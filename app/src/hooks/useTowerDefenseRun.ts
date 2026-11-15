@@ -3,11 +3,7 @@ import { getQueryKey } from "@trpc/react-query";
 import { nanoid } from "nanoid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import {
-  getDojoPurchaseUpdate,
-  getRunClaimUpdate,
-  type TowerDefenseProgress,
-} from "@/deltas/towerDefense";
+import { getDojoPurchaseUpdate, getRunClaimUpdate } from "@/deltas/towerDefense";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { showMutationToast } from "@/libs/toast";
 import { decodeTdActions, isTdActionEncodable } from "@/libs/towerDefense/actionLog";
@@ -125,26 +121,12 @@ export const useTowerDefenseProgressCache = () => {
         upgradeId: TdDojoUpgrade,
         result: { level: number; pointsSpent: number },
         snapshot: Snapshot,
-      ) =>
-        updateCache(
-          (current) =>
-            getDojoPurchaseUpdate(
-              upgradeId,
-              result,
-            )(current as TowerDefenseProgress) as typeof current,
-          snapshot,
-        ),
+      ) => updateCache(getDojoPurchaseUpdate(upgradeId, result), snapshot),
       [updateCache],
     ),
     applyClaim: useCallback(
       (result: { pointsEarned: number; wave: number }, snapshot: Snapshot) =>
-        updateCache(
-          (current) =>
-            getRunClaimUpdate(result)(
-              current as TowerDefenseProgress,
-            ) as typeof current,
-          snapshot,
-        ),
+        updateCache(getRunClaimUpdate(result), snapshot),
       [updateCache],
     ),
     /** A claim whose outcome this page never saw: only the server knows the balance. */

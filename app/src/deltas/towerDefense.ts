@@ -1,11 +1,8 @@
+import type { RouterOutputs } from "@/app/_trpc/client";
 import type { TdDojoUpgrade } from "@/libs/towerDefense/content";
 
 /** The `towerDefense.getProgress` shape these patches apply to. */
-export interface TowerDefenseProgress {
-  points: number;
-  bestWave: number;
-  dojo: Partial<Record<TdDojoUpgrade, number>>;
-}
+export type TowerDefenseProgress = RouterOutputs["towerDefense"]["getProgress"];
 
 /** Apply a confirmed Dojo purchase: the new level and the scrolls it cost. */
 export const getDojoPurchaseUpdate =
