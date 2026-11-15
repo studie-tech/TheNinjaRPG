@@ -5,7 +5,7 @@ import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
 import { Bell, Bug, Eclipse, Link2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type React from "react";
-import { useState } from "react";
+import { Suspense, use, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +28,7 @@ import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import { getMainNavbarLinks, type NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
+import { createModuleLoader } from "@/utils/async";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserData, useUserDataSelector } from "@/utils/UserContext";
 import { CollapsibleNotifications } from "./LayoutNotifications";
@@ -97,18 +98,19 @@ const MenuBoxCombat = dynamic(() => import("@/layout/MenuBoxCombat"), {
   loading: () => <SidebarLoadingSkeleton />,
 });
 
-const loadMenuBoxProfile = () => import("@/layout/MenuBoxProfile");
-
 // Only a loaded character has a profile box; visitors never download it.
-const MenuBoxProfile = dynamic(loadMenuBoxProfile, {
-  loading: () => <SidebarLoadingSkeleton />,
-});
+const loadMenuBoxProfile = createModuleLoader(() => import("@/layout/MenuBoxProfile"));
 
 /**
  * Start the profile box download with the signed-in frame, so it arrives alongside the
- * account rather than after it.
+ * account rather than after it and renders without a loading state.
  */
 export const preloadSignedInSidebar = () => void loadMenuBoxProfile();
+
+const MenuBoxProfile = () => {
+  const { default: LoadedMenuBoxProfile } = use(loadMenuBoxProfile());
+  return <LoadedMenuBoxProfile />;
+};
 
 interface LayoutLeftSidebarProps {
   variant: GameLayoutId;
@@ -144,7 +146,15 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
               {userData.username} <Link2 className="inline-block h-5 w-5" />
             </Link>
           </SideBannerTitle>
-          <MenuBoxProfile />
+          <Suspense
+            fallback={
+              <SidebarLoadingSkeleton
+                className={layoutVariantClasses[variant].leftSidebarReservation}
+              />
+            }
+          >
+            <MenuBoxProfile />
+          </Suspense>
         </>
       )}
       {showPublicContent && (
