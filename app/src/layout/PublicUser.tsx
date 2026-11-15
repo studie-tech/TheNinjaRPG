@@ -152,7 +152,7 @@ export interface PublicUserSeed {
   villageName?: string | null;
 }
 
-interface PublicUserComponentProps {
+export interface PublicUserComponentProps {
   userId: string;
   title: string;
   /** Replaces the default "Profile: <name>" subtitle, e.g. when the title is the name. */
