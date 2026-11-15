@@ -3,7 +3,7 @@
  *
  * A run is a seed, a signed configuration and an ordered log of player actions keyed by
  * tick. The browser steps the simulation live and records every accepted action; the
- * server replays the same log with `replayRun` to verify the result before paying out.
+ * server replays the same log with `advanceReplay` to verify the result before paying out.
  * Both must take identical decisions, so this module:
  * - draws all randomness from the run's seeded generator, in a fixed order;
  * - uses only arithmetic, `Math.sqrt`, `Math.floor` and comparisons (see `rng.ts`);
