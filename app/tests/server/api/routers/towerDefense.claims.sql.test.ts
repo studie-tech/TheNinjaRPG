@@ -18,6 +18,7 @@ import {
   tdDojoCost,
 } from "@/libs/towerDefense/sim";
 import { towerDefenseRouter } from "@/server/api/routers/towerDefense";
+import { TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE } from "@/server/utils/towerDefenseClaims";
 import { botAct } from "../../../libs/towerDefense/bot";
 import { insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
@@ -185,7 +186,10 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     ).toMatchObject({ success: false, reloadRequired: true });
     env.TOWER_DEFENSE_CLAIMS_ENABLED = undefined;
     const paused = await api.claimRun(claim);
-    expect(paused).toMatchObject({ success: false, claimsPaused: true });
+    expect(paused).toMatchObject({
+      success: false,
+      message: TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE,
+    });
     expect(paused.permanent).toBeUndefined();
     expect(await progress("td-user")).toEqual({ points: 500, bestWave: 45 });
   });

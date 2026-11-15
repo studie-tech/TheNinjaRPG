@@ -153,7 +153,6 @@ export const towerDefenseRouter = createTRPCRouter({
     )
     .output(
       baseServerResponse.extend({
-        claimsPaused: z.boolean().optional(),
         permanent: z.boolean().optional(),
         reloadRequired: z.boolean().optional(),
         alreadyClaimed: z.boolean().optional(),
@@ -164,10 +163,7 @@ export const towerDefenseRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       if (!areTowerDefenseClaimsEnabled())
-        return {
-          ...errorResponse(TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE),
-          claimsPaused: true,
-        };
+        return errorResponse(TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE);
       // A page on older rules played a run this replay would not reproduce. Reloading
       // resumes its save under these rules, which the claim then replays exactly.
       if (input.simVersion !== TD_SIM_VERSION)
