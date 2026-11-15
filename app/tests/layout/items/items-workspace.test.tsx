@@ -77,6 +77,7 @@ beforeEach(() => {
   containerWidth = 1000;
   // The workspace measures its own width to choose inline panels or a bottom sheet.
   installBrowserGlobals({
+    animationFrame: true,
     resizeObserver: class {
       constructor(
         private readonly callback: (
