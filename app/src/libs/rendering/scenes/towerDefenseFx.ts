@@ -5,18 +5,19 @@ import { formatTdNumber } from "@/libs/towerDefense/format";
 
 /**
  * Transient tower-defense effects in arena units (y up): additive particles, rings,
- * lightning, streaks, floating numbers, screen flashes and camera shake. Everything is
- * pooled or redrawn per frame, so a crowded late wave allocates nothing per hit.
+ * lightning, streaks, floating numbers, screen flashes and camera shake. Particles and
+ * numbers are pooled; rings, bolts and streaks are redrawn while any are alive, so a
+ * crowded late wave allocates nothing per hit and an idle arena redraws nothing.
  */
 export const createTowerDefenseFx = () => {
   const container = new Container();
   const glow = createGlowTexture();
   const shapes = new Graphics();
   shapes.blendMode = "add";
-  const solid = new Graphics();
+  let shapesDrawn = false;
   const particleLayer = new Container();
   const numberLayer = new Container();
-  container.addChild(solid, shapes, particleLayer, numberLayer);
+  container.addChild(shapes, particleLayer, numberLayer);
 
   // Particles
   const particles = Array.from({ length: PARTICLES }, () => {
@@ -255,8 +256,9 @@ export const createTowerDefenseFx = () => {
       const size = Math.max(0.01, particle.size) / 128;
       particle.sprite.scale.set(size * 2.2);
     }
-    shapes.clear();
-    solid.clear();
+    // Rings, bolts and streaks change every frame while they live; with none alive and
+    // none drawn last frame the geometry is left untouched.
+    if (shapesDrawn || rings.length + bolts.length + streaks.length > 0) shapes.clear();
     for (let i = rings.length - 1; i >= 0; i--) {
       const entry = rings[i];
       if (!entry) continue;
@@ -333,6 +335,7 @@ export const createTowerDefenseFx = () => {
         )
         .stroke({ color: entry.color, alpha: 1 - t, width: entry.width });
     }
+    shapesDrawn = rings.length + bolts.length + streaks.length > 0;
     for (const record of numbers) {
       if (!record.root.visible) continue;
       record.age += dt;

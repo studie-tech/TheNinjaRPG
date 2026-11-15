@@ -1,4 +1,12 @@
-import { Container, Graphics, Matrix, Rectangle, Sprite, Texture } from "pixi.js";
+import {
+  Container,
+  Graphics,
+  GraphicsContext,
+  Matrix,
+  Rectangle,
+  Sprite,
+  Texture,
+} from "pixi.js";
 import { TD_SHURIKEN_IMAGE_URL, type TdSfx } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
@@ -14,6 +22,7 @@ import { createSoftShadowTexture } from "@/libs/rendering/primitives/shadow";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
+import { createRecyclePool } from "@/libs/rendering/recyclePool";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import {
   createTowerDefenseFx,
@@ -28,6 +37,7 @@ import {
 } from "@/libs/spriteAnimations";
 import {
   TD_HERO_ZONE,
+  TD_MAX_ALIVE,
   TD_SPAWN_RADIUS,
   TD_TICK_SECONDS,
 } from "@/libs/towerDefense/balance";
@@ -37,6 +47,7 @@ import {
   TD_ENEMY_KINDS,
   TD_SENTRY_INFO,
   type TdElement,
+  type TdEnemyKind,
   tdStageForWave,
 } from "@/libs/towerDefense/content";
 import {
@@ -125,10 +136,30 @@ export const createTowerDefenseScene = async (options: {
     const camera = new Container();
     const world = new Container();
     const terrainLayer = new Container();
+    // Ground and post layers in draw order. Fixed shapes are drawn once and follow the
+    // hero by position; sentry geometry redraws only when the sentry layout changes.
+    const arenaGround = new Graphics()
+      .circle(0, 0, TD_HERO_ZONE)
+      .stroke({ color: 0xffffff, alpha: 0.12, width: 0.05 });
+    const heroRange = new Graphics();
+    let heroRangeRadius = Number.NaN;
+    const chakraAura = new Graphics().circle(0, 0, 1).fill(0xffffff);
+    const substitutionRing = new Graphics()
+      .circle(0, 0.6, 0.95)
+      .stroke({ color: 0xffffff, alpha: 0.8, width: 0.08 });
+    const rageGlow = new Graphics().circle(0, 0, 1.2).fill(0xff3b3b);
+    const sentryGround = new Graphics();
+    const sentryLayout = createSentryLayout();
     const groundFx = new Graphics();
     const actorLayer = new Container();
     actorLayer.sortableChildren = true;
-    const overlay = new Graphics();
+    const earthDome = new Graphics()
+      .ellipse(0, 0.5, 1.5, 1.7)
+      .fill({ color: 0xc8945a, alpha: 0.18 })
+      .stroke({ color: 0xc8945a, alpha: 0.6, width: 0.08 });
+    for (const shape of [chakraAura, substitutionRing, rageGlow, earthDome])
+      shape.visible = false;
+    const sentryPosts = new Graphics();
     const dynamic = new Graphics();
     const auraLayer = new Container();
     const projectileLayer = new Container();
@@ -136,8 +167,16 @@ export const createTowerDefenseScene = async (options: {
     game.own(fx.dispose);
     world.addChild(
       terrainLayer,
+      arenaGround,
+      heroRange,
+      chakraAura,
+      substitutionRing,
+      rageGlow,
+      sentryGround,
       groundFx,
       auraLayer,
+      earthDome,
+      sentryPosts,
       dynamic,
       actorLayer,
       projectileLayer,
@@ -146,7 +185,7 @@ export const createTowerDefenseScene = async (options: {
     camera.addChild(world);
     const sky = new Graphics();
     const screenFlash = new Graphics();
-    game.stage.addChild(camera, sky, screenFlash, overlay);
+    game.stage.addChild(camera, sky, screenFlash);
 
     // Terrain: one hex per arena unit, centred on the hero. Scenery casts projected sun
     // silhouettes as on the sector map; actors cast matching ones of their own below.
@@ -358,40 +397,87 @@ export const createTowerDefenseScene = async (options: {
       ];
     };
 
+    // Enemies share their outline geometry and recycle their display objects: a death
+    // detaches its record and the next spawn resets it.
     const enemies = new Map<number, EnemyRecord>();
-    const createEnemy = (enemy: TdEnemy, wave: number) => {
+    const enemyShapes = createEnemyShapes();
+    const enemyPool = createRecyclePool<EnemyRecord>({
+      // Records never outnumber the largest crowd, so this only bounds a split surge.
+      limit: TD_MAX_ALIVE,
+      dispose: (record) => record.root.destroy({ children: true }),
+    });
+    game.own(() => {
+      enemyPool.dispose();
+      enemyShapes.dispose();
+    });
+    const createEnemyRecord = (): EnemyRecord => {
       const root = new Container();
       const shadow = contact(1);
       const cast = new Sprite(Texture.EMPTY);
       cast.tint = CAST_SHADOW_TINT;
       cast.alpha = CAST_SHADOW_ALPHA;
+      cast.anchor.set(0.5, 1);
       cast.visible = false;
-      const halo = new Graphics();
+      const halo = {
+        root: new Container(),
+        ring: new Graphics(enemyShapes.ring),
+        bossRing: new Graphics(enemyShapes.bossRing),
+        ward: new Graphics(enemyShapes.ward),
+        shield: new Graphics(enemyShapes.shield),
+        stun: Array.from({ length: 3 }, () => new Graphics(enemyShapes.stun)),
+        focus: new Graphics(enemyShapes.focus),
+      };
+      halo.bossRing.position.set(0, 0.05);
+      halo.bossRing.alpha = 0.3;
+      halo.focus.position.set(0, 0.6);
+      halo.root.addChild(
+        halo.ring,
+        halo.bossRing,
+        halo.ward,
+        halo.shield,
+        ...halo.stun,
+        halo.focus,
+      );
       const body = new Sprite(Texture.EMPTY);
-      body.anchor.set(0.5, 0);
-      const fallback = new Graphics()
-        .circle(0, 0.5, 0.38)
-        .fill(TD_ENEMIES[enemy.kind].tint)
-        .stroke({ color: 0x111111, width: 0.05 });
-      const bar = new Graphics();
-      root.addChild(cast, shadow, halo, fallback, body, bar);
-      const scale = enemy.size * (enemy.boss ? 1.25 : 1);
-      root.scale.set(scale);
-      actorLayer.addChild(root);
-      const record: EnemyRecord = {
+      body.anchor.set(0.5, 1);
+      const fallback = new Graphics(enemyShapes.fallback(TD_ENEMY_KINDS[0]));
+      const bar = {
+        root: new Container(),
+        back: meterSprite(0x000000, 1.55, 0.09),
+        fill: meterSprite(0xffffff, 1.55, 0.09),
+        shield: meterSprite(0x6fb8ff, 1.66, 0.05),
+      };
+      bar.back.alpha = 0.6;
+      bar.root.addChild(bar.back, bar.fill, bar.shield);
+      root.addChild(cast, shadow, halo.root, fallback, body, bar.root);
+      return {
         root,
         body,
         cast,
         fallback,
         halo,
         bar,
-        art: artFor(rosterFor(enemy, wave)),
-        x: enemy.x,
-        y: enemy.y,
-        bornAt: performance.now(),
+        art: artFor(undefined),
+        x: 0,
+        y: 0,
+        bornAt: 0,
         flashUntil: 0,
-        facing: enemy.x > 0 ? -1 : 1,
+        facing: 1,
+        seenFrame: 0,
       };
+    };
+    /** Resets a pooled record for a new enemy; `drawEnemyBody` sets the rest each frame. */
+    const spawnEnemy = (enemy: TdEnemy, wave: number) => {
+      const record = enemyPool.take() ?? createEnemyRecord();
+      record.art = artFor(rosterFor(enemy, wave));
+      record.x = enemy.x;
+      record.y = enemy.y;
+      record.bornAt = performance.now();
+      record.flashUntil = 0;
+      record.facing = enemy.x > 0 ? -1 : 1;
+      record.fallback.context = enemyShapes.fallback(enemy.kind);
+      record.root.scale.set(enemy.size * (enemy.boss ? 1.25 : 1));
+      actorLayer.addChild(record.root);
       enemies.set(enemy.id, record);
       return record;
     };
@@ -477,6 +563,7 @@ export const createTowerDefenseScene = async (options: {
     game.setResize(resize);
 
     let lastTick = -1;
+    let frameNumber = 0;
     let heroX = 0,
       heroY = 0;
     game.setUpdate((frame) => {
@@ -493,8 +580,13 @@ export const createTowerDefenseScene = async (options: {
       const stage = tdStageForWave(state.wave);
       const smoothing = 1 - Math.exp(-Math.min(0.1, frame.delta) * 18);
 
-      // Events from the simulation
-      for (const event of view.events.splice(0)) handleEvent(event, state, now);
+      // Events from the simulation; the view's queue is drained in place.
+      const events = view.events;
+      for (let i = 0; i < events.length; i++) {
+        const event = events[i];
+        if (event) handleEvent(event, state, now);
+      }
+      events.length = 0;
 
       // Hero
       heroX += (state.hero.x - heroX) * smoothing;
@@ -536,11 +628,11 @@ export const createTowerDefenseScene = async (options: {
       });
 
       // Enemies
-      const alive = new Set<number>();
+      frameNumber++;
       for (const enemy of state.enemies) {
         if (enemy.dead) continue;
-        alive.add(enemy.id);
-        const record = enemies.get(enemy.id) ?? createEnemy(enemy, state.wave);
+        const record = enemies.get(enemy.id) ?? spawnEnemy(enemy, state.wave);
+        record.seenFrame = frameNumber;
         const jump = Math.hypot(enemy.x - record.x, enemy.y - record.y) > 3;
         record.x = jump ? enemy.x : record.x + (enemy.x - record.x) * smoothing;
         record.y = jump ? enemy.y : record.y + (enemy.y - record.y) * smoothing;
@@ -554,9 +646,10 @@ export const createTowerDefenseScene = async (options: {
         drawEnemyBody(record, enemy, state, now, moving, reduced);
       }
       for (const [id, record] of enemies)
-        if (!alive.has(id)) {
-          record.root.destroy({ children: true });
+        if (record.seenFrame !== frameNumber) {
+          record.root.removeFromParent();
           enemies.delete(id);
+          enemyPool.release(record);
         }
 
       // Projectiles
@@ -1240,89 +1333,87 @@ export const createTowerDefenseScene = async (options: {
         : enemy.camo && enemy.id !== state.focusId
           ? 0.45
           : 1;
-      // Halo: elites glow in their first affix's colour, wards show their element
-      record.halo.clear();
+      // Halo: elites glow in their first affix's colour, wards show their element. Each
+      // part is shared white geometry, coloured by tint and animated by its transform.
+      const halo = record.halo;
       const pulse = reduced ? 0.5 : 0.5 + Math.sin(now / 200 + enemy.id) * 0.5;
-      if (enemy.boss || enemy.elite) {
+      const ringed = enemy.boss || enemy.elite;
+      halo.ring.visible = ringed;
+      halo.bossRing.visible = enemy.boss;
+      if (ringed) {
         const color = enemy.boss
           ? enemy.enraged
             ? 0xff2a2a
             : 0xffd36b
           : TD_AFFIX_INFO[enemy.affixes[0] ?? "armored"].tint;
-        record.halo
-          .ellipse(0, 0.05, 0.62, 0.26)
-          .stroke({ color, alpha: 0.5 + pulse * 0.4, width: 0.08 });
-        if (enemy.boss)
-          record.halo
-            .ellipse(0, 0.05, 0.8 + pulse * 0.15, 0.34 + pulse * 0.06)
-            .stroke({ color, alpha: 0.3, width: 0.05 });
+        halo.ring.tint = color;
+        halo.ring.alpha = 0.5 + pulse * 0.4;
+        if (enemy.boss) {
+          halo.bossRing.tint = color;
+          halo.bossRing.scale.set(
+            (0.8 + pulse * 0.15) / BOSS_RING_RADIUS_X,
+            (0.34 + pulse * 0.06) / BOSS_RING_RADIUS_Y,
+          );
+        }
       }
-      if (enemy.ward) record.halo.circle(0, 0.9, 0.12).fill(ELEMENT_COLORS[enemy.ward]);
+      halo.ward.visible = enemy.ward !== null;
+      if (enemy.ward) halo.ward.tint = ELEMENT_COLORS[enemy.ward];
+      halo.shield.visible = enemy.shield > 0;
       if (enemy.shield > 0)
-        record.halo.ellipse(0, 0.6, 0.55, 0.75).stroke({
-          color: 0x6fb8ff,
-          alpha: 0.35 + 0.4 * (enemy.shield / Math.max(1, enemy.maxShield)),
-          width: 0.06,
-        });
-      if (tick < enemy.stunUntil)
-        for (let i = 0; i < 3; i++) {
-          const angle = now / 180 + (i * Math.PI * 2) / 3;
-          record.halo
-            .circle(Math.cos(angle) * 0.3, 1.45 + Math.sin(angle) * 0.08, 0.06)
-            .fill(0xfff176);
-        }
-      if (enemy.id === state.focusId) {
-        const spin = now / 300;
-        for (let i = 0; i < 4; i++) {
-          const angle = spin + (i * Math.PI) / 2;
-          record.halo
-            .moveTo(Math.cos(angle) * 0.75, 0.6 + Math.sin(angle) * 0.75)
-            .lineTo(Math.cos(angle) * 0.5, 0.6 + Math.sin(angle) * 0.5)
-            .stroke({ color: 0xff3355, width: 0.07 });
-        }
+        halo.shield.alpha = 0.35 + 0.4 * (enemy.shield / Math.max(1, enemy.maxShield));
+      const stunned = tick < enemy.stunUntil;
+      for (let i = 0; i < halo.stun.length; i++) {
+        const dot = halo.stun[i];
+        if (!dot) continue;
+        dot.visible = stunned;
+        if (!stunned) continue;
+        const angle = now / 180 + (i * Math.PI * 2) / 3;
+        dot.position.set(Math.cos(angle) * 0.3, 1.45 + Math.sin(angle) * 0.08);
       }
-      // Health bar
-      record.bar.clear();
+      halo.focus.visible = enemy.id === state.focusId;
+      if (halo.focus.visible) halo.focus.rotation = now / 300;
+      // Health bar: one-texel sprites stretched to the bar's size
+      const bar = record.bar;
       const fraction = Math.max(0, enemy.hp / enemy.maxHp);
-      if (fraction < 1 || enemy.boss || enemy.elite) {
+      bar.root.visible = fraction < 1 || enemy.boss || enemy.elite;
+      if (bar.root.visible) {
         const width = enemy.boss ? 1.4 : 0.8;
-        record.bar
-          .rect(-width / 2, 1.55, width, 0.09)
-          .fill({ color: 0x000000, alpha: 0.6 });
-        record.bar
-          .rect(-width / 2, 1.55, width * fraction, 0.09)
-          .fill(enemy.boss ? 0xff3b3b : enemy.elite ? 0xffb02e : 0x4cd964);
-        if (enemy.maxShield > 0 && enemy.shield > 0)
-          record.bar
-            .rect(-width / 2, 1.66, (width * enemy.shield) / enemy.maxShield, 0.05)
-            .fill(0x6fb8ff);
+        bar.back.x = bar.fill.x = bar.shield.x = -width / 2;
+        bar.back.width = width;
+        bar.fill.width = width * fraction;
+        bar.fill.visible = fraction > 0;
+        bar.fill.tint = enemy.boss ? 0xff3b3b : enemy.elite ? 0xffb02e : 0x4cd964;
+        bar.shield.visible = enemy.maxShield > 0 && enemy.shield > 0;
+        if (bar.shield.visible)
+          bar.shield.width = (width * enemy.shield) / enemy.maxShield;
       }
     };
 
     const drawArena = (state: TdState, view: TowerDefenseSceneView, now: number) => {
       groundFx.clear();
       dynamic.clear();
-      overlay.clear();
-      // Hero zone and range
-      groundFx
-        .circle(0, 0, TD_HERO_ZONE)
-        .stroke({ color: 0xffffff, alpha: 0.12, width: 0.05 });
-      groundFx
-        .circle(heroX, heroY, state.stats.range)
-        .fill({ color: 0x8ab4ff, alpha: 0.06 })
-        .stroke({ color: 0x8ab4ff, alpha: 0.35, width: 0.05 });
-      // Chakra aura grows with the run
+      // Hero range, redrawn only when the range stat changes
+      if (state.stats.range !== heroRangeRadius) {
+        heroRangeRadius = state.stats.range;
+        heroRange
+          .clear()
+          .circle(0, 0, heroRangeRadius)
+          .fill({ color: 0x8ab4ff, alpha: 0.06 })
+          .stroke({ color: 0x8ab4ff, alpha: 0.35, width: 0.05 });
+      }
+      heroRange.position.set(heroX, heroY);
+      // Chakra aura grows with the run: a unit disc stretched, tinted and faded
       const aura = auraColor(state.wave, now);
+      chakraAura.visible = aura !== null;
       if (aura) {
         const pulse = 0.5 + Math.sin(now / 260) * 0.5;
-        groundFx
-          .ellipse(
-            heroX,
-            heroY + 0.1,
-            0.9 + pulse * 0.2 + Math.min(1.2, state.wave / 400),
-            0.38 + pulse * 0.08,
-          )
-          .fill({ color: aura, alpha: 0.18 + pulse * 0.12 });
+        chakraAura.position.set(heroX, heroY + 0.1);
+        chakraAura.scale.set(
+          0.9 + pulse * 0.2 + Math.min(1.2, state.wave / 400),
+          0.38 + pulse * 0.08,
+        );
+        chakraAura.tint = aura;
+        chakraAura.alpha = 0.18 + pulse * 0.12;
         if (Math.random() < 0.5)
           fx.burst(heroX + (Math.random() - 0.5) * 0.9, heroY + 0.2, {
             color: aura,
@@ -1333,46 +1424,52 @@ export const createTowerDefenseScene = async (options: {
             gravity: -2.2,
           });
       }
-      if (state.tick < state.hero.subUntil)
-        groundFx
-          .circle(heroX, heroY + 0.6, 0.95)
-          .stroke({ color: 0xffffff, alpha: 0.8, width: 0.08 });
-      if (state.tick < state.hero.domeUntil)
-        dynamic
-          .ellipse(heroX, heroY + 0.5, 1.5, 1.7)
-          .fill({ color: 0xc8945a, alpha: 0.18 })
-          .stroke({ color: 0xc8945a, alpha: 0.6, width: 0.08 });
-      if (state.tick < state.hero.rageUntil)
-        groundFx
-          .circle(heroX, heroY, 1.2)
-          .fill({ color: 0xff3b3b, alpha: 0.15 + Math.sin(now / 80) * 0.05 });
-      // Sentry posts
-      for (let slot = 0; slot < state.stats.sentrySlots; slot++) {
-        const at = tdSentryPosition(slot);
-        const sentry = state.sentries[slot];
-        if (!sentry) {
-          groundFx
-            .circle(at.x, at.y, 0.35)
-            .stroke({ color: 0xffffff, alpha: 0.25, width: 0.04 });
-          continue;
+      substitutionRing.visible = state.tick < state.hero.subUntil;
+      substitutionRing.position.set(heroX, heroY);
+      earthDome.visible = state.tick < state.hero.domeUntil;
+      earthDome.position.set(heroX, heroY);
+      rageGlow.visible = state.tick < state.hero.rageUntil;
+      rageGlow.position.set(heroX, heroY);
+      rageGlow.alpha = 0.15 + Math.sin(now / 80) * 0.05;
+      // Sentry slots, bases and posts; only their glows animate
+      if (sentryLayout.update(state)) {
+        sentryGround.clear();
+        sentryPosts.clear();
+        for (let slot = 0; slot < state.stats.sentrySlots; slot++) {
+          const at = tdSentryPosition(slot);
+          const sentry = state.sentries[slot];
+          if (!sentry) {
+            sentryGround
+              .circle(at.x, at.y, 0.35)
+              .stroke({ color: 0xffffff, alpha: 0.25, width: 0.04 });
+            continue;
+          }
+          const color = SENTRY_COLORS[sentry.type] ?? 0xffffff;
+          const info = TD_SENTRY_INFO[sentry.type];
+          if (sentry.type === "frost" || sentry.type === "sensor")
+            sentryGround
+              .circle(at.x, at.y, info.range + sentry.level * 0.25)
+              .fill({ color, alpha: 0.05 });
+          sentryGround
+            .ellipse(at.x, at.y, 0.4, 0.17)
+            .fill({ color: 0x000000, alpha: 0.35 });
+          sentryPosts
+            .roundRect(
+              at.x - 0.2,
+              at.y,
+              0.4,
+              0.7 + Math.min(0.6, sentry.level * 0.03),
+              0.08,
+            )
+            .fill(0x3a3f55)
+            .stroke({ color, width: 0.05 });
         }
+      }
+      for (let slot = 0; slot < state.stats.sentrySlots; slot++) {
+        const sentry = state.sentries[slot];
+        if (!sentry) continue;
+        const at = tdSentryPosition(slot);
         const color = SENTRY_COLORS[sentry.type] ?? 0xffffff;
-        const info = TD_SENTRY_INFO[sentry.type];
-        if (sentry.type === "frost" || sentry.type === "sensor")
-          groundFx
-            .circle(at.x, at.y, info.range + sentry.level * 0.25)
-            .fill({ color, alpha: 0.05 });
-        groundFx.ellipse(at.x, at.y, 0.4, 0.17).fill({ color: 0x000000, alpha: 0.35 });
-        dynamic
-          .roundRect(
-            at.x - 0.2,
-            at.y,
-            0.4,
-            0.7 + Math.min(0.6, sentry.level * 0.03),
-            0.08,
-          )
-          .fill(0x3a3f55)
-          .stroke({ color, width: 0.05 });
         const glowSize =
           0.18 +
           Math.min(0.25, sentry.level * 0.01) +
@@ -1721,6 +1818,96 @@ const hueColor = (hue: number) => {
   return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
 };
 
+/** The boss's outer ring is drawn at its mid-pulse size and scaled through the pulse. */
+const BOSS_RING_RADIUS_X = 0.875;
+const BOSS_RING_RADIUS_Y = 0.37;
+
+/**
+ * Outline geometry every enemy shares, tessellated once per scene. Shapes drawn in
+ * white take their colour from the tint of the graphics that shows them.
+ */
+const createEnemyShapes = () => {
+  const ring = new GraphicsContext()
+    .ellipse(0, 0.05, 0.62, 0.26)
+    .stroke({ color: 0xffffff, width: 0.08 });
+  const bossRing = new GraphicsContext()
+    .ellipse(0, 0, BOSS_RING_RADIUS_X, BOSS_RING_RADIUS_Y)
+    .stroke({ color: 0xffffff, width: 0.05 });
+  const ward = new GraphicsContext().circle(0, 0.9, 0.12).fill(0xffffff);
+  const shield = new GraphicsContext()
+    .ellipse(0, 0.6, 0.55, 0.75)
+    .stroke({ color: 0x6fb8ff, width: 0.06 });
+  const stun = new GraphicsContext().circle(0, 0, 0.06).fill(0xfff176);
+  // Focus marks around their own origin; the graphics turns them.
+  const focus = new GraphicsContext();
+  for (let i = 0; i < 4; i++) {
+    const angle = (i * Math.PI) / 2;
+    focus
+      .moveTo(Math.cos(angle) * 0.75, Math.sin(angle) * 0.75)
+      .lineTo(Math.cos(angle) * 0.5, Math.sin(angle) * 0.5)
+      .stroke({ color: 0xff3355, width: 0.07 });
+  }
+  const fallbacks = new Map<TdEnemyKind, GraphicsContext>();
+  return {
+    ring,
+    bossRing,
+    ward,
+    shield,
+    stun,
+    focus,
+    /** The plain disc drawn for an enemy whose art has not loaded. */
+    fallback: (kind: TdEnemyKind) => {
+      let context = fallbacks.get(kind);
+      if (!context) {
+        context = new GraphicsContext()
+          .circle(0, 0.5, 0.38)
+          .fill(TD_ENEMIES[kind].tint)
+          .stroke({ color: 0x111111, width: 0.05 });
+        fallbacks.set(kind, context);
+      }
+      return context;
+    },
+    dispose: () => {
+      for (const context of [ring, bossRing, ward, shield, stun, focus])
+        context.destroy();
+      for (const context of fallbacks.values()) context.destroy();
+      fallbacks.clear();
+    },
+  };
+};
+
+/** A health-bar segment: the one-texel white texture stretched and tinted. */
+const meterSprite = (color: number, y: number, height: number) => {
+  const sprite = new Sprite(Texture.WHITE);
+  sprite.tint = color;
+  sprite.y = y;
+  sprite.height = height;
+  return sprite;
+};
+
+/** Reports whether the sentry slots, their occupants or levels changed since the last call. */
+const createSentryLayout = () => {
+  let slots = -1;
+  const types: (string | null)[] = [];
+  const levels: number[] = [];
+  return {
+    update: (state: TdState) => {
+      let changed = slots !== state.stats.sentrySlots;
+      slots = state.stats.sentrySlots;
+      for (let slot = 0; slot < slots; slot++) {
+        const sentry = state.sentries[slot];
+        const type = sentry?.type ?? null;
+        const level = sentry?.level ?? 0;
+        if (types[slot] === type && levels[slot] === level) continue;
+        types[slot] = type;
+        levels[slot] = level;
+        changed = true;
+      }
+      return changed;
+    },
+  };
+};
+
 interface EnemyArt {
   still: Texture | null;
   move: { animation: CharacterAnimation; views: Texture[] } | null;
@@ -1732,14 +1919,24 @@ interface EnemyRecord {
   body: Sprite;
   cast: Sprite;
   fallback: Graphics;
-  halo: Graphics;
-  bar: Graphics;
+  halo: {
+    root: Container;
+    ring: Graphics;
+    bossRing: Graphics;
+    ward: Graphics;
+    shield: Graphics;
+    stun: Graphics[];
+    focus: Graphics;
+  };
+  bar: { root: Container; back: Sprite; fill: Sprite; shield: Sprite };
   art: EnemyArt;
   x: number;
   y: number;
   bornAt: number;
   flashUntil: number;
   facing: number;
+  /** The frame that last found this enemy alive; older records are released. */
+  seenFrame: number;
 }
 
 interface Flight {
