@@ -65,7 +65,8 @@ import { cn } from "@/libs/shadui";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getBanOrSilenceRestriction } from "@/utils/permissions";
 import { useUserDataSelector } from "@/utils/UserContext";
-import { readUploadResult, showUploadError, UploadDropzone } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError } from "@/utils/uploadResult";
+import { UploadDropzone } from "@/utils/uploadthing";
 import {
   conceptArtFilterSchema,
   conceptArtPromptSchema,

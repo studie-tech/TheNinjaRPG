@@ -32,7 +32,8 @@ import { groupBy } from "@/utils/grouping";
 import { pushToCombat } from "@/utils/routing";
 import { secondsFromDate } from "@/utils/time";
 import { useUserInfo } from "@/utils/UserContext";
-import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError } from "@/utils/uploadResult";
+import { UploadButton } from "@/utils/uploadthing";
 import type { ObjectiveRewardType } from "@/validators/rewards";
 import {
   type TournamentCreateSchema,

@@ -5,11 +5,10 @@ import { parseHtml } from "@/utils/parse";
 import {
   enterSubmits,
   needsHtmlSource,
-  richTextInput,
   splitQuotedReply,
   stripPastedChatHtml,
 } from "@/utils/richText";
-import sanitize, { buildQuoteBlock } from "@/utils/sanitize";
+import sanitize, { buildQuoteBlock, richTextInput } from "@/utils/sanitize";
 
 const render = (html: string) => renderToStaticMarkup(parseHtml(sanitize(html)));
 

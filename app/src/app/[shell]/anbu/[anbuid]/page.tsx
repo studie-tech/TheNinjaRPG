@@ -71,7 +71,8 @@ import type { BaseServerResponse } from "@/server/api/trpc";
 import { canEditClans } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
-import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError } from "@/utils/uploadResult";
+import { UploadButton } from "@/utils/uploadthing";
 import type { AnbuRenameSchema } from "@/validators/anbu";
 import { anbuRenameSchema } from "@/validators/anbu";
 

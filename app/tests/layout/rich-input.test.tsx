@@ -24,7 +24,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   startUpload.mockReset();
   spies = [
-    vi.spyOn(uploadthing, "useUploadThing").mockReturnValue({ startUpload } as never),
+    vi
+      .spyOn(uploadthing, "uploadFiles")
+      .mockImplementation(((_endpoint: string, { files }: { files: File[] }) =>
+        startUpload(files)) as never),
     vi
       .spyOn(UserSearchSelect, "default")
       .mockImplementation(({ useFormMethods }: any) => (
@@ -957,6 +960,31 @@ describe("rich input composer", () => {
       expect(editor.value).toContain('src="https://example.com/retry.png"'),
     );
     expect(editor.value.endsWith(advancedHtml)).toBe(true);
+  });
+
+  it("shows the uploader's message when an upload fails", async () => {
+    startUpload.mockRejectedValueOnce(new Error("File too large."));
+    const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => {});
+    spies.push(
+      showToast,
+      vi
+        .spyOn(image, "getImageDimensions")
+        .mockResolvedValue({ width: 800, height: 600 }),
+    );
+    const view = render(<Composer initial={advancedHtml} />);
+    const editor = view.getByRole("textbox", {
+      name: "Message",
+    }) as HTMLTextAreaElement;
+    pasteImage(editor);
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith({
+        success: false,
+        message: "File too large.",
+      }),
+    );
+    expect(editor.value).toBe(advancedHtml);
+    expect(editor.disabled).toBe(false);
+    expect(uploadPending).toHaveBeenLastCalledWith(false);
   });
 
   it.each(["reset", "refresh", "disabled", "unmount"])(

@@ -51,6 +51,10 @@ const sanitize = (
 
 export default sanitize;
 
+/** Plain text must not be interpreted as markup when opening an existing draft. */
+export const richTextInput = (value: string): { html: string } | { text: string } =>
+  /<\/?[a-z][^>]*>/i.test(value) ? { html: sanitize(value) } : { text: value };
+
 const PLAIN_TEXT_SEPARATOR_TAGS = new Set([
   "address",
   "article",

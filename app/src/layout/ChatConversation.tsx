@@ -15,7 +15,6 @@ import {
   clearSentChatDraft,
   saveChatDraft,
 } from "@/libs/chatPanel";
-import { stripBlockquotes } from "@/utils/sanitize";
 import { stripHtmlPreview } from "@/utils/string";
 
 /**
@@ -48,6 +47,7 @@ export function ChatConversation({
     canComposeMessage,
     composeRestrictionMessage,
     quoteIds,
+    sanitizer,
     setValue,
     getValues,
     toggleQuoteId,
@@ -275,7 +275,8 @@ export function ChatConversation({
                   Replying to <strong>{quote.username}</strong>{" "}
                   <span className="text-muted-foreground">
                     {format(quote.createdAt, "HH:mm")} ·{" "}
-                    {stripHtmlPreview(stripBlockquotes(quote.content))}
+                    {sanitizer &&
+                      stripHtmlPreview(sanitizer.stripBlockquotes(quote.content))}
                   </span>
                 </span>
                 <button

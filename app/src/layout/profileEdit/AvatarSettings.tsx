@@ -16,7 +16,8 @@ import { showMutationToast } from "@/libs/toast";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
-import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError } from "@/utils/uploadResult";
+import { UploadButton } from "@/utils/uploadthing";
 
 /** Group avatar generation, history, and uploads without mounting inactive panels. */
 export function AvatarSettings() {

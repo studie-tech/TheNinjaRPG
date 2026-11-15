@@ -16,6 +16,7 @@ import { matchesConversationSearch } from "@/deltas/chat";
 import { CONVERSATION_PAUSE_HIDDEN_MINS } from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
+import { loadHtmlSanitizer, useHtmlSanitizer } from "@/hooks/useHtmlSanitizer";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useTypingIndicators } from "@/hooks/useTypingIndicators";
@@ -27,9 +28,7 @@ import RichInput from "@/layout/RichInput";
 import { subscribeConversation } from "@/libs/conversationEvents";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
-import { getNewReactions, processMentions } from "@/utils/chat";
 import { canPostAsAi, getConversationComposeRestriction } from "@/utils/permissions";
-import { buildQuoteBlock, stripBlockquotes } from "@/utils/sanitize";
 import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { selectUserWithoutPosition, useUserDataSelector } from "@/utils/UserContext";
@@ -151,6 +150,8 @@ export const useConversation = (props: ConversationLogicProps) => {
     props.supportTicketCreatedByUserId,
   );
   const canComposeMessage = !!userData && !composeRestrictionMessage;
+  // Quote previews need the sanitizer; it loads with the composer, after the page itself.
+  const sanitizer = useHtmlSanitizer(canComposeMessage);
   type ReturnedComment = ArrayElement<
     NonNullable<typeof comments>["pages"][number]["data"]
   >;
@@ -292,6 +293,9 @@ export const useConversation = (props: ConversationLogicProps) => {
     emoji: string,
     username: string,
   ) => {
+    // Without the reaction helpers the server-confirmed reaction arrives on the next refresh.
+    const chat = await loadChatHtml().catch(() => null);
+    if (!chat) return;
     await utils.comments.getConversationComments.cancel(queryKey);
     const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
     const comment = cached?.pages
@@ -299,7 +303,7 @@ export const useConversation = (props: ConversationLogicProps) => {
       .find((c) => c.id === commentId);
     if (!comment) return;
 
-    const newReactions = getNewReactions(comment.reactions, emoji, username);
+    const newReactions = chat.getNewReactions(comment.reactions, emoji, username);
     updateCachedComments((data) =>
       data.map((c) => (c.id === commentId ? { ...c, reactions: newReactions } : c)),
     );
@@ -425,6 +429,12 @@ export const useConversation = (props: ConversationLogicProps) => {
    */
   const insertOptimisticComment = async (newMessage: MutateCommentSchema) => {
     if (!userData || !conversation) return {};
+    // Without the sanitizer the message still sends; the refresh after success shows it.
+    const html = await Promise.all([loadHtmlSanitizer(), loadChatHtml()]).catch(
+      () => null,
+    );
+    if (!html) return {};
+    const [{ buildQuoteBlock }, { processMentions }] = html;
 
     const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
     const cachedComments = cached?.pages.flatMap((page) => page.data);
@@ -646,6 +656,7 @@ export const useConversation = (props: ConversationLogicProps) => {
     userSearchMethods,
     senderUser,
     quoteIds,
+    sanitizer,
     setValue,
     getValues,
     toggleQuoteId,
@@ -680,6 +691,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     userSearchMethods,
     senderUser,
     quoteIds,
+    sanitizer,
     toggleQuoteId,
     control,
     errors,
@@ -768,7 +780,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                       date={format(quote.createdAt, "MM/dd/yyyy")}
                       onRemove={() => toggleQuoteId(quoteId)}
                     >
-                      {stripBlockquotes(quote.content)}
+                      {sanitizer?.stripBlockquotes(quote.content)}
                     </Quote>
                   );
                 })}
@@ -836,5 +848,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     </div>
   );
 };
+
+/** Mention and reaction builders, which share the sanitizer chunk. */
+const loadChatHtml = () => import("@/utils/chat");
 
 export default Conversation;

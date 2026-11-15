@@ -91,7 +91,10 @@ afterEach(async () => {
   restoreBrowserGlobals();
 });
 
-const mount = (isPublic = true) => {
+const mount = (
+  isPublic = true,
+  rows = [row("a", "Alpha"), row("b", "Bravo", "Peer")],
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
@@ -99,7 +102,7 @@ const mount = (isPublic = true) => {
   const trpcClient = fakeTrpcClient((path, input) => {
     if (path === "comments.getConversationComments") {
       return {
-        data: [row("a", "Alpha"), row("b", "Bravo", "Peer")],
+        data: rows,
         convo: { id: "chat", isPublic },
         nextCursor: null,
       };
@@ -115,6 +118,7 @@ const mount = (isPublic = true) => {
       });
     }
     if (path === "comments.fetchConversationComment") return fetched;
+    if (path === "comments.reactConversationComment") return { success: true };
     throw new Error(`Unexpected request: ${path}`);
   });
   const wrapper = ({ children }: PropsWithChildren) => (
@@ -229,6 +233,55 @@ it("inserts own messages optimistically with the poster's details and removes th
   expect(optimistic?.content).toContain("<blockquote");
   await act(async () => finishCreate({ success: false, message: "Nope" }));
   await waitFor(() => expect(hook.result.current.allComments).toHaveLength(2));
+});
+
+it("sanitizes on-demand optimistic messages, quote previews and reactions", async () => {
+  const quoted =
+    '<p>Quoted<img src="x" onerror="alert(1)"></p><blockquote author="C">Nested</blockquote>';
+  const hook = mount(true, [row("a", "Alpha"), row("b", quoted, "Peer")]);
+  await loaded(hook);
+  await waitFor(() => expect(hook.result.current.sanitizer).toBeDefined());
+  const preview = hook.result.current.sanitizer?.stripBlockquotes(quoted);
+  expect(preview).toBe('<p>Quoted<img src="x" /></p>');
+  act(() => hook.result.current.toggleQuoteId("b"));
+  await act(async () => {
+    hook.result.current.setValue(
+      "comment",
+      '<p>Hi @Peer<script>alert(2)</script><a href="javascript:alert(3)">link</a><iframe srcdoc="<script>alert(4)</script>"></iframe><svg onload="alert(5)"></svg><span style="background:url(javascript:alert(6))">x</span></p>',
+    );
+    await hook.result.current.handleSubmitComment();
+  });
+  await waitFor(() => expect(hook.result.current.allComments).toHaveLength(3));
+  const content = hook.result.current.allComments?.[0]?.content ?? "";
+  for (const unsafe of [
+    "onerror",
+    "<script",
+    "javascript:",
+    "srcdoc",
+    "<svg",
+    "onload",
+    "url(",
+  ])
+    expect(content).not.toContain(unsafe);
+  expect(content).toContain('<a href="/username/Peer"><b>@Peer</b></a>');
+  expect(content).toContain('<blockquote author="Peer"');
+  expect(content).not.toContain("Nested");
+  await act(async () => finishCreate({ success: false, message: "Nope" }));
+
+  act(() =>
+    hook.result.current.reactConversationComment({
+      commentId: "a",
+      emoji: "<script>alert(7)</script>",
+    }),
+  );
+  act(() =>
+    hook.result.current.reactConversationComment({ commentId: "a", emoji: "👍" }),
+  );
+  await waitFor(() =>
+    expect(
+      hook.result.current.allComments?.find((c) => c.id === "a")?.reactions,
+    ).toEqual({ "👍": ["Me"] }),
+  );
 });
 
 it("keeps non-matching new messages out of search results and shows matching ones", async () => {

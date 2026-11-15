@@ -18,11 +18,12 @@ import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import { HistoricalAiAvatar } from "@/layout/HistoricalAiAvatar";
+import { LazyUploadButton } from "@/layout/LazyUploadButton";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import { getPrePrompts, REMOVE_BG_TYPES } from "@/libs/imagePrompts";
 import { showMutationToast } from "@/libs/toast";
-import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError } from "@/utils/uploadResult";
 import {
   type ContentImageProvider,
   type PromptFormSchema,
@@ -258,7 +259,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
 
                 {/* Upload button */}
                 <div className="mt-4 flex flex-row gap-2">
-                  <UploadButton
+                  <LazyUploadButton
                     endpoint="imageUploader"
                     onUploadBegin={() => {
                       uploadGenerationRef.current = operationGenerationRef.current;

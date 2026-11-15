@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as toast from "@/libs/toast";
-import { readUploadResult, showUploadError } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError } from "@/utils/uploadResult";
 
 const showToast = vi.fn();
 

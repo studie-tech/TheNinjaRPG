@@ -36,7 +36,6 @@ import {
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
-import * as uploadthing from "@/utils/uploadthing";
 import {
   flushRadixFocus,
   installBrowserGlobals,
@@ -769,9 +768,6 @@ it.each(["", "<p>Unsent Tavern draft</p>"])(
     vi.spyOn(mutes, "useChatMutes").mockReturnValue({
       isSilenced: () => false,
       isTavernSilenced: () => false,
-    } as never);
-    vi.spyOn(uploadthing, "useUploadThing").mockReturnValue({
-      startUpload: vi.fn(),
     } as never);
     vi.spyOn(conversationComments, "ConversationComments").mockImplementation(
       ({ onMentionUser }) => (

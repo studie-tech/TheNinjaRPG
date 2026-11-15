@@ -29,7 +29,6 @@ import { ForumAttachments } from "@/layout/ForumAttachments";
 import Link from "@/layout/Link";
 import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { hasForumContent } from "@/libs/forumContent";
 import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
@@ -331,7 +330,12 @@ export const ForumComposer = ({
           .filter(Boolean),
       ),
     ];
-    if (!hasForumContent(value.content) || (title && value.title.trim().length < 4)) {
+    // The server applies the same content check, so a failed chunk load skips only this hint.
+    const forumContent = await loadForumContent().catch(() => null);
+    if (
+      (forumContent && !forumContent.hasForumContent(value.content)) ||
+      (title && value.title.trim().length < 4)
+    ) {
       setError("Write at least 4 characters in the message and topic title.");
       return;
     }
@@ -575,6 +579,9 @@ export const ForumEmptyState = ({
 
 /** Replies to a topic: every post after its opening post. */
 const replyCount = (nPosts: number) => Math.max(0, nPosts - 1);
+
+/** The content check shares the sanitizer chunk, so it loads when a post is submitted. */
+const loadForumContent = () => import("@/libs/forumContent");
 
 type Draft = {
   content: string;

@@ -7,7 +7,8 @@ import {
   TAVERN_IMAGE_MAX_SIZE_MB,
   TAVERN_IMAGE_UPLOAD_DAILY_LIMIT,
 } from "@/drizzle/constants";
-import sanitize from "@/utils/sanitize";
+import { loadHtmlSanitizer } from "@/hooks/useHtmlSanitizer";
+import { showMutationToast } from "@/libs/toast";
 
 /** Uses the editor's existing moderated upload path and account-owned image library. */
 export function ForumAttachments({
@@ -24,19 +25,32 @@ export function ForumAttachments({
     enabled: showLibrary,
     refetchOnMount: "always",
   });
-  const document =
+  // A parsed document is inert: it runs no scripts and loads no images, so the draft is
+  // only read here. Removing an image writes back sanitized markup.
+  const draft =
     typeof window === "undefined"
       ? null
-      : new DOMParser().parseFromString(sanitize(content), "text/html");
+      : new DOMParser().parseFromString(content, "text/html");
   const images = [
     ...new Set(
-      Array.from(document?.querySelectorAll("img") ?? [])
+      Array.from(draft?.querySelectorAll("img") ?? [])
         .map((img) => img.getAttribute("src"))
         .filter((url): url is string => !!url && /^(https?:\/\/|\/(?!\/))/i.test(url)),
     ),
   ];
-  const remove = (url: string) => {
-    if (!document) return;
+  const remove = async (url: string) => {
+    const sanitizer = await loadHtmlSanitizer().catch(() => null);
+    if (!sanitizer) {
+      showMutationToast({
+        success: false,
+        message: "The image could not be removed. Please try again.",
+      });
+      return;
+    }
+    const document = new DOMParser().parseFromString(
+      sanitizer.default(content),
+      "text/html",
+    );
     for (const img of document.querySelectorAll("img"))
       if (img.getAttribute("src") === url) img.remove();
     onChange(
@@ -76,7 +90,7 @@ export function ForumAttachments({
                 size="sm"
                 variant="ghost"
                 disabled={disabled}
-                onClick={() => remove(url)}
+                onClick={() => void remove(url)}
               >
                 Remove from draft
               </Button>
