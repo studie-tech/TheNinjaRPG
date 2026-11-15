@@ -97,6 +97,18 @@ const SENTRY_COLORS: Record<string, number> = {
 const VIEW_HALF_WIDTH = 9.5;
 const VIEW_HALF_HEIGHT = 7.5;
 const TERRAIN_SIZE = 29;
+/** How long a character's sheets outlast its last enemy, so a wave gap keeps them. */
+const ENEMY_ART_GRACE_MS = 20_000;
+/** The art of a pooled record, which draws nothing. */
+const NO_ENEMY_ART: EnemyArt = {
+  still: null,
+  move: null,
+  idle: null,
+  users: 0,
+  idleSince: 0,
+  dispose: () => {},
+  disposed: false,
+};
 
 /**
  * Renders a tower-defense run from the deterministic simulation. The scene never
@@ -303,24 +315,30 @@ export const createTowerDefenseScene = async (options: {
       heroAnimationUntil = now + duration;
       heroRestart = true;
     };
-    const ensureClones = async () => {
-      if (clones.length > 0 || !options.appearance || !game.lpcCatalog) return;
-      for (let i = 0; i < 6; i++) {
-        const clone = await createLpcCharacter(
-          game,
-          options.appearance,
-          "travel",
-        ).catch(() => null);
-        if (!clone || game.isDisposed()) return;
-        clone.sprite.scale.set(1.4, -1.4);
-        clone.sprite.alpha = 0.75;
-        clone.sprite.visible = false;
-        actorLayer.addChild(clone.sprite);
-        clones.push(clone);
-      }
+    /** The one clone build, started by the first cast; every later call shares it. */
+    let cloneBuild: Promise<void> | null = null;
+    const ensureClones = () => {
+      const appearance = options.appearance;
+      if (cloneBuild || !appearance || !game.lpcCatalog) return;
+      cloneBuild = (async () => {
+        for (let i = 0; i < 6; i++) {
+          // Each character owns its cleanup, so a build outliving the scene leaks nothing.
+          const clone = await createLpcCharacter(game, appearance, "travel").catch(
+            () => null,
+          );
+          if (!clone || game.isDisposed()) return;
+          clone.sprite.scale.set(1.4, -1.4);
+          clone.sprite.alpha = 0.75;
+          clone.sprite.visible = false;
+          actorLayer.addChild(clone.sprite);
+          clones.push(clone);
+        }
+      })();
     };
 
-    // Enemy art: one sheet set per roster character, shared by every enemy drawn with it
+    // Enemy art: one sheet set per roster character, shared by every enemy drawn with it.
+    // Sheets come from the shared atlas budget, so a character nobody has drawn for a
+    // while gives its sheets back and the rotating bands of a long run keep finding room.
     const appearances = new Map<string, EnemyArt>();
     const maxTexture = game.renderer.gl.getParameter(
       game.renderer.gl.MAX_TEXTURE_SIZE,
@@ -329,7 +347,25 @@ export const createTowerDefenseScene = async (options: {
       const key = entry?.userId ?? "none";
       const existing = appearances.get(key);
       if (existing) return existing;
-      const art: EnemyArt = { still: null, move: null, idle: null };
+      const leases: (() => void)[] = [];
+      const art: EnemyArt = {
+        still: null,
+        move: null,
+        idle: null,
+        users: 0,
+        idleSince: 0,
+        dispose: () => {
+          art.disposed = true;
+          for (const clip of [art.move, art.idle])
+            for (const view of clip?.views ?? []) view.destroy(false);
+          art.move = art.idle = null;
+          for (const release of leases.splice(0)) {
+            release();
+            game.disown(release);
+          }
+        },
+        disposed: false,
+      };
       appearances.set(key, art);
       if (!entry) return art;
       if (entry.avatar)
@@ -347,8 +383,10 @@ export const createTowerDefenseScene = async (options: {
         const lease = acquireAnimationTexture(animation, 128, maxTexture);
         if (!lease) return;
         game.own(lease.release);
+        leases.push(lease.release);
         void lease.resource
           .then((atlas) => {
+            if (art.disposed) return;
             const cell = atlas.width / animation.columns;
             art[slot] = {
               animation,
@@ -372,6 +410,14 @@ export const createTowerDefenseScene = async (options: {
       load(entry.animations.move ?? entry.animations.idle, "move");
       load(entry.animations.idle, "idle");
       return art;
+    };
+    /** Give back the sheets of characters no enemy has used for a while. */
+    const releaseIdleArt = (now: number) => {
+      for (const [key, art] of appearances)
+        if (art.users === 0 && now - art.idleSince > ENEMY_ART_GRACE_MS) {
+          art.dispose();
+          appearances.delete(key);
+        }
     };
     const roster = [...options.roster].sort(
       (a, b) => a.level - b.level || a.userId.localeCompare(b.userId),
@@ -457,7 +503,7 @@ export const createTowerDefenseScene = async (options: {
         fallback,
         halo,
         bar,
-        art: artFor(undefined),
+        art: NO_ENEMY_ART,
         x: 0,
         y: 0,
         bornAt: 0,
@@ -470,6 +516,7 @@ export const createTowerDefenseScene = async (options: {
     const spawnEnemy = (enemy: TdEnemy, wave: number) => {
       const record = enemyPool.take() ?? createEnemyRecord();
       record.art = artFor(rosterFor(enemy, wave));
+      record.art.users++;
       record.x = enemy.x;
       record.y = enemy.y;
       record.bornAt = performance.now();
@@ -610,7 +657,7 @@ export const createTowerDefenseScene = async (options: {
         heroCast?.render(heroFrame, heroAnimation, heroDirection, heroRestart);
       heroRestart = false;
       const cloning = state.tick < state.clonesUntil;
-      if (cloning) void ensureClones();
+      if (cloning) ensureClones();
       clones.forEach((clone, index) => {
         clone.sprite.visible = cloning;
         if (!cloning) return;
@@ -649,8 +696,13 @@ export const createTowerDefenseScene = async (options: {
         if (record.seenFrame !== frameNumber) {
           record.root.removeFromParent();
           enemies.delete(id);
+          if (--record.art.users === 0) record.art.idleSince = now;
+          record.art = NO_ENEMY_ART;
+          // Pooled bodies hold no frame of art that may be released before they return.
+          record.body.texture = record.cast.texture = Texture.EMPTY;
           enemyPool.release(record);
         }
+      releaseIdleArt(now);
 
       // Projectiles
       for (let i = flights.length - 1; i >= 0; i--) {
@@ -1065,7 +1117,7 @@ export const createTowerDefenseScene = async (options: {
           fx.flash(0xffffff, 0.35, 0.4);
           switch (event.ultimate) {
             case "clones":
-              void ensureClones();
+              ensureClones();
               for (let i = 0; i < 6; i++)
                 playClip(
                   smokeFrames,
@@ -1912,6 +1964,13 @@ interface EnemyArt {
   still: Texture | null;
   move: { animation: CharacterAnimation; views: Texture[] } | null;
   idle: { animation: CharacterAnimation; views: Texture[] } | null;
+  /** Live enemies drawn with this art. */
+  users: number;
+  /** When the last of them left the field. */
+  idleSince: number;
+  /** Destroy the frame views and release the sheets. */
+  dispose: () => void;
+  disposed: boolean;
 }
 
 interface EnemyRecord {
