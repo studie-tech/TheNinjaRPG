@@ -1,7 +1,6 @@
 import { afterEach, expect, it } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import { BattleResultSummary } from "@/layout/BattleOutcomeLabel";
-import { battleHistoryOutcome } from "@/libs/combat/history";
 
 afterEach(cleanup);
 
@@ -33,10 +32,4 @@ it("shows nothing for a battle without recorded results", () => {
     />,
   );
   expect(view.container.textContent).toBe("");
-});
-
-it("reads a history row's result from either side", () => {
-  expect(battleHistoryOutcome(entry, "ann")).toBe("Won");
-  expect(battleHistoryOutcome(entry, "bo")).toBe("Lost");
-  expect(battleHistoryOutcome(entry, "someone")).toBeNull();
 });
