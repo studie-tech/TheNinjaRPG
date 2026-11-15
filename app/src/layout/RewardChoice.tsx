@@ -18,6 +18,7 @@ import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Image from "@/layout/Image";
+import { LazyParsedHtml } from "@/layout/LazyParsedHtml";
 import Modal from "@/layout/Modal";
 import {
   REWARD_CHOICE_CATEGORY_LABELS,
@@ -26,7 +27,6 @@ import {
 } from "@/libs/rewardChoice";
 import { cn } from "@/libs/shadui";
 import { showRewardToast } from "@/libs/toast";
-import { parseHtml } from "@/utils/parse";
 import { useUserDataSelector } from "@/utils/UserContext";
 import type { RewardChoiceDisplay } from "@/validators/rewards";
 
@@ -286,7 +286,7 @@ const RewardChoiceCard: React.FC<{
       )}
       {card.description && (
         <div className="line-clamp-2 text-muted-foreground text-xs sm:line-clamp-3">
-          {parseHtml(card.description)}
+          <LazyParsedHtml html={card.description} />
         </div>
       )}
       <div

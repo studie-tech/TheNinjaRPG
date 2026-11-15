@@ -24,13 +24,13 @@ import { useActionPreferenceCacheUpdate } from "@/hooks/useActionPreferenceCache
 import { useMasteryQueueRefresh } from "@/hooks/useMasteryQueueRefresh";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
+import { LazyParsedHtml } from "@/layout/LazyParsedHtml";
 import { usePusherHandler } from "@/layout/PusherHandler";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import type { AchievementProgress, UserWithRelations } from "@/routers/profile";
-import { parseHtml } from "@/utils/parse";
 import { loginRedirectPath } from "@/utils/routing";
 import {
   prepareUserUpdate as captureUserUpdate,
@@ -302,7 +302,11 @@ export function UserContextProvider(props: {
       .forEach((n) => {
         showMutationToast({
           success: true,
-          message: <div>{parseHtml(n.name)}</div>,
+          message: (
+            <div>
+              <LazyParsedHtml html={n.name} />
+            </div>
+          ),
           title: "Notification!",
         });
       });
