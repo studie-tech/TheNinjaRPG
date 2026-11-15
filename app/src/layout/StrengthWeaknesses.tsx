@@ -22,6 +22,7 @@ import {
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   TOTAL_MASTERY_CAP,
 } from "@/drizzle/constants";
+import { useUnspentSkillPoints } from "@/hooks/useUnspentSkillPoints";
 import { Bloodright } from "@/layout/Bloodright";
 import ContentBox from "@/layout/ContentBox";
 import { CovertStatCard } from "@/layout/CovertStatCard";
@@ -55,7 +56,11 @@ const StrengthWeaknesses: React.FC = () => {
   // State
   type TabOptions = (typeof tabOptions)[number];
   const { data: storedUserData } = useRequiredUserData();
-  const [currentTab, setCurrentTab] = useState<TabOptions>("Graphs");
+  const [pickedTab, setCurrentTab] = useState<TabOptions | null>(null);
+  const unspentSkillPoints = useUnspentSkillPoints();
+  // Open on the skill tree while points wait there; spending them keeps the tab open.
+  if (pickedTab === null && unspentSkillPoints > 0) setCurrentTab("Skills");
+  const currentTab = pickedTab ?? "Graphs";
 
   // Show rank-capped stats from a copy; the cached user keeps its stored values
   const userData = storedUserData ? withCappedStats(storedUserData) : undefined;
@@ -122,6 +127,8 @@ const StrengthWeaknesses: React.FC = () => {
             current={currentTab}
             options={tabOptions}
             setValue={setCurrentTab}
+            counts={{ Skills: unspentSkillPoints }}
+            countLabel="unspent skill points"
           />
           {(currentTab === "Stats" || currentTab === "Graphs") && renderInfoButton()}
         </div>

@@ -23,6 +23,8 @@ interface NavTabsProps {
   itemClassName?: (option: string) => string;
   counts?: Partial<Record<string, number>>;
   countLabel?: string;
+  /** Per-tab names for what a count means; tabs without one use `countLabel`. */
+  countLabels?: Partial<Record<string, string>>;
   /** Render Radix tabs inside a controlled Tabs root with matching TabsContent. */
   accessibleTabs?: boolean;
   label?: string;
@@ -56,6 +58,8 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
 
   const tabItems = options.map((option, i) => {
     const count = props.counts?.[option] ?? 0;
+    const countLabel =
+      props.countLabels?.[option] ?? props.countLabel ?? "notifications";
     const isIconOnly =
       !!props.icons?.[option] && !!props.iconOnlyOptions?.includes(option);
     const isSelected = option === shownCurrent;
@@ -65,7 +69,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
         title={isIconOnly ? option : undefined}
         aria-label={
           isIconOnly
-            ? `${option}${count > 0 ? ` ${count} ${props.countLabel ?? "notifications"}` : ""}`
+            ? `${option}${count > 0 ? ` ${count} ${countLabel}` : ""}`
             : undefined
         }
         aria-current={!props.accessibleTabs && isSelected ? "true" : undefined}
@@ -104,12 +108,12 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
         {count > 0 && (
           <span
             className="absolute top-0 right-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-orange-100 text-xs"
-            title={`${count} ${props.countLabel ?? "notifications"}`}
+            title={`${count} ${countLabel}`}
           >
             <span aria-hidden="true">{count}</span>
             <span className="sr-only">
               {" "}
-              {count} {props.countLabel ?? "notifications"}
+              {count} {countLabel}
             </span>
           </span>
         )}
