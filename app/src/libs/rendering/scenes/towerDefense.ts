@@ -1,4 +1,5 @@
 import {
+  Color,
   Container,
   Graphics,
   GraphicsContext,
@@ -22,7 +23,6 @@ import { createSoftShadowTexture } from "@/libs/rendering/primitives/shadow";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
-import { createRecyclePool } from "@/libs/rendering/recyclePool";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import {
   createTowerDefenseFx,
@@ -35,15 +35,12 @@ import {
   type CharacterAnimations,
   spriteAnimationFrame,
 } from "@/libs/spriteAnimations";
-import {
-  TD_HERO_ZONE,
-  TD_MAX_ALIVE,
-  TD_TICK_SECONDS,
-} from "@/libs/towerDefense/balance";
+import { TD_HERO_ZONE, TD_TICK_SECONDS } from "@/libs/towerDefense/balance";
 import {
   TD_AFFIX_INFO,
   TD_ENEMIES,
   TD_ENEMY_KINDS,
+  TD_JUTSU_INFO,
   TD_SENTRY_INFO,
   type TdElement,
   type TdEnemyKind,
@@ -465,13 +462,11 @@ export const createTowerDefenseScene = async (options: {
     // detaches its record and the next spawn resets it.
     const enemies = new Map<number, EnemyRecord>();
     const enemyShapes = createEnemyShapes();
-    const enemyPool = createRecyclePool<EnemyRecord>({
-      // Records never outnumber the largest crowd, so this only bounds a split surge.
-      limit: TD_MAX_ALIVE,
-      dispose: (record) => record.root.destroy({ children: true }),
-    });
+    // A record is built only when none is spare, so spares never outnumber the largest crowd.
+    const spareEnemies: EnemyRecord[] = [];
     game.own(() => {
-      enemyPool.dispose();
+      for (const record of spareEnemies.splice(0))
+        record.root.destroy({ children: true });
       enemyShapes.dispose();
     });
     const createEnemyRecord = (): EnemyRecord => {
@@ -532,7 +527,7 @@ export const createTowerDefenseScene = async (options: {
     };
     /** Resets a pooled record for a new enemy; `drawEnemyBody` sets the rest each frame. */
     const spawnEnemy = (enemy: TdEnemy, wave: number) => {
-      const record = enemyPool.take() ?? createEnemyRecord();
+      const record = spareEnemies.pop() ?? createEnemyRecord();
       record.art = artFor(rosterFor(enemy, wave));
       record.art.users++;
       record.x = enemy.x;
@@ -720,7 +715,7 @@ export const createTowerDefenseScene = async (options: {
           record.art = NO_ENEMY_ART;
           // Pooled bodies hold no frame of art that may be released before they return.
           record.body.texture = record.cast.texture = Texture.EMPTY;
-          enemyPool.release(record);
+          spareEnemies.push(record);
         }
       updateArtLeases(now);
 
@@ -875,7 +870,7 @@ export const createTowerDefenseScene = async (options: {
         }
         case "jutsu": {
           cueHero("spellcast", now);
-          const color = ELEMENT_COLORS[jutsuElement(event.jutsu)];
+          const color = ELEMENT_COLORS[TD_JUTSU_INFO[event.jutsu].element];
           switch (event.jutsu) {
             case "fire":
               for (const point of event.points) {
@@ -1819,17 +1814,6 @@ const LOOT_COLORS = {
   rage: 0xff4d4d,
 } as const;
 
-const jutsuElement = (jutsu: string): TdElement =>
-  jutsu === "fire"
-    ? "fire"
-    : jutsu === "lightning"
-      ? "lightning"
-      : jutsu === "water"
-        ? "water"
-        : jutsu === "wind"
-          ? "wind"
-          : "earth";
-
 const nearestEnemy = (state: TdState, x: number, y: number) => {
   let best: TdEnemy | undefined,
     bestDist = Number.POSITIVE_INFINITY;
@@ -1875,23 +1859,8 @@ const auraColor = (wave: number, now: number) =>
           ? 0x5ab0ff
           : null;
 
-const hueColor = (hue: number) => {
-  const h = hue / 60,
-    x = 1 - Math.abs((h % 2) - 1);
-  const [r, g, b] =
-    h < 1
-      ? [1, x, 0]
-      : h < 2
-        ? [x, 1, 0]
-        : h < 3
-          ? [0, 1, x]
-          : h < 4
-            ? [0, x, 1]
-            : h < 5
-              ? [x, 0, 1]
-              : [1, 0, x];
-  return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
-};
+const hueColor = (hue: number) =>
+  Color.shared.setValue({ h: hue, s: 100, v: 100 }).toNumber();
 
 /** The boss's outer ring is drawn at its mid-pulse size and scaled through the pulse. */
 const BOSS_RING_RADIUS_X = 0.875;
