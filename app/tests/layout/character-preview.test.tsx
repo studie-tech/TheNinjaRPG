@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { Container } from "pixi.js";
 import * as lpcHooks from "@/hooks/lpc";
 import { CharacterPreview } from "@/layout/CharacterPreview";
-import type { LpcCatalog } from "@/libs/lpc/catalog";
 import type { LpcCharacter } from "@/libs/rendering/primitives/character";
 import * as character from "@/libs/rendering/primitives/character";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
@@ -236,7 +235,7 @@ describe("character preview", () => {
   });
 
   it("ignores a catalog that finishes loading for an obsolete appearance", async () => {
-    const held = deferred<LpcCatalog>();
+    const held = deferred<typeof lpcCatalog>();
     const load = vi.fn(loadCatalog).mockImplementationOnce(() => held.promise);
     vi.spyOn(lpcHooks, "useLpcCatalogLoader").mockReturnValue(load);
     const view = render(<CharacterPreview user={{ gender: "Male" }} />);
