@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { Button } from "@/components/ui/button";
+import { useNavigationRouter } from "@/hooks/navigation";
 import AvatarImage from "@/layout/Avatar";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
@@ -43,12 +44,18 @@ type TableProps<T, K extends keyof T> = {
 };
 
 /**
- * Data table. With `linkColumn`, each row is a real link to its page: the row's name cell
- * holds the link and its hit area covers the row, so rows open in a new tab and take focus,
- * while cell controls stay above it.
+ * Data table. With `linkColumn`, each row opens its page: the row's name cell holds a real
+ * link (keyboard focus, open in a new tab), and a click anywhere else on the row follows
+ * that same row's link, while cell controls keep their own clicks.
+ *
+ * The row click is handled on the row itself. A link overlay stretched over the row with
+ * `position: absolute` depends on the `<tr>` being its containing block; where a browser
+ * does not honour `position: relative` on a table row, every row's overlay covers the
+ * whole table and each click opens the last row's page.
  */
 const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
   const { data, columns } = props;
+  const router = useNavigationRouter();
   const compact = props.compact === true;
   const avatarSize = compact ? 36 : 100;
   const avatarWrap = compact ? "w-9" : "w-20";
@@ -122,11 +129,26 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                     "border-gray-700 border-b",
                     i % 2 === 0 ? "bg-card" : "bg-popover",
                     isClickable && "cursor-pointer hover:bg-poppopover",
-                    // The row link's hit area spans the row; controls in cells sit above it.
-                    href &&
-                      "relative focus-within:bg-poppopover [&_:is(a,button,input,select,label):not([data-row-link])]:relative [&_:is(a,button,input,select,label):not([data-row-link])]:z-10",
+                    href && "focus-within:bg-poppopover",
                   )}
-                  onClick={props.onRowClick ? () => props.onRowClick?.(row) : undefined}
+                  onClick={(event) => {
+                    if (props.onRowClick) {
+                      props.onRowClick(row);
+                      return;
+                    }
+                    if (!href || isFromControl(event)) return;
+                    if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                      window.open(href, "_blank", "noopener");
+                    } else {
+                      router.push(href);
+                    }
+                  }}
+                  onAuxClick={(event) => {
+                    // Middle click on the row opens it in a new tab, like the link itself.
+                    if (event.button !== 1 || props.onRowClick) return;
+                    if (!href || isFromControl(event)) return;
+                    window.open(href, "_blank", "noopener");
+                  }}
                 >
                   {columns.map((column, columnIndex) => {
                     const linkHere =
@@ -177,7 +199,7 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                           <Link
                             href={href}
                             data-row-link
-                            className="after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:underline focus-visible:outline-hidden"
+                            className="hover:underline focus-visible:underline focus-visible:outline-hidden"
                           >
                             {content}
                           </Link>
@@ -187,7 +209,7 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                               <Link
                                 href={href}
                                 data-row-link
-                                className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-hidden"
+                                className="focus-visible:outline-hidden"
                               >
                                 <span className="sr-only">Open</span>
                               </Link>
@@ -240,3 +262,18 @@ export default Table;
 /** A column whose cell is plain text, so it can carry the row link's name. */
 const isTextColumn = <T, K extends keyof T>(column: ColumnDefinitionType<T, K>) =>
   column.type === "string" || column.type === "capitalized";
+
+/**
+ * Whether a row click started on a link or control inside the row (including the row's own
+ * name link), which handles the click itself, or outside the row's DOM altogether: a
+ * dialog or popover portalled from a cell still bubbles its clicks through the row.
+ */
+const isFromControl = (event: React.MouseEvent<HTMLTableRowElement>) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return false;
+  if (!event.currentTarget.contains(target)) return true;
+  const control = target.closest(
+    "a, button, input, select, textarea, label, summary, [role='button'], [role='link'], [role='checkbox'], [role='menuitem']",
+  );
+  return !!control && event.currentTarget.contains(control);
+};
