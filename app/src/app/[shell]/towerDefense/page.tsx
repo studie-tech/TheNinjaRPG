@@ -13,7 +13,7 @@ import {
 } from "@/drizzle/constants";
 import { useTowerDefenseRun } from "@/hooks/useTowerDefenseRun";
 import ContentBox from "@/layout/ContentBox";
-import { useGameSettings } from "@/layout/GameSettings";
+import { type GameSettingsUser, useGameSettings } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import {
@@ -67,7 +67,17 @@ export default function TowerDefensePage() {
     ids: [ID_ANIMATION_HIT, ID_ANIMATION_SMOKE, ...Object.values(TD_SFX)],
   });
   // Sound follows the same "Combat sounds" preference and volume as battles.
-  const { data: settingsUser } = useUserDataSelector((profile) => profile);
+  const { data: settingsUser } = useUserDataSelector(
+    (profile): GameSettingsUser => ({
+      musicOn: profile.musicOn,
+      buttonSfxOn: profile.buttonSfxOn,
+      sfxOn: profile.sfxOn,
+      village: profile.village,
+      isOutlaw: profile.isOutlaw,
+      bloodlineId: profile.bloodlineId,
+      status: profile.status,
+    }),
+  );
   const { sfxOn, setSfxEnabled } = useGameSettings(settingsUser);
   const sounds = useMemo(() => {
     const urls = new Map<TdSfx, string>();
