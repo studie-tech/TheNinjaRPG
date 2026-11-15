@@ -15,6 +15,7 @@ import { type ReactNode, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Confirm from "@/layout/Confirm";
 import { cn } from "@/libs/shadui";
 import {
   TD_GAME_SPEEDS,
@@ -169,9 +170,25 @@ export const TowerDefenseOverlay = (props: {
               <VolumeX className="h-4 w-4" />
             )}
           </OverlayButton>
-          <OverlayButton label="Retreat and bank your scrolls" onClick={props.onQuit}>
-            <Flag className="h-4 w-4" />
-          </OverlayButton>
+          <Confirm
+            title="Retreat?"
+            button={
+              <button
+                type="button"
+                title="Retreat and bank your scrolls"
+                className={OVERLAY_BUTTON_CLASS}
+              >
+                <Flag className="h-4 w-4" />
+              </button>
+            }
+            triggerLabel="Retreat and bank your scrolls"
+            tone="destructive"
+            proceed_label="Retreat"
+            onAccept={props.onQuit}
+          >
+            Retreating ends this run at wave {state.wave} and banks the scrolls it
+            earned.
+          </Confirm>
         </div>
       </div>
       {sealCount > 0 && props.mode === "aim" && (
@@ -600,6 +617,9 @@ const Meter = (props: { value: number; max: number; color: string }) => (
   </div>
 );
 
+const OVERLAY_BUTTON_CLASS =
+  "flex h-8 min-w-8 items-center justify-center gap-0.5 rounded-md bg-black/50 px-1.5 text-white hover:bg-black/70 disabled:opacity-50";
+
 const OverlayButton = (props: {
   label: string;
   onClick: () => void;
@@ -612,7 +632,7 @@ const OverlayButton = (props: {
     title={props.label}
     disabled={props.disabled}
     onClick={props.onClick}
-    className="flex h-8 min-w-8 items-center justify-center gap-0.5 rounded-md bg-black/50 px-1.5 text-white hover:bg-black/70 disabled:opacity-50"
+    className={OVERLAY_BUTTON_CLASS}
   >
     {props.children}
   </button>
