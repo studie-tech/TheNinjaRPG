@@ -435,10 +435,6 @@ export const tdDojoCost = (id: TdDojoUpgrade, level: number) => {
   return geometricCost(info.base, info.growth, level);
 };
 
-/** Whether a Dojo level can be bought: unlocked by best wave and below max. */
-export const tdDojoAvailable = (id: TdDojoUpgrade, level: number, bestWave: number) =>
-  level < TD_DOJO_INFO[id].max && bestWave >= TD_DOJO_INFO[id].unlockWave;
-
 const SQRT3_2 = Math.sqrt(3) / 2;
 
 /** Sentry posts on a hexagon around the arena centre, shared by every run. */

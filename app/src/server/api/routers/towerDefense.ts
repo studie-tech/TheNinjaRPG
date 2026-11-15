@@ -9,7 +9,7 @@ import {
   type TdDojoUpgrade,
   tdCheckpoints,
 } from "@/libs/towerDefense/content";
-import { TD_SIM_VERSION, tdDojoAvailable, tdDojoCost } from "@/libs/towerDefense/sim";
+import { TD_SIM_VERSION, tdDojoCost } from "@/libs/towerDefense/sim";
 import {
   findTowerDefenseClaimReceipt,
   findTowerDefenseProgress,
@@ -253,7 +253,7 @@ export const towerDefenseRouter = createTRPCRouter({
       const level = dojoLevels(upgrades)[input.upgradeId] ?? 0;
       if (level >= TD_DOJO_INFO[input.upgradeId].max)
         return errorResponse("Already at max level.");
-      if (!tdDojoAvailable(input.upgradeId, level, progress.towerDefenseBestWave))
+      if (progress.towerDefenseBestWave < TD_DOJO_INFO[input.upgradeId].unlockWave)
         return errorResponse(
           `Reach wave ${TD_DOJO_INFO[input.upgradeId].unlockWave} to unlock this.`,
         );
