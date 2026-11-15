@@ -45,7 +45,6 @@ import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto"
 import {
   TD_MAX_LOG_CHARS,
   TD_MAX_TICKS,
-  type TowerDefenseRunToken,
   towerDefenseRunTokenSchema,
 } from "@/validators/towerDefense";
 
@@ -101,27 +100,20 @@ export const towerDefenseRouter = createTRPCRouter({
       const bestWave = progress.towerDefenseBestWave;
       if (!tdCheckpoints(bestWave).includes(input.startWave))
         return errorResponse("That checkpoint is not unlocked yet.");
-      const payload: TowerDefenseRunToken = {
-        v: 1,
-        userId: ctx.userId,
-        nonce: nanoid(),
+      const config = {
         seed: nanoid(),
         startWave: input.startWave,
         bestWave,
         dojo: dojoLevels(upgrades),
+      };
+      const token = signRunToken({
+        v: 1,
+        userId: ctx.userId,
+        nonce: nanoid(),
+        ...config,
         issuedAt: Date.now(),
-      };
-      return {
-        success: true,
-        message: "Run started",
-        token: signRunToken(payload),
-        config: {
-          seed: payload.seed,
-          startWave: payload.startWave,
-          bestWave: payload.bestWave,
-          dojo: payload.dojo,
-        },
-      };
+      });
+      return { success: true, message: "Run started", token, config };
     }),
 
   /**
