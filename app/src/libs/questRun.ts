@@ -118,16 +118,24 @@ export const getQuestEntryRequirements = (
   return [...quantities].map(([itemId, quantity]) => ({ itemId, quantity }));
 };
 
-/** Entry items with the carried count of each; a missing item shows its id until named. */
+/**
+ * Entry items with the carried count of each. Items the player does not carry are named from
+ * `named` (looked up server-side, since hidden items are not in `item.getAllNames` for
+ * players); an item in neither shows its id.
+ */
 export const getQuestEntryStock = (
   content: Pick<QuestContentType, "entryItems">,
   carried: readonly { itemId: string; quantity: number; item: { name: string } }[],
+  named: readonly { id: string; name: string }[] = [],
 ) =>
   getQuestEntryRequirements(content).map((required) => {
     const rows = carried.filter((row) => row.itemId === required.itemId);
     return {
       ...required,
-      name: rows[0]?.item.name ?? required.itemId,
+      name:
+        rows[0]?.item.name ??
+        named.find((entry) => entry.id === required.itemId)?.name ??
+        required.itemId,
       owned: rows.reduce((sum, row) => sum + row.quantity, 0),
     };
   });

@@ -1,4 +1,5 @@
 import { beforeEach, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 import { item, quest, questHistory, userData, userItem } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -11,6 +12,7 @@ import {
 import {
   callerFor,
   describeWithDatabase,
+  getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
 
@@ -53,11 +55,22 @@ describeWithDatabase("allianceBuilding entry stock", () => {
     ]);
   });
 
-  it("reports a missing item as zero owned", async () => {
+  it("reports a missing item as zero owned, named from the catalogue", async () => {
     const quests = await callerFor(questsRouter, "hero");
     const hall = await quests.allianceBuilding({ level: 50, rank: ["D"] });
     expect(hall[0]?.entryRequirements).toEqual([
-      { itemId: "ticket", quantity: 2, name: "ticket", owned: 0 },
+      { itemId: "ticket", quantity: 2, name: "Event Ticket", owned: 0 },
+    ]);
+  });
+
+  it("names a hidden entry item the player does not carry", async () => {
+    // Players don't get hidden items from item.getAllNames, so the server names them.
+    const db = await getTestDatabase();
+    await db.update(item).set({ hidden: true }).where(eq(item.id, "ticket"));
+    const quests = await callerFor(questsRouter, "hero");
+    const hall = await quests.allianceBuilding({ level: 50, rank: ["D"] });
+    expect(hall[0]?.entryRequirements).toEqual([
+      { itemId: "ticket", quantity: 2, name: "Event Ticket", owned: 0 },
     ]);
   });
 });

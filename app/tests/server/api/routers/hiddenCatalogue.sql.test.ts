@@ -74,6 +74,14 @@ const listHidden = async (userId: Viewer) => ({
   ),
 });
 
+/** Every public name list (content pickers, name lookups), as `userId`. */
+const listNames = async (userId: Viewer) => ({
+  items: ids(await run(itemRouter.getAllNames, userId, undefined)),
+  jutsu: ids(await run(jutsuRouter.getAllNames, userId, undefined)),
+  bloodlines: ids(await run(bloodlineRouter.getAllNames, userId, undefined)),
+  quests: ids(await run(questsRouter.getAllNames, userId, undefined)),
+});
+
 /**
  * Public catalogues list hidden (unreleased) entries only for signed-in content staff. A
  * signed-out visitor, a player or a non-content staff member asking for `hidden: true` gets
@@ -142,12 +150,31 @@ describeWithDatabase("hidden catalogue entries", () => {
       });
     });
 
+    it(`names only released entries for ${who}`, async () => {
+      // getAllNames used to return hidden names and images to any caller.
+      expect(await listNames(userId)).toEqual({
+        items: ["item-open"],
+        jutsu: ["jutsu-open"],
+        bloodlines: ["line-open"],
+        quests: ["quest-open"],
+      });
+    });
+
     it(`lists only released quests for ${who} without a hidden filter`, async () => {
       // An unset filter used to list every quest, hidden ones included.
       const quests = await run(questsRouter.getAll, userId, { limit: 50 });
       expect(ids(quests.data)).toEqual(["quest-open"]);
     });
   }
+
+  it("names hidden entries for content staff pickers", async () => {
+    expect(await listNames(contentId)).toEqual({
+      items: ["item-open", "item-secret"],
+      jutsu: ["jutsu-open", "jutsu-secret"],
+      bloodlines: ["line-open", "line-secret"],
+      quests: ["quest-open", "quest-secret"],
+    });
+  });
 
   it("keeps the hidden filter working for content staff", async () => {
     expect(await listHidden(contentId)).toEqual({

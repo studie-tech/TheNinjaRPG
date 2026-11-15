@@ -150,7 +150,9 @@ export const bloodlineRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { description: "Get all bloodline names and images" } })
     .query(async ({ ctx }) => {
-      return await listBloodlineForGetAllNames(ctx.drizzle);
+      // Hidden bloodlines only for content staff; signed-out callers skip the role lookup.
+      const allowHidden = await fetchCanListHiddenContent(ctx.drizzle, ctx.userId);
+      return await listBloodlineForGetAllNames(ctx.drizzle, allowHidden);
     }),
   getAll: publicProcedure
     .meta({

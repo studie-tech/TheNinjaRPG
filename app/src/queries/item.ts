@@ -341,9 +341,16 @@ export type UserItemMergeBucketRow = Pick<
   | "dropChancePerc"
 >;
 
-/** Build the `item` listing for `getAllNames`. */
-export const listItemForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
+/**
+ * Build the `item` listing for `getAllNames`. Hidden items are included only when
+ * `allowHidden` (content staff, `fetchCanListHiddenContent`).
+ */
+export const listItemForGetAllNames = (
+  client: Pick<DrizzleClient, "query">,
+  allowHidden: boolean,
+) =>
   client.query.item.findMany({
+    where: allowHidden ? undefined : eq(item.hidden, false),
     columns: {
       id: true,
       name: true,

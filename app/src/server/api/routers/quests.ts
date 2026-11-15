@@ -151,6 +151,7 @@ import {
   listQuestHistoryForGetQuestHistory,
   listQuestHistoryForGetUserQuests,
   listRewardPackageForUpdate,
+  listUncarriedQuestEntryItemNames,
   selectBadgeForResolveRewardChoiceDisplays,
   selectBloodlineForResolveRewardChoiceDisplays,
   selectItemForResolveRewardChoiceDisplays,
@@ -281,10 +282,13 @@ export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { description: "Get all quest names and IDs" } })
     .query(async ({ ctx }) => {
-      const [viewerRole, results] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
-        listQuestForGetAllNames(ctx.drizzle),
-      ]);
+      // Hidden quests only for content staff (as in `getAll`); signed-out callers skip the
+      // role lookup.
+      const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+      const results = await listQuestForGetAllNames(
+        ctx.drizzle,
+        canChangeContent(viewerRole),
+      );
       return hideRestrictedQuestsFrom(viewerRole, results);
     }),
   getAll: publicProcedure
@@ -378,12 +382,18 @@ export const questsRouter = createTRPCRouter({
       events.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
-      return events
-        .filter((e) => isAvailableUserQuests(e, user, true).check)
-        .map((entry) => ({
-          ...entry,
-          entryRequirements: getQuestEntryStock(entry.content, inventory),
-        }));
+      const available = events.filter(
+        (e) => isAvailableUserQuests(e, user, true).check,
+      );
+      const named = await listUncarriedQuestEntryItemNames(
+        ctx.drizzle,
+        available,
+        inventory,
+      );
+      return available.map((entry) => ({
+        ...entry,
+        entryRequirements: getQuestEntryStock(entry.content, inventory, named),
+      }));
     }),
   missionHall: protectedProcedure
     .meta({
@@ -435,12 +445,18 @@ export const questsRouter = createTRPCRouter({
       quests.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
-      return quests
-        .filter((e) => isAvailableUserQuests(e, user, true).check)
-        .map((entry) => ({
-          ...entry,
-          entryRequirements: getQuestEntryStock(entry.content, inventory),
-        }));
+      const available = quests.filter(
+        (e) => isAvailableUserQuests(e, user, true).check,
+      );
+      const named = await listUncarriedQuestEntryItemNames(
+        ctx.drizzle,
+        available,
+        inventory,
+      );
+      return available.map((entry) => ({
+        ...entry,
+        entryRequirements: getQuestEntryStock(entry.content, inventory, named),
+      }));
     }),
   upcomingQuests: protectedProcedure
     .meta({

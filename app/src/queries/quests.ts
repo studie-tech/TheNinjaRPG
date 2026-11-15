@@ -71,6 +71,7 @@ import { getFarmingLevel } from "@/libs/farming";
 import { isSupportedOverworldBindingTask } from "@/libs/overworldAi";
 import { filterQuestTrackersForDbPersist, getUserQuests } from "@/libs/quest";
 import { summarizeAvailabilityObjectives } from "@/libs/quest/availability";
+import { getQuestEntryRequirements } from "@/libs/questRun";
 import {
   type RewardChoiceOwnership,
   rewardChoiceContentIds,
@@ -349,9 +350,16 @@ export const fetchRewardChoiceOwnership = async (
   };
 };
 
-/** List quest names and types in name order; callers apply visibility and assignment rules. */
-export const listQuestForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
+/**
+ * List quest names and types in name order. Hidden quests are included only when `allowHidden`
+ * (content staff); callers apply the remaining visibility and assignment rules.
+ */
+export const listQuestForGetAllNames = (
+  client: Pick<DrizzleClient, "query">,
+  allowHidden: boolean,
+) =>
   client.query.quest.findMany({
+    where: allowHidden ? undefined : eq(quest.hidden, false),
     columns: { id: true, name: true, questType: true },
     orderBy: (table, { asc }) => [asc(table.name)],
   });
@@ -427,6 +435,30 @@ export const listCarriedItemsForQuestEntry = (
     columns: { itemId: true, quantity: true },
     with: { item: { columns: { name: true } } },
   });
+
+/**
+ * Name the entry items of listed quests that the player does not carry. Hidden items are
+ * included: a quest the player may start requires them, and `item.getAllNames` leaves them out
+ * for players. Skips the query when every entry item is carried.
+ */
+export const listUncarriedQuestEntryItemNames = async (
+  client: Pick<DrizzleClient, "query">,
+  quests: readonly { content: Pick<QuestContentType, "entryItems"> }[],
+  carried: readonly { itemId: string }[],
+) => {
+  const carriedIds = new Set(carried.map((row) => row.itemId));
+  const missing = new Set(
+    quests
+      .flatMap((entry) => getQuestEntryRequirements(entry.content))
+      .map((required) => required.itemId)
+      .filter((itemId) => !carriedIds.has(itemId)),
+  );
+  if (missing.size === 0) return [];
+  return await client.query.item.findMany({
+    columns: { id: true, name: true },
+    where: inArray(item.id, [...missing]),
+  });
+};
 
 /** Build the `quest` selection for `startRandom`, including predicates on `questType`, `questRank`, `startsAt`. */
 export const selectQuestForStartRandom = (

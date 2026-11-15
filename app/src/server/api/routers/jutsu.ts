@@ -454,7 +454,9 @@ export const jutsuRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { description: "Get all jutsu names and images" } })
     .query(async ({ ctx }) => {
-      return await listJutsuForGetAllNames(ctx.drizzle);
+      // Hidden jutsu only for content staff; signed-out callers skip the role lookup.
+      const allowHidden = await fetchCanListHiddenContent(ctx.drizzle, ctx.userId);
+      return await listJutsuForGetAllNames(ctx.drizzle, allowHidden);
     }),
 
   get: publicProcedure

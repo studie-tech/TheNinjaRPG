@@ -529,7 +529,9 @@ export const itemRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { description: "Get all item names and images" } })
     .query(async ({ ctx }) => {
-      const items = await listItemForGetAllNames(ctx.drizzle);
+      // Hidden items only for content staff; signed-out callers skip the role lookup.
+      const allowHidden = await fetchCanListHiddenContent(ctx.drizzle, ctx.userId);
+      const items = await listItemForGetAllNames(ctx.drizzle, allowHidden);
       return items.map(({ bloodlineId, effects, ...entry }) => ({
         ...entry,
         /** Distinguish weighted caches from other reward consumables in content selectors. */
