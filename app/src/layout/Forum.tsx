@@ -12,7 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useFormState, useWatch } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -282,7 +282,9 @@ export const ForumComposer = ({
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const processedQuote = useRef("");
-  const isBlocked = pending || !ready || !!recovery;
+  // Submitting covers the content check that runs before the mutation starts.
+  const { isSubmitting } = useFormState({ control: form.control });
+  const isBlocked = pending || isSubmitting || !ready || !!recovery;
   const storageKey = `forum-draft:${user?.userId}:${draftKey}`;
   useEffect(() => {
     try {

@@ -331,12 +331,9 @@ export const RichInput = (props: RichInputProps) => {
     const focusedBeforeUpload = document.activeElement;
     const uploadAndInsert = async () => {
       const dimensions = await getImageDimensions(file);
-      // Failed uploads reject with the server message.
-      const { uploadFiles } = await loadUploader();
-      const result = (await uploadFiles("tavernUploader", { files: [file] }))[0]
-        ?.serverData;
+      const result = await uploadTavernImage(file);
       if (!result?.fileUrl || result.error)
-        throw new Error(result?.error || "Image upload failed. Please try again.");
+        throw new Error(result?.error || UPLOAD_FAILED_MESSAGE);
       // A reset, closed composer or account change must not receive an old upload.
       if (generation === generationRef.current && editor === quillRef.current) {
         if (source && selection && source === textareaRef.current) {
@@ -929,8 +926,27 @@ export const RichInput = (props: RichInputProps) => {
  */
 const loadQuill = () => Promise.all([import("quill"), loadHtmlSanitizer()]);
 
-/** The uploader client and its runtime load with the first pasted or dropped image. */
-const loadUploader = () => import("@/utils/uploadthing");
+const UPLOAD_FAILED_MESSAGE = "Image upload failed. Please try again.";
+
+/**
+ * Uploads one image; the uploader client and its runtime load with the first one. Only
+ * UploadThing's own errors carry a message meant for players: a chunk that cannot load or
+ * a dropped connection rejects with the generic failure instead.
+ */
+const uploadTavernImage = async (file: File) => {
+  const uploader = await import("@/utils/uploadthing").catch(() => null);
+  if (!uploader) throw new Error(UPLOAD_FAILED_MESSAGE);
+  try {
+    return (await uploader.uploadFiles("tavernUploader", { files: [file] }))[0]
+      ?.serverData;
+  } catch (error) {
+    throw new Error(
+      error instanceof Error && error.name === "UploadThingError"
+        ? error.message
+        : UPLOAD_FAILED_MESSAGE,
+    );
+  }
+};
 
 /** Touch screens without a precise pointer use soft keyboards. */
 const isCoarsePointer = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;

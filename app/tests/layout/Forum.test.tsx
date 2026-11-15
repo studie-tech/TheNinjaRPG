@@ -75,3 +75,34 @@ it("restores a saved draft before appending a quote once and retains it after fa
   await waitFor(() => expect(editor.value).toBe(""));
   expect(localStorage.getItem(storageKey)).toBeNull();
 });
+
+it("blocks a second submission while the first one is still being checked and sent", async () => {
+  let finish: (posted: boolean) => void = () => {};
+  const onSubmit = vi.fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const view = render(
+    <ForumComposer
+      draftKey="thread:topic"
+      pending={false}
+      uploads={false}
+      onSubmit={onSubmit}
+    />,
+  );
+  const editor = view.getByRole("textbox", {
+    name: "Reply message",
+  }) as HTMLTextAreaElement;
+  await waitFor(() => expect(editor.disabled).toBe(false));
+  fireEvent.change(editor, { target: { value: "<p>A useful reply.</p>" } });
+  const post = view.getByRole("button", { name: "Post reply" }) as HTMLButtonElement;
+  fireEvent.click(post);
+  await waitFor(() => expect(post.disabled).toBe(true));
+  fireEvent.click(post);
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+  finish(true);
+  await waitFor(() => expect(post.disabled).toBe(false));
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+});

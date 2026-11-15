@@ -962,8 +962,19 @@ describe("rich input composer", () => {
     expect(editor.value.endsWith(advancedHtml)).toBe(true);
   });
 
-  it("shows the uploader's message when an upload fails", async () => {
-    startUpload.mockRejectedValueOnce(new Error("File too large."));
+  it.each([
+    ["the uploader's message", "UploadThingError", "File too large."],
+    [
+      "a generic message for transport errors",
+      "TypeError",
+      "Image upload failed. Please try again.",
+    ],
+  ])("shows %s when an upload fails", async (_case, name, message) => {
+    startUpload.mockRejectedValueOnce(
+      Object.assign(new Error(name === "TypeError" ? "Failed to fetch" : message), {
+        name,
+      }),
+    );
     const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => {});
     spies.push(
       showToast,
@@ -977,10 +988,7 @@ describe("rich input composer", () => {
     }) as HTMLTextAreaElement;
     pasteImage(editor);
     await waitFor(() =>
-      expect(showToast).toHaveBeenCalledWith({
-        success: false,
-        message: "File too large.",
-      }),
+      expect(showToast).toHaveBeenCalledWith({ success: false, message }),
     );
     expect(editor.value).toBe(advancedHtml);
     expect(editor.disabled).toBe(false);
