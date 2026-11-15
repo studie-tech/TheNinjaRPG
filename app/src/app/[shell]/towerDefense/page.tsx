@@ -12,7 +12,7 @@ import {
   type TdSfx,
 } from "@/drizzle/constants";
 import { useTowerDefenseRun } from "@/hooks/useTowerDefenseRun";
-import Confirm from "@/layout/Confirm";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import ContentBox from "@/layout/ContentBox";
 import { type GameSettingsUser, useGameSettings } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
@@ -198,6 +198,19 @@ export default function TowerDefensePage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [act, aim, run.phase]);
 
+  // A run this device holds no save of is lost with the tab until its claim succeeds.
+  const isOnlyInTab =
+    !!userId &&
+    run.unsaved &&
+    run.phase !== "lobby" &&
+    (!run.outcome || (!run.outcome.claimed && run.outcome.retryable));
+  const leaveGuard = useUnsavedChangesGuard(isOnlyInTab, {
+    title: "Leave this run?",
+    message:
+      "This run is not saved on this device, so leaving or reloading before it is claimed can lose it and its scrolls.",
+    proceedLabel: "Leave",
+  });
+
   // A signed-in player's runs are claimable only once the profile names them, so the
   // guest lobby waits until the profile has loaded.
   if (!isClerkLoaded || (isSignedIn && !user && status === "pending"))
@@ -235,6 +248,7 @@ export default function TowerDefensePage() {
       noRightAlign
       padding={false}
     >
+      {leaveGuard.dialog}
       <div className="space-y-1.5 p-1.5">
         <div className="relative overflow-hidden rounded-lg">
           {roster.isPending ? (
@@ -282,9 +296,9 @@ export default function TowerDefensePage() {
               phase={run.phase}
               outcome={run.outcome}
               isGuest={!userId}
-              unsaved={run.unsaved}
+              isOnlyInTab={isOnlyInTab}
               onRetry={run.retryClaim}
-              onLeave={run.leave}
+              onLeave={() => leaveGuard.confirmDiscard(run.leave)}
             />
           )}
         </div>
@@ -299,8 +313,8 @@ export default function TowerDefensePage() {
             />
             {run.unsaved && (
               <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
-                This run can no longer be saved on this device. Finish it in this tab: a
-                reload would lose the progress since its last save.
+                This run is no longer saved on this device. Finish it in this tab:
+                leaving or reloading loses its latest progress.
               </p>
             )}
             <TowerDefensePanel state={state} act={act} />
@@ -315,8 +329,8 @@ const Results = (props: {
   phase: string;
   outcome: ReturnType<typeof useTowerDefenseRun>["outcome"];
   isGuest: boolean;
-  /** The run outgrew or failed its local save, so only this tab still holds it. */
-  unsaved: boolean;
+  /** The unclaimed run has no local save, so only this tab still holds it. */
+  isOnlyInTab: boolean;
   onRetry: () => void;
   onLeave: () => void;
 }) => {
@@ -325,7 +339,6 @@ const Results = (props: {
     !props.outcome.claimed &&
     props.outcome.retryable &&
     !props.isGuest;
-  const onlyInTab = canRetry && props.unsaved;
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-2">
       <div className="bg-background w-full max-w-md space-y-3 rounded-xl border p-5 text-center shadow-xl">
@@ -349,10 +362,10 @@ const Results = (props: {
             {props.isGuest && (
               <p className="text-sm">Log in to keep scrolls and train in the Dojo.</p>
             )}
-            {onlyInTab && (
+            {props.isOnlyInTab && (
               <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
-                This run could not be saved on this device. Claim it before leaving this
-                tab: leaving or reloading loses everything since its last save.
+                This run is not saved on this device. Claim it before leaving this tab:
+                leaving or reloading loses it.
               </p>
             )}
             <div className="flex justify-center gap-2">
@@ -366,20 +379,7 @@ const Results = (props: {
                   Reload
                 </Button>
               )}
-              {onlyInTab ? (
-                <Confirm
-                  title="Leave without claiming?"
-                  button={<Button>Back to the Dojo</Button>}
-                  tone="destructive"
-                  proceed_label="Leave"
-                  onAccept={props.onLeave}
-                >
-                  This run is not saved on this device. Leaving before it is claimed
-                  loses its scrolls and everything since its last save.
-                </Confirm>
-              ) : (
-                <Button onClick={props.onLeave}>Back to the Dojo</Button>
-              )}
+              <Button onClick={props.onLeave}>Back to the Dojo</Button>
             </div>
           </>
         )}
