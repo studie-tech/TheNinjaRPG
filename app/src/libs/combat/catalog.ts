@@ -42,6 +42,7 @@ const OMITTED_ITEM_FIELDS = [
   "cookingExperience",
   "mealDurationSeconds",
   "craftingExperience",
+  "craftingOutputQuantity",
   "crystalTargetTypes",
 ] as const;
 

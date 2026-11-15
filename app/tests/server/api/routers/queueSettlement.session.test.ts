@@ -26,6 +26,7 @@ it("reschedules remaining crafts in one statement on the transaction", async () 
     speed: null,
     itemId: "item",
     quantity: 1,
+    craftBatches: null,
     materials: [],
     durationSeconds: 60,
     startsAt: new Date(now.getTime() + (position - 1) * 60_000),

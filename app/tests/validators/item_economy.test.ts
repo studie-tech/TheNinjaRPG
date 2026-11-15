@@ -60,3 +60,21 @@ describe("item economy validation", () => {
     expect(editableOf("ITEM", data)).toEqual(data);
   });
 });
+
+it("defaults both recipe yields to one and accepts bounded whole quantities", () => {
+  const yields = ItemValidatorRawSchema.pick({
+    craftingOutputQuantity: true,
+    cookingOutputQuantity: true,
+  });
+  expect(yields.parse({})).toEqual({
+    craftingOutputQuantity: 1,
+    cookingOutputQuantity: 1,
+  });
+  expect(
+    yields.safeParse({ craftingOutputQuantity: 4, cookingOutputQuantity: 3 }).success,
+  ).toBe(true);
+  for (const value of [0, -1, 1.5, 101]) {
+    expect(yields.safeParse({ craftingOutputQuantity: value }).success).toBe(false);
+    expect(yields.safeParse({ cookingOutputQuantity: value }).success).toBe(false);
+  }
+});

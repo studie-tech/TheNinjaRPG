@@ -73,6 +73,9 @@ export default function CraftingRecipes() {
             <div key={item.id} className="mb-4">
               <ItemWithEffects item={item as Item} />
               <div className="mt-2 ml-4 rounded-lg border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-800">
+                <p className="mb-2 text-sm">
+                  Output: {item.craftingOutputQuantity} per batch
+                </p>
                 <div className="mb-2 flex items-center gap-2">
                   <Hammer className="h-4 w-4" />
                   <span className="font-semibold text-sm">Required Materials:</span>

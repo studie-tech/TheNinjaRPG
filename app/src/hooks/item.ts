@@ -346,6 +346,12 @@ export const useItemEditForm = (
         ]),
   ];
   if (canBeCrafted || isMeal) {
+    if (!isMeal)
+      crafting.push({
+        id: "craftingOutputQuantity",
+        type: "number",
+        label: "Items per batch",
+      });
     crafting.push({
       id: "craftingRequirements",
       doubleWidth: true,
@@ -513,6 +519,7 @@ const FURNITURE_FORM_FIELDS = new Set<Path<ZodItemType>>([
   "auctionMinPrice",
   "auctionMaxPrice",
   "craftingExperience",
+  "craftingOutputQuantity",
   "expireFromStoreAt",
   "craftingRequirements",
 ]);

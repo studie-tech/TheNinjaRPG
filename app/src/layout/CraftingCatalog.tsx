@@ -439,8 +439,12 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                 htmlFor="craft-quantity"
                 className="mb-2 block font-medium text-sm"
               >
-                Quantity to Craft (Max: {maxCraftable})
+                Batches (Max: {maxCraftable}; {selectedItem.craftingOutputQuantity} per
+                batch)
               </label>
+              <p className="mb-2 text-sm">
+                Output: {craftQuantity * selectedItem.craftingOutputQuantity} items
+              </p>
               <NumberInput
                 id="craft-quantity"
                 inputMode="numeric"

@@ -9,6 +9,7 @@ import {
   userVote,
 } from "@/drizzle/schema";
 import { occupationRouter } from "@/server/api/routers/occupation";
+import { profileRouter } from "@/server/api/routers/profile";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
@@ -125,5 +126,57 @@ describeWithDatabase("crafting materials", () => {
     ]);
     expect((await craft(2)).success).toBe(true);
     expect(await quantities()).toEqual({ "ore-large": 6 });
+  });
+  it("snapshots multi-item output and batch experience for immediate and queued crafts", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(item)
+      .set({
+        craftingOutputQuantity: 3,
+        craftingExperience: 5,
+        canStack: false,
+        stackSize: 10,
+      })
+      .where(eq(item.id, "blade"));
+    await insertUserItems([
+      { id: "ore", userId: USER_ID, itemId: "ore", quantity: 20 },
+      { id: "coal", userId: USER_ID, itemId: "coal", quantity: 10 },
+    ]);
+    expect((await craft(1)).success).toBe(true);
+    const firstUser = await db.query.userData.findFirst({
+      where: eq(userData.userId, USER_ID),
+    });
+    const firstOutputs = await db
+      .select()
+      .from(userItem)
+      .where(eq(userItem.itemId, "blade"));
+    expect(firstOutputs.map((row) => row.quantity)).toEqual([1, 1, 1]);
+    expect((await craft(2)).success).toBe(true);
+    const queued = await db.query.userQueue.findFirst({
+      where: eq(userQueue.userId, USER_ID),
+    });
+    expect(queued).toMatchObject({ quantity: 6, craftBatches: 2 });
+    await db
+      .update(item)
+      .set({ craftingOutputQuantity: 1 })
+      .where(eq(item.id, "blade"));
+    await db
+      .update(userItem)
+      .set({ craftingFinishedAt: new Date(Date.now() - 60_000) })
+      .where(eq(userItem.itemId, "blade"));
+    await (await callerFor(profileRouter, USER_ID)).getUser();
+    const outputs = await db
+      .select()
+      .from(userItem)
+      .where(eq(userItem.itemId, "blade"));
+    expect(outputs).toHaveLength(9);
+    expect(outputs.every((row) => row.quantity === 1)).toBe(true);
+    const finalUser = await db.query.userData.findFirst({
+      where: eq(userData.userId, USER_ID),
+    });
+    expect(finalUser!.craftingExperience - firstUser!.craftingExperience).toBe(
+      2 * (firstUser!.craftingExperience - 1_000_000),
+    );
+    expect(await quantities()).toEqual({ ore: 11, coal: 7 });
   });
 });

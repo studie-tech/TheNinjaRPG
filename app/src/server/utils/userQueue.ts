@@ -22,6 +22,7 @@ import {
 import { getCraftingExperienceGain } from "@/libs/crafting";
 import {
   countInventoryBucketSlots,
+  getEffectiveStackSize,
   getInventoryBucket,
   getInventoryBucketCapacity,
   type InventorySlotRow,
@@ -254,6 +255,7 @@ const queueRows = (
     energy: null,
     reservedRyo: null,
     quantity: null,
+    craftBatches: null,
     materials: null,
     durationSeconds: null,
     startsAt: null,
@@ -829,7 +831,7 @@ const startQueuedCraft = async (
   );
   const outputs: (typeof userItem.$inferInsert)[] = splitIntoStacks(
     entry.quantity,
-    entry.item.stackSize,
+    getEffectiveStackSize(entry.item),
   ).map((quantity) => ({
     id: nanoid(),
     userId: entry.userId,
@@ -866,14 +868,18 @@ const startQueuedCraft = async (
     return { finishesAt };
   }
   const expGain = getCraftingExperienceGain(
-    (entry.item.craftingExperience ?? 0) * entry.quantity,
+    (entry.item.craftingExperience ?? 0) * (entry.craftBatches ?? entry.quantity),
     user,
     territoryBoost,
     getPvpBoost(user, [average]).totalPercent,
   );
   await updateQueueOwner(client, user, {
     craftingExperience: expGain,
-    trackers: getCraftTrackerTasks(expGain, entry.quantity, entry.itemId),
+    trackers: getCraftTrackerTasks(
+      expGain,
+      entry.craftBatches ?? entry.quantity,
+      entry.itemId,
+    ),
   });
   return { finishesAt };
 };

@@ -1991,6 +1991,7 @@ export const item = mysqlTable(
     cookingExperience: int("cookingExperience").default(0).notNull(),
     mealDurationSeconds: int("mealDurationSeconds").default(60).notNull(),
     craftingExperience: int("craftingExperience").default(0).notNull(),
+    craftingOutputQuantity: int("craftingOutputQuantity").default(1).notNull(),
     crystalTargetTypes: mysqlEnum("crystalTargetTypes", consts.ItemTypes),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
     battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
@@ -4091,6 +4092,8 @@ export const userQueue = mysqlTable(
     reservedRyo: int("reservedRyo", { unsigned: true }),
     /** CRAFT: items produced */
     quantity: int("quantity", { unsigned: true }),
+    /** CRAFT: batches reserved when the job was queued */
+    craftBatches: int("craftBatches", { unsigned: true }),
     /** CRAFT: material stacks taken on enqueue */
     materials: json("materials").$type<CraftingQueueMaterial[]>(),
     /** JUTSU, CRAFT: job length snapshotted on enqueue */
