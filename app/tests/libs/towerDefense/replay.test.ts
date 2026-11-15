@@ -17,7 +17,6 @@ import {
   applyAction,
   createReplay,
   createRun,
-  replayRun,
   stepRun,
   TD_BOSS_MOVES,
   TD_SIM_VERSION,
@@ -25,10 +24,9 @@ import {
   type TdActionKind,
   type TdEvent,
   type TdRunConfig,
-  tdStateHash,
 } from "@/libs/towerDefense/sim";
 import { TD_MAX_ACTIONS, TD_MAX_TICKS } from "@/validators/towerDefense";
-import { botAct } from "./bot";
+import { botAct, replayRun, tdStateHash } from "./bot";
 
 /** Every Dojo upgrade at a solid level, all ultimates and sentries unlocked. */
 const veteranDojo = (scale: number): TdDojoLevels =>

@@ -2680,8 +2680,7 @@ export interface TdReplayOptions {
 export const createReplay = (
   config: TdRunConfig,
   actions: readonly TdAction[],
-  recordEvents = false,
-): TdReplay => ({ state: createRun(config, recordEvents), actions, index: 0 });
+): TdReplay => ({ state: createRun(config), actions, index: 0 });
 
 /**
  * Advance a replay toward `endTick` by at most `ticks` simulated ticks. Returns the
@@ -2727,54 +2726,4 @@ export const advanceReplay = (
         };
     }
   }
-};
-
-/**
- * Replay a recorded log up to `endTick`. Actions must be in non-decreasing tick order;
- * a run waiting on a draft with no further action at its tick stops as "stalled".
- */
-export const replayRun = (
-  config: TdRunConfig,
-  actions: readonly TdAction[],
-  endTick: number,
-  options: TdReplayOptions & { recordEvents?: boolean } = {},
-): TdReplayResult =>
-  advanceReplay(
-    createReplay(config, actions, options.recordEvents ?? false),
-    endTick,
-    options,
-  ) as TdReplayResult;
-
-/** Compact fingerprint of everything that decides the rest of a run. */
-export const tdStateHash = (state: TdState) => {
-  const round = (value: number) => Math.round(value * 1e6) / 1e6;
-  return JSON.stringify([
-    state.tick,
-    state.wave,
-    state.over,
-    round(state.hero.hp),
-    round(state.hero.chakra),
-    round(state.hero.x),
-    round(state.hero.y),
-    Math.floor(state.ryo),
-    round(state.scrolls),
-    state.kills,
-    state.offer,
-    state.nextId,
-    state.enemies.map((enemy) => [
-      enemy.id,
-      round(enemy.x),
-      round(enemy.y),
-      round(enemy.hp),
-      round(enemy.shield),
-    ]),
-    state.hits.length,
-    state.shots.length,
-    state.telegraphs.length,
-    state.traps.length,
-    state.loot.map((item) => item.id),
-    state.sentries.map((sentry) => (sentry ? `${sentry.type}${sentry.level}` : "")),
-    state.shop,
-    state.perks,
-  ]);
 };

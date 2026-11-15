@@ -17,9 +17,14 @@ import {
   type TdShopItem,
 } from "@/libs/towerDefense/content";
 import {
+  advanceReplay,
   applyAction,
+  createReplay,
   type TdAction,
   type TdCommand,
+  type TdReplayOptions,
+  type TdReplayResult,
+  type TdRunConfig,
   type TdState,
   tdJutsuUnlocked,
   tdSealArtUnlocked,
@@ -278,3 +283,48 @@ export const randomCommand = (state: TdState, random: () => number): TdCommand =
 
 /** Bot priority for perks, exported so balance tests can reuse it. */
 export const botPerkPriority = PERK_PRIORITY.filter((id) => TD_PERK_INFO[id]);
+
+/**
+ * Replay a recorded log up to `endTick`. Actions must be in non-decreasing tick order;
+ * a run waiting on a draft with no further action at its tick stops as "stalled".
+ */
+export const replayRun = (
+  config: TdRunConfig,
+  actions: readonly TdAction[],
+  endTick: number,
+  options: TdReplayOptions = {},
+) => advanceReplay(createReplay(config, actions), endTick, options) as TdReplayResult;
+
+/** Compact fingerprint of everything that decides the rest of a run. */
+export const tdStateHash = (state: TdState) => {
+  const round = (value: number) => Math.round(value * 1e6) / 1e6;
+  return JSON.stringify([
+    state.tick,
+    state.wave,
+    state.over,
+    round(state.hero.hp),
+    round(state.hero.chakra),
+    round(state.hero.x),
+    round(state.hero.y),
+    Math.floor(state.ryo),
+    round(state.scrolls),
+    state.kills,
+    state.offer,
+    state.nextId,
+    state.enemies.map((enemy) => [
+      enemy.id,
+      round(enemy.x),
+      round(enemy.y),
+      round(enemy.hp),
+      round(enemy.shield),
+    ]),
+    state.hits.length,
+    state.shots.length,
+    state.telegraphs.length,
+    state.traps.length,
+    state.loot.map((item) => item.id),
+    state.sentries.map((sentry) => (sentry ? `${sentry.type}${sentry.level}` : "")),
+    state.shop,
+    state.perks,
+  ]);
+};
