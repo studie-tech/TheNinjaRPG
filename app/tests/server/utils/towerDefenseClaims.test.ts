@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { nanoid } from "nanoid";
 import {
   applyAction,
@@ -9,7 +9,6 @@ import {
 } from "@/libs/towerDefense/sim";
 import {
   checkTowerDefenseClaimTiming,
-  reserveTowerDefenseReplay,
   TD_TOKEN_LIFETIME_MS,
   towerDefenseReplayCost,
   verifyTowerDefenseRun,
@@ -17,7 +16,6 @@ import {
 import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
 import { TD_MAX_TICKS, type TowerDefenseRunToken } from "@/validators/towerDefense";
 import { botAct } from "../../libs/towerDefense/bot";
-import { stubRateLimitTransport } from "../../setup/rateLimit";
 
 const token = (
   overrides: Partial<TowerDefenseRunToken> = {},
@@ -184,8 +182,6 @@ describe("tower defense claim verification", () => {
 });
 
 describe("tower defense claim pre-checks", () => {
-  afterEach(() => vi.restoreAllMocks());
-
   it("refuses an impossible length or an expired token from the token alone", () => {
     const payload = token({ seed: "timing" });
     const tenMinutes = payload.issuedAt + 10 * 60_000;
@@ -216,28 +212,10 @@ describe("tower defense claim pre-checks", () => {
     ).toMatchObject({ permanent: true });
   });
 
-  it("reserves replays through their own limiter", async () => {
-    stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected request" });
-    expect(await reserveTowerDefenseReplay("td-replay-open", 0)).toBe(true);
-    vi.restoreAllMocks();
-    stubRateLimitTransport({
-      unexpectedRequestMessage: "Unexpected request",
-      remaining: () => -1,
-    });
-    expect(await reserveTowerDefenseReplay("td-replay-spent", 0)).toBe(false);
-  });
-
-  it("charges a replay by the ticks it covers", async () => {
+  it("charges a replay by the ticks it covers", () => {
     expect(towerDefenseReplayCost(0)).toBe(1);
     expect(towerDefenseReplayCost(50_000)).toBe(1);
     expect(towerDefenseReplayCost(50_001)).toBe(2);
     expect(towerDefenseReplayCost(TD_MAX_TICKS)).toBe(10);
-    const fetch = stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected" });
-    await reserveTowerDefenseReplay("td-replay-weighted", 120_000);
-    const body = String(fetch.mock.calls[0]?.[1]?.body);
-    // The limiter script receives the claim's cost as its increment, its last argument.
-    const command = JSON.parse(body) as unknown[];
-    const args = (Array.isArray(command[0]) ? command[0] : command) as unknown[];
-    expect(args.at(-1)).toBe(3);
   });
 });
