@@ -2690,21 +2690,6 @@ export const updateUserDataForUpdateUser2 = (
       ),
     );
 
-/** Build the `userItem` insert for `updateUser`. */
-export const insertUserItemForUpdateUser = (
-  client: Pick<DrizzleClient, "insert">,
-  result: { droppedItems: import("@/libs/combat/types").DroppedItem[] },
-  user: { userId: string },
-) =>
-  client.insert(userItem).values(
-    result.droppedItems.map((d) => ({
-      id: nanoid(),
-      userId: user.userId,
-      itemId: d.itemId,
-      equipped: "NONE" as const,
-    })),
-  );
-
 /** Build the `conversation` insert for `joinCoopChat`, updating duplicate keys. */
 export const insertConversationForJoinCoopChat = (
   client: Pick<DrizzleClient, "insert">,

@@ -54,10 +54,12 @@ import type {
   BattleWar,
   CombatResult,
   CompleteBattle,
+  DroppedItem,
 } from "@/libs/combat/types";
 import { getItem, getJutsu } from "@/libs/combat/util";
 import { claimVillageMissionPvpKills } from "@/libs/combat/villageMission";
 import { getPvpFarmActivityReductionSeconds } from "@/libs/farming";
+import { getEffectiveStackSize, splitIntoStacks } from "@/libs/item";
 import { getJutsuMaxLevel } from "@/libs/jutsuProgression";
 import { isQuestComplete } from "@/libs/objectives";
 import { getWarSide } from "@/libs/objectiveWar";
@@ -90,7 +92,6 @@ import {
   insertLogBattleLengthsForFinishBattle,
   insertNotificationForUpdateRaidProgress,
   insertRaidParticipationForUpdateRaidProgress,
-  insertUserItemForUpdateUser,
   insertWarKillForUpdateWars,
   selectMpvpBattleQueueForCreateAction,
   updateAnbuSquadForUpdateVillageAnbuClan,
@@ -119,7 +120,11 @@ import {
   updateWarHealthForUpdateWars,
 } from "@/queries/combat";
 import { reduceActiveFarmPlotTimers } from "@/queries/farming";
-import { deleteUserItemsWithPositiveQuantity } from "@/queries/item";
+import {
+  deleteUserItemsWithPositiveQuantity,
+  insertUserItems,
+  updateUserItemForBattleDrop,
+} from "@/queries/item";
 import { incrementNotificationCounters } from "@/queries/misc";
 import { incrementVillageTokens } from "@/queries/village";
 import {
@@ -1212,6 +1217,64 @@ export const settlementWrites = (
     : []),
 ];
 
+/** A battle's drops of one item, combined, with the item's stack size. */
+const groupDroppedItems = (battle: CompleteBattle, drops: DroppedItem[]) => {
+  const quantities = new Map<string, number>();
+  for (const drop of drops) {
+    quantities.set(drop.itemId, (quantities.get(drop.itemId) ?? 0) + 1);
+  }
+  return [...quantities].map(([itemId, quantity]) => {
+    const item = getItem(battle, itemId);
+    return {
+      itemId,
+      quantity,
+      stackSize: item ? getEffectiveStackSize(item) : 1,
+    };
+  });
+};
+
+/**
+ * Add a battle's drops of one item to the backpack like other granted items: they fill the
+ * fullest stacks with room first, and the rest opens as few new stacks as the stack size
+ * allows. The top-ups skip the stacks this settlement writes back, so the battle's own
+ * quantities stay exact.
+ */
+const deliverDroppedItem = async (
+  client: DrizzleClient,
+  userId: string,
+  user: BattleUserState,
+  drop: ReturnType<typeof groupDroppedItems>[number],
+  now: Date,
+) => {
+  const { itemId, quantity, stackSize } = drop;
+  const battleUserItemIds = user.items.map((ui) => ui.id);
+  let remaining = quantity;
+  // A guarded top-up cannot report how much room its stack had, so units join one at a time.
+  while (stackSize > 1 && remaining > 0) {
+    const joined = await updateUserItemForBattleDrop(
+      client,
+      userId,
+      itemId,
+      1,
+      battleUserItemIds,
+      now,
+    );
+    if (joined.rowsAffected !== 1) break;
+    remaining -= 1;
+  }
+  if (remaining === 0) return;
+  await insertUserItems(
+    client,
+    splitIntoStacks(remaining, stackSize).map((stack) => ({
+      id: nanoid(),
+      userId,
+      itemId,
+      quantity: stack,
+      equipped: "NONE" as const,
+    })),
+  );
+};
+
 /**
  * Persist player recovery and progression from the preloaded combat result.
  * Hunting calls may set settlingHunt only inside settleHuntingBattle's transaction;
@@ -1474,6 +1537,80 @@ export const updateUser = async (
     const confirmPetReward =
       !!rewardPetId && petExperience > 0 && canProjectProfileUpdate;
     let petRewardConfirmed = !rewardPetId || petExperience === 0;
+    // Writes to the player's own item rows.
+    const inventoryWrites: (() => PromiseLike<unknown>)[] = [
+      // Delete items
+      ...(deleteItems.length > 0
+        ? [
+            () =>
+              deleteUserItemsWithPositiveQuantity(client, deleteItems).then((saved) => {
+                if (saved.rowsAffected !== deleteItems.length)
+                  itemSettlementCommitted = false;
+              }),
+            () => deleteUserItemImbuementForUpdateKage(client, deleteItems),
+          ]
+        : []),
+      // Persist all surviving items in one request. The owner and quantity guards skip
+      // transferred rows, merge claims and tombstones; settlement cannot resurrect them.
+      ...(updateItems.length > 0
+        ? [
+            () =>
+              updateUserItemForUpdateUser(
+                client,
+                updateItems,
+                settlingHunt,
+                userId,
+              ).then((saved) => {
+                // Every expected row must acknowledge before hunting rewards can commit
+                // or the completion response can safely replace the profile cache.
+                if (saved.rowsAffected !== updateItems.length)
+                  itemSettlementCommitted = false;
+              }),
+          ]
+        : []),
+      // Item experience & level from PvP (equipped items only; per-item xpToLevel)
+      ...(iExp > 0
+        ? [...groupEquippedItemXp(curBattle, user).entries()].map(
+            ([xpToLevel, ids]) =>
+              () =>
+                updateUserItemForUpdateUser2(
+                  client,
+
+                  xpToLevel,
+                  iExp,
+                  user,
+                  ids,
+                ),
+          )
+        : []),
+    ];
+    const drops = groupDroppedItems(curBattle, result.droppedItems);
+    /** Persist rewards and release the account after any pending drop delivery. */
+    const saveUserSettlement = async () => {
+      const save = (confirmPet: boolean) =>
+        updateUserDataForUpdateUser2(
+          client,
+          combatEnergyRecoverySql,
+          curBattle,
+          userId,
+          result,
+          settledAt,
+          facedPvpRewardOpponent,
+          user,
+          updatedQuestData,
+          tookKageSeat,
+          isIsolated,
+          confirmPet,
+        );
+      let saved = await save(confirmPetReward);
+      if (confirmPetReward) {
+        petRewardConfirmed = saved.rowsAffected === 1;
+        // Changed pet eligibility must not discard the player's battle rewards.
+        // The fallback retains the battle-ID guard and runs in this mutation phase.
+        if (!petRewardConfirmed) saved = await save(false);
+      }
+      userSettlementCommitted = saved.rowsAffected === 1;
+    };
     // Defer execution so a hunting transaction never overlaps requests on its session.
     const settlementWrites: (() => PromiseLike<unknown>)[] = [
       ...(!user.isAi
@@ -1508,35 +1645,6 @@ export const updateUser = async (
       ...(result.bountiesClaimed.length > 0
         ? [() => updateBountyForUpdateUser(client, userId, result)]
         : []),
-      // Delete items
-      ...(deleteItems.length > 0
-        ? [
-            () =>
-              deleteUserItemsWithPositiveQuantity(client, deleteItems).then((saved) => {
-                if (saved.rowsAffected !== deleteItems.length)
-                  itemSettlementCommitted = false;
-              }),
-            () => deleteUserItemImbuementForUpdateKage(client, deleteItems),
-          ]
-        : []),
-      // Persist all surviving items in one request. The owner and quantity guards skip
-      // transferred rows, merge claims and tombstones; settlement cannot resurrect them.
-      ...(updateItems.length > 0
-        ? [
-            () =>
-              updateUserItemForUpdateUser(
-                client,
-                updateItems,
-                settlingHunt,
-                userId,
-              ).then((saved) => {
-                // Every expected row must acknowledge before hunting rewards can commit
-                // or the completion response can safely replace the profile cache.
-                if (saved.rowsAffected !== updateItems.length)
-                  itemSettlementCommitted = false;
-              }),
-          ]
-        : []),
       // Jutsu experience & level from experience
       ...(jExp > 0
         ? [...jutsuXpGroups.entries()].map(([cap, ids]) => {
@@ -1551,51 +1659,33 @@ export const updateUser = async (
               executeRowsForUpdateUser(client, jExp, xpToLevel, user, cap, ids);
           })
         : []),
-      // Item experience & level from PvP (equipped items only; per-item xpToLevel)
-      ...(iExp > 0
-        ? [...groupEquippedItemXp(curBattle, user).entries()].map(
-            ([xpToLevel, ids]) =>
-              () =>
-                updateUserItemForUpdateUser2(
-                  client,
-
-                  xpToLevel,
-                  iExp,
-                  user,
-                  ids,
-                ),
-          )
-        : []),
-      // Update user data
-      async () => {
-        const save = (confirmPet: boolean) =>
-          updateUserDataForUpdateUser2(
-            client,
-            combatEnergyRecoverySql,
-            curBattle,
-            userId,
-            result,
-            settledAt,
-            facedPvpRewardOpponent,
-            user,
-            updatedQuestData,
-            tookKageSeat,
-            isIsolated,
-            confirmPet,
-          );
-        let saved = await save(confirmPetReward);
-        if (confirmPetReward) {
-          petRewardConfirmed = saved.rowsAffected === 1;
-          // Changed pet eligibility must not discard the player's battle rewards.
-          // The fallback retains the battle-ID guard and runs in this mutation phase.
-          if (!petRewardConfirmed) saved = await save(false);
-        }
-        userSettlementCommitted = saved.rowsAffected === 1;
-      },
-      // Handle dropped items transfer if present on result. Currently only AI have droppable items, so no need to delete from loser
-      ...(result.droppedItems.length > 0
-        ? [() => insertUserItemForUpdateUser(client, result, user)]
-        : []),
+      ...(drops.length === 0 ? [saveUserSettlement] : []),
+      // A drop's top-up scans the player's stacks, so dropped items follow the battle's own
+      // item writes instead of running beside them, where both would lock the same rows.
+      ...(drops.length > 0
+        ? [
+            async () => {
+              // A failed hunting write rolls the whole settlement back, drops included.
+              if (settlingHunt) for (const write of inventoryWrites) await write();
+              const failed = settlingHunt
+                ? []
+                : (
+                    await Promise.allSettled(inventoryWrites.map((write) => write()))
+                  ).filter((write) => write.status === "rejected");
+              // Drops still arrive when a write to the battle's items fails; the failure is
+              // reported once they are delivered. Only AI drop items, so the loser keeps theirs.
+              try {
+                for (const drop of drops)
+                  await deliverDroppedItem(client, userId, user, drop, settledAt);
+              } finally {
+                // Keep the claim until delivery settles so a later fight cannot preload
+                // stale quantities. Failed delivery must still release the finished battle.
+                await saveUserSettlement();
+              }
+              if (failed[0]) throw failed[0].reason;
+            },
+          ]
+        : inventoryWrites),
     ];
     if (settlingHunt) {
       // The HTTP driver shares one transaction session; await each factory before starting the next.
