@@ -56,6 +56,8 @@ import {
   TD_ELEMENTS,
   TD_ENEMIES,
   TD_ERA_INFO,
+  TD_ERA_INTERVAL,
+  TD_ERA_START_WAVE,
   TD_ERAS,
   TD_EVOLUTION_LEVEL,
   TD_FOCUS_DAMAGE,
@@ -429,9 +431,9 @@ const dojoLevel = (config: TdRunConfig, id: TdDojoUpgrade) =>
 
 /** Eras active for a wave; derived from the seed so upcoming blocks can be previewed. */
 export const tdErasForWave = (seed: string, wave: number): TdEra[] => {
-  if (wave < 21) return ["calm"];
-  const block = Math.floor((wave - 1) / 10),
-    blockStart = block * 10 + 1;
+  if (wave < TD_ERA_START_WAVE) return ["calm"];
+  const block = Math.floor((wave - 1) / TD_ERA_INTERVAL),
+    blockStart = block * TD_ERA_INTERVAL + 1;
   const rng = createRng(`${seed}:era:${block}`);
   const pool = TD_ERAS.filter(
     (era) => era !== "calm" && TD_ERA_INFO[era].firstWave <= blockStart,

@@ -1617,6 +1617,10 @@ export const TD_DOJO_INFO: Record<TdDojoUpgrade, TdDojoInfo> = {
 
 /** A boss closes every this many waves, followed by a perk draft. */
 export const TD_BOSS_INTERVAL = 10;
+/** First wave on which eras can bend the rules. */
+export const TD_ERA_START_WAVE = 21;
+/** Eras hold for blocks of this many waves. */
+export const TD_ERA_INTERVAL = 10;
 /** Every this many waves the boss is a titan. */
 export const TD_TITAN_INTERVAL = 50;
 /** Share of the best wave reached up to which checkpoints are offered. */

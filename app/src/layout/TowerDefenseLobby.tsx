@@ -30,6 +30,8 @@ import {
   TD_DOJO,
   TD_DOJO_CATEGORIES,
   TD_DOJO_INFO,
+  TD_ERA_INTERVAL,
+  TD_ERA_START_WAVE,
   TD_FOCUS_DAMAGE,
   TD_SEAL_ART_INFO,
   TD_SEAL_ARTS,
@@ -357,8 +359,9 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
           tone="bg-orange-500/15 text-orange-600 dark:text-orange-400"
           title="Bosses, perks and eras"
         >
-          A boss every {TD_BOSS_INTERVAL} waves, then pick a perk. From wave 21 an era
-          bends the rules every 10 waves: adapt your build.
+          A boss every {TD_BOSS_INTERVAL} waves, then pick a perk. From wave{" "}
+          {TD_ERA_START_WAVE} an era bends the rules every {TD_ERA_INTERVAL} waves:
+          adapt your build.
         </Rule>
       </div>
       <div>

@@ -26,6 +26,7 @@ import {
 } from "@/libs/towerDefense/balance";
 import {
   TD_ERA_INFO,
+  TD_ERA_INTERVAL,
   TD_JUTSU_INFO,
   TD_PERK_INFO,
   TD_SEAL_ART_INFO,
@@ -106,7 +107,8 @@ export const TowerDefenseOverlay = (props: {
     (speed) => speed <= tdMaxSpeed(state.config.dojo.speed ?? 0),
   );
   const nextSpeed = speeds[(speeds.indexOf(props.speed) + 1) % speeds.length] ?? 1;
-  const nextBlock = Math.floor((state.wave - 1) / 10) * 10 + 11;
+  const nextBlock =
+    (Math.floor((state.wave - 1) / TD_ERA_INTERVAL) + 1) * TD_ERA_INTERVAL + 1;
   const nextEras = tdErasForWave(state.config.seed, nextBlock).filter(
     (era) => era !== "calm",
   );
