@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import alea from "alea";
 import { decodeTdActions } from "@/libs/towerDefense/actionLog";
 import { tdStartingDrafts } from "@/libs/towerDefense/balance";
 import {
@@ -23,14 +24,7 @@ import {
   type TdEvent,
   type TdRunConfig,
 } from "@/libs/towerDefense/sim";
-import {
-  botAct,
-  encodeLog,
-  replayRun,
-  seededRandom,
-  tdStateHash,
-  veteranDojo,
-} from "./bot";
+import { botAct, encodeLog, replayRun, tdStateHash, veteranDojo } from "./bot";
 
 interface Recording {
   config: TdRunConfig;
@@ -55,7 +49,7 @@ const record = (
     script?: (tick: number) => TdAction[];
   } = {},
 ): Recording => {
-  const random = seededRandom(config.seed.length * 7919 + config.startWave);
+  const random = alea(config.seed.length * 7919 + config.startWave);
   const state = createRun(config, true);
   const log: TdAction[] = [];
   const hashes = new Map<number, string>();
@@ -362,7 +356,7 @@ describe("tower defense replay", () => {
     // it, so pages still on the previous rules reload instead of failing their claims.
     expect({ version: TD_SIM_VERSION, fingerprint: rulesFingerprint() }).toEqual({
       version: 1,
-      fingerprint: "6e209a7f166f8cb923b3ff721946d0712eae1011cadc0fa949ca65f9729cf4f9",
+      fingerprint: "d7b0663a4580c3cad7e399885bf1487619808dd8cd78727e5d41a92991869808",
     });
   });
 
@@ -395,7 +389,7 @@ const rulesFingerprint = () => {
       { seed, startWave, bestWave: startWave * 2, dojo: veteranDojo(scale) },
       true,
     );
-    const rng = seededRandom(seed.length * 7919 + startWave);
+    const rng = alea(seed.length * 7919 + startWave);
     const log: TdAction[] = [];
     while (!state.over && state.tick < 12_000) {
       log.push(...botAct(state, { rng, chaos }));

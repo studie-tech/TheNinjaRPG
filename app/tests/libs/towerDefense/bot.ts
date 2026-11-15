@@ -4,6 +4,7 @@
  * every recorded action kind so replay tests cover them, and gives balance tests a
  * reasonable stand-in for a player.
  */
+import alea from "alea";
 import { TD_COORD_SCALE, TD_HERO_ZONE } from "@/libs/towerDefense/balance";
 import {
   TD_DOJO,
@@ -283,15 +284,6 @@ const randomCommand = (state: TdState, random: () => number): TdCommand => {
   return pick(options)();
 };
 
-/** A seeded Park-Miller generator, so a bot run repeats exactly. */
-export const seededRandom = (seed: number) => {
-  let value = seed;
-  return () => {
-    value = (value * 16807) % 2147483647;
-    return value / 2147483647;
-  };
-};
-
 /** Every Dojo upgrade at the same share of its maximum level. */
 export const veteranDojo = (scale: number): TdDojoLevels =>
   Object.fromEntries(
@@ -310,7 +302,7 @@ export const playBotRun = (
   options: { seed: number; ticks: number; attention?: number; retreat?: boolean },
 ) => {
   const state = createRun(config);
-  const rng = seededRandom(options.seed);
+  const rng = alea(options.seed);
   const log: TdAction[] = [];
   while (!state.over && state.tick < options.ticks) {
     log.push(...botAct(state, { rng, attention: options.attention }));
