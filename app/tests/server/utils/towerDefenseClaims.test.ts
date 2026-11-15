@@ -80,11 +80,11 @@ describe("tower defense run tokens", () => {
 });
 
 describe("tower defense claim verification", () => {
-  it("pays out exactly what the replay earned", () => {
+  it("pays out exactly what the replay earned", async () => {
     const payload = token();
     const { state, log } = play(payload);
     expect(state.over).toBe(true);
-    const result = verifyTowerDefenseRun({
+    const result = await verifyTowerDefenseRun({
       token: payload,
       actions: log,
       endTick: state.tick,
@@ -98,11 +98,11 @@ describe("tower defense claim verification", () => {
     });
   });
 
-  it("accepts a retreat and pays the scrolls banked so far", () => {
+  it("accepts a retreat and pays the scrolls banked so far", async () => {
     const payload = token({ seed: "retreat" });
     const { state, log } = play(payload, 900);
     expect(state.quit).toBe(true);
-    const result = verifyTowerDefenseRun({
+    const result = await verifyTowerDefenseRun({
       token: payload,
       actions: log,
       endTick: state.tick,
@@ -111,18 +111,18 @@ describe("tower defense claim verification", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("refuses runs simulated faster than the unlocked game speed", () => {
+  it("refuses runs simulated faster than the unlocked game speed", async () => {
     const payload = token({ seed: "fast" });
     const { state, log } = play(payload);
     const realTime = (state.tick * 100) / 1;
-    const early = verifyTowerDefenseRun({
+    const early = await verifyTowerDefenseRun({
       token: payload,
       actions: log,
       endTick: state.tick,
       now: payload.issuedAt + realTime / 3,
     });
     expect(early.ok).toBe(false);
-    const sped = verifyTowerDefenseRun({
+    const sped = await verifyTowerDefenseRun({
       token: { ...payload, dojo: { ...payload.dojo, speed: 4 } },
       actions: log,
       endTick: state.tick,
@@ -132,32 +132,36 @@ describe("tower defense claim verification", () => {
     expect(sped.ok).toBe(true);
   });
 
-  it("refuses a run that has not ended, or that ends elsewhere", () => {
+  it("refuses a run that has not ended, or that ends elsewhere", async () => {
     const payload = token({ seed: "unfinished" });
     const { state, log } = play(payload);
     const now = payload.issuedAt + state.tick * 100 + 60_000;
     expect(
-      verifyTowerDefenseRun({
-        token: payload,
-        actions: log,
-        endTick: state.tick - 50,
-        now,
-      }).ok,
+      (
+        await verifyTowerDefenseRun({
+          token: payload,
+          actions: log,
+          endTick: state.tick - 50,
+          now,
+        })
+      ).ok,
     ).toBe(false);
     expect(
-      verifyTowerDefenseRun({
-        token: payload,
-        actions: log,
-        endTick: state.tick + 50,
-        now,
-      }).ok,
+      (
+        await verifyTowerDefenseRun({
+          token: payload,
+          actions: log,
+          endTick: state.tick + 50,
+          now,
+        })
+      ).ok,
     ).toBe(false);
   });
 
-  it("refuses a log that names a different run's actions", () => {
+  it("refuses a log that names a different run's actions", async () => {
     const payload = token({ seed: "original" });
     const { state, log } = play(payload);
-    const result = verifyTowerDefenseRun({
+    const result = await verifyTowerDefenseRun({
       token: { ...payload, seed: "other" },
       actions: log,
       endTick: state.tick,
@@ -168,16 +172,44 @@ describe("tower defense claim verification", () => {
     ).toBe(false);
   });
 
-  it("refuses expired tokens", () => {
+  it("refuses expired tokens", async () => {
     const payload = token({ seed: "expired" });
     const { state, log } = play(payload);
-    const result = verifyTowerDefenseRun({
+    const result = await verifyTowerDefenseRun({
       token: payload,
       actions: log,
       endTick: state.tick,
       now: payload.issuedAt + TD_TOKEN_LIFETIME_MS + 1,
     });
     expect(result.ok).toBe(false);
+  });
+
+  it("replays in slices that yield to the event loop and never change the result", async () => {
+    const payload = token({ seed: "sliced" });
+    const { state, log } = play(payload);
+    const claim = {
+      token: payload,
+      actions: log,
+      endTick: state.tick,
+      now: payload.issuedAt + state.tick * 100 + 60_000,
+    };
+    let yielded = false;
+    setImmediate(() => {
+      yielded = true;
+    });
+    const sliced = await verifyTowerDefenseRun({ ...claim, sliceTicks: 97 });
+    expect(yielded).toBe(true);
+    const whole = await verifyTowerDefenseRun({
+      ...claim,
+      sliceTicks: Number.POSITIVE_INFINITY,
+    });
+    expect(sliced).toEqual(whole);
+    expect(sliced).toEqual({
+      ok: true,
+      wave: state.wave,
+      kills: state.kills,
+      points: Math.floor(state.scrolls),
+    });
   });
 });
 

@@ -223,7 +223,7 @@ export const towerDefenseRouter = createTRPCRouter({
           points: receipt.pointsEarned,
         });
       if (!canReplay) return errorResponse(TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE);
-      const result = verifyTowerDefenseRun({
+      const result = await verifyTowerDefenseRun({
         token,
         actions: input.actions,
         endTick: input.endTick,

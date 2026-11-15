@@ -11,7 +11,13 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { env } from "@/env/server.mjs";
 import { TD_TPS, tdMaxSpeed } from "@/libs/towerDefense/balance";
-import { replayRun, type TdAction, tdRunPoints } from "@/libs/towerDefense/sim";
+import {
+  advanceReplay,
+  createReplay,
+  type TdAction,
+  type TdReplayResult,
+  tdRunPoints,
+} from "@/libs/towerDefense/sim";
 import { TD_MAX_TICKS, type TowerDefenseRunToken } from "@/validators/towerDefense";
 
 export const TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE =
@@ -23,6 +29,11 @@ export const TD_TOKEN_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 const TD_TIME_SLACK_MS = 30_000;
 /** Replays a player may request per window; each can cost a second or more of CPU. */
 const TD_REPLAYS_PER_WINDOW = 10;
+/**
+ * Ticks a claim replays between yields to the event loop. A slice takes tens of
+ * milliseconds, so a long replay never holds up the other requests on the instance.
+ */
+const TD_REPLAY_SLICE_TICKS = 10_000;
 
 export const TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE =
   "Too many runs verified recently. Your run is saved; claim it again in a few minutes.";
@@ -86,17 +97,21 @@ export const checkTowerDefenseClaimTiming = (input: {
   return null;
 };
 
-/** Replay a claimed run and decide what it earned. */
-export const verifyTowerDefenseRun = (input: {
+/**
+ * Replay a claimed run and decide what it earned. The replay advances in slices of
+ * `sliceTicks` and yields between them; slicing never changes the result.
+ */
+export const verifyTowerDefenseRun = async (input: {
   token: TowerDefenseRunToken;
   actions: readonly TdAction[];
   endTick: number;
   now: number;
-}): TowerDefenseClaimResult => {
+  sliceTicks?: number;
+}): Promise<TowerDefenseClaimResult> => {
   const { token, actions, endTick } = input;
   const refused = checkTowerDefenseClaimTiming(input);
   if (refused) return { ok: false, message: refused.message };
-  const { state, stop, invalidAt } = replayRun(
+  const replay = createReplay(
     {
       seed: token.seed,
       startWave: token.startWave,
@@ -104,9 +119,17 @@ export const verifyTowerDefenseRun = (input: {
       dojo: token.dojo,
     },
     actions,
-    endTick,
-    { maxTicks: TD_MAX_TICKS },
   );
+  const slice = {
+    maxTicks: TD_MAX_TICKS,
+    ticks: input.sliceTicks ?? TD_REPLAY_SLICE_TICKS,
+  };
+  let result: TdReplayResult | null = advanceReplay(replay, endTick, slice);
+  while (!result) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    result = advanceReplay(replay, endTick, slice);
+  }
+  const { state, stop, invalidAt } = result;
   if (invalidAt !== null)
     return { ok: false, message: "The run's action log does not match its replay." };
   // The timing check trusted the claimed end tick; the replay must end exactly there.
