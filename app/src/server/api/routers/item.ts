@@ -292,6 +292,7 @@ import { insertUserPet, listVisiblePetJutsu } from "@/queries/pets";
 import {
   debitUserMoney,
   fetchAllGameSettings,
+  fetchCanListHiddenContent,
   fetchLoadoutUser,
   fetchUser,
   fetchViewerRole,
@@ -528,7 +529,9 @@ export const itemRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { description: "Get all item names and images" } })
     .query(async ({ ctx }) => {
-      const items = await listItemForGetAllNames(ctx.drizzle);
+      // Hidden items only for content staff; signed-out callers skip the role lookup.
+      const allowHidden = await fetchCanListHiddenContent(ctx.drizzle, ctx.userId);
+      const items = await listItemForGetAllNames(ctx.drizzle, allowHidden);
       return items.map(({ bloodlineId, effects, ...entry }) => ({
         ...entry,
         /** Distinguish weighted caches from other reward consumables in content selectors. */
@@ -1162,8 +1165,13 @@ export const itemRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const { skip, cursorAfter } = offsetPage(input);
 
+      // Hidden items are listed only for content staff who ask for them
+      const allowHidden =
+        input.hidden === true &&
+        (await fetchCanListHiddenContent(ctx.drizzle, ctx.userId));
+
       // Build where conditions using the generalized filter
-      const baseFilters = itemDatabaseFilter(input);
+      const baseFilters = itemDatabaseFilter(input, allowHidden);
 
       const results = await listItemForGetAll(ctx.drizzle, skip, input, baseFilters);
       const nextCursor = cursorAfter(results);
@@ -4124,10 +4132,15 @@ const HUNTING_INVENTORY_UNAVAILABLE_MESSAGE =
   "Inventory changed or is in use by a hunting battle. Finish any hunt, refresh and try again.";
 
 /**
- * Build database filters for item queries based on filtering schema
+ * Build database filters for item queries based on filtering schema.
+ *
+ * @param input - Filters from the UI or an MCP client.
+ * @param allowHiddenFilter - Only true for content staff (`fetchCanListHiddenContent`). When
+ *   false, hidden items are always excluded, whatever `input.hidden` asks for.
  */
 export const itemDatabaseFilter = (
   input?: Partial<ItemFilteringSchema>,
+  allowHiddenFilter = false,
 ): QueryCondition[] => {
   const { slot, itemType } = readItemListFilterSlot(input?.slot, input?.itemType);
   return [
@@ -4180,10 +4193,8 @@ export const itemDatabaseFilter = (
       ? [or(isNull(item.expireFromStoreAt), gt(item.expireFromStoreAt, getUtcDayKey()))]
       : []),
 
-    // Hidden filter (default to false if not specified)
-    ...(input?.hidden !== undefined
-      ? [eq(item.hidden, input.hidden)]
-      : [eq(item.hidden, false)]),
+    // Hidden filter: released items unless content staff ask for hidden ones
+    eq(item.hidden, allowHiddenFilter ? (input?.hidden ?? false) : false),
 
     // Crafting filter
     ...(input?.canBeCrafted !== undefined

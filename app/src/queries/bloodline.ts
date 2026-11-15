@@ -137,9 +137,16 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { jutsu, userData, userJutsu } from "@/drizzle/schema";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 
-/** Build the `bloodline` listing for `getAllNames`. */
-export const listBloodlineForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
+/**
+ * Build the `bloodline` listing for `getAllNames`. Hidden bloodlines are included only when
+ * `allowHidden` (content staff, `fetchCanListHiddenContent`).
+ */
+export const listBloodlineForGetAllNames = (
+  client: Pick<DrizzleClient, "query">,
+  allowHidden: boolean,
+) =>
   client.query.bloodline.findMany({
+    where: allowHidden ? undefined : eq(bloodline.hidden, false),
     columns: { id: true, name: true, image: true },
     orderBy: (table, { asc }) => [asc(table.name)],
   });

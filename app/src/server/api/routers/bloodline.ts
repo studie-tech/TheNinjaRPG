@@ -89,6 +89,7 @@ import { refundPityCredit } from "@/queries/concurrency";
 import {
   fetchAchievementCatalogue,
   fetchAllGameSettings,
+  fetchCanListHiddenContent,
   fetchUser,
 } from "@/queries/profile";
 import { fetchQuestBootstrap, fetchUpdatedUser } from "@/routers/profile";
@@ -149,7 +150,9 @@ export const bloodlineRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { description: "Get all bloodline names and images" } })
     .query(async ({ ctx }) => {
-      return await listBloodlineForGetAllNames(ctx.drizzle);
+      // Hidden bloodlines only for content staff; signed-out callers skip the role lookup.
+      const allowHidden = await fetchCanListHiddenContent(ctx.drizzle, ctx.userId);
+      return await listBloodlineForGetAllNames(ctx.drizzle, allowHidden);
     }),
   getAll: publicProcedure
     .meta({
@@ -164,8 +167,13 @@ export const bloodlineRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const { skip, cursorAfter } = offsetPage(input);
 
+      // Hidden bloodlines are listed only for content staff who ask for them
+      const allowHidden =
+        input.hidden === true &&
+        (await fetchCanListHiddenContent(ctx.drizzle, ctx.userId));
+
       // Build where conditions using the abstracted filter function
-      const baseFilters = bloodlineDatabaseFilter(input);
+      const baseFilters = bloodlineDatabaseFilter(input, allowHidden);
 
       const results = await listBloodlineForGetAll(
         ctx.drizzle,
@@ -549,7 +557,10 @@ export const bloodlineRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { skip, cursorAfter } = offsetPage(input);
-      const baseFilters = bloodlineDatabaseFilter(input);
+      const allowHidden =
+        input.hidden === true &&
+        (await fetchCanListHiddenContent(ctx.drizzle, ctx.userId));
+      const baseFilters = bloodlineDatabaseFilter(input, allowHidden);
       const rows = await selectBloodlineReskinForGetAllReskins(
         ctx.drizzle,
         baseFilters,
@@ -1055,9 +1066,16 @@ export const updateBloodline = async (
 };
 
 /**
- * Build database filters for bloodline queries based on filtering schema
+ * Build database filters for bloodline queries based on filtering schema.
+ *
+ * @param input - Filters from the UI or an MCP client.
+ * @param allowHiddenFilter - Only true for content staff (`fetchCanListHiddenContent`). When
+ *   false, hidden bloodlines are always excluded, whatever `input.hidden` asks for.
  */
-export const bloodlineDatabaseFilter = (input?: BloodlineFilteringSchema) => {
+export const bloodlineDatabaseFilter = (
+  input?: BloodlineFilteringSchema,
+  allowHiddenFilter = false,
+) => {
   return [
     // Name filter
     ...(input?.name ? [like(bloodline.name, `%${input.name}%`)] : []),
@@ -1107,10 +1125,8 @@ export const bloodlineDatabaseFilter = (input?: BloodlineFilteringSchema) => {
         ]
       : []),
 
-    // Hidden filter (default to false if not specified)
-    ...(input?.hidden !== undefined
-      ? [eq(bloodline.hidden, input.hidden)]
-      : [eq(bloodline.hidden, false)]),
+    // Hidden filter: released bloodlines unless content staff ask for hidden ones
+    eq(bloodline.hidden, allowHiddenFilter ? (input?.hidden ?? false) : false),
   ];
 };
 

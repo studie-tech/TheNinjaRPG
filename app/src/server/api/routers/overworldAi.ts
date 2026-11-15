@@ -150,7 +150,8 @@ export const overworldAiRouter = createTRPCRouter({
     if (!canChangeContent(user.role)) {
       throw serverError("UNAUTHORIZED", "Not allowed");
     }
-    const quests = await listQuestForGetAllNames(ctx.drizzle);
+    // Content staff only (guarded above), so hidden quests are listed too.
+    const quests = await listQuestForGetAllNames(ctx.drizzle, true);
     return quests.map((q) => ({
       ...q,
       assignable: OVERWORLD_ASSIGNABLE_QUEST_TYPES.includes(q.questType),

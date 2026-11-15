@@ -216,6 +216,7 @@ import {
 import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
 import {
   debitUserMoney,
+  fetchCanListHiddenContent,
   fetchLoadoutUser,
   fetchUser,
   fetchViewerRole,
@@ -453,7 +454,9 @@ export const jutsuRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { description: "Get all jutsu names and images" } })
     .query(async ({ ctx }) => {
-      return await listJutsuForGetAllNames(ctx.drizzle);
+      // Hidden jutsu only for content staff; signed-out callers skip the role lookup.
+      const allowHidden = await fetchCanListHiddenContent(ctx.drizzle, ctx.userId);
+      return await listJutsuForGetAllNames(ctx.drizzle, allowHidden);
     }),
 
   get: publicProcedure
@@ -489,8 +492,11 @@ export const jutsuRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const { skip, cursorAfter } = offsetPage(input);
 
+      // Hidden jutsu are listed only for content staff who ask for them
+      const hiddenScope = await jutsuCatalogueHiddenScope(ctx, input.hidden);
+
       // Build the base DB filter
-      const baseFilters = jutsuDatabaseFilter(input);
+      const baseFilters = jutsuDatabaseFilter(input, hiddenScope);
 
       const ownerId = input.ownedFirst ? (ctx.userId ?? undefined) : undefined;
       const results = await listJutsuForGetAll(ctx.drizzle, baseFilters, input, skip, {
@@ -2289,8 +2295,9 @@ export const jutsuRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const { skip, cursorAfter } = offsetPage(input);
 
-      // Build the base DB filter (on underlying jutsu)
-      const baseFilters = jutsuDatabaseFilter(input);
+      // Build the base DB filter (on underlying jutsu); hidden only for content staff
+      const hiddenScope = await jutsuCatalogueHiddenScope(ctx, input.hidden);
+      const baseFilters = jutsuDatabaseFilter(input, hiddenScope);
       const jutsuFilters = and(
         ...baseFilters,
         ...(input.hideAi ? [ne(jutsu.jutsuType, "AI")] : []),
@@ -2551,7 +2558,7 @@ export const fetchUserJutsus = async (
   // Use the same ordering as fetchBloodlineJutsuReskins so only the resolved
   // variant's name matches when a group contains multiple variants of a parent.
   const linkedReskinName = selectUserDataForFetchUserJutsus(client, userId);
-  const filters = jutsuDatabaseFilter(input, true, sql`(${linkedReskinName})`);
+  const filters = jutsuDatabaseFilter(input, "all", sql`(${linkedReskinName})`);
   // Equipped slots stay visible; only the unequipped categories follow search filters.
   const inventoryFilter =
     input?.includeEquipped && filters.length > 0
@@ -2589,11 +2596,32 @@ export const fetchUserJutsus = async (
 };
 
 /**
+ * Hidden scope for a public jutsu catalogue: `staff` only when the request asks for hidden
+ * jutsu and the signed-in viewer is a content editor, `released` otherwise.
+ */
+export const jutsuCatalogueHiddenScope = async (
+  ctx: { drizzle: Pick<DrizzleClient, "query">; userId: string | null | undefined },
+  hidden: boolean | undefined,
+): Promise<JutsuHiddenScope> =>
+  hidden === true && (await fetchCanListHiddenContent(ctx.drizzle, ctx.userId))
+    ? "staff"
+    : "released";
+
+/**
+ * Which hidden jutsu a jutsu query may return:
+ * - `released`: never hidden jutsu, whatever `input.hidden` asks for (public catalogues).
+ * - `staff`: `input.hidden` is applied, defaulting to released (content staff only, see
+ *   `fetchCanListHiddenContent`).
+ * - `all`: no hidden filter, for jutsu a character already owns.
+ */
+export type JutsuHiddenScope = "released" | "staff" | "all";
+
+/**
  * Build the include and exclude filter conditions for jutsu queries.
  */
 export const jutsuDatabaseFilter = (
   input?: JutsuFilteringSchema,
-  includeHidden = false,
+  hiddenScope: JutsuHiddenScope = "released",
   additionalName?: SQL,
 ) => {
   return [
@@ -2680,11 +2708,9 @@ export const jutsuDatabaseFilter = (
       ? [eq(jutsu.actionCostPerc, input.actionCostPerc)]
       : []),
 
-    ...(includeHidden
+    ...(hiddenScope === "all"
       ? []
-      : input?.hidden !== undefined
-        ? [eq(jutsu.hidden, input.hidden)]
-        : [eq(jutsu.hidden, false)]),
+      : [eq(jutsu.hidden, hiddenScope === "staff" ? (input?.hidden ?? false) : false)]),
 
     // ---------------------------
     // Exclude: Single-value cols

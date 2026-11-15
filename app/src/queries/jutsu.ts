@@ -227,9 +227,16 @@ export const insertActionLogForTransferLevel = (
     relatedImage: user.avatarLight,
   });
 
-/** Build the `jutsu` listing for `getAllNames`. */
-export const listJutsuForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
+/**
+ * Build the `jutsu` listing for `getAllNames`. Hidden jutsu are included only when
+ * `allowHidden` (content staff, `fetchCanListHiddenContent`).
+ */
+export const listJutsuForGetAllNames = (
+  client: Pick<DrizzleClient, "query">,
+  allowHidden: boolean,
+) =>
   client.query.jutsu.findMany({
+    where: allowHidden ? undefined : eq(jutsu.hidden, false),
     columns: { id: true, name: true, image: true, injectableInBattle: true },
     orderBy: (table, { asc }) => [asc(table.name)],
   });
