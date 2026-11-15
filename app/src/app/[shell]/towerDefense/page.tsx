@@ -21,7 +21,7 @@ import { type GameSettingsUser, useGameSettings } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import {
-  SEAL_KEYS,
+  SEAL_HOTKEYS,
   TowerDefenseActionBar,
   TowerDefenseDraft,
   type TowerDefenseInputMode,
@@ -32,9 +32,9 @@ import { TowerDefenseLobby } from "@/layout/TowerDefenseLobby";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense";
 import { TD_COORD_SCALE } from "@/libs/towerDefense/balance";
-import { TD_ULTIMATES } from "@/libs/towerDefense/content";
+import { TD_SEALS, TD_ULTIMATES } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
-import type { TdCommand, TdEvent } from "@/libs/towerDefense/sim";
+import type { TdEvent } from "@/libs/towerDefense/sim";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -96,16 +96,13 @@ export default function TowerDefensePage() {
     }
     return urls;
   }, [assets]);
-  const soundRef = useRef({ on: false, urls: sounds });
   useEffect(() => {
-    soundRef.current = { on: !!sfxOn, urls: sounds };
     if (sfxOn && sounds.size > 0) void preloadAudioBuffers([...sounds.values()]);
   }, [sfxOn, sounds]);
-  const playSound = useCallback((cue: TdSfx, volume: number) => {
-    const { on, urls } = soundRef.current;
-    const url = urls.get(cue);
-    if (on && url) void playPreloadedAudio(url, savedSfxVolume() * volume);
-  }, []);
+  const playSound = (cue: TdSfx, volume: number) => {
+    const url = sounds.get(cue);
+    if (sfxOn && url) void playPreloadedAudio(url, savedSfxVolume() * volume);
+  };
   const appearance = useMemo(
     () =>
       resolveSpriteAppearance(
@@ -122,14 +119,9 @@ export default function TowerDefensePage() {
   );
   const [mode, setMode] = useState<TowerDefenseInputMode>("aim");
   const reticle = useRef<{ x: number; y: number } | null>(null);
-  const modeRef = useRef(mode);
-  useEffect(() => {
-    modeRef.current = mode;
-  }, [mode]);
 
   // Handlers depend on the run's stable members, never on the object returned per render.
-  const { act: runAct, getSession } = run;
-  const act = useCallback((command: TdCommand) => void runAct(command), [runAct]);
+  const { act, getSession } = run;
   const aim = useCallback((): [number, number] => {
     const point = reticle.current ?? nearestCrowd(getSession()?.state.enemies ?? []);
     return [Math.round(point.x * TD_COORD_SCALE), Math.round(point.y * TD_COORD_SCALE)];
@@ -141,20 +133,20 @@ export default function TowerDefensePage() {
         Math.round(point.x * TD_COORD_SCALE),
         Math.round(point.y * TD_COORD_SCALE),
       ];
-      if (modeRef.current === "blink") {
-        if (runAct(["blink", ...scaled])) setMode("aim");
+      if (mode === "blink") {
+        if (act(["blink", ...scaled])) setMode("aim");
         return;
       }
-      if (modeRef.current === "trap") {
-        runAct(["trap", ...scaled]);
+      if (mode === "trap") {
+        act(["trap", ...scaled]);
         if ((getSession()?.state.hero.trapCharges ?? 0) <= 0) setMode("aim");
         return;
       }
-      if (hit.lootId !== undefined && runAct(["loot", hit.lootId])) return;
-      if (hit.enemyId !== undefined) runAct(["focus", hit.enemyId]);
+      if (hit.lootId !== undefined && act(["loot", hit.lootId])) return;
+      if (hit.enemyId !== undefined) act(["focus", hit.enemyId]);
       reticle.current = point;
     },
-    [getSession, runAct],
+    [act, getSession, mode],
   );
 
   // The renderer asks for this every frame, so it refills one object.
@@ -172,9 +164,9 @@ export default function TowerDefensePage() {
     next.pending = current?.pending ?? 0;
     next.events = current?.events ?? NO_EVENTS;
     next.reticle = reticle.current;
-    next.mode = modeRef.current;
+    next.mode = mode;
     return next;
-  }, [getSession]);
+  }, [getSession, mode]);
 
   // Keyboard shortcuts while a run is on screen
   useEffect(() => {
@@ -189,14 +181,14 @@ export default function TowerDefensePage() {
       if (key === " ") event.preventDefault();
       // A held key repeats keydown; one press is one seal or one cast.
       if (event.repeat) return;
-      const seal = SEAL_KEYS[key];
+      const seal = TD_SEALS.find((id) => SEAL_HOTKEYS[id].toLowerCase() === key);
       if (seal) act(["seal", seal, ...aim()]);
       else if (key === " ") act(["sub"]);
       else if (key === "b") setMode((value) => (value === "blink" ? "aim" : "blink"));
       else if (key === "t") setMode((value) => (value === "trap" ? "aim" : "trap"));
       else if (key === "n") act(["call"]);
       else if (key === "escape") setMode("aim");
-      else if (/^[1-5]$/.test(key)) {
+      else if (/^\d$/.test(key)) {
         const ultimate = TD_ULTIMATES[Number(key) - 1];
         if (ultimate) act(["ult", ultimate, ...aim()]);
       }
@@ -223,6 +215,7 @@ export default function TowerDefensePage() {
   if (!isClerkLoaded || (isSignedIn && !user && status === "pending"))
     return <Loader explanation="Loading user data..." />;
   const state = run.hud;
+  const playing = run.phase === "playing" && state;
 
   if (run.phase === "lobby")
     return (
@@ -277,24 +270,23 @@ export default function TowerDefensePage() {
               />
             )
           )}
-          {state && run.phase === "playing" && (
+          {playing && (
             <TowerDefenseOverlay
-              state={state}
+              state={playing}
               speed={run.speed}
               soundOn={!!sfxOn}
               mode={mode}
               onSpeed={run.setSpeed}
               onSound={setSfxEnabled}
-              onQuit={() => act(["quit"])}
               act={act}
             />
           )}
-          {state && run.phase === "playing" && (
+          {playing && (
             <TowerDefenseDraft
-              state={state}
+              state={playing}
               act={act}
               onAutoPick={() => {
-                for (let i = 0; i < 50 && runAct(["perk", 0]); i++);
+                for (let i = 0; i < 50 && act(["perk", 0]); i++);
               }}
             />
           )}
@@ -309,10 +301,10 @@ export default function TowerDefensePage() {
             />
           )}
         </div>
-        {state && run.phase === "playing" && (
+        {playing && (
           <>
             <TowerDefenseActionBar
-              state={state}
+              state={playing}
               mode={mode}
               onMode={setMode}
               act={act}
@@ -324,7 +316,7 @@ export default function TowerDefensePage() {
                 leaving or reloading loses its latest progress.
               </p>
             )}
-            <TowerDefensePanel state={state} act={act} />
+            <TowerDefensePanel state={playing} act={act} />
           </>
         )}
       </div>

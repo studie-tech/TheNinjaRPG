@@ -23,7 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Confirm from "@/layout/Confirm";
 import Link from "@/layout/Link";
-import { SEAL_GLYPHS } from "@/layout/TowerDefenseHud";
+import { SEAL_GLYPHS, SEAL_HOTKEYS } from "@/layout/TowerDefenseHud";
 import { cn } from "@/libs/shadui";
 import {
   TD_BOSS_INTERVAL,
@@ -36,8 +36,10 @@ import {
   TD_FOCUS_DAMAGE,
   TD_SEAL_ART_INFO,
   TD_SEAL_ARTS,
+  TD_SEALS,
   TD_STAGES,
   TD_TITAN_INTERVAL,
+  TD_ULTIMATES,
   type TdDojoCategory,
   type TdDojoLevels,
   type TdDojoUpgrade,
@@ -45,7 +47,8 @@ import {
   tdStageForWave,
 } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
-import { tdDojoAvailable, tdDojoCost } from "@/libs/towerDefense/sim";
+import { tdDojoCost } from "@/libs/towerDefense/sim";
+import { capitalizeFirstLetter } from "@/utils/string";
 
 const CATEGORY_LABELS: Record<TdDojoCategory, string> = {
   offense: "Offense",
@@ -379,7 +382,7 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
                   {info.seals.map((seal, index) => (
                     <span
                       key={`${seal}-${index}`}
-                      title={`${seal.charAt(0).toUpperCase()}${seal.slice(1)} seal`}
+                      title={`${capitalizeFirstLetter(seal)} seal`}
                       className="bg-secondary flex h-8 w-8 items-center justify-center rounded-md text-base font-bold"
                     >
                       {SEAL_GLYPHS[seal]}
@@ -404,11 +407,11 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
         <span className="flex items-center gap-1 font-semibold">
           <Keyboard className="h-4 w-4" /> Keys
         </span>
-        <KeyHint keys={["A", "S", "D", "F"]} label="seals" />
+        <KeyHint keys={TD_SEALS.map((seal) => SEAL_HOTKEYS[seal])} label="seals" />
         <KeyHint keys={["Space"]} label="substitution" />
         <KeyHint keys={["B"]} label="blink" />
         <KeyHint keys={["T"]} label="tag" />
-        <KeyHint keys={["1", "–", "5"]} label="ultimates" />
+        <KeyHint keys={["1", "–", `${TD_ULTIMATES.length}`]} label="ultimates" />
         <KeyHint keys={["N"]} label="next wave" />
       </div>
     </CardContent>
@@ -527,12 +530,7 @@ const Dojo = (props: {
                         <Button
                           size="sm"
                           className="shrink-0"
-                          disabled={
-                            maxed ||
-                            !affordable ||
-                            props.isPurchasing ||
-                            !tdDojoAvailable(id, level, props.progress.bestWave)
-                          }
+                          disabled={maxed || !affordable || props.isPurchasing}
                           onClick={() => props.onBuy(id)}
                         >
                           {maxed ? "Max" : formatTdNumber(cost)}

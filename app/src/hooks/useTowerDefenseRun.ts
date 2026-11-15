@@ -37,6 +37,7 @@ import {
   type TdState,
 } from "@/libs/towerDefense/sim";
 import { isRetryableTrpcError } from "@/utils/error";
+import { clamp } from "@/utils/math";
 import {
   TD_MAX_ACTIONS,
   TD_MAX_LOG_CHARS,
@@ -312,10 +313,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const retreat = useCallback(
     (current: TowerDefenseSession) => {
       const quit: TdAction = [current.state.tick, "quit"];
-      if (applyAction(current.state, quit)) appendToLog(current.log, quit);
-      current.version++;
-      current.events.push(...current.state.events);
-      current.state.events.length = 0;
+      if (applyAction(current.state, quit)) recordAction(current, quit);
       publish(current);
       void claim();
     },
@@ -484,10 +482,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       // Only what the log can carry is played, so a claim replays exactly this run.
       if (!isTdActionEncodable(action) || !applyAction(current.state, action))
         return false;
-      appendToLog(current.log, action);
-      current.version++;
-      current.events.push(...current.state.events);
-      current.state.events.length = 0;
+      recordAction(current, action);
       publish(current);
       if (current.state.over) void claim();
       else persist();
@@ -520,10 +515,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         stepped++;
         if (current.state.over) break;
       }
-      if (current.state.events.length > 0) {
-        current.events.push(...current.state.events);
-        current.state.events.length = 0;
-      }
+      drainEvents(current);
       if (current.state.over) {
         void claim();
         return;
@@ -541,7 +533,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const setSpeed = useCallback((value: number) => {
     const current = session.current;
     const max = tdMaxSpeed(current?.config.dojo.speed ?? 0);
-    setSpeedState(Math.min(max, Math.max(1, value)));
+    setSpeedState(clamp(value, 1, max));
   }, []);
 
   const retryClaim = useCallback(() => {
@@ -690,6 +682,19 @@ const useTowerDefenseProgressCache = () => {
     /** A claim whose outcome this page never saw: only the server knows the balance. */
     refresh: useCallback(() => utils.towerDefense.getProgress.invalidate(), [utils]),
   };
+};
+
+/** Move the events the run produced to the queue the renderer drains. */
+const drainEvents = (current: TowerDefenseSession) => {
+  current.events.push(...current.state.events);
+  current.state.events.length = 0;
+};
+
+/** Record an action the run accepted and pass its events on to the renderer. */
+const recordAction = (current: TowerDefenseSession, action: TdAction) => {
+  appendToLog(current.log, action);
+  current.version++;
+  drainEvents(current);
 };
 
 /** A copy of everything the HUD reads, so a render never observes the live run. */

@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Confirm from "@/layout/Confirm";
+import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense";
 import { cn } from "@/libs/shadui";
 import {
   TD_GAME_SPEEDS,
@@ -42,7 +43,6 @@ import {
   type TdSeal,
   type TdSentry,
   type TdShopItem,
-  type TdUltimate,
   tdStageForWave,
 } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
@@ -62,14 +62,15 @@ import {
   tdUltimateUnlocked,
 } from "@/libs/towerDefense/sim";
 import { calculatePercent } from "@/utils/math";
+import { capitalizeFirstLetter } from "@/utils/string";
 
-export type TowerDefenseInputMode = "aim" | "blink" | "trap";
+export type TowerDefenseInputMode = TowerDefenseSceneView["mode"];
 
-export const SEAL_KEYS: Record<string, TdSeal> = {
-  a: "tiger",
-  s: "snake",
-  d: "dog",
-  f: "bird",
+export const SEAL_HOTKEYS: Record<TdSeal, string> = {
+  tiger: "A",
+  snake: "S",
+  dog: "D",
+  bird: "F",
 };
 export const SEAL_GLYPHS: Record<TdSeal, string> = {
   tiger: "寅",
@@ -84,13 +85,6 @@ const TARGET_LABELS: Record<TdTargetMode, string> = {
   fast: "Fastest",
   support: "Support",
 };
-const ULTIMATE_SHORT: Record<TdUltimate, string> = {
-  clones: "Clones",
-  tempest: "Tempest",
-  amaterasu: "Amaterasu",
-  tsukuyomi: "Tsukuyomi",
-  cataclysm: "Cataclysm",
-};
 
 /** Run status drawn over the top and bottom edges of the arena. */
 export const TowerDefenseOverlay = (props: {
@@ -100,7 +94,6 @@ export const TowerDefenseOverlay = (props: {
   mode: TowerDefenseInputMode;
   onSpeed: (speed: number) => void;
   onSound: (enabled: boolean) => void;
-  onQuit: () => void;
   act: (command: TdCommand) => void;
 }) => {
   const { state } = props;
@@ -185,7 +178,7 @@ export const TowerDefenseOverlay = (props: {
             triggerLabel="Retreat and bank your scrolls"
             tone="destructive"
             proceed_label="Retreat"
-            onAccept={props.onQuit}
+            onAccept={() => props.act(["quit"])}
           >
             Retreating ends this run at wave {state.wave} and banks the scrolls it
             earned.
@@ -276,12 +269,12 @@ export const TowerDefenseActionBar = (props: {
   );
   return (
     <div className="flex w-full flex-wrap gap-1">
-      {TD_SEALS.map((seal, index) => (
+      {TD_SEALS.map((seal) => (
         <ActionButton
           key={seal}
-          title={`${seal} seal (${"ASDF"[index]})`}
+          title={`${seal} seal (${SEAL_HOTKEYS[seal]})`}
           onClick={() => act(["seal", seal, ...props.aim()])}
-          hotkey={"ASDF"[index]}
+          hotkey={SEAL_HOTKEYS[seal]}
         >
           <span className="text-lg leading-none">{SEAL_GLYPHS[seal]}</span>
         </ActionButton>
@@ -331,7 +324,9 @@ export const TowerDefenseActionBar = (props: {
             highlight={remaining <= 0}
             wide
           >
-            <span className="text-xs font-semibold">{ULTIMATE_SHORT[ultimate]}</span>
+            <span className="text-xs font-semibold">
+              {capitalizeFirstLetter(ultimate)}
+            </span>
           </ActionButton>
         );
       })}
@@ -653,9 +648,6 @@ const ActionButton = (props: {
   wide?: boolean;
 }) => {
   const cooling = (props.remaining ?? 0) > 0;
-  const fraction = cooling
-    ? Math.min(1, (props.remaining ?? 0) / Math.max(1, props.total ?? 1))
-    : 0;
   return (
     <button
       type="button"
@@ -676,7 +668,9 @@ const ActionButton = (props: {
       <span
         aria-hidden
         className="absolute inset-x-0 bottom-0 bg-black/30"
-        style={{ height: `${fraction * 100}%` }}
+        style={{
+          height: `${calculatePercent(props.remaining ?? 0, props.total ?? 1)}%`,
+        }}
       />
       <span className="relative">{props.children}</span>
       {cooling ? (

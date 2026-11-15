@@ -28,15 +28,13 @@ const TowerDefenseArenaInner = (props: TowerDefenseArenaProps) => {
         signal,
         onError,
         seed: props.runId,
-        lpcCatalog: props.appearance
-          ? await loadLpcCatalog().catch(() => undefined)
-          : undefined,
+        lpcCatalog: await loadLpcCatalog().catch(() => undefined),
         appearance: props.appearance,
         roster: props.roster,
         hitAsset: props.hitAsset,
         smokeAsset: props.smokeAsset,
         onFrame: (delta) => latest.current.onFrame(delta),
-        playSound: (cue, volume) => latest.current.playSound?.(cue, volume),
+        playSound: (cue, volume) => latest.current.playSound(cue, volume),
         getView: () => latest.current.getView(),
         onTap: (point, hit) => latest.current.onTap(point, hit),
       }),
@@ -50,12 +48,12 @@ export const TowerDefenseArena = memo(TowerDefenseArenaInner);
 
 interface TowerDefenseArenaProps {
   runId: string;
-  appearance?: SpriteAppearance;
+  appearance: SpriteAppearance;
   roster: TowerDefenseRosterEntry[];
   hitAsset?: GameAsset;
   smokeAsset?: GameAsset;
   onFrame: (delta: number) => void;
-  playSound?: (cue: TdSfx, volume: number) => void;
+  playSound: (cue: TdSfx, volume: number) => void;
   getView: () => TowerDefenseSceneView;
   onTap: (
     point: { x: number; y: number },

@@ -82,7 +82,7 @@ export const areTowerDefenseClaimsEnabled = (): boolean =>
 /** The receipt key for a claim; the nonce is server-generated and signed into the token. */
 export const towerDefenseClaimKey = (nonce: string): string => `run:${nonce}`;
 
-export type TowerDefenseClaimResult =
+type TowerDefenseClaimResult =
   | { ok: true; wave: number; kills: number; points: number }
   | { ok: false; message: string };
 
