@@ -1,7 +1,7 @@
 import { TRPCClientError } from "@trpc/client";
 import { getQueryKey } from "@trpc/react-query";
 import { nanoid } from "nanoid";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getDojoPurchaseUpdate, getRunClaimUpdate } from "@/deltas/towerDefense";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
@@ -34,6 +34,7 @@ import {
   type TdReplay,
   type TdRunConfig,
   type TdState,
+  tdRunPoints,
 } from "@/libs/towerDefense/sim";
 import { isRetryableTrpcError } from "@/utils/error";
 import { clamp } from "@/utils/math";
@@ -118,8 +119,10 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   /** An immutable copy of the run for rendering; the live state stays in `session`. */
   const [hud, setHud] = useState<TdState | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
-  const { prepare, applyClaim, applyPurchase, refresh } =
-    useTowerDefenseProgressCache();
+  const utils = api.useUtils();
+  const { prepareUpdate, updateCache } = useQueryCacheUpdate<
+    RouterOutputs["towerDefense"]["getProgress"]
+  >(getQueryKey(api.towerDefense.getProgress, undefined, "query"));
   const { mutateAsync: startRun, isPending: isStarting } =
     api.towerDefense.startRun.useMutation();
   // A claim uploads a long log and replays it, so it travels alone instead of holding up
@@ -216,7 +219,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     const base = {
       wave: state.wave,
       kills: state.kills,
-      points: Math.floor(state.scrolls),
+      points: tdRunPoints(state),
       quit: state.quit,
     };
     persist(true);
@@ -237,7 +240,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       refreshSaved();
     };
     setPhase("claiming");
-    const snapshot = prepare();
+    const snapshot = prepareUpdate();
     const response = await claimRun({
       token,
       actions: encodedLog(current.log),
@@ -273,14 +276,17 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     }
     const { result } = response;
     if (result.success) {
-      void applyClaim(
-        { pointsEarned: result.pointsEarned ?? 0, wave: result.wave ?? state.wave },
+      void updateCache(
+        getRunClaimUpdate({
+          pointsEarned: result.pointsEarned ?? 0,
+          wave: result.wave ?? state.wave,
+        }),
         snapshot,
       );
       settle();
     } else if (result.alreadyClaimed) {
       // An earlier attempt paid out, but its response never arrived.
-      void refresh();
+      void utils.towerDefense.getProgress.invalidate();
       settle();
     } else if (result.permanent) {
       // The server refused the run itself; claiming it again can only repeat that.
@@ -296,14 +302,14 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     });
     setPhase("over");
   }, [
-    applyClaim,
     claimRun,
     forget,
     persist,
-    prepare,
-    refresh,
+    prepareUpdate,
     refreshSaved,
     storageKey,
+    updateCache,
+    utils,
   ]);
 
   /** End the run with a retreat, as the player could; used at the run's length limits. */
@@ -566,21 +572,23 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
 
   const buyDojo = useCallback(
     async (upgradeId: TdDojoUpgrade) => {
-      const snapshot = prepare();
+      const snapshot = prepareUpdate();
       const result = await purchase({ upgradeId });
       if (
         result.success &&
         result.level !== undefined &&
         result.pointsSpent !== undefined
       )
-        void applyPurchase(
-          upgradeId,
-          { level: result.level, pointsSpent: result.pointsSpent },
+        void updateCache(
+          getDojoPurchaseUpdate(upgradeId, {
+            level: result.level,
+            pointsSpent: result.pointsSpent,
+          }),
           snapshot,
         );
       else showMutationToast(result);
     },
-    [applyPurchase, prepare, purchase],
+    [prepareUpdate, purchase, updateCache],
   );
 
   // A tab that starts or resumes a run takes the save over, and one that discards or
@@ -642,39 +650,6 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     leave,
     discardSaved,
     buyDojo,
-  };
-};
-
-/**
- * Reconcile the Dojo progress query with confirmed purchases and claims. Callers take a
- * snapshot with `prepare` when the mutation starts and hand it to the update.
- */
-const useTowerDefenseProgressCache = () => {
-  const utils = api.useUtils();
-  const key = useMemo(
-    () => getQueryKey(api.towerDefense.getProgress, undefined, "query"),
-    [],
-  );
-  const { prepareUpdate, updateCache } =
-    useQueryCacheUpdate<RouterOutputs["towerDefense"]["getProgress"]>(key);
-  type Snapshot = ReturnType<typeof prepareUpdate>;
-  return {
-    prepare: prepareUpdate,
-    applyPurchase: useCallback(
-      (
-        upgradeId: TdDojoUpgrade,
-        result: { level: number; pointsSpent: number },
-        snapshot: Snapshot,
-      ) => updateCache(getDojoPurchaseUpdate(upgradeId, result), snapshot),
-      [updateCache],
-    ),
-    applyClaim: useCallback(
-      (result: { pointsEarned: number; wave: number }, snapshot: Snapshot) =>
-        updateCache(getRunClaimUpdate(result), snapshot),
-      [updateCache],
-    ),
-    /** A claim whose outcome this page never saw: only the server knows the balance. */
-    refresh: useCallback(() => utils.towerDefense.getProgress.invalidate(), [utils]),
   };
 };
 
