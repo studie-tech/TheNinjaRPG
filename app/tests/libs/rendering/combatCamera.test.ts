@@ -3,6 +3,7 @@ import { Assets, Container, Texture, UniformGroup } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
 import type { GroundEffect } from "@/libs/combat/types";
 import { hexGridHeightRatio } from "@/libs/hexgrid";
+import { AMBIENT_FRAME_RATE } from "@/libs/rendering/frameLoop";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import * as runtime from "@/libs/rendering/runtime";
 import {
@@ -408,5 +409,29 @@ describe("combat camera gestures", () => {
     tick(300);
     expect(actor.x).toBeCloseTo(-destination.center.x);
     expect((195 - world.x) / world.scale.x).toBeGreaterThan(cameraX);
+  });
+
+  it("returns to ambient pacing after following a fighter to the battlefield edges", async () => {
+    const { game, getSnapshot, patchSnapshot, scene, tick } = await setup();
+    const pace = vi.spyOn(game, "setAnimating");
+    for (const position of [
+      { longitude: 0, latitude: 0 },
+      { longitude: 11, latitude: 9 },
+    ]) {
+      const snapshot = getSnapshot();
+      patchSnapshot({
+        battle: {
+          ...snapshot.battle,
+          version: snapshot.battle.version + 1,
+          usersState: snapshot.battle.usersState.map((user) => ({
+            ...user,
+            ...position,
+          })),
+        },
+      });
+      scene.refresh();
+      tick(600);
+      expect(pace).toHaveBeenLastCalledWith(true, AMBIENT_FRAME_RATE);
+    }
   });
 });

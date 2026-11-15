@@ -10,6 +10,7 @@ import {
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as bakedLighting from "@/libs/rendering/bakedVillageLighting";
+import { MAX_FRAME_RATE, STILL_FRAME_RATE } from "@/libs/rendering/frameLoop";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import { CONTACT_RING } from "@/libs/rendering/primitives/shadow";
 import * as terrain from "@/libs/rendering/primitives/terrain";
@@ -38,6 +39,9 @@ const frame = (now = 1000, reducedMotion = true): runtime.GameFrame => ({
   reducedMotion,
 });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+/** Whether the scene's latest frame asked to keep presenting without invalidation. */
+const isAnimating = (game: Pick<runtime.GameRenderer, "setAnimating">) =>
+  (game.setAnimating as ReturnType<typeof vi.fn>).mock.lastCall?.[0];
 const appearance = resolveSpriteAppearance({});
 const player = (patch: Partial<SectorUser> = {}) =>
   ({
@@ -269,7 +273,7 @@ describe("still travel rendering", () => {
     }
   });
 
-  it("keeps rain moving without sprite animation and sleeps only when every active category is off", async () => {
+  it("keeps rain moving without sprite animation, paces frozen lighting and sleeps only when every active category is off", async () => {
     const { game, world, state, advance } = await sceneFixture();
     state.weather = { kind: "rain", intensity: 1 };
     Object.assign(
@@ -279,23 +283,24 @@ describe("still travel rendering", () => {
       ),
     );
     advance(frame(1000, false));
-    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
-    for (const effect of [
-      "weather",
-      "wind",
-      "sunlight",
-      "dayNight",
-      "localLights",
-      "spriteAnimations",
+    expect(isAnimating(game)).toBe(false);
+    for (const [effect, rate] of [
+      ["weather", MAX_FRAME_RATE],
+      ["wind", MAX_FRAME_RATE],
+      // Frozen motion leaves lighting, which follows the world clock.
+      ["sunlight", STILL_FRAME_RATE],
+      ["dayNight", STILL_FRAME_RATE],
+      ["localLights", STILL_FRAME_RATE],
+      ["spriteAnimations", MAX_FRAME_RATE],
     ] as const) {
       game.visualEffects[effect] = true;
       advance(frame(1100, false));
-      expect(game.setAnimating).toHaveBeenLastCalledWith(true);
+      expect(game.setAnimating).toHaveBeenLastCalledWith(true, rate);
       if (effect === "weather")
         expect(world.getChildByLabel("world-weather")!.visible).toBe(true);
       game.visualEffects[effect] = false;
       advance(frame(1200, false));
-      expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+      expect(isAnimating(game)).toBe(false);
     }
   });
   it("sleeps after effects are disabled, wakes for ref updates and resumes after toggling", async () => {
@@ -316,7 +321,7 @@ describe("still travel rendering", () => {
       ),
     );
     advance(frame());
-    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    expect(isAnimating(game)).toBe(false);
     invalidate.mockClear();
     poll();
     expect(invalidate).not.toHaveBeenCalled();
@@ -335,7 +340,7 @@ describe("still travel rendering", () => {
     advance(frame());
     Object.assign(game.visualEffects, DEFAULT_VISUAL_EFFECTS);
     advance(frame(1100, false));
-    expect(game.setAnimating).toHaveBeenLastCalledWith(true);
+    expect(isAnimating(game)).toBe(true);
     Object.assign(
       game.visualEffects,
       Object.fromEntries(
@@ -343,7 +348,7 @@ describe("still travel rendering", () => {
       ),
     );
     advance(frame(1200));
-    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    expect(isAnimating(game)).toBe(false);
     invalidate.mockClear();
     poll();
     expect(invalidate).not.toHaveBeenCalled();
@@ -366,7 +371,7 @@ describe("travel scene ground depth", () => {
     const { scene, game, advance, event, onTap, world } = await sceneFixture(state);
     const sector = scene.sectors.get(state.sector)!;
     expect(sector.art.entries.length).toBeGreaterThan(0);
-    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    expect(isAnimating(game)).toBe(false);
     const actors = world.children.at(-2)!;
     expect(actors.children).toHaveLength(0);
     event("pointerdown", 400, 300);
@@ -380,7 +385,7 @@ describe("travel scene ground depth", () => {
     expect(game.invalidate).toHaveBeenCalled();
     advance();
     await settle();
-    expect(game.setAnimating).toHaveBeenLastCalledWith(true);
+    expect(isAnimating(game)).toBe(true);
     expect(scene.sectors.get(state.sector)).toBe(sector);
     expect(
       (runtime.createGameRenderer as ReturnType<typeof vi.fn>).mock.calls,

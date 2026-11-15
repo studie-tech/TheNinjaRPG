@@ -15,7 +15,8 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
   let geometry: Geometry | undefined,
     shader: Shader | undefined,
     particles: Mesh<Geometry, Shader> | undefined;
-  let disposed = false;
+  let disposed = false,
+    falling = false;
   // View packs viewport, pixel size and density; weather packs clock, kind, strength and ambient light.
   const uniforms = new UniformGroup({
     uView: { value: new Float32Array(4), type: "vec4<f32>" },
@@ -30,6 +31,8 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
   });
   return {
     container,
+    /** The last update drew falling precipitation, whose fast particles need the full frame rate. */
+    isFalling: () => falling,
     /** Only uniforms change per frame; clear skies and reduced motion submit no weather draw. */
     update: (
       frame: GameFrame,
@@ -48,6 +51,7 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
         weather.kind !== "clear" &&
         strength > 0 &&
         !frame.reducedMotion;
+      falling = container.visible && !isCloudy;
       if (!container.visible) return;
       if (isCloudy) {
         if (particles) particles.visible = false;

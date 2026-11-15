@@ -38,6 +38,10 @@ export const createCombatEffects = (
   let queued: { url: string; volume: number }[] = [],
     flushAt: number | null = null;
   let wasMoving = false;
+  /** Set by each animate: an arrival clip is still playing. */
+  let playing = false;
+  /** Fastest frame rate among the looping clips shown in the last animate. */
+  let loopFrameRate = 0;
   const sound = (id: string | undefined, moving: boolean) => {
     if (!id || !snapshot?.sound) return;
     const asset = snapshot.assets.find((entry) => entry.id === id);
@@ -208,6 +212,8 @@ export const createCombatEffects = (
   ) => {
     if (wasMoving && !moving && queued.length) flushAt = now + 50;
     wasMoving = moving;
+    playing = false;
+    loopFrameRate = 0;
     if (flushAt !== null && now >= flushAt && !moving) {
       flushAt = null;
       const sounds = queued;
@@ -227,6 +233,11 @@ export const createCombatEffects = (
         clip.dispose();
         return false;
       });
+      for (const clip of record.clips) {
+        if (!clip.loop) playing = true;
+        else if (record.root.visible)
+          loopFrameRate = Math.max(loopFrameRate, clip.frameRate);
+      }
       if (record.barrier) {
         record.barrier.container.visible = record.root.visible && hoveredId === id;
         const barrier = record.effect as BarrierTagType;
@@ -249,7 +260,17 @@ export const createCombatEffects = (
     queued = [];
     flushAt = null;
   });
-  return { container, ground, sync, animate, hit };
+  return {
+    container,
+    ground,
+    sync,
+    animate,
+    hit,
+    /** Arrival clips or held sounds were still playing in the last animate. */
+    isPlaying: () => playing || flushAt !== null,
+    /** Fastest looping clip frame rate in the last animate, 0 without loops. */
+    clipFrameRate: () => loopFrameRate,
+  };
 };
 export type CombatEffectSnapshot = {
   battle: ReturnedBattle;

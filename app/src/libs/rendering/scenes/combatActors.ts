@@ -82,6 +82,10 @@ export const createCombatActors = (
     expiresAt = Number.POSITIVE_INFINITY,
     calculatedAt = 0,
     animatedAt = 0;
+  /** Set by each animate: a fighter is acting, arriving, reacting, falling or draining health. */
+  let animating = false;
+  /** Fastest frame rate among the artwork clips the fighters showed in the last animate. */
+  let clipFrameRate = 0;
   const shadow = createSoftShadowTexture();
   game.own(() => shadow.destroy(true));
   const sync = (next: CombatActorSnapshot) => {
@@ -272,6 +276,7 @@ export const createCombatActors = (
                     maxTextureSize: game.renderer.gl.getParameter(
                       game.renderer.gl.MAX_TEXTURE_SIZE,
                     ),
+                    onSettle: game.invalidate,
                   },
                 );
                 scope.own(current.spriteAnimation.dispose);
@@ -318,6 +323,7 @@ export const createCombatActors = (
                 for (const marker of [selection, hover]) marker.y += groundOffset;
               }
               updateVisual(current);
+              game.invalidate();
             }
           },
           (error) => {
@@ -423,6 +429,8 @@ export const createCombatActors = (
       scheduleExpiry();
     }
     let moving = false;
+    animating = false;
+    clipFrameRate = 0;
     animatedAt = frame.now;
     const pulse = (Math.sin((frame.now * Math.PI) / 900) + 1) / 2;
     for (const record of records.values()) {
@@ -460,6 +468,7 @@ export const createCombatActors = (
       if (!record.alive && user.curHealth <= 0 && record.deathAt === undefined)
         record.deathAt = frame.now;
       if (record.alive) record.deathAt = undefined;
+      if (active || record.arrival) animating = true;
       if (record.arrival) {
         const { arrival } = record;
         arrival.at ??= frame.now;
@@ -493,12 +502,17 @@ export const createCombatActors = (
                 ? 256
                 : 128,
           });
+          if (record.spriteAnimation) {
+            if (record.spriteAnimation.isActing()) animating = true;
+            clipFrameRate = Math.max(clipFrameRate, record.spriteAnimation.frameRate());
+          }
         }
         if (!entry.character) continue;
         const falling =
           record.deathAt !== undefined &&
           !frame.reducedMotion &&
           frame.now - record.deathAt < 480;
+        if (falling) animating = true;
         entry.sprite.visible = record.alive || falling;
         entry.character.render(
           frame,
@@ -546,6 +560,7 @@ export const createCombatActors = (
       }
       moving ||= !!record.walk;
       if (record.hitAt !== undefined) {
+        animating = true;
         const reaction = HIT_REACTIONS[record.hitSeverity];
         const progress = (frame.now - record.hitAt) / reaction.ms;
         if (progress >= 1) {
@@ -566,6 +581,7 @@ export const createCombatActors = (
         }
       }
       const draining = record.hp.drain(frame.delta * 1000, frame.reducedMotion);
+      if (draining) animating = true;
       const displayed = record.alive && root.visible;
       const isSelected = user.userId === selectedId;
       const isHovered = user.userId === hoveredId;
@@ -636,6 +652,10 @@ export const createCombatActors = (
       for (const record of records.values()) record.art?.setLighting(next);
     },
     animate,
+    /** The last animate moved more than ambient idles, rings and loops. */
+    isAnimating: () => animating,
+    /** Fastest artwork clip frame rate in the last animate, 0 without clips. */
+    clipFrameRate: () => clipFrameRate,
     hit,
     ready: () => Promise.all([...pending]),
     /** Progress from 0 to 1 through a strike cue; 1 once artwork has nothing left to play. */
