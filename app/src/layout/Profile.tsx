@@ -195,6 +195,7 @@ export function Profile() {
             }
             values={profileTabValues}
             counts={{ Character: unspentSkillPoints, Sharing: newInRecruit }}
+            countLabels={{ Character: "unspent skill points" }}
             listClassName="w-full flex-nowrap justify-start gap-[4px]"
             itemClassName={(option) =>
               `shrink-0 w-[min(44px,calc((100cqw_-_24px)/7))] ${option === "Pet" ? "mr-auto" : "mr-0"} ${isLabelledProfileTab(option) ? "@min-[480px]:w-auto" : ""}`

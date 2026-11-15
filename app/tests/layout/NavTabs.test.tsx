@@ -112,6 +112,28 @@ describe("optional tab remembering", () => {
     fireEvent.click(sharing);
     expect(onChange).toHaveBeenCalledWith("Sharing");
   });
+  it("names each badge by its own count label", () => {
+    const view = render(
+      <NavTabs
+        current="Dashboard"
+        options={["Dashboard", "Character", "Sharing"]}
+        icons={{
+          Character: <span aria-hidden="true">C</span>,
+          Sharing: <span aria-hidden="true">↗</span>,
+        }}
+        iconOnlyOptions={["Character", "Sharing"]}
+        counts={{ Character: 14, Sharing: 2 }}
+        countLabels={{ Character: "unspent skill points" }}
+      />,
+    );
+    const character = view.getByRole("button", {
+      name: "Character 14 unspent skill points",
+    });
+    expect(character.querySelector("[title]")?.getAttribute("title")).toBe(
+      "14 unspent skill points",
+    );
+    view.getByRole("button", { name: "Sharing 2 notifications" });
+  });
   it("ignores a saved tab and does not write clicks when remembering is off", () => {
     const read = vi
       .spyOn(storage, "safeLocalStorageGetItem")
