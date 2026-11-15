@@ -11,9 +11,6 @@ export const TD_MAX_ACTIONS = 300_000;
  */
 export const TD_MAX_LOG_CHARS = 4_000_000;
 
-/** Dojo levels as signed into a run. */
-export const towerDefenseDojoSchema = z.partialRecord(z.enum(TD_DOJO), z.int().min(0));
-
 /** What the server signs when a run starts; the claim replays exactly this. */
 export const towerDefenseRunTokenSchema = z.object({
   v: z.literal(1),
@@ -22,7 +19,7 @@ export const towerDefenseRunTokenSchema = z.object({
   seed: z.string(),
   startWave: z.int().min(1),
   bestWave: z.int().min(0),
-  dojo: towerDefenseDojoSchema,
+  dojo: z.partialRecord(z.enum(TD_DOJO), z.int().min(0)),
   issuedAt: z.int(),
 });
 export type TowerDefenseRunToken = z.infer<typeof towerDefenseRunTokenSchema>;
