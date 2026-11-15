@@ -40,6 +40,9 @@ import { pushToCombat, usePublicPathname } from "@/utils/routing";
 import { updateUserCache, updateUserNotifications } from "@/utils/userCache";
 import type { UserRecovery } from "@/validators/base";
 
+/** The websocket client, which loads once a player is signed in. */
+const loadPusherClient = () => import("pusher-js");
+
 // Events sent to the user from websockets
 export type UserEvent = {
   type: string;
@@ -461,7 +464,7 @@ export const usePusherHandler = (
       // pusher-js loads after hydration, and only for a signed-in player.
       let pusher: Pusher | undefined;
       let isCancelled = false;
-      void import("pusher-js").then(({ default: PusherClient }) => {
+      void loadPusherClient().then(({ default: PusherClient }) => {
         // A sign-out or account switch during the download must not open a connection.
         if (isCancelled) return;
         const connection = new PusherClient(

@@ -150,9 +150,9 @@ describeWithDatabase("clan queue claim ownership", () => {
       );
       const callbacks = source
         .slice(source.indexOf("api.clan.deleteClanBattle.useMutation("))
-        .match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+        .match(/useMutation\((\{[\s\S]*?\n {4}\})\);/)?.[1];
       const action = source.match(
-        /const onDeleteBattle = (async [\s\S]*?\n  \});/,
+        /const onDeleteBattle = (async [\s\S]*?\n {2}\});/,
       )?.[1];
       if (!callbacks || !action)
         throw new Error("Clan deletion callbacks were not found");
@@ -191,7 +191,7 @@ describeWithDatabase("clan queue claim ownership", () => {
         "utf8",
       );
       const callback = handlerSource.match(
-        /channel.bind\("event", (async [\s\S]*?\n      \})\);/,
+        /channel.bind\("event", (async [\s\S]*?\n {8}\})\);/,
       )?.[1];
       if (!callback) throw new Error("User event callback was not found");
       const transpiler = new (require("bun").Transpiler)({

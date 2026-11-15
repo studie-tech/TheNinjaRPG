@@ -67,7 +67,7 @@ const muteSettings = [
 it.each(muteSettings)(
   "waits for the profile, then delivers a ping whatever is muted (%j)",
   async (mute) => {
-    const test = mount({ mute });
+    const test = await mount({ mute });
     await waitFor(() => expect(test.reads()).toBe(1));
     let pending!: Promise<void>;
     act(() => {
@@ -90,7 +90,7 @@ it.each(muteSettings)(
 );
 
 it("retains unmuted startup pings through same-account membership-channel rebinding", async () => {
-  const test = mount();
+  const test = await mount();
   let pending!: Promise<void>;
   act(() => {
     pending = test.receive({
@@ -112,7 +112,7 @@ it("retains unmuted startup pings through same-account membership-channel rebind
 it.each([0, 1])(
   "reconciles startup inbox activity when the initial snapshot contains %i event messages",
   async (initialCount) => {
-    const test = mount({ initialCount, deferredRefresh: true });
+    const test = await mount({ initialCount, deferredRefresh: true });
     let pending!: Promise<void>;
     act(() => {
       pending = test.receive({ type: "newInbox", conversationId: "private" });
@@ -136,7 +136,7 @@ it.each([0, 1])(
 );
 
 it("retains the authoritative count when the profile includes a message before its socket delivery", async () => {
-  const test = mount({ initialCount: 1 });
+  const test = await mount({ initialCount: 1 });
   await act(async () => {
     test.finish();
   });
@@ -150,7 +150,11 @@ it("retains the authoritative count when the profile includes a message before i
 it.each([0, 1])(
   "reconciles overlapping startup inbox events with initial count %i",
   async (initialCount) => {
-    const test = mount({ initialCount, deferredRefresh: true, refreshCounts: [1, 2] });
+    const test = await mount({
+      initialCount,
+      deferredRefresh: true,
+      refreshCounts: [1, 2],
+    });
     let first!: Promise<void>;
     let second!: Promise<void>;
     act(() => {
@@ -178,7 +182,11 @@ it.each([0, 1])(
 );
 
 it("reconciles after an unrelated profile refresh that started before socket delivery", async () => {
-  const test = mount({ initialCount: 0, deferredRefresh: true, refreshCounts: [0, 1] });
+  const test = await mount({
+    initialCount: 0,
+    deferredRefresh: true,
+    refreshCounts: [0, 1],
+  });
   await act(async () => {
     test.finish();
   });
@@ -204,7 +212,7 @@ it("reconciles after an unrelated profile refresh that started before socket del
 it.each(muteSettings)(
   "lets muted startup inbox activity finish loading normally (%j)",
   async (mute) => {
-    const test = mount({ mute });
+    const test = await mount({ mute });
     let pending!: Promise<void>;
     act(() => {
       pending = test.receive({ type: "newInbox", conversationId: "global" });
@@ -224,7 +232,7 @@ it.each(muteSettings)(
 it.each(["unmount", "account switch"])(
   "discards pending notifications after %s",
   async (change) => {
-    const test = mount();
+    const test = await mount();
     let pending!: Promise<void>;
     act(() => {
       pending = test.receive({
@@ -250,7 +258,7 @@ it.each(["unmount", "account switch"])(
 it.each(["unmount", "account switch"])(
   "discards an inbox toast if %s happens during count reconciliation",
   async (change) => {
-    const test = mount({ deferredRefresh: true });
+    const test = await mount({ deferredRefresh: true });
     let pending!: Promise<void>;
     act(() => {
       pending = test.receive({ type: "newInbox", conversationId: "private" });
@@ -273,7 +281,7 @@ it.each(["unmount", "account switch"])(
 );
 
 it("settles failed initial profiles without rejecting the pending event handler", async () => {
-  const test = mount();
+  const test = await mount();
   let pending!: Promise<void>;
   act(() => {
     pending = test.receive({ type: "newInbox", conversationId: "private" });
@@ -287,7 +295,7 @@ it("settles failed initial profiles without rejecting the pending event handler"
   expect(test.qc.getQueryState(test.key)?.fetchStatus).toBe("idle");
 });
 
-function mount(
+async function mount(
   options: {
     mute?: {
       chatMuted: boolean;
@@ -374,6 +382,10 @@ function mount(
   );
   const page = <Page />;
   const view = render(page);
+  // The hook loads pusher-js on demand; bind its channels before events arrive.
+  await act(async () => {
+    await import("pusher-js");
+  });
   const key = getQueryKey(testApi.profile.getUser, undefined, "query");
   return {
     qc,

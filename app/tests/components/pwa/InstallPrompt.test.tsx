@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
-import * as tutorial from "@/hooks/tutorial";
+import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
 import * as install from "@/hooks/useInstallPrompt";
 import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
@@ -19,12 +19,7 @@ beforeEach(() => {
     isInstalled: false,
     isIOS: true,
   } as ReturnType<typeof install.useInstallPrompt>);
-  vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
-    currentStep: undefined,
-  } as ReturnType<typeof tutorial.useTutorialStep>);
-  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
-    data: "player",
-  } as ReturnType<typeof userContext.useUserDataSelector>);
+  mockPlayer({ tutorialOn: true, tutorialStep: TUTORIAL_STEPS_COUNT });
 });
 afterEach(() => {
   cleanup();
@@ -45,3 +40,27 @@ it.each(["/native-sign-in", "/native-sign-in/"])(
     expect(view.getByRole("heading", { name: "Install TheNinja-RPG" })).toBeTruthy();
   },
 );
+
+it.each([
+  { tutorialOn: true, tutorialStep: 0 },
+  { tutorialOn: true, tutorialStep: TUTORIAL_STEPS_COUNT - 1 },
+])("stays out of the way of an active tutorial (%o)", (tutorial) => {
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
+  mockPlayer(tutorial);
+  const view = render(<InstallPrompt />);
+  expect(view.queryByRole("heading", { name: "Install TheNinja-RPG" })).toBeNull();
+});
+
+it("returns once the tutorial is switched off", () => {
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
+  mockPlayer({ tutorialOn: false, tutorialStep: 0 });
+  const view = render(<InstallPrompt />);
+  expect(view.getByRole("heading", { name: "Install TheNinja-RPG" })).toBeTruthy();
+});
+
+/** A signed-in player with the given tutorial progress. */
+function mockPlayer(tutorial: { tutorialOn: boolean; tutorialStep: number }) {
+  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
+    data: { userId: "player", ...tutorial },
+  } as ReturnType<typeof userContext.useUserDataSelector>);
+}

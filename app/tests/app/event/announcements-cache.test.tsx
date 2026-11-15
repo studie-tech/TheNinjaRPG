@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from "bun:test";
 import type { Clerk } from "@clerk/nextjs/types";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
@@ -10,6 +10,7 @@ import * as client from "@/app/_trpc/client";
 import NotifyUsers from "@/app/[shell]/event/page";
 import * as toastUi from "@/components/ui/use-toast";
 import * as ContentBox from "@/layout/ContentBox";
+import { LazyParsedHtml } from "@/layout/LazyParsedHtml";
 import * as RichInput from "@/layout/RichInput";
 import * as SliderField from "@/layout/SliderField";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
@@ -26,6 +27,14 @@ import { actualShowMutationToast } from "../../setup/preload";
 import { mockUserContextValue } from "../../setup/userContext";
 
 const key = [["profile", "getUser"], { type: "query" }];
+
+// Announcement toasts render their HTML through the parser the shell loads on demand;
+// load it once so static markup includes the message.
+beforeAll(async () => {
+  renderToStaticMarkup(<LazyParsedHtml html="" />);
+  await import("@/utils/parse");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
 type Result = RouterOutputs["misc"]["submitNotification"];
 type Success = (
   data: Result,
