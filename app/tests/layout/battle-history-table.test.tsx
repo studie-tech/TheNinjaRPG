@@ -150,7 +150,9 @@ it("shows the listed player's result for each battle, and a dash where none was 
   expect(won?.textContent).toContain("Won");
   const unrecorded = view.getByText("battle-2").closest("tr");
   expect(unrecorded?.textContent).toContain("—");
-  expect(view.getByRole("columnheader", { name: "Result" })).toBeDefined();
+  expect(view.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(
+    ["Attacker", "Defender", "Result", "Battle ID", "Date"],
+  );
 });
 
 it("refreshes a cached unrecorded result when its history tab becomes active", async () => {

@@ -58,10 +58,10 @@ export const BattleHistoryTable = ({
           columns={[
             { key: "attackerAvatar", header: "Attacker", type: "avatar" },
             { key: "defenderAvatar", header: "Defender", type: "avatar" },
+            { key: "outcome", header: "Result", type: "jsx" },
             showBattleType
               ? { key: "battleType", header: "Type", type: "capitalized" }
               : { key: "battleId", header: "Battle ID", type: "string" },
-            { key: "outcome", header: "Result", type: "jsx" },
             { key: "createdAt", header: "Date", type: "date" },
           ]}
           linkPrefix="/battlelog/"
