@@ -185,6 +185,11 @@ import {
   validateDevelopmentBackup,
 } from "@/queries/staff";
 import {
+  updateTowerDefenseClaimReceiptForUpdateUserId,
+  updateTowerDefenseRunForUpdateUserId,
+  updateUserTowerDefenseUpgradeForUpdateUserId,
+} from "@/queries/towerDefense";
+import {
   deleteSectorByNumber,
   fetchSector,
   fetchVillages,
@@ -830,6 +835,9 @@ export const staffRouter = createTRPCRouter({
         updateReportLogForUpdateUserId2(ctx.drizzle, input),
         updateActionLogForUpdateUserId(ctx.drizzle, input),
         updateTrainingLogForUpdateUserId(ctx.drizzle, input),
+        updateUserTowerDefenseUpgradeForUpdateUserId(ctx.drizzle, input),
+        updateTowerDefenseRunForUpdateUserId(ctx.drizzle, input),
+        updateTowerDefenseClaimReceiptForUpdateUserId(ctx.drizzle, input),
         updateUserAttributeForUpdateUserId(ctx.drizzle, input),
         updateUserReviewForUpdateUserId(ctx.drizzle, input),
         updateUserRewardsForUpdateUserId(ctx.drizzle, input),

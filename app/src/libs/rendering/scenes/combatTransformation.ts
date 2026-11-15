@@ -448,8 +448,8 @@ const glowSprite = (texture: Texture) => {
   return sprite;
 };
 
-/** One soft radial falloff shared by every additive light in the sequence. */
-const createGlowTexture = () => {
+/** One soft radial falloff shared by every additive light in a sequence. */
+export const createGlowTexture = () => {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 128;
   const context = canvas.getContext("2d");

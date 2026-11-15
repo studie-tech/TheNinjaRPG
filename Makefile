@@ -28,8 +28,6 @@ endif
 PORT ?=
 export PORT REQUEST USER_KEY ENDPOINT INPUT_FILE
 
-SPACETIME_VERSION := $(shell node -p "require('./app/package.json').dependencies.spacetimedb")
-SPACETIME_BIN ?= $(HOME)/.local/share/spacetime/bin/$(SPACETIME_VERSION)/spacetimedb-cli
 
 ## List of available commands:
 ---------------General------------------: # -------------------------------------------------------
@@ -224,50 +222,6 @@ mobile-ios: # Build and run the iOS shell in the simulator
 mobile-android: # Build and run the Android shell in an emulator
 	@echo "${GREEN}mobile-android${RESET}"
 	cd mobile && bun run run:android
-
--------------SpacetimeDB---------------: # -------------------------------------------------------
-.PHONY: spacetime-install
-spacetime-install: # Install SpacetimeDB CLI
-	@echo "${YELLOW}Installing SpacetimeDB CLI${RESET}"
-	curl -sSf https://install.spacetimedb.com | bash -s -- --yes
-	~/.local/bin/spacetime version install $(SPACETIME_VERSION) --yes
-
-.PHONY: spacetime-start
-spacetime-start: # Start local SpacetimeDB server on port 3001
-	@echo "${GREEN}Starting local SpacetimeDB server on port 3001${RESET}"
-	$(SPACETIME_BIN) start --listen-addr 127.0.0.1:3001
-
-.PHONY: spacetime-build
-spacetime-build: # Build SpacetimeDB Rust module
-	@echo "${GREEN}Building SpacetimeDB module (Rust)${RESET}"
-	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && $(SPACETIME_BIN) build
-
-.PHONY: spacetime-publish-local
-spacetime-publish-local: # Build, publish, and generate TypeScript bindings
-	@echo "${GREEN}Publishing SpacetimeDB module to local server${RESET}"
-	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && $(SPACETIME_BIN) build && echo "y" | $(SPACETIME_BIN) publish --server local3001 --delete-data towerdefense
-	$(MAKE) spacetime-generate
-	@echo "${GREEN}Done! Module published and bindings generated${RESET}"
-
-.PHONY: spacetime-generate
-spacetime-generate: install # Generate TypeScript bindings with the CLI matching the app SDK
-	export PATH="$$HOME/.cargo/bin:$$PATH" && $(SPACETIME_BIN) generate --lang typescript --module-path app/spacetimedb --out-dir app/src/libs/spacetimedb/bindings --yes
-	cd app && ./node_modules/.bin/biome check --write --no-errors-on-unmatched src/libs/spacetimedb/bindings
-
-.PHONY: spacetime-publish-prod
-spacetime-publish-prod: spacetime-build # Publish SpacetimeDB module to production (SaaS)
-	@echo "${GREEN}Publishing SpacetimeDB module to production SaaS${RESET}"
-	export PATH="$$HOME/.cargo/bin:$$PATH" && cd app/spacetimedb && $(SPACETIME_BIN) publish --delete-data $(or $(NEXT_PUBLIC_SPACETIMEDB_MODULE), towerdefense)
-
-.PHONY: spacetime-logs
-spacetime-logs: # View SpacetimeDB module logs
-	@echo "${GREEN}Viewing SpacetimeDB logs${RESET}"
-	$(SPACETIME_BIN) logs --server local3001 towerdefense
-
-.PHONY: spacetime-logs-follow
-spacetime-logs-follow: # Follow SpacetimeDB module logs in real-time
-	@echo "${GREEN}Following SpacetimeDB logs${RESET}"
-	$(SPACETIME_BIN) logs --server local3001 -f towerdefense
 
 ---------------Git--------------------: # -------------------------------------------------------
 .PHONY: uncommit

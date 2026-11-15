@@ -140,9 +140,6 @@ Sentry.init({
       // nothing the player can act on.
       return null;
     }
-    if (isEffectInterruptError(event)) {
-      return null; // Drop Effect-TS fiber interruption errors (SpacetimeDB SDK)
-    }
     if (isDataCloneError(event, hint)) {
       return null; // Drop DataCloneError from third-party scripts (gtag, mediafilter)
     }
@@ -187,9 +184,6 @@ Sentry.init({
     }
     if (isWebKitMessageHandlersError(event)) {
       return null; // Drop iOS WebKit bridge errors from third-party scripts
-    }
-    if (isSpacetimeDBWebSocketConnectingError(event)) {
-      return null; // Drop SpacetimeDB WebSocket timing errors (transient)
     }
     if (isUserscriptError(event)) {
       return null; // Drop userscript errors from browser extensions
@@ -508,20 +502,6 @@ const isThirdPartyInjectedError = (
   }
 
   return false;
-};
-
-/**
- * Check if an error is from Effect-TS (used by SpacetimeDB SDK).
- * Effect-TS creates frozen error objects for fiber interruption, and Sentry
- * throws when trying to modify the `stack` property of these frozen objects.
- */
-const isEffectInterruptError = (event: Sentry.ErrorEvent): boolean => {
-  const message = event.exception?.values?.[0]?.value ?? "";
-  return (
-    message.includes("MicroCause.Interrupt") ||
-    (message.includes("Cannot assign to read only property") &&
-      message.includes("stack"))
-  );
 };
 
 /**
@@ -1394,46 +1374,6 @@ const isWebKitMessageHandlersError = (event: Sentry.ErrorEvent): boolean => {
     message.includes("window.webkit.messageHandlers") ||
     message.includes("webkit.messageHandlers")
   );
-};
-
-/**
- * Check if an error is a SpacetimeDB WebSocket "Still in CONNECTING state" error.
- * These occur when the SpacetimeDB SDK tries to send a message on a WebSocket that
- * hasn't fully transitioned to the OPEN state yet. This is a race condition in the
- * SDK's internal connection handling that can occur on slower networks or mobile devices.
- *
- * UX note: These errors are transient and handled gracefully:
- * - The useTowerDefense hook shows a "Connecting..." state during connection
- * - Connection errors trigger a mode change back to "lobby" with an error message
- * - Users can retry with the "Start New Run" or "Resume" button
- *
- * We cannot fix this in the SpacetimeDB SDK itself as it's a third-party library.
- * The error originates from the SDK's websocket_decompress_adapter.ts send() method.
- *
- */
-const isSpacetimeDBWebSocketConnectingError = (event: Sentry.ErrorEvent): boolean => {
-  const message = event.exception?.values?.[0]?.value ?? "";
-  const errorType = event.exception?.values?.[0]?.type ?? "";
-  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
-
-  // Must be an InvalidStateError with the specific WebSocket CONNECTING message
-  if (errorType !== "InvalidStateError" && errorType !== "DOMException") return false;
-  if (!message.includes("Still in CONNECTING state")) return false;
-
-  // Additional check: verify it's from SpacetimeDB SDK (websocket_decompress_adapter or db_connection_impl)
-  const isFromSpacetimeDB = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("spacetimedb") ||
-      frame.filename?.includes("websocket_decompress_adapter") ||
-      frame.filename?.includes("db_connection_impl") ||
-      frame.abs_path?.includes("spacetimedb") ||
-      frame.abs_path?.includes("websocket_decompress_adapter") ||
-      frame.abs_path?.includes("db_connection_impl"),
-  );
-
-  // If we can verify it's from SpacetimeDB, filter it
-  // If stack trace is empty/anonymized (production builds), still filter based on message
-  return isFromSpacetimeDB || stackFrames.length === 0;
 };
 
 /**

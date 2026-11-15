@@ -43,15 +43,16 @@ export default function TowerDefenseLeaderboard() {
   const columns: ColumnDefinitionType<RunWithJSX, keyof RunWithJSX>[] = [
     { key: "rank", header: "Rank", type: "number" },
     { key: "user", header: "Player", type: "jsx" },
-    { key: "score", header: "Score", type: "number" },
     { key: "wave", header: "Wave", type: "number" },
+    { key: "score", header: "Defeated", type: "number" },
+    { key: "startWave", header: "From", type: "number" },
     { key: "startedAt", header: "Date", type: "date" },
   ];
 
   return (
     <ContentBox
       title="Tower Defense Leaderboard"
-      subtitle="Top performing runs"
+      subtitle="Highest waves this month"
       defaultBackHref="/manual/towerDefense"
       padding={false}
     >
@@ -76,7 +77,7 @@ export default function TowerDefenseLeaderboard() {
         <Table data={tableData} columns={columns} />
       )}
       {!isPending && tableData && tableData.length === 0 && (
-        <p className="p-4 text-center text-muted-foreground">
+        <p className="text-muted-foreground p-4 text-center">
           No completed runs found on the leaderboard yet.
         </p>
       )}

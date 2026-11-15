@@ -4,7 +4,7 @@ import { buildMetadata } from "@/libs/seo";
 export const metadata: Metadata = buildMetadata({
   title: "Tower Defense",
   description:
-    "The tower defense minigame in TheNinja-RPG: how rounds work, the tower types available and the rewards on offer.",
+    "The tower defense minigame in TheNinja-RPG: endless waves, eras that change the rules, hand seals, sentries, ultimates and a permanent Dojo.",
   path: "/manual/towerDefense",
 });
 

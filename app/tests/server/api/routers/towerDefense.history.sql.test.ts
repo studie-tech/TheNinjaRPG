@@ -39,11 +39,7 @@ describeWithDatabase("tower defense run history", () => {
           userId: "other-runner",
           startedAt: new Date("2026-01-04T00:00:00Z"),
         },
-      ].map((run) => ({
-        ...run,
-        seed: run.id,
-        state: {} as typeof towerDefenseRun.$inferInsert.state,
-      })),
+      ].map((run) => ({ ...run, seed: run.id })),
     );
   });
   afterEach(() => vi.restoreAllMocks());

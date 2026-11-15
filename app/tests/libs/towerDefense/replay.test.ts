@@ -1,0 +1,356 @@
+import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  TD_DOJO,
+  TD_DOJO_INFO,
+  TD_SEAL_ART_INFO,
+  TD_SEAL_ARTS,
+  TD_ULTIMATES,
+  type TdDojoLevels,
+  type TdEra,
+} from "@/libs/towerDefense/content";
+import {
+  applyAction,
+  createRun,
+  replayRun,
+  stepRun,
+  TD_BOSS_MOVES,
+  type TdAction,
+  type TdActionKind,
+  type TdEvent,
+  type TdRunConfig,
+  tdStateHash,
+} from "@/libs/towerDefense/sim";
+import { towerDefenseActionsSchema } from "@/validators/towerDefense";
+import { botAct } from "./bot";
+
+/** Every Dojo upgrade at a solid level, all ultimates and sentries unlocked. */
+const veteranDojo = (scale: number): TdDojoLevels =>
+  Object.fromEntries(
+    TD_DOJO.map((id) => [
+      id,
+      Math.min(TD_DOJO_INFO[id].max, Math.ceil(TD_DOJO_INFO[id].max * scale)),
+    ]),
+  );
+
+const seededRandom = (seed: number) => {
+  let value = seed;
+  return () => {
+    value = (value * 16807) % 2147483647;
+    return value / 2147483647;
+  };
+};
+
+interface Recording {
+  config: TdRunConfig;
+  log: TdAction[];
+  hashes: Map<number, string>;
+  endTick: number;
+  events: TdEvent[];
+  final: string;
+}
+
+/**
+ * Play a run live the way the page does (actions applied before each tick, events
+ * recorded), keeping the action log and a state fingerprint every `every` ticks.
+ */
+const record = (
+  config: TdRunConfig,
+  options: {
+    chaos?: number;
+    attention?: number;
+    every?: number;
+    maxTicks?: number;
+    script?: (tick: number) => TdAction[];
+  } = {},
+): Recording => {
+  const random = seededRandom(config.seed.length * 7919 + config.startWave);
+  const state = createRun(config, true);
+  const log: TdAction[] = [];
+  const hashes = new Map<number, string>();
+  const events: TdEvent[] = [];
+  const every = options.every ?? 1;
+  const maxTicks = options.maxTicks ?? 60_000;
+  while (!state.over && state.tick < maxTicks) {
+    for (const action of options.script?.(state.tick) ?? [])
+      if (applyAction(state, [state.tick, ...action.slice(1)] as TdAction))
+        log.push([state.tick, ...action.slice(1)] as TdAction);
+    log.push(
+      ...botAct(state, {
+        rng: random,
+        chaos: options.chaos,
+        attention: options.attention,
+      }),
+    );
+    const before = state.tick;
+    stepRun(state);
+    events.push(...state.events);
+    state.events.length = 0;
+    if (state.tick !== before && state.tick % every === 0)
+      hashes.set(state.tick, tdStateHash(state));
+  }
+  if (!state.over) {
+    const quit: TdAction = [state.tick, "quit"];
+    applyAction(state, quit);
+    log.push(quit);
+  }
+  return {
+    config,
+    log,
+    hashes,
+    endTick: state.tick,
+    events,
+    final: tdStateHash(state),
+  };
+};
+
+/** Replay through the claim's JSON and schema round trip, comparing every fingerprint. */
+const expectReplayMatches = (recording: Recording) => {
+  const wire = JSON.parse(JSON.stringify(recording.log));
+  const parsed = towerDefenseActionsSchema.parse(wire);
+  let mismatch: number | null = null;
+  const result = replayRun(recording.config, parsed, recording.endTick, {
+    onTick: (state) => {
+      const expected = recording.hashes.get(state.tick);
+      if (
+        mismatch === null &&
+        expected !== undefined &&
+        expected !== tdStateHash(state)
+      )
+        mismatch = state.tick;
+    },
+  });
+  expect(mismatch).toBeNull();
+  expect(result.invalidAt).toBeNull();
+  expect(result.stop).toBe("over");
+  expect(result.state.tick).toBe(recording.endTick);
+  expect(tdStateHash(result.state)).toBe(recording.final);
+  return result;
+};
+
+describe("tower defense replay", () => {
+  it("replays a fresh player's run tick for tick", () => {
+    const recording = record({ seed: "fresh-1", startWave: 1, bestWave: 0, dojo: {} });
+    expect(recording.endTick).toBeGreaterThan(300);
+    expectReplayMatches(recording);
+  });
+
+  it("replays veteran runs with every active mechanic tick for tick", () => {
+    for (const [seed, startWave, scale] of [
+      ["vet-a", 60, 0.25],
+      ["vet-b", 150, 0.45],
+      ["vet-c", 200, 0.6],
+    ] as const) {
+      const recording = record(
+        { seed, startWave, bestWave: startWave * 2, dojo: veteranDojo(scale) },
+        { maxTicks: 12_000 },
+      );
+      expectReplayMatches(recording);
+    }
+  });
+
+  it("replays fuzzed logs full of invalid and out-of-place actions identically", () => {
+    for (const seed of ["fuzz-1", "fuzz-2", "fuzz-3", "fuzz-4"]) {
+      const recording = record(
+        { seed, startWave: 30, bestWave: 120, dojo: veteranDojo(0.3) },
+        { chaos: 0.35, maxTicks: 8_000 },
+      );
+      expect(recording.log.length).toBeGreaterThan(200);
+      expectReplayMatches(recording);
+    }
+  });
+
+  it("exercises every action kind, seal art, ultimate and boss move across recordings", () => {
+    const kinds = new Set<TdActionKind>();
+    const arts = new Set<string>();
+    const ultimates = new Set<string>();
+    const moves = new Set<string>();
+    const eras = new Set<TdEra>();
+    const seen = new Set<TdEvent["type"]>();
+    let perfectSubstitutions = 0;
+    const script = (tick: number): TdAction[] => {
+      if (tick === 40)
+        return [
+          [tick, "aim", "strong"],
+          [tick, "auto", 1],
+        ];
+      if (tick === 300) return [[tick, "sell", 0]];
+      if (tick === 900)
+        return [
+          [tick, "aim", "support"],
+          [tick, "auto", 0],
+        ];
+      if (tick % 211 === 0)
+        return [
+          [tick, "sub"],
+          [tick, "blink", -120, 90],
+        ];
+      if (tick % 97 === 0) {
+        const art = TD_SEAL_ARTS[(tick / 97) % TD_SEAL_ARTS.length] ?? "dragon_flame";
+        return TD_SEAL_ART_INFO[art].seals.map(
+          (seal) => [tick, "seal", seal, 200, -150] as TdAction,
+        );
+      }
+      return [];
+    };
+    for (const [seed, startWave, scale] of [
+      ["cover-a", 100, 0.2],
+      ["cover-b", 220, 0.3],
+      ["cover-c", 310, 0.4],
+    ] as const) {
+      const recording = record(
+        { seed, startWave, bestWave: 500, dojo: veteranDojo(scale) },
+        { every: 25, maxTicks: 9_000, script },
+      );
+      expectReplayMatches(recording);
+      for (const action of recording.log) kinds.add(action[1]);
+      for (const event of recording.events) {
+        seen.add(event.type);
+        if (event.type === "art") arts.add(event.art);
+        if (event.type === "ultimate") ultimates.add(event.ultimate);
+        if (event.type === "bossMove") moves.add(event.move);
+        if (event.type === "wave") for (const era of event.eras) eras.add(era);
+        if (event.type === "substitution" && event.perfect) perfectSubstitutions++;
+      }
+    }
+    for (const kind of [
+      "buy",
+      "max",
+      "spend",
+      "build",
+      "upgrade",
+      "sell",
+      "ult",
+      "perk",
+      "aim",
+      "focus",
+      "blink",
+      "sub",
+      "seal",
+      "trap",
+      "loot",
+      "call",
+      "auto",
+      "quit",
+    ] as const)
+      expect(kinds).toContain(kind);
+    for (const art of TD_SEAL_ARTS) expect(arts).toContain(art);
+    for (const ultimate of TD_ULTIMATES) expect(ultimates).toContain(ultimate);
+    expect(moves.size).toBeGreaterThanOrEqual(2);
+    expect(eras.size).toBeGreaterThanOrEqual(5);
+    expect(perfectSubstitutions).toBeGreaterThan(0);
+    for (const type of [
+      "throw",
+      "hit",
+      "kill",
+      "jutsu",
+      "explosion",
+      "blink",
+      "loot",
+      "heroHit",
+    ] as const)
+      expect(seen).toContain(type);
+  });
+
+  it("replays titan and boss fights, which together use every boss move", () => {
+    const moves = new Set<string>();
+    for (const startWave of [150, 200, 250, 300, 350])
+      for (const scale of [0.03, 0.08]) {
+        const recording = record(
+          {
+            seed: `titan-${startWave}`,
+            startWave,
+            bestWave: 500,
+            dojo: veteranDojo(scale),
+          },
+          { maxTicks: 3_000 },
+        );
+        expectReplayMatches(recording);
+        for (const event of recording.events)
+          if (event.type === "bossMove") moves.add(event.move);
+      }
+    for (const move of TD_BOSS_MOVES) expect(moves).toContain(move);
+  });
+
+  it("holds the tick while a perk draft is open and accepts shopping meanwhile", () => {
+    const state = createRun({ seed: "draft", startWave: 41, bestWave: 100, dojo: {} });
+    expect(state.offer).not.toBeNull();
+    const tick = state.tick;
+    stepRun(state);
+    stepRun(state);
+    expect(state.tick).toBe(tick);
+    expect(applyAction(state, [tick, "buy", "damage"])).toBe(true);
+    expect(applyAction(state, [tick, "blink", 100, 0])).toBe(false);
+    expect(applyAction(state, [tick, "perk", 0])).toBe(true);
+    while (state.offer) applyAction(state, [tick, "perk", 0]);
+    stepRun(state);
+    expect(state.tick).toBe(tick + 1);
+  });
+
+  it("reports a stalled replay when a draft is never answered", () => {
+    const result = replayRun(
+      { seed: "stall", startWave: 41, bestWave: 100, dojo: {} },
+      [],
+      500,
+    );
+    expect(result.stop).toBe("stalled");
+  });
+
+  it("rejects logs whose actions go back in time", () => {
+    const result = replayRun(
+      { seed: "order", startWave: 1, bestWave: 0, dojo: {} },
+      [
+        [50, "buy", "damage"],
+        [20, "buy", "health"],
+      ],
+      100,
+    );
+    expect(result.invalidAt).toBe(1);
+    expect(
+      towerDefenseActionsSchema.safeParse([
+        [50, "sub"],
+        [20, "sub"],
+      ]).success,
+    ).toBe(false);
+  });
+
+  it("changes the outcome when a recorded action is altered", () => {
+    const recording = record(
+      { seed: "tamper", startWave: 20, bestWave: 60, dojo: veteranDojo(0.15) },
+      { maxTicks: 6000 },
+    );
+    const tampered = recording.log.map((action) =>
+      action[1] === "buy" && action[2] === "damage"
+        ? ([action[0], "buy", "ryo"] as TdAction)
+        : action,
+    );
+    const result = replayRun(recording.config, tampered, recording.endTick);
+    expect(tdStateHash(result.state)).not.toBe(recording.final);
+  });
+
+  it("ends the run on quit and keeps the scrolls earned so far", () => {
+    const state = createRun({ seed: "quit", startWave: 1, bestWave: 0, dojo: {} });
+    for (let i = 0; i < 600; i++) stepRun(state);
+    const scrolls = state.scrolls;
+    expect(applyAction(state, [state.tick, "quit"])).toBe(true);
+    expect(state.over).toBe(true);
+    expect(state.scrolls).toBe(scrolls);
+    expect(applyAction(state, [state.tick, "buy", "damage"])).toBe(false);
+  });
+
+  it("keeps engine-dependent maths out of the deterministic modules", () => {
+    for (const file of ["sim.ts", "rng.ts", "balance.ts", "content.ts"]) {
+      const source = readFileSync(
+        join(import.meta.dirname, "../../../src/libs/towerDefense", file),
+        "utf8",
+      ).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+      expect(source).not.toMatch(
+        /Math\.(pow|exp|log|log2|log10|sin|cos|tan|atan2|atan|hypot|random|cbrt|expm1|log1p)\b/,
+      );
+      expect(source).not.toMatch(
+        /[\w)\]]\s*\*\*\s*[\w(]|Date\.now|performance\.now|new Date/,
+      );
+    }
+  });
+});
