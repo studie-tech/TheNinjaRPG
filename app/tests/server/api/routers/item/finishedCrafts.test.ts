@@ -27,8 +27,8 @@ const stacks = async () =>
     .map((row) => [row.id, row.quantity, row.craftingFinishedAt !== null]);
 
 /** A repair kit crafted into its own row, finishing at the given offset from now. */
-const craftedKits = (quantity: number, finishesInMs: number) => ({
-  id: "kit-crafted",
+const craftedKits = (quantity: number, finishesInMs: number, id = "kit-crafted") => ({
+  id,
   userId,
   itemId: "kit",
   quantity,
@@ -62,6 +62,28 @@ describeWithDatabase("finished crafts in the backpack", () => {
       expect(await stacks()).toEqual([["kit-carried", 7, false]]);
     },
   );
+
+  it("clears the craft time of a crafted stack the carried one joins", async () => {
+    // The merge keeps the lowest ID, so the crafted row holds the joined stack.
+    await insertUserItems([
+      { id: "kit-z-carried", userId, itemId: "kit", quantity: 3 },
+      craftedKits(4, -minute, "kit-a-crafted"),
+    ]);
+    await (await callerFor(itemRouter, userId)).getUserItems();
+    expect(await stacks()).toEqual([["kit-a-crafted", 7, false]]);
+  });
+
+  it("clears the craft time of a finished craft stored at home without joining it", async () => {
+    await insertUserItems([
+      { id: "kit-carried", userId, itemId: "kit", quantity: 3 },
+      { ...craftedKits(4, -minute), storedAtHome: true },
+    ]);
+    await (await callerFor(itemRouter, userId)).getUserItems();
+    expect(await stacks()).toEqual([
+      ["kit-carried", 3, false],
+      ["kit-crafted", 4, false],
+    ]);
+  });
 
   it("keeps a craft that is still running apart", async () => {
     await insertUserItems([
@@ -102,7 +124,11 @@ describeWithDatabase("finished crafts in the backpack", () => {
       craftedKits(4, -minute),
     ]);
     const api = await callerFor(itemRouter, userId);
-    await api.getUserItems();
+    const inBattle = await api.getUserItems();
+    expect(inBattle.map((row) => `${row.id}:${row.quantity}`).sort()).toEqual([
+      "kit-carried:3",
+      "kit-crafted:4",
+    ]);
     expect(await stacks()).toEqual([
       ["kit-carried", 3, false],
       ["kit-crafted", 4, true],

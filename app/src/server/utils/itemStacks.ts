@@ -74,7 +74,8 @@ export const mergeUserItemStacks = async (
  * own row while it runs, and nothing happens when its timer ends, so inventory reads join it.
  * Nothing joins while the owner is in a battle; the craft joins on a read after it.
  * @param rows - The owner's item rows as just read
- * @returns Whether the inventory changed and should be read again
+ * @returns Whether finished crafts were found, so the rows should be read again: a join
+ * changes them, and one that lost to a concurrent read's join leaves them outdated
  */
 export const joinFinishedCrafts = async (
   client: DrizzleClient,
@@ -98,7 +99,7 @@ export const joinFinishedCrafts = async (
     false,
     ownerOutOfBattle(),
   );
-  if (!joined) return false;
+  if (!joined) return true;
   await updateUserItemForJoinFinishedCrafts(
     client,
     userId,
