@@ -465,17 +465,15 @@ export const homeStorageMoveMessage = (
 };
 
 /**
- * Bag slots used by carried stacks left out of the backpack list: the slots auction escrow
- * adds (see `countInventorySlots`), then unfinished crafts (the order of getEquipBlockReason).
+ * Bag slots used by carried stacks left out of the backpack list: auction escrow slots
+ * (see `countInventorySlots`), then unfinished crafts (the order of getEquipBlockReason).
  */
 export const countUnlistedBagStacks = (rows: InventorySlotRow[], now: Date) => {
   const counted = rows.filter(countsTowardInventoryStorage);
-  const auction =
-    countInventorySlots(counted, now) -
-    countInventorySlots(
-      counted.filter((ui) => !ui.isInAuction),
-      now,
-    );
+  const auction = countInventorySlots(
+    counted.filter((ui) => ui.isInAuction),
+    now,
+  );
   const crafting = counted.filter(
     (ui) => !ui.isInAuction && !!ui.craftingFinishedAt && ui.craftingFinishedAt > now,
   ).length;
