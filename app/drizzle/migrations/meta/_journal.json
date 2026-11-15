@@ -1107,6 +1107,13 @@
       "when": 1794730878458,
       "tag": "0158_regular_vin_gonzales",
       "breakpoints": false
+    },
+    {
+      "idx": 159,
+      "version": "5",
+      "when": 1794766565308,
+      "tag": "0159_solid_patch",
+      "breakpoints": false
     }
   ]
 }

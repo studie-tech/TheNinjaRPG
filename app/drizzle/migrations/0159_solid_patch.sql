@@ -14,6 +14,8 @@ CREATE TABLE `UserCosmeticSlot` (
 	CONSTRAINT `UserCosmeticSlot_userId_slot_pk` PRIMARY KEY(`userId`,`slot`)
 );
 
+ALTER TABLE `Item` MODIFY COLUMN `itemType` enum('WEAPON','CONSUMABLE','ARMOR','ACCESSORY','MATERIAL','COOKING','MEAL','KEYSTONE','CRYSTAL','FURNITURE','COSMETIC','OTHER') NOT NULL;
+ALTER TABLE `Item` MODIFY COLUMN `crystalTargetTypes` enum('WEAPON','CONSUMABLE','ARMOR','ACCESSORY','MATERIAL','COOKING','MEAL','KEYSTONE','CRYSTAL','FURNITURE','COSMETIC','OTHER');
 CREATE INDEX `UserCosmetic_item_idx` ON `UserCosmetic` (`itemId`);
 CREATE INDEX `UserCosmeticSlot_item_idx` ON `UserCosmeticSlot` (`itemId`);
 CREATE INDEX `UserCosmeticSlot_variant_idx` ON `UserCosmeticSlot` (`variantId`);

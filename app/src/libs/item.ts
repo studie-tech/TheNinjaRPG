@@ -579,6 +579,8 @@ export const canEquipAdditional = (
   candidate: Pick<EquipConstraintInfo, "bloodlineId" | "itemType" | "slot">,
   equippedItems: EquippedConstraintState[],
 ): string | null => {
+  if (candidate.itemType === "COSMETIC")
+    return "Unlock this appearance with Make Cosmetic and select it in the Cosmetic tab";
   if (candidate.itemType === "MEAL") return "Meals cannot be equipped";
   if (candidate.itemType === "FURNITURE") {
     return "Furniture belongs in your home and cannot be equipped";
@@ -649,6 +651,14 @@ export const isCompatibleEquipSlot = (
 /** Concrete slots an item's slot type fits, in equip order. */
 export const compatibleEquipSlots = (slotType: string | null | undefined): ItemSlot[] =>
   ItemSlots.filter((slot) => isCompatibleEquipSlot(slot, slotType));
+
+/** Slots an item can override after its appearance is unlocked, including dedicated cosmetics. */
+export const cosmeticSlotsForItem = (
+  item: Pick<Item, "slot" | "itemType">,
+): ItemSlot[] =>
+  item.itemType === "MEAL" || item.itemType === "FURNITURE"
+    ? []
+    : compatibleEquipSlots(item.slot);
 
 /** Last compatible slot nothing occupies; purchases and manual equips fill from the back. */
 export const findFreeEquipSlot = (
@@ -940,6 +950,7 @@ export const showsItemLevelBadge = (item: {
   item.itemType !== "MEAL" &&
   item.itemType !== "CRYSTAL" &&
   item.itemType !== "FURNITURE" &&
+  item.itemType !== "COSMETIC" &&
   item.slot !== "THROWN";
 
 /** Consumables consolidate across ownership levels; gear keeps its progression. */

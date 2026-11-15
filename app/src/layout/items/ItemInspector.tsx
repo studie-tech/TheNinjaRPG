@@ -45,6 +45,7 @@ import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
   applyActiveVariant,
   calcItemSellingPrice,
+  cosmeticSlotsForItem,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
   showsItemLevelBadge,
@@ -171,7 +172,7 @@ export function ItemInspector({
       ? Math.round((useritem.durability / useritem.item.maxDurability) * 100)
       : null;
   const hasMoreActions =
-    fittingSlots(useritem.item).length > 0 ||
+    cosmeticSlotsForItem(useritem.item).length > 0 ||
     useritem.item.canStack ||
     hasVariants ||
     (availableEvolutions?.length ?? 0) > 0;

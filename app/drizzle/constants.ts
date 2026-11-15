@@ -889,6 +889,7 @@ export const ItemTypes = [
   "KEYSTONE",
   "CRYSTAL",
   "FURNITURE",
+  "COSMETIC",
   "OTHER",
 ] as const;
 export type ItemType = (typeof ItemTypes)[number];
@@ -899,6 +900,7 @@ export const NonBattleItemTypes = [
   "COOKING",
   "CRYSTAL",
   "FURNITURE",
+  "COSMETIC",
 ] as const satisfies readonly ItemType[];
 /** Description of a newly created item until staff replace it. */
 export const DEFAULT_ITEM_DESCRIPTION = "New item description";
@@ -913,6 +915,7 @@ export const NonActionItemTypes: ItemType[] = [
   "ACCESSORY",
   "KEYSTONE",
   "FURNITURE",
+  "COSMETIC",
 ];
 
 export const BanStates = [

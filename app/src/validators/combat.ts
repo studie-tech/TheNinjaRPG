@@ -1499,6 +1499,13 @@ const SuperRefineBase = (data: ContentBaseValidatorType, ctx: z.RefinementCtx) =
  * Validator specific to items
  */
 const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
+  if (data.itemType === "COSMETIC" && data.slot === "NONE") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["slot"],
+      message: "Cosmetics require an item slot",
+    });
+  }
   if (data.itemType === "MEAL") {
     for (const [field, expected] of Object.entries(MEAL_ITEM_DEFAULTS)) {
       if (

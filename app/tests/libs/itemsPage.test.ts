@@ -258,6 +258,16 @@ describe("backpack filtering", () => {
 });
 
 describe("slot rules", () => {
+  it("keeps dedicated cosmetics out of normal equipment choices while exposing their filter", () => {
+    const cosmetic = userItem({ id: "Mask", itemType: "COSMETIC", slot: "HEAD" });
+    expect(fittingSlots(cosmetic.item)).toEqual([]);
+    expect(rankSlotCandidates([cosmetic], "HEAD", () => null)).toEqual([]);
+    expect(backpackFilterChips([cosmetic])).toContainEqual({
+      value: "COSMETIC",
+      label: "Cosmetics",
+      count: 1,
+    });
+  });
   it("lists the fitting slots of hand and item gear", () => {
     expect(fittingSlots({ slot: "HAND", itemType: "WEAPON" } as never)).toEqual([
       "HAND_1",

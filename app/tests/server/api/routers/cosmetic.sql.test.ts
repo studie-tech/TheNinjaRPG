@@ -155,4 +155,27 @@ describeWithDatabase("cosmetic ownership and selection", () => {
     ).toBe(false);
     expect((await caller.get()).slots[0]?.variant?.id).toBe("hat-red");
   });
+  it.each([
+    { slot: "HEAD", target: "HEAD" },
+    { slot: "HAND", target: "HAND_2" },
+    { slot: "ITEM", target: "ITEM_6" },
+  ] as const)(
+    "unlocks dedicated cosmetics targeting $slot",
+    async ({ slot, target }) => {
+      const db = await getTestDatabase();
+      await db
+        .update(item)
+        .set({ itemType: "COSMETIC", slot })
+        .where(eq(item.id, "cosmetic-hat"));
+      const caller = await callerFor(cosmeticRouter, "cosmetic-owner");
+      expect(
+        (await caller.make({ userItemId: "hat-stack", expectedQuantity: 2 })).success,
+      ).toBe(true);
+      expect(
+        (await caller.select({ slot: target, itemId: "cosmetic-hat" })).success,
+      ).toBe(true);
+      expect((await caller.get()).slots[0]?.slot).toBe(target);
+      expect((await db.query.userItem.findFirst())?.quantity).toBe(1);
+    },
+  );
 });
