@@ -88,6 +88,32 @@ describe("useUnsavedChangesGuard", () => {
     expect(onNew).toHaveBeenCalledTimes(1);
   });
 
+  it("words the dialog for the work it protects", () => {
+    const onLeave = vi.fn();
+    const Run = () => {
+      const guard = useUnsavedChangesGuard(true, {
+        title: "Leave this run?",
+        message: "This run exists only in this tab.",
+        proceedLabel: "Leave",
+      });
+      return (
+        <div>
+          {guard.dialog}
+          <button type="button" onClick={() => guard.confirmDiscard(onLeave)}>
+            Back to the Dojo
+          </button>
+        </div>
+      );
+    };
+    const view = render(<Run />);
+    fireEvent.click(view.getByText("Back to the Dojo"));
+    expect(view.getByText("Leave this run?")).toBeTruthy();
+    expect(view.getByText("This run exists only in this tab.")).toBeTruthy();
+    expect(view.queryByText("Discard unsaved changes?")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Leave" }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
+  });
+
   it("asks the browser before unloading a dirty editor", () => {
     const view = render(<Editor isDirty onBack={vi.fn()} onNew={vi.fn()} />);
     const event = new window.Event("beforeunload", { cancelable: true });
