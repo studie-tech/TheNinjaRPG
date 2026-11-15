@@ -7,12 +7,12 @@ export interface TowerDefenseProgress {
   dojo: Partial<Record<TdDojoUpgrade, number>>;
 }
 
-/** Apply a confirmed Dojo purchase: the new level and the server's remaining scrolls. */
+/** Apply a confirmed Dojo purchase: the new level and the scrolls it cost. */
 export const getDojoPurchaseUpdate =
-  (upgradeId: TdDojoUpgrade, result: { level: number; points: number }) =>
+  (upgradeId: TdDojoUpgrade, result: { level: number; pointsSpent: number }) =>
   (current: TowerDefenseProgress): TowerDefenseProgress => ({
     ...current,
-    points: result.points,
+    points: current.points - result.pointsSpent,
     dojo: { ...current.dojo, [upgradeId]: result.level },
   });
 

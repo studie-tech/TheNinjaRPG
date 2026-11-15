@@ -7,6 +7,7 @@ import {
   userTowerDefenseUpgrade,
 } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
+import { encodeTdActions } from "@/libs/towerDefense/actionLog";
 import {
   applyAction,
   createRun,
@@ -97,7 +98,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + state.tick * 100 + 60_000);
     const claim = {
       token: started.token,
-      actions: log,
+      actions: encodeTdActions(log),
       endTick: state.tick,
     };
     const first = await api.claimRun(claim);
@@ -120,7 +121,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     });
     // A repeat is answered from the receipt before any replay: even a log that could
     // never verify gets the same answer.
-    expect(await api.claimRun({ ...claim, actions: [] })).toMatchObject({
+    expect(await api.claimRun({ ...claim, actions: "" })).toMatchObject({
       alreadyClaimed: true,
     });
     expect(await progress("td-user")).toEqual({
@@ -147,7 +148,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
       (
         await other.claimRun({
           token: started.token,
-          actions: log,
+          actions: encodeTdActions(log),
           endTick: state.tick,
         })
       ).success,
@@ -156,7 +157,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
       (
         await api.claimRun({
           token: started.token,
-          actions: log,
+          actions: encodeTdActions(log),
           endTick: state.tick - 1,
         })
       ).success,
@@ -165,7 +166,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     expect(
       await api.claimRun({
         token: started.token,
-        actions: log,
+        actions: encodeTdActions(log),
         endTick: state.tick,
       }),
     ).toMatchObject({ success: false, claimsPaused: true });
@@ -178,7 +179,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     expect(bought).toMatchObject({
       success: true,
       level: 1,
-      points: 500 - tdDojoCost("dmg", 0),
+      pointsSpent: tdDojoCost("dmg", 0),
     });
     expect((await api.getProgress()).points).toBe(500 - tdDojoCost("dmg", 0));
     expect((await api.getProgress()).dojo.dmg).toBe(1);

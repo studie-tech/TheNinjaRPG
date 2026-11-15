@@ -2649,35 +2649,57 @@ export interface TdReplayResult {
   invalidAt: number | null;
 }
 
-/**
- * Replay a recorded log up to `endTick`. Actions must be in non-decreasing tick order;
- * a run waiting on a draft with no further action at its tick stops as "stalled".
- */
-export const replayRun = (
+/** A replay in progress, advanced in slices by `advanceReplay`. */
+export interface TdReplay {
+  state: TdState;
+  actions: readonly TdAction[];
+  /** Index of the next action to apply. */
+  index: number;
+}
+
+export interface TdReplayOptions {
+  maxTicks?: number;
+  onTick?: (state: TdState) => void;
+}
+
+/** Start replaying a recorded log; nothing is simulated until it is advanced. */
+export const createReplay = (
   config: TdRunConfig,
   actions: readonly TdAction[],
+  recordEvents = false,
+): TdReplay => ({ state: createRun(config, recordEvents), actions, index: 0 });
+
+/**
+ * Advance a replay toward `endTick` by at most `ticks` simulated ticks. Returns the
+ * result once the replay stops, or null when the slice ran out first; advancing again
+ * continues exactly where it left off.
+ */
+export const advanceReplay = (
+  replay: TdReplay,
   endTick: number,
-  options: {
-    maxTicks?: number;
-    recordEvents?: boolean;
-    onTick?: (state: TdState) => void;
-  } = {},
-): TdReplayResult => {
-  const state = createRun(config, options.recordEvents ?? false);
+  options: TdReplayOptions & { ticks?: number } = {},
+): TdReplayResult | null => {
+  const { state, actions } = replay;
   const maxTicks = options.maxTicks ?? Number.POSITIVE_INFINITY;
-  let index = 0;
+  let budget = options.ticks ?? Number.POSITIVE_INFINITY;
   for (;;) {
-    while (index < actions.length && (actions[index]?.[0] ?? 0) <= state.tick) {
-      const action = actions[index];
+    while (
+      replay.index < actions.length &&
+      (actions[replay.index]?.[0] ?? 0) <= state.tick
+    ) {
+      const action = actions[replay.index];
       if (!action || action[0] < state.tick)
-        return { state, stop: "end", invalidAt: index };
+        return { state, stop: "end", invalidAt: replay.index };
       applyAction(state, action);
-      index++;
+      replay.index++;
     }
+    const index = replay.index;
     if (state.over) return { state, stop: "over", invalidAt: null };
     if (state.tick >= endTick)
       return { state, stop: "end", invalidAt: index < actions.length ? index : null };
     if (state.tick >= maxTicks) return { state, stop: "limit", invalidAt: null };
+    if (budget <= 0) return null;
+    budget--;
     const before = state.tick;
     stepRun(state);
     options.onTick?.(state);
@@ -2692,6 +2714,22 @@ export const replayRun = (
     }
   }
 };
+
+/**
+ * Replay a recorded log up to `endTick`. Actions must be in non-decreasing tick order;
+ * a run waiting on a draft with no further action at its tick stops as "stalled".
+ */
+export const replayRun = (
+  config: TdRunConfig,
+  actions: readonly TdAction[],
+  endTick: number,
+  options: TdReplayOptions & { recordEvents?: boolean } = {},
+): TdReplayResult =>
+  advanceReplay(
+    createReplay(config, actions, options.recordEvents ?? false),
+    endTick,
+    options,
+  ) as TdReplayResult;
 
 /** Compact fingerprint of everything that decides the rest of a run. */
 export const tdStateHash = (state: TdState) => {

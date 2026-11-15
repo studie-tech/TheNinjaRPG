@@ -229,7 +229,7 @@ export const towerDefenseRouter = createTRPCRouter({
     .output(
       baseServerResponse.extend({
         level: z.number().optional(),
-        points: z.number().optional(),
+        pointsSpent: z.number().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -256,7 +256,7 @@ export const towerDefenseRouter = createTRPCRouter({
         success: true,
         message: `${TD_DOJO_INFO[input.upgradeId].name} is now level ${level + 1}.`,
         level: level + 1,
-        points: progress.towerDefensePoints - cost,
+        pointsSpent: cost,
       };
     }),
 

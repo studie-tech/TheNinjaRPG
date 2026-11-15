@@ -30,7 +30,7 @@ import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense
 import { TD_COORD_SCALE } from "@/libs/towerDefense/balance";
 import { TD_ULTIMATES } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
-import type { TdCommand } from "@/libs/towerDefense/sim";
+import type { TdCommand, TdEvent } from "@/libs/towerDefense/sim";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -108,12 +108,13 @@ export default function TowerDefensePage() {
     modeRef.current = mode;
   }, [mode]);
 
-  const act = useCallback((command: TdCommand) => void run.act(command), [run]);
-  const aim = (): [number, number] => {
-    const point =
-      reticle.current ?? nearestCrowd(run.session.current?.state.enemies ?? []);
+  // Handlers depend on the run's stable members, never on the object returned per render.
+  const { act: runAct, getSession } = run;
+  const act = useCallback((command: TdCommand) => void runAct(command), [runAct]);
+  const aim = useCallback((): [number, number] => {
+    const point = reticle.current ?? nearestCrowd(getSession()?.state.enemies ?? []);
     return [Math.round(point.x * TD_COORD_SCALE), Math.round(point.y * TD_COORD_SCALE)];
-  };
+  }, [getSession]);
 
   const onTap = useCallback(
     (point: { x: number; y: number }, hit: { enemyId?: number; lootId?: number }) => {
@@ -122,31 +123,39 @@ export default function TowerDefensePage() {
         Math.round(point.y * TD_COORD_SCALE),
       ];
       if (modeRef.current === "blink") {
-        if (run.act(["blink", ...scaled])) setMode("aim");
+        if (runAct(["blink", ...scaled])) setMode("aim");
         return;
       }
       if (modeRef.current === "trap") {
-        run.act(["trap", ...scaled]);
-        if ((run.session.current?.state.hero.trapCharges ?? 0) <= 0) setMode("aim");
+        runAct(["trap", ...scaled]);
+        if ((getSession()?.state.hero.trapCharges ?? 0) <= 0) setMode("aim");
         return;
       }
-      if (hit.lootId !== undefined && run.act(["loot", hit.lootId])) return;
-      if (hit.enemyId !== undefined) run.act(["focus", hit.enemyId]);
+      if (hit.lootId !== undefined && runAct(["loot", hit.lootId])) return;
+      if (hit.enemyId !== undefined) runAct(["focus", hit.enemyId]);
       reticle.current = point;
     },
-    [run],
+    [getSession, runAct],
   );
 
-  const getView = (): TowerDefenseSceneView => {
-    const current = run.session.current;
-    return {
-      state: current?.state ?? null,
-      pending: current?.pending ?? 0,
-      events: current?.events ?? [],
-      reticle: reticle.current,
-      mode: modeRef.current,
-    };
-  };
+  // The renderer asks for this every frame, so it refills one object.
+  const view = useRef<TowerDefenseSceneView>({
+    state: null,
+    pending: 0,
+    events: [],
+    reticle: null,
+    mode: "aim",
+  });
+  const getView = useCallback((): TowerDefenseSceneView => {
+    const current = getSession();
+    const next = view.current;
+    next.state = current?.state ?? null;
+    next.pending = current?.pending ?? 0;
+    next.events = current?.events ?? NO_EVENTS;
+    next.reticle = reticle.current;
+    next.mode = modeRef.current;
+    return next;
+  }, [getSession]);
 
   // Keyboard shortcuts while a run is on screen
   useEffect(() => {
@@ -189,6 +198,7 @@ export default function TowerDefensePage() {
           progress={progress.data}
           saved={run.saved}
           isStarting={run.isStarting}
+          isResuming={run.isResuming}
           isPurchasing={run.isPurchasing}
           onStart={(startWave) => void run.start(startWave)}
           onResume={run.resume}
@@ -244,7 +254,7 @@ export default function TowerDefensePage() {
               state={state}
               act={act}
               onAutoPick={() => {
-                for (let i = 0; i < 50 && run.act(["perk", 0]); i++);
+                for (let i = 0; i < 50 && runAct(["perk", 0]); i++);
               }}
             />
           )}
@@ -300,7 +310,7 @@ const Results = (props: {
             <p className="text-sm">Log in to keep scrolls and train in the Dojo.</p>
           )}
           <div className="flex justify-center gap-2">
-            {!props.outcome.claimed && !props.isGuest && (
+            {!props.outcome.claimed && props.outcome.retryable && !props.isGuest && (
               <Button variant="outline" onClick={props.onRetry}>
                 Retry claim
               </Button>
@@ -312,6 +322,9 @@ const Results = (props: {
     </div>
   </div>
 );
+
+/** The renderer drains its events in place, so the empty fallback is never refilled. */
+const NO_EVENTS: TdEvent[] = [];
 
 const LeaderboardLink = () => (
   <Button asChild size="sm">

@@ -62,6 +62,7 @@ export const TowerDefenseLobby = (props: {
   progress: { points: number; bestWave: number; dojo: TdDojoLevels } | undefined;
   saved: { wave: number } | null;
   isStarting: boolean;
+  isResuming: boolean;
   isPurchasing: boolean;
   onStart: (startWave: number) => void;
   onResume: () => void;
@@ -105,10 +106,16 @@ export const TowerDefenseLobby = (props: {
                 <span className="flex-1">
                   Unfinished run at wave <strong>{props.saved.wave}</strong>
                 </span>
-                <Button size="sm" onClick={props.onResume}>
-                  <RotateCcw className="mr-1 h-4 w-4" /> Resume
+                <Button size="sm" disabled={props.isResuming} onClick={props.onResume}>
+                  <RotateCcw className="mr-1 h-4 w-4" />{" "}
+                  {props.isResuming ? "Restoring..." : "Resume"}
                 </Button>
-                <Button size="sm" variant="outline" onClick={props.onDiscard}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={props.isResuming}
+                  onClick={props.onDiscard}
+                >
                   <Trash2 className="mr-1 h-4 w-4" /> Discard
                 </Button>
               </div>

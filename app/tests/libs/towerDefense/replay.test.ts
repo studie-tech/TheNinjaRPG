@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { encodeTdActions } from "@/libs/towerDefense/actionLog";
 import {
   TD_DOJO,
   TD_DOJO_INFO,
@@ -11,7 +12,9 @@ import {
   type TdEra,
 } from "@/libs/towerDefense/content";
 import {
+  advanceReplay,
   applyAction,
+  createReplay,
   createRun,
   replayRun,
   stepRun,
@@ -105,10 +108,11 @@ const record = (
   };
 };
 
-/** Replay through the claim's JSON and schema round trip, comparing every fingerprint. */
+/** Replay through the claim's encoding and schema round trip, comparing every fingerprint. */
 const expectReplayMatches = (recording: Recording) => {
-  const wire = JSON.parse(JSON.stringify(recording.log));
-  const parsed = towerDefenseActionsSchema.parse(wire);
+  const parsed = towerDefenseActionsSchema.parse(encodeTdActions(recording.log));
+  // JSON equality: the wire, like JSON, carries -0 as 0.
+  expect(JSON.stringify(parsed)).toBe(JSON.stringify(recording.log));
   let mismatch: number | null = null;
   const result = replayRun(recording.config, parsed, recording.endTick, {
     onTick: (state) => {
@@ -273,6 +277,24 @@ describe("tower defense replay", () => {
     for (const move of TD_BOSS_MOVES) expect(moves).toContain(move);
   });
 
+  it("resumes a replay advanced in slices exactly where it left off", () => {
+    const recording = record(
+      { seed: "sliced", startWave: 40, bestWave: 200, dojo: veteranDojo(0.3) },
+      { maxTicks: 8_000 },
+    );
+    const replay = createReplay(recording.config, recording.log);
+    let result = advanceReplay(replay, recording.endTick, { ticks: 997 });
+    let slices = 1;
+    while (!result) {
+      result = advanceReplay(replay, recording.endTick, { ticks: 997 });
+      slices++;
+    }
+    expect(slices).toBeGreaterThan(2);
+    expect(result.stop).toBe("over");
+    expect(result.invalidAt).toBeNull();
+    expect(tdStateHash(result.state)).toBe(recording.final);
+  });
+
   it("holds the tick while a perk draft is open and accepts shopping meanwhile", () => {
     const state = createRun({ seed: "draft", startWave: 41, bestWave: 100, dojo: {} });
     expect(state.offer).not.toBeNull();
@@ -307,12 +329,6 @@ describe("tower defense replay", () => {
       100,
     );
     expect(result.invalidAt).toBe(1);
-    expect(
-      towerDefenseActionsSchema.safeParse([
-        [50, "sub"],
-        [20, "sub"],
-      ]).success,
-    ).toBe(false);
   });
 
   it("changes the outcome when a recorded action is altered", () => {

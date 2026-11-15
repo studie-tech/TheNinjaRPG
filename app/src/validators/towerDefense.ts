@@ -1,55 +1,35 @@
 import { z } from "zod";
-import {
-  TD_DOJO,
-  TD_SEALS,
-  TD_SENTRIES,
-  TD_SHOP,
-  TD_ULTIMATES,
-} from "@/libs/towerDefense/content";
-import { TD_TARGET_MODES, type TdAction } from "@/libs/towerDefense/sim";
+import { decodeTdActions } from "@/libs/towerDefense/actionLog";
+import { TD_DOJO } from "@/libs/towerDefense/content";
 
-/** Longest action log a claim may carry. */
-export const TD_MAX_ACTIONS = 60_000;
 /** Longest run a claim may replay: about 14 hours of game time. */
 export const TD_MAX_TICKS = 500_000;
+/** Most actions a claim may carry: well above the busiest play over `TD_MAX_TICKS`. */
+export const TD_MAX_ACTIONS = 300_000;
+/**
+ * Longest encoded log a claim may carry, keeping the request under the 4.5 MB body
+ * limit of a serverless function. The client ends a run before its log outgrows it.
+ */
+export const TD_MAX_LOG_CHARS = 4_000_000;
 
 const tick = z.int().min(0).max(TD_MAX_TICKS);
-const coordinate = z.int().min(-3000).max(3000);
-const slot = z.int().min(0).max(5);
 
-/** One recorded action; mirrors `TdAction` in `libs/towerDefense/sim`. */
-export const towerDefenseActionSchema = z.union([
-  z.tuple([tick, z.literal("buy"), z.enum(TD_SHOP)]),
-  z.tuple([tick, z.literal("max"), z.enum(TD_SHOP)]),
-  z.tuple([tick, z.literal("spend")]),
-  z.tuple([tick, z.literal("build"), slot, z.enum(TD_SENTRIES)]),
-  z.tuple([tick, z.literal("upgrade"), slot]),
-  z.tuple([tick, z.literal("sell"), slot]),
-  z.tuple([tick, z.literal("ult"), z.enum(TD_ULTIMATES), coordinate, coordinate]),
-  z.tuple([tick, z.literal("perk"), z.int().min(0).max(9)]),
-  z.tuple([tick, z.literal("reroll")]),
-  z.tuple([tick, z.literal("aim"), z.enum(TD_TARGET_MODES)]),
-  z.tuple([tick, z.literal("focus"), z.int().min(0)]),
-  z.tuple([tick, z.literal("blink"), coordinate, coordinate]),
-  z.tuple([tick, z.literal("sub")]),
-  z.tuple([tick, z.literal("seal"), z.enum(TD_SEALS), coordinate, coordinate]),
-  z.tuple([tick, z.literal("trap"), coordinate, coordinate]),
-  z.tuple([tick, z.literal("loot"), z.int().min(0)]),
-  z.tuple([tick, z.literal("call")]),
-  z.tuple([tick, z.literal("auto"), z.union([z.literal(0), z.literal(1)])]),
-  z.tuple([tick, z.literal("quit")]),
-]) satisfies z.ZodType<TdAction>;
-
+/**
+ * An action log in the compact encoding of `libs/towerDefense/actionLog`, decoded and
+ * validated in one pass: a long log has hundreds of thousands of actions.
+ */
 export const towerDefenseActionsSchema = z
-  .array(towerDefenseActionSchema)
-  .max(TD_MAX_ACTIONS)
-  .refine(
-    (actions) =>
-      actions.every(
-        (action, index) => index === 0 || action[0] >= (actions[index - 1]?.[0] ?? 0),
-      ),
-    "Actions must be in tick order",
-  );
+  .string()
+  .max(TD_MAX_LOG_CHARS)
+  .transform((text, context) => {
+    const actions = decodeTdActions(text, {
+      maxTick: TD_MAX_TICKS,
+      maxActions: TD_MAX_ACTIONS,
+    });
+    if (actions) return actions;
+    context.addIssue({ code: "custom", message: "The action log is malformed" });
+    return z.NEVER;
+  });
 
 /** Dojo levels as signed into a run. */
 export const towerDefenseDojoSchema = z.partialRecord(z.enum(TD_DOJO), z.int().min(0));
