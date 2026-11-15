@@ -427,7 +427,22 @@ const REACT_ATTRIBUTE_NAMES: Record<string, string> = {
   srcset: "srcSet",
   tabindex: "tabIndex",
   usemap: "useMap",
+  "xlink:href": "xlinkHref",
 };
+
+/**
+ * Attributes that would reach React as more than markup: event handlers (a string handler
+ * on a custom element is rendered as an inline script), React's own props, and raw HTML.
+ */
+const BLOCKED_ATTRIBUTE_REGEX = /^(?:on|ref$|key$|children$|dangerouslysetinnerhtml$)/;
+
+/** SVG animation elements, which can rewrite another element's link to a script URL. */
+const BLOCKED_ELEMENTS = new Set([
+  "animate",
+  "animatemotion",
+  "animatetransform",
+  "set",
+]);
 
 /** Tag and attribute names React can render; anything else is dropped. */
 const VALID_NAME_REGEX = /^[a-zA-Z][a-zA-Z:_.\-\d]*$/;
@@ -452,7 +467,12 @@ const convertNode = (
   transform: Transform,
 ): React.ReactNode => {
   if (node.type === "text") return node.data;
-  if (node.type !== "tag" || !VALID_NAME_REGEX.test(node.name)) return null;
+  if (
+    node.type !== "tag" ||
+    !VALID_NAME_REGEX.test(node.name) ||
+    BLOCKED_ELEMENTS.has(node.name.toLowerCase())
+  )
+    return null;
   const children = VOID_ELEMENTS.has(node.name)
     ? null
     : processNodes(node.children ?? [], transform);
@@ -473,6 +493,7 @@ const attributesToProps = (attributes: Record<string, string>, key: number) => {
   for (const [attribute, value] of Object.entries(attributes)) {
     if (!VALID_NAME_REGEX.test(attribute)) continue;
     const lowerCaseAttribute = attribute.toLowerCase();
+    if (BLOCKED_ATTRIBUTE_REGEX.test(lowerCaseAttribute)) continue;
     const name = REACT_ATTRIBUTE_NAMES[lowerCaseAttribute] ?? lowerCaseAttribute;
     props[name] = BOOLEAN_ATTRIBUTES.has(lowerCaseAttribute) ? name : value;
   }
