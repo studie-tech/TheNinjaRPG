@@ -43,7 +43,6 @@ import {
 } from "@/server/utils/towerDefenseClaims";
 import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
 import {
-  TD_MAX_ACTIONS,
   TD_MAX_LOG_CHARS,
   TD_MAX_TICKS,
   type TowerDefenseRunToken,
@@ -197,10 +196,7 @@ export const towerDefenseRouter = createTRPCRouter({
           points: receipt.pointsEarned,
         });
       if (!canReplay) return errorResponse(TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE);
-      const actions = decodeTdActions(input.actions, {
-        maxTick: TD_MAX_TICKS,
-        maxActions: TD_MAX_ACTIONS,
-      });
+      const actions = decodeTdActions(input.actions);
       if (!actions) return refusedForGood("This run's record could not be read.");
       const result = await verifyTowerDefenseRun({
         token,

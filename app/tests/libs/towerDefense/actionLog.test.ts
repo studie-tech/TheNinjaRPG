@@ -8,8 +8,6 @@ import type { TdAction } from "@/libs/towerDefense/sim";
 import { TD_MAX_ACTIONS, TD_MAX_TICKS } from "@/validators/towerDefense";
 import { encodeLog } from "./bot";
 
-const limits = { maxTick: TD_MAX_TICKS, maxActions: TD_MAX_ACTIONS };
-
 /** One action of every kind, with negative coordinates and large ids. */
 const EVERY_KIND: TdAction[] = [
   [0, "buy", "damage"],
@@ -36,8 +34,8 @@ const EVERY_KIND: TdAction[] = [
 describe("tower defense action log encoding", () => {
   it("round-trips every action kind", () => {
     const text = encodeLog(EVERY_KIND);
-    expect(decodeTdActions(text, limits)).toEqual(EVERY_KIND);
-    expect(decodeTdActions("", limits)).toEqual([]);
+    expect(decodeTdActions(text)).toEqual(EVERY_KIND);
+    expect(decodeTdActions("")).toEqual([]);
   });
 
   it("stores ticks as distances and is far smaller than JSON", () => {
@@ -65,8 +63,14 @@ describe("tower defense action log encoding", () => {
       "0S;",
       `${(TD_MAX_TICKS + 1).toString(36)}Q`,
     ])
-      expect(decodeTdActions(text, limits)).toBeNull();
-    expect(decodeTdActions("0S;0S;0S", { maxTick: 10, maxActions: 2 })).toBeNull();
+      expect(decodeTdActions(text)).toBeNull();
+    expect(
+      decodeTdActions(
+        Array(TD_MAX_ACTIONS + 1)
+          .fill("0S")
+          .join(";"),
+      ),
+    ).toBeNull();
   });
 
   it("refuses to encode an action recorded before the previous one", () => {

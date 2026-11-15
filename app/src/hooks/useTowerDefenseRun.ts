@@ -89,7 +89,6 @@ const RESUME_SLICE_MS = 8;
 const RESUME_STEP_TICKS = 250;
 /** Room kept in the log for the retreat that ends a run at its length limit. */
 const LOG_RESERVE_CHARS = 64;
-const LOG_LIMITS = { maxTick: TD_MAX_TICKS, maxActions: TD_MAX_ACTIONS };
 const GUEST_STORAGE_KEY = "towerDefenseRun:guest";
 const RETRY_SAVED_MESSAGE =
   "Could not reach the server. Your run is saved; try claiming again.";
@@ -413,7 +412,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   /** Resume the saved run by replaying its log to the saved tick, a slice at a time. */
   const resume = useCallback(() => {
     const stored = loadRun(storageKey);
-    const actions = stored && decodeTdActions(stored.text, LOG_LIMITS);
+    const actions = stored && decodeTdActions(stored.text);
     if (!stored || !actions) {
       showMutationToast({
         success: false,

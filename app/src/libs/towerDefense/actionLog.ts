@@ -20,6 +20,7 @@ import {
   type TdAction,
   type TdActionKind,
 } from "@/libs/towerDefense/sim";
+import { TD_MAX_ACTIONS, TD_MAX_TICKS } from "@/validators/towerDefense";
 
 type ArgumentsOf<Kind extends TdActionKind> =
   Extract<TdAction, [number, Kind, ...unknown[]]> extends [
@@ -120,15 +121,12 @@ export const encodeTdAction = (action: TdAction, previousTick: number): string =
 
 /**
  * Decode an encoded log, or null when it is malformed, holds a value its action does
- * not accept, or exceeds the limits.
+ * not accept, or exceeds the claim limits.
  */
-export const decodeTdActions = (
-  text: string,
-  limits: { maxTick: number; maxActions: number },
-): TdAction[] | null => {
+export const decodeTdActions = (text: string): TdAction[] | null => {
   if (text === "") return [];
   const parts = text.split(";");
-  if (parts.length > limits.maxActions) return null;
+  if (parts.length > TD_MAX_ACTIONS) return null;
   const actions: TdAction[] = [];
   let tick = 0;
   for (const part of parts) {
@@ -136,7 +134,7 @@ export const decodeTdActions = (
     const decoder = match?.[2] ? DECODERS.get(match[2]) : undefined;
     if (!match?.[1] || !decoder) return null;
     tick += Number.parseInt(match[1], 36);
-    if (tick > limits.maxTick) return null;
+    if (tick > TD_MAX_TICKS) return null;
     const raw = match[3] ? match[3].split(",") : [];
     if (raw.length !== decoder.args.length) return null;
     const action: (number | string)[] = [tick, decoder.kind];

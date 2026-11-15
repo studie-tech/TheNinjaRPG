@@ -14,7 +14,6 @@ import {
 } from "@/libs/towerDefense/savedRun";
 import type { TdAction } from "@/libs/towerDefense/sim";
 
-const limits = { maxTick: 1_000_000, maxActions: 1_000_000 };
 const key = "towerDefenseRun:test";
 
 const head = {
@@ -68,7 +67,7 @@ describe("tower defense saved runs", () => {
     ]);
     const stored = loadRun(key);
     expect(stored?.head).toMatchObject({ tick: 99, over: true, chunks: 1 });
-    expect(decodeTdActions(stored?.text ?? "", limits)).toEqual(actions);
+    expect(decodeTdActions(stored?.text ?? "")).toEqual(actions);
   });
 
   it("reports a refused write so the log keeps the chunk for the next save", () => {

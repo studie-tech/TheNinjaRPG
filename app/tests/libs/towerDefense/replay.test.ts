@@ -22,7 +22,6 @@ import {
   type TdEvent,
   type TdRunConfig,
 } from "@/libs/towerDefense/sim";
-import { TD_MAX_ACTIONS, TD_MAX_TICKS } from "@/validators/towerDefense";
 import {
   botAct,
   encodeLog,
@@ -97,10 +96,7 @@ const record = (
 
 /** Replay through the claim's encoding round trip, comparing every fingerprint. */
 const expectReplayMatches = (recording: Recording) => {
-  const parsed = decodeTdActions(encodeLog(recording.log), {
-    maxTick: TD_MAX_TICKS,
-    maxActions: TD_MAX_ACTIONS,
-  });
+  const parsed = decodeTdActions(encodeLog(recording.log));
   if (!parsed) throw new Error("The recorded log does not decode");
   // JSON equality: the wire, like JSON, carries -0 as 0.
   expect(JSON.stringify(parsed)).toBe(JSON.stringify(recording.log));
