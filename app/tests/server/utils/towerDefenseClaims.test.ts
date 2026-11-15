@@ -10,6 +10,7 @@ import {
   checkTowerDefenseClaimTiming,
   reserveTowerDefenseReplay,
   TD_TOKEN_LIFETIME_MS,
+  towerDefenseReplayCost,
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
 import {
@@ -17,7 +18,7 @@ import {
   signRunToken,
   verifyRunToken,
 } from "@/server/utils/towerDefenseCrypto";
-import type { TowerDefenseRunToken } from "@/validators/towerDefense";
+import { TD_MAX_TICKS, type TowerDefenseRunToken } from "@/validators/towerDefense";
 import { botAct } from "../../libs/towerDefense/bot";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 
@@ -248,12 +249,26 @@ describe("tower defense claim pre-checks", () => {
 
   it("reserves replays through their own limiter", async () => {
     stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected request" });
-    expect(await reserveTowerDefenseReplay("td-replay-open")).toBe(true);
+    expect(await reserveTowerDefenseReplay("td-replay-open", 0)).toBe(true);
     vi.restoreAllMocks();
     stubRateLimitTransport({
       unexpectedRequestMessage: "Unexpected request",
       remaining: () => -1,
     });
-    expect(await reserveTowerDefenseReplay("td-replay-spent")).toBe(false);
+    expect(await reserveTowerDefenseReplay("td-replay-spent", 0)).toBe(false);
+  });
+
+  it("charges a replay by the ticks it covers", async () => {
+    expect(towerDefenseReplayCost(0)).toBe(1);
+    expect(towerDefenseReplayCost(50_000)).toBe(1);
+    expect(towerDefenseReplayCost(50_001)).toBe(2);
+    expect(towerDefenseReplayCost(TD_MAX_TICKS)).toBe(10);
+    const fetch = stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected" });
+    await reserveTowerDefenseReplay("td-replay-weighted", 120_000);
+    const body = String(fetch.mock.calls[0]?.[1]?.body);
+    // The limiter script receives the claim's cost as its increment, its last argument.
+    const command = JSON.parse(body) as unknown[];
+    const args = (Array.isArray(command[0]) ? command[0] : command) as unknown[];
+    expect(args.at(-1)).toBe(3);
   });
 });

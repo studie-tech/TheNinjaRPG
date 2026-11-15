@@ -195,12 +195,12 @@ export const towerDefenseRouter = createTRPCRouter({
           ? refusedForGood(refused.message)
           : errorResponse(refused.message);
       const claimKey = towerDefenseClaimKey(token.nonce);
-      // The replay slot is reserved alongside the receipt lookup to keep one round trip.
-      // A retry of a run already paid spends a slot it does not use, which only happens
-      // when a claim's response is lost.
+      // The replay is reserved alongside the receipt lookup to keep one round trip. A
+      // retry of a run already paid spends a reservation it does not use, which only
+      // happens when a claim's response is lost.
       const [receipt, canReplay] = await Promise.all([
         findTowerDefenseClaimReceipt(ctx.drizzle, claimKey),
-        reserveTowerDefenseReplay(ctx.userId),
+        reserveTowerDefenseReplay(ctx.userId, input.endTick),
       ]);
       if (receipt)
         return alreadyClaimed({

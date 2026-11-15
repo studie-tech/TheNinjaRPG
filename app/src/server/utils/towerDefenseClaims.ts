@@ -27,8 +27,13 @@ export const TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE =
 export const TD_TOKEN_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 /** Allowance for clock skew and the request round trip in the elapsed-time check. */
 const TD_TIME_SLACK_MS = 30_000;
-/** Replays a player may request per window; each can cost a second or more of CPU. */
-const TD_REPLAYS_PER_WINDOW = 10;
+/**
+ * Replay units a player may spend per window. A claim costs one unit per
+ * `TD_REPLAY_TICKS_PER_UNIT` ticks it replays, at least one, so quick retreats barely
+ * count while long runs, which cost a second or more of CPU, spend their share.
+ */
+const TD_REPLAY_UNITS_PER_WINDOW = 100;
+const TD_REPLAY_TICKS_PER_UNIT = 50_000;
 /**
  * Ticks a claim replays between yields to the event loop. A slice takes tens of
  * milliseconds, so a long replay never holds up the other requests on the instance.
@@ -40,17 +45,26 @@ export const TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE =
 
 const replayLimiter = new Ratelimit({
   redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(TD_REPLAYS_PER_WINDOW, "10 m"),
+  limiter: Ratelimit.slidingWindow(TD_REPLAY_UNITS_PER_WINDOW, "10 m"),
   prefix: "trpc-ratelimit-td-replay",
 });
 
+/** The limiter units a claim replaying `endTick` ticks spends. */
+export const towerDefenseReplayCost = (endTick: number): number =>
+  Math.max(1, Math.ceil(endTick / TD_REPLAY_TICKS_PER_UNIT));
+
 /**
- * Reserve one claim replay for a player. Like the shared tRPC limiter, an unreachable
- * Redis fails open in development and closed elsewhere.
+ * Reserve a claim replay of `endTick` ticks for a player. Like the shared tRPC limiter,
+ * an unreachable Redis fails open in development and closed elsewhere.
  */
-export const reserveTowerDefenseReplay = async (userId: string): Promise<boolean> => {
+export const reserveTowerDefenseReplay = async (
+  userId: string,
+  endTick: number,
+): Promise<boolean> => {
   try {
-    return (await replayLimiter.limit(userId)).success;
+    return (
+      await replayLimiter.limit(userId, { rate: towerDefenseReplayCost(endTick) })
+    ).success;
   } catch (error) {
     if (process.env.NODE_ENV !== "development") throw error;
     console.warn("Tower defense replay limiter unavailable in development", error);
