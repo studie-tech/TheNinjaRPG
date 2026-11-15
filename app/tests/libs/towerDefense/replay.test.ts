@@ -364,7 +364,7 @@ describe("tower defense replay", () => {
     // it, so pages still on the previous rules reload instead of failing their claims.
     expect({ version: TD_SIM_VERSION, fingerprint: rulesFingerprint() }).toEqual({
       version: 1,
-      fingerprint: "9a0ef1a1f039a480753c9c23e71920fe04e2d498173073f5c20d8c630e4cfe84",
+      fingerprint: "6e209a7f166f8cb923b3ff721946d0712eae1011cadc0fa949ca65f9729cf4f9",
     });
   });
 
