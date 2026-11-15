@@ -18,7 +18,10 @@ import {
   clearRun,
   createLogWriter,
   encodedLog,
+  isForeignHead,
+  isSameSavedRun,
   loadRun,
+  readSavedRunHead,
   readSavedRunSummary,
   resumeLogWriter,
   saveRun,
@@ -63,6 +66,10 @@ export interface TowerDefenseSession {
   version: number;
   /** Whether the latest save failed or the log outgrew local storage. */
   unsaved: boolean;
+  /** Whether this session has written the save, which from then on is its own. */
+  hasSaved: boolean;
+  /** The run was settled, or another session took its save over, so it is not saved again. */
+  released: boolean;
 }
 
 export type TowerDefensePhase = "lobby" | "playing" | "claiming" | "over";
@@ -92,6 +99,10 @@ const RESUME_STEP_TICKS = 250;
 const LOG_RESERVE_CHARS = 64;
 const LOG_LIMITS = { maxTick: TD_MAX_TICKS, maxActions: TD_MAX_ACTIONS };
 const GUEST_STORAGE_KEY = "towerDefenseRun:guest";
+const RETRY_SAVED_MESSAGE =
+  "Could not reach the server. Your run is saved; try claiming again.";
+const RETRY_UNSAVED_MESSAGE =
+  "Could not reach the server. Keep this tab open and try claiming again.";
 
 /**
  * Reconcile the Dojo progress query with confirmed purchases and claims. Callers take a
@@ -182,17 +193,35 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     setUnsaved(value);
   }, []);
 
+  /** Another session took the save over or removed it, so only this tab holds the run. */
+  const loseSave = useCallback(
+    (current: TowerDefenseSession) => {
+      current.released = true;
+      markUnsaved(current, true);
+      setOutcome((outcome) =>
+        outcome?.message === RETRY_SAVED_MESSAGE
+          ? { ...outcome, message: RETRY_UNSAVED_MESSAGE }
+          : outcome,
+      );
+    },
+    [markUnsaved],
+  );
+
   const persist = useCallback(
     (force = false) => {
       const current = session.current;
       // A guest run could never be claimed, so it is not kept either.
-      if (!current?.token) return;
+      if (!current?.token || current.released) return;
       const now = Date.now();
       if (!force && now - lastSave.current < SAVE_INTERVAL_MS) return;
       lastSave.current = now;
       // Past the local limit the last save stays as it is, resumable from where it was.
       if (current.log.chars > TD_SAVED_LOG_MAX_CHARS) {
         markUnsaved(current, true);
+        return;
+      }
+      if (current.hasSaved && isForeignHead(readHead(storageKey), current.id)) {
+        loseSave(current);
         return;
       }
       try {
@@ -209,6 +238,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
           },
           current.log,
         );
+        current.hasSaved = true;
         markUnsaved(current, false);
       } catch {
         // Storage can be full or blocked; the run keeps playing and the player is told
@@ -216,7 +246,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         markUnsaved(current, true);
       }
     },
-    [markUnsaved, storageKey],
+    [loseSave, markUnsaved, storageKey],
   );
 
   /** The save as storage now holds it, for the lobby. */
@@ -249,6 +279,11 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     const current = session.current;
     if (!current || current.claimStarted) return;
     current.claimStarted = true;
+    /** The run is settled for good, so its save goes and is never written again. */
+    const settle = () => {
+      current.released = true;
+      forget();
+    };
     const { state } = current;
     const base = {
       wave: state.wave,
@@ -283,7 +318,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
           : undefined;
       // The server refused to read the log itself; resubmitting it cannot change that.
       const rejected = code === "BAD_REQUEST";
-      if (rejected) forget();
+      if (rejected) settle();
       else refreshSaved();
       setOutcome({
         ...unsettled,
@@ -293,8 +328,8 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
           : error instanceof TRPCClientError && !isRetryableTrpcError(error)
             ? error.message
             : current.unsaved
-              ? "Could not reach the server. Keep this tab open and try claiming again."
-              : "Could not reach the server. Your run is saved; try claiming again.",
+              ? RETRY_UNSAVED_MESSAGE
+              : RETRY_SAVED_MESSAGE,
       });
       setPhase("over");
       return;
@@ -305,14 +340,14 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         { pointsEarned: result.pointsEarned ?? 0, wave: result.wave ?? state.wave },
         snapshot,
       );
-      forget();
+      settle();
     } else if (result.alreadyClaimed) {
       // An earlier attempt paid out, but its response never arrived.
       void refresh();
-      forget();
+      settle();
     } else if (result.permanent) {
       // The server refused the run itself; claiming it again can only repeat that.
-      forget();
+      settle();
     } else refreshSaved();
     setOutcome({
       ...base,
@@ -362,6 +397,8 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         claimStarted: false,
         version: 0,
         unsaved: false,
+        hasSaved: false,
+        released: false,
       };
       published.current = null;
       setUnsaved(false);
@@ -378,19 +415,26 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
 
   /**
    * Start a signed run from a checkpoint, or a local guest run. A new run replaces the
-   * saved one, so it starts only once the player chose to discard that save; the check
-   * reads storage, which another tab may have written since the lobby did.
+   * saved one, so it starts only while storage still holds the save the player chose to
+   * discard, or none without `replaceSaved`. Storage is read again once the server
+   * answers, since another tab may have written it in the meantime.
    */
   const start = useCallback(
     async (startWave: number, replaceSaved = false) => {
-      if (!replaceSaved && readSavedSummary(storageKey)) {
+      const chosen = replaceSaved ? saved : null;
+      /** Whether storage still holds the save the player decided about. */
+      const isUnchanged = () => {
+        if (isSameSavedRun(readSavedSummary(storageKey), chosen)) return true;
         refreshSaved();
         showMutationToast({
           success: false,
-          message: "Claim, resume or discard your saved run before starting a new one.",
+          message: replaceSaved
+            ? "Your saved run changed in another tab. Check it before starting a new run."
+            : "Claim, resume or discard your saved run before starting a new one.",
         });
-        return;
-      }
+        return false;
+      };
+      if (!isUnchanged()) return;
       if (!userId) {
         begin({ seed: nanoid(), startWave: 1, bestWave: 0, dojo: {} }, null);
         return;
@@ -400,10 +444,24 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         showMutationToast(result);
         return;
       }
+      if (!isUnchanged()) return;
       begin(result.config as TdRunConfig, result.token);
     },
-    [begin, refreshSaved, startRun, storageKey, userId],
+    [begin, refreshSaved, saved, startRun, storageKey, userId],
   );
+
+  /** Discard the save the lobby shows, unless another tab wrote or removed it since. */
+  const discardSaved = useCallback(() => {
+    if (isSameSavedRun(readSavedSummary(storageKey), saved)) {
+      forget();
+      return;
+    }
+    refreshSaved();
+    showMutationToast({
+      success: false,
+      message: "Your saved run changed in another tab, so it was kept. Check it again.",
+    });
+  }, [forget, refreshSaved, saved, storageKey]);
 
   /** Resume the saved run by replaying its log to the saved tick, a slice at a time. */
   const resume = useCallback(() => {
@@ -583,6 +641,19 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     [applyPurchase, prepare, purchase],
   );
 
+  // A tab that starts or resumes a run takes the save over, and one that discards or
+  // settles it removes it; either way this session stops writing it.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== storageKey && event.key !== null) return;
+      const current = session.current;
+      if (!current?.hasSaved || current.released) return;
+      if (isForeignHead(readHead(storageKey), current.id)) loseSave(current);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [loseSave, storageKey]);
+
   // Save on tab hide so a closed tab resumes where it was.
   useEffect(() => {
     const onHide = () => {
@@ -627,7 +698,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     setSpeed,
     retryClaim,
     leave,
-    discardSaved: forget,
+    discardSaved,
     buyDojo,
   };
 };
@@ -636,6 +707,15 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
 const readSavedSummary = (key: string) => {
   try {
     return readSavedRunSummary(localStorage, key);
+  } catch {
+    return null;
+  }
+};
+
+/** The saved head, or null when it is missing or unreadable. */
+const readHead = (key: string) => {
+  try {
+    return readSavedRunHead(localStorage, key);
   } catch {
     return null;
   }

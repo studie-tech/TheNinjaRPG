@@ -136,6 +136,8 @@ export const readSavedRunHead = (storage: Storage, key: string): StoredHead | nu
 
 /** What the lobby shows of a save. */
 export interface TdSavedRunSummary {
+  /** The session that wrote the save; every start or resume writes under a new one. */
+  id: string;
   wave: number;
   tick: number;
   /** The run ended and awaits its claim; resuming it claims it. */
@@ -148,8 +150,29 @@ export const readSavedRunSummary = (
   key: string,
 ): TdSavedRunSummary | null => {
   const head = readSavedRunHead(storage, key);
-  return head ? { wave: head.wave, tick: head.tick, over: head.over === true } : null;
+  return head
+    ? { id: head.id, wave: head.wave, tick: head.tick, over: head.over === true }
+    : null;
 };
+
+/**
+ * Whether storage still holds the save a player decided about, or still holds none. Any
+ * write by another session moves the save's id or tick, so a stale decision is caught.
+ */
+export const isSameSavedRun = (
+  stored: TdSavedRunSummary | null,
+  chosen: TdSavedRunSummary | null,
+) =>
+  stored === null || chosen === null
+    ? stored === chosen
+    : stored.id === chosen.id && stored.tick === chosen.tick;
+
+/**
+ * Whether the save a session wrote was since replaced by another session or removed.
+ * That session stops saving, so two tabs never interleave their writes to one save.
+ */
+export const isForeignHead = (head: Pick<TdSavedRunHead, "id"> | null, id: string) =>
+  head?.id !== id;
 
 /** A saved run with its log, or null when nothing complete is stored. */
 export const loadRun = (storage: Storage, key: string) => {

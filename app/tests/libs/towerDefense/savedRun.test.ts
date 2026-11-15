@@ -5,6 +5,8 @@ import {
   clearRun,
   createLogWriter,
   encodedLog,
+  isForeignHead,
+  isSameSavedRun,
   loadRun,
   readSavedRunHead,
   readSavedRunSummary,
@@ -98,16 +100,46 @@ describe("tower defense saved runs", () => {
     expect(readSavedRunSummary(storage, "key")).toBeNull();
     saveRun(storage, "key", { ...head, tick: 40, wave: 3 }, log);
     expect(readSavedRunSummary(storage, "key")).toEqual({
+      id: "run",
       wave: 3,
       tick: 40,
       over: false,
     });
     saveRun(storage, "key", { ...head, tick: 41, wave: 3, over: true }, log);
     expect(readSavedRunSummary(storage, "key")).toEqual({
+      id: "run",
       wave: 3,
       tick: 41,
       over: true,
     });
+  });
+
+  it("notices when another session wrote or removed the save a player chose", () => {
+    const storage = memoryStorage();
+    const log = createLogWriter();
+    saveRun(storage, "key", { ...head, tick: 40, wave: 5 }, log);
+    const shown = readSavedRunSummary(storage, "key");
+    expect(isSameSavedRun(readSavedRunSummary(storage, "key"), shown)).toBe(true);
+    expect(isSameSavedRun(null, null)).toBe(true);
+
+    saveRun(storage, "key", { ...head, tick: 900, wave: 50 }, log);
+    expect(isSameSavedRun(readSavedRunSummary(storage, "key"), shown)).toBe(false);
+    saveRun(storage, "key", { ...head, id: "other", tick: 40, wave: 5 }, log);
+    expect(isSameSavedRun(readSavedRunSummary(storage, "key"), shown)).toBe(false);
+    expect(isSameSavedRun(readSavedRunSummary(storage, "key"), null)).toBe(false);
+    clearRun(storage, "key");
+    expect(isSameSavedRun(readSavedRunSummary(storage, "key"), shown)).toBe(false);
+  });
+
+  it("tells a session when another one took over or removed its save", () => {
+    const storage = memoryStorage();
+    const log = createLogWriter();
+    saveRun(storage, "key", head, log);
+    expect(isForeignHead(readSavedRunHead(storage, "key"), "run")).toBe(false);
+    saveRun(storage, "key", { ...head, id: "other" }, log);
+    expect(isForeignHead(readSavedRunHead(storage, "key"), "run")).toBe(true);
+    clearRun(storage, "key");
+    expect(isForeignHead(readSavedRunHead(storage, "key"), "run")).toBe(true);
   });
 
   it("clears a run with its chunks and ignores incomplete saves", () => {
