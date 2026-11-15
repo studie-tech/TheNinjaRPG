@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { nanoid } from "nanoid";
 import {
   applyAction,
   createRun,
@@ -13,11 +14,7 @@ import {
   towerDefenseReplayCost,
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
-import {
-  generateRunNonce,
-  signRunToken,
-  verifyRunToken,
-} from "@/server/utils/towerDefenseCrypto";
+import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
 import { TD_MAX_TICKS, type TowerDefenseRunToken } from "@/validators/towerDefense";
 import { botAct } from "../../libs/towerDefense/bot";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
@@ -27,7 +24,7 @@ const token = (
 ): TowerDefenseRunToken => ({
   v: 1,
   userId: "td-user",
-  nonce: generateRunNonce(),
+  nonce: nanoid(),
   seed: "claim-seed",
   startWave: 1,
   bestWave: 0,

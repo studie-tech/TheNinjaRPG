@@ -7,8 +7,9 @@
  * configuration nor the result can be forged.
  */
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { env } from "@/env/server.mjs";
+import { constantTimeEquals } from "@/server/utils/constantTime";
 import {
   type TowerDefenseRunToken,
   towerDefenseRunTokenSchema,
@@ -36,10 +37,7 @@ export const signRunToken = (payload: TowerDefenseRunToken) => {
 export const verifyRunToken = (token: string): TowerDefenseRunToken | null => {
   const [body, mac, extra] = token.split(".");
   if (!body || !mac || extra !== undefined) return null;
-  const expected = Buffer.from(signature(body));
-  const provided = Buffer.from(mac);
-  if (expected.length !== provided.length || !timingSafeEqual(expected, provided))
-    return null;
+  if (!constantTimeEquals(signature(body), mac)) return null;
   try {
     const parsed = towerDefenseRunTokenSchema.safeParse(
       JSON.parse(Buffer.from(body, "base64url").toString("utf8")),
@@ -49,7 +47,3 @@ export const verifyRunToken = (token: string): TowerDefenseRunToken | null => {
     return null;
   }
 };
-
-/** A unique nonce per run; it becomes the claim receipt key. */
-export const generateRunNonce = (): string =>
-  `${Date.now().toString(36)}-${randomBytes(12).toString("hex")}`;

@@ -41,11 +41,7 @@ import {
   towerDefenseClaimKey,
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
-import {
-  generateRunNonce,
-  signRunToken,
-  verifyRunToken,
-} from "@/server/utils/towerDefenseCrypto";
+import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
 import {
   TD_MAX_ACTIONS,
   TD_MAX_LOG_CHARS,
@@ -114,7 +110,7 @@ export const towerDefenseRouter = createTRPCRouter({
       const payload: TowerDefenseRunToken = {
         v: 1,
         userId: ctx.userId,
-        nonce: generateRunNonce(),
+        nonce: nanoid(),
         seed: nanoid(),
         startWave: input.startWave,
         bestWave,
