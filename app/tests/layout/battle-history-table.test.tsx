@@ -167,6 +167,7 @@ it("refreshes a cached unrecorded result when its history tab becomes active", a
       pages: [{ data: [{ ...row(3), outcome: null }], nextCursor: undefined }],
       pageParams: [undefined],
     },
+    { updatedAt: 1 },
   );
   const view = mount({ userId: "actor", enabled: false });
   expect(view.getByText("battle-3").closest("tr")?.textContent).toContain("—");
