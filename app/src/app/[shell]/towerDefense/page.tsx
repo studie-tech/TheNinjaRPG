@@ -210,7 +210,7 @@ export default function TowerDefensePage() {
           isStarting={run.isStarting}
           isResuming={run.isResuming}
           isPurchasing={run.isPurchasing}
-          onStart={(startWave) => void run.start(startWave)}
+          onStart={(startWave, replaceSaved) => void run.start(startWave, replaceSaved)}
           onResume={run.resume}
           onDiscard={run.discardSaved}
           onBuy={(upgradeId) => void run.buyDojo(upgradeId)}

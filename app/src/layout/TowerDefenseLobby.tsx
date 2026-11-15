@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Confirm from "@/layout/Confirm";
 import Link from "@/layout/Link";
 import { cn } from "@/libs/shadui";
 import {
@@ -60,11 +61,12 @@ const SEAL_GLYPHS: Record<TdSeal, string> = {
 export const TowerDefenseLobby = (props: {
   isGuest: boolean;
   progress: { points: number; bestWave: number; dojo: TdDojoLevels } | undefined;
-  saved: { wave: number } | null;
+  saved: { wave: number; over: boolean } | null;
   isStarting: boolean;
   isResuming: boolean;
   isPurchasing: boolean;
-  onStart: (startWave: number) => void;
+  /** `replaceSaved` confirms that the saved run may be discarded. */
+  onStart: (startWave: number, replaceSaved: boolean) => void;
   onResume: () => void;
   onDiscard: () => void;
   onBuy: (upgradeId: TdDojoUpgrade) => void;
@@ -79,6 +81,17 @@ export const TowerDefenseLobby = (props: {
   const quickCheckpoints = [
     ...new Set([1, ...checkpoints.slice(Math.max(1, checkpoints.length - 4))]),
   ];
+  const startButton = (
+    <Button
+      className="w-full"
+      size="lg"
+      disabled={props.isStarting || props.isResuming}
+      onClick={props.saved ? undefined : () => props.onStart(chosen, false)}
+    >
+      <Play className="mr-2 h-5 w-5" />
+      {props.isStarting ? "Preparing..." : `Start at wave ${chosen}`}
+    </Button>
+  );
   const nextUnlock = TD_DOJO.map((id) => TD_DOJO_INFO[id])
     .filter((info) => info.unlockWave > bestWave)
     .sort((a, b) => a.unlockWave - b.unlockWave)[0];
@@ -104,11 +117,20 @@ export const TowerDefenseLobby = (props: {
             {props.saved && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-2">
                 <span className="flex-1">
-                  Unfinished run at wave <strong>{props.saved.wave}</strong>
+                  {props.saved.over ? "Unclaimed run" : "Unfinished run"} at wave{" "}
+                  <strong>{props.saved.wave}</strong>
                 </span>
                 <Button size="sm" disabled={props.isResuming} onClick={props.onResume}>
-                  <RotateCcw className="mr-1 h-4 w-4" />{" "}
-                  {props.isResuming ? "Restoring..." : "Resume"}
+                  {props.saved.over ? (
+                    <ScrollText className="mr-1 h-4 w-4" />
+                  ) : (
+                    <RotateCcw className="mr-1 h-4 w-4" />
+                  )}{" "}
+                  {props.isResuming
+                    ? "Restoring..."
+                    : props.saved.over
+                      ? "Claim"
+                      : "Resume"}
                 </Button>
                 <Button
                   size="sm"
@@ -173,15 +195,27 @@ export const TowerDefenseLobby = (props: {
                 </p>
               </div>
             )}
-            <Button
-              className="w-full"
-              size="lg"
-              disabled={props.isStarting}
-              onClick={() => props.onStart(chosen)}
-            >
-              <Play className="mr-2 h-5 w-5" />
-              {props.isStarting ? "Preparing..." : `Start at wave ${chosen}`}
-            </Button>
+            {props.saved ? (
+              <Confirm
+                title="Start a new run?"
+                button={startButton}
+                disabled={props.isStarting || props.isResuming}
+                tone="destructive"
+                proceed_label="Discard and start"
+                proceed_loading_label="Preparing"
+                isLoading={props.isStarting}
+                onAccept={(event) => {
+                  event.preventDefault();
+                  props.onStart(chosen, true);
+                }}
+              >
+                {props.saved.over
+                  ? `Your run at wave ${props.saved.wave} has not been claimed yet. Starting a new run discards it and the scrolls it earned.`
+                  : `Starting a new run discards your unfinished run at wave ${props.saved.wave} and the scrolls it would earn.`}
+              </Confirm>
+            ) : (
+              startButton
+            )}
             {nextUnlock && !props.isGuest && (
               <p className="text-muted-foreground">
                 Next unlock: <strong>{nextUnlock.name}</strong> at wave{" "}

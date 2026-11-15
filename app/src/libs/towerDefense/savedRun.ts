@@ -134,6 +134,23 @@ export const readSavedRunHead = (storage: Storage, key: string): StoredHead | nu
     : null;
 };
 
+/** What the lobby shows of a save. */
+export interface TdSavedRunSummary {
+  wave: number;
+  tick: number;
+  /** The run ended and awaits its claim; resuming it claims it. */
+  over: boolean;
+}
+
+/** The saved run's summary, or null without a readable save. */
+export const readSavedRunSummary = (
+  storage: Storage,
+  key: string,
+): TdSavedRunSummary | null => {
+  const head = readSavedRunHead(storage, key);
+  return head ? { wave: head.wave, tick: head.tick, over: head.over === true } : null;
+};
+
 /** A saved run with its log, or null when nothing complete is stored. */
 export const loadRun = (storage: Storage, key: string) => {
   const head = readSavedRunHead(storage, key);

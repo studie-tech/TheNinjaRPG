@@ -7,6 +7,7 @@ import {
   encodedLog,
   loadRun,
   readSavedRunHead,
+  readSavedRunSummary,
   resumeLogWriter,
   saveRun,
   TD_LOG_CHUNK_ACTIONS,
@@ -88,6 +89,25 @@ describe("tower defense saved runs", () => {
     appendToLog(restored, next);
     expect(encodedLog(restored)).toBe(encodeTdActions([...actions, next]));
     expect(restored.chars).toBe(encodedLog(restored).length);
+  });
+
+  it("tells the lobby whether a save is a finished run awaiting its claim", () => {
+    const storage = memoryStorage();
+    const log = createLogWriter();
+    appendToLog(log, actionAt(1));
+    expect(readSavedRunSummary(storage, "key")).toBeNull();
+    saveRun(storage, "key", { ...head, tick: 40, wave: 3 }, log);
+    expect(readSavedRunSummary(storage, "key")).toEqual({
+      wave: 3,
+      tick: 40,
+      over: false,
+    });
+    saveRun(storage, "key", { ...head, tick: 41, wave: 3, over: true }, log);
+    expect(readSavedRunSummary(storage, "key")).toEqual({
+      wave: 3,
+      tick: 41,
+      over: true,
+    });
   });
 
   it("clears a run with its chunks and ignores incomplete saves", () => {

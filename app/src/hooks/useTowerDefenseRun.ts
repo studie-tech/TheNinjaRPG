@@ -19,11 +19,12 @@ import {
   createLogWriter,
   encodedLog,
   loadRun,
-  readSavedRunHead,
+  readSavedRunSummary,
   resumeLogWriter,
   saveRun,
   TD_SAVED_LOG_MAX_CHARS,
   type TdLogWriter,
+  type TdSavedRunSummary,
 } from "@/libs/towerDefense/savedRun";
 import {
   advanceReplay,
@@ -156,7 +157,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const [phase, setPhase] = useState<TowerDefensePhase>("lobby");
   const [speed, setSpeedState] = useState(1);
   const [outcome, setOutcome] = useState<TowerDefenseOutcome | null>(null);
-  const [saved, setSaved] = useState<{ wave: number; tick: number } | null>(null);
+  const [saved, setSaved] = useState<TdSavedRunSummary | null>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
   /** An immutable copy of the run for rendering; the live state stays in `session`. */
@@ -373,9 +374,21 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     [claim, forget, persist, publish],
   );
 
-  /** Start a signed run from a checkpoint, or a local guest run. */
+  /**
+   * Start a signed run from a checkpoint, or a local guest run. A new run replaces the
+   * saved one, so it starts only once the player chose to discard that save; the check
+   * reads storage, which another tab may have written since the lobby did.
+   */
   const start = useCallback(
-    async (startWave: number) => {
+    async (startWave: number, replaceSaved = false) => {
+      if (!replaceSaved && readSavedSummary(storageKey)) {
+        refreshSaved();
+        showMutationToast({
+          success: false,
+          message: "Claim, resume or discard your saved run before starting a new one.",
+        });
+        return;
+      }
       if (!userId) {
         begin({ seed: nanoid(), startWave: 1, bestWave: 0, dojo: {} }, null);
         return;
@@ -387,7 +400,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       }
       begin(result.config as TdRunConfig, result.token);
     },
-    [begin, startRun, userId],
+    [begin, refreshSaved, startRun, storageKey, userId],
   );
 
   /** Resume the saved run by replaying its log to the saved tick, a slice at a time. */
@@ -617,11 +630,10 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   };
 };
 
-/** The saved run's wave and tick for the lobby, or null without a readable save. */
+/** The saved run's summary for the lobby, or null without a readable save. */
 const readSavedSummary = (key: string) => {
   try {
-    const head = readSavedRunHead(localStorage, key);
-    return head ? { wave: head.wave, tick: head.tick } : null;
+    return readSavedRunSummary(localStorage, key);
   } catch {
     return null;
   }
