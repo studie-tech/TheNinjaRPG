@@ -132,14 +132,22 @@ export const TowerDefenseLobby = (props: {
                       ? "Claim"
                       : "Resume"}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
+                <Confirm
+                  title="Discard this run?"
+                  button={
+                    <Button size="sm" variant="outline" disabled={props.isResuming}>
+                      <Trash2 className="mr-1 h-4 w-4" /> Discard
+                    </Button>
+                  }
                   disabled={props.isResuming}
-                  onClick={props.onDiscard}
+                  tone="destructive"
+                  proceed_label="Discard"
+                  onAccept={props.onDiscard}
                 >
-                  <Trash2 className="mr-1 h-4 w-4" /> Discard
-                </Button>
+                  {props.saved.over
+                    ? `Your run at wave ${props.saved.wave} has not been claimed yet. Discarding it loses the scrolls it earned.`
+                    : `Discarding your unfinished run at wave ${props.saved.wave} loses it and the scrolls it would earn.`}
+                </Confirm>
               </div>
             )}
             {!props.isGuest && (
