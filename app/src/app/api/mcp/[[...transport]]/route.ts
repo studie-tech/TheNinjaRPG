@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { verifyToken as clerkVerifyToken } from "@clerk/backend";
+import { createClerkClient } from "@clerk/backend";
 import {
-  TokenVerificationError,
+  MachineTokenVerificationErrorCode,
   TokenVerificationErrorReason,
 } from "@clerk/backend/errors";
 import type { AuthInfo } from "@modelcontextprotocol/server";
@@ -209,58 +209,93 @@ const verifyOpaqueToken = async (
   };
 };
 
+// Keys are passed per request; the client itself holds no configuration.
+const clerkClient = createClerkClient({ telemetry: { disabled: true } });
+
 /**
- * Verify JWT token using Clerk verification.
+ * Signed-out reasons that point at our configuration or at Clerk (keys, JWKS), not at the
+ * token the client sent. Every other reason (expired, bad signature, wrong token type, ...)
+ * is the client's: withMcpAuth answers 401 with WWW-Authenticate and the client signs in again.
  */
-const verifyJwtToken = async (bearerToken: string): Promise<AuthInfo | undefined> => {
-  const payload = await clerkVerifyToken(bearerToken, {
+const SERVER_SIGNED_OUT_REASONS = new Set<string>([
+  MachineTokenVerificationErrorCode.UnexpectedError,
+  TokenVerificationErrorReason.InvalidSecretKey,
+  TokenVerificationErrorReason.LocalJWKMissing,
+  TokenVerificationErrorReason.RemoteJWKFailedToLoad,
+  TokenVerificationErrorReason.RemoteJWKInvalid,
+  TokenVerificationErrorReason.RemoteJWKMissing,
+  TokenVerificationErrorReason.JWKFailedToResolve,
+]);
+
+/**
+ * Verify a JWT bearer token with Clerk: OAuth access tokens (`typ: at+jwt`) issued to MCP
+ * clients, and Clerk session tokens.
+ *
+ * Since @clerk/backend 3.28, `verifyToken()` only accepts session tokens (JWTs whose `cat`
+ * header marks a session token or JWT template), so OAuth access tokens have to go through
+ * `authenticateRequest()` with `acceptsToken`, which verifies them as machine tokens.
+ */
+const verifyJwtToken = async (
+  serverRequest: Request,
+): Promise<AuthInfo | undefined> => {
+  const requestState = await clerkClient.authenticateRequest(serverRequest, {
+    acceptsToken: ["oauth_token", "session_token"],
     secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
     jwtKey: env.CLERK_JWT_KEY,
-    headerType: ["JWT", "at+jwt"],
   });
 
-  const userId = payload.sub ?? null;
+  if (!requestState.isAuthenticated) {
+    const { reason, message } = requestState;
+    if (reason && SERVER_SIGNED_OUT_REASONS.has(reason)) {
+      console.error("[MCP] Unexpected token verification failure:", reason, message);
+      Sentry.captureMessage(`MCP token verification failed: ${reason}`, {
+        level: "error",
+        tags: { source: "mcp-token-verification", reason },
+        extra: { message },
+      });
+    } else {
+      console.error("[MCP] Token verification failed:", reason, message);
+    }
+    return undefined;
+  }
 
-  // OAuth tokens may include a scope claim as a string or array
-  const scopeClaim = (payload as { scope?: string | string[] }).scope;
+  const auth = requestState.toAuth();
+  const userId = auth.userId ?? null;
+  let clientId = "mcp-client";
+  let scopeClaim: string | string[] | undefined;
+  if (auth.tokenType === "oauth_token") {
+    clientId = auth.clientId || clientId;
+    scopeClaim = auth.scopes;
+  } else {
+    // Session tokens carry no scopes; azp is the origin the session was minted for
+    const claims = auth.sessionClaims as {
+      azp?: string;
+      scope?: string | string[];
+    } | null;
+    clientId = claims?.azp ?? clientId;
+    scopeClaim = claims?.scope;
+  }
   const scopes = parseAndNormalizeScopes(scopeClaim);
 
   updateRequestContext(userId, scopes);
 
   return {
-    token: bearerToken,
-    clientId: payload.azp ?? "mcp-client",
+    token: requestState.token,
+    clientId,
     scopes,
-    extra: { userId: payload.sub },
+    extra: { userId },
   };
 };
 
 /**
- * Token rejections caused by the token the client sent. withMcpAuth answers them with
- * 401 and WWW-Authenticate, so the client re-authenticates; there is nothing to report.
- */
-const CLIENT_TOKEN_REASONS = new Set<string>([
-  TokenVerificationErrorReason.TokenExpired,
-  TokenVerificationErrorReason.TokenNotActiveYet,
-  TokenVerificationErrorReason.TokenIatInTheFuture,
-  TokenVerificationErrorReason.TokenInvalid,
-  TokenVerificationErrorReason.TokenInvalidSignature,
-  TokenVerificationErrorReason.TokenInvalidAlgorithm,
-  TokenVerificationErrorReason.TokenInvalidIssuer,
-  TokenVerificationErrorReason.TokenInvalidAuthorizedParties,
-  TokenVerificationErrorReason.JWKKidMismatch,
-]);
-
-/**
- * Log client token rejections and aborted verification requests; report every other
- * failure (JWK loading, secret key, unknown errors) to Sentry.
+ * Log aborted verification requests; report every other thrown failure (missing keys,
+ * unknown errors) to Sentry. Token rejections don't throw: they come back signed out.
  */
 const handleTokenVerificationError = (error: unknown): undefined => {
-  const isClientTokenError =
-    error instanceof TokenVerificationError && CLIENT_TOKEN_REASONS.has(error.reason);
   const isFetchAbortError =
     error instanceof Error && error.name === "AbortError" && isFetchOriginError(error);
-  if (isClientTokenError || isFetchAbortError) {
+  if (isFetchAbortError) {
     console.error("[MCP] Token verification failed:", error);
     return undefined;
   }
@@ -276,7 +311,7 @@ const handleTokenVerificationError = (error: unknown): undefined => {
  * Also updates the request-scoped context with the userId.
  */
 const verifyToken = async (
-  _serverRequest: Request,
+  serverRequest: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
   if (!bearerToken) return undefined;
@@ -287,8 +322,8 @@ const verifyToken = async (
       return await verifyOpaqueToken(bearerToken);
     }
 
-    // JWT token - verify directly
-    return await verifyJwtToken(bearerToken);
+    // JWT: OAuth access token or Clerk session token
+    return await verifyJwtToken(serverRequest);
   } catch (error) {
     return handleTokenVerificationError(error);
   }
