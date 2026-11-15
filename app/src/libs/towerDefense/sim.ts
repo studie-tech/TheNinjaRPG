@@ -278,7 +278,6 @@ export type TdEvent =
       elite: boolean;
       kind: TdEnemyKind;
     }
-  | { type: "spawn"; id: number }
   | {
       type: "jutsu";
       jutsu: TdJutsu;
@@ -289,15 +288,15 @@ export type TdEvent =
       points: { x: number; y: number }[];
     }
   | { type: "art"; art: TdSealArt | "fizzle"; x: number; y: number; radius: number }
-  | { type: "seal"; seal: TdSeal; count: number }
+  | { type: "seal"; count: number }
   | { type: "ultimate"; ultimate: TdUltimate; x: number; y: number }
-  | { type: "heroHit"; amount: number }
+  | { type: "heroHit" }
   | { type: "substitution"; perfect: boolean; counterId: number }
   | { type: "blink"; fromX: number; fromY: number; x: number; y: number }
   | { type: "bossMove"; id: number; move: TdBossMove }
   | { type: "explosion"; x: number; y: number; radius: number; element: TdElement }
-  | { type: "wave"; wave: number; boss: boolean; titan: boolean; eras: TdEra[] }
-  | { type: "loot"; id: number; kind: TdLoot["kind"]; collected: boolean }
+  | { type: "wave"; boss: boolean; titan: boolean; eras: TdEra[] }
+  | { type: "loot"; kind: TdLoot["kind"]; collected: boolean }
   | { type: "secondWind" }
   | { type: "gameOver" };
 
@@ -833,7 +832,7 @@ const startWave_ = (state: TdState) => {
       });
   }
   state.spawnQueue.sort((a, b) => a.at - b.at);
-  emit(state, { type: "wave", wave, boss, titan, eras: [...eras] });
+  emit(state, { type: "wave", boss, titan, eras: [...eras] });
 };
 
 const rollAffixes = (state: TdState, count: number) => {
@@ -938,7 +937,6 @@ const spawnEnemy = (
   enemy.maxShield = shield * maxHp;
   enemy.shield = enemy.maxShield;
   state.enemies.push(enemy);
-  if (state.recordEvents) emit(state, { type: "spawn", id: enemy.id });
   return enemy;
 };
 
@@ -1185,7 +1183,7 @@ const collectLoot = (state: TdState, item: TdLoot) => {
       state.hero.rageUntil = state.tick + item.value;
       break;
   }
-  emit(state, { type: "loot", id: item.id, kind: item.kind, collected: true });
+  emit(state, { type: "loot", kind: item.kind, collected: true });
 };
 
 // ============================================
@@ -1240,7 +1238,7 @@ const castSeal = (state: TdState, seal: TdSeal, x: number, y: number) => {
   if (state.tick - hero.lastSealAt > TD_SEAL_GAP_TICKS) hero.seals = [];
   hero.seals.push(seal);
   hero.lastSealAt = state.tick;
-  emit(state, { type: "seal", seal, count: hero.seals.length });
+  emit(state, { type: "seal", count: hero.seals.length });
   if (hero.seals.length < 3) return true;
   const sequence = hero.seals.join("-");
   hero.seals = [];
@@ -1534,7 +1532,7 @@ const damageHero = (
     amount +=
       state.stats.maxHp * tdPiercingShare(state.wave) * (source.enemy.boss ? 2 : 1);
   hero.hp -= amount;
-  if (state.recordEvents) emit(state, { type: "heroHit", amount });
+  emit(state, { type: "heroHit" });
   if (source.enemy) {
     const enemy = source.enemy;
     if (source.melee && state.stats.thorns > 0)
@@ -2079,7 +2077,7 @@ const expireLoot = (state: TdState) => {
   let kept = 0;
   for (const item of state.loot) {
     if (item.expires > state.tick) state.loot[kept++] = item;
-    else emit(state, { type: "loot", id: item.id, kind: item.kind, collected: false });
+    else emit(state, { type: "loot", kind: item.kind, collected: false });
   }
   state.loot.length = kept;
 };

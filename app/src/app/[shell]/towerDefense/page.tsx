@@ -162,7 +162,7 @@ export default function TowerDefensePage() {
     const next = view.current;
     next.state = current?.state ?? null;
     next.pending = current?.pending ?? 0;
-    next.events = current?.events ?? NO_EVENTS;
+    next.events = current?.state.events ?? NO_EVENTS;
     next.reticle = reticle.current;
     next.mode = mode;
     return next;

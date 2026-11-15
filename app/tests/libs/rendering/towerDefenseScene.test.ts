@@ -60,7 +60,7 @@ describe("tower defense scene", () => {
     const crowd = state.enemies.length;
 
     const events = view.events;
-    events.push({ type: "wave", wave: 1, boss: false, titan: false, eras: [] });
+    events.push({ type: "wave", boss: false, titan: false, eras: [] });
     frame();
     expect(view.events).toBe(events);
     expect(events).toHaveLength(0);

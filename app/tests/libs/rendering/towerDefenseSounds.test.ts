@@ -21,11 +21,11 @@ describe("tower defense sounds", () => {
     for (const perfect of [false, true])
       cueOf({ type: "substitution", perfect, counterId: 0 });
     cueOf({ type: "blink", fromX: 0, fromY: 0, x: 1, y: 1 });
-    cueOf({ type: "seal", seal: "tiger", count: 1 });
-    cueOf({ type: "loot", id: 1, kind: "ryo", collected: true });
+    cueOf({ type: "seal", count: 1 });
+    cueOf({ type: "loot", kind: "ryo", collected: true });
     cueOf({ type: "kill", id: 1, x: 0, y: 0, boss: true, elite: false, kind: "boss" });
     cueOf({ type: "explosion", x: 0, y: 0, radius: 4, element: "fire" });
-    cueOf({ type: "wave", wave: 10, boss: true, titan: false, eras: [] });
+    cueOf({ type: "wave", boss: true, titan: false, eras: [] });
   });
 
   it("keeps the automatic stream of combat silent", () => {

@@ -112,9 +112,9 @@ const NO_ENEMY_ART: EnemyArt = {
 };
 
 /**
- * Renders a tower-defense run from the deterministic simulation. The scene never
- * changes the run: `onFrame` advances it, `getView` exposes the state and the events
- * produced since the last frame, and taps come back as arena coordinates.
+ * Renders a tower-defense run from the deterministic simulation. The scene only drains
+ * the run's event queue: `onFrame` advances the run, `getView` exposes its state and
+ * events, and taps come back as arena coordinates.
  */
 export const createTowerDefenseScene = async (options: {
   mount: HTMLElement;
@@ -1283,8 +1283,6 @@ export const createTowerDefenseScene = async (options: {
           return;
         case "gameOver":
           fx.flash(0x000000, 0.6, 1.5);
-          return;
-        case "spawn":
           return;
       }
     };

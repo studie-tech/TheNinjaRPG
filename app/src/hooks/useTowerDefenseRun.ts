@@ -31,7 +31,6 @@ import {
   TD_SIM_VERSION,
   type TdAction,
   type TdCommand,
-  type TdEvent,
   type TdReplay,
   type TdRunConfig,
   type TdState,
@@ -53,8 +52,6 @@ interface TowerDefenseSession {
   log: TdLogWriter;
   /** Accumulated real seconds not yet simulated. */
   pending: number;
-  /** Events for the renderer, drained every frame. */
-  events: TdEvent[];
   claimStarted: boolean;
   /** Counts accepted actions, so the HUD can tell when a paused run changed. */
   version: number;
@@ -339,7 +336,6 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         state,
         log: restored?.log ?? createLogWriter(),
         pending: 0,
-        events: [],
         claimStarted: false,
         version: 0,
         unsaved: false,
@@ -515,7 +511,6 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         stepped++;
         if (current.state.over) break;
       }
-      drainEvents(current);
       if (current.state.over) {
         void claim();
         return;
@@ -684,17 +679,10 @@ const useTowerDefenseProgressCache = () => {
   };
 };
 
-/** Move the events the run produced to the queue the renderer drains. */
-const drainEvents = (current: TowerDefenseSession) => {
-  current.events.push(...current.state.events);
-  current.state.events.length = 0;
-};
-
-/** Record an action the run accepted and pass its events on to the renderer. */
+/** Record an action the run accepted. */
 const recordAction = (current: TowerDefenseSession, action: TdAction) => {
   appendToLog(current.log, action);
   current.version++;
-  drainEvents(current);
 };
 
 /** A copy of everything the HUD reads, so a render never observes the live run. */
