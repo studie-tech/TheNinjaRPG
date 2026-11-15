@@ -2536,7 +2536,7 @@ const dropLoot = (state: TdState, enemy: TdEnemy) => {
 export interface TdReplayResult {
   state: TdState;
   /** Why the replay stopped. */
-  stop: "over" | "end" | "stalled" | "limit";
+  stop: "over" | "end" | "stalled";
   /** Index of the first action that could not be applied in order, if any. */
   invalidAt: number | null;
 }
@@ -2550,7 +2550,6 @@ export interface TdReplay {
 }
 
 export interface TdReplayOptions {
-  maxTicks?: number;
   onTick?: (state: TdState) => void;
 }
 
@@ -2571,7 +2570,6 @@ export const advanceReplay = (
   options: TdReplayOptions & { ticks?: number } = {},
 ): TdReplayResult | null => {
   const { state, actions } = replay;
-  const maxTicks = options.maxTicks ?? Number.POSITIVE_INFINITY;
   let budget = options.ticks ?? Number.POSITIVE_INFINITY;
   for (;;) {
     while (
@@ -2588,7 +2586,6 @@ export const advanceReplay = (
     if (state.over) return { state, stop: "over", invalidAt: null };
     if (state.tick >= endTick)
       return { state, stop: "end", invalidAt: index < actions.length ? index : null };
-    if (state.tick >= maxTicks) return { state, stop: "limit", invalidAt: null };
     if (budget <= 0) return null;
     budget--;
     const before = state.tick;

@@ -18,7 +18,7 @@ import {
   type TdReplayResult,
   tdRunPoints,
 } from "@/libs/towerDefense/sim";
-import { TD_MAX_TICKS, type TowerDefenseRunToken } from "@/validators/towerDefense";
+import type { TowerDefenseRunToken } from "@/validators/towerDefense";
 
 export const TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE =
   "Tower defense rewards are temporarily paused.";
@@ -131,10 +131,7 @@ export const verifyTowerDefenseRun = async (input: {
     },
     actions,
   );
-  const slice = {
-    maxTicks: TD_MAX_TICKS,
-    ticks: input.sliceTicks ?? TD_REPLAY_SLICE_TICKS,
-  };
+  const slice = { ticks: input.sliceTicks ?? TD_REPLAY_SLICE_TICKS };
   let result: TdReplayResult | null = advanceReplay(replay, endTick, slice);
   while (!result) {
     await new Promise<void>((resolve) => setImmediate(resolve));
