@@ -6754,7 +6754,6 @@ export const userTowerDefenseUpgrade = mysqlTable(
   },
   (table) => {
     return {
-      upgradeIdIdx: index("UserTowerDefenseUpgrade_upgradeId_idx").on(table.upgradeId),
       userUpgradeKey: uniqueIndex("UserTowerDefenseUpgrade_userId_upgradeId_key").on(
         table.userId,
         table.upgradeId,
@@ -6792,7 +6791,11 @@ export const towerDefenseRun = mysqlTable(
   },
   (table) => {
     return {
-      userIdIdx: index("TowerDefenseRun_userId_idx").on(table.userId),
+      userIdStartedAtIdx: index("TowerDefenseRun_userId_startedAt_id_idx").on(
+        table.userId,
+        table.startedAt,
+        table.id,
+      ),
       waveScoreIdx: index("TowerDefenseRun_wave_score_idx").on(table.wave, table.score),
       startedAtIdx: index("TowerDefenseRun_startedAt_idx").on(table.startedAt),
     };
