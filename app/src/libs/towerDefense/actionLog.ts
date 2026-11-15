@@ -81,14 +81,6 @@ const DECODERS = new Map(
 const DECODERS_BY_KIND = new Map(
   [...DECODERS.values()].map((decoder) => [decoder.kind, decoder.args]),
 );
-const INTEGER_ARGS = Object.fromEntries(
-  Object.entries(FORMAT).map(([kind, format]) => [
-    kind,
-    (format.args as readonly (readonly string[] | IntegerRange)[]).map(
-      (spec) => "min" in spec,
-    ),
-  ]),
-) as Record<TdActionKind, boolean[]>;
 
 const ACTION = /^([0-9a-z]{1,8})([A-Z])(.*)$/;
 const INTEGER = /^-?[0-9a-z]{1,11}$/;
@@ -103,18 +95,13 @@ export const isTdActionEncodable = (action: readonly unknown[]): action is TdAct
   const format = typeof kind === "string" ? DECODERS_BY_KIND.get(kind) : undefined;
   if (!format || typeof tick !== "number" || !Number.isSafeInteger(tick) || tick < 0)
     return false;
-  if (args.length !== format.length) return false;
-  return args.every((value, index) => {
-    const spec = format[index];
-    if (!spec) return false;
-    if ("names" in spec) return typeof value === "string" && spec.names.has(value);
-    return (
-      typeof value === "number" &&
-      Number.isSafeInteger(value) &&
-      value >= spec.min &&
-      value <= spec.max
-    );
-  });
+  return (
+    args.length === format.length &&
+    args.every((value, index) => {
+      const spec = format[index];
+      return !!spec && argumentFits(spec, value);
+    })
+  );
 };
 
 /**
@@ -125,10 +112,9 @@ export const encodeTdAction = (action: TdAction, previousTick: number): string =
   const [tick, kind, ...args] = action;
   if (tick < previousTick)
     throw new RangeError(`Action at tick ${tick} recorded after tick ${previousTick}`);
-  const integers = INTEGER_ARGS[kind];
   let encoded = `${(tick - previousTick).toString(36)}${FORMAT[kind].code}`;
   for (const [index, value] of args.entries())
-    encoded += `${index > 0 ? "," : ""}${integers[index] ? (value as number).toString(36) : value}`;
+    encoded += `${index > 0 ? "," : ""}${typeof value === "number" ? value.toString(36) : value}`;
   return encoded;
 };
 
@@ -167,17 +153,23 @@ export const decodeTdActions = (
     const action: (number | string)[] = [tick, decoder.kind];
     for (const [index, value] of raw.entries()) {
       const spec = decoder.args[index];
-      if (!spec) return null;
-      if ("names" in spec) {
-        if (!spec.names.has(value)) return null;
-        action.push(value);
-      } else {
-        const number = INTEGER.test(value) ? Number.parseInt(value, 36) : Number.NaN;
-        if (!(number >= spec.min && number <= spec.max)) return null;
-        action.push(number);
-      }
+      const parsed =
+        spec && "min" in spec && INTEGER.test(value)
+          ? Number.parseInt(value, 36)
+          : value;
+      if (!spec || !argumentFits(spec, parsed)) return null;
+      action.push(parsed);
     }
     actions.push(action as TdAction);
   }
   return actions;
 };
+
+/** Whether a value is one the argument accepts. */
+const argumentFits = (spec: ArgumentDecoder, value: unknown) =>
+  "names" in spec
+    ? typeof value === "string" && spec.names.has(value)
+    : typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      value >= spec.min &&
+      value <= spec.max;
