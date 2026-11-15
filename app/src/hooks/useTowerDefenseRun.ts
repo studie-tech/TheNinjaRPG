@@ -15,16 +15,12 @@ import {
   clearSettledRun,
   createLogWriter,
   encodedLog,
-  isForeignHead,
   isSameSavedRun,
   loadRun,
   readSavedRunHead,
-  readSavedRunSummary,
-  resumeLogWriter,
   saveRun,
   TD_SAVED_LOG_MAX_CHARS,
   type TdLogWriter,
-  type TdSavedRunSummary,
 } from "@/libs/towerDefense/savedRun";
 import {
   advanceReplay,
@@ -151,7 +147,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const [phase, setPhase] = useState<TowerDefensePhase>("lobby");
   const [speed, setSpeedState] = useState(1);
   const [outcome, setOutcome] = useState<TowerDefenseOutcome | null>(null);
-  const [saved, setSaved] = useState<TdSavedRunSummary | null>(null);
+  const [saved, setSaved] = useState<ReturnType<typeof readSavedRunHead>>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
   /** An immutable copy of the run for rendering; the live state stays in `session`. */
@@ -203,44 +199,37 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         markUnsaved(current, true);
         return;
       }
-      if (current.hasSaved && isForeignHead(readHead(storageKey), current.id)) {
+      if (current.hasSaved && readSavedRunHead(storageKey)?.id !== current.id) {
         loseSave(current);
         return;
       }
-      try {
-        saveRun(
-          localStorage,
-          storageKey,
-          {
-            id: current.id,
-            config: current.config,
-            token: current.token,
-            tick: current.state.tick,
-            wave: current.state.wave,
-            over: current.state.over,
-          },
-          current.log,
-        );
-        current.hasSaved = true;
-        markUnsaved(current, false);
-      } catch {
-        // Storage can be full or blocked; the run keeps playing and the player is told
-        // that a reload would lose it.
-        markUnsaved(current, true);
-      }
+      const isSaved = saveRun(
+        storageKey,
+        {
+          id: current.id,
+          config: current.config,
+          token: current.token,
+          tick: current.state.tick,
+          wave: current.state.wave,
+          over: current.state.over,
+        },
+        current.log,
+      );
+      // Storage can be full or blocked; the run keeps playing and the player is told
+      // that a reload would lose it.
+      if (isSaved) current.hasSaved = true;
+      markUnsaved(current, !isSaved);
     },
     [loseSave, markUnsaved, storageKey],
   );
 
   /** The save as storage now holds it, for the lobby. */
   const refreshSaved = useCallback(() => {
-    setSaved(readSavedSummary(storageKey));
+    setSaved(readSavedRunHead(storageKey));
   }, [storageKey]);
 
   const forget = useCallback(() => {
-    try {
-      clearRun(localStorage, storageKey);
-    } catch {}
+    clearRun(storageKey);
     setSaved(null);
   }, [storageKey]);
 
@@ -279,9 +268,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
      */
     const settle = () => {
       current.released = true;
-      try {
-        clearSettledRun(localStorage, storageKey, token);
-      } catch {}
+      clearSettledRun(storageKey, token);
       refreshSaved();
     };
     setPhase("claiming");
@@ -418,7 +405,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       const chosen = replaceSaved ? saved : null;
       /** Whether storage still holds the save the player decided about. */
       const isUnchanged = () => {
-        if (isSameSavedRun(readSavedSummary(storageKey), chosen)) return true;
+        if (isSameSavedRun(readSavedRunHead(storageKey), chosen)) return true;
         refreshSaved();
         showMutationToast({
           success: false,
@@ -446,7 +433,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
 
   /** Discard the save the lobby shows, unless another tab wrote or removed it since. */
   const discardSaved = useCallback(() => {
-    if (isSameSavedRun(readSavedSummary(storageKey), saved)) {
+    if (isSameSavedRun(readSavedRunHead(storageKey), saved)) {
       forget();
       return;
     }
@@ -459,8 +446,9 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
 
   /** Resume the saved run by replaying its log to the saved tick, a slice at a time. */
   const resume = useCallback(() => {
-    const stored = loadSaved(storageKey);
-    if (!stored) {
+    const stored = loadRun(storageKey);
+    const actions = stored && decodeTdActions(stored.text, LOG_LIMITS);
+    if (!stored || !actions) {
       showMutationToast({
         success: false,
         message: "This saved run could not be read, so it was discarded.",
@@ -468,8 +456,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       forget();
       return;
     }
-    const { head, chunks, tail, actions } = stored;
-    const loaded = readSavedSummary(storageKey);
+    const { head } = stored;
     const replay = createReplay(head.config, actions);
     const ticket = {};
     resuming.current = ticket;
@@ -485,7 +472,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       setIsResuming(false);
       // Another tab may have started, resumed or discarded a run while this one replayed;
       // its save is left alone.
-      if (!isSameSavedRun(readSavedSummary(storageKey), loaded)) {
+      if (!isSameSavedRun(readSavedRunHead(storageKey), head)) {
         refreshSaved();
         showMutationToast({
           success: false,
@@ -493,16 +480,13 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         });
         return;
       }
-      const { complete, log } = resumeLogWriter(
-        { chunks, tail, tick: head.tick },
-        actions,
-        replay,
-      );
-      if (!complete) {
-        // The save is rewritten from the shorter log.
-        try {
-          clearRun(localStorage, storageKey);
-        } catch {}
+      // A replay that stopped short of the save (rules changed by a deploy can end or stall
+      // it earlier) continues from where it stopped, with a log of only the actions it
+      // applied, so the log and the save rewritten from it describe that run.
+      const log = createLogWriter();
+      for (const action of actions.slice(0, replay.index)) appendToLog(log, action);
+      if (replay.index !== actions.length || result.state.tick !== head.tick) {
+        clearRun(storageKey);
         showMutationToast({
           success: false,
           message: `The game was updated since this run was saved, so it resumed at wave ${result.state.wave}.`,
@@ -653,7 +637,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       if (event.key !== storageKey && event.key !== null) return;
       const current = session.current;
       if (!current?.hasSaved || current.released) return;
-      if (isForeignHead(readHead(storageKey), current.id)) loseSave(current);
+      if (readSavedRunHead(storageKey)?.id !== current.id) loseSave(current);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -706,40 +690,6 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     discardSaved,
     buyDojo,
   };
-};
-
-/** The saved run's summary for the lobby, or null without a readable save. */
-const readSavedSummary = (key: string) => {
-  try {
-    return readSavedRunSummary(localStorage, key);
-  } catch {
-    return null;
-  }
-};
-
-/** The saved head, or null when it is missing or unreadable. */
-const readHead = (key: string) => {
-  try {
-    return readSavedRunHead(localStorage, key);
-  } catch {
-    return null;
-  }
-};
-
-/** The saved run with its decoded log, or null when it is missing or unreadable. */
-const loadSaved = (key: string) => {
-  let stored: ReturnType<typeof loadRun> = null;
-  try {
-    stored = loadRun(localStorage, key);
-  } catch {
-    return null;
-  }
-  if (!stored) return null;
-  const actions = decodeTdActions(
-    [...stored.chunks, stored.tail].filter((part) => part !== "").join(";"),
-    LOG_LIMITS,
-  );
-  return actions ? { ...stored, actions } : null;
 };
 
 /** A copy of everything the HUD reads, so a render never observes the live run. */

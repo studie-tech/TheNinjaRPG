@@ -9,6 +9,11 @@
  */
 import { encodeTdAction } from "@/libs/towerDefense/actionLog";
 import type { TdAction, TdRunConfig } from "@/libs/towerDefense/sim";
+import {
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/utils/storage";
 
 /** Actions per sealed chunk. */
 export const TD_LOG_CHUNK_ACTIONS = 2048;
@@ -48,45 +53,15 @@ interface StoredHead extends TdSavedRunHead {
   tail: string;
 }
 
-type Storage = Pick<globalThis.Storage, "getItem" | "setItem" | "removeItem">;
-
-/** A writer for an empty log, or one continuing a log restored from storage. */
-export const createLogWriter = (
-  restored?: { chunks: string[]; tail: string },
-  actions?: readonly TdAction[],
-): TdLogWriter => {
-  const sealed = restored?.chunks ?? [];
-  const tail = restored?.tail ? restored.tail.split(";") : [];
-  return {
-    sealed,
-    tail,
-    count: actions?.length ?? 0,
-    chars: [...sealed, ...tail].reduce(
-      (total, part, index) => total + part.length + (index > 0 ? 1 : 0),
-      0,
-    ),
-    lastTick: actions?.at(-1)?.[0] ?? 0,
-    stored: sealed.length,
-  };
-};
-
-/**
- * The log to continue a run resumed by replaying its save. A replay that applied every
- * action and reached the saved tick continues the stored log. One that stopped short
- * (rules changed by a deploy can end or stall it earlier) continues from where it
- * stopped, with a log of only the actions it applied, so the log describes that run.
- */
-export const resumeLogWriter = (
-  saved: { chunks: string[]; tail: string; tick: number },
-  actions: readonly TdAction[],
-  replay: { index: number; state: { tick: number } },
-): { complete: boolean; log: TdLogWriter } => {
-  if (replay.index === actions.length && replay.state.tick === saved.tick)
-    return { complete: true, log: createLogWriter(saved, actions) };
-  const log = createLogWriter();
-  for (const action of actions.slice(0, replay.index)) appendToLog(log, action);
-  return { complete: false, log };
-};
+/** A writer for an empty log. */
+export const createLogWriter = (): TdLogWriter => ({
+  sealed: [],
+  tail: [],
+  count: 0,
+  chars: 0,
+  lastTick: 0,
+  stored: 0,
+});
 
 /** Record an action, sealing the tail once it holds a full chunk. */
 export const appendToLog = (log: TdLogWriter, action: TdAction) => {
@@ -105,15 +80,13 @@ export const appendToLog = (log: TdLogWriter, action: TdAction) => {
 export const encodedLog = (log: TdLogWriter) =>
   [...log.sealed, log.tail.join(";")].filter((part) => part !== "").join(";");
 
-/** Save a run; storage errors propagate so the caller can carry on without a save. */
-export const saveRun = (
-  storage: Storage,
-  key: string,
-  head: TdSavedRunHead,
-  log: TdLogWriter,
-) => {
+/** Save a run; returns false when storage refused a write, so the run carries on unsaved. */
+export const saveRun = (key: string, head: TdSavedRunHead, log: TdLogWriter) => {
   while (log.stored < log.sealed.length) {
-    storage.setItem(chunkKey(key, log.stored), log.sealed[log.stored] ?? "");
+    if (
+      !safeLocalStorageSetItem(chunkKey(key, log.stored), log.sealed[log.stored] ?? "")
+    )
+      return false;
     log.stored++;
   }
   const stored: StoredHead = {
@@ -121,38 +94,23 @@ export const saveRun = (
     chunks: log.sealed.length,
     tail: log.tail.join(";"),
   };
-  storage.setItem(key, JSON.stringify(stored));
+  return safeLocalStorageSetItem(key, JSON.stringify(stored));
 };
 
 /** The saved head alone, cheap enough to read on every visit to the lobby. */
-export const readSavedRunHead = (storage: Storage, key: string): StoredHead | null => {
-  const raw = storage.getItem(key);
+export const readSavedRunHead = (key: string): StoredHead | null => {
+  const raw = safeLocalStorageGetItem(key);
   if (!raw) return null;
-  const head = JSON.parse(raw) as Partial<StoredHead>;
-  return typeof head.chunks === "number" && typeof head.tail === "string" && head.config
-    ? (head as StoredHead)
-    : null;
-};
-
-/** What the lobby shows of a save. */
-export interface TdSavedRunSummary {
-  /** The session that wrote the save; every start or resume writes under a new one. */
-  id: string;
-  wave: number;
-  tick: number;
-  /** The run ended and awaits its claim; resuming it claims it. */
-  over: boolean;
-}
-
-/** The saved run's summary, or null without a readable save. */
-export const readSavedRunSummary = (
-  storage: Storage,
-  key: string,
-): TdSavedRunSummary | null => {
-  const head = readSavedRunHead(storage, key);
-  return head
-    ? { id: head.id, wave: head.wave, tick: head.tick, over: head.over === true }
-    : null;
+  try {
+    const head = JSON.parse(raw) as Partial<StoredHead>;
+    return typeof head.chunks === "number" &&
+      typeof head.tail === "string" &&
+      head.config
+      ? (head as StoredHead)
+      : null;
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -160,41 +118,33 @@ export const readSavedRunSummary = (
  * write by another session moves the save's id or tick, so a stale decision is caught.
  */
 export const isSameSavedRun = (
-  stored: TdSavedRunSummary | null,
-  chosen: TdSavedRunSummary | null,
+  stored: Pick<TdSavedRunHead, "id" | "tick"> | null,
+  chosen: Pick<TdSavedRunHead, "id" | "tick"> | null,
 ) =>
   stored === null || chosen === null
     ? stored === chosen
     : stored.id === chosen.id && stored.tick === chosen.tick;
 
-/**
- * Whether the save a session wrote was since replaced by another session or removed.
- * That session stops saving, so two tabs never interleave their writes to one save.
- */
-export const isForeignHead = (head: Pick<TdSavedRunHead, "id"> | null, id: string) =>
-  head?.id !== id;
-
-/** A saved run with its log, or null when nothing complete is stored. */
-export const loadRun = (storage: Storage, key: string) => {
-  const head = readSavedRunHead(storage, key);
+/** A saved run with its encoded log, or null when nothing complete is stored. */
+export const loadRun = (key: string) => {
+  const head = readSavedRunHead(key);
   if (!head) return null;
-  const chunks: string[] = [];
+  const parts: string[] = [];
   for (let index = 0; index < head.chunks; index++) {
-    const chunk = storage.getItem(chunkKey(key, index));
+    const chunk = safeLocalStorageGetItem(chunkKey(key, index));
     if (chunk === null) return null;
-    chunks.push(chunk);
+    parts.push(chunk);
   }
-  return { head, chunks, tail: head.tail };
+  if (head.tail) parts.push(head.tail);
+  return { head, text: parts.join(";") };
 };
 
 /** Remove a saved run and its chunks. */
-export const clearRun = (storage: Storage, key: string) => {
-  let chunks = 0;
-  try {
-    chunks = readSavedRunHead(storage, key)?.chunks ?? 0;
-  } catch {}
-  for (let index = 0; index < chunks; index++) storage.removeItem(chunkKey(key, index));
-  storage.removeItem(key);
+export const clearRun = (key: string) => {
+  const chunks = readSavedRunHead(key)?.chunks ?? 0;
+  for (let index = 0; index < chunks; index++)
+    safeLocalStorageRemoveItem(chunkKey(key, index));
+  safeLocalStorageRemoveItem(key);
 };
 
 /**
@@ -202,12 +152,9 @@ export const clearRun = (storage: Storage, key: string) => {
  * token since every session resuming it saves under a new id. A save another run wrote
  * since is kept. Returns whether the save was removed.
  */
-export const clearSettledRun = (storage: Storage, key: string, token: string) => {
-  let isOwned = false;
-  try {
-    isOwned = readSavedRunHead(storage, key)?.token === token;
-  } catch {}
-  if (isOwned) clearRun(storage, key);
+export const clearSettledRun = (key: string, token: string) => {
+  const isOwned = readSavedRunHead(key)?.token === token;
+  if (isOwned) clearRun(key);
   return isOwned;
 };
 
