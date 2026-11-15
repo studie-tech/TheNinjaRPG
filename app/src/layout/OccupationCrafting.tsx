@@ -916,7 +916,7 @@ export default function OccupationCrafting({
                                 {shownImbuements(userItem).map((imbuement) => (
                                   <div
                                     key={imbuement.id}
-                                    className="flex items-center justify-between rounded bg-white p-2"
+                                    className="flex items-center justify-between rounded bg-card p-2 text-card-foreground"
                                   >
                                     <div className="flex items-center space-x-2">
                                       <ContentImage
