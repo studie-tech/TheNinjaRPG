@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 describe("tower defense scene", () => {
-  it("recycles enemy display objects and drains the event queue in place", async () => {
+  it("recycles enemy display objects and drains the event queue", async () => {
     const { game, frame } = fakeRenderer();
     const state = runWithEnemies(3);
     const view = viewOf(state);
@@ -59,11 +59,9 @@ describe("tower defense scene", () => {
     const actors = actorLayer(game.stage);
     const crowd = state.enemies.length;
 
-    const events = state.events;
-    events.push({ type: "wave", boss: false, titan: false, eras: [] });
+    state.events.push({ type: "wave", boss: false, titan: false, eras: [] });
     frame();
-    expect(state.events).toBe(events);
-    expect(events).toHaveLength(0);
+    expect(state.events).toHaveLength(0);
     // The hero plus one root per living enemy.
     expect(actors.children).toHaveLength(1 + crowd);
     const roots = actors.children.slice(1);

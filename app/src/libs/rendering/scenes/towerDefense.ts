@@ -608,13 +608,9 @@ export const createTowerDefenseScene = async (options: {
       const stage = tdStageForWave(state.wave);
       const smoothing = 1 - Math.exp(-Math.min(0.1, frame.delta) * 18);
 
-      // Events from the simulation; the run's queue is drained in place.
-      const events = state.events;
-      for (let i = 0; i < events.length; i++) {
-        const event = events[i];
-        if (event) handleEvent(event, state, now);
-      }
-      events.length = 0;
+      // Events from the simulation, each handled once.
+      for (const event of state.events) handleEvent(event, state, now);
+      state.events.length = 0;
 
       // Hero
       heroX += (state.hero.x - heroX) * smoothing;
