@@ -165,8 +165,11 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     useTowerDefenseProgressCache();
   const { mutateAsync: startRun, isPending: isStarting } =
     api.towerDefense.startRun.useMutation();
+  // A claim uploads a long log and replays it, so it travels alone instead of holding up
+  // the requests batched beside it.
   const { mutateAsync: claimRun } = api.towerDefense.claimRun.useMutation({
     meta: { handlesTransportError: true },
+    trpc: { context: { skipBatch: true } },
   });
   const { mutateAsync: purchase, isPending: isPurchasing } =
     api.towerDefense.purchaseDojoUpgrade.useMutation();
