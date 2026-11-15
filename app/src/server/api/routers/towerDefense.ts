@@ -218,7 +218,6 @@ export const towerDefenseRouter = createTRPCRouter({
         token,
         actions,
         endTick: input.endTick,
-        now,
       });
       // The replay is deterministic, so a refused log stays refused.
       if (!result.ok) return refusedForGood(result.message);

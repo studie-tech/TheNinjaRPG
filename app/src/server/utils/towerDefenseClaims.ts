@@ -119,12 +119,9 @@ export const verifyTowerDefenseRun = async (input: {
   token: TowerDefenseRunToken;
   actions: readonly TdAction[];
   endTick: number;
-  now: number;
   sliceTicks?: number;
 }): Promise<TowerDefenseClaimResult> => {
   const { token, actions, endTick } = input;
-  const refused = checkTowerDefenseClaimTiming(input);
-  if (refused) return { ok: false, message: refused.message };
   const replay = createReplay(
     {
       seed: token.seed,

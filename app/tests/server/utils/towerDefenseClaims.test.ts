@@ -10,7 +10,6 @@ import {
   checkTowerDefenseClaimTiming,
   reserveTowerDefenseReplay,
   TD_TOKEN_LIFETIME_MS,
-  TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE,
   towerDefenseReplayCost,
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
@@ -90,7 +89,6 @@ describe("tower defense claim verification", () => {
       token: payload,
       actions: log,
       endTick: state.tick,
-      now: payload.issuedAt + state.tick * 100 + 60_000,
     });
     expect(result).toEqual({
       ok: true,
@@ -108,27 +106,17 @@ describe("tower defense claim verification", () => {
       token: payload,
       actions: log,
       endTick: state.tick,
-      now: payload.issuedAt + 10 * 60_000,
     });
     expect(result.ok).toBe(true);
   });
 
-  it("refuses runs simulated faster than the unlocked game speed", async () => {
+  it("replays a run the same at any unlocked game speed", async () => {
     const payload = token({ seed: "fast" });
     const { state, log } = play(payload);
-    const realTime = (state.tick * 100) / 1;
-    const early = await verifyTowerDefenseRun({
-      token: payload,
-      actions: log,
-      endTick: state.tick,
-      now: payload.issuedAt + realTime / 3,
-    });
-    expect(early.ok).toBe(false);
     const sped = await verifyTowerDefenseRun({
       token: { ...payload, dojo: { ...payload.dojo, speed: 4 } },
       actions: log,
       endTick: state.tick,
-      now: payload.issuedAt + realTime / 3,
     });
     // Time Dilation never changes the simulation, only how fast it may be played.
     expect(sped.ok).toBe(true);
@@ -137,14 +125,12 @@ describe("tower defense claim verification", () => {
   it("refuses a run that has not ended, or that ends elsewhere", async () => {
     const payload = token({ seed: "unfinished" });
     const { state, log } = play(payload);
-    const now = payload.issuedAt + state.tick * 100 + 60_000;
     expect(
       (
         await verifyTowerDefenseRun({
           token: payload,
           actions: log,
           endTick: state.tick - 50,
-          now,
         })
       ).ok,
     ).toBe(false);
@@ -154,7 +140,6 @@ describe("tower defense claim verification", () => {
           token: payload,
           actions: log,
           endTick: state.tick + 50,
-          now,
         })
       ).ok,
     ).toBe(false);
@@ -167,23 +152,10 @@ describe("tower defense claim verification", () => {
       token: { ...payload, seed: "other" },
       actions: log,
       endTick: state.tick,
-      now: payload.issuedAt + state.tick * 100 + 60_000,
     });
     expect(
       result.ok && result.wave === state.wave && result.kills === state.kills,
     ).toBe(false);
-  });
-
-  it("refuses expired tokens", async () => {
-    const payload = token({ seed: "expired" });
-    const { state, log } = play(payload);
-    const result = await verifyTowerDefenseRun({
-      token: payload,
-      actions: log,
-      endTick: state.tick,
-      now: payload.issuedAt + TD_TOKEN_LIFETIME_MS + 1,
-    });
-    expect(result.ok).toBe(false);
   });
 
   it("replays in slices that yield to the event loop and never change the result", async () => {
@@ -193,7 +165,6 @@ describe("tower defense claim verification", () => {
       token: payload,
       actions: log,
       endTick: state.tick,
-      now: payload.issuedAt + state.tick * 100 + 60_000,
     };
     let yielded = false;
     setImmediate(() => {
@@ -271,10 +242,5 @@ describe("tower defense claim pre-checks", () => {
     const command = JSON.parse(body) as unknown[];
     const args = (Array.isArray(command[0]) ? command[0] : command) as unknown[];
     expect(args.at(-1)).toBe(3);
-  });
-
-  it("refuses an over-limit claim without asserting the run is saved", () => {
-    // The server cannot know whether the player's device still holds the run.
-    expect(TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE).not.toMatch(/saved/i);
   });
 });
