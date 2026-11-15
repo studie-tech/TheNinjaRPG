@@ -16,6 +16,7 @@ import type { TdDojoUpgrade } from "@/libs/towerDefense/content";
 import {
   appendToLog,
   clearRun,
+  clearSettledRun,
   createLogWriter,
   encodedLog,
   isForeignHead,
@@ -279,12 +280,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     const current = session.current;
     if (!current || current.claimStarted) return;
     current.claimStarted = true;
-    /** The run is settled for good, so its save goes and is never written again. */
-    const settle = () => {
-      current.released = true;
-      forget();
-    };
-    const { state } = current;
+    const { state, token } = current;
     const base = {
       wave: state.wave,
       kills: state.kills,
@@ -293,16 +289,27 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     };
     persist(true);
     const unsettled = { ...base, claimed: false, reloadRequired: false };
-    if (!current.token) {
+    if (!token) {
       setOutcome({ ...unsettled, retryable: false, message: null });
       setPhase("over");
       forget();
       return;
     }
+    /**
+     * The run is settled for good, so it is never written again and its save goes, unless
+     * another run took storage over while the claim was in flight.
+     */
+    const settle = () => {
+      current.released = true;
+      try {
+        clearSettledRun(localStorage, storageKey, token);
+      } catch {}
+      refreshSaved();
+    };
     setPhase("claiming");
     const snapshot = prepare();
     const response = await claimRun({
-      token: current.token,
+      token,
       actions: encodedLog(current.log),
       endTick: state.tick,
       simVersion: TD_SIM_VERSION,
@@ -358,7 +365,16 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       message: result.message,
     });
     setPhase("over");
-  }, [applyClaim, claimRun, forget, persist, prepare, refresh, refreshSaved]);
+  }, [
+    applyClaim,
+    claimRun,
+    forget,
+    persist,
+    prepare,
+    refresh,
+    refreshSaved,
+    storageKey,
+  ]);
 
   /** End the run with a retreat, as the player could; used at the run's length limits. */
   const retreat = useCallback(
@@ -475,6 +491,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       return;
     }
     const { head, chunks, tail, actions } = stored;
+    const loaded = readSavedSummary(storageKey);
     const replay = createReplay(head.config, actions);
     const ticket = {};
     resuming.current = ticket;
@@ -488,6 +505,16 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       }
       resuming.current = null;
       setIsResuming(false);
+      // Another tab may have started, resumed or discarded a run while this one replayed;
+      // its save is left alone.
+      if (!isSameSavedRun(readSavedSummary(storageKey), loaded)) {
+        refreshSaved();
+        showMutationToast({
+          success: false,
+          message: "Your saved run changed in another tab. Check it before resuming.",
+        });
+        return;
+      }
       const { complete, log } = resumeLogWriter(
         { chunks, tail, tick: head.tick },
         actions,
@@ -506,7 +533,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       begin(head.config, head.token, { state: result.state, log });
     };
     step();
-  }, [begin, forget, storageKey]);
+  }, [begin, forget, refreshSaved, storageKey]);
 
   /** Apply a player action at the current tick and record it if the run accepted it. */
   const act = useCallback(

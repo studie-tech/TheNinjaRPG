@@ -3,6 +3,7 @@ import { decodeTdActions, encodeTdActions } from "@/libs/towerDefense/actionLog"
 import {
   appendToLog,
   clearRun,
+  clearSettledRun,
   createLogWriter,
   encodedLog,
   isForeignHead,
@@ -153,6 +154,29 @@ describe("tower defense saved runs", () => {
     expect(storage.items.size).toBe(0);
     storage.setItem("key", JSON.stringify({ id: "old", log: [] }));
     expect(readSavedRunHead(storage, "key")).toBeNull();
+  });
+
+  it("removes a settled run's save but keeps one another run wrote since", () => {
+    const storage = memoryStorage();
+    const log = createLogWriter();
+    for (let i = 0; i < TD_LOG_CHUNK_ACTIONS + 3; i++) appendToLog(log, actionAt(i));
+    saveRun(storage, "key", head, log);
+    // Another session resuming the same run saves it under its own id.
+    saveRun(storage, "key", { ...head, id: "resumed" }, log);
+    expect(clearSettledRun(storage, "key", "token")).toBe(true);
+    expect(storage.items.size).toBe(0);
+
+    const next = createLogWriter();
+    for (let i = 0; i < TD_LOG_CHUNK_ACTIONS + 3; i++) appendToLog(next, actionAt(i));
+    saveRun(storage, "key", { ...head, id: "next", token: "next-token" }, next);
+    expect(clearSettledRun(storage, "key", "token")).toBe(false);
+    expect(loadRun(storage, "key")?.head).toMatchObject({
+      id: "next",
+      token: "next-token",
+    });
+    expect(storage.items.has("key:log:0")).toBe(true);
+    clearRun(storage, "key");
+    expect(clearSettledRun(storage, "key", "token")).toBe(false);
   });
 
   it("continues the stored log when the replay reaches the save", () => {

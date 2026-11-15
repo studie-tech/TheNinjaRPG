@@ -197,4 +197,18 @@ export const clearRun = (storage: Storage, key: string) => {
   storage.removeItem(key);
 };
 
+/**
+ * Remove the save of a settled run while storage still holds that run, identified by its
+ * token since every session resuming it saves under a new id. A save another run wrote
+ * since is kept. Returns whether the save was removed.
+ */
+export const clearSettledRun = (storage: Storage, key: string, token: string) => {
+  let isOwned = false;
+  try {
+    isOwned = readSavedRunHead(storage, key)?.token === token;
+  } catch {}
+  if (isOwned) clearRun(storage, key);
+  return isOwned;
+};
+
 const chunkKey = (key: string, index: number) => `${key}:log:${index}`;
