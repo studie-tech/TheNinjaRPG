@@ -49,7 +49,12 @@ const TowerDefenseArena = dynamic(
 );
 
 export default function TowerDefensePage() {
-  const { data: user, isClerkLoaded } = useUserDataSelector((profile) => ({
+  const {
+    data: user,
+    isClerkLoaded,
+    isSignedIn,
+    status,
+  } = useUserDataSelector((profile) => ({
     userId: profile.userId,
     gender: profile.gender,
     spriteBodyStyle: profile.spriteBodyStyle,
@@ -193,7 +198,10 @@ export default function TowerDefensePage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [act, aim, run.phase]);
 
-  if (!isClerkLoaded) return <Loader explanation="Loading user data..." />;
+  // A signed-in player's runs are claimable only once the profile names them, so the
+  // guest lobby waits until the profile has loaded.
+  if (!isClerkLoaded || (isSignedIn && !user && status === "pending"))
+    return <Loader explanation="Loading user data..." />;
   const state = run.hud;
 
   if (run.phase === "lobby")
