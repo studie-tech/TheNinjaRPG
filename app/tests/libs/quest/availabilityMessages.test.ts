@@ -50,6 +50,13 @@ describe("isAvailableUserQuests rejection messages", () => {
     expect(available()).toEqual({ check: true, message: "" });
   });
 
+  it("offers hidden quests to quest staff unless they play as a regular player", () => {
+    expect(available({ hidden: true }, { role: "CONTENT" }).check).toBe(true);
+    expect(
+      available({ hidden: true }, { role: "CONTENT", playsAsPlayer: true }),
+    ).toEqual({ check: false, message: "Quest is hidden\n" });
+  });
+
   it.each<[string, Partial<QuestAvailability>, Record<string, unknown>, string]>([
     ["hidden", { hidden: true }, {}, "Quest is hidden\n"],
     [

@@ -110,7 +110,7 @@ import { missingUserMessage } from "@/server/utils/sentry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
 import { clampActionLogText } from "@/utils/actionLog";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, getContentRole } from "@/utils/permissions";
 import { periodStart, secondsFromNow } from "@/utils/time";
 import type { GetPublicUsersSchema, TavernColorChangeSchema } from "@/validators/user";
 
@@ -2265,7 +2265,7 @@ export const findUserRoleById = (
   userId: string,
 ) =>
   client.query.userData.findFirst({
-    columns: { role: true },
+    columns: { role: true, playsAsPlayer: true },
     where: eq(userData.userId, userId),
   });
 
@@ -2282,17 +2282,20 @@ export const fetchViewerRole = async (
   return viewer?.role ?? "USER";
 };
 
-/**
- * Whether a public catalogue may list hidden (unreleased) entries for this viewer: only for a
- * signed-in content editor (`canChangeContent` on their stored role). Signed-out visitors,
- * players and other staff always get released entries, whatever `hidden` filter they send.
- */
+/** Whether a public catalogue may list unreleased content for the viewer's content role. */
 export const fetchCanListHiddenContent = async (
   client: Pick<DrizzleClient, "query">,
   userId: string | null | undefined,
-): Promise<boolean> => {
-  if (!userId) return false;
-  return canChangeContent(await fetchViewerRole(client, userId));
+): Promise<boolean> => canChangeContent(await fetchContentViewerRole(client, userId));
+
+/** The viewer's content role; signed-out viewers see released content only. */
+export const fetchContentViewerRole = async (
+  client: Pick<DrizzleClient, "query">,
+  userId: string | null | undefined,
+): Promise<UserRole> => {
+  if (!userId) return "USER";
+  const viewer = await findUserRoleById(client, userId);
+  return viewer ? getContentRole(viewer) : "USER";
 };
 
 /** Build a public-profile row by ID with its display title and village; callers apply indexability checks. */

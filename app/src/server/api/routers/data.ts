@@ -101,8 +101,8 @@ import { fetchItem } from "@/queries/item";
 import { fetchJutsu } from "@/queries/jutsu";
 import {
   fetchCanListHiddenContent,
+  fetchContentViewerRole,
   fetchUser,
-  fetchViewerRole,
 } from "@/queries/profile";
 
 import {
@@ -1002,7 +1002,7 @@ export const dataRouter = createTRPCRouter({
 
       // Run userCounts and skill queries in parallel for efficiency
       const [viewerRole, userCounts, skills] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
         // Get user counts per skill
         selectUserSkillForGetSkillTreeBalanceStatistics(ctx.drizzle),
 
@@ -1041,7 +1041,7 @@ export const dataRouter = createTRPCRouter({
       const baseFilters = skillTreeDatabaseFilter(input);
       // Fetch results
       const [viewerRole, results] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
         listSkillTreeForGetSkillTreeEffectsBalanceStatistics(ctx.drizzle, baseFilters),
       ]);
       return results

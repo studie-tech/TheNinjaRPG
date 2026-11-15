@@ -1,0 +1,1 @@
+ALTER TABLE `UserData` ADD `playsAsPlayer` boolean DEFAULT false NOT NULL;

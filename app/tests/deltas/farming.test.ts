@@ -419,6 +419,7 @@ it("projects confirmed farm counters independently of feature inventory and plot
 it("masks hidden quest targets without mutating the committed farming trackers", () => {
   const source = {
     role: "USER" as const,
+    playsAsPlayer: false,
     sector: 1,
     questData: [
       QuestTracker.parse({

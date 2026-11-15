@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { type HotkeyKind, useBattleHotkeys } from "@/hooks/useBattleHotkeys";
 import { BASIC_HOTKEY_ACTIONS, toHotkey } from "@/libs/combat/hotkeys";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, getContentRole } from "@/utils/permissions";
 import { useUserDataSelector } from "@/utils/UserContext";
 
 /** An action that can carry a battle key. */
@@ -155,9 +155,12 @@ export function LoadoutHotkeysPanel({
   kind: HotkeyKind;
   actions: { id: string; name: string; hidden?: boolean }[];
 }) {
-  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
+  const { data: userData } = useUserDataSelector((u) => ({
+    role: u.role,
+    playsAsPlayer: u.playsAsPlayer,
+  }));
   // Match the battle and inventory grids, which hide hidden content from players.
-  const canSeeHidden = !!userData && canChangeContent(userData.role);
+  const canSeeHidden = !!userData && canChangeContent(getContentRole(userData));
   const rows: HotkeyTarget[] = [
     ...actions
       .filter((action) => !action.hidden || canSeeHidden)

@@ -32,7 +32,7 @@ import { hasRequiredRank } from "@/libs/rank";
 import { isRewardChoiceQuest } from "@/libs/rewardChoice";
 import { collapseRewards } from "@/libs/rewards";
 import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
-import { canPlayHiddenQuests } from "@/utils/permissions";
+import { canPlayHiddenQuests, getContentRole } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { hasEndDatePassed, periodStart } from "@/utils/time";
 import type { QuestContentType } from "@/validators/objectives";
@@ -157,7 +157,8 @@ export const isAvailableUserQuests = (
     : null;
   // Checks
   const now = new Date();
-  const hideCheck = !questAndUserQuestInfo.hidden || canPlayHiddenQuests(user.role);
+  const hideCheck =
+    !questAndUserQuestInfo.hidden || canPlayHiddenQuests(getContentRole(user));
   const startsCheck =
     !questAndUserQuestInfo.startsAt || new Date(questAndUserQuestInfo.startsAt) <= now;
   const expiresCheck = !hasEndDatePassed(questAndUserQuestInfo.endsAt, now);

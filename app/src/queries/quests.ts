@@ -2231,7 +2231,10 @@ export const fetchQuestDiscoverySummaryCandidates = async (
         buildQuestDiscoveryWhere(options),
         or(
           eq(quest.hidden, false),
-          inArray(userData.role, UserRoles.filter(canPlayHiddenQuests)),
+          and(
+            inArray(userData.role, UserRoles.filter(canPlayHiddenQuests)),
+            eq(userData.playsAsPlayer, false),
+          ),
         ),
       ),
     )

@@ -7,7 +7,7 @@ import type { UserRole } from "@/drizzle/constants";
 import { SKILL_RESET_STAFF_RELATED_MSG } from "@/drizzle/constants";
 import { actionLog, skillTree, skillTreeFolder, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { canAccessHiddenSkillTree } from "@/utils/permissions";
+import { canAccessHiddenSkillTree, getContentRole } from "@/utils/permissions";
 import { getNextUserSnapshotAt } from "@/utils/time";
 
 /** Build the `skillTree` listing for `get`, using predicates on `pathType`. */
@@ -24,6 +24,7 @@ export const updateUserDataForPurchase = (
   user: {
     updatedAt: Date;
     role: UserRole;
+    playsAsPlayer: boolean;
   },
   tier: { seichiSilverCost: number; bloodlineId: string; id: string; updatedAt: Date },
   bloodright: { skillId: string; cost: number }[],
@@ -43,7 +44,7 @@ export const updateUserDataForPurchase = (
         eq(userData.userId, ctx.userId),
         eq(userData.bloodlineId, tier.bloodlineId),
         // Content may change between loading the card and claiming its purchase.
-        sql`EXISTS (SELECT 1 FROM ${skillTree} LEFT JOIN ${skillTreeFolder} ON ${skillTree.folderId} = ${skillTreeFolder.id} WHERE ${skillTree.id} = ${tier.id} AND ${skillTree.updatedAt} = ${tier.updatedAt} AND (${canAccessHiddenSkillTree(user.role)} OR (${skillTree.hidden} = false AND COALESCE(${skillTreeFolder.hidden}, false) = false)))`,
+        sql`EXISTS (SELECT 1 FROM ${skillTree} LEFT JOIN ${skillTreeFolder} ON ${skillTree.folderId} = ${skillTreeFolder.id} WHERE ${skillTree.id} = ${tier.id} AND ${skillTree.updatedAt} = ${tier.updatedAt} AND (${canAccessHiddenSkillTree(getContentRole(user))} OR (${skillTree.hidden} = false AND COALESCE(${skillTreeFolder.hidden}, false) = false)))`,
         ne(userData.status, "BATTLE"),
         sql`${userData.bloodright} = CAST(${JSON.stringify(purchased)} AS JSON)`,
         gte(userData.seichiSilver, tier.seichiSilverCost),

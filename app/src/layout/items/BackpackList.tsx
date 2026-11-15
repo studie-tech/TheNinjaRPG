@@ -17,7 +17,7 @@ import {
 } from "@/libs/itemsPage";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, getContentRole } from "@/utils/permissions";
 
 /**
  * The carried items of one bag with name search, type chips and a sort order. Sort and chip
@@ -41,7 +41,7 @@ export function BackpackList({
     `items:filter:${userData.userId}`,
     "ALL",
   );
-  const visible = canChangeContent(userData.role)
+  const visible = canChangeContent(getContentRole(userData))
     ? items
     : items.filter((ui) => !ui.item.hidden);
   const chips = backpackFilterChips(visible);
@@ -164,7 +164,7 @@ export function BackpackList({
 
 interface BackpackListProps {
   items: UserItemWithRelations[];
-  userData: Pick<NonNullable<UserWithRelations>, "userId" | "role">;
+  userData: Pick<NonNullable<UserWithRelations>, "userId" | "role" | "playsAsPlayer">;
   selectedId: string | undefined;
   onSelect: (userItemId: string) => void;
   /** Called with the item a drag starts on, and with null when it ends. */

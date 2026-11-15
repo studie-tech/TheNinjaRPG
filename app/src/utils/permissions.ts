@@ -97,6 +97,15 @@ export const isStaffMember = (user: Pick<UserData, "staffAccount">) => {
   return user.staffAccount;
 };
 
+/**
+ * The role that decides which unreleased content a character sees and plays: staff who
+ * play as a regular player meet only released content. Content editing, moderation and
+ * other staff tools keep the character's own role.
+ */
+export const getContentRole = (
+  user: Pick<UserData, "role" | "playsAsPlayer">,
+): UserRole => (user.playsAsPlayer ? "USER" : user.role);
+
 export const isStaffRole = (role?: UserRole | null) => {
   return !!role && role !== "USER";
 };

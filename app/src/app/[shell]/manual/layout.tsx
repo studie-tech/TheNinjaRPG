@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { StaffPlayerViewNotice } from "@/layout/StaffPlayerViewNotice";
 import { buildMetadata } from "@/libs/seo";
 
 export const metadata: Metadata = buildMetadata({
@@ -9,5 +10,10 @@ export const metadata: Metadata = buildMetadata({
 });
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      <StaffPlayerViewNotice />
+      {children}
+    </>
+  );
 }

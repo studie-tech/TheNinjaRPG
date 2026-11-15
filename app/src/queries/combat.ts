@@ -140,6 +140,7 @@ import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { questAttemptIsActive } from "@/server/utils/questEntry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
+import { getContentRole } from "@/utils/permissions";
 import {
   periodStart,
   postCombatStealthCooldownAt,
@@ -1115,6 +1116,7 @@ export const updateUserDataForCreateBattle = (
     UserData,
     | "userId"
     | "role"
+    | "playsAsPlayer"
     | "rank"
     | "isAi"
     | "isOutlaw"
@@ -1320,7 +1322,12 @@ export const updateUserDataForCreateBattle = (
           ? questAttemptIsActive(
               client,
               info.questAttempt,
-              users.find((u) => u.userId === info.questAttempt?.userId)?.role ?? "USER",
+              getContentRole(
+                users.find((u) => u.userId === info.questAttempt?.userId) ?? {
+                  role: "USER",
+                  playsAsPlayer: false,
+                },
+              ),
             )
           : undefined,
         // Queue spending must match its preload even if movement or another claim raced us.

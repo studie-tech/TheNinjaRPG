@@ -50,7 +50,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
-import { canAbandonQuestType } from "@/utils/permissions";
+import { canAbandonQuestType, getContentRole } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserDataSelector, useUserInfo } from "@/utils/UserContext";
@@ -435,6 +435,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     userQuests: u.userQuests,
     dailyMissions: u.dailyMissions,
     role: u.role,
+    playsAsPlayer: u.playsAsPlayer,
     status: u.status,
     autoWakeUp: u.autoWakeUp,
     battleId: u.battleId,
@@ -453,7 +454,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const allDone = isQuestComplete(quest, tracker);
   const isPaused =
     quest.questType === "battlepyramid" &&
-    isQuestAttemptPaused(userQuest, userData?.role ?? "USER");
+    isQuestAttemptPaused(userQuest, userData ? getContentRole(userData) : "USER");
   const canProgress =
     !isPaused &&
     (canAttemptAwakeAction(userData) ||

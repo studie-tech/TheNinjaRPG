@@ -320,7 +320,7 @@ import {
 import { findRelationship } from "@/utils/alliance";
 import { getKageEligibility } from "@/utils/kage";
 import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, getContentRole } from "@/utils/permissions";
 import { regenTicksSince, secondsFromNow } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
 import type { BaseServerResponse } from "@/validators/base";
@@ -1257,7 +1257,7 @@ export const combatRouter = createTRPCRouter({
       // Skip jutsu combat would strip, plus hidden jutsu as the Jutsu page does, so
       // they neither fill equip slots nor persist as equipped.
       const validateLobbyJutsu = (jutsu: Jutsu) => {
-        if (jutsu.hidden && !canChangeContent(user.role))
+        if (jutsu.hidden && !canChangeContent(getContentRole(user)))
           return `${jutsu.name} is hidden`;
         return battleJutsuGateFailure(
           jutsu,
@@ -3480,7 +3480,7 @@ export const initiateBattle = async (
       client,
       attempt,
       items: entryInventory,
-      role: player?.role ?? "USER",
+      role: player ? getContentRole(player) : "USER",
       createBattle,
       didClaim: claimedEveryone,
     });

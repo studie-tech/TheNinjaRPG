@@ -20,7 +20,7 @@ import { canSetHotkeys } from "@/libs/combat/hotkeys";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { isActionRangeLimited } from "@/libs/hexgrid";
 import { cn } from "@/libs/shadui";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, getContentRole } from "@/utils/permissions";
 import { useUserDataSelector } from "@/utils/UserContext";
 import type { ZodAllTags } from "@/validators/combat";
 
@@ -106,7 +106,10 @@ interface ActionSelectorProps extends ActionSelectorSettingsProps {
 }
 
 export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
-  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
+  const { data: userData } = useUserDataSelector((u) => ({
+    role: u.role,
+    playsAsPlayer: u.playsAsPlayer,
+  }));
   // A ref callback read from `props` would make the compiler treat every prop as a ref.
   const {
     items,
@@ -120,7 +123,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
   } = props;
   const { combatMode, selectedId, currentRound, userActionPoints, onClick } = props;
   const filtered = items?.filter(
-    (i) => !i.hidden || (userData && canChangeContent(userData.role)),
+    (i) => !i.hidden || (userData && canChangeContent(getContentRole(userData))),
   );
   const base = "gap-1 text-xs";
   const grid = props.gridClassNameOverwrite || "grid grid-cols-6 md:grid-cols-7";

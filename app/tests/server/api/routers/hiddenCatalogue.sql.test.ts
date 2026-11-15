@@ -23,6 +23,7 @@ import {
 
 const contentId = "catalogue-content";
 const moderatorId = "catalogue-moderator";
+const playerViewId = "catalogue-player-view";
 const playerId = "catalogue-player";
 
 /** Viewer id; null is a signed-out visitor. */
@@ -90,8 +91,9 @@ const listNames = async (userId: Viewer) => ({
 describeWithDatabase("hidden catalogue entries", () => {
   beforeEach(async () => {
     await resetTables(userData, item, jutsu, bloodline, quest);
-    const users: { userId: string; role: UserRole }[] = [
+    const users: { userId: string; role: UserRole; playsAsPlayer?: boolean }[] = [
       { userId: contentId, role: "CONTENT" },
+      { userId: playerViewId, role: "CONTENT", playsAsPlayer: true },
       { userId: moderatorId, role: "MODERATOR" },
       { userId: playerId, role: "USER" },
     ];
@@ -127,6 +129,7 @@ describeWithDatabase("hidden catalogue entries", () => {
     const db = await getTestDatabase();
     expect(await fetchCanListHiddenContent(db, contentId)).toBe(true);
     expect(await fetchCanListHiddenContent(db, moderatorId)).toBe(false);
+    expect(await fetchCanListHiddenContent(db, playerViewId)).toBe(false);
     expect(await fetchCanListHiddenContent(db, playerId)).toBe(false);
     expect(await fetchCanListHiddenContent(db, "missing-user")).toBe(false);
     expect(await fetchCanListHiddenContent(db, null)).toBe(false);
@@ -136,6 +139,7 @@ describeWithDatabase("hidden catalogue entries", () => {
     ["a signed-out visitor", null],
     ["a player", playerId],
     ["a moderator", moderatorId],
+    ["content staff playing as a regular player", playerViewId],
   ];
   for (const [who, userId] of outsiders) {
     it(`lists only released entries for ${who} asking for hidden ones`, async () => {

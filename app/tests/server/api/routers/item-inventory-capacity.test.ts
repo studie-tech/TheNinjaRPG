@@ -237,6 +237,26 @@ describeWithDatabase("equipped items and backpack capacity", () => {
     });
   });
 
+  it("sells hidden items to content staff only while they play as staff", async () => {
+    const db = await getTestDatabase();
+    await db.update(item).set({ hidden: true }).where(eq(item.id, "backpack-item"));
+    await db
+      .update(userData)
+      .set({ role: "CONTENT", playsAsPlayer: true })
+      .where(eq(userData.userId, userId));
+    const api = await callerFor(itemRouter, userId);
+    const input = { itemId: "backpack-item", villageId, stack: 1 };
+    expect(await api.buy(input)).toMatchObject({
+      success: false,
+      message: "Item is hidden, cannot be bought",
+    });
+    await db
+      .update(userData)
+      .set({ playsAsPlayer: false })
+      .where(eq(userData.userId, userId));
+    expect((await api.buy(input)).success).toBe(true);
+  });
+
   it("buys directly into an empty equipment slot when the backpack is full", async () => {
     await fillBackpack("normal");
     const api = await callerFor(itemRouter, userId);
