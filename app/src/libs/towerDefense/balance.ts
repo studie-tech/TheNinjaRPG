@@ -62,15 +62,14 @@ export const TD_HERO_BASE = {
 const MAX_TABLE_WAVE = 5000;
 
 /** Health growth per wave; each later era grows more slowly but adds new mechanics. */
-export const tdHealthGrowth = (wave: number) =>
+const tdHealthGrowth = (wave: number) =>
   wave <= 30 ? 0.085 : wave <= 100 ? 0.068 : wave <= 300 ? 0.064 : 0.056;
 
 /**
  * Extra growth past wave 600 that bounty does not share: in-run upgrades stop keeping
  * pace, so every build eventually meets its wall.
  */
-export const tdLateRamp = (wave: number) =>
-  Math.min(0.1, Math.max(0, wave - 600) * 0.0002);
+const tdLateRamp = (wave: number) => Math.min(0.1, Math.max(0, wave - 600) * 0.0002);
 
 const buildTable = (rate: (wave: number) => number) => {
   const table = [1, 1];

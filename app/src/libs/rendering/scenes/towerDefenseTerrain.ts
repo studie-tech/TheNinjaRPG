@@ -9,7 +9,7 @@ import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { buildHexTerrainData } from "@/libs/rendering/terrainData";
 
 /** World pixels per hex; the arena maps one simulation unit to one hex width. */
-export const TD_HEX_SIZE = 100;
+const TD_HEX_SIZE = 100;
 
 /** A seeded biome arena with clear ground around the hero's zone in the centre. */
 export const prepareTowerDefenseTerrain = (seed: string, size: number) => {

@@ -596,7 +596,7 @@ export const createRun = (config: TdRunConfig, recordEvents = false): TdState =>
 const perk = (state: TdState, id: TdPerk) => state.perks[id] ?? 0;
 const shop = (state: TdState, id: TdShopItem) => state.shop[id] ?? 0;
 
-export const computeStats = (state: TdState): TdStats => {
+const computeStats = (state: TdState): TdStats => {
   const d = (id: TdDojoUpgrade) => dojoLevel(state.config, id);
   const eras = state.eras;
   const glass = powi(1.9, perk(state, "glass_cannon"));

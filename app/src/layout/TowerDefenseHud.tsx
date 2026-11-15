@@ -61,6 +61,7 @@ import {
   tdUltimateCooldownTicks,
   tdUltimateUnlocked,
 } from "@/libs/towerDefense/sim";
+import { calculatePercent } from "@/utils/math";
 
 export type TowerDefenseInputMode = "aim" | "blink" | "trap";
 
@@ -608,7 +609,7 @@ const Meter = (props: { value: number; max: number; color: string }) => (
     <div
       className={cn("h-full transition-[width] duration-150", props.color)}
       style={{
-        width: `${Math.max(0, Math.min(100, (props.value / Math.max(1, props.max)) * 100))}%`,
+        width: `${calculatePercent(props.value, props.max)}%`,
       }}
     />
     <span className="absolute inset-0 text-center text-[0.75rem] leading-3 font-semibold">

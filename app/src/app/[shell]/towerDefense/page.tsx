@@ -11,7 +11,10 @@ import {
   TD_SFX,
   type TdSfx,
 } from "@/drizzle/constants";
-import { useTowerDefenseRun } from "@/hooks/useTowerDefenseRun";
+import {
+  type TowerDefenseOutcome,
+  useTowerDefenseRun,
+} from "@/hooks/useTowerDefenseRun";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import ContentBox from "@/layout/ContentBox";
 import { type GameSettingsUser, useGameSettings } from "@/layout/GameSettings";
@@ -331,7 +334,7 @@ export default function TowerDefensePage() {
 
 const Results = (props: {
   phase: string;
-  outcome: ReturnType<typeof useTowerDefenseRun>["outcome"];
+  outcome: TowerDefenseOutcome | null;
   isGuest: boolean;
   /** The unclaimed run has no local save, so only this tab still holds it. */
   isOnlyInTab: boolean;

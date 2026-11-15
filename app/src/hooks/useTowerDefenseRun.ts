@@ -44,7 +44,7 @@ import {
 } from "@/validators/towerDefense";
 
 /** A run in progress, kept outside React so the frame loop never waits on a render. */
-export interface TowerDefenseSession {
+interface TowerDefenseSession {
   id: string;
   config: TdRunConfig;
   token: string | null;
@@ -65,7 +65,7 @@ export interface TowerDefenseSession {
   released: boolean;
 }
 
-export type TowerDefensePhase = "lobby" | "playing" | "claiming" | "over";
+type TowerDefensePhase = "lobby" | "playing" | "claiming" | "over";
 
 export interface TowerDefenseOutcome {
   wave: number;
@@ -96,39 +96,6 @@ const RETRY_SAVED_MESSAGE =
   "Could not reach the server. Your run is saved; try claiming again.";
 const RETRY_UNSAVED_MESSAGE =
   "Could not reach the server. Keep this tab open and try claiming again.";
-
-/**
- * Reconcile the Dojo progress query with confirmed purchases and claims. Callers take a
- * snapshot with `prepare` when the mutation starts and hand it to the update.
- */
-export const useTowerDefenseProgressCache = () => {
-  const utils = api.useUtils();
-  const key = useMemo(
-    () => getQueryKey(api.towerDefense.getProgress, undefined, "query"),
-    [],
-  );
-  const { prepareUpdate, updateCache } =
-    useQueryCacheUpdate<RouterOutputs["towerDefense"]["getProgress"]>(key);
-  type Snapshot = ReturnType<typeof prepareUpdate>;
-  return {
-    prepare: prepareUpdate,
-    applyPurchase: useCallback(
-      (
-        upgradeId: TdDojoUpgrade,
-        result: { level: number; pointsSpent: number },
-        snapshot: Snapshot,
-      ) => updateCache(getDojoPurchaseUpdate(upgradeId, result), snapshot),
-      [updateCache],
-    ),
-    applyClaim: useCallback(
-      (result: { pointsEarned: number; wave: number }, snapshot: Snapshot) =>
-        updateCache(getRunClaimUpdate(result), snapshot),
-      [updateCache],
-    ),
-    /** A claim whose outcome this page never saw: only the server knows the balance. */
-    refresh: useCallback(() => utils.towerDefense.getProgress.invalidate(), [utils]),
-  };
-};
 
 /**
  * Drives a tower-defense run: steps the deterministic simulation from the render loop,
@@ -689,6 +656,39 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     leave,
     discardSaved,
     buyDojo,
+  };
+};
+
+/**
+ * Reconcile the Dojo progress query with confirmed purchases and claims. Callers take a
+ * snapshot with `prepare` when the mutation starts and hand it to the update.
+ */
+const useTowerDefenseProgressCache = () => {
+  const utils = api.useUtils();
+  const key = useMemo(
+    () => getQueryKey(api.towerDefense.getProgress, undefined, "query"),
+    [],
+  );
+  const { prepareUpdate, updateCache } =
+    useQueryCacheUpdate<RouterOutputs["towerDefense"]["getProgress"]>(key);
+  type Snapshot = ReturnType<typeof prepareUpdate>;
+  return {
+    prepare: prepareUpdate,
+    applyPurchase: useCallback(
+      (
+        upgradeId: TdDojoUpgrade,
+        result: { level: number; pointsSpent: number },
+        snapshot: Snapshot,
+      ) => updateCache(getDojoPurchaseUpdate(upgradeId, result), snapshot),
+      [updateCache],
+    ),
+    applyClaim: useCallback(
+      (result: { pointsEarned: number; wave: number }, snapshot: Snapshot) =>
+        updateCache(getRunClaimUpdate(result), snapshot),
+      [updateCache],
+    ),
+    /** A claim whose outcome this page never saw: only the server knows the balance. */
+    refresh: useCallback(() => utils.towerDefense.getProgress.invalidate(), [utils]),
   };
 };
 
