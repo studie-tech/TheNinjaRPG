@@ -333,7 +333,7 @@ export const encodeLog = (actions: readonly TdAction[]) => {
 
 /**
  * Replay a recorded log up to `endTick`. Actions must be in non-decreasing tick order;
- * a run waiting on a draft with no further action at its tick stops as "stalled".
+ * a run waiting on a draft with no further action at its tick stops short of it.
  */
 export const replayRun = (
   config: TdRunConfig,

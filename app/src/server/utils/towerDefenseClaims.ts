@@ -137,11 +137,11 @@ export const verifyTowerDefenseRun = async (input: {
     await new Promise<void>((resolve) => setImmediate(resolve));
     result = advanceReplay(replay, endTick, slice);
   }
-  const { state, stop, invalidAt } = result;
+  const { state, invalidAt } = result;
   if (invalidAt !== null)
     return { ok: false, message: "The run's action log does not match its replay." };
   // The timing check trusted the claimed end tick; the replay must end exactly there.
-  if (stop !== "over" || state.tick !== endTick)
+  if (!state.over || state.tick !== endTick)
     return { ok: false, message: "This run has not ended yet." };
   return {
     ok: true,

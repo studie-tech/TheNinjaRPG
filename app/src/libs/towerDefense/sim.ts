@@ -2503,8 +2503,6 @@ const dropLoot = (state: TdState, enemy: TdEnemy) => {
 
 export interface TdReplayResult {
   state: TdState;
-  /** Why the replay stopped. */
-  stop: "over" | "end" | "stalled";
   /** Index of the first action that could not be applied in order, if any. */
   invalidAt: number | null;
 }
@@ -2545,15 +2543,14 @@ export const advanceReplay = (
       (actions[replay.index]?.[0] ?? 0) <= state.tick
     ) {
       const action = actions[replay.index];
-      if (!action || action[0] < state.tick)
-        return { state, stop: "end", invalidAt: replay.index };
+      if (!action || action[0] < state.tick) return { state, invalidAt: replay.index };
       applyAction(state, action);
       replay.index++;
     }
     const index = replay.index;
-    if (state.over) return { state, stop: "over", invalidAt: null };
+    if (state.over) return { state, invalidAt: null };
     if (state.tick >= endTick)
-      return { state, stop: "end", invalidAt: index < actions.length ? index : null };
+      return { state, invalidAt: index < actions.length ? index : null };
     if (budget <= 0) return null;
     budget--;
     const before = state.tick;
@@ -2562,11 +2559,7 @@ export const advanceReplay = (
     if (state.tick === before && !state.over) {
       // Waiting on a draft: only an action at this tick can continue the run.
       if ((actions[index]?.[0] ?? -1) !== state.tick)
-        return {
-          state,
-          stop: "stalled",
-          invalidAt: index < actions.length ? index : null,
-        };
+        return { state, invalidAt: index < actions.length ? index : null };
     }
   }
 };

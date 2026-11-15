@@ -118,7 +118,7 @@ const expectReplayMatches = (recording: Recording) => {
   });
   expect(mismatch).toBeNull();
   expect(result.invalidAt).toBeNull();
-  expect(result.stop).toBe("over");
+  expect(result.state.over).toBe(true);
   expect(result.state.tick).toBe(recording.endTick);
   expect(tdStateHash(result.state)).toBe(recording.final);
   return result;
@@ -281,7 +281,7 @@ describe("tower defense replay", () => {
       slices++;
     }
     expect(slices).toBeGreaterThan(2);
-    expect(result.stop).toBe("over");
+    expect(result.state.over).toBe(true);
     expect(result.invalidAt).toBeNull();
     expect(tdStateHash(result.state)).toBe(recording.final);
   });
@@ -307,7 +307,8 @@ describe("tower defense replay", () => {
       [],
       500,
     );
-    expect(result.stop).toBe("stalled");
+    expect(result.state.over).toBe(false);
+    expect(result.state.tick).toBeLessThan(500);
   });
 
   it("rejects logs whose actions go back in time", () => {
