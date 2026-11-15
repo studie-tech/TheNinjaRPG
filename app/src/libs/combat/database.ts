@@ -1585,6 +1585,32 @@ export const updateUser = async (
         : []),
     ];
     const drops = groupDroppedItems(curBattle, result.droppedItems);
+    /** Persist rewards and release the account after any pending drop delivery. */
+    const saveUserSettlement = async () => {
+      const save = (confirmPet: boolean) =>
+        updateUserDataForUpdateUser2(
+          client,
+          combatEnergyRecoverySql,
+          curBattle,
+          userId,
+          result,
+          settledAt,
+          facedPvpRewardOpponent,
+          user,
+          updatedQuestData,
+          tookKageSeat,
+          isIsolated,
+          confirmPet,
+        );
+      let saved = await save(confirmPetReward);
+      if (confirmPetReward) {
+        petRewardConfirmed = saved.rowsAffected === 1;
+        // Changed pet eligibility must not discard the player's battle rewards.
+        // The fallback retains the battle-ID guard and runs in this mutation phase.
+        if (!petRewardConfirmed) saved = await save(false);
+      }
+      userSettlementCommitted = saved.rowsAffected === 1;
+    };
     // Defer execution so a hunting transaction never overlaps requests on its session.
     const settlementWrites: (() => PromiseLike<unknown>)[] = [
       ...(!user.isAi
@@ -1633,32 +1659,7 @@ export const updateUser = async (
               executeRowsForUpdateUser(client, jExp, xpToLevel, user, cap, ids);
           })
         : []),
-      // Update user data
-      async () => {
-        const save = (confirmPet: boolean) =>
-          updateUserDataForUpdateUser2(
-            client,
-            combatEnergyRecoverySql,
-            curBattle,
-            userId,
-            result,
-            settledAt,
-            facedPvpRewardOpponent,
-            user,
-            updatedQuestData,
-            tookKageSeat,
-            isIsolated,
-            confirmPet,
-          );
-        let saved = await save(confirmPetReward);
-        if (confirmPetReward) {
-          petRewardConfirmed = saved.rowsAffected === 1;
-          // Changed pet eligibility must not discard the player's battle rewards.
-          // The fallback retains the battle-ID guard and runs in this mutation phase.
-          if (!petRewardConfirmed) saved = await save(false);
-        }
-        userSettlementCommitted = saved.rowsAffected === 1;
-      },
+      ...(drops.length === 0 ? [saveUserSettlement] : []),
       // A drop's top-up scans the player's stacks, so dropped items follow the battle's own
       // item writes instead of running beside them, where both would lock the same rows.
       ...(drops.length > 0
@@ -1673,8 +1674,14 @@ export const updateUser = async (
                   ).filter((write) => write.status === "rejected");
               // Drops still arrive when a write to the battle's items fails; the failure is
               // reported once they are delivered. Only AI drop items, so the loser keeps theirs.
-              for (const drop of drops)
-                await deliverDroppedItem(client, userId, user, drop, settledAt);
+              try {
+                for (const drop of drops)
+                  await deliverDroppedItem(client, userId, user, drop, settledAt);
+              } finally {
+                // Keep the claim until delivery settles so a later fight cannot preload
+                // stale quantities. Failed delivery must still release the finished battle.
+                await saveUserSettlement();
+              }
               if (failed[0]) throw failed[0].reason;
             },
           ]

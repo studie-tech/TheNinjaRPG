@@ -1,17 +1,33 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { battle, item, userData, userItem } from "@/drizzle/schema";
+import {
+  aiProfile,
+  battle,
+  battleHistory,
+  item,
+  userData,
+  userItem,
+} from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
 import type { BattleUserState, CompleteBattle, DroppedItem } from "@/libs/combat/types";
 import type { PusherClient } from "@/libs/pusher";
 import * as itemQueries from "@/queries/item";
+import { initiateBattle } from "@/server/api/routers/combat";
+import type { DrizzleClient } from "@/server/db";
 import {
   makeBattleUser,
   makeBattleUserItem,
   makeCompleteBattle,
 } from "../../setup/combat";
-import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
+import { deferred } from "../../setup/deferred";
+import {
+  insertDefaultAiProfile,
+  insertItems,
+  insertUserItems,
+  insertUsers,
+} from "../../setup/factories";
+import { beforeStatements } from "../../setup/statements";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -92,14 +108,24 @@ const drop = (itemId: keyof typeof catalog, index = 0): DroppedItem => ({
 });
 
 /** Settle a won battle for the player with the given drops. */
-const settle = async (state: CompleteBattle, drops: DroppedItem[]) => {
+const settle = async (
+  state: CompleteBattle,
+  drops: DroppedItem[],
+  client?: DrizzleClient,
+) => {
   const result = {
     ...calcBattleResult(structuredClone(state), "player")!,
     didWin: 1,
     outcome: "Won" as const,
     droppedItems: drops,
   };
-  await updateUser(await getTestDatabase(), pusher, state, result, "player");
+  await updateUser(
+    client ?? (await getTestDatabase()),
+    pusher,
+    state,
+    result,
+    "player",
+  );
 };
 
 /** The player's rows of an item as [id or "new", quantity, where], sorted. */
@@ -128,7 +154,7 @@ const stacksOf = async (itemId: string) =>
 
 describeWithDatabase("items dropped in battle", () => {
   beforeEach(async () => {
-    await resetTables(battle, userItem, item, userData);
+    await resetTables(aiProfile, battle, battleHistory, userItem, item, userData);
     await insertUsers([
       { userId: "player", username: "player", status: "BATTLE", battleId: "drops" },
     ]);
@@ -194,6 +220,96 @@ describeWithDatabase("items dropped in battle", () => {
     });
     await expect(settle(usedUp, [drop("ore")])).rejects.toThrow("fetch failed");
     expect(await stacksOf("ore")).toEqual([["new", 1, "bag"]]);
+  });
+
+  it.each(["top-up", "new-stack"] as const)(
+    "releases the finished battle when drop delivery fails at %s",
+    async (delivery) => {
+      if (delivery === "top-up")
+        vi.spyOn(itemQueries, "updateUserItemForBattleDrop").mockRejectedValue(
+          new TypeError("drop delivery failed"),
+        );
+      else
+        vi.spyOn(itemQueries, "insertUserItems").mockRejectedValue(
+          new TypeError("drop delivery failed"),
+        );
+      await expect(
+        settle(scenario(), [drop(delivery === "top-up" ? "pill" : "blade")]),
+      ).rejects.toThrow("drop delivery failed");
+      const owner = await (await getTestDatabase()).query.userData.findFirst({
+        where: eq(userData.userId, "player"),
+      });
+      expect(owner).toMatchObject({ status: "AWAKE", battleId: null });
+    },
+  );
+
+  it("holds battle admission until drops finish so the next fight preloads every unit", async () => {
+    const database = await getTestDatabase();
+    await insertDefaultAiProfile();
+    await insertUsers([{ userId: "foe", username: "foe", isAi: true, inArena: true }]);
+    await insertUserItems([
+      { id: "own-pill", userId: "player", itemId: "pill", quantity: 5 },
+    ]);
+    const deliveryReady = deferred();
+    const resumeDelivery = deferred();
+    const held = beforeStatements(
+      database,
+      userItem,
+      [
+        async () => {
+          deliveryReady.resolve();
+          await resumeDelivery.promise;
+        },
+      ],
+      { operations: ["update"] },
+    );
+    const settlement = settle(scenario(), [drop("pill")], held);
+    const startNextBattle = () =>
+      initiateBattle(
+        { client: database, userIds: ["player"], targetIds: ["foe"] },
+        "ARENA",
+      );
+    try {
+      await deliveryReady.promise;
+      await database
+        .update(userItem)
+        .set({ equipped: "ITEM_1" })
+        .where(eq(userItem.id, "own-pill"));
+      const attempted = await startNextBattle();
+      expect(attempted.success).toBe(false);
+      const owner = await database.query.userData.findFirst({
+        where: eq(userData.userId, "player"),
+      });
+      expect(owner).toMatchObject({ status: "BATTLE", battleId: "drops" });
+    } finally {
+      await database
+        .update(userItem)
+        .set({ equipped: "NONE" })
+        .where(eq(userItem.id, "own-pill"));
+      resumeDelivery.resolve();
+      await settlement;
+    }
+    await database
+      .update(userItem)
+      .set({ equipped: "ITEM_1" })
+      .where(eq(userItem.id, "own-pill"));
+    const started = await startNextBattle();
+    expect(started.success, started.message).toBe(true);
+    const next = (await database.query.battle.findFirst({
+      where: eq(battle.id, started.battleId!),
+    }))! as CompleteBattle;
+    const player = next.usersState.find((user) => user.userId === "player")!;
+    expect(player.items.find((entry) => entry.id === "own-pill")?.quantity).toBe(6);
+    // Unequipping during ordinary combat makes the row eligible for drop top-ups.
+    await database
+      .update(userItem)
+      .set({ equipped: "NONE" })
+      .where(eq(userItem.id, "own-pill"));
+    const foe = next.usersState.find((user) => user.isAi && !user.isSummon)!;
+    foe.curHealth = 0;
+    foe.leftBattle = true;
+    await settle(next, []);
+    expect(await stacksOf("pill")).toEqual([["own-pill", 6, "bag"]]);
   });
 
   it("opens a new stack when no carried stack has room", async () => {
