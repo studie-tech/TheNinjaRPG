@@ -14,6 +14,7 @@ import * as sanitizerLoader from "@/hooks/useHtmlSanitizer";
 import * as media from "@/hooks/useMediaQuery";
 import { useConversation } from "@/layout/Conversation";
 import * as pagination from "@/libs/pagination";
+import * as sanitizeModule from "@/utils/sanitize";
 import * as userContext from "@/utils/UserContext";
 import {
   flushRadixFocus,
@@ -316,6 +317,35 @@ it("shows a sent message and a reaction after success when their helpers fail to
       "👍": ["Me"],
     }),
   );
+});
+
+it("retries a failed sanitizer load when a quote is toggled and fills its preview", async () => {
+  let attempts = 0;
+  const store = sanitizerLoader.createLazyModule(async () => {
+    attempts++;
+    if (attempts === 1) throw new Error("chunk failed");
+    return sanitizeModule;
+  });
+  vi.spyOn(sanitizerLoader, "useHtmlSanitizer").mockImplementation((enabled) => {
+    const { module, failed } = sanitizerLoader.useLazyModule(store, enabled);
+    return { sanitizer: module, failed };
+  });
+  vi.spyOn(sanitizerLoader, "loadHtmlSanitizer").mockImplementation(() => store.load());
+  const hook = mount(true, [
+    row("a", "Alpha"),
+    row("b", '<p>Bravo</p><blockquote author="C">Nested</blockquote>', "Peer"),
+  ]);
+  await loaded(hook);
+  await waitFor(() => expect(attempts).toBe(1));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(hook.result.current.sanitizer).toBeUndefined();
+  act(() => hook.result.current.toggleQuoteId("b"));
+  await waitFor(() => expect(hook.result.current.sanitizer).toBeDefined());
+  expect(attempts).toBe(2);
+  expect(hook.result.current.quoteIds).toEqual(["b"]);
+  const quoted =
+    hook.result.current.allComments?.find((c) => c.id === "b")?.content ?? "";
+  expect(hook.result.current.sanitizer?.stripBlockquotes(quoted)).toBe("<p>Bravo</p>");
 });
 
 it("keeps non-matching new messages out of search results and shows matching ones", async () => {
