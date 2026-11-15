@@ -165,10 +165,24 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
       success: false,
       permanent: true,
     });
-    // A page on older rules is sent to reload and resume, keeping its save.
+    // A log that cannot be decoded is refused for good, after every cheaper check.
+    expect(await api.claimRun({ ...claim, actions: "not a log" })).toMatchObject({
+      success: false,
+      permanent: true,
+      message: "This run's record could not be read.",
+    });
+    // A page on older rules is sent to reload and resume, keeping its save, even when
+    // these rules can no longer read its log.
     const outdated = await api.claimRun({ ...claim, simVersion: TD_SIM_VERSION - 1 });
     expect(outdated).toMatchObject({ success: false, reloadRequired: true });
     expect(outdated.permanent).toBeUndefined();
+    expect(
+      await api.claimRun({
+        ...claim,
+        actions: "not a log",
+        simVersion: TD_SIM_VERSION - 1,
+      }),
+    ).toMatchObject({ success: false, reloadRequired: true });
     env.TOWER_DEFENSE_CLAIMS_ENABLED = undefined;
     const paused = await api.claimRun(claim);
     expect(paused).toMatchObject({ success: false, claimsPaused: true });

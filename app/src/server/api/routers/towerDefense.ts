@@ -146,23 +146,9 @@ export const towerDefenseRouter = createTRPCRouter({
     .input(
       z.object({
         token: z.string().min(1).max(8000),
-        // The compact encoding of `libs/towerDefense/actionLog`, decoded and validated in
-        // one pass: a long log has hundreds of thousands of actions.
-        actions: z
-          .string()
-          .max(TD_MAX_LOG_CHARS)
-          .transform((text, context) => {
-            const actions = decodeTdActions(text, {
-              maxTick: TD_MAX_TICKS,
-              maxActions: TD_MAX_ACTIONS,
-            });
-            if (actions) return actions;
-            context.addIssue({
-              code: "custom",
-              message: "The action log is malformed",
-            });
-            return z.NEVER;
-          }),
+        // The compact encoding of `libs/towerDefense/actionLog`. A long log has hundreds of
+        // thousands of actions, so it is decoded only once the claim is otherwise allowed.
+        actions: z.string().max(TD_MAX_LOG_CHARS),
         endTick: z.int().min(0).max(TD_MAX_TICKS),
         /** `TD_SIM_VERSION` of the page that played the run. */
         simVersion: z.int(),
@@ -223,9 +209,14 @@ export const towerDefenseRouter = createTRPCRouter({
           points: receipt.pointsEarned,
         });
       if (!canReplay) return errorResponse(TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE);
+      const actions = decodeTdActions(input.actions, {
+        maxTick: TD_MAX_TICKS,
+        maxActions: TD_MAX_ACTIONS,
+      });
+      if (!actions) return refusedForGood("This run's record could not be read.");
       const result = await verifyTowerDefenseRun({
         token,
-        actions: input.actions,
+        actions,
         endTick: input.endTick,
         now,
       });
