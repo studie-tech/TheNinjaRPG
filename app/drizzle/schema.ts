@@ -6797,7 +6797,6 @@ export const towerDefenseRun = mysqlTable(
         table.id,
       ),
       waveScoreIdx: index("TowerDefenseRun_wave_score_idx").on(table.wave, table.score),
-      startedAtIdx: index("TowerDefenseRun_startedAt_idx").on(table.startedAt),
     };
   },
 );
