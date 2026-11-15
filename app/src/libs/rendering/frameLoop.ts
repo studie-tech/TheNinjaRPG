@@ -1,10 +1,10 @@
-/** Frame rate a continuous scene presents at when it requests none, also the cap for every scene. */
+/** Default and maximum requested scene frame rate; whole-refresh pacing can present above it. */
 export const MAX_FRAME_RATE = 60;
 /** While only slow decorative motion plays: water, sway, pulses and loops of at most this rate. */
 export const AMBIENT_FRAME_RATE = 30;
 /** While motion is frozen and only clock-driven lighting or late artwork can change the picture. */
 export const STILL_FRAME_RATE = 1;
-/** Assumed until measured; a high refresh rate keeps the first frames on faster displays capped. */
+/** Assumed until measured so initial frames use a paced interval on high-refresh displays. */
 const DEFAULT_REFRESH_MS = 1000 / 120;
 /** Consecutive callback gaps sampled for the refresh estimate; longer gaps are stalls, not vsyncs. */
 const REFRESH_SAMPLES = 15;

@@ -26,7 +26,7 @@ const frames = createFrameLoop(
  * Owns the renderer, frame subscription, input listeners and texture leases together.
  * Abort or dispose releases them once. Initialization rejects; frame failures dispose
  * the scene and call onError. Hidden/offscreen canvases suspend their frame subscription.
- * Every scene presents at most MAX_FRAME_RATE frames per second, on whole display refreshes.
+ * Scenes request at most MAX_FRAME_RATE; whole-refresh pacing can present above that target.
  */
 export const createGameRenderer = async (options: {
   lpcCatalog?: LpcCatalog;
@@ -315,7 +315,7 @@ export const createGameRenderer = async (options: {
     },
     /**
      * False renders only after invalidation; true keeps visible scenes presenting at
-     * frameRate, which slows ambient-only motion. Invalidations still present promptly.
+     * the requested target rate, which slows ambient-only motion. Invalidations still present promptly.
      */
     setAnimating: (value: boolean, rate = MAX_FRAME_RATE) => {
       const nextRate = Math.min(MAX_FRAME_RATE, rate);

@@ -169,7 +169,7 @@ describe("renderer context loss", () => {
     for (let tick = 41; tick <= 60; tick++) runFrame(1000 + tick * refresh);
     expect(render).toHaveBeenCalledTimes(10);
     for (const delta of deltas) expect(delta).toBeCloseTo(2 * refresh * 0.001, 5);
-    // Invalidation never waits out a slower rate, but still respects the display cap.
+    // Invalidation never waits out a slower rate, but still respects the display cadence.
     game.setAnimating(true, 30);
     for (let tick = 61; tick <= 84; tick++) runFrame(1000 + tick * refresh);
     render.mockClear();
@@ -251,7 +251,7 @@ describe("shared renderer frame loop", () => {
     );
     const leave = loop.subscribe(() => {});
     let now = 0;
-    // Refreshes per presented frame at 60 fps: 60 and 90 Hz present every refresh,
+    // Refreshes per presented frame with a 60 fps target: 60 and 90 Hz present every refresh,
     // 120 and 144 Hz every second one (60 and 72 fps), 240 Hz every fourth.
     for (const [hz, vsyncs] of [
       [60, 1],
