@@ -1257,13 +1257,7 @@ export const combatRouter = createTRPCRouter({
       // Skip jutsu combat would strip, plus hidden jutsu as the Jutsu page does, so
       // they neither fill equip slots nor persist as equipped.
       const validateLobbyJutsu = (jutsu: Jutsu) => {
-        // Battles started before the setting existed carry no `playsAsPlayer`.
-        if (
-          jutsu.hidden &&
-          !canChangeContent(
-            getContentRole({ ...user, playsAsPlayer: user.playsAsPlayer ?? false }),
-          )
-        )
+        if (jutsu.hidden && !canChangeContent(getContentRole(user)))
           return `${jutsu.name} is hidden`;
         return battleJutsuGateFailure(
           jutsu,
