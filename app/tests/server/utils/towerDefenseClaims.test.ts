@@ -197,7 +197,7 @@ describe("tower defense claim pre-checks", () => {
         endTick: 12_000,
         now: tenMinutes,
       }),
-    ).not.toBeNull();
+    ).toMatchObject({ permanent: false });
     expect(
       checkTowerDefenseClaimTiming({
         token: { ...payload, dojo: { speed: 4 } },
@@ -211,7 +211,7 @@ describe("tower defense claim pre-checks", () => {
         endTick: 0,
         now: payload.issuedAt + TD_TOKEN_LIFETIME_MS + 1,
       }),
-    ).not.toBeNull();
+    ).toMatchObject({ permanent: true });
   });
 
   it("reserves replays through their own limiter", async () => {

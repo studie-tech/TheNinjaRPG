@@ -277,6 +277,12 @@ export default function TowerDefensePage() {
               act={act}
               aim={aim}
             />
+            {run.unsaved && (
+              <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
+                This run can no longer be saved on this device. Finish it in this tab: a
+                reload would lose the progress since its last save.
+              </p>
+            )}
             <TowerDefensePanel state={state} act={act} />
           </>
         )}
@@ -313,6 +319,11 @@ const Results = (props: {
             {!props.outcome.claimed && props.outcome.retryable && !props.isGuest && (
               <Button variant="outline" onClick={props.onRetry}>
                 Retry claim
+              </Button>
+            )}
+            {props.outcome.reloadRequired && (
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Reload
               </Button>
             )}
             <Button onClick={props.onLeave}>Back to the Dojo</Button>

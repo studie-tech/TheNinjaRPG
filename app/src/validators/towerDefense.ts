@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { decodeTdActions } from "@/libs/towerDefense/actionLog";
 import { TD_DOJO } from "@/libs/towerDefense/content";
 
 /** Longest run a claim may replay: about 14 hours of game time. */
@@ -11,25 +10,6 @@ export const TD_MAX_ACTIONS = 300_000;
  * limit of a serverless function. The client ends a run before its log outgrows it.
  */
 export const TD_MAX_LOG_CHARS = 4_000_000;
-
-const tick = z.int().min(0).max(TD_MAX_TICKS);
-
-/**
- * An action log in the compact encoding of `libs/towerDefense/actionLog`, decoded and
- * validated in one pass: a long log has hundreds of thousands of actions.
- */
-export const towerDefenseActionsSchema = z
-  .string()
-  .max(TD_MAX_LOG_CHARS)
-  .transform((text, context) => {
-    const actions = decodeTdActions(text, {
-      maxTick: TD_MAX_TICKS,
-      maxActions: TD_MAX_ACTIONS,
-    });
-    if (actions) return actions;
-    context.addIssue({ code: "custom", message: "The action log is malformed" });
-    return z.NEVER;
-  });
 
 /** Dojo levels as signed into a run. */
 export const towerDefenseDojoSchema = z.partialRecord(z.enum(TD_DOJO), z.int().min(0));
@@ -46,9 +26,3 @@ export const towerDefenseRunTokenSchema = z.object({
   issuedAt: z.int(),
 });
 export type TowerDefenseRunToken = z.infer<typeof towerDefenseRunTokenSchema>;
-
-export const claimTowerDefenseRunSchema = z.object({
-  token: z.string().min(1).max(8000),
-  actions: towerDefenseActionsSchema,
-  endTick: tick,
-});

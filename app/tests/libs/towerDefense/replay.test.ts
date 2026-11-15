@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { encodeTdActions } from "@/libs/towerDefense/actionLog";
+import { decodeTdActions, encodeTdActions } from "@/libs/towerDefense/actionLog";
 import {
   TD_DOJO,
   TD_DOJO_INFO,
@@ -19,13 +20,14 @@ import {
   replayRun,
   stepRun,
   TD_BOSS_MOVES,
+  TD_SIM_VERSION,
   type TdAction,
   type TdActionKind,
   type TdEvent,
   type TdRunConfig,
   tdStateHash,
 } from "@/libs/towerDefense/sim";
-import { towerDefenseActionsSchema } from "@/validators/towerDefense";
+import { TD_MAX_ACTIONS, TD_MAX_TICKS } from "@/validators/towerDefense";
 import { botAct } from "./bot";
 
 /** Every Dojo upgrade at a solid level, all ultimates and sentries unlocked. */
@@ -108,9 +110,13 @@ const record = (
   };
 };
 
-/** Replay through the claim's encoding and schema round trip, comparing every fingerprint. */
+/** Replay through the claim's encoding round trip, comparing every fingerprint. */
 const expectReplayMatches = (recording: Recording) => {
-  const parsed = towerDefenseActionsSchema.parse(encodeTdActions(recording.log));
+  const parsed = decodeTdActions(encodeTdActions(recording.log), {
+    maxTick: TD_MAX_TICKS,
+    maxActions: TD_MAX_ACTIONS,
+  });
+  if (!parsed) throw new Error("The recorded log does not decode");
   // JSON equality: the wire, like JSON, carries -0 as 0.
   expect(JSON.stringify(parsed)).toBe(JSON.stringify(recording.log));
   let mismatch: number | null = null;
@@ -355,6 +361,15 @@ describe("tower defense replay", () => {
     expect(applyAction(state, [state.tick, "buy", "damage"])).toBe(false);
   });
 
+  it("pins how recorded runs replay to TD_SIM_VERSION", () => {
+    // A new fingerprint means recorded runs replay differently: bump TD_SIM_VERSION with
+    // it, so pages still on the previous rules reload instead of failing their claims.
+    expect({ version: TD_SIM_VERSION, fingerprint: rulesFingerprint() }).toEqual({
+      version: 1,
+      fingerprint: "9a0ef1a1f039a480753c9c23e71920fe04e2d498173073f5c20d8c630e4cfe84",
+    });
+  });
+
   it("keeps engine-dependent maths out of the deterministic modules", () => {
     for (const file of ["sim.ts", "rng.ts", "balance.ts", "content.ts"]) {
       const source = readFileSync(
@@ -370,3 +385,30 @@ describe("tower defense replay", () => {
     }
   });
 });
+
+/** A digest of bot runs across the game's stages, their logs and their states. */
+const rulesFingerprint = () => {
+  const digest = createHash("sha256");
+  for (const [seed, startWave, scale, chaos] of [
+    ["fresh-1", 1, 0, 0],
+    ["vet-a", 60, 0.25, 0],
+    ["vet-c", 200, 0.6, 0],
+    ["fuzz-1", 30, 0.3, 0.35],
+  ] as const) {
+    const state = createRun(
+      { seed, startWave, bestWave: startWave * 2, dojo: veteranDojo(scale) },
+      true,
+    );
+    const rng = seededRandom(seed.length * 7919 + startWave);
+    const log: TdAction[] = [];
+    while (!state.over && state.tick < 12_000) {
+      log.push(...botAct(state, { rng, chaos }));
+      stepRun(state);
+      state.events.length = 0;
+      if (state.tick % 500 === 0) digest.update(tdStateHash(state));
+    }
+    digest.update(tdStateHash(state));
+    digest.update(encodeTdActions(log));
+  }
+  return digest.digest("hex");
+};

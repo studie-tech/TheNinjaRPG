@@ -12,6 +12,12 @@ import type { TdAction, TdRunConfig } from "@/libs/towerDefense/sim";
 
 /** Actions per sealed chunk. */
 export const TD_LOG_CHUNK_ACTIONS = 2048;
+/**
+ * Longest log saved locally. Browsers give an origin about 5 MB of local storage, shared
+ * with the rest of the game and counted in UTF-16 by some, so a longer run keeps its
+ * last save instead of crowding out every other stored setting.
+ */
+export const TD_SAVED_LOG_MAX_CHARS = 1_000_000;
 
 /** An encoded action log being recorded. */
 export interface TdLogWriter {
@@ -62,6 +68,24 @@ export const createLogWriter = (
     lastTick: actions?.at(-1)?.[0] ?? 0,
     stored: sealed.length,
   };
+};
+
+/**
+ * The log to continue a run resumed by replaying its save. A replay that applied every
+ * action and reached the saved tick continues the stored log. One that stopped short
+ * (rules changed by a deploy can end or stall it earlier) continues from where it
+ * stopped, with a log of only the actions it applied, so the log describes that run.
+ */
+export const resumeLogWriter = (
+  saved: { chunks: string[]; tail: string; tick: number },
+  actions: readonly TdAction[],
+  replay: { index: number; state: { tick: number } },
+): { complete: boolean; log: TdLogWriter } => {
+  if (replay.index === actions.length && replay.state.tick === saved.tick)
+    return { complete: true, log: createLogWriter(saved, actions) };
+  const log = createLogWriter();
+  for (const action of actions.slice(0, replay.index)) appendToLog(log, action);
+  return { complete: false, log };
 };
 
 /** Record an action, sealing the tail once it holds a full chunk. */

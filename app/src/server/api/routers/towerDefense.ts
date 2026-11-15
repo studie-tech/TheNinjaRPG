@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
+import { decodeTdActions } from "@/libs/towerDefense/actionLog";
 import {
   TD_DOJO,
   TD_DOJO_INFO,
@@ -8,7 +9,7 @@ import {
   type TdDojoUpgrade,
   tdCheckpoints,
 } from "@/libs/towerDefense/content";
-import { tdDojoAvailable, tdDojoCost } from "@/libs/towerDefense/sim";
+import { TD_SIM_VERSION, tdDojoAvailable, tdDojoCost } from "@/libs/towerDefense/sim";
 import {
   findTowerDefenseClaimReceipt,
   findTowerDefenseProgress,
@@ -46,7 +47,9 @@ import {
   verifyRunToken,
 } from "@/server/utils/towerDefenseCrypto";
 import {
-  claimTowerDefenseRunSchema,
+  TD_MAX_ACTIONS,
+  TD_MAX_LOG_CHARS,
+  TD_MAX_TICKS,
   type TowerDefenseRunToken,
 } from "@/validators/towerDefense";
 
@@ -135,14 +138,41 @@ export const towerDefenseRouter = createTRPCRouter({
    * and pays out what the replay earned. Everything that can refuse a claim without the
    * replay runs first, and replays have their own tighter limit. The receipt keyed on
    * the run nonce is inserted before anything is granted, so each run pays out once.
+   * `permanent` marks refusals that claiming the same run again can only repeat.
    */
   claimRun: protectedProcedure
     .meta({ mcp: { description: "Claim a finished tower defense run" } })
     .use(ratelimitMiddleware)
-    .input(claimTowerDefenseRunSchema)
+    .input(
+      z.object({
+        token: z.string().min(1).max(8000),
+        // The compact encoding of `libs/towerDefense/actionLog`, decoded and validated in
+        // one pass: a long log has hundreds of thousands of actions.
+        actions: z
+          .string()
+          .max(TD_MAX_LOG_CHARS)
+          .transform((text, context) => {
+            const actions = decodeTdActions(text, {
+              maxTick: TD_MAX_TICKS,
+              maxActions: TD_MAX_ACTIONS,
+            });
+            if (actions) return actions;
+            context.addIssue({
+              code: "custom",
+              message: "The action log is malformed",
+            });
+            return z.NEVER;
+          }),
+        endTick: z.int().min(0).max(TD_MAX_TICKS),
+        /** `TD_SIM_VERSION` of the page that played the run. */
+        simVersion: z.int(),
+      }),
+    )
     .output(
       baseServerResponse.extend({
         claimsPaused: z.boolean().optional(),
+        permanent: z.boolean().optional(),
+        reloadRequired: z.boolean().optional(),
         alreadyClaimed: z.boolean().optional(),
         pointsEarned: z.number().optional(),
         wave: z.number().optional(),
@@ -155,18 +185,33 @@ export const towerDefenseRouter = createTRPCRouter({
           ...errorResponse(TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE),
           claimsPaused: true,
         };
+      // A page on older rules played a run this replay would not reproduce. Reloading
+      // resumes its save under these rules, which the claim then replays exactly.
+      if (input.simVersion !== TD_SIM_VERSION)
+        return {
+          ...errorResponse(
+            "Tower defense was updated during your run. Reload the page to resume it and claim it.",
+          ),
+          reloadRequired: true,
+        };
       const token = verifyRunToken(input.token);
-      if (!token) return errorResponse("This run's token is invalid.");
+      if (!token) return refusedForGood("This run's token is invalid.");
       if (token.userId !== ctx.userId)
-        return errorResponse("This run belongs to another player.");
+        return refusedForGood("This run belongs to another player.");
       const now = Date.now();
       const refused = checkTowerDefenseClaimTiming({
         token,
         endTick: input.endTick,
         now,
       });
-      if (refused) return errorResponse(refused);
+      if (refused)
+        return refused.permanent
+          ? refusedForGood(refused.message)
+          : errorResponse(refused.message);
       const claimKey = towerDefenseClaimKey(token.nonce);
+      // The replay slot is reserved alongside the receipt lookup to keep one round trip.
+      // A retry of a run already paid spends a slot it does not use, which only happens
+      // when a claim's response is lost.
       const [receipt, canReplay] = await Promise.all([
         findTowerDefenseClaimReceipt(ctx.drizzle, claimKey),
         reserveTowerDefenseReplay(ctx.userId),
@@ -184,7 +229,8 @@ export const towerDefenseRouter = createTRPCRouter({
         endTick: input.endTick,
         now,
       });
-      if (!result.ok) return errorResponse(result.message);
+      // The replay is deterministic, so a refused log stays refused.
+      if (!result.ok) return refusedForGood(result.message);
       try {
         await insertTowerDefenseClaimReceipt(ctx.drizzle, ctx, {
           claimKey,
@@ -285,6 +331,12 @@ export const towerDefenseRouter = createTRPCRouter({
     .query(async ({ ctx, input }) =>
       listTowerDefenseRunForGetLeaderboard(ctx.drizzle, input),
     ),
+});
+
+/** A refusal the same claim can never overcome; the client discards the run. */
+const refusedForGood = (message: string) => ({
+  ...errorResponse(message),
+  permanent: true,
 });
 
 /** The answer to a run that has already paid out, with what it earned then. */

@@ -64,20 +64,25 @@ export type TowerDefenseClaimResult =
 /**
  * Refuse what the token and claimed length alone rule out: an expired token, or a run
  * longer than the time since it started allows at the unlocked game speed. It costs
- * nothing, so it runs before the replay.
+ * nothing, so it runs before the replay. An expired token stays expired; a run that
+ * seems too fast can pass later, once the elapsed time covers it.
  */
 export const checkTowerDefenseClaimTiming = (input: {
   token: TowerDefenseRunToken;
   endTick: number;
   now: number;
-}): string | null => {
+}): { message: string; permanent: boolean } | null => {
   const elapsed = input.now - input.token.issuedAt;
-  if (elapsed > TD_TOKEN_LIFETIME_MS) return "This run is too old to claim.";
+  if (elapsed > TD_TOKEN_LIFETIME_MS)
+    return { message: "This run is too old to claim.", permanent: true };
   const fastestMs =
     (input.endTick * 1000) / TD_TPS / tdMaxSpeed(input.token.dojo.speed ?? 0) -
     TD_TIME_SLACK_MS;
   if (elapsed < fastestMs)
-    return "This run finished faster than the game can be played.";
+    return {
+      message: "This run finished faster than the game can be played.",
+      permanent: false,
+    };
   return null;
 };
 
@@ -90,7 +95,7 @@ export const verifyTowerDefenseRun = (input: {
 }): TowerDefenseClaimResult => {
   const { token, actions, endTick } = input;
   const refused = checkTowerDefenseClaimTiming(input);
-  if (refused) return { ok: false, message: refused };
+  if (refused) return { ok: false, message: refused.message };
   const { state, stop, invalidAt } = replayRun(
     {
       seed: token.seed,

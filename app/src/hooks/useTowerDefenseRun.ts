@@ -10,7 +10,7 @@ import {
 } from "@/deltas/towerDefense";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { showMutationToast } from "@/libs/toast";
-import { decodeTdActions } from "@/libs/towerDefense/actionLog";
+import { decodeTdActions, isTdActionEncodable } from "@/libs/towerDefense/actionLog";
 import { TD_TICK_SECONDS, tdMaxSpeed } from "@/libs/towerDefense/balance";
 import type { TdDojoUpgrade } from "@/libs/towerDefense/content";
 import {
@@ -20,7 +20,9 @@ import {
   encodedLog,
   loadRun,
   readSavedRunHead,
+  resumeLogWriter,
   saveRun,
+  TD_SAVED_LOG_MAX_CHARS,
   type TdLogWriter,
 } from "@/libs/towerDefense/savedRun";
 import {
@@ -29,9 +31,11 @@ import {
   createReplay,
   createRun,
   stepRun,
+  TD_SIM_VERSION,
   type TdAction,
   type TdCommand,
   type TdEvent,
+  type TdReplay,
   type TdRunConfig,
   type TdState,
 } from "@/libs/towerDefense/sim";
@@ -56,6 +60,8 @@ export interface TowerDefenseSession {
   claimStarted: boolean;
   /** Counts accepted actions, so the HUD can tell when a paused run changed. */
   version: number;
+  /** Whether the latest save failed or the log outgrew local storage. */
+  unsaved: boolean;
 }
 
 export type TowerDefensePhase = "lobby" | "playing" | "claiming" | "over";
@@ -67,6 +73,8 @@ export interface TowerDefenseOutcome {
   claimed: boolean;
   /** Whether claiming again could still succeed. */
   retryable: boolean;
+  /** The page runs older rules than the server; a reload resumes the saved run. */
+  reloadRequired: boolean;
   message: string | null;
   quit: boolean;
 }
@@ -75,8 +83,10 @@ export interface TowerDefenseOutcome {
 const MAX_TICKS_PER_FRAME = 40;
 const SAVE_INTERVAL_MS = 4000;
 const HUD_REFRESH_MS = 150;
-/** Ticks replayed per slice when resuming, so a long run restores without freezing. */
-const RESUME_SLICE_TICKS = 10_000;
+/** Time a resume replays before yielding, so a long run restores without freezing. */
+const RESUME_SLICE_MS = 8;
+/** Ticks replayed between clock checks while resuming. */
+const RESUME_STEP_TICKS = 250;
 /** Room kept in the log for the retreat that ends a run at its length limit. */
 const LOG_RESERVE_CHARS = 64;
 const LOG_LIMITS = { maxTick: TD_MAX_TICKS, maxActions: TD_MAX_ACTIONS };
@@ -138,10 +148,8 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const storageKey = `towerDefenseRun:${userId ?? "guest"}`;
   const session = useRef<TowerDefenseSession | null>(null);
   const lastSave = useRef(0);
-  /** The latest published snapshot and what it was taken at. */
-  const published = useRef<{ hud: TdState; tick: number; version: number } | null>(
-    null,
-  );
+  /** What the latest published snapshot was taken at. */
+  const published = useRef<{ tick: number; version: number } | null>(null);
   /** Identifies the resume in flight; replacing it cancels the previous one. */
   const resuming = useRef<object | null>(null);
   const [phase, setPhase] = useState<TowerDefensePhase>("lobby");
@@ -149,6 +157,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const [outcome, setOutcome] = useState<TowerDefenseOutcome | null>(null);
   const [saved, setSaved] = useState<{ wave: number; tick: number } | null>(null);
   const [isResuming, setIsResuming] = useState(false);
+  const [unsaved, setUnsaved] = useState(false);
   /** An immutable copy of the run for rendering; the live state stays in `session`. */
   const [hud, setHud] = useState<TdState | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -162,6 +171,12 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const { mutateAsync: purchase, isPending: isPurchasing } =
     api.towerDefense.purchaseDojoUpgrade.useMutation();
 
+  const markUnsaved = useCallback((current: TowerDefenseSession, value: boolean) => {
+    if (current.unsaved === value) return;
+    current.unsaved = value;
+    setUnsaved(value);
+  }, []);
+
   const persist = useCallback(
     (force = false) => {
       const current = session.current;
@@ -169,6 +184,11 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       const now = Date.now();
       if (!force && now - lastSave.current < SAVE_INTERVAL_MS) return;
       lastSave.current = now;
+      // Past the local limit the last save stays as it is, resumable from where it was.
+      if (current.log.chars > TD_SAVED_LOG_MAX_CHARS) {
+        markUnsaved(current, true);
+        return;
+      }
       try {
         saveRun(
           localStorage,
@@ -183,12 +203,20 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
           },
           current.log,
         );
+        markUnsaved(current, false);
       } catch {
-        // Storage can be full or blocked; the run keeps playing, it just will not resume.
+        // Storage can be full or blocked; the run keeps playing and the player is told
+        // that a reload would lose it.
+        markUnsaved(current, true);
       }
     },
-    [storageKey],
+    [markUnsaved, storageKey],
   );
+
+  /** The save as storage now holds it, for the lobby. */
+  const refreshSaved = useCallback(() => {
+    setSaved(readSavedSummary(storageKey));
+  }, [storageKey]);
 
   const forget = useCallback(() => {
     try {
@@ -198,14 +226,13 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   }, [storageKey]);
 
   useEffect(() => {
-    setSaved(readSavedSummary(storageKey));
-  }, [storageKey]);
+    refreshSaved();
+  }, [refreshSaved]);
 
-  /** Publish a snapshot for the HUD, reusing whatever did not change since the last. */
+  /** Publish a snapshot for the HUD. */
   const publish = useCallback((current: TowerDefenseSession) => {
-    const hud = snapshotRun(current.state, published.current?.hud ?? null);
-    published.current = { hud, tick: current.state.tick, version: current.version };
-    setHud(hud);
+    published.current = { tick: current.state.tick, version: current.version };
+    setHud(snapshotRun(current.state));
   }, []);
 
   const claim = useCallback(async () => {
@@ -220,8 +247,9 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       quit: state.quit,
     };
     persist(true);
+    const unsettled = { ...base, claimed: false, reloadRequired: false };
     if (!current.token) {
-      setOutcome({ ...base, claimed: false, retryable: false, message: null });
+      setOutcome({ ...unsettled, retryable: false, message: null });
       setPhase("over");
       forget();
       return;
@@ -232,6 +260,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       token: current.token,
       actions: encodedLog(current.log),
       endTick: state.tick,
+      simVersion: TD_SIM_VERSION,
     }).then(
       (result) => ({ result }),
       (error: unknown) => ({ error }),
@@ -245,9 +274,9 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       // The server refused to read the log itself; resubmitting it cannot change that.
       const rejected = code === "BAD_REQUEST";
       if (rejected) forget();
+      else refreshSaved();
       setOutcome({
-        ...base,
-        claimed: false,
+        ...unsettled,
         retryable: !rejected,
         message: rejected
           ? "This run's record could not be read, so it cannot be claimed."
@@ -269,16 +298,20 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       // An earlier attempt paid out, but its response never arrived.
       void refresh();
       forget();
-    }
+    } else if (result.permanent) {
+      // The server refused the run itself; claiming it again can only repeat that.
+      forget();
+    } else refreshSaved();
     setOutcome({
       ...base,
       points: result.pointsEarned ?? base.points,
       claimed: result.success || !!result.alreadyClaimed,
-      retryable: true,
+      retryable: !result.permanent && !result.reloadRequired,
+      reloadRequired: !!result.reloadRequired,
       message: result.message,
     });
     setPhase("over");
-  }, [applyClaim, claimRun, forget, persist, prepare, refresh]);
+  }, [applyClaim, claimRun, forget, persist, prepare, refresh, refreshSaved]);
 
   /** End the run with a retreat, as the player could; used at the run's length limits. */
   const retreat = useCallback(
@@ -316,8 +349,10 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         events: [],
         claimStarted: false,
         version: 0,
+        unsaved: false,
       };
       published.current = null;
+      setUnsaved(false);
       setOutcome(null);
       setSpeedState(1);
       setPhase("playing");
@@ -360,17 +395,29 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     setIsResuming(true);
     const step = () => {
       if (resuming.current !== ticket) return;
-      const result = advanceReplay(replay, head.tick, { ticks: RESUME_SLICE_TICKS });
+      const result = advanceReplayFor(replay, head.tick, RESUME_SLICE_MS);
       if (!result) {
         setTimeout(step, 0);
         return;
       }
       resuming.current = null;
       setIsResuming(false);
-      begin(head.config, head.token, {
-        state: result.state,
-        log: createLogWriter({ chunks, tail }, actions),
-      });
+      const { complete, log } = resumeLogWriter(
+        { chunks, tail, tick: head.tick },
+        actions,
+        replay,
+      );
+      if (!complete) {
+        // The save is rewritten from the shorter log.
+        try {
+          clearRun(localStorage, storageKey);
+        } catch {}
+        showMutationToast({
+          success: false,
+          message: `The game was updated since this run was saved, so it resumed at wave ${result.state.wave}.`,
+        });
+      }
+      begin(head.config, head.token, { state: result.state, log });
     };
     step();
   }, [begin, forget, storageKey]);
@@ -391,8 +438,10 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       const action = [
         current.state.tick,
         ...command.map((value) => (value === 0 ? 0 : value)),
-      ] as TdAction;
-      if (!applyAction(current.state, action)) return false;
+      ];
+      // Only what the log can carry is played, so a claim replays exactly this run.
+      if (!isTdActionEncodable(action) || !applyAction(current.state, action))
+        return false;
       appendToLog(current.log, action);
       current.version++;
       current.events.push(...current.state.events);
@@ -463,11 +512,13 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     published.current = null;
     resuming.current = null;
     setIsResuming(false);
+    setUnsaved(false);
     setOutcome(null);
     setRunId(null);
     setHud(null);
     setPhase("lobby");
-  }, []);
+    refreshSaved();
+  }, [refreshSaved]);
 
   // Publish a fresh snapshot a few times a second while the run is on screen, skipping
   // refreshes while nothing moved (a draft, the claim or the results).
@@ -537,6 +588,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     speed,
     outcome,
     saved,
+    unsaved,
     isStarting,
     isResuming,
     isPurchasing,
@@ -578,51 +630,29 @@ const loadSaved = (key: string) => {
   return actions ? { ...stored, actions } : null;
 };
 
-/**
- * A copy of everything the HUD reads, so a render never observes the live run. Parts
- * equal to the previous snapshot keep its objects, so memoized HUD pieces that read
- * only those parts skip re-rendering.
- */
-const snapshotRun = (state: TdState, previous: TdState | null): TdState => ({
+/** A copy of everything the HUD reads, so a render never observes the live run. */
+const snapshotRun = (state: TdState): TdState => ({
   ...state,
-  hero: {
-    ...state.hero,
-    seals: reuseArray(state.hero.seals, previous?.hero.seals),
-  },
-  shop: reuseRecord(state.shop, previous?.shop),
-  perks: reuseRecord(state.perks, previous?.perks),
-  offer: state.offer ? reuseArray(state.offer, previous?.offer ?? undefined) : null,
-  jutsuReadyAt: reuseRecord(state.jutsuReadyAt, previous?.jutsuReadyAt),
-  ultReadyAt: reuseRecord(state.ultReadyAt, previous?.ultReadyAt),
-  sentries: reuseArray(
-    state.sentries.map((sentry, slot) => {
-      const before = previous?.sentries[slot];
-      return sentry ? (before ? reuseRecord(sentry, before) : { ...sentry }) : null;
-    }),
-    previous?.sentries,
-  ),
+  hero: { ...state.hero, seals: [...state.hero.seals] },
+  shop: { ...state.shop },
+  perks: { ...state.perks },
+  offer: state.offer ? [...state.offer] : null,
+  jutsuReadyAt: { ...state.jutsuReadyAt },
+  ultReadyAt: { ...state.ultReadyAt },
+  sentries: state.sentries.map((sentry) => (sentry ? { ...sentry } : null)),
   enemies: [...state.enemies],
-  eras: reuseArray(state.eras, previous?.eras),
+  eras: [...state.eras],
   events: [],
 });
 
-/** A copy of `next`, or `previous` itself when it holds the same items. */
-const reuseArray = <T>(next: readonly T[], previous: readonly T[] | undefined): T[] =>
-  previous &&
-  previous.length === next.length &&
-  next.every((item, index) => item === previous[index])
-    ? (previous as T[])
-    : [...next];
-
-/** A copy of `next`, or `previous` itself when it holds the same entries. */
-const reuseRecord = <T extends object>(next: T, previous: T | undefined): T => {
-  if (previous) {
-    const keys = Object.keys(next) as (keyof T)[];
-    if (
-      keys.length === Object.keys(previous).length &&
-      keys.every((key) => next[key] === previous[key])
-    )
-      return previous;
+/**
+ * Advance a replay for about `budgetMs` of real time, in short steps between clock
+ * checks. Returns the result once the replay stops, or null when the time ran out.
+ */
+const advanceReplayFor = (replay: TdReplay, endTick: number, budgetMs: number) => {
+  const started = performance.now();
+  for (;;) {
+    const result = advanceReplay(replay, endTick, { ticks: RESUME_STEP_TICKS });
+    if (result || performance.now() - started >= budgetMs) return result;
   }
-  return { ...next };
 };

@@ -85,6 +85,14 @@ import {
 } from "@/libs/towerDefense/content";
 import { createRng, geometricCost, powi, type Rng } from "@/libs/towerDefense/rng";
 
+/**
+ * Version of the rules a recorded run replays under. Bump it with any change that alters
+ * how a recorded log plays out (the pinned fingerprint in `replay.test.ts` fails on
+ * one): a claim from a page still running the previous rules is then answered with a
+ * reload, which resumes the saved run under the new rules instead of failing its replay.
+ */
+export const TD_SIM_VERSION = 1;
+
 // ============================================
 // Types
 // ============================================
@@ -697,7 +705,8 @@ const refreshStats = (state: TdState) => {
 
 const ultimatePower = (state: TdState, ultimate: TdUltimate) =>
   powi(1.1, Math.max(0, dojoLevel(state.config, `ul_${ultimate}`) - 1));
-const ultimateCooldownTicks = (state: TdState, ultimate: TdUltimate) =>
+/** Ticks an ultimate takes to recharge after a cast, with its Dojo reduction. */
+export const tdUltimateCooldownTicks = (state: TdState, ultimate: TdUltimate) =>
   Math.floor(
     TD_ULTIMATE_INFO[ultimate].cooldown *
       TD_TPS *
@@ -1293,7 +1302,7 @@ const castUltimate = (state: TdState, ultimate: TdUltimate, x: number, y: number
   if (state.tick < (state.ultReadyAt[ultimate] ?? 0)) return false;
   const at = clampToZone(x, y, TD_SPAWN_RADIUS);
   const power = state.stats.damage * heroBoost(state) * ultimatePower(state, ultimate);
-  state.ultReadyAt[ultimate] = state.tick + ultimateCooldownTicks(state, ultimate);
+  state.ultReadyAt[ultimate] = state.tick + tdUltimateCooldownTicks(state, ultimate);
   emit(state, { type: "ultimate", ultimate, x: at.x, y: at.y });
   switch (ultimate) {
     case "clones":

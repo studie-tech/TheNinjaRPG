@@ -12,6 +12,7 @@ import {
   applyAction,
   createRun,
   stepRun,
+  TD_SIM_VERSION,
   type TdAction,
   type TdRunConfig,
   tdDojoCost,
@@ -100,6 +101,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
       token: started.token,
       actions: encodeTdActions(log),
       endTick: state.tick,
+      simVersion: TD_SIM_VERSION,
     };
     const first = await api.claimRun(claim);
     expect(first).toMatchObject({
@@ -137,39 +139,40 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     });
   });
 
-  it("refuses another player's token, a run that ends elsewhere and paused claims", async () => {
+  it("refuses another player's token, a run that ends elsewhere, older rules and paused claims", async () => {
     const api = await callerFor(towerDefenseRouter, "td-user");
     const other = await callerFor(towerDefenseRouter, "td-other");
     const started = await api.startRun({ startWave: 1 });
     if (!started.token || !started.config) throw new Error("Run did not start");
     const { state, log } = play(started.config as TdRunConfig);
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + state.tick * 100 + 60_000);
-    expect(
-      (
-        await other.claimRun({
-          token: started.token,
-          actions: encodeTdActions(log),
-          endTick: state.tick,
-        })
-      ).success,
-    ).toBe(false);
-    expect(
-      (
-        await api.claimRun({
-          token: started.token,
-          actions: encodeTdActions(log),
-          endTick: state.tick - 1,
-        })
-      ).success,
-    ).toBe(false);
+    const claim = {
+      token: started.token,
+      actions: encodeTdActions(log),
+      endTick: state.tick,
+      simVersion: TD_SIM_VERSION,
+    };
+    // Refusals the same claim can only repeat tell the client to discard the run.
+    expect(await other.claimRun(claim)).toMatchObject({
+      success: false,
+      permanent: true,
+    });
+    expect(await api.claimRun({ ...claim, endTick: state.tick - 1 })).toMatchObject({
+      success: false,
+      permanent: true,
+    });
+    expect(await api.claimRun({ ...claim, token: `${claim.token}x` })).toMatchObject({
+      success: false,
+      permanent: true,
+    });
+    // A page on older rules is sent to reload and resume, keeping its save.
+    const outdated = await api.claimRun({ ...claim, simVersion: TD_SIM_VERSION - 1 });
+    expect(outdated).toMatchObject({ success: false, reloadRequired: true });
+    expect(outdated.permanent).toBeUndefined();
     env.TOWER_DEFENSE_CLAIMS_ENABLED = undefined;
-    expect(
-      await api.claimRun({
-        token: started.token,
-        actions: encodeTdActions(log),
-        endTick: state.tick,
-      }),
-    ).toMatchObject({ success: false, claimsPaused: true });
+    const paused = await api.claimRun(claim);
+    expect(paused).toMatchObject({ success: false, claimsPaused: true });
+    expect(paused.permanent).toBeUndefined();
     expect(await progress("td-user")).toEqual({ points: 500, bestWave: 45 });
   });
 
