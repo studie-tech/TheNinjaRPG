@@ -33,6 +33,7 @@ import {
   PVP_WEEKLY_KILL_BOOST_CAP,
   VILLAGE_LOYALTY_TIERS,
 } from "@/drizzle/constants";
+import { useUnspentSkillPoints } from "@/hooks/useUnspentSkillPoints";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import { DashboardSettings } from "@/layout/DashboardSettings";
@@ -90,6 +91,7 @@ export function Profile() {
   const { data: userData, updateUser, notifications } = useRequiredUserData();
   const [tab, setTab] = useState<ProfileTab | null>(null);
   const searchParams = useSearchParams();
+  const unspentSkillPoints = useUnspentSkillPoints();
   const requestedTab = searchParams.get("tab");
   const urlTab = profileTabs.find(
     (option) =>
@@ -192,7 +194,7 @@ export function Profile() {
               isLabelledProfileTab(option) ? "@min-[480px]:not-sr-only" : ""
             }
             values={profileTabValues}
-            counts={{ Sharing: newInRecruit }}
+            counts={{ Character: unspentSkillPoints, Sharing: newInRecruit }}
             listClassName="w-full flex-nowrap justify-start gap-[4px]"
             itemClassName={(option) =>
               `shrink-0 w-[min(44px,calc((100cqw_-_24px)/7))] ${option === "Pet" ? "mr-auto" : "mr-0"} ${isLabelledProfileTab(option) ? "@min-[480px]:w-auto" : ""}`
