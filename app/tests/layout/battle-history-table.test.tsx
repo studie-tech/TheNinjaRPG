@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
@@ -40,6 +41,9 @@ const row = (id: number): Row => ({
   attackedId: "deleted",
   defenderId: "actor",
   battleType: "COMBAT",
+  attackerOutcome: null,
+  defenderOutcome: id === 3 ? "Won" : null,
+  outcome: id === 3 ? "Won" : null,
   // A deleted relation is null at runtime despite Drizzle inferring a required attacker.
   attacker: null as unknown as Row["attacker"],
   defender: { userId: "actor", username: "Actor", avatar: null },
@@ -138,4 +142,37 @@ it("does not fetch inactive tabs and resets the cursor when the user or type cha
   expect(requests.at(-1)?.userId).toBe("two");
   expect(requests.at(-1)?.cursor).toBeUndefined();
   expect(view.queryByText("battle-1")).toBeNull();
+});
+
+it("shows the listed player's result for each battle, and a dash where none was recorded", async () => {
+  const view = mount({ userId: "actor" });
+  const won = (await view.findByText("battle-3")).closest("tr");
+  expect(won?.textContent).toContain("Won");
+  const unrecorded = view.getByText("battle-2").closest("tr");
+  expect(unrecorded?.textContent).toContain("—");
+  expect(view.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(
+    ["Attacker", "Defender", "Result", "Battle ID", "Date"],
+  );
+});
+
+it("refreshes a cached unrecorded result when its history tab becomes active", async () => {
+  queryClient.setDefaultOptions({ queries: { retry: false, staleTime: Infinity } });
+  queryClient.setQueryData(
+    getQueryKey(
+      testApi.combat.getBattleHistory,
+      { userId: "actor", limit: 20 },
+      "infinite",
+    ),
+    {
+      pages: [{ data: [{ ...row(3), outcome: null }], nextCursor: undefined }],
+      pageParams: [undefined],
+    },
+    { updatedAt: 1 },
+  );
+  const view = mount({ userId: "actor", enabled: false });
+  expect(view.getByText("battle-3").closest("tr")?.textContent).toContain("—");
+  expect(requests).toHaveLength(0);
+  view.change({ userId: "actor", enabled: true });
+  await view.findByText("Won");
+  expect(requests).toHaveLength(1);
 });

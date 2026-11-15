@@ -488,9 +488,9 @@ export const combatRouter = createTRPCRouter({
               claim.battleOver,
             ),
           ]);
-          // Idle effects can land a killing blow here too. Announce only after
-          // their log insert finishes so clients can refresh an earlier read.
-          if (history.length) {
+          // Announce committed logs and settlement-only results so observers can
+          // refresh both the action history and each fighter's recorded outcome.
+          if (history.length || result) {
             notifyBattleLogs(
               pusher,
               settledBattle,
@@ -609,7 +609,16 @@ export const combatRouter = createTRPCRouter({
         input,
       );
       const hasMore = results.length > input.limit;
-      const data = results.slice(0, input.limit);
+      // Each row's result is the listed player's own.
+      const data = results.slice(0, input.limit).map((row) => ({
+        ...row,
+        outcome:
+          row.attackedId === userId
+            ? row.attackerOutcome
+            : row.defenderId === userId
+              ? row.defenderOutcome
+              : null,
+      }));
       const last = data.at(-1);
       return {
         data,

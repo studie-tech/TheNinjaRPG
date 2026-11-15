@@ -3,6 +3,7 @@
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { type BattleType, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { BattleOutcomeLabel } from "@/layout/BattleOutcomeLabel";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 
@@ -32,7 +33,8 @@ export const BattleHistoryTable = ({
     refetch,
   } = api.combat.getBattleHistory.useInfiniteQuery(
     { userId, secondsBack, combatTypes, limit: 20 },
-    { enabled, getNextPageParam: (lastPage) => lastPage.nextCursor },
+    // Results may settle while this history tab is inactive or closed.
+    { enabled, staleTime: 0, getNextPageParam: (lastPage) => lastPage.nextCursor },
   );
   const rows = history?.pages
     .flatMap((page) => page.data)
@@ -42,6 +44,7 @@ export const BattleHistoryTable = ({
       defenderAvatar: entry.defender?.avatar || IMG_AVATAR_DEFAULT,
       battleId: entry.battleId,
       battleType: entry.battleType || "Unknown",
+      outcome: <BattleOutcomeLabel outcome={entry.outcome} />,
       createdAt: entry.createdAt,
     }));
 
@@ -55,6 +58,7 @@ export const BattleHistoryTable = ({
           columns={[
             { key: "attackerAvatar", header: "Attacker", type: "avatar" },
             { key: "defenderAvatar", header: "Defender", type: "avatar" },
+            { key: "outcome", header: "Result", type: "jsx" },
             showBattleType
               ? { key: "battleType", header: "Type", type: "capitalized" }
               : { key: "battleId", header: "Battle ID", type: "string" },

@@ -54,6 +54,20 @@ export const useCombatUpdates = (state: BattleState, isDriverEnabled = true) => 
   );
   const logRefreshesRef = useRef(new Map<string, number>());
 
+  /** Recorded results are absent from combat deltas; recover only after a committed settlement. */
+  const refreshBattleResults = useCallback(
+    (id: string) =>
+      Promise.all([
+        utils.combat.getBattleHistoryEntry.invalidate({ battleId: id }),
+        utils.combat.getBattleHistory.invalidate(),
+      ]),
+    [utils],
+  );
+  const hasResult = !!state.result;
+  useEffect(() => {
+    if (battleId && hasResult) void refreshBattleResults(battleId);
+  }, [battleId, hasResult, refreshBattleResults]);
+
   /** Reserve the action and capture its exact battle-query revision before sending it. */
   const startAction = useCallback(
     (id: string) => {
@@ -263,6 +277,8 @@ export const useCombatUpdates = (state: BattleState, isDriverEnabled = true) => 
     if (!battleId || !pusher) return;
     const channel = pusher.subscribe(battleId);
     const onUpdate = async (data: BattleUpdate) => {
+      // A later fighter can settle after this viewer already holds their own result.
+      if (data.finished) void refreshBattleResults(battleId);
       if (data.logEntries !== undefined) {
         await updateLogs(
           battleId,
@@ -302,7 +318,14 @@ export const useCombatUpdates = (state: BattleState, isDriverEnabled = true) => 
       channel.unbind("event", onUpdate);
       pusher.unsubscribe(battleId);
     };
-  }, [battleId, pusher, refreshBattle, updateLogs, updateBattleEvent]);
+  }, [
+    battleId,
+    pusher,
+    refreshBattle,
+    refreshBattleResults,
+    updateLogs,
+    updateBattleEvent,
+  ]);
   return { updateLogs, startAction, settleAction, canDrive, publishBattle: publish };
 };
 

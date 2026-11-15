@@ -1056,6 +1056,10 @@ export type MasteryName = (typeof MasteryNames)[number];
 export const UserStatNames = [...CombatStatNames, ...MasteryNames] as const;
 export type UserStatName = (typeof UserStatNames)[number];
 
+/** How a battle ended for one fighter. */
+export const BattleOutcomes = ["Won", "Lost", "Draw", "Fled"] as const;
+export type BattleOutcome = (typeof BattleOutcomes)[number];
+
 export const BattleTypes = [
   "ARENA",
   "COMBAT",
