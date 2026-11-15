@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "bun:test";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { StaffPlayerViewNotice } from "@/layout/StaffPlayerViewNotice";
 import * as routing from "@/utils/routing";
 import { mockUserContextValue } from "../setup/userContext";
@@ -21,6 +21,9 @@ const notice = (
 it("tells staff playing as a regular player why manual pages hide unreleased content", () => {
   expect(notice({ role: "CONTENT", playsAsPlayer: true })).toBe(
     "You are playing as a regular player, so unreleased content is hidden here. Switch it off under Staff tools to see or edit it.",
+  );
+  expect(screen.getByRole("link", { name: "Staff tools" }).getAttribute("href")).toBe(
+    "/manual#staff-tools",
   );
 });
 

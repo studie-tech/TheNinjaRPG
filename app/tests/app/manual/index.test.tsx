@@ -4,7 +4,6 @@ import ManualMain from "@/app/[shell]/manual/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as ImageLinkGrid from "@/layout/ImageLinkGrid";
 import * as StaffPlayerViewSwitch from "@/layout/StaffPlayerViewSwitch";
-import * as UserContext from "@/utils/UserContext";
 import { mockUserContextValue } from "../../setup/userContext";
 
 type Tile = { href: string; label?: string };
@@ -12,8 +11,8 @@ let grids: Tile[][];
 
 beforeEach(() => {
   grids = [];
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
-    <div>{children}</div>
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children, id }) => (
+    <div id={id}>{children}</div>
   ));
   vi.spyOn(StaffPlayerViewSwitch, "StaffPlayerViewSwitch").mockImplementation(
     () => null,
@@ -48,6 +47,7 @@ it("lists the dungeon and hunting editors only for content staff", () => {
   expect(manualCards("USER")).toContain("/manual/quest");
   expect(manualCards("CONTENT")).toContain("/manual/dungeon");
   expect(manualCards("CONTENT")).toContain("/manual/hunting");
+  expect(document.getElementById("staff-tools")).not.toBeNull();
 });
 
 const playerCards = [

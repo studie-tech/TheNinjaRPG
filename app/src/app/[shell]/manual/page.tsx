@@ -172,6 +172,7 @@ export default function ManualMain() {
       </ContentBox>
       {staffTiles.length > 0 && (
         <ContentBox
+          id="staff-tools"
           title="Staff tools"
           subtitle="Content, moderation and operations tools for your role"
           initialBreak={true}

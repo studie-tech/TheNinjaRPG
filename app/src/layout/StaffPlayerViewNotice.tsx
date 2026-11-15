@@ -26,7 +26,7 @@ export const StaffPlayerViewNotice = () => {
     <p role="status" className="bg-muted mb-2 rounded-md border px-3 py-2 text-sm">
       You are playing as a regular player, so unreleased content is hidden here. Switch
       it off under{" "}
-      <Link href="/manual" className="font-semibold underline">
+      <Link href="/manual#staff-tools" className="font-semibold underline">
         Staff tools
       </Link>{" "}
       to see or edit it.
