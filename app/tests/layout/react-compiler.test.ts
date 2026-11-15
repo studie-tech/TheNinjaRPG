@@ -10,6 +10,7 @@ import {
   STEALTH_TRAIN_GAIN_PER_MINUTE,
 } from "@/drizzle/constants";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
+import { cn } from "@/libs/shadui";
 import {
   calcStealthDuration,
   getRemainingSensoryCooldown,
@@ -264,6 +265,8 @@ describe("React Compiler runtime", () => {
       useLiveCountdown,
       getStealthStatus,
       getRemainingSensoryCooldown,
+      cn,
+      mapToolClassName: "",
       STEALTH_SENSORY_CAP,
       STEALTH_TRAIN_GAIN_PER_MINUTE,
       showMutationToast: vi.fn(),

@@ -4,7 +4,11 @@ import * as navigation from "next/navigation";
 import { useState } from "react";
 import Confirm from "@/layout/Confirm";
 import ContentBox, * as contentBox from "@/layout/ContentBox";
-import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
+import {
+  type HeaderActionItem,
+  REVEAL_CONTENT_BOX_CONTROLS,
+  splitHeaderActions,
+} from "@/layout/ContentBoxHeaderActions";
 import Modal from "@/layout/Modal";
 import {
   flushRadixFocus,
@@ -15,6 +19,7 @@ import { actualContentBox } from "../setup/preload";
 
 let headerWidth = 600;
 let controlWidth = 240;
+let actionsWidth = 400;
 const resizeCallbacks = new Set<() => void>();
 const originalClientWidth = Object.getOwnPropertyDescriptor(
   Element.prototype,
@@ -42,6 +47,7 @@ beforeEach(() => {
   installBrowserGlobals({ resizeObserver: HeaderResizeObserver });
   headerWidth = 600;
   controlWidth = 240;
+  actionsWidth = 400;
   vi.spyOn(contentBox, "default").mockImplementation(actualContentBox);
   vi.spyOn(navigation, "useRouter").mockReturnValue({
     back: vi.fn(),
@@ -50,7 +56,8 @@ beforeEach(() => {
   Object.defineProperty(Element.prototype, "clientWidth", {
     configurable: true,
     get() {
-      return this.hasAttribute("data-content-box-header") ? headerWidth : 100;
+      if (this.hasAttribute("data-content-box-header")) return headerWidth;
+      return this.hasAttribute("data-content-box-actions") ? actionsWidth : 100;
     },
   });
   Object.defineProperty(Element.prototype, "scrollWidth", {
@@ -58,6 +65,14 @@ beforeEach(() => {
     get() {
       return this.hasAttribute("data-content-box-controls") ? controlWidth : 100;
     },
+  });
+  // Priority header controls are 44px wide, the tabs 90px.
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: Element,
+  ) {
+    const key = this.getAttribute("data-header-item");
+    const width = key === null ? 0 : key === "tabs" ? 90 : key === "nothing" ? 0 : 44;
+    return new window.DOMRect(0, 0, width, 44);
   });
   vi.spyOn(Element.prototype, "getClientRects").mockImplementation(function (
     this: Element,
@@ -298,4 +313,115 @@ it("goes back only to a previous page of the game, otherwise to its parent page"
   expect(router.back).toHaveBeenCalledTimes(1);
   expect(router.push).toHaveBeenCalledTimes(2);
   expect(router.push).toHaveBeenCalledWith("/village");
+});
+
+const travelLikeItems = (
+  overrides: Partial<Record<string, Partial<HeaderActionItem>>> = {},
+): HeaderActionItem[] =>
+  [
+    { key: "players", priority: 6, label: "Show players" },
+    { key: "stealth", priority: 1, label: "Stealth" },
+    { key: "quick-travel", priority: 4, label: "Quick travel" },
+    { key: "nothing", priority: 10, label: undefined },
+    { key: "tabs", priority: 3, label: "Tabs" },
+  ].map(({ key, priority, label }) => ({
+    key,
+    priority,
+    node: label ? (
+      <button type="button" id={`tool-${key}`}>
+        {label}
+      </button>
+    ) : null,
+    ...overrides[key],
+  }));
+
+const setupPriority = (items = travelLikeItems()) =>
+  render(
+    <ContentBox title="Travel" topRightItems={items}>
+      Map
+    </ContentBox>,
+  );
+
+const resizeActions = (width: number) => {
+  act(() => {
+    actionsWidth = width;
+    for (const notify of resizeCallbacks) notify();
+  });
+};
+
+const rowNames = (view: ReturnType<typeof render>) =>
+  Array.from(
+    view.container.querySelectorAll<HTMLElement>(
+      "[data-content-box-actions] > [data-header-item]",
+    ),
+  ).map((element) => element.textContent);
+
+it("keeps every priority control in the header row while they fit", () => {
+  const view = setupPriority();
+  expect(rowNames(view)).toEqual([
+    "Show players",
+    "Stealth",
+    "Quick travel",
+    "",
+    "Tabs",
+  ]);
+  expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
+});
+
+it("moves the lowest-priority controls behind More, keeping both lists in display order", () => {
+  const view = setupPriority();
+  // Room for More (44) + stealth (44) + tabs (90): quick travel and show players leave.
+  resizeActions(200);
+  expect(rowNames(view)).toEqual(["Stealth", "", "Tabs"]);
+  const more = view.getByRole("button", { name: "More Travel controls" });
+  expect(more.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(more);
+  const menu = view.getByRole("region", { name: "More Travel controls" });
+  expect(
+    Array.from(menu.querySelectorAll("[data-header-item]")).map((el) => el.textContent),
+  ).toEqual(["Show players", "Quick travel"]);
+  resizeActions(400);
+  expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
+});
+
+it("marks More while a control that needs attention is hidden in it", () => {
+  const view = setupPriority(travelLikeItems({ players: { attention: true } }));
+  expect(view.container.querySelector("[data-attention]")).toBeNull();
+  resizeActions(200);
+  const more = view.getByRole("button", { name: /More Travel controls/ });
+  expect(more.getAttribute("aria-label")).toBe("More Travel controls (one is changed)");
+  expect(more.querySelector("[data-attention]")).not.toBeNull();
+});
+
+it("closes More on Escape and returns focus to it", async () => {
+  const view = setupPriority();
+  resizeActions(200);
+  const more = view.getByRole("button", { name: "More Travel controls" });
+  fireEvent.click(more);
+  fireEvent.keyDown(view.getByRole("button", { name: "Quick travel" }), {
+    key: "Escape",
+  });
+  expect(more.getAttribute("aria-expanded")).toBe("false");
+  await waitFor(() => expect(document.activeElement).toBe(more));
+});
+
+it("reveals a tutorial target hidden behind More", () => {
+  const view = setupPriority();
+  resizeActions(200);
+  const target = view.container.querySelector("#tool-quick-travel") as HTMLElement;
+  expect(target.closest("[inert]")).not.toBeNull();
+  fireEvent(target, new Event(REVEAL_CONTENT_BOX_CONTROLS, { bubbles: true }));
+  expect(target.closest("[inert]")).toBeNull();
+});
+
+it("keeps narrower controls by priority when a wider, more important one cannot fit", () => {
+  const items = [
+    { key: "a", priority: 1 },
+    { key: "wide", priority: 2 },
+    { key: "b", priority: 3 },
+  ];
+  const width = (key: string) => (key === "wide" ? 200 : 44);
+  expect([...splitHeaderActions(items, width, 400, 44)]).toEqual([]);
+  expect([...splitHeaderActions(items, width, 150, 44)]).toEqual(["wide"]);
+  expect([...splitHeaderActions(items, width, 100, 44)]).toEqual(["wide", "b"]);
 });
