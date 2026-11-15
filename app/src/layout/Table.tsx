@@ -265,11 +265,13 @@ const isTextColumn = <T, K extends keyof T>(column: ColumnDefinitionType<T, K>) 
 
 /**
  * Whether a row click started on a link or control inside the row (including the row's own
- * name link), which handles the click itself.
+ * name link), which handles the click itself, or outside the row's DOM altogether: a
+ * dialog or popover portalled from a cell still bubbles its clicks through the row.
  */
 const isFromControl = (event: React.MouseEvent<HTMLTableRowElement>) => {
   const target = event.target;
   if (!(target instanceof Element)) return false;
+  if (!event.currentTarget.contains(target)) return true;
   const control = target.closest(
     "a, button, input, select, textarea, label, summary, [role='button'], [role='link'], [role='checkbox'], [role='menuitem']",
   );

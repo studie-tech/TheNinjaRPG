@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import * as navigation from "next/navigation";
+import { createPortal } from "react-dom";
 import * as Avatar from "@/layout/Avatar";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 
@@ -146,5 +147,28 @@ it("opens a row in a new tab on a modified or middle click and ignores masked ro
   );
   expect(open).toHaveBeenCalledTimes(2);
   fireEvent.click(within(second!).getByText("12"));
+  expect(push).not.toHaveBeenCalled();
+});
+
+it("ignores clicks bubbling from a dialog portalled out of a cell", () => {
+  type PortalRow = Row & { info: React.ReactNode };
+  const portalRows: PortalRow[] = [
+    {
+      ...rows[0]!,
+      info: createPortal(<button type="button">Inside dialog</button>, document.body),
+    },
+  ];
+  const view = render(
+    <Table
+      data={portalRows}
+      columns={[
+        { key: "username", header: "Name", type: "string" },
+        { key: "info", header: "Info", type: "jsx" },
+      ]}
+      linkColumn="username"
+      linkPrefix="/username/"
+    />,
+  );
+  fireEvent.click(view.getByText("Inside dialog"));
   expect(push).not.toHaveBeenCalled();
 });
