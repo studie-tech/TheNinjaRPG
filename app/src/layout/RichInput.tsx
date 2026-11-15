@@ -928,10 +928,13 @@ const loadQuill = () => Promise.all([import("quill"), loadHtmlSanitizer()]);
 
 const UPLOAD_FAILED_MESSAGE = "Image upload failed. Please try again.";
 
+/** UploadThing codes the client raises itself for transport failures, with technical text. */
+const CLIENT_UPLOAD_ERROR_CODES = new Set(["INTERNAL_CLIENT_ERROR", "UPLOAD_FAILED"]);
+
 /**
- * Uploads one image; the uploader client and its runtime load with the first one. Only
- * UploadThing's own errors carry a message meant for players: a chunk that cannot load or
- * a dropped connection rejects with the generic failure instead.
+ * Uploads one image; the uploader client and its runtime load with the first one. Errors the
+ * upload server reported (limits, permissions, size) keep their message; a chunk that cannot
+ * load or a failed request rejects with the generic failure instead.
  */
 const uploadTavernImage = async (file: File) => {
   const uploader = await import("@/utils/uploadthing").catch(() => null);
@@ -940,11 +943,13 @@ const uploadTavernImage = async (file: File) => {
     return (await uploader.uploadFiles("tavernUploader", { files: [file] }))[0]
       ?.serverData;
   } catch (error) {
-    throw new Error(
-      error instanceof Error && error.name === "UploadThingError"
-        ? error.message
-        : UPLOAD_FAILED_MESSAGE,
-    );
+    const code = (error as { code?: unknown } | null)?.code;
+    const isServerMessage =
+      error instanceof Error &&
+      error.name === "UploadThingError" &&
+      typeof code === "string" &&
+      !CLIENT_UPLOAD_ERROR_CODES.has(code);
+    throw new Error(isServerMessage ? error.message : UPLOAD_FAILED_MESSAGE);
   }
 };
 

@@ -23,6 +23,9 @@ export const loadHtmlSanitizer = () => {
   return sanitizerLoad;
 };
 
+/** Mention and reaction builders for optimistic chat updates; they share the sanitizer chunk. */
+export const loadChatHelpers = () => import("@/utils/chat");
+
 /**
  * The sanitizer module once it has loaded, or `undefined` while it is still loading.
  * Loading starts when `enabled` first becomes true; renders then use it synchronously.

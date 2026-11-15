@@ -7,8 +7,7 @@ import {
   TAVERN_IMAGE_MAX_SIZE_MB,
   TAVERN_IMAGE_UPLOAD_DAILY_LIMIT,
 } from "@/drizzle/constants";
-import { loadHtmlSanitizer } from "@/hooks/useHtmlSanitizer";
-import { showMutationToast } from "@/libs/toast";
+import { useHtmlSanitizer } from "@/hooks/useHtmlSanitizer";
 
 /** Uses the editor's existing moderated upload path and account-owned image library. */
 export function ForumAttachments({
@@ -38,15 +37,10 @@ export function ForumAttachments({
         .filter((url): url is string => !!url && /^(https?:\/\/|\/(?!\/))/i.test(url)),
     ),
   ];
-  const remove = async (url: string) => {
-    const sanitizer = await loadHtmlSanitizer().catch(() => null);
-    if (!sanitizer) {
-      showMutationToast({
-        success: false,
-        message: "The image could not be removed. Please try again.",
-      });
-      return;
-    }
+  // Removal rewrites the current draft synchronously, so it waits for the sanitizer to load.
+  const sanitizer = useHtmlSanitizer(images.length > 0);
+  const remove = (url: string) => {
+    if (!sanitizer) return;
     const document = new DOMParser().parseFromString(
       sanitizer.default(content),
       "text/html",
@@ -89,8 +83,8 @@ export function ForumAttachments({
                 type="button"
                 size="sm"
                 variant="ghost"
-                disabled={disabled}
-                onClick={() => void remove(url)}
+                disabled={disabled || !sanitizer}
+                onClick={() => remove(url)}
               >
                 Remove from draft
               </Button>

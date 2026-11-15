@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import * as client from "@/app/_trpc/client";
+import * as sanitizerLoader from "@/hooks/useHtmlSanitizer";
 import * as media from "@/hooks/useMediaQuery";
 import { useConversation } from "@/layout/Conversation";
 import * as pagination from "@/libs/pagination";
@@ -55,6 +56,7 @@ let typingSent: unknown[];
 let createInputs: unknown[];
 let finishCreate: (value: object) => void;
 let fetched: ReturnType<typeof row> | undefined;
+let reads = 0;
 const pusher = {
   subscribe: () => ({
     bind: (_event: string, handler: typeof receive) => {
@@ -101,8 +103,9 @@ const mount = (
   clients.push(queryClient);
   const trpcClient = fakeTrpcClient((path, input) => {
     if (path === "comments.getConversationComments") {
+      reads++;
       return {
-        data: rows,
+        data: [...rows],
         convo: { id: "chat", isPublic },
         nextCursor: null,
       };
@@ -281,6 +284,37 @@ it("sanitizes on-demand optimistic messages, quote previews and reactions", asyn
     expect(
       hook.result.current.allComments?.find((c) => c.id === "a")?.reactions,
     ).toEqual({ "👍": ["Me"] }),
+  );
+});
+
+it("shows a sent message and a reaction after success when their helpers fail to load", async () => {
+  const rows = [row("a", "Alpha"), row("b", "Bravo", "Peer")];
+  const hook = mount(true, rows);
+  await loaded(hook);
+  vi.spyOn(sanitizerLoader, "loadHtmlSanitizer").mockRejectedValue(new Error("chunk"));
+  vi.spyOn(sanitizerLoader, "loadChatHelpers").mockRejectedValue(new Error("chunk"));
+  await act(async () => {
+    hook.result.current.setValue("comment", "Sent without helpers");
+    await hook.result.current.handleSubmitComment();
+  });
+  await waitFor(() => expect(createInputs).toHaveLength(1));
+  expect(hook.result.current.allComments).toHaveLength(2);
+  rows.unshift(row("c", "Sent without helpers"));
+  const readsBeforeSend = reads;
+  await act(async () => finishCreate({ success: true, commentId: "c" }));
+  await waitFor(() => expect(hook.result.current.allComments).toHaveLength(3));
+  expect(reads).toBeGreaterThan(readsBeforeSend);
+
+  rows[0] = { ...rows[0]!, reactions: { "👍": ["Me"] } } as never;
+  act(() =>
+    hook.result.current.reactConversationComment({ commentId: "c", emoji: "👍" }),
+  );
+  await waitFor(() =>
+    expect(
+      hook.result.current.allComments?.find((c) => c.id === "c")?.reactions,
+    ).toEqual({
+      "👍": ["Me"],
+    }),
   );
 });
 

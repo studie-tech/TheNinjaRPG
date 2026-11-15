@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { UploadThingError } from "uploadthing/server";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import RichInput from "@/layout/RichInput";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
@@ -962,19 +963,37 @@ describe("rich input composer", () => {
     expect(editor.value.endsWith(advancedHtml)).toBe(true);
   });
 
+  const generic = "Image upload failed. Please try again.";
   it.each([
-    ["the uploader's message", "UploadThingError", "File too large."],
     [
-      "a generic message for transport errors",
-      "TypeError",
-      "Image upload failed. Please try again.",
+      "the server's message",
+      new UploadThingError("Can only make 20 tavern image upload attempts per day"),
+      "Can only make 20 tavern image upload attempts per day",
     ],
-  ])("shows %s when an upload fails", async (_case, name, message) => {
-    startUpload.mockRejectedValueOnce(
-      Object.assign(new Error(name === "TypeError" ? "Failed to fetch" : message), {
-        name,
+    [
+      "the server's size message",
+      new UploadThingError({ code: "TOO_LARGE", message: "Image exceeds 4MB." }),
+      "Image exceeds 4MB.",
+    ],
+    [
+      "a generic message for a failed transfer",
+      new UploadThingError({
+        code: "UPLOAD_FAILED",
+        message: "XHR failed 502 Bad Gateway",
       }),
-    );
+      generic,
+    ],
+    [
+      "a generic message when the upload server is unreachable",
+      new UploadThingError({
+        code: "INTERNAL_CLIENT_ERROR",
+        message: 'Failed to report event "upload" to UploadThing server',
+      }),
+      generic,
+    ],
+    ["a generic message for other errors", new TypeError("Failed to fetch"), generic],
+  ])("shows %s when an upload fails", async (_case, error, message) => {
+    startUpload.mockRejectedValueOnce(error);
     const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => {});
     spies.push(
       showToast,

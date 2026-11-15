@@ -16,7 +16,11 @@ import { matchesConversationSearch } from "@/deltas/chat";
 import { CONVERSATION_PAUSE_HIDDEN_MINS } from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
-import { loadHtmlSanitizer, useHtmlSanitizer } from "@/hooks/useHtmlSanitizer";
+import {
+  loadChatHelpers,
+  loadHtmlSanitizer,
+  useHtmlSanitizer,
+} from "@/hooks/useHtmlSanitizer";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useTypingIndicators } from "@/hooks/useTypingIndicators";
@@ -293,9 +297,9 @@ export const useConversation = (props: ConversationLogicProps) => {
     emoji: string,
     username: string,
   ) => {
-    // Without the reaction helpers the server-confirmed reaction arrives on the next refresh.
-    const chat = await loadChatHtml().catch(() => null);
-    if (!chat) return;
+    // Without the reaction helpers the caller refetches to show the reaction.
+    const chat = await loadChatHelpers().catch(() => null);
+    if (!chat) return { reactionSkipped: true };
     await utils.comments.getConversationComments.cancel(queryKey);
     const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
     const comment = cached?.pages
@@ -320,11 +324,9 @@ export const useConversation = (props: ConversationLogicProps) => {
           userData.username,
         );
       },
-      onSuccess: (result) => {
-        if (!result.success) {
-          showMutationToast(result);
-          void refetch();
-        }
+      onSuccess: (result, _input, context) => {
+        if (!result.success) showMutationToast(result);
+        if (!result.success || context?.reactionSkipped) void refetch();
       },
       onError: () => void refetch(),
     });
@@ -429,11 +431,11 @@ export const useConversation = (props: ConversationLogicProps) => {
    */
   const insertOptimisticComment = async (newMessage: MutateCommentSchema) => {
     if (!userData || !conversation) return {};
-    // Without the sanitizer the message still sends; the refresh after success shows it.
-    const html = await Promise.all([loadHtmlSanitizer(), loadChatHtml()]).catch(
+    // Without the sanitizer the message still sends; success then refetches this view too.
+    const html = await Promise.all([loadHtmlSanitizer(), loadChatHelpers()]).catch(
       () => null,
     );
-    if (!html) return {};
+    if (!html) return { optimisticSkipped: true };
     const [{ buildQuoteBlock }, { processMentions }] = html;
 
     const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
@@ -524,7 +526,10 @@ export const useConversation = (props: ConversationLogicProps) => {
               ),
             );
           }
-          void refreshConversationComments(newComment.object_id, context?.input);
+          void refreshConversationComments(
+            newComment.object_id,
+            context?.optimisticSkipped ? undefined : context?.input,
+          );
         } else {
           removeOptimisticComment(context?.optimisticCommentId);
           showMutationToast({ success: false, message: data.message });
@@ -579,7 +584,9 @@ export const useConversation = (props: ConversationLogicProps) => {
                   data.commentId,
                   data.emoji,
                   data.username,
-                );
+                ).then((update) => {
+                  if (update?.reactionSkipped) void refetch();
+                });
               }
               break;
             case "typing":
@@ -848,8 +855,5 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     </div>
   );
 };
-
-/** Mention and reaction builders, which share the sanitizer chunk. */
-const loadChatHtml = () => import("@/utils/chat");
 
 export default Conversation;
