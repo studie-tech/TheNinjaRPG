@@ -1,5 +1,5 @@
 import { DUNGEON_FLOORS_PER_TIER, DUNGEON_INACTIVE_ROUNDS } from "@/drizzle/constants";
-import { stillInBattle } from "@/libs/combat/actions";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { attemptCapReached } from "@/libs/quest/availability";

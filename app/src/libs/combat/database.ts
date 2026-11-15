@@ -20,7 +20,6 @@ import {
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
 import { type Battle, userData, userJutsu, war } from "@/drizzle/schema";
-import { stillInBattle } from "@/libs/combat/actions";
 import {
   ITEM_BROKEN_NOTICE,
   ITEM_DURABILITY_CRITICAL_NOTICE,
@@ -28,6 +27,7 @@ import {
   SHRINE_CAPTURED_NOTICE,
   SHRINE_RECAPTURED_NOTICE,
 } from "@/libs/combat/constants";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import { settleObjectiveWarCombat } from "@/libs/combat/objectiveWar";
 import {
   areBattleAllies,

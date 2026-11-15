@@ -103,6 +103,7 @@ import {
   InjectJutsusTag,
   MoveTag,
 } from "@/validators/combat";
+import { stillInBattle } from "./inBattle";
 
 /**
  * Given a user, return a list of actions that the user can perform
@@ -1678,14 +1679,6 @@ export const getActionPointCost = (
     (action.actionCostPerc || 0) + timeCompressionApIncrease - timeDilationApDecrease,
   );
 };
-
-/**
- * Figure out if user is still live and well in battle (not fled, not dead, etc.)
- * Stored current health already includes pool buffs/debuffs.
- */
-export const stillInBattle = (
-  user: Pick<ReturnedUserState, "curHealth" | "fledBattle">,
-) => user.curHealth > 0 && !user.fledBattle;
 
 /**
  * Calculate (based on current time), which user is currently the one to perform a move

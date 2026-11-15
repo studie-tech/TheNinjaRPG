@@ -2,6 +2,7 @@
 
 import { useSetAtom } from "jotai";
 import { BellOff, Gift, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityStreaks } from "@/hooks/useActivityStreaks";
-import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
+import Loader from "@/layout/Loader";
 import {
   isActivityStreakPopupBlocking,
   resolveActivityStreakDateLatches,
@@ -26,6 +27,14 @@ import { isTutorialActive } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
 import { getDateKey } from "@/utils/time";
 import { blockingPopupOpenAtom, useUserDataSelector } from "@/utils/UserContext";
+
+const loadActivityStreakPanel = () => import("@/layout/ActivityStreakPanel");
+
+// The reward panel downloads with the streak query that decides whether the dialog opens,
+// so pages where it never appears do not carry it.
+const ActivityStreakPanel = dynamic(loadActivityStreakPanel, {
+  loading: () => <Loader explanation="Loading rewards" />,
+});
 
 const ActivityStreakPopup: React.FC = () => {
   const pathname = usePublicPathname();
@@ -83,6 +92,9 @@ const ActivityStreakPopup: React.FC = () => {
     shouldFetchStreaks,
     timeDiff,
   );
+  useEffect(() => {
+    if (shouldFetchStreaks) void loadActivityStreakPanel();
+  }, [shouldFetchStreaks]);
 
   // Determine if we should show the popup
   const hasUnclaimedRewards =

@@ -5,8 +5,8 @@ import {
   actionPointsAfterAction,
   availableUserActions,
   performBattleAction,
-  stillInBattle,
 } from "@/libs/combat/actions";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import { areBattleAllies } from "@/libs/combat/participants";
 import { applyEffects } from "@/libs/combat/process";
 import { hasLiveSummon, isSummonActionCastable } from "@/libs/combat/summon";

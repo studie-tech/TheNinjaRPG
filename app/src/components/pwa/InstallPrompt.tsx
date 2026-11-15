@@ -2,9 +2,9 @@
 
 import { Download, Smartphone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useTutorialStep } from "@/hooks/tutorial";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
+import { isTutorialActive } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -20,10 +20,11 @@ export default function InstallPrompt() {
     isIOS,
   } = useInstallPrompt();
 
-  const { data: userData } = useUserDataSelector((user) => user.userId);
-
-  // Tutorial mode
-  const { currentStep } = useTutorialStep();
+  const { data: userData } = useUserDataSelector((user) => ({
+    userId: user.userId,
+    tutorialOn: user.tutorialOn,
+    tutorialStep: user.tutorialStep,
+  }));
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -44,7 +45,7 @@ export default function InstallPrompt() {
     isInstalled ||
     !isVisible ||
     !userData ||
-    currentStep
+    isTutorialActive(userData)
   ) {
     return null;
   }

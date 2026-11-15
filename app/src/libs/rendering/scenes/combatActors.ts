@@ -9,8 +9,8 @@ import {
   WORLD_DAY_BRIGHTNESS,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
-import { stillInBattle } from "@/libs/combat/actions";
 import type { AggroDisplay } from "@/libs/combat/aggroDisplay";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import type { HitSeverity } from "@/libs/combat/playback";
 import { isClone } from "@/libs/combat/summon";
 import type { ReturnedBattle, ReturnedUserState } from "@/libs/combat/types";

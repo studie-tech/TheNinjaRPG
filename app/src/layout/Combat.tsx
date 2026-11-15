@@ -27,11 +27,7 @@ import { QuestUpdateModal } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffects";
 import WebGlError from "@/layout/WebGLError";
 import { getAudioPreference } from "@/libs/audioPreferences";
-import {
-  availableUserActions,
-  calcActiveUser,
-  stillInBattle,
-} from "@/libs/combat/actions";
+import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
 import {
@@ -44,6 +40,7 @@ import {
   SHRINE_RECAPTURED_NOTICE,
 } from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import { inspectsBattlefieldTap } from "@/libs/combat/inspection";
 import {
   actionAimsAtFighter,

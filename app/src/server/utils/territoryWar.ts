@@ -11,7 +11,7 @@ import {
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import type { userData } from "@/drizzle/schema";
-import { stillInBattle } from "@/libs/combat/actions";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import { areBattleAllies } from "@/libs/combat/participants";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { TerritoryBoostWindow, TerritoryCompetitor } from "@/libs/territoryWar";
