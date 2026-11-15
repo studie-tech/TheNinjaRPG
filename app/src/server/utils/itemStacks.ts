@@ -2,7 +2,10 @@ import * as Sentry from "@sentry/nextjs";
 import { isNull, type SQL } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import { getEffectiveStackSize } from "@/libs/item";
-import { listUserItemForMergeAllStacks } from "@/queries/item";
+import {
+  listUserItemForMergeAllStacks,
+  updateUserItemForJoinFinishedCrafts,
+} from "@/queries/item";
 import { executeMergeStacksForItem } from "@/routers/item";
 import type { DrizzleClient } from "@/server/db";
 import { groupBy } from "@/utils/grouping";
@@ -63,4 +66,44 @@ export const mergeUserItemStacks = async (
     Sentry.captureException(error, { tags: { source: "mergeUserItemStacks" } });
     return undefined;
   }
+};
+
+/**
+ * Join crafts that have finished to the carried stacks of the same item, by the Merge
+ * button's rules, then clear their craft times so they join only once. A craft keeps its
+ * own row while it runs, and nothing happens when its timer ends, so inventory reads join it.
+ * Nothing joins while the owner is in a battle; the craft joins on a read after it.
+ * @param rows - The owner's item rows as just read
+ * @returns Whether the inventory changed and should be read again
+ */
+export const joinFinishedCrafts = async (
+  client: DrizzleClient,
+  userId: string,
+  rows: readonly {
+    id: string;
+    itemId: string;
+    storedAtHome: boolean;
+    craftingFinishedAt: Date | null;
+  }[],
+  now = new Date(),
+) => {
+  const finished = rows.filter(
+    (row) => row.craftingFinishedAt && row.craftingFinishedAt <= now,
+  );
+  if (finished.length === 0) return false;
+  const joined = await mergeUserItemStacks(
+    client,
+    userId,
+    finished.filter((row) => !row.storedAtHome).map((row) => row.itemId),
+    false,
+    ownerOutOfBattle(),
+  );
+  if (!joined) return false;
+  await updateUserItemForJoinFinishedCrafts(
+    client,
+    userId,
+    finished.map((row) => row.id),
+    now,
+  );
+  return true;
 };

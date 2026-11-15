@@ -339,6 +339,7 @@ import { planConsumeEffects } from "@/server/utils/consumeEffects";
 import { consumeMeal } from "@/server/utils/cooking";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { grantUserItems } from "@/server/utils/itemGrants";
+import { joinFinishedCrafts } from "@/server/utils/itemStacks";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
@@ -1193,14 +1194,20 @@ export const itemRouter = createTRPCRouter({
   getUserItems: protectedProcedure
     .meta({ mcp: { description: "Get all user items" } })
     .query(async ({ ctx }) => {
-      return await fetchUserItems(ctx.drizzle, ctx.userId);
+      const useritems = await fetchUserItems(ctx.drizzle, ctx.userId);
+      return (await joinFinishedCrafts(ctx.drizzle, ctx.userId, useritems))
+        ? await fetchUserItems(ctx.drizzle, ctx.userId)
+        : useritems;
     }),
   getUserItemsWithVariants: protectedProcedure
     .meta({
       mcp: { description: "Get all user items including variant data" },
     })
     .query(async ({ ctx }) => {
-      return await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
+      const useritems = await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
+      return (await joinFinishedCrafts(ctx.drizzle, ctx.userId, useritems))
+        ? await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId)
+        : useritems;
     }),
   // Get items of public user (staff edit)
   getPublicUserItems: protectedProcedure

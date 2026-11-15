@@ -1226,6 +1226,27 @@ export const listUserItemForMergeAllStacks = (
     with: { imbuements: true, item: true },
   });
 
+/**
+ * Build the update marking the given finished crafts as joined to the backpack: their craft
+ * time is cleared, so stacks later split from them are not joined again.
+ */
+export const updateUserItemForJoinFinishedCrafts = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  userItemIds: string[],
+  now: Date,
+) =>
+  client
+    .update(userItem)
+    .set({ craftingFinishedAt: null })
+    .where(
+      and(
+        eq(userItem.userId, userId),
+        inArray(userItem.id, userItemIds),
+        lte(userItem.craftingFinishedAt, now),
+      ),
+    );
+
 /** Build the `villageStructure` selection for `sellUserItem`, using predicates on `villageId` and `userId`. */
 export const selectVillageStructureForSellUserItem = (
   client: Pick<DrizzleClient, "select">,
