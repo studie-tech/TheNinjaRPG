@@ -1,7 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { createTRPCUntypedClient, loggerLink, TRPCClientError } from "@trpc/client";
 import { observable } from "@trpc/server/observable";
-import { diagnosticTrpcInput, shouldLogTrpcOperation } from "@/libs/trpcLogging";
+import {
+  canAttachTrpcInput,
+  diagnosticTrpcInput,
+  shouldLogTrpcOperation,
+} from "@/libs/trpcLogging";
 
 const request = async (
   path: string,
@@ -88,4 +92,14 @@ it("redacts native authentication proofs and future handoff credentials", () => 
   const proof = { flowId: "flow", verifier: "private-proof", ticket: "private-ticket" };
   expect(diagnosticTrpcInput("nativeAuth.exchange", proof)).toBe("[REDACTED]");
   expect(diagnosticTrpcInput("nativeAuth.start", proof)).toBe("[REDACTED]");
+});
+
+it("keeps megabyte tower defense claim logs out of error telemetry and the console", async () => {
+  const claim = { token: "token", actions: "0S".repeat(1000), endTick: 1 };
+  expect(canAttachTrpcInput("towerDefense.claimRun")).toBe(false);
+  expect(diagnosticTrpcInput("towerDefense.claimRun", claim)).toBe("[OMITTED]");
+  expect(await request("towerDefense.claimRun", true, false)).toEqual([]);
+  expect(await request("towerDefense.claimRun", false, true)).toEqual([]);
+  expect(canAttachTrpcInput("towerDefense.startRun")).toBe(true);
+  expect(canAttachTrpcInput("parentalControls.save")).toBe(false);
 });

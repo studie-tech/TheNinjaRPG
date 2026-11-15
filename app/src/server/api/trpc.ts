@@ -20,7 +20,7 @@ import {
   ISOLATED_PYRAMID_MESSAGE,
   isPyramidRestrictedProcedure,
 } from "@/libs/questRun";
-import { hasSensitiveTrpcInput } from "@/libs/trpcLogging";
+import { canAttachTrpcInput } from "@/libs/trpcLogging";
 import { trpcSessionUserId } from "@/libs/trpcSession";
 import {
   parseWallpaperVariant,
@@ -125,8 +125,8 @@ export const sentryMiddleware = t.middleware((opts) =>
     },
     () =>
       Sentry.trpcMiddleware({
-        // Parental settings contain PIN credentials; keep them out of error telemetry.
-        attachRpcInput: !hasSensitiveTrpcInput(opts.path),
+        // Credentials and oversized inputs stay out of error telemetry.
+        attachRpcInput: canAttachTrpcInput(opts.path),
       })(opts),
   ),
 );
