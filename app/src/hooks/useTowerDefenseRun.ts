@@ -388,6 +388,10 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const resume = useCallback(() => {
     const stored = loadSaved(storageKey);
     if (!stored) {
+      showMutationToast({
+        success: false,
+        message: "This saved run could not be read, so it was discarded.",
+      });
       forget();
       return;
     }
