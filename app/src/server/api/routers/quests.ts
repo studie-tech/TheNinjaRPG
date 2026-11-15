@@ -299,10 +299,16 @@ export const questsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { skip, cursorAfter } = offsetPage(input);
-      const [viewerRole, results] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
-        listQuestForGetAll(ctx.drizzle, input, skip),
-      ]);
+      const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+      // Hidden quests are listed only for content staff; everyone else gets released quests,
+      // whatever `hidden` filter they send.
+      const allowHiddenFilter = canChangeContent(viewerRole);
+      const results = await listQuestForGetAll(
+        ctx.drizzle,
+        input,
+        skip,
+        allowHiddenFilter,
+      );
       results.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });

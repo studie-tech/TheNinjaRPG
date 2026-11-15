@@ -110,6 +110,7 @@ import { missingUserMessage } from "@/server/utils/sentry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
 import { clampActionLogText } from "@/utils/actionLog";
+import { canChangeContent } from "@/utils/permissions";
 import { periodStart, secondsFromNow } from "@/utils/time";
 import type { GetPublicUsersSchema, TavernColorChangeSchema } from "@/validators/user";
 
@@ -2279,6 +2280,19 @@ export const fetchViewerRole = async (
   if (!userId) return "USER";
   const viewer = await findUserRoleById(client, userId);
   return viewer?.role ?? "USER";
+};
+
+/**
+ * Whether a public catalogue may list hidden (unreleased) entries for this viewer: only for a
+ * signed-in content editor (`canChangeContent` on their stored role). Signed-out visitors,
+ * players and other staff always get released entries, whatever `hidden` filter they send.
+ */
+export const fetchCanListHiddenContent = async (
+  client: Pick<DrizzleClient, "query">,
+  userId: string | null | undefined,
+): Promise<boolean> => {
+  if (!userId) return false;
+  return canChangeContent(await fetchViewerRole(client, userId));
 };
 
 /** Build a public-profile row by ID with its display title and village; callers apply indexability checks. */

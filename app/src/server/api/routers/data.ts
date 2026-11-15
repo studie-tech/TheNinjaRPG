@@ -99,7 +99,11 @@ import {
 } from "@/queries/data";
 import { fetchItem } from "@/queries/item";
 import { fetchJutsu } from "@/queries/jutsu";
-import { fetchUser, fetchViewerRole } from "@/queries/profile";
+import {
+  fetchCanListHiddenContent,
+  fetchUser,
+  fetchViewerRole,
+} from "@/queries/profile";
 
 import {
   baseServerResponse,
@@ -127,7 +131,7 @@ import { skillTreeFilteringSchema } from "@/validators/skillTree";
 import { getPublicUsersSchema } from "@/validators/user";
 import { bloodlineDatabaseFilter } from "./bloodline";
 import { itemDatabaseFilter } from "./item";
-import { jutsuDatabaseFilter } from "./jutsu";
+import { jutsuCatalogueHiddenScope, jutsuDatabaseFilter } from "./jutsu";
 import { skillTreeDatabaseFilter } from "./skillTree";
 
 export const dataRouter = createTRPCRouter({
@@ -862,8 +866,9 @@ export const dataRouter = createTRPCRouter({
       if (!effects || effects.length === 0) {
         return [];
       }
-      // Build where conditions
-      const baseFilters = jutsuDatabaseFilter(input);
+      // Build where conditions; hidden jutsu only for content staff who ask for them
+      const hiddenScope = await jutsuCatalogueHiddenScope(ctx, input.hidden);
+      const baseFilters = jutsuDatabaseFilter(input, hiddenScope);
       // Fetch results
       const results = await listJutsuForGetJutsuEffectsBalanceStatistics(
         ctx.drizzle,
@@ -882,8 +887,11 @@ export const dataRouter = createTRPCRouter({
       if (!effects || effects.length === 0) {
         return [];
       }
-      // Build where conditions
-      const baseFilters = itemDatabaseFilter(input);
+      // Build where conditions; hidden items only for content staff who ask for them
+      const allowHidden =
+        input.hidden === true &&
+        (await fetchCanListHiddenContent(ctx.drizzle, ctx.userId));
+      const baseFilters = itemDatabaseFilter(input, allowHidden);
       // Fetch results
       const results = await listItemForGetItemEffectsBalanceStatistics(
         ctx.drizzle,
@@ -902,8 +910,11 @@ export const dataRouter = createTRPCRouter({
       if (!effects || effects.length === 0) {
         return [];
       }
-      // Build where conditions
-      const baseFilters = bloodlineDatabaseFilter(input);
+      // Build where conditions; hidden bloodlines only for content staff who ask for them
+      const allowHidden =
+        input.hidden === true &&
+        (await fetchCanListHiddenContent(ctx.drizzle, ctx.userId));
+      const baseFilters = bloodlineDatabaseFilter(input, allowHidden);
       // Fetch results
       const results = await listBloodlineForGetBloodlineEffectsBalanceStatistics(
         ctx.drizzle,

@@ -70,7 +70,7 @@ describeWithDatabase("jutsuDatabaseFilter", () => {
         and(
           ...jutsuDatabaseFilter(
             { limit: 50, name: "wall" } as JutsuFilteringSchema,
-            false,
+            "released",
             sql`${parent.name}`,
           ),
         ),

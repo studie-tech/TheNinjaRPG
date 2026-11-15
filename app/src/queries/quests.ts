@@ -372,6 +372,8 @@ export const listQuestForGetAll = (
     limit: number;
   },
   skip: number,
+  /** Only true for content staff: apply `input.hidden` (unset = all). Otherwise released only. */
+  allowHiddenFilter = false,
 ) =>
   client.query.quest.findMany({
     with: { village: true },
@@ -392,7 +394,11 @@ export const listQuestForGetAll = (
       ...(input.bloodline ? [eq(quest.requiredBloodlineId, input.bloodline)] : []),
       ...(input.sageMode ? [eq(quest.requiredSageModeId, input.sageMode)] : []),
       ...(input.userLevel ? [...questLevelFilters(input.userLevel)] : []),
-      ...(input.hidden !== undefined ? [eq(quest.hidden, !!input.hidden)] : []),
+      ...(allowHiddenFilter
+        ? input.hidden !== undefined
+          ? [eq(quest.hidden, input.hidden)]
+          : []
+        : [eq(quest.hidden, false)]),
     ),
     offset: skip,
     limit: input.limit,
