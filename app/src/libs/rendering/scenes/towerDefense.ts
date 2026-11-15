@@ -42,13 +42,17 @@ import {
   TD_JUTSU_INFO,
   type TdElement,
   type TdEnemyKind,
+  type TdSealArt,
   type TdSentry,
+  type TdUltimate,
   tdStageForWave,
 } from "@/libs/towerDefense/content";
 import {
+  type TdBossMove,
   type TdEnemy,
   type TdEvent,
   type TdState,
+  tdIsPhased,
   tdSentryPosition,
   tdSentryRange,
 } from "@/libs/towerDefense/sim";
@@ -516,13 +520,6 @@ export const createTowerDefenseScene = async (options: {
     // Projectiles in flight, from throw events
     const flights: Flight[] = [];
     const flightPool: Sprite[] = [];
-    const takeSprite = () => {
-      const sprite = flightPool.pop() ?? new Sprite(shuriken);
-      sprite.anchor.set(0.5);
-      sprite.visible = true;
-      projectileLayer.addChild(sprite);
-      return sprite;
-    };
     const hitClips: {
       sprite: Sprite;
       startedAt: number;
@@ -703,7 +700,6 @@ export const createTowerDefenseScene = async (options: {
         );
         if (!reduced) flight.sprite.rotation += frame.delta * 14;
         if (t >= 1) {
-          flight.sprite.visible = false;
           projectileLayer.removeChild(flight.sprite);
           flightPool.push(flight.sprite);
           flights.splice(i, 1);
@@ -763,7 +759,9 @@ export const createTowerDefenseScene = async (options: {
       switch (event.type) {
         case "throw": {
           if (flights.length > 160) return;
-          const sprite = takeSprite();
+          const sprite =
+            flightPool.pop() ?? new Sprite({ texture: shuriken, anchor: 0.5 });
+          projectileLayer.addChild(sprite);
           const size = event.from === "sentry" ? 0.28 : event.crit ? 0.42 : 0.34;
           sprite.width = sprite.height = size;
           sprite.tint =
@@ -1162,11 +1160,6 @@ export const createTowerDefenseScene = async (options: {
           });
           if (event.perfect) {
             fx.flash(0xffffff, 0.45, 0.25);
-            fx.number(heroX, heroY + 1.6, 0, {
-              color: 0xffe14d,
-              crit: true,
-              prefix: "+",
-            });
             const target = enemies.get(event.counterId);
             if (target)
               fx.streak(heroX, heroY + 0.7, target.x, target.y + 0.6, {
@@ -1351,9 +1344,7 @@ export const createTowerDefenseScene = async (options: {
       if (now < record.flashUntil) tint = 0xff6b6b;
       record.body.tint = tint;
       record.fallback.tint = tint;
-      const phased =
-        TD_ENEMIES[enemy.kind].phase && (state.tick + enemy.phaseOffset) % 30 < 10;
-      record.root.alpha = phased
+      record.root.alpha = tdIsPhased(state, enemy)
         ? 0.25
         : enemy.camo && enemy.id !== state.focusId
           ? 0.45
@@ -1704,20 +1695,16 @@ export const eventSound = (event: TdEvent): [TdSfx, number, number] | null => {
   }
 };
 
-const BOSS_MOVE_SOUNDS: Record<Extract<TdEvent, { type: "bossMove" }>["move"], TdSfx> =
-  {
-    slam: "charge",
-    summon: "smoke",
-    roar: "roar",
-    charge: "whoosh",
-    barrage: "clash",
-    heal: "heal",
-  };
+const BOSS_MOVE_SOUNDS: Record<TdBossMove, TdSfx> = {
+  slam: "charge",
+  summon: "smoke",
+  roar: "roar",
+  charge: "whoosh",
+  barrage: "clash",
+  heal: "heal",
+};
 
-const ART_SOUNDS: Record<
-  Exclude<Extract<TdEvent, { type: "art" }>["art"], "fizzle">,
-  TdSfx
-> = {
+const ART_SOUNDS: Record<TdSealArt, TdSfx> = {
   dragon_flame: "fire",
   thunder_strike: "lightning",
   water_prison: "ice",
@@ -1726,10 +1713,7 @@ const ART_SOUNDS: Record<
   earth_dome: "earth",
 };
 
-const ULTIMATE_SOUNDS: Record<
-  Extract<TdEvent, { type: "ultimate" }>["ultimate"],
-  TdSfx
-> = {
+const ULTIMATE_SOUNDS: Record<TdUltimate, TdSfx> = {
   clones: "smoke",
   tempest: "whoosh",
   amaterasu: "fire",

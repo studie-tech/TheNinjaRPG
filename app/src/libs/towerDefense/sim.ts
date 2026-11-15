@@ -1383,7 +1383,8 @@ const scalePoint = (point: { x: number; y: number }, scale: number) => ({
 const arrivalTick = (state: TdState, dist: number, speed: number, min = 1) =>
   state.tick + Math.max(min, Math.round((dist / speed) * TD_TPS));
 
-const isPhased = (state: TdState, enemy: TdEnemy) =>
+/** Whether a phasing enemy is out of reach on this tick. */
+export const tdIsPhased = (state: TdState, enemy: TdEnemy) =>
   TD_ENEMIES[enemy.kind].phase === true && (state.tick + enemy.phaseOffset) % 30 < 10;
 
 const enemiesWithin = (state: TdState, x: number, y: number, radius: number) =>
@@ -1426,7 +1427,7 @@ const damageEnemy = (
   element: TdElement,
   options: { crit?: boolean; ignoreArmor?: boolean; dot?: boolean } = {},
 ) => {
-  if (isPhased(state, enemy) || raw <= 0) return 0;
+  if (tdIsPhased(state, enemy) || raw <= 0) return 0;
   let amount = raw * vulnerability(state, enemy);
   if (enemy.ward === element) amount *= 0.1;
   let shieldHit = false;
@@ -1564,7 +1565,7 @@ const damageHero = (
 // ============================================
 
 const canSee = (state: TdState, enemy: TdEnemy, fromX: number, fromY: number) => {
-  if (isPhased(state, enemy)) return false;
+  if (tdIsPhased(state, enemy)) return false;
   if (!enemy.camo || enemy.id === state.focusId) return true;
   return (
     distance(enemy.x, enemy.y, fromX, fromY) <= TD_CAMO_REVEAL_RANGE ||

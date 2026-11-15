@@ -190,16 +190,15 @@ export const createTowerDefenseFx = () => {
     x: number,
     y: number,
     value: number,
-    options: { color: number; crit?: boolean; prefix?: string },
+    options: { color: number; crit?: boolean },
   ) => {
     const record = numbers[nextNumber];
     nextNumber = (nextNumber + 1) % numbers.length;
     if (!record) return;
-    const text =
-      `${options.prefix ?? ""}${formatTdNumber(value)}${options.crit ? "!" : ""}`.slice(
-        0,
-        record.glyphs.length,
-      );
+    const text = `${formatTdNumber(value)}${options.crit ? "!" : ""}`.slice(
+      0,
+      record.glyphs.length,
+    );
     const scale = options.crit ? 0.016 : 0.011;
     record.root.position.set(
       x + (Math.random() - 0.5) * 0.5,
@@ -384,7 +383,7 @@ const ageEntries = <T extends { age: number; life: number }>(
 };
 
 const createGlyphAtlas = () => {
-  const characters = "0123456789.KMBTqQsSond!-+∞";
+  const characters = "0123456789.KMBTqQsSond!-∞";
   const canvas = document.createElement("canvas");
   canvas.width = characters.length * 32;
   canvas.height = 64;
