@@ -37,13 +37,13 @@ import {
 } from "@/libs/spriteAnimations";
 import { TD_HERO_ZONE, TD_TICK_SECONDS } from "@/libs/towerDefense/balance";
 import {
-  TD_AFFIX_INFO,
+  TD_AFFIX_TINTS,
   TD_ENEMIES,
   TD_ENEMY_KINDS,
   TD_JUTSU_INFO,
-  TD_SENTRY_INFO,
   type TdElement,
   type TdEnemyKind,
+  type TdSentry,
   tdStageForWave,
 } from "@/libs/towerDefense/content";
 import {
@@ -51,6 +51,7 @@ import {
   type TdEvent,
   type TdState,
   tdSentryPosition,
+  tdSentryRange,
 } from "@/libs/towerDefense/sim";
 import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
 
@@ -81,7 +82,7 @@ const ELEMENT_COLORS: Record<TdElement, number> = {
   earth: 0xc8945a,
 };
 
-const SENTRY_COLORS: Record<string, number> = {
+const SENTRY_COLORS: Record<TdSentry, number> = {
   kunai: 0xd0d0d0,
   mortar: 0xff8a3d,
   rod: 0x8fd3ff,
@@ -692,7 +693,6 @@ export const createTowerDefenseScene = async (options: {
       // Enemies
       frameNumber++;
       for (const enemy of state.enemies) {
-        if (enemy.dead) continue;
         const record = enemies.get(enemy.id) ?? spawnEnemy(enemy, state.wave);
         record.seenFrame = frameNumber;
         const jump = Math.hypot(enemy.x - record.x, enemy.y - record.y) > 3;
@@ -1415,7 +1415,7 @@ export const createTowerDefenseScene = async (options: {
           ? enemy.enraged
             ? 0xff2a2a
             : 0xffd36b
-          : TD_AFFIX_INFO[enemy.affixes[0] ?? "armored"].tint;
+          : TD_AFFIX_TINTS[enemy.affixes[0] ?? "armored"];
         halo.ring.tint = color;
         halo.ring.alpha = 0.5 + pulse * 0.4;
         if (enemy.boss) {
@@ -1514,11 +1514,10 @@ export const createTowerDefenseScene = async (options: {
               .stroke({ color: 0xffffff, alpha: 0.25, width: 0.04 });
             continue;
           }
-          const color = SENTRY_COLORS[sentry.type] ?? 0xffffff;
-          const info = TD_SENTRY_INFO[sentry.type];
+          const color = SENTRY_COLORS[sentry.type];
           if (sentry.type === "frost" || sentry.type === "sensor")
             sentryGround
-              .circle(at.x, at.y, info.range + sentry.level * 0.25)
+              .circle(at.x, at.y, tdSentryRange(sentry))
               .fill({ color, alpha: 0.05 });
           sentryGround
             .ellipse(at.x, at.y, 0.4, 0.17)
@@ -1539,7 +1538,7 @@ export const createTowerDefenseScene = async (options: {
         const sentry = state.sentries[slot];
         if (!sentry) continue;
         const at = tdSentryPosition(slot);
-        const color = SENTRY_COLORS[sentry.type] ?? 0xffffff;
+        const color = SENTRY_COLORS[sentry.type];
         const glowSize =
           0.18 +
           Math.min(0.25, sentry.level * 0.01) +

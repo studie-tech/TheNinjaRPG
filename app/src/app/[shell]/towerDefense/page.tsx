@@ -408,11 +408,10 @@ const LeaderboardLink = () => (
 );
 
 /** Aim at the thickest crowd when the player has not placed a reticle. */
-const nearestCrowd = (enemies: { x: number; y: number; dead: boolean }[]) => {
+const nearestCrowd = (enemies: { x: number; y: number }[]) => {
   let best = { x: 0, y: 3 },
     bestCount = 0;
   for (const enemy of enemies.slice(0, 40)) {
-    if (enemy.dead) continue;
     let count = 0;
     for (const other of enemies)
       if (Math.abs(other.x - enemy.x) + Math.abs(other.y - enemy.y) < 3) count++;

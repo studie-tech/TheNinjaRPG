@@ -2,9 +2,8 @@
  * Tower-defense content: enemies, affixes, eras, jutsu, sentries, seal arts, ultimates,
  * perks, the in-run shop and the permanent Dojo. Everything here is data read by the
  * deterministic simulation (`sim.ts`), the server replay and the UI, so balance changes
- * apply to all three at once. Changing a value changes how recorded runs replay; runs
- * are only replayed while their session token is live, so this is safe between deploys
- * as long as no claim straddles one.
+ * apply to all three at once. A value the simulation reads changes how recorded runs
+ * replay, so changing one means bumping `TD_SIM_VERSION`.
  */
 
 // ============================================
@@ -42,9 +41,6 @@ export const TD_ENEMY_KINDS = [
 export type TdEnemyKind = (typeof TD_ENEMY_KINDS)[number];
 
 export interface TdEnemyArchetype {
-  name: string;
-  /** What the player should learn about this enemy. */
-  hint: string;
   /** Multipliers on the wave's reference health, damage and bounty. */
   hp: number;
   damage: number;
@@ -84,8 +80,6 @@ export interface TdEnemyArchetype {
 
 export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
   grunt: {
-    name: "Bandit",
-    hint: "Basic melee fighter.",
     hp: 1,
     damage: 1,
     bounty: 1,
@@ -98,8 +92,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1,
   },
   swift: {
-    name: "Runner",
-    hint: "Fast and fragile. Slows and range keep them off you.",
     hp: 0.55,
     damage: 0.7,
     bounty: 0.9,
@@ -112,8 +104,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 0.85,
   },
   brute: {
-    name: "Armored Brute",
-    hint: "Armor shrugs off weak hits. Use big hits, crits or lightning.",
     hp: 3,
     damage: 2,
     bounty: 2.5,
@@ -127,8 +117,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1.25,
   },
   archer: {
-    name: "Kunai Thrower",
-    hint: "Attacks from range. Extend your range or blink toward them.",
     hp: 0.8,
     damage: 0.8,
     bounty: 1.4,
@@ -141,8 +129,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 0.95,
   },
   shieldbearer: {
-    name: "Chakra Guard",
-    hint: "Shield refills when left alone. Lightning breaks shields twice as fast.",
     hp: 1.2,
     damage: 1.2,
     bounty: 2,
@@ -156,8 +142,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1.1,
   },
   splitter: {
-    name: "Clay Clone",
-    hint: "Splits into three when killed. Area damage cleans up.",
     hp: 1.6,
     damage: 1,
     bounty: 1.2,
@@ -171,8 +155,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1.1,
   },
   mini: {
-    name: "Clay Fragment",
-    hint: "Remains of a clay clone.",
     hp: 0.35,
     damage: 0.5,
     bounty: 0.3,
@@ -185,8 +167,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 0.6,
   },
   regenerator: {
-    name: "Cursed Monk",
-    hint: "Regenerates quickly. Fire and black flames stop the healing.",
     hp: 1.9,
     damage: 1.1,
     bounty: 2,
@@ -200,8 +180,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1.1,
   },
   shade: {
-    name: "Shade",
-    hint: "Camouflaged: auto-attacks only see it up close. Sensor totems reveal it.",
     hp: 1,
     damage: 1.3,
     bounty: 2,
@@ -215,8 +193,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1,
   },
   medic: {
-    name: "Field Medic",
-    hint: "Heals nearby enemies. Kill it first: mark it or use Support targeting.",
     hp: 1.5,
     damage: 0.6,
     bounty: 2.5,
@@ -230,8 +206,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1,
   },
   bomber: {
-    name: "Tag Runner",
-    hint: "Sprints in and explodes. Knock it back, slow it, or swap out with Substitution.",
     hp: 0.7,
     damage: 1,
     bounty: 1.8,
@@ -245,8 +219,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 0.95,
   },
   summoner: {
-    name: "Summoner",
-    hint: "Keeps calling bandits. Hunt it down.",
     hp: 2.6,
     damage: 0.8,
     bounty: 3,
@@ -260,8 +232,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1.15,
   },
   golem: {
-    name: "Stone Golem",
-    hint: "Huge, armored and immune to crowd control.",
     hp: 8,
     damage: 3,
     bounty: 6,
@@ -276,8 +246,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1.6,
   },
   wraith: {
-    name: "Wraith",
-    hint: "Phases out of reality every few seconds. Hit it while it is solid.",
     hp: 2,
     damage: 1.6,
     bounty: 3,
@@ -291,8 +259,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1.05,
   },
   boss: {
-    name: "Rogue Jonin",
-    hint: "Boss. Watch for red circles: blink away or time a Substitution.",
     hp: 40,
     damage: 4,
     bounty: 25,
@@ -305,8 +271,6 @@ export const TD_ENEMIES: Record<TdEnemyKind, TdEnemyArchetype> = {
     size: 1.9,
   },
   titan: {
-    name: "Titan",
-    hint: "Era boss. Every move in the book, and it enrages.",
     hp: 220,
     damage: 7,
     bounty: 120,
@@ -338,19 +302,17 @@ export const TD_AFFIXES = [
 ] as const;
 export type TdAffix = (typeof TD_AFFIXES)[number];
 
-export const TD_AFFIX_INFO: Record<
-  TdAffix,
-  { name: string; hint: string; tint: number }
-> = {
-  armored: { name: "Armored", hint: "+5% armor", tint: 0xc0c4cc },
-  shielded: { name: "Shielded", hint: "Chakra shield", tint: 0x6fb8ff },
-  hasted: { name: "Hasted", hint: "+50% speed", tint: 0xfff176 },
-  regenerating: { name: "Regenerating", hint: "Heals 3%/s", tint: 0x8cff8c },
-  vampiric: { name: "Vampiric", hint: "Heals from hits on you", tint: 0xff4d6d },
-  juggernaut: { name: "Juggernaut", hint: "Crowd control immune", tint: 0xb08968 },
-  warded: { name: "Warded", hint: "Resists one element", tint: 0xe0aaff },
-  splitting: { name: "Splitting", hint: "Splits on death", tint: 0xd9a36c },
-  berserk: { name: "Berserk", hint: "Faster and harder at low health", tint: 0xff6b35 },
+/** Render tint of each affix. */
+export const TD_AFFIX_TINTS: Record<TdAffix, number> = {
+  armored: 0xc0c4cc,
+  shielded: 0x6fb8ff,
+  hasted: 0xfff176,
+  regenerating: 0x8cff8c,
+  vampiric: 0xff4d6d,
+  juggernaut: 0xb08968,
+  warded: 0xe0aaff,
+  splitting: 0xd9a36c,
+  berserk: 0xff6b35,
 };
 
 // ============================================
@@ -375,79 +337,67 @@ export type TdEra = (typeof TD_ERAS)[number];
 
 export const TD_ERA_INFO: Record<
   TdEra,
-  { name: string; description: string; firstWave: number; sky: number }
+  { name: string; description: string; firstWave: number }
 > = {
   calm: {
     name: "Calm",
     description: "No modifier.",
     firstWave: 1,
-    sky: 0x87b5ff,
   },
   iron_tide: {
     name: "Iron Tide",
     description: "Every enemy wears armor. Hit hard or use lightning.",
     firstWave: 21,
-    sky: 0x9aa5b1,
   },
   blitz: {
     name: "Blitz",
     description: "Enemies are 40% faster but 20% frailer.",
     firstWave: 21,
-    sky: 0xffd36b,
   },
   swarm: {
     name: "Swarm",
     description: "Twice the enemies at 45% health. Area damage shines.",
     firstWave: 21,
-    sky: 0xb7e07a,
   },
   fog: {
     name: "Fog of War",
     description: "Range -25% and every third enemy is camouflaged.",
     firstWave: 41,
-    sky: 0x6b7a8f,
   },
   siege: {
     name: "Siege",
     description: "Three times as many kunai throwers with longer range.",
     firstWave: 41,
-    sky: 0xd9915c,
   },
   titans: {
     name: "Titans",
     description: "Half the enemies with 2.5x health, all immune to crowd control.",
     firstWave: 61,
-    sky: 0x8d6e63,
   },
   blood_moon: {
     name: "Blood Moon",
     description: "Enemies regenerate and heal from their hits.",
     firstWave: 81,
-    sky: 0xb3002d,
   },
   elemental_storm: {
     name: "Elemental Storm",
     description: "Every enemy resists a random element. Diversify your damage.",
     firstWave: 91,
-    sky: 0x7c4dff,
   },
   hydra: {
     name: "Hydra",
     description: "Every enemy splits in two when it dies.",
     firstWave: 111,
-    sky: 0x2e7d32,
   },
   meteor_shower: {
     name: "Meteor Shower",
     description: "Meteors rain on the arena. They hit enemies too, and you.",
     firstWave: 151,
-    sky: 0xff5722,
   },
   rifts: {
     name: "Void Rifts",
     description: "Enemies tear through rifts much closer to you.",
     firstWave: 201,
-    sky: 0x311b92,
   },
 };
 
@@ -547,8 +497,7 @@ export const TD_SENTRY_INFO: Record<
   {
     name: string;
     description: string;
-    element: TdElement;
-    /** Half the ryo to build; each level costs 60% more than the last. */
+    /** Ryo to build; each level costs 60% more than the last. */
     cost: number;
     /** Seconds between attacks. */
     attackEvery: number;
@@ -559,8 +508,7 @@ export const TD_SENTRY_INFO: Record<
   kunai: {
     name: "Kunai Turret",
     description: "Rapid single-target kunai.",
-    element: "physical",
-    cost: 40,
+    cost: 80,
     attackEvery: 0.5,
     power: 0.6,
     range: 6,
@@ -568,8 +516,7 @@ export const TD_SENTRY_INFO: Record<
   mortar: {
     name: "Tag Mortar",
     description: "Lobs explosive tags at crowds.",
-    element: "fire",
-    cost: 70,
+    cost: 140,
     attackEvery: 2,
     power: 2.5,
     range: 7,
@@ -577,8 +524,7 @@ export const TD_SENTRY_INFO: Record<
   rod: {
     name: "Lightning Rod",
     description: "Chains three enemies, ignoring armor.",
-    element: "lightning",
-    cost: 80,
+    cost: 160,
     attackEvery: 1.25,
     power: 1.2,
     range: 4.5,
@@ -586,8 +532,7 @@ export const TD_SENTRY_INFO: Record<
   frost: {
     name: "Frost Totem",
     description: "Chills everything nearby and pulses damage.",
-    element: "water",
-    cost: 60,
+    cost: 120,
     attackEvery: 1,
     power: 0.5,
     range: 3.5,
@@ -595,8 +540,7 @@ export const TD_SENTRY_INFO: Record<
   sensor: {
     name: "Sensor Totem",
     description: "Reveals camouflage within its range; enemies there take +15% damage.",
-    element: "physical",
-    cost: 50,
+    cost: 100,
     attackEvery: 1,
     power: 0,
     range: 6,
@@ -627,7 +571,6 @@ export const TD_SEAL_ART_INFO: Record<
     power: number;
     radius: number;
     firstWave: number;
-    element: TdElement;
   }
 > = {
   dragon_flame: {
@@ -638,7 +581,6 @@ export const TD_SEAL_ART_INFO: Record<
     power: 10,
     radius: 2,
     firstWave: 1,
-    element: "fire",
   },
   thunder_strike: {
     name: "Thunder Strike",
@@ -649,7 +591,6 @@ export const TD_SEAL_ART_INFO: Record<
     power: 30,
     radius: 2.5,
     firstWave: 15,
-    element: "lightning",
   },
   water_prison: {
     name: "Water Prison",
@@ -659,7 +600,6 @@ export const TD_SEAL_ART_INFO: Record<
     power: 2,
     radius: 2,
     firstWave: 30,
-    element: "water",
   },
   cyclone: {
     name: "Cyclone",
@@ -669,7 +609,6 @@ export const TD_SEAL_ART_INFO: Record<
     power: 3,
     radius: 3,
     firstWave: 50,
-    element: "wind",
   },
   mystic_palm: {
     name: "Mystic Palm",
@@ -679,7 +618,6 @@ export const TD_SEAL_ART_INFO: Record<
     power: 0.35,
     radius: 0,
     firstWave: 8,
-    element: "physical",
   },
   earth_dome: {
     name: "Earth Dome",
@@ -689,7 +627,6 @@ export const TD_SEAL_ART_INFO: Record<
     power: 0.5,
     radius: 0,
     firstWave: 70,
-    element: "earth",
   },
 };
 
@@ -791,6 +728,16 @@ export interface TdPerkInfo {
   /** Evolutions need this jutsu at in-run level `TD_EVOLUTION_LEVEL` or more. */
   jutsu?: TdJutsu;
 }
+
+/** The perk that evolves a jutsu into its evolved form. */
+const evolutionPerk = (jutsu: TdJutsu, description: string): TdPerkInfo => ({
+  name: `Evolution: ${TD_JUTSU_INFO[jutsu].evolvedName}`,
+  description,
+  max: 1,
+  firstWave: 10,
+  kind: "evolution",
+  jutsu,
+});
 
 export const TD_PERK_INFO: Record<TdPerk, TdPerkInfo> = {
   sharp_steel: {
@@ -989,46 +936,20 @@ export const TD_PERK_INFO: Record<TdPerk, TdPerkInfo> = {
     firstWave: 15,
     kind: "mechanic",
   },
-  evolve_fire: {
-    name: "Evolution: Phoenix Flower",
-    description: "Great Fireball splits into five fireballs.",
-    max: 1,
-    firstWave: 10,
-    kind: "evolution",
-    jutsu: "fire",
-  },
-  evolve_lightning: {
-    name: "Evolution: Kirin",
-    description: "Every cast also strikes every enemy on the field.",
-    max: 1,
-    firstWave: 10,
-    kind: "evolution",
-    jutsu: "lightning",
-  },
-  evolve_water: {
-    name: "Evolution: Absolute Zero",
-    description: "Tidal Wave freezes enemies solid for 1.5s.",
-    max: 1,
-    firstWave: 10,
-    kind: "evolution",
-    jutsu: "water",
-  },
-  evolve_wind: {
-    name: "Evolution: Gale Spiral",
-    description: "Vacuum Blades fire in three directions and pull enemies.",
-    max: 1,
-    firstWave: 10,
-    kind: "evolution",
-    jutsu: "wind",
-  },
-  evolve_earth: {
-    name: "Evolution: Tectonic Rift",
-    description: "Stone Spikes erupt in three expanding rings and stun 1s longer.",
-    max: 1,
-    firstWave: 10,
-    kind: "evolution",
-    jutsu: "earth",
-  },
+  evolve_fire: evolutionPerk("fire", "Great Fireball splits into five fireballs."),
+  evolve_lightning: evolutionPerk(
+    "lightning",
+    "Every cast also strikes every enemy on the field.",
+  ),
+  evolve_water: evolutionPerk("water", "Tidal Wave freezes enemies solid for 1.5s."),
+  evolve_wind: evolutionPerk(
+    "wind",
+    "Vacuum Blades fire in three directions and pull enemies.",
+  ),
+  evolve_earth: evolutionPerk(
+    "earth",
+    "Stone Spikes erupt in three expanding rings and stun 1s longer.",
+  ),
 };
 
 /** In-run jutsu level at which its evolution can be drafted. */
@@ -1065,6 +986,16 @@ export interface TdShopInfo {
   max: number;
   jutsu?: TdJutsu;
 }
+
+/** The shop item that levels up a jutsu during a run. */
+const jutsuShopItem = (jutsu: TdJutsu, extra = ""): TdShopInfo => ({
+  name: TD_JUTSU_INFO[jutsu].name,
+  description: `x1.08 damage, -2% cooldown${extra}`,
+  base: 25,
+  growth: 1.2,
+  max: 2000,
+  jutsu,
+});
 
 export const TD_SHOP_INFO: Record<TdShopItem, TdShopInfo> = {
   damage: {
@@ -1130,46 +1061,11 @@ export const TD_SHOP_INFO: Record<TdShopItem, TdShopInfo> = {
     growth: 1.2,
     max: 30,
   },
-  jutsu_fire: {
-    name: "Great Fireball",
-    description: "x1.08 damage, -2% cooldown",
-    base: 25,
-    growth: 1.2,
-    max: 2000,
-    jutsu: "fire",
-  },
-  jutsu_lightning: {
-    name: "Lightning Chain",
-    description: "x1.08 damage, -2% cooldown, +1 chain every 3 levels",
-    base: 25,
-    growth: 1.2,
-    max: 2000,
-    jutsu: "lightning",
-  },
-  jutsu_water: {
-    name: "Tidal Wave",
-    description: "x1.08 damage, -2% cooldown",
-    base: 25,
-    growth: 1.2,
-    max: 2000,
-    jutsu: "water",
-  },
-  jutsu_wind: {
-    name: "Vacuum Blades",
-    description: "x1.08 damage, -2% cooldown",
-    base: 25,
-    growth: 1.2,
-    max: 2000,
-    jutsu: "wind",
-  },
-  jutsu_earth: {
-    name: "Stone Spikes",
-    description: "x1.08 damage, -2% cooldown",
-    base: 25,
-    growth: 1.2,
-    max: 2000,
-    jutsu: "earth",
-  },
+  jutsu_fire: jutsuShopItem("fire"),
+  jutsu_lightning: jutsuShopItem("lightning", ", +1 chain every 3 levels"),
+  jutsu_water: jutsuShopItem("water"),
+  jutsu_wind: jutsuShopItem("wind"),
+  jutsu_earth: jutsuShopItem("earth"),
 };
 
 /** How "Spend all" weighs each item: it buys whichever is cheapest for its weight. */
@@ -1259,6 +1155,37 @@ export interface TdDojoInfo {
   /** Best wave needed before the first level can be bought. */
   unlockWave: number;
 }
+
+/** The Dojo upgrade that unlocks a jutsu and then raises its damage. */
+const jutsuDojo = (
+  jutsu: TdJutsu,
+  name: string,
+  base: number,
+  unlockWave: number,
+): TdDojoInfo => ({
+  name,
+  description: `Unlocks ${TD_JUTSU_INFO[jutsu].name}; later levels x1.06 jutsu damage.`,
+  category: "jutsu",
+  base,
+  growth: 1.15,
+  max: 300,
+  unlockWave,
+});
+
+/** The Dojo upgrade that unlocks an ultimate and then strengthens it. */
+const ultimateDojo = (
+  ultimate: TdUltimate,
+  base: number,
+  unlockWave: number,
+): TdDojoInfo => ({
+  name: TD_ULTIMATE_INFO[ultimate].name,
+  description: "Unlocks the ultimate; later levels x1.1 power and -2% cooldown.",
+  category: "ultimate",
+  base,
+  growth: 1.12,
+  max: 50,
+  unlockWave,
+});
 
 export const TD_DOJO_INFO: Record<TdDojoUpgrade, TdDojoInfo> = {
   dmg: {
@@ -1424,51 +1351,11 @@ export const TD_DOJO_INFO: Record<TdDojoUpgrade, TdDojoInfo> = {
     max: 4,
     unlockWave: 20,
   },
-  jt_fire: {
-    name: "Fire Release",
-    description: "Unlocks Great Fireball; later levels x1.06 jutsu damage.",
-    category: "jutsu",
-    base: 30,
-    growth: 1.15,
-    max: 300,
-    unlockWave: 3,
-  },
-  jt_lightning: {
-    name: "Lightning Release",
-    description: "Unlocks Lightning Chain; later levels x1.06 jutsu damage.",
-    category: "jutsu",
-    base: 80,
-    growth: 1.15,
-    max: 300,
-    unlockWave: 15,
-  },
-  jt_water: {
-    name: "Water Release",
-    description: "Unlocks Tidal Wave; later levels x1.06 jutsu damage.",
-    category: "jutsu",
-    base: 150,
-    growth: 1.15,
-    max: 300,
-    unlockWave: 30,
-  },
-  jt_wind: {
-    name: "Wind Release",
-    description: "Unlocks Vacuum Blades; later levels x1.06 jutsu damage.",
-    category: "jutsu",
-    base: 300,
-    growth: 1.15,
-    max: 300,
-    unlockWave: 45,
-  },
-  jt_earth: {
-    name: "Earth Release",
-    description: "Unlocks Stone Spikes; later levels x1.06 jutsu damage.",
-    category: "jutsu",
-    base: 600,
-    growth: 1.15,
-    max: 300,
-    unlockWave: 70,
-  },
+  jt_fire: jutsuDojo("fire", "Fire Release", 30, 3),
+  jt_lightning: jutsuDojo("lightning", "Lightning Release", 80, 15),
+  jt_water: jutsuDojo("water", "Water Release", 150, 30),
+  jt_wind: jutsuDojo("wind", "Wind Release", 300, 45),
+  jt_earth: jutsuDojo("earth", "Earth Release", 600, 70),
   jt_cd: {
     name: "Seal Speed",
     description: "-1% jutsu cooldowns per level.",
@@ -1559,51 +1446,11 @@ export const TD_DOJO_INFO: Record<TdDojoUpgrade, TdDojoInfo> = {
     max: 3,
     unlockWave: 30,
   },
-  ul_clones: {
-    name: "Shadow Clone Army",
-    description: "Unlocks the ultimate; later levels x1.1 power and -2% cooldown.",
-    category: "ultimate",
-    base: 200,
-    growth: 1.12,
-    max: 50,
-    unlockWave: 25,
-  },
-  ul_tempest: {
-    name: "Spiral Tempest",
-    description: "Unlocks the ultimate; later levels x1.1 power and -2% cooldown.",
-    category: "ultimate",
-    base: 500,
-    growth: 1.12,
-    max: 50,
-    unlockWave: 60,
-  },
-  ul_amaterasu: {
-    name: "Amaterasu",
-    description: "Unlocks the ultimate; later levels x1.1 power and -2% cooldown.",
-    category: "ultimate",
-    base: 1500,
-    growth: 1.12,
-    max: 50,
-    unlockWave: 100,
-  },
-  ul_tsukuyomi: {
-    name: "Tsukuyomi",
-    description: "Unlocks the ultimate; later levels x1.1 power and -2% cooldown.",
-    category: "ultimate",
-    base: 4000,
-    growth: 1.12,
-    max: 50,
-    unlockWave: 150,
-  },
-  ul_cataclysm: {
-    name: "Chakra Cataclysm",
-    description: "Unlocks the ultimate; later levels x1.1 power and -2% cooldown.",
-    category: "ultimate",
-    base: 12000,
-    growth: 1.12,
-    max: 50,
-    unlockWave: 250,
-  },
+  ul_clones: ultimateDojo("clones", 200, 25),
+  ul_tempest: ultimateDojo("tempest", 500, 60),
+  ul_amaterasu: ultimateDojo("amaterasu", 1500, 100),
+  ul_tsukuyomi: ultimateDojo("tsukuyomi", 4000, 150),
+  ul_cataclysm: ultimateDojo("cataclysm", 12000, 250),
   ul_auto: {
     name: "Muscle Memory",
     description: "Lets ultimates cast themselves when ready (toggle in a run).",

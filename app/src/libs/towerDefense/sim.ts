@@ -55,6 +55,7 @@ import {
   TD_DOJO_INFO,
   TD_ELEMENTS,
   TD_ENEMIES,
+  TD_ENEMY_KINDS,
   TD_ERA_INFO,
   TD_ERA_INTERVAL,
   TD_ERA_START_WAVE,
@@ -178,7 +179,6 @@ export interface TdEnemy {
   summonReadyAt: number;
   phaseOffset: number;
   enraged: boolean;
-  dead: boolean;
   size: number;
 }
 
@@ -191,15 +191,12 @@ interface PendingHit {
   damage: number;
   element: TdElement;
   crit: boolean;
-  /** Shuriken effects travel with the projectile. */
-  shuriken: boolean;
   bounces: number;
   hitIds: number[];
   burn: number;
   stun: number;
   chill: number;
   knockback: number;
-  source: "hero" | "clone" | "sentry" | "jutsu" | "art" | "trap" | "ultimate" | "kill";
 }
 
 interface EnemyShot {
@@ -294,7 +291,7 @@ export type TdEvent =
   | { type: "art"; art: TdSealArt | "fizzle"; x: number; y: number; radius: number }
   | { type: "seal"; seal: TdSeal; count: number }
   | { type: "ultimate"; ultimate: TdUltimate; x: number; y: number }
-  | { type: "heroHit"; amount: number; blocked: boolean }
+  | { type: "heroHit"; amount: number }
   | { type: "substitution"; perfect: boolean; counterId: number }
   | { type: "blink"; fromX: number; fromY: number; x: number; y: number }
   | { type: "bossMove"; id: number; move: TdBossMove }
@@ -457,7 +454,11 @@ export const tdShopCost = (state: TdState, item: TdShopItem) => {
 
 /** Ryo to build a sentry (level 0) or to raise it to `level`. */
 export const tdSentryCost = (type: TdSentry, level = 0) =>
-  Math.floor(TD_SENTRY_INFO[type].cost * 2 * powi(1.6, level));
+  Math.floor(TD_SENTRY_INFO[type].cost * powi(1.6, level));
+
+/** Attack range of a built sentry, growing with its level. */
+export const tdSentryRange = (sentry: TdSentrySlot) =>
+  TD_SENTRY_INFO[sentry.type].range + sentry.level * 0.25;
 
 /** Scroll cost of the next Dojo level. */
 export const tdDojoCost = (id: TdDojoUpgrade, level: number) => {
@@ -506,7 +507,7 @@ export const tdCanCallWave = (state: TdState) =>
   (state.waveTick < 0 ||
     (state.waveTick >= 10 &&
       state.spawnQueue.length === 0 &&
-      state.enemies.every((enemy) => enemy.dead)));
+      state.enemies.length === 0));
 
 /** Scrolls a run ending now would pay out. */
 export const tdRunPoints = (state: TdState) => Math.floor(state.scrolls);
@@ -773,7 +774,7 @@ const startWave_ = (state: TdState) => {
   let count = tdWaveCount(wave);
   if (eras.includes("swarm")) count *= 2;
   if (eras.includes("titans")) count = Math.ceil(count / 2);
-  const unlocked = (Object.keys(TD_ENEMIES) as TdEnemyKind[]).filter(
+  const unlocked = TD_ENEMY_KINDS.filter(
     (kind) => TD_ENEMIES[kind].weight > 0 && TD_ENEMIES[kind].firstWave <= wave,
   );
   const weights = unlocked.map((kind) => {
@@ -872,8 +873,8 @@ const spawnEnemy = (
   let speed = arch.speed * tdSpeedBonus(wave);
   if (eras.includes("blitz")) speed *= 1.4;
   if (has("hasted")) speed *= 1.5;
-  let direction = position ? null : state.rng.direction();
   const radius = eras.includes("rifts") ? TD_RIFT_SPAWN_RADIUS : TD_SPAWN_RADIUS;
+  const at = position ?? scalePoint(state.rng.direction(), radius);
   const size = arch.size * (elite ? 1.2 : 1) * (scale < 1 ? 0.8 : 1);
   const ranged = arch.range > 0;
   const stop = ranged
@@ -891,8 +892,8 @@ const spawnEnemy = (
     titan: entry.titan,
     elite,
     affixes: entry.affixes,
-    x: position ? position.x : (direction?.x ?? 1) * radius,
-    y: position ? position.y : (direction?.y ?? 0) * radius,
+    x: at.x,
+    y: at.y,
     hp: maxHp,
     maxHp,
     shield: 0,
@@ -931,16 +932,35 @@ const spawnEnemy = (
     summonReadyAt: state.tick + 20,
     phaseOffset: state.rng.int(30),
     enraged: false,
-    dead: false,
     size: entry.boss ? arch.size : size,
   };
   const shield = (arch.shield ?? 0) + (has("shielded") ? 1 : 0);
   enemy.maxShield = shield * maxHp;
   enemy.shield = enemy.maxShield;
-  direction = null;
   state.enemies.push(enemy);
   if (state.recordEvents) emit(state, { type: "spawn", id: enemy.id });
   return enemy;
+};
+
+/** Spawn plain enemies scattered within `spread` around a point. */
+const spawnMinions = (
+  state: TdState,
+  kind: TdEnemyKind,
+  count: number,
+  around: { x: number; y: number },
+  spread: number,
+  scale: number,
+) => {
+  for (let i = 0; i < count; i++)
+    spawnEnemy(
+      state,
+      { kind, boss: false, titan: false, affixes: [], camo: false },
+      {
+        x: around.x + (state.rng.next() - 0.5) * spread,
+        y: around.y + (state.rng.next() - 0.5) * spread,
+      },
+      scale,
+    );
 };
 
 // ============================================
@@ -997,8 +1017,7 @@ export const applyAction = (state: TdState, action: TdAction): boolean => {
     }
     case "build": {
       const [, , slot, type] = action;
-      if (!TD_SENTRY_INFO[type] || !validSlot(state, slot) || state.sentries[slot])
-        return false;
+      if (!validSlot(state, slot) || state.sentries[slot]) return false;
       const cost = tdSentryCost(type);
       if (state.ryo < cost) return false;
       state.ryo -= cost;
@@ -1024,11 +1043,9 @@ export const applyAction = (state: TdState, action: TdAction): boolean => {
       state.sentries[slot] = null;
       return true;
     }
-    case "aim": {
-      if (!TD_TARGET_MODES.includes(action[2])) return false;
+    case "aim":
       state.aim = action[2];
       return true;
-    }
     case "auto": {
       if (dojoLevel(state.config, "ul_auto") < 1) return false;
       state.autoUlt = action[2] === 1;
@@ -1065,9 +1082,7 @@ export const applyAction = (state: TdState, action: TdAction): boolean => {
     case "ult":
       return castUltimate(state, action[2], coord(action[3]), coord(action[4]));
     case "focus": {
-      const target = state.enemies.find(
-        (enemy) => enemy.id === action[2] && !enemy.dead,
-      );
+      const target = state.enemies.find((enemy) => enemy.id === action[2]);
       if (!target) return false;
       state.focusId = target.id;
       return true;
@@ -1135,7 +1150,6 @@ export const applyAction = (state: TdState, action: TdAction): boolean => {
 
 const shopAvailable = (state: TdState, item: TdShopItem) => {
   const info = TD_SHOP_INFO[item];
-  if (!info) return false;
   if (info.jutsu && !tdJutsuUnlocked(state.config, info.jutsu)) return false;
   return shop(state, item) < info.max;
 };
@@ -1250,17 +1264,14 @@ const castSeal = (state: TdState, seal: TdSeal, x: number, y: number) => {
   switch (art) {
     case "dragon_flame":
       for (const enemy of enemiesWithin(state, at.x, at.y, info.radius)) {
-        damageEnemy(state, enemy, power, "fire", { source: "art" });
+        damageEnemy(state, enemy, power, "fire");
         ignite(enemy, state.tick, 50, power * 0.4);
       }
       break;
     case "thunder_strike": {
       const target = strongestWithin(state, at.x, at.y, info.radius);
       if (target) {
-        damageEnemy(state, target, power, "lightning", {
-          source: "art",
-          ignoreArmor: true,
-        });
+        damageEnemy(state, target, power, "lightning", { ignoreArmor: true });
         stun(target, state.tick + 15);
         emit(state, {
           type: "explosion",
@@ -1274,7 +1285,7 @@ const castSeal = (state: TdState, seal: TdSeal, x: number, y: number) => {
     }
     case "water_prison":
       for (const enemy of enemiesWithin(state, at.x, at.y, info.radius)) {
-        damageEnemy(state, enemy, power, "water", { source: "art" });
+        damageEnemy(state, enemy, power, "water");
         if (!enemy.boss) enemy.frozenUntil = state.tick + 30;
       }
       break;
@@ -1302,8 +1313,7 @@ const castSeal = (state: TdState, seal: TdSeal, x: number, y: number) => {
 };
 
 const castUltimate = (state: TdState, ultimate: TdUltimate, x: number, y: number) => {
-  if (!TD_ULTIMATE_INFO[ultimate] || !tdUltimateUnlocked(state.config, ultimate))
-    return false;
+  if (!tdUltimateUnlocked(state.config, ultimate)) return false;
   if (state.tick < (state.ultReadyAt[ultimate] ?? 0)) return false;
   const at = clampToZone(x, y, TD_SPAWN_RADIUS);
   const power = state.stats.damage * heroBoost(state) * ultimatePower(state, ultimate);
@@ -1327,7 +1337,6 @@ const castUltimate = (state: TdState, ultimate: TdUltimate, x: number, y: number
       break;
     case "amaterasu":
       for (const enemy of state.enemies) {
-        if (enemy.dead) continue;
         enemy.flameUntil = state.tick + 50;
         enemy.flameDps = enemy.maxHp * (enemy.boss ? 0.006 : 0.03) + power * 5;
       }
@@ -1367,13 +1376,21 @@ const distance = (ax: number, ay: number, bx: number, by: number) => {
   return Math.sqrt(dx * dx + dy * dy);
 };
 
+const scalePoint = (point: { x: number; y: number }, scale: number) => ({
+  x: point.x * scale,
+  y: point.y * scale,
+});
+
+/** Tick on which something travelling `dist` at `speed` units per second lands. */
+const arrivalTick = (state: TdState, dist: number, speed: number, min = 1) =>
+  state.tick + Math.max(min, Math.round((dist / speed) * TD_TPS));
+
 const isPhased = (state: TdState, enemy: TdEnemy) =>
   TD_ENEMIES[enemy.kind].phase === true && (state.tick + enemy.phaseOffset) % 30 < 10;
 
 const enemiesWithin = (state: TdState, x: number, y: number, radius: number) =>
   state.enemies.filter(
-    (enemy) =>
-      !enemy.dead && distance(enemy.x, enemy.y, x, y) <= radius + enemy.size * 0.3,
+    (enemy) => distance(enemy.x, enemy.y, x, y) <= radius + enemy.size * 0.3,
   );
 
 const strongestWithin = (state: TdState, x: number, y: number, radius: number) => {
@@ -1388,11 +1405,7 @@ const sensorCovers = (state: TdState, enemy: TdEnemy) => {
     const sentry = state.sentries[slot];
     if (sentry?.type !== "sensor") continue;
     const at = tdSentryPosition(slot);
-    if (
-      distance(at.x, at.y, enemy.x, enemy.y) <=
-      TD_SENTRY_INFO.sensor.range + sentry.level * 0.25
-    )
-      return true;
+    if (distance(at.x, at.y, enemy.x, enemy.y) <= tdSentryRange(sentry)) return true;
   }
   return false;
 };
@@ -1413,14 +1426,9 @@ const damageEnemy = (
   enemy: TdEnemy,
   raw: number,
   element: TdElement,
-  options: {
-    source: PendingHit["source"];
-    crit?: boolean;
-    ignoreArmor?: boolean;
-    dot?: boolean;
-  },
+  options: { crit?: boolean; ignoreArmor?: boolean; dot?: boolean } = {},
 ) => {
-  if (enemy.dead || isPhased(state, enemy) || raw <= 0) return 0;
+  if (isPhased(state, enemy) || raw <= 0) return 0;
   let amount = raw * vulnerability(state, enemy);
   if (enemy.ward === element) amount *= 0.1;
   let shieldHit = false;
@@ -1500,7 +1508,7 @@ const damageHero = (
   if (state.tick <= hero.subUntil) {
     hero.subUntil = -1;
     const perfect = !!source.telegraphed || !!source.enemy?.boss;
-    const counter = source.enemy && !source.enemy.dead ? source.enemy : undefined;
+    const counter = source.enemy;
     if (perfect) {
       hero.counterUntil = state.tick + 30;
       if (counter)
@@ -1509,22 +1517,25 @@ const damageHero = (
           counter,
           state.stats.damage * state.stats.counterMult,
           "physical",
-          { source: "hero", crit: true, ignoreArmor: true },
+          {
+            crit: true,
+            ignoreArmor: true,
+          },
         );
     }
     emit(state, { type: "substitution", perfect, counterId: counter?.id ?? 0 });
     return;
   }
   let amount = raw * (1 - state.stats.block);
-  if (state.tick < hero.domeUntil) amount *= 0.5;
+  if (state.tick < hero.domeUntil) amount *= TD_SEAL_ART_INFO.earth_dome.power;
   // Past wave 150 elite and boss hits pierce a share of max health, so piling up
   // health alone never makes the hero untouchable.
   if (source.enemy && (source.enemy.elite || source.enemy.boss))
     amount +=
       state.stats.maxHp * tdPiercingShare(state.wave) * (source.enemy.boss ? 2 : 1);
   hero.hp -= amount;
-  if (state.recordEvents) emit(state, { type: "heroHit", amount, blocked: false });
-  if (source.enemy && !source.enemy.dead) {
+  if (state.recordEvents) emit(state, { type: "heroHit", amount });
+  if (source.enemy) {
     const enemy = source.enemy;
     if (source.melee && state.stats.thorns > 0)
       damageEnemy(
@@ -1532,10 +1543,7 @@ const damageHero = (
         enemy,
         enemy.maxHp * state.stats.thorns * (enemy.boss ? 0.1 : 1),
         "physical",
-        {
-          source: "hero",
-          dot: true,
-        },
+        { dot: true },
       );
     if (enemy.affixes.includes("vampiric") || state.eras.includes("blood_moon"))
       enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.05);
@@ -1558,7 +1566,7 @@ const damageHero = (
 // ============================================
 
 const canSee = (state: TdState, enemy: TdEnemy, fromX: number, fromY: number) => {
-  if (enemy.dead || isPhased(state, enemy)) return false;
+  if (isPhased(state, enemy)) return false;
   if (!enemy.camo || enemy.id === state.focusId) return true;
   return (
     distance(enemy.x, enemy.y, fromX, fromY) <= TD_CAMO_REVEAL_RANGE ||
@@ -1641,7 +1649,7 @@ const throwShuriken = (
   from: "hero" | "clone" | "sentry",
 ) => {
   const crit = state.rng.next() < state.stats.crit;
-  const due = state.tick + Math.max(1, Math.round((dist / TD_SHURIKEN_SPEED) * TD_TPS));
+  const due = arrivalTick(state, dist, TD_SHURIKEN_SPEED);
   state.hits.push({
     due,
     targetId: target.id,
@@ -1651,14 +1659,12 @@ const throwShuriken = (
     damage: damage * (crit ? state.stats.critMult : 1),
     element: "physical",
     crit,
-    shuriken: true,
     bounces: from === "sentry" ? 0 : state.stats.ricochet,
     hitIds: [],
     burn: perk(state, "burning_steel") ? 0.3 : 0,
     stun: 0,
     chill: perk(state, "frost_edge") ? 0.25 : 0,
     knockback: state.rng.next() < state.stats.knockback ? 0.6 : 0,
-    source: from,
   });
   if (state.recordEvents)
     emit(state, {
@@ -1696,7 +1702,7 @@ const heroAttack = (state: TdState) => {
       throwShuriken(state, hero.x, hero.y, enemy, dist, damage, "hero");
     hero.shots += 1;
     if (perk(state, "static_charge") && hero.shots % 8 === 0)
-      chainLightning(state, hero.x, hero.y, 4, damage * 2, "hero");
+      chainLightning(state, hero.x, hero.y, 4, damage * 2);
   }
 };
 
@@ -1732,7 +1738,6 @@ const chainLightning = (
   fromY: number,
   links: number,
   damage: number,
-  source: PendingHit["source"],
   range = 6,
 ) => {
   const hit = new Set<number>();
@@ -1752,7 +1757,7 @@ const chainLightning = (
     }
     if (!best) break;
     hit.add(best.id);
-    damageEnemy(state, best, damage, "lightning", { source });
+    damageEnemy(state, best, damage, "lightning");
     x = best.x;
     y = best.y;
     points.push({ x, y });
@@ -1773,7 +1778,6 @@ const densest = (
     bestCount = -1;
   const candidates = state.enemies.filter(
     (enemy) =>
-      !enemy.dead &&
       !exclude.has(enemy.id) &&
       canSee(state, enemy, fromX, fromY) &&
       distance(enemy.x, enemy.y, fromX, fromY) <= range,
@@ -1801,7 +1805,12 @@ const castJutsu = (state: TdState) => {
     const damage = jutsuDamage(state, jutsu) * heroBoost(state);
     const isEvolved = evolved(state, jutsu);
     const castRange = state.stats.range + 1.5;
-    let cast = false;
+    let cast: {
+      x: number;
+      y: number;
+      radius: number;
+      points: { x: number; y: number }[];
+    } | null = null;
     switch (jutsu) {
       case "fire": {
         const used = new Set<number>();
@@ -1812,92 +1821,49 @@ const castJutsu = (state: TdState) => {
           used.add(target.id);
           const dist = distance(target.x, target.y, hero.x, hero.y);
           state.hits.push(
-            areaHit(state, target.x, target.y, info.radius, damage, "fire", "jutsu", {
-              due: state.tick + Math.max(1, Math.round((dist / 8) * TD_TPS)),
+            areaHit(state, target.x, target.y, info.radius, damage, "fire", {
+              due: arrivalTick(state, dist, 8),
               burn: 0.3,
             }),
           );
           points.push({ x: target.x, y: target.y });
         }
-        if (points.length > 0) {
-          cast = true;
-          const [first] = points;
-          emit(state, {
-            type: "jutsu",
-            jutsu,
-            x: first?.x ?? 0,
-            y: first?.y ?? 0,
-            radius: info.radius,
-            evolved: isEvolved,
-            points,
-          });
-        }
+        const [first] = points;
+        if (first) cast = { x: first.x, y: first.y, radius: info.radius, points };
         break;
       }
       case "lightning": {
         const links = 4 + Math.floor(jutsuLevel(state, "lightning") / 3);
-        const points = chainLightning(
-          state,
-          hero.x,
-          hero.y,
-          links,
-          damage,
-          "jutsu",
-          castRange,
-        );
-        if (points.length > 1) {
-          cast = true;
-          if (isEvolved)
-            for (const enemy of state.enemies)
-              if (!enemy.dead)
-                damageEnemy(state, enemy, damage * 0.6, "lightning", {
-                  source: "jutsu",
-                });
-          emit(state, {
-            type: "jutsu",
-            jutsu,
-            x: hero.x,
-            y: hero.y,
-            radius: 0,
-            evolved: isEvolved,
-            points,
-          });
-        }
+        const points = chainLightning(state, hero.x, hero.y, links, damage, castRange);
+        if (points.length < 2) break;
+        if (isEvolved)
+          for (const enemy of state.enemies)
+            damageEnemy(state, enemy, damage * 0.6, "lightning");
+        cast = { x: hero.x, y: hero.y, radius: 0, points };
         break;
       }
       case "water": {
         const targets = enemiesWithin(state, hero.x, hero.y, info.radius);
-        if (targets.length > 0) {
-          cast = true;
-          for (const enemy of targets) {
-            damageEnemy(state, enemy, damage, "water", { source: "jutsu" });
-            chill(enemy, state.tick, 30, 0.45);
-            if (isEvolved && !enemy.ccImmune)
-              enemy.frozenUntil = Math.max(enemy.frozenUntil, state.tick + 15);
-          }
-          emit(state, {
-            type: "jutsu",
-            jutsu,
-            x: hero.x,
-            y: hero.y,
-            radius: info.radius,
-            evolved: isEvolved,
-            points: [],
-          });
+        if (targets.length === 0) break;
+        for (const enemy of targets) {
+          damageEnemy(state, enemy, damage, "water");
+          chill(enemy, state.tick, 30, 0.45);
+          if (isEvolved && !enemy.ccImmune)
+            enemy.frozenUntil = Math.max(enemy.frozenUntil, state.tick + 15);
         }
+        cast = { x: hero.x, y: hero.y, radius: info.radius, points: [] };
         break;
       }
       case "wind": {
         const [primary] = pickTargets(state, hero.x, hero.y, castRange, 1, "near");
-        if (primary) {
-          cast = true;
-          const dx = primary.enemy.x - hero.x,
-            dy = primary.enemy.y - hero.y;
-          const length = Math.sqrt(dx * dx + dy * dy) || 1;
-          const directions = [{ x: dx / length, y: dy / length }];
-          if (isEvolved) {
-            const base = directions[0] ?? { x: 1, y: 0 };
-            directions.push(
+        if (!primary) break;
+        const dx = primary.enemy.x - hero.x,
+          dy = primary.enemy.y - hero.y;
+        const length = Math.sqrt(dx * dx + dy * dy) || 1;
+        const base = { x: dx / length, y: dy / length };
+        const directions = isEvolved
+          ? [
+              base,
               {
                 x: base.x * -0.5 - base.y * SQRT3_2,
                 y: base.x * SQRT3_2 + base.y * -0.5,
@@ -1906,73 +1872,55 @@ const castJutsu = (state: TdState) => {
                 x: base.x * -0.5 + base.y * SQRT3_2,
                 y: -base.x * SQRT3_2 + base.y * -0.5,
               },
-            );
+            ]
+          : [base];
+        const points: { x: number; y: number }[] = [];
+        for (const direction of directions) {
+          for (const enemy of state.enemies) {
+            const ex = enemy.x - hero.x,
+              ey = enemy.y - hero.y;
+            const along = ex * direction.x + ey * direction.y;
+            if (along < 0 || along > info.radius) continue;
+            const across = Math.abs(ex * direction.y - ey * direction.x);
+            if (across > 0.7 + enemy.size * 0.3) continue;
+            damageEnemy(state, enemy, damage, "wind");
+            if (!isEvolved) knockback(state, enemy, 0.5);
           }
-          const points: { x: number; y: number }[] = [];
-          for (const direction of directions) {
-            for (const enemy of state.enemies) {
-              if (enemy.dead) continue;
-              const ex = enemy.x - hero.x,
-                ey = enemy.y - hero.y;
-              const along = ex * direction.x + ey * direction.y;
-              if (along < 0 || along > info.radius) continue;
-              const across = Math.abs(ex * direction.y - ey * direction.x);
-              if (across > 0.7 + enemy.size * 0.3) continue;
-              damageEnemy(state, enemy, damage, "wind", { source: "jutsu" });
-              if (!isEvolved) knockback(state, enemy, 0.5);
-            }
-            points.push({
-              x: hero.x + direction.x * info.radius,
-              y: hero.y + direction.y * info.radius,
-            });
-          }
-          emit(state, {
-            type: "jutsu",
-            jutsu,
-            x: hero.x,
-            y: hero.y,
-            radius: info.radius,
-            evolved: isEvolved,
-            points,
+          points.push({
+            x: hero.x + direction.x * info.radius,
+            y: hero.y + direction.y * info.radius,
           });
         }
+        cast = { x: hero.x, y: hero.y, radius: info.radius, points };
         break;
       }
       case "earth": {
         const targets = enemiesWithin(state, hero.x, hero.y, info.radius);
-        if (targets.length > 0) {
-          cast = true;
-          const stunTicks = isEvolved ? 20 : 10;
-          for (const enemy of targets) {
-            damageEnemy(state, enemy, damage, "earth", { source: "jutsu" });
-            stun(enemy, state.tick + stunTicks);
-            knockback(state, enemy, 1.5);
-          }
-          if (isEvolved)
-            for (const [delay, radius] of [
-              [3, 5],
-              [6, 7],
-            ] as const)
-              state.hits.push(
-                areaHit(state, hero.x, hero.y, radius, damage, "earth", "jutsu", {
-                  due: state.tick + delay,
-                  stun: stunTicks,
-                }),
-              );
-          emit(state, {
-            type: "jutsu",
-            jutsu,
-            x: hero.x,
-            y: hero.y,
-            radius: info.radius,
-            evolved: isEvolved,
-            points: [],
-          });
+        if (targets.length === 0) break;
+        const stunTicks = isEvolved ? 20 : 10;
+        for (const enemy of targets) {
+          damageEnemy(state, enemy, damage, "earth");
+          stun(enemy, state.tick + stunTicks);
+          knockback(state, enemy, 1.5);
         }
+        if (isEvolved)
+          for (const [delay, radius] of [
+            [3, 5],
+            [6, 7],
+          ] as const)
+            state.hits.push(
+              areaHit(state, hero.x, hero.y, radius, damage, "earth", {
+                due: state.tick + delay,
+                stun: stunTicks,
+              }),
+            );
+        cast = { x: hero.x, y: hero.y, radius: info.radius, points: [] };
         break;
       }
     }
-    if (cast) state.jutsuReadyAt[jutsu] = state.tick + jutsuCooldownTicks(state, jutsu);
+    if (!cast) continue;
+    emit(state, { type: "jutsu", jutsu, evolved: isEvolved, ...cast });
+    state.jutsuReadyAt[jutsu] = state.tick + jutsuCooldownTicks(state, jutsu);
   }
 };
 
@@ -1983,7 +1931,6 @@ const areaHit = (
   radius: number,
   damage: number,
   element: TdElement,
-  source: PendingHit["source"],
   extra: Partial<PendingHit> = {},
 ): PendingHit => ({
   due: state.tick + 1,
@@ -1994,14 +1941,12 @@ const areaHit = (
   damage,
   element,
   crit: false,
-  shuriken: false,
   bounces: 0,
   hitIds: [],
   burn: 0,
   stun: 0,
   chill: 0,
   knockback: 0,
-  source,
   ...extra,
 });
 
@@ -2014,7 +1959,7 @@ const sentriesAttack = (state: TdState) => {
     const info = TD_SENTRY_INFO[sentry.type];
     if (sentry.type === "sensor") continue;
     const at = tdSentryPosition(slot);
-    const range = info.range + sentry.level * 0.25;
+    const range = tdSentryRange(sentry);
     const damage =
       state.stats.damage *
       info.power *
@@ -2035,10 +1980,9 @@ const sentriesAttack = (state: TdState) => {
         if (target) {
           fired = true;
           const dist = distance(at.x, at.y, target.x, target.y);
+          const due = arrivalTick(state, dist, 6, 2);
           state.hits.push(
-            areaHit(state, target.x, target.y, 1.2, damage, "fire", "sentry", {
-              due: state.tick + Math.max(2, Math.round((dist / 6) * TD_TPS)),
-            }),
+            areaHit(state, target.x, target.y, 1.2, damage, "fire", { due }),
           );
           if (state.recordEvents)
             emit(state, {
@@ -2047,7 +1991,7 @@ const sentriesAttack = (state: TdState) => {
               x: at.x,
               y: at.y,
               targetId: target.id,
-              due: state.tick + Math.max(2, Math.round((dist / 6) * TD_TPS)),
+              due,
               crit: false,
               element: "fire",
             });
@@ -2061,7 +2005,6 @@ const sentriesAttack = (state: TdState) => {
           at.y,
           3 + Math.floor(sentry.level / 4),
           damage,
-          "sentry",
           range,
         );
         if (points.length > 1) {
@@ -2084,7 +2027,7 @@ const sentriesAttack = (state: TdState) => {
         if (targets.length > 0) {
           fired = true;
           for (const enemy of targets) {
-            damageEnemy(state, enemy, damage, "water", { source: "sentry" });
+            damageEnemy(state, enemy, damage, "water");
             chill(enemy, state.tick, 15, 0.3);
           }
         }
@@ -2142,8 +2085,7 @@ const expireLoot = (state: TdState) => {
 };
 
 const spawnDue = (state: TdState) => {
-  let alive = 0;
-  for (const enemy of state.enemies) if (!enemy.dead) alive++;
+  let alive = state.enemies.length;
   while (state.spawnQueue.length > 0 && alive < TD_MAX_ALIVE) {
     const next = state.spawnQueue[0];
     if (!next || next.at > state.tick) break;
@@ -2186,10 +2128,7 @@ const updateVortices = (state: TdState) => {
           enemy.y += (dy / length) * step;
         }
       }
-      if (pulse)
-        damageEnemy(state, enemy, vortex.damage, "wind", {
-          source: vortex.kind === "tempest" ? "ultimate" : "art",
-        });
+      if (pulse) damageEnemy(state, enemy, vortex.damage, "wind");
     }
   }
 };
@@ -2199,18 +2138,13 @@ const updateEnemies = (state: TdState) => {
     hero = state.hero;
   const frozenWorld = tick < state.tsukuyomiUntil;
   for (const enemy of state.enemies) {
-    if (enemy.dead) continue;
     const arch = TD_ENEMIES[enemy.kind];
     // Damage over time and healing
     const burning = tick < enemy.burnUntil || tick < enemy.flameUntil;
     if (tick < enemy.burnUntil)
-      damageEnemy(state, enemy, enemy.burnDps * TD_TICK_SECONDS, "fire", {
-        source: "jutsu",
-        dot: true,
-      });
+      damageEnemy(state, enemy, enemy.burnDps * TD_TICK_SECONDS, "fire", { dot: true });
     if (tick < enemy.flameUntil)
       damageEnemy(state, enemy, enemy.flameDps * TD_TICK_SECONDS, "fire", {
-        source: "ultimate",
         dot: true,
       });
     if (!burning && enemy.regen > 0 && enemy.hp > 0)
@@ -2245,16 +2179,7 @@ const updateEnemies = (state: TdState) => {
     if (enemy.boss && tick >= enemy.moveReadyAt) bossMove(state, enemy);
     if (arch.summon && tick >= enemy.summonReadyAt) {
       enemy.summonReadyAt = tick + arch.summon.everySeconds * TD_TPS;
-      for (let i = 0; i < arch.summon.count; i++)
-        spawnEnemy(
-          state,
-          { kind: "grunt", boss: false, titan: false, affixes: [], camo: false },
-          {
-            x: enemy.x + (state.rng.next() - 0.5),
-            y: enemy.y + (state.rng.next() - 0.5),
-          },
-          0.6,
-        );
+      spawnMinions(state, "grunt", arch.summon.count, enemy, 1, 0.6);
     }
     // Movement toward the hero
     const dx = hero.x - enemy.x,
@@ -2288,7 +2213,7 @@ const updateEnemies = (state: TdState) => {
     const damage = enemy.damage * (berserk ? 1.5 : 1);
     if (enemy.range > 0)
       state.shots.push({
-        due: tick + Math.max(1, Math.round((dist / 7) * TD_TPS)),
+        due: arrivalTick(state, dist, 7),
         damage,
         sourceId: enemy.id,
         telegraphed: false,
@@ -2323,16 +2248,7 @@ const bossMove = (state: TdState, boss: TdEnemy) => {
       });
       break;
     case "summon":
-      for (let i = 0; i < 3 + Math.floor(state.wave / 100); i++)
-        spawnEnemy(
-          state,
-          { kind: "grunt", boss: false, titan: false, affixes: [], camo: false },
-          {
-            x: boss.x + (state.rng.next() - 0.5) * 2,
-            y: boss.y + (state.rng.next() - 0.5) * 2,
-          },
-          0.8,
-        );
+      spawnMinions(state, "grunt", 3 + Math.floor(state.wave / 100), boss, 2, 0.8);
       break;
     case "roar":
       state.hero.silencedUntil = state.tick + 25;
@@ -2381,10 +2297,7 @@ const resolveHits = (state: TdState) => {
   for (const hit of due) {
     if (hit.radius > 0) {
       for (const enemy of enemiesWithin(state, hit.x, hit.y, hit.radius)) {
-        damageEnemy(state, enemy, hit.damage, hit.element, {
-          source: hit.source,
-          crit: hit.crit,
-        });
+        damageEnemy(state, enemy, hit.damage, hit.element, { crit: hit.crit });
         if (hit.burn > 0) ignite(enemy, state.tick, 30, hit.damage * hit.burn);
         if (hit.stun > 0) stun(enemy, state.tick + hit.stun);
         if (hit.knockback > 0) knockback(state, enemy, hit.knockback);
@@ -2399,17 +2312,9 @@ const resolveHits = (state: TdState) => {
         });
       continue;
     }
-    let target: TdEnemy | undefined;
-    for (const enemy of state.enemies)
-      if (enemy.id === hit.targetId) {
-        target = enemy;
-        break;
-      }
-    if (!target || target.dead) continue;
-    damageEnemy(state, target, hit.damage, hit.element, {
-      source: hit.source,
-      crit: hit.crit,
-    });
+    const target = state.enemies.find((enemy) => enemy.id === hit.targetId);
+    if (!target) continue;
+    damageEnemy(state, target, hit.damage, hit.element, { crit: hit.crit });
     if (hit.burn > 0) ignite(target, state.tick, 30, hit.damage * hit.burn);
     if (hit.chill > 0) chill(target, state.tick, 20, hit.chill);
     if (hit.knockback > 0) knockback(state, target, hit.knockback);
@@ -2427,8 +2332,7 @@ const resolveHits = (state: TdState) => {
         }
       }
       if (next) {
-        const nextDue =
-          state.tick + Math.max(1, Math.round((nextDist / TD_SHURIKEN_SPEED) * TD_TPS));
+        const nextDue = arrivalTick(state, nextDist, TD_SHURIKEN_SPEED);
         state.hits.push({
           ...hit,
           due: nextDue,
@@ -2492,15 +2396,10 @@ const resolveTelegraphs = (state: TdState) => {
         telegraph.y,
         telegraph.radius,
       ))
-        damageEnemy(state, enemy, telegraph.enemyDamage, element, {
-          source: telegraph.kind === "cataclysm" ? "ultimate" : "kill",
-        });
+        damageEnemy(state, enemy, telegraph.enemyDamage, element);
       if (telegraph.kind === "cataclysm")
         for (const enemy of state.enemies) {
-          if (enemy.dead) continue;
-          damageEnemy(state, enemy, telegraph.enemyDamage * 0.15, "fire", {
-            source: "ultimate",
-          });
+          damageEnemy(state, enemy, telegraph.enemyDamage * 0.15, "fire");
           knockback(state, enemy, 3);
         }
     }
@@ -2521,13 +2420,11 @@ const resolveTraps = (state: TdState) => {
   const damage = state.stats.damage * 8 * state.stats.trapMult * heroBoost(state);
   state.traps = state.traps.filter((trap) => {
     const triggered = state.enemies.some(
-      (enemy) =>
-        !enemy.dead &&
-        distance(enemy.x, enemy.y, trap.x, trap.y) <= 0.8 + enemy.size * 0.3,
+      (enemy) => distance(enemy.x, enemy.y, trap.x, trap.y) <= 0.8 + enemy.size * 0.3,
     );
     if (!triggered) return true;
     for (const enemy of enemiesWithin(state, trap.x, trap.y, 1.6)) {
-      damageEnemy(state, enemy, damage, "fire", { source: "trap" });
+      damageEnemy(state, enemy, damage, "fire");
       ignite(enemy, state.tick, 20, damage * 0.1);
     }
     emit(state, {
@@ -2561,8 +2458,7 @@ const dropMeteor = (state: TdState) => {
 const cleanupDead = (state: TdState) => {
   let anyDead = false;
   for (const enemy of state.enemies) {
-    if (enemy.dead || enemy.hp > 0) continue;
-    enemy.dead = true;
+    if (enemy.hp > 0) continue;
     anyDead = true;
     state.kills += 1;
     const hunter = perk(state, "bounty_hunter") > 0 && (enemy.elite || enemy.boss);
@@ -2585,38 +2481,20 @@ const cleanupDead = (state: TdState) => {
       });
     dropLoot(state, enemy);
     if (perk(state, "exploding_kunai")) {
-      state.hits.push(
-        areaHit(state, enemy.x, enemy.y, 1.5, enemy.maxHp * 0.4, "fire", "kill"),
-      );
+      state.hits.push(areaHit(state, enemy.x, enemy.y, 1.5, enemy.maxHp * 0.4, "fire"));
     }
-    const arch = TD_ENEMIES[enemy.kind];
     if (enemy.canSplit) {
-      const splits: { kind: TdEnemyKind; count: number; scale: number }[] = [];
-      if (arch.split)
-        splits.push({ kind: arch.split.kind, count: arch.split.count, scale: 1 });
+      // Just under full scale, so the pieces cannot split again.
+      const split = TD_ENEMIES[enemy.kind].split;
+      if (split) spawnMinions(state, split.kind, split.count, enemy, 0.8, 0.999);
       if (
         enemy.affixes.includes("splitting") ||
         (state.eras.includes("hydra") && !enemy.boss)
       )
-        splits.push({
-          kind: enemy.kind === "mini" ? "mini" : enemy.kind,
-          count: 2,
-          scale: 0.35,
-        });
-      for (const split of splits)
-        for (let i = 0; i < split.count; i++)
-          spawnEnemy(
-            state,
-            { kind: split.kind, boss: false, titan: false, affixes: [], camo: false },
-            {
-              x: enemy.x + (state.rng.next() - 0.5) * 0.8,
-              y: enemy.y + (state.rng.next() - 0.5) * 0.8,
-            },
-            split.scale < 1 ? split.scale : 0.999,
-          );
+        spawnMinions(state, enemy.kind, 2, enemy, 0.8, 0.35);
     }
   }
-  if (anyDead) state.enemies = state.enemies.filter((enemy) => !enemy.dead);
+  if (anyDead) state.enemies = state.enemies.filter((enemy) => enemy.hp > 0);
 };
 
 const dropLoot = (state: TdState, enemy: TdEnemy) => {

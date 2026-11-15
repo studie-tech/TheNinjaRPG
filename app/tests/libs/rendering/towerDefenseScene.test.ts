@@ -54,26 +54,10 @@ describe("tower defense scene", () => {
   it("recycles enemy display objects and drains the event queue in place", async () => {
     const { game, frame } = fakeRenderer();
     const state = runWithEnemies(3);
-    const view: TowerDefenseSceneView = {
-      state,
-      pending: 0,
-      events: [],
-      reticle: null,
-      mode: "aim",
-    };
-    const scene = await createTowerDefenseScene({
-      mount: document.createElement("div"),
-      signal: new AbortController().signal,
-      onError: vi.fn(),
-      seed: "pool",
-      roster: [],
-      onFrame() {},
-      getView: () => view,
-      onTap: vi.fn(),
-    });
+    const view = viewOf(state);
+    const scene = await createTowerDefenseScene(sceneOptions(view));
     const actors = actorLayer(game.stage);
-    const living = () => state.enemies.filter((enemy) => !enemy.dead);
-    const crowd = living().length;
+    const crowd = state.enemies.length;
 
     const events = view.events;
     events.push({ type: "wave", wave: 1, boss: false, titan: false, eras: [] });
@@ -84,18 +68,17 @@ describe("tower defense scene", () => {
     expect(actors.children).toHaveLength(1 + crowd);
     const roots = actors.children.slice(1);
 
-    for (const enemy of living()) enemy.dead = true;
+    const template = state.enemies[0];
+    if (!template) throw new Error("Run has no enemies");
+    state.enemies = [];
     frame();
     expect(actors.children).toHaveLength(1);
     for (const root of roots) expect(root.destroyed).toBe(false);
 
     // New enemies take the released records instead of building new ones.
-    const template = state.enemies[0];
-    if (!template) throw new Error("Run has no enemies");
     state.enemies = Array.from({ length: crowd }, (_, index) => ({
       ...template,
       id: 10_000 + index,
-      dead: false,
       boss: index === 0,
       elite: index === 1,
       shield: 5,
@@ -195,20 +178,11 @@ describe("tower defense enemy art", () => {
     );
     const state = runWithEnemies(2);
     const view = viewOf(state);
-    const roster: TowerDefenseRosterEntry[] = [
-      {
-        userId: "ninja",
-        username: "Ninja",
-        level: 1,
-        avatar: null,
-        animations: { move: sheet("move"), idle: sheet("idle") },
-      },
-    ];
-    await createTowerDefenseScene({ ...sceneOptions(view), roster });
+    await createTowerDefenseScene({ ...sceneOptions(view), roster: [ninja()] });
     frame();
     expect([...releases.keys()].sort()).toEqual(["idle", "move"]);
-    const living = state.enemies.filter((enemy) => !enemy.dead);
-    for (const enemy of living) enemy.dead = true;
+    const living = state.enemies;
+    state.enemies = [];
     // A short gap keeps the sheets for the next wave.
     frame(5_000);
     for (const release of releases.values()) expect(release).not.toHaveBeenCalled();
@@ -216,7 +190,7 @@ describe("tower defense enemy art", () => {
     for (const release of releases.values()) expect(release).toHaveBeenCalledTimes(1);
     // The character's next enemy leases its sheets again.
     releases.clear();
-    for (const enemy of living) enemy.dead = false;
+    state.enemies = living;
     frame();
     expect([...releases.keys()].sort()).toEqual(["idle", "move"]);
   });
@@ -325,7 +299,7 @@ const sheet = (url: string): CharacterAnimation => ({
 const runWithEnemies = (count: number): TdState => {
   const state = createRun({ seed: "pool", startWave: 1, bestWave: 0, dojo: {} });
   for (let tick = 0; tick < 2_000; tick++) {
-    if (state.enemies.filter((enemy) => !enemy.dead).length >= count) return state;
+    if (state.enemies.length >= count) return state;
     stepRun(state);
   }
   throw new Error("Run never fielded enough enemies");
