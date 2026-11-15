@@ -7,7 +7,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import dynamic from "next/dist/shared/lib/app-dynamic";
 import { Suspense } from "react";
 import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
-import { LazyParsedHtml } from "@/layout/LazyParsedHtml";
+import { htmlToText, LazyParsedHtml } from "@/layout/LazyParsedHtml";
 
 afterEach(() => {
   cleanup();
@@ -74,4 +74,12 @@ it("renders stored HTML once the parser has loaded", async () => {
   await waitFor(() =>
     expect(view.container.querySelector("strong")?.textContent).toBe("event"),
   );
+});
+
+it("reads the text of stored HTML without markup or scripts for the parser fallback", () => {
+  expect(
+    htmlToText(
+      'An <strong>event</strong> <script>alert(1)</script><img src=x onerror="alert(2)">starts.',
+    ),
+  ).toBe("An event starts.");
 });
