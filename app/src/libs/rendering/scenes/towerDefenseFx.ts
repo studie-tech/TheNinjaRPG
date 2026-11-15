@@ -1,6 +1,6 @@
 import { Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
+import { createGlowTexture } from "@/libs/rendering/primitives/shadow";
 import type { GameFrame } from "@/libs/rendering/runtime";
-import { createGlowTexture } from "@/libs/rendering/scenes/combatTransformation";
 import { formatTdNumber } from "@/libs/towerDefense/format";
 
 /**
