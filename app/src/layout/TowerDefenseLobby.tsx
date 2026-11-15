@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Confirm from "@/layout/Confirm";
 import Link from "@/layout/Link";
+import { SEAL_GLYPHS } from "@/layout/TowerDefenseHud";
 import { cn } from "@/libs/shadui";
 import {
   TD_BOSS_INTERVAL,
@@ -40,7 +41,6 @@ import {
   type TdDojoCategory,
   type TdDojoLevels,
   type TdDojoUpgrade,
-  type TdSeal,
   tdCheckpoints,
   tdStageForWave,
 } from "@/libs/towerDefense/content";
@@ -54,13 +54,6 @@ const CATEGORY_LABELS: Record<TdDojoCategory, string> = {
   jutsu: "Jutsu & Sentries",
   arts: "Ninja Arts",
   ultimate: "Ultimates",
-};
-
-const SEAL_GLYPHS: Record<TdSeal, string> = {
-  tiger: "寅",
-  snake: "巳",
-  dog: "戌",
-  bird: "酉",
 };
 
 /** Start or resume a run, spend scrolls in the Dojo and learn how the game works. */

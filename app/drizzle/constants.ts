@@ -118,8 +118,6 @@ export const ContentTypes = [
   "sageMode",
   "user",
   "skillTree",
-  "towerDefenseCharacter",
-  "towerDefenseUpgrade",
   "guide",
 ] as const;
 export type ContentType = (typeof ContentTypes)[number];

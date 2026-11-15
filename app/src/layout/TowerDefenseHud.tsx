@@ -70,7 +70,7 @@ export const SEAL_KEYS: Record<string, TdSeal> = {
   d: "dog",
   f: "bird",
 };
-const SEAL_GLYPHS: Record<TdSeal, string> = {
+export const SEAL_GLYPHS: Record<TdSeal, string> = {
   tiger: "寅",
   snake: "巳",
   dog: "戌",
