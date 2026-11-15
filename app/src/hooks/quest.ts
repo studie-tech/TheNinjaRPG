@@ -14,6 +14,7 @@ import {
   MasteryNames,
   MasteryTypes,
   MEDNIN_RANKS,
+  QUEST_LIMIT_UNLIMITED,
   QUEST_REWARD_MODES,
   QUEST_REWARD_PICK_MAX,
   QuestTypes,
@@ -312,8 +313,18 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     });
 
   if (QuestTypesWithMaxAttempts.includes(questType)) {
-    formData.push({ id: "maxAttempts", type: "number", label: "Max Attempts" });
-    formData.push({ id: "maxCompletes", type: "number", label: "Max Completes" });
+    formData.push({
+      id: "maxAttempts",
+      type: "number",
+      label: "Max Attempts",
+      unlimitedValue: QUEST_LIMIT_UNLIMITED,
+    });
+    formData.push({
+      id: "maxCompletes",
+      type: "number",
+      label: "Max Completes",
+      unlimitedValue: QUEST_LIMIT_UNLIMITED,
+    });
     formData.push({ id: "retryDelay", type: "str_array", values: RetryQuestDelays });
   }
   formData.push({

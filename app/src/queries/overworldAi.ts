@@ -261,6 +261,21 @@ export const updateUserDataForInteractWithOverworldAi = (
       ),
     );
 
+/** Release a failed quest reservation without subtracting from a later UTC day's usage. */
+export const releaseOverworldQuestReservation = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  questId: string,
+  reservedAt: Date,
+) =>
+  client
+    .update(userData)
+    .set({
+      activeNpcQuestId: null,
+      dailyOverworldQuestRolls: sql`CASE WHEN UTC_DATE() = ${reservedAt.toISOString().slice(0, 10)} AND ${userData.dailyOverworldQuestRolls} > 0 THEN ${userData.dailyOverworldQuestRolls} - 1 ELSE ${userData.dailyOverworldQuestRolls} END`,
+    })
+    .where(and(eq(userData.userId, userId), eq(userData.activeNpcQuestId, questId)));
+
 /** Build the `userQuestAttempt` insert for `interactWithOverworldAi`, updating duplicate keys. */
 export const insertUserQuestAttemptForInteractWithOverworldAi = (
   client: Pick<DrizzleClient, "insert">,

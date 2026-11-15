@@ -75,6 +75,7 @@ import {
   MAX_PLAYER_LEVEL,
   MasteryTypes,
   MEDNIN_RANKS,
+  QUEST_LIMIT_UNLIMITED,
   QUEST_PARTY_TYPES,
   type QuestRewardMode,
   QuestTypes,
@@ -937,8 +938,8 @@ export const QuestValidatorRawSchema = z.object({
   requiredLevel: z.coerce.number().int().min(0).max(MAX_PLAYER_LEVEL).optional(),
   requiredFarmingLevel: z.coerce.number().min(0).max(FARMING_MAX_LEVEL).optional(),
   maxLevel: z.coerce.number().int().min(0).max(MAX_PLAYER_LEVEL).optional(),
-  maxAttempts: z.coerce.number().min(0).max(100).prefault(1),
-  maxCompletes: z.coerce.number().min(0).max(100).prefault(1),
+  maxAttempts: z.coerce.number().int().min(QUEST_LIMIT_UNLIMITED).max(100).prefault(1),
+  maxCompletes: z.coerce.number().int().min(QUEST_LIMIT_UNLIMITED).max(100).prefault(1),
   requiredVillage: z.string().max(30).nullish(),
   requiredBloodlineId: z.string().max(191).nullish(),
   /** Exact equipped sage mode required to take the quest; unset = no mode gate. */
@@ -1168,14 +1169,14 @@ const questSuperRefine = (
     });
   }
   // A real retry period means maxCompletes is a per-period cap, so 0 would
-  // block the quest forever (or be silently uncapped). Require >= 1 to make intent
-  // explicit. retryDelay "none"/omitted preserves the legacy lifetime-cap validation, where 0
+  // block the quest forever. Require a positive cap or the unlimited sentinel. retryDelay "none"/omitted preserves the legacy lifetime-cap validation, where 0
   // remains accepted for existing content. Special quests are exempt because each
   // new attempt consumes an item instead of using completion caps.
   if (
     val.questType !== "special" &&
     val.retryDelay &&
     val.retryDelay !== "none" &&
+    val.maxCompletes !== QUEST_LIMIT_UNLIMITED &&
     val.maxCompletes < 1
   ) {
     ctx.addIssue({

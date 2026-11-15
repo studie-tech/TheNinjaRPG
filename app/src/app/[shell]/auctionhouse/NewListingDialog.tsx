@@ -47,8 +47,6 @@ import {
   AUCTION_BIDDER_LEVEL_MIN,
   AUCTION_LISTING_TYPES,
   AUCTION_SALES_TAX_PERCENT,
-  RYO_FOR_REP_MIN_REPS,
-  TRADEABLE_CURRENCY_TYPES,
 } from "@/drizzle/constants";
 import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -96,7 +94,7 @@ export const NewAuctionListingDialog: React.FC<{
     defaultValues: {
       listingType: defaultListingType,
       durationHours: 24,
-      currencyType: TRADEABLE_CURRENCY_TYPES[0],
+      currencyType: "MONEY",
       bidderMinLevel: AUCTION_BIDDER_LEVEL_MIN,
       bidderMaxLevel: AUCTION_BIDDER_LEVEL_MAX,
     },
@@ -186,34 +184,25 @@ export const NewAuctionListingDialog: React.FC<{
 
   // Get the selected item to check if it's stackable
   const selectedItem = filteredItems.find((item) => item.id === watchedUserItemId);
-  const [watchedQuantity, watchedCurrency, watchedStartingPrice] = useWatch({
+  const [watchedQuantity, watchedStartingPrice] = useWatch({
     control: createForm.control,
-    name: ["quantity", "currencyType", "startingPrice"],
+    name: ["quantity", "startingPrice"],
   });
   const listingQuantity =
     watchedQuantity !== undefined && Number.isFinite(watchedQuantity)
       ? watchedQuantity
       : (selectedItem?.quantity ?? 1);
-  const hasRyoBounds = watchedListingType === "AUCTION" && watchedCurrency === "MONEY";
+  const hasRyoBounds = watchedListingType === "AUCTION";
   const minimum = hasRyoBounds ? selectedItem?.item.auctionMinPrice : null;
   const maximum = hasRyoBounds ? selectedItem?.item.auctionMaxPrice : null;
-  const minimumTotal = Math.max(
-    watchedCurrency === "REPUTATION" ? RYO_FOR_REP_MIN_REPS : 1,
-    (minimum ?? 0) * listingQuantity,
-  );
+  const minimumTotal = Math.max(1, (minimum ?? 0) * listingQuantity);
   const maximumTotal = maximum == null ? undefined : maximum * listingQuantity;
   useEffect(() => {
-    // Changing the item, quantity, or currency changes both price fields' bounds.
+    // Changing the item or quantity changes both price fields' bounds.
     if (watchedUserItemId && createForm.getValues("startingPrice") !== undefined) {
       void createForm.trigger(["startingPrice", "buyoutPrice"]);
     }
-  }, [
-    watchedUserItemId,
-    watchedQuantity,
-    watchedListingType,
-    watchedCurrency,
-    createForm,
-  ]);
+  }, [watchedUserItemId, watchedQuantity, watchedListingType, createForm]);
   const showQuantityInput = selectedItem?.item?.canStack && selectedItem.quantity > 1;
 
   // Start each selected stack at its full quantity so the amount sent is explicit.
@@ -490,43 +479,16 @@ export const NewAuctionListingDialog: React.FC<{
               </div>
             )}
 
-            <FormField
-              control={createForm.control}
-              name="currencyType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Currency Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {TRADEABLE_CURRENCY_TYPES.map((currency, i) => (
-                        <SelectItem key={`${currency}-${i}`} value={currency}>
-                          {currency === "MONEY" ? "Money (Ryo)" : "Reputation Points"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             {selectedItem && watchedListingType === "AUCTION" && (
               <p className="text-muted-foreground text-sm">
-                {hasRyoBounds
-                  ? `Allowed per-unit range: ${minimum ?? "no minimum"} – ${maximum ?? "no maximum"} ryo. Bids may exceed the maximum.`
-                  : "Item price bounds apply only to ryo listings."}{" "}
+                {`Allowed per-unit range: ${minimum ?? "no minimum"} – ${maximum ?? "no maximum"} ryo. Bids may exceed the maximum.`}{" "}
                 Prices below are totals for {listingQuantity} units.
               </p>
             )}
             <p className="text-muted-foreground text-sm">
               A {AUCTION_SALES_TAX_PERCENT}% sales tax is deducted from your proceeds
-              when an auction or direct sale completes, in either currency. Your payout
-              is rounded down to a whole number. Unsold listings are not taxed.
+              when an auction or direct sale completes. Your payout is rounded down to a
+              whole number. Unsold listings are not taxed.
             </p>
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -556,7 +518,7 @@ export const NewAuctionListingDialog: React.FC<{
                           Estimated proceeds at starting price:{" "}
                           {formatAuctionCurrency(
                             getAuctionSellerPayout(field.value),
-                            watchedCurrency ?? TRADEABLE_CURRENCY_TYPES[0],
+                            "MONEY",
                           )}
                         </p>
                       )}
@@ -593,7 +555,7 @@ export const NewAuctionListingDialog: React.FC<{
                           Estimated proceeds at buyout:{" "}
                           {formatAuctionCurrency(
                             getAuctionSellerPayout(field.value),
-                            watchedCurrency ?? TRADEABLE_CURRENCY_TYPES[0],
+                            "MONEY",
                           )}
                         </p>
                       )}
@@ -625,7 +587,6 @@ export const NewAuctionListingDialog: React.FC<{
                       <SelectItem value="24">24 Hours</SelectItem>
                       <SelectItem value="48">48 Hours</SelectItem>
                       <SelectItem value="72">72 Hours</SelectItem>
-                      <SelectItem value="168">1 Week</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

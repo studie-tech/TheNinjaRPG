@@ -4,9 +4,7 @@ import { z } from "zod";
 import {
   getAssignedOverworldQuestUserUpdate,
   getOverworldBattleResponseUpdate,
-  getOverworldRollUserUpdate,
   getOverworldUnchangedPatch,
-  getReleasedOverworldQuestUserUpdate,
 } from "@/deltas/overworldAi";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import { getQuestRewardProjectionUpdate } from "@/deltas/quests";
@@ -57,6 +55,7 @@ import {
   listOverworldAiPlacementForGetPlacementsForAi,
   listQuestForUpsertPlacement,
   listQuestHistoryForInteractWithOverworldAi,
+  releaseOverworldQuestReservation,
   selectUserQuestAttemptForInteractWithOverworldAi,
   updateOverworldAiPlacementForUpsertPlacement,
   updateUserDataForInteractWithOverworldAi,
@@ -909,23 +908,6 @@ const rollOverworldQuestGiver = async ({
     });
   }
 
-  // Consume one daily roll via CAS before rolling so a failed roll still costs a slot.
-  // A stale slot belongs to another quest and can be cleared in parallel with this counter.
-  const clearStale = activeNpcQuestId
-    ? clearActiveNpcQuest({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        questId: activeNpcQuestId,
-      })
-    : Promise.resolve();
-  const [clearedStale, claim] = await Promise.all([
-    clearStale,
-    updateUserDataForInteractWithOverworldAi(ctx.drizzle, ctx, readiness),
-  ]);
-  if (claim.rowsAffected === 0) {
-    return errorResponse("You've reached your daily mission allowance.");
-  }
-
   // Record an attempt for every eligible cooldown quest, including a roll that grants nothing.
   const attemptRowsToInsert = eligible
     .filter((e) => e.quest.attemptDelay !== "none")
@@ -952,31 +934,28 @@ const rollOverworldQuestGiver = async ({
   const chosen = chosenId ? eligible.find((e) => e.quest.id === chosenId) : undefined;
   if (!chosen) {
     await attemptPromise;
-    return actionReadinessResponse(
-      {
-        success: true,
-        message: "The NPC had nothing for you this time.",
-        ...getOverworldRollUserUpdate({
-          requiresUserRefresh,
-          activeNpcQuestId,
-          clearedStaleRowsAffected: clearedStale?.rowsAffected,
-          activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
-        }),
-      },
-      readiness,
-      ctx.drizzle,
-    );
+    return recoverIdleInteraction(ctx.drizzle, readiness, {
+      success: true,
+      message: "The NPC had nothing for you this time.",
+      userPatch: noUserChange,
+    });
   }
+
   // Claim the single active-NPC-mission slot atomically before granting. If the slot is
   // already taken (e.g. a concurrent interaction won the race), don't grant a second one.
-  const [, claimed] = await Promise.all([
-    attemptPromise,
-    claimActiveNpcQuest({
+  await attemptPromise;
+  if (activeNpcQuestId) {
+    await clearActiveNpcQuest({
       client: ctx.drizzle,
       userId: ctx.userId,
-      questId: chosen.quest.id,
-    }),
-  ]);
+      questId: activeNpcQuestId,
+    });
+  }
+  const claimed = await claimActiveNpcQuest({
+    client: ctx.drizzle,
+    userId: ctx.userId,
+    questId: chosen.quest.id,
+  });
   if (!claimed) {
     return actionReadinessResponse(
       {
@@ -988,13 +967,28 @@ const rollOverworldQuestGiver = async ({
       ctx.drizzle,
     );
   }
-  /** Releases the NPC-mission slot claimed for this quest when assignment does not complete. */
-  const releaseClaimedSlot = () =>
-    clearActiveNpcQuest({
+  const reservation = await updateUserDataForInteractWithOverworldAi(
+    ctx.drizzle,
+    ctx,
+    readiness,
+  );
+  if (reservation.rowsAffected === 0) {
+    await clearActiveNpcQuest({
       client: ctx.drizzle,
       userId: ctx.userId,
       questId: chosen.quest.id,
     });
+    return errorResponse("You've reached your daily mission allowance.");
+  }
+  // The slot excludes competing assignments while the reserved usage is refunded on failure.
+  const reservedAt = new Date();
+  const releaseClaimedSlot = () =>
+    releaseOverworldQuestReservation(
+      ctx.drizzle,
+      ctx.userId,
+      chosen.quest.id,
+      reservedAt,
+    );
   let result: Awaited<ReturnType<typeof assignQuestToUser>>;
   try {
     result = await assignQuestToUser({
@@ -1011,16 +1005,9 @@ const rollOverworldQuestGiver = async ({
   }
   if (!result.success) {
     // Assign failed (e.g. cap/availability raced).
-    const released = await releaseClaimedSlot();
+    await releaseClaimedSlot();
     return actionReadinessResponse(
-      {
-        ...errorResponse(result.message),
-        ...getReleasedOverworldQuestUserUpdate({
-          requiresUserRefresh,
-          releasedRowsAffected: released.rowsAffected,
-          activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
-        }),
-      },
+      { ...errorResponse(result.message), userPatch: undefined },
       readiness,
       ctx.drizzle,
     );
