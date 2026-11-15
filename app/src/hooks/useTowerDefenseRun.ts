@@ -263,10 +263,6 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   }, [storageKey]);
 
   useEffect(() => {
-    // Guest runs are never kept, so a guest save left in this browser is removed.
-    try {
-      clearRun(localStorage, GUEST_STORAGE_KEY);
-    } catch {}
     refreshSaved();
   }, [refreshSaved]);
 
