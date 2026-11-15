@@ -38,7 +38,6 @@ import {
 import {
   TD_HERO_ZONE,
   TD_MAX_ALIVE,
-  TD_SPAWN_RADIUS,
   TD_TICK_SECONDS,
 } from "@/libs/towerDefense/balance";
 import {
@@ -99,6 +98,8 @@ const VIEW_HALF_HEIGHT = 7.5;
 const TERRAIN_SIZE = 29;
 /** How long a character's sheets outlast its last enemy, so a wave gap keeps them. */
 const ENEMY_ART_GRACE_MS = 20_000;
+/** How often characters on the field ask again for sheets the atlas budget refused. */
+const ENEMY_ART_RETRY_MS = 1_000;
 /** The art of a pooled record, which draws nothing. */
 const NO_ENEMY_ART: EnemyArt = {
   still: null,
@@ -106,6 +107,7 @@ const NO_ENEMY_ART: EnemyArt = {
   idle: null,
   users: 0,
   idleSince: 0,
+  retry: () => {},
   dispose: () => {},
   disposed: false,
 };
@@ -348,12 +350,18 @@ export const createTowerDefenseScene = async (options: {
       const existing = appearances.get(key);
       if (existing) return existing;
       const leases: (() => void)[] = [];
+      /** Sheets the atlas budget had no room for yet. */
+      let missing: { animation: CharacterAnimation; slot: "move" | "idle" }[] = [];
       const art: EnemyArt = {
         still: null,
         move: null,
         idle: null,
         users: 0,
         idleSince: 0,
+        retry: () => {
+          if (missing.length === 0 || art.disposed) return;
+          missing = missing.filter(({ animation, slot }) => !load(animation, slot));
+        },
         dispose: () => {
           art.disposed = true;
           for (const clip of [art.move, art.idle])
@@ -375,13 +383,10 @@ export const createTowerDefenseScene = async (options: {
             art.still = texture;
           })
           .catch(() => {});
-      const load = (
-        animation: CharacterAnimation | undefined,
-        slot: "move" | "idle",
-      ) => {
-        if (!animation) return;
+      /** Lease a sheet for a slot; false when the atlas budget has no room for it. */
+      const load = (animation: CharacterAnimation, slot: "move" | "idle") => {
         const lease = acquireAnimationTexture(animation, 128, maxTexture);
-        if (!lease) return;
+        if (!lease) return false;
         game.own(lease.release);
         leases.push(lease.release);
         void lease.resource
@@ -406,18 +411,29 @@ export const createTowerDefenseScene = async (options: {
             };
           })
           .catch(() => {});
+        return true;
       };
-      load(entry.animations.move ?? entry.animations.idle, "move");
-      load(entry.animations.idle, "idle");
+      const move = entry.animations.move ?? entry.animations.idle;
+      if (move) missing.push({ animation: move, slot: "move" });
+      if (entry.animations.idle)
+        missing.push({ animation: entry.animations.idle, slot: "idle" });
+      art.retry();
       return art;
     };
-    /** Give back the sheets of characters no enemy has used for a while. */
-    const releaseIdleArt = (now: number) => {
+    let artRetriedAt = 0;
+    /**
+     * Give back the sheets of characters no enemy has used for a while, and let the
+     * characters on the field claim the room for sheets they were refused.
+     */
+    const updateArtLeases = (now: number) => {
       for (const [key, art] of appearances)
         if (art.users === 0 && now - art.idleSince > ENEMY_ART_GRACE_MS) {
           art.dispose();
           appearances.delete(key);
         }
+      if (now - artRetriedAt < ENEMY_ART_RETRY_MS) return;
+      artRetriedAt = now;
+      for (const art of appearances.values()) if (art.users > 0) art.retry();
     };
     const roster = [...options.roster].sort(
       (a, b) => a.level - b.level || a.userId.localeCompare(b.userId),
@@ -702,7 +718,7 @@ export const createTowerDefenseScene = async (options: {
           record.body.texture = record.cast.texture = Texture.EMPTY;
           enemyPool.release(record);
         }
-      releaseIdleArt(now);
+      updateArtLeases(now);
 
       // Projectiles
       for (let i = flights.length - 1; i >= 0; i--) {
@@ -1968,6 +1984,8 @@ interface EnemyArt {
   users: number;
   /** When the last of them left the field. */
   idleSince: number;
+  /** Ask again for the sheets the atlas budget refused. */
+  retry: () => void;
   /** Destroy the frame views and release the sheets. */
   dispose: () => void;
   disposed: boolean;

@@ -222,6 +222,47 @@ describe("tower defense enemy art", () => {
   });
 });
 
+describe("tower defense enemy art budget", () => {
+  it("asks again for sheets the atlas budget refused while the character is on the field", async () => {
+    const { frame } = fakeRenderer();
+    let room = false;
+    const leased: string[] = [];
+    const acquire = vi
+      .spyOn(animationTextures, "acquireAnimationTexture")
+      .mockImplementation((animation) => {
+        if (!room) return undefined;
+        leased.push(animation.url);
+        return { resource: Promise.resolve(Texture.WHITE), release: vi.fn() };
+      });
+    const state = runWithEnemies(2);
+    await createTowerDefenseScene({
+      ...sceneOptions(viewOf(state)),
+      roster: [ninja()],
+    });
+    frame();
+    expect(acquire).toHaveBeenCalled();
+    expect(leased).toHaveLength(0);
+    room = true;
+    // Retries are spaced out, so a full budget is not polled every frame.
+    frame(100);
+    expect(leased).toHaveLength(0);
+    frame(1_000);
+    expect(leased.sort()).toEqual(["idle", "move"]);
+    // Leased sheets are not requested again.
+    const calls = acquire.mock.calls.length;
+    frame(1_000);
+    expect(acquire.mock.calls.length).toBe(calls);
+  });
+});
+
+const ninja = (): TowerDefenseRosterEntry => ({
+  userId: "ninja",
+  username: "Ninja",
+  level: 1,
+  avatar: null,
+  animations: { move: sheet("move"), idle: sheet("idle") },
+});
+
 const sceneOptions = (view: TowerDefenseSceneView) => ({
   mount: document.createElement("div"),
   signal: new AbortController().signal,
