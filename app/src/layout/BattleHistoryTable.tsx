@@ -33,7 +33,8 @@ export const BattleHistoryTable = ({
     refetch,
   } = api.combat.getBattleHistory.useInfiniteQuery(
     { userId, secondsBack, combatTypes, limit: 20 },
-    { enabled, getNextPageParam: (lastPage) => lastPage.nextCursor },
+    // Results may settle while this history tab is inactive or closed.
+    { enabled, staleTime: 0, getNextPageParam: (lastPage) => lastPage.nextCursor },
   );
   const rows = history?.pages
     .flatMap((page) => page.data)

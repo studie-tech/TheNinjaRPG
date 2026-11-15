@@ -13,7 +13,6 @@ import type { CombatStateUpdate } from "@/deltas/combat";
 import { useCombatUpdates } from "@/hooks/combat";
 import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
-import * as UserContext from "@/utils/UserContext";
 import { TrpcTestProviders, testApi } from "../setup/trpc";
 import { mockUserContextValue } from "../setup/userContext";
 
@@ -394,6 +393,65 @@ it("does not refresh held results after a pending final action", async () => {
   await waitFor(() => expect(queryClient.isMutating()).toBe(0));
   expect(reads).toHaveLength(1);
 });
+
+it.each(["personal result", "spectator event"])(
+  "refreshes cached battle results after a committed %s",
+  async (source) => {
+    mount();
+    await waitFor(() => expect(reads).toHaveLength(1));
+    const entryKey = getQueryKey(
+      testApi.combat.getBattleHistoryEntry,
+      { battleId: "battle" },
+      "query",
+    );
+    const otherEntryKey = getQueryKey(
+      testApi.combat.getBattleHistoryEntry,
+      { battleId: "other" },
+      "query",
+    );
+    const historyKey = getQueryKey(testApi.combat.getBattleHistory, {}, "infinite");
+    queryClient.setQueryData(entryKey, { attackerOutcome: null });
+    queryClient.setQueryData(otherEntryKey, { attackerOutcome: null });
+    queryClient.setQueryData(historyKey, { outcome: null });
+    let defenderOutcome: string | null = null;
+    const stopEntry = new QueryObserver(queryClient, {
+      queryKey: entryKey,
+      queryFn: async () => ({ attackerOutcome: "Won", defenderOutcome }),
+    }).subscribe(() => {});
+    const stopHistory = new QueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn: async () => ({ outcome: "Won" }),
+    }).subscribe(() => {});
+    try {
+      if (source === "personal result") {
+        await act(async () =>
+          setState(stateAt(2, { result: { outcome: "Won" } as never })),
+        );
+      } else await act(async () => onEvent({ version: 2, finished: true }));
+      await waitFor(() =>
+        expect(queryClient.getQueryData(entryKey)).toEqual({
+          attackerOutcome: "Won",
+          defenderOutcome: null,
+        }),
+      );
+      expect(queryClient.getQueryData(historyKey)).toEqual({ outcome: "Won" });
+      expect(queryClient.getQueryState(otherEntryKey)?.isInvalidated).toBe(false);
+
+      // The last fighter may settle without advancing a deleted battle's version.
+      defenderOutcome = "Lost";
+      await act(async () => onEvent({ version: 2, finished: true }));
+      await waitFor(() =>
+        expect(queryClient.getQueryData(entryKey)).toEqual({
+          attackerOutcome: "Won",
+          defenderOutcome: "Lost",
+        }),
+      );
+    } finally {
+      stopEntry();
+      stopHistory();
+    }
+  },
+);
 
 it("waits for the actual mutation when a poll clears the displayed pending flag", async () => {
   mount();

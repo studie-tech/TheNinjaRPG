@@ -64,7 +64,8 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
     isError: isHistoryError,
   } = api.combat.getBattleHistoryEntry.useQuery(
     { battleId: battleId },
-    { enabled: !!battleId },
+    // A fighter may have settled while this log was closed and its events were missed.
+    { enabled: !!battleId, staleTime: 0 },
   );
   const otherUser =
     battleHistory?.attacker?.userId === userData?.userId

@@ -1093,6 +1093,30 @@ describeWithDatabase("CAS combat settlement", () => {
     expect(await balance()).toBe(100000 + response.result.money);
   });
 
+  it("announces a settlement-only poll after its battle outcome is recorded", async () => {
+    const snapshot = scenario(false);
+    const database = await getTestDatabase();
+    await database.insert(battle).values(snapshot);
+    await database.insert(battleHistory).values({
+      battleId: snapshot.id,
+      battleType: "COMBAT",
+      attackedId: "winner",
+      defenderId: "loser",
+    });
+    const events = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    const api = await callerFor(combatRouter, "winner");
+    const response = await api.getBattle({ battleId: snapshot.id });
+    expect(response.result?.outcome).toBe("Won");
+    expect(await database.query.battleAction.findMany()).toEqual([]);
+    expect(events).toHaveBeenCalledWith(snapshot.id, "event", {
+      version: response.battle?.version,
+      finished: true,
+    });
+    expect(
+      (await api.getBattleHistoryEntry({ battleId: snapshot.id }))?.attackerOutcome,
+    ).toBe("Won");
+  });
+
   for (const route of ["getBattle", "performAction"] as const) {
     it(`${route} grants rewards while independent cleanup is still pending`, async () => {
       const snapshot = scenario(true);

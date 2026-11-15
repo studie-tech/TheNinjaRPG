@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
@@ -150,4 +151,25 @@ it("shows the listed player's result for each battle, and a dash where none was 
   const unrecorded = view.getByText("battle-2").closest("tr");
   expect(unrecorded?.textContent).toContain("—");
   expect(view.getByRole("columnheader", { name: "Result" })).toBeDefined();
+});
+
+it("refreshes a cached unrecorded result when its history tab becomes active", async () => {
+  queryClient.setDefaultOptions({ queries: { retry: false, staleTime: Infinity } });
+  queryClient.setQueryData(
+    getQueryKey(
+      testApi.combat.getBattleHistory,
+      { userId: "actor", limit: 20 },
+      "infinite",
+    ),
+    {
+      pages: [{ data: [{ ...row(3), outcome: null }], nextCursor: undefined }],
+      pageParams: [undefined],
+    },
+  );
+  const view = mount({ userId: "actor", enabled: false });
+  expect(view.getByText("battle-3").closest("tr")?.textContent).toContain("—");
+  expect(requests).toHaveLength(0);
+  view.change({ userId: "actor", enabled: true });
+  await view.findByText("Won");
+  expect(requests).toHaveLength(1);
 });
