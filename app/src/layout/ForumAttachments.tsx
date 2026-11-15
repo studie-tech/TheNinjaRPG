@@ -7,7 +7,7 @@ import {
   TAVERN_IMAGE_MAX_SIZE_MB,
   TAVERN_IMAGE_UPLOAD_DAILY_LIMIT,
 } from "@/drizzle/constants";
-import { useHtmlSanitizer } from "@/hooks/useHtmlSanitizer";
+import { loadHtmlSanitizer, useHtmlSanitizer } from "@/hooks/useHtmlSanitizer";
 
 /** Uses the editor's existing moderated upload path and account-owned image library. */
 export function ForumAttachments({
@@ -38,7 +38,7 @@ export function ForumAttachments({
     ),
   ];
   // Removal rewrites the current draft synchronously, so it waits for the sanitizer to load.
-  const sanitizer = useHtmlSanitizer(images.length > 0);
+  const { sanitizer, failed: sanitizerFailed } = useHtmlSanitizer(images.length > 0);
   const remove = (url: string) => {
     if (!sanitizer) return;
     const document = new DOMParser().parseFromString(
@@ -91,6 +91,18 @@ export function ForumAttachments({
             </div>
           ))}
         </div>
+      )}
+      {images.length > 0 && sanitizerFailed && (
+        <p role="alert" className="text-sm">
+          Removing images is unavailable right now.{" "}
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void loadHtmlSanitizer().catch(() => undefined)}
+          >
+            Try again
+          </Button>
+        </p>
       )}
       <p className="my-2 text-xs text-muted-foreground">
         Removing an image detaches it from this draft. Copies in published posts stay

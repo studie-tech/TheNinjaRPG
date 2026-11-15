@@ -7,7 +7,12 @@ import type { PublicUserComponentProps } from "@/layout/PublicUser";
 import { PublicUserSkeleton } from "@/layout/publicUser/PublicUserSkeleton";
 import { useUserData } from "@/utils/UserContext";
 
-const PublicUserComponent = lazy(() => import("@/layout/PublicUser"));
+// The export is read at render, so the loaded chunk always renders the module's current card.
+const PublicUserComponent = lazy(() =>
+  import("@/layout/PublicUser").then((module) => ({
+    default: (props: PublicUserComponentProps) => <module.default {...props} />,
+  })),
+);
 
 /**
  * Public profile card for pages that show it beside their own content (a sensei, a Kage).

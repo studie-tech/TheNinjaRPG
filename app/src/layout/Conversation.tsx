@@ -155,7 +155,7 @@ export const useConversation = (props: ConversationLogicProps) => {
   );
   const canComposeMessage = !!userData && !composeRestrictionMessage;
   // Quote previews need the sanitizer; it loads with the composer, after the page itself.
-  const sanitizer = useHtmlSanitizer(canComposeMessage);
+  const { sanitizer, failed: sanitizerFailed } = useHtmlSanitizer(canComposeMessage);
   type ReturnedComment = ArrayElement<
     NonNullable<typeof comments>["pages"][number]["data"]
   >;
@@ -365,6 +365,8 @@ export const useConversation = (props: ConversationLogicProps) => {
 
   const toggleQuoteId = useCallback(
     (quoteId: string) => {
+      // A quote needs its preview, so it retries a sanitizer load that failed earlier.
+      if (sanitizerFailed) void loadHtmlSanitizer().catch(() => undefined);
       const currentQuoteIds = getValues("quoteIds");
       setValue(
         "quoteIds",
@@ -373,7 +375,7 @@ export const useConversation = (props: ConversationLogicProps) => {
           : [...(currentQuoteIds ?? []), quoteId],
       );
     },
-    [getValues, setValue],
+    [getValues, setValue, sanitizerFailed],
   );
 
   // A proven-successful delete remains hidden even if the subsequent
