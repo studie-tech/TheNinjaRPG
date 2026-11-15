@@ -100,6 +100,8 @@ const TERRAIN_SIZE = 29;
 const ENEMY_ART_GRACE_MS = 20_000;
 /** How often characters on the field ask again for sheets the atlas budget refused. */
 const ENEMY_ART_RETRY_MS = 1_000;
+/** How long the field keeps animating after the run ends, for its closing effects. */
+const GAME_OVER_SETTLE_MS = 2_000;
 /** The art of a pooled record, which draws nothing. */
 const NO_ENEMY_ART: EnemyArt = {
   still: null,
@@ -627,6 +629,8 @@ export const createTowerDefenseScene = async (options: {
 
     let lastTick = -1;
     let frameNumber = 0;
+    /** When this scene first drew the run as over. */
+    let overSince: number | null = null;
     let heroX = 0,
       heroY = 0;
     game.setUpdate((frame) => {
@@ -782,7 +786,10 @@ export const createTowerDefenseScene = async (options: {
       screenFlash.tint = shake.overlay?.color ?? 0xffffff;
       screenFlash.alpha = shake.overlay?.alpha ?? 0;
       lastTick = state.tick;
-      game.setAnimating(true);
+      // A finished run never changes, so the field rests under the results once its
+      // closing effects have played; a resize or tap still redraws it.
+      if (state.over) overSince ??= now;
+      game.setAnimating(overSince === null || now - overSince < GAME_OVER_SETTLE_MS);
     });
 
     const lastSound = new Map<TdSfx, number>();

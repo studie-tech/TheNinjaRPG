@@ -255,6 +255,24 @@ describe("tower defense enemy art budget", () => {
   });
 });
 
+describe("tower defense frame loop", () => {
+  it("stops animating once a finished run has played its closing effects", async () => {
+    const { game, frame } = fakeRenderer();
+    const state = runWithEnemies(1);
+    await createTowerDefenseScene(sceneOptions(viewOf(state)));
+    const animating = game.setAnimating as ReturnType<typeof vi.fn>;
+    frame();
+    expect(animating).toHaveBeenLastCalledWith(true);
+    state.over = true;
+    frame();
+    expect(animating).toHaveBeenLastCalledWith(true);
+    frame(1_000);
+    expect(animating).toHaveBeenLastCalledWith(true);
+    frame(1_500);
+    expect(animating).toHaveBeenLastCalledWith(false);
+  });
+});
+
 const ninja = (): TowerDefenseRosterEntry => ({
   userId: "ninja",
   username: "Ninja",
