@@ -177,15 +177,19 @@ export default function TowerDefensePage() {
   useEffect(() => {
     if (run.phase !== "playing") return;
     const onKey = (event: KeyboardEvent) => {
+      // Modifier chords belong to the browser or OS, not to run keys.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       const key = event.key.toLowerCase();
+      // Space never scrolls the page, even while held.
+      if (key === " ") event.preventDefault();
+      // A held key repeats keydown; one press is one seal or one cast.
+      if (event.repeat) return;
       const seal = SEAL_KEYS[key];
       if (seal) act(["seal", seal, ...aim()]);
-      else if (key === " ") {
-        event.preventDefault();
-        act(["sub"]);
-      } else if (key === "b") setMode((value) => (value === "blink" ? "aim" : "blink"));
+      else if (key === " ") act(["sub"]);
+      else if (key === "b") setMode((value) => (value === "blink" ? "aim" : "blink"));
       else if (key === "t") setMode((value) => (value === "trap" ? "aim" : "trap"));
       else if (key === "n") act(["call"]);
       else if (key === "escape") setMode("aim");
