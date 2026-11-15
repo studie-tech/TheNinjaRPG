@@ -2,14 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { decodeTdActions, encodeTdActions } from "@/libs/towerDefense/actionLog";
+import { decodeTdActions } from "@/libs/towerDefense/actionLog";
 import {
-  TD_DOJO,
-  TD_DOJO_INFO,
   TD_SEAL_ART_INFO,
   TD_SEAL_ARTS,
   TD_ULTIMATES,
-  type TdDojoLevels,
   type TdEra,
 } from "@/libs/towerDefense/content";
 import {
@@ -26,24 +23,14 @@ import {
   type TdRunConfig,
 } from "@/libs/towerDefense/sim";
 import { TD_MAX_ACTIONS, TD_MAX_TICKS } from "@/validators/towerDefense";
-import { botAct, replayRun, tdStateHash } from "./bot";
-
-/** Every Dojo upgrade at a solid level, all ultimates and sentries unlocked. */
-const veteranDojo = (scale: number): TdDojoLevels =>
-  Object.fromEntries(
-    TD_DOJO.map((id) => [
-      id,
-      Math.min(TD_DOJO_INFO[id].max, Math.ceil(TD_DOJO_INFO[id].max * scale)),
-    ]),
-  );
-
-const seededRandom = (seed: number) => {
-  let value = seed;
-  return () => {
-    value = (value * 16807) % 2147483647;
-    return value / 2147483647;
-  };
-};
+import {
+  botAct,
+  encodeLog,
+  replayRun,
+  seededRandom,
+  tdStateHash,
+  veteranDojo,
+} from "./bot";
 
 interface Recording {
   config: TdRunConfig;
@@ -110,7 +97,7 @@ const record = (
 
 /** Replay through the claim's encoding round trip, comparing every fingerprint. */
 const expectReplayMatches = (recording: Recording) => {
-  const parsed = decodeTdActions(encodeTdActions(recording.log), {
+  const parsed = decodeTdActions(encodeLog(recording.log), {
     maxTick: TD_MAX_TICKS,
     maxActions: TD_MAX_ACTIONS,
   });
@@ -406,7 +393,7 @@ const rulesFingerprint = () => {
       if (state.tick % 500 === 0) digest.update(tdStateHash(state));
     }
     digest.update(tdStateHash(state));
-    digest.update(encodeTdActions(log));
+    digest.update(encodeLog(log));
   }
   return digest.digest("hex");
 };

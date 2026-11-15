@@ -4,38 +4,26 @@ import {
   tdReferenceDamage,
   tdReferenceHealth,
 } from "@/libs/towerDefense/balance";
-import { TD_DOJO, TD_DOJO_INFO, tdCheckpoints } from "@/libs/towerDefense/content";
+import { tdCheckpoints } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
-import { createRun, stepRun } from "@/libs/towerDefense/sim";
 import { TD_MAX_TICKS } from "@/validators/towerDefense";
-import { botAct } from "./bot";
+import { playBotRun, veteranDojo } from "./bot";
 
-const play = (startWave: number, scale: number, seed: string) => {
-  const dojo = Object.fromEntries(
-    TD_DOJO.map((id) => [id, Math.ceil(TD_DOJO_INFO[id].max * scale)]),
-  );
-  const state = createRun({ seed, startWave, bestWave: 5000, dojo });
-  let value = 3;
-  const rng = () => {
-    value = (value * 16807) % 2147483647;
-    return value / 2147483647;
-  };
-  while (!state.over && state.tick < TD_MAX_TICKS) {
-    botAct(state, { rng });
-    stepRun(state);
-  }
-  return state;
-};
+const play = (scale: number, seed: string) =>
+  playBotRun(
+    { seed, startWave: 1, bestWave: 5000, dojo: veteranDojo(scale) },
+    { seed: 3, ticks: TD_MAX_TICKS },
+  ).state;
 
 describe("tower defense balance", () => {
   it("stops a brand-new ninja early, so the Dojo matters from the first run", () => {
-    const state = play(1, 0, "fresh");
+    const state = play(0, "fresh");
     expect(state.over).toBe(true);
     expect(state.wave).toBeLessThan(40);
   });
 
   it("ends even a fully maxed Dojo run within what a claim can replay", () => {
-    const state = play(1, 1, "maxed");
+    const state = play(1, "maxed");
     expect(state.over).toBe(true);
     expect(state.tick).toBeLessThan(TD_MAX_TICKS);
   });

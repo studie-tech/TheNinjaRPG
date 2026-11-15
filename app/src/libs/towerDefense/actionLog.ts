@@ -118,17 +118,6 @@ export const encodeTdAction = (action: TdAction, previousTick: number): string =
   return encoded;
 };
 
-/** Encode a whole log in tick order. */
-export const encodeTdActions = (actions: readonly TdAction[]): string => {
-  let previousTick = 0;
-  const parts: string[] = [];
-  for (const action of actions) {
-    parts.push(encodeTdAction(action, previousTick));
-    previousTick = action[0];
-  }
-  return parts.join(";");
-};
-
 /**
  * Decode an encoded log, or null when it is malformed, holds a value its action does
  * not accept, or exceeds the limits.

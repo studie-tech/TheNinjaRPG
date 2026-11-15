@@ -6,20 +6,27 @@
  */
 import { TD_COORD_SCALE, TD_HERO_ZONE } from "@/libs/towerDefense/balance";
 import {
+  TD_DOJO,
+  TD_DOJO_INFO,
   type TD_JUTSU,
-  TD_PERK_INFO,
   TD_SEAL_ART_INFO,
+  TD_SEALS,
   TD_SENTRIES,
   TD_ULTIMATES,
+  type TdDojoLevels,
   type TdPerk,
   type TdSealArt,
   type TdSentry,
   type TdShopItem,
 } from "@/libs/towerDefense/content";
+import { appendToLog, createLogWriter, encodedLog } from "@/libs/towerDefense/savedRun";
 import {
   advanceReplay,
   applyAction,
   createReplay,
+  createRun,
+  stepRun,
+  TD_TARGET_MODES,
   type TdAction,
   type TdCommand,
   type TdReplayOptions,
@@ -33,7 +40,7 @@ import {
   tdUltimateUnlocked,
 } from "@/libs/towerDefense/sim";
 
-export interface BotOptions {
+interface BotOptions {
   /** Chance per tick of acting on actives at all (lower = lazier player). */
   attention?: number;
   /** Extra random noise actions, for fuzzing. */
@@ -247,7 +254,7 @@ const densestPoint = (state: TdState) => {
 };
 
 /** A random, possibly invalid, command for fuzzing. */
-export const randomCommand = (state: TdState, random: () => number): TdCommand => {
+const randomCommand = (state: TdState, random: () => number): TdCommand => {
   const coordinate = () => Math.round((random() * 24 - 12) * TD_COORD_SCALE);
   const pick = <T>(items: readonly T[]) =>
     items[Math.floor(random() * items.length)] as T;
@@ -263,16 +270,11 @@ export const randomCommand = (state: TdState, random: () => number): TdCommand =
     () => ["ult", pick(TD_ULTIMATES), coordinate(), coordinate()],
     () => ["perk", Math.floor(random() * 5)],
     () => ["reroll"],
-    () => ["aim", pick(["near", "strong", "weak", "fast", "support"] as const)],
+    () => ["aim", pick(TD_TARGET_MODES)],
     () => ["focus", enemyId],
     () => ["blink", coordinate(), coordinate()],
     () => ["sub"],
-    () => [
-      "seal",
-      pick(["tiger", "snake", "dog", "bird"] as const),
-      coordinate(),
-      coordinate(),
-    ],
+    () => ["seal", pick(TD_SEALS), coordinate(), coordinate()],
     () => ["trap", coordinate(), coordinate()],
     () => ["loot", state.loot[0]?.id ?? Math.floor(random() * 100)],
     () => ["call"],
@@ -281,8 +283,53 @@ export const randomCommand = (state: TdState, random: () => number): TdCommand =
   return pick(options)();
 };
 
-/** Bot priority for perks, exported so balance tests can reuse it. */
-export const botPerkPriority = PERK_PRIORITY.filter((id) => TD_PERK_INFO[id]);
+/** A seeded Park-Miller generator, so a bot run repeats exactly. */
+export const seededRandom = (seed: number) => {
+  let value = seed;
+  return () => {
+    value = (value * 16807) % 2147483647;
+    return value / 2147483647;
+  };
+};
+
+/** Every Dojo upgrade at the same share of its maximum level. */
+export const veteranDojo = (scale: number): TdDojoLevels =>
+  Object.fromEntries(
+    TD_DOJO.map((id) => [
+      id,
+      Math.min(TD_DOJO_INFO[id].max, Math.ceil(TD_DOJO_INFO[id].max * scale)),
+    ]),
+  );
+
+/**
+ * Play a run with the bot until the hero falls or `ticks` pass, then retreat if asked
+ * to; returns the final state and the log of accepted actions.
+ */
+export const playBotRun = (
+  config: TdRunConfig,
+  options: { seed: number; ticks: number; attention?: number; retreat?: boolean },
+) => {
+  const state = createRun(config);
+  const rng = seededRandom(options.seed);
+  const log: TdAction[] = [];
+  while (!state.over && state.tick < options.ticks) {
+    log.push(...botAct(state, { rng, attention: options.attention }));
+    stepRun(state);
+  }
+  if (options.retreat && !state.over) {
+    const quit: TdAction = [state.tick, "quit"];
+    applyAction(state, quit);
+    log.push(quit);
+  }
+  return { state, log };
+};
+
+/** A log in its claim encoding, written the way the page records it. */
+export const encodeLog = (actions: readonly TdAction[]) => {
+  const log = createLogWriter();
+  for (const action of actions) appendToLog(log, action);
+  return encodedLog(log);
+};
 
 /**
  * Replay a recorded log up to `endTick`. Actions must be in non-decreasing tick order;

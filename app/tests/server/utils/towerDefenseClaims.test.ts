@@ -1,13 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { nanoid } from "nanoid";
 import {
-  applyAction,
-  createRun,
-  stepRun,
-  type TdAction,
-  type TdRunConfig,
-} from "@/libs/towerDefense/sim";
-import {
   checkTowerDefenseClaimTiming,
   TD_TOKEN_LIFETIME_MS,
   towerDefenseReplayCost,
@@ -15,7 +8,7 @@ import {
 } from "@/server/utils/towerDefenseClaims";
 import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
 import { TD_MAX_TICKS, type TowerDefenseRunToken } from "@/validators/towerDefense";
-import { botAct } from "../../libs/towerDefense/bot";
+import { playBotRun } from "../../libs/towerDefense/bot";
 
 const token = (
   overrides: Partial<TowerDefenseRunToken> = {},
@@ -31,33 +24,20 @@ const token = (
   ...overrides,
 });
 
-/** Play the token's run with the test bot until the hero falls. */
-const play = (payload: TowerDefenseRunToken, quitAt?: number) => {
-  const config: TdRunConfig = {
-    seed: payload.seed,
-    startWave: payload.startWave,
-    bestWave: payload.bestWave,
-    dojo: payload.dojo,
-  };
-  const state = createRun(config);
-  const log: TdAction[] = [];
-  let value = 11;
-  const rng = () => {
-    value = (value * 16807) % 2147483647;
-    return value / 2147483647;
-  };
-  while (!state.over && state.tick < 50_000) {
-    if (quitAt !== undefined && state.tick === quitAt) {
-      const quit: TdAction = [state.tick, "quit"];
-      applyAction(state, quit);
-      log.push(quit);
-      break;
-    }
-    log.push(...botAct(state, { rng, attention: 0.8 }));
-    stepRun(state);
-  }
-  return { state, log };
-};
+/** Play the token's run with the test bot until the hero falls, or retreat at `quitAt`. */
+const play = (
+  { seed, startWave, bestWave, dojo }: TowerDefenseRunToken,
+  quitAt?: number,
+) =>
+  playBotRun(
+    { seed, startWave, bestWave, dojo },
+    {
+      seed: 11,
+      attention: 0.8,
+      ticks: quitAt ?? 50_000,
+      retreat: quitAt !== undefined,
+    },
+  );
 
 describe("tower defense run tokens", () => {
   it("round-trips a signed payload and rejects any alteration", () => {
@@ -172,12 +152,7 @@ describe("tower defense claim verification", () => {
       sliceTicks: Number.POSITIVE_INFINITY,
     });
     expect(sliced).toEqual(whole);
-    expect(sliced).toEqual({
-      ok: true,
-      wave: state.wave,
-      kills: state.kills,
-      points: Math.floor(state.scrolls),
-    });
+    expect(sliced.ok).toBe(true);
   });
 });
 

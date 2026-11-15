@@ -2,11 +2,11 @@ import { describe, expect, it } from "bun:test";
 import {
   decodeTdActions,
   encodeTdAction,
-  encodeTdActions,
   isTdActionEncodable,
 } from "@/libs/towerDefense/actionLog";
 import type { TdAction } from "@/libs/towerDefense/sim";
 import { TD_MAX_ACTIONS, TD_MAX_TICKS } from "@/validators/towerDefense";
+import { encodeLog } from "./bot";
 
 const limits = { maxTick: TD_MAX_TICKS, maxActions: TD_MAX_ACTIONS };
 
@@ -35,7 +35,7 @@ const EVERY_KIND: TdAction[] = [
 
 describe("tower defense action log encoding", () => {
   it("round-trips every action kind", () => {
-    const text = encodeTdActions(EVERY_KIND);
+    const text = encodeLog(EVERY_KIND);
     expect(decodeTdActions(text, limits)).toEqual(EVERY_KIND);
     expect(decodeTdActions("", limits)).toEqual([]);
   });
@@ -44,7 +44,7 @@ describe("tower defense action log encoding", () => {
     expect(encodeTdAction([2_001, "seal", "tiger", 200, -150], 2_000)).toBe(
       "1Gtiger,5k,-46",
     );
-    const text = encodeTdActions(EVERY_KIND);
+    const text = encodeLog(EVERY_KIND);
     expect(text.length * 2).toBeLessThan(JSON.stringify(EVERY_KIND).length);
   });
 
@@ -71,12 +71,6 @@ describe("tower defense action log encoding", () => {
 
   it("refuses to encode an action recorded before the previous one", () => {
     expect(() => encodeTdAction([3, "sub"], 5)).toThrow(RangeError);
-    expect(() =>
-      encodeTdActions([
-        [5, "sub"],
-        [3, "sub"],
-      ]),
-    ).toThrow(RangeError);
   });
 
   it("accepts exactly the actions the decoder would", () => {

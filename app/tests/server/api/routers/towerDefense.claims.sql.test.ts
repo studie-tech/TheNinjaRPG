@@ -7,19 +7,10 @@ import {
   userTowerDefenseUpgrade,
 } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
-import { encodeTdActions } from "@/libs/towerDefense/actionLog";
-import {
-  applyAction,
-  createRun,
-  stepRun,
-  TD_SIM_VERSION,
-  type TdAction,
-  type TdRunConfig,
-  tdDojoCost,
-} from "@/libs/towerDefense/sim";
+import { TD_SIM_VERSION, type TdRunConfig, tdDojoCost } from "@/libs/towerDefense/sim";
 import { towerDefenseRouter } from "@/server/api/routers/towerDefense";
 import { TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE } from "@/server/utils/towerDefenseClaims";
-import { botAct } from "../../../libs/towerDefense/bot";
+import { encodeLog, playBotRun } from "../../../libs/towerDefense/bot";
 import { insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
@@ -29,26 +20,9 @@ import {
   resetTables,
 } from "../../../setup/testDatabase";
 
-/** Play a signed run with the test bot until the hero falls. */
-const play = (config: TdRunConfig) => {
-  const state = createRun(config);
-  const log: TdAction[] = [];
-  let value = 5;
-  const rng = () => {
-    value = (value * 16807) % 2147483647;
-    return value / 2147483647;
-  };
-  while (!state.over && state.tick < 40_000) {
-    log.push(...botAct(state, { rng, attention: 0.8 }));
-    stepRun(state);
-  }
-  if (!state.over) {
-    const quit: TdAction = [state.tick, "quit"];
-    applyAction(state, quit);
-    log.push(quit);
-  }
-  return { state, log };
-};
+/** Play a signed run with the test bot until the hero falls, or retreat at 40,000 ticks. */
+const play = (config: TdRunConfig) =>
+  playBotRun(config, { seed: 5, attention: 0.8, ticks: 40_000, retreat: true });
 
 const progress = async (userId: string) => {
   const database = await getTestDatabase();
@@ -100,7 +74,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + state.tick * 100 + 60_000);
     const claim = {
       token: started.token,
-      actions: encodeTdActions(log),
+      actions: encodeLog(log),
       endTick: state.tick,
       simVersion: TD_SIM_VERSION,
     };
@@ -149,7 +123,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + state.tick * 100 + 60_000);
     const claim = {
       token: started.token,
-      actions: encodeTdActions(log),
+      actions: encodeLog(log),
       endTick: state.tick,
       simVersion: TD_SIM_VERSION,
     };
