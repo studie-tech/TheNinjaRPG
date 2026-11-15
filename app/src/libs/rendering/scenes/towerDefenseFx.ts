@@ -190,7 +190,7 @@ export const createTowerDefenseFx = () => {
     x: number,
     y: number,
     value: number,
-    options: { color: number; crit?: boolean; scale?: number; prefix?: string },
+    options: { color: number; crit?: boolean; prefix?: string },
   ) => {
     const record = numbers[nextNumber];
     nextNumber = (nextNumber + 1) % numbers.length;
@@ -200,7 +200,7 @@ export const createTowerDefenseFx = () => {
         0,
         record.glyphs.length,
       );
-    const scale = (options.scale ?? 1) * (options.crit ? 0.016 : 0.011);
+    const scale = options.crit ? 0.016 : 0.011;
     record.root.position.set(
       x + (Math.random() - 0.5) * 0.5,
       y + 0.4 + Math.random() * 0.3,
@@ -226,11 +226,11 @@ export const createTowerDefenseFx = () => {
   let shakeLeft = 0,
     shakePower = 0;
   const flashes: { color: number; alpha: number; age: number; life: number }[] = [];
-  const shake = (power: number, seconds = 0.3) => {
+  const shake = (power: number, seconds: number) => {
     shakePower = Math.max(shakePower * (shakeLeft > 0 ? 1 : 0), power);
     shakeLeft = Math.max(shakeLeft, seconds);
   };
-  const flash = (color: number, alpha: number, seconds = 0.35) => {
+  const flash = (color: number, alpha: number, seconds: number) => {
     if (flashes.length > 6) flashes.shift();
     flashes.push({ color, alpha, age: 0, life: seconds });
   };
@@ -259,14 +259,7 @@ export const createTowerDefenseFx = () => {
     // Rings, bolts and streaks change every frame while they live; with none alive and
     // none drawn last frame the geometry is left untouched.
     if (shapesDrawn || rings.length + bolts.length + streaks.length > 0) shapes.clear();
-    for (let i = rings.length - 1; i >= 0; i--) {
-      const entry = rings[i];
-      if (!entry) continue;
-      entry.age += dt;
-      if (entry.age >= entry.life) {
-        rings.splice(i, 1);
-        continue;
-      }
+    for (const entry of ageEntries(rings, dt)) {
       const t = entry.age / entry.life;
       const eased = 1 - (1 - t) * (1 - t);
       const radius = entry.from + (entry.to - entry.from) * eased;
@@ -280,14 +273,7 @@ export const createTowerDefenseFx = () => {
         width: entry.width * (1 - t * 0.5),
       });
     }
-    for (let i = bolts.length - 1; i >= 0; i--) {
-      const entry = bolts[i];
-      if (!entry) continue;
-      entry.age += dt;
-      if (entry.age >= entry.life) {
-        bolts.splice(i, 1);
-        continue;
-      }
+    for (const entry of ageEntries(bolts, dt)) {
       const alpha = 1 - entry.age / entry.life;
       for (const pass of [2.6, 1]) {
         const [first, ...rest] = entry.points;
@@ -313,14 +299,7 @@ export const createTowerDefenseFx = () => {
         });
       }
     }
-    for (let i = streaks.length - 1; i >= 0; i--) {
-      const entry = streaks[i];
-      if (!entry) continue;
-      entry.age += dt;
-      if (entry.age >= entry.life) {
-        streaks.splice(i, 1);
-        continue;
-      }
+    for (const entry of ageEntries(streaks, dt)) {
       const t = entry.age / entry.life;
       const head = Math.min(1, t * 3);
       const tail = Math.max(0, t * 3 - 1.2);
@@ -357,16 +336,10 @@ export const createTowerDefenseFx = () => {
       offsetY = (Math.random() - 0.5) * 2 * power;
     }
     let overlay: { color: number; alpha: number } | null = null;
-    for (let i = flashes.length - 1; i >= 0; i--) {
-      const entry = flashes[i];
-      if (!entry) continue;
-      entry.age += dt;
-      if (entry.age >= entry.life) {
-        flashes.splice(i, 1);
-        continue;
-      }
+    // The newest of equally bright flashes sets the colour.
+    for (const entry of ageEntries(flashes, dt)) {
       const alpha = entry.alpha * (1 - entry.age / entry.life);
-      if (!overlay || alpha > overlay.alpha) overlay = { color: entry.color, alpha };
+      if (!overlay || alpha >= overlay.alpha) overlay = { color: entry.color, alpha };
     }
     return {
       offsetX,
@@ -378,7 +351,6 @@ export const createTowerDefenseFx = () => {
 
   return {
     container,
-    glow,
     burst,
     ring,
     bolt,
@@ -394,10 +366,22 @@ export const createTowerDefenseFx = () => {
   };
 };
 
-export type TowerDefenseFx = ReturnType<typeof createTowerDefenseFx>;
-
 const PARTICLES = 900;
 const NUMBERS = 48;
+
+/** Age every entry by `dt` and drop, in place, those that outlived their `life`. */
+const ageEntries = <T extends { age: number; life: number }>(
+  entries: T[],
+  dt: number,
+) => {
+  let kept = 0;
+  for (const entry of entries) {
+    entry.age += dt;
+    if (entry.age < entry.life) entries[kept++] = entry;
+  }
+  entries.length = kept;
+  return entries;
+};
 
 const createGlyphAtlas = () => {
   const characters = "0123456789.KMBTqQsSond!-+∞";

@@ -4,7 +4,6 @@ import {
   Graphics,
   GraphicsContext,
   Matrix,
-  Rectangle,
   Sprite,
   Texture,
 } from "pixi.js";
@@ -13,7 +12,10 @@ import type { GameAsset } from "@/drizzle/schema";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { lpcFacing } from "@/libs/lpc/catalog";
 import { assetAnimationClip, sampleAnimationClip } from "@/libs/rendering/animation";
-import { acquireAnimationTexture } from "@/libs/rendering/animationTextures";
+import {
+  acquireAnimationTexture,
+  animationFrameViews,
+} from "@/libs/rendering/animationTextures";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
 import {
   createLpcCharacter,
@@ -24,10 +26,7 @@ import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import { createGameRenderer } from "@/libs/rendering/runtime";
-import {
-  createTowerDefenseFx,
-  type TowerDefenseFx,
-} from "@/libs/rendering/scenes/towerDefenseFx";
+import { createTowerDefenseFx } from "@/libs/rendering/scenes/towerDefenseFx";
 import { prepareTowerDefenseTerrain } from "@/libs/rendering/scenes/towerDefenseTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import {
@@ -211,22 +210,18 @@ export const createTowerDefenseScene = async (options: {
     ]);
     if (game.isDisposed())
       throw new DOMException("Tower defense cancelled", "AbortError");
-    const unitPx = (terrain.bounds.right - terrain.bounds.left) / (TERRAIN_SIZE + 1);
-    const center = terrain.grid.getHex({
-      col: Math.floor(TERRAIN_SIZE / 2),
-      row: Math.floor(TERRAIN_SIZE / 2),
-    });
+    const { unitPx, center } = terrain;
     lighting.container.addChild(hexes.container, scenery.container);
     game.own(lighting.registerTerrain(hexes.container, terrain.terrain));
     terrainLayer.addChild(lighting.container);
     terrainLayer.scale.set(1 / unitPx);
-    terrainLayer.position.set(-(center?.x ?? 0) / unitPx, -(center?.y ?? 0) / unitPx);
+    terrainLayer.position.set(-center.x / unitPx, -center.y / unitPx);
     /** The visible arena in terrain pixels, for the lighting pass. */
     const terrainView = {
-      minX: (center?.x ?? 0) - (VIEW_HALF_WIDTH + 2) * unitPx,
-      maxX: (center?.x ?? 0) + (VIEW_HALF_WIDTH + 2) * unitPx,
-      minY: (center?.y ?? 0) - (VIEW_HALF_HEIGHT + 2) * unitPx,
-      maxY: (center?.y ?? 0) + (VIEW_HALF_HEIGHT + 2) * unitPx,
+      minX: center.x - (VIEW_HALF_WIDTH + 2) * unitPx,
+      maxX: center.x + (VIEW_HALF_WIDTH + 2) * unitPx,
+      minY: center.y - (VIEW_HALF_HEIGHT + 2) * unitPx,
+      maxY: center.y + (VIEW_HALF_HEIGHT + 2) * unitPx,
     };
     const contactTexture = createSoftShadowTexture();
     game.own(() => contactTexture.destroy(true));
@@ -267,43 +262,36 @@ export const createTowerDefenseScene = async (options: {
     if (game.isDisposed())
       throw new DOMException("Tower defense cancelled", "AbortError");
 
-    // Hero
+    // The hero, and a darkened twin sheared away from the sun like the enemies' silhouettes.
     const heroRoot = new Container();
     actorLayer.addChild(heroRoot);
-    let hero: LpcCharacter | null = null;
-    const clones: LpcCharacter[] = [];
-    if (options.appearance && game.lpcCatalog) {
-      hero = await createLpcCharacter(game, options.appearance, "all").catch(
-        () => null,
-      );
-      if (hero) {
-        hero.sprite.scale.set(1.6, -1.6);
-        hero.sprite.position.set(0, HERO_CENTER_Y);
-        heroRoot.addChild(hero.sprite);
-      }
-    }
-    // A darkened twin of the hero, sheared away from the sun like the enemies' silhouettes.
     const heroCastRoot = new Container();
-    let heroCast: LpcCharacter | null = null;
-    if (hero && options.appearance) {
-      heroCast = await createLpcCharacter(game, options.appearance, "all").catch(
-        () => null,
+    const clones: LpcCharacter[] = [];
+    const appearance = options.appearance;
+    const buildHero = (look: SpriteAppearance) =>
+      createLpcCharacter(game, look, "all").catch(() => null);
+    const [hero, heroCast] =
+      appearance && game.lpcCatalog
+        ? await Promise.all([buildHero(appearance), buildHero(appearance)])
+        : [null, null];
+    if (hero) {
+      hero.sprite.scale.set(1.6, -1.6);
+      hero.sprite.position.set(0, HERO_CENTER_Y);
+      heroRoot.addChild(hero.sprite);
+    } else
+      heroRoot.addChild(
+        new Graphics()
+          .circle(0, 0.45, 0.4)
+          .fill(0x2b2f4a)
+          .stroke({ color: 0xffffff, width: 0.06 }),
       );
-      if (heroCast) {
-        heroCast.sprite.position.set(0, -LPC_FOOT);
-        heroCast.sprite.tint = CAST_SHADOW_TINT;
-        heroCastRoot.alpha = CAST_SHADOW_ALPHA;
-        heroCastRoot.addChild(heroCast.sprite);
-        castMatrix.set(1.6, 0, SUN_SLOPE_X * 1.6, SUN_SLOPE_Y * 1.6, 0, 0);
-        heroCastRoot.setFromMatrix(castMatrix);
-      }
-    }
-    if (!hero) {
-      const fallback = new Graphics()
-        .circle(0, 0.45, 0.4)
-        .fill(0x2b2f4a)
-        .stroke({ color: 0xffffff, width: 0.06 });
-      heroRoot.addChild(fallback);
+    if (hero && heroCast) {
+      heroCast.sprite.position.set(0, -LPC_FOOT);
+      heroCast.sprite.tint = CAST_SHADOW_TINT;
+      heroCastRoot.alpha = CAST_SHADOW_ALPHA;
+      heroCastRoot.addChild(heroCast.sprite);
+      castMatrix.set(1.6, 0, SUN_SLOPE_X * 1.6, SUN_SLOPE_Y * 1.6, 0, 0);
+      heroCastRoot.setFromMatrix(castMatrix);
     }
     heroRoot.addChildAt(contact(1.1), 0);
     heroRoot.addChildAt(heroCastRoot, 0);
@@ -391,24 +379,8 @@ export const createTowerDefenseScene = async (options: {
         leases.push(lease.release);
         void lease.resource
           .then((atlas) => {
-            if (art.disposed) return;
-            const cell = atlas.width / animation.columns;
-            art[slot] = {
-              animation,
-              views: Array.from(
-                { length: animation.frameCount },
-                (_, i) =>
-                  new Texture({
-                    source: atlas.source,
-                    frame: new Rectangle(
-                      (i % animation.columns) * cell,
-                      Math.floor(i / animation.columns) * cell,
-                      cell,
-                      cell,
-                    ),
-                  }),
-              ),
-            };
+            if (!art.disposed)
+              art[slot] = { animation, views: animationFrameViews(atlas, animation) };
           })
           .catch(() => {});
         return true;
@@ -522,7 +494,6 @@ export const createTowerDefenseScene = async (options: {
         y: 0,
         bornAt: 0,
         flashUntil: 0,
-        facing: 1,
         seenFrame: 0,
       };
     };
@@ -535,7 +506,6 @@ export const createTowerDefenseScene = async (options: {
       record.y = enemy.y;
       record.bornAt = performance.now();
       record.flashUntil = 0;
-      record.facing = enemy.x > 0 ? -1 : 1;
       record.fallback.context = enemyShapes.fallback(enemy.kind);
       record.root.scale.set(enemy.size * (enemy.boss ? 1.25 : 1));
       actorLayer.addChild(record.root);
@@ -623,7 +593,6 @@ export const createTowerDefenseScene = async (options: {
     };
     game.setResize(resize);
 
-    let lastTick = -1;
     let frameNumber = 0;
     /** When this scene first drew the run as over. */
     let overSince: number | null = null;
@@ -700,12 +669,7 @@ export const createTowerDefenseScene = async (options: {
         record.y = jump ? enemy.y : record.y + (enemy.y - record.y) * smoothing;
         record.root.position.set(record.x, record.y);
         record.root.zIndex = -record.y;
-        const moving =
-          Math.hypot(enemy.x - state.hero.x, enemy.y - state.hero.y) >
-          enemy.stop + 0.05;
-        const facing = enemy.x > state.hero.x ? -1 : 1;
-        record.facing = facing;
-        drawEnemyBody(record, enemy, state, now, moving, reduced);
+        drawEnemyBody(record, enemy, state, now, reduced);
       }
       for (const [id, record] of enemies)
         if (record.seenFrame !== frameNumber) {
@@ -780,7 +744,6 @@ export const createTowerDefenseScene = async (options: {
       }
       screenFlash.tint = shake.overlay?.color ?? 0xffffff;
       screenFlash.alpha = shake.overlay?.alpha ?? 0;
-      lastTick = state.tick;
       // A finished run never changes, so the field rests under the results once its
       // closing effects have played; a resize or tap still redraws it.
       if (state.over) overSince ??= now;
@@ -1331,43 +1294,38 @@ export const createTowerDefenseScene = async (options: {
       enemy: TdEnemy,
       state: TdState,
       now: number,
-      moving: boolean,
       reduced: boolean,
     ) => {
+      const { x, y } = state.hero;
+      const moving = Math.hypot(enemy.x - x, enemy.y - y) > enemy.stop + 0.05;
+      const facing = enemy.x > x ? -1 : 1;
+      // A sheet animates at full height; a lone avatar bobs at a smaller size.
       const clip =
         (moving ? record.art.move : record.art.idle) ??
         record.art.move ??
         record.art.idle;
-      if (clip) {
-        const index = reduced
-          ? 0
-          : spriteAnimationFrame(clip.animation, now - record.bornAt, true);
-        record.body.texture = clip.views[index] ?? Texture.EMPTY;
-        record.body.visible = true;
-        record.fallback.visible = false;
-        const flip = (clip.animation.facing === "left" ? -1 : 1) * record.facing;
+      const texture = clip
+        ? (clip.views[
+            reduced
+              ? 0
+              : spriteAnimationFrame(clip.animation, now - record.bornAt, true)
+          ] ?? Texture.EMPTY)
+        : record.art.still;
+      record.body.visible = !!texture;
+      record.fallback.visible = !texture;
+      if (texture) {
+        const size = clip ? 1.9 : 1.05;
+        const flip = clip?.animation.facing === "left" ? -facing : facing;
+        const bob =
+          clip || reduced
+            ? 0
+            : Math.abs(Math.sin((now - record.bornAt) / 160)) * (moving ? 0.12 : 0.03);
+        record.body.texture = texture;
         record.body.scale.set(
-          (1.9 / Math.max(1, record.body.texture.width)) * flip,
-          -1.9 / Math.max(1, record.body.texture.height),
+          (size / Math.max(1, texture.width)) * flip,
+          -size / Math.max(1, texture.height),
         );
-        record.body.anchor.set(0.5, 1);
-        record.body.position.set(0, 0);
-      } else if (record.art.still) {
-        record.body.texture = record.art.still;
-        record.body.visible = true;
-        record.fallback.visible = false;
-        const bob = reduced
-          ? 0
-          : Math.abs(Math.sin((now - record.bornAt) / 160)) * (moving ? 0.12 : 0.03);
-        record.body.scale.set(
-          (1.05 / Math.max(1, record.art.still.width)) * record.facing,
-          -1.05 / Math.max(1, record.art.still.height),
-        );
-        record.body.anchor.set(0.5, 1);
         record.body.position.set(0, bob);
-      } else {
-        record.body.visible = false;
-        record.fallback.visible = true;
       }
       // Sun silhouette: the current frame sheared away from the sun from the feet.
       record.cast.visible = record.body.visible && showCasts();
@@ -1375,7 +1333,6 @@ export const createTowerDefenseScene = async (options: {
         const body = record.body;
         const rise = Math.abs(body.scale.y);
         record.cast.texture = body.texture;
-        record.cast.anchor.copyFrom(body.anchor);
         castMatrix.set(
           body.scale.x,
           0,
@@ -1700,11 +1657,7 @@ export const createTowerDefenseScene = async (options: {
       }
     };
 
-    return {
-      dispose: game.dispose,
-      refresh: game.invalidate,
-      tickOf: () => lastTick,
-    };
+    return { dispose: game.dispose };
   } catch (error) {
     game.dispose();
     throw error;
@@ -1986,7 +1939,6 @@ interface EnemyRecord {
   y: number;
   bornAt: number;
   flashUntil: number;
-  facing: number;
   /** The frame that last found this enemy alive; older records are released. */
   seenFrame: number;
 }
@@ -2002,6 +1954,3 @@ interface Flight {
   due: number;
   element: TdElement;
 }
-
-export type TowerDefenseScene = Awaited<ReturnType<typeof createTowerDefenseScene>>;
-export type { TowerDefenseFx };

@@ -53,17 +53,16 @@ export const prepareTowerDefenseTerrain = (seed: string, size: number) => {
     },
     false,
   );
-  const corners = grid.toArray().flatMap((tile) => tile.corners);
-  const bounds = {
-    left: Math.min(...corners.map((p) => p.x)) - TD_HEX_SIZE / 2,
-    right: Math.max(...corners.map((p) => p.x)) + TD_HEX_SIZE / 2,
-    bottom: Math.min(...corners.map((p) => p.y)) - TD_HEX_SIZE / 2,
-    top: Math.max(...corners.map((p) => p.y)) + TD_HEX_SIZE / 2,
-  };
+  const xs = grid.toArray().flatMap((tile) => tile.corners.map((corner) => corner.x));
+  const left = Math.min(...xs) - TD_HEX_SIZE / 2,
+    right = Math.max(...xs) + TD_HEX_SIZE / 2;
+  const middle = grid.getHex(center);
   return {
-    grid,
     terrain,
     scenery: scenery.sort((a, b) => b.groundY - a.groundY),
-    bounds,
+    /** World pixels per arena unit. */
+    unitPx: (right - left) / (size + 1),
+    /** The arena's centre in world pixels. */
+    center: { x: middle?.x ?? 0, y: middle?.y ?? 0 },
   };
 };
