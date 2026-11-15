@@ -281,15 +281,7 @@ export default function TowerDefensePage() {
               act={act}
             />
           )}
-          {playing && (
-            <TowerDefenseDraft
-              state={playing}
-              act={act}
-              onAutoPick={() => {
-                for (let i = 0; i < 50 && act(["perk", 0]); i++);
-              }}
-            />
-          )}
+          {playing && <TowerDefenseDraft state={playing} act={act} />}
           {run.phase !== "playing" && (
             <Results
               phase={run.phase}
@@ -387,9 +379,6 @@ const Results = (props: {
   );
 };
 
-/** The renderer drains its events in place, so the empty fallback is never refilled. */
-const NO_EVENTS: TdEvent[] = [];
-
 const LeaderboardLink = () => (
   <Button asChild size="sm">
     <Link href="/manual/towerDefense/leaderboard">
@@ -398,6 +387,9 @@ const LeaderboardLink = () => (
     </Link>
   </Button>
 );
+
+/** The renderer drains its events in place, so the empty fallback is never refilled. */
+const NO_EVENTS: TdEvent[] = [];
 
 /** Aim at the thickest crowd when the player has not placed a reticle. */
 const nearestCrowd = (enemies: { x: number; y: number }[]) => {

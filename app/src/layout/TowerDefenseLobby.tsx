@@ -465,11 +465,6 @@ const Stat = (props: { icon: ReactNode; label: string; value: string }) => (
   </div>
 );
 
-const hex = (color: number) => `#${color.toString(16).padStart(6, "0")}`;
-/** A stage's sky over its ground light, as a small landscape swatch. */
-const stageGradient = (sky: number, ground: number) =>
-  `linear-gradient(to bottom, ${hex(sky)} 0%, ${hex(sky)} 55%, color-mix(in srgb, ${hex(ground)} 35%, #2f5d2f) 100%)`;
-
 const Dojo = (props: {
   progress: { points: number; bestWave: number; dojo: TdDojoLevels };
   isPurchasing: boolean;
@@ -547,3 +542,8 @@ const Dojo = (props: {
     </CardContent>
   </Card>
 );
+
+const hex = (color: number) => `#${color.toString(16).padStart(6, "0")}`;
+/** A stage's sky over its ground light, as a small landscape swatch. */
+const stageGradient = (sky: number, ground: number) =>
+  `linear-gradient(to bottom, ${hex(sky)} 0%, ${hex(sky)} 55%, color-mix(in srgb, ${hex(ground)} 35%, #2f5d2f) 100%)`;

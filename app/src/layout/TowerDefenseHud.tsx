@@ -471,6 +471,70 @@ export const TowerDefensePanel = (props: {
   );
 };
 
+/** The perk draft that pauses the run after each boss. */
+export const TowerDefenseDraft = ({
+  state,
+  act,
+}: {
+  state: TdState;
+  act: (command: TdCommand) => boolean;
+}) => {
+  if (!state.offer) return null;
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-2">
+      <div className="bg-background max-h-full w-full max-w-3xl space-y-3 overflow-y-auto rounded-xl border p-4 shadow-xl">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-lg font-bold">Choose a perk</h3>
+          {state.drafts > 1 && <Badge>{state.drafts} drafts waiting</Badge>}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {state.offer.map((perk, index) => {
+            const info = TD_PERK_INFO[perk];
+            return (
+              <button
+                type="button"
+                key={perk}
+                onClick={() => act(["perk", index])}
+                className={cn(
+                  "rounded-lg border-2 p-3 text-left transition hover:scale-[1.02] hover:shadow-lg",
+                  info.kind === "evolution" && "border-amber-400 bg-amber-400/10",
+                  info.kind === "tradeoff" && "border-rose-400 bg-rose-400/10",
+                  info.kind === "mechanic" && "border-sky-400 bg-sky-400/10",
+                )}
+              >
+                <p className="font-bold">{info.name}</p>
+                <p className="text-sm">{info.description}</p>
+                <p className="text-muted-foreground mt-1 text-sm capitalize">
+                  {info.kind}
+                  {(state.perks[perk] ?? 0) > 0 ? ` · owned ×${state.perks[perk]}` : ""}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {state.rerolls > 0 && (
+            <Button variant="outline" onClick={() => act(["reroll"])}>
+              Reroll ({state.rerolls} left)
+            </Button>
+          )}
+          {state.drafts > 1 && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Take the first offer of every waiting draft.
+                for (let i = 0; i < 50 && act(["perk", 0]); i++);
+              }}
+            >
+              Pick for me ({state.drafts})
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Sentries = ({
   state,
   act,
@@ -537,67 +601,6 @@ const Sentries = ({
     })}
   </div>
 );
-
-/** The perk draft that pauses the run after each boss. */
-export const TowerDefenseDraft = ({
-  state,
-  act,
-  onAutoPick,
-}: {
-  state: TdState;
-  act: (command: TdCommand) => void;
-  /** Take the first offer of every waiting draft. */
-  onAutoPick: () => void;
-}) => {
-  if (!state.offer) return null;
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-2">
-      <div className="bg-background max-h-full w-full max-w-3xl space-y-3 overflow-y-auto rounded-xl border p-4 shadow-xl">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-lg font-bold">Choose a perk</h3>
-          {state.drafts > 1 && <Badge>{state.drafts} drafts waiting</Badge>}
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {state.offer.map((perk, index) => {
-            const info = TD_PERK_INFO[perk];
-            return (
-              <button
-                type="button"
-                key={perk}
-                onClick={() => act(["perk", index])}
-                className={cn(
-                  "rounded-lg border-2 p-3 text-left transition hover:scale-[1.02] hover:shadow-lg",
-                  info.kind === "evolution" && "border-amber-400 bg-amber-400/10",
-                  info.kind === "tradeoff" && "border-rose-400 bg-rose-400/10",
-                  info.kind === "mechanic" && "border-sky-400 bg-sky-400/10",
-                )}
-              >
-                <p className="font-bold">{info.name}</p>
-                <p className="text-sm">{info.description}</p>
-                <p className="text-muted-foreground mt-1 text-sm capitalize">
-                  {info.kind}
-                  {(state.perks[perk] ?? 0) > 0 ? ` · owned ×${state.perks[perk]}` : ""}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {state.rerolls > 0 && (
-            <Button variant="outline" onClick={() => act(["reroll"])}>
-              Reroll ({state.rerolls} left)
-            </Button>
-          )}
-          {state.drafts > 1 && (
-            <Button variant="outline" onClick={onAutoPick}>
-              Pick for me ({state.drafts})
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const Meter = (props: { value: number; max: number; color: string }) => (
   <div className="relative h-3 max-w-72 overflow-hidden rounded bg-black/50">
