@@ -4075,6 +4075,7 @@ export const processUsersForBattle = async (
     user.items = user.items.filter(
       (ui) =>
         ui.item.itemType !== "FURNITURE" &&
+        ui.item.itemType !== "COSMETIC" &&
         (!usesPlayerLoadout ||
           hasRequiredSkill(ui.item, { userSkills: requirementSkills })),
     );

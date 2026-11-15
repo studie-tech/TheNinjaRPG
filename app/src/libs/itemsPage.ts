@@ -2,7 +2,6 @@ import type { ItemRarity, ItemSlot, ItemType, UserStatus } from "@/drizzle/const
 import {
   BULK_SELL_WARN_RARITIES,
   ItemRarities,
-  ItemSlots,
   ItemSlotTypes,
   ItemTypes,
 } from "@/drizzle/constants";
@@ -17,6 +16,7 @@ import {
   applyActiveVariant,
   byItemName,
   calcItemSellingPrice,
+  cosmeticSlotsForItem,
   countInventoryBucketSlots,
   countInventorySlots,
   countsTowardInventoryStorage,
@@ -29,7 +29,6 @@ import {
   getInventoryBucketFullMessage,
   type InventoryBucket,
   type InventorySlotRow,
-  isCompatibleEquipSlot,
 } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -55,6 +54,7 @@ const TYPE_LABELS: Record<ItemType, string> = {
   KEYSTONE: "Keystones",
   CRYSTAL: "Crystals",
   FURNITURE: "Furniture",
+  COSMETIC: "Cosmetics",
   OTHER: "Other",
 };
 
@@ -136,13 +136,9 @@ export const backpackFilterChips = (
   ];
 };
 
-/** Equipment slots an item can go into; none for meals, furniture and unslotted items. */
-export const fittingSlots = (item: Pick<Item, "slot" | "itemType">): ItemSlot[] => {
-  if (item.itemType === "MEAL" || item.itemType === "FURNITURE") {
-    return [];
-  }
-  return ItemSlots.filter((slot) => isCompatibleEquipSlot(slot, item.slot));
-};
+/** Slots available for ordinary equipment; dedicated cosmetics use the wardrobe. */
+export const fittingSlots = (item: Pick<Item, "slot" | "itemType">): ItemSlot[] =>
+  item.itemType === "COSMETIC" ? [] : cosmeticSlotsForItem(item);
 
 /**
  * Backpack and worn items that fit `slot`, other than the one already in it: equippable

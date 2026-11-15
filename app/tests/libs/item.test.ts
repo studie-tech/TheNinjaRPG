@@ -25,6 +25,7 @@ import {
   compatibleEquipSlots,
   computeAutoEquipAssignments,
   computeLoadoutAssignments,
+  cosmeticSlotsForItem,
   countMergeableStackTypes,
   countsTowardInventoryStorage,
   type EquipConstraintInfo,
@@ -976,6 +977,61 @@ describe("computeAutoEquipAssignments", () => {
     const out = computeAutoEquipAssignments(items, USER, NOW);
     expect(out.assignments).toEqual([]);
     expect(out.hasUnequipped).toBe(true);
+  });
+});
+
+describe("COSMETIC item type", () => {
+  it("keeps dedicated cosmetics out of automatic and saved equipment loadouts", () => {
+    const items = [
+      ui({
+        id: "cosmetic-row",
+        itemId: "cosmetic",
+        itemType: "COSMETIC",
+        slotType: "HEAD",
+        cost: 999,
+      }),
+      ui({
+        id: "helmet-row",
+        itemId: "helmet",
+        itemType: "ARMOR",
+        slotType: "HEAD",
+        cost: 10,
+      }),
+    ];
+    expect(computeAutoEquipAssignments(items, USER, NOW).assignments).toEqual([
+      { userItemId: "helmet-row", slot: "HEAD" },
+    ]);
+    const loadout = computeLoadoutAssignments(
+      [
+        { itemId: "cosmetic", slot: "HEAD" },
+        { itemId: "helmet", slot: "HEAD" },
+      ],
+      items,
+      USER,
+      NOW,
+    );
+    expect(loadout.assignments).toEqual([{ userItemId: "helmet-row", slot: "HEAD" }]);
+    expect(loadout.invalidItems[0]).toContain("Make Cosmetic");
+  });
+
+  it("keeps target slots while preventing normal equipment and progression", () => {
+    expect(ItemTypes).toContain("COSMETIC");
+    expect(NonActionItemTypes).toContain("COSMETIC");
+    expect(cosmeticSlotsForItem({ itemType: "COSMETIC", slot: "HAND" })).toEqual([
+      "HAND_1",
+      "HAND_2",
+    ]);
+    expect(cosmeticSlotsForItem({ itemType: "COSMETIC", slot: "HEAD" })).toEqual([
+      "HEAD",
+    ]);
+    expect(cosmeticSlotsForItem({ itemType: "COSMETIC", slot: "ITEM" })).toHaveLength(
+      6,
+    );
+    expect(cosmeticSlotsForItem({ itemType: "COSMETIC", slot: "NONE" })).toEqual([]);
+    expect(
+      canEquipAdditional(info({ itemType: "COSMETIC", slot: "HAND" }), []),
+    ).toContain("Cosmetic tab");
+    expect(showsItemLevelBadge({ itemType: "COSMETIC", slot: "HAND" })).toBe(false);
   });
 });
 

@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { ItemSlots } from "@/drizzle/constants";
-import { fittingSlots } from "@/libs/itemsPage";
+import { cosmeticSlotsForItem } from "@/libs/item";
 import {
   claimCosmetic,
   clearCosmeticSlot,
@@ -33,8 +33,8 @@ export const cosmeticRouter = createTRPCRouter({
         ctx.userId,
         input.userItemId,
       );
-      if (!source || !fittingSlots(source.item).length)
-        return errorResponse("Choose equipment to make cosmetic.");
+      if (!source || !cosmeticSlotsForItem(source.item).length)
+        return errorResponse("Choose an item with a cosmetic slot.");
       if (source.imbuements.length)
         return errorResponse("Remove imbuements before making this item cosmetic.");
       const rejected = new Error("COSMETIC_SOURCE_CHANGED");

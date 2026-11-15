@@ -82,6 +82,14 @@ const equip = (
   );
 
 describe("toggleEquipItem mastery gate", () => {
+  it("rejects dedicated cosmetic items even when their target slot fits", async () => {
+    const cosmetic = chestArmor("cosmetic");
+    cosmetic.item.itemType = "COSMETIC";
+    const result = await equip([cosmetic], "cosmetic", 100);
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Cosmetic tab");
+  });
+
   it("refuses gear whose mastery requirement is unmet", async () => {
     const result = await equip([chestArmor("gated", { required: 500 })], "gated", 100);
     expect(result).toMatchObject({

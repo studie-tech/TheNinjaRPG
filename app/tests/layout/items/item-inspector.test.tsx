@@ -394,3 +394,10 @@ it("shows a stored item's details with taking it out as the only action", () => 
   fireEvent.click(screen.getByRole("button", { name: "Take out" }));
   expect(onMove).toHaveBeenCalledTimes(1);
 });
+
+it("offers dedicated cosmetics for appearance unlocking without a normal equip action", () => {
+  renderInspector({ userItem: userItem({ itemType: "COSMETIC" }) });
+  expect(screen.getByRole("button", { name: "Make Cosmetic" })).toBeDefined();
+  expect(screen.queryByRole("button", { name: /^Equip$/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Set hotkey/ })).toBeNull();
+});

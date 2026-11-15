@@ -10,7 +10,8 @@ import { EquipmentPreview } from "@/layout/EquipmentPreview";
 import Image from "@/layout/Image";
 import { EQUIPMENT_LAYOUT } from "@/layout/items/EquipmentFigure";
 import Loader from "@/layout/Loader";
-import { fittingSlots, slotName } from "@/libs/itemsPage";
+import { cosmeticSlotsForItem } from "@/libs/item";
+import { slotName } from "@/libs/itemsPage";
 import type { SpriteUser } from "@/libs/lpc/appearance";
 import { cn } from "@/libs/shadui";
 
@@ -28,7 +29,9 @@ export function CosmeticWorkspace({ user }: { user: SpriteUser }) {
     );
   const { owned, slots, unlocks } = wardrobe.data;
   const current = slots.find((entry) => entry.slot === slot);
-  const candidates = owned.filter((entry) => fittingSlots(entry.item).includes(slot));
+  const candidates = owned.filter((entry) =>
+    cosmeticSlotsForItem(entry.item).includes(slot),
+  );
   const isOccupied = user.items?.some(
     (entry) => entry.equipped === slot && (entry.quantity ?? 0) > 0,
   );

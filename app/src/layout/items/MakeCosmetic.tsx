@@ -4,14 +4,13 @@ import { Button } from "@/components/ui/button";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { useCosmetics } from "@/hooks/useCosmetics";
 import Confirm from "@/layout/Confirm";
-import { isEquippableUserItem } from "@/libs/item";
-import { fittingSlots } from "@/libs/itemsPage";
+import { cosmeticSlotsForItem, isEquippableUserItem } from "@/libs/item";
 
 /** Confirm permanent consumption before unlocking an equipment appearance. */
 export function MakeCosmetic({ userItem }: { userItem: UserItemWithRelations }) {
   const { wardrobe, make, error } = useCosmetics();
   const owned = wardrobe.data?.owned.some((entry) => entry.itemId === userItem.itemId);
-  if (!fittingSlots(userItem.item).length) return null;
+  if (!cosmeticSlotsForItem(userItem.item).length) return null;
   const blocked =
     userItem.equipped !== "NONE" ||
     !isEquippableUserItem(userItem) ||
