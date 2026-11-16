@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import {
   craftingRequirement,
   item,
+  quest,
+  questHistory,
   userData,
   userItem,
   userQueue,
@@ -10,7 +12,14 @@ import {
 } from "@/drizzle/schema";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { profileRouter } from "@/server/api/routers/profile";
-import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import { AllObjectives, QuestTracker } from "@/validators/objectives";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUserItems,
+  insertUsers,
+} from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -40,6 +49,8 @@ describeWithDatabase("crafting materials", () => {
       craftingRequirement,
       userItem,
       item,
+      questHistory,
+      quest,
       userVote,
       userData,
     );
@@ -127,8 +138,43 @@ describeWithDatabase("crafting materials", () => {
     expect((await craft(2)).success).toBe(true);
     expect(await quantities()).toEqual({ "ore-large": 6 });
   });
-  it("snapshots multi-item output and batch experience for immediate and queued crafts", async () => {
+  it("snapshots multi-item output, item progress and batch experience for immediate and queued crafts", async () => {
     const db = await getTestDatabase();
+    await insertQuests([
+      {
+        id: "craft-output",
+        questType: "mission",
+        consecutiveObjectives: false,
+        content: {
+          objectives: [
+            AllObjectives.parse({ id: "total", task: "items_crafted", value: 100 }),
+            AllObjectives.parse({
+              id: "specific",
+              task: "craft_specific_item",
+              craftItemIds: ["blade"],
+              value: 100,
+            }),
+          ],
+        },
+      },
+    ]);
+    await insertQuestHistory([
+      { userId: USER_ID, questId: "craft-output", questType: "mission" },
+    ]);
+    await db
+      .update(userData)
+      .set({
+        questData: [
+          QuestTracker.parse({
+            id: "craft-output",
+            goals: [
+              { id: "total", value: 0, done: false },
+              { id: "specific", value: 0, done: false },
+            ],
+          }),
+        ],
+      })
+      .where(eq(userData.userId, USER_ID));
     await db
       .update(item)
       .set({
@@ -146,6 +192,10 @@ describeWithDatabase("crafting materials", () => {
     const firstUser = await db.query.userData.findFirst({
       where: eq(userData.userId, USER_ID),
     });
+    expect(firstUser?.questData?.[0]?.goals).toMatchObject([
+      { id: "total", value: 3, done: false },
+      { id: "specific", value: 3, done: false },
+    ]);
     const firstOutputs = await db
       .select()
       .from(userItem)
@@ -156,6 +206,10 @@ describeWithDatabase("crafting materials", () => {
       where: eq(userQueue.userId, USER_ID),
     });
     expect(queued).toMatchObject({ quantity: 6, craftBatches: 2 });
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, USER_ID) }))
+        ?.questData,
+    ).toEqual(firstUser?.questData);
     await db
       .update(item)
       .set({ craftingOutputQuantity: 1 })
@@ -182,6 +236,10 @@ describeWithDatabase("crafting materials", () => {
     const finalUser = await db.query.userData.findFirst({
       where: eq(userData.userId, USER_ID),
     });
+    expect(finalUser?.questData?.[0]?.goals).toMatchObject([
+      { id: "total", value: 9, done: false },
+      { id: "specific", value: 9, done: false },
+    ]);
     expect(finalUser!.craftingExperience - firstUser!.craftingExperience).toBe(
       2 * (firstUser!.craftingExperience - 1_000_000),
     );

@@ -875,11 +875,7 @@ const startQueuedCraft = async (
   );
   await updateQueueOwner(client, user, {
     craftingExperience: expGain,
-    trackers: getCraftTrackerTasks(
-      expGain,
-      entry.craftBatches ?? entry.quantity,
-      entry.itemId,
-    ),
+    trackers: getCraftTrackerTasks(expGain, entry.quantity, entry.itemId),
   });
   return { finishesAt };
 };

@@ -401,7 +401,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
         where: eq(userData.userId, "npc-cache-actor"),
       });
       expect(result.userDelta?.dailyOverworldQuestRolls ?? 0).toBe(
-        saved?.dailyOverworldQuestRolls,
+        saved!.dailyOverworldQuestRolls,
       );
       if (chance)
         expect(result.userPatch?.activeNpcQuestId).toBe(saved?.activeNpcQuestId);

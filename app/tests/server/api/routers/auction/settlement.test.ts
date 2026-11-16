@@ -314,7 +314,7 @@ describeWithDatabase("auction settlement", () => {
         ),
       ).toBe(true);
       expect(await balances(balance)).toEqual({
-        seller: 1135,
+        seller: 1142,
         winner: 750,
         loser: 930,
       });
@@ -347,7 +347,7 @@ describeWithDatabase("auction settlement", () => {
       const [listing] = await db.select().from(auctionListing);
       expect(listing?.status).toBe("SOLD");
       expect(await balances(balance)).toEqual({
-        seller: 1000 + Math.floor((listing!.currentPrice * 90) / 100),
+        seller: 1000 + Math.floor((listing!.currentPrice * 95) / 100),
         winner: 1000 - listing!.currentPrice,
         loser: 930,
       });
@@ -430,8 +430,8 @@ describeWithDatabase("auction settlement", () => {
       expect(listing?.status).toBe("SOLD");
       expect(await balances(balance)).toEqual(
         listing?.buyerId === "winner"
-          ? { seller: 1135, winner: 850, loser: 1000 }
-          : { seller: 1162, winner: 1000, loser: 820 },
+          ? { seller: 1142, winner: 850, loser: 1000 }
+          : { seller: 1171, winner: 1000, loser: 820 },
       );
       expect(queuePush).toHaveBeenCalledTimes(1);
     });
@@ -611,7 +611,7 @@ describeWithDatabase("auction settlement", () => {
     await insertUsers([{ userId: "refund-74", username: "Refund74", bank: 0 }]);
     expect((await completeAuctionInternal(db, "auction")).success).toBe(true);
     const delivered = await balances("bank");
-    expect(delivered.seller).toBe(1090);
+    expect(delivered.seller).toBe(1095);
     for (let index = 0; index < 75; index++)
       expect(delivered[`refund-${index}`]).toBe(index + 1);
     expect(queuePush).toHaveBeenCalledTimes(1);
