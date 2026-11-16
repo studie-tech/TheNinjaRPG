@@ -16,6 +16,7 @@ import { getRankForExperience, getRankProgress } from "@/libs/occupationRank";
 import { boostPvpGain } from "@/libs/pvpExperience";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { reduceActivitySeconds } from "@/utils/time";
+import type { CraftingQueueMaterial } from "@/validators/train";
 
 /** Experience for a craft: clan boosts skip outlaws, and the PvP boost applies last. */
 export const getCraftingExperienceGain = (
@@ -281,3 +282,37 @@ export const getImbueBlockedMessage = (
   }
   return null;
 };
+
+/** Present a waiting craft as the crafting queue lists it, with materials summed per item. */
+export const toCraftingQueueEntry = (entry: {
+  id: string;
+  itemId: string;
+  quantity: number;
+  durationSeconds: number;
+  startsAt: Date;
+  finishesAt: Date;
+  materials: CraftingQueueMaterial[];
+  item: Pick<Item, "name" | "image"> | null;
+}) => ({
+  id: entry.id,
+  itemId: entry.itemId,
+  name: entry.item?.name ?? "Removed item",
+  image: entry.item?.image ?? null,
+  quantity: entry.quantity,
+  durationSeconds: entry.durationSeconds,
+  startsAt: entry.startsAt,
+  finishesAt: entry.finishesAt,
+  materials: Object.values(
+    entry.materials.reduce<Record<string, { name: string; quantity: number }>>(
+      (sum, material) => {
+        const name = material.name ?? "Unknown item";
+        sum[material.itemId] = {
+          name,
+          quantity: (sum[material.itemId]?.quantity ?? 0) + material.quantity,
+        };
+        return sum;
+      },
+      {},
+    ),
+  ),
+});

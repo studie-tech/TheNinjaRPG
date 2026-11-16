@@ -204,7 +204,14 @@ describe("hidden skill-tree permissions", () => {
       drizzle.query.skillTree.findFirst.mockResolvedValue(visibleSkill);
       expect(
         await invoke("purchaseSkill", drizzle, { skillId: visibleSkill.id }),
-      ).toMatchObject({ success: true });
+      ).toMatchObject({
+        success: true,
+        purchasedSkill: {
+          skillId: visibleSkill.id,
+          activated: true,
+          skill: visibleSkill,
+        },
+      });
 
       owned[0]!.activated = false;
       expect(await invoke("getUserSkills", drizzle)).toEqual({

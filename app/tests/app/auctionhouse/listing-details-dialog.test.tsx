@@ -18,6 +18,7 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import * as client from "@/app/_trpc/client";
 import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/ListingDetailsDialog";
 import { auctionHouseLevelMessage } from "@/drizzle/constants";
+import * as AuctionBidCache from "@/hooks/useAuctionBidCacheUpdate";
 import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as UserContext from "@/utils/UserContext";
 import {
@@ -29,6 +30,10 @@ import { mockUserContextValue } from "../../setup/userContext";
 
 type Bid = { auctionId: string; amount: number };
 const placeBid = vi.fn((_input: Bid) => new Promise<never>(() => undefined));
+const bidSnapshot = { listing: "listing-snapshot" };
+const prepareBidUpdate = vi.fn(() => bidSnapshot);
+const updateBid = vi.fn(async (_result: unknown, _snapshot: unknown) => {});
+const updateUser = vi.fn(async (..._args: unknown[]): Promise<unknown> => true);
 let queryClient: QueryClient;
 
 const listingFor = (overrides: object = {}) => ({
@@ -64,8 +69,13 @@ const listingFor = (overrides: object = {}) => ({
 const renderDialog = (listing: object, user: object = {}, utils: object = {}) => {
   mockUserContextValue({
     data: { userId: "viewer", level: 20, bank: 1000, reputationPoints: 0, ...user },
-    updateUser: vi.fn(),
+    prepareUserUpdate: () => 7,
+    updateUser,
     timeDiff: 0,
+  } as never);
+  vi.spyOn(AuctionBidCache, "useAuctionBidCacheUpdate").mockReturnValue({
+    prepareBidUpdate,
+    updateBid,
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => utils,
@@ -174,29 +184,21 @@ describe("bid and buyout confirmations", () => {
     ).toBe(true);
   });
 
-  it("closes the confirmation once the bid lands, without waiting for listings to refetch", async () => {
+  it("closes the confirmation once the bid lands, without waiting for caches to reconcile", async () => {
     const neverSettles = () => new Promise<void>(() => undefined);
-    const listings = vi.fn(neverSettles);
-    const details = vi.fn(neverSettles);
     const inventory = vi.fn(neverSettles);
-    placeBid.mockImplementationOnce(
-      () =>
-        Promise.resolve({
-          success: true,
-          message: "Bid placed",
-          amountToDeduct: 500,
-        }) as never,
-    );
+    updateBid.mockImplementationOnce(neverSettles);
+    updateUser.mockImplementationOnce(neverSettles);
+    const result = {
+      success: true,
+      message: "Buyout successful - auction completed",
+      userDelta: { bank: -500 },
+    };
+    placeBid.mockImplementationOnce(() => Promise.resolve(result) as never);
     renderDialog(
       listingFor({ bids: [] }),
       {},
-      {
-        auction: {
-          getAuctionListings: { invalidate: listings },
-          getAuctionListing: { invalidate: details },
-        },
-        item: { getUserItems: { invalidate: inventory } },
-      },
+      { item: { getUserItems: { invalidate: inventory } } },
     );
     fireEvent.click(screen.getByRole("button", { name: "Buy it now — 500 ryo" }));
     await act(async () => {
@@ -208,9 +210,40 @@ describe("bid and buyout confirmations", () => {
     await waitFor(() =>
       expect(queryClient.getMutationCache().getAll()[0]?.state.status).toBe("success"),
     );
-    expect(listings).toHaveBeenCalledTimes(1);
-    expect(details).toHaveBeenCalledTimes(1);
+    // The balance and both listing views reconcile against the snapshots taken at submit.
+    expect(updateUser).toHaveBeenCalledWith(result, { revision: 7 });
+    expect(updateBid).toHaveBeenCalledWith(result, bidSnapshot);
+    // A buyout delivers the item, so the inventory reads it again.
     expect(inventory).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the inventory cached after a bid that does not deliver the item", async () => {
+    const inventory = vi.fn(async () => {});
+    const result = {
+      success: true,
+      message: "Bid raised successfully",
+      amountToDeduct: 100,
+      userDelta: { bank: -100 },
+      placedBid: { listingId: "listing", previousPrice: 100, currentPrice: 200 },
+    };
+    placeBid.mockImplementationOnce(() => Promise.resolve(result) as never);
+    renderDialog(
+      listingFor(),
+      {},
+      { item: { getUserItems: { invalidate: inventory } } },
+    );
+    fireEvent.input(screen.getByPlaceholderText("Bid amount (whole numbers)"), {
+      target: { value: "200" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Raise to" }));
+    await act(async () => {
+      fireEvent.click(
+        within(confirmation()).getByRole("button", { name: "Confirm Bid" }),
+      );
+    });
+    await waitFor(() => expect(updateBid).toHaveBeenCalledWith(result, bidSnapshot));
+    expect(updateUser).toHaveBeenCalledWith(result, { revision: 7 });
+    expect(inventory).not.toHaveBeenCalled();
   });
 
   it("closes an idle confirmation on cancel", () => {

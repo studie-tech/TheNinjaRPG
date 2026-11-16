@@ -1,8 +1,9 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 import type { CombatStatName } from "@/drizzle/constants";
-import type { UserData, UserPet } from "@/drizzle/schema";
+import type { UserData, UserItem, UserPet } from "@/drizzle/schema";
 import { petRankUpBlockMessage } from "@/libs/pets/progression";
 import { getNextUserSnapshotAt } from "@/utils/time";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
  * Project the claimed pet slot and account revision together with its confirmed currency
@@ -47,21 +48,54 @@ export const getUnchangedPetUserUpdate = () => ({
   userPatch: {},
 });
 
-/** Advance the account revision and credit pet XP only when the fed pet is active. */
+/**
+ * Advance the account revision, credit pet XP only when the fed pet is active and take the
+ * eaten meal from its guarded stack.
+ */
 export const getFeedPetUserUpdate = ({
   userUpdatedAt,
   now,
   isActive,
   experience,
+  meal,
 }: {
   userUpdatedAt: Date;
   now: Date;
   isActive: boolean;
   experience: number;
+  meal: Pick<UserItem, "id" | "itemId" | "quantity">;
 }) => ({
   userPatch: { updatedAt: getNextUserSnapshotAt(userUpdatedAt, now) },
   userDelta: isActive ? { petExperience: experience } : {},
+  inventoryChanges: [
+    {
+      id: meal.id,
+      itemId: meal.itemId,
+      beforeQuantity: meal.quantity,
+      quantity: meal.quantity - 1,
+    },
+  ],
 });
+
+/**
+ * Project the owner progress a pet mutation response leaves in the profile cache, so the
+ * pet view does not read its bank again for an update it already reconciles.
+ */
+export const getPetOwnerProgress = (
+  current: PetOwnerProgress,
+  result: Pick<UserDeltaResponse, "userPatch" | "userDelta">,
+): PetOwnerProgress => {
+  const [updatedAt, experience, earnedExperience, petExperience] = current;
+  const patch = result.userPatch;
+  const gained = result.userDelta?.petExperience ?? 0;
+  return [
+    patch?.updatedAt?.getTime() ?? updatedAt,
+    patch?.experience ?? experience,
+    patch?.earnedExperience ?? earnedExperience,
+    patch?.petExperience ??
+      (petExperience === undefined ? undefined : petExperience + gained),
+  ];
+};
 
 /**
  * Record the confirmed acquisition and daily species claim, debit payment and activate the
@@ -310,3 +344,11 @@ export const getSavedPetSettingsCollection = (
     pets: current.pets.map((pet) => (pet.id === id ? { ...pet, ...patch } : pet)),
   };
 };
+
+/** Owner update time, experience, earned experience and pet experience bank. */
+type PetOwnerProgress = [
+  number | undefined,
+  number | undefined,
+  number | undefined,
+  number | undefined,
+];

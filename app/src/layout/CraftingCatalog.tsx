@@ -18,6 +18,7 @@ import {
 import { ItemRarities, type ItemType, MAX_COOKING_BATCHES } from "@/drizzle/constants";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 import { useActivityBonusRefresh } from "@/hooks/useActivityBonusRefresh";
+import { useCraftingCacheUpdate } from "@/hooks/useCraftingCacheUpdate";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -105,6 +106,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     ? getActivityBonuses(userData).craftingReductionPercent
     : 0;
   const { timeDiff = 0, prepareUserUpdate, updateUser } = useUserInfo();
+  const { prepareCraftUpdate, updateCraft } = useCraftingCacheUpdate();
   const territoryWarBoost = userData
     ? getTerritoryWarBoost(userData, new Date(Date.now() - timeDiff))
     : 0;
@@ -128,18 +130,17 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 
   // Craft mutation
   const craftItemMutation = api.occupation.craftItem.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: (data, _variables, revision) => {
+    onMutate: () => ({ user: prepareUserUpdate(), craft: prepareCraftUpdate() }),
+    onSuccess: (data, _variables, context) => {
       showMutationToast(data);
-      if (data.userRecovery && !data.success) void updateUser(data, { revision });
+      if (data.userRecovery && !data.success)
+        void updateUser(data, { revision: context.user });
       if (data.success) {
         setSelectedItem(null);
         setCraftQuantity(1);
         void Promise.allSettled([
-          utils.item.getUserItems.invalidate(),
-          utils.profile.getSidebarTimers.invalidate(),
-          updateUser(data, { revision }),
-          utils.occupation.getCraftingQueue.invalidate(),
+          updateCraft(data, context.craft),
+          updateUser(data, { revision: context.user }),
         ]);
       }
     },

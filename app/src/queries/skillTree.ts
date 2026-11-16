@@ -154,17 +154,11 @@ export const updateUserSkillForPurchaseSkill = (
 /** Build the `userSkill` insert for `purchaseSkill`, updating duplicate keys. */
 export const insertUserSkillForPurchaseSkill = (
   client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-  input: { skillId: string },
+  row: { id: string; userId: string; skillId: string; purchasedAt: Date },
 ) =>
   client
     .insert(userSkill)
-    .values({
-      id: nanoid(),
-      userId: ctx.userId,
-      skillId: input.skillId,
-      activated: true,
-    })
+    .values({ ...row, activated: true })
     .onDuplicateKeyUpdate({ set: { activated: true } });
 
 /** Build a bloodline ID lookup to validate its existence. */

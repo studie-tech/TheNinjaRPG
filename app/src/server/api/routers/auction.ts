@@ -16,6 +16,7 @@ import {
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getPlaceBidUserUpdate, getPlacedBid } from "@/deltas/auction";
 import {
   AUCTION_BIDDER_LEVEL_MAX,
   AUCTION_BIDDER_LEVEL_MIN,
@@ -76,6 +77,7 @@ import { deferPushToUsers } from "@/server/utils/push/defer";
 import { auctionOutbid, tradeUpdate } from "@/server/utils/push/messages";
 import type { QueryCondition } from "@/utils/typeutils";
 import { createAuctionListingSchema } from "@/validators/auction";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { auctionOfferProcedures } from "./auctionOffers";
 import { splitItemStack } from "./item";
 
@@ -415,7 +417,12 @@ export const auctionRouter = createTRPCRouter({
         amount: z.number().int().min(1),
       }),
     )
-    .output(baseServerResponse.extend({ amountToDeduct: z.number().optional() }))
+    .output(
+      userDeltaResponseSchema.extend({
+        amountToDeduct: z.number().optional(),
+        placedBid: z.custom<ReturnType<typeof getPlacedBid>>().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const { auctionId, amount } = input;
 
@@ -500,6 +507,19 @@ export const auctionRouter = createTRPCRouter({
 
       const bidId = existingBid?.id ?? nanoid();
       const updatedAt = new Date();
+      // Every committed path, buyouts included, debits exactly this raise.
+      const balanceUpdate = getPlaceBidUserUpdate({
+        currencyType: auction.currencyType,
+        amountToDeduct,
+      });
+      const placedBid = getPlacedBid({
+        auction,
+        existingBid,
+        bidId,
+        bidder: user,
+        amount,
+        updatedAt,
+      });
       const bidLog = {
         id: nanoid(),
         userId: ctx.userId,
@@ -583,7 +603,13 @@ export const auctionRouter = createTRPCRouter({
         // Report them separately, as with training logs.
         await recordBidActivity(ctx.drizzle, bidLog, true);
         notifyOutbid();
-        return { success: true, message: "Bid raised successfully", amountToDeduct };
+        return {
+          success: true,
+          message: "Bid raised successfully",
+          amountToDeduct,
+          ...balanceUpdate,
+          placedBid,
+        };
       }
 
       try {
@@ -604,7 +630,11 @@ export const auctionRouter = createTRPCRouter({
             ]),
           ]);
           notifyAuctionSettlement(ctx.drizzle, settlement);
-          return { success: true, message: "Buyout successful - auction completed" };
+          return {
+            success: true,
+            message: "Buyout successful - auction completed",
+            ...balanceUpdate,
+          };
         }
         // A first bid must INSERT AuctionBid and UPDATE its balance/listing together;
         // MySQL cannot combine that INSERT and those UPDATEs in one statement.
@@ -650,7 +680,14 @@ export const auctionRouter = createTRPCRouter({
                 "Balance or trading access changed; please refresh and try again",
               );
 
-              await insertAuctionBidForPlaceBid(tx, bidId, auctionId, ctx, amount);
+              await insertAuctionBidForPlaceBid(
+                tx,
+                bidId,
+                auctionId,
+                ctx,
+                amount,
+                updatedAt,
+              );
             }
             await recordBidActivity(tx, bidLog);
             // Buyout escrow, delivery and every payment share this commit.
@@ -662,7 +699,11 @@ export const auctionRouter = createTRPCRouter({
             { ownerId: ctx.userId, itemId: auction.itemId },
           ]);
           notifyAuctionSettlement(ctx.drizzle, settlement);
-          return { success: true, message: "Buyout successful - auction completed" };
+          return {
+            success: true,
+            message: "Buyout successful - auction completed",
+            ...balanceUpdate,
+          };
         }
         notifyOutbid();
       } catch (error) {
@@ -679,6 +720,8 @@ export const auctionRouter = createTRPCRouter({
         success: true,
         message: existingBid ? "Bid raised successfully" : "Bid placed successfully",
         amountToDeduct,
+        ...balanceUpdate,
+        placedBid,
       };
     }),
 

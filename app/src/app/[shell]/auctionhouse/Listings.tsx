@@ -71,6 +71,29 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
   // Queries
   const parsedMinPrice = Number.parseFloat(debouncedMinPrice);
   const parsedMaxPrice = Number.parseFloat(debouncedMaxPrice);
+  const search = {
+    itemName: debouncedSearchTerm.trim() || undefined,
+    sellerSearch: debouncedSellerSearchTerm.trim() || undefined,
+    minPrice:
+      debouncedMinPrice && Number.isFinite(parsedMinPrice)
+        ? Math.max(0, parsedMinPrice)
+        : undefined,
+    maxPrice:
+      debouncedMaxPrice && Number.isFinite(parsedMaxPrice)
+        ? Math.max(0, parsedMaxPrice)
+        : undefined,
+    ...(browseTab === "MINE"
+      ? { onlyMine: true as const, listingType: undefined, onlyBidOn: undefined }
+      : browseTab === "MY_BIDS"
+        ? { onlyBidOn: true as const, listingType: undefined, onlyMine: undefined }
+        : {
+            onlyMine: undefined,
+            onlyBidOn: undefined,
+            listingType: browseTab,
+          }),
+    status: selectedStatus,
+    limit: 10,
+  };
   const {
     data: listings,
     isLoading,
@@ -81,50 +104,25 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
     refetch,
     fetchNextPage,
     hasNextPage,
-  } = api.auction.getAuctionListings.useInfiniteQuery(
-    {
-      itemName: debouncedSearchTerm.trim() || undefined,
-      sellerSearch: debouncedSellerSearchTerm.trim() || undefined,
-      minPrice:
-        debouncedMinPrice && Number.isFinite(parsedMinPrice)
-          ? Math.max(0, parsedMinPrice)
-          : undefined,
-      maxPrice:
-        debouncedMaxPrice && Number.isFinite(parsedMaxPrice)
-          ? Math.max(0, parsedMaxPrice)
-          : undefined,
-      ...(browseTab === "MINE"
-        ? { onlyMine: true as const, listingType: undefined, onlyBidOn: undefined }
-        : browseTab === "MY_BIDS"
-          ? { onlyBidOn: true as const, listingType: undefined, onlyMine: undefined }
-          : {
-              onlyMine: undefined,
-              onlyBidOn: undefined,
-              listingType: browseTab,
-            }),
-      status: selectedStatus,
-      limit: 10,
+  } = api.auction.getAuctionListings.useInfiniteQuery(search, {
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    placeholderData: (previousData, previousQuery) => {
+      const previousInput = previousQuery?.queryKey[1]?.input as
+        | RouterInputs["auction"]["getAuctionListings"]
+        | undefined;
+      const isSameScope =
+        browseTab === "MINE"
+          ? previousInput?.onlyMine === true
+          : browseTab === "MY_BIDS"
+            ? previousInput?.onlyBidOn === true
+            : previousInput?.listingType === browseTab;
+      return previousInput?.status === selectedStatus && isSameScope
+        ? previousData
+        : undefined;
     },
-    {
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
-      placeholderData: (previousData, previousQuery) => {
-        const previousInput = previousQuery?.queryKey[1]?.input as
-          | RouterInputs["auction"]["getAuctionListings"]
-          | undefined;
-        const isSameScope =
-          browseTab === "MINE"
-            ? previousInput?.onlyMine === true
-            : browseTab === "MY_BIDS"
-              ? previousInput?.onlyBidOn === true
-              : previousInput?.listingType === browseTab;
-        return previousInput?.status === selectedStatus && isSameScope
-          ? previousData
-          : undefined;
-      },
-      refetchInterval: 10000,
-      refetchIntervalInBackground: false,
-    },
-  );
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false,
+  });
 
   // Infinite pagination
   const isUpdatingFilters = isDebouncing || isPlaceholderData;
@@ -300,6 +298,7 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
           auctionId={selectedAuction}
           isOpen={showDialog}
           setIsOpen={setShowDialog}
+          search={search}
         />
       )}
     </div>

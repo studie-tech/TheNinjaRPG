@@ -2,6 +2,7 @@ import { getQueryKey } from "@trpc/react-query";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import type { UserItem } from "@/drizzle/schema";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
+import type { QueryCacheUpdate } from "@/utils/queryCache";
 
 /** Preserve each view's row extensions; undefined requests authoritative reconciliation. */
 type InventoryUpdate = <T extends UserItem>(rows: T[]) => T[] | undefined;
@@ -34,6 +35,21 @@ export const useInventoryCacheUpdate = () => {
       variants.updateCache(update, snapshot.variants),
     ]);
   };
+  /** Apply view-specific projections, such as new stacks that only one view's relations describe. */
+  const updateInventoryViews = async (
+    updates: {
+      inventory: QueryCacheUpdate<RouterOutputs["item"]["getUserItems"]> | undefined;
+      variants:
+        | QueryCacheUpdate<RouterOutputs["item"]["getUserItemsWithVariants"]>
+        | undefined;
+    },
+    snapshot: ReturnType<typeof prepareInventoryUpdate>,
+  ) => {
+    await Promise.all([
+      inventory.updateCache(updates.inventory, snapshot.inventory),
+      variants.updateCache(updates.variants, snapshot.variants),
+    ]);
+  };
   /** Recover both views when a request may have failed after the server committed. */
   const invalidateInventory = async () => {
     await Promise.all([
@@ -41,5 +57,10 @@ export const useInventoryCacheUpdate = () => {
       utils.item.getUserItemsWithVariants.invalidate(),
     ]);
   };
-  return { prepareInventoryUpdate, updateInventory, invalidateInventory };
+  return {
+    prepareInventoryUpdate,
+    updateInventory,
+    updateInventoryViews,
+    invalidateInventory,
+  };
 };

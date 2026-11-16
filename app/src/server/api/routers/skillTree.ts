@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
+  getPurchasedSkill,
   getPurchaseSkillUserUpdate,
   getResetSkillPointsUserUpdate,
 } from "@/deltas/skillTree";
@@ -196,7 +197,13 @@ export const skillTreeRouter = createTRPCRouter({
   purchaseSkill: protectedProcedure
     .meta({ mcp: { description: "Purchase or activate a skill" } })
     .input(z.object({ skillId: z.string() }))
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        purchasedSkill: z
+          .custom<Awaited<ReturnType<typeof fetchUserSkills>>[number]>()
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Fetch all required data in parallel
       const [snapshot, skill, userSkills] = await Promise.all([
@@ -271,6 +278,13 @@ export const skillTreeRouter = createTRPCRouter({
             }),
           }
         : {};
+      const purchasedSkill = getPurchasedSkill({
+        existingUserSkill,
+        skill,
+        userSkillId: nanoid(),
+        userId: ctx.userId,
+        purchasedAt: new Date(),
+      });
 
       // Check if skill is already owned
       if (existingUserSkill) {
@@ -282,6 +296,7 @@ export const skillTreeRouter = createTRPCRouter({
           success: true,
           message: `Successfully activated ${skill.name}!`,
           ...cacheUpdate,
+          purchasedSkill,
         };
       }
 
@@ -289,12 +304,18 @@ export const skillTreeRouter = createTRPCRouter({
       // Uses onDuplicateKeyUpdate to handle race conditions where concurrent requests
       // both pass the ownership check. The unique index on (userId, skillId) ensures
       // only one record exists, and we simply update activated=true if it already exists.
-      await insertUserSkillForPurchaseSkill(ctx.drizzle, ctx, input);
+      await insertUserSkillForPurchaseSkill(ctx.drizzle, {
+        id: purchasedSkill.id,
+        userId: ctx.userId,
+        skillId: skill.id,
+        purchasedAt: purchasedSkill.purchasedAt,
+      });
 
       return {
         success: true,
         message: `Successfully purchased ${skill.name}!`,
         ...cacheUpdate,
+        purchasedSkill,
       };
     }),
 

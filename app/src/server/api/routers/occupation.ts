@@ -3,17 +3,19 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   getCancelQueuedCraftUserUpdate,
+  getCraftItemCacheUpdate,
   getCraftingUserUpdate,
   getImbuedItemUserUpdate,
   getSelectOccupationUserUpdate,
 } from "@/deltas/occupation";
 import {
   CRAFTING_TIMES_MINS,
+  DURABILITY_MAX_DEFAULT,
   MAP_WAKE_ISLAND_SECTOR,
   MAX_COOKING_BATCHES,
   OCCUPATIONS,
 } from "@/drizzle/constants";
-import { userData, userItem } from "@/drizzle/schema";
+import { type UserItem, userData, userItem } from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import {
   getCookingExperience,
@@ -31,6 +33,7 @@ import {
   getImbuementRankCapMessage,
   getMissingCraftingRank,
   getTotalItemQuantity,
+  toCraftingQueueEntry,
 } from "@/libs/crafting";
 import {
   countInventoryBucketSlots,
@@ -203,7 +206,14 @@ export const occupationRouter = createTRPCRouter({
   craftItem: protectedProcedure
     .meta({ mcp: { description: "Craft an item using materials" } })
     .input(cookItemInputSchema)
-    .output(userDeltaResponseSchema.extend({ finishTime: z.string().optional() }))
+    .output(
+      userDeltaResponseSchema.extend({
+        finishTime: z.string().optional(),
+        craftUpdate: z
+          .custom<NonNullable<ReturnType<typeof getCraftItemCacheUpdate>>>()
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Read userData before inventory. Every capacity mutation commits both rows
       // atomically and bumps updatedAt, so this ordering gives the later CAS a
@@ -218,9 +228,14 @@ export const occupationRouter = createTRPCRouter({
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
+      let restoredStaleClaims = false;
       const [itemWithRequirements, useritems, waiting] = await Promise.all([
         fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId, {
+          onStaleMergeClaimRecovery: () => {
+            restoredStaleClaims = true;
+          },
+        }),
         fetchCraftingQueue(ctx.drizzle, ctx.userId),
       ]);
       // Derived
@@ -367,21 +382,45 @@ export const occupationRouter = createTRPCRouter({
         waiting.at(-1)?.finishesAt ?? currentlyCrafting?.craftingFinishedAt,
       );
 
-      // Create crafting item entry/entries
-      // Respect stackSize limit when creating items
-      const craftingItemValues: (typeof userItem.$inferInsert)[] = [];
-      for (const quantity of splitIntoStacks(
+      // Output stacks respect the stack size. Persist the complete rows returned to the
+      // cache, timestamps included, so the inventory needs no readback of defaults.
+      const startedAt = new Date();
+      const craftingItemValues: UserItem[] = splitIntoStacks(
         outputQuantity,
         getEffectiveStackSize(itemWithRequirements),
-      )) {
-        craftingItemValues.push({
-          id: nanoid(),
-          userId: ctx.userId,
-          itemId: input.itemId,
-          quantity,
-          craftingFinishedAt: finishTime,
-        });
-      }
+      ).map((quantity) => ({
+        id: nanoid(),
+        userId: ctx.userId,
+        itemId: input.itemId,
+        createdAt: startedAt,
+        updatedAt: startedAt,
+        quantity,
+        level: 1,
+        experience: 0,
+        equipped: "NONE",
+        durability: DURABILITY_MAX_DEFAULT,
+        storedAtHome: false,
+        homeX: null,
+        homeY: null,
+        homeRotation: 0,
+        homeRoom: "main",
+        craftingFinishedAt: finishTime,
+        isInAuction: false,
+        activeVariantId: null,
+        dropChancePerc: 0,
+      }));
+      const {
+        craftingRequirements: _requirements,
+        requiredBloodline: _bloodline,
+        ...craftedItem
+      } = itemWithRequirements;
+      const craftCacheUpdate = {
+        updatedUser,
+        restoredStaleClaims,
+        useritems,
+        allConsumptions,
+        item: craftedItem,
+      };
 
       // Award crafting experience (from item config, or 0 if not set)
       const baseExpGain = isMeal
@@ -464,8 +503,9 @@ export const occupationRouter = createTRPCRouter({
             ctx.drizzle,
           );
         }
+        let added: Awaited<ReturnType<typeof appendQueueEntries>> = [];
         try {
-          const added = await appendQueueEntries(
+          added = await appendQueueEntries(
             ctx.drizzle,
             ctx.userId,
             "CRAFT",
@@ -505,6 +545,15 @@ export const occupationRouter = createTRPCRouter({
               consequences,
               questIdsUpdated,
               allConsumptions,
+            }),
+            craftUpdate: getCraftItemCacheUpdate({
+              ...craftCacheUpdate,
+              craftedItems: [],
+              queuedCraft: added[0]
+                ? toCraftingQueueEntry(
+                    toQueuedCraft({ ...added[0], item: craftedItem }),
+                  )
+                : undefined,
             }),
           },
           readiness,
@@ -577,6 +626,10 @@ export const occupationRouter = createTRPCRouter({
             questIdsUpdated,
             allConsumptions,
           }),
+          craftUpdate: getCraftItemCacheUpdate({
+            ...craftCacheUpdate,
+            craftedItems: craftingItemValues,
+          }),
         },
         readiness,
         ctx.drizzle,
@@ -598,29 +651,7 @@ export const occupationRouter = createTRPCRouter({
       }
       return {
         capacity: getQueueTotalCapacity(user),
-        waiting: waiting.map((entry) => ({
-          id: entry.id,
-          itemId: entry.itemId,
-          name: entry.item?.name ?? "Removed item",
-          image: entry.item?.image ?? null,
-          quantity: entry.quantity,
-          durationSeconds: entry.durationSeconds,
-          startsAt: entry.startsAt,
-          finishesAt: entry.finishesAt,
-          materials: Object.values(
-            entry.materials.reduce<Record<string, { name: string; quantity: number }>>(
-              (sum, material) => {
-                const name = material.name ?? "Unknown item";
-                sum[material.itemId] = {
-                  name,
-                  quantity: (sum[material.itemId]?.quantity ?? 0) + material.quantity,
-                };
-                return sum;
-              },
-              {},
-            ),
-          ),
-        })),
+        waiting: waiting.map(toCraftingQueueEntry),
       };
     }),
 

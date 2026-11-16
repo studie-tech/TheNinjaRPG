@@ -7,9 +7,12 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 export const usePetMutationFeedback = ({
   setMessage,
   updateUser,
+  onOwnerUpdate,
 }: {
   setMessage: (message: string | null) => void;
   updateUser: ReturnType<typeof useUserInfo>["updateUser"];
+  /** Receives each owner update before it reaches the profile cache; pet views reload here. */
+  onOwnerUpdate?: (result: UserDeltaResponse) => void;
 }) => {
   const utils = api.useUtils();
   /** Reconcile pet views after a committed or uncertain mutation. */
@@ -26,6 +29,7 @@ export const usePetMutationFeedback = ({
   ) => {
     setMessage(result.success ? null : result.message);
     showMutationToast(result);
+    onOwnerUpdate?.(result);
     await Promise.all([invalidatePetData(), updateUser(result, { revision })]);
   };
   const failMutation = async (cause: { message: string }) => {

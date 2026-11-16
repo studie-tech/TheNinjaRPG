@@ -14,11 +14,13 @@ import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/ListingDetailsD
 import { AuctionOffers } from "@/app/[shell]/auctionhouse/Offers";
 import Occupations from "@/app/[shell]/occupation/page";
 import { CRAFTING_REQUIRED_EXP, CRAFTING_TIMES_MINS } from "@/drizzle/constants";
+import * as AuctionBidCache from "@/hooks/useAuctionBidCacheUpdate";
 import * as CombatActions from "@/layout/CombatActions";
 import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
+import { stubCraftingCache } from "../layout/helpers/craftingCatalog";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { mockUserContextValue } from "../setup/userContext";
 
@@ -103,6 +105,11 @@ const stubCraftingUser = (data: object = {}) =>
 beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true });
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
+  stubCraftingCache();
+  vi.spyOn(AuctionBidCache, "useAuctionBidCacheUpdate").mockReturnValue({
+    prepareBidUpdate: vi.fn(),
+    updateBid: vi.fn(async () => {}),
+  } as never);
   stubCraftingUser();
   vi.spyOn(ItemDetails, "default").mockImplementation((({
     item,
