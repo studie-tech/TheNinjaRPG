@@ -188,7 +188,7 @@ export const createRenderQualityGovernor = (initial: GovernorState) => {
       samples++;
       if (isFullRate) fullRate++;
       elapsed += interval;
-      if (elapsed < WINDOW_MS) return false;
+      if (elapsed < WINDOW_MS || samples < WINDOW_FRAMES) return false;
       const ratio = ratioPercentile(ratios, samples, 0.75);
       const isFull = fullRate >= samples * 0.75;
       restart(0);
@@ -281,14 +281,17 @@ const ratioPercentile = (histogram: Uint16Array, total: number, quantile: number
 
 const statuses = new Map<object, QualityStatus>();
 const statusListeners = new Set<() => void>();
-/** Sixteenth-of-target buckets up to four times the target interval. */
-const RATIO_BUCKETS = 65;
+/** Sixteenth-of-target buckets up to 32 times the target interval (about 2 fps at 60). */
+const RATIO_BUCKETS = 513;
 /** Shader compilation and first texture uploads are not sustained load. */
 const WARMUP_MS = 3_000;
 /** Resizing targets and rebuilding passes stalls the first frames after a change. */
 const SETTLE_MS = 500;
 const WINDOW_MS = 2_000;
-const MAX_SAMPLE_MS = 250;
+/** Very slow scenes extend a window until a percentile means something. */
+const WINDOW_FRAMES = 12;
+/** Longer gaps are stalls or suspensions; slower sustained frames still count. */
+const MAX_SAMPLE_MS = 1_000;
 const SLOW_RATIO = 1.4;
 const SEVERE_RATIO = 2.5;
 const HEALTHY_RATIO = 1.1;

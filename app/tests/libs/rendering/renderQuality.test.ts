@@ -211,10 +211,18 @@ describe("render quality governor", () => {
     run(governor, 4_600, 30);
     expect(governor.level).toBe(2);
   });
+  it("tells apart levels of a scene running at a few frames a second", () => {
+    const governor = start();
+    run(governor, 3_000, FRAME);
+    run(governor, 3_700, 300);
+    expect(governor.level).toBe(1);
+    run(governor, 4_000, 200);
+    expect(governor.level).toBe(2);
+  });
   it("discards stalls and does not step below the last level", () => {
     const governor = start(5);
     run(governor, 3_000, FRAME);
-    run(governor, 10_000, 300);
+    run(governor, 10_000, 1_500);
     run(governor, 10_000, 40);
     expect(governor.level).toBe(5);
   });
