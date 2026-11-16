@@ -1114,6 +1114,13 @@
       "when": 1794843182035,
       "tag": "0159_mute_lethal_legion",
       "breakpoints": false
+    },
+    {
+      "idx": 160,
+      "version": "5",
+      "when": 1794847850084,
+      "tag": "0160_parched_tarantula",
+      "breakpoints": false
     }
   ]
 }

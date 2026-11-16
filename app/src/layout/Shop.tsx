@@ -747,6 +747,7 @@ const SHOP_ITEM_TYPE_TAB_ICON: Partial<Record<ItemType, LucideIcon>> = {
   COOKING: ChefHat,
   MEAL: ChefHat,
   FURNITURE: Sofa,
+  COSMETIC: Sparkles,
   KEYSTONE: Gem,
   CRYSTAL: Diamond,
 };
@@ -760,6 +761,7 @@ const SHOP_ITEM_TYPE_TAB_HINT: Record<ItemType, string> = {
   COOKING: "Cooking — ingredients and prepared foods for storage.",
   MEAL: "Meals — cooked food with a timed effect.",
   FURNITURE: "Furniture — painted props to place and arrange in your residence.",
+  COSMETIC: "Cosmetics — consume to unlock an appearance for the Cosmetic tab.",
   KEYSTONE: "Keystones — slot upgrades and build-defining modifiers.",
   CRYSTAL: "Crystals — special slot items and enhancements.",
   OTHER: "Other — miscellaneous goods in stock.",
@@ -774,6 +776,7 @@ const SHOP_ITEM_TYPE_TAB_LABEL: Record<ItemType, string> = {
   COOKING: "Cooking",
   MEAL: "Meals",
   FURNITURE: "Furniture",
+  COSMETIC: "Cosmetic",
   KEYSTONE: "Keystone",
   CRYSTAL: "Crystal",
   OTHER: "Other",

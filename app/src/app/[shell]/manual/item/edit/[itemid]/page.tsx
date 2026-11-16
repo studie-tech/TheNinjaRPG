@@ -786,5 +786,5 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
 
 /** Equipment shown on the character sprite: weapons, armour, accessories and worn slots. */
 const isWornItem = (itemType: string, slot: string) =>
-  ["WEAPON", "ARMOR", "ACCESSORY"].includes(itemType) ||
+  ["WEAPON", "ARMOR", "ACCESSORY", "COSMETIC"].includes(itemType) ||
   ["HEAD", "CHEST", "LEGS", "FEET", "HAND", "WAIST", "THROWN"].includes(slot);

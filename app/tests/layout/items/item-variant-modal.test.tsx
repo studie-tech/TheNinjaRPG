@@ -11,6 +11,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockCosmetics } from "../../setup/cosmetics";
 import { mockUserContextValue } from "../../setup/userContext";
 
 type Options = {
@@ -42,6 +43,7 @@ const Host = () => {
 };
 
 beforeEach(() => {
+  mockCosmetics();
   installBrowserGlobals({ resizeObserver: true });
   vi.clearAllMocks();
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);

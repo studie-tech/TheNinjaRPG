@@ -239,6 +239,7 @@ it("keeps patrol anchors, roaming and pursuit paths clear of actual Horizon buil
     anbuId: null,
     anbuSquad: null,
     attributes: [],
+    cosmeticSlots: [],
     items: [],
   }));
   const actors = villageDutyPatrols(
@@ -391,6 +392,7 @@ it("masks ANBU owner IDs consistently in snapshots, seeds and deltas", () => {
     rank: "CHUNIN",
     villageDutyStartedAt: new Date(0),
     attributes: [],
+    cosmeticSlots: [],
     items: [],
   } as Parameters<typeof villageDutyPatrols>[0][number];
   const foreign = villageDutyPatrols([owner], map, 1, "foreign")[0]!;

@@ -176,6 +176,12 @@ export const validateJutsuLoadout = (jutsus: Jutsu[], caps: JutsuEquipCap[]) => 
  * @returns An object with a check flag and a message if the loadout is invalid
  */
 export const validateItemLoadout = (items: Item[]) => {
+  const cosmetic = items.find((item) => item.itemType === "COSMETIC");
+  if (cosmetic)
+    return {
+      check: false,
+      message: `${cosmetic.name} must be selected in the Cosmetic tab`,
+    };
   const furnitureItem = items.find((item) => item.itemType === "FURNITURE");
   if (furnitureItem) {
     return {

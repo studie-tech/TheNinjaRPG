@@ -19,10 +19,14 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockCosmetics } from "../../setup/cosmetics";
 
 let equip: ReturnType<typeof vi.fn>;
 
+let cosmeticState: ReturnType<typeof mockCosmetics>;
+
 beforeEach(() => {
+  cosmeticState = mockCosmetics();
   installBrowserGlobals();
   equip = vi.fn();
   vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => (
@@ -51,6 +55,7 @@ beforeEach(() => {
     isRepairingWithRyo: false,
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
+    cosmetic: { get: { useQuery: () => cosmeticState.wardrobe } },
     item: { getEvolutions: { useQuery: () => ({ data: [] }) } },
   });
 });
@@ -388,4 +393,11 @@ it("shows a stored item's details with taking it out as the only action", () => 
   expect(screen.queryByRole("button", { name: /Sell Item|Drop Item/ })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Take out" }));
   expect(onMove).toHaveBeenCalledTimes(1);
+});
+
+it("offers dedicated cosmetics for appearance unlocking without a normal equip action", () => {
+  renderInspector({ userItem: userItem({ itemType: "COSMETIC" }) });
+  expect(screen.getByRole("button", { name: "Make Cosmetic" })).toBeDefined();
+  expect(screen.queryByRole("button", { name: /^Equip$/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Set hotkey/ })).toBeNull();
 });
