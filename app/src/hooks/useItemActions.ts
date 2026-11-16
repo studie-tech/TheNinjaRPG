@@ -7,7 +7,6 @@ import {
   getInventoryDurabilities,
   getInventoryQuantities,
   getSoldInventory,
-  getSplitInventory,
 } from "@/deltas/item";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
@@ -134,11 +133,10 @@ export const useItemActions = ({
 
   const { mutate: splitStack, isPending: isSplitting } =
     api.item.splitStack.useMutation({
-      onMutate: prepareInventoryUpdate,
-      onSuccess: async (data, _variables, context) => {
+      onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success)
-          void updateInventory((rows) => getSplitInventory(rows, data.split), context);
+        // The source may have moved or changed cosmetics in another tab before splitting.
+        if (data.success) void invalidateInventory();
       },
       onSettled,
     });

@@ -2020,7 +2020,6 @@ export const insertUserItemForSplitItemStack = (
     dropChancePerc: number;
   },
   quantityToSplit: number,
-  createdAt: Date,
 ) =>
   client.insert(userItem).values({
     id: newUserItemId,
@@ -2039,8 +2038,8 @@ export const insertUserItemForSplitItemStack = (
     activeVariantId: currentUserItem.activeVariantId,
     craftingFinishedAt: currentUserItem.craftingFinishedAt,
     dropChancePerc: currentUserItem.dropChancePerc,
-    createdAt,
-    updatedAt: createdAt,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   });
 
 /** Build the `userItem` lookup for `splitItemStack`, selecting only `id`, using predicates on `id`. */

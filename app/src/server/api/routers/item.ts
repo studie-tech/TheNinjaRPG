@@ -374,10 +374,8 @@ import {
 } from "@/validators/combat";
 import {
   type InventoryQuantityChange,
-  type InventorySplit,
   inventoryDurabilityChangeSchema,
   inventoryQuantityChangeSchema,
-  inventorySplitSchema,
 } from "@/validators/inventory";
 import {
   displayCostType,
@@ -1878,7 +1876,7 @@ export const itemRouter = createTRPCRouter({
         quantityToKeep: z.int().min(1),
       }),
     )
-    .output(baseServerResponse.extend({ split: inventorySplitSchema.optional() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Use the convenience method to split the stack
       const result = await splitItemStack(
@@ -1888,11 +1886,7 @@ export const itemRouter = createTRPCRouter({
         input.quantityToKeep,
       );
 
-      return {
-        success: result.success,
-        message: result.message,
-        ...(result.success ? { split: result.split } : {}),
-      };
+      return { success: result.success, message: result.message };
     }),
   // Sell a user item (dropped when it has no resale value)
   sellUserItem: protectedProcedure
@@ -4327,13 +4321,7 @@ export const splitItemStack = async (
   quantityToKeep: number,
   expectedQuantity?: number,
 ): Promise<
-  | {
-      success: true;
-      message: string;
-      newUserItemId: string;
-      quantityToSplit: number;
-      split: InventorySplit;
-    }
+  | { success: true; message: string; newUserItemId: string; quantityToSplit: number }
   | { success: false; message: string }
 > => {
   // Fetch the user item to verify ownership
@@ -4390,7 +4378,6 @@ export const splitItemStack = async (
 
   const quantityToSplit = currentUserItem.quantity - quantityToKeep;
   const newUserItemId = nanoid();
-  const createdAt = new Date();
 
   // Claim the source quantity before inserting the new row. This CAS cannot match a negative
   // merge claim and prevents a concurrent merge from turning a failed split into duplicated items.
@@ -4415,7 +4402,6 @@ export const splitItemStack = async (
       newUserItemId,
       currentUserItem,
       quantityToSplit,
-      createdAt,
     );
   } catch {
     // A thrown insert is ambiguous on PlanetScale's HTTP driver (the row may have committed
@@ -4444,14 +4430,6 @@ export const splitItemStack = async (
     message: `Split stack: kept ${quantityToKeep}, created new stack with ${quantityToSplit}`,
     newUserItemId,
     quantityToSplit,
-    split: {
-      id: userItemId,
-      beforeQuantity: currentUserItem.quantity,
-      quantity: quantityToKeep,
-      newUserItemId,
-      splitQuantity: quantityToSplit,
-      createdAt,
-    },
   };
 };
 

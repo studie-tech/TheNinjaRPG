@@ -11,7 +11,6 @@ import {
   getInventoryQuantityChanges,
   getSaleUserUpdate,
   getSoldInventory,
-  getSplitInventory,
 } from "@/deltas/item";
 import {
   getEquippedJutsus,
@@ -186,40 +185,6 @@ describe("item mutation projections", () => {
     homeY: 5,
     variants: ["red"],
   } as unknown as UserItem & { variants: string[] };
-  const createdAt = new Date("2026-11-16T12:00:00Z");
-  const split = {
-    id: "stack",
-    beforeQuantity: 10,
-    quantity: 6,
-    newUserItemId: "half",
-    splitQuantity: 4,
-    createdAt,
-  };
-
-  it("keeps the source and adds the split stack with its progression", () => {
-    expect(getSplitInventory([stack], split)).toEqual([
-      { ...stack, quantity: 6 },
-      {
-        ...stack,
-        id: "half",
-        quantity: 4,
-        isInAuction: false,
-        homeX: null,
-        homeY: null,
-        homeRotation: 0,
-        homeRoom: "main",
-        createdAt,
-        updatedAt: createdAt,
-      },
-    ]);
-  });
-
-  it("refetches a split against a changed or already patched baseline", () => {
-    expect(getSplitInventory([{ ...stack, quantity: 9 }], split)).toBeUndefined();
-    expect(getSplitInventory([stack, { ...stack, id: "half" }], split)).toBeUndefined();
-    expect(getSplitInventory([stack], undefined)).toBeUndefined();
-  });
-
   it("applies repaired durability after the kit's quantity", () => {
     const kit = { ...stack, id: "kit", quantity: 2, durability: 100 };
     const repaired = getInventoryDurabilities(

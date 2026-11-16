@@ -10,7 +10,6 @@ import type { fetchItem, fetchUserEquipmentSnapshot } from "@/queries/item";
 import type {
   InventoryDurabilityChange,
   InventoryQuantityChange,
-  InventorySplit,
 } from "@/validators/inventory";
 import type { UserCachePatch } from "@/validators/userCache";
 
@@ -456,44 +455,6 @@ export const getBulkSoldInventory = <T extends { id: string }>(
   soldIds.every((id) => rows.some((row) => row.id === id))
     ? rows.filter((row) => !soldIds.includes(row.id))
     : undefined;
-
-/**
- * Apply a confirmed split: the source keeps its quantity and a new unequipped stack, created
- * from the source's progression, holds the rest. A changed source baseline refetches.
- */
-export const getSplitInventory = <T extends UserItem>(
-  rows: T[],
-  split: InventorySplit | undefined,
-): T[] | undefined => {
-  const source = rows.find((row) => row.id === split?.id);
-  if (
-    !split ||
-    !source ||
-    source.quantity !== split.beforeQuantity ||
-    rows.some((row) => row.id === split.newUserItemId)
-  )
-    return;
-  return rows.flatMap((row) =>
-    row.id === split.id
-      ? [
-          { ...row, quantity: split.quantity },
-          {
-            ...row,
-            id: split.newUserItemId,
-            quantity: split.splitQuantity,
-            equipped: "NONE",
-            isInAuction: false,
-            homeX: null,
-            homeY: null,
-            homeRotation: 0,
-            homeRoom: "main",
-            createdAt: split.createdAt,
-            updatedAt: split.createdAt,
-          },
-        ]
-      : [row],
-  );
-};
 
 /** Apply confirmed durability writes to matching loaded baselines; any mismatch refetches. */
 export const getInventoryDurabilities = <T extends Pick<UserItem, "id" | "durability">>(
