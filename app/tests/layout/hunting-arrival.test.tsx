@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/nextjs";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
 import { useState } from "react";
@@ -21,6 +22,9 @@ import { huntingContract } from "../setup/hunting";
 let store: ReturnType<typeof createStore>;
 let isLoading: boolean;
 let canClaimToday: boolean;
+let panelError: Error | undefined;
+// The lazy panel retains its resolved export across test cases.
+const activityPanel = vi.spyOn(ActivityStreakPanel, "default");
 const streakQuery = vi.fn();
 const cachedEncounter = {
   session: { id: "session", sector: 1, battleId: null },
@@ -56,6 +60,7 @@ beforeEach(() => {
   store = createStore();
   isLoading = false;
   canClaimToday = true;
+  panelError = undefined;
   encounterData = cachedEncounter;
   encounterError = null;
   refetch.mockReset();
@@ -89,9 +94,10 @@ beforeEach(() => {
   vi.spyOn(HuntingBoard, "HuntingBoard").mockImplementation(() => (
     <p>Hunting preparation</p>
   ));
-  vi.spyOn(ActivityStreakPanel, "default").mockImplementation(() => (
-    <p>Reward claims</p>
-  ));
+  activityPanel.mockImplementation(() => {
+    if (panelError) throw panelError;
+    return <p>Reward claims</p>;
+  });
 });
 
 afterEach(async () => {
@@ -166,6 +172,30 @@ it.each([false, true])(
     await view.findByRole("dialog", { name: "Hunting encounter" });
     expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(false);
     expect(window.sessionStorage.getItem(storageKey)).toBeNull();
+  },
+);
+
+it.each(["Close", "Dismiss for today"])(
+  "keeps the game and %s available when the reward panel fails",
+  async (action) => {
+    vi.spyOn(Sentry, "captureException").mockImplementation(() => "");
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    panelError = new Error("Failed to load reward panel");
+    const view = render(
+      <>
+        <main>Game navigation</main>
+        {shell()}
+      </>,
+    );
+    const daily = await view.findByRole("dialog", { name: "Daily Activity Rewards" });
+    await within(daily).findByText("Rewards could not be loaded.");
+    expect(view.getByText("Game navigation")).toBeTruthy();
+    expect(within(daily).getByRole("button", { name: "Reload" })).toBeTruthy();
+    expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(true);
+    fireEvent.click(within(daily).getAllByRole("button", { name: action })[0]!);
+    await view.findByRole("dialog", { name: "Hunting encounter" });
+    expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(false);
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
   },
 );
 

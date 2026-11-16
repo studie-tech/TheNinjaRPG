@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityStreaks } from "@/hooks/useActivityStreaks";
+import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import Loader from "@/layout/Loader";
 import {
   isActivityStreakPopupBlocking,
@@ -93,7 +94,10 @@ const ActivityStreakPopup: React.FC = () => {
     timeDiff,
   );
   useEffect(() => {
-    if (shouldFetchStreaks) void loadActivityStreakPanel();
+    if (shouldFetchStreaks)
+      void loadActivityStreakPanel().catch(() => {
+        // The dialog boundary reports failed downloads and keeps rewards dismissible.
+      });
   }, [shouldFetchStreaks]);
 
   // Determine if we should show the popup
@@ -178,7 +182,25 @@ const ActivityStreakPopup: React.FC = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <ActivityStreakPanel />
+        <ChunkErrorBoundary
+          fallback={() => (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-2 text-sm"
+            >
+              <span>Rewards could not be loaded.</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.location.reload()}
+              >
+                Reload
+              </Button>
+            </div>
+          )}
+        >
+          <ActivityStreakPanel />
+        </ChunkErrorBoundary>
 
         <div className="flex justify-between gap-2 pt-2">
           <Button variant="ghost" size="sm" onClick={handleDismissForToday}>
