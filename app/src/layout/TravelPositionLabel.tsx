@@ -5,35 +5,23 @@ import type { UserWithRelations } from "@/routers/profile";
 import { useUserDataRef } from "@/utils/UserContext";
 
 /**
- * The player's live position: "You (x, y)", or just "x, y" with `coordinatesOnly`. Confirmed
- * coordinates update one text node without reconciling the travel controls; coordinates alone
- * keep a fixed width, so moving does not shift the header around them.
+ * Confirmed coordinates update one subtitle text node without reconciling the travel controls.
+ * A fixed minimum width keeps movement from shifting the header around them.
  */
-export const TravelPositionLabel = ({
-  coordinatesOnly = false,
-}: {
-  coordinatesOnly?: boolean;
-}) => {
+export const TravelPositionLabel = () => {
   const label = useRef<HTMLSpanElement>(null);
   const user = useUserDataRef((next) => {
-    if (label.current) label.current.textContent = positionText(next, coordinatesOnly);
+    if (label.current) label.current.textContent = positionText(next);
   });
   useEffect(() => {
-    if (label.current)
-      label.current.textContent = positionText(user.current, coordinatesOnly);
-  }, [user, coordinatesOnly]);
+    if (label.current) label.current.textContent = positionText(user.current);
+  }, [user]);
   return (
-    <span
-      ref={label}
-      className={coordinatesOnly ? "inline-block min-w-[6ch] tabular-nums" : undefined}
-    >
-      {positionText(user.current, coordinatesOnly)}
+    <span ref={label} className="inline-block min-w-[6ch] tabular-nums">
+      {positionText(user.current)}
     </span>
   );
 };
 
-const positionText = (user: UserWithRelations, coordinatesOnly: boolean) => {
-  if (!user) return coordinatesOnly ? "" : "You";
-  const coordinates = `${user.longitude}, ${user.latitude}`;
-  return coordinatesOnly ? coordinates : `You (${coordinates})`;
-};
+const positionText = (user: UserWithRelations) =>
+  user ? `${user.longitude}, ${user.latitude}` : "";

@@ -12,7 +12,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("updates confirmed coordinates without rendering or changing tab identity, and releases its cache listener", async () => {
+it("updates subtitle coordinates without rendering or changing tab identity, and releases its cache listener", async () => {
   const key: ReturnType<typeof trpc.getQueryKey> = [
     ["profile", "getUser"],
     { type: "query" },
@@ -27,22 +27,22 @@ it("updates confirmed coordinates without rendering or changing tab identity, an
     selected = vi.fn();
   const view = render(
     <QueryClientProvider client={client}>
-      <Profiler id="tabs" onRender={rendered}>
-        <NavTabs
-          current="You"
-          options={["You", "Global"]}
-          labels={{ You: <TravelPositionLabel /> }}
-          onChange={selected}
-        />
+      <Profiler id="travel-header" onRender={rendered}>
+        <div>
+          Sector 724 · <TravelPositionLabel />
+        </div>
+        <NavTabs current="You" options={["You", "Global"]} onChange={selected} />
       </Profiler>
     </QueryClientProvider>,
   );
-  const button = view.getByRole("button", { name: "You (10, 9)" });
+  const coordinates = view.getByText("10, 9");
+  const button = view.getByRole("button", { name: "You" });
   rendered.mockClear();
   await act(async () => {
     setPosition(12);
   });
-  expect(view.getByRole("button", { name: "You (12, 9)" })).toBe(button);
+  expect(view.getByText("12, 9")).toBe(coordinates);
+  expect(view.getByRole("button", { name: "You" })).toBe(button);
   expect(rendered).not.toHaveBeenCalled();
   fireEvent.click(button);
   expect(selected).toHaveBeenCalledWith("You");
@@ -50,6 +50,6 @@ it("updates confirmed coordinates without rendering or changing tab identity, an
   await act(async () => {
     setPosition(13);
   });
-  expect(button.textContent).toBe("You (12, 9)");
+  expect(coordinates.textContent).toBe("12, 9");
   client.clear();
 });

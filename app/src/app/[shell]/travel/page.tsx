@@ -1058,10 +1058,6 @@ function Travel() {
   const canCreateHideout =
     isOutlaw && !sectorVillage && clanLeader && !hadHideout && loadedVillages;
   const joinVillageBtn = userData.isOutlaw && canJoin && sectorVillage?.joinable;
-  // Compare against the stable Global label rather than sectorLink: the sector
-  // tab's label mutates from "Sector N" to "You (x, y)" once the scene reports
-  // the player position, so a string match against it would go stale and drop
-  // the subtitle back to the world name while on the sector view.
   const subtitle =
     hasCurrentSector && userData && !isGlobal
       ? `Sector ${currentSector} ${sectorVillageName ? `(${sectorVillageName})` : ""}`
@@ -1446,7 +1442,6 @@ function Travel() {
         <NavTabs
           current={isGlobal ? globalLink : activeTab}
           options={isTraveling ? [globalLink] : [sectorLink, globalLink]}
-          labels={{ [sectorLink]: "You" }}
           setValue={setActiveTab}
           onChange={(value) => {
             if (value !== globalLink)
@@ -1503,7 +1498,7 @@ function Travel() {
         subtitle={
           isSectorTools && hasCurrentSector ? (
             <>
-              {subtitle} · <TravelPositionLabel coordinatesOnly />
+              {subtitle} · <TravelPositionLabel />
             </>
           ) : (
             subtitle
