@@ -3,9 +3,12 @@ import { asc, eq } from "drizzle-orm";
 import { item, userData, userItem } from "@/drizzle/schema";
 import { itemRouter, splitItemStack } from "@/server/api/routers/item";
 import { joinFinishedCrafts } from "@/server/utils/itemStacks";
+import { deferred } from "../../../../setup/deferred";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import { aroundStatements, overrideQuery } from "../../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -159,10 +162,79 @@ describeWithDatabase("finished crafts in the backpack", () => {
     // Nothing joined here, so the rows already read stay this read's answer.
     expect(await joinFinishedCrafts(db, userId, seen)).toBe(false);
     // The claiming merge fails and restores the quantity: a later read still joins the craft.
-    await db.update(userItem).set({ quantity: 4 }).where(eq(userItem.id, "kit-crafted"));
+    await db
+      .update(userItem)
+      .set({ quantity: 4 })
+      .where(eq(userItem.id, "kit-crafted"));
     await (await callerFor(itemRouter, userId)).getUserItems();
     expect(await stacks()).toEqual([["kit-carried", 7, false]]);
   });
+  it.each(["getUserItems", "getUserItemsWithVariants"] as const)(
+    "recovers an abandoned craft merge before returning the inventory (%s)",
+    async (procedure) => {
+      await insertUserItems([
+        {
+          id: "kit-carried",
+          userId,
+          itemId: "kit",
+          quantity: -3,
+          updatedAt: new Date(Date.now() - minute),
+        },
+        { ...craftedKits(-4, -minute), updatedAt: new Date(Date.now() - minute) },
+      ]);
+      const inventory = await (await callerFor(itemRouter, userId))[procedure]();
+      expect(inventory.reduce((sum, row) => sum + row.quantity, 0)).toBe(7);
+      expect(await stacks()).toEqual([["kit-carried", 7, false]]);
+    },
+  );
+  it.each(["getUserItems", "getUserItemsWithVariants"] as const)(
+    "returns the complete inventory when a read starts during a craft merge (%s)",
+    async (procedure) => {
+      await insertUserItems([
+        { id: "kit-carried", userId, itemId: "kit", quantity: 3 },
+        craftedKits(4, -minute),
+      ]);
+      const db = await getTestDatabase();
+      const claimed = deferred();
+      const publish = deferred();
+      const observed = deferred();
+      const merging = callerForDatabase(
+        itemRouter,
+        userId,
+        aroundStatements(
+          db,
+          userItem,
+          async (run) => {
+            const result = await run();
+            claimed.resolve();
+            await publish.promise;
+            return result;
+          },
+          { when: (values) => values.updatedAt instanceof Date && !!values.quantity },
+        ),
+      ).getUserItems();
+      await claimed.promise;
+      const reader = callerForDatabase(
+        itemRouter,
+        userId,
+        overrideQuery(db, "userItem", {
+          findMany: async (read, ...args) => {
+            const rows = await read(...args);
+            observed.resolve();
+            return rows;
+          },
+        }),
+      )[procedure]();
+      // The second read has fetched the claimed rows before the first may publish them.
+      await observed.promise;
+      publish.resolve();
+      const answers = await Promise.all([merging, reader]);
+      for (const inventory of answers) {
+        expect(inventory.reduce((sum, row) => sum + row.quantity, 0)).toBe(7);
+      }
+      expect(await stacks()).toEqual([["kit-carried", 7, false]]);
+    },
+  );
   it("answers both inventory reads in full while they join the same craft", async () => {
     const api = await callerFor(itemRouter, userId);
     const db = await getTestDatabase();
@@ -179,6 +251,8 @@ describeWithDatabase("finished crafts in the backpack", () => {
       for (const inventory of answers) {
         expect(inventory.reduce((sum, row) => sum + row.quantity, 0)).toBe(7);
       }
+      // Concurrent claims may both conflict; the retained craft time retries on a later read.
+      await api.getUserItems();
       expect(await stacks()).toEqual([["kit-carried", 7, false]]);
     }
   });
