@@ -87,8 +87,11 @@ export const createCombatActors = (
   let animating = false;
   /** Fastest frame rate among the artwork clips the fighters showed in the last animate. */
   let clipFrameRate = 0;
-  /** Whether the last animate showed sprite animations, so switching them off is seen once. */
-  let spriteAnimationsShown = game.visualEffects?.spriteAnimations ?? false;
+  /**
+   * Whether the last animate showed sprite animations, so switching them off is seen once;
+   * a scene starting with them off frees sheets cached while they were on.
+   */
+  let spriteAnimationsShown = true;
   const shadow = createSoftShadowTexture();
   game.own(() => shadow.destroy(true));
   const sync = (next: CombatActorSnapshot) => {

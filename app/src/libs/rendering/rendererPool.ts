@@ -5,21 +5,53 @@ import type { RendererSurface } from "@/libs/rendering/telemetry";
 const PARKED_RENDERER_MS = 30_000;
 
 let parked: ParkedRenderer | null = null;
+/** Scenes between acquiring and releasing a renderer, including those still initializing. */
+const activeScenes = new Map<RendererSurface, number>();
 
 /**
- * Keeps a released scene renderer detached from the page for a short while, so the next
- * scene of the same surface (the next battle after a result screen) reuses its WebGL
- * context with its linked shader programs and the uploaded textures that are still cached,
- * instead of creating, compiling and uploading them again. At most one renderer waits; it
- * is destroyed after PARKED_RENDERER_MS, when the page is hidden, when its context is lost
- * and when a scene of another surface or context type starts. `isAlpha` is the context's
- * immutable transparent-backbuffer attribute.
+ * Starts a scene's hold on a renderer: hands over the parked renderer when it suits this
+ * scene, so the next scene of the same surface (the next battle after a result screen)
+ * reuses its WebGL context with its linked shader programs and the uploaded textures that
+ * are still cached, instead of creating, compiling and uploading them again. Any other
+ * parked renderer is destroyed. Every call is paired with one releaseRenderer.
+ * `isAlpha` is the context's immutable transparent-backbuffer attribute.
  */
-export const parkRenderer = (
+export const takeParkedRenderer = (surface: RendererSurface, isAlpha: boolean) => {
+  activeScenes.set(surface, (activeScenes.get(surface) ?? 0) + 1);
+  const entry = parked;
+  if (!entry) return null;
+  if (
+    entry.surface !== surface ||
+    entry.isAlpha !== isAlpha ||
+    entry.renderer.context.isLost
+  ) {
+    destroyParkedRenderer();
+    return null;
+  }
+  detach(entry);
+  return entry.renderer;
+};
+
+/**
+ * Ends a scene's hold. A reusable renderer waits detached from the page while no other
+ * scene of its surface holds one; at most one renderer waits, and it is destroyed after
+ * PARKED_RENDERER_MS, when the page is hidden, when its context is lost and when a scene
+ * of another surface or context type starts. So a parked renderer never coexists with a
+ * renderer of a newer scene.
+ */
+export const releaseRenderer = (
   surface: RendererSurface,
   renderer: WebGLRenderer,
   isAlpha: boolean,
+  isReusable: boolean,
 ) => {
+  const remaining = Math.max(0, (activeScenes.get(surface) ?? 1) - 1);
+  if (remaining) activeScenes.set(surface, remaining);
+  else activeScenes.delete(surface);
+  if (!isReusable || remaining || renderer.context.isLost) {
+    renderer.destroy({ removeView: true });
+    return;
+  }
   destroyParkedRenderer();
   const canvas = renderer.canvas as HTMLCanvasElement;
   canvas.remove();
@@ -43,26 +75,10 @@ export const parkRenderer = (
   };
 };
 
-/** Hands over the parked renderer when it suits this scene; any other parked renderer goes. */
-export const takeParkedRenderer = (surface: RendererSurface, isAlpha: boolean) => {
-  const entry = parked;
-  if (!entry) return null;
-  if (
-    entry.surface !== surface ||
-    entry.isAlpha !== isAlpha ||
-    entry.renderer.context.isLost
-  ) {
-    destroyParkedRenderer();
-    return null;
-  }
-  release(entry);
-  return entry.renderer;
-};
-
 export const destroyParkedRenderer = () => {
   const entry = parked;
   if (!entry) return;
-  release(entry);
+  detach(entry);
   try {
     entry.renderer.destroy({ removeView: true });
   } catch {
@@ -70,7 +86,7 @@ export const destroyParkedRenderer = () => {
   }
 };
 
-const release = (entry: ParkedRenderer) => {
+const detach = (entry: ParkedRenderer) => {
   parked = null;
   clearTimeout(entry.timer);
   entry.listeners.abort();

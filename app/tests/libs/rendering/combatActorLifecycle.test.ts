@@ -10,6 +10,7 @@ import {
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import { acquireAnimationTexture } from "@/libs/rendering/animationTextures";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -100,6 +101,34 @@ const setup = async (isAi = true, spriteAppearance?: SpriteAppearance) => {
 };
 
 describe("combat actor reconciliation", () => {
+  it("frees idle animation sheets when a battle starts with sprite animation off", async () => {
+    const lease = acquireAnimationTexture({
+      id: "idle",
+      name: "idle",
+      url: "https://animation-off.test/idle.png",
+      smallUrl: null,
+      columns: 4,
+      rows: 1,
+      frameCount: 4,
+      fps: 8,
+      facing: "left",
+    });
+    await lease?.resource.catch(() => {});
+    lease?.release();
+    const unload = vi.spyOn(Assets, "unload").mockResolvedValue(undefined);
+    // The scene's visual effects leave sprite animation off.
+    const { actors, user } = await setup();
+    actors.animate(
+      { now: 1000, delta: 1 / 60, reducedMotion: false },
+      user.userId,
+      undefined,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(unload).toHaveBeenCalledWith(
+      expect.stringContaining("https://animation-off.test/idle.png"),
+    );
+  });
+
   it.each([
     [4, 8],
     [12, 8],

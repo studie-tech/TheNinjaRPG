@@ -11,7 +11,7 @@ import { createSceneAssets } from "@/libs/rendering/assets";
 import { createCharacterComposites } from "@/libs/rendering/characterComposites";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop, MAX_FRAME_RATE } from "@/libs/rendering/frameLoop";
-import { parkRenderer, takeParkedRenderer } from "@/libs/rendering/rendererPool";
+import { releaseRenderer, takeParkedRenderer } from "@/libs/rendering/rendererPool";
 import { observeRenderer, type RendererSurface } from "@/libs/rendering/telemetry";
 import { readVisualEffects, subscribeVisualEffects } from "@/libs/visualEffects";
 
@@ -26,7 +26,7 @@ const frames = createFrameLoop(
 /**
  * Owns the renderer, frame subscription, input listeners and texture leases together.
  * Abort or dispose releases them once; a healthy scene renderer is parked for its surface's
- * next scene (see parkRenderer). Initialization rejects; frame failures dispose
+ * next scene (see releaseRenderer). Initialization rejects; frame failures dispose
  * the scene and call onError. Hidden/offscreen canvases suspend their frame subscription.
  * Scenes request at most MAX_FRAME_RATE; whole-refresh pacing can present above that target.
  */
@@ -57,8 +57,7 @@ export const createGameRenderer = async (options: {
   const renderer = parked ?? new WebGLRenderer();
   /** Parks a healthy scene renderer for its surface's next scene; previews' callers restyle their canvas. */
   const release = (isReusable: boolean) => {
-    if (isScene && isReusable && !renderer.context.isLost)
-      parkRenderer(options.surface, renderer, isAlpha);
+    if (isScene) releaseRenderer(options.surface, renderer, isAlpha, isReusable);
     else renderer.destroy({ removeView: true });
   };
   try {
@@ -87,7 +86,7 @@ export const createGameRenderer = async (options: {
   } catch (error) {
     // Teardown throws on a partly built renderer; the initialization error stays the cause.
     try {
-      if (renderer.view?.canvas) renderer.destroy({ removeView: true });
+      release(false);
     } catch {}
     throw error;
   }

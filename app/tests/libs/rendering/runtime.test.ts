@@ -188,6 +188,28 @@ describe("renderer context loss", () => {
     expect(next.game.canvas).not.toBe(canvas);
   });
 
+  it("destroys a cancelled scene's renderer while a newer scene of its surface holds one", async () => {
+    const { destroy, init, create } = await start(vi.fn());
+    const cancelled = new window.AbortController();
+    const first = createGameRenderer({
+      surface: "combat",
+      mount: document.createElement("div"),
+      signal: cancelled.signal,
+      height: () => 100,
+      onError: vi.fn(),
+    });
+    const second = create("combat");
+    cancelled.abort();
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    const { game } = await second;
+    expect(init).toHaveBeenCalledTimes(3);
+    expect(destroy).toHaveBeenCalledTimes(1);
+    game.dispose();
+    expect(destroy).toHaveBeenCalledTimes(1);
+    await create("combat");
+    expect(init).toHaveBeenCalledTimes(3);
+  });
+
   it("never parks a preview renderer, whose canvas its caller restyles", async () => {
     const { init, destroy, create } = await start(vi.fn());
     const preview = await create("battlefield-preview");
