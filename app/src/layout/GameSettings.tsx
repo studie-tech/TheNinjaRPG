@@ -6,13 +6,20 @@ import { api } from "@/app/_trpc/client";
 import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { useSelectGameLayout } from "@/hooks/useGameLayout";
 import { useIframeMute } from "@/hooks/useIframeMute";
-import { useVisualEffects } from "@/hooks/visual-effects";
+import { useRenderQuality, useVisualEffects } from "@/hooks/visual-effects";
 import { GameLayoutPicker } from "@/layout/GameLayoutPicker";
 import { useGlobalAudio } from "@/layout/GlobalAudioProvider";
 import Link from "@/layout/Link";
@@ -27,6 +34,11 @@ import {
   SWAP_SIDEBARS_STORAGE_KEY,
 } from "@/libs/layoutPreference";
 import { showMutationToast } from "@/libs/toast";
+import {
+  RENDER_QUALITIES,
+  type RenderQuality,
+  type VisualEffect,
+} from "@/libs/visualEffects";
 import type { UserWithRelations } from "@/routers/profile";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { clamp } from "@/utils/math";
@@ -396,6 +408,7 @@ export const VisualEffectsSettings = () => {
   return (
     <div className="space-y-3">
       <div className="divide-border/50 divide-y">
+        <RenderQualitySetting />
         <SettingsToggle
           label="Sunlight"
           description="Directional light from the sun"
@@ -448,6 +461,52 @@ export const VisualEffectsSettings = () => {
       <p className="text-muted-foreground text-xs">
         Shared across the game; saved on this device.
       </p>
+    </div>
+  );
+};
+
+/** Device quality preference, with what auto is lowering on visible scenes right now. */
+const RenderQualitySetting = () => {
+  const { quality, status, setRenderQuality } = useRenderQuality();
+  const id = useId();
+  const reductions = [
+    status.isResolutionReduced ? "resolution" : null,
+    ...status.disabled.map((effect) => QUALITY_EFFECT_NAMES[effect] ?? effect),
+  ].filter((reduction) => reduction !== null);
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-4 py-2">
+      <label htmlFor={id} className="flex-1 text-sm">
+        Graphics quality
+        <span
+          id={`${id}-description`}
+          className="text-muted-foreground mt-0.5 block text-xs"
+        >
+          {RENDER_QUALITY_OPTIONS[quality].description}
+          {quality === "auto" && reductions.length > 0 && (
+            <span role="status" className="block">
+              Lowered now: {reductions.join(", ")}.
+            </span>
+          )}
+        </span>
+      </label>
+      <Select
+        value={quality}
+        onValueChange={(value) => {
+          const next = RENDER_QUALITIES.find((option) => option === value);
+          if (next) setRenderQuality(next);
+        }}
+      >
+        <SelectTrigger id={id} aria-describedby={`${id}-description`} className="w-28">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {RENDER_QUALITIES.map((option) => (
+            <SelectItem key={option} value={option}>
+              {RENDER_QUALITY_OPTIONS[option].name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 };
@@ -605,4 +664,27 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
       </PopoverContent>
     </Popover>
   );
+};
+
+/** Names and explanations shown for each quality preference. */
+const RENDER_QUALITY_OPTIONS: Record<
+  RenderQuality,
+  { name: string; description: string }
+> = {
+  auto: {
+    name: "Auto",
+    description:
+      "Keeps frames smooth by lowering resolution, then any shadows, local lights or weather you have not switched yourself",
+  },
+  high: {
+    name: "High",
+    description: "Full display resolution; effects follow the switches below",
+  },
+  low: { name: "Low", description: "Standard resolution for slower devices" },
+};
+
+const QUALITY_EFFECT_NAMES: Partial<Record<VisualEffect, string>> = {
+  shadows: "shadows",
+  localLights: "local lights",
+  weather: "weather",
 };

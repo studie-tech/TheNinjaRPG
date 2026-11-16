@@ -185,6 +185,39 @@ describe("renderer diagnostics", () => {
     expect(metrics.distribution).toHaveBeenCalledTimes(3);
   });
 
+  it("labels frames with their quality level and restarts the window when it changes", () => {
+    const { metrics, diagnostics } = setup();
+    const observer = diagnostics.observe("combat", renderer());
+    const full = {
+      quality: "auto",
+      quality_level: 0,
+      quality_effects: "none",
+    } as const;
+    observer.quality(full);
+    play(observer, 15);
+    observer.quality({ ...full, quality_level: 4, quality_effects: "shadows" });
+    expect(metrics.count).toHaveBeenLastCalledWith(
+      "renderer.quality.change",
+      1 / RENDERER_METRICS_SAMPLE_RATE,
+      {
+        attributes: expect.objectContaining({
+          surface: "combat",
+          quality_level: 4,
+          direction: "lower",
+        }),
+      },
+    );
+    // Fifteen seconds at full quality are discarded rather than mixed into the reduced level.
+    for (let elapsed = 0; elapsed < 7_000; elapsed += 16) observer.frame(16, 4);
+    expect(metrics.distribution).not.toHaveBeenCalled();
+    observer.dispose();
+    expect(metrics.distribution.mock.calls[0]![2].attributes).toMatchObject({
+      quality: "auto",
+      quality_level: 4,
+      quality_effects: "shadows",
+    });
+  });
+
   it("collects no frames or device metrics on unsampled page loads but still reports failures", () => {
     const { metrics, capture, diagnostics } = setup(0.99);
     const observer = diagnostics.observe("combat", renderer());

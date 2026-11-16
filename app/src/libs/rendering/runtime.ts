@@ -12,8 +12,26 @@ import { createCharacterComposites } from "@/libs/rendering/characterComposites"
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop, MAX_FRAME_RATE } from "@/libs/rendering/frameLoop";
 import { releaseRenderer, takeParkedRenderer } from "@/libs/rendering/rendererPool";
+import {
+  baseRenderResolution,
+  createRenderQualityGovernor,
+  INITIAL_HEALTHY_WINDOWS,
+  initialRenderQualityLevel,
+  matchingQualityLevel,
+  publishRenderQualityStatus,
+  type QualityLevel,
+  renderQualityLevels,
+  sessionRenderQuality,
+} from "@/libs/rendering/renderQuality";
 import { observeRenderer, type RendererSurface } from "@/libs/rendering/telemetry";
-import { readVisualEffects, subscribeVisualEffects } from "@/libs/visualEffects";
+import {
+  readChosenVisualEffects,
+  readRenderQuality,
+  readVisualEffects,
+  subscribeRenderQuality,
+  subscribeVisualEffects,
+  type VisualEffect,
+} from "@/libs/visualEffects";
 
 // Keep sub-texel UV offsets through sprite interpolation; Pixi falls back when highp is unavailable.
 GlProgram.defaultOptions.preferredFragmentPrecision = "highp";
@@ -39,7 +57,11 @@ export const createGameRenderer = async (options: {
   /** Renderer/CSS pixel dimensions at resolution 1; observed mount width is used by default. */
   height: (width: number) => number;
   width?: number;
-  /** Defaults to display density capped at 2×; logical coordinates stay in CSS pixels. */
+  /**
+   * Fixes the density and disables automatic quality. Scenes otherwise follow the quality
+   * preference (display density capped at 2×, within a pixel budget in auto) and previews
+   * keep display density; logical coordinates stay in CSS pixels.
+   */
   resolution?: number;
   background?: number;
   backgroundAlpha?: number;
@@ -51,6 +73,18 @@ export const createGameRenderer = async (options: {
     options.backgroundAlpha ?? (options.background === undefined ? 0 : 1);
   // Previews are incidental to their page, so its decoration keeps running around them.
   const isScene = !options.surface.endsWith("-preview");
+  const isTouch = matchMedia("(pointer: coarse)").matches;
+  let quality = readRenderQuality();
+  /** Scenes follow the quality preference; previews and explicit resolutions keep their density. */
+  const baseResolution = (width: number, height: number) =>
+    options.resolution ??
+    baseRenderResolution({
+      quality: isScene ? quality : "high",
+      width,
+      height,
+      devicePixelRatio: window.devicePixelRatio || 1,
+      isTouch,
+    });
   // The context's backbuffer is transparent exactly when the background is.
   const isAlpha = backgroundAlpha < 1;
   const parked = isScene ? takeParkedRenderer(options.surface, isAlpha) : null;
@@ -62,12 +96,13 @@ export const createGameRenderer = async (options: {
   };
   try {
     const width = Math.max(1, options.width ?? mount.clientWidth);
+    const height = options.height(width);
     const settings = {
       width,
-      height: options.height(width),
+      height,
       preferWebGLVersion: 1,
       // Bound color-buffer cost while preserving artwork detail on dense mobile displays.
-      resolution: options.resolution ?? Math.min(window.devicePixelRatio || 1, 2),
+      resolution: baseResolution(width, height),
       autoDensity: true,
       antialias: false,
       background: premultipliedClearColor(
@@ -110,7 +145,30 @@ export const createGameRenderer = async (options: {
   canvas.style.imageRendering = options.resolution !== undefined ? "pixelated" : "";
   canvas.style.touchAction = options.touchAction ?? "none";
   mount.appendChild(canvas);
-  const visualEffects = readVisualEffects();
+  const storedEffects = readVisualEffects();
+  /** Stored preferences less the effects automatic quality has switched off. */
+  const visualEffects = { ...storedEffects };
+  let chosenEffects = readChosenVisualEffects();
+  const adapts = () =>
+    isScene && options.resolution === undefined && quality === "auto";
+  let ladder = adapts()
+    ? renderQualityLevels(
+        baseResolution(renderer.width, renderer.height),
+        storedEffects,
+        chosenEffects,
+      )
+    : [];
+  const governor = createRenderQualityGovernor(
+    sessionRenderQuality.get(options.surface) ?? {
+      level: initialRenderQualityLevel(ladder, {
+        software: telemetry.isSoftware,
+        memory: (navigator as { deviceMemory?: number }).deviceMemory,
+        cores: navigator.hardwareConcurrency,
+      }),
+      patience: INITIAL_HEALTHY_WINDOWS,
+    },
+  );
+  const qualityOwner = {};
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;
   let contextLost = false;
@@ -125,6 +183,9 @@ export const createGameRenderer = async (options: {
   let presentedAt = Number.NEGATIVE_INFINITY;
   /** The previous frame presented at the full rate; frame telemetry measures intervals from it. */
   let measuredAt: number | null = null;
+  /** The previous continuous frame and its requested rate, for automatic quality. */
+  let pacedAt: number | null = null;
+  let pacedRate = frameRate;
   let wake: ReturnType<typeof setTimeout> | null = null;
   let update: FrameUpdate = () => {};
   let resize: (width: number, height: number) => void = () => {};
@@ -172,7 +233,7 @@ export const createGameRenderer = async (options: {
       resumeWaiters();
       // A scene reporting an unchanged picture keeps its previous frame on screen.
       if (changed === false && !forced) {
-        measuredAt = null;
+        measuredAt = pacedAt = null;
         return;
       }
       characterComposites.flush();
@@ -183,6 +244,18 @@ export const createGameRenderer = async (options: {
       if (isMeasured && measuredAt !== null)
         telemetry.frame(now - measuredAt, performance.now() - startedAt);
       measuredAt = isMeasured ? now : null;
+      // Quality compares each continuous interval with its requested rate.
+      const isPaced = continuous && frameRate >= TIMED_FRAME_RATE;
+      if (
+        isPaced &&
+        pacedAt !== null &&
+        pacedRate === frameRate &&
+        adapts() &&
+        governor.sample(now - pacedAt, 1000 / frameRate, frameRate >= MAX_FRAME_RATE)
+      )
+        updateQuality(false);
+      pacedAt = isPaced ? now : null;
+      pacedRate = frameRate;
     } catch (error) {
       // Losing the context mid-frame surfaces as a GL TypeError (e.g. a null shader).
       if (renderer.context.isLost) {
@@ -206,7 +279,7 @@ export const createGameRenderer = async (options: {
     else if (!active && unsubscribe) {
       unsubscribe();
       unsubscribe = null;
-      measuredAt = null;
+      measuredAt = pacedAt = null;
       // A sleeping scene's next delta spans its sleep; resumed and on-demand scenes restart at 0.
       if (!sleeps || !drawable) previousTime = null;
     }
@@ -231,9 +304,60 @@ export const createGameRenderer = async (options: {
       for (const resume of waiters) resume();
     }, 0);
   };
+  /**
+   * Applies the quality level for this size and preference. A changed ladder (a resize, a
+   * new preference or a settings change) keeps the most reduced level that is no lower
+   * than the current one, so a player's own change never removes another effect.
+   */
+  const updateQuality = (
+    // A resize or settings change interrupts the measurement window; a step already restarted it.
+    isInterrupted = true,
+    width = renderer.width,
+    height = renderer.height,
+  ) => {
+    if (disposed) return;
+    const base = baseResolution(width, height);
+    let level: QualityLevel = { resolution: base, disabled: [] };
+    if (adapts()) {
+      const previous = ladder[governor.level];
+      ladder = renderQualityLevels(base, storedEffects, chosenEffects);
+      governor.setLevel(
+        previous ? matchingQualityLevel(ladder, previous) : governor.level,
+        ladder.length - 1,
+        isInterrupted,
+      );
+      level = ladder[governor.level] ?? level;
+      sessionRenderQuality.set(options.surface, governor.state);
+    }
+    for (const effect of Object.keys(storedEffects) as VisualEffect[])
+      visualEffects[effect] = storedEffects[effect] && !level.disabled.includes(effect);
+    if (
+      width !== renderer.width ||
+      height !== renderer.height ||
+      level.resolution !== renderer.resolution
+    ) {
+      renderer.resize(width, height, level.resolution);
+      resize(width, height);
+    }
+    telemetry.quality({
+      quality,
+      quality_level: adapts() ? governor.level : 0,
+      quality_effects: level.disabled.join(",") || "none",
+    });
+    if (isScene)
+      publishRenderQualityStatus(
+        qualityOwner,
+        visible && !disposed
+          ? { isResolutionReduced: level.resolution < base, disabled: level.disabled }
+          : null,
+      );
+    invalidate();
+  };
   const observer = new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? true;
     if (isScene) setGameSceneVisible(canvas, visible);
+    // Settings describe the reductions on scenes the player can see.
+    updateQuality();
     updateSubscription();
   });
   observer.observe(canvas);
@@ -241,9 +365,7 @@ export const createGameRenderer = async (options: {
     const width = Math.max(1, options.width ?? mount.clientWidth);
     const height = options.height(width);
     if (width === renderer.width && height === renderer.height) return;
-    renderer.resize(width, height);
-    resize(width, height);
-    invalidate();
+    updateQuality(true, width, height);
   });
   resizeObserver.observe(mount);
   const listen = <K extends keyof HTMLElementEventMap>(
@@ -264,8 +386,16 @@ export const createGameRenderer = async (options: {
   };
   cleanups.add(
     subscribeVisualEffects((effect, enabled) => {
-      visualEffects[effect] = enabled;
-      invalidate();
+      storedEffects[effect] = enabled;
+      chosenEffects = readChosenVisualEffects();
+      updateQuality();
+    }),
+  );
+  cleanups.add(
+    subscribeRenderQuality((next) => {
+      if (next === quality) return;
+      quality = next;
+      updateQuality();
     }),
   );
   motion.addEventListener("change", invalidate, { signal: listeners.signal });
@@ -296,6 +426,7 @@ export const createGameRenderer = async (options: {
     if (disposed) return;
     disposed = true;
     setGameSceneVisible(canvas, false);
+    publishRenderQualityStatus(qualityOwner, null);
     telemetry.dispose();
     updateSubscription();
     signal.removeEventListener("abort", dispose);
@@ -312,6 +443,7 @@ export const createGameRenderer = async (options: {
     release(isReusable && !contextLost);
   };
   signal.addEventListener("abort", dispose, { once: true });
+  updateQuality();
   updateSubscription();
   return {
     lpcCatalog: options.lpcCatalog,

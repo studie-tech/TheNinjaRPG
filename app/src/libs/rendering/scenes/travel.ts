@@ -113,7 +113,6 @@ export const createTravelScene = async (options: {
         ? window.innerHeight
         : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600)),
   });
-  const resolution = game.renderer.resolution ?? options.resolution ?? 1;
   game.canvas.style.filter = "none";
   try {
     // The camera moves this group without repacking unchanged descendant transforms.
@@ -349,6 +348,8 @@ export const createTravelScene = async (options: {
       }
       world.scale.set(s, -s);
       // Move the whole map on backing pixels so nearest-sampled wall joints stay stable.
+      // Quality changes density through a resize, which repeats this snap.
+      const { resolution } = game.renderer;
       world.position.set(
         Math.round((game.renderer.width / 2 - (camera?.x ?? 0) * s) * resolution) /
           resolution,

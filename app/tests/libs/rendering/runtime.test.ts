@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import { WebGLRenderer } from "pixi.js";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
+import { sessionRenderQuality } from "@/libs/rendering/renderQuality";
 import { destroyParkedRenderer } from "@/libs/rendering/rendererPool";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { farmPlotAt, farmPlotPosition } from "@/libs/rendering/scenes/farmLayout";
 import type { RendererSurface } from "@/libs/rendering/telemetry";
+import { setRenderQuality, setVisualEffect } from "@/libs/visualEffects";
 
 describe("renderer initialization failure", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -21,14 +23,23 @@ describe("renderer initialization failure", () => {
     vi.spyOn(WebGLRenderer.prototype, "destroy").mockImplementation(() => {
       throw new TypeError("Cannot read properties of undefined (reading 'destroy')");
     });
-    const start = createGameRenderer({
-      surface: "travel",
-      mount: document.createElement("div"),
-      signal: new AbortController().signal,
-      height: () => 100,
-      onError: () => {},
-    });
-    await expect(start).rejects.toBe(cause);
+    const { matchMedia } = globalThis;
+    // The initial density depends on the pointer type.
+    globalThis.matchMedia = (() => ({
+      matches: false,
+    })) as unknown as typeof matchMedia;
+    try {
+      const start = createGameRenderer({
+        surface: "travel",
+        mount: document.createElement("div"),
+        signal: new AbortController().signal,
+        height: () => 100,
+        onError: () => {},
+      });
+      await expect(start).rejects.toBe(cause);
+    } finally {
+      globalThis.matchMedia = matchMedia;
+    }
   });
 });
 
@@ -52,8 +63,15 @@ describe("renderer context loss", () => {
     Object.assign(globalThis, originals);
     frame = null;
     lost = false;
+    // Quality state persists per session and device; each test starts from a new device.
+    sessionRenderQuality.clear();
+    localStorage.clear();
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 1 });
   });
-  const start = async (onError: (error: unknown) => void, backgroundAlpha = 0) => {
+  const start = async (
+    onError: (error: unknown) => void,
+    { resolution = 1, backgroundAlpha = 0 } = {},
+  ) => {
     class NoopObserver {
       observe() {}
       disconnect() {}
@@ -89,7 +107,7 @@ describe("renderer context loss", () => {
           },
           width: 100,
           height: 100,
-          resolution: 1,
+          resolution,
           background: { color: 0, alpha: 0 },
         })) {
           Object.defineProperty(this, key, { configurable: true, value });
@@ -271,7 +289,7 @@ describe("renderer context loss", () => {
   });
 
   it("ignores a disposed scene's background update after its renderer is reused", async () => {
-    const { game, create } = await start(vi.fn(), 1);
+    const { game, create } = await start(vi.fn(), { backgroundAlpha: 1 });
     game.dispose();
     const next = await create();
     expect(next.game.renderer).toBe(game.renderer);
@@ -366,6 +384,70 @@ describe("renderer context loss", () => {
     changed = true;
     runFrame(5400);
     expect(render).toHaveBeenCalledTimes(3);
+  });
+
+  const resizeRenderer = () =>
+    vi.spyOn(WebGLRenderer.prototype, "resize").mockImplementation(function (
+      this: WebGLRenderer,
+      width: number,
+      height: number,
+      resolution?: number,
+    ) {
+      for (const [key, value] of Object.entries({
+        width,
+        height,
+        resolution: resolution ?? this.resolution,
+      }))
+        Object.defineProperty(this, key, { configurable: true, value });
+    });
+
+  it("lowers resolution under sustained slow frames unless the player chose high quality", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    const { game, render } = await start(vi.fn(), { resolution: 2 });
+    render.mockImplementation(() => {});
+    const resize = resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    // Thirty frames a second against a sixty-frame request.
+    for (let i = 0; i < 400 && game.renderer.resolution === 2; i++) {
+      now += 33;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(1.5);
+    expect(resize).toHaveBeenLastCalledWith(100, 100, 1.5);
+    setRenderQuality("high");
+    expect(game.renderer.resolution).toBe(2);
+    for (let i = 0; i < 400; i++) {
+      now += 33;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(2);
+  });
+
+  it("switches off effects the player has not chosen and keeps only steps that help", async () => {
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    // Shadows are this scene's cost; local lights cost nothing measurable.
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.shadows ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects).toMatchObject({
+      shadows: false,
+      localLights: true,
+      weather: true,
+    });
+    // Choosing shadows in settings wins and takes no other effect away instead.
+    setVisualEffect("shadows", true);
+    expect(game.visualEffects).toMatchObject({ shadows: true, localLights: true });
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.localLights ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects).toMatchObject({ shadows: true, localLights: false });
   });
 
   it("sleeps between the frames of a slow scene and wakes on a timer", async () => {

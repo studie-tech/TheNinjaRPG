@@ -57,28 +57,90 @@ export const readVisualEffects = (): VisualEffects => {
   return effects;
 };
 
-/** Publishes immediately to active scenes, including when browser storage is unavailable. */
+/**
+ * Publishes immediately to active scenes, including when browser storage is unavailable.
+ * The effect becomes the player's own choice, which automatic quality never overrides.
+ */
 export const setVisualEffect = (effect: VisualEffect, enabled: boolean) => {
   // Save sibling choices before changing a key also used by a grouped preference.
   readVisualEffects();
-  const key = VISUAL_EFFECT_KEYS[effect];
-  const value = JSON.stringify(enabled);
+  const chosen = readChosenVisualEffects();
+  if (!chosen.has(effect)) {
+    chosen.add(effect);
+    safeLocalStorageSetItem(CHOSEN_VISUAL_EFFECTS_KEY, JSON.stringify([...chosen]));
+  }
+  publish(VISUAL_EFFECT_KEYS[effect], JSON.stringify(enabled));
+};
+
+/**
+ * Effects the player has set in settings on this device. Values materialized from defaults
+ * or grouped preferences are not choices, so automatic quality may still lower them.
+ */
+export const readChosenVisualEffects = (): Set<VisualEffect> => {
+  const chosen = new Set<VisualEffect>();
+  try {
+    const stored: unknown = JSON.parse(
+      safeLocalStorageGetItem(CHOSEN_VISUAL_EFFECTS_KEY) ?? "[]",
+    );
+    if (Array.isArray(stored))
+      for (const effect of stored)
+        if (Object.hasOwn(VISUAL_EFFECT_KEYS, effect)) chosen.add(effect);
+  } catch {}
+  return chosen;
+};
+
+/**
+ * Renderer detail on this device. Auto bounds canvas pixels and adapts resolution and
+ * expensive effects to the measured frame rate; high keeps display density up to 2× and
+ * never adapts; low renders at standard density. Effect toggles apply in every mode.
+ */
+export const RENDER_QUALITIES = ["auto", "high", "low"] as const;
+export type RenderQuality = (typeof RENDER_QUALITIES)[number];
+
+export const readRenderQuality = (): RenderQuality =>
+  parseRenderQuality(safeLocalStorageGetItem(RENDER_QUALITY_KEY));
+
+/** Publishes immediately to active scenes and open settings. */
+export const setRenderQuality = (quality: RenderQuality) =>
+  publish(RENDER_QUALITY_KEY, JSON.stringify(quality));
+
+/** Follows quality changes from this and other tabs. */
+export const subscribeRenderQuality = (onChange: (quality: RenderQuality) => void) =>
+  subscribeStorage((key, value) => {
+    if (key === null || key === RENDER_QUALITY_KEY) onChange(parseRenderQuality(value));
+  });
+
+/** Uses the same storage events as layout preferences without sending frame updates through React. */
+export const subscribeVisualEffects = (
+  onChange: (effect: VisualEffect, enabled: boolean) => void,
+) =>
+  subscribeStorage((key, value) => {
+    for (const effect of Object.keys(VISUAL_EFFECT_KEYS) as VisualEffect[]) {
+      if (key === null || key === VISUAL_EFFECT_KEYS[effect])
+        onChange(effect, value !== "false");
+    }
+  });
+
+const RENDER_QUALITY_KEY = "worldRenderQuality";
+const CHOSEN_VISUAL_EFFECTS_KEY = "worldEffectChoices";
+
+const parseRenderQuality = (value: string | null): RenderQuality => {
+  try {
+    const quality: unknown = value === null ? null : JSON.parse(value);
+    return RENDER_QUALITIES.find((option) => option === quality) ?? "auto";
+  } catch {
+    return "auto";
+  }
+};
+
+const publish = (key: string, value: string) => {
   safeLocalStorageSetItem(key, value);
   window.dispatchEvent(
     new window.CustomEvent("localStorageSync", { detail: { key, value } }),
   );
 };
 
-/** Uses the same storage events as layout preferences without sending frame updates through React. */
-export const subscribeVisualEffects = (
-  onChange: (effect: VisualEffect, enabled: boolean) => void,
-) => {
-  const sync = (key: string | null, value: string | null) => {
-    for (const effect of Object.keys(VISUAL_EFFECT_KEYS) as VisualEffect[]) {
-      if (key === null || key === VISUAL_EFFECT_KEYS[effect])
-        onChange(effect, value !== "false");
-    }
-  };
+const subscribeStorage = (sync: (key: string | null, value: string | null) => void) => {
   const storage = (event: StorageEvent) => {
     if (event.storageArea === null || event.storageArea === window.localStorage)
       sync(event.key, event.newValue);

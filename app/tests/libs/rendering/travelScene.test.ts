@@ -134,7 +134,7 @@ const gameFixture = () => {
     stage,
     canvas,
     signal: controller.signal,
-    renderer: { width: 1024, height: 600 },
+    renderer: { width: 1024, height: 600, resolution: 1 },
     own: (cleanup: () => void) => {
       owned.add(cleanup);
     },

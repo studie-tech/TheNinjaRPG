@@ -286,8 +286,9 @@ describe("physical world lighting", () => {
         f.shadows.registerTerrain(f.parent, f.terrain);
         f.shadows.update(worldSunlight(), viewport);
       }
-      expect(standard.shadows.container.filters![0]!.resolution).toBe(1);
-      expect(dense.shadows.container.filters![0]!.resolution).toBe(2);
+      // The lighting pass follows the renderer as automatic quality changes its density.
+      expect(standard.shadows.container.filters![0]!.resolution).toBe("inherit");
+      expect(dense.shadows.container.filters![0]!.resolution).toBe("inherit");
       const targets = (f: ReturnType<typeof fixture>) =>
         f.render.mock.calls.map(([draw]) => [draw.target.width, draw.target.height]);
       expect(targets(dense)).toEqual(targets(standard));
