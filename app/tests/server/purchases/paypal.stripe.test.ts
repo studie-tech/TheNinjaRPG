@@ -220,7 +220,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
       fetchProvider as unknown as typeof fetch,
     );
-    vi.spyOn(stripeClient, "getStripe").mockReturnValue(stripeApi);
+    vi.spyOn(stripeClient, "getStripe").mockResolvedValue(stripeApi);
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -1677,7 +1677,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
           ],
         },
       });
-      vi.spyOn(stripeClient, "getStripe").mockReturnValue({
+      vi.spyOn(stripeClient, "getStripe").mockResolvedValue({
         invoices: { retrieve: async (id: string) => ({ ...invoice(), id }) },
         subscriptions: {
           retrieve: async () => ({

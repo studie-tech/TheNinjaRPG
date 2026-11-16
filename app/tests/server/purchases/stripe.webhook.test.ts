@@ -17,8 +17,8 @@ const payload = (type = "product.created", livemode = false) =>
     livemode,
     data: { object: { id: "cs_test_session" } },
   });
-const signed = (body: string, timestamp?: number) =>
-  getStripe().webhooks.generateTestHeaderStringAsync({
+const signed = async (body: string, timestamp?: number) =>
+  (await getStripe()).webhooks.generateTestHeaderStringAsync({
     payload: body,
     secret,
     ...(timestamp ? { timestamp } : {}),

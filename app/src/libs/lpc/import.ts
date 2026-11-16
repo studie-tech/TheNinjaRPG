@@ -1,6 +1,4 @@
 import { createHash } from "node:crypto";
-import sharp from "sharp";
-import { UTApi, UTFile } from "uploadthing/server";
 import { canonicalJson } from "@/libs/contentReview/version";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { validateUrlForSsrf } from "@/server/utils/ssrf";
@@ -55,6 +53,7 @@ export const readLpcImage = async (url: string) => {
 /** Require decodable atlas pixels within the declared layout and bounded image dimensions. */
 export const validateLpcAtlas = async (bytes: Buffer, layout: LpcLayout) => {
   lpcLayoutValidator.parse(layout);
+  const { default: sharp } = await import("sharp");
   const image = sharp(bytes, { limitInputPixels: 2048 * 2048 });
   const metadata = await image.metadata();
   if (
@@ -85,6 +84,7 @@ export const validateLpcAtlas = async (bytes: Buffer, layout: LpcLayout) => {
 
 /** Convert the standard 13-column LPC export's supported poses into a bounded atlas. */
 export const packStandardLpc = async (bytes: Buffer) => {
+  const { default: sharp } = await import("sharp");
   const metadata = await sharp(bytes, {
     limitInputPixels: 16 * 1024 * 1024,
   }).metadata();
@@ -160,6 +160,7 @@ export const packStandardLpc = async (bytes: Buffer) => {
 /** Build a trimmed, deduplicated movement atlas with extruded texels for WebGL sampling. */
 export const packLpcTravel = async (bytes: Buffer, layout: LpcLayout) => {
   if (!layout.clips.stand || !layout.clips.walk) return undefined;
+  const { default: sharp } = await import("sharp");
   const decoded = await sharp(bytes)
     .ensureAlpha()
     .raw()
@@ -269,6 +270,7 @@ export const packLpcTravel = async (bytes: Buffer, layout: LpcLayout) => {
 
 /** Publish raw-key atlas URLs so CDN image optimization cannot alter sprite coordinates. */
 const publishAtlas = async (bytes: Buffer) => {
+  const { UTApi, UTFile } = await import("uploadthing/server");
   const upload = await new UTApi().uploadFiles(
     new UTFile(
       [new Uint8Array(bytes)],

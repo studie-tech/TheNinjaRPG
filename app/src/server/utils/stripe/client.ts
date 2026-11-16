@@ -1,4 +1,4 @@
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { FEDERAL_MONTHLY_USD_CENTS } from "@/drizzle/constants";
 import { env } from "@/env/server.mjs";
 
@@ -18,9 +18,10 @@ export const isStripeConfigured = () =>
       Object.values(stripePriceIds()).every(Boolean),
   );
 /** Create the server-only SDK client with bounded network retries; callers supply write idempotency. */
-export const getStripe = () => {
+export const getStripe = async () => {
   if (!env.STRIPE_SECRET_KEY) throw new Error("Stripe is not configured");
-  return new Stripe(env.STRIPE_SECRET_KEY, { maxNetworkRetries: 2 });
+  const { default: StripeClient } = await import("stripe");
+  return new StripeClient(env.STRIPE_SECRET_KEY, { maxNetworkRetries: 2 });
 };
 /** Match receipts and webhook events to the configured standard or restricted key environment. */
 export const stripeIsLive = () =>

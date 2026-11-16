@@ -1,4 +1,3 @@
-import { UTApi } from "uploadthing/server";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { listUserUploadForRemoveAccountProcessorData } from "@/queries/accountDeletion";
 import { drizzleDB } from "@/server/db";
@@ -28,6 +27,7 @@ export const removeAccountProcessorData = async (userId: string) => {
   const files = uploads.map((upload) => ownedUploadKey(upload.imageUrl));
   if (files.some((file) => file === null))
     throw new Error("An owned upload needs manual storage cleanup");
+  const { UTApi } = await import("uploadthing/server");
   const storage = new UTApi();
   await Promise.all(
     (["customId", "fileKey"] as const).map(async (keyType) => {

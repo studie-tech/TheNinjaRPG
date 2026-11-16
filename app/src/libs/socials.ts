@@ -1,10 +1,17 @@
 import crypto from "node:crypto";
-import { NodeHtmlMarkdown } from "node-html-markdown";
+import type { NodeHtmlMarkdown } from "node-html-markdown";
 import { absoluteUrl } from "@/libs/seo";
 import { truncateString } from "@/utils/string";
 
 // Shared NodeHtmlMarkdown instance for converting HTML to Markdown across all social media integrations
-const nodeHtmlMarkdown = new NodeHtmlMarkdown({}, undefined, undefined);
+let nodeHtmlMarkdown: NodeHtmlMarkdown | undefined;
+const htmlToMarkdown = async (html: string) => {
+  if (!nodeHtmlMarkdown) {
+    const { NodeHtmlMarkdown } = await import("node-html-markdown");
+    nodeHtmlMarkdown ??= new NodeHtmlMarkdown({}, undefined, undefined);
+  }
+  return nodeHtmlMarkdown.translate(html);
+};
 
 // Twitter character limits and formatting constants
 const TWITTER_CHARACTER_LIMIT = 280;
@@ -59,7 +66,7 @@ export const callDiscordNews = async (
 ) => {
   return postDiscordWebhook(process.env.DISCORD_NEWS_UPDATES, "news updates", {
     avatar_url: discordAvatar(image_url),
-    content: nodeHtmlMarkdown.translate(`**${title}**\n* ${content} @everyone`),
+    content: await htmlToMarkdown(`**${title}**\n* ${content} @everyone`),
   });
 };
 
@@ -74,7 +81,7 @@ export const callFacebookNews = async (title: string, content: string) => {
     return;
   }
 
-  const message = nodeHtmlMarkdown.translate(`${title}\n\n${content}`);
+  const message = await htmlToMarkdown(`${title}\n\n${content}`);
 
   // SECURITY: Do not log request bodies for this endpoint as they contain the access token in plaintext
   return fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
@@ -107,7 +114,7 @@ export const callInstagramNews = async (
     return;
   }
 
-  const caption = nodeHtmlMarkdown.translate(
+  const caption = await htmlToMarkdown(
     `${title}\n\n${content}\n\n#TheNinjaRPG #BrowserGame #NinjaGame`,
   );
 
@@ -164,7 +171,7 @@ export const callRedditNews = async (title: string, content: string) => {
     return;
   }
 
-  const postContent = nodeHtmlMarkdown.translate(content);
+  const postContent = await htmlToMarkdown(content);
 
   // Step 1: Get access token using refresh token
   // SECURITY: Do not log request headers for this endpoint as Authorization contains base64-encoded client secret
@@ -277,7 +284,7 @@ export const callTwitterNews = async (title: string, content: string) => {
     return;
   }
 
-  const plainContent = nodeHtmlMarkdown.translate(content);
+  const plainContent = await htmlToMarkdown(content);
 
   // Twitter has 280 char limit - compose tweet with title and truncated content
   const newsUrl = absoluteUrl("/news");
