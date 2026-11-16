@@ -43,6 +43,7 @@ beforeEach(() => {
     bfcacheId: "startup-notifications",
   });
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
+  vi.spyOn(routing, "pushToCombat").mockImplementation(() => {});
   vi.spyOn(mastery, "useMasteryQueueRefresh").mockImplementation(() => {});
   vi.spyOn(refresh, "useRefreshAt").mockImplementation(() => {});
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -85,8 +86,21 @@ it.each([false, true])(
     expect(test.qc.getQueryData(test.key)).toMatchObject({
       userData: { status: "BATTLE", battleId: "missed-battle" },
     });
+    expect(routing.pushToCombat).toHaveBeenCalledWith(
+      navigation.useRouter(),
+      "missed-battle",
+    );
   },
 );
+
+it("preserves deliberate navigation away from an already-known battle", async () => {
+  const battle = { status: "BATTLE", battleId: "known-battle" };
+  const test = await mount({ initialUser: battle, refreshUser: battle });
+  await act(async () => test.finish());
+  await act(async () => test.subscribed());
+  expect(test.reads()).toBe(2);
+  expect(routing.pushToCombat).not.toHaveBeenCalled();
+});
 
 it("uses a profile request started after subscription without another refresh", async () => {
   const test = await mount();
@@ -351,6 +365,7 @@ async function mount(
     initialCount?: number;
     deferredRefresh?: boolean;
     refreshCounts?: number[];
+    initialUser?: { status: string; battleId?: string };
     refreshUser?: { status: string; battleId?: string };
   } = {},
 ) {
@@ -390,7 +405,7 @@ async function mount(
       mutedConversationIds: [],
       unmutedTavernIds: [],
       ...options.mute,
-      ...(isRefresh && options.refreshUser),
+      ...(isRefresh ? options.refreshUser : options.initialUser),
     },
     notifications: count
       ? [{ href: "/inbox", name: `${count} messages`, notificationCount: count }]

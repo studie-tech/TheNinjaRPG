@@ -230,8 +230,23 @@ export const usePusherHandler = (
               notificationSession.current === session &&
               profile.userData?.userId === userId &&
               !hasSubscribedProfileRead
-            )
+            ) {
               await utils.profile.getUser.invalidate();
+              const user = utils.profile.getUser.getData()?.userData;
+              // A recovered admission must enter combat just like its missed live event.
+              // An unchanged battle leaves deliberate navigation away from combat alone.
+              if (
+                !isCancelled &&
+                notificationSession.current === session &&
+                user?.userId === userId &&
+                user.status === "BATTLE" &&
+                user.battleId &&
+                user.battleId !== profile.userData.battleId
+              ) {
+                pushToCombat(router, user.battleId);
+                void utils.combat.getBattle.invalidate();
+              }
+            }
           } catch {
             // UserContext exposes profile failures and owns their recovery/redirect UX.
           }
