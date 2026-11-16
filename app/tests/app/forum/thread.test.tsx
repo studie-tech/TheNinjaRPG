@@ -194,6 +194,18 @@ function renderThread(
             requestedPaths.push(op.path);
             if (op.path === "forum.getContext")
               data = { boards: [], canManage: false, canModerate: false };
+            if (op.path === "forum.resolvePost") {
+              const { postId } = op.input as { postId: string };
+              data = {
+                boardId: "board",
+                threadId: "topic",
+                postId,
+                page: Math.floor(
+                  posts.findIndex((post) => post.id === postId) /
+                    FORUM_THREAD_POSTS_PER_PAGE,
+                ),
+              };
+            }
             if (op.path === "comments.getForumComments") {
               const { cursor, thread_id } = op.input as {
                 cursor: number;
@@ -500,6 +512,32 @@ it("opens the page of a server-resolved linked post without resolving it again",
   expect(view.container.querySelector("#post-entry-0")).toBeNull();
   await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
   expect(requestedPaths).toEqual([]);
+});
+
+it("refreshes a replayed linked-post seed and follows the post's current page", async () => {
+  const opening = posts[0]!;
+  posts = Array.from({ length: FORUM_THREAD_POSTS_PER_PAGE + 2 }, (_, index) => ({
+    ...opening,
+    id: `entry-${index}`,
+    content: `<p>entry ${index}</p>`,
+  }));
+  const postId = "entry-0";
+  vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+    new URLSearchParams({ post: postId }) as never,
+  );
+  const view = renderThread({
+    fetchedAt: 0,
+    initialCursor: 1,
+    linkedPost: {
+      postId,
+      target: { boardId: "board", threadId: "topic", postId, page: 1 },
+    },
+  });
+  await waitFor(() =>
+    expect(view.container.querySelector(`#post-${postId}`)).not.toBeNull(),
+  );
+  expect(requestedPaths).toContain("forum.resolvePost");
+  expect(requestedPages).toContain(0);
 });
 
 it.each([

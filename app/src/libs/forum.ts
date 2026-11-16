@@ -233,19 +233,17 @@ export const fetchForumPageData = async (
 /**
  * Return only a readable, published topic and its visible posts; denied topics have an empty result.
  * Access, topic and posts load in one wave; rows leave only after the access check.
+ * Load a fresh topic rather than authorizing posts against metadata's earlier snapshot.
  */
 export const fetchForumThreadPage = async (
   client: DrizzleClient,
   input: { thread_id: string; limit: number; cursor?: number | null },
-  sources: {
-    context: ForumContext | PromiseLike<ForumContext>;
-    thread?: PromiseLike<ForumThreadRow | undefined>;
-  },
+  context: ForumContext | PromiseLike<ForumContext>,
 ) => {
   const offset = (input.cursor ?? 0) * input.limit;
   const [access, thread, comments, counts] = await Promise.all([
-    sources.context,
-    sources.thread ?? fetchThread(client, input.thread_id),
+    context,
+    fetchThread(client, input.thread_id),
     listForumPosts(client, input.thread_id, offset, input.limit),
     countForumPosts(client, input.thread_id),
   ]);
@@ -369,6 +367,5 @@ const applyPostingRestriction = (
     ? { ...permissions, create: false, reply: false, edit: false, vote: false }
     : permissions;
 
-type ForumThreadRow = NonNullable<Awaited<ReturnType<typeof fetchThread>>>;
 type ForumStructure = Awaited<ReturnType<typeof loadForumStructure>>;
 type ForumAccess = Awaited<ReturnType<typeof loadForumAccess>>;

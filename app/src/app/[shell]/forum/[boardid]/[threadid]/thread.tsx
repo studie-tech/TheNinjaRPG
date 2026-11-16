@@ -79,6 +79,7 @@ export default function Thread({
       initialData:
         seeded && linkedPost?.postId === postId ? linkedPost?.target : undefined,
       initialDataUpdatedAt: fetchedAt,
+      staleTime: 15000,
     },
   );
   const comments = api.comments.getForumComments.useQuery(

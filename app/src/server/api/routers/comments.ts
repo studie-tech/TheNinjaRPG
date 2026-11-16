@@ -172,9 +172,11 @@ export const commentsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      return await fetchForumThreadPage(ctx.drizzle, input, {
-        context: getForumContext(ctx.drizzle, ctx.userId),
-      });
+      return await fetchForumThreadPage(
+        ctx.drizzle,
+        input,
+        getForumContext(ctx.drizzle, ctx.userId),
+      );
     }),
   createForumComment: protectedProcedure
     .use(ratelimitMiddleware)

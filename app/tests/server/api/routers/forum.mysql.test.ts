@@ -414,7 +414,7 @@ describeWithDatabase(
           await fetchForumThreadPage(
             db,
             { thread_id: id, limit: 20 },
-            { context: getForumContext(db) },
+            getForumContext(db),
           )
         ).thread,
       ).toBeNull();

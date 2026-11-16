@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
-import { getPageForumContext, getPageThread } from "@/app/[shell]/forum/pageData";
+import { getPageForumContext } from "@/app/[shell]/forum/pageData";
 import { FORUM_THREAD_POSTS_PER_PAGE } from "@/drizzle/constants";
 import {
   fetchForumThreadPage,
@@ -44,7 +44,7 @@ export default async function ThreadPage(props: {
       limit: FORUM_THREAD_POSTS_PER_PAGE,
       cursor: initialCursor,
     },
-    { context, thread: getPageThread(params.threadid) },
+    context,
   );
   // Matches /username/<name>: an unknown thread answers 404 rather than rendering a
   // "not found" body under HTTP 200, which Google indexes as a soft 404.
