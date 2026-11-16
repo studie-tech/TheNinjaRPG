@@ -1,6 +1,7 @@
 /** Exercise application removal/recovery with real query/tRPC state and controlled transport failures. */
 
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as clerk from "@clerk/nextjs";
 import { QueryClient } from "@tanstack/react-query";
 import {
   act,
@@ -42,6 +43,7 @@ let refreshDuringRemoval: boolean;
 let removalPaths: string[];
 let requestedPages: number[];
 let requestedPaths: string[];
+let clientViewer: { isLoaded: boolean; userId: string | null };
 let holdPageTwo: boolean;
 let holdReaction: boolean;
 let finishPageTwo: (() => void) | undefined;
@@ -61,6 +63,7 @@ beforeEach(() => {
   removalPaths = [];
   requestedPages = [];
   requestedPaths = [];
+  clientViewer = { isLoaded: true, userId: "reader" };
   posts = ["opening", "reply"].map((id) => ({
     id,
     authorId: "reader",
@@ -78,6 +81,13 @@ beforeEach(() => {
       disconnect() {}
     },
   });
+  vi.spyOn(clerk, "useUser").mockImplementation(
+    () =>
+      ({
+        isLoaded: clientViewer.isLoaded,
+        user: clientViewer.userId ? { id: clientViewer.userId } : null,
+      }) as ReturnType<typeof clerk.useUser>,
+  );
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(
     new URLSearchParams() as never,
   );
@@ -170,6 +180,7 @@ function threadPage(cursor = 0, threadId = "topic"): ThreadData {
 function renderThread(
   seed: {
     fetchedAt?: number;
+    renderedFor?: string | null;
     initialCursor?: number;
     linkedPost?: Parameters<typeof Thread>[0]["linkedPost"];
   } = {},
@@ -250,6 +261,7 @@ function renderThread(
         initialCursor={seed.initialCursor ?? 0}
         linkedPost={seed.linkedPost ?? null}
         initialContext={{ boards: [], canManage: false, canModerate: false }}
+        renderedFor={seed.renderedFor === undefined ? "reader" : seed.renderedFor}
         fetchedAt={fetchedAt}
       />
     </TrpcTestProviders>
@@ -466,6 +478,13 @@ it("opens the page of a server-resolved linked post without resolving it again",
     content: `<p>entry ${index}</p>`,
   }));
   const postId = `entry-${FORUM_THREAD_POSTS_PER_PAGE + 1}`;
+  vi.spyOn(clerk, "useUser").mockImplementation(
+    () =>
+      ({
+        isLoaded: clientViewer.isLoaded,
+        user: clientViewer.userId ? { id: clientViewer.userId } : null,
+      }) as ReturnType<typeof clerk.useUser>,
+  );
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(
     new URLSearchParams({ post: postId }) as never,
   );
@@ -482,3 +501,39 @@ it("opens the page of a server-resolved linked post without resolving it again",
   await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
   expect(requestedPaths).toEqual([]);
 });
+
+it.each([
+  ["the same account", "reader", { isLoaded: true, userId: "reader" }, []],
+  [
+    "the cookie account while Clerk loads",
+    "reader",
+    { isLoaded: false, userId: null },
+    [],
+  ],
+  [
+    "another account",
+    "previous",
+    { isLoaded: true, userId: "reader" },
+    ["comments.getForumComments", "forum.getContext"],
+  ],
+  [
+    "a guest",
+    null,
+    { isLoaded: true, userId: "reader" },
+    ["comments.getForumComments", "forum.getContext"],
+  ],
+  [
+    "a signed-out client",
+    "previous",
+    { isLoaded: true, userId: null },
+    ["comments.getForumComments", "forum.getContext"],
+  ],
+])(
+  "seeds queries only with a render made for the current viewer (%s)",
+  async (_case, renderedFor, viewer, expected) => {
+    clientViewer = viewer;
+    renderThread({ fetchedAt: Date.now(), renderedFor });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect([...requestedPaths].sort()).toEqual(expected);
+  },
+);

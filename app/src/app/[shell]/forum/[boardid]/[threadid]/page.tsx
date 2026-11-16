@@ -56,6 +56,7 @@ export default async function ThreadPage(props: {
       initialCursor={initialCursor}
       linkedPost={search.post ? { postId: search.post, target: linkedPost } : null}
       initialContext={forumNavigationContext(await context)}
+      renderedFor={session.userId ?? null}
       fetchedAt={Date.now()}
     />
   );

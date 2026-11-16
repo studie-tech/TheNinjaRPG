@@ -30,6 +30,7 @@ export default async function BoardPage(props: {
       boardId={params.boardid}
       initialThreads={initialThreads}
       initialContext={forumNavigationContext(context)}
+      renderedFor={session.userId ?? null}
       fetchedAt={Date.now()}
     />
   );

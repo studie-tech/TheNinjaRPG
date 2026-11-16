@@ -14,6 +14,7 @@ import {
   forumLevelMessage,
 } from "@/drizzle/constants";
 import { useForumCacheUpdate } from "@/hooks/useForumCacheUpdate";
+import { useRenderedForViewer } from "@/hooks/useRenderedForViewer";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ForumComposer, ForumNavigation, ForumWatchButton } from "@/layout/Forum";
@@ -37,6 +38,7 @@ export default function Thread({
   initialCursor,
   linkedPost,
   initialContext,
+  renderedFor,
   fetchedAt,
 }: {
   threadId: string;
@@ -45,6 +47,8 @@ export default function Thread({
   /** The `?post=` link the server resolved; `target` is null when it is unavailable. */
   linkedPost: { postId: string; target: ResolvedPost } | null;
   initialContext: RouterOutputs["forum"]["getContext"];
+  /** The account the server rendered the seeds for, or null for a guest. */
+  renderedFor: string | null;
   /** Server render time; a replayed render's seed data is stale rather than fresh. */
   fetchedAt: number;
 }) {
@@ -62,23 +66,25 @@ export default function Thread({
   const [tools, setTools] = useState(false);
   const [selectedPosts, setSelectedPosts] = useState<string[]>([]);
   const postId = params.get("post");
+  const seeded = useRenderedForViewer(renderedFor);
   // Seed the navigation context the server already computed for the shared forum header.
   api.forum.getContext.useQuery(undefined, {
-    initialData: initialContext,
+    initialData: seeded ? initialContext : undefined,
     initialDataUpdatedAt: fetchedAt,
   });
   const resolved = api.forum.resolvePost.useQuery(
     { postId: postId ?? "" },
     {
       enabled: !!postId,
-      initialData: linkedPost?.postId === postId ? linkedPost?.target : undefined,
+      initialData:
+        seeded && linkedPost?.postId === postId ? linkedPost?.target : undefined,
       initialDataUpdatedAt: fetchedAt,
     },
   );
   const comments = api.comments.getForumComments.useQuery(
     { thread_id: threadId, limit: FORUM_THREAD_POSTS_PER_PAGE, cursor: page },
     {
-      initialData: page === initialCursor ? initialPage : undefined,
+      initialData: seeded && page === initialCursor ? initialPage : undefined,
       initialDataUpdatedAt: fetchedAt,
       // Keep the current page on screen, dimmed, while the next one loads.
       placeholderData: (previous) => previous,

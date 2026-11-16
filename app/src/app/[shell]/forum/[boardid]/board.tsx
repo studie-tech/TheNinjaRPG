@@ -11,6 +11,7 @@ import {
   FORUM_MIN_LEVEL,
   forumLevelMessage,
 } from "@/drizzle/constants";
+import { useRenderedForViewer } from "@/hooks/useRenderedForViewer";
 import ContentBox from "@/layout/ContentBox";
 import {
   ForumComposer,
@@ -30,11 +31,14 @@ export default function Board({
   boardId,
   initialThreads,
   initialContext,
+  renderedFor,
   fetchedAt,
 }: {
   boardId: string;
   initialThreads: RouterOutputs["forum"]["getThreads"];
   initialContext: RouterOutputs["forum"]["getContext"];
+  /** The account the server rendered the seeds for, or null for a guest. */
+  renderedFor: string | null;
   /** Server render time; a replayed render's seed data is stale rather than fresh. */
   fetchedAt: number;
 }) {
@@ -48,15 +52,17 @@ export default function Board({
   const query = params.get("q") ?? "";
   const [compose, setCompose] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const seeded = useRenderedForViewer(renderedFor);
   // Seed the navigation context the server already computed for the shared forum header.
   api.forum.getContext.useQuery(undefined, {
-    initialData: initialContext,
+    initialData: seeded ? initialContext : undefined,
     initialDataUpdatedAt: fetchedAt,
   });
   const threads = api.forum.getThreads.useInfiniteQuery(
     { boardId, limit: FORUM_BOARD_THREADS_PER_PAGE, query: query || undefined },
     {
-      initialData: !query ? { pages: [initialThreads], pageParams: [0] } : undefined,
+      initialData:
+        seeded && !query ? { pages: [initialThreads], pageParams: [0] } : undefined,
       initialDataUpdatedAt: fetchedAt,
       placeholderData: (previous) => previous,
       getNextPageParam: (p) => p.nextCursor,
