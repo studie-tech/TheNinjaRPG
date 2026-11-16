@@ -20,13 +20,12 @@ export const UPLOAD_ROUTER_CONFIG = [
   uploadRoute("avatarGoldUploader", "image", "2MB"),
   uploadRoute("audioSfxUploader", "audio", "64KB"),
   uploadRoute("audioMusicUploader", "audio", "4MB"),
-  uploadRoute("towerDefenseCharacterZip", "application/zip", "32MB"),
 ];
 
 /** One single-file route as extractRouterConfig expands it. */
 function uploadRoute(
   slug: string,
-  fileType: "image" | "audio" | "application/zip",
+  fileType: "image" | "audio",
   maxFileSize: `${number}${"KB" | "MB"}`,
 ) {
   return {
