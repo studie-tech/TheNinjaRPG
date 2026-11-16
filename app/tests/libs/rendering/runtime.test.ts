@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import { WebGLRenderer } from "pixi.js";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
+import { destroyParkedRenderer } from "@/libs/rendering/rendererPool";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { farmPlotAt, farmPlotPosition } from "@/libs/rendering/scenes/farmLayout";
+import type { RendererSurface } from "@/libs/rendering/telemetry";
 
 describe("renderer initialization failure", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -45,12 +47,13 @@ describe("renderer context loss", () => {
   afterEach(() => {
     // The frame loop is shared by the module; leaving a scene subscribed would starve the next.
     for (const game of games.splice(0)) game.dispose();
+    destroyParkedRenderer();
     vi.restoreAllMocks();
     Object.assign(globalThis, originals);
     frame = null;
     lost = false;
   });
-  const start = async (onError: (error: unknown) => void) => {
+  const start = async (onError: (error: unknown) => void, backgroundAlpha = 0) => {
     class NoopObserver {
       observe() {}
       disconnect() {}
@@ -69,41 +72,51 @@ describe("renderer context loss", () => {
       // jsdom's canvas listeners only accept jsdom's own signals.
       AbortController: window.AbortController,
     });
-    const canvas = document.createElement("canvas");
-    vi.spyOn(WebGLRenderer.prototype, "init").mockImplementation(async function (
-      this: WebGLRenderer,
-    ) {
-      // Only what the runtime reads after initialization; a real GL context is unavailable here.
-      const gl = { isContextLost: () => lost };
-      for (const [key, value] of Object.entries({
-        canvas,
-        gl,
-        context: {
-          get isLost() {
-            return lost;
+    let canvas = document.createElement("canvas");
+    const init = vi
+      .spyOn(WebGLRenderer.prototype, "init")
+      .mockImplementation(async function (this: WebGLRenderer) {
+        canvas = document.createElement("canvas");
+        // Only what the runtime reads after initialization; a real GL context is unavailable here.
+        const gl = { isContextLost: () => lost };
+        for (const [key, value] of Object.entries({
+          canvas,
+          gl,
+          context: {
+            get isLost() {
+              return lost;
+            },
           },
-        },
-        width: 100,
-        height: 100,
-        resolution: 1,
-        background: { color: 0, alpha: 0 },
-      })) {
-        Object.defineProperty(this, key, { configurable: true, value });
-      }
-    });
+          width: 100,
+          height: 100,
+          resolution: 1,
+          background: { color: 0, alpha: 0 },
+        })) {
+          Object.defineProperty(this, key, { configurable: true, value });
+        }
+      });
     const destroy = vi
       .spyOn(WebGLRenderer.prototype, "destroy")
       .mockImplementation(() => {});
+    const resize = vi
+      .spyOn(WebGLRenderer.prototype, "resize")
+      .mockImplementation(() => {});
     const render = vi.spyOn(WebGLRenderer.prototype, "render");
-    const game = await createGameRenderer({
-      surface: "travel",
-      mount: document.createElement("div"),
-      signal: new window.AbortController().signal,
-      height: () => 100,
-      onError,
-    });
-    games.push(game);
-    return { game, canvas, render, destroy };
+    const create = async (surface: RendererSurface = "travel") => {
+      const mount = document.createElement("div");
+      const game = await createGameRenderer({
+        surface,
+        mount,
+        signal: new window.AbortController().signal,
+        height: () => 100,
+        backgroundAlpha,
+        onError,
+      });
+      games.push(game);
+      return { game, mount };
+    };
+    const { game, mount } = await create();
+    return { game, mount, canvas, render, destroy, init, resize, create };
   };
   const runFrame = (now: number) => {
     const callback = frame;
@@ -152,6 +165,125 @@ describe("renderer context loss", () => {
     runFrame(16);
     expect(onError).toHaveBeenCalledWith(failure);
     expect(destroy).toHaveBeenCalled();
+  });
+
+  it("hands a disposed renderer to the next scene of its surface", async () => {
+    const { game, mount, canvas, init, destroy, resize, create } = await start(vi.fn());
+    expect(mount.contains(canvas)).toBe(true);
+    game.dispose();
+    expect(mount.contains(canvas)).toBe(false);
+    expect(destroy).not.toHaveBeenCalled();
+    const next = await create();
+    expect(init).toHaveBeenCalledTimes(1);
+    expect(next.game.canvas).toBe(canvas);
+    expect(next.mount.contains(canvas)).toBe(true);
+    expect(resize).toHaveBeenCalledWith(1, 100, 1);
+    expect(destroy).not.toHaveBeenCalled();
+  });
+
+  it("destroys a parked renderer when another surface starts a scene", async () => {
+    const { game, canvas, init, destroy, create } = await start(vi.fn());
+    game.dispose();
+    const next = await create("combat");
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(init).toHaveBeenCalledTimes(2);
+    expect(next.game.canvas).not.toBe(canvas);
+  });
+
+  for (const surface of ["combat", "travel"] as const) {
+    it(`destroys a cancelled combat renderer while a ${surface} scene holds one`, async () => {
+      const { game: initial, destroy, init, create } = await start(vi.fn());
+      initial.dispose();
+      const cancelled = new window.AbortController();
+      const first = createGameRenderer({
+        surface: "combat",
+        mount: document.createElement("div"),
+        signal: cancelled.signal,
+        height: () => 100,
+        onError: vi.fn(),
+      });
+      // Starting combat discards the initial travel renderer.
+      destroy.mockClear();
+      const second = create(surface);
+      cancelled.abort();
+      await expect(first).rejects.toMatchObject({ name: "AbortError" });
+      const { game } = await second;
+      expect(init).toHaveBeenCalledTimes(3);
+      expect(destroy).toHaveBeenCalledTimes(1);
+      game.dispose();
+      expect(destroy).toHaveBeenCalledTimes(1);
+      await create(surface);
+      expect(init).toHaveBeenCalledTimes(3);
+    });
+  }
+
+  it("destroys a renderer released while the page is already hidden", async () => {
+    const { game, destroy, init, create } = await start(vi.fn());
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    try {
+      game.dispose();
+    } finally {
+      Reflect.deleteProperty(document, "hidden");
+    }
+    expect(destroy).toHaveBeenCalledTimes(1);
+    await create();
+    expect(init).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a disposed scene's background update after its renderer is reused", async () => {
+    const { game, create } = await start(vi.fn(), 1);
+    game.dispose();
+    const next = await create();
+    expect(next.game.renderer).toBe(game.renderer);
+    next.game.setBackground(0x123456);
+    const color = next.game.renderer.background.color;
+    game.setBackground(0xabcdef);
+    expect(next.game.renderer.background.color).toEqual(color);
+  });
+
+  it("never parks a preview renderer, whose canvas its caller restyles", async () => {
+    const { init, destroy, create } = await start(vi.fn());
+    const preview = await create("battlefield-preview");
+    expect(init).toHaveBeenCalledTimes(2);
+    preview.game.dispose();
+    expect(destroy).toHaveBeenCalledTimes(1);
+    await create("battlefield-preview");
+    expect(init).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not reuse a renderer that failed a frame or lost its context", async () => {
+    const { render, init, destroy, create } = await start(vi.fn());
+    render.mockImplementation(() => {
+      throw new Error("broken scene");
+    });
+    runFrame(16);
+    expect(destroy).toHaveBeenCalledTimes(1);
+    render.mockImplementation(() => {});
+    const second = await create();
+    expect(init).toHaveBeenCalledTimes(2);
+    lost = true;
+    second.game.dispose();
+    expect(destroy).toHaveBeenCalledTimes(2);
+    lost = false;
+    await create();
+    expect(init).toHaveBeenCalledTimes(3);
+  });
+
+  it("destroys a parked renderer when its context is lost or the page is hidden", async () => {
+    const { game, canvas, init, destroy, create } = await start(vi.fn());
+    game.dispose();
+    canvas.dispatchEvent(new window.Event("webglcontextlost"));
+    expect(destroy).toHaveBeenCalledTimes(1);
+    const second = await create();
+    expect(init).toHaveBeenCalledTimes(2);
+    second.game.dispose();
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    try {
+      document.dispatchEvent(new window.Event("visibilitychange"));
+    } finally {
+      Reflect.deleteProperty(document, "hidden");
+    }
+    expect(destroy).toHaveBeenCalledTimes(2);
   });
 
   it("presents a continuous scene on every second refresh of a 120 Hz display", async () => {
