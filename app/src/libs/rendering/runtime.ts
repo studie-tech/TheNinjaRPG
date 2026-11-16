@@ -326,7 +326,9 @@ export const createGameRenderer = async (options: {
     signal,
     listen,
     invalidate,
+    /** Async scene work may resume after disposal, when another scene owns this renderer. */
     setBackground: (color: number) => {
+      if (disposed) return;
       renderer.background.color = premultipliedClearColor(color, backgroundAlpha);
       renderer.background.alpha = backgroundAlpha;
       invalidate();

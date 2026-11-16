@@ -6,7 +6,7 @@ const PARKED_RENDERER_MS = 30_000;
 
 let parked: ParkedRenderer | null = null;
 /** Scenes between acquiring and releasing a renderer, including those still initializing. */
-const activeScenes = new Map<RendererSurface, number>();
+let activeScenes = 0;
 
 /**
  * Starts a scene's hold on a renderer: hands over the parked renderer when it suits this
@@ -17,7 +17,7 @@ const activeScenes = new Map<RendererSurface, number>();
  * `isAlpha` is the context's immutable transparent-backbuffer attribute.
  */
 export const takeParkedRenderer = (surface: RendererSurface, isAlpha: boolean) => {
-  activeScenes.set(surface, (activeScenes.get(surface) ?? 0) + 1);
+  activeScenes++;
   const entry = parked;
   if (!entry) return null;
   if (
@@ -34,7 +34,7 @@ export const takeParkedRenderer = (surface: RendererSurface, isAlpha: boolean) =
 
 /**
  * Ends a scene's hold. A reusable renderer waits detached from the page while no other
- * scene of its surface holds one; at most one renderer waits, and it is destroyed after
+ * scene holds one; at most one renderer waits, and it is destroyed after
  * PARKED_RENDERER_MS, when the page is hidden, when its context is lost and when a scene
  * of another surface or context type starts. So a parked renderer never coexists with a
  * renderer of a newer scene.
@@ -45,10 +45,8 @@ export const releaseRenderer = (
   isAlpha: boolean,
   isReusable: boolean,
 ) => {
-  const remaining = Math.max(0, (activeScenes.get(surface) ?? 1) - 1);
-  if (remaining) activeScenes.set(surface, remaining);
-  else activeScenes.delete(surface);
-  if (!isReusable || remaining || renderer.context.isLost) {
+  activeScenes--;
+  if (!isReusable || activeScenes || document.hidden || renderer.context.isLost) {
     renderer.destroy({ removeView: true });
     return;
   }
@@ -75,6 +73,7 @@ export const releaseRenderer = (
   };
 };
 
+/** Destroys the idle renderer and removes its expiry and lifecycle listeners. */
 export const destroyParkedRenderer = () => {
   const entry = parked;
   if (!entry) return;

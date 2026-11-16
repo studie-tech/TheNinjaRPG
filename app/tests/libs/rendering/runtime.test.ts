@@ -53,7 +53,7 @@ describe("renderer context loss", () => {
     frame = null;
     lost = false;
   });
-  const start = async (onError: (error: unknown) => void) => {
+  const start = async (onError: (error: unknown) => void, backgroundAlpha = 0) => {
     class NoopObserver {
       observe() {}
       disconnect() {}
@@ -109,13 +109,14 @@ describe("renderer context loss", () => {
         mount,
         signal: new window.AbortController().signal,
         height: () => 100,
+        backgroundAlpha,
         onError,
       });
       games.push(game);
       return { game, mount };
     };
-    const { game } = await create();
-    return { game, canvas, render, destroy, init, resize, create };
+    const { game, mount } = await create();
+    return { game, mount, canvas, render, destroy, init, resize, create };
   };
   const runFrame = (now: number) => {
     const callback = frame;
@@ -167,9 +168,10 @@ describe("renderer context loss", () => {
   });
 
   it("hands a disposed renderer to the next scene of its surface", async () => {
-    const { game, canvas, init, destroy, resize, create } = await start(vi.fn());
+    const { game, mount, canvas, init, destroy, resize, create } = await start(vi.fn());
+    expect(mount.contains(canvas)).toBe(true);
     game.dispose();
-    expect(canvas.isConnected).toBe(false);
+    expect(mount.contains(canvas)).toBe(false);
     expect(destroy).not.toHaveBeenCalled();
     const next = await create();
     expect(init).toHaveBeenCalledTimes(1);
@@ -188,26 +190,55 @@ describe("renderer context loss", () => {
     expect(next.game.canvas).not.toBe(canvas);
   });
 
-  it("destroys a cancelled scene's renderer while a newer scene of its surface holds one", async () => {
-    const { destroy, init, create } = await start(vi.fn());
-    const cancelled = new window.AbortController();
-    const first = createGameRenderer({
-      surface: "combat",
-      mount: document.createElement("div"),
-      signal: cancelled.signal,
-      height: () => 100,
-      onError: vi.fn(),
+  for (const surface of ["combat", "travel"] as const) {
+    it(`destroys a cancelled combat renderer while a ${surface} scene holds one`, async () => {
+      const { game: initial, destroy, init, create } = await start(vi.fn());
+      initial.dispose();
+      const cancelled = new window.AbortController();
+      const first = createGameRenderer({
+        surface: "combat",
+        mount: document.createElement("div"),
+        signal: cancelled.signal,
+        height: () => 100,
+        onError: vi.fn(),
+      });
+      // Starting combat discards the initial travel renderer.
+      destroy.mockClear();
+      const second = create(surface);
+      cancelled.abort();
+      await expect(first).rejects.toMatchObject({ name: "AbortError" });
+      const { game } = await second;
+      expect(init).toHaveBeenCalledTimes(3);
+      expect(destroy).toHaveBeenCalledTimes(1);
+      game.dispose();
+      expect(destroy).toHaveBeenCalledTimes(1);
+      await create(surface);
+      expect(init).toHaveBeenCalledTimes(3);
     });
-    const second = create("combat");
-    cancelled.abort();
-    await expect(first).rejects.toMatchObject({ name: "AbortError" });
-    const { game } = await second;
-    expect(init).toHaveBeenCalledTimes(3);
+  }
+
+  it("destroys a renderer released while the page is already hidden", async () => {
+    const { game, destroy, init, create } = await start(vi.fn());
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    try {
+      game.dispose();
+    } finally {
+      Reflect.deleteProperty(document, "hidden");
+    }
     expect(destroy).toHaveBeenCalledTimes(1);
+    await create();
+    expect(init).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a disposed scene's background update after its renderer is reused", async () => {
+    const { game, create } = await start(vi.fn(), 1);
     game.dispose();
-    expect(destroy).toHaveBeenCalledTimes(1);
-    await create("combat");
-    expect(init).toHaveBeenCalledTimes(3);
+    const next = await create();
+    expect(next.game.renderer).toBe(game.renderer);
+    next.game.setBackground(0x123456);
+    const color = next.game.renderer.background.color;
+    game.setBackground(0xabcdef);
+    expect(next.game.renderer.background.color).toEqual(color);
   });
 
   it("never parks a preview renderer, whose canvas its caller restyles", async () => {
