@@ -1228,7 +1228,9 @@ export const listUserItemForMergeAllStacks = (
 
 /**
  * Build the update marking the given finished crafts as joined to the backpack: their craft
- * time is cleared, so stacks later split from them are not joined again.
+ * time is cleared, so stacks later split from them are not joined again. A row a concurrent
+ * merge has claimed (negative quantity) keeps its craft time, so it still joins on a later
+ * read if that merge fails and restores it.
  */
 export const updateUserItemForJoinFinishedCrafts = (
   client: Pick<DrizzleClient, "update">,
@@ -1244,6 +1246,7 @@ export const updateUserItemForJoinFinishedCrafts = (
         eq(userItem.userId, userId),
         inArray(userItem.id, userItemIds),
         lte(userItem.craftingFinishedAt, now),
+        gt(userItem.quantity, 0),
       ),
     );
 

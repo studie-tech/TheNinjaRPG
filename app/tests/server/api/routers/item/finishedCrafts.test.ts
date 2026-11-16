@@ -2,6 +2,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 import { item, userData, userItem } from "@/drizzle/schema";
 import { itemRouter, splitItemStack } from "@/server/api/routers/item";
+import { joinFinishedCrafts } from "@/server/utils/itemStacks";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
@@ -139,5 +140,46 @@ describeWithDatabase("finished crafts in the backpack", () => {
       .where(eq(userData.userId, userId));
     await api.getUserItems();
     expect(await stacks()).toEqual([["kit-carried", 7, false]]);
+  });
+  it("keeps the craft time of a finished craft another read has claimed for its merge", async () => {
+    // Another read's merge has claimed the craft (negative quantity) after this read saw it.
+    await insertUserItems([
+      { id: "kit-carried", userId, itemId: "kit", quantity: 3 },
+      craftedKits(-4, -minute),
+    ]);
+    const db = await getTestDatabase();
+    const seen = [
+      {
+        id: "kit-crafted",
+        itemId: "kit",
+        storedAtHome: false,
+        craftingFinishedAt: new Date(Date.now() - minute),
+      },
+    ];
+    // Nothing joined here, so the rows already read stay this read's answer.
+    expect(await joinFinishedCrafts(db, userId, seen)).toBe(false);
+    // The claiming merge fails and restores the quantity: a later read still joins the craft.
+    await db.update(userItem).set({ quantity: 4 }).where(eq(userItem.id, "kit-crafted"));
+    await (await callerFor(itemRouter, userId)).getUserItems();
+    expect(await stacks()).toEqual([["kit-carried", 7, false]]);
+  });
+  it("answers both inventory reads in full while they join the same craft", async () => {
+    const api = await callerFor(itemRouter, userId);
+    const db = await getTestDatabase();
+    for (let round = 0; round < 15; round++) {
+      await db.delete(userItem).where(eq(userItem.userId, userId));
+      await insertUserItems([
+        { id: "kit-carried", userId, itemId: "kit", quantity: 3 },
+        craftedKits(4, -minute),
+      ]);
+      const answers = await Promise.all([
+        api.getUserItems(),
+        api.getUserItemsWithVariants(),
+      ]);
+      for (const inventory of answers) {
+        expect(inventory.reduce((sum, row) => sum + row.quantity, 0)).toBe(7);
+      }
+      expect(await stacks()).toEqual([["kit-carried", 7, false]]);
+    }
   });
 });
