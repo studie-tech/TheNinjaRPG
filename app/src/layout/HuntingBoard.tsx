@@ -131,6 +131,8 @@ export function HuntingBoard({
     [session?.readyAt, ...(data?.progress ?? []).map((p) => p.cooldownUntil)],
     () => void board.refetch(),
     timeDiff,
+    true,
+    data?.serverTime,
   );
   const allowance = active
     ? huntingAllowance(active, progress, data?.serverTime.getTime())

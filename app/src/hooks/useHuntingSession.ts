@@ -16,6 +16,7 @@ export const useHuntingSession = (enabled: boolean) => {
     () => void query.refetch(),
     timeDiff,
     enabled,
+    query.data?.serverTime,
   );
   return query;
 };
