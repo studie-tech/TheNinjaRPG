@@ -158,17 +158,6 @@ describeWithDatabase("location quest inventory recovery", () => {
     async (claim) => {
       const db = await getTestDatabase();
       const now = new Date();
-      if (claim !== "empty") {
-        await insertUserItems([
-          {
-            id: "claimed-herbs",
-            userId,
-            itemId: "merge-herb",
-            quantity: -4,
-            updatedAt: now,
-          },
-        ]);
-      }
       const items = await callerFor(itemRouter, userId);
       const client = new QueryClient({
         defaultOptions: { queries: { staleTime: Infinity, retry: false } },
@@ -192,6 +181,18 @@ describeWithDatabase("location quest inventory recovery", () => {
             queries.map((query) => client.fetchQuery<UserItemWithRelations[]>(query)),
           ),
         ).toEqual([[], []]);
+        // The cached views precede the concurrent merge claim at the next crossing.
+        if (claim !== "empty") {
+          await insertUserItems([
+            {
+              id: "claimed-herbs",
+              userId,
+              itemId: "merge-herb",
+              quantity: -4,
+              updatedAt: now,
+            },
+          ]);
+        }
         setSystemTime(new Date(now.getTime() + (claim === "stale" ? 31_000 : 1_000)));
         const quests = await callerFor(questsRouter, userId);
         const { result, statements } = await recordQueries(() =>

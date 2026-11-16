@@ -339,6 +339,7 @@ import { planConsumeEffects } from "@/server/utils/consumeEffects";
 import { consumeMeal } from "@/server/utils/cooking";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { grantUserItems } from "@/server/utils/itemGrants";
+import { joinFinishedCrafts } from "@/server/utils/itemStacks";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
@@ -359,7 +360,7 @@ import {
   isRestrictedToSelf,
 } from "@/utils/permissions";
 import { sanitizeVariantText } from "@/utils/sanitize";
-import { getNextUserSnapshotAt, getUtcDayKey } from "@/utils/time";
+import { getNextUserSnapshotAt, getUtcDayKey, sleep } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import {
   IncreaseJutsuSlots,
@@ -1193,14 +1194,28 @@ export const itemRouter = createTRPCRouter({
   getUserItems: protectedProcedure
     .meta({ mcp: { description: "Get all user items" } })
     .query(async ({ ctx }) => {
-      return await fetchUserItems(ctx.drizzle, ctx.userId);
+      const useritems = await fetchUserItems(ctx.drizzle, ctx.userId, {
+        waitForActiveMergeClaims: true,
+      });
+      return (await joinFinishedCrafts(ctx.drizzle, ctx.userId, useritems))
+        ? await fetchUserItems(ctx.drizzle, ctx.userId, {
+            waitForActiveMergeClaims: true,
+          })
+        : useritems;
     }),
   getUserItemsWithVariants: protectedProcedure
     .meta({
       mcp: { description: "Get all user items including variant data" },
     })
     .query(async ({ ctx }) => {
-      return await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
+      const useritems = await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId, {
+        waitForActiveMergeClaims: true,
+      });
+      return (await joinFinishedCrafts(ctx.drizzle, ctx.userId, useritems))
+        ? await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId, {
+            waitForActiveMergeClaims: true,
+          })
+        : useritems;
     }),
   // Get items of public user (staff edit)
   getPublicUserItems: protectedProcedure
@@ -3938,11 +3953,10 @@ const restoreStaleMergeStackClaims = async (client: DrizzleClient, userId: strin
   });
 
 /**
- * Self-heals abandoned stack-merge state on the primary inventory reads: rows are fetched
- * without a quantity filter, and only when a stale claim/tombstone is actually present (a merge
- * died mid-protocol — rare) does the reaper run followed by one refetch. The common case pays no
- * extra round trip, and a crashed merge recovers on the player's next inventory load instead of
- * leaving their stacks invisible until they press merge again.
+ * Recover abandoned merge claims without adding a round trip to ordinary inventory reads.
+ * Player inventory queries also wait for active claims to publish or restore, so concurrent
+ * craft joins cannot make carried stacks disappear. Internal preloads skip waiting.
+ * Waiting is bounded by the claim recovery timeout.
  */
 const withStaleMergeClaimRecovery = async <
   T extends { quantity: number; updatedAt: Date },
@@ -3952,18 +3966,32 @@ const withStaleMergeClaimRecovery = async <
   fetchRows: () => Promise<T[]>,
   canRecover?: () => Promise<boolean>,
   onStaleMergeClaimRecovery?: () => void,
+  waitForActiveMergeClaims = false,
 ): Promise<T[]> => {
+  const waitUntil = Date.now() + MERGE_STACK_CLAIM_TIMEOUT_MS;
   let rows = await fetchRows();
-  const staleBefore = new Date(Date.now() - MERGE_STACK_CLAIM_TIMEOUT_MS);
-  if (
-    rows.some((row) => row.quantity <= 0 && row.updatedAt <= staleBefore) &&
-    (!canRecover || (await canRecover()))
-  ) {
-    await restoreStaleUserItemMergeClaims({ client, userId, staleBefore });
+  while (true) {
+    const staleBefore = new Date(Date.now() - MERGE_STACK_CLAIM_TIMEOUT_MS);
+    if (
+      rows.some((row) => row.quantity <= 0 && row.updatedAt <= staleBefore) &&
+      (!canRecover || (await canRecover()))
+    ) {
+      await restoreStaleUserItemMergeClaims({ client, userId, staleBefore });
+      rows = await fetchRows();
+      onStaleMergeClaimRecovery?.();
+    }
+    if (!waitForActiveMergeClaims || !rows.some((row) => row.quantity < 0)) {
+      return rows.filter((row) => row.quantity > 0);
+    }
+    if (Date.now() >= waitUntil) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Inventory is updating. Please try again.",
+      });
+    }
+    await sleep(100);
     rows = await fetchRows();
-    onStaleMergeClaimRecovery?.();
   }
-  return rows.filter((row) => row.quantity > 0);
 };
 
 export const fetchUserItems = async (
@@ -3971,6 +3999,8 @@ export const fetchUserItems = async (
   userId: string,
   options?: {
     includeHidden?: boolean;
+    /** Wait for concurrent stack merges before returning a complete player inventory. */
+    waitForActiveMergeClaims?: boolean;
     /** Parallel authorization reads must finish before an inventory read repairs stale claims. */
     canRecoverStaleMergeClaims?: () => Promise<boolean>;
     onStaleMergeClaimRecovery?: () => void;
@@ -3982,6 +4012,7 @@ export const fetchUserItems = async (
     () => listUserItemForFetchUserItems(client, userId),
     options?.canRecoverStaleMergeClaims,
     options?.onStaleMergeClaimRecovery,
+    options?.waitForActiveMergeClaims,
   );
   return useritems.filter(
     (ui) => ui.item && (options?.includeHidden || !ui.item.hidden),
@@ -3991,9 +4022,15 @@ export const fetchUserItems = async (
 export const fetchUserItemsWithVariants = async (
   client: DrizzleClient,
   userId: string,
+  options?: { waitForActiveMergeClaims?: boolean },
 ) => {
-  const useritems = await withStaleMergeClaimRecovery(client, userId, () =>
-    listUserItemForFetchUserItemsWithVariants(client, userId),
+  const useritems = await withStaleMergeClaimRecovery(
+    client,
+    userId,
+    () => listUserItemForFetchUserItemsWithVariants(client, userId),
+    undefined,
+    undefined,
+    options?.waitForActiveMergeClaims,
   );
   return useritems.filter((ui) => ui.item && !ui.item.hidden);
 };
