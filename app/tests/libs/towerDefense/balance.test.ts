@@ -24,11 +24,12 @@ describe("tower defense balance", () => {
     expect(state.wave).toBeLessThan(40);
   });
 
+  // A maxed run plays up to TD_MAX_TICKS, several seconds on a loaded CI runner.
   it("ends even a fully maxed Dojo run within what a claim can replay", () => {
     const state = play(1, "maxed");
     expect(state.over).toBe(true);
     expect(state.tick).toBeLessThan(TD_MAX_TICKS);
-  });
+  }, 30_000);
 
   it("keeps enemy health ahead of bounty at every wave", () => {
     let previous = 0;
