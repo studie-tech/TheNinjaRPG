@@ -29,9 +29,11 @@ import {
   readRenderQuality,
   readVisualEffects,
   readVisualSettingsKey,
+  subscribeChosenVisualEffects,
   subscribeRenderQuality,
   subscribeVisualEffects,
   type VisualEffect,
+  visualSettingsKey,
 } from "@/libs/visualEffects";
 
 // Keep sub-texel UV offsets through sprite interpolation; Pixi falls back when highp is unavailable.
@@ -362,7 +364,8 @@ export const createGameRenderer = async (options: {
         patience: governor.patience,
         resolutionFloor,
         ineffectiveEffects: [...ineffectiveEffects],
-        settings: readVisualSettingsKey(),
+        // The settings this renderer measured under, even if storage has changed since.
+        settings: visualSettingsKey(quality, storedEffects, chosenEffects),
       });
     }
     for (const effect of Object.keys(storedEffects) as VisualEffect[])
@@ -423,6 +426,13 @@ export const createGameRenderer = async (options: {
   cleanups.add(
     subscribeVisualEffects((effect, enabled) => {
       storedEffects[effect] = enabled;
+      chosenEffects = readChosenVisualEffects();
+      forgetRejectedSteps();
+      updateQuality();
+    }),
+  );
+  cleanups.add(
+    subscribeChosenVisualEffects(() => {
       chosenEffects = readChosenVisualEffects();
       forgetRejectedSteps();
       updateQuality();

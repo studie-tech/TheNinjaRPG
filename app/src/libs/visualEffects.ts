@@ -105,15 +105,27 @@ export const setRenderQuality = (quality: RenderQuality) =>
   publish(RENDER_QUALITY_KEY, JSON.stringify(quality));
 
 /**
- * Identifies this device's current quality preference, effect switches and choices, however
- * they were changed (this tab, another tab, any page), for state measured under them.
+ * Identifies a quality preference, effect switches and choices, for state measured under
+ * them; the read form takes this device's current storage, however it was changed.
  */
+export const visualSettingsKey = (
+  quality: RenderQuality,
+  effects: VisualEffects,
+  chosen: ReadonlySet<VisualEffect>,
+) => JSON.stringify([quality, effects, [...chosen].sort()]);
+
 export const readVisualSettingsKey = () =>
-  JSON.stringify([
+  visualSettingsKey(
     readRenderQuality(),
     readVisualEffects(),
-    [...readChosenVisualEffects()].sort(),
-  ]);
+    readChosenVisualEffects(),
+  );
+
+/** Follows the player's effect choices from other tabs, which change no effect switch on their own. */
+export const subscribeChosenVisualEffects = (onChange: () => void) =>
+  subscribeStorage((key) => {
+    if (key === null || key === CHOSEN_VISUAL_EFFECTS_KEY) onChange();
+  });
 
 /** Follows quality changes from this and other tabs. */
 export const subscribeRenderQuality = (onChange: (quality: RenderQuality) => void) =>

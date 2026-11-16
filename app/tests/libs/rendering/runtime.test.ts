@@ -503,6 +503,31 @@ describe("renderer context loss", () => {
     expect(resize).not.toHaveBeenCalled();
   });
 
+  it("applies an effect chosen in another tab while Auto has it off", async () => {
+    setVisualEffect("shadows", true);
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 400 && game.visualEffects.localLights; i++) {
+      now += game.visualEffects.localLights ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects.localLights).toBe(false);
+    // The switch was already stored on, so only the list of choices changes in storage.
+    const value = JSON.stringify(["shadows", "localLights"]);
+    localStorage.setItem("worldEffectChoices", value);
+    window.dispatchEvent(
+      new window.StorageEvent("storage", {
+        key: "worldEffectChoices",
+        newValue: value,
+      }),
+    );
+    expect(game.visualEffects.localLights).toBe(true);
+    expect(sessionRenderQuality.get("travel")?.settings).toBe(readVisualSettingsKey());
+  });
+
   it("measures again when another tab changed settings while no scene was mounted", async () => {
     Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
     sessionRenderQuality.set("travel", {
