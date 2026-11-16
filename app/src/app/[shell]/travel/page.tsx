@@ -1184,7 +1184,6 @@ function Travel() {
             <button
               type="button"
               aria-label="Find a sector"
-              aria-pressed={focusSector !== null}
               className={mapToolClassName}
             >
               <Locate
@@ -1455,7 +1454,8 @@ function Travel() {
           }}
         />
       ),
-      priority: 3,
+      // Tutorial steps point at the Global tab, so the tabs stay in the row while it runs.
+      priority: tutorialRunning ? 0 : 3,
     },
   ];
 
@@ -2095,7 +2095,7 @@ const activateSensory = api.stealth.useSensory;
 
 /** Every map tool in the same 44px box, so the header row stays even and each is easy to tap. */
 const mapToolClassName =
-  "inline-flex size-[44px] shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+  "inline-flex size-[44px] shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
 /** Public player fields shown by sensory reveals and their map markers. */
 type RevealedPlayer = NonNullable<

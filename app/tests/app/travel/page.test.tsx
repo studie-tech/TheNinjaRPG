@@ -140,7 +140,7 @@ beforeEach(() => {
       <div>
         {topRightContent}
         {topRightItems?.map((item) => (
-          <div key={item.key} data-header-item={item.key}>
+          <div key={item.key} data-header-item={item.key} data-priority={item.priority}>
             {item.node}
           </div>
         ))}
@@ -236,6 +236,31 @@ it("updates the Travel destination when the saved automatic-wake preference chan
     result.current.systems.find((entry) => entry.id === "tutorial-travel")?.href,
   ).toBe("/home");
 });
+
+it("keeps the You and Global tabs in the header row while the tutorial runs", () => {
+  const priorities = (): Record<string, number> =>
+    Object.fromEntries(
+      Array.from(document.querySelectorAll<HTMLElement>("[data-header-item]")).map(
+        (element) => [
+          element.dataset.headerItem ?? "",
+          Number(element.dataset.priority),
+        ],
+      ),
+    );
+  const playing = render(<TravelPage />);
+  expect(priorities().tabs).toBe(3);
+  playing.unmount();
+  actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
+  userRef.current = actor;
+  render(<TravelPage />);
+  const inTutorial = priorities();
+  const tabs = inTutorial.tabs ?? Number.NaN;
+  expect(Math.min(...Object.values(inTutorial))).toBe(tabs);
+  expect(
+    Object.entries(inTutorial).filter(([, priority]) => priority === tabs),
+  ).toEqual([["tabs", tabs]]);
+});
+
 it("keeps Quick Travel disabled for the current sector", async () => {
   actor.status = "ASLEEP";
   actor.sector = 1539;

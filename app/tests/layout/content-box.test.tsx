@@ -346,11 +346,18 @@ const PriorityBox = ({ items }: { items: HeaderActionItem[] }) => (
 const setupPriority = (items = travelLikeItems()) =>
   render(<PriorityBox items={items} />);
 
+/** Gives the priority controls `width` beside the title's text. */
 const resizeActions = (width: number) => {
   act(() => {
-    actionsWidth = width;
+    headerWidth = width + titleTextWidth();
     for (const notify of resizeCallbacks) notify();
   });
+};
+
+/** The test environment's width for the "Travel" title text. */
+const titleTextWidth = () => {
+  const range = document.createRange();
+  return range.getBoundingClientRect?.().width ?? 100;
 };
 
 const rowNames = (view: ReturnType<typeof render>) =>
@@ -377,6 +384,28 @@ it("keeps every priority control in the header row while they fit", () => {
     "Tabs",
   ]);
   expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
+});
+
+it("measures the room for controls from the title, not a longer subtitle", () => {
+  // A long subtitle widens the title block and squeezes the actions; it truncates instead.
+  actionsWidth = 150;
+  const view = render(
+    <ContentBox
+      title="Travel"
+      subtitle="Sector 115 (Konoki) · 12, 8, a long subtitle"
+      topRightItems={travelLikeItems()}
+    >
+      Map
+    </ContentBox>,
+  );
+  expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
+  expect(rowNames(view)).toEqual([
+    "Show players",
+    "Stealth",
+    "Quick travel",
+    "",
+    "Tabs",
+  ]);
 });
 
 it("moves the lowest-priority controls behind More, keeping both lists in display order", () => {
@@ -419,6 +448,15 @@ it("gives the row back the room of a control that stops rendering", () => {
   // Without quick travel everything fits again, so the menu goes away.
   expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
   expect(rowNames(view)).toEqual(["Show players", "Stealth", "", "", "Tabs"]);
+});
+
+it("places a control that starts rendering before the browser paints it", () => {
+  const view = setupPriority(travelLikeItems({ players: { node: null } }));
+  resizeActions(200);
+  expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
+  // No resize notification: the new control is measured in the same commit.
+  view.rerender(<PriorityBox items={travelLikeItems()} />);
+  expect(menuNames(view)).toEqual(["Show players", "Quick travel"]);
 });
 
 it("closes More when it empties, so it does not reopen by itself", () => {
@@ -475,29 +513,22 @@ it("leaves focus alone when the focused control stays in the row", () => {
   expect(document.activeElement).toBe(stealth);
 });
 
-it("focuses the first control in More when it is opened from the keyboard", async () => {
+it("orders the row, then More, then the controls behind it, so Tab follows what is shown", () => {
   const view = setupPriority();
   resizeActions(200);
-  const more = view.getByRole("button", { name: "More Travel controls" });
-  more.focus();
-  // A keyboard click (Enter or Space) has no pointer presses: detail 0.
-  fireEvent.click(more, { detail: 0 });
-  await waitFor(() =>
-    expect(document.activeElement).toBe(
-      view.getByRole("button", { name: "Show players" }),
+  const order = Array.from(
+    view.container.querySelectorAll<HTMLElement>(
+      "[data-content-box-actions] > [data-header-item], [data-content-box-actions] > button",
     ),
-  );
-});
-
-it("keeps focus on More when it is opened with a pointer", async () => {
-  const view = setupPriority();
-  resizeActions(200);
-  const more = view.getByRole("button", { name: "More Travel controls" });
-  more.focus();
-  fireEvent.click(more, { detail: 1 });
-  await act(async () => {});
-  expect(more.getAttribute("aria-expanded")).toBe("true");
-  expect(document.activeElement).toBe(more);
+  ).map((element) => element.dataset.headerItem ?? element.getAttribute("aria-label"));
+  expect(order).toEqual([
+    "stealth",
+    "nothing",
+    "tabs",
+    "More Travel controls",
+    "players",
+    "quick-travel",
+  ]);
 });
 
 it("reveals a tutorial target hidden behind More", () => {

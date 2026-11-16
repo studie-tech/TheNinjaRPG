@@ -41,15 +41,7 @@ export function ContentBoxHeaderActions({
     const content = contentRef.current;
     if (!header || !content) return;
     const measure = () => {
-      const heading = titleRef.current?.querySelector("h1,h2");
-      const text = heading?.querySelector<HTMLElement>("[data-content-box-title-text]");
-      const range = document.createRange();
-      if (text) range.selectNodeContents(text);
-      // Measure the title's text, independent of the subtitle and its block width.
-      const titleWidth = text
-        ? (range.getBoundingClientRect?.().width ?? text.scrollWidth) +
-          (heading?.querySelector("svg")?.getBoundingClientRect().width ?? 0)
-        : 0;
+      const titleWidth = titleTextWidth(titleRef.current);
       const gap = titleWidth
         ? Number.parseFloat(getComputedStyle(header).columnGap) || 0
         : 0;
@@ -244,17 +236,29 @@ export function ContentBoxPriorityActions({
   const [menu, setMenu] = useState<HeaderMenuLayout>(EMPTY_MENU);
   const [isOpen, setIsOpen] = useState(false);
   const baseId = useId();
-  const keys = items.map((item) => `${item.key}:${item.priority}`).join(",");
+  const keys = items
+    .map((item) => `${item.key}:${item.priority}:${item.node ? 1 : 0}`)
+    .join(",");
   const menuId = `${baseId}-menu`;
   const itemId = (key: string) => `${baseId}-${key}`;
 
-  // `keys` stands for the items: their nodes are new on every render, their keys only change
-  // with the set of controls. Each control's wrapper is observed, so one that appears,
-  // disappears or changes width is measured again.
+  // `keys` stands for the items: their nodes are new on every render, their keys change with
+  // the set of controls and with whether each renders, so a control that appears is placed
+  // before it paints. Each control's wrapper is observed, so one that changes width or renders
+  // nothing from inside its node is measured again.
   useLayoutEffect(() => {
     const root = rootRef.current;
-    if (!root) return;
+    // The header row holds the title block, then these controls.
+    const header = root?.parentElement;
+    if (!root || !header) return;
+    const title = root.previousElementSibling as HTMLElement | null;
     const measure = () => {
+      // The controls get the header beside the title's text: a longer subtitle truncates
+      // rather than moving controls behind More.
+      const titleWidth = titleTextWidth(title);
+      const gap = titleWidth
+        ? Number.parseFloat(getComputedStyle(header).columnGap) || 0
+        : 0;
       const widths = new Map<string, number>();
       for (const element of root.querySelectorAll<HTMLElement>("[data-header-item]")) {
         // A control that renders nothing measures 0 and takes no room.
@@ -267,7 +271,7 @@ export function ContentBoxPriorityActions({
       const hidden = splitHeaderActions(
         items,
         widthOf,
-        root.clientWidth,
+        header.clientWidth - titleWidth - gap,
         HEADER_TOOL_WIDTH,
       );
       const next = layoutHeaderMenu(
@@ -285,7 +289,8 @@ export function ContentBoxPriorityActions({
       return () => window.removeEventListener("resize", measure);
     }
     const observer = new ResizeObserver(measure);
-    observer.observe(root);
+    observer.observe(header);
+    if (title) observer.observe(title);
     for (const element of root.querySelectorAll("[data-header-item]")) {
       observer.observe(element);
     }
@@ -295,7 +300,6 @@ export function ContentBoxPriorityActions({
   const isMenuShown = Object.keys(menu.places).length > 0;
   const isExpanded = isMenuShown && isOpen;
   const previousPlacesRef = useRef(menu.places);
-  const focusFirstOnOpenRef = useRef(false);
 
   // A focused control that moves behind the closed menu turns inert and would drop keyboard
   // focus, so focus moves to More before the browser repaints.
@@ -314,23 +318,6 @@ export function ContentBoxPriorityActions({
       triggerRef.current?.focus();
     }
   }, [menu, isExpanded]);
-
-  // The menu's controls come before More in the document, so a keyboard user who opens it
-  // starts on its first control rather than tabbing out of the header.
-  useEffect(() => {
-    if (!isExpanded || !focusFirstOnOpenRef.current) return;
-    focusFirstOnOpenRef.current = false;
-    for (const item of items) {
-      if (!menu.places[item.key]) continue;
-      const control = document
-        .getElementById(itemId(item.key))
-        ?.querySelector<HTMLElement>(FOCUSABLE_CONTROL);
-      if (control) {
-        control.focus();
-        return;
-      }
-    }
-  });
 
   // A menu that empties (the screen grew) closes, so it does not reopen by itself later.
   useEffect(() => {
@@ -375,10 +362,38 @@ export function ContentBoxPriorityActions({
   }, [isExpanded]);
 
   const needsAttention = items.some((item) => menu.places[item.key] && item.attention);
+  const renderItem = (item: HeaderActionItem) => {
+    const place = menu.places[item.key];
+    const isFolded = !!place && !isExpanded;
+    return (
+      <div
+        key={item.key}
+        id={itemId(item.key)}
+        data-header-item={item.key}
+        aria-hidden={isFolded || undefined}
+        inert={isFolded}
+        className={cn(
+          "flex shrink-0 items-center",
+          // A control keeps its own width in the menu rather than wrapping to fit it.
+          place && "absolute z-[46] w-max",
+          isFolded && "pointer-events-none invisible",
+        )}
+        style={
+          place
+            ? { top: `calc(100% + 4px + ${place.top}px)`, right: place.right }
+            : undefined
+        }
+      >
+        <HeaderActionsFocusContext value={place ? triggerRef : null}>
+          {item.node}
+        </HeaderActionsFocusContext>
+      </div>
+    );
+  };
   return (
     <div
       ref={rootRef}
-      className="relative ml-auto flex min-w-0 flex-1 flex-row items-center justify-end"
+      className="relative ml-auto flex shrink-0 flex-row items-center justify-end"
       onKeyDownCapture={(event) => {
         if (
           !isExpanded ||
@@ -406,62 +421,50 @@ export function ContentBoxPriorityActions({
           style={{ width: menu.width, height: menu.height }}
         ></section>
       )}
-      {items.map((item) => {
-        const place = menu.places[item.key];
-        const isFolded = !!place && !isExpanded;
-        return (
-          <div
-            key={item.key}
-            id={itemId(item.key)}
-            data-header-item={item.key}
-            aria-hidden={isFolded || undefined}
-            inert={isFolded}
-            className={cn(
-              "flex shrink-0 items-center",
-              place && "absolute z-[46]",
-              isFolded && "pointer-events-none invisible",
-            )}
-            style={
-              place
-                ? { top: `calc(100% + 4px + ${place.top}px)`, right: place.right }
-                : undefined
-            }
-          >
-            <HeaderActionsFocusContext value={place ? triggerRef : null}>
-              {item.node}
-            </HeaderActionsFocusContext>
-          </div>
-        );
-      })}
-      <Button
-        ref={triggerRef}
-        variant="ghost"
-        className={cn("relative size-[44px] shrink-0 p-0", !isMenuShown && "hidden")}
-        hidden={!isMenuShown}
-        aria-label={`More ${label} controls${needsAttention ? ", includes a changed setting" : ""}`}
-        aria-controls={isMenuShown ? menuId : undefined}
-        aria-expanded={isExpanded}
-        onClick={(event) => {
-          // Enter and Space click without pointer presses (detail 0).
-          focusFirstOnOpenRef.current = !isExpanded && event.detail === 0;
-          setIsOpen((open) => !open);
-        }}
-      >
-        <Ellipsis className="size-7" aria-hidden />
-        {needsAttention && (
-          <span
-            aria-hidden
-            data-attention
-            className="ring-background absolute top-2 right-2 size-2.5 rounded-full bg-orange-500 ring-2"
-          />
-        )}
-      </Button>
+      {/* One list, so a control that moves between the row and More keeps its element. The
+          row comes before More and the menu after it, so Tab follows what is shown. */}
+      {[
+        ...items.filter((item) => !menu.places[item.key]).map(renderItem),
+        <Button
+          key={MORE_TRIGGER_KEY}
+          ref={triggerRef}
+          variant="ghost"
+          className={cn("relative size-[44px] shrink-0 p-0", !isMenuShown && "hidden")}
+          hidden={!isMenuShown}
+          aria-label={`More ${label} controls${needsAttention ? ", includes a changed setting" : ""}`}
+          aria-controls={isMenuShown ? menuId : undefined}
+          aria-expanded={isExpanded}
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          <Ellipsis className="size-7" aria-hidden />
+          {needsAttention && (
+            <span
+              aria-hidden
+              data-attention
+              className="ring-background absolute top-2 right-2 size-2.5 rounded-full bg-orange-500 ring-2"
+            />
+          )}
+        </Button>,
+        ...items.filter((item) => menu.places[item.key]).map(renderItem),
+      ]}
     </div>
   );
 }
 
-const FOCUSABLE_CONTROL =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const MORE_TRIGGER_KEY = "content-box-more-trigger";
+
+/** The width of a content box title's text and back icon, independent of its subtitle. */
+const titleTextWidth = (title: HTMLElement | null) => {
+  const heading = title?.querySelector("h1,h2");
+  const text = heading?.querySelector<HTMLElement>("[data-content-box-title-text]");
+  if (!text) return 0;
+  const range = document.createRange();
+  range.selectNodeContents(text);
+  return (
+    (range.getBoundingClientRect?.().width ?? text.scrollWidth) +
+    (heading?.querySelector("svg")?.getBoundingClientRect().width ?? 0)
+  );
+};
 
 /**
  * Places the menu's controls in rows, in display order, no wider than `maxWidth`. Offsets are
