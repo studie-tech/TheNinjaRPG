@@ -4114,7 +4114,8 @@ export const getCombatStatCap = (
 
 /** Game sound effects tower defense plays for its events, by cue. */
 export const TD_SFX = {
-  throw: "muq1tu3xvolOsUHm-NqBr",
+  throw: "td-shuriken-throw",
+  impact: "td-shuriken-hit",
   explosion: "epidemic-0f59bf72-207b-4520-b726-ff9fdd819406",
   fire: "9-b8hbTXA019dgn8yyr3j",
   lightning: "eJCEtS5_P_pW_VPc6ttRh",
@@ -4134,6 +4135,20 @@ export const TD_SFX = {
   whoosh: "epidemic-fc2ead45-3357-4bd3-9ed3-239aa6d94b71",
 } as const;
 export type TdSfx = keyof typeof TD_SFX;
+
+/** Painted backdrop of each tower defense stage, keyed by stage name. */
+export const TD_STAGE_IMAGE_URLS = {
+  Dawn: "https://uploadthing.b-cdn.net/f/td-stage-dawn-89331f2390bb603c.webp",
+  Midday: "https://uploadthing.b-cdn.net/f/td-stage-midday-e7d885c115500dc4.webp",
+  Dusk: "https://uploadthing.b-cdn.net/f/td-stage-dusk-0be3f4ac51bf94a4.webp",
+  "Blood Moon":
+    "https://uploadthing.b-cdn.net/f/td-stage-blood-moon-05708bf422bbdd2b.webp",
+  Eclipse: "https://uploadthing.b-cdn.net/f/td-stage-eclipse-0ec19822dfcd4ada.webp",
+  Void: "https://uploadthing.b-cdn.net/f/td-stage-void-92c2fa30e8a890cc.webp",
+  Cosmic: "https://uploadthing.b-cdn.net/f/td-stage-cosmic-e42e0c0d5f962c89.webp",
+  "Infinite Dream":
+    "https://uploadthing.b-cdn.net/f/td-stage-infinite-dream-3f0f4ae37c289f9f.webp",
+} as const;
 
 /** Shuriken sprite thrown by the hero, shadow clones and kunai turrets. */
 export const TD_SHURIKEN_IMAGE_URL =

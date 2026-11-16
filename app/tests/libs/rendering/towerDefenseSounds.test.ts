@@ -23,7 +23,16 @@ describe("tower defense sounds", () => {
     cueOf({ type: "blink", fromX: 0, fromY: 0, x: 1, y: 1 });
     cueOf({ type: "seal", count: 1 });
     cueOf({ type: "loot", kind: "ryo", collected: true });
-    cueOf({ type: "kill", id: 1, x: 0, y: 0, boss: true, elite: false, kind: "boss" });
+    cueOf({
+      type: "kill",
+      id: 1,
+      x: 0,
+      y: 0,
+      boss: true,
+      elite: false,
+      kind: "boss",
+      ryo: 0,
+    });
     cueOf({ type: "explosion", x: 0, y: 0, radius: 4, element: "fire" });
     cueOf({ type: "wave", boss: true, titan: false, eras: [] });
   });
@@ -37,10 +46,19 @@ describe("tower defense sounds", () => {
         y: 0,
         amount: 5,
         crit: true,
-        element: "physical",
+        element: "fire",
         shield: false,
       },
-      { type: "kill", id: 1, x: 0, y: 0, boss: false, elite: true, kind: "grunt" },
+      {
+        type: "kill",
+        id: 1,
+        x: 0,
+        y: 0,
+        boss: false,
+        elite: true,
+        kind: "grunt",
+        ryo: 0,
+      },
       {
         type: "jutsu",
         from: "hero",
@@ -66,7 +84,7 @@ describe("tower defense sounds", () => {
     for (const event of silent) expect(eventSound(event)).toBeNull();
   });
 
-  it("gives the hero's throws a quiet, sparse slash", () => {
+  it("plays a quiet swish for each of the hero's volleys", () => {
     const sound = cueOf({
       type: "throw",
       from: "hero",
@@ -77,7 +95,26 @@ describe("tower defense sounds", () => {
       crit: false,
       element: "physical",
     });
-    expect(sound?.[1]).toBeLessThanOrEqual(0.12);
-    expect(sound?.[2]).toBeGreaterThanOrEqual(1000);
+    expect(sound?.[0]).toBe("throw");
+    expect(sound?.[1]).toBeLessThanOrEqual(0.15);
+    // Long enough to merge a multishot volley, short enough for every throw to sound.
+    expect(sound?.[2]).toBeGreaterThan(0);
+    expect(sound?.[2]).toBeLessThan(150);
+  });
+
+  it("bites once for each landing shuriken volley", () => {
+    const sound = cueOf({
+      type: "hit",
+      targetId: 1,
+      x: 0,
+      y: 0,
+      amount: 5,
+      crit: false,
+      element: "physical",
+      shield: false,
+    });
+    expect(sound?.[0]).toBe("impact");
+    expect(sound?.[2]).toBeGreaterThan(0);
+    expect(sound?.[2]).toBeLessThan(150);
   });
 });

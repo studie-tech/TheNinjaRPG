@@ -16,6 +16,7 @@ import {
   acquireAnimationTexture,
   animationFrameViews,
 } from "@/libs/rendering/animationTextures";
+import { readTextureFramePixels } from "@/libs/rendering/assets";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
 import {
   createLpcCharacter,
@@ -84,6 +85,13 @@ const ELEMENT_COLORS: Record<TdElement, number> = {
   earth: 0xc8945a,
 };
 
+const RYO_SOURCE_LABELS: Record<Extract<TdEvent, { type: "ryo" }>["source"], string> = {
+  wave: "wave cleared",
+  interest: "interest",
+  early: "called early",
+  loot: "",
+};
+
 const SENTRY_COLORS: Record<TdSentry, number> = {
   kunai: 0xd0d0d0,
   mortar: 0xff8a3d,
@@ -102,6 +110,15 @@ const ENEMY_ART_GRACE_MS = 20_000;
 const ENEMY_ART_RETRY_MS = 1_000;
 /** How long the field keeps animating after the run ends, for its closing effects. */
 const GAME_OVER_SETTLE_MS = 2_000;
+/** How long the hero keeps facing its last throw's target before turning to the nearest. */
+const AIM_FACING_MS = 1_200;
+/** A frame whose feet are unknown stands on its bottom edge. */
+const FRAME_FOOT: ClipFoot = { x: 0, lift: 0 };
+/** Alpha above which a pixel counts as drawn when finding a frame's feet. */
+const FOOT_ALPHA = 48;
+/** Longest side, in pixels, a frame is sampled at to find its feet. */
+const FOOT_SAMPLE_PX = 64;
+
 /** The art of a pooled record, which draws nothing. */
 const NO_ENEMY_ART: EnemyArt = {
   still: null,
@@ -302,6 +319,10 @@ export const createTowerDefenseScene = async (options: {
       heroAnimationUntil = 0,
       heroDirection: LpcDirection = 2,
       heroRestart = false;
+    /** The hero's latest throw: its primary target, faced until the next volley. */
+    let aimTargetId = 0,
+      aimTick = -1,
+      aimedAt = Number.NEGATIVE_INFINITY;
     const cueHero = (animation: LpcAnimation, now: number) => {
       const duration = hero?.durations[animation] ?? 400;
       heroAnimation = animation;
@@ -382,8 +403,9 @@ export const createTowerDefenseScene = async (options: {
         leases.push(lease.release);
         void lease.resource
           .then((atlas) => {
-            if (!art.disposed)
-              art[slot] = { animation, views: animationFrameViews(atlas, animation) };
+            if (art.disposed) return;
+            const views = animationFrameViews(atlas, animation);
+            art[slot] = { animation, views, foot: clipFoot(views[0]) };
           })
           .catch(() => {});
         return true;
@@ -618,11 +640,14 @@ export const createTowerDefenseScene = async (options: {
       heroY += (state.hero.y - heroY) * smoothing;
       heroRoot.position.set(heroX, heroY);
       heroRoot.zIndex = -heroY;
-      const nearest = nearestEnemy(state, heroX, heroY);
-      if (nearest)
+      // Face the enemy being thrown at; between volleys, the nearest one.
+      const aimed =
+        now - aimedAt < AIM_FACING_MS ? enemies.get(aimTargetId) : undefined;
+      const facingTarget = aimed ?? nearestEnemy(state, heroX, heroY);
+      if (facingTarget)
         heroDirection = lpcFacing(
-          nearest.x - heroX,
-          -(nearest.y - heroY),
+          facingTarget.x - heroX,
+          -(facingTarget.y - heroY),
           heroDirection,
         );
       if (now > heroAnimationUntil && heroAnimation !== "combat")
@@ -743,6 +768,8 @@ export const createTowerDefenseScene = async (options: {
     });
 
     const lastSound = new Map<TdSfx, number>();
+    let lastBonusAt = Number.NEGATIVE_INFINITY,
+      bonusStack = 0;
     const handleEvent = (event: TdEvent, state: TdState, now: number) => {
       const cue = eventSound(event);
       if (cue && options.playSound) {
@@ -754,6 +781,19 @@ export const createTowerDefenseScene = async (options: {
       }
       switch (event.type) {
         case "throw": {
+          // A volley's first target is its primary one; the hero turns to face it.
+          if (event.from === "hero" && aimTick !== state.tick) {
+            aimTick = state.tick;
+            aimTargetId = event.targetId;
+            aimedAt = now;
+            const target = enemies.get(event.targetId);
+            if (target)
+              heroDirection = lpcFacing(
+                target.x - event.x,
+                -(target.y - event.y),
+                heroDirection,
+              );
+          }
           if (flights.length > 160) return;
           const sprite =
             flightPool.pop() ?? new Sprite({ texture: shuriken, anchor: 0.5 });
@@ -788,7 +828,7 @@ export const createTowerDefenseScene = async (options: {
           }
           const color = event.crit ? 0xffe14d : ELEMENT_COLORS[event.element];
           if (event.amount > 0)
-            fx.number(x, y, event.amount, { color, crit: event.crit });
+            fx.number(x, y, event.amount, { element: event.element, crit: event.crit });
           fx.burst(x, y - 0.2, {
             color,
             count: event.crit ? 7 : 3,
@@ -797,6 +837,22 @@ export const createTowerDefenseScene = async (options: {
             life: 0.3,
           });
           if (event.crit) playClip(hitFrames, x, y - 0.2, 1.1, now);
+          return;
+        }
+        case "ryo": {
+          if (event.source === "loot") {
+            fx.ryo(event.x, event.y + 0.4, event.amount);
+            return;
+          }
+          // Bonuses paid together (a cleared wave and its interest) stack above the hero.
+          bonusStack = now - lastBonusAt < 400 ? bonusStack + 1 : 0;
+          lastBonusAt = now;
+          fx.ryo(
+            event.x,
+            event.y + 1.7 + bonusStack * 0.75,
+            event.amount,
+            RYO_SOURCE_LABELS[event.source],
+          );
           return;
         }
         case "kill": {
@@ -818,6 +874,8 @@ export const createTowerDefenseScene = async (options: {
             life: 0.45,
             width: 0.08,
           });
+          // Below the killing blow's damage number, at the enemy's feet.
+          if (event.ryo > 0) fx.ryo(x, y - 0.6, event.ryo);
           if (event.boss) {
             fx.shake(0.45, 0.6);
             fx.flash(0xfff3c4, 0.5, 0.5);
@@ -1312,7 +1370,9 @@ export const createTowerDefenseScene = async (options: {
           (size / Math.max(1, texture.width)) * flip,
           -size / Math.max(1, texture.height),
         );
-        record.body.position.set(0, bob);
+        // Seat the drawn feet, not the frame's bottom edge, on the contact shadow.
+        const foot = clip?.foot ?? FRAME_FOOT;
+        record.body.position.set(-foot.x * size * flip, bob - foot.lift * size);
       }
       // Sun silhouette: the current frame sheared away from the sun from the feet.
       record.cast.visible = record.body.visible && showCasts();
@@ -1653,13 +1713,21 @@ export const createTowerDefenseScene = async (options: {
 
 /**
  * The sound for a simulation event: cue, relative volume and minimum gap in ms. Sound
- * marks what the player did and what demands attention; the steady stream of automatic
- * hits, kills, jutsu casts and small blasts stays silent so a crowded wave stays calm.
+ * marks what the player did and what demands attention, plus the hero's own throws and
+ * the shuriken that land; kills, jutsu casts and small blasts stay silent so a crowded
+ * wave stays calm.
  */
 export const eventSound = (event: TdEvent): [TdSfx, number, number] | null => {
   switch (event.type) {
     case "throw":
-      return event.from === "hero" ? ["throw", 0.1, 1000] : null;
+      // Multishot throws several at once and fast throwers stream them; the gap keeps
+      // each volley to one swish.
+      return event.from === "hero" ? ["throw", 0.12, 70] : null;
+    case "hit":
+      // Physical hits are thrown steel; the gap keeps a ricochet or volley to one bite.
+      return event.element === "physical" && !event.shield
+        ? ["impact", event.crit ? 0.16 : 0.09, 60]
+        : null;
     case "kill":
       return event.boss ? ["explosion", 0.9, 0] : null;
     case "art":
@@ -1861,10 +1929,23 @@ const meterSprite = (color: number, y: number, height: number) => {
   return sprite;
 };
 
+interface EnemyClip {
+  animation: CharacterAnimation;
+  views: Texture[];
+  /** Where the feet stand in the first frame; every frame shares it, so steps keep their bob. */
+  foot: ClipFoot;
+}
+
+/** Feet as a share of the frame: across from its centre, and up from its bottom edge. */
+interface ClipFoot {
+  x: number;
+  lift: number;
+}
+
 interface EnemyArt {
   still: Texture | null;
-  move: { animation: CharacterAnimation; views: Texture[] } | null;
-  idle: { animation: CharacterAnimation; views: Texture[] } | null;
+  move: EnemyClip | null;
+  idle: EnemyClip | null;
   /** Live enemies drawn with this art. */
   users: number;
   /** When the last of them left the field. */
@@ -1911,3 +1992,41 @@ interface Flight {
   due: number;
   element: TdElement;
 }
+
+/**
+ * Feet of a sheet's frame: the lowest drawn row and the middle of the pixels just above it,
+ * read from that one cell at low resolution. Unreadable art stands on its frame's edge.
+ */
+const clipFoot = (texture: Texture | undefined): ClipFoot => {
+  if (!texture) return FRAME_FOOT;
+  try {
+    const pixels = readTextureFramePixels(texture, FOOT_SAMPLE_PX);
+    const scale = Math.min(
+      1,
+      FOOT_SAMPLE_PX / Math.max(texture.frame.width, texture.frame.height),
+    );
+    const width = Math.max(1, Math.round(texture.frame.width * scale)),
+      height = Math.max(1, Math.round(texture.frame.height * scale));
+    const drawn = (x: number, y: number) =>
+      (pixels[(y * width + x) * 4 + 3] ?? 0) > FOOT_ALPHA;
+    let bottom = -1;
+    for (let y = height - 1; y >= 0 && bottom < 0; y--)
+      for (let x = 0; x < width; x++)
+        if (drawn(x, y)) {
+          bottom = y;
+          break;
+        }
+    if (bottom < 0) return FRAME_FOOT;
+    let sum = 0,
+      count = 0;
+    for (let y = Math.max(0, bottom - 2); y <= bottom; y++)
+      for (let x = 0; x < width; x++)
+        if (drawn(x, y)) {
+          sum += x + 0.5;
+          count++;
+        }
+    return { x: sum / count / width - 0.5, lift: (height - 1 - bottom) / height };
+  } catch {
+    return FRAME_FOOT;
+  }
+};

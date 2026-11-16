@@ -5,6 +5,7 @@ import {
   Crosshair,
   Crown,
   Footprints,
+  Info,
   Keyboard,
   Lock,
   Map as MapIcon,
@@ -20,19 +21,31 @@ import { type ReactNode, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TD_STAGE_IMAGE_URLS } from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
+import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { SEAL_GLYPHS, SEAL_HOTKEYS } from "@/layout/TowerDefenseHud";
 import { cn } from "@/libs/shadui";
+import {
+  TD_HERO_BASE,
+  TD_PIERCING_AFTER_WAVE,
+  TD_SEAL_GAP_TICKS,
+  TD_TICK_SECONDS,
+} from "@/libs/towerDefense/balance";
 import {
   TD_BOSS_INTERVAL,
   TD_CHECKPOINT_SHARE,
   TD_DOJO,
   TD_DOJO_CATEGORIES,
   TD_DOJO_INFO,
+  TD_ENEMIES,
+  TD_ERA_INFO,
   TD_ERA_INTERVAL,
   TD_ERA_START_WAVE,
+  TD_ERAS,
   TD_FOCUS_DAMAGE,
   TD_SEAL_ART_INFO,
   TD_SEAL_ARTS,
@@ -43,12 +56,16 @@ import {
   type TdDojoCategory,
   type TdDojoLevels,
   type TdDojoUpgrade,
+  type TdEnemyKind,
   tdCheckpoints,
   tdStageForWave,
 } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
 import { tdDojoCost } from "@/libs/towerDefense/sim";
 import { capitalizeFirstLetter } from "@/utils/string";
+
+/** Bosses, titans and mini-bosses are milestones rather than new families. */
+const STAGE_SKIPPED_ENEMIES = new Set<TdEnemyKind>(["boss", "titan", "mini"]);
 
 const CATEGORY_LABELS: Record<TdDojoCategory, string> = {
   offense: "Offense",
@@ -251,7 +268,8 @@ export const TowerDefenseLobby = (props: {
 
 /** The road from Dawn to the Infinite Dream, with the player's best wave marked. */
 const Journey = ({ bestWave }: { bestWave: number }) => {
-  const current = tdStageForWave(Math.max(1, bestWave));
+  const best = Math.max(1, bestWave);
+  const current = tdStageForWave(best);
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -261,41 +279,129 @@ const Journey = ({ bestWave }: { bestWave: number }) => {
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div className="grid grid-cols-4 gap-1.5">
-          {TD_STAGES.map((stage) => {
-            const reached = bestWave >= stage.wave;
+          {TD_STAGES.map((stage, index) => {
+            const reached = best >= stage.wave;
             const here = stage === current;
+            const until = TD_STAGES[index + 1]?.wave;
             return (
-              <div
-                key={stage.name}
-                className={cn(
-                  "relative flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-lg border-2 p-1 text-white",
-                  here ? "border-amber-400" : "border-transparent",
-                  !reached && "opacity-45 grayscale",
-                )}
-                style={{ background: stageGradient(stage.sky, stage.ground) }}
-                title={`${stage.name}: from wave ${stage.wave}`}
-              >
-                {!reached && (
-                  <Lock className="absolute top-1 right-1 h-3.5 w-3.5 opacity-80" />
-                )}
-                <span className="text-[0.8rem] leading-tight font-bold drop-shadow">
-                  {stage.name}
-                </span>
-                <span className="text-[0.75rem] leading-tight opacity-90 drop-shadow">
-                  {stage.wave}+
-                </span>
-              </div>
+              <Popover key={stage.name}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`${stage.name}, from wave ${stage.wave}`}
+                    className={cn(
+                      "relative flex aspect-[4/3] flex-col items-start justify-end overflow-hidden rounded-lg border-2 p-1 text-left text-white",
+                      here ? "border-amber-400" : "border-transparent",
+                    )}
+                  >
+                    <span
+                      className="absolute inset-0"
+                      style={{ background: stageGradient(stage.sky, stage.ground) }}
+                    />
+                    <Image
+                      src={TD_STAGE_IMAGE_URLS[stage.name]}
+                      alt=""
+                      width={320}
+                      height={213}
+                      className={cn(
+                        "absolute inset-0 h-full w-full object-cover",
+                        !reached && "brightness-75 saturate-[.35]",
+                      )}
+                    />
+                    <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                    {!reached && (
+                      <Lock className="absolute top-1 right-1 h-3.5 w-3.5 drop-shadow" />
+                    )}
+                    {here && (
+                      <span className="absolute top-1 left-1 rounded bg-amber-400 px-1 text-[0.7rem] font-bold text-black">
+                        You are here
+                      </span>
+                    )}
+                    <span className="relative text-[0.8rem] leading-tight font-bold drop-shadow">
+                      {stage.name}
+                    </span>
+                    <span className="relative text-[0.75rem] leading-tight opacity-90 drop-shadow">
+                      {until
+                        ? `Waves ${stage.wave}–${until - 1}`
+                        : `Wave ${stage.wave}+`}
+                    </span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 space-y-2 p-3 text-sm">
+                  <div>
+                    <p className="font-semibold">{stage.name}</p>
+                    <p className="text-muted-foreground">
+                      {here
+                        ? `Your best run reached wave ${bestWave}.`
+                        : reached
+                          ? "Already behind you."
+                          : `Reach wave ${stage.wave} to see it.`}
+                    </p>
+                  </div>
+                  <StageNews from={stage.wave} until={until} />
+                </PopoverContent>
+              </Popover>
             );
           })}
         </div>
         <p className="text-muted-foreground">
-          The sky darkens and the battlefield grows wilder with every stage: new enemy
-          families, elite affixes, era rules stacking two and three at a time, and a
-          titan every {TD_TITAN_INTERVAL} waves. Each run pushes a little further as the
-          Dojo makes you stronger.
+          Tap a stage to see what it brings. The sky darkens and the battlefield grows
+          wilder with every stage: new enemy families, elite affixes, era rules stacking
+          two and three at a time, and a titan every {TD_TITAN_INTERVAL} waves. Each run
+          pushes a little further as the Dojo makes you stronger.
         </p>
       </CardContent>
     </Card>
+  );
+};
+
+/** What first appears between two waves: enemies, era rules, seal arts and milestones. */
+const StageNews = ({ from, until }: { from: number; until?: number }) => {
+  const within = (wave: number) =>
+    wave >= from && (until === undefined || wave < until);
+  const enemies = (Object.keys(TD_ENEMIES) as TdEnemyKind[])
+    .filter(
+      (kind) => !STAGE_SKIPPED_ENEMIES.has(kind) && within(TD_ENEMIES[kind].firstWave),
+    )
+    .map(capitalizeFirstLetter);
+  const eras = TD_ERAS.filter(
+    (era) => era !== "calm" && within(TD_ERA_INFO[era].firstWave),
+  ).map((era) => TD_ERA_INFO[era].name);
+  const arts = TD_SEAL_ARTS.filter((art) =>
+    within(TD_SEAL_ART_INFO[art].firstWave),
+  ).map((art) => TD_SEAL_ART_INFO[art].name);
+  const milestones = [
+    within(TD_BOSS_INTERVAL) && `A boss every ${TD_BOSS_INTERVAL} waves, then a perk`,
+    within(TD_ERA_START_WAVE) &&
+      `Era rules from wave ${TD_ERA_START_WAVE}, changing every ${TD_ERA_INTERVAL} waves`,
+    within(TD_TITAN_INTERVAL) && `A titan every ${TD_TITAN_INTERVAL} waves`,
+    within(TD_PIERCING_AFTER_WAVE + 1) &&
+      `From wave ${TD_PIERCING_AFTER_WAVE + 1}, elite and boss hits pierce part of your max health`,
+  ].filter((line): line is string => !!line);
+  const sections: [string, string[]][] = [
+    ["New enemies", enemies],
+    ["New era rules", eras],
+    ["Seal arts unlocked", arts],
+    ["Milestones", milestones],
+  ];
+  const shown = sections.filter(([, items]) => items.length > 0);
+  if (shown.length === 0)
+    return (
+      <p className="text-muted-foreground">
+        Familiar foes, but tougher, faster and more often elite.
+      </p>
+    );
+  return (
+    <>
+      {shown.map(([title, items]) => (
+        <div key={title}>
+          <p className="text-muted-foreground text-xs font-semibold uppercase">
+            {title}
+          </p>
+          <p>{items.join(" · ")}</p>
+        </div>
+      ))}
+    </>
   );
 };
 
@@ -398,21 +504,69 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
                   </p>
                 </div>
                 {!open && <Lock className="h-4 w-4 shrink-0" />}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`About ${info.name}`}
+                      className="text-muted-foreground hover:text-foreground shrink-0 rounded p-1"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 space-y-1.5 p-3 text-sm">
+                    <p className="font-semibold">{info.name}</p>
+                    <p>{info.description}</p>
+                    <p className="text-muted-foreground">
+                      Keys {info.seals.map((seal) => SEAL_HOTKEYS[seal]).join(" ")} ·{" "}
+                      {info.chakra} chakra · from wave {info.firstWave}
+                    </p>
+                  </PopoverContent>
+                </Popover>
               </div>
             );
           })}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span className="flex items-center gap-1 font-semibold">
-          <Keyboard className="h-4 w-4" /> Keys
-        </span>
-        <KeyHint keys={TD_SEALS.map((seal) => SEAL_HOTKEYS[seal])} label="seals" />
-        <KeyHint keys={["Space"]} label="substitution" />
-        <KeyHint keys={["B"]} label="blink" />
-        <KeyHint keys={["T"]} label="tag" />
-        <KeyHint keys={["1", "–", `${TD_ULTIMATES.length}`]} label="ultimates" />
-        <KeyHint keys={["N"]} label="next wave" />
+      <div>
+        <p className="mb-2 flex items-center gap-2 font-semibold">
+          <Keyboard className="h-4 w-4" /> Controls
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Control
+            keys={TD_SEALS.map((seal) => SEAL_HOTKEYS[seal])}
+            name="Hand seals"
+            description={`Press three within ${seconds(TD_SEAL_GAP_TICKS)}s of each other to cast the matching art at the reticle.`}
+          />
+          <Control
+            keys={["Space"]}
+            name="Substitution"
+            description={`For ${seconds(TD_HERO_BASE.substitutionWindow)}s the next hit strikes a log instead of you. Time it on a boss or telegraphed attack to counter with a huge critical blow and 1.5× damage for 3s. Recharges in ${seconds(TD_HERO_BASE.substitutionTicks)}s.`}
+          />
+          <Control
+            keys={["B"]}
+            name="Blink"
+            description={`Then tap a spot near the centre to teleport there, out of a crowd or an incoming strike. Recharges in ${seconds(TD_HERO_BASE.blinkTicks)}s.`}
+          />
+          <Control
+            keys={["T"]}
+            name="Explosive tag"
+            description={`Then tap where to plant it. The first enemy to step on it sets off a fiery blast that burns everything nearby. Holds ${TD_HERO_BASE.trapCharges} charges, one returning every ${seconds(TD_HERO_BASE.trapRechargeTicks)}s.`}
+          />
+          <Control
+            keys={["1", "–", `${TD_ULTIMATES.length}`]}
+            name="Ultimates"
+            description="Your strongest techniques, unlocked in the Dojo, each on a long cooldown."
+          />
+          <Control
+            keys={["N"]}
+            name="Next wave"
+            description="Once a wave is cleared, call the next one early for bonus ryo."
+          />
+        </div>
+        <p className="text-muted-foreground mt-2">
+          The Dojo shortens these cooldowns and adds tag charges.
+        </p>
       </div>
     </CardContent>
   </Card>
@@ -440,19 +594,27 @@ const Rule = (props: {
   </div>
 );
 
-const KeyHint = ({ keys, label }: { keys: string[]; label: string }) => (
-  <span className="flex items-center gap-1">
-    {keys.map((key) =>
-      key === "–" ? (
-        <span key={key}>–</span>
-      ) : (
-        <kbd key={key} className="bg-secondary rounded border px-1.5 py-0.5 font-mono">
-          {key}
-        </kbd>
-      ),
-    )}
-    <span className="text-muted-foreground">{label}</span>
-  </span>
+const Control = (props: { keys: string[]; name: string; description: string }) => (
+  <div className="flex gap-2 rounded-lg border p-2">
+    <span className="flex shrink-0 items-start gap-1 pt-0.5">
+      {props.keys.map((key) =>
+        key === "–" ? (
+          <span key={key}>–</span>
+        ) : (
+          <kbd
+            key={key}
+            className="bg-secondary rounded border px-1.5 py-0.5 font-mono"
+          >
+            {key}
+          </kbd>
+        ),
+      )}
+    </span>
+    <div className="min-w-0">
+      <p className="font-semibold">{props.name}</p>
+      <p className="text-muted-foreground">{props.description}</p>
+    </div>
+  </div>
 );
 
 const Stat = (props: { icon: ReactNode; label: string; value: string }) => (
@@ -542,6 +704,9 @@ const Dojo = (props: {
     </CardContent>
   </Card>
 );
+
+/** Ticks as seconds, without a trailing ".0". */
+const seconds = (ticks: number) => `${Number((ticks * TD_TICK_SECONDS).toFixed(1))}`;
 
 const hex = (color: number) => `#${color.toString(16).padStart(6, "0")}`;
 /** A stage's sky over its ground light, as a small landscape swatch. */

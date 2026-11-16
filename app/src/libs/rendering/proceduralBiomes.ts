@@ -312,6 +312,8 @@ export const proceduralDecoration = (
   prng: () => number,
   asset: string,
   hex: TerrainHex,
+  /** Only grass, flowers, pebbles and other ground detail, for ground kept walkable. */
+  smallOnly = false,
 ) => {
   const rand = prng();
   const choices =
@@ -326,7 +328,7 @@ export const proceduralDecoration = (
             : OCEAN_ASSET_PROPS;
   // Sample each score once: random comparator calls depend on the browser's sort algorithm.
   const selected = choices
-    .filter((choice) => rand < choice.chance)
+    .filter((choice) => rand < choice.chance && (!smallOnly || choice.small))
     .map((choice) => ({
       choice,
       score: Math.abs(choice.scale / 2 - hex.assetStrength + prng() / 10),

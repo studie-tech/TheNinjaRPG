@@ -1,6 +1,12 @@
 import { Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import { createGlowTexture } from "@/libs/rendering/primitives/shadow";
 import type { GameFrame } from "@/libs/rendering/runtime";
+import {
+  NUMBER_FONT_FAMILY,
+  NUMBER_STOPS,
+  overshoot,
+} from "@/libs/rendering/scenes/combatFeedback";
+import type { TdElement } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
 
 /**
@@ -171,55 +177,141 @@ export const createTowerDefenseFx = () => {
     });
   };
 
-  // Floating numbers from a glyph atlas
+  // Floating numbers: combat's lettering baked once into a glyph atlas, so a crowded wave
+  // positions sprites instead of rasterising text. Bounties have their own pool so damage
+  // numbers never recycle a kill's ryo before it is read.
   const atlas = createGlyphAtlas();
-  const numbers = Array.from({ length: NUMBERS }, () => {
-    const root = new Container();
-    root.visible = false;
-    const glyphs = Array.from({ length: 8 }, () => {
-      const glyph = new Sprite(atlas.views[0]);
-      glyph.anchor.set(0.5);
-      root.addChild(glyph);
-      return glyph;
+  const createPool = (size: number, length: number) =>
+    Array.from({ length: size }, () => {
+      const root = new Container();
+      root.visible = false;
+      const glyphs = Array.from({ length }, () => {
+        const glyph = new Sprite(Texture.EMPTY);
+        glyph.anchor.set(0.5);
+        root.addChild(glyph);
+        return glyph;
+      });
+      numberLayer.addChild(root);
+      return {
+        root,
+        glyphs,
+        age: 0,
+        life: 1,
+        x: 0,
+        y: 0,
+        dirX: 0,
+        rise: 0,
+        tilt: 0,
+        scale: 0,
+        pop: 0,
+      };
     });
-    numberLayer.addChild(root);
-    return { root, glyphs, age: 0, life: 0.8, vy: 0 };
-  });
-  let nextNumber = 0;
+  const damagePool = { records: createPool(NUMBERS, 8), next: 0 };
+  const ryoPool = { records: createPool(RYO_NUMBERS, 24), next: 0 };
+  const numbers = [...damagePool.records, ...ryoPool.records];
+  const showText = (
+    pool: typeof damagePool,
+    x: number,
+    y: number,
+    lines: { text: string; tone: NumberTone; size: number }[][],
+    motion: Pick<
+      (typeof damagePool.records)[number],
+      "life" | "dirX" | "rise" | "tilt" | "scale" | "pop"
+    >,
+  ) => {
+    const record = pool.records[pool.next];
+    pool.next = (pool.next + 1) % pool.records.length;
+    if (!record) return;
+    Object.assign(record, motion, { x, y, age: 0 });
+    record.root.visible = true;
+    let used = 0;
+    lines.forEach((segments, line) => {
+      const width = segments.reduce(
+        (sum, segment) =>
+          sum +
+          [...segment.text].reduce((w, c) => w + atlas.advance(c) * segment.size, 0),
+        0,
+      );
+      let cursor = -width / 2;
+      for (const segment of segments) {
+        for (const character of segment.text) {
+          const glyph = record.glyphs[used];
+          if (!glyph) break;
+          used += 1;
+          const advance = atlas.advance(character) * segment.size;
+          glyph.texture = atlas.view(segment.tone, character);
+          glyph.visible = true;
+          glyph.scale.set(segment.size);
+          // Smaller lettering shares the line's baseline rather than its middle.
+          glyph.position.set(
+            cursor + advance / 2,
+            line * GLYPH_LINE + (1 - segment.size) * GLYPH_BASELINE,
+          );
+          cursor += advance;
+        }
+      }
+    });
+    for (let index = used; index < record.glyphs.length; index++) {
+      const glyph = record.glyphs[index];
+      if (glyph) glyph.visible = false;
+    }
+  };
+  /** A hit: combat's pop, tilt and sideways arc; critical hits in its crushing red. */
   const number = (
     x: number,
     y: number,
     value: number,
-    options: { color: number; crit?: boolean },
+    options: { element: TdElement; crit?: boolean },
   ) => {
-    const record = numbers[nextNumber];
-    nextNumber = (nextNumber + 1) % numbers.length;
-    if (!record) return;
-    const text = `${formatTdNumber(value)}${options.crit ? "!" : ""}`.slice(
-      0,
-      record.glyphs.length,
+    const side = Math.random() < 0.5 ? -1 : 1;
+    showText(
+      damagePool,
+      x + (Math.random() - 0.5) * 0.3,
+      y + 0.3,
+      [
+        [
+          {
+            text: `${formatTdNumber(value)}${options.crit ? "!" : ""}`,
+            tone: options.crit ? "crit" : options.element,
+            size: 1,
+          },
+        ],
+      ],
+      {
+        life: options.crit ? 1.1 : 0.8,
+        dirX: side * (0.3 + Math.random() * 0.3),
+        rise: options.crit ? 0.95 : 0.7,
+        tilt: -side * (0.08 + Math.random() * 0.08),
+        scale: options.crit ? 0.015 : 0.0105,
+        pop: 1.3,
+      },
     );
-    const scale = options.crit ? 0.016 : 0.011;
-    record.root.position.set(
-      x + (Math.random() - 0.5) * 0.5,
-      y + 0.4 + Math.random() * 0.3,
-    );
-    record.root.scale.set(scale, -scale);
-    record.root.alpha = 1;
-    record.root.visible = true;
-    record.age = 0;
-    record.life = options.crit ? 1.1 : 0.75;
-    record.vy = options.crit ? 1.6 : 1.1;
-    record.glyphs.forEach((glyph, index) => {
-      const character = text[index];
-      glyph.visible = character !== undefined;
-      glyph.texture =
-        atlas.views[Math.max(0, atlas.characters.indexOf(character ?? "0"))] ??
-        Texture.EMPTY;
-      glyph.tint = options.color;
-      glyph.position.set((index - (text.length - 1) / 2) * 24, 0);
-    });
   };
+  /**
+   * Ryo earned: a gold "+12" with a smaller "ryo", and under a bonus the reason it paid,
+   * rising straight up and lingering longer than damage so it never reads as a hit.
+   */
+  const ryo = (x: number, y: number, amount: number, reason?: string) =>
+    showText(
+      ryoPool,
+      x,
+      y,
+      [
+        [
+          { text: `+${formatTdNumber(amount)}`, tone: "ryo", size: 1 },
+          { text: " ryo", tone: "ryo", size: 0.8 },
+        ],
+        ...(reason ? [[{ text: reason, tone: "label" as const, size: 0.6 }]] : []),
+      ],
+      {
+        life: reason ? 2.2 : 1.4,
+        dirX: 0,
+        rise: reason ? 0.8 : 0.6,
+        tilt: 0,
+        scale: reason ? 0.015 : 0.0115,
+        pop: 0.6,
+      },
+    );
 
   // Camera shake and full-screen flashes
   let shakeLeft = 0,
@@ -317,14 +409,23 @@ export const createTowerDefenseFx = () => {
     for (const record of numbers) {
       if (!record.root.visible) continue;
       record.age += dt;
-      if (record.age >= record.life) {
+      const progress = record.age / record.life;
+      if (progress >= 1) {
         record.root.visible = false;
         continue;
       }
-      if (!reduced) record.root.y += record.vy * dt;
-      record.vy *= Math.max(0, 1 - 2.5 * dt);
-      const t = record.age / record.life;
-      record.root.alpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+      const landed = Math.min(1, progress / 0.14);
+      const pop = reduced ? 1 : 1 + record.pop - record.pop * overshoot(landed);
+      const scale = record.scale * pop * (1 - progress * 0.12);
+      const arc = reduced ? 0 : progress * (2 - progress);
+      // The arena's Y axis points up, so text flips back to read upright.
+      record.root.scale.set(scale, -scale);
+      record.root.rotation = reduced ? 0 : record.tilt;
+      record.root.position.set(
+        record.x + record.dirX * arc,
+        record.y + record.rise * arc,
+      );
+      record.root.alpha = progress < 0.7 ? 1 : (1 - progress) / 0.3;
     }
     let offsetX = 0,
       offsetY = 0;
@@ -355,6 +456,7 @@ export const createTowerDefenseFx = () => {
     bolt,
     streak,
     number,
+    ryo,
     shake,
     flash,
     update,
@@ -367,6 +469,28 @@ export const createTowerDefenseFx = () => {
 
 const PARTICLES = 900;
 const NUMBERS = 48;
+const RYO_NUMBERS = 16;
+const GLYPH_FONT_PX = 44;
+const GLYPH_CELL_WIDTH = 52;
+const GLYPH_CELL_HEIGHT = 72;
+/** Line spacing and the drop that seats smaller lettering on the baseline, in atlas pixels. */
+const GLYPH_LINE = 46;
+const GLYPH_BASELINE = 16;
+const GLYPH_CHARACTERS = "0123456789.KMBTQS!-+ abcdefghijklmnopqrstuvwxyz";
+
+/** Damage takes its element's colour, critical hits combat's crushing grade, ryo gold. */
+const NUMBER_TONES = {
+  physical: { stops: ["#ffffff", "#e8edf6", "#9aa6bc"], stroke: 0x14161c },
+  fire: NUMBER_STOPS.heavy,
+  lightning: { stops: ["#ffffff", "#a8dcff", "#3d7cf0"], stroke: 0x0a1530 },
+  water: { stops: ["#eaf8ff", "#56c6ff", "#0b6fb8"], stroke: 0x06203a },
+  wind: { stops: ["#f4fff7", "#aef5c6", "#2f9e6a"], stroke: 0x062a18 },
+  earth: { stops: ["#fff0dc", "#d9a66c", "#8a5a2b"], stroke: 0x24150a },
+  crit: NUMBER_STOPS.crushing,
+  ryo: { stops: ["#fffbe3", "#ffd84a", "#d98a00"], stroke: 0x3a2200 },
+  label: { stops: ["#ffffff", "#fff6d6", "#ffe3a0"], stroke: 0x2a1c08 },
+} satisfies Record<string, { stops: string[]; stroke: number }>;
+type NumberTone = keyof typeof NUMBER_TONES;
 
 /** Age every entry by `dt` and drop, in place, those that outlived their `life`. */
 const ageEntries = <T extends { age: number; life: number }>(
@@ -382,36 +506,72 @@ const ageEntries = <T extends { age: number; life: number }>(
   return entries;
 };
 
+/** Every tone's glyphs in one canvas: one row per tone, gradient-filled and outlined. */
 const createGlyphAtlas = () => {
-  const characters = "0123456789.KMBTqQsSond!-∞";
+  const tones = Object.keys(NUMBER_TONES) as NumberTone[];
+  const characters = [...GLYPH_CHARACTERS];
   const canvas = document.createElement("canvas");
-  canvas.width = characters.length * 32;
-  canvas.height = 64;
+  canvas.width = characters.length * GLYPH_CELL_WIDTH;
+  canvas.height = tones.length * GLYPH_CELL_HEIGHT;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Damage numbers need a 2D canvas");
-  context.font = "900 40px Arial, sans-serif";
+  context.font = `italic 900 ${GLYPH_FONT_PX}px ${NUMBER_FONT_FAMILY}`;
   context.textAlign = "center";
   context.textBaseline = "middle";
+  context.lineJoin = "round";
   context.lineWidth = 7;
-  context.strokeStyle = "rgba(0,0,0,0.85)";
-  context.fillStyle = "white";
-  [...characters].forEach((character, index) => {
-    context.strokeText(character, index * 32 + 16, 33);
-    context.fillText(character, index * 32 + 16, 33);
+  const advances = new Map(
+    characters.map((character) => [
+      character,
+      context.measureText(character).width + 2,
+    ]),
+  );
+  tones.forEach((tone, row) => {
+    const { stops, stroke } = NUMBER_TONES[tone];
+    const middle = row * GLYPH_CELL_HEIGHT + GLYPH_CELL_HEIGHT / 2;
+    const fill = context.createLinearGradient(
+      0,
+      middle - GLYPH_FONT_PX / 2,
+      0,
+      middle + GLYPH_FONT_PX / 2,
+    );
+    stops.forEach((color, index) => {
+      fill.addColorStop(index / (stops.length - 1), color);
+    });
+    characters.forEach((character, column) => {
+      const x = column * GLYPH_CELL_WIDTH + GLYPH_CELL_WIDTH / 2;
+      // Combat's drop shadow falls under the outline only, as its text style does.
+      context.shadowColor = "rgba(0,0,0,0.55)";
+      context.shadowOffsetX = 1.5;
+      context.shadowOffsetY = 3.7;
+      context.strokeStyle = `#${stroke.toString(16).padStart(6, "0")}`;
+      context.strokeText(character, x, middle);
+      context.shadowColor = "transparent";
+      context.fillStyle = fill;
+      context.fillText(character, x, middle);
+    });
   });
   const source = Texture.from(canvas);
-  const views = [...characters].map(
-    (_, index) =>
-      new Texture({
-        source: source.source,
-        frame: new Rectangle(index * 32, 0, 32, 64),
-      }),
+  const views = tones.map((_, row) =>
+    characters.map(
+      (_, column) =>
+        new Texture({
+          source: source.source,
+          frame: new Rectangle(
+            column * GLYPH_CELL_WIDTH,
+            row * GLYPH_CELL_HEIGHT,
+            GLYPH_CELL_WIDTH,
+            GLYPH_CELL_HEIGHT,
+          ),
+        }),
+    ),
   );
   return {
-    characters,
-    views,
+    view: (tone: NumberTone, character: string) =>
+      views[tones.indexOf(tone)]?.[characters.indexOf(character)] ?? Texture.EMPTY,
+    advance: (character: string) => advances.get(character) ?? GLYPH_FONT_PX / 2,
     dispose: () => {
-      for (const view of views) view.destroy(false);
+      for (const row of views) for (const view of row) view.destroy(false);
       source.destroy(true);
     },
   };

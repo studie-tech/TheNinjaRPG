@@ -5,6 +5,7 @@ import {
   Crosshair,
   FastForward,
   Flag,
+  Info,
   ScrollText,
   Skull,
   Volume2,
@@ -14,6 +15,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Confirm from "@/layout/Confirm";
@@ -26,6 +28,7 @@ import {
   TD_TICK_SECONDS,
   TD_WAVE_TICKS,
   tdMaxSpeed,
+  tdWaveBonus,
 } from "@/libs/towerDefense/balance";
 import {
   TD_ERA_INFO,
@@ -41,6 +44,7 @@ import {
   TD_SHOP_INFO,
   TD_ULTIMATE_INFO,
   TD_ULTIMATES,
+  type TdPerk,
   type TdSeal,
   type TdSentry,
   type TdShopItem,
@@ -152,6 +156,7 @@ export const TowerDefenseOverlay = (props: {
           />
         </div>
         <div className="pointer-events-auto flex shrink-0 gap-1">
+          <BoostsButton state={state} />
           <OverlayButton
             label={`Game speed ${props.speed}x`}
             onClick={() => props.onSpeed(nextSpeed)}
@@ -623,6 +628,205 @@ const Meter = (props: { label: string; value: number; max: number; color: string
   </div>
 );
 
+/** Everything currently shaping the run: timed effects, effective stats, perks and eras. */
+const BoostsButton = ({ state }: { state: TdState }) => {
+  const { stats, hero, tick } = state;
+  const secondsUntil = (until: number) => Math.ceil((until - tick) * TD_TICK_SECONDS);
+  const berserk =
+    (state.perks.berserker ?? 0) > 0 ? 1.5 * (1 - hero.hp / stats.maxHp) : 0;
+  const timed: [string, string, number | null][] = [];
+  const during = (until: number, name: string, effect: string) => {
+    if (tick < until) timed.push([name, effect, secondsUntil(until)]);
+  };
+  during(hero.rageUntil, "Rage", "×2 damage");
+  during(hero.counterUntil, "Counter", "×1.5 damage");
+  during(hero.domeUntil, "Earth Dome", "Half damage taken");
+  during(state.clonesUntil, "Shadow clones", "Clones throw with you");
+  during(state.tsukuyomiUntil, "Tsukuyomi", "Enemies frozen");
+  during(hero.silencedUntil, "Silenced", "Jutsu cannot cast");
+  if (berserk > 0.01)
+    timed.push(["Berserker", `+${percent(berserk)} damage from missing health`, null]);
+  // The same sums the simulation pays when the wave ends or is called early.
+  const waveBonus = Math.floor(tdWaveBonus(state.wave) * stats.ryoMult);
+  const earlyShare =
+    state.waveTick < 0 ? 0 : (TD_WAVE_TICKS - state.waveTick) / TD_WAVE_TICKS;
+  const interest =
+    stats.interest > 0
+      ? Math.floor(Math.min(60 * tdWaveBonus(state.wave), state.ryo * stats.interest))
+      : 0;
+  const ryoBonuses: [string, string][] = [
+    ["Clearing this wave", `${formatTdNumber(waveBonus)} ryo`],
+    [
+      "Calling the next wave now",
+      tdCanCallWave(state) && earlyShare > 0
+        ? `+${formatTdNumber(Math.floor(tdWaveBonus(state.wave) * earlyShare * stats.ryoMult))} ryo extra`
+        : "once the wave is cleared",
+    ],
+    ...(interest > 0
+      ? ([["Interest on your ryo", `${formatTdNumber(interest)} ryo`]] as [
+          string,
+          string,
+        ][])
+      : []),
+  ];
+  const rows: [string, string, string | null][] = [
+    [
+      "Damage",
+      formatTdNumber(stats.damage),
+      boostOf(stats.damage / TD_HERO_BASE.damage),
+    ],
+    [
+      "Throws per second",
+      stats.rate.toFixed(2),
+      boostOf(stats.rate / TD_HERO_BASE.rate),
+    ],
+    ["Range", stats.range.toFixed(1), boostOf(stats.range / TD_HERO_BASE.range)],
+    ["Critical hits", `${percent(stats.crit)} for ×${stats.critMult.toFixed(2)}`, null],
+    [
+      "Max health",
+      formatTdNumber(stats.maxHp),
+      boostOf(stats.maxHp / TD_HERO_BASE.health),
+    ],
+    [
+      "Regeneration",
+      `${percent(stats.regen, 2)} health/s`,
+      boostOf(stats.regen / TD_HERO_BASE.regen),
+    ],
+    [
+      "Max chakra",
+      formatTdNumber(stats.maxChakra),
+      boostOf(stats.maxChakra / TD_HERO_BASE.chakra),
+    ],
+    [
+      "Chakra per second",
+      stats.chakraRegen.toFixed(1),
+      boostOf(stats.chakraRegen / TD_HERO_BASE.chakraRegen),
+    ],
+    ["Blink cooldown", `${(stats.blinkTicks * TD_TICK_SECONDS).toFixed(1)}s`, null],
+    ["Substitution window", `${(stats.subWindow * TD_TICK_SECONDS).toFixed(1)}s`, null],
+    [
+      "Explosive tags",
+      `${stats.trapCharges} charges`,
+      boostOf(stats.trapMult, "power"),
+    ],
+    ["Ryo earned", `×${stats.ryoMult.toFixed(2)}`, boostOf(stats.ryoMult)],
+    ["Scrolls earned", `×${stats.scrollMult.toFixed(2)}`, boostOf(stats.scrollMult)],
+  ];
+  const optional: [string, number, string][] = [
+    ["Extra targets", stats.multishot, `${stats.multishot}`],
+    ["Ricochets", stats.ricochet, `${stats.ricochet}`],
+    ["Block", stats.block, percent(stats.block)],
+    ["Lifesteal", stats.lifesteal, percent(stats.lifesteal, 2)],
+    ["Thorns", stats.thorns, percent(stats.thorns, 1)],
+    ["Interest per wave", stats.interest, percent(stats.interest, 1)],
+    ["Jutsu power", stats.jutsuMult - 1, `×${stats.jutsuMult.toFixed(2)}`],
+    ["Jutsu cooldowns", 1 - stats.jutsuCdMult, `−${percent(1 - stats.jutsuCdMult)}`],
+    ["Seal power", stats.sealMult - 1, `×${stats.sealMult.toFixed(2)}`],
+    ["Sentry power", stats.sentryMult - 1, `×${stats.sentryMult.toFixed(2)}`],
+    ["Enemy health", stats.enemyHpMult - 1, `×${stats.enemyHpMult.toFixed(2)}`],
+  ];
+  for (const [label, amount, value] of optional)
+    if (amount > 1e-6) rows.push([label, value, null]);
+  const perks = (Object.entries(state.perks) as [TdPerk, number][]).filter(
+    ([, count]) => count > 0,
+  );
+  const eras = state.eras.filter((era) => era !== "calm");
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Active boosts"
+          title="Active boosts"
+          className={OVERLAY_BUTTON_CLASS}
+        >
+          <Info className="h-4 w-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="max-h-[70vh] w-80 space-y-3 overflow-y-auto p-3 text-sm"
+      >
+        <BoostSection title="Right now">
+          {timed.length === 0 ? (
+            <p className="text-muted-foreground">No timed effects.</p>
+          ) : (
+            timed.map(([name, effect, seconds]) => (
+              <BoostRow
+                key={name}
+                label={name}
+                value={seconds === null ? effect : `${effect} · ${seconds}s`}
+              />
+            ))
+          )}
+        </BoostSection>
+        <BoostSection title="Ryo bonuses">
+          {ryoBonuses.map(([label, value]) => (
+            <BoostRow key={label} label={label} value={value} />
+          ))}
+          <p className="text-muted-foreground text-xs">
+            Every kill also pays its bounty, ×{stats.ryoMult.toFixed(2)} with your Dojo
+            and perks.
+          </p>
+        </BoostSection>
+        <BoostSection title="Your ninja">
+          {rows.map(([label, value, boost]) => (
+            <BoostRow key={label} label={label} value={value} boost={boost} />
+          ))}
+        </BoostSection>
+        {perks.length > 0 && (
+          <BoostSection title="Perks">
+            {perks.map(([id, count]) => (
+              <div key={id}>
+                <p className="font-semibold">
+                  {TD_PERK_INFO[id].name}
+                  {count > 1 && ` ×${count}`}
+                </p>
+                <p className="text-muted-foreground">{TD_PERK_INFO[id].description}</p>
+              </div>
+            ))}
+          </BoostSection>
+        )}
+        {eras.length > 0 && (
+          <BoostSection title="Era rules">
+            {eras.map((era) => (
+              <div key={era}>
+                <p className="font-semibold text-red-600 dark:text-red-400">
+                  {TD_ERA_INFO[era].name}
+                </p>
+                <p className="text-muted-foreground">{TD_ERA_INFO[era].description}</p>
+              </div>
+            ))}
+          </BoostSection>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const BoostSection = (props: { title: string; children: ReactNode }) => (
+  <div className="space-y-1">
+    <p className="text-muted-foreground text-xs font-semibold uppercase">
+      {props.title}
+    </p>
+    {props.children}
+  </div>
+);
+
+const BoostRow = (props: { label: string; value: string; boost?: string | null }) => (
+  <div className="flex items-baseline justify-between gap-2">
+    <span>{props.label}</span>
+    <span className="text-right font-semibold">
+      {props.value}
+      {props.boost && (
+        <span className="ml-1 text-xs text-green-600 dark:text-green-400">
+          {props.boost}
+        </span>
+      )}
+    </span>
+  </div>
+);
+
 const OVERLAY_BUTTON_CLASS =
   "flex h-8 min-w-8 items-center justify-center gap-0.5 rounded-md bg-black/50 px-1.5 text-white hover:bg-black/70 disabled:opacity-50";
 
@@ -697,3 +901,12 @@ const ActionButton = (props: {
     </button>
   );
 };
+
+const percent = (fraction: number, digits = 0) =>
+  `${(fraction * 100).toFixed(digits)}%`;
+
+/** "+42%" for a multiplier above the base, or nothing when it has not grown. */
+const boostOf = (multiplier: number, suffix?: string) =>
+  multiplier > 1.0005
+    ? `+${formatTdNumber(Math.round((multiplier - 1) * 100))}%${suffix ? ` ${suffix}` : ""}`
+    : null;

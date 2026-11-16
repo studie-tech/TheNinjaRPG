@@ -277,6 +277,7 @@ export type TdEvent =
       boss: boolean;
       elite: boolean;
       kind: TdEnemyKind;
+      ryo: number;
     }
   | {
       type: "jutsu";
@@ -298,6 +299,13 @@ export type TdEvent =
   | { type: "explosion"; x: number; y: number; radius: number; element: TdElement }
   | { type: "wave"; boss: boolean; titan: boolean; eras: TdEra[] }
   | { type: "loot"; kind: TdLoot["kind"]; collected: boolean }
+  | {
+      type: "ryo";
+      amount: number;
+      source: "wave" | "interest" | "early" | "loot";
+      x: number;
+      y: number;
+    }
   | { type: "secondWind" }
   | { type: "gameOver" };
 
@@ -721,10 +729,14 @@ const startWave_ = (state: TdState) => {
   const completed = state.wave;
   if (completed >= state.config.startWave && completed > 0) {
     state.scrolls += tdWaveScrolls(completed) * state.stats.scrollMult;
-    state.ryo += Math.floor(tdWaveBonus(completed) * state.stats.ryoMult);
+    gainRyo(state, Math.floor(tdWaveBonus(completed) * state.stats.ryoMult), "wave");
     if (state.stats.interest > 0) {
       const cap = 60 * tdWaveBonus(completed);
-      state.ryo += Math.floor(Math.min(cap, state.ryo * state.stats.interest));
+      gainRyo(
+        state,
+        Math.floor(Math.min(cap, state.ryo * state.stats.interest)),
+        "interest",
+      );
     }
     if (completed % TD_BOSS_INTERVAL === 0) state.drafts += 1;
   }
@@ -1101,8 +1113,10 @@ export const applyAction = (state: TdState, action: TdAction): boolean => {
         return true;
       }
       const remaining = (TD_WAVE_TICKS - state.waveTick) / TD_WAVE_TICKS;
-      state.ryo += Math.floor(
-        tdWaveBonus(state.wave) * remaining * state.stats.ryoMult,
+      gainRyo(
+        state,
+        Math.floor(tdWaveBonus(state.wave) * remaining * state.stats.ryoMult),
+        "early",
       );
       startWave_(state);
       openDraft(state);
@@ -1134,7 +1148,7 @@ const validSlot = (state: TdState, slot: number) =>
 const collectLoot = (state: TdState, item: TdLoot) => {
   switch (item.kind) {
     case "ryo":
-      state.ryo += Math.floor(item.value);
+      gainRyo(state, Math.floor(item.value), "loot", item.x, item.y);
       break;
     case "chakra":
       state.hero.chakra = Math.min(
@@ -1332,6 +1346,19 @@ const castUltimate = (state: TdState, ultimate: TdUltimate, x: number, y: number
 
 const emit = (state: TdState, event: TdEvent) => {
   if (state.recordEvents) state.events.push(event);
+};
+
+/** Ryo earned outside a kill, announced where it came from (the hero, unless a pickup). */
+const gainRyo = (
+  state: TdState,
+  amount: number,
+  source: Extract<TdEvent, { type: "ryo" }>["source"],
+  x = state.hero.x,
+  y = state.hero.y,
+) => {
+  if (amount <= 0) return;
+  state.ryo += amount;
+  emit(state, { type: "ryo", amount, source, x, y });
 };
 
 const distance = (ax: number, ay: number, bx: number, by: number) => {
@@ -2432,7 +2459,8 @@ const cleanupDead = (state: TdState) => {
     anyDead = true;
     state.kills += 1;
     const hunter = perk(state, "bounty_hunter") > 0 && (enemy.elite || enemy.boss);
-    state.ryo += Math.floor(enemy.bounty * state.stats.ryoMult * (hunter ? 3 : 1));
+    const bounty = Math.floor(enemy.bounty * state.stats.ryoMult * (hunter ? 3 : 1));
+    state.ryo += bounty;
     state.hero.chakra = Math.min(
       state.stats.maxChakra,
       state.hero.chakra + (enemy.boss ? 25 : 1),
@@ -2448,6 +2476,7 @@ const cleanupDead = (state: TdState) => {
         boss: enemy.boss,
         elite: enemy.elite,
         kind: enemy.kind,
+        ryo: bounty,
       });
     dropLoot(state, enemy);
     if (perk(state, "exploding_kunai")) {

@@ -102,9 +102,11 @@ export const tdReferenceBounty = (wave: number) => tableAt(bountyTable, wave);
 /** Enemy speed bonus, capped so late waves stay readable. */
 export const tdSpeedBonus = (wave: number) => 1 + Math.min(0.6, wave / 1000);
 
+/** Past this wave, elite and boss hits pierce a share of the hero's max health. */
+export const TD_PIERCING_AFTER_WAVE = 150;
 /** Share of the hero's max health an elite or boss hit pierces through every defense. */
 export const tdPiercingShare = (wave: number) =>
-  Math.min(0.04, Math.max(0, wave - 150) / 8000);
+  Math.min(0.04, Math.max(0, wave - TD_PIERCING_AFTER_WAVE) / 8000);
 
 /** Enemies in a normal wave before era modifiers. */
 export const tdWaveCount = (wave: number) =>

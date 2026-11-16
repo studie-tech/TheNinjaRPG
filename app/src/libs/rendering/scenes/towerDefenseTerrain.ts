@@ -11,7 +11,7 @@ import { buildHexTerrainData } from "@/libs/rendering/terrainData";
 /** World pixels per hex; the arena maps one simulation unit to one hex width. */
 const TD_HEX_SIZE = 100;
 
-/** A seeded biome arena with clear ground around the hero's zone in the centre. */
+/** A seeded biome arena whose centre, the hero's zone, holds only small ground detail. */
 export const prepareTowerDefenseTerrain = (seed: string, size: number) => {
   const center = { col: Math.floor(size / 2), row: Math.floor(size / 2) };
   const grid = createHexGrid(TD_HEX_SIZE, size, size, {
@@ -32,12 +32,11 @@ export const prepareTowerDefenseTerrain = (seed: string, size: number) => {
     const look = getProceduralTerrain(tile, "ground");
     looks.set(`${tile.col},${tile.row}`, look);
     tile.asset = look.spec.key;
-    const { description } = proceduralDecoration(prng, look.spec.key, tile);
-    if (
-      description &&
-      Math.max(Math.abs(tile.col - center.col), Math.abs(tile.row - center.row)) > 9
-    )
-      scenery.push(description);
+    // The hero's zone keeps only ground detail, so nothing tall hides the fight.
+    const open =
+      Math.max(Math.abs(tile.col - center.col), Math.abs(tile.row - center.row)) <= 9;
+    const { description } = proceduralDecoration(prng, look.spec.key, tile, open);
+    if (description) scenery.push(description);
   }
   const terrain = buildHexTerrainData(
     grid,

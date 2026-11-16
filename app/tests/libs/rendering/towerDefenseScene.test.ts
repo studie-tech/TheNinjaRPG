@@ -39,6 +39,8 @@ beforeEach(() => {
         fillRect() {},
         fillText() {},
         strokeText() {},
+        createLinearGradient: () => ({ addColorStop() {} }),
+        measureText: () => ({ width: 24 }),
       }) as never,
   );
 });
