@@ -15,6 +15,7 @@ import { releaseRenderer, takeParkedRenderer } from "@/libs/rendering/rendererPo
 import {
   baseRenderResolution,
   createRenderQualityGovernor,
+  forgetRejectedQualitySteps,
   INITIAL_HEALTHY_WINDOWS,
   initialRenderQualityLevel,
   matchingQualityLevel,
@@ -193,12 +194,8 @@ export const createGameRenderer = async (options: {
   const forgetRejectedSteps = () => {
     resolutionFloor = 1;
     ineffectiveEffects.clear();
-    for (const [surface, state] of sessionRenderQuality)
-      sessionRenderQuality.set(surface, {
-        ...state,
-        resolutionFloor: 1,
-        ineffectiveEffects: [],
-      });
+    // Covers changes from other tabs, which do not pass through this tab's settings writes.
+    forgetRejectedQualitySteps();
   };
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;

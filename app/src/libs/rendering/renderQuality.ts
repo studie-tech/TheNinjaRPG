@@ -247,6 +247,19 @@ export const sessionRenderQuality = new Map<
   }
 >();
 
+/**
+ * A settings change is a new situation to measure: every surface tries the steps it had
+ * rejected again. Settings writes call this whether or not a scene is mounted.
+ */
+export const forgetRejectedQualitySteps = () => {
+  for (const [surface, state] of sessionRenderQuality)
+    sessionRenderQuality.set(surface, {
+      ...state,
+      resolutionFloor: 1,
+      ineffectiveEffects: [],
+    });
+};
+
 /** The first wait for headroom; regressions double it up to the maximum. */
 export const INITIAL_HEALTHY_WINDOWS = 5;
 

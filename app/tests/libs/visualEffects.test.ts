@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { sessionRenderQuality } from "@/libs/rendering/renderQuality";
 import {
   readChosenVisualEffects,
   readRenderQuality,
@@ -8,7 +9,10 @@ import {
   subscribeRenderQuality,
 } from "@/libs/visualEffects";
 
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  localStorage.clear();
+  sessionRenderQuality.clear();
+});
 
 describe("visual effect choices", () => {
   it("records only effects the player sets, not defaults materialized from groups", () => {
@@ -39,5 +43,27 @@ describe("render quality preference", () => {
     expect(readRenderQuality()).toBe("low");
     localStorage.setItem("worldRenderQuality", '"ultra"');
     expect(readRenderQuality()).toBe("auto");
+  });
+});
+
+describe("rejected quality steps", () => {
+  it.each([
+    ["an effect", () => setVisualEffect("shadows", true)],
+    ["the quality", () => setRenderQuality("high")],
+  ])("are forgotten when %s changes while no scene is mounted", (_, change) => {
+    const level = { resolution: 2, disabled: [] };
+    sessionRenderQuality.set("travel", {
+      level,
+      patience: 10,
+      resolutionFloor: 2,
+      ineffectiveEffects: ["shadows"],
+    });
+    change();
+    expect(sessionRenderQuality.get("travel")).toEqual({
+      level,
+      patience: 10,
+      resolutionFloor: 1,
+      ineffectiveEffects: [],
+    });
   });
 });
