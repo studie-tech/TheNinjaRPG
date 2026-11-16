@@ -98,7 +98,7 @@ import { createRng, geometricCost, powi, type Rng } from "@/libs/towerDefense/rn
  * one): a claim from a page still running the previous rules is then answered with a
  * reload, which resumes the saved run under the new rules instead of failing its replay.
  */
-export const TD_SIM_VERSION = 3;
+export const TD_SIM_VERSION = 4;
 
 // ============================================
 // Types
@@ -2505,6 +2505,11 @@ const cleanupDead = (state: TdState) => {
         kind: enemy.kind,
         ryo: bounty,
       });
+    // A boss's pending strikes die with it, so its last slam never lands after the fight.
+    if (state.telegraphs.some((telegraph) => telegraph.sourceId === enemy.id))
+      state.telegraphs = state.telegraphs.filter(
+        (telegraph) => telegraph.sourceId !== enemy.id,
+      );
     dropLoot(state, enemy);
     if (perk(state, "exploding_kunai")) {
       state.hits.push(areaHit(state, enemy.x, enemy.y, 1.5, enemy.maxHp * 0.4, "fire"));
