@@ -28,6 +28,7 @@ import {
   villageDutyActorId,
 } from "@/server/utils/villageDuty";
 import { getUtcHourStart, secondsFromDate } from "@/utils/time";
+import { dateInputSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Manage persistent village enrollment without changing the owner's presence or combat state. */
@@ -98,7 +99,7 @@ export const villageDutyRouter = createTRPCRouter({
       z.object({
         sector: z.number().int().nonnegative(),
         originSocketId: z.string().max(128).optional(),
-        startedAt: z.date().optional(),
+        startedAt: dateInputSchema.optional(),
         revision: z.number().int().nonnegative().optional(),
       }),
     )

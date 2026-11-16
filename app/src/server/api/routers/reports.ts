@@ -92,7 +92,7 @@ import {
   HOUR_S,
   secondsFromNow,
 } from "@/utils/time";
-import { idSchema } from "@/validators/misc";
+import { dateInputSchema, idSchema } from "@/validators/misc";
 import type { ReportCommentSchema } from "@/validators/reports";
 import {
   modBotPerformanceSchema,
@@ -110,8 +110,8 @@ const reportFilteringSchema = z.object({
   reportedUser: z.string().optional(),
   reporterUser: z.string().optional(),
   status: z.enum(BanStates).optional(),
-  startDate: z.date().optional(),
-  endDate: z.date().optional(),
+  startDate: dateInputSchema.optional(),
+  endDate: dateInputSchema.optional(),
   system: z.string().optional(),
 });
 
