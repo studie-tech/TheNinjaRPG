@@ -218,6 +218,36 @@ describe("renderer diagnostics", () => {
     });
   });
 
+  it("restarts frames when a resize changes density at the same quality level", () => {
+    const { metrics, diagnostics } = setup();
+    const target = renderer();
+    const observer = diagnostics.observe("travel", target);
+    const quality = {
+      quality: "auto",
+      quality_level: 0,
+      quality_effects: "none",
+    } as const;
+    observer.quality(quality);
+    play(observer, 15);
+    target.resolution = 1.5;
+    observer.quality(quality);
+    expect(metrics.count.mock.calls.at(-1)?.[2].attributes).toMatchObject({
+      resolution: 1.5,
+      direction: "lower",
+    });
+    for (let elapsed = 0; elapsed < 7_000; elapsed += 16) observer.frame(16, 4);
+    expect(metrics.distribution).not.toHaveBeenCalled();
+    // Repeated visibility notifications at the same density preserve this useful window.
+    observer.quality(quality);
+    expect(names(metrics.count)).toEqual([
+      "renderer.session",
+      "renderer.quality.change",
+    ]);
+    observer.dispose();
+    expect(metrics.distribution).toHaveBeenCalledTimes(3);
+    expect(metrics.distribution.mock.calls[0]![2].attributes.resolution).toBe(1.5);
+  });
+
   it("collects no frames or device metrics on unsampled page loads but still reports failures", () => {
     const { metrics, capture, diagnostics } = setup(0.99);
     const observer = diagnostics.observe("combat", renderer());

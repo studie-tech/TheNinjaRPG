@@ -73,7 +73,7 @@ export const createRendererDiagnostics = ({
     let observed = 0;
     let lostAt: number | null = null;
     let restoreTimer: ReturnType<typeof setTimeout> | null = null;
-    let quality: RendererQuality | null = null;
+    let quality: (RendererQuality & { resolution: number }) | null = null;
 
     const finishFrames = () => {
       isCollecting = false;
@@ -129,16 +129,17 @@ export const createRendererDiagnostics = ({
       isSoftware: gpu.software,
       /**
        * Labels frame percentiles with the quality they were drawn at. A change restarts the
-       * window, so one report never mixes levels, and sampled sessions count each step.
+       * window, so one report never mixes levels or densities, and sampled sessions count each step.
        */
       quality: (next: RendererQuality) => {
         const previous = quality;
-        quality = next;
+        quality = { ...next, resolution: renderer.resolution };
         if (
           !previous ||
           (previous.quality === next.quality &&
             previous.quality_level === next.quality_level &&
-            previous.quality_effects === next.quality_effects)
+            previous.quality_effects === next.quality_effects &&
+            previous.resolution === renderer.resolution)
         )
           return;
         if (isCollecting) {
@@ -156,7 +157,10 @@ export const createRendererDiagnostics = ({
               surface,
               resolution: renderer.resolution,
               direction:
-                next.quality_level > previous.quality_level ? "lower" : "higher",
+                next.quality_level > previous.quality_level ||
+                renderer.resolution < previous.resolution
+                  ? "lower"
+                  : "higher",
               sample_rate: RENDERER_METRICS_SAMPLE_RATE,
             },
           }),
