@@ -1,15 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
-import { GameLayout } from "@/components/layout/GameLayout";
-import { PanelPublicLayout } from "@/components/layout/PanelPublicLayout";
-import PixelPublicLayout from "@/components/layout/PixelPublicLayout";
+import type { GameFrameProps } from "@/components/layout/GameLayout";
 import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
+import { Button } from "@/components/ui/button";
 import { applyGameLayout } from "@/hooks/useGameLayout";
-import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
+import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
+import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
+import { type GameLayout, type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import {
   applyFontScaleCookie,
   LAYOUT_PREFERENCE_COOKIE,
@@ -20,7 +22,35 @@ import type { WallpaperVariant } from "@/libs/wallpaperExperiment";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
 import { usePublicPathname } from "@/utils/routing";
 import { safeLocalStorageGetItem } from "@/utils/storage";
-import { useUserInfo } from "@/utils/UserContext";
+import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
+
+/**
+ * A visitor renders one of these frames, so each is its own chunk: the server render
+ * preloads the frame a variant shows, and the others never download. Without a loading
+ * state the frames suspend into the switch below rather than into a fallback.
+ */
+const ClassicGame = dynamic(() =>
+  import("@/components/layout/ClassicGameLayout").then((module) => module.ClassicGame),
+);
+const PixelGame = dynamic(() =>
+  import("@/components/layout/PixelGameLayout").then((module) => module.PixelGame),
+);
+const PanelGame = dynamic(() =>
+  import("@/components/layout/PanelGameLayout").then((module) => module.PanelGame),
+);
+const GAME_FRAMES = {
+  classic: ClassicGame,
+  pixel: PixelGame,
+  panel: PanelGame,
+} satisfies Record<GameLayout["frame"], React.ComponentType<GameFrameProps>>;
+const PanelPublicLayout = dynamic(() =>
+  import("@/components/layout/PanelPublicLayout").then(
+    (module) => module.PanelPublicLayout,
+  ),
+);
+const PixelPublicLayout = dynamic(
+  () => import("@/components/layout/PixelPublicLayout"),
+);
 
 /**
  * The cookie repair below refreshes at most once per document, so a cookie the server
@@ -96,15 +126,20 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
     }
   }, [initialLayout, initialIsSignedIn, router]);
 
-  const isKnownAnonymous = isClerkLoaded ? !isSignedIn : !initialIsSignedIn;
+  // A sign-in, sign-out or layout choice can need a frame that has not downloaded yet.
+  // Deferred, the current frame stays on screen until the next one can render.
+  const isKnownAnonymous = useDeferredValue(
+    isClerkLoaded ? !isSignedIn : !initialIsSignedIn,
+  );
+  const shownLayout = useDeferredValue(displayedLayout);
   useEffect(() => {
-    applyGameLayout(displayedLayout);
+    applyGameLayout(shownLayout);
     // A change of shell variant mid-session remounts everything under <html>, and React
     // strips what the head script set on it; put the font scale back.
     applyFontScaleCookie();
-  }, [displayedLayout]);
+  }, [shownLayout]);
 
-  const definition = getGameLayout(displayedLayout);
+  const definition = getGameLayout(shownLayout);
   const isPixelLanding =
     definition.publicFrame === "landing" && pathname === "/" && isKnownAnonymous;
   const publicFrames = { landing: PixelPublicLayout, page: PanelPublicLayout };
@@ -112,26 +147,65 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
     definition.publicFrame === "game"
       ? undefined
       : publicFrames[definition.publicFrame];
-  const content =
+  const GameFrame = GAME_FRAMES[definition.frame];
+  const showsPublicFrame =
     isKnownAnonymous &&
     PublicFrame &&
-    (isPixelLanding || definition.publicFrame === "page") ? (
-      <PublicFrame>{children}</PublicFrame>
-    ) : (
-      <GameLayout initialIsSignedIn={initialIsSignedIn}>{children}</GameLayout>
-    );
+    (isPixelLanding || definition.publicFrame === "page");
+  const content = showsPublicFrame ? (
+    <PublicFrame>{children}</PublicFrame>
+  ) : (
+    <GameFrame initialIsSignedIn={initialIsSignedIn}>{children}</GameFrame>
+  );
 
   return (
     <LayoutContextProvider
       isPixelLanding={isPixelLanding}
-      value={displayedLayout}
+      value={shownLayout}
       onLayoutChange={setDisplayedLayout}
       wallpaper={wallpaper}
     >
-      {content}
+      {/* A frame that fails to download leaves the page usable without it. A new frame
+          gets a fresh boundary; a failed one stays failed until the page reloads. */}
+      <ChunkErrorBoundary
+        key={showsPublicFrame ? definition.publicFrame : definition.frame}
+        fallback={() => <FrameLoadError>{children}</FrameLoadError>}
+      >
+        {content}
+      </ChunkErrorBoundary>
       <LayoutParticles />
     </LayoutContextProvider>
   );
 };
 
 export default LayoutSwitcher;
+
+/**
+ * The page without its frame, with a way back to the full layout. Pages read the audio
+ * settings the frames provide, so this provides them too; the tutorial assistant and the
+ * sidebars live in the frame and are absent until the reload.
+ */
+const FrameLoadError: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { data: audioUser } = useUserDataSelector((user) => ({
+    status: user.status,
+    village: user.village,
+    musicOn: user.musicOn,
+    buttonSfxOn: user.buttonSfxOn,
+    sfxOn: user.sfxOn,
+    isOutlaw: user.isOutlaw,
+    bloodlineId: user.bloodlineId,
+  }));
+  return (
+    <GlobalAudioProvider userData={audioUser}>
+      <div className="min-h-screen bg-background p-2 text-foreground">
+        <div role="alert" className="mb-2 flex items-center gap-2 text-sm">
+          <span>The page layout could not be loaded.</span>
+          <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+            Reload
+          </Button>
+        </div>
+        {children}
+      </div>
+    </GlobalAudioProvider>
+  );
+};

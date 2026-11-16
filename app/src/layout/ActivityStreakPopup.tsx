@@ -2,6 +2,7 @@
 
 import { useSetAtom } from "jotai";
 import { BellOff, Gift, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityStreaks } from "@/hooks/useActivityStreaks";
-import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
+import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
+import Loader from "@/layout/Loader";
 import {
   isActivityStreakPopupBlocking,
   resolveActivityStreakDateLatches,
@@ -26,6 +28,14 @@ import { isTutorialActive } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
 import { getDateKey } from "@/utils/time";
 import { blockingPopupOpenAtom, useUserDataSelector } from "@/utils/UserContext";
+
+const loadActivityStreakPanel = () => import("@/layout/ActivityStreakPanel");
+
+// The reward panel downloads with the streak query that decides whether the dialog opens,
+// so pages where it never appears do not carry it.
+const ActivityStreakPanel = dynamic(loadActivityStreakPanel, {
+  loading: () => <Loader explanation="Loading rewards" />,
+});
 
 const ActivityStreakPopup: React.FC = () => {
   const pathname = usePublicPathname();
@@ -83,6 +93,12 @@ const ActivityStreakPopup: React.FC = () => {
     shouldFetchStreaks,
     timeDiff,
   );
+  useEffect(() => {
+    if (shouldFetchStreaks)
+      void loadActivityStreakPanel().catch(() => {
+        // The dialog boundary reports failed downloads and keeps rewards dismissible.
+      });
+  }, [shouldFetchStreaks]);
 
   // Determine if we should show the popup
   const hasUnclaimedRewards =
@@ -166,7 +182,25 @@ const ActivityStreakPopup: React.FC = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <ActivityStreakPanel />
+        <ChunkErrorBoundary
+          fallback={() => (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-2 text-sm"
+            >
+              <span>Rewards could not be loaded.</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.location.reload()}
+              >
+                Reload
+              </Button>
+            </div>
+          )}
+        >
+          <ActivityStreakPanel />
+        </ChunkErrorBoundary>
 
         <div className="flex justify-between gap-2 pt-2">
           <Button variant="ghost" size="sm" onClick={handleDismissForToday}>

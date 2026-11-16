@@ -75,7 +75,6 @@ import {
   availableUserActions,
   getDefaultBasicActions,
   performBattleAction,
-  stillInBattle,
 } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { withBossForms } from "@/libs/combat/bossFight";
@@ -92,6 +91,7 @@ import {
 import { createAction, settlementWrites, updateBattle } from "@/libs/combat/database";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import {
   applyForcedLoadouts,
   buildQueuedTrainingLogs,

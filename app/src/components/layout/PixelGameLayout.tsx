@@ -20,6 +20,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { cn } from "@/libs/shadui";
+import { type GameFrameProps, GameLayout } from "./GameLayout";
 import { LayoutBackground } from "./shared/LayoutBackground";
 import {
   FloatingHelpButton,
@@ -350,3 +351,8 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
     </div>
   );
 };
+
+/** The Pixel frame around the game, as LayoutSwitcher loads it. */
+export const PixelGame = (props: GameFrameProps) => (
+  <GameLayout renderer={PixelGameLayout} {...props} />
+);

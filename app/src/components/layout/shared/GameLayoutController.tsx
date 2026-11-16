@@ -42,6 +42,7 @@ import {
   LayoutLeftSidebar,
   LayoutMainMenu,
   LayoutRightSidebarContent,
+  preloadSignedInSidebar,
   SignedInIcons,
 } from "./LayoutSidebars";
 import type { GameLayoutControllerProps, GameLayoutRenderProps } from "./layoutTypes";
@@ -226,6 +227,9 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     ];
   }, [notifications, pathname, rankedQueueCount, userId, activeTerritoryWar]);
   const isSignedInLayout = isClerkLoaded ? isSignedIn : initialIsSignedIn;
+  useEffect(() => {
+    if (isSignedInLayout) preloadSignedInSidebar();
+  }, [isSignedInLayout]);
   let accountState: AccountMenuState = null;
   if (isSignedInLayout && !userData) {
     if (!isClerkLoaded || userStatus === "pending") accountState = "loading";

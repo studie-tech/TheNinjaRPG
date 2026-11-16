@@ -1,7 +1,8 @@
 import { actionPointsAfterAction } from "@/libs/combat/actions";
 import { areBattleAllies } from "@/libs/combat/participants";
 import { spliceOrphanedSummons } from "@/libs/combat/summon";
-import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
+import { availableUserActions, calcActiveUser } from "./actions";
+import { stillInBattle } from "./inBattle";
 import { refreshMasteries } from "./mastery";
 import {
   applySageModeAfterRoundTransition,

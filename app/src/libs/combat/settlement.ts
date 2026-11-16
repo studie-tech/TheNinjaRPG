@@ -58,7 +58,7 @@ import { findRelationship } from "@/utils/alliance";
 import { randomInt, round } from "@/utils/math";
 import { countBoostingShrines, getShrineBoost, getStrucBoost } from "@/utils/village";
 import { checkAssassin, checkCoLeader } from "@/validators/clan";
-import { stillInBattle } from "./actions";
+import { stillInBattle } from "./inBattle";
 import type {
   BattleUserState,
   BattleWar,

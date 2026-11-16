@@ -3,7 +3,7 @@
 import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { useStore } from "jotai";
-import Pusher from "pusher-js";
+import type Pusher from "pusher-js";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { SuperJSONResult } from "superjson";
 import superjson from "superjson";
@@ -28,6 +28,7 @@ import {
   isConversationMuted,
 } from "@/libs/chatPanel";
 import { showMutationToast } from "@/libs/toast";
+import { createModuleLoader } from "@/utils/async";
 import {
   addUserInteractionListeners,
   playPreloadedAudio,
@@ -39,6 +40,12 @@ import { transformImageUrl } from "@/utils/image";
 import { pushToCombat, usePublicPathname } from "@/utils/routing";
 import { updateUserCache, updateUserNotifications } from "@/utils/userCache";
 import type { UserRecovery } from "@/validators/base";
+
+/** The websocket client, which loads once a player is signed in. */
+const loadPusherClient = createModuleLoader(() => import("pusher-js"));
+
+/** Longest wait between attempts to download the websocket client. */
+const MAX_CLIENT_RETRY_MS = 30_000;
 
 // Events sent to the user from websockets
 export type UserEvent = {
@@ -138,10 +145,13 @@ export const usePusherHandler = (
       let inboxAcknowledged = queryClient.getQueryData(inboxKey) !== undefined;
       let inboxReadRevision = 0;
       let profileInboxRevision: number | undefined;
+      let hasSubscribedProfileRead = false;
       const unsubscribeInboxReads = queryClient.getQueryCache().subscribe((event) => {
         if (event.type !== "updated") return;
-        if (event.query.queryHash === profileHash && event.action.type === "fetch")
+        if (event.query.queryHash === profileHash && event.action.type === "fetch") {
           profileInboxRevision = inboxReadRevision;
+          hasSubscribedProfileRead = true;
+        }
         if (event.action.type !== "success" || event.action.manual) return;
         if (event.query.queryHash === inboxHash) {
           inboxAcknowledged = true;
@@ -174,28 +184,6 @@ export const usePusherHandler = (
         }
         return canNotifyConversation(conversationId, isPing);
       };
-      // Pusher Channel
-      const pusher = new Pusher(
-        process.env.NEXT_PUBLIC_PUSHER_APP_KEY,
-        env.NEXT_PUBLIC_NODE_ENV === "development"
-          ? {
-              wsHost: "127.0.0.1",
-              wsPort: 6001,
-              wssPort: 6001,
-              forceTLS: false,
-              disableStats: true,
-              enabledTransports: ["ws", "wss"],
-              cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER,
-            }
-          : {
-              wsHost: "soketi.theninja-rpg.com",
-              forceTLS: true,
-              disableStats: true,
-              enabledTransports: ["ws", "wss"],
-              cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER,
-            },
-      );
-      setPusher(pusher);
       const pendingBattleSubscriptions = new Set<() => void>();
       const applyBattleEvent = async (
         battleId: string,
@@ -224,226 +212,235 @@ export const usePusherHandler = (
         pushToCombat(router, battleId);
         void utils.combat.getBattle.invalidate();
       };
-      // Listening on userId channel
-      const channel = pusher.subscribe(userId);
-      channel.bind("event", async (data: UserEvent) => {
-        if (data.type === "battle") {
-          if (!data.battleId) return;
-          const battleId = data.battleId;
-          const user = utils.profile.getUser.getData()?.userData;
+      /** Bind the account's channels once the client has loaded. */
+      const subscribe = (pusher: Pusher) => {
+        // Listening on userId channel
+        const channel = pusher.subscribe(userId);
+        channel.bind("pusher:subscription_succeeded", async () => {
+          if (isCancelled || notificationSession.current !== session) return;
+          hasSubscribedProfileRead = false;
+          // A snapshot read before subscription can miss events during the client download.
+          // Join initial loading, then reconcile unless a read already began after binding.
+          const profile = await utils.profile.getUser
+            .fetch(undefined, {
+              staleTime: Infinity,
+            })
+            .catch(() => {
+              // UserContext exposes profile failures and owns their recovery/redirect UX.
+              return undefined;
+            });
           if (
+            !profile ||
+            isCancelled ||
+            notificationSession.current !== session ||
+            profile.userData?.userId !== userId ||
+            hasSubscribedProfileRead
+          )
+            return;
+          try {
+            await utils.profile.getUser.invalidate();
+          } catch {
+            return;
+          }
+          const user = utils.profile.getUser.getData()?.userData;
+          // A recovered admission must enter combat just like its missed live event.
+          // An unchanged battle leaves deliberate navigation away from combat alone.
+          if (
+            !isCancelled &&
             notificationSession.current === session &&
             user?.userId === userId &&
-            lastBattleNotification.current !== battleId
+            user.status === "BATTLE" &&
+            user.battleId &&
+            user.battleId !== profile.userData.battleId
           ) {
-            // Record silent admissions too, so a duplicate cannot sound after the tab is hidden.
-            lastBattleNotification.current = battleId;
+            pushToCombat(router, user.battleId);
+            void utils.combat.getBattle.invalidate();
+          }
+        });
+        channel.bind("event", async (data: UserEvent) => {
+          if (data.type === "battle") {
+            if (!data.battleId) return;
+            const battleId = data.battleId;
+            const user = utils.profile.getUser.getData()?.userData;
             if (
-              data.isDefender &&
-              document.hidden &&
-              getAudioPreference("sfxOn", user.sfxOn)
+              notificationSession.current === session &&
+              user?.userId === userId &&
+              lastBattleNotification.current !== battleId
             ) {
-              void playPreloadedAudio(
-                transformImageUrl(BATTLE_ALERT_SFX_URL),
-                savedSfxVolume(),
-              );
-            }
-          }
-          const userRecovery = data.userRecovery
-            ? superjson.deserialize<UserRecovery>(data.userRecovery)
-            : undefined;
-          const ownOrigin =
-            !!data.originSocketId &&
-            data.originSocketId === pusher.connection.socket_id;
-          if (ownOrigin) {
-            // Preserve the admission mutation's revision until its recovery and costs settle.
-            const mutationCache = queryClient.getMutationCache();
-            const pending = mutationCache
-              .findAll({ status: "pending" })
-              .filter((mutation) => {
-                const variables = mutation.state.variables;
-                return (
-                  !!variables &&
-                  typeof variables === "object" &&
-                  "originSocketId" in variables &&
-                  variables.originSocketId === data.originSocketId
+              // Record silent admissions too, so a duplicate cannot sound after the tab is hidden.
+              lastBattleNotification.current = battleId;
+              if (
+                data.isDefender &&
+                document.hidden &&
+                getAudioPreference("sfxOn", user.sfxOn)
+              ) {
+                void playPreloadedAudio(
+                  transformImageUrl(BATTLE_ALERT_SFX_URL),
+                  savedSfxVolume(),
                 );
-              });
-            if (pending.length) {
-              const unsubscribe = mutationCache.subscribe(() => {
-                if (pending.some((mutation) => mutation.state.status === "pending"))
-                  return;
-                unsubscribe();
-                pendingBattleSubscriptions.delete(unsubscribe);
-                // The socket confirms admission even when the response with costs is lost.
-                void applyBattleEvent(battleId, true, userRecovery);
-              });
-              pendingBattleSubscriptions.add(unsubscribe);
-              return;
+              }
             }
-          }
-          await applyBattleEvent(battleId, ownOrigin, userRecovery);
-        } else if (data.type === "battleEnded") {
-          // The deleting socket recovers through its mutation response or transport-error callback.
-          if (
-            data.originSocketId &&
-            data.originSocketId === pusher.connection.socket_id
-          )
-            return;
-          await utils.profile.getUser.cancel();
-          await utils.profile.getUser.invalidate();
-          void utils.combat.getBattle.invalidate();
-          if (data.dungeonRunId) {
-            void utils.coop.dungeon.getState.invalidate();
-            router.push("/dungeon");
-          }
-        } else if (data.type === "questTeam") {
-          // Membership changes affect the roster, personal quest projection and reward offers.
-          await Promise.all([
-            utils.profile.getUser.invalidate(),
-            utils.coop.quest.overview.invalidate(),
-            utils.quests.getPendingRewardChoices.invalidate(),
-          ]);
-          if (data.message)
-            showMutationToast({
-              success: true,
-              message: data.message,
-              title: "Quest Team",
-              action: (
-                <ToastAction altText="Open Quest Teams">
-                  <Link href={data.route ?? "/questteams"}>
-                    {data.routeText ?? "Open team"}
-                  </Link>
-                </ToastAction>
-              ),
-            });
-        } else if (data.type === "eventTournament") {
-          // The originating action reconciles its response, including transport failure.
-          if (
-            data.originSocketId &&
-            data.originSocketId === pusher.connection.socket_id
-          )
-            return;
-          // Invitations and substitutions can make an idle tab a ready-check participant.
-          await Promise.all([
-            utils.profile.getUser.invalidate(),
-            refreshEventTournamentNotices(),
-            utils.tournament.getEvent.invalidate(),
-            utils.tournament.listEvents.invalidate(),
-          ]);
-        } else if (data.type === "parentalControlsChanged") {
-          // Drop cached chat history in every open tab when a parent changes access.
-          void utils.parentalControls.get.invalidate();
-          void utils.comments.getUserConversations.invalidate();
-          void utils.comments.getTavernIds.invalidate();
-          void utils.comments.getConversationComments.reset();
-        } else if (data.type === "newInbox") {
-          const shouldNotify =
-            (await resolveNotificationProfile(data.conversationId)) &&
-            canNotifyConversation(data.conversationId);
-          if (!shouldNotify || isInboxListShown()) {
-            // A shown list's reread also resets the server's inbox news, so no count appears.
-            void utils.comments.getUserConversations.invalidate();
-          } else if (
-            inboxAcknowledged ||
-            inboxQuery()?.state.fetchStatus === "fetching" ||
-            !isInboxDeliveryAfterProfile(
-              utils.profile.getUser.getData()?.serverTime,
-              data.countedAt,
+            const userRecovery = data.userRecovery
+              ? superjson.deserialize<UserRecovery>(data.userRecovery)
+              : undefined;
+            const ownOrigin =
+              !!data.originSocketId &&
+              data.originSocketId === pusher.connection.socket_id;
+            if (ownOrigin) {
+              // Preserve the admission mutation's revision until its recovery and costs settle.
+              const mutationCache = queryClient.getMutationCache();
+              const pending = mutationCache
+                .findAll({ status: "pending" })
+                .filter((mutation) => {
+                  const variables = mutation.state.variables;
+                  return (
+                    !!variables &&
+                    typeof variables === "object" &&
+                    "originSocketId" in variables &&
+                    variables.originSocketId === data.originSocketId
+                  );
+                });
+              if (pending.length) {
+                const unsubscribe = mutationCache.subscribe(() => {
+                  if (pending.some((mutation) => mutation.state.status === "pending"))
+                    return;
+                  unsubscribe();
+                  pendingBattleSubscriptions.delete(unsubscribe);
+                  // The socket confirms admission even when the response with costs is lost.
+                  void applyBattleEvent(battleId, true, userRecovery);
+                });
+                pendingBattleSubscriptions.add(unsubscribe);
+                return;
+              }
+            }
+            await applyBattleEvent(battleId, ownOrigin, userRecovery);
+          } else if (data.type === "battleEnded") {
+            // The deleting socket recovers through its mutation response or transport-error callback.
+            if (
+              data.originSocketId &&
+              data.originSocketId === pusher.connection.socket_id
             )
-          ) {
-            // Profile reads can include a delivery, and list reads can acknowledge it.
-            // Either uncertainty needs the authoritative count.
-            void utils.comments.getUserConversations.invalidate();
-            try {
-              await utils.profile.getUser.invalidate(undefined, { refetchType: "all" });
-            } catch {
-              // UserContext exposes a failed refresh; an eligible message can still show its toast.
+              return;
+            await utils.profile.getUser.cancel();
+            await utils.profile.getUser.invalidate();
+            void utils.combat.getBattle.invalidate();
+            if (data.dungeonRunId) {
+              void utils.coop.dungeon.getState.invalidate();
+              router.push("/dungeon");
             }
-          } else {
-            // The delivery already counted this message in the server's inbox news; the next
-            // list read resets that counter and clears this count.
-            void utils.comments.getUserConversations.invalidate(undefined, {
-              refetchType: "none",
-            });
-            await updateUserNotifications(
-              queryClient,
-              getQueryKey(api.profile.getUser, undefined, "query"),
-              incrementInboxNotifications,
-            );
-          }
-          if (shouldNotify) {
-            if (!canNotifyConversation(data.conversationId)) return;
-            if (!isOnInbox()) {
-              const canOpenChat =
-                (utils.profile.getUser.getData()?.userData?.level ?? 0) >=
-                MESSAGING_MIN_LEVEL;
+          } else if (data.type === "questTeam") {
+            // Membership changes affect the roster, personal quest projection and reward offers.
+            await Promise.all([
+              utils.profile.getUser.invalidate(),
+              utils.coop.quest.overview.invalidate(),
+              utils.quests.getPendingRewardChoices.invalidate(),
+            ]);
+            if (data.message)
               showMutationToast({
                 success: true,
-                message: "You have a new message",
-                duration: data.duration,
-                title: "Notification!",
+                message: data.message,
+                title: "Quest Team",
                 action: (
-                  <ToastAction
-                    altText={canOpenChat ? "Open chat" : "To Inbox"}
-                    onClick={() => {
-                      if (!canOpenChat) {
-                        router.push("/inbox");
-                        return;
-                      }
-                      store.set(chatPanelAtom, (current) => ({
-                        ...current,
-                        openRequested: true,
-                        tab: "inbox",
-                        conversationId: data.conversationId,
-                      }));
-                    }}
-                  >
-                    {canOpenChat ? "Open chat" : "To Inbox"}
+                  <ToastAction altText="Open Quest Teams">
+                    <Link href={data.route ?? "/questteams"}>
+                      {data.routeText ?? "Open team"}
+                    </Link>
                   </ToastAction>
                 ),
               });
-            }
-          }
-        } else if (data.type === "userMessage" || data.type === "homeInvitation") {
-          if (data.type === "homeInvitation")
-            await utils.home.getHomeRequests.invalidate();
-          showMutationToast({
-            success: true,
-            message: data.message ?? "You have a new message",
-            duration: data.duration,
-            title: "Notification!",
-            action: routeToastAction(
-              "To Arena",
-              data.route ?? "/battlearena",
-              data.routeText ?? "To Profile",
-            ),
-          });
-        } else if (data.type === "pinged") {
-          const conversationId = data.conversationId;
-          if (
-            (await resolveNotificationProfile(conversationId, true)) &&
-            canNotifyConversation(conversationId, true)
-          ) {
-            if (conversationId && data.isPublic) {
-              store.set(chatMentionsAtom, (old) =>
-                addConversationMention(old, conversationId),
+          } else if (data.type === "eventTournament") {
+            // The originating action reconciles its response, including transport failure.
+            if (
+              data.originSocketId &&
+              data.originSocketId === pusher.connection.socket_id
+            )
+              return;
+            // Invitations and substitutions can make an idle tab a ready-check participant.
+            await Promise.all([
+              utils.profile.getUser.invalidate(),
+              refreshEventTournamentNotices(),
+              utils.tournament.getEvent.invalidate(),
+              utils.tournament.listEvents.invalidate(),
+            ]);
+          } else if (data.type === "parentalControlsChanged") {
+            // Drop cached chat history in every open tab when a parent changes access.
+            void utils.parentalControls.get.invalidate();
+            void utils.comments.getUserConversations.invalidate();
+            void utils.comments.getTavernIds.invalidate();
+            void utils.comments.getConversationComments.reset();
+          } else if (data.type === "newInbox") {
+            const shouldNotify =
+              (await resolveNotificationProfile(data.conversationId)) &&
+              canNotifyConversation(data.conversationId);
+            if (!shouldNotify || isInboxListShown()) {
+              // A shown list's reread also resets the server's inbox news, so no count appears.
+              void utils.comments.getUserConversations.invalidate();
+            } else if (
+              inboxAcknowledged ||
+              inboxQuery()?.state.fetchStatus === "fetching" ||
+              !isInboxDeliveryAfterProfile(
+                utils.profile.getUser.getData()?.serverTime,
+                data.countedAt,
+              )
+            ) {
+              // Profile reads can include a delivery, and list reads can acknowledge it.
+              // Either uncertainty needs the authoritative count.
+              void utils.comments.getUserConversations.invalidate();
+              try {
+                await utils.profile.getUser.invalidate(undefined, {
+                  refetchType: "all",
+                });
+              } catch {
+                // UserContext exposes a failed refresh; an eligible message can still show its toast.
+              }
+            } else {
+              // The delivery already counted this message in the server's inbox news; the next
+              // list read resets that counter and clears this count.
+              void utils.comments.getUserConversations.invalidate(undefined, {
+                refetchType: "none",
+              });
+              await updateUserNotifications(
+                queryClient,
+                getQueryKey(api.profile.getUser, undefined, "query"),
+                incrementInboxNotifications,
               );
             }
-            showMutationToast({
-              success: true,
-              message: data.message ?? "You have been pinged",
-              duration: data.duration,
-              title: "Notification!",
-            });
-          }
-        }
-      });
-      // Listen on clanId channel
-      if (clanId) {
-        const clanChannel = pusher.subscribe(clanId);
-        clanChannel.bind("event", (data: UserEvent) => {
-          if (data.type === "userMessage") {
+            if (shouldNotify) {
+              if (!canNotifyConversation(data.conversationId)) return;
+              if (!isOnInbox()) {
+                const canOpenChat =
+                  (utils.profile.getUser.getData()?.userData?.level ?? 0) >=
+                  MESSAGING_MIN_LEVEL;
+                showMutationToast({
+                  success: true,
+                  message: "You have a new message",
+                  duration: data.duration,
+                  title: "Notification!",
+                  action: (
+                    <ToastAction
+                      altText={canOpenChat ? "Open chat" : "To Inbox"}
+                      onClick={() => {
+                        if (!canOpenChat) {
+                          router.push("/inbox");
+                          return;
+                        }
+                        store.set(chatPanelAtom, (current) => ({
+                          ...current,
+                          openRequested: true,
+                          tab: "inbox",
+                          conversationId: data.conversationId,
+                        }));
+                      }}
+                    >
+                      {canOpenChat ? "Open chat" : "To Inbox"}
+                    </ToastAction>
+                  ),
+                });
+              }
+            }
+          } else if (data.type === "userMessage" || data.type === "homeInvitation") {
+            if (data.type === "homeInvitation")
+              await utils.home.getHomeRequests.invalidate();
             showMutationToast({
               success: true,
               message: data.message ?? "You have a new message",
@@ -455,30 +452,118 @@ export const usePusherHandler = (
                 data.routeText ?? "To Profile",
               ),
             });
+          } else if (data.type === "pinged") {
+            const conversationId = data.conversationId;
+            if (
+              (await resolveNotificationProfile(conversationId, true)) &&
+              canNotifyConversation(conversationId, true)
+            ) {
+              if (conversationId && data.isPublic) {
+                store.set(chatMentionsAtom, (old) =>
+                  addConversationMention(old, conversationId),
+                );
+              }
+              showMutationToast({
+                success: true,
+                message: data.message ?? "You have been pinged",
+                duration: data.duration,
+                title: "Notification!",
+              });
+            }
           }
         });
-      }
-      // Listen on village channel
-      if (villageId) {
-        const villageChannel = pusher.subscribe(`village-${villageId}`);
-        villageChannel.bind("event", (data: UserEvent) => {
-          if (data.type === "villageAlert") {
-            showMutationToast({
-              success: true,
-              message: data.message ?? "Village alert!",
-              duration: data.duration,
-              title: "Village Notification!",
-              action: data.route
-                ? routeToastAction("Action", data.route, data.routeText ?? "Go")
-                : undefined,
-            });
-          }
-        });
-      }
+        // Listen on clanId channel
+        if (clanId) {
+          const clanChannel = pusher.subscribe(clanId);
+          clanChannel.bind("event", (data: UserEvent) => {
+            if (data.type === "userMessage") {
+              showMutationToast({
+                success: true,
+                message: data.message ?? "You have a new message",
+                duration: data.duration,
+                title: "Notification!",
+                action: routeToastAction(
+                  "To Arena",
+                  data.route ?? "/battlearena",
+                  data.routeText ?? "To Profile",
+                ),
+              });
+            }
+          });
+        }
+        // Listen on village channel
+        if (villageId) {
+          const villageChannel = pusher.subscribe(`village-${villageId}`);
+          villageChannel.bind("event", (data: UserEvent) => {
+            if (data.type === "villageAlert") {
+              showMutationToast({
+                success: true,
+                message: data.message ?? "Village alert!",
+                duration: data.duration,
+                title: "Village Notification!",
+                action: data.route
+                  ? routeToastAction("Action", data.route, data.routeText ?? "Go")
+                  : undefined,
+              });
+            }
+          });
+        }
+      };
+      // pusher-js loads after hydration, and only for a signed-in player.
+      let pusher: Pusher | undefined;
+      let isCancelled = false;
+      let retryTimer: ReturnType<typeof setTimeout> | undefined;
+      let failedAttempts = 0;
+      const connect = (PusherClient: typeof Pusher) => {
+        // A sign-out or account switch during the download must not open a connection.
+        if (isCancelled) return;
+        const connection = new PusherClient(
+          process.env.NEXT_PUBLIC_PUSHER_APP_KEY,
+          env.NEXT_PUBLIC_NODE_ENV === "development"
+            ? {
+                wsHost: "127.0.0.1",
+                wsPort: 6001,
+                wssPort: 6001,
+                forceTLS: false,
+                disableStats: true,
+                enabledTransports: ["ws", "wss"],
+                cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER,
+              }
+            : {
+                wsHost: "soketi.theninja-rpg.com",
+                forceTLS: true,
+                disableStats: true,
+                enabledTransports: ["ws", "wss"],
+                cluster: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER,
+              },
+        );
+        pusher = connection;
+        setPusher(connection);
+        subscribe(connection);
+      };
+      // A failed download (a flaky network, or a chunk a newer deploy removed) retries
+      // with backoff, so the tab does not stay without live updates.
+      const load = () => {
+        loadPusherClient().then(
+          ({ default: PusherClient }) => connect(PusherClient),
+          () => {
+            if (isCancelled) return;
+            failedAttempts += 1;
+            retryTimer = setTimeout(
+              load,
+              Math.min(MAX_CLIENT_RETRY_MS, 1000 * 2 ** failedAttempts),
+            );
+          },
+        );
+      };
+      load();
       // Cleanup
       return () => {
+        isCancelled = true;
+        clearTimeout(retryTimer);
         unsubscribeInboxReads();
         for (const unsubscribe of pendingBattleSubscriptions) unsubscribe();
+        if (!pusher) return;
         pusher.unsubscribe(userId);
         if (clanId) pusher.unsubscribe(clanId);
         if (villageId) pusher.unsubscribe(`village-${villageId}`);

@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/use-toast";
 import { CONFETTI_SFX_URL } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import Image from "@/layout/Image";
+import { LazyParsedHtml } from "@/layout/LazyParsedHtml";
 import Link from "@/layout/Link";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getAudioPreference } from "@/libs/audioPreferences";
@@ -20,7 +21,6 @@ import { registerParticlePlugins } from "@/libs/particlePlugins";
 import { getSessionErrorToastId } from "@/libs/trpcSession";
 import { countNames } from "@/utils/array";
 import { playPreloadedAudio, savedSfxVolume } from "@/utils/audio";
-import { parseHtml } from "@/utils/parse";
 import type { PostProcessedRewards } from "@/validators/rewards";
 import type { CacheRewardDisplay } from "@/validators/weightedCache";
 
@@ -200,7 +200,11 @@ export const showMutationToast = (data: {
   data.announcements?.forEach((message) => {
     showMutationToast({
       success: true,
-      message: <div>{parseHtml(message)}</div>,
+      message: (
+        <div>
+          <LazyParsedHtml html={message} />
+        </div>
+      ),
       title: "Notification!",
     });
   });
@@ -313,7 +317,9 @@ export const showRewardToast = (
             >
               <b>Objective {notificationIndex + 1}:</b>
               <br />
-              <i>{parseHtml(description)}</i>
+              <i>
+                <LazyParsedHtml html={description} />
+              </i>
             </div>
           ))}
         </div>
@@ -322,7 +328,9 @@ export const showRewardToast = (
         <div>
           <b>Quest Completed:</b>
           <br />
-          <i>{parseHtml(quest.successDescription)}</i>
+          <i>
+            <LazyParsedHtml html={quest.successDescription} />
+          </i>
         </div>
       )}
       <div className="flex flex-row items-center">

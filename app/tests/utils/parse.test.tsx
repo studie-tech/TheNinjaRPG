@@ -108,4 +108,21 @@ describe("parseHtml during server rendering", () => {
       render("<blockquote>outer <blockquote>inner</blockquote></blockquote>"),
     ).not.toThrow();
   });
+
+  it("drops attributes that reach React as handlers, React props or raw HTML", () => {
+    const html = render(
+      '<x-foo onclick="alert(1)" ref="r" key="k" children="kid" dangerouslySetInnerHTML="x" data-ok="1">text</x-foo>',
+    );
+    expect(html).toContain('data-ok="1"');
+    expect(html).toContain("text");
+    expect(html).not.toMatch(/onclick|ref=|key=|kid|dangerously/i);
+  });
+
+  it("drops SVG animations and leaves script links to React's URL guard", () => {
+    const html = render(
+      '<svg><a xlink:href="javascript:alert(1)"><text>x</text></a><animate attributeName="href" to="javascript:alert(1)"/></svg>',
+    );
+    expect(html).not.toContain("<animate");
+    expect(html).not.toContain("javascript:alert(1)");
+  });
 });

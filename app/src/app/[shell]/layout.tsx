@@ -2,10 +2,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
-import { extractRouterConfig } from "uploadthing/server";
-import { CDN_CACHED_QUERY_PATHS } from "@/api/root";
 import TrpcClientProvider from "@/app/_trpc/Provider";
-import { ourFileRouter } from "@/app/api/uploadthing/core";
+import { UPLOAD_ROUTER_CONFIG } from "@/app/api/uploadthing/routerConfig";
 import NativeBridge from "@/components/native/NativeBridge";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import PWAManager from "@/components/pwa/PWAManager";
@@ -50,6 +48,7 @@ import {
   SITE_URL,
 } from "@/libs/seo";
 import { parseShellParam, SHELL_PARAMS } from "@/libs/shell";
+import { CDN_CACHED_QUERY_PATHS } from "@/server/api/cdnCachedQueries";
 import { UserContextProvider } from "@/utils/UserContext";
 
 import "../../styles/globals.css";
@@ -142,7 +141,7 @@ export default async function RootLayout({
         <StructuredData />
         <NextSSRPlugin
           /** https://docs.uploadthing.com/getting-started/appdir */
-          routerConfig={extractRouterConfig(ourFileRouter)}
+          routerConfig={UPLOAD_ROUTER_CONFIG}
         />
         <ClerkProvider
           afterSignOutUrl="/"

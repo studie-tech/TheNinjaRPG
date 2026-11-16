@@ -5,7 +5,7 @@ import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
 import { Bell, Bug, Eclipse, Link2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type React from "react";
-import { useState } from "react";
+import { Suspense, use, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,15 +20,16 @@ import {
   type UserStatus,
 } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
+import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import { GameSettingsPopover, type GameSettingsUser } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import { SideBannerTitle } from "@/layout/SideBannerTitle";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import { getMainNavbarLinks, type NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
+import { createModuleLoader } from "@/utils/async";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserData, useUserDataSelector } from "@/utils/UserContext";
 import { CollapsibleNotifications } from "./LayoutNotifications";
@@ -98,6 +99,20 @@ const MenuBoxCombat = dynamic(() => import("@/layout/MenuBoxCombat"), {
   loading: () => <SidebarLoadingSkeleton />,
 });
 
+// Only a loaded character has a profile box; visitors never download it.
+const loadMenuBoxProfile = createModuleLoader(() => import("@/layout/MenuBoxProfile"));
+
+/**
+ * Start the profile box download with the signed-in frame, so it arrives alongside the
+ * account rather than after it and renders without a loading state.
+ */
+export const preloadSignedInSidebar = () => void loadMenuBoxProfile();
+
+const MenuBoxProfile = () => {
+  const { default: LoadedMenuBoxProfile } = use(loadMenuBoxProfile());
+  return <LoadedMenuBoxProfile />;
+};
+
 interface LayoutLeftSidebarProps {
   variant: GameLayoutId;
   isSignedInLayout: boolean;
@@ -132,7 +147,26 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
               {userData.username} <Link2 className="inline-block h-5 w-5" />
             </Link>
           </SideBannerTitle>
-          <MenuBoxProfile />
+          <ChunkErrorBoundary
+            fallback={(retry) => (
+              <div className="p-2 text-sm">
+                <p>We couldn&apos;t load your profile.</p>
+                <Button variant="outline" onClick={retry}>
+                  Try again
+                </Button>
+              </div>
+            )}
+          >
+            <Suspense
+              fallback={
+                <SidebarLoadingSkeleton
+                  className={layoutVariantClasses[variant].leftSidebarReservation}
+                />
+              }
+            >
+              <MenuBoxProfile />
+            </Suspense>
+          </ChunkErrorBoundary>
         </>
       )}
       {showPublicContent && (

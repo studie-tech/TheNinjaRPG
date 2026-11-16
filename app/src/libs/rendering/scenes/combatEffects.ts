@@ -1,7 +1,7 @@
 import type { Grid } from "honeycomb-grid";
 import { Container } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
-import { stillInBattle } from "@/libs/combat/actions";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import type { GroundEffect, ReturnedBattle, UserEffect } from "@/libs/combat/types";
 import type { TerrainHex } from "@/libs/hexgrid";
 import {

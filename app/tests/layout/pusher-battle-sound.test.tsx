@@ -16,6 +16,12 @@ import { testRouter } from "../setup/router";
 import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
+
+/** Let the hook's on-demand pusher-js import settle, so its channels are bound. */
+const connectPusher = () =>
+  act(async () => {
+    await import("pusher-js");
+  });
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
 let hidden = true;
 beforeEach(() => {
@@ -44,7 +50,7 @@ afterEach(() => {
 });
 
 it("preloads and unlocks the alert, plays once at saved volume, and enters combat", async () => {
-  const test = mount();
+  const test = await mount();
   expect(audio.preloadAudioBuffers).toHaveBeenCalledWith([BATTLE_ALERT_SFX_URL]);
   act(() => document.dispatchEvent(new window.Event("click")));
   expect(audio.unlockAudioPlayback).toHaveBeenCalledTimes(1);
@@ -69,7 +75,7 @@ it.each([
   { visible: false, sfxOn: true, isDefender: undefined },
 ])("keeps admission silent for %j", async ({ visible, sfxOn, isDefender }) => {
   hidden = !visible;
-  const test = mount(sfxOn);
+  const test = await mount(sfxOn);
   await act(async () => test.receive({ isDefender }));
   expect(test.play).not.toHaveBeenCalled();
   expect(test.qc.getQueryData(test.key)).toMatchObject({
@@ -78,7 +84,7 @@ it.each([
 });
 
 it("does not replay a foreground admission when its duplicate arrives in the background", async () => {
-  const test = mount();
+  const test = await mount();
   hidden = false;
   await act(async () => test.receive());
   hidden = true;
@@ -87,7 +93,7 @@ it("does not replay a foreground admission when its duplicate arrives in the bac
 });
 
 it("reads the current effects preference for each event", async () => {
-  const test = mount();
+  const test = await mount();
   await act(async () => test.receive());
   test.setProfile(false);
   await act(async () => test.receive({ battleId: "battle-two" }));
@@ -95,7 +101,7 @@ it("reads the current effects preference for each event", async () => {
 });
 
 it("honors the local playback preference", async () => {
-  const test = mount();
+  const test = await mount();
   vi.spyOn(preferences, "getAudioPreference").mockReturnValue(false);
   await act(async () => test.receive());
   expect(test.play).not.toHaveBeenCalled();
@@ -104,7 +110,7 @@ it("honors the local playback preference", async () => {
 it.each(["unmount", "account switch"])(
   "ignores stale admissions after %s",
   async (change) => {
-    const test = mount();
+    const test = await mount();
     if (change === "unmount") test.view.unmount();
     else test.setProfile(true, "another-player");
     await act(async () => test.receive());
@@ -112,8 +118,31 @@ it.each(["unmount", "account switch"])(
   },
 );
 
+it("opens no connection without a player or after an unmount during the client download", async () => {
+  const construct = vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({ bind: () => undefined }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+    connection: { socket_id: "tab" },
+  })) as never);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(qc);
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <TrpcTestProviders client={trpcClient} queryClient={qc}>
+      {children}
+    </TrpcTestProviders>
+  );
+  const signedOut = renderHook(() => usePusherHandler(undefined), { wrapper });
+  await connectPusher();
+  expect(signedOut.result.current).toBeUndefined();
+  renderHook(() => usePusherHandler("player"), { wrapper }).unmount();
+  await connectPusher();
+  expect(construct).not.toHaveBeenCalled();
+});
+
 /** Exercise live-event guards with an isolated profile cache and mocked transport/playback. */
-function mount(sfxOn = true) {
+async function mount(sfxOn = true) {
   let receive!: (data: UserEvent) => Promise<void>;
   vi.spyOn(Pusher, "default").mockImplementation((() => ({
     subscribe: (channel: string) => ({
@@ -161,6 +190,7 @@ function mount(sfxOn = true) {
       initialProps: { villageId: "village" },
     },
   );
+  await connectPusher();
   return {
     qc,
     key,

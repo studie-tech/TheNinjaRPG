@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { stillInBattle } from "@/libs/combat/actions";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import { getBattleSpawnLocations } from "@/libs/combat/participants";
 import type {
   BattleUserState,

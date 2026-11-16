@@ -27,7 +27,6 @@ import type { PathCalculator, TerrainHex } from "@/libs/hexgrid";
 import { createHexGrid, nameArenaTile, oddQHexDistance } from "@/libs/hexgrid";
 import { randomInt, secureRandomInt } from "@/utils/math";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
-import { stillInBattle } from "./actions";
 import type { GenName } from "./constants";
 import {
   BARRIER_DAMAGE_TAG_TYPES,
@@ -39,6 +38,7 @@ import {
   INITIATIVE_TERRITORY_BONUS,
   POST_PIERCE_TAGS,
 } from "./constants";
+import { stillInBattle } from "./inBattle";
 import type {
   BattleRoundContext,
   BattleUserItem,

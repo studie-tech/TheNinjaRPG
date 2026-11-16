@@ -1,6 +1,6 @@
 import { AutoBattleTypes } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
-import { stillInBattle } from "@/libs/combat/actions";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import type { BattleUserState, CombatAction } from "@/libs/combat/types";
 
 /** The combatant that owns this summon, or null. Only meaningful when

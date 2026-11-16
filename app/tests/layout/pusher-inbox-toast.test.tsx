@@ -23,6 +23,12 @@ import { TrpcTestProviders, testApi } from "../setup/trpc";
 const queryClients: QueryClient[] = [];
 const router = testRouter("pusher-inbox");
 
+/** Let the hook's on-demand pusher-js import settle, so its channels are bound. */
+const connectPusher = () =>
+  act(async () => {
+    await import("pusher-js");
+  });
+
 beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -82,6 +88,7 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
     </TrpcTestProviders>
   );
   const view = renderHook(() => usePusherHandler("player"), { wrapper });
+  await connectPusher();
 
   pathname = "/inbox";
   view.rerender();
@@ -158,6 +165,7 @@ it("counts a delivered private message in the cached profile without rereading i
     </TrpcTestProviders>
   );
   renderHook(() => usePusherHandler("player"), { wrapper });
+  await connectPusher();
   const inboxNews = () =>
     queryClient
       .getQueryData<UserCache>(profileKey)
@@ -267,6 +275,7 @@ it("counts only public conversation pings as Tavern notifications", async () => 
     </TrpcTestProviders>
   );
   renderHook(() => usePusherHandler("player"), { wrapper });
+  await connectPusher();
   await act(async () =>
     receiveEvent({ type: "pinged", conversationId: "private", isPublic: false }),
   );
@@ -320,6 +329,7 @@ it("keeps the notification list when a battle event finds the derived combat ent
     </TrpcTestProviders>
   );
   renderHook(() => usePusherHandler("player"), { wrapper });
+  await connectPusher();
 
   await act(async () => receiveEvent({ type: "battle", battleId: "battle-1" }));
 
@@ -455,6 +465,7 @@ it.each([
       </TrpcTestProviders>
     );
     const view = renderHook(() => usePusherHandler("player"), { wrapper });
+    await connectPusher();
     try {
       const { promise: responseReady, resolve: settle } = deferred<void>();
       const mutation = queryClient.getMutationCache().build(queryClient, {

@@ -8,9 +8,10 @@ import {
   PET_BATTLE_CONFIG,
 } from "@/drizzle/constants";
 import type { Jutsu, PetSpecies, UserPet } from "@/drizzle/schema";
-import { getDefaultBasicActions, stillInBattle } from "@/libs/combat/actions";
+import { getDefaultBasicActions } from "@/libs/combat/actions";
 import { GROUND_EFFECT_TAG_TYPES } from "@/libs/combat/constants";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
+import { stillInBattle } from "@/libs/combat/inBattle";
 import { checkFriendlyFire } from "@/libs/combat/process";
 import {
   markPassiveEffect,

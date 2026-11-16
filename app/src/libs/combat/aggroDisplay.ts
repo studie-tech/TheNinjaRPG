@@ -1,4 +1,4 @@
-import { stillInBattle } from "./actions";
+import { stillInBattle } from "./inBattle";
 import { wantsHumanActionSet } from "./turn";
 import type { ReturnedUserState } from "./types";
 

@@ -1,7 +1,8 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { headers } from "next/headers";
 import type { NextRequest } from "next/server";
-import { appRouter, CDN_CACHED_QUERY_PATHS } from "@/api/root";
+import { appRouter } from "@/api/root";
+import { CDN_CACHED_QUERY_PATHS } from "@/server/api/cdnCachedQueries";
 import { createCdnTRPCContext } from "@/server/api/trpc";
 import { withRequestScope } from "@/server/requestScope";
 import { trpcPathsFromUrl } from "@/server/utils/botid";
