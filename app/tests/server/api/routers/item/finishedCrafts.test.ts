@@ -117,6 +117,28 @@ describeWithDatabase("finished crafts in the backpack", () => {
     expect((await stacks()).map(([, quantity]) => quantity).sort()).toEqual([2, 4]);
   });
 
+  it.each([-2 * minute, -minute / 2])(
+    "acknowledges a concurrently settled craft kept by the merge (finish offset %s)",
+    async (finishesInMs) => {
+      await insertUserItems([
+        { id: "kit-carried", userId, itemId: "kit", quantity: 3 },
+        craftedKits(2, -3 * minute, "kit-z-crafted"),
+      ]);
+      const db = await getTestDatabase();
+      const seen = await db.query.userItem.findMany({
+        where: eq(userItem.userId, userId),
+      });
+      const snapshotAt = new Date(Date.now() - minute);
+      // Another request settles the queued craft before this read's merge reload.
+      await insertUserItems([craftedKits(2, finishesInMs, "kit-a-crafted")]);
+      expect(await joinFinishedCrafts(db, userId, seen, snapshotAt)).toBe(true);
+      expect(await stacks()).toEqual([["kit-a-crafted", 7, false]]);
+      expect((await splitItemStack(db, "kit-a-crafted", userId, 4)).success).toBe(true);
+      await (await callerFor(itemRouter, userId)).getUserItems();
+      expect((await stacks()).map(([, quantity]) => quantity).sort()).toEqual([3, 4]);
+    },
+  );
+
   it("joins a craft that finished during a battle once the battle is over", async () => {
     const db = await getTestDatabase();
     await db

@@ -102,11 +102,13 @@ export const joinFinishedCrafts = async (
     ownerOutOfBattle(),
   );
   if (!joined) return false;
+  // Queue settlement may add a finished keeper after the initial inventory snapshot.
+  // Acknowledge every confirmed merge row so later player splits stay split.
   await updateUserItemForJoinFinishedCrafts(
     client,
     userId,
-    finished.map((row) => row.id),
-    now,
+    [...finished.map((row) => row.id), ...joined.map((row) => row.id)],
+    new Date(),
   );
   return joined.length > 0;
 };

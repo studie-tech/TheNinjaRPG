@@ -94,13 +94,6 @@ describeWithDatabase("mutation cache recovery for abandoned merge claims", () =>
         itemId: "armor",
         durability: 100,
       },
-      {
-        id: "abandoned",
-        userId: "recovery-player",
-        itemId: "herb",
-        quantity: -3,
-        updatedAt: claimTime,
-      },
     ]);
     await db.insert(itemLoadout).values({
       id: "loadout",
@@ -128,6 +121,16 @@ describeWithDatabase("mutation cache recovery for abandoned merge claims", () =>
     );
     const profileRevision = prepareUserUpdate(client, profileKey);
 
+    // The cached inventory predates the merge claim that the mutation will recover.
+    await insertUserItems([
+      {
+        id: "abandoned",
+        userId: "recovery-player",
+        itemId: "herb",
+        quantity: -3,
+        updatedAt: claimTime,
+      },
+    ]);
     setSystemTime(recoveryTime);
     const result = await api.selectItemLoadout({ id: "loadout" });
     expect(result.success, result.message).toBe(true);
