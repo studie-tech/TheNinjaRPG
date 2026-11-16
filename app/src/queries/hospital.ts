@@ -23,6 +23,16 @@ import { getNextUserSnapshotAt, secondsFromNow } from "@/utils/time";
 /** Table alias for recipient joins, keeping its columns distinct from other participants. */
 const recipient = alias(userData, "recipient");
 
+/** Build the caller lookup for `getHospitalizedUsers`, projecting the fields its listing filters on. */
+export const findUserDataForGetHospitalizedUsers = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    columns: { sector: true, villageId: true },
+    where: eq(userData.userId, userId),
+  });
+
 /** Build the `userData` listing for `getHospitalizedUsers`, including predicates on `sector`, `villageId`, `status`. */
 export const listUserDataForGetHospitalizedUsers = (
   client: Pick<DrizzleClient, "query">,

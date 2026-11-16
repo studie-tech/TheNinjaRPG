@@ -100,6 +100,7 @@ export const huntingRouter = createTRPCRouter({
       allowance: contract
         ? huntingAllowance(contract, row.progress ?? undefined, serverTime.getTime())
         : null,
+      cooldownUntil: row.progress?.cooldownUntil ?? null,
       serverTime,
     };
   }),

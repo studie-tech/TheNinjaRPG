@@ -907,6 +907,7 @@ it("shows the personal hunting contract and its current stage ahead of legacy qu
     },
     contract: huntingContract(),
     allowance: { used: 1, remaining: 2, cooling: false },
+    cooldownUntil: null,
     serverTime,
   };
   const line = () =>

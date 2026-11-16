@@ -43,6 +43,7 @@ import {
 } from "@/drizzle/constants";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
 import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
+import { useHuntingSession } from "@/hooks/useHuntingSession";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import Confirm from "@/layout/Confirm";
@@ -111,11 +112,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
   const streaks = useActivityStreaks(true, timeDiff);
   const interest = usePendingBankInterest(true, timeDiff);
   const sidebarTimers = api.profile.getSidebarTimers.useQuery();
-  const hunting = api.hunting.getSession.useQuery(undefined, {
-    enabled: userData?.occupation === "HUNTER",
-    refetchInterval: 5000,
-    refetchOnMount: "always",
-  });
+  const hunting = useHuntingSession(userData?.occupation === "HUNTER");
 
   const claimInterest = useClaimBankInterest();
   const claimStreak = useClaimStreakDay();

@@ -4,6 +4,7 @@ import { isBotIdProtectedProcedure } from "@/libs/botid";
 import {
   huntingAllowance,
   huntingEligibility,
+  huntingRefetchInterval,
   huntingVictoryReceipt,
 } from "@/libs/hunting/contracts";
 import { huntingHabitatSchema } from "@/validators/hunting";
@@ -135,6 +136,16 @@ describe("Hunting contract rules", () => {
       }).success,
     ).toBe(false);
     expect(huntingHabitatSchema.safeParse(habitat).success).toBe(true);
+  });
+  it("polls quickly only while a preparation countdown is running", () => {
+    const serverTime = new Date(10_000);
+    const at = (readyAt: Date | null) => ({ session: { readyAt }, serverTime });
+    expect(huntingRefetchInterval(at(new Date(15_000)))).toBe(5_000);
+    expect(huntingRefetchInterval(at(serverTime))).toBe(60_000);
+    expect(huntingRefetchInterval(at(null))).toBe(60_000);
+    expect(huntingRefetchInterval({ session: null, serverTime })).toBe(60_000);
+    expect(huntingRefetchInterval(null)).toBe(60_000);
+    expect(huntingRefetchInterval(undefined)).toBe(60_000);
   });
   it("protects encounter starts with BotID", () =>
     expect(isBotIdProtectedProcedure("hunting.start")).toBe(true));
