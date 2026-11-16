@@ -442,6 +442,13 @@ export const applyEffects = (
     .sort(sortEffects)
     .forEach(resolve);
 
+  const usersStateById = new Map(newUsersState.map((u) => [u.userId, u]));
+  const damageModifierEligibilityById = buildDamageModifierEligibilityById(
+    usersEffects,
+    battle.round,
+    usersStateById,
+  );
+
   // Resolve activation and prevention before Final Stand can protect debt repayment.
   repayDiffuseDamage(
     newUsersState,
@@ -449,6 +456,7 @@ export const applyEffects = (
     actorId,
     round,
     actionEffects,
+    damageModifierEligibilityById,
     (userId, targetId, damage, healthLost, creditUserId) => {
       accumulateCurseDamage(
         newUsersEffects,
@@ -480,12 +488,6 @@ export const applyEffects = (
       !sealCheck(e, sealEffects),
   );
   const diffuseTargets = new Set(diffuseEffects.map((e) => e.targetId));
-  const usersStateById = new Map(newUsersState.map((u) => [u.userId, u]));
-  const damageModifierEligibilityById = buildDamageModifierEligibilityById(
-    usersEffects,
-    battle.round,
-    usersStateById,
-  );
 
   // Consolidated damage pipeline: multiplicative inc buckets, shared sequential % DR, static DR, BL inc
   applyDamageModifierPipelineToConsequences({

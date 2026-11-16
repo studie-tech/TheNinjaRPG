@@ -1,8 +1,14 @@
-import { DIFFUSE_MAX_PERCENTAGE } from "@/drizzle/constants";
+import { DIFFUSE_MAX_PERCENTAGE, DMG_REDUCTION_CAP } from "@/drizzle/constants";
 import { creditDamageEnmity } from "./aggro";
+import type { DamageModifierEligibility } from "./damagePipeline";
 import { applyFinalStandDamage, getPower } from "./tags";
 import type { ActionEffect, BattleUserState, UserEffect } from "./types";
-import { creditDamageDealt, resolveDamageCreditUser } from "./util";
+import {
+  creditDamageDealt,
+  getActiveSealEffects,
+  resolveDamageCreditUser,
+  sealCheck,
+} from "./util";
 
 export type DiffusePacket = {
   targetId: string;
@@ -82,13 +88,14 @@ export const deferDiffuseDamage = (
   }
 };
 
-/** Debt ticks once per target round, bypassing mitigation but respecting Final Stand. */
+/** Debt ticks once per target round, respecting active damage reduction and Final Stand. */
 export const repayDiffuseDamage = (
   users: BattleUserState[],
   effects: UserEffect[],
   actorId: string,
   round: number,
   messages: ActionEffect[],
+  eligibility: Map<string, DamageModifierEligibility>,
   onDamage?: (
     attackerId: string,
     targetId: string,
@@ -99,13 +106,40 @@ export const repayDiffuseDamage = (
 ) => {
   const target = users.find((u) => u.userId === actorId);
   if (!target?.diffuseDamage?.length || target.curHealth <= 0) return;
+  const seals = getActiveSealEffects(effects);
+  const reductions = effects.filter(
+    (effect) =>
+      effect.type === "decreasedamagetaken" &&
+      eligibility.get(effect.id)?.decreaseSide === "defender" &&
+      effect.targetId === target.userId &&
+      (!effect.elements?.length || effect.elements.includes("None")) &&
+      !sealCheck(effect, seals),
+  );
   for (const debt of target.diffuseDamage) {
     if (debt.lastAppliedRound >= round || debt.remainingTurns <= 0) continue;
     const repayment = debt.remainingDamage / debt.remainingTurns;
     debt.remainingDamage -= repayment;
     debt.remainingTurns -= 1;
     debt.lastAppliedRound = round;
-    const damage = applyFinalStandDamage(effects, target, repayment, messages);
+    let reduced = repayment;
+    for (const effect of reductions) {
+      if (
+        effect.type === "decreasedamagetaken" &&
+        effect.calculation === "percentage"
+      ) {
+        reduced *= Math.max(0, 1 - Math.abs(getPower(effect).power) / 100);
+      }
+    }
+    const staticReduction = reductions.reduce(
+      (total, effect) =>
+        total +
+        (effect.type === "decreasedamagetaken" && effect.calculation === "static"
+          ? Math.abs(getPower(effect).power)
+          : 0),
+      0,
+    );
+    reduced = Math.max(repayment * (1 - DMG_REDUCTION_CAP), reduced - staticReduction);
+    const damage = applyFinalStandDamage(effects, target, reduced, messages);
     const healthLost = Math.min(target.curHealth, damage);
     target.curHealth = Math.max(0, target.curHealth - damage);
     const attacker = users.find((u) => u.userId === debt.attackerId);

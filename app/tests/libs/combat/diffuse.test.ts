@@ -274,6 +274,47 @@ describe("Diffuse damage resolution", () => {
       0,
     );
   });
+  it("defers direct damage, afterburn and wound together while active", () => {
+    const activeDiffuse = diffuse();
+    activeDiffuse.isNew = false;
+    activeDiffuse.castThisRound = false;
+    activeDiffuse.createdRound = 1;
+    const afterburn = makeEffect(
+      "afterburn",
+      { power: 30, calculation: "percentage", rounds: 3 },
+      runtime(),
+    );
+    const wound = makeEffect(
+      "wound",
+      { power: 20, rounds: 3, timeTracker: { originalDamage: 100 } },
+      { ...runtime(), creatorId: "attacker" },
+    );
+    const result = run(
+      [attack(), activeDiffuse, afterburn, wound],
+      200,
+      "defender",
+    ).newBattle;
+    expect(debt(defender(result))).toBeCloseTo(62);
+    expect(defender(result).curHealth).toBeCloseTo(138);
+  });
+  it("keeps Diffuse active for later attacks after deferring a wound", () => {
+    const wound = makeEffect(
+      "wound",
+      { power: 20, rounds: 3, timeTracker: { originalDamage: 100 } },
+      { ...runtime(), creatorId: "attacker" },
+    );
+    const afterburn = makeEffect(
+      "afterburn",
+      { power: 30, calculation: "percentage", rounds: 3 },
+      runtime(),
+    );
+    const first = run([diffuse(), wound, afterburn], 1000, "defender").newBattle;
+    expect(debt(defender(first))).toBeCloseTo(10);
+    first.usersEffects.push(attack());
+    const second = applyEffects(first, "attacker").newBattle;
+    expect(debt(defender(second))).toBeCloseTo(62);
+    expect(defender(second).curHealth).toBeCloseTo(938);
+  });
   it("preserves wound damage reduction bypass when diffusing", () => {
     const wound = makeEffect(
       "wound",
@@ -671,6 +712,22 @@ describe("Diffuse repayment and restrictions", () => {
     expect(defender(result).curHealth).toBe(0);
     expect(debt(defender(result))).toBe(0);
   });
+  it.each([
+    ["percentage", 50, 20],
+    ["static", 10, 30],
+  ] as const)(
+    "applies active %s damage reduction to repayments",
+    (calculation, power, damage) => {
+      const current = run([attack(), diffuse({ delayRounds: 1 })]).newBattle;
+      current.round += 1;
+      current.usersEffects = [
+        makeEffect("decreasedamagetaken", { power, calculation, rounds: 3 }, runtime()),
+      ];
+      const result = applyEffects(current, "defender").newBattle;
+      expect(defender(result).curHealth).toBeCloseTo(960 - damage);
+      expect(debt(defender(result))).toBe(0);
+    },
+  );
   it.each([
     {
       name: "active",
