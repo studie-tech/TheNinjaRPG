@@ -415,6 +415,10 @@ describe("renderer context loss", () => {
     }
     expect(game.renderer.resolution).toBe(1.5);
     expect(resize).toHaveBeenLastCalledWith(100, 100, 1.5);
+    // The next visit to the same surface in this session starts where this one settled.
+    const next = await start(vi.fn(), 2);
+    expect(next.game.renderer.resolution).toBe(1.5);
+    next.game.dispose();
     setRenderQuality("high");
     expect(game.renderer.resolution).toBe(2);
     for (let i = 0; i < 400; i++) {

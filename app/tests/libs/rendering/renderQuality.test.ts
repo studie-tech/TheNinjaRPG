@@ -182,7 +182,7 @@ describe("render quality governor", () => {
     expect(governor.level).toBe(0);
     run(governor, 4_600, 25);
     expect(governor.level).toBe(1);
-    expect(governor.state.patience).toBe(INITIAL_HEALTHY_WINDOWS * 2);
+    expect(governor.patience).toBe(INITIAL_HEALTHY_WINDOWS * 2);
     run(governor, 18_000, FRAME);
     expect(governor.level).toBe(1);
     run(governor, 3_000, FRAME);

@@ -158,16 +158,17 @@ export const createGameRenderer = async (options: {
         chosenEffects,
       )
     : [];
-  const governor = createRenderQualityGovernor(
-    sessionRenderQuality.get(options.surface) ?? {
-      level: initialRenderQualityLevel(ladder, {
-        software: telemetry.isSoftware,
-        memory: (navigator as { deviceMemory?: number }).deviceMemory,
-        cores: navigator.hardwareConcurrency,
-      }),
-      patience: INITIAL_HEALTHY_WINDOWS,
-    },
-  );
+  const remembered = sessionRenderQuality.get(options.surface);
+  const governor = createRenderQualityGovernor({
+    level: remembered
+      ? matchingQualityLevel(ladder, remembered.level)
+      : initialRenderQualityLevel(ladder, {
+          software: telemetry.isSoftware,
+          memory: (navigator as { deviceMemory?: number }).deviceMemory,
+          cores: navigator.hardwareConcurrency,
+        }),
+    patience: remembered?.patience ?? INITIAL_HEALTHY_WINDOWS,
+  });
   const qualityOwner = {};
   /** Reductions this scene showed buy no speed: the lowest density worth using and effects to keep. */
   let resolutionFloor = 1;
@@ -350,7 +351,7 @@ export const createGameRenderer = async (options: {
         isInterrupted,
       );
       level = ladder[governor.level] ?? level;
-      sessionRenderQuality.set(options.surface, governor.state);
+      sessionRenderQuality.set(options.surface, { level, patience: governor.patience });
     }
     for (const effect of Object.keys(storedEffects) as VisualEffect[])
       visualEffects[effect] = storedEffects[effect] && !level.disabled.includes(effect);

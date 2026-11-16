@@ -122,9 +122,10 @@ export const initialRenderQualityLevel = (
  * the nominal interval is used because a loaded GPU also delays the refreshes a measured display
  * rate would come from. Two-second windows step down one level when their 75th percentile runs
  * 40% slow (one window when it runs 2.5× slow), and step up after consecutive windows at full
- * rate with headroom. A step down that does not speed frames up is undone and reported as
- * rejected, so the caller can drop it from the ladder and try the next kind of step; a step up that is followed by a slowdown doubles the wait for the next one, so a device on
- * the edge of a level settles instead of oscillating.
+ * rate with headroom. A step down that does not cut the slow percentile by a tenth is undone
+ * and reported as rejected, so the caller can drop it from the ladder and try the next kind
+ * of step. A step up followed by a slowdown doubles the wait for the next one, so a device
+ * on the edge of a level settles instead of oscillating.
  */
 export const createRenderQualityGovernor = (initial: GovernorState) => {
   const ratios = new Uint16Array(RATIO_BUCKETS);
@@ -160,9 +161,9 @@ export const createRenderQualityGovernor = (initial: GovernorState) => {
     get level() {
       return level;
     },
-    /** State a later renderer of the same surface resumes from in this session. */
-    get state(): GovernorState {
-      return { level, patience };
+    /** Windows of headroom the next step up waits for. */
+    get patience() {
+      return patience;
     },
     /**
      * Moves to a level of a rebuilt ladder without counting it as a step. Moving, or an
@@ -231,7 +232,10 @@ export const createRenderQualityGovernor = (initial: GovernorState) => {
 };
 
 /** Last automatic level per surface, so the next battle or map visit starts where this one settled. */
-export const sessionRenderQuality = new Map<RendererSurface, GovernorState>();
+export const sessionRenderQuality = new Map<
+  RendererSurface,
+  { level: QualityLevel; patience: number }
+>();
 
 /** The first wait for headroom; regressions double it up to the maximum. */
 export const INITIAL_HEALTHY_WINDOWS = 5;
