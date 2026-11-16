@@ -96,7 +96,7 @@ export default function Thread({
   const thread = comments.data?.thread;
   const board = comments.data?.board;
   const postsTopRef = useRef<HTMLDivElement>(null);
-  /** Open either pagination control at the top of the newly selected post page. */
+  /** Show the first post when either pagination control changes the page. */
   const goToPage = (nextPage: number) => {
     setPage(nextPage);
     postsTopRef.current?.scrollIntoView({ block: "start" });
@@ -315,7 +315,7 @@ export default function Thread({
       )}
       {thread && board && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span>
                 {comments.data?.totalComments}{" "}
@@ -340,7 +340,27 @@ export default function Thread({
                 </Link>
               ))}
             </div>
-            <ForumWatchButton scope="THREAD" scopeId={thread.id} />
+            {comments.data && comments.data.totalPages > 1 && (
+              <Pagination
+                current={page}
+                total={comments.data.totalPages}
+                setPage={goToPage}
+                className="order-last my-0 w-full sm:order-none sm:w-auto"
+              />
+            )}
+            <div className="ml-auto flex items-center gap-2 sm:ml-0">
+              {board.permissions.moderate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-expanded={tools}
+                  onClick={() => setTools((t) => !t)}
+                >
+                  {tools ? "Close topic tools" : "Moderate topic"}
+                </Button>
+              )}
+              <ForumWatchButton scope="THREAD" scopeId={thread.id} />
+            </div>
           </div>
           {thread.summary && (
             <section
@@ -369,21 +389,14 @@ export default function Thread({
               Jump to the accepted answer
             </Link>
           )}
-          {board.permissions.moderate && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setTools((t) => !t)}>
-                {tools ? "Close topic tools" : "Moderate topic"}
-              </Button>
-              {tools && (
-                <ForumTopicTools
-                  ids={[thread.id]}
-                  thread={thread}
-                  onDone={() => {
-                    setTools(false);
-                  }}
-                />
-              )}
-            </>
+          {board.permissions.moderate && tools && (
+            <ForumTopicTools
+              ids={[thread.id]}
+              thread={thread}
+              onDone={() => {
+                setTools(false);
+              }}
+            />
           )}
           {board.permissions.moderate && tools && (
             <ForumTopicExtras key={thread.id} thread={thread} onDone={refresh} />
@@ -398,17 +411,10 @@ export default function Thread({
               }}
             />
           )}
-          <div ref={postsTopRef} className="scroll-mt-4" />
-          {comments.data && comments.data.totalPages > 1 && (
-            <Pagination
-              current={page}
-              total={comments.data.totalPages}
-              setPage={goToPage}
-            />
-          )}
           <div
+            ref={postsTopRef}
             className={cn(
-              "contents",
+              "scroll-mt-4 space-y-4",
               comments.isPlaceholderData && "[&>*]:opacity-60 [&>*]:transition-opacity",
             )}
             aria-busy={comments.isPlaceholderData}
