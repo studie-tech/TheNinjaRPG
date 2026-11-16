@@ -470,12 +470,12 @@ it.each([false, true])(
 );
 
 it.each([
-  [Date.now(), []],
-  [0, ["comments.getForumComments"]],
+  [true, []],
+  [false, ["comments.getForumComments"]],
 ])(
-  "reuses a fresh server seed and refreshes a replayed one on mount (fetchedAt=%p)",
-  async (fetchedAt, expected) => {
-    const view = renderThread({ fetchedAt });
+  "reuses a fresh server seed and refreshes a replayed one on mount (fresh=%p)",
+  async (isFresh, expected) => {
+    const view = renderThread({ fetchedAt: isFresh ? Date.now() : 0 });
     expect(view.getByText("opening content")).toBeTruthy();
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
     expect([...requestedPaths].sort()).toEqual([...expected].sort());
@@ -490,13 +490,6 @@ it("opens the page of a server-resolved linked post without resolving it again",
     content: `<p>entry ${index}</p>`,
   }));
   const postId = `entry-${FORUM_THREAD_POSTS_PER_PAGE + 1}`;
-  vi.spyOn(clerk, "useUser").mockImplementation(
-    () =>
-      ({
-        isLoaded: clientViewer.isLoaded,
-        user: clientViewer.userId ? { id: clientViewer.userId } : null,
-      }) as ReturnType<typeof clerk.useUser>,
-  );
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(
     new URLSearchParams({ post: postId }) as never,
   );
