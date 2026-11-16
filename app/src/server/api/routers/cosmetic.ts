@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getInventoryQuantityChanges } from "@/deltas/item";
 import { ItemSlots } from "@/drizzle/constants";
 import { cosmeticSlotsForItem } from "@/libs/item";
 import {
@@ -65,8 +66,10 @@ export const cosmeticRouter = createTRPCRouter({
       return {
         success: true,
         message: "Cosmetic unlocked",
-        userItemId: source.id,
-        quantity: input.expectedQuantity - 1,
+        inventoryChanges: getInventoryQuantityChanges(
+          [source],
+          [{ id: source.id, quantity: input.expectedQuantity - 1 }],
+        ),
       };
     }),
   select: protectedProcedure

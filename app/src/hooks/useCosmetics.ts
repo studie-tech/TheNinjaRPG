@@ -3,7 +3,8 @@
 import { getQueryKey } from "@trpc/react-query";
 import { useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import { getCosmeticConsumedInventory, getCosmeticSlots } from "@/deltas/cosmetic";
+import { getCosmeticSlots } from "@/deltas/cosmetic";
+import { getInventoryQuantities } from "@/deltas/item";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { showMutationToast } from "@/libs/toast";
@@ -24,7 +25,7 @@ export const useCosmetics = () => {
       setError(null);
       return inventory.prepareInventoryUpdate();
     },
-    onSuccess: async (data, input, snapshot) => {
+    onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
       if (!data.success) {
         setError(data.message);
@@ -34,15 +35,9 @@ export const useCosmetics = () => {
         ]);
         return;
       }
-      if ("quantity" in data)
+      if ("inventoryChanges" in data)
         await inventory.updateInventory(
-          (rows) =>
-            getCosmeticConsumedInventory(
-              rows,
-              input.userItemId,
-              input.expectedQuantity,
-              data.quantity,
-            ),
+          (rows) => getInventoryQuantities(rows, data.inventoryChanges),
           snapshot,
         );
       await utils.cosmetic.get.invalidate();

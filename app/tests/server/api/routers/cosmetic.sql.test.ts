@@ -1,5 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
+import { getInventoryQuantities } from "@/deltas/item";
 import {
   item,
   itemVariant,
@@ -51,6 +52,33 @@ describeWithDatabase("cosmetic ownership and selection", () => {
       caller.make({ userItemId: "hat-stack", expectedQuantity: 2 }),
     ]);
     expect(results.filter((result) => result.success)).toHaveLength(1);
+    const committed = results.find((result) => "inventoryChanges" in result)!;
+    expect(committed.inventoryChanges).toEqual([
+      {
+        id: "hat-stack",
+        itemId: "cosmetic-hat",
+        beforeQuantity: 2,
+        quantity: 1,
+      },
+    ]);
+    const cached = [
+      { id: "hat-stack", itemId: "cosmetic-hat", quantity: 2, variants: ["red"] },
+    ];
+    expect(getInventoryQuantities(cached, committed.inventoryChanges)).toEqual([
+      { ...cached[0]!, quantity: 1 },
+    ]);
+    expect(
+      getInventoryQuantities(
+        [{ ...cached[0]!, quantity: 1 }],
+        committed.inventoryChanges,
+      ),
+    ).toBeUndefined();
+    expect(
+      getInventoryQuantities(
+        [{ ...cached[0]!, itemId: "other-hat" }],
+        committed.inventoryChanges,
+      ),
+    ).toBeUndefined();
     const db = await getTestDatabase();
     expect(
       (await db.query.userItem.findFirst({ where: eq(userItem.id, "hat-stack") }))
@@ -73,9 +101,23 @@ describeWithDatabase("cosmetic ownership and selection", () => {
     const db = await getTestDatabase();
     await db.update(userItem).set({ quantity: 1 }).where(eq(userItem.id, "hat-stack"));
     const caller = await callerFor(cosmeticRouter, "cosmetic-owner");
+    const result = await caller.make({ userItemId: "hat-stack", expectedQuantity: 1 });
+    expect(result.success).toBe(true);
+    if (!("inventoryChanges" in result)) throw new Error("Missing inventory changes");
+    expect(result.inventoryChanges).toEqual([
+      {
+        id: "hat-stack",
+        itemId: "cosmetic-hat",
+        beforeQuantity: 1,
+        quantity: 0,
+      },
+    ]);
     expect(
-      (await caller.make({ userItemId: "hat-stack", expectedQuantity: 1 })).success,
-    ).toBe(true);
+      getInventoryQuantities(
+        [{ id: "hat-stack", itemId: "cosmetic-hat", quantity: 1 }],
+        result.inventoryChanges,
+      ),
+    ).toEqual([]);
     expect(await db.query.userItem.findMany()).toHaveLength(0);
     expect(
       (await caller.select({ slot: "HEAD", itemId: "cosmetic-hat" })).success,
