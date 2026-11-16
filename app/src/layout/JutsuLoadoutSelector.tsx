@@ -40,9 +40,9 @@ const JutsuLoadoutSelector: React.FC<LoadoutSelectorDisplayProps> = (props) => {
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
+        // Selection recomputes equipment server-side, so the jutsu lists are read again.
         await Promise.all([
           updateUser(data, { revision }),
-          utils.item.getUserItems.invalidate(),
           utils.jutsu.getUserJutsus.invalidate(),
         ]);
       }

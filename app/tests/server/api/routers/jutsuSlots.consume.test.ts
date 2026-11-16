@@ -12,6 +12,7 @@ const consumption = (slots: number, power = 1, rowsAffected = 1) => {
       status: "AWAKE",
       battleId: null,
       updatedAt: new Date(0),
+      regenAt: new Date(),
       extraJutsuSlots: slots,
       extraReskinSlots: 0,
       marriageSlots: 1,

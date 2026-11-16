@@ -106,3 +106,14 @@ export const createLinkedJutsuSchema = z.object({
   bloodlineReskinId: z.string().min(1),
 });
 export type CreateLinkedJutsuSchema = z.infer<typeof createLinkedJutsuSchema>;
+
+/** Levels a confirmed transfer moved between two owned jutsu, with their loaded levels. */
+export const jutsuLevelTransferSchema = z.object({
+  fromUserJutsuId: z.string(),
+  fromLevel: z.number().int(),
+  toUserJutsuId: z.string(),
+  toLevel: z.number().int(),
+  levels: z.number().int().positive(),
+});
+
+export type JutsuLevelTransfer = z.infer<typeof jutsuLevelTransferSchema>;

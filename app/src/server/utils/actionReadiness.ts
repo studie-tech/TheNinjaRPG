@@ -16,6 +16,7 @@ import { calcHealCost, calcHealFinish } from "@/libs/hospital";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { calcActiveUserRegen, calcMaxEnergy } from "@/libs/profile";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { hasEnergyQueue } from "@/libs/queue";
 import { getTimedRegenerationGain } from "@/libs/timedBuffs";
 import { regenerationBuffs } from "@/libs/titles";
 import { applyMasteryTrainingGains, settleQueuedTraining } from "@/libs/train";
@@ -273,6 +274,41 @@ export const prepareActionReadiness = <T extends UserData>(
     trainingLogs,
     userRecovery,
     notice: wakes ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE,
+  };
+};
+
+/**
+ * Settle an awake actor's complete passive regeneration ticks into the endpoint's own guarded
+ * account write, so effects apply to current pools without a separate settlement write.
+ * Queued Energy training spends regenerated Energy, so those actors keep their stored pools
+ * and regenAt: later settlement integrates the same ticks, and pool caps make the deferred
+ * total identical.
+ */
+export const withPassiveRegeneration = <T extends UserData>(
+  readiness: ActionReadiness<T>,
+  now = new Date(),
+): ActionReadiness<T> => {
+  const { user } = readiness;
+  const ticks = Math.max(
+    0,
+    Math.floor((now.getTime() - user.regenAt.getTime()) / (REGEN_SECONDS * 1000)),
+  );
+  if (readiness.initial.status !== "AWAKE" || hasEnergyQueue(user) || ticks === 0)
+    return readiness;
+  const gain = getUserRegenerationGain(user, now);
+  // Integer pools expose the same rounding MySQL persists; Energy is fractional.
+  const set = {
+    curHealth: Math.round(Math.min(user.curHealth + gain, user.maxHealth)),
+    curChakra: Math.round(Math.min(user.curChakra + gain, user.maxChakra)),
+    curStamina: Math.round(Math.min(user.curStamina + gain, user.maxStamina)),
+    curEnergy: Math.min(user.curEnergy + gain, user.maxEnergy),
+    regenAt: new Date(user.regenAt.getTime() + ticks * REGEN_SECONDS * 1000),
+  };
+  return {
+    ...readiness,
+    user: { ...user, ...set },
+    set: { ...readiness.set, ...set },
+    where: and(readiness.where, eq(userData.regenAt, user.regenAt)),
   };
 };
 

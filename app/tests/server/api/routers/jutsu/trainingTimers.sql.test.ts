@@ -17,9 +17,9 @@ import {
 } from "@/drizzle/schema";
 import { calcJutsuTrainTime } from "@/libs/train";
 import {
+  trainOwnedJutsuLevelAtomically,
   updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically,
   updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically,
-  updateUserJutsuForStartTraining,
 } from "@/queries/jutsu";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { profileRouter } from "@/server/api/routers/profile";
@@ -28,8 +28,10 @@ import {
   insertUsers,
   insertUserVotes,
 } from "../../../../setup/factories";
+import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -146,26 +148,78 @@ describeWithDatabase("jutsu training progress timestamps", () => {
     },
   );
 
-  it("permits only one level increment against the same owned baseline", async () => {
+  it("permits only one paid level increment against the same owned baseline", async () => {
     const db = await getTestDatabase();
     await db.insert(userJutsu).values({ id: "owned", userId, jutsuId, level: 1 });
     const startsAt = new Date(),
       finishesAt = new Date(startsAt.getTime() + 60000);
     const writes = await Promise.all(
       [1, 2].map(() =>
-        updateUserJutsuForStartTraining(
+        trainOwnedJutsuLevelAtomically(
           db,
           startsAt,
           finishesAt,
           { id: "owned", level: 1 },
+          400,
           { userId },
         ),
       ),
     );
-    expect(writes.map((row) => row.rowsAffected).sort()).toEqual([0, 1]);
+    expect(writes.map((row) => row.rowsAffected).sort()).toEqual([0, 2]);
     expect(
       (await db.query.userJutsu.findFirst({ where: eq(userJutsu.id, "owned") }))?.level,
     ).toBe(2);
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))
+        ?.money,
+    ).toBe(100_000 - 400);
+  });
+
+  it("charges nothing when the owned level changes between the read and the write", async () => {
+    const db = await getTestDatabase();
+    await db.insert(userJutsu).values({ id: "owned", userId, jutsuId, level: 1 });
+    const stale = beforeStatements(
+      db,
+      userJutsu,
+      [() => db.update(userJutsu).set({ level: 2 }).where(eq(userJutsu.id, "owned"))],
+      { operations: ["execute"] },
+    );
+    const result = await callerForDatabase(jutsuRouter, userId, stale).startTraining({
+      jutsuId,
+    });
+    expect(result).toMatchObject({
+      success: false,
+      message: "Jutsu training changed. Refresh and try again",
+    });
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))
+        ?.money,
+    ).toBe(100_000);
+    expect(
+      (await db.query.userJutsu.findFirst({ where: eq(userJutsu.id, "owned") }))?.level,
+    ).toBe(2);
+  });
+
+  it("leaves the level unchanged when the balance cannot pay for it", async () => {
+    const db = await getTestDatabase();
+    await db.insert(userJutsu).values({ id: "owned", userId, jutsuId, level: 1 });
+    const startsAt = new Date();
+    const write = await trainOwnedJutsuLevelAtomically(
+      db,
+      startsAt,
+      new Date(startsAt.getTime() + 60000),
+      { id: "owned", level: 1 },
+      100_001,
+      { userId },
+    );
+    expect(write.rowsAffected).toBe(0);
+    expect(
+      (await db.query.userJutsu.findFirst({ where: eq(userJutsu.id, "owned") }))?.level,
+    ).toBe(1);
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))
+        ?.money,
+    ).toBe(100_000);
   });
 
   it("withholds loadout baseline confirmation across concurrent membership changes", async () => {

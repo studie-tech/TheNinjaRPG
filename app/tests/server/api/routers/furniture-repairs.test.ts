@@ -6,8 +6,10 @@ import { itemRouter } from "@/server/api/routers/item";
 import { RepairTag } from "@/validators/combat";
 import { FURNITURE_ITEM_DEFAULTS } from "@/validators/itemFurniture";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import { beforeStatements } from "../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -150,4 +152,49 @@ describeWithDatabase("furniture repair exclusions", () => {
     expect(after.inventory.find(({ id }) => id === "owned-kit")?.quantity).toBe(1);
     expect(after.inventory.find(({ id }) => id === "owned-chair")?.durability).toBe(10);
   });
+
+  it("reports the repaired durability for the inventory views", async () => {
+    const api = await callerFor(itemRouter, userId);
+    expect(await api.repair({ userItemId: "owned-armor" })).toMatchObject({
+      success: true,
+      durabilityChanges: [{ id: "owned-armor", beforeDurability: 10, durability: 100 }],
+    });
+  });
+
+  it.each([
+    ["the item changed", { durability: 20 }, "Could not repair item"],
+    ["the balance was spent", { money: 0 }, "Insufficient funds"],
+  ] as const)(
+    "neither charges nor repairs when %s after the read",
+    async (_case, change, message) => {
+      const database = await getTestDatabase();
+      const stale = beforeStatements(
+        database,
+        userItem,
+        [
+          () =>
+            "money" in change
+              ? database.update(userData).set(change).where(eq(userData.userId, userId))
+              : database
+                  .update(userItem)
+                  .set(change)
+                  .where(eq(userItem.id, "owned-armor")),
+        ],
+        { operations: ["execute"] },
+      );
+      const before = await snapshot();
+      const result = await callerForDatabase(itemRouter, userId, stale).repair({
+        userItemId: "owned-armor",
+      });
+      expect(result).toMatchObject({
+        success: false,
+        message: expect.stringContaining(message),
+      });
+      const after = await snapshot();
+      expect(after.money).toBe("money" in change ? 0 : before.money);
+      expect(after.inventory.find(({ id }) => id === "owned-armor")?.durability).toBe(
+        "durability" in change ? 20 : 10,
+      );
+    },
+  );
 });

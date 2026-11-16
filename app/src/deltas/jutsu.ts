@@ -4,7 +4,7 @@ import { getSavedTrainingQueueUserUpdate } from "@/deltas/train";
 import type { UserQueue } from "@/drizzle/schema";
 import { hasEnergyQueue } from "@/libs/queue";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import type { UserJutsuFilteringSchema } from "@/validators/jutsu";
+import type { JutsuLevelTransfer, UserJutsuFilteringSchema } from "@/validators/jutsu";
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { UserCachePatch, UserDeltaResponse } from "@/validators/userCache";
 
@@ -162,6 +162,54 @@ export const getEquippedJutsus = <
     return;
   return rows.map((row) =>
     row.id === userJutsuId ? { ...row, equipped: change.equipped } : row,
+  );
+};
+
+/** Remove a confirmed forgotten jutsu; a row missing from the loaded list refetches. */
+export const getForgottenJutsus = <T extends { id: string }>(
+  rows: T[],
+  userJutsuId: string,
+): T[] | undefined =>
+  rows.some((row) => row.id === userJutsuId)
+    ? rows.filter((row) => row.id !== userJutsuId)
+    : undefined;
+
+/** Clear every equip flag; filtered lists that admit equipped rows need a read for membership. */
+export const getUnequippedJutsus = <T extends { equipped: boolean }>(
+  rows: T[],
+  input: UserJutsuFilteringSchema,
+): T[] | undefined => {
+  if (
+    input.includeEquipped &&
+    Object.entries(input).some(
+      ([key, value]) => key !== "includeEquipped" && value !== undefined,
+    )
+  )
+    return;
+  return rows.map((row) => (row.equipped ? { ...row, equipped: false } : row));
+};
+
+/** Move confirmed transferred levels between loaded baselines; any mismatch refetches. */
+export const getTransferredJutsus = <T extends { id: string; level: number }>(
+  rows: T[],
+  transfer: JutsuLevelTransfer | undefined,
+): T[] | undefined => {
+  if (
+    !transfer ||
+    !rows.some(
+      (row) => row.id === transfer.fromUserJutsuId && row.level === transfer.fromLevel,
+    ) ||
+    !rows.some(
+      (row) => row.id === transfer.toUserJutsuId && row.level === transfer.toLevel,
+    )
+  )
+    return;
+  return rows.map((row) =>
+    row.id === transfer.fromUserJutsuId
+      ? { ...row, level: transfer.fromLevel - transfer.levels }
+      : row.id === transfer.toUserJutsuId
+        ? { ...row, level: transfer.toLevel + transfer.levels }
+        : row,
   );
 };
 

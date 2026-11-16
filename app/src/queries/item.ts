@@ -1265,30 +1265,11 @@ export const selectVillageStructureForSellUserItem = (
       ),
     );
 
-/** Build the `userItem` deletion for `sellUserItem`, including predicates on `id`, `userId`, `quantity`. */
-export const deleteUserItemForSellUserItem = (
-  client: Pick<DrizzleClient, "delete">,
-  input: { userItemId: string },
-  ctx: { userId: string },
-  useritem: { quantity: number },
-) =>
-  client
-    .delete(userItem)
-    .where(
-      and(
-        eq(userItem.id, input.userItemId),
-        eq(userItem.userId, ctx.userId),
-        eq(userItem.quantity, useritem.quantity),
-        gt(userItem.quantity, 0),
-        eq(userItem.isInAuction, false),
-        hasNoHuntingBattle(ctx.userId),
-      ),
-    );
-
 /**
  * Atomically consume one eligible stack and credit its sale price, so a failed payment
  * leaves the inventory intact. Call once per stack: a joined UPDATE changes the shared
- * owner row only once. A zero-ryo drop can affect only the inventory row.
+ * owner row only once. A zero-ryo drop can affect only the inventory row. Bulk sales
+ * stay in the carried backpack; a single sale may also sell equipped or home-stored rows.
  */
 export const sellUserItemAtomically = (
   client: Pick<DrizzleClient, "execute">,
@@ -1297,6 +1278,7 @@ export const sellUserItemAtomically = (
     item: Pick<Item, "isFarmSeed" | "inShop" | "hidden" | "farmSellValue">;
   },
   price: number,
+  scope: "backpack" | "owned" = "backpack",
 ) =>
   client.execute(sql`UPDATE ${userItem} INNER JOIN ${userData} ON ${eq(userData.userId, userItem.userId)}
     SET ${userItem.quantity} = 0, ${userData.money} = ${userData.money} + ${price}
@@ -1307,8 +1289,8 @@ export const sellUserItemAtomically = (
       eq(userItem.quantity, useritem.quantity),
       gt(userItem.quantity, 0),
       eq(userItem.isInAuction, false),
-      eq(userItem.equipped, "NONE"),
-      eq(userItem.storedAtHome, false),
+      scope === "backpack" ? eq(userItem.equipped, "NONE") : undefined,
+      scope === "backpack" ? eq(userItem.storedAtHome, false) : undefined,
       or(
         isNull(userItem.craftingFinishedAt),
         lte(userItem.craftingFinishedAt, new Date()),
@@ -2038,6 +2020,7 @@ export const insertUserItemForSplitItemStack = (
     dropChancePerc: number;
   },
   quantityToSplit: number,
+  createdAt: Date,
 ) =>
   client.insert(userItem).values({
     id: newUserItemId,
@@ -2056,8 +2039,8 @@ export const insertUserItemForSplitItemStack = (
     activeVariantId: currentUserItem.activeVariantId,
     craftingFinishedAt: currentUserItem.craftingFinishedAt,
     dropChancePerc: currentUserItem.dropChancePerc,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt,
+    updatedAt: createdAt,
   });
 
 /** Build the `userItem` lookup for `splitItemStack`, selecting only `id`, using predicates on `id`. */
@@ -2096,33 +2079,59 @@ export const updateUserItemForSplitItemStack2 = (
 export const updateUserItemForTryRepairUserItemDurability = (
   client: Pick<DrizzleClient, "update">,
   newDurability: number,
-  target: {
-    id: string;
-    quantity: number;
-    equipped: import("@/drizzle/schema").ItemSlot;
-    level: number;
-    experience: number;
-    durability: number;
-  },
+  target: RepairTarget,
   userId: string,
 ) =>
   client
     .update(userItem)
     .set({ durability: newDurability })
-    .where(
-      and(
-        eq(userItem.id, target.id),
-        eq(userItem.userId, userId),
-        eq(userItem.storedAtHome, false),
-        eq(userItem.isInAuction, false),
-        eq(userItem.quantity, target.quantity),
-        eq(userItem.equipped, target.equipped),
-        eq(userItem.level, target.level),
-        eq(userItem.experience, target.experience),
-        eq(userItem.durability, target.durability),
-        hasNoHuntingBattle(userId),
-      ),
-    );
+    .where(repairableUserItemGuard(target, userId));
+
+/**
+ * Restore one carried item's durability and debit its repair cost in one joined statement,
+ * so a changed item or balance leaves both rows unchanged. Zero affected rows means a guard
+ * failed.
+ */
+export const repairUserItemAtomically = (
+  client: Pick<DrizzleClient, "execute">,
+  newDurability: number,
+  target: RepairTarget,
+  cost: number,
+  userId: string,
+  readiness?: ActionReadinessWrite,
+) =>
+  client.execute(sql`
+    UPDATE ${userItem}
+    INNER JOIN ${userData} ON ${userData.userId} = ${userItem.userId}
+    SET ${actionReadinessSqlSet(readiness, [])}
+        ${userItem.durability} = ${newDurability},
+        ${userData.money} = ${userData.money} - ${cost}
+    WHERE ${and(
+      repairableUserItemGuard(target, userId),
+      gte(userData.money, cost),
+      readiness?.where,
+    )}
+  `);
+
+/** Match a carried, unlisted item outside a hunting battle at its loaded repair baseline. */
+const repairableUserItemGuard = (target: RepairTarget, userId: string) =>
+  and(
+    eq(userItem.id, target.id),
+    eq(userItem.userId, userId),
+    eq(userItem.storedAtHome, false),
+    eq(userItem.isInAuction, false),
+    eq(userItem.quantity, target.quantity),
+    eq(userItem.equipped, target.equipped),
+    eq(userItem.level, target.level),
+    eq(userItem.experience, target.experience),
+    eq(userItem.durability, target.durability),
+    hasNoHuntingBattle(userId),
+  );
+
+type RepairTarget = Pick<
+  UserItem,
+  "id" | "quantity" | "equipped" | "level" | "experience" | "durability"
+>;
 
 /** Build the `userData` selection for `executeMergeStacksForItemBucket`, using predicates on `userId` and `status`. */
 export const selectUserDataForExecuteMergeStacksForItemBucket = (

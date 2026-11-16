@@ -11,9 +11,12 @@ import {
 } from "@/drizzle/schema";
 import * as itemQueries from "@/queries/item";
 import { itemRouter } from "@/server/api/routers/item";
+import type { DrizzleClient } from "@/server/db";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import { beforeStatements } from "../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -386,5 +389,91 @@ describeWithDatabase("bulk selling and dropping", () => {
       ),
     ).rejects.toThrow();
     expect(await money()).toBe(startMoney);
+  });
+});
+
+/** A single sale shares the joined statement and may also sell worn or home-stored stacks. */
+describeWithDatabase("single selling", () => {
+  beforeEach(async () => {
+    await resetTables(
+      actionLog,
+      huntingSession,
+      userItemImbuement,
+      userItem,
+      item,
+      userData,
+    );
+    await insertUsers([
+      { userId: seller, username: seller, status: "AWAKE", money: startMoney },
+    ]);
+    await insertItems([
+      { id: "blade", name: "Blade", cost: 1_000, rarity: "RARE", inShop: true },
+    ]);
+    await insertUserItems([
+      { id: "blade-row", userId: seller, itemId: "blade" },
+      { id: "equipped-row", userId: seller, itemId: "blade", equipped: "HAND_1" },
+      { id: "home-row", userId: seller, itemId: "blade", storedAtHome: true },
+    ]);
+    const database = await getTestDatabase();
+    await database.insert(userItemImbuement).values({
+      id: "blade-imbuement",
+      userItemId: "blade-row",
+      imbuementItemId: "blade",
+      craftingFinishedAt: new Date(0),
+    });
+  });
+
+  const sellOne = async (userItemId: string, database?: DrizzleClient) =>
+    database
+      ? callerForDatabase(itemRouter, seller, database).sellUserItem({ userItemId })
+      : (await callerFor(itemRouter, seller)).sellUserItem({ userItemId });
+
+  it("pays, removes the stack and its imbuements, and confirms the ryo", async () => {
+    const result = await sellOne("blade-row");
+    expect(result).toMatchObject({ success: true, userDelta: { money: 200 } });
+    expect(await money()).toBe(startMoney + 200);
+    expect(await remaining(["blade-row"])).toEqual([]);
+    const database = await getTestDatabase();
+    expect(await database.select().from(userItemImbuement)).toEqual([]);
+  });
+
+  it("sells a home-stored stack with a confirmed balance", async () => {
+    const result = await sellOne("home-row");
+    expect(result).toMatchObject({ success: true, userDelta: { money: 200 } });
+    expect(await remaining(["home-row"])).toEqual([]);
+  });
+
+  it("sells worn gear but leaves the profile's equipment to a read", async () => {
+    const result = await sellOne("equipped-row");
+    expect(result.success).toBe(true);
+    expect("userDelta" in result).toBe(false);
+    expect(await money()).toBe(startMoney + 200);
+    expect(await remaining(["equipped-row"])).toEqual([]);
+  });
+
+  it("neither pays nor removes a stack that changed after the read", async () => {
+    const database = await getTestDatabase();
+    const stale = beforeStatements(
+      database,
+      userItem,
+      [
+        () =>
+          database
+            .update(userItem)
+            .set({ quantity: 2 })
+            .where(eq(userItem.id, "blade-row")),
+      ],
+      { operations: ["execute"] },
+    );
+    const result = await sellOne("blade-row", stale);
+    expect(result.success).toBe(false);
+    expect(await money()).toBe(startMoney);
+    expect(await remaining(["blade-row"])).toEqual(["blade-row"]);
+  });
+
+  it("pays once across concurrent sales of the same stack", async () => {
+    const results = await Promise.all([sellOne("blade-row"), sellOne("blade-row")]);
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(await money()).toBe(startMoney + 200);
   });
 });

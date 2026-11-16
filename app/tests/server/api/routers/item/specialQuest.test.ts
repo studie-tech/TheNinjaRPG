@@ -33,7 +33,7 @@ describe("Special quest consumption preflight", () => {
         },
       };
       stubProfile("fetchUpdatedUser", (async () => ({
-        user: { userId: "hero", status: "AWAKE", userQuests: [] },
+        user: { userId: "hero", status: "AWAKE", regenAt: new Date(), userQuests: [] },
       })) as never);
       const execute = vi.fn();
       const update = vi.fn();

@@ -7,7 +7,11 @@ import { effectiveMasteries, type MasteryBuffUser } from "@/libs/mastery";
 import { calcMaxEnergy } from "@/libs/profile";
 import { hasEnergyQueue } from "@/libs/queue";
 import type { fetchItem, fetchUserEquipmentSnapshot } from "@/queries/item";
-import type { InventoryQuantityChange } from "@/validators/inventory";
+import type {
+  InventoryDurabilityChange,
+  InventoryQuantityChange,
+  InventorySplit,
+} from "@/validators/inventory";
 import type { UserCachePatch } from "@/validators/userCache";
 
 type EquipmentSnapshot = Omit<MasteryBuffUser, "items"> &
@@ -454,6 +458,91 @@ export const getBulkSoldInventory = <T extends { id: string }>(
     : undefined;
 
 /**
+ * Apply a confirmed split: the source keeps its quantity and a new unequipped stack, created
+ * from the source's progression, holds the rest. A changed source baseline refetches.
+ */
+export const getSplitInventory = <T extends UserItem>(
+  rows: T[],
+  split: InventorySplit | undefined,
+): T[] | undefined => {
+  const source = rows.find((row) => row.id === split?.id);
+  if (
+    !split ||
+    !source ||
+    source.quantity !== split.beforeQuantity ||
+    rows.some((row) => row.id === split.newUserItemId)
+  )
+    return;
+  return rows.flatMap((row) =>
+    row.id === split.id
+      ? [
+          { ...row, quantity: split.quantity },
+          {
+            ...row,
+            id: split.newUserItemId,
+            quantity: split.splitQuantity,
+            equipped: "NONE",
+            isInAuction: false,
+            homeX: null,
+            homeY: null,
+            homeRotation: 0,
+            homeRoom: "main",
+            createdAt: split.createdAt,
+            updatedAt: split.createdAt,
+          },
+        ]
+      : [row],
+  );
+};
+
+/** Apply confirmed durability writes to matching loaded baselines; any mismatch refetches. */
+export const getInventoryDurabilities = <T extends Pick<UserItem, "id" | "durability">>(
+  rows: T[] | undefined,
+  changes: InventoryDurabilityChange[] | undefined,
+): T[] | undefined => {
+  if (
+    !rows ||
+    !changes ||
+    changes.some(
+      (change) =>
+        !rows.some(
+          (row) => row.id === change.id && row.durability === change.beforeDurability,
+        ),
+    )
+  )
+    return;
+  return rows.map((row) => {
+    const change = changes.find((entry) => entry.id === row.id);
+    return change ? { ...row, durability: change.durability } : row;
+  });
+};
+
+/** Drop a confirmed removed imbuement from its stack; rows without loaded imbuements refetch. */
+export const getImbuementRemovedInventory = <T extends Pick<UserItem, "id">>(
+  rows: T[],
+  removed: { userItemId: string; imbuementId: string } | undefined,
+): T[] | undefined => {
+  const owner = rows.find((row) => row.id === removed?.userItemId) as
+    | (T & { imbuements?: { id: string }[] })
+    | undefined;
+  if (
+    !removed ||
+    !owner?.imbuements?.some((imbuement) => imbuement.id === removed.imbuementId)
+  )
+    return;
+  return rows.map((row) =>
+    row === owner
+      ? {
+          ...row,
+          imbuements: owner.imbuements?.filter(
+            (imbuement) => imbuement.id !== removed.imbuementId,
+          ),
+        }
+      : row,
+  );
+};
+
+/**
  * Place the stacks a home storage move confirmed on their new side, preserving each view's
  * row data; a moved stack missing from the loaded rows asks for reconciliation instead.
  */
@@ -468,8 +557,8 @@ export const getHomeStorageMovedInventory = <
     ? rows.map((row) => (movedIds.includes(row.id) ? { ...row, storedAtHome } : row))
     : undefined;
 
-/** Credit the ryo a bulk sell paid for the stacks it removed. */
-export const getBulkSellUserUpdate = (ryo: number) => ({ userDelta: { money: ryo } });
+/** Credit the ryo a confirmed single or bulk sale paid for the stacks it removed. */
+export const getSaleUserUpdate = (ryo: number) => ({ userDelta: { money: ryo } });
 
 /** Describe committed stack writes using a matching loaded baseline for every target. */
 export const getInventoryQuantityChanges = (

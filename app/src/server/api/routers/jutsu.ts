@@ -120,6 +120,7 @@ import {
   executeTransferredForTransferLevel,
   executeUnequipAllJutsus,
   executeWriteForImportJutsuLoadout,
+  fetchActiveJutsuLoadout,
   fetchActiveLoadoutJutsuIds,
   fetchBloodlineJutsuReskins,
   fetchJutsu,
@@ -189,6 +190,7 @@ import {
   selectUserJutsuForGetJutsuRelations,
   selectUserJutsuForStartTraining,
   setUserJutsuReskin,
+  trainOwnedJutsuLevelAtomically,
   updateJutsuForSaveJutsuFamily,
   updateJutsuForSaveJutsuFamily2,
   updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically,
@@ -205,7 +207,6 @@ import {
   updateUserJutsuForEvolveJutsu,
   updateUserJutsuForRemoveReskin,
   updateUserJutsuForRollbackEquipIfOverCap,
-  updateUserJutsuForStartTraining,
   updateUserJutsuForStopTraining,
   updateUserJutsuForToggleEquip,
   updateUserJutsuForTryEquipUserJutsuAtomically,
@@ -223,6 +224,7 @@ import {
   findUserDataForGetUsername,
   incrementUserMoney,
   refundUserReputationPoints,
+  selectUserMoney,
 } from "@/queries/profile";
 import { updateUserQuestData } from "@/queries/quests";
 import { fetchStudents } from "@/queries/sensei";
@@ -274,6 +276,7 @@ import {
   createLinkedJutsuSchema,
   type JutsuFilteringSchema,
   jutsuFilteringSchema,
+  jutsuLevelTransferSchema,
   jutsuReskinCreateSchema,
   jutsuReskinUpdateSchema,
   type UserJutsuFilteringSchema,
@@ -351,7 +354,9 @@ export const jutsuRouter = createTRPCRouter({
         transferLevels: z.number().int().min(1, "Must transfer at least 1 level"),
       }),
     )
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({ transfer: jutsuLevelTransferSchema.optional() }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       const transfer = input.transferLevels;
@@ -446,6 +451,13 @@ export const jutsuRouter = createTRPCRouter({
       return {
         success: true,
         ...getTransferLevelUserUpdate({ user, needsReputation, transferCost }),
+        transfer: {
+          fromUserJutsuId: fromUserJutsu.id,
+          fromLevel: fromUserJutsu.level,
+          toUserJutsuId: toUserJutsu.id,
+          toLevel: toUserJutsu.level,
+          levels: transfer,
+        },
         message: needsReputation
           ? `Level transferred for ${transferCost} reputation points`
           : "Level transferred for free",
@@ -1518,33 +1530,42 @@ export const jutsuRouter = createTRPCRouter({
       }
       const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);
 
-      // Deduct money first, but persist new-jutsu quest progress only after the
-      // ownership insert is confirmed. A duplicate request can then refund its
-      // own money without restoring a stale questData snapshot over the winner.
-      const moneyUpdate = await debitUserMoney(ctx.drizzle, trainCost, ctx, readiness);
-      if (moneyUpdate.rowsAffected !== 1) {
-        return errorResponse("You don't have enough money");
-      }
-
-      // Insert or update user jutsu
       if (userjutsuObj) {
-        const saved = await updateUserJutsuForStartTraining(
-          ctx.drizzle,
-          trainingStartedAt,
-          finishTraining,
-          userjutsuObj,
-          ctx,
-        );
-        // The returned level must describe this increment, even when two starts race.
-        if (saved.rowsAffected !== 1) {
-          await incrementUserMoney(ctx.drizzle, trainCost, ctx.userId);
-          return actionReadinessResponse(
-            errorResponse("Jutsu training changed. Refresh and try again"),
-            readiness,
+        // The level and debit commit together; the returned level must describe this
+        // increment, even when two starts race.
+        const saved = await retryOnDeadlock(() =>
+          trainOwnedJutsuLevelAtomically(
             ctx.drizzle,
+            trainingStartedAt,
+            finishTraining,
+            userjutsuObj,
+            trainCost,
+            ctx,
+            readiness,
+          ),
+        );
+        if (saved.rowsAffected === 0) {
+          // Only the rejection message needs the live balance.
+          const balance = await selectUserMoney(ctx.drizzle, ctx.userId);
+          return errorResponse(
+            (balance?.money ?? 0) < trainCost
+              ? "You don't have enough money"
+              : "Jutsu training changed. Refresh and try again",
           );
         }
       } else {
+        // Deduct money first, but persist new-jutsu quest progress only after the
+        // ownership insert is confirmed. A duplicate request can then refund its
+        // own money without restoring a stale questData snapshot over the winner.
+        const moneyUpdate = await debitUserMoney(
+          ctx.drizzle,
+          trainCost,
+          ctx,
+          readiness,
+        );
+        if (moneyUpdate.rowsAffected !== 1) {
+          return errorResponse("You don't have enough money");
+        }
         // Soft pre-check whether auto-equip is likely to succeed. Insert already
         // equipped when the snapshot says yes; only the over-cap rollback CAS
         // runs afterward to handle concurrent equips (under-cap re-check would
@@ -1776,16 +1797,17 @@ export const jutsuRouter = createTRPCRouter({
 
   unequipAll: protectedProcedure
     .meta({ mcp: { description: "Unequip all jutsus" } })
-    .output(userDeltaResponseSchema)
+    .output(userDeltaResponseSchema.extend({ clearedLoadoutId: z.string().optional() }))
     .mutation(async ({ ctx }) => {
       // The lookup only controls the cache patch; the write resolves and clears the
       // active loadout atomically with equipment, even if selection races this read.
-      const activeLoadout = await fetchActiveLoadoutJutsuIds(ctx.drizzle, ctx.userId);
+      const activeLoadout = await fetchActiveJutsuLoadout(ctx.drizzle, ctx.userId);
       await executeUnequipAllJutsus(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: "All jutsu unequipped",
-        ...getUnequipAllJutsuUserUpdate(activeLoadout !== null),
+        ...getUnequipAllJutsuUserUpdate(activeLoadout !== undefined),
+        ...(activeLoadout ? { clearedLoadoutId: activeLoadout.id } : {}),
       };
     }),
 
