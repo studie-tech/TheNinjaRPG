@@ -477,7 +477,7 @@ const Dojo = (props: {
           <ScrollText className="h-5 w-5" /> Dojo
         </span>
         <Badge variant="secondary" className="text-sm">
-          {formatTdNumber(props.progress.points)} scrolls
+          {`${formatTdNumber(props.progress.points)} scroll${props.progress.points === 1 ? "" : "s"}`}
         </Badge>
       </CardTitle>
     </CardHeader>

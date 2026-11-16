@@ -225,7 +225,7 @@ export const towerDefenseRouter = createTRPCRouter({
         success: true,
         message:
           result.points > 0
-            ? `Reached wave ${result.wave} and earned ${result.points.toLocaleString()} scrolls!`
+            ? `Reached wave ${result.wave} and earned ${result.points.toLocaleString()} scroll${result.points === 1 ? "" : "s"}!`
             : `Reached wave ${result.wave}.`,
         pointsEarned: result.points,
         wave: result.wave,

@@ -340,7 +340,7 @@ const Results = (props: {
               {formatTdNumber(props.outcome.kills)} enemies defeated
               {props.isGuest
                 ? ""
-                : ` · ${formatTdNumber(props.outcome.points)} scrolls`}
+                : ` · ${formatTdNumber(props.outcome.points)} scroll${props.outcome.points === 1 ? "" : "s"}`}
             </p>
             {props.outcome.message && (
               <p className="text-sm">{props.outcome.message}</p>
