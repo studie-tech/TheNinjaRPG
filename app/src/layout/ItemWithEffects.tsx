@@ -22,6 +22,7 @@ import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import Link from "@/layout/Link";
+import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { getPotencyDescription, POTENCY_TAG_LABELS } from "@/libs/combat/potency";
 import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
@@ -282,6 +283,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   } = props;
   // Only the role decides staff links, so other profile changes do not re-render each card.
   const { data: role } = useUserDataSelector((user) => user.role);
+  // Elemental damage resolves to the caster's element in battle; show the viewer's own.
+  const { data: viewerDamageElement } = useUserDataSelector(getPreferredDamageElement);
   const isFurniture = "itemType" in item && item.itemType === "FURNITURE";
 
   // Get bloodline / sage-mode names for requirement labels
@@ -1299,6 +1302,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                               </div>
                             </span>
                           )}
+                        {parsedEffect.type === "elementaldamage" && (
+                          <span>
+                            <b>Element: </b>
+                            Primary damage element
+                            {viewerDamageElement && ` (yours: ${viewerDamageElement})`}
+                          </span>
+                        )}
                         {"reward_items" in parsedEffect &&
                           parsedEffect.reward_items &&
                           parsedEffect.reward_items.length > 0 && (
