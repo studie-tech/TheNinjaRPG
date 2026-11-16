@@ -206,7 +206,8 @@ export const createTowerDefenseFx = () => {
         pop: 0,
       };
     });
-  const damagePool = { records: createPool(NUMBERS, 8), next: 0 };
+  // Room for a critical hit with a three-digit exponent: "1.23e100!".
+  const damagePool = { records: createPool(NUMBERS, 9), next: 0 };
   const ryoPool = { records: createPool(RYO_NUMBERS, 24), next: 0 };
   const numbers = [...damagePool.records, ...ryoPool.records];
   const showText = (

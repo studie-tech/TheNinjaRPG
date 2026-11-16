@@ -109,6 +109,8 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const published = useRef<{ tick: number; version: number } | null>(null);
   /** Identifies the resume in flight; replacing it cancels the previous one. */
   const resuming = useRef<object | null>(null);
+  /** Identifies the start in flight; a resume, leaving or unmounting cancels it. */
+  const starting = useRef<object | null>(null);
   const [phase, setPhase] = useState<TowerDefensePhase>("lobby");
   const [speed, setSpeedState] = useState(1);
   const [outcome, setOutcome] = useState<TowerDefenseOutcome | null>(null);
@@ -385,7 +387,12 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         begin({ seed: nanoid(), startWave: 1, bestWave: 0, dojo: {} }, null);
         return;
       }
+      const ticket = {};
+      starting.current = ticket;
       const result = await startRun({ startWave });
+      // A run resumed or left while this request was pending keeps the page.
+      if (starting.current !== ticket) return;
+      starting.current = null;
       if (!result.success || !result.token || !result.config) {
         showMutationToast(result);
         return;
@@ -425,6 +432,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     const replay = createReplay(head.config, actions);
     const ticket = {};
     resuming.current = ticket;
+    starting.current = null;
     setIsResuming(true);
     const step = () => {
       if (resuming.current !== ticket) return;
@@ -544,6 +552,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     session.current = null;
     published.current = null;
     resuming.current = null;
+    starting.current = null;
     setIsResuming(false);
     setUnsaved(false);
     setOutcome(null);
@@ -617,10 +626,12 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     };
   }, [persist]);
 
-  // A resume still replaying when the page goes away has nothing left to start.
+  // A resume still replaying or a start still pending when the page goes away has
+  // nothing left to begin.
   useEffect(
     () => () => {
       resuming.current = null;
+      starting.current = null;
     },
     [],
   );

@@ -103,6 +103,21 @@ describe("tower defense saved runs", () => {
     expect(savedKeys()).toEqual([`${key}:log:0`]);
     clearRun(key);
     expect(savedKeys()).toEqual([]);
+    // Settling the run clears them too, since no head names another run to keep.
+    log.stored = 0;
+    expect(saveRun(key, head, log)).toBe(false);
+    expect(savedKeys()).toEqual([`${key}:log:0`]);
+    expect(clearSettledRun(key, "token")).toBe(false);
+    expect(savedKeys()).toEqual([]);
+  });
+
+  it("notices actions saved during a draft, at the same tick", () => {
+    const log = createLogWriter();
+    saveRun(key, { ...head, tick: 40, wave: 5 }, log);
+    const shown = readSavedRunHead(key);
+    appendToLog(log, [40, "buy", "damage"]);
+    saveRun(key, { ...head, tick: 40, wave: 5 }, log);
+    expect(isSameSavedRun(readSavedRunHead(key), shown)).toBe(false);
   });
 
   it("notices when another session wrote or removed the save a player chose", () => {

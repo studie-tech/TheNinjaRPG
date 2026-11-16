@@ -52,6 +52,8 @@ export interface TdSavedRunHead {
 interface StoredHead extends TdSavedRunHead {
   chunks: number;
   tail: string;
+  /** Actions in the log, which grows during a draft while the tick stands still. */
+  actions: number;
 }
 
 /** A writer for an empty log. */
@@ -94,6 +96,7 @@ export const saveRun = (key: string, head: TdSavedRunHead, log: TdLogWriter) => 
     ...head,
     chunks: log.sealed.length,
     tail: log.tail.join(";"),
+    actions: log.count,
   };
   return safeLocalStorageSetItem(key, JSON.stringify(stored));
 };
@@ -106,6 +109,7 @@ export const readSavedRunHead = (key: string): StoredHead | null => {
     const head = JSON.parse(raw) as Partial<StoredHead>;
     return typeof head.chunks === "number" &&
       typeof head.tail === "string" &&
+      typeof head.actions === "number" &&
       head.config
       ? (head as StoredHead)
       : null;
@@ -116,15 +120,18 @@ export const readSavedRunHead = (key: string): StoredHead | null => {
 
 /**
  * Whether storage still holds the save a player decided about, or still holds none. Any
- * write by another session moves the save's id or tick, so a stale decision is caught.
+ * later write moves the save's id, tick or action count (a purchase during a draft adds
+ * actions without a tick), so a stale decision is caught.
  */
 export const isSameSavedRun = (
-  stored: Pick<TdSavedRunHead, "id" | "tick"> | null,
-  chosen: Pick<TdSavedRunHead, "id" | "tick"> | null,
+  stored: Pick<StoredHead, "id" | "tick" | "actions"> | null,
+  chosen: Pick<StoredHead, "id" | "tick" | "actions"> | null,
 ) =>
   stored === null || chosen === null
     ? stored === chosen
-    : stored.id === chosen.id && stored.tick === chosen.tick;
+    : stored.id === chosen.id &&
+      stored.tick === chosen.tick &&
+      stored.actions === chosen.actions;
 
 /** A saved run with its encoded log, or null when nothing complete is stored. */
 export const loadRun = (key: string) => {
@@ -156,7 +163,11 @@ export const clearRun = (key: string) => {
  * since is kept. Returns whether the save was removed.
  */
 export const clearSettledRun = (key: string, token: string) => {
-  const isOwned = readSavedRunHead(key)?.token === token;
+  const head = readSavedRunHead(key);
+  // Without a head no other run's save is there to keep, only chunks a refused head
+  // write left behind.
+  if (!head) clearRun(key);
+  const isOwned = head?.token === token;
   if (isOwned) clearRun(key);
   return isOwned;
 };

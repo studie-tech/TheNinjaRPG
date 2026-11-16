@@ -167,6 +167,7 @@ export const TowerDefenseLobby = (props: {
                     </Button>
                   }
                   disabled={props.isResuming || props.isStarting}
+                  confirmDisabled={props.isResuming || props.isStarting}
                   tone="destructive"
                   proceed_label="Discard"
                   onAccept={props.onDiscard}
