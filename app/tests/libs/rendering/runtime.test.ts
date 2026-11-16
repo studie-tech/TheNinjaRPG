@@ -2,12 +2,16 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import { WebGLRenderer } from "pixi.js";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
-import { sessionRenderQuality } from "@/libs/rendering/renderQuality";
 import { destroyParkedRenderer } from "@/libs/rendering/rendererPool";
+import { sessionRenderQuality } from "@/libs/rendering/renderQuality";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { farmPlotAt, farmPlotPosition } from "@/libs/rendering/scenes/farmLayout";
 import type { RendererSurface } from "@/libs/rendering/telemetry";
-import { setRenderQuality, setVisualEffect } from "@/libs/visualEffects";
+import {
+  readVisualSettingsKey,
+  setRenderQuality,
+  setVisualEffect,
+} from "@/libs/visualEffects";
 
 describe("renderer initialization failure", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -68,6 +72,21 @@ describe("renderer context loss", () => {
     localStorage.clear();
     Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 1 });
   });
+  /** Renderer size and density follow resize calls, as Pixi's do. */
+  const resizeRenderer = () =>
+    vi.spyOn(WebGLRenderer.prototype, "resize").mockImplementation(function (
+      this: WebGLRenderer,
+      width: number,
+      height: number,
+      resolution?: number,
+    ) {
+      for (const [key, value] of Object.entries({
+        width,
+        height,
+        resolution: resolution ?? this.resolution,
+      }))
+        Object.defineProperty(this, key, { configurable: true, value });
+    });
   const start = async (
     onError: (error: unknown) => void,
     { resolution = 1, backgroundAlpha = 0 } = {},
@@ -116,9 +135,7 @@ describe("renderer context loss", () => {
     const destroy = vi
       .spyOn(WebGLRenderer.prototype, "destroy")
       .mockImplementation(() => {});
-    const resize = vi
-      .spyOn(WebGLRenderer.prototype, "resize")
-      .mockImplementation(() => {});
+    const resize = resizeRenderer();
     const render = vi.spyOn(WebGLRenderer.prototype, "render");
     const create = async (surface: RendererSurface = "travel") => {
       const mount = document.createElement("div");
@@ -386,21 +403,6 @@ describe("renderer context loss", () => {
     expect(render).toHaveBeenCalledTimes(3);
   });
 
-  const resizeRenderer = () =>
-    vi.spyOn(WebGLRenderer.prototype, "resize").mockImplementation(function (
-      this: WebGLRenderer,
-      width: number,
-      height: number,
-      resolution?: number,
-    ) {
-      for (const [key, value] of Object.entries({
-        width,
-        height,
-        resolution: resolution ?? this.resolution,
-      }))
-        Object.defineProperty(this, key, { configurable: true, value });
-    });
-
   it("lowers resolution under sustained slow frames unless the player chose high quality", async () => {
     Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
     const { game, render } = await start(vi.fn(), { resolution: 2 });
@@ -416,7 +418,7 @@ describe("renderer context loss", () => {
     expect(game.renderer.resolution).toBe(1.5);
     expect(resize).toHaveBeenLastCalledWith(100, 100, 1.5);
     // The next visit to the same surface in this session starts where this one settled.
-    const next = await start(vi.fn(), 2);
+    const next = await start(vi.fn(), { resolution: 2 });
     expect(next.game.renderer.resolution).toBe(1.5);
     next.game.dispose();
     setRenderQuality("high");
@@ -456,7 +458,7 @@ describe("renderer context loss", () => {
 
   it("keeps display density when lowering it does not help and tries effects instead", async () => {
     Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
-    const { game, render } = await start(vi.fn(), 2);
+    const { game, render } = await start(vi.fn(), { resolution: 2 });
     render.mockImplementation(() => {});
     resizeRenderer();
     game.setAnimating(true);
@@ -471,7 +473,7 @@ describe("renderer context loss", () => {
 
   it("learns once per session that a display capped at 30 Hz gains nothing from lower quality", async () => {
     Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
-    const first = await start(vi.fn(), 2);
+    const first = await start(vi.fn(), { resolution: 2 });
     first.render.mockImplementation(() => {});
     resizeRenderer();
     first.game.setAnimating(true);
@@ -488,7 +490,7 @@ describe("renderer context loss", () => {
       weather: true,
     });
     first.game.dispose();
-    const next = await start(vi.fn(), 2);
+    const next = await start(vi.fn(), { resolution: 2 });
     next.render.mockImplementation(() => {});
     const resize = resizeRenderer();
     resize.mockClear();
@@ -499,6 +501,32 @@ describe("renderer context loss", () => {
       expect(next.game.visualEffects.shadows).toBe(true);
     }
     expect(resize).not.toHaveBeenCalled();
+  });
+
+  it("measures again when another tab changed settings while no scene was mounted", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    sessionRenderQuality.set("travel", {
+      level: { resolution: 2, disabled: [] },
+      patience: 5,
+      resolutionFloor: 2,
+      ineffectiveEffects: ["shadows", "localLights", "weather"],
+      settings: readVisualSettingsKey(),
+    });
+    // Another tab turns wind off; this tab only receives the storage event.
+    localStorage.setItem("showWorldWind", "false");
+    window.dispatchEvent(
+      new window.StorageEvent("storage", { key: "showWorldWind", newValue: "false" }),
+    );
+    const { game, render } = await start(vi.fn(), { resolution: 2 });
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 400 && game.renderer.resolution === 2; i++) {
+      now += 1000 / 30;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(1.5);
   });
 
   it("sleeps between the frames of a slow scene and wakes on a timer", async () => {

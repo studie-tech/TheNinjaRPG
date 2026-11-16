@@ -15,7 +15,6 @@ import { releaseRenderer, takeParkedRenderer } from "@/libs/rendering/rendererPo
 import {
   baseRenderResolution,
   createRenderQualityGovernor,
-  forgetRejectedQualitySteps,
   INITIAL_HEALTHY_WINDOWS,
   initialRenderQualityLevel,
   matchingQualityLevel,
@@ -29,6 +28,7 @@ import {
   readChosenVisualEffects,
   readRenderQuality,
   readVisualEffects,
+  readVisualSettingsKey,
   subscribeRenderQuality,
   subscribeVisualEffects,
   type VisualEffect,
@@ -156,10 +156,13 @@ export const createGameRenderer = async (options: {
   /**
    * Reductions shown to buy no speed on this surface (a slow display, scene work on the CPU):
    * the lowest density worth using and effects to keep. Later renderers of the surface reuse
-   * them for the session, so they do not try the same steps again.
+   * them for the session unless the device settings have changed since, so they do not try
+   * the same steps again.
    */
-  let resolutionFloor = remembered?.resolutionFloor ?? 1;
-  const ineffectiveEffects = new Set<VisualEffect>(remembered?.ineffectiveEffects);
+  const rejections =
+    remembered?.settings === readVisualSettingsKey() ? remembered : null;
+  let resolutionFloor = rejections?.resolutionFloor ?? 1;
+  const ineffectiveEffects = new Set<VisualEffect>(rejections?.ineffectiveEffects);
   const buildLadder = (base: number) =>
     renderQualityLevels(
       base,
@@ -190,12 +193,10 @@ export const createGameRenderer = async (options: {
     for (const effect of undone.disabled)
       if (!kept.disabled.includes(effect)) ineffectiveEffects.add(effect);
   };
-  /** A settings change is a new scene to measure, on every surface. */
+  /** A settings change is a new scene to measure. */
   const forgetRejectedSteps = () => {
     resolutionFloor = 1;
     ineffectiveEffects.clear();
-    // Covers changes from other tabs, which do not pass through this tab's settings writes.
-    forgetRejectedQualitySteps();
   };
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;
@@ -361,6 +362,7 @@ export const createGameRenderer = async (options: {
         patience: governor.patience,
         resolutionFloor,
         ineffectiveEffects: [...ineffectiveEffects],
+        settings: readVisualSettingsKey(),
       });
     }
     for (const effect of Object.keys(storedEffects) as VisualEffect[])

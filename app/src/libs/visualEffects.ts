@@ -1,4 +1,3 @@
-import { forgetRejectedQualitySteps } from "@/libs/rendering/renderQuality";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 /** Independent device preferences shared by settings and renderers. */
@@ -70,7 +69,6 @@ export const setVisualEffect = (effect: VisualEffect, enabled: boolean) => {
     chosen.add(effect);
     safeLocalStorageSetItem(CHOSEN_VISUAL_EFFECTS_KEY, JSON.stringify([...chosen]));
   }
-  forgetRejectedQualitySteps();
   publish(VISUAL_EFFECT_KEYS[effect], JSON.stringify(enabled));
 };
 
@@ -103,10 +101,19 @@ export const readRenderQuality = (): RenderQuality =>
   parseRenderQuality(safeLocalStorageGetItem(RENDER_QUALITY_KEY));
 
 /** Publishes immediately to active scenes and open settings. */
-export const setRenderQuality = (quality: RenderQuality) => {
-  forgetRejectedQualitySteps();
+export const setRenderQuality = (quality: RenderQuality) =>
   publish(RENDER_QUALITY_KEY, JSON.stringify(quality));
-};
+
+/**
+ * Identifies this device's current quality preference, effect switches and choices, however
+ * they were changed (this tab, another tab, any page), for state measured under them.
+ */
+export const readVisualSettingsKey = () =>
+  JSON.stringify([
+    readRenderQuality(),
+    readVisualEffects(),
+    [...readChosenVisualEffects()].sort(),
+  ]);
 
 /** Follows quality changes from this and other tabs. */
 export const subscribeRenderQuality = (onChange: (quality: RenderQuality) => void) =>

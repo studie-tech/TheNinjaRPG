@@ -1,18 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { sessionRenderQuality } from "@/libs/rendering/renderQuality";
 import {
   readChosenVisualEffects,
   readRenderQuality,
   readVisualEffects,
+  readVisualSettingsKey,
   setRenderQuality,
   setVisualEffect,
   subscribeRenderQuality,
 } from "@/libs/visualEffects";
 
-afterEach(() => {
-  localStorage.clear();
-  sessionRenderQuality.clear();
-});
+afterEach(() => localStorage.clear());
 
 describe("visual effect choices", () => {
   it("records only effects the player sets, not defaults materialized from groups", () => {
@@ -46,24 +43,22 @@ describe("render quality preference", () => {
   });
 });
 
-describe("rejected quality steps", () => {
+describe("visual settings key", () => {
   it.each([
-    ["an effect", () => setVisualEffect("shadows", true)],
-    ["the quality", () => setRenderQuality("high")],
-  ])("are forgotten when %s changes while no scene is mounted", (_, change) => {
-    const level = { resolution: 2, disabled: [] };
-    sessionRenderQuality.set("travel", {
-      level,
-      patience: 10,
-      resolutionFloor: 2,
-      ineffectiveEffects: ["shadows"],
-    });
+    ["an effect in this tab", () => setVisualEffect("shadows", true)],
+    ["the quality in this tab", () => setRenderQuality("high")],
+    [
+      "the quality in another tab",
+      () => localStorage.setItem("worldRenderQuality", '"low"'),
+    ],
+    [
+      "an effect in another tab",
+      () => localStorage.setItem("showWorldWeather", "false"),
+    ],
+  ])("changes when %s changes", (_, change) => {
+    const before = readVisualSettingsKey();
+    expect(readVisualSettingsKey()).toBe(before);
     change();
-    expect(sessionRenderQuality.get("travel")).toEqual({
-      level,
-      patience: 10,
-      resolutionFloor: 1,
-      ineffectiveEffects: [],
-    });
+    expect(readVisualSettingsKey()).not.toBe(before);
   });
 });
