@@ -42,6 +42,18 @@ export const huntingSessionStage = (
           : "Ready to Fight";
 
 /**
+ * Refetch cadence for hunting reads. A preparation countdown ticks with each response's
+ * server time; otherwise deadline timers and the player's own hunting actions refresh the
+ * data, and the slow poll only picks up changes made in another tab or by the cleaner.
+ */
+export const huntingRefetchInterval = (
+  data?: { session?: { readyAt: Date | null } | null; serverTime: Date } | null,
+) =>
+  data?.session?.readyAt && data.session.readyAt.getTime() > data.serverTime.getTime()
+    ? 5_000
+    : 60_000;
+
+/**
  * Build the persisted result from preloaded rules, preserving allowance on non-victories.
  * Roll once before settlement so deadlock retries keep the same drops and cooldown.
  * Snapshotted yield increases only successful drops; older battles default to no bonus.

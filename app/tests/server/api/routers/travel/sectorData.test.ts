@@ -130,13 +130,13 @@ const makeCaller = (
 };
 
 describe("travel.getSectorData query scheduling", () => {
-  it("starts all sector/global reads before the authoritative user lookup finishes", async () => {
+  it("starts all sector, global and quest-history reads before the authoritative user lookup finishes", async () => {
     const test = makeCaller({ waitForUser: true });
     const pending = test.caller.getSectorData({ sector: SECTOR });
     try {
       await test.allSectorReadsStarted;
       expect(test.findUser).toHaveBeenCalledTimes(1);
-      expect(test.history).not.toHaveBeenCalled();
+      expect(test.history).toHaveBeenCalledTimes(2);
       Object.values(test.reads).forEach((read) =>
         expect(read).toHaveBeenCalledTimes(1),
       );
@@ -147,7 +147,7 @@ describe("travel.getSectorData query scheduling", () => {
   });
 
   it.each(["AWAKE", "TRAVEL", "QUEUED"] as const)(
-    "scouts while %s without reading quest history in an NPC-free window",
+    "scouts while %s in an NPC-free window without quest placements",
     async (status) => {
       const test = makeCaller({ status });
       const result = await test.caller.getSectorData({ sector: SECTOR });
@@ -157,7 +157,7 @@ describe("travel.getSectorData query scheduling", () => {
       ]);
       expect(result.questPlacements).toEqual([]);
       expect(result.overworldAis).toEqual([]);
-      expect(test.history).not.toHaveBeenCalled();
+      expect(test.history).toHaveBeenCalledTimes(2);
       Object.values(test.reads).forEach((read) =>
         expect(read).toHaveBeenCalledTimes(1),
       );
@@ -165,11 +165,10 @@ describe("travel.getSectorData query scheduling", () => {
   );
 
   it.each([false, null])(
-    "skips history when the placement's template is %s",
+    "binds no quest placement when the placement's template is %s",
     async (isAi) => {
       const test = makeCaller({ placements: [placement(SECTOR, isAi)] });
       const result = await test.caller.getSectorData({ sector: SECTOR });
-      expect(test.history).not.toHaveBeenCalled();
       expect(result.overworldAis).toEqual([]);
       expect(result.questPlacements).toEqual([]);
     },
@@ -246,14 +245,14 @@ describe("travel.getSectorData query scheduling", () => {
     },
   );
 
-  it("re-reads every sector-bound dataset after a crossing, keeping global reads once", async () => {
+  it("re-reads every sector-bound dataset after a crossing, keeping global and user reads once", async () => {
     const test = makeCaller({ placements: [placement(STALE_SECTOR)] });
     const result = await test.caller.getSectorData({ sector: STALE_SECTOR });
     expect(result.users.map((u) => u.userId)).toEqual([`player-${SECTOR}`, "viewer"]);
     expect(result.village?.id).toBe(`village-${SECTOR}`);
     expect(result.sectorData?.sector).toBe(SECTOR);
     expect(result.overworldAis).toEqual([]);
-    expect(test.history).not.toHaveBeenCalled();
+    expect(test.history).toHaveBeenCalledTimes(2);
     for (const read of [
       test.reads.users,
       test.reads.patrols,
@@ -270,7 +269,7 @@ describe("travel.getSectorData query scheduling", () => {
     ).toEqual([STALE_SECTOR, SECTOR]);
   });
 
-  it("uses authoritative placements to decide whether history is needed after a crossing", async () => {
+  it("resolves quest-bound NPCs from authoritative placements after a crossing", async () => {
     const test = makeCaller({ placements: [placement(SECTOR)] });
     const result = await test.caller.getSectorData({ sector: STALE_SECTOR });
     expect(test.history).toHaveBeenCalledTimes(2);
@@ -280,7 +279,7 @@ describe("travel.getSectorData query scheduling", () => {
   });
 
   it.each(["ASLEEP", "HOSPITALIZED", "BATTLE"] as const)(
-    "discards speculative data while %s without reading history or retrying a stale sector",
+    "discards speculative data while %s without retrying a stale sector",
     async (status) => {
       const test = makeCaller({
         status,
@@ -294,7 +293,7 @@ describe("travel.getSectorData query scheduling", () => {
         overworldAis: [],
         questPlacements: [],
       });
-      expect(test.history).not.toHaveBeenCalled();
+      expect(test.history).toHaveBeenCalledTimes(2);
       expect(test.reads.sector).toHaveBeenCalledTimes(1);
     },
   );

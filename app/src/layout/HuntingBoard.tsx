@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { HUNTING_RANKS } from "@/drizzle/constants";
 import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { HuntingRewards } from "@/layout/CombatRewards";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
@@ -18,6 +19,7 @@ import { getHuntingRank, getHuntingRankProgress } from "@/libs/hunting";
 import {
   huntingAllowance,
   huntingEligibility,
+  huntingRefetchInterval,
   huntingSessionStage,
 } from "@/libs/hunting/contracts";
 import { getScrollBehavior } from "@/utils/dom";
@@ -44,7 +46,7 @@ export function HuntingBoard({
   const router = useRouter();
   const { prepareCombatEntry, loadBattle } = useCombatEntry();
   const utils = api.useUtils();
-  const { updateUser, prepareUserUpdate, pusher } = useUserInfo();
+  const { updateUser, prepareUserUpdate, pusher, timeDiff } = useUserInfo();
   const [habitatId, setHabitatId] = useState("");
   const [creature, setCreature] = useState("");
   const [rank, setRank] = useState("");
@@ -53,7 +55,7 @@ export function HuntingBoard({
   const selector = useRef<HTMLDivElement>(null);
   const [message, setMessage] = useState("");
   const board = api.hunting.getBoard.useQuery(undefined, {
-    refetchInterval: 5000,
+    refetchInterval: (q) => huntingRefetchInterval(q.state.data),
     refetchOnMount: "always",
   });
   /** Keep expected rejections beside the action and refetch authoritative state after success. */
@@ -125,6 +127,13 @@ export function HuntingBoard({
   const activeHabitat = session?.content;
   const active = activeHabitat?.contracts.find((c) => c.id === session?.contractId);
   const progress = data?.progress.find((p) => p.contractId === active?.id);
+  useRefreshAt(
+    [session?.readyAt, ...(data?.progress ?? []).map((p) => p.cooldownUntil)],
+    () => void board.refetch(),
+    timeDiff,
+    true,
+    data?.serverTime,
+  );
   const allowance = active
     ? huntingAllowance(active, progress, data?.serverTime.getTime())
     : null;

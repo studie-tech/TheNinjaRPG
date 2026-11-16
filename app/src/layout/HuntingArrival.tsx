@@ -2,8 +2,8 @@
 
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useHuntingSession } from "@/hooks/useHuntingSession";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import Modal from "@/layout/Modal";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
@@ -34,11 +34,7 @@ export function HuntingArrival({ blocked = false }: { blocked?: boolean }) {
     safeSessionStorageSetItem(storageKey, value ?? "");
     setDismissed(value);
   };
-  const encounter = api.hunting.getSession.useQuery(undefined, {
-    enabled: user?.occupation === "HUNTER",
-    refetchInterval: 5000,
-    refetchOnMount: "always",
-  });
+  const encounter = useHuntingSession(user?.occupation === "HUNTER");
   const session = encounter.data?.session;
   const isAtEncounter = canAttemptAwakeAction(user) && user?.sector === session?.sector;
   useEffect(() => {

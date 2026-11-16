@@ -375,18 +375,29 @@ export const travelRouter = createTRPCRouter({
     .input(z.object({ sector: sectorIdSchema }))
     .query(async ({ input, ctx }) => {
       // The client's sector usually matches; overlap its reads with the authoritative user lookup.
-      const [user, sectorWindowData, fetchedWarData, liveBattles, requestedMap] =
-        await Promise.all([
-          findUserDataForGetSectorData(ctx.drizzle, ctx),
-          fetchSectorWindowData(ctx.drizzle, ctx.userId, input.sector),
-          listWarForGetSectorData(ctx.drizzle),
-          // All recently-advanced battles. The Battle table only holds a handful of rows
-          // (the cleaner drops them after a day), so this indexed range scan is cheaper than
-          // a second sequential round-trip filtered by the sector's battle ids.
-          selectBattleForGetSectorData(ctx.drizzle),
-          // Roaming NPC copies anchor on this map; the published-map cache keeps it warm.
-          fetchPublishedSectorMap(ctx.drizzle, input.sector).catch(() => null),
-        ]);
+      const [
+        user,
+        sectorWindowData,
+        fetchedWarData,
+        liveBattles,
+        requestedMap,
+        userQuests,
+        completedQuests,
+      ] = await Promise.all([
+        findUserDataForGetSectorData(ctx.drizzle, ctx),
+        fetchSectorWindowData(ctx.drizzle, ctx.userId, input.sector),
+        listWarForGetSectorData(ctx.drizzle),
+        // All recently-advanced battles. The Battle table only holds a handful of rows
+        // (the cleaner drops them after a day), so this indexed range scan is cheaper than
+        // a second sequential round-trip filtered by the sector's battle ids.
+        selectBattleForGetSectorData(ctx.drizzle),
+        // Roaming NPC copies anchor on this map; the published-map cache keeps it warm.
+        fetchPublishedSectorMap(ctx.drizzle, input.sector).catch(() => null),
+        // Quest-bound NPC markers. Global wildlife placements put AI templates in nearly
+        // every sector, so reading these upfront saves a sequential round-trip per poll.
+        listQuestHistoryForGetSectorData(ctx.drizzle, ctx),
+        listQuestHistoryForGetSectorData2(ctx.drizzle, ctx),
+      ]);
 
       if (!user) {
         throw serverError("NOT_FOUND", missingUserMessage(ctx.userId));
@@ -504,14 +515,9 @@ export const travelRouter = createTRPCRouter({
         );
       });
 
-      // Quest history can only affect placements backed by an AI template.
-      const readsQuests = placements.some((p) => p.aiTemplate?.isAi);
-      const hostsCreator = processedUsers.some(isCreator);
-      const [userQuests, completedQuests, creatorBody] = await Promise.all([
-        readsQuests ? listQuestHistoryForGetSectorData(ctx.drizzle, ctx) : [],
-        readsQuests ? listQuestHistoryForGetSectorData2(ctx.drizzle, ctx) : [],
-        hostsCreator ? findUserDataForCreatorBody(ctx.drizzle) : undefined,
-      ]);
+      const creatorBody = processedUsers.some(isCreator)
+        ? await findUserDataForCreatorBody(ctx.drizzle)
+        : undefined;
       const activeQuests = getUserQuests({ ...user, userQuests, completedQuests });
       const boundPlacementIds = new Set(
         activeQuests.flatMap((entry) =>

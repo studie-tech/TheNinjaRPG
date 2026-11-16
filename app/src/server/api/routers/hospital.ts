@@ -25,6 +25,7 @@ import { hasRequiredRank } from "@/libs/rank";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import {
   executeResultForUserHeal,
+  findUserDataForGetHospitalizedUsers,
   listUserDataForGetHospitalizedUsers,
   updateUserDataForNpcHeal,
   updateUserDataForUserHeal,
@@ -50,7 +51,7 @@ import {
   getUserRegenerationGain,
   userRegenerationGainSql,
 } from "@/server/utils/regeneration";
-import { flushSafe } from "@/server/utils/sentry";
+import { flushSafe, missingUserMessage } from "@/server/utils/sentry";
 import { findRelationship, getAlliedVillageIds } from "@/utils/alliance";
 import { secondsFromDate } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
@@ -91,9 +92,10 @@ export const hospitalRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       // Query
       const [user, alliances] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+        findUserDataForGetHospitalizedUsers(ctx.drizzle, ctx.userId),
         fetchAlliances(ctx.drizzle),
       ]);
+      if (!user) throw serverError("NOT_FOUND", missingUserMessage(ctx.userId));
       // Return filtered data
       return await listUserDataForGetHospitalizedUsers(
         ctx.drizzle,
