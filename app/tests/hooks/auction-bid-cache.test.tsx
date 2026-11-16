@@ -75,6 +75,8 @@ it("patches the opened listing on a later page of the captured search without re
   await waitFor(() => expect(view.result.current.listing.data).toBeDefined());
   await waitFor(() => expect(view.result.current.listings.data).toBeDefined());
   await act(() => view.result.current.listings.fetchNextPage());
+  await waitFor(() => expect(view.result.current.listings.data?.pages).toHaveLength(2));
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
   // An inactive search for another tab only becomes stale.
   queryClient.setQueryData(
     [["auction", "getAuctionListings"], { input: otherSearch, type: "infinite" }],
@@ -89,10 +91,17 @@ it("patches the opened listing on a later page of the captured search without re
     ),
   );
   expect(calls).toEqual([]);
-  const pages = view.result.current.listings.data?.pages;
+  const pages = queryClient.getQueryData<{
+    pages: { data: { id: string; currentPrice: number }[] }[];
+  }>([["auction", "getAuctionListings"], { input: search, type: "infinite" }])?.pages;
   expect(pages?.[0]?.data[0]?.currentPrice).toBe(100);
   expect(pages?.[1]?.data[0]).toMatchObject({ id: "lot", currentPrice: 150 });
-  expect(view.result.current.listing.data).toMatchObject({ currentPrice: 150 });
+  expect(
+    queryClient.getQueryData([
+      ["auction", "getAuctionListing"],
+      { input: { auctionId: "lot" }, type: "query" },
+    ]),
+  ).toMatchObject({ currentPrice: 150 });
   expect(
     queryClient.getQueryState([
       ["auction", "getAuctionListings"],
