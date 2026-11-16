@@ -291,7 +291,14 @@ export const skillTreeRouter = createTRPCRouter({
         if (existingUserSkill.activated) {
           return errorResponse("Skill already activated");
         }
-        await updateUserSkillForPurchaseSkill(ctx.drizzle, existingUserSkill);
+        const result = await updateUserSkillForPurchaseSkill(
+          ctx.drizzle,
+          existingUserSkill,
+        );
+        // A reset can remove the unlocked row after the opening reads.
+        if (result.rowsAffected === 0) {
+          return errorResponse("Your skills changed. Please try again.");
+        }
         return {
           success: true,
           message: `Successfully activated ${skill.name}!`,

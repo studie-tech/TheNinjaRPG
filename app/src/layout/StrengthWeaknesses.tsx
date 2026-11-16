@@ -550,13 +550,11 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
       onMutate: () => ({ user: prepareUserUpdate(), skills: prepareSkillUpdate() }),
       onSuccess: async (data, _variables, context) => {
         showMutationToast(data);
-        if (data.success) {
-          // The catalogue lists every skill regardless of ownership, so it stays cached.
-          await Promise.all([
-            updateSkills(data, context.skills),
-            updateUser(data, { revision: context.user }),
-          ]);
-        }
+        // Rejections reconcile changed prerequisites or ownership; the catalogue stays cached.
+        await Promise.all([
+          updateSkills(data, context.skills),
+          updateUser(data, { revision: context.user }),
+        ]);
       },
     });
 

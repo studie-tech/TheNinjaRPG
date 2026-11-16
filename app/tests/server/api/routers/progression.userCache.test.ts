@@ -367,6 +367,17 @@ describeWithDatabase("confirmed progression cache responses", () => {
       expect(cached?.userSkills).toEqual([
         expect.objectContaining({ skillId: "cache-skill", activated: true }),
       ]);
+      // A rejected activation must recover a concurrent reset instead of keeping stale skills.
+      const rejected = {
+        success: false,
+        message: "Your skills changed. Please try again.",
+      };
+      const retryContext = options.onMutate();
+      getUser.mockClear();
+      updateSkills.mockClear();
+      await options.onSuccess(rejected, { skillId: "cache-skill" }, retryContext);
+      expect(updateSkills).toHaveBeenCalledWith(rejected, skillSnapshot);
+      expect(getUser).toHaveBeenCalledTimes(1);
     } finally {
       unsubscribe();
       client.clear();

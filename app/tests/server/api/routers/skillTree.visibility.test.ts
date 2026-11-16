@@ -603,6 +603,17 @@ describe("hidden skill-tree permissions", () => {
     expect(write).toHaveBeenCalledTimes(1);
   });
 
+  it("withholds activation projections when a reset removed the unlocked skill", async () => {
+    const { drizzle, write } = setup("CONTENT");
+    write.mockResolvedValueOnce({ rowsAffected: 0 });
+    expect(await invoke("purchaseSkill", drizzle, { skillId: "secret" })).toEqual({
+      success: false,
+      message: "Your skills changed. Please try again.",
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(drizzle.insert).not.toHaveBeenCalled();
+  });
+
   it("counts special skills only after ownership is unlocked", async () => {
     const { drizzle, skills } = setup("OWNER");
     skills[1]!.skillType = "SPECIAL";
