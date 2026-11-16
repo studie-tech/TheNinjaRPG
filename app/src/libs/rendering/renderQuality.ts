@@ -283,6 +283,7 @@ export const readRenderQualityStatus = (): QualityStatus => {
   };
 };
 
+/** Notifies settings when visible-scene reductions change and returns subscription cleanup. */
 export const subscribeRenderQualityStatus = (listener: () => void) => {
   statusListeners.add(listener);
   return () => {

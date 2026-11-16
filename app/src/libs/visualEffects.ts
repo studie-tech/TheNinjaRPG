@@ -97,6 +97,7 @@ export const readChosenVisualEffects = (): Set<VisualEffect> => {
 export const RENDER_QUALITIES = ["auto", "high", "low"] as const;
 export type RenderQuality = (typeof RENDER_QUALITIES)[number];
 
+/** Reads the saved device quality preference, defaulting missing or malformed values to Auto. */
 export const readRenderQuality = (): RenderQuality =>
   parseRenderQuality(safeLocalStorageGetItem(RENDER_QUALITY_KEY));
 
@@ -114,6 +115,7 @@ export const visualSettingsKey = (
   chosen: ReadonlySet<VisualEffect>,
 ) => JSON.stringify([quality, effects, [...chosen].sort()]);
 
+/** Captures stored device preferences to validate the settings attached to session history. */
 export const readVisualSettingsKey = () =>
   visualSettingsKey(
     readRenderQuality(),
