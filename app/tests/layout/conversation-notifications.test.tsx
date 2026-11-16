@@ -109,8 +109,9 @@ function mount(
         channels.set(name, handlers);
       }
       return {
-        bind: (_event: string, handler: (data: object) => void) =>
-          handlers!.add(handler),
+        bind: (event: string, handler: (data: object) => void) => {
+          if (event === "event") handlers!.add(handler);
+        },
         unbind: (_event: string, handler: (data: object) => void) =>
           handlers!.delete(handler),
       };
@@ -245,8 +246,12 @@ function mount(
     profileKey,
     showToast,
     removePanel: () => view.rerender(<Page showPanel={false} />),
-    receive: (data: object) =>
-      Promise.all([...(channels.get("player") ?? [])].map((handler) => handler(data))),
+    receive: async (data: object) => {
+      await waitFor(() => expect(channels.get("player")?.size).toBeGreaterThan(0));
+      await Promise.all(
+        [...(channels.get("player") ?? [])].map((handler) => handler(data)),
+      );
+    },
   };
 }
 it.each(["public", "private"] as const)(

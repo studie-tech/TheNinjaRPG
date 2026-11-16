@@ -219,36 +219,42 @@ export const usePusherHandler = (
         channel.bind("pusher:subscription_succeeded", async () => {
           if (isCancelled || notificationSession.current !== session) return;
           hasSubscribedProfileRead = false;
-          try {
-            // A snapshot read before subscription can miss events during the client download.
-            // Join initial loading, then reconcile unless a read already began after binding.
-            const profile = await utils.profile.getUser.fetch(undefined, {
+          // A snapshot read before subscription can miss events during the client download.
+          // Join initial loading, then reconcile unless a read already began after binding.
+          const profile = await utils.profile.getUser
+            .fetch(undefined, {
               staleTime: Infinity,
+            })
+            .catch(() => {
+              // UserContext exposes profile failures and owns their recovery/redirect UX.
+              return undefined;
             });
-            if (
-              !isCancelled &&
-              notificationSession.current === session &&
-              profile.userData?.userId === userId &&
-              !hasSubscribedProfileRead
-            ) {
-              await utils.profile.getUser.invalidate();
-              const user = utils.profile.getUser.getData()?.userData;
-              // A recovered admission must enter combat just like its missed live event.
-              // An unchanged battle leaves deliberate navigation away from combat alone.
-              if (
-                !isCancelled &&
-                notificationSession.current === session &&
-                user?.userId === userId &&
-                user.status === "BATTLE" &&
-                user.battleId &&
-                user.battleId !== profile.userData.battleId
-              ) {
-                pushToCombat(router, user.battleId);
-                void utils.combat.getBattle.invalidate();
-              }
-            }
+          if (
+            !profile ||
+            isCancelled ||
+            notificationSession.current !== session ||
+            profile.userData?.userId !== userId ||
+            hasSubscribedProfileRead
+          )
+            return;
+          try {
+            await utils.profile.getUser.invalidate();
           } catch {
-            // UserContext exposes profile failures and owns their recovery/redirect UX.
+            return;
+          }
+          const user = utils.profile.getUser.getData()?.userData;
+          // A recovered admission must enter combat just like its missed live event.
+          // An unchanged battle leaves deliberate navigation away from combat alone.
+          if (
+            !isCancelled &&
+            notificationSession.current === session &&
+            user?.userId === userId &&
+            user.status === "BATTLE" &&
+            user.battleId &&
+            user.battleId !== profile.userData.battleId
+          ) {
+            pushToCombat(router, user.battleId);
+            void utils.combat.getBattle.invalidate();
           }
         });
         channel.bind("event", async (data: UserEvent) => {
