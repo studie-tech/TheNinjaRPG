@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { TAVERN_IMAGE_MAX_SIZE_MB } from "@/drizzle/constants";
+import { loadHtmlSanitizer } from "@/hooks/useHtmlSanitizer";
 import { EmojiPicker } from "@/layout/EmojiPicker";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { cn } from "@/libs/shadui";
@@ -38,12 +39,11 @@ import { getImageDimensions } from "@/utils/image";
 import {
   enterSubmits,
   needsHtmlSource,
-  richTextInput,
   type SubmitOnEnter,
   stripPastedChatHtml,
 } from "@/utils/richText";
+import type { richTextInput } from "@/utils/sanitize";
 import { useUserPicker } from "@/utils/search";
-import { useUploadThing } from "@/utils/uploadthing";
 import "quill/dist/quill.core.css";
 import "./RichInput.css";
 
@@ -66,6 +66,8 @@ export const RichInput = (props: RichInputProps) => {
   } | null>(null);
   const [mention, setMention] = useState<{ start: number; end: number } | null>(null);
   const quillRef = useRef<Quill | null>(null);
+  // Loaded with Quill; it imports stored HTML into the visual editor.
+  const richTextInputRef = useRef<RichTextInput | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -74,7 +76,6 @@ export const RichInput = (props: RichInputProps) => {
   const lastValueRef = useRef(value);
   // Reject rapid duplicate events before React renders the pending state.
   const uploadInFlightRef = useRef(false);
-  const uploadErrorRef = useRef<string | null>(null);
   // Release the containing form's upload lock exactly once, including on unmount.
   const uploadPendingRef = useRef(false);
   const generationRef = useRef(0);
@@ -86,11 +87,6 @@ export const RichInput = (props: RichInputProps) => {
   // physical keyboard, so touch keyboards keep a newline key.
   const enterKeyHint = props.onSubmit && submitMode === "always" ? "send" : "enter";
   const { methods: mentionForm, users: selectedUsers } = useUserPicker();
-  const { startUpload } = useUploadThing("tavernUploader", {
-    onUploadError: (error) => {
-      uploadErrorRef.current = error.message;
-    },
-  });
 
   /** Search plain text while keeping replacement offsets in Quill's embed-aware coordinates. */
   const checkMention = (text: string, end: number, position = end) => {
@@ -149,8 +145,9 @@ export const RichInput = (props: RichInputProps) => {
     setReady(false);
     setLoadError(false);
     void loadQuill()
-      .then(({ default: Editor, Delta }) => {
+      .then(([{ default: Editor, Delta }, { richTextInput }]) => {
         if (disposed) return;
+        richTextInputRef.current = richTextInput;
         const container = document.createElement("div");
         host.replaceChildren(container);
         const options = initialOptions();
@@ -246,7 +243,8 @@ export const RichInput = (props: RichInputProps) => {
     // A draft cleared from outside, such as after sending, starts over in the visual editor.
     else if (!value) setSourceMode(false);
     const editor = quillRef.current;
-    if (!editor) return;
+    const richTextInput = richTextInputRef.current;
+    if (!editor || !richTextInput) return;
     editor.setContents(editor.clipboard.convert(richTextInput(value)), "silent");
     editor.history.clear();
     if (props.focusEndOnExternalChange && !blocked)
@@ -320,7 +318,6 @@ export const RichInput = (props: RichInputProps) => {
       return;
     }
     uploadInFlightRef.current = true;
-    uploadErrorRef.current = null;
     setUploading(true);
     uploadPendingRef.current = true;
     props.onUploadPendingChange?.(true);
@@ -334,13 +331,9 @@ export const RichInput = (props: RichInputProps) => {
     const focusedBeforeUpload = document.activeElement;
     const uploadAndInsert = async () => {
       const dimensions = await getImageDimensions(file);
-      const result = (await startUpload([file]))?.[0]?.serverData;
+      const result = await uploadTavernImage(file);
       if (!result?.fileUrl || result.error)
-        throw new Error(
-          result?.error ||
-            uploadErrorRef.current ||
-            "Image upload failed. Please try again.",
-        );
+        throw new Error(result?.error || UPLOAD_FAILED_MESSAGE);
       // A reset, closed composer or account change must not receive an old upload.
       if (generation === generationRef.current && editor === quillRef.current) {
         if (source && selection && source === textareaRef.current) {
@@ -927,8 +920,38 @@ export const RichInput = (props: RichInputProps) => {
   );
 };
 
-/** Quill touches the DOM on import, so it loads only once a visual editor mounts. */
-const loadQuill = () => import("quill");
+/**
+ * Quill touches the DOM on import, so it loads only once a visual editor mounts, together
+ * with the sanitizer that imports stored HTML into it.
+ */
+const loadQuill = () => Promise.all([import("quill"), loadHtmlSanitizer()]);
+
+const UPLOAD_FAILED_MESSAGE = "Image upload failed. Please try again.";
+
+/** UploadThing codes the client raises itself for transport failures, with technical text. */
+const CLIENT_UPLOAD_ERROR_CODES = new Set(["INTERNAL_CLIENT_ERROR", "UPLOAD_FAILED"]);
+
+/**
+ * Uploads one image; the uploader client and its runtime load with the first one. Errors the
+ * upload server reported (limits, permissions, size) keep their message; a chunk that cannot
+ * load or a failed request rejects with the generic failure instead.
+ */
+const uploadTavernImage = async (file: File) => {
+  const uploader = await import("@/utils/uploadthing").catch(() => null);
+  if (!uploader) throw new Error(UPLOAD_FAILED_MESSAGE);
+  try {
+    return (await uploader.uploadFiles("tavernUploader", { files: [file] }))[0]
+      ?.serverData;
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    const isServerMessage =
+      error instanceof Error &&
+      error.name === "UploadThingError" &&
+      typeof code === "string" &&
+      !CLIENT_UPLOAD_ERROR_CODES.has(code);
+    throw new Error(isServerMessage ? error.message : UPLOAD_FAILED_MESSAGE);
+  }
+};
 
 /** Touch screens without a precise pointer use soft keyboards. */
 const isCoarsePointer = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;
@@ -957,6 +980,8 @@ const formatButtons = [
   { format: "blockquote", label: "Quote", icon: Quote },
   { format: "clean", label: "Clear formatting", icon: Eraser },
 ];
+
+type RichTextInput = typeof richTextInput;
 
 interface RichInputProps {
   id: string;

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { UploadThingError } from "uploadthing/server";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import RichInput from "@/layout/RichInput";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
@@ -24,7 +25,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   startUpload.mockReset();
   spies = [
-    vi.spyOn(uploadthing, "useUploadThing").mockReturnValue({ startUpload } as never),
+    vi
+      .spyOn(uploadthing, "uploadFiles")
+      .mockImplementation(((_endpoint: string, { files }: { files: File[] }) =>
+        startUpload(files)) as never),
     vi
       .spyOn(UserSearchSelect, "default")
       .mockImplementation(({ useFormMethods }: any) => (
@@ -957,6 +961,57 @@ describe("rich input composer", () => {
       expect(editor.value).toContain('src="https://example.com/retry.png"'),
     );
     expect(editor.value.endsWith(advancedHtml)).toBe(true);
+  });
+
+  const generic = "Image upload failed. Please try again.";
+  it.each([
+    [
+      "the server's message",
+      new UploadThingError("Can only make 20 tavern image upload attempts per day"),
+      "Can only make 20 tavern image upload attempts per day",
+    ],
+    [
+      "the server's size message",
+      new UploadThingError({ code: "TOO_LARGE", message: "Image exceeds 4MB." }),
+      "Image exceeds 4MB.",
+    ],
+    [
+      "a generic message for a failed transfer",
+      new UploadThingError({
+        code: "UPLOAD_FAILED",
+        message: "XHR failed 502 Bad Gateway",
+      }),
+      generic,
+    ],
+    [
+      "a generic message when the upload server is unreachable",
+      new UploadThingError({
+        code: "INTERNAL_CLIENT_ERROR",
+        message: 'Failed to report event "upload" to UploadThing server',
+      }),
+      generic,
+    ],
+    ["a generic message for other errors", new TypeError("Failed to fetch"), generic],
+  ])("shows %s when an upload fails", async (_case, error, message) => {
+    startUpload.mockRejectedValueOnce(error);
+    const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => {});
+    spies.push(
+      showToast,
+      vi
+        .spyOn(image, "getImageDimensions")
+        .mockResolvedValue({ width: 800, height: 600 }),
+    );
+    const view = render(<Composer initial={advancedHtml} />);
+    const editor = view.getByRole("textbox", {
+      name: "Message",
+    }) as HTMLTextAreaElement;
+    pasteImage(editor);
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith({ success: false, message }),
+    );
+    expect(editor.value).toBe(advancedHtml);
+    expect(editor.disabled).toBe(false);
+    expect(uploadPending).toHaveBeenLastCalledWith(false);
   });
 
   it.each(["reset", "refresh", "disabled", "unmount"])(

@@ -10,15 +10,18 @@ import {
 } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import * as client from "@/app/_trpc/client";
+import * as sanitizerLoader from "@/hooks/useHtmlSanitizer";
 import * as media from "@/hooks/useMediaQuery";
 import { useConversation } from "@/layout/Conversation";
 import * as pagination from "@/libs/pagination";
+import * as sanitizeModule from "@/utils/sanitize";
 import * as userContext from "@/utils/UserContext";
 import {
   flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { deferred } from "../setup/deferred";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 const user = {
@@ -55,6 +58,7 @@ let typingSent: unknown[];
 let createInputs: unknown[];
 let finishCreate: (value: object) => void;
 let fetched: ReturnType<typeof row> | undefined;
+let reads = 0;
 const pusher = {
   subscribe: () => ({
     bind: (_event: string, handler: typeof receive) => {
@@ -91,15 +95,19 @@ afterEach(async () => {
   restoreBrowserGlobals();
 });
 
-const mount = (isPublic = true) => {
+const mount = (
+  isPublic = true,
+  rows = [row("a", "Alpha"), row("b", "Bravo", "Peer")],
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
   clients.push(queryClient);
   const trpcClient = fakeTrpcClient((path, input) => {
     if (path === "comments.getConversationComments") {
+      reads++;
       return {
-        data: [row("a", "Alpha"), row("b", "Bravo", "Peer")],
+        data: [...rows],
         convo: { id: "chat", isPublic },
         nextCursor: null,
       };
@@ -115,6 +123,7 @@ const mount = (isPublic = true) => {
       });
     }
     if (path === "comments.fetchConversationComment") return fetched;
+    if (path === "comments.reactConversationComment") return { success: true };
     throw new Error(`Unexpected request: ${path}`);
   });
   const wrapper = ({ children }: PropsWithChildren) => (
@@ -229,6 +238,140 @@ it("inserts own messages optimistically with the poster's details and removes th
   expect(optimistic?.content).toContain("<blockquote");
   await act(async () => finishCreate({ success: false, message: "Nope" }));
   await waitFor(() => expect(hook.result.current.allComments).toHaveLength(2));
+});
+
+it("sanitizes on-demand optimistic messages, quote previews and reactions", async () => {
+  const quoted =
+    '<p>Quoted<img src="x" onerror="alert(1)"></p><blockquote author="C">Nested</blockquote>';
+  const hook = mount(true, [row("a", "Alpha"), row("b", quoted, "Peer")]);
+  await loaded(hook);
+  await waitFor(() => expect(hook.result.current.sanitizer).toBeDefined());
+  const preview = hook.result.current.sanitizer?.stripBlockquotes(quoted);
+  expect(preview).toBe('<p>Quoted<img src="x" /></p>');
+  act(() => hook.result.current.toggleQuoteId("b"));
+  await act(async () => {
+    hook.result.current.setValue(
+      "comment",
+      '<p>Hi @Peer<script>alert(2)</script><a href="javascript:alert(3)">link</a><iframe srcdoc="<script>alert(4)</script>"></iframe><svg onload="alert(5)"></svg><span style="background:url(javascript:alert(6))">x</span></p>',
+    );
+    await hook.result.current.handleSubmitComment();
+  });
+  await waitFor(() => expect(hook.result.current.allComments).toHaveLength(3));
+  const content = hook.result.current.allComments?.[0]?.content ?? "";
+  for (const unsafe of [
+    "onerror",
+    "<script",
+    "javascript:",
+    "srcdoc",
+    "<svg",
+    "onload",
+    "url(",
+  ])
+    expect(content).not.toContain(unsafe);
+  expect(content).toContain('<a href="/username/Peer"><b>@Peer</b></a>');
+  expect(content).toContain('<blockquote author="Peer"');
+  expect(content).not.toContain("Nested");
+  await act(async () => finishCreate({ success: false, message: "Nope" }));
+
+  act(() =>
+    hook.result.current.reactConversationComment({
+      commentId: "a",
+      emoji: "<script>alert(7)</script>",
+    }),
+  );
+  act(() =>
+    hook.result.current.reactConversationComment({ commentId: "a", emoji: "👍" }),
+  );
+  await waitFor(() =>
+    expect(
+      hook.result.current.allComments?.find((c) => c.id === "a")?.reactions,
+    ).toEqual({ "👍": ["Me"] }),
+  );
+});
+
+it("retains a remote reaction included by a refetch while helpers load", async () => {
+  const rows = [row("a", "Alpha"), row("b", "Bravo", "Peer")];
+  const hook = mount(true, rows);
+  await loaded(hook);
+  const chat = await import("@/utils/chat");
+  const helpers = deferred<typeof chat>();
+  vi.spyOn(sanitizerLoader, "loadChatHelpers").mockReturnValue(helpers.promise);
+  act(() =>
+    receive({
+      message: "reaction",
+      fromId: "peer",
+      commentId: "a",
+      username: "Peer",
+      emoji: "👍",
+    }),
+  );
+  rows[0] = { ...rows[0]!, reactions: { "👍": ["Peer"] } } as never;
+  await act(async () => hook.result.current.invalidateComments());
+  const reactions = () =>
+    hook.result.current.allComments?.find((comment) => comment.id === "a")?.reactions;
+  expect(reactions()).toEqual({ "👍": ["Peer"] });
+  await act(async () => helpers.resolve(chat));
+  expect(reactions()).toEqual({ "👍": ["Peer"] });
+});
+
+it("shows a sent message and a reaction after success when their helpers fail to load", async () => {
+  const rows = [row("a", "Alpha"), row("b", "Bravo", "Peer")];
+  const hook = mount(true, rows);
+  await loaded(hook);
+  vi.spyOn(sanitizerLoader, "loadHtmlSanitizer").mockRejectedValue(new Error("chunk"));
+  vi.spyOn(sanitizerLoader, "loadChatHelpers").mockRejectedValue(new Error("chunk"));
+  await act(async () => {
+    hook.result.current.setValue("comment", "Sent without helpers");
+    await hook.result.current.handleSubmitComment();
+  });
+  await waitFor(() => expect(createInputs).toHaveLength(1));
+  expect(hook.result.current.allComments).toHaveLength(2);
+  rows.unshift(row("c", "Sent without helpers"));
+  const readsBeforeSend = reads;
+  await act(async () => finishCreate({ success: true, commentId: "c" }));
+  await waitFor(() => expect(hook.result.current.allComments).toHaveLength(3));
+  expect(reads).toBeGreaterThan(readsBeforeSend);
+
+  rows[0] = { ...rows[0]!, reactions: { "👍": ["Me"] } } as never;
+  act(() =>
+    hook.result.current.reactConversationComment({ commentId: "c", emoji: "👍" }),
+  );
+  await waitFor(() =>
+    expect(
+      hook.result.current.allComments?.find((c) => c.id === "c")?.reactions,
+    ).toEqual({
+      "👍": ["Me"],
+    }),
+  );
+});
+
+it("retries a failed sanitizer load when a quote is toggled and fills its preview", async () => {
+  let attempts = 0;
+  const store = sanitizerLoader.createLazyModule(async () => {
+    attempts++;
+    if (attempts === 1) throw new Error("chunk failed");
+    return sanitizeModule;
+  });
+  vi.spyOn(sanitizerLoader, "useHtmlSanitizer").mockImplementation((enabled) => {
+    const { module, failed } = sanitizerLoader.useLazyModule(store, enabled);
+    return { sanitizer: module, failed };
+  });
+  vi.spyOn(sanitizerLoader, "loadHtmlSanitizer").mockImplementation(() => store.load());
+  const hook = mount(true, [
+    row("a", "Alpha"),
+    row("b", '<p>Bravo</p><blockquote author="C">Nested</blockquote>', "Peer"),
+  ]);
+  await loaded(hook);
+  await waitFor(() => expect(attempts).toBe(1));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(hook.result.current.sanitizer).toBeUndefined();
+  act(() => hook.result.current.toggleQuoteId("b"));
+  await waitFor(() => expect(hook.result.current.sanitizer).toBeDefined());
+  expect(attempts).toBe(2);
+  expect(hook.result.current.quoteIds).toEqual(["b"]);
+  const quoted =
+    hook.result.current.allComments?.find((c) => c.id === "b")?.content ?? "";
+  expect(hook.result.current.sanitizer?.stripBlockquotes(quoted)).toBe("<p>Bravo</p>");
 });
 
 it("keeps non-matching new messages out of search results and shows matching ones", async () => {

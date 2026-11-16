@@ -417,10 +417,13 @@ describe("content furniture image generation", () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  it("keeps upload callbacks from an old item from replacing another item's image", () => {
+  it("keeps upload callbacks from an old item from replacing another item's image", async () => {
     const view = render(<ContentImageSelector.default {...props} />);
     open(view);
-    fireEvent.click(view.getByRole("button", { name: "Upload image" }));
+    // The uploader loads on demand once the dialog opens; React throttles Suspense reveals.
+    fireEvent.click(
+      await view.findByRole("button", { name: "Upload image" }, { timeout: 3000 }),
+    );
     const previousUpload = upload;
     const replacement = vi.fn();
     view.rerender(

@@ -104,7 +104,7 @@ import Loader from "@/layout/Loader";
 import { MasteryTrainingQueue } from "@/layout/MasteryTrainingQueue";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
-import PublicUserComponent from "@/layout/PublicUser";
+import { LazyPublicUser } from "@/layout/publicUser/LazyPublicUser";
 import QuestPicker from "@/layout/QuestPicker";
 import { TimedQueue } from "@/layout/TimedQueue";
 import { UserAvatarTile } from "@/layout/UserAvatarTile";
@@ -424,7 +424,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
         {/* Show Sensei */}
         {showSensei && (
           <div className="flex flex-col gap-2">
-            <PublicUserComponent initialBreak userId={showSensei} title="Your Sensei" />
+            <LazyPublicUser initialBreak userId={showSensei} title="Your Sensei" />
             <Button onClick={() => leaveSensei()}>
               <DoorOpen className="mr-2 h-6 w-6" />
               Leave Sensei

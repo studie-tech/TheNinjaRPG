@@ -54,6 +54,7 @@ import JutsuFiltering, {
 } from "@/layout/JutsuFiltering";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import { JutsuLoadoutSharing } from "@/layout/JutsuLoadoutSharing";
+import { LazyUploadButton } from "@/layout/LazyUploadButton";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import {
@@ -75,7 +76,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { canReskinFreely, canTransferJutsu } from "@/utils/permissions";
 import { DAY_S, secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError } from "@/utils/uploadResult";
 import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
 
@@ -1187,7 +1188,7 @@ export default function MyJutsu() {
                         size={64}
                         hover_effect={false}
                       />
-                      <UploadButton
+                      <LazyUploadButton
                         endpoint="imageUploader"
                         onClientUploadComplete={(res) => {
                           const url = readUploadResult(res)?.fileUrl;

@@ -23,7 +23,7 @@ import { KageDefense } from "@/layout/KageDefense";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
-import PublicUserComponent from "@/layout/PublicUser";
+import { LazyPublicUser } from "@/layout/publicUser/LazyPublicUser";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { canTakeKage } from "@/utils/permissions";
@@ -186,7 +186,7 @@ export const KageHall: React.FC<{
         )}
       </ContentBox>
       {village.villageData.kageId ? (
-        <PublicUserComponent
+        <LazyPublicUser
           userId={village.villageData.kageId}
           title={user.isOutlaw ? "Faction Kage" : "Village Kage"}
           initialBreak

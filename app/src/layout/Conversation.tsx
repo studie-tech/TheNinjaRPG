@@ -16,6 +16,11 @@ import { matchesConversationSearch } from "@/deltas/chat";
 import { CONVERSATION_PAUSE_HIDDEN_MINS } from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
+import {
+  loadChatHelpers,
+  loadHtmlSanitizer,
+  useHtmlSanitizer,
+} from "@/hooks/useHtmlSanitizer";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useTypingIndicators } from "@/hooks/useTypingIndicators";
@@ -27,9 +32,7 @@ import RichInput from "@/layout/RichInput";
 import { subscribeConversation } from "@/libs/conversationEvents";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
-import { getNewReactions, processMentions } from "@/utils/chat";
 import { canPostAsAi, getConversationComposeRestriction } from "@/utils/permissions";
-import { buildQuoteBlock, stripBlockquotes } from "@/utils/sanitize";
 import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { selectUserWithoutPosition, useUserDataSelector } from "@/utils/UserContext";
@@ -151,6 +154,8 @@ export const useConversation = (props: ConversationLogicProps) => {
     props.supportTicketCreatedByUserId,
   );
   const canComposeMessage = !!userData && !composeRestrictionMessage;
+  // Quote previews need the sanitizer; it loads with the composer, after the page itself.
+  const { sanitizer, failed: sanitizerFailed } = useHtmlSanitizer(canComposeMessage);
   type ReturnedComment = ArrayElement<
     NonNullable<typeof comments>["pages"][number]["data"]
   >;
@@ -286,20 +291,27 @@ export const useConversation = (props: ConversationLogicProps) => {
     [isSearchOpen, searchForm, searchQuery, clearSearch, onSearchSubmit],
   );
 
-  /** Optimistically toggle a user's emoji reaction on a cached comment. */
+  /** Toggle a cached reaction, reconciling remote events when the cache changes during loading. */
   const optimisticReactionUpdate = async (
     commentId: string,
     emoji: string,
     username: string,
+    isRemote = false,
   ) => {
+    const snapshot = utils.comments.getConversationComments.getInfiniteData(queryKey);
+    // Without the reaction helpers the caller refetches to show the reaction.
+    const chat = await loadChatHelpers().catch(() => null);
+    if (!chat) return { reactionSkipped: true };
     await utils.comments.getConversationComments.cancel(queryKey);
     const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
+    // A refresh may already include a remote reaction; local mutations have not reached the server yet.
+    if (isRemote && cached !== snapshot) return { reactionSkipped: true };
     const comment = cached?.pages
       .flatMap((page) => page.data)
       .find((c) => c.id === commentId);
     if (!comment) return;
 
-    const newReactions = getNewReactions(comment.reactions, emoji, username);
+    const newReactions = chat.getNewReactions(comment.reactions, emoji, username);
     updateCachedComments((data) =>
       data.map((c) => (c.id === commentId ? { ...c, reactions: newReactions } : c)),
     );
@@ -316,11 +328,9 @@ export const useConversation = (props: ConversationLogicProps) => {
           userData.username,
         );
       },
-      onSuccess: (result) => {
-        if (!result.success) {
-          showMutationToast(result);
-          void refetch();
-        }
+      onSuccess: (result, _input, context) => {
+        if (!result.success) showMutationToast(result);
+        if (!result.success || context?.reactionSkipped) void refetch();
       },
       onError: () => void refetch(),
     });
@@ -359,6 +369,8 @@ export const useConversation = (props: ConversationLogicProps) => {
 
   const toggleQuoteId = useCallback(
     (quoteId: string) => {
+      // A quote needs its preview, so it retries a sanitizer load that failed earlier.
+      if (sanitizerFailed) void loadHtmlSanitizer().catch(() => undefined);
       const currentQuoteIds = getValues("quoteIds");
       setValue(
         "quoteIds",
@@ -367,7 +379,7 @@ export const useConversation = (props: ConversationLogicProps) => {
           : [...(currentQuoteIds ?? []), quoteId],
       );
     },
-    [getValues, setValue],
+    [getValues, setValue, sanitizerFailed],
   );
 
   // A proven-successful delete remains hidden even if the subsequent
@@ -425,6 +437,12 @@ export const useConversation = (props: ConversationLogicProps) => {
    */
   const insertOptimisticComment = async (newMessage: MutateCommentSchema) => {
     if (!userData || !conversation) return {};
+    // Without the sanitizer the message still sends; success then refetches this view too.
+    const html = await Promise.all([loadHtmlSanitizer(), loadChatHelpers()]).catch(
+      () => null,
+    );
+    if (!html) return { optimisticSkipped: true };
+    const [{ buildQuoteBlock }, { processMentions }] = html;
 
     const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
     const cachedComments = cached?.pages.flatMap((page) => page.data);
@@ -514,7 +532,10 @@ export const useConversation = (props: ConversationLogicProps) => {
               ),
             );
           }
-          void refreshConversationComments(newComment.object_id, context?.input);
+          void refreshConversationComments(
+            newComment.object_id,
+            context?.optimisticSkipped ? undefined : context?.input,
+          );
         } else {
           removeOptimisticComment(context?.optimisticCommentId);
           showMutationToast({ success: false, message: data.message });
@@ -569,7 +590,10 @@ export const useConversation = (props: ConversationLogicProps) => {
                   data.commentId,
                   data.emoji,
                   data.username,
-                );
+                  true,
+                ).then((update) => {
+                  if (update?.reactionSkipped) void refetch();
+                });
               }
               break;
             case "typing":
@@ -646,6 +670,7 @@ export const useConversation = (props: ConversationLogicProps) => {
     userSearchMethods,
     senderUser,
     quoteIds,
+    sanitizer,
     setValue,
     getValues,
     toggleQuoteId,
@@ -680,6 +705,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     userSearchMethods,
     senderUser,
     quoteIds,
+    sanitizer,
     toggleQuoteId,
     control,
     errors,
@@ -768,7 +794,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                       date={format(quote.createdAt, "MM/dd/yyyy")}
                       onRemove={() => toggleQuoteId(quoteId)}
                     >
-                      {stripBlockquotes(quote.content)}
+                      {sanitizer?.stripBlockquotes(quote.content)}
                     </Quote>
                   );
                 })}

@@ -7,7 +7,7 @@ import {
   TAVERN_IMAGE_MAX_SIZE_MB,
   TAVERN_IMAGE_UPLOAD_DAILY_LIMIT,
 } from "@/drizzle/constants";
-import sanitize from "@/utils/sanitize";
+import { loadHtmlSanitizer, useHtmlSanitizer } from "@/hooks/useHtmlSanitizer";
 
 /** Uses the editor's existing moderated upload path and account-owned image library. */
 export function ForumAttachments({
@@ -24,19 +24,27 @@ export function ForumAttachments({
     enabled: showLibrary,
     refetchOnMount: "always",
   });
-  const document =
+  // A parsed document is inert: it runs no scripts and loads no images, so the draft is
+  // only read here. Removing an image writes back sanitized markup.
+  const draft =
     typeof window === "undefined"
       ? null
-      : new DOMParser().parseFromString(sanitize(content), "text/html");
+      : new DOMParser().parseFromString(content, "text/html");
   const images = [
     ...new Set(
-      Array.from(document?.querySelectorAll("img") ?? [])
+      Array.from(draft?.querySelectorAll("img") ?? [])
         .map((img) => img.getAttribute("src"))
         .filter((url): url is string => !!url && /^(https?:\/\/|\/(?!\/))/i.test(url)),
     ),
   ];
+  // Removal rewrites the current draft synchronously, so it waits for the sanitizer to load.
+  const { sanitizer, failed: sanitizerFailed } = useHtmlSanitizer(images.length > 0);
   const remove = (url: string) => {
-    if (!document) return;
+    if (!sanitizer) return;
+    const document = new DOMParser().parseFromString(
+      sanitizer.default(content),
+      "text/html",
+    );
     for (const img of document.querySelectorAll("img"))
       if (img.getAttribute("src") === url) img.remove();
     onChange(
@@ -75,7 +83,7 @@ export function ForumAttachments({
                 type="button"
                 size="sm"
                 variant="ghost"
-                disabled={disabled}
+                disabled={disabled || !sanitizer}
                 onClick={() => remove(url)}
               >
                 Remove from draft
@@ -83,6 +91,18 @@ export function ForumAttachments({
             </div>
           ))}
         </div>
+      )}
+      {images.length > 0 && sanitizerFailed && (
+        <p role="alert" className="text-sm">
+          Removing images is unavailable right now.{" "}
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void loadHtmlSanitizer().catch(() => undefined)}
+          >
+            Try again
+          </Button>
+        </p>
       )}
       <p className="my-2 text-xs text-muted-foreground">
         Removing an image detaches it from this draft. Copies in published posts stay

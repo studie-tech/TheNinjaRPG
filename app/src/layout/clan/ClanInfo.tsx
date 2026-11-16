@@ -74,7 +74,8 @@ import { showMutationToast } from "@/libs/toast";
 import type { ClanRouter } from "@/routers/clan";
 import { canEditClans } from "@/utils/permissions";
 import { useRequiredUserDataSelector, useRequiredUserInfo } from "@/utils/UserContext";
-import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError } from "@/utils/uploadResult";
+import { UploadButton } from "@/utils/uploadthing";
 import {
   createMoneyTransferSchema,
   type MoneyTransferSchema,

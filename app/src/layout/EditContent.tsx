@@ -66,7 +66,8 @@ import { canAwardReputation } from "@/utils/permissions";
 import { humanizeIdentifier } from "@/utils/string";
 import { objectKeys } from "@/utils/typeutils";
 import { useUserDataSelector } from "@/utils/UserContext";
-import { showUploadError, UploadButton } from "@/utils/uploadthing";
+import { showUploadError } from "@/utils/uploadResult";
+import { UploadButton } from "@/utils/uploadthing";
 import type { ZodAllTags } from "@/validators/combat";
 import {
   activityBonusPowerLabel,
