@@ -509,7 +509,12 @@ const RenderQualitySetting = () => {
           if (next) setRenderQuality(next);
         }}
       >
-        <SelectTrigger id={id} aria-describedby={`${id}-description`} className="w-28">
+        <SelectTrigger
+          id={id}
+          aria-label="Graphics quality"
+          aria-describedby={`${id}-description`}
+          className="w-28"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

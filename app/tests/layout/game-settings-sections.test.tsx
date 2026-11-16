@@ -151,6 +151,7 @@ describe("game settings sections", () => {
       </section>,
     );
     expect(screen.getAllByText("Visual effects")).toHaveLength(1);
+    expect(screen.getByRole("combobox", { name: "Graphics quality" })).toBeTruthy();
     expect(screen.queryByText("Adjust graphics for your device.")).toBeNull();
     expect(
       screen.getByText("Shared across the game; saved on this device."),
@@ -186,6 +187,7 @@ describe("game settings sections", () => {
       expect(shadows.getAttribute("aria-checked")).toBe("false");
       expect(screen.getByText(/Off for now: Auto quality lowered it/)).toBeTruthy();
       expect(screen.getByText(/Lowered now: resolution, shadows/)).toBeTruthy();
+      expect(screen.getByRole("combobox", { name: "Graphics quality" })).toBeTruthy();
       fireEvent.click(shadows);
       expect(window.localStorage.getItem("showWorldShadows")).toBe("true");
       expect(readChosenVisualEffects().has("shadows")).toBe(true);

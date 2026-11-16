@@ -263,10 +263,10 @@ describe("physical world lighting", () => {
     const f = fixture();
     try {
       f.shadows.update(worldSunlight(), viewport);
-      change("localLights", false);
+      change("localLights", false, true);
       await new Promise((r) => setTimeout(r, 10));
       expect(fields[0]!.revision).toBe(0);
-      change("localLights", true);
+      change("localLights", true, true);
       for (let i = 0; i < 100 && !fields[0]!.revision; i++)
         await new Promise((r) => setTimeout(r, 1));
       expect(fields[0]!.revision).toBeGreaterThan(0);

@@ -10,11 +10,14 @@ import {
 import { Settings, Shield, UserRound } from "lucide-react";
 import * as navigation from "next/navigation";
 import { useSyncExternalStore } from "react";
+import * as client from "@/app/_trpc/client";
 import * as Link from "@/layout/Link";
+import { ProfileEdit } from "@/layout/ProfileEdit";
 import {
   type ProfileSettingsGroup,
   ProfileSettingsNavigation,
 } from "@/layout/ProfileSettingsNavigation";
+import { mockUserContextValue } from "../setup/userContext";
 
 const mounted = vi.fn();
 /** Record rendered editors so navigation tests catch hidden forms mounting eagerly. */
@@ -201,6 +204,25 @@ it.each(["Sound & music", "Help & tutorial"])(
     expect(within(row).getAllByText(title)).toHaveLength(1);
   },
 );
+
+it("finds the graphics controls in the profile catalog by quality and performance terms", () => {
+  mockUserContextValue({
+    data: { userId: "actor", role: "USER", rank: "JONIN" },
+    updateUser: vi.fn(),
+  });
+  Object.assign(vi.spyOn(client, "api" as never), {
+    misc: { getPersonalEmailReminder: { useQuery: () => ({}) } },
+    discord: { getStatus: { useQuery: () => ({}) } },
+  });
+  vi.spyOn(navigation, "useRouter").mockReturnValue({} as never);
+  const view = render(<ProfileEdit />);
+  for (const query of ["Graphics quality", "resolution", "performance"]) {
+    fireEvent.change(view.getByRole("searchbox", { name: "Search settings" }), {
+      target: { value: query },
+    });
+    expect(view.getByRole("link", { name: /Visual effects/ })).toBeTruthy();
+  }
+});
 
 it("offers a recovery action when a search has no results", () => {
   const view = mount();

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   readChosenVisualEffects,
   readRenderQuality,
@@ -9,6 +9,7 @@ import {
   subscribeRenderQuality,
 } from "@/libs/visualEffects";
 
+beforeEach(() => localStorage.clear());
 afterEach(() => localStorage.clear());
 
 describe("visual effect choices", () => {

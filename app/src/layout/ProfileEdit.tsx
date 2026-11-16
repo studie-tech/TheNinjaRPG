@@ -292,7 +292,8 @@ export function ProfileEdit() {
           id: "effects",
           title: "Visual effects",
           description: "Lighting, shadows, and animations",
-          keywords: "graphics lighting shadows animations day night weather",
+          keywords:
+            "graphics quality resolution performance lighting shadows animations day night weather",
           icon: Sparkles,
           content: <GameSettingsPanel section="effects" />,
         },
