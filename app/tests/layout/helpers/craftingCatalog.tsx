@@ -1,12 +1,14 @@
 import { vi } from "bun:test";
 import type { ComponentProps, ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
+import * as craftingCache from "@/hooks/useCraftingCacheUpdate";
 import * as combatActions from "@/layout/CombatActions";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
 import * as modal from "@/layout/Modal";
 
 /** Flatten the catalog's modal and selectors; restored by `vi.restoreAllMocks()`. */
 export const stubCraftingCatalog = () => {
+  stubCraftingCache();
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     occupation: {
@@ -51,3 +53,10 @@ export const stubCraftingCatalog = () => {
   );
   vi.spyOn(itemWithEffects, "default").mockImplementation(() => null);
 };
+
+/** Replace the craft's cache reconciliation, whose query keys need the real tRPC proxy. */
+export const stubCraftingCache = () =>
+  vi.spyOn(craftingCache, "useCraftingCacheUpdate").mockReturnValue({
+    prepareCraftUpdate: vi.fn(),
+    updateCraft: vi.fn(async () => {}),
+  } as never);

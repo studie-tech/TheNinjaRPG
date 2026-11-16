@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getInventoryQuantities } from "@/deltas/item";
+import { getPetOwnerProgress } from "@/deltas/pets";
 import {
   CombatStatNames,
   getCombatStatCap,
@@ -49,6 +51,7 @@ import {
   type PetPaymentCurrency,
   PetSpawnPositions,
 } from "@/drizzle/constants";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePetCacheUpdate } from "@/hooks/usePetCacheUpdate";
 import { usePetMutationFeedback } from "@/hooks/usePetMutationFeedback";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
@@ -152,6 +155,8 @@ export function PetProfile() {
   });
   const { preparePetUpdate, updatePet, prepareSettingsUpdate, updateSettings } =
     usePetCacheUpdate(petInput, { prepareUserUpdate, updateUser });
+  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
+    useInventoryCacheUpdate();
   const pet = data?.pet;
   const isGenerating = !!pet && generatingPetIds.includes(pet.id);
   const aiProfile = useMemo(
@@ -163,12 +168,21 @@ export function PetProfile() {
   const ownerEarnedExperience = userData?.earnedExperience;
   const ownerPetExperience = userData?.petExperience;
   const ownerUpdatedAt = userData?.updatedAt?.getTime();
-  const previousOwnerProgress = useRef([
+  const previousOwnerProgress = useRef<Parameters<typeof getPetOwnerProgress>[0]>([
     ownerUpdatedAt,
     ownerExperience,
     ownerEarnedExperience,
     ownerPetExperience,
   ]);
+  /** A pet mutation reconciles its own views, so its owner update must not read them again. */
+  const acknowledgeOwnerUpdate = (
+    result: Parameters<typeof getPetOwnerProgress>[1],
+  ) => {
+    previousOwnerProgress.current = getPetOwnerProgress(
+      [ownerUpdatedAt, ownerExperience, ownerEarnedExperience, ownerPetExperience],
+      result,
+    );
+  };
 
   useEffect(() => {
     setSelectedPetId(requestedPetId);
@@ -181,7 +195,7 @@ export function PetProfile() {
 
   // Training and quest rewards update the player view; the pet bank is fetched separately.
   useEffect(() => {
-    const ownerProgress = [
+    const ownerProgress: typeof previousOwnerProgress.current = [
       ownerUpdatedAt,
       ownerExperience,
       ownerEarnedExperience,
@@ -212,6 +226,7 @@ export function PetProfile() {
   const { invalidatePetData, finishMutation, failMutation } = usePetMutationFeedback({
     setMessage,
     updateUser,
+    onOwnerUpdate: acknowledgeOwnerUpdate,
   });
   const finishSettings = async (
     result: RouterOutputs["pets"]["updatePet"],
@@ -220,15 +235,7 @@ export function PetProfile() {
   ) => {
     setMessage(result.success ? null : result.message);
     showMutationToast(result);
-    if (result.success && result.petSettingsUpdate) {
-      // A confirmed settings-only owner timestamp must not reload the pet bank.
-      previousOwnerProgress.current = [
-        result.userPatch?.updatedAt?.getTime() ?? ownerUpdatedAt,
-        ownerExperience,
-        ownerEarnedExperience,
-        ownerPetExperience,
-      ];
-    }
+    if (result.success && result.petSettingsUpdate) acknowledgeOwnerUpdate(result);
     await updateSettings(result, context);
   };
   const update = api.pets.updatePet.useMutation({
@@ -288,14 +295,7 @@ export function PetProfile() {
       showMutationToast(result);
       if (result.success) {
         await updatePet(result.petUpdate, context.pet);
-        // The confirmed owner update must not trigger a second pet-bank read.
-        const next = result.userPatch;
-        previousOwnerProgress.current = [
-          next?.updatedAt?.getTime() ?? ownerUpdatedAt,
-          ownerExperience,
-          ownerEarnedExperience,
-          next?.petExperience ?? ownerPetExperience,
-        ];
+        acknowledgeOwnerUpdate(result);
         await updateUser(result, { revision: context.user });
       } else {
         await Promise.all([
@@ -333,14 +333,24 @@ export function PetProfile() {
     onError: failMutation,
   });
   const feed = api.pets.feedPet.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (result, variables, revision) => {
+    onMutate: () => ({
+      user: prepareUserUpdate(),
+      inventory: prepareInventoryUpdate(),
+    }),
+    onSuccess: async (result, variables, context) => {
       await Promise.all([
-        finishMutation(result, variables, revision),
-        utils.item.getUserItems.invalidate(),
+        finishMutation(result, variables, context.user),
+        updateInventory(
+          result.success
+            ? (rows) => getInventoryQuantities(rows, result.inventoryChanges)
+            : undefined,
+          context.inventory,
+        ),
       ]);
     },
-    onError: failMutation,
+    onError: async (cause) => {
+      await Promise.all([failMutation(cause), invalidateInventory()]);
+    },
   });
   const updateAbilities = api.pets.updateAbilities.useMutation({
     onMutate: prepareUserUpdate,

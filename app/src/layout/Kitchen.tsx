@@ -8,6 +8,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Progress } from "@/components/ui/progress";
 import { MAX_COOKING_BATCHES } from "@/drizzle/constants";
 import { useActivityBonusRefresh } from "@/hooks/useActivityBonusRefresh";
+import { useCraftingCacheUpdate } from "@/hooks/useCraftingCacheUpdate";
 import { ActiveTimedBuffs } from "@/layout/ActiveTimedBuffs";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
@@ -64,16 +65,21 @@ export default function Kitchen({ image }: { image?: string }) {
       utils.profile.getSidebarTimers.invalidate(),
     ]);
   };
+  const { prepareCraftUpdate, updateCraft } = useCraftingCacheUpdate();
   const cook = api.occupation.craftItem.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (result, _variables, revision) => {
+    onMutate: () => ({ user: prepareUserUpdate(), craft: prepareCraftUpdate() }),
+    onSuccess: async (result, _variables, context) => {
       showMutationToast(result);
-      if (result.userRecovery && !result.success) void updateUser(result, { revision });
+      if (result.userRecovery && !result.success)
+        void updateUser(result, { revision: context.user });
       setMessage(result.message);
       if (result.success) {
         setSelectedId("");
         setBatches(1);
-        await Promise.all([refresh(), updateUser(result, { revision })]);
+        await Promise.all([
+          updateCraft(result, context.craft),
+          updateUser(result, { revision: context.user }),
+        ]);
       }
     },
     onError: (error) => setMessage(error.message),

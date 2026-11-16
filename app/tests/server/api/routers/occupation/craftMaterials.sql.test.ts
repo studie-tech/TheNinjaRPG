@@ -1,6 +1,11 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
+  getCraftedInventory,
+  getCraftingTimers,
+  getQueuedCrafts,
+} from "@/deltas/occupation";
+import {
   craftingRequirement,
   item,
   quest,
@@ -10,6 +15,7 @@ import {
   userQueue,
   userVote,
 } from "@/drizzle/schema";
+import { itemRouter } from "@/server/api/routers/item";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { profileRouter } from "@/server/api/routers/profile";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
@@ -244,5 +250,83 @@ describeWithDatabase("crafting materials", () => {
       2 * (firstUser!.craftingExperience - 1_000_000),
     );
     expect(await quantities()).toEqual({ ore: 11, coal: 7 });
+  });
+});
+
+describeWithDatabase("craft cache projection", () => {
+  beforeEach(async () => {
+    await resetTables(
+      userQueue,
+      craftingRequirement,
+      userItem,
+      item,
+      userVote,
+      userData,
+    );
+    await insertUsers([
+      {
+        userId: USER_ID,
+        username: "Crafter",
+        status: "AWAKE",
+        occupation: "CRAFTING",
+        rank: "JONIN",
+        craftingExperience: 1_000_000,
+      },
+    ]);
+    await insertItems([
+      {
+        id: "blade",
+        name: "Blade",
+        canBeCrafted: true,
+        itemType: "WEAPON",
+        slot: "HAND",
+      },
+      { id: "ore", name: "Ore", stackSize: 100 },
+    ]);
+    await (await getTestDatabase())
+      .insert(craftingRequirement)
+      .values([
+        { id: "req-ore", craftItemId: "blade", requirementItemId: "ore", quantity: 3 },
+      ]);
+    await insertUserItems([
+      { id: "ore-small", userId: USER_ID, itemId: "ore", quantity: 3 },
+      { id: "ore-large", userId: USER_ID, itemId: "ore", quantity: 8 },
+    ]);
+  });
+
+  it("matches the inventory, queue and timers the next reads return", async () => {
+    const items = await callerFor(itemRouter, USER_ID);
+    const occupation = await callerFor(occupationRouter, USER_ID);
+    const profile = await callerFor(profileRouter, USER_ID);
+    const byId = <T extends { id: string }>(rows: T[] | undefined) =>
+      [...(rows ?? [])].sort((a, b) => a.id.localeCompare(b.id));
+    const read = () =>
+      Promise.all([
+        items.getUserItems(),
+        occupation.getCraftingQueue(),
+        profile.getSidebarTimers(),
+      ]);
+
+    const [inventory, queue, timers] = await read();
+    const started = await craft(1);
+    expect(started.success).toBe(true);
+    expect(started.craftUpdate?.craftedItems).toHaveLength(1);
+    const [startedInventory, startedQueue, startedTimers] = await read();
+    expect(byId(getCraftedInventory(inventory, started.craftUpdate))).toEqual(
+      byId(startedInventory),
+    );
+    expect(getQueuedCrafts(queue, started.craftUpdate)).toEqual(startedQueue);
+    expect(getCraftingTimers(timers, started.craftUpdate)).toEqual(startedTimers);
+
+    // A second craft waits behind the first and takes its materials at once.
+    const queued = await craft(1);
+    expect(queued.success).toBe(true);
+    expect(queued.craftUpdate?.craftedItems).toEqual([]);
+    const [queuedInventory, queuedQueue, queuedTimers] = await read();
+    expect(byId(getCraftedInventory(startedInventory, queued.craftUpdate))).toEqual(
+      byId(queuedInventory),
+    );
+    expect(getQueuedCrafts(startedQueue, queued.craftUpdate)).toEqual(queuedQueue);
+    expect(getCraftingTimers(startedTimers, queued.craftUpdate)).toEqual(queuedTimers);
   });
 });

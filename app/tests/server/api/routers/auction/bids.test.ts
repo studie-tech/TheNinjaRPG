@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import { eq } from "drizzle-orm";
+import { getBidAuctionListing, getBidAuctionListings } from "@/deltas/auction";
 import {
   actionLog,
   auctionBid,
@@ -91,6 +92,36 @@ describeWithDatabase("auction bid atomicity", () => {
       .insert(auctionBid)
       .values({ id: "existing", auctionId: "auction", bidderId: "bidder", amount: 50 });
   };
+
+  it("projects the listing views and balance that the next reads return", async () => {
+    const api = await callerFor(auctionRouter, "bidder");
+    const search = { limit: 10 };
+    const read = async () => {
+      const [detail, page] = await Promise.all([
+        api.getAuctionListing({ auctionId: "auction" }),
+        api.getAuctionListings(search),
+      ]);
+      return { detail, pages: { pages: [page], pageParams: [null] } };
+    };
+    let before = await read();
+    for (const amount of [20, 35]) {
+      const result = await api.placeBid({ auctionId: "auction", amount });
+      expect(result.success).toBe(true);
+      const after = await read();
+      expect(getBidAuctionListing(before.detail, result.placedBid)).toEqual(
+        after.detail,
+      );
+      expect(getBidAuctionListings(before.pages, result.placedBid, {})).toEqual(
+        after.pages,
+      );
+      before = after;
+    }
+    const state = await saved();
+    expect(state.users.bidder?.bank).toBe(1000 - 35);
+    // The raise debits only the difference between the bids.
+    const raised = await api.placeBid({ auctionId: "auction", amount: 40 });
+    expect(raised).toMatchObject({ userDelta: { bank: -5 }, amountToDeduct: 5 });
+  });
 
   it.each(["MONEY", "REPUTATION"] as const)(
     "charges a duplicate 50→100 raise only once in %s",

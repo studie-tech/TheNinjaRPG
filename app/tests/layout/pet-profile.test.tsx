@@ -238,6 +238,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     pets: testApi.pets,
     ai: testApi.ai,
+    item: testApi.item,
     useUtils: testApi.useUtils,
   });
   vi.spyOn(navigation, "useSearchParams").mockImplementation(
@@ -1802,6 +1803,39 @@ it.each([false, true])(
     expect(view.getByText("100 training points available")).toBeTruthy();
   },
 );
+
+it("reads the pet bank once after feeding and takes the meal from the cached inventory", async () => {
+  const cachedOwner = observeProfileCache();
+  const inventoryKey = getQueryKey(testApi.item.getUserItems, undefined, "query");
+  const other = { id: "other", itemId: "tea", quantity: 1 };
+  queryClient.setQueryData(inventoryKey, [
+    { id: "meal", itemId: "rice", quantity: 2 },
+    other,
+  ]);
+  feed.mockImplementation(() => ({
+    success: true,
+    message: "Fed",
+    userPatch: { updatedAt: new Date(owner.updatedAt.getTime() + 1000) },
+    userDelta: { petExperience: 500 },
+    inventoryChanges: [{ id: "meal", itemId: "rice", beforeQuantity: 2, quantity: 1 }],
+  }));
+  const view = mount();
+  await view.findAllByRole("button", { name: "Feed one meal" });
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  getPet.mockClear();
+  await confirmMeal(view);
+  await waitFor(() => expect(feed).toHaveBeenCalledTimes(1));
+  await waitFor(() =>
+    expect(cachedOwner()?.petExperience).toBe(owner.petExperience + 500),
+  );
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  // The confirmed owner update does not repeat the pet-bank read the mutation started.
+  expect(getPet).toHaveBeenCalledTimes(1);
+  expect(queryClient.getQueryData(inventoryKey)).toEqual([
+    { id: "meal", itemId: "rice", quantity: 1 },
+    other,
+  ]);
+});
 
 it("keeps feeding unavailable until the server-time countdown expires and refreshes eligibility in place", async () => {
   let now = Date.now();

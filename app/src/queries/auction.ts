@@ -346,17 +346,18 @@ export const updateUserDataForPlaceBid = (
     )
     .where(bidderGuard);
 
-/** Build the `auctionBid` insert for `placeBid`. */
+/** Build the `auctionBid` insert for `placeBid`, stamped with the listing's bid time. */
 export const insertAuctionBidForPlaceBid = (
   client: Pick<DrizzleClient, "insert">,
   bidId: string,
   auctionId: string,
   ctx: { userId: string },
   amount: number,
+  createdAt: Date,
 ) =>
   client
     .insert(auctionBid)
-    .values({ id: bidId, auctionId, bidderId: ctx.userId, amount });
+    .values({ id: bidId, auctionId, bidderId: ctx.userId, amount, createdAt });
 
 /**
  * Build the `auctionListing` lookup for `cancelAuction`, selecting only `userItemId`,

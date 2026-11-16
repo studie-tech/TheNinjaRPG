@@ -9,6 +9,7 @@ import Kitchen from "@/layout/Kitchen";
 import * as modal from "@/layout/Modal";
 import * as timedQueue from "@/layout/TimedQueue";
 import * as userContext from "@/utils/UserContext";
+import { stubCraftingCache } from "./helpers/craftingCatalog";
 
 describe("Kitchen recipe availability", () => {
   beforeEach(() => {
@@ -69,6 +70,7 @@ describe("Kitchen recipe availability", () => {
           : [],
       } as unknown as RouterOutputs["occupation"]["getCookingRecipes"][number];
       const query = <T,>(data: T) => ({ data, isPending: false, isError: false });
+      stubCraftingCache();
       Object.assign(vi.spyOn(client, "api" as never), {
         useUtils: () => ({}),
         occupation: {

@@ -304,31 +304,35 @@ describeWithDatabase("confirmed progression cache responses", () => {
       const call = source.indexOf("api.skillTree.purchaseSkill.useMutation(");
       const callbacks = source
         .slice(call)
-        .match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+        .match(/useMutation\((\{[\s\S]*?\n {4}\})\);/)?.[1];
       if (!callbacks) throw new Error("Skill purchase callbacks were not found");
-      const invalidate = vi.fn(async () => {});
-      const leaf = { invalidate };
-      const utils = {
-        skillTree: { getUserSkills: leaf, getAll: leaf, getFolderStats: leaf },
-      };
+      const skillSnapshot = { skills: "skills-snapshot" };
+      const updateSkills = vi.fn(async () => {});
       const updateUser = (update: UserUpdate | undefined, options: UserUpdateOptions) =>
         updateUserCache(client, key, update, options);
       const options = new Function(
         "prepareUserUpdate",
+        "prepareSkillUpdate",
+        "updateSkills",
         "updateUser",
         "showMutationToast",
-        "utils",
         `return (${callbacks});`,
-      )(() => prepareUserUpdate(client, key), updateUser, vi.fn(), utils) as {
-        onMutate: () => number | undefined;
+      )(
+        () => prepareUserUpdate(client, key),
+        () => skillSnapshot,
+        updateSkills,
+        updateUser,
+        vi.fn(),
+      ) as {
+        onMutate: () => { user: number | undefined; skills: typeof skillSnapshot };
         onSuccess: (
           data: unknown,
           input: unknown,
-          revision: number | undefined,
+          context: { user: number | undefined; skills: typeof skillSnapshot },
         ) => Promise<void>;
       };
-      const revision = options.onMutate();
-      expect(revision).toBeDefined();
+      const context = options.onMutate();
+      expect(context.user).toBeDefined();
       const result = await callerForDatabase(skillTreeRouter, userId, db).purchaseSkill(
         { skillId: "cache-skill" },
       );
@@ -352,7 +356,8 @@ describeWithDatabase("confirmed progression cache responses", () => {
       expect((await db.query.userQueue.findMany()).map((row) => row.id)).toEqual(
         failedCraft ? ["skill-craft"] : [],
       );
-      await options.onSuccess(result, { skillId: "cache-skill" }, revision);
+      await options.onSuccess(result, { skillId: "cache-skill" }, context);
+      expect(updateSkills).toHaveBeenCalledWith(result, skillSnapshot);
       expect(getUser).toHaveBeenCalledTimes(succeeds ? 0 : 1);
       const cached = client.getQueryData<typeof initial>(key)?.userData;
       expect(cached?.cookingExperience).toBe(saved?.cookingExperience);
@@ -362,6 +367,17 @@ describeWithDatabase("confirmed progression cache responses", () => {
       expect(cached?.userSkills).toEqual([
         expect.objectContaining({ skillId: "cache-skill", activated: true }),
       ]);
+      // A rejected activation must recover a concurrent reset instead of keeping stale skills.
+      const rejected = {
+        success: false,
+        message: "Your skills changed. Please try again.",
+      };
+      const retryContext = options.onMutate();
+      getUser.mockClear();
+      updateSkills.mockClear();
+      await options.onSuccess(rejected, { skillId: "cache-skill" }, retryContext);
+      expect(updateSkills).toHaveBeenCalledWith(rejected, skillSnapshot);
+      expect(getUser).toHaveBeenCalledTimes(1);
     } finally {
       unsubscribe();
       client.clear();

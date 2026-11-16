@@ -28,6 +28,7 @@ import {
   auctionHouseLevelMessage,
   IMG_AVATAR_DEFAULT,
 } from "@/drizzle/constants";
+import { useAuctionBidCacheUpdate } from "@/hooks/useAuctionBidCacheUpdate";
 import { useAvatarRenditionWidth } from "@/layout/Avatar";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
@@ -50,16 +51,19 @@ import {
  * @param auctionId - Auction ID
  * @param isOpen - Whether the dialog is open
  * @param setIsOpen - Function to set the dialog open state
+ * @param search - Listing search the auction was opened from, patched after a bid
  * @returns Auction details dialog
  */
 export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   auctionId,
   isOpen,
   setIsOpen,
+  search,
 }) => {
   // User data
   const {
     data: userData,
+    prepareUserUpdate,
     updateUser,
     timeDiff,
   } = useRequiredUserDataSelector((u) => ({
@@ -80,6 +84,7 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
 
   // Utils
   const utils = api.useUtils();
+  const { prepareBidUpdate, updateBid } = useAuctionBidCacheUpdate(auctionId, search);
 
   // Query single auction listing
   const {
@@ -99,32 +104,21 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     isPending: isPlacingBid,
     variables: placeBidVariables,
   } = api.auction.placeBid.useMutation({
-    onSuccess: async (data, variables) => {
+    onMutate: () => ({ user: prepareUserUpdate(), bid: prepareBidUpdate() }),
+    onSuccess: (data, _variables, context) => {
       showMutationToast(data);
       if (data.success) {
-        if ("amountToDeduct" in data && data.amountToDeduct && userData && listing) {
-          const delta = data.amountToDeduct;
-          if (listing.currencyType === "MONEY") {
-            await updateUser({ bank: userData.bank - delta });
-          } else {
-            await updateUser({
-              reputationPoints: userData.reputationPoints - delta,
-            });
-          }
-        }
         // Clear state after successful bid
         setBidAmount("");
         setPendingBidAmount(null);
         setShowBidConfirmation(false);
         setShowBuyoutConfirmation(false);
-        // Listings refetch in the background; the dialog is released once the bid lands.
+        // Caches reconcile in the background; the dialog is released once the bid lands.
         void Promise.all([
-          utils.auction.getAuctionListings.invalidate(),
-          utils.auction.getAuctionListing.invalidate(),
+          updateUser(data, { revision: context.user }),
+          updateBid(data, context.bid),
           // A buyout delivers the item, which may join a carried stack.
-          listing?.buyoutPrice && variables.amount >= listing.buyoutPrice
-            ? utils.item.getUserItems.invalidate()
-            : undefined,
+          data.placedBid ? undefined : utils.item.getUserItems.invalidate(),
         ]);
       }
     },
@@ -736,6 +730,7 @@ interface AuctionDetailsDialogProps {
   auctionId: string;
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  search?: Parameters<typeof useAuctionBidCacheUpdate>[1];
 }
 
 interface ConfirmPurchaseDialogProps {

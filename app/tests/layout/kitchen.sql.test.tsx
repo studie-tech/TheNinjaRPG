@@ -37,6 +37,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../setup/testDatabase";
+import { stubCraftingCache } from "./helpers/craftingCatalog";
 
 describeWithDatabase("Kitchen shrine duration preview", () => {
   beforeEach(async () => {
@@ -156,6 +157,7 @@ describeWithDatabase("Kitchen shrine duration preview", () => {
       data: user,
     } as never);
     const query = <T,>(data: T) => ({ data, isPending: false, isError: false });
+    stubCraftingCache();
     Object.assign(vi.spyOn(client, "api" as never), {
       useUtils: () => ({}),
       occupation: {

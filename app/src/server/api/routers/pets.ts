@@ -105,6 +105,7 @@ import {
   getUtcDayKey,
 } from "@/utils/time";
 import { AiRule } from "@/validators/ai";
+import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 import {
   acquirePetSchema,
   assignPetExperienceSchema,
@@ -333,7 +334,11 @@ export const petsRouter = createTRPCRouter({
   /** Exchange one carried meal for XP after the companion's feeding cooldown. */
   feedPet: protectedProcedure
     .input(feedPetSchema)
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [{ user: initialUser, pet, settings }, meal] = await Promise.all([
         fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true),
@@ -400,8 +405,8 @@ export const petsRouter = createTRPCRouter({
             now,
             isActive,
             experience,
+            meal,
           }),
-
           message: `${pet.name} enjoyed its meal and gained ${experience.toLocaleString("en-US")} companion experience.`,
         },
         readiness,

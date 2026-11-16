@@ -22,6 +22,7 @@ import {
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   TOTAL_MASTERY_CAP,
 } from "@/drizzle/constants";
+import { useSkillTreeCacheUpdate } from "@/hooks/useSkillTreeCacheUpdate";
 import { useUnspentSkillPoints } from "@/hooks/useUnspentSkillPoints";
 import { Bloodright } from "@/layout/Bloodright";
 import ContentBox from "@/layout/ContentBox";
@@ -529,8 +530,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
 
-  // Get tRPC utils
-  const utils = api.useUtils();
+  const { prepareSkillUpdate, updateSkills } = useSkillTreeCacheUpdate();
 
   // Skill Tree Queries - only run when this component is mounted
   const { data: allSkills } = api.skillTree.getAll.useQuery({ limit: 500 });
@@ -547,17 +547,14 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   // Skill Tree Mutations
   const { mutate: purchaseSkill, isPending: isPurchasing } =
     api.skillTree.purchaseSkill.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
+      onMutate: () => ({ user: prepareUserUpdate(), skills: prepareSkillUpdate() }),
+      onSuccess: async (data, _variables, context) => {
         showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            utils.skillTree.getUserSkills.invalidate(),
-            utils.skillTree.getAll.invalidate(),
-            utils.skillTree.getFolderStats.invalidate(),
-            updateUser(data, { revision }),
-          ]);
-        }
+        // Rejections reconcile changed prerequisites or ownership; the catalogue stays cached.
+        await Promise.all([
+          updateSkills(data, context.skills),
+          updateUser(data, { revision: context.user }),
+        ]);
       },
     });
 
