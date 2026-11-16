@@ -145,10 +145,13 @@ export const usePusherHandler = (
       let inboxAcknowledged = queryClient.getQueryData(inboxKey) !== undefined;
       let inboxReadRevision = 0;
       let profileInboxRevision: number | undefined;
+      let hasSubscribedProfileRead = false;
       const unsubscribeInboxReads = queryClient.getQueryCache().subscribe((event) => {
         if (event.type !== "updated") return;
-        if (event.query.queryHash === profileHash && event.action.type === "fetch")
+        if (event.query.queryHash === profileHash && event.action.type === "fetch") {
           profileInboxRevision = inboxReadRevision;
+          hasSubscribedProfileRead = true;
+        }
         if (event.action.type !== "success" || event.action.manual) return;
         if (event.query.queryHash === inboxHash) {
           inboxAcknowledged = true;
@@ -213,6 +216,26 @@ export const usePusherHandler = (
       const subscribe = (pusher: Pusher) => {
         // Listening on userId channel
         const channel = pusher.subscribe(userId);
+        channel.bind("pusher:subscription_succeeded", async () => {
+          if (isCancelled || notificationSession.current !== session) return;
+          hasSubscribedProfileRead = false;
+          try {
+            // A snapshot read before subscription can miss events during the client download.
+            // Join initial loading, then reconcile unless a read already began after binding.
+            const profile = await utils.profile.getUser.fetch(undefined, {
+              staleTime: Infinity,
+            });
+            if (
+              !isCancelled &&
+              notificationSession.current === session &&
+              profile.userData?.userId === userId &&
+              !hasSubscribedProfileRead
+            )
+              await utils.profile.getUser.invalidate();
+          } catch {
+            // UserContext exposes profile failures and owns their recovery/redirect UX.
+          }
+        });
         channel.bind("event", async (data: UserEvent) => {
           if (data.type === "battle") {
             if (!data.battleId) return;

@@ -64,6 +64,52 @@ const muteSettings = [
   { chatMuted: true, mutedConversationIds: [], unmutedTavernIds: [] },
   { chatMuted: false, mutedConversationIds: ["global"], unmutedTavernIds: [] },
 ];
+
+it.each([false, true])(
+  "recovers battle admission missed before subscription with initial loading %s",
+  async (isInitiallyLoading) => {
+    const test = await mount({
+      refreshUser: { status: "BATTLE", battleId: "missed-battle" },
+    });
+    if (!isInitiallyLoading) {
+      await act(async () => test.finish());
+      await test.view.findByText("Profile loaded");
+    }
+    let pending!: Promise<void>;
+    act(() => {
+      pending = test.subscribed();
+    });
+    if (isInitiallyLoading) await act(async () => test.finish());
+    await act(async () => pending);
+    expect(test.reads()).toBe(2);
+    expect(test.qc.getQueryData(test.key)).toMatchObject({
+      userData: { status: "BATTLE", battleId: "missed-battle" },
+    });
+  },
+);
+
+it("uses a profile request started after subscription without another refresh", async () => {
+  const test = await mount();
+  await act(async () => test.qc.cancelQueries({ queryKey: test.key }));
+  await act(async () => test.subscribed());
+  expect(test.reads()).toBe(2);
+});
+
+it.each(["unmount", "account switch"])(
+  "ignores a delayed subscription success after %s",
+  async (change) => {
+    const test = await mount();
+    await act(async () => test.finish());
+    if (change === "unmount") test.view.unmount();
+    else {
+      userId = "other-player";
+      test.rerender();
+    }
+    await act(async () => test.subscribed());
+    expect(test.reads()).toBe(1);
+  },
+);
+
 it.each(muteSettings)(
   "waits for the profile, then delivers a ping whatever is muted (%j)",
   async (mute) => {
@@ -305,13 +351,18 @@ async function mount(
     initialCount?: number;
     deferredRefresh?: boolean;
     refreshCounts?: number[];
+    refreshUser?: { status: string; battleId?: string };
   } = {},
 ) {
   let receive!: (data: object) => Promise<void>;
+  let subscribed!: () => Promise<void>;
   vi.spyOn(Pusher, "default").mockImplementation((() => ({
     subscribe: (channel: string) => ({
-      bind: (_event: string, handler: typeof receive) => {
-        if (channel === "player") receive = handler;
+      bind: (event: string, handler: typeof receive) => {
+        if (channel !== "player") return;
+        if (event === "event") receive = handler;
+        else if (event === "pusher:subscription_succeeded")
+          subscribed = handler as typeof subscribed;
       },
     }),
     unsubscribe: vi.fn(),
@@ -328,7 +379,7 @@ async function mount(
   let finish!: () => void;
   let finishRefresh!: () => void;
   let fail!: () => void;
-  const profile = (count = 0) => ({
+  const profile = (count = 0, isRefresh = false) => ({
     userData: {
       userId: "player",
       username: "Profile loaded",
@@ -339,6 +390,7 @@ async function mount(
       mutedConversationIds: [],
       unmutedTavernIds: [],
       ...options.mute,
+      ...(isRefresh && options.refreshUser),
     },
     notifications: count
       ? [{ href: "/inbox", name: `${count} messages`, notificationCount: count }]
@@ -352,12 +404,13 @@ async function mount(
           observable((observer) => {
             if (op.path !== "profile.getUser") throw new Error(op.path);
             reads++;
+            const isRefresh = reads > 1;
             const count =
               reads === 1
                 ? options.initialCount
                 : (options.refreshCounts?.[reads - 2] ?? 1);
             const send = () => {
-              observer.next({ result: { data: profile(count) } });
+              observer.next({ result: { data: profile(count, isRefresh) } });
               observer.complete();
             };
             if (reads === 1) {
@@ -395,6 +448,7 @@ async function mount(
     showToast,
     reads: () => reads,
     receive: (data: object) => receive(data),
+    subscribed: () => subscribed(),
     finish: () => finish(),
     finishRefresh: () => finishRefresh(),
     fail: () => fail(),
