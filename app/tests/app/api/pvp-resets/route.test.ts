@@ -21,6 +21,8 @@ type PvpResetTestMocks = {
   markerClaimRows: number;
   /** Player ids the decay candidate read returns. */
   candidates: string[];
+  /** Candidates already handed out by earlier pages. */
+  candidatesRead: number;
 };
 
 const mocks: PvpResetTestMocks = {
@@ -33,6 +35,7 @@ const mocks: PvpResetTestMocks = {
   updates: [],
   markerClaimRows: 1,
   candidates: [],
+  candidatesRead: 0,
 };
 
 const cronRequest = (path: string) => new Request(`https://example.com/api/${path}`);
@@ -57,9 +60,21 @@ describe("PvP reset crons", () => {
     stubDatabase({
       update,
       transaction: (run: (tx: unknown) => Promise<unknown>) => run({ update }),
+      // Candidate pages arrive in primary-key order, each after the previous page's last key.
       select: () => ({
         from: () => ({
-          where: () => Promise.resolve(mocks.candidates.map((userId) => ({ userId }))),
+          where: () => ({
+            orderBy: () => ({
+              limit: (size: number) => {
+                const page = mocks.candidates.slice(
+                  mocks.candidatesRead,
+                  mocks.candidatesRead + size,
+                );
+                mocks.candidatesRead += page.length;
+                return Promise.resolve(page.map((userId) => ({ userId })));
+              },
+            }),
+          }),
         }),
       }),
     });
@@ -76,6 +91,7 @@ describe("PvP reset crons", () => {
     mocks.updates.length = 0;
     mocks.markerClaimRows = 1;
     mocks.candidates = ["user-1"];
+    mocks.candidatesRead = 0;
     mocks.getSetting.mockResolvedValue({
       id: "marker",
       name: "daily-pvp-group-decay",
@@ -158,7 +174,7 @@ describe("PvP reset crons", () => {
     expect(await response.json()).toBe("OK");
     expect(setsFor(clan)).toHaveLength(1);
     expect(setsFor(anbuSquad)).toHaveLength(1);
-    expect(userDataSets()).toHaveLength(3);
+    expect(userDataSets()).toHaveLength(13);
   });
 
   it("weekly kill reset does not mark every player as recently active", async () => {

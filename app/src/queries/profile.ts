@@ -115,21 +115,36 @@ import { canChangeContent, getContentRole } from "@/utils/permissions";
 import { periodStart, secondsFromNow } from "@/utils/time";
 import type { GetPublicUsersSchema, TavernColorChangeSchema } from "@/validators/user";
 
-/** Build the `userData` update for `GET`. */
-export const updateUserDataForGET = (client: Pick<DrizzleClient, "update">) =>
-  client.update(userData).set({
-    villagePrestige: sql`${userData.villagePrestige} + 1`,
-    dailyArenaFights: 0,
-    dailyMissions: 0,
-    dailyErrands: 0,
-    dailyMedicalMissions: 0,
-    dailyPvpMissions: 0,
-    dailyWarMissions: 0,
-    dailyTrainings: 0,
-    dailyOverworldQuestRolls: 0,
-    dailySageActivations: 0,
-    aiCalls: 0,
-  });
+/** Players whose daily counters were not yet reset for the day starting at `dayStart`. */
+export const dailyCountersPendingWhere = (dayStart: Date) =>
+  lt(userData.dailyCountersResetAt, dayStart);
+
+/**
+ * Build the daily counter reset and prestige increment for one batch of players. Each row
+ * records `dayStart`, so a retried run skips the players an earlier attempt already reset.
+ */
+export const updateUserDataForDailyCounters = (
+  client: Pick<DrizzleClient, "update">,
+  dayStart: Date,
+  batch: string[],
+) =>
+  client
+    .update(userData)
+    .set({
+      villagePrestige: sql`${userData.villagePrestige} + 1`,
+      dailyArenaFights: 0,
+      dailyMissions: 0,
+      dailyErrands: 0,
+      dailyMedicalMissions: 0,
+      dailyPvpMissions: 0,
+      dailyWarMissions: 0,
+      dailyTrainings: 0,
+      dailyOverworldQuestRolls: 0,
+      dailySageActivations: 0,
+      aiCalls: 0,
+      dailyCountersResetAt: dayStart,
+    })
+    .where(and(inArray(userData.userId, batch), dailyCountersPendingWhere(dayStart)));
 
 /** Build the `userVote` update for `GET`, setting `claimed`. */
 export const updateUserVoteForGET = (client: Pick<DrizzleClient, "update">) =>

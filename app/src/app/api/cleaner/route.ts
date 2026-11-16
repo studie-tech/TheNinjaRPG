@@ -36,7 +36,10 @@ import {
   executeRowsForGET8,
   executeRowsForGET9,
   executeRowsForGET10,
+  missingBattleUserDataWhere,
+  missingClanUserDataWhere,
   selectMpvpBattleQueueForGET,
+  tavernActiveUserDataWhere,
   updateHuntingSessionForGET,
   updateUserDataForGET,
   updateUserDataForGET2,
@@ -47,7 +50,11 @@ import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { completeExpiredGlobalTravel } from "@/routers/travel";
 import { drizzleDB } from "@/server/db";
 import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
-import { cleanupOrphanRows, deleteCleanupCandidates } from "@/server/utils/cleaner";
+import {
+  cleanupOrphanRows,
+  deleteCleanupCandidates,
+  updateUserDataCandidates,
+} from "@/server/utils/cleaner";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/federalStatus";
@@ -84,7 +91,11 @@ export async function GET(request: Request) {
     await retryOnDeadlock(() => updateHuntingSessionForGET(drizzleDB));
 
     // Release missing fights while preserving an open isolated Pyramid run.
-    await updateUserDataForGET(drizzleDB);
+    await updateUserDataCandidates(
+      drizzleDB,
+      missingBattleUserDataWhere(drizzleDB),
+      (batch) => updateUserDataForGET(drizzleDB, batch),
+    );
 
     // Complete travel for users whose travel time has expired
     await completeExpiredGlobalTravel(drizzleDB);
@@ -137,7 +148,11 @@ export async function GET(request: Request) {
     await deleteHistoricalAvatarForGET(drizzleDB);
 
     // Update users who have a clanId by no clan
-    await updateUserDataForGET2(drizzleDB);
+    await updateUserDataCandidates(
+      drizzleDB,
+      missingClanUserDataWhere(drizzleDB),
+      (batch) => updateUserDataForGET2(drizzleDB, batch),
+    );
 
     // Purge inactive low-progress characters in guarded primary-key batches
     await deleteCleanupCandidates(
@@ -204,7 +219,12 @@ export async function GET(request: Request) {
       try {
         await cleanupOrphanRows(drizzleDB);
         await executeRowsForGET9(drizzleDB);
-        await executeRowsForGET10(drizzleDB);
+        // A run retried after a failed batch decays the batches before it once more.
+        await updateUserDataCandidates(
+          drizzleDB,
+          tavernActiveUserDataWhere(),
+          (batch) => executeRowsForGET10(drizzleDB, batch),
+        );
       } catch (cause) {
         await tavernDecayTimer.release();
         throw cause;

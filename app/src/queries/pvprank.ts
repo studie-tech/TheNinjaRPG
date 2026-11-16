@@ -46,12 +46,6 @@ import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { RankedLoadoutSchema } from "@/validators/pvpRank";
 
-/** Build the `userData` selection for `decayPlayerPvpExperience`, using the configured predicates. */
-export const selectUserDataForDecayPlayerPvpExperience = (
-  client: Pick<DrizzleClient, "select">,
-  pending: undefined | SQL<unknown>,
-) => client.select({ userId: userData.userId }).from(userData).where(pending);
-
 /**
  * Build the `userData` update for `decayPlayerPvpExperience`, setting `pvpExperience`
  * and `pvpExperienceDecayAt`, using predicates on `userId`.

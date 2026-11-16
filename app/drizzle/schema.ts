@@ -3299,6 +3299,10 @@ export const userData = mysqlTable(
     pvpExperienceDecayAt: datetime("pvpExperienceDecayAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
+    /** Start of the UTC day whose daily counters and prestige increment were last applied. */
+    dailyCountersResetAt: datetime("dailyCountersResetAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
     weeklyPvpKills: int("weeklyPvpKills", { unsigned: true }).default(0).notNull(),
     weeklyPvpKillsAt: datetime("weeklyPvpKillsAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)

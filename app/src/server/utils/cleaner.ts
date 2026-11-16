@@ -22,9 +22,17 @@ import {
   executeStatementForDeleteCleanupCandidates,
   selectDistinctKeyForDeleteCleanupCandidates,
   selectParentForMissing,
+  selectUserIdsForUpdateUserDataCandidates,
 } from "@/queries/cleaner";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+
+/**
+ * Players written per batched UserData statement. MySQL skips range optimization once an
+ * IN list of UserData keys outgrows `range_optimizer_max_mem_size` (from roughly 275 keys
+ * at the default 8 MB), and the UPDATE then scans and locks the whole primary key.
+ */
+const USER_UPDATE_BATCH_SIZE = 200;
 
 /** Scan with consistent reads, then recheck eligibility in indexed write batches. */
 export const deleteCleanupCandidates = async (
@@ -67,6 +75,34 @@ export const deleteCleanupCandidates = async (
     // Keyset progress also skips candidates rescued between the read and write.
     cursor = candidates[candidates.length - 1];
     if (candidates.length < batchSize) return;
+  }
+};
+
+/**
+ * Rewrite the players matching `pending` in primary-key batches. Candidates come from
+ * consistent reads, and `update` must recheck `pending`, so each statement locks only its
+ * batch instead of every row a table-wide UPDATE scans.
+ */
+export const updateUserDataCandidates = async (
+  client: Pick<DrizzleClient, "select">,
+  pending: SQL | undefined,
+  update: (batch: string[]) => Promise<unknown>,
+  batchSize = USER_UPDATE_BATCH_SIZE,
+) => {
+  if (!pending) throw new Error("Batched updates require an eligibility predicate");
+  let cursor: string | undefined;
+  while (true) {
+    const candidates = await selectUserIdsForUpdateUserDataCandidates(
+      client,
+      pending,
+      cursor,
+      batchSize,
+    );
+    const batch = candidates.map((row) => row.userId);
+    if (!batch.length) return;
+    await retryOnDeadlock(() => update(batch));
+    cursor = batch[batch.length - 1];
+    if (batch.length < batchSize) return;
   }
 };
 

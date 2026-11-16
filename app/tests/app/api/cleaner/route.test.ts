@@ -255,10 +255,15 @@ describeWithDatabase("war ally reservations during request expiry", () => {
 });
 
 describe("hourly cleaner maintenance", () => {
+  let candidateUpdates: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     vi.clearAllMocks();
     stubCleanerCollaborators();
     vi.spyOn(cleanerUtils, "cleanupOrphanRows").mockResolvedValue(undefined);
+    // Batched player repairs read candidates through `select`; suites that run them restore it.
+    candidateUpdates = vi
+      .spyOn(cleanerUtils, "updateUserDataCandidates")
+      .mockResolvedValue(undefined);
     stubDatabase({
       execute: mocks.execute,
       select: queryBuilder.select.bind(queryBuilder),
@@ -480,6 +485,7 @@ describe("hourly cleaner maintenance", () => {
       await resetTables(questHistory);
     });
     it("clears missing fights while keeping isolated runs in BATTLE and preserving their pools", async () => {
+      candidateUpdates.mockRestore();
       const db = await getTestDatabase();
       await resetTables(battle, questHistory, quest, userData);
       await insertUsers(

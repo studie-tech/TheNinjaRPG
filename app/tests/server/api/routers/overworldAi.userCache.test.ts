@@ -22,7 +22,7 @@ import {
   userQuestAttempt,
   userQueue,
 } from "@/drizzle/schema";
-import { updateUserDataForGET } from "@/queries/profile";
+import { updateUserDataForDailyCounters } from "@/queries/profile";
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -565,7 +565,14 @@ describeWithDatabase("overworld interaction profile updates", () => {
       const stop = observer.subscribe(() => {});
       if (resetDay) {
         setSystemTime(new Date("2026-10-31T00:00:01Z"));
-        await updateUserDataForGET(db);
+        // The row's insert default is the database clock, not the frozen test clock.
+        await db
+          .update(userData)
+          .set({ dailyCountersResetAt: new Date("2026-10-30T00:00:00Z") })
+          .where(eq(userData.userId, "npc-cache-actor"));
+        await updateUserDataForDailyCounters(db, new Date("2026-10-31T00:00:00Z"), [
+          "npc-cache-actor",
+        ]);
         // Another settled request can advance updatedAt before this tab learns the reset.
         await db
           .update(userData)
