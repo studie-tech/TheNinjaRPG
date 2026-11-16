@@ -245,6 +245,8 @@ export function ContentBoxPriorityActions({
   const [isOpen, setIsOpen] = useState(false);
   const baseId = useId();
   const keys = items.map((item) => `${item.key}:${item.priority}`).join(",");
+  const menuId = `${baseId}-menu`;
+  const itemId = (key: string) => `${baseId}-${key}`;
 
   // `keys` stands for the items: their nodes are new on every render, their keys only change
   // with the set of controls. Each control's wrapper is observed, so one that appears,
@@ -292,6 +294,43 @@ export function ContentBoxPriorityActions({
 
   const isMenuShown = Object.keys(menu.places).length > 0;
   const isExpanded = isMenuShown && isOpen;
+  const previousPlacesRef = useRef(menu.places);
+  const focusFirstOnOpenRef = useRef(false);
+
+  // A focused control that moves behind the closed menu turns inert and would drop keyboard
+  // focus, so focus moves to More before the browser repaints.
+  useLayoutEffect(() => {
+    const previousPlaces = previousPlacesRef.current;
+    previousPlacesRef.current = menu.places;
+    if (isExpanded) return;
+    const focused = document.activeElement?.closest<HTMLElement>("[data-header-item]");
+    const key = focused?.dataset.headerItem;
+    if (
+      key &&
+      rootRef.current?.contains(focused) &&
+      menu.places[key] &&
+      !previousPlaces[key]
+    ) {
+      triggerRef.current?.focus();
+    }
+  }, [menu, isExpanded]);
+
+  // The menu's controls come before More in the document, so a keyboard user who opens it
+  // starts on its first control rather than tabbing out of the header.
+  useEffect(() => {
+    if (!isExpanded || !focusFirstOnOpenRef.current) return;
+    focusFirstOnOpenRef.current = false;
+    for (const item of items) {
+      if (!menu.places[item.key]) continue;
+      const control = document
+        .getElementById(itemId(item.key))
+        ?.querySelector<HTMLElement>(FOCUSABLE_CONTROL);
+      if (control) {
+        control.focus();
+        return;
+      }
+    }
+  });
 
   // A menu that empties (the screen grew) closes, so it does not reopen by itself later.
   useEffect(() => {
@@ -336,8 +375,6 @@ export function ContentBoxPriorityActions({
   }, [isExpanded]);
 
   const needsAttention = items.some((item) => menu.places[item.key] && item.attention);
-  const menuId = `${baseId}-menu`;
-  const itemId = (key: string) => `${baseId}-${key}`;
   return (
     <div
       ref={rootRef}
@@ -404,7 +441,11 @@ export function ContentBoxPriorityActions({
         aria-label={`More ${label} controls${needsAttention ? ", includes a changed setting" : ""}`}
         aria-controls={isMenuShown ? menuId : undefined}
         aria-expanded={isExpanded}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={(event) => {
+          // Enter and Space click without pointer presses (detail 0).
+          focusFirstOnOpenRef.current = !isExpanded && event.detail === 0;
+          setIsOpen((open) => !open);
+        }}
       >
         <Ellipsis className="size-7" aria-hidden />
         {needsAttention && (
@@ -418,6 +459,9 @@ export function ContentBoxPriorityActions({
     </div>
   );
 }
+
+const FOCUSABLE_CONTROL =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Places the menu's controls in rows, in display order, no wider than `maxWidth`. Offsets are

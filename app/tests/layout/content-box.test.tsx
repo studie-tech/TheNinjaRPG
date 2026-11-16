@@ -457,6 +457,49 @@ it("closes More on Escape and returns focus to it", async () => {
   await waitFor(() => expect(document.activeElement).toBe(more));
 });
 
+it("moves focus to More when the focused control moves behind it", () => {
+  const view = setupPriority();
+  const quickTravel = view.getByRole("button", { name: "Quick travel" });
+  quickTravel.focus();
+  resizeActions(200);
+  expect(document.activeElement).toBe(
+    view.getByRole("button", { name: "More Travel controls" }),
+  );
+});
+
+it("leaves focus alone when the focused control stays in the row", () => {
+  const view = setupPriority();
+  const stealth = view.getByRole("button", { name: "Stealth" });
+  stealth.focus();
+  resizeActions(200);
+  expect(document.activeElement).toBe(stealth);
+});
+
+it("focuses the first control in More when it is opened from the keyboard", async () => {
+  const view = setupPriority();
+  resizeActions(200);
+  const more = view.getByRole("button", { name: "More Travel controls" });
+  more.focus();
+  // A keyboard click (Enter or Space) has no pointer presses: detail 0.
+  fireEvent.click(more, { detail: 0 });
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      view.getByRole("button", { name: "Show players" }),
+    ),
+  );
+});
+
+it("keeps focus on More when it is opened with a pointer", async () => {
+  const view = setupPriority();
+  resizeActions(200);
+  const more = view.getByRole("button", { name: "More Travel controls" });
+  more.focus();
+  fireEvent.click(more, { detail: 1 });
+  await act(async () => {});
+  expect(more.getAttribute("aria-expanded")).toBe("true");
+  expect(document.activeElement).toBe(more);
+});
+
 it("reveals a tutorial target hidden behind More", () => {
   const view = setupPriority();
   resizeActions(200);
