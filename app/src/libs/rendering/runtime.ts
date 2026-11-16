@@ -151,14 +151,24 @@ export const createGameRenderer = async (options: {
   let chosenEffects = readChosenVisualEffects();
   const adapts = () =>
     isScene && options.resolution === undefined && quality === "auto";
-  let ladder = adapts()
-    ? renderQualityLevels(
-        baseResolution(renderer.width, renderer.height),
-        storedEffects,
-        chosenEffects,
-      )
-    : [];
   const remembered = sessionRenderQuality.get(options.surface);
+  /**
+   * Reductions shown to buy no speed on this surface (a slow display, scene work on the CPU):
+   * the lowest density worth using and effects to keep. Later renderers of the surface reuse
+   * them for the session, so they do not try the same steps again.
+   */
+  let resolutionFloor = remembered?.resolutionFloor ?? 1;
+  const ineffectiveEffects = new Set<VisualEffect>(remembered?.ineffectiveEffects);
+  const buildLadder = (base: number) =>
+    renderQualityLevels(
+      base,
+      storedEffects,
+      new Set([...chosenEffects, ...ineffectiveEffects]),
+      resolutionFloor,
+    );
+  let ladder = adapts()
+    ? buildLadder(baseResolution(renderer.width, renderer.height))
+    : [];
   const governor = createRenderQualityGovernor({
     level: remembered
       ? matchingQualityLevel(ladder, remembered.level)
@@ -170,10 +180,7 @@ export const createGameRenderer = async (options: {
     patience: remembered?.patience ?? INITIAL_HEALTHY_WINDOWS,
   });
   const qualityOwner = {};
-  /** Reductions this scene showed buy no speed: the lowest density worth using and effects to keep. */
-  let resolutionFloor = 1;
-  const ineffectiveEffects = new Set<VisualEffect>();
-  /** Removes the step the governor just undid from this scene's ladder. */
+  /** Removes the step the governor just undid from this surface's ladder. */
   const keepRejectedStep = () => {
     const kept = ladder[governor.level],
       undone = ladder[governor.level + 1];
@@ -182,10 +189,16 @@ export const createGameRenderer = async (options: {
     for (const effect of undone.disabled)
       if (!kept.disabled.includes(effect)) ineffectiveEffects.add(effect);
   };
-  /** A settings change is a new scene to measure. */
+  /** A settings change is a new scene to measure, on every surface. */
   const forgetRejectedSteps = () => {
     resolutionFloor = 1;
     ineffectiveEffects.clear();
+    for (const [surface, state] of sessionRenderQuality)
+      sessionRenderQuality.set(surface, {
+        ...state,
+        resolutionFloor: 1,
+        ineffectiveEffects: [],
+      });
   };
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;
@@ -339,19 +352,19 @@ export const createGameRenderer = async (options: {
     let level: QualityLevel = { resolution: base, disabled: [] };
     if (adapts()) {
       const previous = ladder[governor.level];
-      ladder = renderQualityLevels(
-        base,
-        storedEffects,
-        new Set([...chosenEffects, ...ineffectiveEffects]),
-        resolutionFloor,
-      );
+      ladder = buildLadder(base);
       governor.setLevel(
         previous ? matchingQualityLevel(ladder, previous) : governor.level,
         ladder.length - 1,
         isInterrupted,
       );
       level = ladder[governor.level] ?? level;
-      sessionRenderQuality.set(options.surface, { level, patience: governor.patience });
+      sessionRenderQuality.set(options.surface, {
+        level,
+        patience: governor.patience,
+        resolutionFloor,
+        ineffectiveEffects: [...ineffectiveEffects],
+      });
     }
     for (const effect of Object.keys(storedEffects) as VisualEffect[])
       visualEffects[effect] = storedEffects[effect] && !level.disabled.includes(effect);

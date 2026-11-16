@@ -469,6 +469,38 @@ describe("renderer context loss", () => {
     expect(game.visualEffects.shadows).toBe(false);
   });
 
+  it("learns once per session that a display capped at 30 Hz gains nothing from lower quality", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    const first = await start(vi.fn(), 2);
+    first.render.mockImplementation(() => {});
+    resizeRenderer();
+    first.game.setAnimating(true);
+    let now = 1000;
+    // Every step is tried, undone and kept out of the ladder: the frames never get faster.
+    for (let i = 0; i < 1500; i++) {
+      now += 1000 / 30;
+      runFrame(now);
+    }
+    expect(first.game.renderer.resolution).toBe(2);
+    expect(first.game.visualEffects).toMatchObject({
+      shadows: true,
+      localLights: true,
+      weather: true,
+    });
+    first.game.dispose();
+    const next = await start(vi.fn(), 2);
+    next.render.mockImplementation(() => {});
+    const resize = resizeRenderer();
+    resize.mockClear();
+    next.game.setAnimating(true);
+    for (let i = 0; i < 1500; i++) {
+      now += 1000 / 30;
+      runFrame(now);
+      expect(next.game.visualEffects.shadows).toBe(true);
+    }
+    expect(resize).not.toHaveBeenCalled();
+  });
+
   it("sleeps between the frames of a slow scene and wakes on a timer", async () => {
     const { game, render } = await start(vi.fn());
     render.mockImplementation(() => {});
