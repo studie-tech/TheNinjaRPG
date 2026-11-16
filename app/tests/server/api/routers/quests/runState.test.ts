@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import { MISSIONS_PER_DAY } from "@/drizzle/constants";
 import { item, quest, questHistory, userData, userItem } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { getNewTrackers } from "@/libs/quest";
@@ -362,7 +363,7 @@ describeWithDatabase("quest run state preservation", () => {
       const client = await getTestDatabase();
       await client
         .update(userData)
-        .set({ dailyMissions: 19 })
+        .set({ dailyMissions: MISSIONS_PER_DAY - 1 })
         .where(eq(userData.userId, "hero"));
       await client
         .update(quest)
@@ -393,11 +394,11 @@ describeWithDatabase("quest run state preservation", () => {
         ).success,
       ).toBe(true);
       expect(retrying.attempts()).toBe(retries + 1);
-      expect(user!.dailyMissions).toBe(20);
+      expect(user!.dailyMissions).toBe(MISSIONS_PER_DAY);
       expect(
         (await client.query.userData.findFirst({ where: eq(userData.userId, "hero") }))
           ?.dailyMissions,
-      ).toBe(20);
+      ).toBe(MISSIONS_PER_DAY);
       expect(
         await client.query.questHistory.findMany({
           where: eq(questHistory.questId, "mission"),
