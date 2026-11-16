@@ -405,6 +405,13 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
 /** Graphics controls share one device preference across game and combat settings. */
 export const VisualEffectsSettings = () => {
   const { visualEffects, setVisualEffect } = useVisualEffects();
+  const { status } = useRenderQuality();
+  // A switch shows what visible scenes draw; switching an effect Auto lowered on makes it a choice.
+  const isLowered = (effect: VisualEffect) => status.disabled.includes(effect);
+  const explain = (effect: VisualEffect, description: string) =>
+    isLowered(effect)
+      ? `${description}. Off for now: Auto quality lowered it`
+      : description;
   return (
     <div className="space-y-3">
       <div className="divide-border/50 divide-y">
@@ -423,20 +430,26 @@ export const VisualEffectsSettings = () => {
         />
         <SettingsToggle
           label="Local lights"
-          description="Lanterns, windows and nearby light sources"
-          checked={visualEffects.localLights}
+          description={explain(
+            "localLights",
+            "Lanterns, windows and nearby light sources",
+          )}
+          checked={visualEffects.localLights && !isLowered("localLights")}
           onCheckedChange={(enabled) => setVisualEffect("localLights", enabled)}
         />
         <SettingsToggle
           label="Shadows"
-          description="Shadows from the sun and nearby lights"
-          checked={visualEffects.shadows}
+          description={explain("shadows", "Shadows from the sun and nearby lights")}
+          checked={visualEffects.shadows && !isLowered("shadows")}
           onCheckedChange={(enabled) => setVisualEffect("shadows", enabled)}
         />
         <SettingsToggle
           label="Weather"
-          description="Rain, snow, storms, cloud shadows and other weather effects"
-          checked={visualEffects.weather}
+          description={explain(
+            "weather",
+            "Rain, snow, storms, cloud shadows and other weather effects",
+          )}
+          checked={visualEffects.weather && !isLowered("weather")}
           onCheckedChange={(enabled) => setVisualEffect("weather", enabled)}
         />
         <SettingsToggle
