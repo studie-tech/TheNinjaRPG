@@ -950,35 +950,39 @@ const PlayerTutorialAssistant: React.FC<
               {claimable && (
                 <div className="rounded-lg border bg-muted/40 p-3">
                   {claimable.isReady ? (
-                    <Button
-                      size="lg"
-                      decoration="gold"
+                    <ClaimHighlight
                       // Without a logbook entry on the page, this is the only place to claim.
-                      animation={
-                        currentTutorialStep.elementIds?.length || isCheckingRewards
-                          ? undefined
-                          : "pulse"
-                      }
-                      className="w-full"
-                      disabled={isCheckingRewards}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        checkRewards({ questId: claimable.questId });
-                      }}
+                      active={!currentTutorialStep.elementIds?.length}
                     >
-                      {isCheckingRewards ? (
-                        <Loader2
-                          className="mr-2 h-5 w-5 animate-spin"
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <Gift className="mr-2 h-5 w-5" aria-hidden="true" />
-                      )}
-                      {isCheckingRewards
-                        ? "Claiming"
-                        : `Claim${claimable.rewards.length ? ` ${claimable.rewards.join(" + ")}` : " reward"}`}
-                    </Button>
+                      <Button
+                        size="lg"
+                        decoration="gold"
+                        animation={
+                          currentTutorialStep.elementIds?.length || isCheckingRewards
+                            ? undefined
+                            : "pulse"
+                        }
+                        className="w-full"
+                        disabled={isCheckingRewards}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          checkRewards({ questId: claimable.questId });
+                        }}
+                      >
+                        {isCheckingRewards ? (
+                          <Loader2
+                            className="mr-2 h-5 w-5 animate-spin"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <Gift className="mr-2 h-5 w-5" aria-hidden="true" />
+                        )}
+                        {isCheckingRewards
+                          ? "Claiming"
+                          : `Claim${claimable.rewards.length ? ` ${claimable.rewards.join(" + ")}` : " reward"}`}
+                      </Button>
+                    </ClaimHighlight>
                   ) : (
                     <p className="text-base text-muted-foreground">
                       Objective:{" "}
@@ -1520,6 +1524,42 @@ const HandPointer: React.FC<{
         ),
       }}
     />
+  );
+};
+
+/**
+ * Marks the lesson's own Claim button the way a page highlight marks its target:
+ * the page dims behind the Activity dock, and the button gets the amber ring and
+ * the hand. For claim steps with nothing to point at on the page, where the
+ * lesson's button is the only place to claim.
+ */
+const ClaimHighlight: React.FC<{ active: boolean; children: React.ReactNode }> = ({
+  active,
+  children,
+}) => {
+  if (!active) return children;
+  return (
+    <div className="relative" data-tutorial-claim-highlight="">
+      {createPortal(
+        // Below the open lesson's dock (z-[61]); page controls stay reachable.
+        <div
+          data-battle-focus-layer
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-[60] bg-black/55"
+        />,
+        document.body,
+      )}
+      <span className="pointer-events-none absolute -inset-1.5 rounded-lg border-[3px] border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.8)]" />
+      {children}
+      <Image
+        src={IMG_URL_HANDPOINTER}
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-12 right-6 z-[1] h-12 w-12 rotate-180 animate-bounce drop-shadow-lg motion-reduce:animate-none"
+        width={80}
+        height={80}
+      />
+    </div>
   );
 };
 

@@ -715,6 +715,70 @@ describe("quest steps", () => {
     expect(pending.queryByRole("button", { name: /^Claim/ })).toBeNull();
   });
 
+  it("points at the lesson's Claim button when nothing on the page can claim", () => {
+    const starterQuest = (stepIndex: number, done: boolean) => {
+      const step = TUTORIAL_STEPS[stepIndex]!;
+      const questId = String(step.relatedValue);
+      const objectiveId = String(step.objectiveId);
+      return {
+        userQuests: [
+          {
+            id: "attempt",
+            questId,
+            endAt: null,
+            quest: {
+              id: questId,
+              name: "Trials",
+              questType: "starter",
+              consecutiveObjectives: true,
+              content: {
+                reward: { reward_rank: "NONE", reward_exp: 0, reward_money: 0 },
+                objectives: [
+                  {
+                    id: objectiveId,
+                    task: "train_specific_jutsu",
+                    description: "Learn Sonic Slash",
+                    reward_rank: "NONE",
+                    reward_exp: 1000,
+                    reward_money: 0,
+                  },
+                ],
+              },
+            },
+          },
+        ],
+        questData: [
+          { id: questId, goals: [{ id: objectiveId, done, collected: false }] },
+        ],
+      };
+    };
+    // The first jutsu's reward has no logbook entry on the Training Grounds.
+    const jutsuClaim = TUTORIAL_STEPS.findIndex(
+      (step) => step.id === "tools-claim-jutsu",
+    );
+    expect(TUTORIAL_STEPS[jutsuClaim]?.elementIds ?? []).toEqual([]);
+    const view = show(jutsuClaim, starterQuest(jutsuClaim, true));
+    const claim = view.getByRole("button", { name: "Claim 1,000 XP" });
+    expect(claim.closest("[data-tutorial-claim-highlight]")).toBeTruthy();
+    expect(overlay()).toBeTruthy();
+    fireEvent.click(claim);
+    expect(state.checkRewards).toHaveBeenCalledWith({
+      questId: String(TUTORIAL_STEPS[jutsuClaim]?.relatedValue),
+    });
+    cleanup();
+    // Nothing to claim yet: no dimming, no pointer.
+    show(jutsuClaim, starterQuest(jutsuClaim, false));
+    expect(document.querySelector("[data-tutorial-claim-highlight]")).toBeNull();
+    expect(overlay()).toBeNull();
+    cleanup();
+    // A claim step that highlights its logbook entry keeps the page highlight instead.
+    const logbookClaim = TUTORIAL_STEPS.findIndex(
+      (step) => step.advanceOn === "questReward" && !!step.elementIds?.length,
+    );
+    show(logbookClaim, starterQuest(logbookClaim, true));
+    expect(document.querySelector("[data-tutorial-claim-highlight]")).toBeNull();
+  });
+
   describe("after the tutorial", () => {
     const openLesson = () => {
       localStorage.setItem("activityDockOpen:actor", "true");
