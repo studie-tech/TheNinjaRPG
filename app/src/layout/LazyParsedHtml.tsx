@@ -10,12 +10,12 @@ const ParsedHtml = dynamic(() =>
 
 /**
  * Stored HTML for toasts and dialogs the shell can show on any page. The parser loads with
- * the first one, so it stays out of the JavaScript every page starts with. Until it has
- * loaded the HTML renders nothing, and if it cannot load, its text without markup.
+ * the first one, so it stays out of the JavaScript every page starts with. Its text stays
+ * readable while the parser loads or if the download fails.
  */
 export const LazyParsedHtml = ({ html }: { html: string }) => (
   <ChunkErrorBoundary fallback={() => htmlToText(html)}>
-    <Suspense fallback={null}>
+    <Suspense fallback={htmlToText(html)}>
       <ParsedHtml html={html} />
     </Suspense>
   </ChunkErrorBoundary>

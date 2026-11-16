@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import * as htmlParser from "htmlparser2";
 // The App Router's next/dynamic, which wraps a component without a loading state in a
 // Fragment rather than a Suspense boundary; plain "next/dynamic" resolves to the Pages
 // Router loader under Bun.
@@ -8,6 +9,7 @@ import dynamic from "next/dist/shared/lib/app-dynamic";
 import { Suspense } from "react";
 import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import { htmlToText, LazyParsedHtml } from "@/layout/LazyParsedHtml";
+import { deferred } from "../setup/deferred";
 
 afterEach(() => {
   cleanup();
@@ -71,6 +73,27 @@ it("retries children that can load again", async () => {
 
 it("renders stored HTML once the parser has loaded", async () => {
   const view = render(<LazyParsedHtml html="An <strong>event</strong> starts." />);
+  await waitFor(() =>
+    expect(view.container.querySelector("strong")?.textContent).toBe("event"),
+  );
+});
+
+it("keeps feedback readable while the parser is pending, then renders its markup", async () => {
+  const pending = deferred();
+  const parseDocument = htmlParser.parseDocument;
+  let isReady = false;
+  // Suspend parsing so the wrapper stays pending even if another test loaded its chunk.
+  vi.spyOn(htmlParser, "parseDocument").mockImplementation((...args) => {
+    if (!isReady) throw pending.promise;
+    return parseDocument(...args);
+  });
+  const view = render(<LazyParsedHtml html="An <strong>event</strong> starts." />);
+  expect(view.getByText("An event starts.")).toBeTruthy();
+  expect(view.container.querySelector("strong")).toBeNull();
+  await act(async () => {
+    isReady = true;
+    pending.resolve();
+  });
   await waitFor(() =>
     expect(view.container.querySelector("strong")?.textContent).toBe("event"),
   );
