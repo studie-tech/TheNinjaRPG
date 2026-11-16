@@ -116,6 +116,25 @@ describe("render quality levels", () => {
     expect(
       initialRenderQualityLevel(levels, { software: false, memory: 8, cores: 8 }),
     ).toBe(0);
+    // A software start never switches off weather, also when local lights are the player's choice.
+    const chosen = renderQualityLevels(
+      2,
+      DEFAULT_VISUAL_EFFECTS,
+      new Set<VisualEffect>(["localLights"]),
+    );
+    expect(chosen[initialRenderQualityLevel(chosen, { software: true })]).toEqual({
+      resolution: 1,
+      disabled: ["shadows"],
+    });
+    const kept = renderQualityLevels(
+      2,
+      DEFAULT_VISUAL_EFFECTS,
+      new Set<VisualEffect>(["localLights", "shadows"]),
+    );
+    expect(kept[initialRenderQualityLevel(kept, { software: true })]).toEqual({
+      resolution: 1,
+      disabled: [],
+    });
   });
 });
 

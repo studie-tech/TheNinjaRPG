@@ -108,8 +108,13 @@ export const initialRenderQualityLevel = (
     levels.findIndex((level) => level.resolution <= 1),
   );
   if (device.software) {
-    const unlit = levels.findIndex((level) => level.disabled.includes("localLights"));
-    return unlit >= 0 ? unlit : levels.length - 1;
+    // The most reduced level that switches off nothing beyond shadows and local lights.
+    for (let index = levels.length - 1; index > standard; index--) {
+      const disabled = levels[index]?.disabled ?? [];
+      if (disabled.every((effect) => effect === "shadows" || effect === "localLights"))
+        return index;
+    }
+    return standard;
   }
   if ((device.memory ?? Infinity) <= 2 || (device.cores ?? Infinity) <= 2)
     return standard;
@@ -234,7 +239,12 @@ export const createRenderQualityGovernor = (initial: GovernorState) => {
 /** Last automatic level per surface, so the next battle or map visit starts where this one settled. */
 export const sessionRenderQuality = new Map<
   RendererSurface,
-  { level: QualityLevel; patience: number }
+  {
+    level: QualityLevel;
+    patience: number;
+    resolutionFloor: number;
+    ineffectiveEffects: readonly VisualEffect[];
+  }
 >();
 
 /** The first wait for headroom; regressions double it up to the maximum. */
