@@ -528,6 +528,7 @@ describe("mutation awake prerequisites", () => {
     expect(localReadinessDrift(mutations)).toEqual([]);
   });
 
+  // Rebuilding both mutation graphs needs a separate budget when CI shards share the CPU.
   it("detects removing endpoint preparation or its mutation-phase composition", () => {
     const file = join(sourceRoot, "server/api/routers/farming.ts");
     const source = readFileSync(file, "utf8");
@@ -548,7 +549,7 @@ describe("mutation awake prerequisites", () => {
     expect(
       localReadinessDrift(inspectMutations(new Map([[file, withoutWrite]]))),
     ).toContain("farming.waterPlot");
-  });
+  }, 20_000);
 
   it("keeps recovery out of tRPC and the global mutation provider", () => {
     for (const file of ["server/api/trpc.ts", "app/_trpc/Provider.tsx"]) {
