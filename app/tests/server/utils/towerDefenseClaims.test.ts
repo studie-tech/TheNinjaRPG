@@ -1,101 +1,197 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
-import { env } from "@/env/server.mjs";
+import { describe, expect, it } from "bun:test";
+import { nanoid } from "nanoid";
 import {
-  areTowerDefenseClaimsEnabled,
-  fetchSpacetimeCompletedRun,
-  parseSpacetimeSqlRows,
-  towerDefenseClaimKey,
+  checkTowerDefenseClaimTiming,
+  TD_TOKEN_LIFETIME_MS,
+  towerDefenseReplayCost,
+  verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
+import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
+import { TD_MAX_TICKS, type TowerDefenseRunToken } from "@/validators/towerDefense";
+import { playBotRun } from "../../libs/towerDefense/bot";
 
-// Response shape recorded from a SpacetimeDB `/v1/database/:name/sql` call
-const sqlResponse = (row: unknown[] | null) => [
-  {
-    schema: {
-      elements: [
-        { name: { some: "id" }, algebraic_type: { U64: [] } },
-        { name: { some: "session_id" }, algebraic_type: { U64: [] } },
-        { name: { some: "ninjarpg_user_id" }, algebraic_type: { String: [] } },
-      ],
+const token = (
+  overrides: Partial<TowerDefenseRunToken> = {},
+): TowerDefenseRunToken => ({
+  v: 1,
+  userId: "td-user",
+  nonce: nanoid(),
+  seed: "claim-seed",
+  startWave: 1,
+  bestWave: 0,
+  level: 1,
+  dojo: { dmg: 3, hp: 3 },
+  issuedAt: 1_000_000,
+  ...overrides,
+});
+
+/** Play the token's run with the test bot until the hero falls, or retreat at `quitAt`. */
+const play = (
+  { seed, startWave, bestWave, level, dojo }: TowerDefenseRunToken,
+  quitAt?: number,
+) =>
+  playBotRun(
+    { seed, startWave, bestWave, level, dojo },
+    {
+      seed: 11,
+      attention: 0.8,
+      ticks: quitAt ?? 50_000,
+      retreat: quitAt !== undefined,
     },
-    rows: row ? [row] : [],
-    total_duration_micros: 100,
-    stats: { rows_inserted: 0, rows_deleted: 0, rows_updated: 0 },
-  },
-];
+  );
 
-describe("tower defense claim switch", () => {
-  const configured = env.TOWER_DEFENSE_CLAIMS_ENABLED;
-  const setSwitch = (value: string | undefined) =>
-    Object.assign(env, { TOWER_DEFENSE_CLAIMS_ENABLED: value });
-  afterEach(() => setSwitch(configured));
-
-  it("is paused unless explicitly enabled", () => {
-    setSwitch(undefined);
-    expect(areTowerDefenseClaimsEnabled()).toBe(false);
-    setSwitch("false");
-    expect(areTowerDefenseClaimsEnabled()).toBe(false);
-    setSwitch("1");
-    expect(areTowerDefenseClaimsEnabled()).toBe(false);
-    setSwitch("true");
-    expect(areTowerDefenseClaimsEnabled()).toBe(true);
+describe("tower defense run tokens", () => {
+  it("round-trips a signed payload and rejects any alteration", () => {
+    const payload = token();
+    const signed = signRunToken(payload);
+    expect(verifyRunToken(signed)).toEqual(payload);
+    const [body, mac] = signed.split(".");
+    const forged = Buffer.from(
+      JSON.stringify({ ...payload, dojo: { dmg: 999 } }),
+    ).toString("base64url");
+    expect(verifyRunToken(`${forged}.${mac}`)).toBeNull();
+    expect(verifyRunToken(`${body}.${mac}x`)).toBeNull();
+    expect(verifyRunToken(`${body}`)).toBeNull();
+    expect(verifyRunToken("not-a-token")).toBeNull();
   });
 });
 
-describe("tower defense claim key", () => {
-  it("depends on the signed nonce only", () => {
-    expect(towerDefenseClaimKey("abc-123")).toBe("nonce:abc-123");
-  });
-});
-
-describe("parseSpacetimeSqlRows", () => {
-  it("keys row values by column name", () => {
-    expect(parseSpacetimeSqlRows(sqlResponse([1, 7, "user-a"]))).toEqual([
-      { id: 1, session_id: 7, ninjarpg_user_id: "user-a" },
-    ]);
-  });
-
-  it("returns no rows for an empty result", () => {
-    expect(parseSpacetimeSqlRows(sqlResponse(null))).toEqual([]);
-  });
-
-  it("rejects malformed responses", () => {
-    expect(() => parseSpacetimeSqlRows({ error: "nope" })).toThrow();
-  });
-});
-
-describe("fetchSpacetimeCompletedRun", () => {
-  afterEach(() => vi.restoreAllMocks());
-
-  it("never sends a non-numeric session ID to SpacetimeDB", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    expect(await fetchSpacetimeCompletedRun("1 OR 1=1")).toBeNull();
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("mints an identity when anonymous reads are refused", async () => {
-    const calls: { url: string; auth: string | null }[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      const url = String(input);
-      const auth = new Headers(init?.headers).get("Authorization");
-      calls.push({ url, auth });
-      if (url.endsWith("/v1/identity")) return Response.json({ token: "minted" });
-      if (!auth) return new Response("unauthorized", { status: 401 });
-      return Response.json(sqlResponse(null));
+describe("tower defense claim verification", () => {
+  it("pays out exactly what the replay earned", async () => {
+    const payload = token();
+    const { state, log } = play(payload);
+    expect(state.over).toBe(true);
+    const result = await verifyTowerDefenseRun({
+      token: payload,
+      actions: log,
+      endTick: state.tick,
     });
-
-    expect(await fetchSpacetimeCompletedRun("42")).toBeNull();
-    expect(calls.map((call) => call.url.split("/v1/")[1])).toEqual([
-      "database/towerdefense/sql",
-      "identity",
-      "database/towerdefense/sql",
-    ]);
-    expect(calls[2]?.auth).toBe("Bearer minted");
+    expect(result).toEqual({
+      ok: true,
+      wave: state.wave,
+      kills: state.kills,
+      points: Math.floor(state.scrolls),
+    });
   });
 
-  it("throws when SpacetimeDB is unreachable", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("down", { status: 502 }),
-    );
-    await expect(fetchSpacetimeCompletedRun("42")).rejects.toThrow();
+  it("accepts a retreat and pays the scrolls banked so far", async () => {
+    const payload = token({ seed: "retreat" });
+    const { state, log } = play(payload, 900);
+    expect(state.quit).toBe(true);
+    const result = await verifyTowerDefenseRun({
+      token: payload,
+      actions: log,
+      endTick: state.tick,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("replays a run the same at any unlocked game speed", async () => {
+    const payload = token({ seed: "fast" });
+    const { state, log } = play(payload);
+    const sped = await verifyTowerDefenseRun({
+      token: { ...payload, dojo: { ...payload.dojo, speed: 4 } },
+      actions: log,
+      endTick: state.tick,
+    });
+    // Time Dilation never changes the simulation, only how fast it may be played.
+    expect(sped.ok).toBe(true);
+  });
+
+  it("refuses a run that has not ended, or that ends elsewhere", async () => {
+    const payload = token({ seed: "unfinished" });
+    const { state, log } = play(payload);
+    expect(
+      (
+        await verifyTowerDefenseRun({
+          token: payload,
+          actions: log,
+          endTick: state.tick - 50,
+        })
+      ).ok,
+    ).toBe(false);
+    expect(
+      (
+        await verifyTowerDefenseRun({
+          token: payload,
+          actions: log,
+          endTick: state.tick + 50,
+        })
+      ).ok,
+    ).toBe(false);
+  });
+
+  it("refuses a log that names a different run's actions", async () => {
+    const payload = token({ seed: "original" });
+    const { state, log } = play(payload);
+    const result = await verifyTowerDefenseRun({
+      token: { ...payload, seed: "other" },
+      actions: log,
+      endTick: state.tick,
+    });
+    expect(
+      result.ok && result.wave === state.wave && result.kills === state.kills,
+    ).toBe(false);
+  });
+
+  it("replays in slices that yield to the event loop and never change the result", async () => {
+    const payload = token({ seed: "sliced" });
+    const { state, log } = play(payload);
+    const claim = {
+      token: payload,
+      actions: log,
+      endTick: state.tick,
+    };
+    let yielded = false;
+    setImmediate(() => {
+      yielded = true;
+    });
+    const sliced = await verifyTowerDefenseRun({ ...claim, sliceTicks: 97 });
+    expect(yielded).toBe(true);
+    const whole = await verifyTowerDefenseRun({
+      ...claim,
+      sliceTicks: Number.POSITIVE_INFINITY,
+    });
+    expect(sliced).toEqual(whole);
+    expect(sliced.ok).toBe(true);
+  });
+});
+
+describe("tower defense claim pre-checks", () => {
+  it("refuses an impossible length or an expired token from the token alone", () => {
+    const payload = token({ seed: "timing" });
+    const tenMinutes = payload.issuedAt + 10 * 60_000;
+    expect(
+      checkTowerDefenseClaimTiming({ token: payload, endTick: 6_000, now: tenMinutes }),
+    ).toBeNull();
+    // Ten minutes at 1x is 6,000 ticks; thirty seconds of slack is not twice that.
+    expect(
+      checkTowerDefenseClaimTiming({
+        token: payload,
+        endTick: 12_000,
+        now: tenMinutes,
+      }),
+    ).toMatchObject({ permanent: false });
+    expect(
+      checkTowerDefenseClaimTiming({
+        token: { ...payload, dojo: { speed: 4 } },
+        endTick: 12_000,
+        now: tenMinutes,
+      }),
+    ).toBeNull();
+    expect(
+      checkTowerDefenseClaimTiming({
+        token: payload,
+        endTick: 0,
+        now: payload.issuedAt + TD_TOKEN_LIFETIME_MS + 1,
+      }),
+    ).toMatchObject({ permanent: true });
+  });
+
+  it("charges a replay by the ticks it covers", () => {
+    expect(towerDefenseReplayCost(0)).toBe(1);
+    expect(towerDefenseReplayCost(50_000)).toBe(1);
+    expect(towerDefenseReplayCost(50_001)).toBe(2);
+    expect(towerDefenseReplayCost(TD_MAX_TICKS)).toBe(10);
   });
 });

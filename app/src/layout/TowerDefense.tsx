@@ -1,66 +1,62 @@
-import type React from "react";
 import { memo, useEffect, useRef } from "react";
+import type { TdSfx } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import { useGameScene } from "@/hooks/game-scene";
+import { useLpcCatalogLoader } from "@/hooks/lpc";
 import WebGlError from "@/layout/WebGLError";
-import { createTowerDefenseScene } from "@/libs/rendering/scenes/towerDefense";
-import type {
-  EntityStore,
-  HexPosition,
-  HitEvent,
-  RuntimeState,
-} from "@/validators/towerDefense";
+import {
+  createTowerDefenseScene,
+  type TowerDefenseRosterEntry,
+  type TowerDefenseSceneView,
+} from "@/libs/rendering/scenes/towerDefense";
+import type { SpriteAppearance } from "@/validators/lpc";
 
-/** Stable entity refs allow server updates to reach the renderer without a React render. */
-const TowerDefenseInner = (props: TowerDefenseProps) => {
-  const mount = useRef<HTMLDivElement>(null),
-    latest = useRef(props);
-  latest.current = props;
-  const { scene, error } = useGameScene(
+/** The arena canvas; live run data reaches the renderer through refs, not renders. */
+const TowerDefenseArenaInner = (props: TowerDefenseArenaProps) => {
+  const mount = useRef<HTMLDivElement>(null);
+  const latest = useRef(props);
+  useEffect(() => {
+    latest.current = props;
+  });
+  const loadLpcCatalog = useLpcCatalogLoader();
+  const { error } = useGameScene(
     "tower-defense",
     mount,
-    (element, signal, onError) =>
+    async (element, signal, onError) =>
       createTowerDefenseScene({
         mount: element,
         signal,
         onError,
-        seed: props.seed,
-        initialGridSize: props.initialGridSize,
-        initialPlayerPosition: props.initialPlayerPosition,
+        seed: props.runId,
+        lpcCatalog: await loadLpcCatalog().catch(() => undefined),
+        appearance: props.appearance,
+        roster: props.roster,
+        hitAsset: props.hitAsset,
+        smokeAsset: props.smokeAsset,
         onFrame: (delta) => latest.current.onFrame(delta),
-        getSnapshot: () => ({
-          active: latest.current.active,
-          entities: latest.current.entitiesRef.current,
-          runtime: latest.current.runtimeStateRef.current,
-          hits: latest.current.playerHitEventsRef.current,
-          impactAsset: latest.current.impactAsset,
-          sfxUrl: latest.current.sfxUrl,
-          sfxEnabled: latest.current.sfxEnabledRef.current,
-        }),
-        onTileClick: (position) => latest.current.onTileClick(position),
+        playSound: (cue, volume) => latest.current.playSound(cue, volume),
+        getView: () => latest.current.getView(),
+        onTap: (point, hit) => latest.current.onTap(point, hit),
       }),
-    props.seed,
+    props.runId,
   );
-  useEffect(() => {
-    scene.current?.refresh();
-  }, [props.active, scene]);
   if (error) return <WebGlError />;
-  return <div ref={mount} className="w-full" />;
+  return <div ref={mount} className="w-full touch-none select-none" />;
 };
-const TowerDefense = memo(TowerDefenseInner);
-export default TowerDefense;
 
-interface TowerDefenseProps {
-  active: boolean;
+export const TowerDefenseArena = memo(TowerDefenseArenaInner);
+
+interface TowerDefenseArenaProps {
+  runId: string;
+  appearance: SpriteAppearance;
+  roster: TowerDefenseRosterEntry[];
+  hitAsset?: GameAsset;
+  smokeAsset?: GameAsset;
   onFrame: (delta: number) => void;
-  seed: string;
-  initialGridSize: number;
-  initialPlayerPosition: HexPosition;
-  onTileClick: (position: HexPosition) => void;
-  entitiesRef: React.RefObject<EntityStore>;
-  runtimeStateRef: React.RefObject<RuntimeState>;
-  playerHitEventsRef: React.RefObject<HitEvent[]>;
-  impactAsset?: GameAsset;
-  sfxUrl?: string;
-  sfxEnabledRef: React.RefObject<boolean | undefined>;
+  playSound: (cue: TdSfx, volume: number) => void;
+  getView: () => TowerDefenseSceneView;
+  onTap: (
+    point: { x: number; y: number },
+    hit: { enemyId?: number; lootId?: number },
+  ) => void;
 }

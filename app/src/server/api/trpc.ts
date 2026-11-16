@@ -20,7 +20,7 @@ import {
   ISOLATED_PYRAMID_MESSAGE,
   isPyramidRestrictedProcedure,
 } from "@/libs/questRun";
-import { hasSensitiveTrpcInput } from "@/libs/trpcLogging";
+import { canAttachTrpcInput } from "@/libs/trpcLogging";
 import { trpcSessionUserId } from "@/libs/trpcSession";
 import {
   parseWallpaperVariant,
@@ -125,8 +125,8 @@ export const sentryMiddleware = t.middleware((opts) =>
     },
     () =>
       Sentry.trpcMiddleware({
-        // Parental settings contain PIN credentials; keep them out of error telemetry.
-        attachRpcInput: !hasSensitiveTrpcInput(opts.path),
+        // Credentials and oversized inputs stay out of error telemetry.
+        attachRpcInput: canAttachTrpcInput(opts.path),
       })(opts),
   ),
 );
@@ -169,7 +169,7 @@ export const MUTATION_RATE_LIMIT_MESSAGE =
  * development fails open (the local shim may not be running) while production
  * fails closed. The SDK resolves its own timeout as success, so a slow Redis lets
  * requests through rather than failing every one;
- * tavern image uploads deliberately refuse that case instead.
+ * `strictRateLimit` callers deliberately refuse that case instead.
  */
 const enforceRateLimit = async (
   context: Pick<Awaited<ReturnType<typeof createAppTRPCContext>>, "userId" | "userIp">,

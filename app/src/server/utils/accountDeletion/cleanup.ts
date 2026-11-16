@@ -11,6 +11,7 @@ import {
   recruitmentRewards,
   referralSource,
   sageModeRolls,
+  towerDefenseClaimReceipt,
   towerDefenseRun,
   userItemVariant,
   userStreakProgress,
@@ -90,6 +91,8 @@ export const removeAccountGameData = async (userId: string) => {
       abEvent,
       userTowerDefenseUpgrade,
       towerDefenseRun,
+      // Claim receipts outlive a character, so a recreated one cannot claim its runs again.
+      towerDefenseClaimReceipt,
       userStreakProgress,
       battleAction,
     ].map((table) => deleteRowsForUser(drizzleDB, table, userId)),

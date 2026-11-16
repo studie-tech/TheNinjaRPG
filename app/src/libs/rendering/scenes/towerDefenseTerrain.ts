@@ -1,6 +1,5 @@
 import alea from "alea";
 import { createNoise2D } from "simplex-noise";
-import { TD_HEX_SIZE } from "@/drizzle/constants";
 import { createHexGrid, nameArenaTile } from "@/libs/hexgrid";
 import {
   getProceduralTerrain,
@@ -8,19 +7,13 @@ import {
 } from "@/libs/rendering/proceduralBiomes";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { buildHexTerrainData } from "@/libs/rendering/terrainData";
-import { getProjectileProgress } from "@/libs/towerDefense/game";
-import type {
-  HexPosition,
-  TowerDefenseEnemy,
-  TowerDefenseProjectile,
-} from "@/validators/towerDefense";
 
-/** Tower defense retains its fixed world scale as the viewport and grid expand. */
-export const prepareTowerDefenseTerrain = (
-  seed: string,
-  size: number,
-  center: HexPosition,
-) => {
+/** World pixels per hex; the arena maps one simulation unit to one hex width. */
+const TD_HEX_SIZE = 100;
+
+/** A seeded biome arena whose centre, the hero's zone, holds only small ground detail. */
+export const prepareTowerDefenseTerrain = (seed: string, size: number) => {
+  const center = { col: Math.floor(size / 2), row: Math.floor(size / 2) };
   const grid = createHexGrid(TD_HEX_SIZE, size, size, {
     x: -TD_HEX_SIZE / 2,
     y: -TD_HEX_SIZE / 2,
@@ -39,12 +32,11 @@ export const prepareTowerDefenseTerrain = (
     const look = getProceduralTerrain(tile, "ground");
     looks.set(`${tile.col},${tile.row}`, look);
     tile.asset = look.spec.key;
-    const { description } = proceduralDecoration(prng, look.spec.key, tile);
-    if (
-      description &&
-      !(Math.abs(tile.col - center.col) <= 1 && Math.abs(tile.row - center.row) <= 1)
-    )
-      scenery.push(description);
+    // The hero's zone keeps only ground detail, so nothing tall hides the fight.
+    const open =
+      Math.max(Math.abs(tile.col - center.col), Math.abs(tile.row - center.row)) <= 9;
+    const { description } = proceduralDecoration(prng, look.spec.key, tile, open);
+    if (description) scenery.push(description);
   }
   const terrain = buildHexTerrainData(
     grid,
@@ -60,48 +52,16 @@ export const prepareTowerDefenseTerrain = (
     },
     false,
   );
-  const corners = grid.toArray().flatMap((tile) => tile.corners);
-  const bounds = {
-    left: Math.min(...corners.map((p) => p.x)) - TD_HEX_SIZE / 2,
-    right: Math.max(...corners.map((p) => p.x)) + TD_HEX_SIZE / 2,
-    bottom: Math.min(...corners.map((p) => p.y)) - TD_HEX_SIZE / 2,
-    top: Math.max(...corners.map((p) => p.y)) + TD_HEX_SIZE / 2,
-  };
+  const xs = grid.toArray().flatMap((tile) => tile.corners.map((corner) => corner.x));
+  const left = Math.min(...xs) - TD_HEX_SIZE / 2,
+    right = Math.max(...xs) + TD_HEX_SIZE / 2;
+  const middle = grid.getHex(center);
   return {
-    grid,
     terrain,
     scenery: scenery.sort((a, b) => b.groundY - a.groundY),
-    bounds,
+    /** World pixels per arena unit. */
+    unitPx: (right - left) / (size + 1),
+    /** The arena's centre in world pixels. */
+    center: { x: middle?.x ?? 0, y: middle?.y ?? 0 },
   };
-};
-
-/** Rendering samples server-provided progress; it never advances game simulation. */
-export const towerDefenseEnemyPosition = (
-  enemy: TowerDefenseEnemy,
-  grid: ReturnType<typeof prepareTowerDefenseTerrain>["grid"],
-) => {
-  const tile = grid.getHex(enemy.position);
-  if (!tile) return null;
-  const waypoint = enemy.path[enemy.pathIndex],
-    next = waypoint ? grid.getHex(waypoint) : undefined;
-  const progress = next ? Math.max(0, Math.min(1, enemy.movementProgress)) : 0;
-  return {
-    x: tile.x + ((next?.x ?? tile.x) - tile.x) * progress,
-    y: tile.y + ((next?.y ?? tile.y) - tile.y) * progress,
-  };
-};
-
-/** Interpolates clientSpawnTime with local epoch milliseconds; otherwise uses authoritative progress. */
-export const towerDefenseProjectileProgress = (
-  projectile: TowerDefenseProjectile & { clientSpawnTime?: number },
-  now: number,
-) => {
-  if (projectile.clientSpawnTime === undefined)
-    return Math.max(0, Math.min(1, projectile.progress));
-  return getProjectileProgress(
-    projectile.origin,
-    projectile.target,
-    projectile.clientSpawnTime,
-    now,
-  );
 };

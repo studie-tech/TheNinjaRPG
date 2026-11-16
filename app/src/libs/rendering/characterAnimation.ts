@@ -1,14 +1,11 @@
-import { Rectangle, type Sprite, Texture } from "pixi.js";
+import type { Sprite, Texture } from "pixi.js";
 import type { AvatarFacing } from "@/drizzle/constants";
 import {
   acquireAnimationTexture,
+  animationFrameViews,
   clearUnusedAnimationTextures,
 } from "@/libs/rendering/animationTextures";
-import {
-  setSpriteGroundContact,
-  stabilizeNearestTexture,
-  textureGroundContact,
-} from "@/libs/rendering/assets";
+import { setSpriteGroundContact, textureGroundContact } from "@/libs/rendering/assets";
 import {
   type CharacterAnimation,
   type CharacterAnimations,
@@ -179,20 +176,7 @@ export const createCharacterAnimation = (
           void lease.resource.then(
             (atlas) => {
               if (disposed || pending !== slot) return;
-              const width = atlas.width / slot.animation.columns;
-              slot.views = Array.from({ length: slot.animation.frameCount }, (_, i) =>
-                stabilizeNearestTexture(
-                  new Texture({
-                    source: atlas.source,
-                    frame: new Rectangle(
-                      (i % slot.animation.columns) * width,
-                      Math.floor(i / slot.animation.columns) * width,
-                      width,
-                      width,
-                    ),
-                  }),
-                ),
-              );
+              slot.views = animationFrameViews(atlas, slot.animation);
               // One rest contact per clip preserves authored movement within every cell.
               slot.contact = textureGroundContact(slot.views[0]!);
               slot.ready = true;

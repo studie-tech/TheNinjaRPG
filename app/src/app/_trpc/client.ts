@@ -64,7 +64,6 @@ export const PUBLIC_MUTATIONS: string[] = [
   "merch.addToCart",
   "merch.updateCart",
   "merch.checkout",
-  "towerDefense.initiateGuestSession",
   // Landing-page analytics: writes VisitorLog and the A/B "loaded" events. Only ever
   // runs for signed-out visitors, so blocking it here disabled recruitment tracking.
   "misc.trackVisitor",

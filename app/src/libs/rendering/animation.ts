@@ -1,9 +1,4 @@
 import type { GameAsset } from "@/drizzle/schema";
-import type {
-  CharacterAnimationState,
-  CharacterAssetConfig,
-  SpriteDirection,
-} from "@/validators/towerDefense";
 
 /** Samples elapsed milliseconds; reduced motion holds frame zero without changing one-shot expiry. */
 export const sampleAnimationClip = (
@@ -55,30 +50,6 @@ export const assetAnimationClip = (
   frameDurationMs: Math.max(1, asset.speed),
   loop,
 });
-
-/** Missing movement/attack art falls back to that direction's rotation without inventing frames. */
-export const characterAnimationClip = (
-  config: CharacterAssetConfig,
-  state: CharacterAnimationState,
-  direction: SpriteDirection,
-): AnimationClip => {
-  const animation = config.animations.find((entry) => entry.state === state);
-  const rotation = config.rotations[direction] ?? config.rotations.south;
-  const images = animation?.frames[direction]?.length
-    ? animation.frames[direction]
-    : rotation
-      ? [rotation]
-      : [];
-  if (!images?.length) throw new Error(`Character has no ${direction} artwork`);
-  return {
-    images,
-    columns: 1,
-    rows: 1,
-    frameCount: images.length,
-    frameDurationMs: animation?.frameDurationMs ?? 100,
-    loop: animation?.loop ?? true,
-  };
-};
 
 /** One sheet uses columns/rows in row-major order; multiple images supply one frame each. */
 export type AnimationClip = {

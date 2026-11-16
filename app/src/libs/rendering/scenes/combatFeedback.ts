@@ -12,16 +12,21 @@ const SEVERITY = {
   crushing: { size: 0.95, minPx: 26, life: 1400, shake: 0.13 },
 } as const;
 const HEAL = { size: 0.5, minPx: 16, life: 1100 };
-const NUMBER_STOPS = {
+/** Gradient stops and outline per grade; the tower-defense arena bakes the same looks. */
+export const NUMBER_STOPS = {
   light: { stops: ["#ffffff", "#ffd36b", "#ff7a2f"], stroke: 0x2a0a0a },
   heavy: { stops: ["#fff4c2", "#ffb02e", "#e3261b"], stroke: 0x2a0a0a },
   crushing: { stops: ["#ffffff", "#ff4a3a", "#8c0a16"], stroke: 0x12040a },
   heal: { stops: ["#f2fff4", "#5eea8d", "#0f9d58"], stroke: 0x06281a },
 };
 
+/** Shared with the tower-defense glyph atlas so both games' numbers read alike. */
+export const NUMBER_FONT_FAMILY =
+  'Impact, "Arial Black", "Arial Narrow", Arial, sans-serif';
+
 const numberStyle = (fill: FillGradient, stroke: number) =>
   new TextStyle({
-    fontFamily: 'Impact, "Arial Black", "Arial Narrow", Arial, sans-serif',
+    fontFamily: NUMBER_FONT_FAMILY,
     fontSize: FONT_SIZE,
     fontStyle: "italic",
     fontWeight: "900",
@@ -44,7 +49,7 @@ const gradient = (stops: string[]) =>
   });
 
 /** Eases past the target and back, which gives a landed number its snap. */
-const overshoot = (time: number) => {
+export const overshoot = (time: number) => {
   const t = time - 1;
   return 1 + t * t * (3.2 * t + 2.2);
 };

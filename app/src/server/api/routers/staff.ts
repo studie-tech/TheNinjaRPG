@@ -20,8 +20,11 @@ import {
   raidParticipation,
   rankedPvpQueue,
   rankedUserRewards,
+  towerDefenseClaimReceipt,
+  towerDefenseRun,
   userQuestAttempt,
   userSkill,
+  userTowerDefenseUpgrade,
 } from "@/drizzle/schema";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { isBattleClaimId } from "@/libs/raids";
@@ -890,6 +893,9 @@ export const staffRouter = createTRPCRouter({
           rankedUserRewards,
           rankedPvpQueue,
           raidParticipation,
+          userTowerDefenseUpgrade,
+          towerDefenseRun,
+          towerDefenseClaimReceipt,
         ].map((table) => updateTableForUpdateUserId(ctx.drizzle, table, input)),
         updateStaffApplicationForUpdateUserId(ctx.drizzle, input),
         updateWarKillForUpdateUserId(ctx.drizzle, input),

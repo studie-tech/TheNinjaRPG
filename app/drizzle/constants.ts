@@ -118,8 +118,6 @@ export const ContentTypes = [
   "sageMode",
   "user",
   "skillTree",
-  "towerDefenseCharacter",
-  "towerDefenseUpgrade",
   "guide",
 ] as const;
 export type ContentType = (typeof ContentTypes)[number];
@@ -4112,98 +4110,49 @@ export const getCombatStatCap = (
 // ============================================
 // Tower Defense Constants
 // ============================================
+// Game balance lives in `libs/towerDefense/content.ts` and `balance.ts`.
 
-export const TD_ENEMY_DIRECTIONS = [
-  "n",
-  "ne",
-  "e",
-  "se",
-  "s",
-  "sw",
-  "w",
-  "nw",
-] as const;
-export type TDEnemyDirection = (typeof TD_ENEMY_DIRECTIONS)[number];
+/** Game sound effects tower defense plays for its events, by cue. */
+export const TD_SFX = {
+  throw: "td-shuriken-throw",
+  impact: "td-shuriken-hit",
+  explosion: "epidemic-0f59bf72-207b-4520-b726-ff9fdd819406",
+  fire: "9-b8hbTXA019dgn8yyr3j",
+  lightning: "eJCEtS5_P_pW_VPc6ttRh",
+  ice: "epidemic-a5eb85fd-2f54-4162-8b4f-5c2ff2387d9f",
+  earth: "XBlRonNjvwAZx1_HFpHdM",
+  seal: "3Oqg2QPzBNI7KqSRCTHLi",
+  smoke: "16vlpusdcPY8Ki3zE4qOs",
+  heal: "4iG_WpgEmPGUzHn8z129r",
+  charge: "epidemic-69cbda71-a90d-45e2-b92c-58e387bdebd2",
+  shimmer: "epidemic-3f7b2696-7045-48d9-ba86-93e13bd8456d",
+  clash: "PFY2oXpwIpNwUOx327WCm",
+  hurt: "874ccOJkc8HPAzQgmzgQ8",
+  roar: "epidemic-a807ef2d-c3a8-4fbd-9252-1d9c4310dc42",
+  coin: "ybPf-N-KEPTxK_eMHlXTa",
+  chime: "epidemic-0b39de3a-2a4e-4300-ad63-317f24a2680e",
+  pulse: "RDyKFpl-FPTyAhGXg4QeY",
+  whoosh: "epidemic-fc2ead45-3357-4bd3-9ed3-239aa6d94b71",
+} as const;
+export type TdSfx = keyof typeof TD_SFX;
 
-export const TowerDefenseUpgradeTypes = [
-  // Attack upgrades
-  "DAMAGE",
-  "ATTACK_SPEED",
-  "RANGE",
-  "CRIT_CHANCE",
-  "DAMAGE_PER_TILE",
-  // Defense upgrades
-  "HEALTH",
-  "HEALTH_REGEN",
-  "DEFENSE_PERCENT",
-  "DEFENSE_FLAT",
-  "LIFESTEAL",
-  "KNOCKBACK_CHANCE",
-  "KNOCKBACK_FORCE",
-  // Utility upgrades
-  "TOKENS_PER_WAVE",
-  "TOKENS_PER_KILL",
-  "INTEREST_PER_WAVE",
-  "SKIP_ENEMY_CHANCE",
-  // Ability unlocks
-  "ABILITY_UNLOCK",
-] as const;
-export type TowerDefenseUpgradeType = (typeof TowerDefenseUpgradeTypes)[number];
-
-// Upgrade categories for UI organization
-export const TowerDefenseUpgradeCategories = {
-  ATTACK: ["DAMAGE", "ATTACK_SPEED", "RANGE", "CRIT_CHANCE", "DAMAGE_PER_TILE"],
-  DEFENSE: [
-    "HEALTH",
-    "DEFENSE_FLAT",
-    "DEFENSE_PERCENT",
-    "HEALTH_REGEN",
-    "LIFESTEAL",
-    "KNOCKBACK_CHANCE",
-    "KNOCKBACK_FORCE",
-  ],
-  UTILITY: [
-    "TOKENS_PER_KILL",
-    "TOKENS_PER_WAVE",
-    "INTEREST_PER_WAVE",
-    "SKIP_ENEMY_CHANCE",
-  ],
-  ABILITIES: ["ABILITY_UNLOCK"],
-} as const satisfies Record<string, readonly TowerDefenseUpgradeType[]>;
-export type TowerDefenseUpgradeCategory = keyof typeof TowerDefenseUpgradeCategories;
-
-export const TowerDefenseRunStatuses = ["ACTIVE", "COMPLETED", "ABANDONED"] as const;
-
-// Game balance constants
-export const TD_INITIAL_GRID_SIZE = 7;
-export const TD_MAX_GRID_SIZE = 35;
-export const TD_GRID_EXPAND_EVERY_N_WAVES = 5;
-export const TD_SCORE_PER_KILL = 10;
-export const TD_SCORE_TO_POINTS_RATIO = 100; // 100 score = 1 permanent point
-export const TD_PLAYER_BASE_HEALTH = 100;
-export const TD_SHURIKEN_BASE_DAMAGE = 10;
-export const TD_SHURIKEN_BASE_RANGE = 2;
-export const TD_SHURIKEN_BASE_COOLDOWN = 500; // ms
-export const TD_BASE_CRIT_CHANCE = 0; // Base critical hit chance (0%)
-export const TD_BASE_DAMAGE_PER_TILE = 0; // Extra damage per tile distance traveled (0)
-export const TD_CRIT_DAMAGE_MULTIPLIER = 2; // Critical hit damage factor - must match the crit branch in lib.rs
-export const TD_RANGE_VISUAL_FACTOR = 0.85; // Range visual factor for ellipse-based range checking
-export const TD_PROJECTILE_SPEED = 5.0; // tiles/sec - must match PROJECTILE_SPEED in lib.rs
-export const TD_EXISTING_SESSION_CHECK_TIMEOUT_MS = 500; // Time to wait for SpacetimeDB to send existing session data
-export const TD_HIT_EVENT_DURATION_MS = 500; // Duration for hit event animations
-
-// Ability IDs
-export const TD_ABILITY_IDS = {
-  SHURIKEN: "shuriken",
+/** Painted backdrop of each tower defense stage, keyed by stage name. */
+export const TD_STAGE_IMAGE_URLS = {
+  Dawn: "https://uploadthing.b-cdn.net/f/td-stage-dawn-89331f2390bb603c.webp",
+  Midday: "https://uploadthing.b-cdn.net/f/td-stage-midday-e7d885c115500dc4.webp",
+  Dusk: "https://uploadthing.b-cdn.net/f/td-stage-dusk-0be3f4ac51bf94a4.webp",
+  "Blood Moon":
+    "https://uploadthing.b-cdn.net/f/td-stage-blood-moon-05708bf422bbdd2b.webp",
+  Eclipse: "https://uploadthing.b-cdn.net/f/td-stage-eclipse-0ec19822dfcd4ada.webp",
+  Void: "https://uploadthing.b-cdn.net/f/td-stage-void-92c2fa30e8a890cc.webp",
+  Cosmic: "https://uploadthing.b-cdn.net/f/td-stage-cosmic-e42e0c0d5f962c89.webp",
+  "Infinite Dream":
+    "https://uploadthing.b-cdn.net/f/td-stage-infinite-dream-3f0f4ae37c289f9f.webp",
 } as const;
 
-// Visual & Effect Constants
-export const TD_DAMAGE_NUMBER_POOL_SIZE = 20;
-export const TD_DAMAGE_NUMBER_LIFETIME = 0.8; // seconds
-export const TD_DAMAGE_NUMBER_RISE_SPEED_FACTOR = 0.48; // relative to hexWidth
+/** Shuriken sprite thrown by the hero, shadow clones and kunai turrets. */
 export const TD_SHURIKEN_IMAGE_URL =
   "https://uploadthing.b-cdn.net/f/4a3100e5-97c6-4e5a-96e2-1c3520838179-gwm3dh.svg";
-export const TD_HEX_SIZE = 100;
 
 // ============================================
 // Stealth & Sensory System Constants

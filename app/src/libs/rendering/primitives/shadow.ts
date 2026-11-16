@@ -25,6 +25,22 @@ export const createPixelLightTexture = () => {
   });
 };
 
+/** A soft white radial falloff that additive sprites tint; its owner must destroy the texture/source. */
+export const createGlowTexture = () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gradient.addColorStop(0, "rgba(255,255,255,1)");
+    gradient.addColorStop(0.3, "rgba(255,255,255,.55)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 128, 128);
+  }
+  return Texture.from(canvas, true);
+};
+
 /** Creates a soft ellipse to share within a scene; its owner must destroy the texture/source. */
 export const createSoftShadowTexture = () => {
   const canvas = document.createElement("canvas");

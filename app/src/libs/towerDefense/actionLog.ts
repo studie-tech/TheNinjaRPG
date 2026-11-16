@@ -1,0 +1,162 @@
+/**
+ * Compact text encoding of a run's action log, used for claims and local saves.
+ *
+ * Each action is `<tick delta><kind letter><arguments>` and actions are separated by
+ * `;`. Tick deltas and integers are base 36 (negative integers carry a leading `-`),
+ * names stay as written and arguments are separated by `,`, e.g. `3Gtiger,5k,-46`.
+ * Ticks are stored as the distance to the previous action, so a decoded log is always
+ * in tick order. Decoding validates every value against the format below, which is
+ * the wire contract for `TdAction`: a kind missing from it, or an argument of the
+ * wrong type, fails to compile.
+ */
+import {
+  TD_SEALS,
+  TD_SENTRIES,
+  TD_SHOP,
+  TD_ULTIMATES,
+} from "@/libs/towerDefense/content";
+import {
+  TD_TARGET_MODES,
+  type TdAction,
+  type TdActionKind,
+} from "@/libs/towerDefense/sim";
+import { TD_MAX_ACTIONS, TD_MAX_TICKS } from "@/validators/towerDefense";
+
+type ArgumentsOf<Kind extends TdActionKind> =
+  Extract<TdAction, [number, Kind, ...unknown[]]> extends [
+    number,
+    Kind,
+    ...infer Rest extends unknown[],
+  ]
+    ? Rest
+    : never;
+type IntegerRange = { min: number; max: number };
+type ArgumentFormat<T> = [T] extends [string] ? readonly T[] : IntegerRange;
+type ArgumentFormats<Args extends unknown[]> = {
+  [Index in keyof Args]: ArgumentFormat<Args[Index]>;
+};
+type ActionFormat<Kind extends TdActionKind> = {
+  code: string;
+  args: ArgumentFormats<ArgumentsOf<Kind>>;
+};
+
+const coordinate: IntegerRange = { min: -3000, max: 3000 };
+const slot: IntegerRange = { min: 0, max: 5 };
+const id: IntegerRange = { min: 0, max: Number.MAX_SAFE_INTEGER };
+
+const FORMAT: { [Kind in TdActionKind]: ActionFormat<Kind> } = {
+  buy: { code: "B", args: [TD_SHOP] },
+  max: { code: "M", args: [TD_SHOP] },
+  spend: { code: "P", args: [] },
+  build: { code: "D", args: [slot, TD_SENTRIES] },
+  upgrade: { code: "U", args: [slot] },
+  sell: { code: "E", args: [slot] },
+  ult: { code: "X", args: [TD_ULTIMATES, coordinate, coordinate] },
+  perk: { code: "K", args: [{ min: 0, max: 9 }] },
+  reroll: { code: "R", args: [] },
+  aim: { code: "A", args: [TD_TARGET_MODES] },
+  focus: { code: "F", args: [id] },
+  blink: { code: "J", args: [coordinate, coordinate] },
+  sub: { code: "S", args: [] },
+  seal: { code: "G", args: [TD_SEALS, coordinate, coordinate] },
+  trap: { code: "T", args: [coordinate, coordinate] },
+  loot: { code: "L", args: [id] },
+  call: { code: "C", args: [] },
+  auto: { code: "O", args: [{ min: 0, max: 1 }] },
+  quit: { code: "Q", args: [] },
+};
+
+type ArgumentDecoder = { names: ReadonlySet<string> } | IntegerRange;
+
+const DECODERS = new Map(
+  Object.entries(FORMAT).map(([kind, format]) => [
+    format.code,
+    {
+      kind,
+      args: (format.args as readonly (readonly string[] | IntegerRange)[]).map(
+        (spec): ArgumentDecoder => ("min" in spec ? spec : { names: new Set(spec) }),
+      ),
+    },
+  ]),
+);
+const DECODERS_BY_KIND = new Map(
+  [...DECODERS.values()].map((decoder) => [decoder.kind, decoder.args]),
+);
+
+const ACTION = /^([0-9a-z]{1,8})([A-Z])(.*)$/;
+const INTEGER = /^-?[0-9a-z]{1,11}$/;
+
+/**
+ * Whether the log can carry an action exactly: every argument is one its kind accepts.
+ * The live run applies only actions that pass, so it never plays one a claim's decoder
+ * would refuse.
+ */
+export const isTdActionEncodable = (action: readonly unknown[]): action is TdAction => {
+  const [tick, kind, ...args] = action;
+  const format = typeof kind === "string" ? DECODERS_BY_KIND.get(kind) : undefined;
+  if (!format || typeof tick !== "number" || !Number.isSafeInteger(tick) || tick < 0)
+    return false;
+  return (
+    args.length === format.length &&
+    args.every((value, index) => {
+      const spec = format[index];
+      return !!spec && argumentFits(spec, value);
+    })
+  );
+};
+
+/**
+ * Encode one action placed after an action at `previousTick`. Actions are recorded in
+ * tick order, so an earlier tick throws: the log could never be decoded.
+ */
+export const encodeTdAction = (action: TdAction, previousTick: number): string => {
+  const [tick, kind, ...args] = action;
+  if (tick < previousTick)
+    throw new RangeError(`Action at tick ${tick} recorded after tick ${previousTick}`);
+  let encoded = `${(tick - previousTick).toString(36)}${FORMAT[kind].code}`;
+  for (const [index, value] of args.entries())
+    encoded += `${index > 0 ? "," : ""}${typeof value === "number" ? value.toString(36) : value}`;
+  return encoded;
+};
+
+/**
+ * Decode an encoded log, or null when it is malformed, holds a value its action does
+ * not accept, or exceeds the claim limits.
+ */
+export const decodeTdActions = (text: string): TdAction[] | null => {
+  if (text === "") return [];
+  const parts = text.split(";");
+  if (parts.length > TD_MAX_ACTIONS) return null;
+  const actions: TdAction[] = [];
+  let tick = 0;
+  for (const part of parts) {
+    const match = ACTION.exec(part);
+    const decoder = match?.[2] ? DECODERS.get(match[2]) : undefined;
+    if (!match?.[1] || !decoder) return null;
+    tick += Number.parseInt(match[1], 36);
+    if (tick > TD_MAX_TICKS) return null;
+    const raw = match[3] ? match[3].split(",") : [];
+    if (raw.length !== decoder.args.length) return null;
+    const action: (number | string)[] = [tick, decoder.kind];
+    for (const [index, value] of raw.entries()) {
+      const spec = decoder.args[index];
+      const parsed =
+        spec && "min" in spec && INTEGER.test(value)
+          ? Number.parseInt(value, 36)
+          : value;
+      if (!spec || !argumentFits(spec, parsed)) return null;
+      action.push(parsed);
+    }
+    actions.push(action as TdAction);
+  }
+  return actions;
+};
+
+/** Whether a value is one the argument accepts. */
+const argumentFits = (spec: ArgumentDecoder, value: unknown) =>
+  "names" in spec
+    ? typeof value === "string" && spec.names.has(value)
+    : typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      value >= spec.min &&
+      value <= spec.max;

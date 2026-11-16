@@ -83,7 +83,7 @@ export const serverSchema = z.object({
    */
   BOTID_ENFORCE: z.enum(["true", "false"]).optional(),
   AI_TEST_USER_BROKER_TOKEN: z.string().optional(),
-  // Tower Defense HMAC secret for signing session data
+  // Tower Defense HMAC secret for signing run tokens
   TOWER_DEFENSE_HMAC_SECRET: z.string().optional(),
   // Tower Defense reward claims are refused unless this is "true"
   TOWER_DEFENSE_CLAIMS_ENABLED: z.enum(["true", "false"]).optional(),
@@ -209,7 +209,7 @@ export const serverEnv = {
     process.env.GOOGLE_ADS_TUTORIAL_CONVERSION_ACTION_ID,
   GOOGLE_DATA_MANAGER_CLIENT_EMAIL: process.env.GOOGLE_DATA_MANAGER_CLIENT_EMAIL,
   GOOGLE_DATA_MANAGER_PRIVATE_KEY: process.env.GOOGLE_DATA_MANAGER_PRIVATE_KEY,
-  // Tower Defense HMAC secret for signing session data
+  // Tower Defense HMAC secret for signing run tokens
   TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,
   TOWER_DEFENSE_CLAIMS_ENABLED: /** @type {"true" | "false" | undefined} */ (
     process.env.TOWER_DEFENSE_CLAIMS_ENABLED

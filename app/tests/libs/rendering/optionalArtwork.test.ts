@@ -4,24 +4,20 @@ import {
   Assets,
   BufferImageSource,
   Container,
-  Sprite,
+  type Sprite,
   Texture,
   UniformGroup,
 } from "pixi.js";
 import { IMG_FARM_PLOT_SOIL, TD_SHURIKEN_IMAGE_URL } from "@/drizzle/constants";
 import { useGameScene } from "@/hooks/game-scene";
-import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
+import type { GameRenderer } from "@/libs/rendering/runtime";
 import * as runtime from "@/libs/rendering/runtime";
 import { createFarmScene } from "@/libs/rendering/scenes/farm";
 import { farmPlotPosition, farmViewScale } from "@/libs/rendering/scenes/farmLayout";
 import { createTowerDefenseScene } from "@/libs/rendering/scenes/towerDefense";
-import * as towerActors from "@/libs/rendering/scenes/towerDefenseActors";
-import * as towerEffects from "@/libs/rendering/scenes/towerDefenseEffects";
-import { createTowerDefenseEffects } from "@/libs/rendering/scenes/towerDefenseEffects";
-import { prepareTowerDefenseTerrain } from "@/libs/rendering/scenes/towerDefenseTerrain";
+import { createRun } from "@/libs/towerDefense/sim";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import type { FarmPlotState, FarmVisualState } from "@/validators/farming";
-import type { TowerDefenseProjectile } from "@/validators/towerDefense";
 
 const cleanups: (() => void)[] = [];
 const originalMatchMedia = Object.getOwnPropertyDescriptor(globalThis, "matchMedia");
@@ -41,6 +37,9 @@ beforeEach(() => {
         createRadialGradient: () => ({ addColorStop() {} }),
         fillRect() {},
         fillText() {},
+        strokeText() {},
+        createLinearGradient: () => ({ addColorStop() {} }),
+        measureText: () => ({ width: 24 }),
       }) as never,
   );
 });
@@ -69,7 +68,12 @@ const renderer = (texture: (path: string) => Promise<Texture>) => {
     stage: new Container(),
     canvas,
     animation: new UniformGroup({ uTime: { value: 0, type: "f32" } }),
-    renderer: { width: 800, height: 440, resize: vi.fn() },
+    renderer: {
+      width: 800,
+      height: 440,
+      resize: vi.fn(),
+      gl: { MAX_TEXTURE_SIZE: 0x0d33, getParameter: () => 4096 },
+    },
     assets: { texture },
     get signal() {
       return signal;
@@ -162,53 +166,6 @@ const cropSprites = (game: GameRenderer) => {
 };
 
 describe("optional farm crop artwork", () => {
-  it("freezes tower-defense artwork without pausing simulation or mutating the source frame", async () => {
-    const actors = vi.fn(),
-      effects = vi.fn();
-    vi.spyOn(towerActors, "createTowerDefenseActors").mockReturnValue({
-      container: new Container(),
-      animate: actors,
-      throwAt() {},
-      hitPlayer() {},
-    } as unknown as ReturnType<typeof towerActors.createTowerDefenseActors>);
-    vi.spyOn(towerEffects, "createTowerDefenseEffects").mockResolvedValue({
-      container: new Container(),
-      update: effects,
-      impact() {},
-    } as unknown as Awaited<ReturnType<typeof towerEffects.createTowerDefenseEffects>>);
-    const fixture = renderer(async () => Texture.WHITE),
-      updates = vi.spyOn(fixture.game, "setUpdate"),
-      advance = vi.fn();
-    const scene = await createTowerDefenseScene({
-      mount: fixture.mount,
-      signal: fixture.controller.signal,
-      onError: vi.fn(),
-      seed: "still-art",
-      initialGridSize: 7,
-      initialPlayerPosition: { col: 3, row: 3 },
-      onFrame: advance,
-      getSnapshot: () =>
-        ({
-          active: true,
-          entities: { enemiesArray: [], projectilesArray: [] },
-          runtime: { abilities: [] },
-          hits: [],
-        }) as never,
-      onTileClick() {},
-    });
-    const update = updates.mock.lastCall?.[0],
-      frame = { now: 1000, delta: 0.1, reducedMotion: false };
-    fixture.game.visualEffects.spriteAnimations = false;
-    update?.(frame);
-    expect(advance).toHaveBeenLastCalledWith(0.1);
-    expect(actors.mock.lastCall?.[3]).toEqual({ ...frame, reducedMotion: true });
-    expect(effects.mock.lastCall?.[4]).toEqual({ ...frame, reducedMotion: true });
-    expect(frame.reducedMotion).toBe(false);
-    fixture.game.visualEffects.spriteAnimations = true;
-    update?.(frame);
-    expect(actors.mock.lastCall?.[3]).toBe(frame);
-    scene.dispose();
-  });
   it("keeps the hook ready and every plot selectable after a late crop-image failure", async () => {
     const pending = pendingTexture(),
       failure = new Error("Crop image unavailable");
@@ -348,129 +305,75 @@ describe("optional farm crop artwork", () => {
   });
 });
 
-const projectile: TowerDefenseProjectile = {
-  id: "shot",
-  abilityType: "shuriken",
-  origin: { col: 3, row: 3 },
-  target: { col: 4, row: 3 },
-  progress: 0.5,
-  damage: 10,
-};
-const frame: GameFrame = { now: 1000, delta: 1 / 60, reducedMotion: false };
+const towerOptions = (fixture: ReturnType<typeof renderer>, onTap = vi.fn()) => ({
+  mount: fixture.mount,
+  signal: fixture.controller.signal,
+  onError: vi.fn(),
+  seed: "optional-art",
+  roster: [],
+  onFrame() {},
+  getView: () => ({
+    state: createRun({
+      seed: "optional-art",
+      startWave: 1,
+      bestWave: 0,
+      level: 1,
+      dojo: {},
+    }),
+    pending: 0,
+    events: [],
+    reticle: null,
+    mode: "aim" as const,
+  }),
+  onTap,
+});
 describe("optional tower-defense projectile artwork", () => {
-  it("initializes actual terrain and tile input when only the projectile image fails", async () => {
+  it("initializes the arena and tap input when only the projectile image fails", async () => {
     const failure = new Error("Shuriken image unavailable"),
       fixture = renderer(async (path) => {
         if (path === TD_SHURIKEN_IMAGE_URL) throw failure;
         return Texture.WHITE;
       });
-    const onTileClick = vi.fn();
-    const scene = await createTowerDefenseScene({
-      mount: fixture.mount,
-      signal: fixture.controller.signal,
-      onError: vi.fn(),
-      seed: "optional-art",
-      initialGridSize: 7,
-      initialPlayerPosition: { col: 3, row: 3 },
-      onFrame() {},
-      getSnapshot: () =>
-        ({
-          active: true,
-          entities: { enemiesArray: [], projectilesArray: [] },
-          runtime: { abilities: [] },
-          hits: [],
-        }) as never,
-      onTileClick,
-    });
+    const onTap = vi.fn();
+    const scene = await createTowerDefenseScene(towerOptions(fixture, onTap));
     expect(fixture.game.isDisposed()).toBe(false);
-    const world = fixture.game.stage.children[0] as Container;
-    expect(world.children[0]!.children.length).toBeGreaterThan(0);
     fixture.pointer("pointerdown", 400, 220);
-    fixture.pointer("pointerup", 400, 220);
-    expect(onTileClick).toHaveBeenCalledTimes(1);
-    const wheel = new window.WheelEvent("wheel", { deltaY: 420, cancelable: true });
-    fixture.game.canvas.dispatchEvent(wheel);
-    expect(wheel.defaultPrevented).toBe(false);
+    expect(onTap).toHaveBeenCalledTimes(1);
+    const [point] = onTap.mock.lastCall ?? [];
+    expect(Math.abs(point.x)).toBeLessThan(0.01);
+    expect(Math.abs(point.y)).toBeLessThan(0.01);
     expect(console.warn).toHaveBeenCalledWith(
       "Tower defense projectile artwork unavailable",
       failure,
     );
     scene.dispose();
     fixture.pointer("pointerdown", 400, 220);
-    fixture.pointer("pointerup", 400, 220);
-    expect(onTileClick).toHaveBeenCalledTimes(1);
-    expect(world.destroyed).toBe(true);
+    expect(onTap).toHaveBeenCalledTimes(1);
   });
-
-  it.each(["healthy", "missing"])(
-    "preserves projectile and hit bookkeeping with %s artwork",
-    async (artwork) => {
-      const healthy = image(),
-        fixture = renderer(async () => {
-          if (artwork === "missing") throw new Error("Missing projectile");
-          return healthy;
-        });
-      const effects = await createTowerDefenseEffects(fixture.game);
-      fixture.game.stage.addChild(effects.container);
-      const { grid } = prepareTowerDefenseTerrain("optional-art", 7, projectile.origin),
-        spawn = vi.fn(),
-        impact = vi.fn();
-      effects.update(
-        [projectile],
-        [],
-        grid,
-        undefined,
-        frame,
-        undefined,
-        spawn,
-        impact,
-      );
-      const sprite = effects.container.children[0]!.children[0] as Sprite;
-      expect(sprite.texture).toBe(artwork === "healthy" ? healthy : Texture.WHITE);
-      expect(sprite.visible).toBe(true);
-      expect(spawn).toHaveBeenCalledWith(projectile);
-      expect(effects.container.children[0]!.children).toHaveLength(1);
-      effects.update([], [], grid, undefined, frame, undefined, spawn, impact);
-      expect(effects.container.children[0]!.children).toHaveLength(0);
-      expect(
-        effects.container.children[1]!.children.filter((child) => child.visible),
-      ).toHaveLength(0);
-      expect(
-        effects.container.children[2]!.children.filter((child) => child.visible),
-      ).toHaveLength(1);
-      expect(impact).toHaveBeenCalledTimes(1);
-      expect(sprite.destroyed).toBe(true);
-      fixture.game.dispose();
-      expect(healthy.source.destroyed).toBe(false);
-      expect(Texture.WHITE.source.destroyed).toBe(false);
-    },
-  );
 
   it.each(["abort", "dispose", "AbortError"])(
     "preserves %s while projectile artwork is loading",
     async (cancellation) => {
       const pending = pendingTexture(),
-        fixture = renderer(() => pending.promise);
-      const effects = createTowerDefenseEffects(fixture.game);
+        fixture = renderer((path) =>
+          path === TD_SHURIKEN_IMAGE_URL
+            ? pending.promise
+            : Promise.resolve(Texture.WHITE),
+        );
+      const scene = createTowerDefenseScene(towerOptions(fixture));
       const failure =
         cancellation === "AbortError"
           ? new DOMException("Image cancelled", "AbortError")
           : new Error("Late image failure");
+      await new Promise((resolve) => setTimeout(resolve, 20));
       if (cancellation === "abort") fixture.controller.abort();
       if (cancellation === "dispose") fixture.game.dispose();
       pending.reject(failure);
-      await expect(effects).rejects.toBe(failure);
-      expect(console.warn).not.toHaveBeenCalled();
+      await expect(scene).rejects.toBeDefined();
+      expect(console.warn).not.toHaveBeenCalledWith(
+        "Tower defense projectile artwork unavailable",
+        expect.anything(),
+      );
     },
   );
-
-  it("still rejects an unavailable damage atlas after projectile recovery", async () => {
-    const fixture = renderer(async () => {
-      throw new Error("Missing projectile");
-    });
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
-    await expect(createTowerDefenseEffects(fixture.game)).rejects.toThrow(
-      "Damage atlas requires a 2D canvas",
-    );
-  });
 });

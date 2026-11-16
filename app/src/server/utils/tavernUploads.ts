@@ -1,27 +1,7 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { TAVERN_IMAGE_UPLOAD_DAILY_LIMIT } from "@/drizzle/constants";
-
-/**
- * Return false for an exhausted allowance; backend errors fail closed outside development.
- * Post-image attempts remain independent of avatar and generated-pet allowances.
- */
-export const createTavernUploadGuard =
-  (limit: (userId: string) => Promise<{ success: boolean; reason?: string }>) =>
-  async (userId: string) => {
-    try {
-      const result = await limit(userId);
-      // The SDK resolves its timeout as success, so explicitly keep production closed.
-      if (result.reason === "timeout")
-        throw new Error("Unable to verify image upload allowance. Please try again.");
-      return result.success;
-    } catch (error) {
-      // Match the existing tRPC policy for an unavailable local Redis shim.
-      if (process.env.NODE_ENV !== "development") throw error;
-      console.warn("Tavern upload limiter unavailable in development", error);
-      return true;
-    }
-  };
+import { strictRateLimit } from "@/server/utils/rateLimit";
 
 const tavernUploadLimiter = new Ratelimit({
   redis: Redis.fromEnv(),
@@ -29,7 +9,9 @@ const tavernUploadLimiter = new Ratelimit({
   prefix: "tavern-image-upload",
 });
 
-/** Reserve a daily post-image attempt through the shared Redis limiter. */
-export const claimTavernImageUpload = createTavernUploadGuard((userId) =>
-  tavernUploadLimiter.limit(userId),
-);
+/**
+ * Reserve a daily post-image attempt through the shared Redis limiter. Post-image
+ * attempts remain independent of avatar and generated-pet allowances.
+ */
+export const claimTavernImageUpload = (userId: string) =>
+  strictRateLimit("image upload", () => tavernUploadLimiter.limit(userId));

@@ -14,9 +14,6 @@ export const clientSchema = z.object({
   // Optional public presentation rollout; game layout preferences remain per device.
   NEXT_PUBLIC_WELCOME_LAYOUT: z.string().optional(),
   NEXT_PUBLIC_NODE_ENV: z.enum(["development", "test", "production"]),
-  // SpacetimeDB for Tower Defense
-  NEXT_PUBLIC_SPACETIMEDB_HOST: z.string().optional(),
-  NEXT_PUBLIC_SPACETIMEDB_MODULE: z.string().optional(),
   // RevenueCat public SDK keys. Public by design -- they only identify the app.
   NEXT_PUBLIC_REVENUECAT_IOS_KEY: z.string().optional(),
   NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: z.string().optional(),
@@ -35,9 +32,6 @@ export const clientEnv = {
   NEXT_PUBLIC_MEASUREMENT_ID: process.env.NEXT_PUBLIC_MEASUREMENT_ID,
   NEXT_PUBLIC_WELCOME_LAYOUT: process.env.NEXT_PUBLIC_WELCOME_LAYOUT,
   NEXT_PUBLIC_NODE_ENV: process.env.NODE_ENV,
-  // SpacetimeDB for Tower Defense
-  NEXT_PUBLIC_SPACETIMEDB_HOST: process.env.NEXT_PUBLIC_SPACETIMEDB_HOST,
-  NEXT_PUBLIC_SPACETIMEDB_MODULE: process.env.NEXT_PUBLIC_SPACETIMEDB_MODULE,
   // RevenueCat
   NEXT_PUBLIC_REVENUECAT_IOS_KEY: process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY,
   NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: process.env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY,

@@ -15,11 +15,6 @@ assets/pwa/*
 assets/sfx/*
 **.pyc
 
-# Rust / SpacetimeDB
-app/spacetimedb/target/
-app/spacetimedb/dist/
-app/spacetimedb/Cargo.lock
-app/spacetimedb/node_modules/
 *.wasm
 
 # AI clutter

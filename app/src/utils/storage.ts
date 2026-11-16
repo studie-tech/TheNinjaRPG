@@ -63,6 +63,26 @@ export const safeLocalStorageRemoveItem = (key: string): boolean => {
 };
 
 /**
+ * Safely lists the localStorage keys that start with a prefix
+ * @param prefix - The prefix the keys share
+ * @returns The matching keys, or none if localStorage is unavailable
+ */
+export const safeLocalStorageKeys = (prefix: string): string[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index++) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    return keys;
+  } catch {
+    // SecurityError or other storage access errors
+    return [];
+  }
+};
+
+/**
  * Safely gets an item from sessionStorage
  * @param key - The key to retrieve
  * @returns The value from sessionStorage, or null if sessionStorage is unavailable or key doesn't exist

@@ -1,582 +1,400 @@
 "use client";
 
-import {
-  AlertCircle,
-  BarChart3,
-  Coins,
-  Crosshair,
-  Heart,
-  Home,
-  Info,
-  LoaderCircle,
-  LogIn,
-  Play,
-  RefreshCw,
-  SkipForward,
-  Sparkles,
-  Sword,
-  Target,
-  Trophy,
-  X,
-  Zap,
-} from "lucide-react";
+import { Trophy } from "lucide-react";
 import dynamic from "next/dynamic";
-import type React from "react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import type { TowerDefenseUpgradeCategory } from "@/drizzle/constants";
 import {
   ID_ANIMATION_HIT,
-  ID_SFX_HIT,
-  TD_SCORE_TO_POINTS_RATIO,
+  ID_ANIMATION_SMOKE,
+  TD_SFX,
+  type TdSfx,
 } from "@/drizzle/constants";
-import { useLocalStorage } from "@/hooks/localstorage";
-import { useHudStoreValues, useTowerDefense } from "@/hooks/useTowerDefense";
-import Confirm from "@/layout/Confirm";
+import {
+  type TowerDefenseOutcome,
+  useTowerDefenseRun,
+} from "@/hooks/useTowerDefenseRun";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import ContentBox from "@/layout/ContentBox";
-import Countdown from "@/layout/Countdown";
+import { useGameSettings } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import TowerDefenseUpgrades from "@/layout/TowerDefenseUpgrades";
-import { getFirstOfNextMonth } from "@/utils/time";
+import {
+  SEAL_HOTKEYS,
+  TowerDefenseActionBar,
+  TowerDefenseDraft,
+  type TowerDefenseInputMode,
+  TowerDefenseOverlay,
+  TowerDefensePanel,
+} from "@/layout/TowerDefenseHud";
+import { TowerDefenseLobby } from "@/layout/TowerDefenseLobby";
+import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense";
+import { TD_COORD_SCALE } from "@/libs/towerDefense/balance";
+import { TD_SEALS, TD_ULTIMATES } from "@/libs/towerDefense/content";
+import { formatTdNumber } from "@/libs/towerDefense/format";
+import { tdCrowdTarget } from "@/libs/towerDefense/sim";
+import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { useUserDataSelector } from "@/utils/UserContext";
 
-// Load the game renderer only when the tower-defense page is opened
-const TowerDefenseCanvas = dynamic(() => import("@/layout/TowerDefense"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-[500px] items-center justify-center">
-      <Loader explanation="Loading game..." />
-    </div>
-  ),
-});
+// Load the renderer only once a run starts
+const TowerDefenseArena = dynamic(
+  () => import("@/layout/TowerDefense").then((module) => module.TowerDefenseArena),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader explanation="Loading arena..." />
+      </div>
+    ),
+  },
+);
 
-const GAME_NAME = "Tower Defense";
-const PAGE_SUBTITLE = "Survive as many waves as possible!";
-
-const TowerDefensePage: React.FC = () => {
-  const { data: userData, isClerkLoaded } = useUserDataSelector((profile) => ({
+export default function TowerDefensePage() {
+  const {
+    data: user,
+    isClerkLoaded,
+    isSignedIn,
+    status,
+  } = useUserDataSelector((profile) => ({
     userId: profile.userId,
+    level: profile.level,
+    gender: profile.gender,
+    spriteBodyStyle: profile.spriteBodyStyle,
+    attributes: profile.attributes,
+    items: profile.items,
+    // Sound follows the same "Combat sounds" preference and volume as battles.
+    musicOn: profile.musicOn,
+    buttonSfxOn: profile.buttonSfxOn,
     sfxOn: profile.sfxOn,
+    village: profile.village,
+    isOutlaw: profile.isOutlaw,
+    bloodlineId: profile.bloodlineId,
+    status: profile.status,
   }));
-  const sfxEnabledRef = useRef(userData?.sfxOn);
+  const userId = user?.userId;
+  const utils = api.useUtils();
+  const run = useTowerDefenseRun(userId);
+  const progress = api.towerDefense.getProgress.useQuery(undefined, {
+    enabled: !!userId,
+  });
+  const roster = api.towerDefense.getRoster.useQuery(undefined, {
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const { data: assets } = api.misc.getAllGameAssetNames.useQuery({
+    ids: [ID_ANIMATION_HIT, ID_ANIMATION_SMOKE, ...Object.values(TD_SFX)],
+  });
+  const { sfxOn, setSfxEnabled } = useGameSettings(user);
+  const sounds = useMemo(() => {
+    const urls = new Map<TdSfx, string>();
+    for (const [cue, id] of Object.entries(TD_SFX) as [TdSfx, string][]) {
+      const url = assets?.find((asset) => asset.id === id)?.url;
+      if (url) urls.set(cue, url);
+    }
+    return urls;
+  }, [assets]);
   useEffect(() => {
-    sfxEnabledRef.current = userData?.sfxOn;
-  }, [userData?.sfxOn]);
-  const [upgradeTab, setUpgradeTab] = useLocalStorage<TowerDefenseUpgradeCategory>(
-    "towerDefenseUpgradeTab",
-    "ATTACK",
+    if (sfxOn && sounds.size > 0) void preloadAudioBuffers([...sounds.values()]);
+  }, [sfxOn, sounds]);
+  const playSound = (cue: TdSfx, volume: number) => {
+    const url = sounds.get(cue);
+    if (sfxOn && url) void playPreloadedAudio(url, savedSfxVolume() * volume);
+  };
+  const appearance = useMemo(
+    () =>
+      resolveSpriteAppearance(
+        user
+          ? {
+              gender: user.gender,
+              spriteBodyStyle: user.spriteBodyStyle,
+              attributes: user.attributes,
+              items: user.items,
+            }
+          : { gender: "Male" },
+      ),
+    [user],
+  );
+  const [mode, setMode] = useState<TowerDefenseInputMode>("aim");
+  const reticle = useRef<{ x: number; y: number } | null>(null);
+
+  // Handlers depend on the run's stable members, never on the object returned per render.
+  const { act, getSession } = run;
+  const aim = useCallback((): [number, number] => {
+    const state = getSession()?.state;
+    const point = reticle.current ?? (state && tdCrowdTarget(state)) ?? { x: 0, y: 3 };
+    return [Math.round(point.x * TD_COORD_SCALE), Math.round(point.y * TD_COORD_SCALE)];
+  }, [getSession]);
+
+  const onTap = useCallback(
+    (point: { x: number; y: number }, hit: { enemyId?: number; lootId?: number }) => {
+      const scaled: [number, number] = [
+        Math.round(point.x * TD_COORD_SCALE),
+        Math.round(point.y * TD_COORD_SCALE),
+      ];
+      if (mode === "blink") {
+        if (act(["blink", ...scaled])) setMode("aim");
+        return;
+      }
+      if (mode === "trap") {
+        act(["trap", ...scaled]);
+        if ((getSession()?.state.hero.trapCharges ?? 0) <= 0) setMode("aim");
+        return;
+      }
+      if (hit.lootId !== undefined && act(["loot", hit.lootId])) return;
+      if (hit.enemyId !== undefined) act(["focus", hit.enemyId]);
+      reticle.current = point;
+    },
+    [act, getSession, mode],
   );
 
-  const {
-    gameState,
-    upgradesData,
-    upgradeDefinitions,
-    startRun,
-    resumeRun,
-    throwShuriken,
-    update,
-    startWave,
-    abandonRun,
-    returnToLobby,
-    clearError,
-    purchaseInRunUpgrade,
-    cancelExistingSession,
-    checkForExistingSession,
-    isStarting,
-    isReturningToLobby,
-    isClaimingRewards,
-    isGuest,
-    // PERFORMANCE: Direct refs to avoid React re-renders
-    entitiesRef,
-    runtimeStateRef,
-    playerHitEventsRef,
-  } = useTowerDefense(userData?.userId);
+  // The renderer asks for this every frame, so it refills one object.
+  const view = useRef<TowerDefenseSceneView>({
+    state: null,
+    pending: 0,
+    reticle: null,
+    mode: "aim",
+  });
+  const getView = useCallback((): TowerDefenseSceneView => {
+    const current = getSession();
+    const next = view.current;
+    next.state = current?.state ?? null;
+    next.pending = current?.pending ?? 0;
+    next.reticle = reticle.current;
+    next.mode = mode;
+    return next;
+  }, [getSession, mode]);
 
-  // PERFORMANCE: Fetch game assets at page level (stable across re-renders)
-  const { data: gameAssets } = api.misc.getAllGameAssetNames.useQuery({
-    ids: [ID_ANIMATION_HIT, ID_SFX_HIT],
+  // Keyboard shortcuts while a run is on screen
+  useEffect(() => {
+    if (run.phase !== "playing") return;
+    const onKey = (event: KeyboardEvent) => {
+      // Modifier chords belong to the browser or OS, not to run keys.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      const key = event.key.toLowerCase();
+      // A control reached with the keyboard keeps Space and Enter for itself; a clicked
+      // HUD button does not, so Space still substitutes right after a click.
+      if (
+        (key === " " || key === "enter") &&
+        target?.closest("button, a, [role=button]") &&
+        target.matches(":focus-visible")
+      )
+        return;
+      // Space never scrolls the page, even while held.
+      if (key === " ") event.preventDefault();
+      // A held key repeats keydown; one press is one seal or one cast.
+      if (event.repeat) return;
+      const seal = TD_SEALS.find((id) => SEAL_HOTKEYS[id].toLowerCase() === key);
+      if (seal) act(["seal", seal, ...aim()]);
+      else if (key === " ") act(["sub"]);
+      else if (key === "b") setMode((value) => (value === "blink" ? "aim" : "blink"));
+      else if (key === "t") setMode((value) => (value === "trap" ? "aim" : "trap"));
+      else if (key === "n") act(["call"]);
+      else if (key === "escape") setMode("aim");
+      else if (/^\d$/.test(key)) {
+        const ultimate = TD_ULTIMATES[Number(key) - 1];
+        if (ultimate) act(["ult", ultimate, ...aim()]);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [act, aim, run.phase]);
+
+  // A run this device holds no save of is lost with the tab until its claim succeeds.
+  const isOnlyInTab =
+    !!userId &&
+    run.unsaved &&
+    run.phase !== "lobby" &&
+    (!run.outcome || (!run.outcome.claimed && run.outcome.retryable));
+  const leaveGuard = useUnsavedChangesGuard(isOnlyInTab, {
+    title: "Leave this run?",
+    message:
+      "This run is not saved on this device, so leaving or reloading before it is claimed can lose it and its scrolls.",
+    proceedLabel: "Leave",
   });
 
-  // PERFORMANCE: Cache asset lookups to avoid repeated .find() calls
-  const cachedAssets = useMemo(() => {
-    if (!gameAssets) return { impactAsset: undefined, sfxUrl: undefined };
-    const impactAsset = gameAssets.find((a) => a.id === ID_ANIMATION_HIT);
-    const sfxAsset = gameAssets.find((a) => a.id === ID_SFX_HIT);
-    return {
-      impactAsset,
-      sfxUrl: sfxAsset?.url,
-    };
-  }, [gameAssets]);
+  // A signed-in player's runs are claimable only once the profile names them, so the
+  // guest lobby waits until the profile has loaded.
+  if (!isClerkLoaded || (isSignedIn && !user && status === "pending"))
+    return <Loader explanation="Loading user data..." />;
+  // Without the profile a signed-in player would fall through to an unpaid guest run.
+  if (isSignedIn && !user && status === "error")
+    return (
+      <ContentBox title="Connection interrupted">
+        <p className="p-4">We couldn&apos;t load your character. Please try again.</p>
+        <Button className="m-4" onClick={() => void utils.profile.getUser.invalidate()}>
+          Try again
+        </Button>
+      </ContentBox>
+    );
+  const state = run.hud;
+  const playing = run.phase === "playing" && state;
 
-  // Check for existing sessions on mount or when user data becomes available
-  useEffect(() => {
-    if (userData?.userId && gameState.mode === "lobby" && !gameState.existingSession) {
-      void checkForExistingSession();
-    }
-  }, [
-    userData?.userId,
-    gameState.mode,
-    gameState.existingSession,
-    checkForExistingSession,
-  ]);
-
-  // Loader
-  if (!isClerkLoaded) return <Loader explanation="Loading user data..." />;
-
-  // Lobby mode
-  if (gameState.mode === "lobby") {
+  if (run.phase === "lobby")
     return (
       <ContentBox
-        title={GAME_NAME}
-        subtitle={PAGE_SUBTITLE}
+        title="Tower Defense"
+        subtitle="Hold the line for as many waves as you can"
         defaultBackHref="/minigames"
         topRightContent={<LeaderboardLink />}
       >
-        {/* Guest Mode Notice */}
-        {isGuest && (
-          <div className="mb-6 rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
-            <div className="flex items-start gap-3">
-              <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
-              <div className="flex-1 space-y-2">
-                <p className="font-semibold text-blue-600 dark:text-blue-400">
-                  Playing as Guest
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  You can play the game without logging in, but you won&apos;t be able
-                  to earn or save permanent upgrade points. Log in to save your progress
-                  and purchase permanent upgrades!
-                </p>
-                <Button asChild variant="outline" size="sm" className="mt-1">
-                  <Link href="/login">
-                    <LogIn className="mr-2 h-4 w-4" />
-                    Log In
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Start/Resume Game Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sword className="h-5 w-5" />
-                {GAME_NAME}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Existing Session Panel - only for logged in users */}
-              {!isGuest && gameState.existingSession && (
-                <div className="space-y-3 rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
-                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
-                    <AlertCircle className="h-4 w-4" />
-                    <span className="font-semibold">Active Run Found</span>
-                  </div>
-                  <div className="space-y-1 text-sm">
-                    <p>
-                      Wave: <strong>{gameState.existingSession.wave}</strong>
-                    </p>
-                    <p>
-                      Score: <strong>{gameState.existingSession.score}</strong>
-                    </p>
-                    <p>
-                      Health:{" "}
-                      <strong>
-                        {gameState.existingSession.health}/
-                        {gameState.existingSession.maxHealth}
-                      </strong>
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={resumeRun}
-                      disabled={isStarting}
-                      className="flex-1 truncate"
-                      variant="default"
-                    >
-                      <RefreshCw className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="inline-block max-w-[8rem] truncate align-middle">
-                        {isStarting ? "Connecting..." : "Resume"}
-                      </span>
-                    </Button>
-                    <AbandonRunConfirm
-                      onAbandon={cancelExistingSession}
-                      disabled={isStarting}
-                      triggerLabel="Abandon run"
-                      button={
-                        <Button
-                          disabled={isStarting}
-                          variant="outline"
-                          className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Start New Run Button - only show if no existing session */}
-              {(isGuest || !gameState.existingSession) && (
-                <>
-                  <Button
-                    onClick={startRun}
-                    disabled={isStarting}
-                    className="w-full"
-                    size="lg"
-                  >
-                    <Play className="mr-2 h-4 w-4" />
-                    {isStarting ? "Connecting..." : "Start New Run"}
-                  </Button>
-
-                  <div className="text-muted-foreground text-sm">
-                    <p>Survive as many waves as possible!</p>
-                    <p>Enemies get stronger each wave.</p>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Stats Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5" />
-                Your Stats
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {isGuest ? (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">
-                        Tower Defense Points
-                      </span>
-                      <Badge variant="secondary" className="text-lg">
-                        <Coins className="mr-1 h-4 w-4" />0
-                      </Badge>
-                    </div>
-                    <p className="text-muted-foreground text-xs">
-                      <Link href="/login" className="text-blue-500 hover:underline">
-                        Log in
-                      </Link>{" "}
-                      to earn points and purchase permanent upgrades!
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">
-                        Tower Defense Points
-                      </span>
-                      <Badge variant="secondary" className="text-lg">
-                        <Coins className="mr-1 h-4 w-4" />
-                        {upgradesData?.points ?? 0}
-                      </Badge>
-                    </div>
-                    <p className="text-muted-foreground text-xs">
-                      Earn points by surviving waves. Use them to purchase permanent
-                      upgrades!
-                    </p>
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Monthly Reset Notice */}
-        <div className="col-span-2 mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-          <div className="flex items-center gap-3">
-            <Trophy className="h-5 w-5 text-amber-500" />
-            <div>
-              <p className="font-semibold text-amber-800 dark:text-amber-300">
-                Leaderboard resets monthly!
-              </p>
-              <p className="text-muted-foreground text-sm">
-                Next reset in:{" "}
-                <Countdown targetDate={getFirstOfNextMonth()} className="font-bold" />
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Upgrades Section */}
-        {userData && (
-          <div className="mt-6">
-            <TowerDefenseUpgrades
-              mode="permanent"
-              upgradeDefinitions={upgradeDefinitions ?? []}
-              userUpgrades={upgradesData?.upgrades ?? []}
-              currency={upgradesData?.points ?? 0}
-              activeTab={upgradeTab}
-              onTabChange={setUpgradeTab}
-              isGuest={isGuest}
-            />
-          </div>
-        )}
-
-        {/* Error Display */}
-        {gameState.error && (
-          <ErrorBanner message={gameState.error} onDismiss={clearError} />
-        )}
+        <TowerDefenseLobby
+          isGuest={!userId}
+          level={user?.level ?? 1}
+          progress={progress.data}
+          saved={run.saved}
+          isStarting={run.isStarting}
+          isResuming={run.isResuming}
+          isPurchasing={run.isPurchasing}
+          onStart={(startWave, replaceSaved) => void run.start(startWave, replaceSaved)}
+          onResume={run.resume}
+          onDiscard={run.discardSaved}
+          onBuy={(upgradeId) => void run.buyDojo(upgradeId)}
+        />
       </ContentBox>
     );
-  }
 
-  // Playing / Wave-end mode
   return (
     <ContentBox
-      title={`${GAME_NAME} - Wave ${gameState.currentWave}`}
-      subtitle={
-        gameState.mode === "wave-end" ? "Wave Complete!" : `Score: ${gameState.score}`
-      }
-      topRightContent={<LeaderboardLink />}
+      title="Tower Defense"
+      subtitle={state ? `Wave ${state.wave}` : "Run"}
+      defaultBackHref="/minigames"
+      noRightAlign
+      padding={false}
     >
-      {/* Game HUD - Subscribes directly to module-level hudStore, parent never re-renders */}
-      <GameHUD />
-
-      {/* Game Canvas */}
-      <div className="relative w-full overflow-hidden rounded-lg border bg-slate-900">
-        {gameState.seed && gameState.state && (
-          <TowerDefenseCanvas
-            seed={gameState.seed}
-            initialGridSize={gameState.state.gridSize}
-            initialPlayerPosition={gameState.state.playerPosition}
-            onTileClick={throwShuriken}
-            active={gameState.mode === "playing"}
-            onFrame={update}
-            entitiesRef={entitiesRef}
-            runtimeStateRef={runtimeStateRef}
-            playerHitEventsRef={playerHitEventsRef}
-            impactAsset={cachedAssets.impactAsset}
-            sfxUrl={cachedAssets.sfxUrl}
-            sfxEnabledRef={sfxEnabledRef}
-          />
-        )}
-
-        {/* Wave Complete Overlay - covers the game field */}
-        {gameState.mode === "wave-end" && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="max-w-md rounded-xl border-2 border-green-500/50 bg-background/95 p-8 text-center shadow-2xl">
-              <h2 className="font-bold text-4xl text-green-500">
-                Wave {gameState.currentWave} Complete!
-              </h2>
-              <p className="mt-3 text-muted-foreground">All enemies defeated!</p>
-              <div className="mt-6 flex justify-center gap-4">
-                <Button
-                  onClick={startWave}
-                  disabled={gameState.waveInProgress}
-                  size="lg"
-                >
-                  <SkipForward className="mr-2 h-4 w-4" />
-                  Next Wave
-                </Button>
-                <AbandonRunConfirm
-                  onAbandon={abandonRun}
-                  button={
-                    <Button variant="outline">
-                      <Home className="mr-2 h-4 w-4" />
-                      Abandon Run
-                    </Button>
-                  }
-                />
-              </div>
+      {leaveGuard.dialog}
+      <div className="space-y-1.5 p-1.5">
+        <div className="relative overflow-hidden rounded-lg">
+          {roster.isPending ? (
+            <div className="flex h-[400px] items-center justify-center">
+              <Loader explanation="Gathering enemies..." />
             </div>
-          </div>
-        )}
-
-        {/* Game Over Overlay - covers the game field */}
-        {gameState.mode === "game-over" && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className="max-w-md rounded-xl border-2 border-destructive/50 bg-background/95 p-8 text-center shadow-2xl">
-              <h2 className="font-bold text-4xl text-destructive">Game Over!</h2>
-              <div className="mt-6 space-y-3">
-                <p className="text-2xl">
-                  Final Score:{" "}
-                  <strong className="text-3xl text-primary">{gameState.score}</strong>
-                </p>
-                <p className="text-muted-foreground">
-                  You survived{" "}
-                  <strong className="text-foreground">{gameState.currentWave}</strong>{" "}
-                  wave{gameState.currentWave !== 1 ? "s" : ""}
-                </p>
-
-                {/* Points Earned Section - Different for guest vs logged in */}
-                {isGuest ? (
-                  <div className="mt-4 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
-                    <p className="font-semibold text-blue-500 text-lg">
-                      <Info className="mr-2 inline h-5 w-5" />
-                      Would have earned{" "}
-                      {Math.floor(gameState.score / TD_SCORE_TO_POINTS_RATIO)} points
-                    </p>
-                    <div className="mt-2 space-y-1 text-muted-foreground text-xs">
-                      <p>
-                        <Link href="/login" className="text-blue-500 hover:underline">
-                          Log in
-                        </Link>{" "}
-                        to save your points and purchase permanent upgrades!
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    className={`mt-4 rounded-lg p-4 ${(gameState.finalPointsEarned ?? 0) > 0 ? "border border-primary/30 bg-primary/10" : "border border-muted bg-muted/50"}`}
-                  >
-                    <p
-                      className={`font-semibold text-lg ${(gameState.finalPointsEarned ?? 0) > 0 ? "text-primary" : "text-muted-foreground"}`}
-                    >
-                      <Coins className="mr-2 inline h-5 w-5" />
-                      {(gameState.finalPointsEarned ?? 0) > 0
-                        ? `+${gameState.finalPointsEarned} Tower Defense Points Earned!`
-                        : "0 Tower Defense Points Earned"}
-                    </p>
-
-                    {/* Calculation explanation */}
-                    <div className="mt-2 space-y-1 text-muted-foreground text-xs">
-                      <p className="font-medium">How points are calculated:</p>
-                      <p>
-                        {gameState.score} score ÷ {TD_SCORE_TO_POINTS_RATIO} ={" "}
-                        {Math.floor(gameState.score / TD_SCORE_TO_POINTS_RATIO)} points
-                      </p>
-                      {(gameState.finalPointsEarned ?? 0) === 0 && (
-                        <p className="text-amber-500/80">
-                          Reach {TD_SCORE_TO_POINTS_RATIO}+ score to earn points!
-                        </p>
-                      )}
-                      {(gameState.finalPointsEarned ?? 0) > 0 && (
-                        <p>Use these to purchase permanent upgrades</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-              {gameState.error && (
-                <div
-                  className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-left text-destructive text-sm"
-                  role="alert"
-                >
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div>
-                      <p className="font-semibold">Your rewards were not claimed.</p>
-                      <p>{gameState.error}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <Button
-                onClick={returnToLobby}
-                className="mt-6 min-w-48"
-                size="lg"
-                disabled={isReturningToLobby}
-                aria-busy={isReturningToLobby}
-              >
-                {isReturningToLobby ? (
-                  <LoaderCircle
-                    className="mr-2 h-4 w-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <Home className="mr-2 h-4 w-4" aria-hidden="true" />
-                )}
-                {isReturningToLobby
-                  ? isClaimingRewards
-                    ? "Claiming"
-                    : "Returning"
-                  : gameState.error && (gameState.finalPointsEarned ?? 0) > 0
-                    ? "Try claiming again"
-                    : "Return to Lobby"}
-              </Button>
-              {isReturningToLobby && (
-                <p className="mt-2 text-muted-foreground text-sm" role="status">
-                  {isClaimingRewards ? "Claiming" : "Returning"}
-                </p>
-              )}
-            </div>
-          </div>
+          ) : (
+            run.runId && (
+              <TowerDefenseArena
+                runId={run.runId}
+                appearance={appearance}
+                roster={roster.data ?? []}
+                hitAsset={assets?.find((asset) => asset.id === ID_ANIMATION_HIT)}
+                smokeAsset={assets?.find((asset) => asset.id === ID_ANIMATION_SMOKE)}
+                onFrame={run.advance}
+                playSound={playSound}
+                getView={getView}
+                onTap={onTap}
+              />
+            )
+          )}
+          {playing && (
+            <TowerDefenseOverlay
+              state={playing}
+              speed={run.speed}
+              soundOn={!!sfxOn}
+              mode={mode}
+              onSpeed={run.setSpeed}
+              onSound={setSfxEnabled}
+              act={act}
+            />
+          )}
+          {playing && <TowerDefenseDraft state={playing} act={act} />}
+          {run.phase !== "playing" && (
+            <Results
+              phase={run.phase}
+              outcome={run.outcome}
+              isGuest={!userId}
+              isOnlyInTab={isOnlyInTab}
+              onRetry={run.retryClaim}
+              onLeave={() => leaveGuard.confirmDiscard(run.leave)}
+            />
+          )}
+        </div>
+        {playing && (
+          <>
+            <TowerDefenseActionBar
+              state={playing}
+              mode={mode}
+              onMode={setMode}
+              act={act}
+              aim={aim}
+            />
+            {run.unsaved && (
+              <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
+                This run is no longer saved on this device. Finish it in this tab:
+                leaving or reloading loses its latest progress.
+              </p>
+            )}
+            <TowerDefensePanel state={playing} act={act} />
+          </>
         )}
       </div>
-
-      {/* In-Run Upgrades Bar - show during active gameplay and between waves */}
-      {(gameState.mode === "playing" || gameState.mode === "wave-end") &&
-        upgradeDefinitions && (
-          <div className="mt-4">
-            <InRunUpgradesWrapper
-              upgradeDefinitions={upgradeDefinitions}
-              userUpgrades={upgradesData?.upgrades ?? []}
-              activeTab={upgradeTab}
-              onTabChange={setUpgradeTab}
-              onInRunPurchase={purchaseInRunUpgrade}
-            />
-          </div>
-        )}
-
-      {/* Error Display */}
-      {gameState.error && gameState.mode !== "game-over" && (
-        <ErrorBanner message={gameState.error} onDismiss={clearError} centered />
-      )}
     </ContentBox>
   );
-};
+}
 
-export default TowerDefensePage;
-
-/** Confirm before ending a run for good, and keep the dialog pending until it ends. */
-const AbandonRunConfirm = ({
-  onAbandon,
-  button,
-  disabled,
-  triggerLabel,
-}: {
-  onAbandon: () => Promise<void>;
-  button: React.ReactNode;
-  disabled?: boolean;
-  triggerLabel?: string;
+const Results = (props: {
+  phase: string;
+  outcome: TowerDefenseOutcome | null;
+  isGuest: boolean;
+  /** The unclaimed run has no local save, so only this tab still holds it. */
+  isOnlyInTab: boolean;
+  onRetry: () => void;
+  onLeave: () => void;
 }) => {
-  const [isAbandoning, setIsAbandoning] = useState(false);
+  const canRetry =
+    !!props.outcome &&
+    !props.outcome.claimed &&
+    props.outcome.retryable &&
+    !props.isGuest;
   return (
-    <Confirm
-      title="Abandon run"
-      button={button}
-      disabled={disabled || isAbandoning}
-      triggerLabel={triggerLabel}
-      proceed_label="Abandon run"
-      proceed_loading_label="Abandoning..."
-      confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-      isLoading={isAbandoning}
-      keepOpenOnAccept
-      onAccept={async (_e, { close }) => {
-        setIsAbandoning(true);
-        await onAbandon().finally(() => {
-          setIsAbandoning(false);
-          close();
-        });
-      }}
-    >
-      This ends the run permanently. Its waves, score and in-run upgrades are lost and
-      cannot be restored.
-    </Confirm>
+    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-2">
+      <div className="bg-background w-full max-w-md space-y-3 rounded-xl border p-5 text-center shadow-xl">
+        {props.phase === "claiming" || !props.outcome ? (
+          <Loader explanation="Verifying your run..." />
+        ) : (
+          <>
+            <h3 className="text-2xl font-bold">
+              {props.outcome.quit ? "Retreated" : "Defeated"} at wave{" "}
+              {props.outcome.wave}
+            </h3>
+            <p>
+              {formatTdNumber(props.outcome.kills)} enemies defeated
+              {props.isGuest
+                ? ""
+                : ` · ${formatTdNumber(props.outcome.points)} scroll${props.outcome.points === 1 ? "" : "s"}`}
+            </p>
+            {props.outcome.message && (
+              <p className="text-sm">{props.outcome.message}</p>
+            )}
+            {props.isGuest && (
+              <p className="text-sm">Log in to keep scrolls and train in the Dojo.</p>
+            )}
+            {props.isOnlyInTab && (
+              <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
+                This run is not saved on this device. Claim it before leaving this tab:
+                leaving or reloading loses it.
+              </p>
+            )}
+            <div className="flex justify-center gap-2">
+              {canRetry && (
+                <Button variant="outline" onClick={props.onRetry}>
+                  Retry claim
+                </Button>
+              )}
+              {props.outcome.reloadRequired && (
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                  Reload
+                </Button>
+              )}
+              <Button onClick={props.onLeave}>Back to the Dojo</Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 };
 
-/** Reuse the leaderboard navigation control across tower-defense screen states. */
 const LeaderboardLink = () => (
   <Button asChild size="sm">
     <Link href="/manual/towerDefense/leaderboard">
@@ -585,191 +403,3 @@ const LeaderboardLink = () => (
     </Link>
   </Button>
 );
-
-/** Keep a recoverable tower-defense error visible until the player dismisses it. */
-const ErrorBanner = ({
-  message,
-  onDismiss,
-  centered = false,
-}: {
-  message: string;
-  onDismiss: () => void;
-  centered?: boolean;
-}) => (
-  <div
-    className={`mt-4 flex items-center ${centered ? "justify-center " : ""}gap-2 rounded-lg bg-destructive/10 p-3 text-destructive`}
-  >
-    <AlertCircle className="h-4 w-4" />
-    <span>{message}</span>
-    <Button variant="ghost" size="sm" onClick={onDismiss}>
-      Dismiss
-    </Button>
-  </div>
-);
-
-// ============================================================================
-// PERFORMANCE: HUD components that subscribe directly to hudStore (module-level singleton)
-// Parent page NEVER re-renders for HUD updates - only these components do
-// ============================================================================
-
-/**
- * PERFORMANCE-CRITICAL: GameHUD subscribes directly to module-level hudStore.
- * Only this component re-renders on HUD changes - parent page stays static.
- * Wrapped in memo() to ensure parent re-renders don't affect this component.
- */
-const GameHUD = memo(function GameHUD() {
-  // Use custom hook that subscribes via useSyncExternalStore
-  const values = useHudStoreValues();
-  const ability = values.abilities[0];
-
-  return (
-    <div className="mb-4 flex items-center justify-between">
-      <TooltipProvider delayDuration={100}>
-        <div className="flex items-center gap-2">
-          {/* Health Badge */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge variant="outline" className="h-8 text-lg">
-                <Heart className="mr-1 h-4 w-4 text-red-500" />
-                {values.playerHealth} / {values.maxHealth}
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent className="bg-slate-700 text-white">
-              <p>Health - Game ends when this reaches 0</p>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Enemy Count Badge */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge variant="outline" className="h-8 text-lg">
-                <Target className="mr-1 h-4 w-4" />
-                {values.enemyCount}
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent className="bg-slate-700 text-white">
-              <p>Enemies remaining in the current wave</p>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Stats Popover */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Badge
-                variant="outline"
-                className="h-8 cursor-pointer text-lg hover:bg-accent"
-              >
-                <BarChart3 className="h-4 w-4" />
-              </Badge>
-            </PopoverTrigger>
-            <PopoverContent className="w-72" side="bottom" align="start">
-              <div className="space-y-2">
-                <h4 className="border-b pb-2 font-semibold">Current Stats</h4>
-                {ability && (
-                  <>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <Sword className="h-3 w-3 text-orange-500" />
-                        <span>Damage</span>
-                      </div>
-                      <span className="font-medium">{ability.damage}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <Crosshair className="h-3 w-3 text-blue-500" />
-                        <span>Range</span>
-                      </div>
-                      <span className="font-medium">{ability.range} tiles</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-3 w-3 text-yellow-500" />
-                        <span>Attack Speed</span>
-                      </div>
-                      <span className="font-medium">
-                        {ability.cooldownMs > 0
-                          ? (1000 / ability.cooldownMs).toFixed(1)
-                          : "∞"}
-                        /s
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-3 w-3 text-purple-500" />
-                        <span>Crit Chance</span>
-                      </div>
-                      <span className="font-medium">
-                        {((ability.critChance ?? 0) * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <Target className="h-3 w-3 text-green-500" />
-                        <span>Damage/Tile</span>
-                      </div>
-                      <span className="font-medium">
-                        +{(ability.damagePerTile ?? 0).toFixed(1)}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Score Badge */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge variant="outline" className="h-8 text-lg">
-                <Trophy className="mr-1 h-4 w-4" />
-                {values.score} pts
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent className="bg-slate-700 text-white">
-              <p>Score - Earn permanent upgrade points based on your score</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </TooltipProvider>
-    </div>
-  );
-});
-
-/**
- * PERFORMANCE: In-run upgrades wrapper that subscribes to module-level hudStore.
- * Only re-renders when activeUpgrades or inRunCurrency change.
- * Wrapped in memo() to ensure parent re-renders don't affect this component.
- */
-const InRunUpgradesWrapper = memo(function InRunUpgradesWrapper({
-  upgradeDefinitions,
-  userUpgrades,
-  activeTab,
-  onTabChange,
-  onInRunPurchase,
-}: InRunUpgradesWrapperProps) {
-  // Use custom hook that subscribes via useSyncExternalStore
-  const values = useHudStoreValues();
-
-  return (
-    <TowerDefenseUpgrades
-      mode="inRun"
-      upgradeDefinitions={upgradeDefinitions}
-      userUpgrades={userUpgrades}
-      currency={values.inRunCurrency}
-      activeTab={activeTab}
-      onTabChange={onTabChange}
-      inRunUpgrades={values.activeUpgrades}
-      onInRunPurchase={onInRunPurchase}
-    />
-  );
-});
-
-interface InRunUpgradesWrapperProps {
-  upgradeDefinitions: Parameters<typeof TowerDefenseUpgrades>[0]["upgradeDefinitions"];
-  userUpgrades: Parameters<typeof TowerDefenseUpgrades>[0]["userUpgrades"];
-  activeTab: TowerDefenseUpgradeCategory | undefined;
-  onTabChange: (tab: TowerDefenseUpgradeCategory) => void;
-  onInRunPurchase: (upgradeId: string) => void;
-}

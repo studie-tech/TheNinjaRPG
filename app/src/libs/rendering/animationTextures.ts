@@ -1,4 +1,4 @@
-import { Assets, type Texture } from "pixi.js";
+import { Assets, Rectangle, Texture } from "pixi.js";
 import { SPRITE_ANIMATION_LIMITS } from "@/drizzle/constants";
 import { stabilizeNearestTexture } from "@/libs/rendering/assets";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
@@ -49,6 +49,24 @@ export const animationTextureUrl = (
 /** Grid identity prevents incompatible library entries sharing one frame layout. */
 export const animationTextureKey = (animation: CharacterAnimation, cellSize: number) =>
   `${animation.columns}x${animation.rows}:${cellSize}:${animationTextureUrl(animation, cellSize)}`;
+
+/** One view per frame of an animation's atlas, whose square cells run row by row. */
+export const animationFrameViews = (atlas: Texture, animation: CharacterAnimation) => {
+  const cell = atlas.width / animation.columns;
+  return Array.from({ length: animation.frameCount }, (_, i) =>
+    stabilizeNearestTexture(
+      new Texture({
+        source: atlas.source,
+        frame: new Rectangle(
+          (i % animation.columns) * cell,
+          Math.floor(i / animation.columns) * cell,
+          cell,
+          cell,
+        ),
+      }),
+    ),
+  );
+};
 
 /**
  * Admission includes active and pending RGBA images. Actors own only frame views;

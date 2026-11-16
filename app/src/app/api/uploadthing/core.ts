@@ -183,24 +183,6 @@ export const ourFileRouter = {
   audioSfxUploader: audioUploader("64KB"),
   // MUSIC audio (larger files)
   audioMusicUploader: audioUploader("4MB"),
-  // Tower Defense character animation zip uploader
-  towerDefenseCharacterZip: f({
-    "application/zip": { maxFileSize: "32MB" },
-  })
-    .input(z.object({ characterId: z.string() }))
-    .middleware(async ({ input, files }) => {
-      const { userId } = await adminMiddleware();
-      return { userId, characterId: input.characterId, ...withExtensionIds(files) };
-    })
-    .onUploadComplete(async ({ metadata, file }) => {
-      // The actual processing will be done by a tRPC endpoint
-      // This just handles the upload and returns the URL
-      return {
-        fileUrl: servedUfsUrl(file),
-        userId: metadata.userId,
-        characterId: metadata.characterId,
-      };
-    }),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;

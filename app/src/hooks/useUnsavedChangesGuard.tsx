@@ -13,9 +13,12 @@ import Modal from "@/layout/Modal";
  * the draft (New, load another entry) through the same dialog. Render `dialog` once.
  *
  * The App Router has no cancellable route-change event, so the browser's own Back button
- * is not intercepted.
+ * is not intercepted. `copy` replaces the editor wording for other kinds of unsaved work.
  */
-export const useUnsavedChangesGuard = (isDirty: boolean) => {
+export const useUnsavedChangesGuard = (
+  isDirty: boolean,
+  copy: UnsavedChangesCopy = {},
+) => {
   const router = useRouter();
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   // Set while a confirmed back-button click is replayed, so the guard lets it through.
@@ -72,10 +75,10 @@ export const useUnsavedChangesGuard = (isDirty: boolean) => {
 
   const dialog = (
     <Modal
-      title="Discard unsaved changes?"
+      title={copy.title ?? "Discard unsaved changes?"}
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      proceed_label="Discard changes"
+      proceed_label={copy.proceedLabel ?? "Discard changes"}
       confirmClassName="bg-red-600 text-white hover:bg-red-700"
       onAccept={() => {
         const action = pendingAction;
@@ -83,7 +86,8 @@ export const useUnsavedChangesGuard = (isDirty: boolean) => {
         action?.();
       }}
     >
-      This editor has changes that are not saved yet. Continuing discards them.
+      {copy.message ??
+        "This editor has changes that are not saved yet. Continuing discards them."}
     </Modal>
   );
 
@@ -115,3 +119,10 @@ export const leavingHref = (anchor: HTMLAnchorElement | null | undefined) => {
     return null;
   return `${url.pathname}${url.search}${url.hash}`;
 };
+
+/** The guard dialog's wording. */
+interface UnsavedChangesCopy {
+  title?: string;
+  message?: string;
+  proceedLabel?: string;
+}

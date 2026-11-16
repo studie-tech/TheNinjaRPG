@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, Text, TextStyle, Texture } from "pixi.js";
+import { Container, Graphics, Sprite, Text, TextStyle, type Texture } from "pixi.js";
 import {
   ID_SFX_HIT,
   ID_SFX_TRANSFORMATION_BURST,
@@ -6,6 +6,7 @@ import {
   TRANSFORMATION_ACTION,
 } from "@/drizzle/constants";
 import type { ReturnedBattle, ReturnedUserState } from "@/libs/combat/types";
+import { createGlowTexture } from "@/libs/rendering/primitives/shadow";
 
 const FONT_SIZE = 72;
 /** The field's backdrop reaches well past any zoom, drag or shake. */
@@ -446,22 +447,6 @@ const glowSprite = (texture: Texture) => {
   sprite.anchor.set(0.5);
   sprite.blendMode = "add";
   return sprite;
-};
-
-/** One soft radial falloff shared by every additive light in the sequence. */
-const createGlowTexture = () => {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 128;
-  const context = canvas.getContext("2d");
-  if (context) {
-    const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gradient.addColorStop(0, "rgba(255,255,255,1)");
-    gradient.addColorStop(0.3, "rgba(255,255,255,.55)");
-    gradient.addColorStop(1, "rgba(255,255,255,0)");
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, 128, 128);
-  }
-  return Texture.from(canvas, true);
 };
 
 type TransformationStage = TransformationTier & { color: number; glow: number };
