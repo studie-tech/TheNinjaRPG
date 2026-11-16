@@ -84,19 +84,22 @@ function renderForum() {
         ({ op }) =>
           observable((observer) => {
             let data: unknown = [];
-            if (op.path === "forum.getAll")
-              data = [
-                {
-                  id: "board",
-                  name: "Strategy",
-                  sectionId: "section",
-                  section: { name: "Community" },
-                  nThreads: 1,
-                  nPosts: 1,
-                  permissions: { read: true },
-                },
-              ];
-            if (op.path === "forum.getContext") data = {};
+            if (op.path === "forum.getContext")
+              data = {
+                boards: [
+                  {
+                    id: "board",
+                    name: "Strategy",
+                    sectionId: "section",
+                    section: { name: "Community" },
+                    nThreads: 1,
+                    nPosts: 1,
+                    permissions: { read: true },
+                  },
+                ],
+                canManage: false,
+                canModerate: false,
+              };
             if (op.path === "forum.getThreads") {
               const input = op.input as RouterInputs["forum"]["getThreads"];
               requests.push(input);

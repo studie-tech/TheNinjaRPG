@@ -29,9 +29,14 @@ import { useUserDataSelector } from "@/utils/UserContext";
 export default function Board({
   boardId,
   initialThreads,
+  initialContext,
+  fetchedAt,
 }: {
   boardId: string;
   initialThreads: RouterOutputs["forum"]["getThreads"];
+  initialContext: RouterOutputs["forum"]["getContext"];
+  /** Server render time; a replayed render's seed data is stale rather than fresh. */
+  fetchedAt: number;
 }) {
   const { data: user } = useUserDataSelector((u) => ({
     userId: u.userId,
@@ -43,14 +48,19 @@ export default function Board({
   const query = params.get("q") ?? "";
   const [compose, setCompose] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  // Seed the navigation context the server already computed for the shared forum header.
+  api.forum.getContext.useQuery(undefined, {
+    initialData: initialContext,
+    initialDataUpdatedAt: fetchedAt,
+  });
   const threads = api.forum.getThreads.useInfiniteQuery(
     { boardId, limit: FORUM_BOARD_THREADS_PER_PAGE, query: query || undefined },
     {
       initialData: !query ? { pages: [initialThreads], pageParams: [0] } : undefined,
+      initialDataUpdatedAt: fetchedAt,
       placeholderData: (previous) => previous,
       getNextPageParam: (p) => p.nextCursor,
       staleTime: 15000,
-      refetchOnMount: "always",
     },
   );
   const board = threads.data?.pages[0]?.board;
@@ -131,7 +141,7 @@ export default function Board({
                 showMutationToast(result);
                 if (!result.success) return false;
                 await Promise.all([
-                  utils.forum.getAll.invalidate(),
+                  utils.forum.getContext.invalidate(undefined, { refetchType: "none" }),
                   utils.forum.getThreads.invalidate(),
                 ]);
                 setCompose(false);

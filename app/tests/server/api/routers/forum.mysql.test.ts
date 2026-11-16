@@ -397,7 +397,9 @@ describeWithDatabase(
       const db = await getTestDatabase();
       const post = (await db.query.forumPost.findMany())[0]!;
       expect(
-        (await (await client()).getAll()).some((b) => b.id === "private-board"),
+        (await (await client()).getContext()).boards.some(
+          (b) => b.id === "private-board",
+        ),
       ).toBe(false);
       expect(
         (await (await client()).getThreads({ query: "shinobi", limit: 20 })).threads,
@@ -408,7 +410,13 @@ describeWithDatabase(
       ).toBeNull();
       expect(await (await client()).resolvePost({ postId: post.id })).toBeNull();
       expect(
-        (await fetchForumThreadPage(db, { thread_id: id, limit: 20 })).thread,
+        (
+          await fetchForumThreadPage(
+            db,
+            { thread_id: id, limit: 20 },
+            { context: getForumContext(db) },
+          )
+        ).thread,
       ).toBeNull();
       expect(
         (await getInfiniteThreads({ client: db, boardId: "private-board", limit: 20 }))
@@ -422,9 +430,9 @@ describeWithDatabase(
     it("fails closed for boards missing their section", async () => {
       const db = await getTestDatabase();
       await db.delete(forumSection).where(eq(forumSection.id, "public"));
-      expect((await (await client()).getAll()).some((b) => b.id === "general")).toBe(
-        false,
-      );
+      expect(
+        (await (await client()).getContext()).boards.some((b) => b.id === "general"),
+      ).toBe(false);
     });
     it("limits scoped moderators to content in their boards and checks stored restriction scope", async () => {
       const otherId = await create("other");

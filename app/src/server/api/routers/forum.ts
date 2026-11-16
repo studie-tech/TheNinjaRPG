@@ -7,6 +7,8 @@ import { forumPost, type forumThread, poll } from "@/drizzle/schema";
 import { resolveSenderId } from "@/libs/comments";
 import {
   type ForumContext,
+  findReadableForumPost,
+  forumNavigationContext,
   forumPersonalState,
   forumWriteSnapshotMatches,
   getForumContext,
@@ -221,23 +223,10 @@ export const forumRouter = createTRPCRouter({
       };
     }),
 
-  /** List boards the caller may discover, including boards whose content requires further access. */
-  getAll: publicProcedure.query(async ({ ctx }) =>
-    (await getForumContext(ctx.drizzle, ctx.userId)).boards.filter(
-      (b) => b.permissions.view,
-    ),
-  ),
   /** Expose discoverable boards and effective staff capabilities for forum navigation. */
-  getContext: publicProcedure.query(async ({ ctx }) => {
-    const context = await getForumContext(ctx.drizzle, ctx.userId);
-    return {
-      boards: context.boards.filter((b) => b.permissions.view),
-      canManage: context.canManage,
-      canModerate: context.boards.some(
-        (b) => b.permissions.moderate || b.permissions.approve,
-      ),
-    };
-  }),
+  getContext: publicProcedure.query(async ({ ctx }) =>
+    forumNavigationContext(await getForumContext(ctx.drizzle, ctx.userId)),
+  ),
   readNews: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
     await q.readNews(ctx.drizzle, ctx.userId);
     return { success: true, message: "News marked as read" };
@@ -277,7 +266,7 @@ export const forumRouter = createTRPCRouter({
       resolveForumPost(
         ctx.drizzle,
         input.postId,
-        await getForumContext(ctx.drizzle, ctx.userId),
+        getForumContext(ctx.drizzle, ctx.userId),
       ),
     ),
   /** Advance the caller's read position and clear alerts through an accessible visible post. */
@@ -285,9 +274,11 @@ export const forumRouter = createTRPCRouter({
     .input(z.object({ postId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const context = await getForumContext(ctx.drizzle, ctx.userId);
-      const resolved = await resolveForumPost(ctx.drizzle, input.postId, context);
-      const post = resolved ? await q.findForumPost(ctx.drizzle, input.postId) : null;
+      const post = await findReadableForumPost(
+        ctx.drizzle,
+        input.postId,
+        getForumContext(ctx.drizzle, ctx.userId),
+      );
       if (!post) return errorResponse("Post not found");
       await Promise.all([
         q.saveForumRead(ctx.drizzle, ctx.userId, post),

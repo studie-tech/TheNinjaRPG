@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { getForumContext } from "@/libs/forum";
+import { getPageForumContext, getPageThread } from "@/app/[shell]/forum/pageData";
 import { buildMetadata, noindexMetadata } from "@/libs/seo";
-import { fetchThread } from "@/queries/forum";
-import { drizzleDB } from "@/server/db";
 
 /** Expose only published, publicly readable topics and derive the canonical URL from their actual board. */
 export async function generateMetadata(props: {
@@ -10,8 +8,8 @@ export async function generateMetadata(props: {
 }): Promise<Metadata> {
   const params = await props.params;
   const [context, thread] = await Promise.all([
-    getForumContext(drizzleDB),
-    fetchThread(drizzleDB, params.threadid),
+    getPageForumContext(null),
+    getPageThread(params.threadid),
   ]);
   const board = context.boards.find(
     (b) => b.id === thread?.boardId && b.permissions.read,

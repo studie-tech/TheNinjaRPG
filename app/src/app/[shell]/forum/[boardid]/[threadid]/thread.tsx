@@ -34,9 +34,19 @@ import { useUserDataSelector } from "@/utils/UserContext";
 export default function Thread({
   threadId,
   initialPage,
+  initialCursor,
+  linkedPost,
+  initialContext,
+  fetchedAt,
 }: {
   threadId: string;
   initialPage: ThreadData;
+  initialCursor: number;
+  /** The `?post=` link the server resolved; `target` is null when it is unavailable. */
+  linkedPost: { postId: string; target: ResolvedPost } | null;
+  initialContext: RouterOutputs["forum"]["getContext"];
+  /** Server render time; a replayed render's seed data is stale rather than fresh. */
+  fetchedAt: number;
 }) {
   const { data: user } = useUserDataSelector((u) => ({
     userId: u.userId,
@@ -47,23 +57,32 @@ export default function Thread({
   const router = useRouter();
   const utils = api.useUtils();
   const { updateReaction } = useForumCacheUpdate(threadId);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(initialCursor);
   const [quote, setQuote] = useState("");
   const [tools, setTools] = useState(false);
   const [selectedPosts, setSelectedPosts] = useState<string[]>([]);
   const postId = params.get("post");
+  // Seed the navigation context the server already computed for the shared forum header.
+  api.forum.getContext.useQuery(undefined, {
+    initialData: initialContext,
+    initialDataUpdatedAt: fetchedAt,
+  });
   const resolved = api.forum.resolvePost.useQuery(
     { postId: postId ?? "" },
-    { enabled: !!postId },
+    {
+      enabled: !!postId,
+      initialData: linkedPost?.postId === postId ? linkedPost?.target : undefined,
+      initialDataUpdatedAt: fetchedAt,
+    },
   );
   const comments = api.comments.getForumComments.useQuery(
     { thread_id: threadId, limit: FORUM_THREAD_POSTS_PER_PAGE, cursor: page },
     {
-      initialData: page === 0 ? initialPage : undefined,
+      initialData: page === initialCursor ? initialPage : undefined,
+      initialDataUpdatedAt: fetchedAt,
       // Keep the current page on screen, dimmed, while the next one loads.
       placeholderData: (previous) => previous,
       staleTime: 15000,
-      refetchOnMount: "always",
       refetchInterval: 20000,
     },
   );
@@ -76,11 +95,9 @@ export default function Thread({
     postsTopRef.current?.scrollIntoView({ block: "start" });
   };
   const reply = api.comments.createForumComment.useMutation();
+  // Alerts render only on the forum index, which reloads the stale list on its next visit.
   const read = api.forum.markRead.useMutation({
-    onSuccess: () => {
-      void utils.forum.personal.invalidate();
-      void utils.forum.alerts.invalidate();
-    },
+    onSuccess: () => void utils.forum.alerts.invalidate(),
   });
   const observedPosts = useRef(new Set<string>());
   const scrolledPost = useRef<string | null>(null);
@@ -227,7 +244,7 @@ export default function Thread({
     await Promise.all([
       utils.comments.getForumComments.invalidate(),
       utils.forum.getThreads.invalidate(),
-      utils.forum.getAll.invalidate(),
+      utils.forum.getContext.invalidate(undefined, { refetchType: "none" }),
     ]);
   };
   // A list apart from the composer keeps quoting from re-rendering every post.
@@ -816,5 +833,6 @@ function ForumPost({
 /** Reactions offered under each post, in display order. */
 const FORUM_REACTIONS = ["helpful", "❤️", "😂", "👏"] as const;
 
+type ResolvedPost = RouterOutputs["forum"]["resolvePost"];
 type ThreadData = RouterOutputs["comments"]["getForumComments"];
 type ForumReaction = (typeof FORUM_REACTIONS)[number];

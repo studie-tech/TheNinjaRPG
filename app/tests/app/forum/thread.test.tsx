@@ -41,6 +41,7 @@ let moderator: boolean;
 let refreshDuringRemoval: boolean;
 let removalPaths: string[];
 let requestedPages: number[];
+let requestedPaths: string[];
 let holdPageTwo: boolean;
 let holdReaction: boolean;
 let finishPageTwo: (() => void) | undefined;
@@ -59,6 +60,7 @@ beforeEach(() => {
   refreshDuringRemoval = false;
   removalPaths = [];
   requestedPages = [];
+  requestedPaths = [];
   posts = ["opening", "reply"].map((id) => ({
     id,
     authorId: "reader",
@@ -117,7 +119,10 @@ beforeEach(() => {
   vi.spyOn(Forum, "ForumWatchButton").mockImplementation(() => null);
   vi.spyOn(Forum, "ForumComposer").mockImplementation(() => <></>);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Matches the application client, whose reads stay fresh until invalidated.
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
 });
 
 afterEach(() => {
@@ -158,14 +163,26 @@ function threadPage(cursor = 0, threadId = "topic"): ThreadData {
   } as unknown as ThreadData;
 }
 
-/** Mount the actual discussion with an in-memory transport that can reject reads after successful writes. */
-function renderThread() {
+/**
+ * Mount the actual discussion with an in-memory transport that can reject reads after successful writes.
+ * The seed defaults to a replayed server render, which is stale on mount.
+ */
+function renderThread(
+  seed: {
+    fetchedAt?: number;
+    initialCursor?: number;
+    linkedPost?: Parameters<typeof Thread>[0]["linkedPost"];
+  } = {},
+) {
   const trpcClient = testApi.createClient({
     links: [
       () =>
         ({ op }) =>
           observable((observer) => {
             let data: unknown = [];
+            requestedPaths.push(op.path);
+            if (op.path === "forum.getContext")
+              data = { boards: [], canManage: false, canModerate: false };
             if (op.path === "comments.getForumComments") {
               const { cursor, thread_id } = op.input as {
                 cursor: number;
@@ -225,15 +242,24 @@ function renderThread() {
           }),
     ],
   });
-  const discussion = (threadId: string) => (
+  const discussion = (threadId: string, fetchedAt = seed.fetchedAt ?? 0) => (
     <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
-      <Thread threadId={threadId} initialPage={threadPage(0, threadId)} />
+      <Thread
+        threadId={threadId}
+        initialPage={threadPage(seed.initialCursor ?? 0, threadId)}
+        initialCursor={seed.initialCursor ?? 0}
+        linkedPost={seed.linkedPost ?? null}
+        initialContext={{ boards: [], canManage: false, canModerate: false }}
+        fetchedAt={fetchedAt}
+      />
     </TrpcTestProviders>
   );
   const view = render(discussion("topic"));
   return {
     ...view,
-    rerenderThread: (threadId: string) => view.rerender(discussion(threadId)),
+    // A route change arrives with a freshly rendered server seed.
+    rerenderThread: (threadId: string) =>
+      view.rerender(discussion(threadId, Date.now())),
   };
 }
 
@@ -418,3 +444,41 @@ it.each([false, true])(
     expect(requestedPages).toEqual([0, 1]);
   },
 );
+
+it.each([
+  [Date.now(), []],
+  [0, ["comments.getForumComments"]],
+])(
+  "reuses a fresh server seed and refreshes a replayed one on mount (fetchedAt=%p)",
+  async (fetchedAt, expected) => {
+    const view = renderThread({ fetchedAt });
+    expect(view.getByText("opening content")).toBeTruthy();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect([...requestedPaths].sort()).toEqual([...expected].sort());
+  },
+);
+
+it("opens the page of a server-resolved linked post without resolving it again", async () => {
+  const opening = posts[0]!;
+  posts = Array.from({ length: FORUM_THREAD_POSTS_PER_PAGE + 2 }, (_, index) => ({
+    ...opening,
+    id: `entry-${index}`,
+    content: `<p>entry ${index}</p>`,
+  }));
+  const postId = `entry-${FORUM_THREAD_POSTS_PER_PAGE + 1}`;
+  vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+    new URLSearchParams({ post: postId }) as never,
+  );
+  const view = renderThread({
+    fetchedAt: Date.now(),
+    initialCursor: 1,
+    linkedPost: {
+      postId,
+      target: { boardId: "board", threadId: "topic", postId, page: 1 },
+    },
+  });
+  expect(view.container.querySelector(`#post-${postId}`)).not.toBeNull();
+  expect(view.container.querySelector("#post-entry-0")).toBeNull();
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+  expect(requestedPaths).toEqual([]);
+});

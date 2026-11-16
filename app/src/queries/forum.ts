@@ -91,6 +91,9 @@ export const fetchThread = (db: Pick<DrizzleClient, "query">, id: string) =>
 /** Find a post including removed/pending content; the caller must authorize its current topic. */
 export const findForumPost = (db: Client, id: string) =>
   db.query.forumPost.findFirst({ where: eq(forumPost.id, id) });
+/** Find a post with its current topic in one read; the caller must authorize both. */
+export const findForumPostWithThread = (db: Client, id: string) =>
+  db.query.forumPost.findFirst({ where: eq(forumPost.id, id), with: { thread: true } });
 /** Load only this account's resume positions for personal discussion views. */
 export const listForumReads = (db: Client, userId: string) =>
   db.query.forumRead.findMany({ where: eq(forumRead.userId, userId) });
