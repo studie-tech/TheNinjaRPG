@@ -36,124 +36,153 @@ export function CosmeticWorkspace({ user }: { user: SpriteUser }) {
     (entry) => entry.equipped === slot && (entry.quantity ?? 0) > 0,
   );
   return (
-    <div className="grid gap-4 p-3 sm:grid-cols-[290px_minmax(0,1fr)]">
-      <div>
-        <EquipmentPreview user={{ ...user, cosmeticSlots: slots }} items={user.items} />
-        <div className="relative mx-auto w-full max-w-[290px]">
-          <Image
-            src={IMG_EQUIP_SILHOUETTE}
-            alt="Cosmetic equipment slots"
-            width={290}
-            height={461}
-            className="w-full opacity-50"
-          />
-          {EQUIPMENT_LAYOUT.map((entry) => {
-            const selected = slots.find((selection) => selection.slot === entry.slot);
-            const name = selected?.variant?.name ?? selected?.item?.name;
-            return (
-              <button
-                key={entry.slot}
-                type="button"
-                data-slot={entry.slot}
-                aria-label={`${slotName(entry.slot)} cosmetic${name ? `: ${name}` : ", empty"}`}
-                aria-current={slot === entry.slot ? "true" : undefined}
-                onClick={() => setSlot(entry.slot)}
-                className={cn(
-                  "absolute flex aspect-square w-1/5 items-center justify-center rounded-xl border-2 bg-card p-1 text-xs",
-                  entry.pos,
-                  slot === entry.slot && "ring-4 ring-primary/60",
-                )}
+    <div className="@container">
+      <div className="grid gap-4 p-3 @min-[600px]:grid-cols-[290px_minmax(0,1fr)]">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <EquipmentPreview
+              user={{ ...user, cosmeticSlots: slots }}
+              items={user.items}
+            />
+            <label className="flex min-w-0 flex-1 items-center gap-2 text-sm @min-[600px]:hidden">
+              Slot
+              <select
+                value={slot}
+                onChange={(event) => setSlot(event.target.value as ItemSlot)}
+                className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-foreground"
               >
-                {selected?.item ? (
-                  <ContentImage
-                    image={selected.variant?.image ?? selected.item.image}
-                    alt={name ?? entry.label}
-                    className="h-full w-full"
-                    hideBorder
-                  />
-                ) : (
-                  entry.label
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <section
-        aria-label={`${slotName(slot)} cosmetic choices`}
-        aria-busy={select.isPending}
-        className="flex flex-col gap-3"
-      >
-        <h2 className="font-bold text-xl">{slotName(slot)}</h2>
-        {current && (
-          <div className="rounded-lg border p-3">
-            <p>{current.variant?.name ?? current.item?.name}</p>
-            {!isOccupied && (
-              <p className="text-sm text-muted-foreground">
-                Saved. Equip gear in this slot to display the cosmetic.
-              </p>
-            )}
-            <Button
-              variant="outline"
-              disabled={select.isPending}
-              onClick={() =>
-                select.mutate({ slot: slot as Exclude<ItemSlot, "NONE">, itemId: null })
-              }
-            >
-              Remove cosmetic
-            </Button>
+                {EQUIPMENT_LAYOUT.map((entry) => (
+                  <option key={entry.slot} value={entry.slot}>
+                    {slotName(entry.slot)}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        )}
-        {error && (
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-        )}
-        {candidates.length === 0 && (
-          <p>
-            Make an item cosmetic from your backpack to unlock its appearance for this
-            slot.
-          </p>
-        )}
-        {candidates.map(({ item }) => (
-          <div key={item.id} className="flex flex-col gap-2 rounded-lg border p-3">
-            {[
-              null,
-              ...item.variants.filter((variant) =>
-                unlocks.some((unlock) => unlock.variantId === variant.id),
-              ),
-            ].map((variant) => {
-              const isSelected =
-                current?.itemId === item.id &&
-                current.variantId === (variant?.id ?? null);
+          <div className="relative mx-auto hidden w-full max-w-[290px] @min-[600px]:block">
+            <Image
+              src={IMG_EQUIP_SILHOUETTE}
+              alt="Cosmetic equipment slots"
+              width={290}
+              height={461}
+              className="w-full opacity-50"
+            />
+            {EQUIPMENT_LAYOUT.map((entry) => {
+              const selected = slots.find((selection) => selection.slot === entry.slot);
+              const name = selected?.variant?.name ?? selected?.item?.name;
               return (
-                <Button
-                  key={variant?.id ?? "base"}
-                  variant={isSelected ? "secondary" : "outline"}
-                  className="h-auto justify-start gap-3 whitespace-normal text-left"
-                  disabled={select.isPending || isSelected}
-                  onClick={() =>
-                    select.mutate({
-                      slot: slot as Exclude<ItemSlot, "NONE">,
-                      itemId: item.id,
-                      variantId: variant?.id ?? null,
-                    })
-                  }
+                <button
+                  key={entry.slot}
+                  type="button"
+                  data-slot={entry.slot}
+                  aria-label={`${slotName(entry.slot)} cosmetic${name ? `: ${name}` : ", empty"}`}
+                  aria-current={slot === entry.slot ? "true" : undefined}
+                  onClick={() => setSlot(entry.slot)}
+                  className={cn(
+                    "absolute flex aspect-square w-1/5 items-center justify-center rounded-xl border-2 bg-card p-1 text-xs",
+                    entry.pos,
+                    slot === entry.slot && "ring-4 ring-primary/60",
+                  )}
                 >
-                  <ContentImage
-                    image={variant?.image ?? item.image}
-                    alt={variant?.name ?? item.name}
-                    className="h-12 w-12 shrink-0"
-                    hideBorder
-                  />
-                  {variant?.name ?? item.name}
-                  {isSelected ? " · Selected" : ""}
-                </Button>
+                  {selected?.item ? (
+                    <ContentImage
+                      image={selected.variant?.image ?? selected.item.image}
+                      alt={name ?? entry.label}
+                      className="h-full w-full"
+                      hideBorder
+                    />
+                  ) : (
+                    entry.label
+                  )}
+                </button>
               );
             })}
           </div>
-        ))}
-      </section>
+        </div>
+        <section
+          aria-label={`${slotName(slot)} cosmetic choices`}
+          aria-busy={select.isPending}
+          className="flex max-h-[600px] min-w-0 flex-col gap-3 overflow-y-auto p-1"
+        >
+          <h2 className="font-bold text-xl">{slotName(slot)}</h2>
+          {current && (
+            <div className="rounded-lg border p-3">
+              <p>{current.variant?.name ?? current.item?.name}</p>
+              {!isOccupied && (
+                <p className="text-sm text-muted-foreground">
+                  Saved. Equip gear in this slot to display the cosmetic.
+                </p>
+              )}
+              <Button
+                variant="outline"
+                disabled={select.isPending}
+                onClick={() =>
+                  select.mutate({
+                    slot: slot as Exclude<ItemSlot, "NONE">,
+                    itemId: null,
+                  })
+                }
+              >
+                Remove cosmetic
+              </Button>
+            </div>
+          )}
+          {error && (
+            <p role="alert" className="text-destructive">
+              {error}
+            </p>
+          )}
+          {candidates.length === 0 && (
+            <p>
+              Make an item cosmetic from your backpack to unlock its appearance for this
+              slot.
+            </p>
+          )}
+          {candidates.map(({ item }) => (
+            <div key={item.id} className="rounded-lg border p-3">
+              <h3 className="mb-2 break-words font-semibold text-sm">{item.name}</h3>
+              <div className="grid grid-cols-2 gap-2 @min-[900px]:grid-cols-3">
+                {[
+                  null,
+                  ...item.variants.filter((variant) =>
+                    unlocks.some((unlock) => unlock.variantId === variant.id),
+                  ),
+                ].map((variant) => {
+                  const isSelected =
+                    current?.itemId === item.id &&
+                    current.variantId === (variant?.id ?? null);
+                  return (
+                    <Button
+                      key={variant?.id ?? "base"}
+                      variant={isSelected ? "secondary" : "outline"}
+                      className="h-auto min-w-0 flex-col gap-2 whitespace-normal p-2 text-center"
+                      disabled={select.isPending || isSelected}
+                      onClick={() =>
+                        select.mutate({
+                          slot: slot as Exclude<ItemSlot, "NONE">,
+                          itemId: item.id,
+                          variantId: variant?.id ?? null,
+                        })
+                      }
+                    >
+                      <ContentImage
+                        image={variant?.image ?? item.image}
+                        alt={variant?.name ?? item.name}
+                        className="h-12 w-12 shrink-0"
+                        hideBorder
+                      />
+                      <span className="w-full break-words text-xs">
+                        {variant?.name ?? item.name}
+                        {isSelected ? " · Selected" : ""}
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </section>
+      </div>
     </div>
   );
 }

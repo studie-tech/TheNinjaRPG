@@ -171,10 +171,12 @@ export default function MyItems() {
     <>
       <ContentBox title="Items" defaultBackHref="/profile" padding={false}>
         <Tabs defaultValue="inventory">
-          <TabsList className="m-3" aria-label="Inventory view">
-            <TabsTrigger value="inventory">Inventory</TabsTrigger>
-            <TabsTrigger value="cosmetic">Cosmetic</TabsTrigger>
-          </TabsList>
+          <div className="p-3 pb-0">
+            <TabsList aria-label="Inventory view">
+              <TabsTrigger value="inventory">Inventory</TabsTrigger>
+              <TabsTrigger value="cosmetic">Cosmetic</TabsTrigger>
+            </TabsList>
+          </div>
           <TabsContent value="cosmetic">
             <CosmeticWorkspace user={{ ...userData, items: userItems ?? [] }} />
           </TabsContent>
