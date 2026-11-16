@@ -146,21 +146,14 @@ export const fetchBloodlineJutsuReskins = async (
 export const fetchActiveLoadoutJutsuIds = async (
   client: DrizzleClient,
   userId: string,
-): Promise<string[] | null> =>
-  (await fetchActiveJutsuLoadout(client, userId))?.jutsuIds ?? null;
-
-/** Load the id and jutsu of the user's active loadout; undefined when none is selected. */
-export const fetchActiveJutsuLoadout = async (
-  client: DrizzleClient,
-  userId: string,
-) => {
+): Promise<string[] | null> => {
   const [active] = await client
-    .select({ id: jutsuLoadout.id, jutsuIds: jutsuLoadout.jutsuIds })
+    .select({ jutsuIds: jutsuLoadout.jutsuIds })
     .from(userData)
     .innerJoin(jutsuLoadout, eq(jutsuLoadout.id, userData.jutsuLoadout))
     .where(and(eq(userData.userId, userId), eq(jutsuLoadout.userId, userId)))
     .limit(1);
-  return active;
+  return active?.jutsuIds ?? null;
 };
 
 /** Table alias for linked reskin alias joins, keeping its columns distinct from other participants. */

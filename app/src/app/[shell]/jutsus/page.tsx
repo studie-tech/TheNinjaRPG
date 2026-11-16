@@ -182,12 +182,8 @@ export default function MyJutsu() {
   const jutsuInput = { ...getFilter(state), includeEquipped: true };
   const { prepareJutsuUpdate, updateJutsus, updateJutsuRows } =
     useJutsuCacheUpdate(jutsuInput);
-  const {
-    prepareLoadoutUpdate,
-    updateEquippedLoadout,
-    updateLoadoutOrder,
-    updateClearedLoadout,
-  } = useJutsuLoadoutCacheUpdate();
+  const { prepareLoadoutUpdate, updateEquippedLoadout, updateLoadoutOrder } =
+    useJutsuLoadoutCacheUpdate();
   const { data: userJutsus, isFetching: l1 } = api.jutsu.getUserJutsus.useQuery(
     jutsuInput,
     { enabled: !!userData, placeholderData: (previousData) => previousData },
@@ -320,7 +316,6 @@ export default function MyJutsu() {
       onMutate: () => ({
         jutsus: prepareJutsuUpdate(),
         user: prepareUserUpdate(),
-        loadouts: prepareLoadoutUpdate(),
       }),
       onSuccess: async (data, _variables, context) => {
         showMutationToast(data);
@@ -328,7 +323,8 @@ export default function MyJutsu() {
           await Promise.all([
             updateUser(data, { revision: context.user }),
             updateJutsuRows(getUnequippedJutsus, context.jutsus),
-            updateClearedLoadout(data.clearedLoadoutId, context.loadouts),
+            // Selection can change in another tab before the server clears its live pointer.
+            utils.jutsu.getLoadouts.invalidate(),
           ]);
         }
       },

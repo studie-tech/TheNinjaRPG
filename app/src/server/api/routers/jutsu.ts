@@ -120,7 +120,6 @@ import {
   executeTransferredForTransferLevel,
   executeUnequipAllJutsus,
   executeWriteForImportJutsuLoadout,
-  fetchActiveJutsuLoadout,
   fetchActiveLoadoutJutsuIds,
   fetchBloodlineJutsuReskins,
   fetchJutsu,
@@ -1797,17 +1796,16 @@ export const jutsuRouter = createTRPCRouter({
 
   unequipAll: protectedProcedure
     .meta({ mcp: { description: "Unequip all jutsus" } })
-    .output(userDeltaResponseSchema.extend({ clearedLoadoutId: z.string().optional() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // The lookup only controls the cache patch; the write resolves and clears the
       // active loadout atomically with equipment, even if selection races this read.
-      const activeLoadout = await fetchActiveJutsuLoadout(ctx.drizzle, ctx.userId);
+      const activeLoadout = await fetchActiveLoadoutJutsuIds(ctx.drizzle, ctx.userId);
       await executeUnequipAllJutsus(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: "All jutsu unequipped",
-        ...getUnequipAllJutsuUserUpdate(activeLoadout !== undefined),
-        ...(activeLoadout ? { clearedLoadoutId: activeLoadout.id } : {}),
+        ...getUnequipAllJutsuUserUpdate(activeLoadout !== null),
       };
     }),
 

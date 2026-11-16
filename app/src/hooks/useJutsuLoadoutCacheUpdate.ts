@@ -22,18 +22,5 @@ export const useJutsuLoadoutCacheUpdate = () => {
     snapshot: ReturnType<typeof prepareLoadoutUpdate>,
   ) =>
     cache.updateCache((rows) => getOrderedJutsuLoadouts(rows, id, jutsuIds), snapshot);
-  /** Empty the loadout a confirmed unequip-all cleared; no cleared loadout leaves the rows. */
-  const updateClearedLoadout = (
-    id: string | undefined,
-    snapshot: ReturnType<typeof prepareLoadoutUpdate>,
-  ) =>
-    id
-      ? cache.updateCache((rows) => getOrderedJutsuLoadouts(rows, id, []), snapshot)
-      : undefined;
-  return {
-    prepareLoadoutUpdate,
-    updateEquippedLoadout,
-    updateLoadoutOrder,
-    updateClearedLoadout,
-  };
+  return { prepareLoadoutUpdate, updateEquippedLoadout, updateLoadoutOrder };
 };
