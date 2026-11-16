@@ -495,11 +495,22 @@ it("closes More on Escape and returns focus to it", async () => {
   await waitFor(() => expect(document.activeElement).toBe(more));
 });
 
-it("moves focus to More when the focused control moves behind it", () => {
+it("moves focus to More when moving the focused control behind it blurs the browser", () => {
   const view = setupPriority();
   const quickTravel = view.getByRole("button", { name: "Quick travel" });
+  const appendChild = Node.prototype.appendChild;
+  const blur = vi.spyOn(quickTravel, "blur");
+  // Native Chrome blurs a focused descendant when React moves its keyed wrapper.
+  vi.spyOn(Node.prototype, "appendChild").mockImplementation(function <T extends Node>(
+    this: Node,
+    node: T,
+  ): T {
+    if (node.contains(document.activeElement)) quickTravel.blur();
+    return appendChild.call(this, node) as T;
+  });
   quickTravel.focus();
   resizeActions(200);
+  expect(blur).toHaveBeenCalled();
   expect(document.activeElement).toBe(
     view.getByRole("button", { name: "More Travel controls" }),
   );

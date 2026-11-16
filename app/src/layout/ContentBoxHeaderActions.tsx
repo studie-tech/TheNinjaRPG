@@ -233,6 +233,7 @@ export function ContentBoxPriorityActions({
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const focusedItemRef = useRef<HTMLElement | null>(null);
   const [menu, setMenu] = useState<HeaderMenuLayout>(EMPTY_MENU);
   const [isOpen, setIsOpen] = useState(false);
   const baseId = useId();
@@ -279,6 +280,9 @@ export function ContentBoxPriorityActions({
         widthOf,
         Math.max(HEADER_TOOL_WIDTH, window.innerWidth - 32),
       );
+      // Moving a keyed wrapper can blur its control before layout effects run.
+      focusedItemRef.current =
+        document.activeElement?.closest<HTMLElement>("[data-header-item]") ?? null;
       setMenu((previous) =>
         JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
       );
@@ -306,8 +310,9 @@ export function ContentBoxPriorityActions({
   useLayoutEffect(() => {
     const previousPlaces = previousPlacesRef.current;
     previousPlacesRef.current = menu.places;
+    const focused = focusedItemRef.current;
+    focusedItemRef.current = null;
     if (isExpanded) return;
-    const focused = document.activeElement?.closest<HTMLElement>("[data-header-item]");
     const key = focused?.dataset.headerItem;
     if (
       key &&
