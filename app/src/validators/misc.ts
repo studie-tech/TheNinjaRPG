@@ -37,3 +37,13 @@ export const experienceAwardSchema = z.object({
 export type ExperienceAwardSchema = z.infer<typeof experienceAwardSchema>;
 
 export const idSchema = z.object({ id: z.string() });
+
+/**
+ * Date input for tRPC procedures. The web client sends a Date through superjson, while
+ * MCP clients send plain JSON, where a date is an ISO 8601 string or epoch milliseconds.
+ * Invalid dates are rejected.
+ */
+export const dateInputSchema = z
+  .union([z.date(), z.iso.datetime({ offset: true }), z.number().int()])
+  .pipe(z.coerce.date())
+  .meta({ description: "Date as an ISO 8601 string or epoch milliseconds" });

@@ -6,7 +6,7 @@ import { buildToolRegistry, handleCallEndpoint } from "@/libs/mcp/meta-tools";
 import { extractToolsFromProcedures } from "@/libs/mcp/tools";
 import type { McpMeta } from "@/libs/mcp/types";
 import { DATABASE_FAILURE_MESSAGE } from "@/server/utils/mysqlErrors";
-import { idSchema } from "@/validators/misc";
+import { dateInputSchema, idSchema } from "@/validators/misc";
 
 const firstText = (result: Awaited<ReturnType<typeof handleCallEndpoint>>) => {
   const block = result.content[0];
@@ -113,5 +113,62 @@ describe("universal MCP exposure", () => {
     );
     expect(firstText(result)).toContain("Insufficient permissions");
     expect(createCaller).not.toHaveBeenCalled();
+  });
+});
+
+describe("JSON date inputs", () => {
+  const createdAt = new Date("2025-11-15T13:01:44.449Z");
+  const dateRouter = t.router({
+    history: t.procedure
+      .input(
+        z.object({
+          cursor: z
+            .object({ createdAt: dateInputSchema, id: z.number().int().positive() })
+            .nullish(),
+        }),
+      )
+      .query(({ input }) => ({
+        isDate: input.cursor?.createdAt instanceof Date,
+        createdAt: input.cursor?.createdAt.toISOString(),
+      })),
+  });
+  const dateRegistry = buildToolRegistry(extractToolsFromProcedures(dateRouter));
+  const callHistory = (createdAtInput: unknown) =>
+    handleCallEndpoint(
+      dateRegistry,
+      async () => dateRouter.createCaller({ isStaff: false }),
+      "history",
+      () => [],
+      () => true,
+      { cursor: { createdAt: createdAtInput, id: 4200046 } },
+    );
+
+  it("accepts the epoch milliseconds and ISO strings MCP clients send", async () => {
+    for (const value of [createdAt.getTime(), createdAt.toISOString()]) {
+      const text = firstText(await callHistory(value));
+      expect(JSON.parse(text ?? "{}")).toEqual({
+        isDate: true,
+        createdAt: createdAt.toISOString(),
+      });
+    }
+  });
+
+  it("still accepts the Date the web client sends through superjson", async () => {
+    const result = await dateRouter
+      .createCaller({ isStaff: false })
+      .history({ cursor: { createdAt, id: 1 } });
+    expect(result.createdAt).toBe(createdAt.toISOString());
+  });
+
+  it("rejects strings and numbers that are not dates", async () => {
+    for (const value of ["yesterday", 8.64e15 + 1, 1.5]) {
+      expect(firstText(await callHistory(value))).toStartWith("Error calling history");
+    }
+    expect(dateInputSchema.safeParse(new Date("invalid")).success).toBe(false);
+  });
+
+  it("describes the accepted formats in the tool schema", () => {
+    const [tool] = extractToolsFromProcedures(dateRouter);
+    expect(JSON.stringify(tool?.inputSchema)).toContain("ISO 8601");
   });
 });

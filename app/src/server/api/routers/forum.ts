@@ -48,6 +48,7 @@ import {
   forumSectionSchema,
   forumStructureBoardSchema,
 } from "@/validators/forum";
+import { dateInputSchema } from "@/validators/misc";
 
 // Built-in game pages resolve these boards by name.
 const gameDestinationBoards = new Set(["News", "History", "ANBU HQ"]);
@@ -251,8 +252,8 @@ export const forumRouter = createTRPCRouter({
         limit: z.number().int().min(1).max(100),
         query: z.string().trim().max(200).optional(),
         author: z.string().trim().max(100).optional(),
-        since: z.date().optional(),
-        until: z.date().optional(),
+        since: dateInputSchema.optional(),
+        until: dateInputSchema.optional(),
         tag: z.string().max(32).optional(),
         view: z.enum(["latest", "mine", "unread", "watched", "unanswered"]).optional(),
       }),

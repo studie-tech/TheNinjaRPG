@@ -333,6 +333,7 @@ import {
 } from "@/validators/combat";
 import type { HuntingBattleState } from "@/validators/hunting";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
+import { dateInputSchema } from "@/validators/misc";
 import {
   sectorIdSchema,
   sectorLatitudeSchema,
@@ -597,7 +598,7 @@ export const combatRouter = createTRPCRouter({
         combatTypes: z.array(z.enum(BattleTypes)).optional(),
         limit: z.number().int().min(1).max(100).default(20),
         cursor: z
-          .object({ createdAt: z.date(), id: z.number().int().positive() })
+          .object({ createdAt: dateInputSchema, id: z.number().int().positive() })
           .nullish(),
       }),
     )
