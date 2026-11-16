@@ -73,6 +73,7 @@ export default function TowerDefensePage() {
     status: profile.status,
   }));
   const userId = user?.userId;
+  const utils = api.useUtils();
   const run = useTowerDefenseRun(userId);
   const progress = api.towerDefense.getProgress.useQuery(undefined, {
     enabled: !!userId,
@@ -172,6 +173,14 @@ export default function TowerDefensePage() {
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       const key = event.key.toLowerCase();
+      // A control reached with the keyboard keeps Space and Enter for itself; a clicked
+      // HUD button does not, so Space still substitutes right after a click.
+      if (
+        (key === " " || key === "enter") &&
+        target?.closest("button, a, [role=button]") &&
+        target.matches(":focus-visible")
+      )
+        return;
       // Space never scrolls the page, even while held.
       if (key === " ") event.preventDefault();
       // A held key repeats keydown; one press is one seal or one cast.
@@ -209,6 +218,16 @@ export default function TowerDefensePage() {
   // guest lobby waits until the profile has loaded.
   if (!isClerkLoaded || (isSignedIn && !user && status === "pending"))
     return <Loader explanation="Loading user data..." />;
+  // Without the profile a signed-in player would fall through to an unpaid guest run.
+  if (isSignedIn && !user && status === "error")
+    return (
+      <ContentBox title="Connection interrupted">
+        <p className="p-4">We couldn&apos;t load your character. Please try again.</p>
+        <Button className="m-4" onClick={() => void utils.profile.getUser.invalidate()}>
+          Try again
+        </Button>
+      </ContentBox>
+    );
   const state = run.hud;
   const playing = run.phase === "playing" && state;
 

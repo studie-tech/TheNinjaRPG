@@ -37,7 +37,7 @@ import {
 } from "@/libs/towerDefense/balance";
 import {
   TD_BOSS_INTERVAL,
-  TD_CHECKPOINT_SHARE,
+  TD_CHECKPOINT_PERCENT,
   TD_DOJO,
   TD_DOJO_CATEGORIES,
   TD_DOJO_INFO,
@@ -139,7 +139,11 @@ export const TowerDefenseLobby = (props: {
                   {props.saved.over ? "Unclaimed run" : "Unfinished run"} at wave{" "}
                   <strong>{props.saved.wave}</strong>
                 </span>
-                <Button size="sm" disabled={props.isResuming} onClick={props.onResume}>
+                <Button
+                  size="sm"
+                  disabled={props.isResuming || props.isStarting}
+                  onClick={props.onResume}
+                >
                   {props.saved.over ? (
                     <ScrollText className="mr-1 h-4 w-4" />
                   ) : (
@@ -154,11 +158,15 @@ export const TowerDefenseLobby = (props: {
                 <Confirm
                   title="Discard this run?"
                   button={
-                    <Button size="sm" variant="outline" disabled={props.isResuming}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={props.isResuming || props.isStarting}
+                    >
                       <Trash2 className="mr-1 h-4 w-4" /> Discard
                     </Button>
                   }
-                  disabled={props.isResuming}
+                  disabled={props.isResuming || props.isStarting}
                   tone="destructive"
                   proceed_label="Discard"
                   onAccept={props.onDiscard}
@@ -217,9 +225,8 @@ export const TowerDefenseLobby = (props: {
                   )}
                 </div>
                 <p className="text-muted-foreground mt-1">
-                  Checkpoints follow each boss, up to{" "}
-                  {Math.round(TD_CHECKPOINT_SHARE * 100)}% of your best wave. Scrolls
-                  come only from waves you clear.
+                  Checkpoints follow each boss, up to {TD_CHECKPOINT_PERCENT}% of your
+                  best wave. Scrolls come only from waves you clear.
                 </p>
               </div>
             )}

@@ -84,6 +84,27 @@ describe("tower defense saved runs", () => {
     expect(log.stored).toBe(1);
   });
 
+  it("clears chunks whose head was never written", () => {
+    const log = createLogWriter();
+    for (let i = 0; i < TD_LOG_CHUNK_ACTIONS; i++) appendToLog(log, actionAt(i));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const setItem = Storage.prototype.setItem;
+    // The chunk lands, then the head write is refused.
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      item: string,
+      value: string,
+    ) {
+      if (item === key) throw new DOMException("full", "QuotaExceededError");
+      setItem.call(this, item, value);
+    });
+    expect(saveRun(key, head, log)).toBe(false);
+    expect(readSavedRunHead(key)).toBeNull();
+    expect(savedKeys()).toEqual([`${key}:log:0`]);
+    clearRun(key);
+    expect(savedKeys()).toEqual([]);
+  });
+
   it("notices when another session wrote or removed the save a player chose", () => {
     const log = createLogWriter();
     saveRun(key, { ...head, tick: 40, wave: 5 }, log);

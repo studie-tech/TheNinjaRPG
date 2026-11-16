@@ -205,8 +205,14 @@ export const towerDefenseRouter = createTRPCRouter({
           points: result.points,
         });
       } catch (error) {
-        if (isMysqlDuplicateKeyError(error)) return alreadyClaimed(result);
-        throw error;
+        if (!isMysqlDuplicateKeyError(error)) throw error;
+        // A simultaneous claim of the same run won with its own log; report what it paid.
+        const winner = await findTowerDefenseClaimReceipt(ctx.drizzle, claimKey);
+        return alreadyClaimed(
+          winner
+            ? { wave: winner.wave, kills: winner.score, points: winner.pointsEarned }
+            : result,
+        );
       }
       const [updated] = await Promise.all([
         updateUserDataForClaimTowerDefenseRun(ctx.drizzle, ctx, result),

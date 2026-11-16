@@ -44,12 +44,16 @@ describe("tower defense balance", () => {
     expect(tdCheckpoints(0)).toEqual([1]);
     expect(tdCheckpoints(31)).toEqual([1, 11, 21]);
     expect(tdCheckpoints(480).at(-1)).toBe(331);
+    // 70% of 330 is exactly 231, which floating-point multiplication lands just below.
+    expect(tdCheckpoints(330).at(-1)).toBe(231);
     expect(tdCheckpoints(480).every((wave) => wave % 10 !== 0)).toBe(true);
   });
 
   it("formats huge numbers in short scale", () => {
     expect(
-      [999, 1000, 1234, 999_999, 1.5e6, 2.04e9, 7.7e13].map(formatTdNumber),
-    ).toEqual(["999", "1K", "1.23K", "1M", "1.5M", "2.04B", "77T"]);
+      [999, 1000, 1234, 999_999, 1.5e6, 2.04e9, 7.7e13, 1e60, 2.5e40].map(
+        formatTdNumber,
+      ),
+    ).toEqual(["999", "1K", "1.23K", "1M", "1.5M", "2.04B", "77T", "1e60", "2.5e40"]);
   });
 });

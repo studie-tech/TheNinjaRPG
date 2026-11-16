@@ -1470,13 +1470,13 @@ export const TD_ERA_START_WAVE = 21;
 export const TD_ERA_INTERVAL = 10;
 /** Every this many waves the boss is a titan. */
 export const TD_TITAN_INTERVAL = 50;
-/** Share of the best wave reached up to which checkpoints are offered. */
-export const TD_CHECKPOINT_SHARE = 0.7;
+/** Percent of the best wave reached up to which checkpoints are offered; an integer, so the boundary is exact. */
+export const TD_CHECKPOINT_PERCENT = 70;
 /** Damage multiplier on the enemy the player has marked. */
 export const TD_FOCUS_DAMAGE = 1.2;
 
 /**
- * Waves a run may start from: just after each boss, up to `TD_CHECKPOINT_SHARE` of the
+ * Waves a run may start from: just after each boss, up to `TD_CHECKPOINT_PERCENT` of the
  * best wave reached. Starting on a boss wave would drop an unprepared ninja straight
  * into a boss fight.
  */
@@ -1484,7 +1484,7 @@ export const tdCheckpoints = (bestWave: number) => {
   const checkpoints = [1];
   for (
     let wave = TD_BOSS_INTERVAL + 1;
-    wave <= Math.floor(bestWave * TD_CHECKPOINT_SHARE);
+    wave <= Math.floor((bestWave * TD_CHECKPOINT_PERCENT) / 100);
     wave += TD_BOSS_INTERVAL
   )
     checkpoints.push(wave);

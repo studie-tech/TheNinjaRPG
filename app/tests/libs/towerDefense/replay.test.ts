@@ -355,8 +355,8 @@ describe("tower defense replay", () => {
     // A test bot change only repins the fingerprint. A rules change moves it too and needs
     // a TD_SIM_VERSION bump, so pages still on the old rules reload instead of failing.
     expect({ version: TD_SIM_VERSION, fingerprint: rulesFingerprint() }).toEqual({
-      version: 1,
-      fingerprint: "a37aff05ea6d6578dcb9cca24eb9249a24d65696678c1f9ddeca6b7623a9e4f6",
+      version: 2,
+      fingerprint: "db3c1e78e6780d9bb318b9b335f5986dafa461a9fcaa61a47607edf064833776",
     });
   });
 

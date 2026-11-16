@@ -476,7 +476,7 @@ const GLYPH_CELL_HEIGHT = 72;
 /** Line spacing and the drop that seats smaller lettering on the baseline, in atlas pixels. */
 const GLYPH_LINE = 46;
 const GLYPH_BASELINE = 16;
-const GLYPH_CHARACTERS = "0123456789.KMBTQS!-+ abcdefghijklmnopqrstuvwxyz";
+const GLYPH_CHARACTERS = "0123456789.KMBTQS!-+∞ abcdefghijklmnopqrstuvwxyz";
 
 /** Damage takes its element's colour, critical hits combat's crushing grade, ryo gold. */
 const NUMBER_TONES = {

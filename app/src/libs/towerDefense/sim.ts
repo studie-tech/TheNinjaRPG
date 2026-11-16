@@ -97,7 +97,7 @@ import { createRng, geometricCost, powi, type Rng } from "@/libs/towerDefense/rn
  * one): a claim from a page still running the previous rules is then answered with a
  * reload, which resumes the saved run under the new rules instead of failing its replay.
  */
-export const TD_SIM_VERSION = 1;
+export const TD_SIM_VERSION = 2;
 
 // ============================================
 // Types
@@ -918,7 +918,10 @@ const spawnEnemy = (
   return enemy;
 };
 
-/** Spawn plain enemies scattered within `spread` around a point. */
+/**
+ * Spawn plain enemies scattered within `spread` around a point. Summons and splits obey
+ * the alive cap as queued waves do; minions past it are never spawned, not deferred.
+ */
 const spawnMinions = (
   state: TdState,
   kind: TdEnemyKind,
@@ -927,7 +930,7 @@ const spawnMinions = (
   spread: number,
   scale: number,
 ) => {
-  for (let i = 0; i < count; i++)
+  for (let i = 0; i < count && state.enemies.length < TD_MAX_ALIVE; i++)
     spawnEnemy(
       state,
       { kind, boss: false, titan: false, affixes: [], camo: false },
@@ -980,7 +983,10 @@ export const applyAction = (state: TdState, action: TdAction): boolean => {
         for (const item of TD_SHOP) {
           const weight = TD_SPEND_WEIGHTS[item];
           if (!shopAvailable(state, item)) continue;
-          const score = tdShopCost(state, item) / weight;
+          const cost = tdShopCost(state, item);
+          // The best-value item may be out of reach while a cheaper one is not.
+          if (cost > state.ryo) continue;
+          const score = cost / weight;
           if (score < bestScore) {
             best = item;
             bestScore = score;
@@ -1264,7 +1270,7 @@ const castSeal = (state: TdState, seal: TdSeal, x: number, y: number) => {
     case "water_prison":
       for (const enemy of enemiesWithin(state, at.x, at.y, info.radius)) {
         damageEnemy(state, enemy, power, "water");
-        if (!enemy.boss) enemy.frozenUntil = state.tick + 30;
+        if (!enemy.boss && !enemy.ccImmune) enemy.frozenUntil = state.tick + 30;
       }
       break;
     case "cyclone":
@@ -1380,9 +1386,11 @@ const arrivalTick = (state: TdState, dist: number, speed: number, min = 1) =>
 export const tdIsPhased = (state: TdState, enemy: TdEnemy) =>
   TD_ENEMIES[enemy.kind].phase === true && (state.tick + enemy.phaseOffset) % 30 < 10;
 
+/** Living enemies near a point; one killed this tick stays listed until cleanup. */
 const enemiesWithin = (state: TdState, x: number, y: number, radius: number) =>
   state.enemies.filter(
-    (enemy) => distance(enemy.x, enemy.y, x, y) <= radius + enemy.size * 0.3,
+    (enemy) =>
+      enemy.hp > 0 && distance(enemy.x, enemy.y, x, y) <= radius + enemy.size * 0.3,
   );
 
 const strongestWithin = (state: TdState, x: number, y: number, radius: number) => {
@@ -1489,6 +1497,19 @@ const knockback = (state: TdState, enemy: TdEnemy, amount: number) => {
   enemy.y = state.hero.y + (dy / length) * pushed;
 };
 
+/** Draw an enemy toward the hero, never past the distance it attacks from. */
+const pullIn = (state: TdState, enemy: TdEnemy, amount: number) => {
+  if (enemy.ccImmune) return;
+  const scale = enemy.boss ? 0.3 : 1;
+  const dx = enemy.x - state.hero.x,
+    dy = enemy.y - state.hero.y;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  if (length <= enemy.stop) return;
+  const pulled = Math.max(enemy.stop, length - amount * scale);
+  enemy.x = state.hero.x + (dx / length) * pulled;
+  enemy.y = state.hero.y + (dy / length) * pulled;
+};
+
 /** Damage the hero, honouring substitution, the earth dome and damage reduction. */
 const damageHero = (
   state: TdState,
@@ -1558,7 +1579,7 @@ const damageHero = (
 // ============================================
 
 const canSee = (state: TdState, enemy: TdEnemy, fromX: number, fromY: number) => {
-  if (tdIsPhased(state, enemy)) return false;
+  if (enemy.hp <= 0 || tdIsPhased(state, enemy)) return false;
   if (!enemy.camo || enemy.id === state.focusId) return true;
   return (
     distance(enemy.x, enemy.y, fromX, fromY) <= TD_CAMO_REVEAL_RANGE ||
@@ -1880,7 +1901,9 @@ const castJutsu = (state: TdState) => {
             const across = Math.abs(ex * direction.y - ey * direction.x);
             if (across > 0.7 + enemy.size * 0.3) continue;
             damageEnemy(state, enemy, damage, "wind");
-            if (!isEvolved) knockback(state, enemy, 0.5);
+            // Evolved blades draw their targets in; the plain ones blow them back.
+            if (isEvolved) pullIn(state, enemy, 0.6);
+            else knockback(state, enemy, 0.5);
           }
           points.push({
             x: hero.x + direction.x * info.radius,
@@ -2158,7 +2181,12 @@ const updateEnemies = (state: TdState) => {
     if (enemy.hp <= 0) continue;
     if (arch.heal && tick % 10 === 0)
       for (const ally of enemiesWithin(state, enemy.x, enemy.y, arch.heal.radius))
-        if (ally.id !== enemy.id && tick >= ally.burnUntil && tick >= ally.flameUntil)
+        if (
+          ally.id !== enemy.id &&
+          ally.hp > 0 &&
+          tick >= ally.burnUntil &&
+          tick >= ally.flameUntil
+        )
           ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * arch.heal.pct);
     if (frozenWorld || tick < enemy.stunUntil || tick < enemy.frozenUntil) continue;
     // Bosses and berserkers escalate
@@ -2276,12 +2304,7 @@ const autoCastUltimates = (state: TdState) => {
     if (state.tick < (state.ultReadyAt[ultimate] ?? 0)) continue;
     const target = tdCrowdTarget(state);
     if (!target) return;
-    castUltimate(
-      state,
-      ultimate,
-      Math.round(target.x * TD_COORD_SCALE),
-      Math.round(target.y * TD_COORD_SCALE),
-    );
+    castUltimate(state, ultimate, target.x, target.y);
   }
 };
 

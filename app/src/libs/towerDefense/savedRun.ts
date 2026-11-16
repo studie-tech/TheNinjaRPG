@@ -11,6 +11,7 @@ import { encodeTdAction } from "@/libs/towerDefense/actionLog";
 import type { TdAction, TdRunConfig } from "@/libs/towerDefense/sim";
 import {
   safeLocalStorageGetItem,
+  safeLocalStorageKeys,
   safeLocalStorageRemoveItem,
   safeLocalStorageSetItem,
 } from "@/utils/storage";
@@ -139,11 +140,13 @@ export const loadRun = (key: string) => {
   return { head, text: parts.join(";") };
 };
 
-/** Remove a saved run and its chunks. */
+/**
+ * Remove a saved run and every chunk stored under its key, including chunks a failed
+ * head write or a shorter later save left unlisted.
+ */
 export const clearRun = (key: string) => {
-  const chunks = readSavedRunHead(key)?.chunks ?? 0;
-  for (let index = 0; index < chunks; index++)
-    safeLocalStorageRemoveItem(chunkKey(key, index));
+  for (const chunk of safeLocalStorageKeys(chunkPrefix(key)))
+    safeLocalStorageRemoveItem(chunk);
   safeLocalStorageRemoveItem(key);
 };
 
@@ -158,4 +161,5 @@ export const clearSettledRun = (key: string, token: string) => {
   return isOwned;
 };
 
-const chunkKey = (key: string, index: number) => `${key}:log:${index}`;
+const chunkPrefix = (key: string) => `${key}:log:`;
+const chunkKey = (key: string, index: number) => `${chunkPrefix(key)}${index}`;

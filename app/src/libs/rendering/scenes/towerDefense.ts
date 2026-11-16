@@ -354,6 +354,12 @@ export const createTowerDefenseScene = async (options: {
     // Sheets come from the shared atlas budget, so a character nobody has drawn for a
     // while gives its sheets back and the rotating bands of a long run keep finding room.
     const appearances = new Map<string, EnemyArt>();
+    // Registered before any sheet lease, so closing the scene disposes each art (and
+    // disowns its leases) first, and a sheet that finishes loading later builds nothing.
+    game.own(() => {
+      for (const art of appearances.values()) art.dispose();
+      appearances.clear();
+    });
     const maxTexture = game.renderer.gl.getParameter(
       game.renderer.gl.MAX_TEXTURE_SIZE,
     ) as number;
@@ -671,7 +677,7 @@ export const createTowerDefenseScene = async (options: {
         );
         clone.sprite.zIndex = -clone.sprite.y;
         clone.render(
-          frame,
+          heroFrame,
           "walk",
           lpcFacing(Math.cos(angle + Math.PI / 2), -Math.sin(angle + Math.PI / 2)),
         );
