@@ -76,6 +76,7 @@ const queueRows = (kind: MasteryQueueKind, entries: Queue): UserQueue[] =>
     energy: null,
     reservedRyo: null,
     quantity: null,
+    craftBatches: null,
     materials: null,
     durationSeconds: null,
     startsAt: null,

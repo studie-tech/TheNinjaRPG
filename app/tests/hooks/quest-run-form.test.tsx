@@ -69,6 +69,25 @@ afterEach(() => {
 });
 
 describe("quest run editor validation and payload", () => {
+  it("offers and saves unlimited attempt and completion limits", async () => {
+    const { result } = renderHook(() =>
+      useQuestEditForm(structuredClone(savedQuest), async () => undefined),
+    );
+    expect(result.current.formData).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "maxAttempts", unlimitedValue: -1 }),
+        expect.objectContaining({ id: "maxCompletes", unlimitedValue: -1 }),
+      ]),
+    );
+    await act(async () => {
+      result.current.form.setValue("maxAttempts", -1);
+      result.current.form.setValue("maxCompletes", -1);
+      await result.current.handleQuestSubmit();
+    });
+    expect(save.mock.calls[0]?.[0]).toMatchObject({
+      data: { maxAttempts: -1, maxCompletes: -1 },
+    });
+  });
   it("saves layout-only edits and reloads their shared positions", async () => {
     const positions = { floor: { x: -125.5, y: 300 } };
     const { result, unmount } = renderHook(() =>

@@ -504,12 +504,13 @@ export const EditContent = <
                                 <NumberInput
                                   id={id}
                                   isDirty={fieldState.isDirty}
-                                  readOnly={formEntry.readonly}
+                                  readOnly={formEntry.readonly || (formEntry.type === "number" && formEntry.unlimitedValue !== undefined && field.value === formEntry.unlimitedValue)}
                                   name={field.name}
                                   ref={field.ref}
                                   onBlur={field.onBlur}
                                   // Read explicit undefined without Controller's saved-value fallback.
-                                  value={form.getValues(id) as number | undefined}
+                                  value={formEntry.type === "number" && formEntry.unlimitedValue !== undefined && field.value === formEntry.unlimitedValue ? undefined : form.getValues(id) as number | undefined}
+                                  placeholder={formEntry.type === "number" && formEntry.unlimitedValue !== undefined && field.value === formEntry.unlimitedValue ? "Unlimited" : undefined}
                                   optional={isOptional}
                                   onValueChange={
                                     isOptional ? undefined : field.onChange
@@ -536,6 +537,9 @@ export const EditContent = <
                                 />
                               )}
                             </FormControl>
+                            {formEntry.type === "number" && formEntry.unlimitedValue !== undefined && (
+                              <Button type="button" variant={field.value === formEntry.unlimitedValue ? "default" : "outline"} aria-pressed={field.value === formEntry.unlimitedValue} aria-label={`Unlimited ${formEntry.label ?? id}`} disabled={formEntry.readonly} onClick={() => field.onChange(field.value === formEntry.unlimitedValue ? 1 : formEntry.unlimitedValue)}>Unlimited</Button>
+                            )}
                             <FormMessage />
                           </FormItem>
                         );
@@ -2307,7 +2311,7 @@ export type FormEntry<K> = {
   | { type: "textarea"; rows?: number }
   | { type: "richinput"; height?: string }
   | { type: "date" }
-  | { type: "number" }
+  | { type: "number"; unlimitedValue?: number }
   | { type: "boolean" }
   | { type: "audio"; href?: string | null }
   | { type: "avatar"; href?: string | null; size?: IMG_ORIENTATION; maxDim?: number }

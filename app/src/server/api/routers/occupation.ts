@@ -34,6 +34,7 @@ import {
 } from "@/libs/crafting";
 import {
   countInventoryBucketSlots,
+  getEffectiveStackSize,
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
@@ -127,7 +128,7 @@ const craftingQueueOutputSchema = z.object({
   ),
 });
 
-/** Shared production input counts batches; meal output quantity comes from the recipe. */
+/** Shared production input counts batches; output quantity comes from the recipe. */
 const cookItemInputSchema = z.object({
   itemId: z.string(),
   quantity: z.int().min(1).max(MAX_COOKING_BATCHES).prefault(1),
@@ -237,7 +238,10 @@ export const occupationRouter = createTRPCRouter({
       }
       const isMeal = itemWithRequirements.itemType === "MEAL";
       const outputQuantity =
-        input.quantity * (isMeal ? itemWithRequirements.cookingOutputQuantity : 1);
+        input.quantity *
+        (isMeal
+          ? itemWithRequirements.cookingOutputQuantity
+          : itemWithRequirements.craftingOutputQuantity);
       if (
         isMeal &&
         getCookingLevel(user.cookingExperience) < itemWithRequirements.cookingMinLevel
@@ -271,13 +275,13 @@ export const occupationRouter = createTRPCRouter({
       if (outputBucket === "cooking") {
         const carriedCookingStacks = countInventoryBucketSlots(useritems, "cooking");
         const newStacksRequired = Math.ceil(
-          outputQuantity / Math.max(1, itemWithRequirements.stackSize),
+          outputQuantity / getEffectiveStackSize(itemWithRequirements),
         );
         // Queued cooking crafts land in the same bucket when they start.
         const queuedCookingStacks = waiting.reduce(
           (sum, entry) =>
             entry.item && getInventoryBucket(entry.item) === "cooking"
-              ? sum + Math.ceil(entry.quantity / Math.max(1, entry.item.stackSize))
+              ? sum + Math.ceil(entry.quantity / getEffectiveStackSize(entry.item))
               : sum,
           0,
         );
@@ -368,7 +372,7 @@ export const occupationRouter = createTRPCRouter({
       const craftingItemValues: (typeof userItem.$inferInsert)[] = [];
       for (const quantity of splitIntoStacks(
         outputQuantity,
-        itemWithRequirements.stackSize,
+        getEffectiveStackSize(itemWithRequirements),
       )) {
         craftingItemValues.push({
           id: nanoid(),
@@ -405,7 +409,7 @@ export const occupationRouter = createTRPCRouter({
         ? { trackers: user.questData ?? [], consequences: [], questIdsUpdated: [] }
         : getNewTrackers(
             { ...user, craftingExperience: user.craftingExperience + expGain },
-            isMeal ? [] : getCraftTrackerTasks(expGain, input.quantity, input.itemId),
+            isMeal ? [] : getCraftTrackerTasks(expGain, outputQuantity, input.itemId),
           );
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const materials: CraftingQueueMaterial[] = allConsumptions.flatMap(
@@ -469,6 +473,7 @@ export const occupationRouter = createTRPCRouter({
               {
                 itemId: input.itemId,
                 quantity: outputQuantity,
+                craftBatches: input.quantity,
                 materials,
                 durationSeconds: craftSeconds,
                 ...queueSchedule,

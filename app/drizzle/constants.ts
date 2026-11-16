@@ -40,6 +40,7 @@ export const MIN_ITEM_SHOP_DISCOUNT_FACTOR = 0.05;
 export const ActivityStreakTypes = ["RECURRING", "EVENT_PASS"] as const;
 export type ActivityStreakType = (typeof ActivityStreakTypes)[number];
 
+export const AUCTION_MAX_DURATION_HOURS = 72;
 export const TRADEABLE_CURRENCY_TYPES = ["MONEY", "REPUTATION"] as const;
 export type TradeableCurrencyType = (typeof TRADEABLE_CURRENCY_TYPES)[number];
 
@@ -1364,6 +1365,9 @@ export const QuestRewardMetrics = [
 ] as const;
 export type QuestRewardMetric = (typeof QuestRewardMetrics)[number];
 
+/** Stored quest limit representing no attempt or completion cap. */
+export const QUEST_LIMIT_UNLIMITED = -1;
+
 export const QuestTypesWithMaxAttempts: readonly QuestType[] = [
   "mastery",
   "event",
@@ -2481,10 +2485,10 @@ export const FED_EVENT_ITEMS: Record<FederalStatus, number> = {
 };
 
 // Missions config
-export const ERRANDS_PER_DAY = 50;
-export const MISSIONS_PER_DAY = 20;
-/** Overworld friendly-NPC quest-give attempts a player gets per day; mirrors the daily mission cap. */
-export const OVERWORLD_QUEST_ROLLS_PER_DAY = MISSIONS_PER_DAY;
+export const ERRANDS_PER_DAY = 10;
+export const MISSIONS_PER_DAY = 9;
+/** Overworld quests a player can receive from friendly NPCs per day. */
+export const OVERWORLD_QUEST_ROLLS_PER_DAY = 20;
 
 /**
  * Sentinel a client sends as a dialog "contentId"/"nextObjectiveId" when the player picks
@@ -2528,8 +2532,8 @@ export const OVERWORLD_MAX_GROUPS_PER_SECTOR = 4;
 export const OVERWORLD_MAP_SCALE_RANGE = [30, 250] as const;
 
 export const MEDICAL_MISSIONS_PER_DAY = 9;
-export const PVP_MISSIONS_PER_DAY = 12;
-/** Last daily mission that still pays full rewards. The 10th+ pay the reduced multiplier. */
+export const PVP_MISSIONS_PER_DAY = 9;
+/** Number of daily missions that pay full rewards. */
 export const MISSIONS_FULL_REWARD_COUNT = 9;
 export const ADDITIONAL_MISSION_REWARD_MULTIPLIER = 0.4;
 
@@ -3898,7 +3902,7 @@ export const AUCTION_LISTING_STATES = [
 export type AuctionListingState = (typeof AUCTION_LISTING_STATES)[number];
 
 export const AUCTION_LISTING_TYPES = ["AUCTION", "DIRECT"] as const;
-export const AUCTION_SALES_TAX_PERCENT = 10;
+export const AUCTION_SALES_TAX_PERCENT = 5;
 export type AuctionListingType = (typeof AUCTION_LISTING_TYPES)[number];
 
 export const AUCTION_OFFER_TYPES = ["REQUEST", "TRADE"] as const;

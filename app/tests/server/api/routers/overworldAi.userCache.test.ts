@@ -366,6 +366,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
           id: "cache-npc-quest",
           questType: "overworld",
           hidden: false,
+          attemptDelay: "daily",
           maxAttempts: 10,
           maxCompletes: 10,
           content: {
@@ -388,7 +389,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
         positionVersion: 0,
       });
       expect(result.success).toBe(true);
-      expect(result.userDelta).toMatchObject({ dailyOverworldQuestRolls: 1 });
+      expect(result.userDelta?.dailyOverworldQuestRolls ?? 0).toBe(chance ? 1 : 0);
       if (chance)
         expect(result.userPatch).toMatchObject({ activeNpcQuestId: "cache-npc-quest" });
       else expect(result.userPatch).toEqual({});
@@ -399,11 +400,12 @@ describeWithDatabase("overworld interaction profile updates", () => {
       const saved = await db.query.userData.findFirst({
         where: eq(userData.userId, "npc-cache-actor"),
       });
-      expect(result.userDelta?.dailyOverworldQuestRolls).toBe(
-        saved?.dailyOverworldQuestRolls,
+      expect(result.userDelta?.dailyOverworldQuestRolls ?? 0).toBe(
+        saved!.dailyOverworldQuestRolls,
       );
       if (chance)
         expect(result.userPatch?.activeNpcQuestId).toBe(saved?.activeNpcQuestId);
+      expect(await db.select().from(userQuestAttempt)).toHaveLength(1);
     },
   );
 
@@ -414,6 +416,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
         id: "cache-npc-quest",
         questType: "overworld",
         hidden: false,
+        attemptDelay: "daily",
         maxAttempts: 10,
         maxCompletes: 10,
         content: {
@@ -452,6 +455,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
       dailyOverworldQuestRolls: OVERWORLD_QUEST_ROLLS_PER_DAY,
     });
     expect(await db.select().from(questHistory)).toEqual([]);
+    expect(await db.select().from(userQuestAttempt)).toEqual([]);
   });
 
   it("returns the committed assignment without a cache confirmation SELECT", async () => {
@@ -540,9 +544,11 @@ describeWithDatabase("overworld interaction profile updates", () => {
           },
         },
       ]);
-      await db
-        .insert(overworldAiPlacementQuest)
-        .values({ placementId: "cache-giver", questId: "cache-npc-quest", chance: 0 });
+      await db.insert(overworldAiPlacementQuest).values({
+        placementId: "cache-giver",
+        questId: "cache-npc-quest",
+        chance: 100,
+      });
       const profile = callerForDatabase(profileRouter, "npc-cache-actor", db);
       const initial = await profile.getUser();
       expect(initial.userData?.dailyOverworldQuestRolls).toBe(1);

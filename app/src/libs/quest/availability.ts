@@ -7,6 +7,7 @@ import {
   MAX_PLAYER_LEVEL,
   type MEDNIN_RANK,
   MEDNIN_RANKS,
+  QUEST_LIMIT_UNLIMITED,
   type QuestType,
   QuestTypesWithMaxAttempts,
   type RetryQuestDelay,
@@ -223,10 +224,12 @@ export const isAvailableUserQuests = (
   const eventCompletedCheck =
     !QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType) ||
     questAndUserQuestInfo.retryDelay !== "none" ||
+    maxCompletes === QUEST_LIMIT_UNLIMITED ||
     !questAndUserQuestInfo.previousCompletes ||
     questAndUserQuestInfo.previousCompletes < maxCompletes;
   const eventAttemptsCheck =
     ignorePreviousAttempts ||
+    maxAttempts === QUEST_LIMIT_UNLIMITED ||
     !QuestTypesWithMaxAttempts.includes(questAndUserQuestInfo.questType) ||
     !questAndUserQuestInfo.previousAttempts ||
     questAndUserQuestInfo.previousAttempts < maxAttempts;
@@ -337,7 +340,7 @@ export const getQuestMaxLevel = (quest: {
 /**
  * True when a retryDelay != none quest already hit `maxCompletes` completions in the
  * current calendar period. retryDelay "none" is never capped. Invalid persisted content with a
- * real retry delay and maxCompletes <= 0 fails closed so it cannot silently become unlimited.
+ * real retry delay and maxCompletes 0 fails closed; the unlimited sentinel is uncapped.
  */
 export const periodCapReached = (
   args: {
@@ -348,7 +351,8 @@ export const periodCapReached = (
   },
   now: Date = new Date(),
 ): boolean => {
-  if (args.retryDelay === "none") return false;
+  if (args.retryDelay === "none" || args.maxCompletes === QUEST_LIMIT_UNLIMITED)
+    return false;
   if (args.maxCompletes <= 0) return true;
   const cps = periodStart(args.retryDelay, now);
   const startedAt = args.periodStartAt ? new Date(args.periodStartAt) : null;

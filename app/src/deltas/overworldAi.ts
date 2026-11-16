@@ -40,62 +40,6 @@ export const getOverworldBattleResponseUpdate = ({
 });
 
 /**
- * Increment the guarded daily roll count and clear a stale quest slot only after a confirmed
- * release. Unsettled profiles or unconfirmed releases withhold the projection.
- */
-export const getOverworldRollUserUpdate = ({
-  requiresUserRefresh,
-  activeNpcQuestId,
-  clearedStaleRowsAffected,
-  activeUserDailyOverworldQuestRolls,
-}: {
-  requiresUserRefresh: boolean;
-  activeNpcQuestId: string | null;
-  clearedStaleRowsAffected: number | undefined;
-  activeUserDailyOverworldQuestRolls: number;
-}) => ({
-  userPatch:
-    !requiresUserRefresh && (!activeNpcQuestId || clearedStaleRowsAffected === 1)
-      ? activeNpcQuestId
-        ? { activeNpcQuestId: null }
-        : {}
-      : undefined,
-  userDelta:
-    !requiresUserRefresh && (!activeNpcQuestId || clearedStaleRowsAffected === 1)
-      ? { dailyOverworldQuestRolls: 1 }
-      : undefined,
-  userExpected: {
-    dailyOverworldQuestRolls: activeUserDailyOverworldQuestRolls,
-  },
-});
-
-/**
- * Clear a released quest slot and increment the guarded daily roll count only after one
- * confirmed release on a settled profile.
- */
-export const getReleasedOverworldQuestUserUpdate = ({
-  requiresUserRefresh,
-  releasedRowsAffected,
-  activeUserDailyOverworldQuestRolls,
-}: {
-  requiresUserRefresh: boolean;
-  releasedRowsAffected: number;
-  activeUserDailyOverworldQuestRolls: number;
-}) => ({
-  userPatch:
-    !requiresUserRefresh && releasedRowsAffected === 1
-      ? { activeNpcQuestId: null }
-      : undefined,
-  userDelta:
-    !requiresUserRefresh && releasedRowsAffected === 1
-      ? { dailyOverworldQuestRolls: 1 }
-      : undefined,
-  userExpected: {
-    dailyOverworldQuestRolls: activeUserDailyOverworldQuestRolls,
-  },
-});
-
-/**
  * Combine the confirmed progression patch with the assigned quest and a daily roll increment
  * guarded by the opening count.
  */

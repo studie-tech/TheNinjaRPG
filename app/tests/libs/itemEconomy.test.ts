@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { getAuctionPriceError, getItemPurchaseAllowance } from "@/libs/itemEconomy";
+import {
+  getAuctionPriceError,
+  getAuctionSellerPayout,
+  getItemPurchaseAllowance,
+} from "@/libs/itemEconomy";
 import { getItemPurchasePeriodStart } from "@/utils/time";
 
 describe("UTC purchase calendar", () => {
@@ -155,4 +159,9 @@ describe("auction server price guard", () => {
       ),
     ).toBeNull();
   });
+});
+
+it("deducts five percent from auction proceeds, rounding down", () => {
+  expect(getAuctionSellerPayout(1000)).toBe(950);
+  expect(getAuctionSellerPayout(99)).toBe(94);
 });

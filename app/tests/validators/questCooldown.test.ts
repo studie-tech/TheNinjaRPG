@@ -52,3 +52,22 @@ describe("QuestValidator maxCompletes/retryDelay guard", () => {
     expect(res.success).toBe(true);
   });
 });
+
+it("accepts independently unlimited quest limits with a retry period", () => {
+  expect(
+    QuestValidator.safeParse({
+      ...baseQuest,
+      maxAttempts: -1,
+      maxCompletes: -1,
+      retryDelay: "weekly",
+    }).success,
+  ).toBe(true);
+  expect(
+    QuestValidator.safeParse({
+      ...baseQuest,
+      maxAttempts: -2,
+      maxCompletes: -1,
+      retryDelay: "weekly",
+    }).success,
+  ).toBe(false);
+});

@@ -3,10 +3,9 @@ import {
   AUCTION_BIDDER_LEVEL_MAX,
   AUCTION_BIDDER_LEVEL_MIN,
   AUCTION_LISTING_TYPES,
+  AUCTION_MAX_DURATION_HOURS,
   AUCTION_OFFER_MAX_RYO,
   MAX_ITEM_STACK_SIZE,
-  RYO_FOR_REP_MIN_REPS,
-  TRADEABLE_CURRENCY_TYPES,
 } from "@/drizzle/constants";
 import type { Item } from "@/drizzle/schema";
 import { getAuctionPriceError } from "@/libs/itemEconomy";
@@ -19,8 +18,8 @@ export const createAuctionListingSchema = z
     startingPrice: z.number().int().min(1),
     buyoutPrice: z.number().int().min(1).optional(),
     targetUserId: z.string().optional(), // For direct auctions to specific users
-    durationHours: z.number().min(1).max(168), // 1 hour to 7 days
-    currencyType: z.enum(TRADEABLE_CURRENCY_TYPES).prefault("MONEY"),
+    durationHours: z.number().min(1).max(AUCTION_MAX_DURATION_HOURS),
+    currencyType: z.literal("MONEY").prefault("MONEY"),
     quantity: z.int().min(1).optional(), // Quantity to auction from stack
     bidderMinLevel: z
       .number()
@@ -39,32 +38,6 @@ export const createAuctionListingSchema = z
     message: "Minimum bidder level cannot exceed maximum bidder level",
     path: ["bidderMinLevel"],
   })
-  .refine(
-    (data) => {
-      // For reputation auctions, ensure minimum reputation amount
-      if (data.currencyType === "REPUTATION") {
-        return data.startingPrice >= RYO_FOR_REP_MIN_REPS;
-      }
-      return true;
-    },
-    {
-      message: `Reputation auctions must have a starting price of at least ${RYO_FOR_REP_MIN_REPS} reputation points`,
-      path: ["startingPrice"],
-    },
-  )
-  .refine(
-    (data) => {
-      // For reputation auctions, ensure buyout price meets minimum if provided
-      if (data.currencyType === "REPUTATION" && data.buyoutPrice) {
-        return data.buyoutPrice >= RYO_FOR_REP_MIN_REPS;
-      }
-      return true;
-    },
-    {
-      message: `Reputation auctions must have a buyout price of at least ${RYO_FOR_REP_MIN_REPS} reputation points`,
-      path: ["buyoutPrice"],
-    },
-  )
   .refine(
     (data) => {
       // Ensure buyout price is higher than starting price

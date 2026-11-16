@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq, type SQL } from "drizzle-orm";
 import { MySqlDialect, QueryBuilder } from "drizzle-orm/mysql-core";
+import { QUEST_LIMIT_UNLIMITED } from "@/drizzle/constants";
 import {
   bankTransfers,
   quest,
@@ -902,6 +903,53 @@ describeWithDatabase("quest reward claims", () => {
         }),
       ).toMatchObject({ money: 500 + bonus });
       expect(await client.query.bankTransfers.findMany()).toHaveLength(1);
+    },
+  );
+
+  it.each([
+    { maxCompletes: 1, reopens: false },
+    { maxCompletes: 2, reopens: true },
+    { maxCompletes: QUEST_LIMIT_UNLIMITED, reopens: true },
+  ])(
+    "reopens achievements after completion when maxCompletes is $maxCompletes",
+    async ({ maxCompletes, reopens }) => {
+      const client = await getTestDatabase();
+      await insertUsers([
+        { userId: "achievement-player", rank: "CHUNIN", isOutlaw: true },
+      ]);
+      await insertQuests([
+        { id: "achievement-repeat", questType: "achievement", maxCompletes },
+        { id: "achievement-tier", questType: "tier" },
+      ]);
+      await insertQuestHistory([
+        {
+          userId: "achievement-player",
+          questId: "achievement-repeat",
+          questType: "achievement",
+        },
+        {
+          userId: "achievement-player",
+          questId: "achievement-tier",
+          questType: "tier",
+        },
+      ]);
+      const user = (await client.query.userData.findFirst({
+        where: eq(userData.userId, "achievement-player"),
+        with: {
+          userQuests: { with: { quest: true } },
+          completedQuests: true,
+          items: { with: { item: true } },
+        },
+      }))!;
+      const history = user.userQuests.find(
+        (entry) => entry.questId === "achievement-repeat",
+      )!;
+      expect((await commit(client, user, history)).outcome).toBe("claimed");
+      const saved = await client.query.questHistory.findFirst({
+        where: eq(questHistory.id, history.id),
+      });
+      expect(saved?.endAt === null).toBe(reopens);
+      expect(saved?.completed).toBe(reopens ? 0 : 1);
     },
   );
 

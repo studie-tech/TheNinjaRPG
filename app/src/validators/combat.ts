@@ -2114,6 +2114,12 @@ export const ItemValidatorRawSchema = z.object({
     .max(MAX_MEAL_DURATION_SECONDS)
     .prefault(60),
   craftingExperience: z.coerce.number().int().min(0).prefault(0),
+  craftingOutputQuantity: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_COOKING_OUTPUT)
+    .prefault(1),
   crystalTargetTypes: z.enum(ItemTypes).nullable(),
   requiredSkillId: optionalIdField(z.string().max(191)),
   bloodlineId: z.string().nullable(),

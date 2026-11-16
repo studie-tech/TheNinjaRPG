@@ -11,6 +11,7 @@ import {
   getUserCaps,
   PET_TASK_MAX_MINUTES,
   PET_TASK_QUEST_TYPES,
+  QUEST_LIMIT_UNLIMITED,
   SENSEI_STUDENT_RYO_PER_MISSION,
   type UserRole,
 } from "@/drizzle/constants";
@@ -1148,7 +1149,10 @@ const runCheckRewardsPrepInParallel = async (
   }
   if (resolved && userQuest?.quest.questType === "achievement") {
     if (!userQuest.quest.hidden || canPlayHiddenQuests(getContentRole(user))) {
-      if (userQuest.quest.maxCompletes > 1) {
+      if (
+        userQuest.quest.maxCompletes > 1 ||
+        userQuest.quest.maxCompletes === QUEST_LIMIT_UNLIMITED
+      ) {
         prepTasks.push(upsertQuestEntry(client, user, userQuest.quest, "system"));
       }
     }

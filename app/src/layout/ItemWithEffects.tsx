@@ -4,6 +4,7 @@ import { BarChartBig, MessageSquarePlus, SquarePen, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
+import { QUEST_LIMIT_UNLIMITED } from "@/drizzle/constants";
 import type {
   Bloodline,
   GameAsset,
@@ -1014,16 +1015,26 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
           {/* Show quest timing specific details for story and event quests */}
           {"questType" in item && ["story", "event"].includes(item.questType) && (
             <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2">
-              {"maxAttempts" in item && item.maxAttempts > 0 && (
-                <p>
-                  <b>Max Attempts</b>: {item.maxAttempts}
-                </p>
-              )}
-              {"maxCompletes" in item && item.maxCompletes > 0 && (
-                <p>
-                  <b>Max Completes</b>: {item.maxCompletes}
-                </p>
-              )}
+              {"maxAttempts" in item &&
+                (item.maxAttempts > 0 ||
+                  item.maxAttempts === QUEST_LIMIT_UNLIMITED) && (
+                  <p>
+                    <b>Max Attempts</b>:{" "}
+                    {item.maxAttempts === QUEST_LIMIT_UNLIMITED
+                      ? "Unlimited"
+                      : item.maxAttempts}
+                  </p>
+                )}
+              {"maxCompletes" in item &&
+                (item.maxCompletes > 0 ||
+                  item.maxCompletes === QUEST_LIMIT_UNLIMITED) && (
+                  <p>
+                    <b>Max Completes</b>:{" "}
+                    {item.maxCompletes === QUEST_LIMIT_UNLIMITED
+                      ? "Unlimited"
+                      : item.maxCompletes}
+                  </p>
+                )}
               {"previousAttempts" in item && (item.previousAttempts as number) > 0 && (
                 <p>
                   <b>Previous Attempts</b>: {item.previousAttempts as number}

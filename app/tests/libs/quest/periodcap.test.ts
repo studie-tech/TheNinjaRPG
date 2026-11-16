@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { QUEST_LIMIT_UNLIMITED, QuestTypesWithMaxAttempts } from "@/drizzle/constants";
 import { isAvailableUserQuests, periodCapReached } from "@/libs/quest/availability";
 
 const NOW = new Date("2026-06-19T12:00:00Z"); // Fri; week start Mon 2026-06-15
@@ -17,7 +18,7 @@ describe("periodCapReached", () => {
       ),
     ).toBe(false);
   });
-  it("maxCompletes<=0 with a real retry period fails closed", () => {
+  it("maxCompletes 0 with a real retry period fails closed", () => {
     expect(
       periodCapReached(
         {
@@ -98,6 +99,59 @@ describe("isAvailableUserQuests — period cap vs lifetime cap", () => {
     requiredVillage: null,
     retryDelay: "daily",
   } as const;
+
+  it.each(QuestTypesWithMaxAttempts)(
+    "allows unlimited attempts and completions for %s",
+    (questType) => {
+      for (const retryDelay of ["none", "daily"] as const) {
+        expect(
+          isAvailableUserQuests(
+            {
+              ...repeatable,
+              questType,
+              retryDelay,
+              maxAttempts: QUEST_LIMIT_UNLIMITED,
+              maxCompletes: QUEST_LIMIT_UNLIMITED,
+              previousAttempts: 1000,
+              previousCompletes: 1000,
+              periodCompletes: 1000,
+              periodStartAt: new Date(),
+            },
+            user,
+          ).check,
+        ).toBe(true);
+      }
+    },
+  );
+
+  it("keeps each finite limit independently enforced", () => {
+    expect(
+      isAvailableUserQuests(
+        {
+          ...repeatable,
+          retryDelay: "none",
+          maxAttempts: QUEST_LIMIT_UNLIMITED,
+          maxCompletes: 1,
+          previousAttempts: 1000,
+          previousCompletes: 1,
+        },
+        user,
+      ).check,
+    ).toBe(false);
+    expect(
+      isAvailableUserQuests(
+        {
+          ...repeatable,
+          retryDelay: "none",
+          maxAttempts: 1,
+          maxCompletes: QUEST_LIMIT_UNLIMITED,
+          previousAttempts: 1,
+          previousCompletes: 1000,
+        },
+        user,
+      ).check,
+    ).toBe(false);
+  });
 
   it("repeatable quest is available in a new period despite lifetime completes >= maxCompletes", () => {
     // Lifetime previousCompletes(1) >= maxCompletes(1), but the only completion was
