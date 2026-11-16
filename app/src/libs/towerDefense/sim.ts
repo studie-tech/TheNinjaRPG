@@ -310,6 +310,8 @@ export type TdEvent =
       y: number;
     }
   | { type: "secondWind" }
+  /** A ranged attack or boss barrage on its way to the hero; it lands at `due`. */
+  | { type: "enemyShot"; sourceId: number; x: number; y: number; due: number }
   | { type: "gameOver" };
 
 export const TD_BOSS_MOVES = [
@@ -2240,14 +2242,17 @@ const updateEnemies = (state: TdState) => {
     if (tick < enemy.attackReadyAt) continue;
     enemy.attackReadyAt = tick + Math.floor(enemy.attackTicks / (berserk ? 1.5 : 1));
     const damage = enemy.damage * (berserk ? 1.5 : 1);
-    if (enemy.range > 0)
-      state.shots.push({
-        due: arrivalTick(state, dist, 7),
-        damage,
+    if (enemy.range > 0) {
+      const due = arrivalTick(state, dist, 7);
+      state.shots.push({ due, damage, sourceId: enemy.id, telegraphed: false });
+      emit(state, {
+        type: "enemyShot",
         sourceId: enemy.id,
-        telegraphed: false,
+        x: enemy.x,
+        y: enemy.y,
+        due,
       });
-    else damageHero(state, damage, { enemy, melee: true });
+    } else damageHero(state, damage, { enemy, melee: true });
     if (state.over) return;
   }
 };
@@ -2286,13 +2291,22 @@ const bossMove = (state: TdState, boss: TdEnemy) => {
       boss.dashUntil = state.tick + 10;
       break;
     case "barrage":
-      for (let i = 0; i < 5; i++)
+      for (let i = 0; i < 5; i++) {
+        const due = state.tick + 6 + i * 3;
         state.shots.push({
-          due: state.tick + 6 + i * 3,
+          due,
           damage: boss.damage * 0.8,
           sourceId: boss.id,
           telegraphed: true,
         });
+        emit(state, {
+          type: "enemyShot",
+          sourceId: boss.id,
+          x: boss.x,
+          y: boss.y,
+          due,
+        });
+      }
       break;
     case "heal":
       if (state.tick >= boss.burnUntil && state.tick >= boss.flameUntil)
