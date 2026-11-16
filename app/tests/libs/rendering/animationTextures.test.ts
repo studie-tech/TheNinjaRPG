@@ -1,8 +1,11 @@
-import { describe, expect, it } from "bun:test";
-import { BufferImageSource, Texture } from "pixi.js";
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import { Assets, BufferImageSource, Sprite, Texture } from "pixi.js";
 import { assetAnimationClip } from "@/libs/rendering/animation";
+import { clearUnusedAnimationTextures } from "@/libs/rendering/animationTextures";
+import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
 import { createSpriteClip } from "@/libs/rendering/primitives/animation";
 import type { GameRenderer } from "@/libs/rendering/runtime";
+import type { CharacterAnimation } from "@/libs/spriteAnimations";
 
 describe("animation texture ownership", () => {
   it("keeps atlas sources immutable while independently sampling two actors", async () => {
@@ -61,5 +64,82 @@ describe("animation texture ownership", () => {
     controller.abort();
     complete(Texture.WHITE);
     await expect(animation).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("character animation sheets", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("keeps released sheets cached while another fighter is shown without animation", async () => {
+    const load = vi.spyOn(Assets, "load").mockImplementation(
+      async () =>
+        new Texture({
+          source: new BufferImageSource({
+            resource: new Uint8Array(512 * 128 * 4),
+            width: 512,
+            height: 128,
+          }),
+        }),
+    );
+    const unload = vi.spyOn(Assets, "unload").mockImplementation(async () => {});
+    const clip = (name: string): CharacterAnimation => ({
+      id: name,
+      name,
+      smallUrl: null,
+      url: `https://fallen-fighter.test/${name}.png`,
+      columns: 4,
+      rows: 1,
+      frameCount: 4,
+      fps: 8,
+      facing: "left" as const,
+    });
+    const animations = { idle: clip("idle"), attack: clip("attack") };
+    const fighter = () =>
+      createCharacterAnimation(
+        new Sprite(
+          new Texture({
+            source: new BufferImageSource({
+              resource: new Uint8Array(16),
+              width: 2,
+              height: 2,
+            }),
+          }),
+        ),
+        50,
+        animations,
+      );
+    const alive = fighter(),
+      fallen = fighter();
+    let now = 0;
+    const frames = async (count: number, eventId: string) => {
+      for (let i = 0; i < count; i++) {
+        now += 16;
+        const input = {
+          now,
+          moving: false,
+          facing: "left",
+          sourceFacing: "left",
+          reducedMotion: false,
+          cellSize: 128,
+        } as const;
+        alive.render({
+          ...input,
+          enabled: true,
+          event: { id: eventId, actionKey: "attack" },
+        });
+        fallen.render({ ...input, enabled: false });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    };
+    // The attack plays out and the fighter returns to idle, releasing the attack sheet.
+    await frames(70, "first");
+    await frames(70, "second");
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(unload).not.toHaveBeenCalled();
+    alive.dispose();
+    fallen.dispose();
+    clearUnusedAnimationTextures();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(unload).toHaveBeenCalledTimes(2);
   });
 });

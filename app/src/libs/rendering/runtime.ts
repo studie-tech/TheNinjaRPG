@@ -11,6 +11,7 @@ import { createSceneAssets } from "@/libs/rendering/assets";
 import { createCharacterComposites } from "@/libs/rendering/characterComposites";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop, MAX_FRAME_RATE } from "@/libs/rendering/frameLoop";
+import { parkRenderer, takeParkedRenderer } from "@/libs/rendering/rendererPool";
 import { observeRenderer, type RendererSurface } from "@/libs/rendering/telemetry";
 import { readVisualEffects, subscribeVisualEffects } from "@/libs/visualEffects";
 
@@ -24,7 +25,8 @@ const frames = createFrameLoop(
 
 /**
  * Owns the renderer, frame subscription, input listeners and texture leases together.
- * Abort or dispose releases them once. Initialization rejects; frame failures dispose
+ * Abort or dispose releases them once; a healthy scene renderer is parked for its surface's
+ * next scene (see parkRenderer). Initialization rejects; frame failures dispose
  * the scene and call onError. Hidden/offscreen canvases suspend their frame subscription.
  * Scenes request at most MAX_FRAME_RATE; whole-refresh pacing can present above that target.
  */
@@ -47,10 +49,21 @@ export const createGameRenderer = async (options: {
   const { mount, signal } = options;
   const backgroundAlpha =
     options.backgroundAlpha ?? (options.background === undefined ? 0 : 1);
-  const renderer = new WebGLRenderer();
+  // Previews are incidental to their page, so its decoration keeps running around them.
+  const isScene = !options.surface.endsWith("-preview");
+  // The context's backbuffer is transparent exactly when the background is.
+  const isAlpha = backgroundAlpha < 1;
+  const parked = isScene ? takeParkedRenderer(options.surface, isAlpha) : null;
+  const renderer = parked ?? new WebGLRenderer();
+  /** Parks a healthy scene renderer for its surface's next scene; previews' callers restyle their canvas. */
+  const release = (isReusable: boolean) => {
+    if (isScene && isReusable && !renderer.context.isLost)
+      parkRenderer(options.surface, renderer, isAlpha);
+    else renderer.destroy({ removeView: true });
+  };
   try {
     const width = Math.max(1, options.width ?? mount.clientWidth);
-    await renderer.init({
+    const settings = {
       width,
       height: options.height(width),
       preferWebGLVersion: 1,
@@ -65,7 +78,12 @@ export const createGameRenderer = async (options: {
       backgroundAlpha,
       powerPreference: "low-power",
       preserveDrawingBuffer: false,
-    });
+    } as const;
+    if (parked) {
+      parked.resize(settings.width, settings.height, settings.resolution);
+      parked.background.color = settings.background;
+      parked.background.alpha = backgroundAlpha;
+    } else await renderer.init(settings);
   } catch (error) {
     // Teardown throws on a partly built renderer; the initialization error stays the cause.
     try {
@@ -74,7 +92,7 @@ export const createGameRenderer = async (options: {
     throw error;
   }
   if (signal.aborted) {
-    renderer.destroy({ removeView: true });
+    release(true);
     throw new DOMException("Scene initialization cancelled", "AbortError");
   }
   const telemetry = observeRenderer(options.surface, renderer);
@@ -90,7 +108,7 @@ export const createGameRenderer = async (options: {
   const canvas = renderer.canvas as HTMLCanvasElement;
   canvas.style.display = "block";
   canvas.style.width = "100%";
-  if (options.resolution !== undefined) canvas.style.imageRendering = "pixelated";
+  canvas.style.imageRendering = options.resolution !== undefined ? "pixelated" : "";
   canvas.style.touchAction = options.touchAction ?? "none";
   mount.appendChild(canvas);
   const visualEffects = readVisualEffects();
@@ -98,6 +116,8 @@ export const createGameRenderer = async (options: {
   let visible = true;
   let contextLost = false;
   let disposed = false;
+  /** A renderer whose frame failed while its context was live is not handed to another scene. */
+  let isReusable = true;
   let continuous = true;
   let frameRate = MAX_FRAME_RATE;
   let dirty = true;
@@ -170,6 +190,7 @@ export const createGameRenderer = async (options: {
         dirty = true;
         markContextLost();
       } else {
+        isReusable = false;
         dispose();
         options.onError(error);
       }
@@ -211,8 +232,6 @@ export const createGameRenderer = async (options: {
       for (const resume of waiters) resume();
     }, 0);
   };
-  // Previews are incidental to their page, so its decoration keeps running around them.
-  const isScene = !options.surface.endsWith("-preview");
   const observer = new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? true;
     if (isScene) setGameSceneVisible(canvas, visible);
@@ -291,7 +310,7 @@ export const createGameRenderer = async (options: {
     frameWaiters.clear();
     assets.dispose();
     characterComposites.destroy();
-    renderer.destroy({ removeView: true });
+    release(isReusable && !contextLost);
   };
   signal.addEventListener("abort", dispose, { once: true });
   updateSubscription();

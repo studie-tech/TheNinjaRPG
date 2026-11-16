@@ -3,7 +3,6 @@ import type { AvatarFacing } from "@/drizzle/constants";
 import {
   acquireAnimationTexture,
   animationFrameViews,
-  clearUnusedAnimationTextures,
 } from "@/libs/rendering/animationTextures";
 import { setSpriteGroundContact, textureGroundContact } from "@/libs/rendering/assets";
 import {
@@ -118,12 +117,13 @@ export const createCharacterAnimation = (
           events.push(input.event);
       }
       if (!input.enabled) {
+        // Released sheets stay cached for the next clips of any fighter; turning animation
+        // off frees them (see createCombatActors).
         release();
         events.length = 0;
         actionAt = undefined;
         activeKey = "";
         restore(input.facing, input.sourceFacing);
-        clearUnusedAnimationTextures();
         return;
       }
       if (!input.moving && actionAt !== undefined && events[0]) {

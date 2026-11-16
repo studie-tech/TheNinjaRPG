@@ -23,6 +23,7 @@ import {
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { lpcFacing } from "@/libs/lpc/catalog";
 import { walkDuration, walkProgress } from "@/libs/rendering/animation";
+import { clearUnusedAnimationTextures } from "@/libs/rendering/animationTextures";
 import { spriteGroundContact } from "@/libs/rendering/assets";
 import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
@@ -86,6 +87,8 @@ export const createCombatActors = (
   let animating = false;
   /** Fastest frame rate among the artwork clips the fighters showed in the last animate. */
   let clipFrameRate = 0;
+  /** Whether the last animate showed sprite animations, so switching them off is seen once. */
+  let spriteAnimationsShown = game.visualEffects?.spriteAnimations ?? false;
   const shadow = createSoftShadowTexture();
   game.own(() => shadow.destroy(true));
   const sync = (next: CombatActorSnapshot) => {
@@ -606,6 +609,10 @@ export const createCombatActors = (
       if (record.sp) record.sp.container.visible = visible;
       if (record.cp) record.cp.container.visible = visible;
     }
+    // Fighters released their sheets above; turning animation off also frees the idle cache.
+    const showsSpriteAnimations = game.visualEffects?.spriteAnimations ?? false;
+    if (spriteAnimationsShown && !showsSpriteAnimations) clearUnusedAnimationTextures();
+    spriteAnimationsShown = showsSpriteAnimations;
     if (needsSort) {
       container.children.sort((a, b) => b.y - a.y);
       needsSort = false;
