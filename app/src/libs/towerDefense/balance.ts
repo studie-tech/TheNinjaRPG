@@ -42,6 +42,19 @@ export const TD_SEAL_GAP_TICKS = 25;
 /** Coordinates in actions are integers in hundredths of a unit. */
 export const TD_COORD_SCALE = 100;
 
+/** Character level at which the level bonus peaks. */
+export const TD_LEVEL_BONUS_MAX_LEVEL = 100;
+/** Extra damage at that level, rising linearly from nothing at level 1. */
+export const TD_LEVEL_BONUS_MAX = 1;
+
+/** Share of extra damage a character level brings: 0 at level 1, the maximum at 100. */
+export const tdLevelDamageBonus = (level: number) =>
+  Number.isFinite(level)
+    ? (TD_LEVEL_BONUS_MAX *
+        Math.min(Math.max(Math.floor(level) - 1, 0), TD_LEVEL_BONUS_MAX_LEVEL - 1)) /
+      (TD_LEVEL_BONUS_MAX_LEVEL - 1)
+    : 0;
+
 export const TD_HERO_BASE = {
   damage: 10,
   rate: 1.4,

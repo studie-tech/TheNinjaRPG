@@ -111,7 +111,13 @@ describe("tower defense clones", () => {
           ? new Promise((resolve) => pending.push(resolve))
           : Promise.resolve(fakeCharacter()),
       );
-    const state = createRun({ seed: "clones", startWave: 1, bestWave: 0, dojo: {} });
+    const state = createRun({
+      seed: "clones",
+      startWave: 1,
+      bestWave: 0,
+      level: 1,
+      dojo: {},
+    });
     const view = viewOf(state);
     await createTowerDefenseScene({
       ...sceneOptions(view),
@@ -147,7 +153,13 @@ describe("tower defense clones", () => {
           ? new Promise((resolve) => pending.push(resolve))
           : Promise.resolve(fakeCharacter()),
       );
-    const state = createRun({ seed: "clones", startWave: 1, bestWave: 0, dojo: {} });
+    const state = createRun({
+      seed: "clones",
+      startWave: 1,
+      bestWave: 0,
+      level: 1,
+      dojo: {},
+    });
     const scene = await createTowerDefenseScene({
       ...sceneOptions(viewOf(state)),
       appearance: { layers: [] } as unknown as SpriteAppearance,
@@ -296,7 +308,13 @@ const sheet = (url: string): CharacterAnimation => ({
 
 /** Steps a fresh run until at least `count` enemies are on the field. */
 const runWithEnemies = (count: number): TdState => {
-  const state = createRun({ seed: "pool", startWave: 1, bestWave: 0, dojo: {} });
+  const state = createRun({
+    seed: "pool",
+    startWave: 1,
+    bestWave: 0,
+    level: 1,
+    dojo: {},
+  });
   for (let tick = 0; tick < 2_000; tick++) {
     if (state.enemies.length >= count) return state;
     stepRun(state);

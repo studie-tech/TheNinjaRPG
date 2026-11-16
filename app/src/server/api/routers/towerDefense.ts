@@ -87,7 +87,13 @@ export const towerDefenseRouter = createTRPCRouter({
       baseServerResponse.extend({
         token: z.string().optional(),
         config: towerDefenseRunTokenSchema
-          .pick({ seed: true, startWave: true, bestWave: true, dojo: true })
+          .pick({
+            seed: true,
+            startWave: true,
+            bestWave: true,
+            level: true,
+            dojo: true,
+          })
           .optional(),
       }),
     )
@@ -104,6 +110,7 @@ export const towerDefenseRouter = createTRPCRouter({
         seed: nanoid(),
         startWave: input.startWave,
         bestWave,
+        level: progress.level,
         dojo: dojoLevels(upgrades),
       };
       const token = signRunToken({

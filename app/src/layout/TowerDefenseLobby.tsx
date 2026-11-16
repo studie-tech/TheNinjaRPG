@@ -31,9 +31,12 @@ import { SEAL_GLYPHS, SEAL_HOTKEYS } from "@/layout/TowerDefenseHud";
 import { cn } from "@/libs/shadui";
 import {
   TD_HERO_BASE,
+  TD_LEVEL_BONUS_MAX,
+  TD_LEVEL_BONUS_MAX_LEVEL,
   TD_PIERCING_AFTER_WAVE,
   TD_SEAL_GAP_TICKS,
   TD_TICK_SECONDS,
+  tdLevelDamageBonus,
 } from "@/libs/towerDefense/balance";
 import {
   TD_BOSS_INTERVAL,
@@ -79,6 +82,8 @@ const CATEGORY_LABELS: Record<TdDojoCategory, string> = {
 /** Start or resume a run, spend scrolls in the Dojo and learn how the game works. */
 export const TowerDefenseLobby = (props: {
   isGuest: boolean;
+  /** The character's level, which raises damage in every run it starts. */
+  level: number;
   progress: { points: number; bestWave: number; dojo: TdDojoLevels } | undefined;
   saved: { wave: number; over: boolean } | null;
   isStarting: boolean;
@@ -179,7 +184,7 @@ export const TowerDefenseLobby = (props: {
               </div>
             )}
             {!props.isGuest && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Stat
                   icon={<ScrollText className="h-5 w-5 text-purple-500" />}
                   label="Scrolls"
@@ -189,6 +194,11 @@ export const TowerDefenseLobby = (props: {
                   icon={<Crown className="h-5 w-5 text-amber-500" />}
                   label="Best wave"
                   value={`${bestWave}`}
+                />
+                <Stat
+                  icon={<Swords className="h-5 w-5 text-red-500" />}
+                  label={`Level ${props.level}`}
+                  value={`+${Math.round(tdLevelDamageBonus(props.level) * 100)}% dmg`}
                 />
               </div>
             )}
@@ -429,7 +439,8 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
           title="Your ninja fights on its own"
         >
           Shuriken fly at the nearest enemy. Jutsu, sentries and ultimates join in as
-          you unlock them.
+          you unlock them. Your character level adds damage, up to +
+          {TD_LEVEL_BONUS_MAX * 100}% at level {TD_LEVEL_BONUS_MAX_LEVEL}.
         </Rule>
         <Rule
           icon={<Coins className="h-5 w-5" />}

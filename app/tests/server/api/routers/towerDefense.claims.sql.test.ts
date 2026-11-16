@@ -47,7 +47,12 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
       userData,
     );
     await insertUsers([
-      { userId: "td-user", towerDefensePoints: 500, towerDefenseBestWave: 45 },
+      {
+        userId: "td-user",
+        towerDefensePoints: 500,
+        towerDefenseBestWave: 45,
+        level: 60,
+      },
       { userId: "td-other" },
     ]);
     stubRateLimitTransport();
@@ -62,7 +67,8 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     expect((await api.startRun({ startWave: 41 })).success).toBe(false);
     const started = await api.startRun({ startWave: 31 });
     expect(started.success).toBe(true);
-    expect(started.config).toMatchObject({ startWave: 31, bestWave: 45 });
+    // The character's level is signed with the run, so the claim replays its bonus.
+    expect(started.config).toMatchObject({ startWave: 31, bestWave: 45, level: 60 });
   });
 
   it("pays a replayed run once, raises the best wave and records the leaderboard", async () => {

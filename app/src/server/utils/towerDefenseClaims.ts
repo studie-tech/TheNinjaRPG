@@ -115,6 +115,7 @@ export const verifyTowerDefenseRun = async (input: {
       seed: token.seed,
       startWave: token.startWave,
       bestWave: token.bestWave,
+      level: token.level,
       dojo: token.dojo,
     },
     actions,

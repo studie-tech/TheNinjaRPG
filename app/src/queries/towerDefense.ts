@@ -27,13 +27,13 @@ export const listUserTowerDefenseUpgrades = (
     where: eq(userTowerDefenseUpgrade.userId, ctx.userId),
   });
 
-/** Build the caller's scroll balance and best wave. */
+/** Build the caller's scroll balance, best wave and character level. */
 export const findTowerDefenseProgress = (
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
 ) =>
   client.query.userData.findFirst({
-    columns: { towerDefensePoints: true, towerDefenseBestWave: true },
+    columns: { towerDefensePoints: true, towerDefenseBestWave: true, level: true },
     where: eq(userData.userId, ctx.userId),
   });
 

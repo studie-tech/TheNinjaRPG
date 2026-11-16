@@ -18,7 +18,7 @@ const key = "towerDefenseRun:test";
 
 const head = {
   id: "run",
-  config: { seed: "s", startWave: 1, bestWave: 0, dojo: {} },
+  config: { seed: "s", startWave: 1, bestWave: 0, level: 1, dojo: {} },
   token: "token",
   tick: 0,
   wave: 1,

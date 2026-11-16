@@ -19,6 +19,7 @@ const token = (
   seed: "claim-seed",
   startWave: 1,
   bestWave: 0,
+  level: 1,
   dojo: { dmg: 3, hp: 3 },
   issuedAt: 1_000_000,
   ...overrides,
@@ -26,11 +27,11 @@ const token = (
 
 /** Play the token's run with the test bot until the hero falls, or retreat at `quitAt`. */
 const play = (
-  { seed, startWave, bestWave, dojo }: TowerDefenseRunToken,
+  { seed, startWave, bestWave, level, dojo }: TowerDefenseRunToken,
   quitAt?: number,
 ) =>
   playBotRun(
-    { seed, startWave, bestWave, dojo },
+    { seed, startWave, bestWave, level, dojo },
     {
       seed: 11,
       attention: 0.8,

@@ -19,6 +19,7 @@ export const towerDefenseRunTokenSchema = z.object({
   seed: z.string(),
   startWave: z.int().min(1),
   bestWave: z.int().min(0),
+  level: z.int().min(1),
   dojo: z.partialRecord(z.enum(TD_DOJO), z.int().min(0)),
   issuedAt: z.int(),
 });

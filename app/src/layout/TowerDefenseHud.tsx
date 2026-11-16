@@ -27,6 +27,7 @@ import {
   TD_SEAL_GAP_TICKS,
   TD_TICK_SECONDS,
   TD_WAVE_TICKS,
+  tdLevelDamageBonus,
   tdMaxSpeed,
   tdWaveBonus,
 } from "@/libs/towerDefense/balance";
@@ -669,7 +670,13 @@ const BoostsButton = ({ state }: { state: TdState }) => {
         ][])
       : []),
   ];
+  const levelBonus = tdLevelDamageBonus(state.config.level);
   const rows: [string, string, string | null][] = [
+    [
+      "Character level",
+      `${state.config.level}`,
+      levelBonus > 0 ? `+${percent(levelBonus)} damage` : null,
+    ],
     [
       "Damage",
       formatTdNumber(stats.damage),

@@ -384,7 +384,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       };
       if (!isUnchanged()) return;
       if (!userId) {
-        begin({ seed: nanoid(), startWave: 1, bestWave: 0, dojo: {} }, null);
+        begin({ seed: nanoid(), startWave: 1, bestWave: 0, level: 1, dojo: {} }, null);
         return;
       }
       const ticket = {};

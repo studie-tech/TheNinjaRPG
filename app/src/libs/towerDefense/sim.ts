@@ -38,6 +38,7 @@ import {
   tdAffixCount,
   tdBossScrolls,
   tdEliteChance,
+  tdLevelDamageBonus,
   tdPiercingShare,
   tdReferenceBounty,
   tdReferenceDamage,
@@ -97,7 +98,7 @@ import { createRng, geometricCost, powi, type Rng } from "@/libs/towerDefense/rn
  * one): a claim from a page still running the previous rules is then answered with a
  * reload, which resumes the saved run under the new rules instead of failing its replay.
  */
-export const TD_SIM_VERSION = 2;
+export const TD_SIM_VERSION = 3;
 
 // ============================================
 // Types
@@ -108,6 +109,8 @@ export interface TdRunConfig {
   startWave: number;
   /** Best wave before this run; gates seal arts. */
   bestWave: number;
+  /** The character's level when the run started; raises damage (`tdLevelDamageBonus`). */
+  level: number;
   dojo: TdDojoLevels;
 }
 
@@ -579,6 +582,7 @@ const computeStats = (state: TdState) => {
     powi(1.05, d("dmg")) *
     powi(1.08, shop(state, "damage")) *
     (1 + 0.3 * perk(state, "sharp_steel")) *
+    (1 + tdLevelDamageBonus(state.config.level)) *
     glass;
   const rate = Math.min(
     15,

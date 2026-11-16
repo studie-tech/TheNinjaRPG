@@ -1,17 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import {
+  tdLevelDamageBonus,
   tdReferenceBounty,
   tdReferenceDamage,
   tdReferenceHealth,
 } from "@/libs/towerDefense/balance";
 import { tdCheckpoints } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
+import { createRun } from "@/libs/towerDefense/sim";
 import { TD_MAX_TICKS } from "@/validators/towerDefense";
 import { playBotRun, veteranDojo } from "./bot";
 
 const play = (scale: number, seed: string) =>
   playBotRun(
-    { seed, startWave: 1, bestWave: 5000, dojo: veteranDojo(scale) },
+    { seed, startWave: 1, bestWave: 5000, level: 1, dojo: veteranDojo(scale) },
     { seed: 3, ticks: TD_MAX_TICKS },
   ).state;
 
@@ -38,6 +40,21 @@ describe("tower defense balance", () => {
       expect(tdReferenceDamage(wave)).toBeLessThanOrEqual(health);
     }
     expect(Number.isFinite(tdReferenceHealth(6000))).toBe(true);
+  });
+
+  it("adds damage linearly with character level, doubling it at level 100", () => {
+    expect([0, 1, 50, 100, 150, Number.NaN].map(tdLevelDamageBonus)).toEqual([
+      0,
+      0,
+      49 / 99,
+      1,
+      1,
+      0,
+    ]);
+    const damageAt = (level: number) =>
+      createRun({ seed: "lvl", startWave: 1, bestWave: 0, level, dojo: {} }).stats
+        .damage;
+    expect(damageAt(100)).toBeCloseTo(damageAt(1) * 2);
   });
 
   it("offers checkpoints just after each boss, up to 70% of the best wave", () => {

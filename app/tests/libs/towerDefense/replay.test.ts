@@ -117,7 +117,13 @@ const expectReplayMatches = (recording: Recording) => {
 
 describe("tower defense replay", () => {
   it("replays a fresh player's run tick for tick", () => {
-    const recording = record({ seed: "fresh-1", startWave: 1, bestWave: 0, dojo: {} });
+    const recording = record({
+      seed: "fresh-1",
+      startWave: 1,
+      bestWave: 0,
+      level: 1,
+      dojo: {},
+    });
     expect(recording.endTick).toBeGreaterThan(300);
     expectReplayMatches(recording);
   });
@@ -129,7 +135,13 @@ describe("tower defense replay", () => {
       ["vet-c", 200, 0.6],
     ] as const) {
       const recording = record(
-        { seed, startWave, bestWave: startWave * 2, dojo: veteranDojo(scale) },
+        {
+          seed,
+          startWave,
+          bestWave: startWave * 2,
+          level: 1,
+          dojo: veteranDojo(scale),
+        },
         { maxTicks: 12_000 },
       );
       expectReplayMatches(recording);
@@ -139,7 +151,7 @@ describe("tower defense replay", () => {
   it("replays fuzzed logs full of invalid and out-of-place actions identically", () => {
     for (const seed of ["fuzz-1", "fuzz-2", "fuzz-3", "fuzz-4"]) {
       const recording = record(
-        { seed, startWave: 30, bestWave: 120, dojo: veteranDojo(0.3) },
+        { seed, startWave: 30, bestWave: 120, level: 1, dojo: veteranDojo(0.3) },
         { chaos: 0.35, maxTicks: 8_000 },
       );
       expect(recording.log.length).toBeGreaterThan(200);
@@ -186,7 +198,7 @@ describe("tower defense replay", () => {
       ["cover-c", 310, 0.4],
     ] as const) {
       const recording = record(
-        { seed, startWave, bestWave: 500, dojo: veteranDojo(scale) },
+        { seed, startWave, bestWave: 500, level: 1, dojo: veteranDojo(scale) },
         { every: 25, maxTicks: 9_000, script },
       );
       expectReplayMatches(recording);
@@ -248,6 +260,7 @@ describe("tower defense replay", () => {
             seed: `titan-${startWave}`,
             startWave,
             bestWave: 500,
+            level: 1,
             dojo: veteranDojo(scale),
           },
           { maxTicks: 3_000 },
@@ -261,7 +274,13 @@ describe("tower defense replay", () => {
 
   it("resumes a replay advanced in slices exactly where it left off", () => {
     const recording = record(
-      { seed: "sliced", startWave: 40, bestWave: 200, dojo: veteranDojo(0.3) },
+      {
+        seed: "sliced",
+        startWave: 40,
+        bestWave: 200,
+        level: 1,
+        dojo: veteranDojo(0.3),
+      },
       { maxTicks: 8_000 },
     );
     const replay = createReplay(recording.config, recording.log);
@@ -278,7 +297,13 @@ describe("tower defense replay", () => {
   });
 
   it("holds the tick while a perk draft is open and accepts shopping meanwhile", () => {
-    const state = createRun({ seed: "draft", startWave: 41, bestWave: 100, dojo: {} });
+    const state = createRun({
+      seed: "draft",
+      startWave: 41,
+      bestWave: 100,
+      level: 1,
+      dojo: {},
+    });
     expect(state.offer).not.toBeNull();
     const tick = state.tick;
     stepRun(state);
@@ -297,6 +322,7 @@ describe("tower defense replay", () => {
       seed: "drafts",
       startWave: 2001,
       bestWave: 2001,
+      level: 1,
       dojo: {},
     });
     let picks = 0;
@@ -307,7 +333,7 @@ describe("tower defense replay", () => {
 
   it("stops short of the end tick when a draft is never answered", () => {
     const result = replayRun(
-      { seed: "stall", startWave: 41, bestWave: 100, dojo: {} },
+      { seed: "stall", startWave: 41, bestWave: 100, level: 1, dojo: {} },
       [],
       500,
     );
@@ -317,7 +343,7 @@ describe("tower defense replay", () => {
 
   it("rejects logs whose actions go back in time", () => {
     const result = replayRun(
-      { seed: "order", startWave: 1, bestWave: 0, dojo: {} },
+      { seed: "order", startWave: 1, bestWave: 0, level: 1, dojo: {} },
       [
         [50, "buy", "damage"],
         [20, "buy", "health"],
@@ -329,7 +355,13 @@ describe("tower defense replay", () => {
 
   it("changes the outcome when a recorded action is altered", () => {
     const recording = record(
-      { seed: "tamper", startWave: 20, bestWave: 60, dojo: veteranDojo(0.15) },
+      {
+        seed: "tamper",
+        startWave: 20,
+        bestWave: 60,
+        level: 1,
+        dojo: veteranDojo(0.15),
+      },
       { maxTicks: 6000 },
     );
     const tampered = recording.log.map((action) =>
@@ -342,7 +374,13 @@ describe("tower defense replay", () => {
   });
 
   it("ends the run on quit and keeps the scrolls earned so far", () => {
-    const state = createRun({ seed: "quit", startWave: 1, bestWave: 0, dojo: {} });
+    const state = createRun({
+      seed: "quit",
+      startWave: 1,
+      bestWave: 0,
+      level: 1,
+      dojo: {},
+    });
     for (let i = 0; i < 600; i++) stepRun(state);
     const scrolls = state.scrolls;
     expect(applyAction(state, [state.tick, "quit"])).toBe(true);
@@ -355,8 +393,8 @@ describe("tower defense replay", () => {
     // A test bot change only repins the fingerprint. A rules change moves it too and needs
     // a TD_SIM_VERSION bump, so pages still on the old rules reload instead of failing.
     expect({ version: TD_SIM_VERSION, fingerprint: rulesFingerprint() }).toEqual({
-      version: 2,
-      fingerprint: "db3c1e78e6780d9bb318b9b335f5986dafa461a9fcaa61a47607edf064833776",
+      version: 3,
+      fingerprint: "2376d09cbf38aa849eebee5ac504e38e26144461c3f5a79bf795e82b8bd9b111",
     });
   });
 
@@ -379,14 +417,15 @@ describe("tower defense replay", () => {
 /** A digest of bot runs across the game's stages, their logs and their states. */
 const rulesFingerprint = () => {
   const digest = createHash("sha256");
-  for (const [seed, startWave, scale, chaos] of [
-    ["fresh-1", 1, 0, 0],
-    ["vet-a", 60, 0.25, 0],
-    ["vet-c", 200, 0.6, 0],
-    ["fuzz-1", 30, 0.3, 0.35],
+  for (const [seed, startWave, scale, chaos, level] of [
+    ["fresh-1", 1, 0, 0, 1],
+    ["fresh-50", 1, 0, 0, 50],
+    ["vet-a", 60, 0.25, 0, 60],
+    ["vet-c", 200, 0.6, 0, 100],
+    ["fuzz-1", 30, 0.3, 0.35, 1],
   ] as const) {
     const { hashes, final, log } = record(
-      { seed, startWave, bestWave: startWave * 2, dojo: veteranDojo(scale) },
+      { seed, startWave, bestWave: startWave * 2, level, dojo: veteranDojo(scale) },
       { chaos, every: 500, maxTicks: 12_000 },
     );
     for (const hash of hashes.values()) digest.update(hash);

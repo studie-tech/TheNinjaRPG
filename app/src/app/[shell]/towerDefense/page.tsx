@@ -59,6 +59,7 @@ export default function TowerDefensePage() {
     status,
   } = useUserDataSelector((profile) => ({
     userId: profile.userId,
+    level: profile.level,
     gender: profile.gender,
     spriteBodyStyle: profile.spriteBodyStyle,
     attributes: profile.attributes,
@@ -241,6 +242,7 @@ export default function TowerDefensePage() {
       >
         <TowerDefenseLobby
           isGuest={!userId}
+          level={user?.level ?? 1}
           progress={progress.data}
           saved={run.saved}
           isStarting={run.isStarting}

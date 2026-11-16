@@ -313,7 +313,13 @@ const towerOptions = (fixture: ReturnType<typeof renderer>, onTap = vi.fn()) => 
   roster: [],
   onFrame() {},
   getView: () => ({
-    state: createRun({ seed: "optional-art", startWave: 1, bestWave: 0, dojo: {} }),
+    state: createRun({
+      seed: "optional-art",
+      startWave: 1,
+      bestWave: 0,
+      level: 1,
+      dojo: {},
+    }),
     pending: 0,
     events: [],
     reticle: null,
