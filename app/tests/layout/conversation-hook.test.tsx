@@ -21,6 +21,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { deferred } from "../setup/deferred";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 const user = {
@@ -286,6 +287,31 @@ it("sanitizes on-demand optimistic messages, quote previews and reactions", asyn
       hook.result.current.allComments?.find((c) => c.id === "a")?.reactions,
     ).toEqual({ "👍": ["Me"] }),
   );
+});
+
+it("retains a remote reaction included by a refetch while helpers load", async () => {
+  const rows = [row("a", "Alpha"), row("b", "Bravo", "Peer")];
+  const hook = mount(true, rows);
+  await loaded(hook);
+  const chat = await import("@/utils/chat");
+  const helpers = deferred<typeof chat>();
+  vi.spyOn(sanitizerLoader, "loadChatHelpers").mockReturnValue(helpers.promise);
+  act(() =>
+    receive({
+      message: "reaction",
+      fromId: "peer",
+      commentId: "a",
+      username: "Peer",
+      emoji: "👍",
+    }),
+  );
+  rows[0] = { ...rows[0]!, reactions: { "👍": ["Peer"] } } as never;
+  await act(async () => hook.result.current.invalidateComments());
+  const reactions = () =>
+    hook.result.current.allComments?.find((comment) => comment.id === "a")?.reactions;
+  expect(reactions()).toEqual({ "👍": ["Peer"] });
+  await act(async () => helpers.resolve(chat));
+  expect(reactions()).toEqual({ "👍": ["Peer"] });
 });
 
 it("shows a sent message and a reaction after success when their helpers fail to load", async () => {

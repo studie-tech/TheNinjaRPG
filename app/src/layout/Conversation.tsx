@@ -291,17 +291,21 @@ export const useConversation = (props: ConversationLogicProps) => {
     [isSearchOpen, searchForm, searchQuery, clearSearch, onSearchSubmit],
   );
 
-  /** Optimistically toggle a user's emoji reaction on a cached comment. */
+  /** Toggle a cached reaction, reconciling remote events when the cache changes during loading. */
   const optimisticReactionUpdate = async (
     commentId: string,
     emoji: string,
     username: string,
+    isRemote = false,
   ) => {
+    const snapshot = utils.comments.getConversationComments.getInfiniteData(queryKey);
     // Without the reaction helpers the caller refetches to show the reaction.
     const chat = await loadChatHelpers().catch(() => null);
     if (!chat) return { reactionSkipped: true };
     await utils.comments.getConversationComments.cancel(queryKey);
     const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
+    // A refresh may already include a remote reaction; local mutations have not reached the server yet.
+    if (isRemote && cached !== snapshot) return { reactionSkipped: true };
     const comment = cached?.pages
       .flatMap((page) => page.data)
       .find((c) => c.id === commentId);
@@ -586,6 +590,7 @@ export const useConversation = (props: ConversationLogicProps) => {
                   data.commentId,
                   data.emoji,
                   data.username,
+                  true,
                 ).then((update) => {
                   if (update?.reactionSkipped) void refetch();
                 });
