@@ -424,9 +424,10 @@ export const createGameRenderer = async (options: {
     updateSubscription();
   };
   cleanups.add(
-    subscribeVisualEffects((effect, enabled) => {
+    subscribeVisualEffects((effect, enabled, isChoice) => {
       storedEffects[effect] = enabled;
-      chosenEffects = readChosenVisualEffects();
+      // Local choices must also win when the browser cannot persist their marker.
+      if (isChoice) chosenEffects.add(effect);
       forgetRejectedSteps();
       updateQuality();
     }),

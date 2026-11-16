@@ -456,6 +456,37 @@ describe("renderer context loss", () => {
     expect(game.visualEffects).toMatchObject({ shadows: true, localLights: false });
   });
 
+  it("honors an effect choice through later updates when storage writes fail", async () => {
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.shadows ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects.shadows).toBe(false);
+    vi.spyOn(window.Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    setVisualEffect("shadows", true);
+    expect(game.visualEffects.shadows).toBe(true);
+    setVisualEffect("weather", false);
+    setRenderQuality("low");
+    setRenderQuality("auto");
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.localLights ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects).toMatchObject({
+      shadows: true,
+      localLights: false,
+      weather: false,
+    });
+  });
+
   it("keeps display density when lowering it does not help and tries effects instead", async () => {
     Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
     const { game, render } = await start(vi.fn(), { resolution: 2 });

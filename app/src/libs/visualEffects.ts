@@ -133,14 +133,14 @@ export const subscribeRenderQuality = (onChange: (quality: RenderQuality) => voi
     if (key === null || key === RENDER_QUALITY_KEY) onChange(parseRenderQuality(value));
   });
 
-/** Uses the same storage events as layout preferences without sending frame updates through React. */
+/** Publishes effects and same-tab choices, so active scenes honor choices even when storage fails. */
 export const subscribeVisualEffects = (
-  onChange: (effect: VisualEffect, enabled: boolean) => void,
+  onChange: (effect: VisualEffect, enabled: boolean, isChoice: boolean) => void,
 ) =>
-  subscribeStorage((key, value) => {
+  subscribeStorage((key, value, isLocal) => {
     for (const effect of Object.keys(VISUAL_EFFECT_KEYS) as VisualEffect[]) {
       if (key === null || key === VISUAL_EFFECT_KEYS[effect])
-        onChange(effect, value !== "false");
+        onChange(effect, value !== "false", isLocal === true && key !== null);
     }
   });
 
@@ -163,7 +163,9 @@ const publish = (key: string, value: string) => {
   );
 };
 
-const subscribeStorage = (sync: (key: string | null, value: string | null) => void) => {
+const subscribeStorage = (
+  sync: (key: string | null, value: string | null, isLocal?: boolean) => void,
+) => {
   const storage = (event: StorageEvent) => {
     if (event.storageArea === null || event.storageArea === window.localStorage)
       sync(event.key, event.newValue);
@@ -171,7 +173,7 @@ const subscribeStorage = (sync: (key: string | null, value: string | null) => vo
   const local = (event: Event) => {
     const { key, value } = (event as CustomEvent<{ key: string; value: string }>)
       .detail;
-    sync(key, value);
+    sync(key, value, true);
   };
   window.addEventListener("storage", storage);
   window.addEventListener("localStorageSync", local);
