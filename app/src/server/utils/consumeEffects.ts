@@ -1,6 +1,5 @@
 import { MAX_MARRIAGE_SLOTS } from "@/drizzle/constants";
-import type { Item, UserData } from "@/drizzle/schema";
-import type { filterRollableBloodlines } from "@/libs/bloodline";
+import type { Bloodline, Item, UserData } from "@/drizzle/schema";
 import type { filterRollableSageModes } from "@/libs/sageMode";
 import type { fetchItemBloodlineRolls } from "@/queries/bloodline";
 import {
@@ -25,7 +24,7 @@ export const planConsumeEffects = (info: {
   effects: Item["effects"];
   user: UserData;
   ctx: { userId: string };
-  bloodlinePools: ReadonlyMap<string, ReturnType<typeof filterRollableBloodlines>>;
+  bloodlinePools: ReadonlyMap<string, Pick<Bloodline, "id" | "name">[]>;
   sageModePool: ReturnType<typeof filterRollableSageModes>;
   previousRolls: Awaited<ReturnType<typeof fetchItemBloodlineRolls>>;
   userSkills: Awaited<ReturnType<typeof fetchUserSkills>>;

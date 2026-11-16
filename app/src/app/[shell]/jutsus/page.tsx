@@ -24,7 +24,12 @@ import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { getEquippedJutsuProfilePatch } from "@/deltas/jutsu";
+import {
+  getEquippedJutsuProfilePatch,
+  getForgottenJutsus,
+  getTransferredJutsus,
+  getUnequippedJutsus,
+} from "@/deltas/jutsu";
 import {
   COST_EXTRA_JUTSU_SLOT,
   COST_RESKIN_JUTSU,
@@ -175,7 +180,8 @@ export default function MyJutsu() {
 
   // User Jutsus & items
   const jutsuInput = { ...getFilter(state), includeEquipped: true };
-  const { prepareJutsuUpdate, updateJutsus } = useJutsuCacheUpdate(jutsuInput);
+  const { prepareJutsuUpdate, updateJutsus, updateJutsuRows } =
+    useJutsuCacheUpdate(jutsuInput);
   const { prepareLoadoutUpdate, updateEquippedLoadout, updateLoadoutOrder } =
     useJutsuLoadoutCacheUpdate();
   const { data: userJutsus, isFetching: l1 } = api.jutsu.getUserJutsus.useQuery(
@@ -307,13 +313,17 @@ export default function MyJutsu() {
 
   const { mutate: unequipAll, isPending: isUnequipping } =
     api.jutsu.unequipAll.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
+      onMutate: () => ({
+        jutsus: prepareJutsuUpdate(),
+        user: prepareUserUpdate(),
+      }),
+      onSuccess: async (data, _variables, context) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data, { revision }),
-            utils.jutsu.getUserJutsus.invalidate(),
+            updateUser(data, { revision: context.user }),
+            updateJutsuRows(getUnequippedJutsus, context.jutsus),
+            // Selection can change in another tab before the server clears its live pointer.
             utils.jutsu.getLoadouts.invalidate(),
           ]);
         }
@@ -322,10 +332,14 @@ export default function MyJutsu() {
     });
 
   const { mutate: forget, isPending: isForgetting } = api.jutsu.forget.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareJutsuUpdate,
+    onSuccess: async (data, variables, context) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.jutsu.getUserJutsus.invalidate();
+        await updateJutsuRows(
+          (rows) => getForgottenJutsus(rows, variables.id),
+          context,
+        );
       }
     },
     onSettled,
@@ -392,14 +406,18 @@ export default function MyJutsu() {
 
   const { mutate: transferLevel, isPending: isTransferring } =
     api.jutsu.transferLevel.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
+      onMutate: () => ({ jutsus: prepareJutsuUpdate(), user: prepareUserUpdate() }),
+      onSuccess: async (data, _variables, context) => {
         showMutationToast(data);
         if (data.success && userData) {
           await Promise.all([
-            utils.jutsu.getUserJutsus.invalidate(), // Refresh Jutsu list
-            utils.jutsu.getRecentTransfers.invalidate(), // 🔹 Refresh free transfers
-            updateUser(undefined, { revision, delta: data.userDelta }),
+            updateJutsuRows(
+              (rows) => getTransferredJutsus(rows, data.transfer),
+              context.jutsus,
+            ),
+            // The transfer log decides the remaining free transfers.
+            utils.jutsu.getRecentTransfers.invalidate(),
+            updateUser(undefined, { revision: context.user, delta: data.userDelta }),
           ]);
         }
       },

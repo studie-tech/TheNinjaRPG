@@ -42,6 +42,11 @@ describeWithDatabase("imbuement removal", () => {
     expect(await remove()).toEqual({
       success: true,
       message: "Removed Crystal from Sword",
+      removedImbuement: {
+        userItemId: "sword-stack",
+        imbuementId: "imbuement",
+        returnedCrystal: false,
+      },
     });
     const db = await getTestDatabase();
     expect(await db.select().from(userItemImbuement)).toEqual([]);
@@ -57,6 +62,11 @@ describeWithDatabase("imbuement removal", () => {
       success: true,
       message:
         "Removed Crystal from Retired Sword and returned the crystal to your inventory",
+      removedImbuement: {
+        userItemId: "sword-stack",
+        imbuementId: "imbuement",
+        returnedCrystal: true,
+      },
     });
     const db = await getTestDatabase();
     expect(

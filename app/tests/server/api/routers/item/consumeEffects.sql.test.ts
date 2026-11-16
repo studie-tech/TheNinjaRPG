@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
+import { REGEN_SECONDS } from "@/drizzle/constants";
 import {
   actionLog,
   bloodline,
@@ -135,6 +136,67 @@ describeWithDatabase("item.consume effect planning", () => {
         consumeWith([stored({ type: "heal", power: 10, poolsAffected: ["Energy"] })]),
       ).rejects.toThrow();
       expect(await carriedStacks()).toHaveLength(1);
+    });
+  });
+
+  describe("passive regeneration", () => {
+    const regenAt = () => new Date(Date.now() - 10.5 * REGEN_SECONDS * 1000);
+    const setRegeneration = async (values: Partial<typeof userData.$inferInsert>) =>
+      (await getTestDatabase())
+        .update(userData)
+        .set({ regeneration: 5, curEnergy: 10, ...values })
+        .where(eq(userData.userId, userId));
+
+    it("heals the regenerated pools and settles the ticks in the consumption claim", async () => {
+      const lastRegen = regenAt();
+      await setRegeneration({ regenAt: lastRegen });
+      const result = await consumeWith([
+        HealTag.parse({ power: 25, calculation: "static", poolsAffected: ["Health"] }),
+      ]);
+      expect(result.notifications).toEqual(["You healed 25 HP"]);
+      const saved = await savedUser();
+      // Every pool gained the same ten ticks; Chakra and Stamina did not cap.
+      const gain = saved.curStamina - 10;
+      expect(gain).toBeGreaterThan(0);
+      expect(saved.curChakra).toBe(Math.min(10 + gain, 33));
+      expect(saved.curHealth).toBe(10 + gain + 25);
+      expect(saved.curEnergy).toBe(Math.min(10 + gain, saved.maxEnergy));
+      expect(saved.regenAt.getTime()).toBe(
+        lastRegen.getTime() + 10 * REGEN_SECONDS * 1000,
+      );
+      expect(result.userPatch).toMatchObject({
+        curHealth: saved.curHealth,
+        curStamina: saved.curStamina,
+        regenAt: saved.regenAt,
+      });
+    });
+
+    it("leaves the account untouched when the item is missing", async () => {
+      const lastRegen = regenAt();
+      await setRegeneration({ regenAt: lastRegen });
+      const before = await savedUser();
+      const api = await callerFor(itemRouter, userId);
+      expect(await api.consume({ userItemId: "missing" })).toMatchObject({
+        success: false,
+        message: "User item not found",
+      });
+      expect(await savedUser()).toEqual(before);
+    });
+
+    it("defers regeneration to queued Energy training", async () => {
+      const lastRegen = regenAt();
+      await setRegeneration({
+        regenAt: lastRegen,
+        energyQueueHead: 0,
+        energyQueueTail: 1,
+      });
+      const result = await consumeWith([
+        HealTag.parse({ power: 25, calculation: "static", poolsAffected: ["Health"] }),
+      ]);
+      expect(result.success).toBe(true);
+      const saved = await savedUser();
+      expect(saved).toMatchObject({ curHealth: 35, curStamina: 10, curEnergy: 10 });
+      expect(saved.regenAt.getTime()).toBe(lastRegen.getTime());
     });
   });
 

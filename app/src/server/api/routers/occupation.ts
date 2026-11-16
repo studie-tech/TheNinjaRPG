@@ -1002,7 +1002,18 @@ export const occupationRouter = createTRPCRouter({
   removeImbuement: protectedProcedure
     .meta({ mcp: { description: "Remove an imbuement from an item" } })
     .input(z.object({ userItemImbuementId: z.string() }))
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        // A returned crystal adds an inventory row, which the client reads.
+        removedImbuement: z
+          .object({
+            userItemId: z.string(),
+            imbuementId: z.string(),
+            returnedCrystal: z.boolean(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Queries
       const [userItems, imbuement] = await Promise.all([
@@ -1061,6 +1072,11 @@ export const occupationRouter = createTRPCRouter({
         message: returnsCrystal
           ? `Removed ${imbuement.item.name} from ${ownedUserItem.item.name} and returned the crystal to your inventory`
           : `Removed ${imbuement.item.name} from ${ownedUserItem.item.name}`,
+        removedImbuement: {
+          userItemId: ownedUserItem.id,
+          imbuementId: input.userItemImbuementId,
+          returnedCrystal: returnsCrystal,
+        },
       };
     }),
 });

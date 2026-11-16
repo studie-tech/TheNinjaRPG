@@ -13,19 +13,30 @@ export const useJutsuCacheUpdate = (input: UserJutsuFilteringSchema) => {
   );
   /** Capture the filter and query revision before later renders can change the selection. */
   const prepareJutsuUpdate = () => ({ query: cache.prepareUpdate(), input });
-  /** Reconcile the initiating filter and refresh other filters whose membership may change. */
-  const updateJutsus = async (
-    userJutsuId: string,
-    change: RouterOutputs["jutsu"]["toggleEquip"]["data"],
+  /** Patch the initiating filter and refresh other filters, whose rows may also change. */
+  const updateJutsuRows = async (
+    update: (
+      rows: UserJutsus,
+      input: UserJutsuFilteringSchema,
+    ) => UserJutsus | undefined,
     snapshot: ReturnType<typeof prepareJutsuUpdate>,
   ) => {
     void utils.jutsu.getUserJutsus.invalidate(undefined, {
       predicate: (query) => hashKey(query.queryKey) !== hashKey(snapshot.query.key),
     });
-    await cache.updateCache(
-      (rows) => getEquippedJutsus(rows, userJutsuId, change, snapshot.input),
-      snapshot.query,
-    );
+    await cache.updateCache((rows) => update(rows, snapshot.input), snapshot.query);
   };
-  return { prepareJutsuUpdate, updateJutsus };
+  /** Reconcile a confirmed equip change across the jutsu lists. */
+  const updateJutsus = (
+    userJutsuId: string,
+    change: RouterOutputs["jutsu"]["toggleEquip"]["data"],
+    snapshot: ReturnType<typeof prepareJutsuUpdate>,
+  ) =>
+    updateJutsuRows(
+      (rows, filter) => getEquippedJutsus(rows, userJutsuId, change, filter),
+      snapshot,
+    );
+  return { prepareJutsuUpdate, updateJutsus, updateJutsuRows };
 };
+
+type UserJutsus = RouterOutputs["jutsu"]["getUserJutsus"];

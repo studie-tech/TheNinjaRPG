@@ -126,6 +126,13 @@ export const fetchBloodline = async (client: DrizzleClient, bloodlineId: string)
   });
 };
 
+/** Load the identity, rank and village of every non-hidden bloodline, as roll pools need. */
+export const fetchRollableBloodlines = (client: Pick<DrizzleClient, "query">) =>
+  client.query.bloodline.findMany({
+    columns: { id: true, name: true, rank: true, villageId: true },
+    where: eq(bloodline.hidden, false),
+  });
+
 /** Load all non-hidden bloodline definitions. */
 export const fetchBloodlines = async (client: DrizzleClient) => {
   return await client.query.bloodline.findMany({ where: eq(bloodline.hidden, false) });

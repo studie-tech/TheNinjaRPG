@@ -17,7 +17,6 @@ import {
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
-  getBulkSellUserUpdate,
   getBuyUserUpdate,
   getConsumedItemUserUpdate,
   getConsumedMealUserUpdate,
@@ -28,6 +27,7 @@ import {
   getMergedStacksUserUpdate,
   getPurchaseVariantUserUpdate,
   getRepairedEquipmentUpdate,
+  getSaleUserUpdate,
   getSelectItemLoadoutUserUpdate,
   getUnchangedEquipmentUserUpdate,
   getUnequippedUserUpdate,
@@ -164,7 +164,7 @@ import {
   fetchActionUser,
   updateUserForActionReadiness,
 } from "@/queries/actionReadiness";
-import { fetchBloodlines, fetchItemBloodlineRolls } from "@/queries/bloodline";
+import { fetchItemBloodlineRolls, fetchRollableBloodlines } from "@/queries/bloodline";
 import { clearCosmeticVariant, deleteItemCosmetics } from "@/queries/cosmetic";
 import { listHuntingHabitats } from "@/queries/hunting";
 import type { UserItemMergeBucketRow } from "@/queries/item";
@@ -177,7 +177,6 @@ import {
   deleteItemVariantForDelete,
   deleteUserItemForDelete,
   deleteUserItemForExecuteMergeStacksForItemBucket,
-  deleteUserItemForSellUserItem,
   deleteUserItemImbuementForDelete,
   deleteUserItemImbuementForEvolveItem,
   deleteUserItemImbuementForSellUserItem,
@@ -241,6 +240,7 @@ import {
   listUserItemsForSellUserItems,
   listUserPetForConsume,
   listVariantNames,
+  repairUserItemAtomically,
   restoreUserItemDurability,
   selectEvoSiblingCountForUpdate,
   selectItemForDelete,
@@ -298,6 +298,7 @@ import {
   fetchLoadoutUser,
   fetchUser,
   incrementUserMoney,
+  selectUserMoney,
 } from "@/queries/profile";
 import {
   fetchQuest,
@@ -322,6 +323,7 @@ import {
   type ActionReadiness,
   actionReadinessResponse,
   prepareActionReadiness,
+  withPassiveRegeneration,
 } from "@/server/utils/actionReadiness";
 import {
   cacheReceiptId,
@@ -372,6 +374,7 @@ import {
 } from "@/validators/combat";
 import {
   type InventoryQuantityChange,
+  inventoryDurabilityChangeSchema,
   inventoryQuantityChangeSchema,
 } from "@/validators/inventory";
 import {
@@ -581,7 +584,7 @@ export const itemRouter = createTRPCRouter({
       const [selectedItem, user, bloodlines, previousRolls] = await Promise.all([
         fetchItem(ctx.drizzle, input.id),
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchBloodlines(ctx.drizzle),
+        fetchRollableBloodlines(ctx.drizzle),
         fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
       ]);
       if (!selectedItem) return null;
@@ -1889,7 +1892,7 @@ export const itemRouter = createTRPCRouter({
   sellUserItem: protectedProcedure
     .meta({ mcp: { description: "Sell or drop a user item" } })
     .input(z.object({ userItemId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, useritem, structures] = await Promise.all([
@@ -1912,19 +1915,18 @@ export const itemRouter = createTRPCRouter({
       }
       // Derived
       const cost = calcItemSellingPrice(user, useritem, structures);
-      // Claim the positive stack before granting proceeds. A merge claim negates quantity, so the
-      // CAS cannot delete or pay for a row while it belongs to an in-flight merge.
-      const deleteResult = await retryOnDeadlock(async () =>
-        deleteUserItemForSellUserItem(ctx.drizzle, input, ctx, useritem),
+      // Empty the positive stack and pay in one statement. A merge claim negates quantity, so
+      // the CAS cannot sell a row while it belongs to an in-flight merge.
+      const sale = await retryOnDeadlock(async () =>
+        sellUserItemAtomically(ctx.drizzle, ctx, useritem, cost, "owned"),
       );
-      if (deleteResult.rowsAffected !== 1) {
+      if (sale.rowsAffected === 0) {
         return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
       }
-
-      // Mutate dependent state only after the inventory CAS succeeds.
+      // Cleanup cannot make a paid stack sellable again, even if it needs retrying.
       await Promise.all([
+        deleteEmptyUserItem(ctx.drizzle, input.userItemId, ctx.userId),
         deleteUserItemImbuementForSellUserItem(ctx.drizzle, input),
-        incrementUserMoney(ctx.drizzle, cost, ctx.userId),
         ...(useritem.item.cost >= 500000
           ? [insertActionLogForSellUserItem(ctx.drizzle, ctx, useritem, cost)]
           : []),
@@ -1935,6 +1937,8 @@ export const itemRouter = createTRPCRouter({
           cost > 0
             ? `You sold ${useritem.item.name} for ${cost} ryo`
             : `You dropped ${useritem.item.name}`,
+        // Equipped gear changes the profile's derived equipment, which a read reconciles.
+        ...(useritem.equipped === "NONE" ? getSaleUserUpdate(cost) : {}),
       };
     }),
   sellUserItems: protectedProcedure
@@ -2053,7 +2057,7 @@ export const itemRouter = createTRPCRouter({
         soldUserItemIds: sold.map((useritem) => useritem.id),
         ryo,
         refused: [...refused, ...unconfirmed],
-        ...(unconfirmed.length > 0 ? {} : getBulkSellUserUpdate(ryo)),
+        ...(unconfirmed.length > 0 ? {} : getSaleUserUpdate(ryo)),
       };
     }),
   // Equip or unequip a user item
@@ -2212,13 +2216,9 @@ export const itemRouter = createTRPCRouter({
         userSkills,
         previousOpening,
       ] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        }),
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
-        fetchBloodlines(ctx.drizzle),
+        fetchRollableBloodlines(ctx.drizzle),
         fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
         fetchSageModeRolls(ctx.drizzle, ctx.userId),
         fetchSageModes(ctx.drizzle),
@@ -2229,12 +2229,14 @@ export const itemRouter = createTRPCRouter({
         return readCacheReceipt(previousOpening.changes, input.userItemId);
       const { user: initialUser } = updatedUser;
       if (!initialUser) return errorResponse("User not found");
-      const readiness = prepareActionReadiness(initialUser, updatedUser.settings);
-      if (readiness.error) return errorResponse(readiness.error);
-      const user = readiness.user;
+      const recovery = prepareActionReadiness(initialUser, updatedUser.settings);
+      if (recovery.error) return errorResponse(recovery.error);
 
       // Guard
       if (!useritem) return errorResponse("User item not found");
+      // Effects apply to regenerated pools, which the consumption claim persists.
+      const readiness = withPassiveRegeneration(recovery);
+      const user = readiness.user;
       if (useritem.item.itemType === "MEAL") {
         const result = await consumeMeal({
           client: ctx.drizzle,
@@ -2749,7 +2751,11 @@ export const itemRouter = createTRPCRouter({
   repair: protectedProcedure
     .meta({ mcp: { description: "Repair an item with ryo" } })
     .input(z.object({ userItemId: z.string() }))
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        durabilityChanges: z.array(inventoryDurabilityChangeSchema).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       const [initialUser, useritem, settings] = await Promise.all([
@@ -2783,31 +2789,24 @@ export const itemRouter = createTRPCRouter({
       if (user.money < repairCost) {
         return errorResponse(`Insufficient funds. Repair costs ${repairCost} ryo`);
       }
-      // Mutate - update money with conditional guard to prevent race conditions
-      const moneyUpdateResult = await debitUserMoney(
-        ctx.drizzle,
-        repairCost,
-        ctx,
-        readiness,
-      );
-      if (moneyUpdateResult.rowsAffected !== 1) {
-        return errorResponse("Insufficient funds for this repair");
-      }
-      // CAS durability write — refund if item left inventory / changed concurrently
-      const repaired = await tryRepairUserItemDurability(
-        ctx.drizzle,
-        ctx.userId,
-        useritem,
-        useritem.item.maxDurability,
-      );
-      if (!repaired) {
-        await refundUserMoney(ctx.drizzle, ctx.userId, repairCost);
-        return actionReadinessResponse(
-          errorResponse(
-            "Could not repair item — it may have been stored, auctioned, or already repaired",
-          ),
-          readiness,
+      // Mutate - the durability CAS and the balance-guarded debit commit together
+      const repaired = await retryOnDeadlock(() =>
+        repairUserItemAtomically(
           ctx.drizzle,
+          useritem.item.maxDurability,
+          useritem,
+          repairCost,
+          ctx.userId,
+          readiness,
+        ),
+      );
+      if (repaired.rowsAffected === 0) {
+        // Only the rejection message needs the live balance.
+        const balance = await selectUserMoney(ctx.drizzle, ctx.userId);
+        return errorResponse(
+          (balance?.money ?? 0) < repairCost
+            ? "Insufficient funds for this repair"
+            : "Could not repair item — it may have been stored, auctioned, or already repaired",
         );
       }
       return actionReadinessResponse(
@@ -2818,6 +2817,13 @@ export const itemRouter = createTRPCRouter({
             [{ before: useritem, durability: useritem.item.maxDurability }],
             repairCost,
           ),
+          durabilityChanges: [
+            {
+              id: useritem.id,
+              beforeDurability: useritem.durability,
+              durability: useritem.item.maxDurability,
+            },
+          ],
           message: `Repaired ${useritem.item.name} for ${repairCost} ryo`,
         },
         readiness,
@@ -2925,7 +2931,12 @@ export const itemRouter = createTRPCRouter({
   useRepairItem: protectedProcedure
     .meta({ mcp: { description: "Use repair kit on an item" } })
     .input(z.object({ repairItemId: z.string(), targetItemId: z.string() }))
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        durabilityChanges: z.array(inventoryDurabilityChangeSchema).optional(),
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       const [initialUser, repairUserItem, targetUserItem, settings] = await Promise.all(
@@ -3070,6 +3081,19 @@ export const itemRouter = createTRPCRouter({
               ? [{ before: repairUserItem, quantity: repairUserItem.quantity - 1 }]
               : []),
           ]),
+          durabilityChanges: [
+            {
+              id: targetUserItem.id,
+              beforeDurability: targetUserItem.durability,
+              durability: newDurability,
+            },
+          ],
+          inventoryChanges: repairUserItem.item.destroyOnUse
+            ? getInventoryQuantityChanges(
+                [repairUserItem],
+                [{ id: repairUserItem.id, quantity: repairUserItem.quantity - 1 }],
+              )
+            : [],
           message: `Repaired ${targetUserItem.item.name} by ${actualRepair} durability using ${repairUserItem.item.name}`,
         },
         readiness,

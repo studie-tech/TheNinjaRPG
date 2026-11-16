@@ -3,6 +3,8 @@
 import { api } from "@/app/_trpc/client";
 import {
   getEquippedInventory,
+  getImbuementRemovedInventory,
+  getInventoryDurabilities,
   getInventoryQuantities,
   getSoldInventory,
 } from "@/deltas/item";
@@ -21,7 +23,7 @@ import { useRequiredUserInfo, useUserDataSelector } from "@/utils/UserContext";
  * Binds per-item tRPC mutations to the shared inventory and profile cache controllers.
  * Each action owns when onDone dismisses its initiating view; repairs dismiss only after
  * confirmed success, while actions with settlement handlers also dismiss after rejection.
- * Inventory refetches after confirmed writes run in the background, so the pressed
+ * Inventory reconciliation after confirmed writes runs in the background, so the pressed
  * control is released as soon as the server answers.
  */
 export const useItemActions = ({
@@ -74,14 +76,20 @@ export const useItemActions = ({
   });
 
   const { mutate: sell, isPending: isSelling } = api.item.sellUserItem.useMutation({
-    onMutate: prepareInventoryUpdate,
+    onMutate: () => ({
+      inventory: prepareInventoryUpdate(),
+      user: prepareUserUpdate(),
+    }),
     onSuccess: async (data, input, context) => {
       showMutationToast(data);
       if (data.success) {
-        await updateInventory(
-          (rows) => getSoldInventory(rows, input.userItemId),
-          context,
-        );
+        await Promise.all([
+          updateInventory(
+            (rows) => getSoldInventory(rows, input.userItemId),
+            context.inventory,
+          ),
+          updateUser(data, { revision: context.user }),
+        ]);
       }
     },
     onError: async (error) => {
@@ -91,7 +99,11 @@ export const useItemActions = ({
         message: error.message,
         variant: "destructive",
       });
-      await invalidateInventory();
+      // The sale may have committed before the error, so both views need authoritative reads.
+      await Promise.all([
+        invalidateInventory(),
+        updateUser(undefined, { revision: undefined }),
+      ]);
     },
     onSettled,
   });
@@ -123,35 +135,54 @@ export const useItemActions = ({
     api.item.splitStack.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success) void utils.item.getUserItemsWithVariants.invalidate();
+        // The source may have moved or changed cosmetics in another tab before splitting.
+        if (data.success) void invalidateInventory();
       },
       onSettled,
     });
 
   const { mutate: repairWithKit, isPending: isUsingRepairItem } =
     repairWithKitProcedure.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
+      onMutate: () => ({
+        inventory: prepareInventoryUpdate(),
+        user: prepareUserUpdate(),
+      }),
+      onSuccess: async (data, _variables, context) => {
         showMutationToast(data);
-        if (data.userRecovery && !data.success) void updateUser(data, { revision });
+        if (data.userRecovery && !data.success)
+          void updateUser(data, { revision: context.user });
         if (data.success) {
           onDone();
-          await updateUser(data, { revision });
-          void utils.item.getUserItemsWithVariants.invalidate();
+          await updateUser(data, { revision: context.user });
+          void updateInventory(
+            (rows) =>
+              getInventoryDurabilities(
+                getInventoryQuantities(rows, data.inventoryChanges),
+                data.durabilityChanges,
+              ),
+            context.inventory,
+          );
         }
       },
     });
 
   const { mutate: repairWithRyo, isPending: isRepairingWithRyo } =
     api.item.repair.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
+      onMutate: () => ({
+        inventory: prepareInventoryUpdate(),
+        user: prepareUserUpdate(),
+      }),
+      onSuccess: async (data, _variables, context) => {
         showMutationToast(data);
-        if (data.userRecovery && !data.success) void updateUser(data, { revision });
+        if (data.userRecovery && !data.success)
+          void updateUser(data, { revision: context.user });
         if (data.success) {
           onSettled();
-          await updateUser(data, { revision });
-          void utils.item.getUserItemsWithVariants.invalidate();
+          await updateUser(data, { revision: context.user });
+          void updateInventory(
+            (rows) => getInventoryDurabilities(rows, data.durabilityChanges),
+            context.inventory,
+          );
         }
       },
     });
@@ -175,9 +206,17 @@ export const useItemActions = ({
 
   const { mutate: removeImbuement, isPending: isRemovingImbuement } =
     api.occupation.removeImbuement.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareInventoryUpdate,
+      onSuccess: async (data, _variables, context) => {
         showMutationToast(data);
-        if (data.success) void utils.item.getUserItemsWithVariants.invalidate();
+        if (data.success)
+          void updateInventory(
+            (rows) =>
+              data.removedImbuement?.returnedCrystal
+                ? undefined
+                : getImbuementRemovedInventory(rows, data.removedImbuement),
+            context,
+          );
       },
       onSettled,
     });

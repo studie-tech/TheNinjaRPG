@@ -47,7 +47,10 @@ import { JUTSU_FREE_TRANSFER_MARKER } from "@/libs/jutsu";
 import type { getJutsuReskinMechanics } from "@/libs/jutsu/reskins";
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import type { DrizzleClient } from "@/server/db";
-import type { ActionReadiness } from "@/server/utils/actionReadiness";
+import type {
+  ActionReadiness,
+  ActionReadinessWrite,
+} from "@/server/utils/actionReadiness";
 import { clampActionLogText } from "@/utils/actionLog";
 import { calculateContentDiff } from "@/utils/diff";
 import { DAY_S, getNextUserSnapshotAt, secondsFromDate } from "@/utils/time";
@@ -762,29 +765,37 @@ export const insertActionLogForAdjustUserJutsu = (
     relatedImage: userjutsu.jutsu.image,
   });
 
-/** Increment the owned level only against its loaded baseline so concurrent starts cannot share a projection. */
-export const updateUserJutsuForStartTraining = (
-  client: Pick<DrizzleClient, "update">,
+/**
+ * Advance an owned jutsu one level and debit its training cost in one joined statement, so
+ * a lost level race or balance leaves both rows unchanged. Both rows change on success,
+ * except that a free level changes only the jutsu row; zero affected rows means a guard failed.
+ */
+export const trainOwnedJutsuLevelAtomically = (
+  client: Pick<DrizzleClient, "execute">,
   trainingStartedAt: Date,
   finishTraining: Date,
   userjutsuObj: { id: string; level: number },
+  cost: number,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
-  client
-    .update(userJutsu)
-    .set({
-      level: sql`${userJutsu.level} + 1`,
-      trainingStartedAt,
-      finishTraining,
-      updatedAt: trainingStartedAt,
-    })
-    .where(
-      and(
-        eq(userJutsu.id, userjutsuObj.id),
-        eq(userJutsu.userId, ctx.userId),
-        eq(userJutsu.level, userjutsuObj.level),
-      ),
-    );
+  client.execute(sql`
+    UPDATE ${userJutsu}
+    INNER JOIN ${userData} ON ${userData.userId} = ${userJutsu.userId}
+    SET ${actionReadinessSqlSet(readiness, [])}
+        ${userJutsu.level} = ${userJutsu.level} + 1,
+        ${userJutsu.trainingStartedAt} = ${trainingStartedAt},
+        ${userJutsu.finishTraining} = ${finishTraining},
+        ${userJutsu.updatedAt} = ${trainingStartedAt},
+        ${userData.money} = ${userData.money} - ${cost}
+    WHERE ${and(
+      eq(userJutsu.id, userjutsuObj.id),
+      eq(userJutsu.userId, ctx.userId),
+      eq(userJutsu.level, userjutsuObj.level),
+      gte(userData.money, cost),
+      readiness?.where,
+    )}
+  `);
 
 /** Build the `userJutsu` insert for `startTraining`, updating duplicate keys. */
 export const insertUserJutsuForStartTraining = (

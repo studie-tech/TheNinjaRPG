@@ -109,6 +109,22 @@ describeWithDatabase("jutsu unequip all", () => {
     expect(rows.every((row) => !row.equipped)).toBe(true);
   });
 
+  it("clears a newly selected loadout without claiming the earlier snapshot ID", async () => {
+    const db = await getTestDatabase();
+    const selector = await callerFor(jutsuRouter, userId);
+    const raced = beforeStatements(db, userData, [
+      async () => {
+        expect((await selector.selectJutsuLoadout({ id: "spare" })).success).toBe(true);
+      },
+    ]);
+    const result = await callerForDatabase(jutsuRouter, userId, raced).unequipAll();
+    expect(result.success).toBe(true);
+    // The read saw active, but the write cleared spare; neither ID can be patched from that read.
+    expect(result).not.toHaveProperty("clearedLoadoutId");
+    expect(await loadoutIds("active")).toEqual(["strike", "guard"]);
+    expect(await loadoutIds("spare")).toEqual([]);
+  });
+
   it("keeps a loadout selected after the equipment clear intact", async () => {
     const db = await getTestDatabase();
     const selected = deferred<void>();

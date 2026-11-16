@@ -10,3 +10,12 @@ export const inventoryQuantityChangeSchema = z.object({
 });
 
 export type InventoryQuantityChange = z.infer<typeof inventoryQuantityChangeSchema>;
+
+/** A confirmed durability write against the loaded baseline. */
+export const inventoryDurabilityChangeSchema = z.object({
+  id: z.string(),
+  beforeDurability: z.number().int().nonnegative(),
+  durability: z.number().int().nonnegative(),
+});
+
+export type InventoryDurabilityChange = z.infer<typeof inventoryDurabilityChangeSchema>;

@@ -2223,6 +2223,13 @@ export const incrementUserMoney = (
     .set({ money: sql`${userData.money} + ${amount}` })
     .where(eq(userData.userId, userId));
 
+/** Build a lookup of the user's live ryo balance. */
+export const selectUserMoney = (client: Pick<DrizzleClient, "query">, userId: string) =>
+  client.query.userData.findFirst({
+    columns: { money: true },
+    where: eq(userData.userId, userId),
+  });
+
 /** Build a money debit guarded by the user’s available balance. */
 export const debitUserMoney = (
   client: Pick<DrizzleClient, "update">,

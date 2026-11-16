@@ -48,8 +48,10 @@ export const buildBloodlineCollectionProgress = (
  *
  * @returns A filtered and sorted array of bloodlines that match the specified criteria.
  */
-export const filterRollableBloodlines = (info: {
-  bloodlines: Bloodline[];
+export const filterRollableBloodlines = <
+  T extends Pick<Bloodline, "id" | "rank" | "villageId">,
+>(info: {
+  bloodlines: T[];
   rank: LetterRank | null | undefined;
   user: UserData;
   previousRolls: BloodlineRolls[];

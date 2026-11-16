@@ -1,16 +1,24 @@
 import { describe, expect, it } from "bun:test";
 import {
-  getBulkSellUserUpdate,
   getBulkSoldInventory,
   getConsumedRaidBuffs,
   getEquippedInventory,
   getHomeStorageMovedInventory,
+  getImbuementRemovedInventory,
+  getInventoryDurabilities,
   getInventoryEquipmentChanges,
   getInventoryQuantities,
   getInventoryQuantityChanges,
+  getSaleUserUpdate,
   getSoldInventory,
 } from "@/deltas/item";
-import { getEquippedJutsus } from "@/deltas/jutsu";
+import {
+  getEquippedJutsus,
+  getForgottenJutsus,
+  getTransferredJutsus,
+  getUnequippedJutsus,
+} from "@/deltas/jutsu";
+import type { UserItem } from "@/drizzle/schema";
 
 const rows = [
   { id: "one", equipped: "NONE" as const, variants: ["red"] },
@@ -63,7 +71,7 @@ describe("inventory reconciliation", () => {
   });
 
   it("credits a bulk sell's summed ryo", () => {
-    expect(getBulkSellUserUpdate(1_250)).toEqual({ userDelta: { money: 1_250 } });
+    expect(getSaleUserUpdate(1_250)).toEqual({ userDelta: { money: 1_250 } });
   });
 });
 
@@ -162,4 +170,94 @@ it("extends a loaded meal buff while new identities require their display relati
   );
   expect(getConsumedRaidBuffs({ buffs: [] }, update)).toBeUndefined();
   expect(getConsumedRaidBuffs(current, { ...update, userPatch: {} })).toBeUndefined();
+});
+
+describe("item mutation projections", () => {
+  const stack = {
+    id: "stack",
+    itemId: "herb",
+    quantity: 10,
+    durability: 80,
+    level: 3,
+    equipped: "NONE",
+    storedAtHome: true,
+    homeX: 4,
+    homeY: 5,
+    variants: ["red"],
+  } as unknown as UserItem & { variants: string[] };
+  it("applies repaired durability after the kit's quantity", () => {
+    const kit = { ...stack, id: "kit", quantity: 2, durability: 100 };
+    const repaired = getInventoryDurabilities(
+      getInventoryQuantities(
+        [stack, kit],
+        getInventoryQuantityChanges([kit], [{ id: "kit", quantity: 1 }]),
+      ),
+      [{ id: "stack", beforeDurability: 80, durability: 100 }],
+    );
+    expect(repaired?.map((row) => [row.id, row.quantity, row.durability])).toEqual([
+      ["stack", 10, 100],
+      ["kit", 1, 100],
+    ]);
+    expect(
+      getInventoryDurabilities(
+        [stack],
+        [{ id: "stack", beforeDurability: 70, durability: 100 }],
+      ),
+    ).toBeUndefined();
+    expect(getInventoryDurabilities(undefined, [])).toBeUndefined();
+  });
+
+  it("drops only the removed imbuement and refetches unloaded relations", () => {
+    const imbued = { ...stack, imbuements: [{ id: "keep" }, { id: "gone" }] };
+    expect(
+      getImbuementRemovedInventory([imbued], {
+        userItemId: "stack",
+        imbuementId: "gone",
+      })?.[0],
+    ).toEqual({ ...imbued, imbuements: [{ id: "keep" }] });
+    expect(
+      getImbuementRemovedInventory([stack], {
+        userItemId: "stack",
+        imbuementId: "gone",
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("jutsu mutation projections", () => {
+  const jutsus = [
+    { id: "one", jutsuId: "a", equipped: true, level: 8 },
+    { id: "two", jutsuId: "b", equipped: false, level: 2 },
+  ];
+
+  it("removes a forgotten jutsu and refetches a missing one", () => {
+    expect(getForgottenJutsus(jutsus, "one")).toEqual([jutsus[1]!]);
+    expect(getForgottenJutsus(jutsus, "missing")).toBeUndefined();
+  });
+
+  it("clears every equip flag unless the filter admits equipped rows", () => {
+    expect(getUnequippedJutsus(jutsus, {})?.map((row) => row.equipped)).toEqual([
+      false,
+      false,
+    ]);
+    expect(getUnequippedJutsus(jutsus, { includeEquipped: true })).toBeDefined();
+    expect(
+      getUnequippedJutsus(jutsus, { includeEquipped: true, name: "search" }),
+    ).toBeUndefined();
+  });
+
+  it("moves transferred levels between matching baselines", () => {
+    const transfer = {
+      fromUserJutsuId: "one",
+      fromLevel: 8,
+      toUserJutsuId: "two",
+      toLevel: 2,
+      levels: 3,
+    };
+    expect(getTransferredJutsus(jutsus, transfer)?.map((row) => row.level)).toEqual([
+      5, 5,
+    ]);
+    expect(getTransferredJutsus(jutsus, { ...transfer, toLevel: 3 })).toBeUndefined();
+    expect(getTransferredJutsus(jutsus, undefined)).toBeUndefined();
+  });
 });
