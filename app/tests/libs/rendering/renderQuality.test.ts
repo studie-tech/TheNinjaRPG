@@ -188,20 +188,22 @@ describe("render quality governor", () => {
     run(governor, 3_000, FRAME);
     expect(governor.level).toBe(0);
   });
-  it("undoes a step that does not speed frames up and stops lowering", () => {
+  it("undoes and reports a step that does not speed frames up", () => {
     const governor = start();
-    run(governor, 3_000, FRAME);
-    run(governor, 4_100, 30);
+    const steps: (string | null)[] = [];
+    const record = (milliseconds: number, interval: number) => {
+      for (let elapsed = 0; elapsed < milliseconds; elapsed += interval) {
+        const step = governor.sample(interval, FRAME, true);
+        if (step) steps.push(step);
+      }
+    };
+    record(3_000, FRAME);
+    record(4_100, 30);
     expect(governor.level).toBe(1);
     // Still just as slow at the lower level: the frames are limited by something else.
-    run(governor, 2_600, 30);
+    record(2_600, 30);
+    expect(steps).toEqual(["lowered", "rejected"]);
     expect(governor.level).toBe(0);
-    run(governor, 20_000, 30);
-    expect(governor.level).toBe(0);
-    // A resize or settings change lets the governor try again.
-    governor.setLevel(0, 5, true);
-    run(governor, 4_600, 30);
-    expect(governor.level).toBe(1);
   });
   it("keeps a step that helps and continues while frames are still slow", () => {
     const governor = start();

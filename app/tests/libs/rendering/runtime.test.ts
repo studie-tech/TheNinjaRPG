@@ -450,6 +450,21 @@ describe("renderer context loss", () => {
     expect(game.visualEffects).toMatchObject({ shadows: true, localLights: false });
   });
 
+  it("keeps display density when lowering it does not help and tries effects instead", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    const { game, render } = await start(vi.fn(), 2);
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.shadows ? 40 : 15;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(2);
+    expect(game.visualEffects.shadows).toBe(false);
+  });
+
   it("sleeps between the frames of a slow scene and wakes on a timer", async () => {
     const { game, render } = await start(vi.fn());
     render.mockImplementation(() => {});

@@ -169,6 +169,23 @@ export const createGameRenderer = async (options: {
     },
   );
   const qualityOwner = {};
+  /** Reductions this scene showed buy no speed: the lowest density worth using and effects to keep. */
+  let resolutionFloor = 1;
+  const ineffectiveEffects = new Set<VisualEffect>();
+  /** Removes the step the governor just undid from this scene's ladder. */
+  const keepRejectedStep = () => {
+    const kept = ladder[governor.level],
+      undone = ladder[governor.level + 1];
+    if (!kept || !undone) return;
+    if (undone.resolution < kept.resolution) resolutionFloor = kept.resolution;
+    for (const effect of undone.disabled)
+      if (!kept.disabled.includes(effect)) ineffectiveEffects.add(effect);
+  };
+  /** A settings change is a new scene to measure. */
+  const forgetRejectedSteps = () => {
+    resolutionFloor = 1;
+    ineffectiveEffects.clear();
+  };
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;
   let contextLost = false;
@@ -246,14 +263,15 @@ export const createGameRenderer = async (options: {
       measuredAt = isMeasured ? now : null;
       // Quality compares each continuous interval with its requested rate.
       const isPaced = continuous && frameRate >= TIMED_FRAME_RATE;
-      if (
-        isPaced &&
-        pacedAt !== null &&
-        pacedRate === frameRate &&
-        adapts() &&
-        governor.sample(now - pacedAt, 1000 / frameRate, frameRate >= MAX_FRAME_RATE)
-      )
-        updateQuality(false);
+      if (isPaced && pacedAt !== null && pacedRate === frameRate && adapts()) {
+        const step = governor.sample(
+          now - pacedAt,
+          1000 / frameRate,
+          frameRate >= MAX_FRAME_RATE,
+        );
+        if (step === "rejected") keepRejectedStep();
+        if (step) updateQuality(false);
+      }
       pacedAt = isPaced ? now : null;
       pacedRate = frameRate;
     } catch (error) {
@@ -320,7 +338,12 @@ export const createGameRenderer = async (options: {
     let level: QualityLevel = { resolution: base, disabled: [] };
     if (adapts()) {
       const previous = ladder[governor.level];
-      ladder = renderQualityLevels(base, storedEffects, chosenEffects);
+      ladder = renderQualityLevels(
+        base,
+        storedEffects,
+        new Set([...chosenEffects, ...ineffectiveEffects]),
+        resolutionFloor,
+      );
       governor.setLevel(
         previous ? matchingQualityLevel(ladder, previous) : governor.level,
         ladder.length - 1,
@@ -388,6 +411,7 @@ export const createGameRenderer = async (options: {
     subscribeVisualEffects((effect, enabled) => {
       storedEffects[effect] = enabled;
       chosenEffects = readChosenVisualEffects();
+      forgetRejectedSteps();
       updateQuality();
     }),
   );
@@ -395,6 +419,7 @@ export const createGameRenderer = async (options: {
     subscribeRenderQuality((next) => {
       if (next === quality) return;
       quality = next;
+      forgetRejectedSteps();
       updateQuality();
     }),
   );

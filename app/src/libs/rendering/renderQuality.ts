@@ -47,22 +47,26 @@ export const baseRenderResolution = ({
 };
 
 /**
- * Ordered quality levels from full detail: resolution steps to 1.5× and 1×, then each
- * adaptive effect that is currently on and that the player has not chosen in settings.
+ * Ordered quality levels from full detail: resolution steps to 1.5× and 1× (no lower than
+ * the floor), then each adaptive effect that is currently on and not kept. Kept effects are
+ * the player's choices in settings and effects whose removal did not speed this scene up.
  */
 export const renderQualityLevels = (
   base: number,
   effects: VisualEffects,
-  chosen: ReadonlySet<VisualEffect>,
+  kept: ReadonlySet<VisualEffect>,
+  resolutionFloor = 1,
 ): QualityLevel[] => {
   const levels: QualityLevel[] = [{ resolution: base, disabled: [] }];
+  let resolution = base;
   for (const step of [1.5, 1]) {
-    if (base > step) levels.push({ resolution: step, disabled: [] });
+    if (base <= step || step < resolutionFloor) continue;
+    resolution = step;
+    levels.push({ resolution, disabled: [] });
   }
-  const resolution = Math.min(base, 1);
   const disabled: VisualEffect[] = [];
   for (const effect of ADAPTIVE_EFFECTS) {
-    if (!effects[effect] || chosen.has(effect)) continue;
+    if (!effects[effect] || kept.has(effect)) continue;
     disabled.push(effect);
     levels.push({ resolution, disabled: [...disabled] });
   }
@@ -118,8 +122,8 @@ export const initialRenderQualityLevel = (
  * the nominal interval is used because a loaded GPU also delays the refreshes a measured display
  * rate would come from. Two-second windows step down one level when their 75th percentile runs
  * 40% slow (one window when it runs 2.5× slow), and step up after consecutive windows at full
- * rate with headroom. A step down that does not speed frames up is undone and lowering stops;
- * a step up that is followed by a slowdown doubles the wait for the next one, so a device on
+ * rate with headroom. A step down that does not speed frames up is undone and reported as
+ * rejected, so the caller can drop it from the ladder and try the next kind of step; a step up that is followed by a slowdown doubles the wait for the next one, so a device on
  * the edge of a level settles instead of oscillating.
  */
 export const createRenderQualityGovernor = (initial: GovernorState) => {
@@ -135,7 +139,6 @@ export const createRenderQualityGovernor = (initial: GovernorState) => {
     windowsSinceRaise = Number.POSITIVE_INFINITY;
   /** The slow percentile that caused the last step down, until the next window verifies it. */
   let loweredFrom: number | null = null;
-  let isHeld = false;
 
   const restart = (settle: number) => {
     ratios.fill(0);
@@ -146,11 +149,12 @@ export const createRenderQualityGovernor = (initial: GovernorState) => {
   const change = (next: number) => {
     if (next > level && windowsSinceRaise <= REGRESSION_WINDOWS)
       patience = Math.min(MAX_HEALTHY_WINDOWS, patience * 2);
+    const step = next > level ? "lowered" : "raised";
     windowsSinceRaise = next < level ? 0 : Number.POSITIVE_INFINITY;
     level = next;
     slowWindows = healthyWindows = 0;
     restart(SETTLE_MS);
-    return true;
+    return step;
   };
   return {
     get level() {
@@ -169,26 +173,29 @@ export const createRenderQualityGovernor = (initial: GovernorState) => {
       const next = Math.max(0, Math.min(maxLevel, value));
       if (next === level && !isInterrupted) return;
       level = next;
-      isHeld = false;
       loweredFrom = null;
       slowWindows = healthyWindows = 0;
       restart(SETTLE_MS);
     },
     /**
-     * Records one presented interval and returns true when the level changed. Long gaps are
+     * Records one presented interval and returns the step it took, if any. Long gaps are
      * stalls or suspensions rather than sustained load. Allocation-free for frame callbacks.
      */
-    sample(interval: number, expected: number, isFullRate: boolean) {
-      if (interval <= 0 || expected <= 0 || interval > MAX_SAMPLE_MS) return false;
+    sample(
+      interval: number,
+      expected: number,
+      isFullRate: boolean,
+    ): QualityStep | null {
+      if (interval <= 0 || expected <= 0 || interval > MAX_SAMPLE_MS) return null;
       if (pending > 0) {
         pending -= interval;
-        return false;
+        return null;
       }
       ratios[Math.min(RATIO_BUCKETS - 1, Math.round((interval / expected) * 16))]!++;
       samples++;
       if (isFullRate) fullRate++;
       elapsed += interval;
-      if (elapsed < WINDOW_MS || samples < WINDOW_FRAMES) return false;
+      if (elapsed < WINDOW_MS || samples < WINDOW_FRAMES) return null;
       const ratio = ratioPercentile(ratios, samples, 0.75);
       const isFull = fullRate >= samples * 0.75;
       restart(0);
@@ -197,30 +204,28 @@ export const createRenderQualityGovernor = (initial: GovernorState) => {
       loweredFrom = null;
       if (ratio >= SLOW_RATIO) {
         healthyWindows = 0;
-        // A step that bought no speed means frames are limited elsewhere (scene work on the
-        // CPU, a slow display); undo it and stop lowering until the scene is resized or reset.
+        // A step that bought no speed is limited elsewhere (scene work on the CPU, a slow
+        // display, a cost this scene does not have); undo it rather than lose detail for nothing.
         if (steppedFrom !== null && ratio > steppedFrom * USEFUL_STEP_RATIO) {
-          isHeld = true;
           level--;
           slowWindows = 0;
           restart(SETTLE_MS);
-          return true;
+          return "rejected";
         }
-        if (level >= maxLevel || isHeld) return false;
+        if (level >= maxLevel) return null;
         if (ratio >= SEVERE_RATIO || ++slowWindows >= SLOW_WINDOWS) {
-          change(level + 1);
           loweredFrom = ratio;
-          return true;
+          return change(level + 1);
         }
-        return false;
+        return null;
       }
       slowWindows = 0;
       if (ratio <= HEALTHY_RATIO && isFull && level > 0) {
         if (++healthyWindows >= patience) return change(level - 1);
-        return false;
+        return null;
       }
       healthyWindows = 0;
-      return false;
+      return null;
     },
   };
 };
@@ -305,6 +310,8 @@ const REGRESSION_WINDOWS = 5;
 /** Renderer density and session-disabled effects at one quality level. */
 export type QualityLevel = { resolution: number; disabled: readonly VisualEffect[] };
 type GovernorState = { level: number; patience: number };
+/** Rejected: a step down that did not speed frames up and was undone. */
+type QualityStep = "lowered" | "raised" | "rejected";
 type QualityStatus = {
   isResolutionReduced: boolean;
   disabled: readonly VisualEffect[];
