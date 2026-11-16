@@ -1195,6 +1195,10 @@ const spawnStandIn = (
   const standIn = structuredClone(template);
   standIn.enmity = 0;
   delete standIn.baseStatsForModifiers;
+  // Pools are rebuilt full below; the template's max-pool deltas belong to its own effects.
+  delete standIn._prevHealthAdj;
+  delete standIn._prevChakraAdj;
+  delete standIn._prevStaminaAdj;
   standIn.userId = nanoid();
   standIn.isSummon = true;
   standIn.isAi = true;
