@@ -4,7 +4,11 @@ import { ChevronsLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useRef } from "react";
-import { ContentBoxHeaderActions } from "@/layout/ContentBoxHeaderActions";
+import {
+  ContentBoxHeaderActions,
+  ContentBoxPriorityActions,
+  type HeaderActionItem,
+} from "@/layout/ContentBoxHeaderActions";
 import { hasInAppPreviousEntry } from "@/utils/routing";
 
 export interface ContentBoxProps {
@@ -13,6 +17,8 @@ export interface ContentBoxProps {
   defaultBackHref?: string;
   subtitle?: string | React.ReactNode;
   topRightContent?: React.ReactNode;
+  /** Header controls kept in the row by priority, the rest behind a "More" menu. */
+  topRightItems?: HeaderActionItem[];
   bottomRightContent?: React.ReactNode;
   padding?: boolean;
   noBorder?: boolean;
@@ -107,15 +113,22 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
               )}
             </div>
           )}
-          {props.topRightContent && (
-            <ContentBoxHeaderActions
-              headerRef={headerRef}
-              titleRef={titleRef}
+          {props.topRightItems ? (
+            <ContentBoxPriorityActions
+              items={props.topRightItems}
               label={props.title || "Page"}
-              noRightAlign={props.noRightAlign}
-            >
-              {props.topRightContent}
-            </ContentBoxHeaderActions>
+            />
+          ) : (
+            props.topRightContent && (
+              <ContentBoxHeaderActions
+                headerRef={headerRef}
+                titleRef={titleRef}
+                label={props.title || "Page"}
+                noRightAlign={props.noRightAlign}
+              >
+                {props.topRightContent}
+              </ContentBoxHeaderActions>
+            )
           )}
         </div>
 
