@@ -60,7 +60,7 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/federalStatus";
 import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { removeExpiredSanctionTombstones } from "@/server/utils/sanctionTombstone";
-import { getBankInterestDateRange } from "@/utils/time";
+import { getBankInterestDateRange, periodStart } from "@/utils/time";
 
 const HOURLY_TIMER_NAME = "cleaner-hourly";
 
@@ -219,11 +219,11 @@ export async function GET(request: Request) {
       try {
         await cleanupOrphanRows(drizzleDB);
         await executeRowsForGET9(drizzleDB);
-        // A run retried after a failed batch decays the batches before it once more.
+        const dayStart = periodStart("daily", new Date());
         await updateUserDataCandidates(
           drizzleDB,
-          tavernActiveUserDataWhere(),
-          (batch) => executeRowsForGET10(drizzleDB, batch),
+          tavernActiveUserDataWhere(dayStart),
+          (batch) => executeRowsForGET10(drizzleDB, dayStart, batch),
         );
       } catch (cause) {
         await tavernDecayTimer.release();

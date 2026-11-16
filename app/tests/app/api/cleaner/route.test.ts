@@ -4,6 +4,7 @@ import { MySqlDialect, QueryBuilder } from "drizzle-orm/mysql-core";
 import { GET } from "@/app/api/cleaner/route";
 import {
   battle,
+  clan,
   huntingSession,
   mpvpBattleUser,
   quest,
@@ -27,6 +28,7 @@ import * as federalStatus from "@/server/utils/purchases/federalStatus";
 import { acceptWarAllyOffer } from "@/server/utils/warAlly";
 import { restoreEnvAfterEach } from "../../../setup/env";
 import {
+  insertClans,
   insertQuestHistory,
   insertQuests,
   insertUsers,
@@ -543,6 +545,67 @@ describe("hourly cleaner maintenance", () => {
         if (user.userId === "between") expect(user.curEnergy).toBe(10);
         else expect(user.curEnergy).toBeGreaterThan(10);
       }
+    });
+  });
+  describeWithDatabase("batched player repairs", () => {
+    it("clears missing clans hourly and decays tavern messages once per day", async () => {
+      candidateUpdates.mockRestore();
+      const db = await getTestDatabase();
+      await resetTables(clan, userData);
+      await insertClans([{ id: "live-clan" }]);
+      const yesterday = new Date(Date.now() - 2 * 86_400_000);
+      await insertUsers([
+        {
+          userId: "orphan",
+          username: "orphan",
+          clanId: "gone-clan",
+          tavernMessages: 40,
+          tavernDecayAt: yesterday,
+        },
+        {
+          userId: "member",
+          username: "member",
+          clanId: "live-clan",
+          tavernMessages: 0,
+          tavernDecayAt: yesterday,
+        },
+      ]);
+      stubDatabase({
+        execute: mocks.execute,
+        select: db.select.bind(db),
+        delete: skipDelete,
+        update: (table: object) => ({
+          set: (values: Record<string, unknown>) => ({
+            // Only the clan repair and tavern decay run against SQL; other cron work stays stubbed.
+            where: (condition: SQL) =>
+              table === userData && ("clanId" in values || "tavernMessages" in values)
+                ? db.update(userData).set(values).where(condition)
+                : Promise.resolve(undefined),
+          }),
+        }),
+      });
+      vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({
+        ...timerClaimFixture(),
+        prevTime: new Date(0),
+        isNewDay: true,
+        response: Response.json(null),
+      });
+      mocks.lock.mockResolvedValue(claimedHour());
+      expect((await GET(request())).status).toBe(200);
+      expect((await GET(request())).status).toBe(200);
+      const users = await db
+        .select({
+          userId: userData.userId,
+          clanId: userData.clanId,
+          tavernMessages: userData.tavernMessages,
+        })
+        .from(userData)
+        .orderBy(userData.userId);
+      // Both runs claim the day here; the per-row decay day keeps the second from decaying again.
+      expect(users).toEqual([
+        { userId: "member", clanId: "live-clan", tavernMessages: 0 },
+        { userId: "orphan", clanId: null, tavernMessages: 38 },
+      ]);
     });
   });
 });

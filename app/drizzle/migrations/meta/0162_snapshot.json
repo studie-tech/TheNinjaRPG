@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "ec92de79-5f93-4846-88b1-3fb3dbcc7dd8",
+  "id": "fdb4c371-54f9-4e95-b400-9cff21cf21b9",
   "prevId": "009462c5-2e35-4f7c-a9f2-8525075d496d",
   "tables": {
     "AbEvent": {
@@ -18553,6 +18553,14 @@
         },
         "dailyCountersResetAt": {
           "name": "dailyCountersResetAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(CURRENT_TIMESTAMP(3))"
+        },
+        "tavernDecayAt": {
+          "name": "tavernDecayAt",
           "type": "datetime(3)",
           "primaryKey": false,
           "notNull": true,

@@ -1,0 +1,2 @@
+ALTER TABLE `UserData` ADD `dailyCountersResetAt` datetime(3) DEFAULT (CURRENT_TIMESTAMP(3)) NOT NULL;
+ALTER TABLE `UserData` ADD `tavernDecayAt` datetime(3) DEFAULT (CURRENT_TIMESTAMP(3)) NOT NULL;

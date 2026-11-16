@@ -420,18 +420,29 @@ export const executeRowsForGET9 = (client: Pick<DrizzleClient, "execute">) =>
           `,
   );
 
-/** Players with a tavern message count left to decay; FLOOR(0 * 0.95) leaves zero unchanged. */
-export const tavernActiveUserDataWhere = () => gt(userData.tavernMessages, 0);
+/**
+ * Players whose tavern message count has not decayed yet for the day starting at
+ * `dayStart`; FLOOR(0 * 0.95) leaves zero unchanged.
+ */
+export const tavernActiveUserDataWhere = (dayStart: Date) =>
+  and(gt(userData.tavernMessages, 0), lt(userData.tavernDecayAt, dayStart));
 
-/** Build the daily tavern message decay for one batch of players. */
+/**
+ * Build the daily tavern message decay for one batch of players. Each row records
+ * `dayStart`, so a retried run skips the players an earlier attempt already decayed.
+ */
 export const executeRowsForGET10 = (
   client: Pick<DrizzleClient, "update">,
+  dayStart: Date,
   batch: string[],
 ) =>
   client
     .update(userData)
-    .set({ tavernMessages: sql`FLOOR(${userData.tavernMessages} * 0.95)` })
-    .where(and(inArray(userData.userId, batch), tavernActiveUserDataWhere()));
+    .set({
+      tavernMessages: sql`FLOOR(${userData.tavernMessages} * 0.95)`,
+      tavernDecayAt: dayStart,
+    })
+    .where(and(inArray(userData.userId, batch), tavernActiveUserDataWhere(dayStart)));
 
 /** Build the `automatedModeration` deletion for `GET`, using predicates on `createdAt`. */
 export const deleteAutomatedModerationForGET = (

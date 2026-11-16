@@ -53,6 +53,7 @@ const counterUsers = Array.from({ length: 7 }, (_, index) => ({
   aiCalls: 9,
   tavernMessages: [0, 1, 19, 20, 21, 100, 1_000_001][index]!,
   dailyCountersResetAt: yesterday,
+  tavernDecayAt: yesterday,
 }));
 
 const counterColumns = {
@@ -235,13 +236,49 @@ describeWithDatabase("batched UserData cron updates", () => {
     const batched = await resultOf(counterUsers, (db) =>
       updateUserDataCandidates(
         db,
-        tavernActiveUserDataWhere(),
-        (batch) => executeRowsForGET10(db, batch),
+        tavernActiveUserDataWhere(dayStart),
+        (batch) => executeRowsForGET10(db, dayStart, batch),
         2,
       ),
     );
     expect(batched).toEqual(tableWide);
     expect(batched.map((row) => row.tavernMessages)).toEqual([
+      0, 0, 18, 19, 19, 95, 950_000,
+    ]);
+  });
+
+  it("decays tavern messages once when a run is retried after a failed batch", async () => {
+    await insertUsers(counterUsers);
+    const db = await getTestDatabase();
+    let writes = 0;
+    const failsSecondWrite = aroundStatements(
+      db,
+      userData,
+      async (run) => {
+        writes += 1;
+        if (writes === 2) throw new Error("Statement failed on purpose");
+        return run();
+      },
+      { operations: ["update"] },
+    );
+    const decay = (client: DrizzleClient) =>
+      updateUserDataCandidates(
+        client,
+        tavernActiveUserDataWhere(dayStart),
+        (batch) => executeRowsForGET10(client, dayStart, batch),
+        2,
+      );
+    await expect(decay(failsSecondWrite)).rejects.toThrow(
+      "Statement failed on purpose",
+    );
+    // The first batch holds the two lowest tavern-active ids: counter-1 and counter-2.
+    expect((await readUsers(db)).map((row) => row.tavernMessages)).toEqual([
+      0, 0, 18, 20, 21, 100, 1_000_001,
+    ]);
+
+    await decay(db);
+    await decay(db);
+    expect((await readUsers(db)).map((row) => row.tavernMessages)).toEqual([
       0, 0, 18, 19, 19, 95, 950_000,
     ]);
   });
