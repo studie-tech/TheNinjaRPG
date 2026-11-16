@@ -160,10 +160,18 @@ describeWithDatabase("crafting materials", () => {
       .update(item)
       .set({ craftingOutputQuantity: 1 })
       .where(eq(item.id, "blade"));
+    const dueStart = new Date(Date.now() - 60_000);
     await db
       .update(userItem)
-      .set({ craftingFinishedAt: new Date(Date.now() - 60_000) })
+      .set({ craftingFinishedAt: dueStart })
       .where(eq(userItem.itemId, "blade"));
+    await db
+      .update(userQueue)
+      .set({
+        startsAt: dueStart,
+        finishesAt: new Date(dueStart.getTime() + queued!.durationSeconds! * 1000),
+      })
+      .where(eq(userQueue.id, queued!.id));
     await (await callerFor(profileRouter, USER_ID)).getUser();
     const outputs = await db
       .select()

@@ -366,6 +366,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
           id: "cache-npc-quest",
           questType: "overworld",
           hidden: false,
+          attemptDelay: "daily",
           maxAttempts: 10,
           maxCompletes: 10,
           content: {
@@ -404,6 +405,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
       );
       if (chance)
         expect(result.userPatch?.activeNpcQuestId).toBe(saved?.activeNpcQuestId);
+      expect(await db.select().from(userQuestAttempt)).toHaveLength(1);
     },
   );
 
@@ -414,6 +416,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
         id: "cache-npc-quest",
         questType: "overworld",
         hidden: false,
+        attemptDelay: "daily",
         maxAttempts: 10,
         maxCompletes: 10,
         content: {
@@ -452,6 +455,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
       dailyOverworldQuestRolls: OVERWORLD_QUEST_ROLLS_PER_DAY,
     });
     expect(await db.select().from(questHistory)).toEqual([]);
+    expect(await db.select().from(userQuestAttempt)).toEqual([]);
   });
 
   it("returns the committed assignment without a cache confirmation SELECT", async () => {

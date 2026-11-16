@@ -916,8 +916,7 @@ const rollOverworldQuestGiver = async ({
       questId: e.quest.id,
       lastAttemptAt: now,
     }));
-  // This write is independent of the selected quest and may run alongside the slot claim.
-  const attemptPromise =
+  const recordAttempts = () =>
     attemptRowsToInsert.length > 0
       ? insertUserQuestAttemptForInteractWithOverworldAi(
           ctx.drizzle,
@@ -933,7 +932,7 @@ const rollOverworldQuestGiver = async ({
   );
   const chosen = chosenId ? eligible.find((e) => e.quest.id === chosenId) : undefined;
   if (!chosen) {
-    await attemptPromise;
+    await recordAttempts();
     return recoverIdleInteraction(ctx.drizzle, readiness, {
       success: true,
       message: "The NPC had nothing for you this time.",
@@ -943,7 +942,6 @@ const rollOverworldQuestGiver = async ({
 
   // Claim the single active-NPC-mission slot atomically before granting. If the slot is
   // already taken (e.g. a concurrent interaction won the race), don't grant a second one.
-  await attemptPromise;
   if (activeNpcQuestId) {
     await clearActiveNpcQuest({
       client: ctx.drizzle,
@@ -991,6 +989,7 @@ const rollOverworldQuestGiver = async ({
     );
   let result: Awaited<ReturnType<typeof assignQuestToUser>>;
   try {
+    await recordAttempts();
     result = await assignQuestToUser({
       client: ctx.drizzle,
       user: activeUser,
