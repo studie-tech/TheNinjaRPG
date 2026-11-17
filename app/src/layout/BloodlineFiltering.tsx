@@ -67,8 +67,9 @@ const makeBloodlineFilteringSchema = (
         options: tagTypes.map((e) => ({ value: e, label: e })),
       },
       {
-        id: "stat",
-        label: "Stat",
+        id: "generals",
+        label: "Generals",
+        filterKey: "stat",
         type: "multi-select",
         defaultValue: [],
         options: GeneralTypes.map((s) => ({ value: s, label: s })),
