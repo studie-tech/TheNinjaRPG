@@ -57,6 +57,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     stubRateLimitTransport({
       unexpectedRequestMessage: "Unexpected HTTP request in dungeon tests",
     });
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
       actionLog,
       aiProfile,
@@ -306,7 +307,13 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   it("loads lobby membership and invitations through the state query", async () => {
     const { a, id } = await lobby();
     const b = await callerFor(dungeonRouter, "b");
+    const trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await a.act({ id, action: "invite", userId: "b" });
+    expect(trigger).toHaveBeenCalledWith(
+      "b",
+      "event",
+      expect.objectContaining({ type: "dungeonParty", route: "/dungeon" }),
+    );
     expect((await a.getState()).runs[0]?.id).toBe(id);
     expect((await b.getState()).runs[0]?.id).toBe(id);
     const outsider = await callerFor(dungeonRouter, "outsider");

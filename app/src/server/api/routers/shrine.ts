@@ -40,6 +40,9 @@ import {
   getWarSide,
   isObjectiveWarActive,
   isWarMercenary,
+  isWarObjectiveLeader,
+  maskWarObjectives,
+  withMercenaryParticipation,
 } from "@/libs/objectiveWar";
 import { getServerPusher } from "@/libs/pusher";
 import { createBattleClaimId } from "@/libs/raids";
@@ -67,9 +70,11 @@ import {
   findSectorByNumber,
   findSectorForPayWeeklyMaintenance,
   findSectorWithVillage,
+  findUserDataForGetSectorShrine,
   findUserDataForJoinShrineBattle,
   findVillageForGetBoostTemplate,
   findVillageForInitiateShrineBattle,
+  findVillageIdForGetSectorShrine,
   insertMpvpBattleQueueForChallengeShrine,
   insertMpvpBattleUserForJoinShrineBattle,
   listMpvpBattleQueueForGetShrineBattles,
@@ -91,7 +96,8 @@ import {
   updateVillageForUpgradeShrine2,
 } from "@/queries/shrine";
 import { findVillageBoostUserCache } from "@/queries/socialUserCache";
-import { fetchAlliances, findVillageBySector } from "@/queries/village";
+import { listWarForGetSectorData } from "@/queries/travel";
+import { fetchAlliances, fetchSector, findVillageBySector } from "@/queries/village";
 import { listVillageDutyRoster } from "@/queries/villageDuty";
 import { initiateBattle, initiateVillageDutyBattle } from "@/routers/combat";
 import { fetchUpdatedUser } from "@/routers/profile";
@@ -109,6 +115,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { missingUserMessage } from "@/server/utils/sentry";
 import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
 import { ensureVillageDutyShift } from "@/server/utils/villageDuty";
 // Pusher instance
@@ -117,6 +124,7 @@ import { isKage } from "@/utils/kage";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import { boostTemplateSchema } from "@/validators/shrine";
+import { sectorIdSchema } from "@/validators/travel";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const getBoostTemplateSchema = z.object({ villageId: z.string() });
@@ -147,6 +155,42 @@ export const shrineRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const sectors = await listSectorForGetCapturedSectors(ctx.drizzle, input);
       return sectors;
+    }),
+
+  /** The viewer's shrine: sector ownership, whether it is a village home, and masked open wars. */
+  getSectorShrine: protectedProcedure
+    .meta({
+      mcp: { description: "Get shrine ownership and wars for the current sector" },
+    })
+    .input(z.object({ sector: sectorIdSchema }))
+    .query(async ({ ctx, input }) => {
+      const [user, requestedSector, requestedHome, fetchedWarData] = await Promise.all([
+        findUserDataForGetSectorShrine(ctx.drizzle, ctx.userId),
+        fetchSector(ctx.drizzle, input.sector),
+        findVillageIdForGetSectorShrine(ctx.drizzle, input.sector),
+        listWarForGetSectorData(ctx.drizzle),
+      ]);
+      if (!user) throw serverError("NOT_FOUND", missingUserMessage(ctx.userId));
+      // The scouting guard of travel.getSectorData, which shares these war fields.
+      if (!["AWAKE", "TRAVEL", "QUEUED"].includes(user.status)) {
+        return { sectorData: null, isHome: false, warData: null };
+      }
+      // Crossings can leave a stale query key. Never return another sector's data.
+      const [sectorData, home] =
+        user.sector === input.sector
+          ? [requestedSector, requestedHome]
+          : await Promise.all([
+              fetchSector(ctx.drizzle, user.sector),
+              findVillageIdForGetSectorShrine(ctx.drizzle, user.sector),
+            ]);
+      const isLeader = isWarObjectiveLeader(user, user.village);
+      return {
+        sectorData,
+        isHome: !!home,
+        warData: withMercenaryParticipation(fetchedWarData).map((w) =>
+          maskWarObjectives(w, user.villageId, isLeader, ctx.userId),
+        ),
+      };
     }),
 
   // Upgrade a shrine level

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
 import * as activeBuffs from "@/layout/ActiveTimedBuffs";
@@ -98,4 +98,57 @@ describe("Kitchen recipe availability", () => {
       if (disabled) expect(view.getAllByText(label)).toHaveLength(2);
     },
   );
+
+  it("reads the queue when a waiting job starts, then the inventory it changed", async () => {
+    const order: string[] = [];
+    const invalidate = (name: string) => ({
+      invalidate: vi.fn(async () => {
+        order.push(name);
+      }),
+    });
+    const startsAt = new Date(Date.now() + 20);
+    const queue = {
+      data: {
+        capacity: 2,
+        waiting: [
+          {
+            id: "job",
+            quantity: 1,
+            name: "Rice Bowl",
+            startsAt,
+            finishesAt: new Date(startsAt.getTime() + 60000),
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(async () => {
+        order.push("queue");
+      }),
+    };
+    stubCraftingCache();
+    Object.assign(vi.spyOn(client, "api" as never), {
+      useUtils: () => ({
+        item: {
+          getUserItems: invalidate("items"),
+          getUserItemsWithVariants: invalidate("variants"),
+        },
+        profile: { getSidebarTimers: invalidate("timers") },
+      }),
+      occupation: {
+        getCookingRecipes: { useQuery: () => ({ data: [], isPending: false }) },
+        getCraftingQueue: { useQuery: () => queue },
+        craftItem: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+        cancelQueuedCraft: {
+          useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+        },
+      },
+      item: { getUserItems: { useQuery: () => ({ data: [], isPending: false }) } },
+    });
+    render(<Kitchen />);
+    expect(queue.refetch).not.toHaveBeenCalled();
+    await waitFor(() => expect(order).toHaveLength(4), { timeout: 3000 });
+    expect(queue.refetch).toHaveBeenCalledWith({ cancelRefetch: false });
+    expect(order[0]).toBe("queue");
+  });
 });

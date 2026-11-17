@@ -24,6 +24,7 @@ import {
   rollDungeonRewards,
 } from "@/libs/dungeonRewards";
 import { canUsePet } from "@/libs/pets/progression";
+import { getServerPusher } from "@/libs/pusher";
 import { isWeightedCacheEffect } from "@/libs/weightedCache";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiUserIds } from "@/queries/ai";
@@ -353,7 +354,6 @@ export const dungeonRouter = createTRPCRouter({
       // Battle identity is private to the actor's cache prerequisite, not the roster.
       users: users.map(({ battleId: _battleId, ...user }) => user),
       members: members.filter((m) => m.userId === ctx.userId),
-      serverTime: new Date(),
       ...getDungeonStateUserUpdate({
         requiresUserRefresh,
         actor,
@@ -748,6 +748,16 @@ export const dungeonRouter = createTRPCRouter({
             ? ctx.drizzle.transaction(updateParty)
             : updateParty(ctx.drizzle),
         );
+        // Members poll their party; an invited player outside one learns of it here.
+        if (saved && action === "invite" && target)
+          await Promise.allSettled([
+            getServerPusher().trigger(target.userId, "event", {
+              type: "dungeonParty",
+              message: "You were invited to a dungeon party. Open Dungeons to accept.",
+              route: "/dungeon",
+              routeText: "Open Dungeons",
+            }),
+          ]);
         return actionReadinessResponse(
           saved
             ? {

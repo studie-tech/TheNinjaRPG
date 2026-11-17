@@ -348,6 +348,21 @@ export const usePusherHandler = (
                   </ToastAction>
                 ),
               });
+          } else if (data.type === "dungeonParty") {
+            // An open dungeon page shows the invitation at once instead of on its idle poll.
+            void utils.coop.dungeon.getState.invalidate();
+            showMutationToast({
+              success: true,
+              message: data.message ?? "You were invited to a dungeon party.",
+              title: "Dungeon Party",
+              action: (
+                <ToastAction altText="Open Dungeons">
+                  <Link href={data.route ?? "/dungeon"}>
+                    {data.routeText ?? "Open Dungeons"}
+                  </Link>
+                </ToastAction>
+              ),
+            });
           } else if (data.type === "eventTournament") {
             // The originating action reconciles its response, including transport failure.
             if (

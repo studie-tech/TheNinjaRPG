@@ -71,9 +71,12 @@ export default function DungeonPage() {
     userRevision: prepareUserUpdate(),
     availability: available.prepareAvailabilityUpdate(),
   });
+  // Reads expire deadlines and recover interrupted starts, and party changes send no event
+  // to members, so an open party polls quickly. Invitations to anyone else arrive by websocket.
   const state = api.coop.dungeon.getState.useQuery(undefined, {
     enabled: !!user,
-    refetchInterval: 3000,
+    refetchInterval: (query) =>
+      hasOpenParty(query.state.data?.runs, user?.userId) ? 3000 : 30000,
   });
   /** Show expected rejections beside the action and refresh party/account state after a mutation. */
   const refresh = async (
@@ -820,3 +823,17 @@ const DungeonRequirements = ({ content }: { content: DungeonContent }) => {
     </section>
   );
 };
+
+/** Whether the viewer belongs to, or is invited to, a party that has not finished. */
+const hasOpenParty = (
+  runs:
+    | { status: string; state: { memberIds: string[]; invitedIds: string[] } }[]
+    | undefined,
+  userId: string | undefined,
+) =>
+  !!userId &&
+  !!runs?.some(
+    (run) =>
+      !["ENDED", "COMPLETED"].includes(run.status) &&
+      (run.state.memberIds.includes(userId) || run.state.invitedIds.includes(userId)),
+  );

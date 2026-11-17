@@ -65,7 +65,7 @@ const party = (status: RunStatus): PartyState["runs"][number] => ({
     message: "",
   },
 });
-/** Build a state response with the party identities and server time displayed by the page. */
+/** Build a state response with the party identities displayed by the page. */
 const partyState = (status: RunStatus | null): PartyState => ({
   runs: status ? [party(status)] : [],
   users: ["a", "b", "c"].map((userId) => ({
@@ -75,7 +75,6 @@ const partyState = (status: RunStatus | null): PartyState => ({
     isBanned: false,
   })),
   members: [],
-  serverTime: new Date(),
   userPatch: {},
   userExpected: { activeDungeonRunId: null },
 });
@@ -253,12 +252,36 @@ it("uses the shared account clock across dungeon response updates", async () => 
   );
   expect(countdown.mock.calls.at(-1)?.[0].timeDiff).toBe(1234);
   await act(async () => {
-    queryClient.setQueryData(["state"], {
-      ...partyState("PAUSED"),
-      serverTime: new Date(Date.now() - 60000),
-    });
+    queryClient.setQueryData(["state"], partyState("PAUSED"));
   });
   expect(countdown.mock.calls.at(-1)?.[0].timeDiff).toBe(1234);
+});
+
+it("polls quickly only while the viewer has an open party", async () => {
+  const interval = (queryClient: QueryClient) => {
+    const query = queryClient.getQueryCache().find({ queryKey: ["state"] });
+    const option = query?.observers[0]?.options.refetchInterval;
+    return typeof option === "function" ? option(query as never) : option;
+  };
+  const lobby = mount("LOBBY", async () => []);
+  await waitFor(() => expect(lobby.queryClient.getQueryData(["state"])).toBeDefined());
+  expect(interval(lobby.queryClient)).toBe(3000);
+  lobby.view.unmount();
+  const idle = mount(null, async () => []);
+  await waitFor(() => expect(idle.queryClient.getQueryData(["state"])).toBeDefined());
+  expect(interval(idle.queryClient)).toBe(30000);
+  await act(async () => {
+    idle.queryClient.setQueryData(["state"], {
+      ...partyState("LOBBY"),
+      runs: [
+        {
+          ...party("LOBBY"),
+          state: { ...party("LOBBY").state, memberIds: ["b"], invitedIds: ["a"] },
+        },
+      ],
+    });
+  });
+  expect(interval(idle.queryClient)).toBe(3000);
 });
 
 for (const scenario of scenarios) {

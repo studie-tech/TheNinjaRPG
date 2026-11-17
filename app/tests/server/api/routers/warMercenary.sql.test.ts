@@ -426,6 +426,13 @@ describeWithDatabase("war mercenary contracts", () => {
       const mercenary = sectorData.users.find((row) => row.userId === "merc")!;
       expect(mercenary.isMasked).toBe(viewer !== "merc");
       expect(mercenary.username === "Mercenary").toBe(viewer !== "merc");
+      // The shrine page's slim read applies the same war masking as the sector map.
+      const shrine = await callerForDatabase(shrineRouter, viewer, db).getSectorShrine({
+        sector: 1,
+      });
+      expect(shrine.warData).toEqual(sectorData.warData);
+      expect(shrine.sectorData).toEqual(sectorData.sectorData);
+      expect(shrine.isHome).toBe(!!sectorData.village);
     }
     const kage = callerForDatabase(warRouter, "kage", db);
     expect(
