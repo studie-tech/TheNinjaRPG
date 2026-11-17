@@ -1182,6 +1182,8 @@ export const profileRouter = createTRPCRouter({
         achievementProgress: achievementProgress,
         notifications: notifications,
         isEventParticipant: tournamentNoticeState.isEventParticipant,
+        // Expiry refreshes cover bonuses evaluated before the response finishes.
+        snapshotAt: now,
         serverTime: Date.now(),
         userAgent: ctx.userAgent,
       };

@@ -1580,20 +1580,11 @@ export const combatRouter = createTRPCRouter({
       let attempts = 0;
 
       // PvP handovers belong to this encounter; only PvE toggles update the
-      // non-PvP default, after the battle change succeeds. The response already carries
-      // the patch, and a lost write only keeps the previous default, so it runs after responding.
-      const rememberPreference = (battleType: BattleType) => {
+      // non-PvP default, after the battle change succeeds.
+      const rememberPreference = async (battleType: BattleType) => {
         const patch = getAutoCombatPreferencePatch(battleType, input.enabled);
         if ("defaultAutoCombat" in patch)
-          after(async () => {
-            try {
-              await updateUserDataForRememberPreference(ctx.drizzle, input, ctx);
-            } catch (error) {
-              Sentry.captureException(error, {
-                tags: { source: "rememberPreference" },
-              });
-            }
-          });
+          await updateUserDataForRememberPreference(ctx.drizzle, input, ctx);
         return patch;
       };
 
@@ -1628,7 +1619,7 @@ export const combatRouter = createTRPCRouter({
         // with a version here — the battle already reads the way the player
         // asked for, so their choice is safe to remember.
         if (!!user.isAutoCombat === input.enabled) {
-          const userPatch = rememberPreference(userBattle.battleType);
+          const userPatch = await rememberPreference(userBattle.battleType);
           return {
             success: true,
             userPatch,
@@ -1657,7 +1648,7 @@ export const combatRouter = createTRPCRouter({
         );
 
         if (result.rowsAffected > 0) {
-          const userPatch = rememberPreference(userBattle.battleType);
+          const userPatch = await rememberPreference(userBattle.battleType);
           announceLobbyChange(userBattle);
           return {
             success: true,
