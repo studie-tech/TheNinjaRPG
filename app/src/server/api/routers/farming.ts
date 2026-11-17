@@ -1754,7 +1754,6 @@ const buildFarmState = async (
   const now = new Date();
   const userPromise = fetchUser(client, userId);
   const extractionsPromise = settleFarmExtractions(client, userId, now);
-  const inventoryPromise = fetchUserItems(client, userId);
   const plotsPromise = Promise.all([userPromise, fetchFarmPlots(client, userId)]).then(
     ([user, existingPlots]) =>
       ensureFarmPlots(
@@ -1766,7 +1765,7 @@ const buildFarmState = async (
   );
   const [
     user,
-    { activeSeedExtractions },
+    activeSeedExtractions,
     plotsRaw,
     shopItems,
     collectionLog,
@@ -1782,11 +1781,8 @@ const buildFarmState = async (
     // The small configured yield catalog is independent of inventory and plot reads.
     // Include hidden/non-seed references too: owned seeds and planted crops still need them.
     listItemForBuildFarmState(client),
-    // Settlement can grant seeds; only a payout attempt re-reads for the delivered stacks.
-    Promise.all([extractionsPromise, inventoryPromise]).then(
-      ([{ attemptedPayout }, inventory]) =>
-        attemptedPayout ? fetchUserItems(client, userId) : inventory,
-    ),
+    // Read after settlement: another request may pay out before our extraction read.
+    extractionsPromise.then(() => fetchUserItems(client, userId)),
     fetchMasterySources(client, userId),
   ]);
   const { farmingReductionPercent } = getActivityBonuses({
@@ -1979,10 +1975,7 @@ const settleFarmExtractions = async (
   client: DrizzleClient,
   userId: string,
   now: Date,
-): Promise<{
-  activeSeedExtractions: FarmStateResponse["activeSeedExtractions"];
-  attemptedPayout: boolean;
-}> => {
+): Promise<FarmStateResponse["activeSeedExtractions"]> => {
   const extractions = await fetchUserExtractions(client, userId);
 
   const completedExtractions = extractions.filter(
@@ -1996,7 +1989,7 @@ const settleFarmExtractions = async (
   // Anything still on the books is still the player's, finished or not. A payout held back
   // for want of inventory space keeps its row, and showing it keeps the extractor from
   // looking empty while it is in fact still holding seeds.
-  const activeSeedExtractions = extractions
+  return extractions
     .filter(
       (extraction) =>
         !settledIds.has(extraction.id) && extraction.cropItem && extraction.seedItem,
@@ -2015,7 +2008,6 @@ const settleFarmExtractions = async (
       startedAt: extraction.startedAt,
       finishAt: extraction.finishAt,
     }));
-  return { activeSeedExtractions, attemptedPayout: completedExtractions.length > 0 };
 };
 
 /** How long a settlement claim is honoured before another request may take it over. */

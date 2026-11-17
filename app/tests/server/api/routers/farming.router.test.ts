@@ -1878,6 +1878,50 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     expect(row?.farmingExperience).toBe(FARM_WATER_EXPERIENCE * 2);
   });
 
+  it("includes seeds paid out before its extraction read by another request", async () => {
+    await farmer();
+    const database = await insertFinishedExtraction();
+    await database.insert(farmPlot).values(
+      Array.from({ length: FARM_STARTING_PLOTS }, (_, slotIndex) => ({
+        id: `plot-${slotIndex}`,
+        userId: "farm-user",
+        slotIndex,
+      })) as never,
+    );
+
+    let inventoryRead: Promise<unknown> | undefined;
+    const racing = overrideQuery(
+      overrideQuery(database, "userItem", {
+        findMany: (read, args) => {
+          const rows = Promise.resolve(read(args));
+          inventoryRead = rows;
+          return rows;
+        },
+      }),
+      "farmExtraction",
+      {
+        findMany: async (read, args) => {
+          // Complete any independently started inventory read before another request
+          // pays out, then let this request observe the extractor after its deletion.
+          await Promise.resolve();
+          await inventoryRead;
+          await (await caller("farm-user")).getFarmState();
+          return read(args);
+        },
+      },
+    );
+
+    const state = await callerForDatabase(
+      farmingRouter,
+      "farm-user",
+      racing,
+    ).getFarmState();
+    expect(state.activeSeedExtractions).toHaveLength(0);
+    expect(
+      state.availableSeeds.find((seed) => seed.itemId === "seed-1")?.quantity,
+    ).toBe(3);
+  });
+
   it("settles a finished extraction once when two reads race to award it", async () => {
     await farmer();
     const database = await getTestDatabase();
