@@ -182,6 +182,11 @@ describeWithDatabase("combat lobby jutsu gates", () => {
       jutsuLoadoutId: "rules",
     });
     expect(own.success).toBe(true);
+    // The profile cache follows the loadout, and the rules it fights with, out of the lobby.
+    expect("userPatch" in own && own.userPatch).toMatchObject({
+      jutsuLoadout: "rules",
+      aiProfileId: "rules-own",
+    });
     const withRules = await stored();
     expect(withRules.usersState[0]!.aiProfileId).toBe("rules-own");
     expect(withRules.extraState.aiProfiles["rules-own"]?.rules).toHaveLength(1);

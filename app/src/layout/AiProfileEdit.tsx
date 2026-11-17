@@ -32,6 +32,7 @@ import {
   ActionMoveTowardsOpponent,
   AiActionTypes,
   AiConditionTypes,
+  AiRule,
   AvailableActionTargets,
   AvailableEffectTypes,
   AvailableTargets,
@@ -72,8 +73,17 @@ interface AiProfileEditProps {
   onDirtyChange?: (isDirty: boolean) => void;
   /** Other saved profiles whose rules can be copied into the draft. */
   copySources?: { id: string; name: string }[];
-  /** Hear which rules a player's jutsu loadout fights with after their own toggle. */
-  onToggled?: (toggled: { jutsuLoadout: string; aiProfileId: string | null }) => void;
+  /**
+   * Caches that follow a player's own toggle: `prepare` runs when the toggle starts and its
+   * snapshot reaches `update` with the rules the active jutsu loadout now fights with.
+   */
+  toggleCache?: {
+    prepare: () => unknown;
+    update: (
+      toggled: { jutsuLoadout: string; aiProfileId: string | null },
+      snapshot: unknown,
+    ) => unknown;
+  };
 }
 
 /** Edit an ordinary AI profile or a caller-controlled companion configuration with the same rule UI. */
@@ -123,8 +133,11 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   // Mutations
   const { mutate: toggleAiProfile, isPending: isToggling } =
     api.ai.toggleAiProfile.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
+      onMutate: () => ({
+        revision: prepareUserUpdate(),
+        caller: props.toggleCache?.prepare(),
+      }),
+      onSuccess: async (data, _variables, snapshot) => {
         showMutationToast(data);
         if (!data.success) {
           // The active loadout changed elsewhere; read the profile again to show it.
@@ -135,13 +148,16 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
         await Promise.all([
           // A player's own toggle patches their profile; staff pages read the edited user again.
           toggled
-            ? updateUser(data, { revision })
+            ? updateUser(data, { revision: snapshot?.revision })
             : utils.profile.getPublicUser.invalidate(),
           toggled?.jutsuLoadout
-            ? props.onToggled?.({
-                jutsuLoadout: toggled.jutsuLoadout,
-                aiProfileId: toggled.aiProfileId ?? null,
-              })
+            ? props.toggleCache?.update(
+                {
+                  jutsuLoadout: toggled.jutsuLoadout,
+                  aiProfileId: toggled.aiProfileId ?? null,
+                },
+                snapshot?.caller,
+              )
             : undefined,
           utils.profile.getAi.invalidate(),
         ]);
@@ -621,10 +637,16 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   );
 };
 
-/** Rules and the backup-rule switch as saved, ignoring the editor's rule identities. */
+/**
+ * Rules and the backup-rule switch as they would be saved, ignoring the editor's rule
+ * identities, so a value typed back to its saved number is no edit.
+ */
 const draftKey = (rules: AiRuleType[], includeDefault: boolean | undefined) =>
   JSON.stringify({
-    rules: rules.map(({ id: _id, ...rule }) => rule),
+    rules: rules.map(({ id: _id, ...rule }) => {
+      const parsed = AiRule.safeParse(rule);
+      return parsed.success ? parsed.data : rule;
+    }),
     includeDefault: !!includeDefault,
   });
 

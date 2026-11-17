@@ -19,6 +19,7 @@ import {
   getAutoCombatPreferencePatch,
   getCombatAdmissionUserUpdate,
 } from "@/deltas/combat";
+import { getSelectJutsuLoadoutUserUpdate } from "@/deltas/jutsu";
 import {
   AdjustableBasicActions,
   AutoBattleTypes,
@@ -1254,10 +1255,10 @@ export const combatRouter = createTRPCRouter({
         ? (userBattle.extraState.villages?.[user.villageId] as CombatQueryVillage)
         : null;
       const questData = userBattle.extraState.questData?.[user.controllerId];
+      const selectedJutsuLoadout = jutsuLoadouts.find((loadout) => loadout.id === jId);
       // A new jutsu loadout brings its own AI rules, or the Default ones.
       const aiProfile = jutsuChanged
-        ? jutsuLoadouts.find((loadout) => loadout.id === jId)?.customAi &&
-          loadoutAiProfile
+        ? selectedJutsuLoadout?.customAi && loadoutAiProfile
           ? loadoutAiProfile
           : userBattle.extraState.aiProfiles?.Default
         : user.aiProfileId && user.aiProfileId !== "Default"
@@ -1502,6 +1503,16 @@ export const combatRouter = createTRPCRouter({
               : []),
           ].join(". "),
           battle: maskBattle(userBattle, ctx.userId),
+          // The profile follows the selected jutsu loadout and the AI rules it fights with.
+          ...(jutsuChanged && selectedJutsuLoadout
+            ? getSelectJutsuLoadoutUserUpdate({
+                id: selectedJutsuLoadout.id,
+                loadoutJutsuIds: selectedJutsuLoadout.jutsuIds,
+                aiProfileId: selectedJutsuLoadout.customAi
+                  ? (selectedJutsuLoadout.aiProfile?.id ?? null)
+                  : null,
+              })
+            : {}),
         };
       } else {
         return errorResponse("Battle state could not be updated");

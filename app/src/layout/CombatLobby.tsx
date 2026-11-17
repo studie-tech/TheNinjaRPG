@@ -50,7 +50,12 @@ export const CombatLobby: React.FC<CombatLobbyProps> = ({
   } | null>(null);
   const battleId = battle?.id;
   const setBattleAtom = useSetAtom(userBattleAtom);
-  const { data: userData, timeDiff } = useRequiredUserDataSelector((u) => ({
+  const {
+    data: userData,
+    timeDiff,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
     userId: u.userId,
   }));
   const suid = userData?.userId;
@@ -132,7 +137,10 @@ export const CombatLobby: React.FC<CombatLobbyProps> = ({
 
   // Mutation for selecting loadouts
   const { mutate: selectLoadout } = api.combat.updateCombatLoadout.useMutation({
-    onSuccess: (data, variables) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: (data, variables, revision) => {
+      // The profile follows a new jutsu loadout and the AI rules it fights with.
+      if ("userPatch" in data && data.userPatch) void updateUser(data, { revision });
       if (
         "battle" in data &&
         data.success &&

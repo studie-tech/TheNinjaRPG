@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -26,13 +26,13 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getToggledAiLoadouts } from "@/deltas/ai";
 import {
   AI_PROFILE_MAX_RULES,
   BasicElementName,
   GeneralTypes,
 } from "@/drizzle/constants";
 import { useAutoCombatSetting } from "@/hooks/combat";
+import { useJutsuLoadoutCacheUpdate } from "@/hooks/useJutsuLoadoutCacheUpdate";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import Confirm from "@/layout/Confirm";
@@ -75,6 +75,9 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
   }));
   const { data: loadouts } = api.jutsu.getLoadouts.useQuery();
   const [hasUnsavedRules, setHasUnsavedRules] = useState(false);
+  const [tab, setTab] = useState("preferred");
+  const unsavedRulesId = useId();
+  const { prepareLoadoutUpdate, updateToggledAiLoadout } = useJutsuLoadoutCacheUpdate();
   const utils = api.useUtils();
   const [battleDescriptionDraft, setBattleDescriptionDraft] = useState(
     userData?.showBattleDescription ?? false,
@@ -185,7 +188,18 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
     <div className="pb-3">
       <div className="m-2 mb-4 flex items-center space-x-2">
         <Tabs
-          defaultValue="preferred"
+          value={tab}
+          onValueChange={(next) => {
+            // Leaving the AI Profile tab would drop its unsaved rules.
+            if (tab === "aiprofile" && hasUnsavedRules) {
+              showMutationToast({
+                success: false,
+                message: "Save or discard your rule changes first",
+              });
+              return;
+            }
+            setTab(next);
+          }}
           className="flex w-full flex-col items-center justify-center"
         >
           <TabsList className="text-center">
@@ -373,7 +387,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                   variant="dropdown"
                   label="Jutsu loadout"
                   disabled={hasUnsavedRules}
-                  describedBy={hasUnsavedRules ? "ai-rules-unsaved" : undefined}
+                  describedBy={hasUnsavedRules ? unsavedRulesId : undefined}
                   // Equipping changes the jutsu these rules can use.
                   onSelected={() =>
                     void utils.profile.getPublicUser.invalidate({ userId })
@@ -381,7 +395,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                 />
               </div>
               {hasUnsavedRules && (
-                <p id="ai-rules-unsaved" className="text-muted-foreground text-sm">
+                <p id={unsavedRulesId} className="text-muted-foreground text-sm">
                   Save or discard your rule changes to switch loadout.
                 </p>
               )}
@@ -408,11 +422,14 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
               ])}
               maxCustomRules={AI_PROFILE_MAX_RULES}
               onDirtyChange={setHasUnsavedRules}
-              onToggled={(toggled) =>
-                utils.jutsu.getLoadouts.setData(undefined, (current) =>
-                  current ? getToggledAiLoadouts(current, toggled) : current,
-                )
-              }
+              toggleCache={{
+                prepare: prepareLoadoutUpdate,
+                update: (toggled, snapshot) =>
+                  updateToggledAiLoadout(
+                    toggled,
+                    snapshot as ReturnType<typeof prepareLoadoutUpdate>,
+                  ),
+              }}
               copySources={(loadouts ?? []).flatMap((loadout, index) =>
                 loadout.customAi &&
                 loadout.aiProfile &&

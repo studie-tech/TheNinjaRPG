@@ -204,6 +204,28 @@ describe("a player's rules for a jutsu loadout", () => {
     ).toBeDefined();
   });
 
+  it("does not report a rule value typed back to its saved number as an unsaved edit", () => {
+    mocks.profile = {
+      id: "custom",
+      includeDefaultRules: true,
+      rules: [
+        AiRule.parse({
+          conditions: [ConditionDistanceHigherThan.parse({ value: 2 })],
+          action: ActionEndTurn.parse({}),
+        }),
+        ...getBackupRules(),
+      ],
+    };
+    const onDirtyChange = vi.fn();
+    const view = player({ onDirtyChange });
+    fireEvent.click(headers(view)[0]!);
+    const value = view.getByDisplayValue("2");
+    fireEvent.change(value, { target: { value: "25" } });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    fireEvent.change(value, { target: { value: "2" } });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
   it("reports unsaved edits and discards them on request", () => {
     const onDirtyChange = vi.fn();
     const view = player({ onDirtyChange });
