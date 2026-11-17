@@ -200,6 +200,35 @@ describe("combat active effects", () => {
     expect(view.queryByText(/hidden by the/)).toBeNull();
   });
 
+  it("makes the source filter a focusable button that opens its source controls", () => {
+    const view = render(
+      <VisualizeEffects effects={[jutsuReflect()]} userId={userId} />,
+    );
+    const trigger = view.getByRole("button", { name: "Filter effects by source" });
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger.getAttribute("type")).toBe("button");
+    fireEvent.click(trigger);
+    expect(view.getByRole("switch", { name: "Jutsu" })).toBeTruthy();
+  });
+
+  it("uses player-facing potency target labels", () => {
+    const effect = makeEffect(
+      "increasepotency",
+      {
+        power: 20,
+        rounds: 2,
+        affectedTag: "increasedamagegiven",
+        affectedElements: ["Fire"],
+      },
+      { ...runtime, id: "damage-potency" },
+    );
+    const view = render(<VisualizeEffects effects={[effect]} userId={userId} />);
+    expect(
+      view.getByText("Potency (Increase Damage Given, Fire) +20 ↻ 2"),
+    ).toBeTruthy();
+  });
+
   it("lists active effects that have no dedicated section", () => {
     const effects = [
       makeEffect(

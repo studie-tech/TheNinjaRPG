@@ -12,6 +12,7 @@ import type {
 import { DIFFUSE_MAX_PERCENTAGE, PARRY_MAX_PERCENTAGE } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import ElementImage from "@/layout/ElementImage";
+import { POTENCY_TAG_LABELS } from "@/libs/combat/potency";
 import { getEffectMagnitude } from "@/libs/combat/power";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
 import {
@@ -468,6 +469,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     onehitkill: "One-Hit Kill",
     jutsuslots: "Jutsu Slots",
   };
+  /** Use the shared player-facing potency names while retaining scope details. */
   const getOtherLabel = (e: CollapsedEffect) => {
     const label =
       otherLabel[e.type] ?? `${e.type.charAt(0).toUpperCase()}${e.type.slice(1)}`;
@@ -476,7 +478,9 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     }
     if (e.type !== "potency") return label;
     const parts = [
-      ...(e.detail && e.detail !== "all" ? [statusLabel[e.detail] ?? e.detail] : []),
+      ...(e.detail && e.detail !== "all"
+        ? [POTENCY_TAG_LABELS[e.detail as keyof typeof POTENCY_TAG_LABELS] ?? e.detail]
+        : []),
       ...(e.detailElements ? [e.detailElements] : []),
     ];
     return parts.length > 0 ? `${label} (${parts.join(", ")})` : label;
@@ -540,13 +544,16 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
       {effects.length > 0 && (
         <Popover>
           <PopoverTrigger asChild>
-            <Filter
+            <button
+              type="button"
               aria-label="Filter effects by source"
               className={cn(
-                "absolute top-0 right-0 h-5 w-5 hover:cursor-pointer hover:text-orange-500",
+                "focus-visible:ring-ring absolute top-0 right-0 h-5 w-5 rounded-sm hover:cursor-pointer hover:text-orange-500 focus-visible:ring-2 focus-visible:outline-none",
                 hiddenSources.length > 0 && "text-orange-500",
               )}
-            />
+            >
+              <Filter className="h-5 w-5" />
+            </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-max p-2 text-xs">
             <div className="flex flex-col gap-2">
