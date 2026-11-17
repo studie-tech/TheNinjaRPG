@@ -46,8 +46,11 @@ export default function TerritoryWarPage() {
   const { prepareCombatEntry, loadBattle } = useCombatEntry();
   const utils = api.useUtils();
   const ownTeamRef = useRef<HTMLDivElement>(null);
+  // Standings and lobbies move while an event runs; between events the deadline refresh
+  // below reads the opening, and the slow poll covers a scheduler that opens it late.
   const current = api.territoryWar.getCurrent.useQuery(undefined, {
-    refetchInterval: 10000,
+    refetchInterval: (query) =>
+      isEventRunning(query.state.data?.event, timeDiff) ? 10000 : 60000,
   });
   const onSuccess = async (
     result: UserDeltaResponse,
@@ -99,8 +102,7 @@ export default function TerritoryWarPage() {
     boostUntil,
     nextStartsAt,
   } = current.data ?? {};
-  const active =
-    !!event && !event.resolvedAt && event.endsAt.getTime() > Date.now() - timeDiff;
+  const active = isEventRunning(event, timeDiff);
   const ownTeam = teams.find((team) =>
     team.queue.some((member) => member.userId === user?.userId),
   );
@@ -366,3 +368,9 @@ export default function TerritoryWarPage() {
     </ContentBox>
   );
 }
+
+/** Whether the event still admits lobbies and scores, on the account's server clock. */
+const isEventRunning = (
+  event: { resolvedAt: Date | null; endsAt: Date } | null | undefined,
+  timeDiff: number,
+) => !!event && !event.resolvedAt && event.endsAt.getTime() > Date.now() - timeDiff;

@@ -28,6 +28,7 @@ import {
   settleDungeonBattle,
 } from "@/server/utils/dungeon";
 import { ObjectiveReward } from "@/validators/rewards";
+import { afterTasks } from "../../../setup/after";
 import { makeCompleteBattle, makeUser } from "../../../setup/combat";
 import { dungeonBattleState, dungeonContent } from "../../../setup/dungeon";
 import {
@@ -50,6 +51,7 @@ import {
   getTestDatabase,
   recordQueries,
   resetTables,
+  resolverOf,
 } from "../../../setup/testDatabase";
 
 describeWithDatabase("Dungeon parties and settlement", () => {
@@ -57,6 +59,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     stubRateLimitTransport({
       unexpectedRequestMessage: "Unexpected HTTP request in dungeon tests",
     });
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
       actionLog,
       aiProfile,
@@ -306,11 +309,42 @@ describeWithDatabase("Dungeon parties and settlement", () => {
   it("loads lobby membership and invitations through the state query", async () => {
     const { a, id } = await lobby();
     const b = await callerFor(dungeonRouter, "b");
+    const trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await a.act({ id, action: "invite", userId: "b" });
+    expect(trigger).toHaveBeenCalledWith(
+      "b",
+      "event",
+      expect.objectContaining({ type: "dungeonParty", route: "/dungeon" }),
+    );
     expect((await a.getState()).runs[0]?.id).toBe(id);
     expect((await b.getState()).runs[0]?.id).toBe(id);
     const outsider = await callerFor(dungeonRouter, "outsider");
     expect((await outsider.getState()).runs).toHaveLength(0);
+  });
+  it("saves an invitation before delivering its notification", async () => {
+    const { id } = await lobby();
+    const db = await getTestDatabase();
+    const tasks: (() => unknown)[] = [];
+    const trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    const result = await afterTasks.run(tasks, () =>
+      resolverOf(dungeonRouter.act)({
+        ctx: { drizzle: db, userId: "a" },
+        input: { id, action: "invite", userId: "b" },
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(
+      (await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) }))?.state
+        .invitedIds,
+    ).toContain("b");
+    expect(trigger).not.toHaveBeenCalled();
+    expect(tasks).toHaveLength(1);
+    await tasks[0]!();
+    expect(trigger).toHaveBeenCalledWith(
+      "b",
+      "event",
+      expect.objectContaining({ type: "dungeonParty" }),
+    );
   });
   it("keeps an older accepted party and its unclaimed rewards visible beyond twenty invitations", async () => {
     const db = await getTestDatabase();

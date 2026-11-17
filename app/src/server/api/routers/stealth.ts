@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { z } from "zod";
 import {
   CovertTrainingTypes,
@@ -263,19 +264,24 @@ export const stealthRouter = createTRPCRouter({
         await clearStealthForUsers(ctx.drizzle, detectedUserIds);
       }
 
-      // Broadcast map updates and notifications for detected users
+      // Broadcast map updates and notifications for detected users. The sector event is
+      // how revealed players reach every map, the scanner's included, so the function
+      // stays alive until it is delivered.
       if (detectedUsers.length > 0) {
-        const broadcasts = detectedUsers.flatMap((detectedUser) => [
-          // Broadcast to sector so they appear on the map for everyone
-          broadcastStealth(detectedUser, false),
-          // Notify the detected user that their stealth was broken
-          pusher.trigger(detectedUser.userId, "event", {
-            type: "userMessage",
-            message: `Your stealth was broken by ${user.username}'s sensory ability!`,
-            route: "/travel",
-          }),
-        ]);
-        void Promise.all(broadcasts);
+        after(() =>
+          Promise.all(
+            detectedUsers.flatMap((detectedUser) => [
+              // Broadcast to sector so they appear on the map for everyone
+              broadcastStealth(detectedUser, false),
+              // Notify the detected user that their stealth was broken
+              pusher.trigger(detectedUser.userId, "event", {
+                type: "userMessage",
+                message: `Your stealth was broken by ${user.username}'s sensory ability!`,
+                route: "/travel",
+              }),
+            ]),
+          ),
+        );
       }
 
       const cooldown = calcSensoryCooldown(user.sensory);

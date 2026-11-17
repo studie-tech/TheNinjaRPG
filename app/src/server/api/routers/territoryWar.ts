@@ -25,12 +25,18 @@ import {
   fetchLatestTerritoryWar,
   findMpvpBattleQueueForStartBattle,
   findTerritoryWarById,
+  findUserDataForGetCurrent,
   insertMpvpBattleQueueForCreateTeam,
   listMpvpBattleQueueForGetCurrent,
   listTerritoryWarScoreForGetCurrent,
 } from "@/queries/territoryWar";
 import { initiateBattle } from "@/server/api/routers/combat";
-import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import {
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  serverError,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
 import {
@@ -38,7 +44,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { fetchTerritoryWarUser } from "@/server/utils/territoryWar";
+import { missingUserMessage } from "@/server/utils/sentry";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Read the global competition and manage same-competitor guardian lobbies. */
@@ -49,10 +55,15 @@ export const territoryWarRouter = createTRPCRouter({
   ),
   /** Include the latest result, standings, own competitor's lobbies and next opening. */
   getCurrent: protectedProcedure.query(async ({ ctx }) => {
-    const [event, user] = await Promise.all([
+    // Scores and lobbies select the latest event themselves, so all four reads run at once.
+    // A response that straddles the scheduler opening an event settles on the next poll.
+    const [event, user, scores, teams] = await Promise.all([
       fetchLatestTerritoryWar(ctx.drizzle),
-      fetchTerritoryWarUser(ctx.drizzle, ctx.userId),
+      findUserDataForGetCurrent(ctx.drizzle, ctx.userId),
+      listTerritoryWarScoreForGetCurrent(ctx.drizzle),
+      listMpvpBattleQueueForGetCurrent(ctx.drizzle),
     ]);
+    if (!user) throw serverError("NOT_FOUND", missingUserMessage(ctx.userId));
     const competitor = getTerritoryCompetitor(user);
     const boostUntil = getTerritoryWarBoostUntil(user);
     if (!event)
@@ -64,10 +75,6 @@ export const territoryWarRouter = createTRPCRouter({
         boostUntil,
         nextStartsAt: null,
       };
-    const [scores, teams] = await Promise.all([
-      listTerritoryWarScoreForGetCurrent(ctx.drizzle, event),
-      listMpvpBattleQueueForGetCurrent(ctx.drizzle, event),
-    ]);
     const endedAt =
       event.resolvedAt ?? (event.endsAt <= new Date() ? event.endsAt : null);
     return {

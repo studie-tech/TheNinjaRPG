@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { MAX_COOKING_BATCHES } from "@/drizzle/constants";
 import { useActivityBonusRefresh } from "@/hooks/useActivityBonusRefresh";
 import { useCraftingCacheUpdate } from "@/hooks/useCraftingCacheUpdate";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { ActiveTimedBuffs } from "@/layout/ActiveTimedBuffs";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
@@ -54,9 +55,7 @@ export default function Kitchen({ image }: { image?: string }) {
   const recipeTriggerRef = useRef<HTMLButtonElement>(null);
   const recipes = api.occupation.getCookingRecipes.useQuery();
   const inventory = api.item.getUserItems.useQuery();
-  const queue = api.occupation.getCraftingQueue.useQuery(undefined, {
-    refetchInterval: 15000,
-  });
+  const queue = api.occupation.getCraftingQueue.useQuery();
   const refresh = async () => {
     await Promise.all([
       utils.item.getUserItems.invalidate(),
@@ -65,6 +64,25 @@ export default function Kitchen({ image }: { image?: string }) {
       utils.profile.getSidebarTimers.invalidate(),
     ]);
   };
+  /** Reading the queue starts a job whose turn has come, so the inventory is read after it. */
+  const refreshAtBoundary = async () => {
+    await queue.refetch({ cancelRefetch: false });
+    await Promise.all([
+      utils.item.getUserItems.invalidate(),
+      utils.item.getUserItemsWithVariants.invalidate(),
+      utils.profile.getSidebarTimers.invalidate(),
+    ]);
+  };
+  // Waiting jobs change only at their own start and finish times, or through this player's actions.
+  // Include past deadlines: a waiting job may become due in transit or while unmounted.
+  // useRefreshAt reconciles each crossed boundary once, even if the read fails.
+  useRefreshAt(
+    queue.data?.waiting.flatMap((job) => [job.startsAt, job.finishesAt]) ?? [],
+    () => void refreshAtBoundary(),
+    timeDiff,
+    true,
+    new Date(0),
+  );
   const { prepareCraftUpdate, updateCraft } = useCraftingCacheUpdate();
   const cook = api.occupation.craftItem.useMutation({
     onMutate: () => ({ user: prepareUserUpdate(), craft: prepareCraftUpdate() }),
@@ -218,7 +236,7 @@ export default function Kitchen({ image }: { image?: string }) {
         isPending={cancel.isPending || cook.isPending}
         emptyText="Choose a recipe to start cooking."
         onActiveFinish={() => {
-          void refresh();
+          void refreshAtBoundary();
         }}
       />
       <ActiveTimedBuffs />

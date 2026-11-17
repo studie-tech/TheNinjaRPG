@@ -170,6 +170,7 @@ const renderShrineHall = (
       profile: { getUser: invalidation },
       travel: { getSectorData: invalidation },
       shrine: {
+        getSectorShrine: invalidation,
         getCapturedSectors: invalidation,
         getBoostTemplate: invalidation,
       },

@@ -150,6 +150,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
       onSuccess: (res, _variables, revision) => {
         showMutationToast(res);
         void utils.travel.getSectorData.invalidate();
+        void utils.shrine.getSectorShrine.invalidate();
         void utils.shrine.getCapturedSectors.invalidate();
         void updateShrineVillage(res, revision);
       },

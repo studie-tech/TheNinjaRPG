@@ -22,6 +22,7 @@ import {
   village,
 } from "@/drizzle/schema";
 import { activeDungeonNotification } from "@/libs/dungeon";
+import { Pusher } from "@/libs/pusher";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import * as profileQueries from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
@@ -184,6 +185,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     stubRateLimitTransport({
       unexpectedRequestMessage: "Unexpected HTTP request in dungeon cache tests",
     });
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
       battle,
       dungeonMember,

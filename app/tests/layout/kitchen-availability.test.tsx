@@ -1,5 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
 import * as activeBuffs from "@/layout/ActiveTimedBuffs";
@@ -37,6 +45,7 @@ describe("Kitchen recipe availability", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -96,6 +105,87 @@ describe("Kitchen recipe availability", () => {
           .disabled,
       ).toBe(disabled);
       if (disabled) expect(view.getAllByText(label)).toHaveLength(2);
+    },
+  );
+
+  it.each([
+    { case: "starts while open", startsIn: 20, readAgo: 0 },
+    {
+      case: "started while a cached queue was closed",
+      startsIn: -60000,
+      readAgo: 120000,
+    },
+    { case: "became due before its response arrived", startsIn: -500, readAgo: 0 },
+  ])(
+    "reads the queue when a waiting job $case, then the inventory it changed",
+    async ({ startsIn, readAgo }) => {
+      vi.useFakeTimers();
+      setSystemTime(Date.UTC(2026, 9, 1, 12));
+      const order: string[] = [];
+      let finishQueueRead = () => {};
+      const queueRead = new Promise<void>((resolve) => {
+        finishQueueRead = resolve;
+      });
+      const invalidate = (name: string) => ({
+        invalidate: vi.fn(async () => {
+          order.push(name);
+        }),
+      });
+      const startsAt = new Date(Date.now() + startsIn);
+      const queue = {
+        data: {
+          capacity: 2,
+          waiting: [
+            {
+              id: "job",
+              quantity: 1,
+              name: "Rice Bowl",
+              startsAt,
+              finishesAt: new Date(startsAt.getTime() + 60000),
+            },
+          ],
+        },
+        dataUpdatedAt: Date.now() - readAgo,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(async () => {
+          order.push("queue");
+          await queueRead;
+        }),
+      };
+      stubCraftingCache();
+      Object.assign(vi.spyOn(client, "api" as never), {
+        useUtils: () => ({
+          item: {
+            getUserItems: invalidate("items"),
+            getUserItemsWithVariants: invalidate("variants"),
+          },
+          profile: { getSidebarTimers: invalidate("timers") },
+        }),
+        occupation: {
+          getCookingRecipes: { useQuery: () => ({ data: [], isPending: false }) },
+          getCraftingQueue: { useQuery: () => queue },
+          craftItem: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+          cancelQueuedCraft: {
+            useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+          },
+        },
+        item: { getUserItems: { useQuery: () => ({ data: [], isPending: false }) } },
+      });
+      const view = render(<Kitchen />);
+      expect(queue.refetch).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(Math.max(0, startsIn) + 1000);
+      });
+      expect(order).toEqual(["queue"]);
+      await act(async () => finishQueueRead());
+      expect(order).toEqual(["queue", "items", "variants", "timers"]);
+      expect(queue.refetch).toHaveBeenCalledWith({ cancelRefetch: false });
+      view.rerender(<Kitchen />);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(queue.refetch).toHaveBeenCalledTimes(1);
     },
   );
 });

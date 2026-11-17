@@ -12,7 +12,7 @@ import * as warField from "@/layout/WarFieldActions";
 import { defaultWarRules } from "@/validators/war";
 import { mockUserContextValue } from "../../setup/userContext";
 
-type SectorData = RouterOutputs["travel"]["getSectorData"];
+type SectorData = RouterOutputs["shrine"]["getSectorShrine"];
 type ShrineBattle = RouterOutputs["shrine"]["getShrineBattles"][number];
 const challenge = vi.fn();
 const join = vi.fn();
@@ -35,7 +35,7 @@ beforeEach(() => {
       shrineLevel: 1,
       village: { name: "Defender" },
     },
-    village: null,
+    isHome: false,
     warData: [
       {
         id: "war",
@@ -69,10 +69,10 @@ beforeEach(() => {
   vi.spyOn(countdown, "default").mockReturnValue(null);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
-    travel: { getSectorData: { useQuery: () => ({ data: sectorData }) } },
     combat: { startShrineBattle: { useMutation: () => ({ mutate: attack }) } },
     raids: { getAvailableRaids: { useQuery: () => ({ data: { raids: [] } }) } },
     shrine: {
+      getSectorShrine: { useQuery: () => ({ data: sectorData }) },
       getUserQueuedShrineBattle: { useQuery: () => ({ data: null }) },
       getShrineBattles: { useQuery: () => ({ data: battles }) },
       challengeShrine: { useMutation: () => ({ mutate: challenge }) },
@@ -240,10 +240,8 @@ describe("shrine page war affiliation", () => {
       sideVillageId = side;
       villageId = null;
       sectorNumber = side === "attacker" ? 200 : 100;
-      sectorData.village = {
-        id: side === "attacker" ? "defender" : "attacker",
-      } as NonNullable<SectorData["village"]>;
-      sectorData.sectorData!.villageId = sectorData.village.id;
+      sectorData.isHome = true;
+      sectorData.sectorData!.villageId = side === "attacker" ? "defender" : "attacker";
       queuedBattle("ATTACKER");
       const view = mount();
       fireEvent.click(view.getByRole("button", { name: "Attack shrine" }));
@@ -266,7 +264,7 @@ describe("shrine page war affiliation", () => {
       sideVillageId = side;
       villageId = null;
       sectorNumber = side === "attacker" ? 100 : 200;
-      sectorData.village = { id: side } as NonNullable<SectorData["village"]>;
+      sectorData.isHome = true;
       sectorData.sectorData!.villageId = side;
       queuedBattle("DEFENDER");
       const view = mount();

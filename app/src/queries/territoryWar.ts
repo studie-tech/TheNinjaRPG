@@ -275,24 +275,52 @@ export const findUserDataForFetchTerritoryWarUser = (
     with: { village: true, clan: true },
   });
 
-/** Build the `territoryWarScore` listing for `getCurrent`, using predicates on `warId`. */
-export const listTerritoryWarScoreForGetCurrent = (
+/** The latest event's ID as a scalar subquery, in `fetchLatestTerritoryWar`'s order. */
+const latestTerritoryWarId = (client: Pick<DrizzleClient, "select">) =>
+  sql`(${client
+    .select({ id: territoryWar.id })
+    .from(territoryWar)
+    .orderBy(desc(territoryWar.startsAt))
+    .limit(1)})`;
+
+/** Build the viewer lookup for `getCurrent`: the competitor identity and its bonus deadline. */
+export const findUserDataForGetCurrent = (
   client: Pick<DrizzleClient, "query">,
-  event: { id: string },
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    columns: { isOutlaw: true, villageId: true, clanId: true },
+    where: eq(userData.userId, userId),
+    with: {
+      village: { columns: { id: true, name: true, territoryWarBoostUntil: true } },
+      clan: {
+        columns: {
+          id: true,
+          name: true,
+          hasHideout: true,
+          villageId: true,
+          territoryWarBoostUntil: true,
+        },
+      },
+    },
+  });
+
+/** Build the latest event's `territoryWarScore` listing for `getCurrent`. */
+export const listTerritoryWarScoreForGetCurrent = (
+  client: Pick<DrizzleClient, "query" | "select">,
 ) =>
   client.query.territoryWarScore.findMany({
-    where: eq(territoryWarScore.warId, event.id),
+    where: eq(territoryWarScore.warId, latestTerritoryWarId(client)),
     orderBy: (row, { desc }) => [desc(row.points), asc(row.name)],
   });
 
-/** Build the `mpvpBattleQueue` listing for `getCurrent`, using predicates on `territoryWarId` and `battleId`. */
+/** Build the latest event's unstarted `mpvpBattleQueue` listing for `getCurrent`. */
 export const listMpvpBattleQueueForGetCurrent = (
-  client: Pick<DrizzleClient, "query">,
-  event: { id: string },
+  client: Pick<DrizzleClient, "query" | "select">,
 ) =>
   client.query.mpvpBattleQueue.findMany({
     where: and(
-      eq(mpvpBattleQueue.territoryWarId, event.id),
+      eq(mpvpBattleQueue.territoryWarId, latestTerritoryWarId(client)),
       isNull(mpvpBattleQueue.battleId),
     ),
     with: {

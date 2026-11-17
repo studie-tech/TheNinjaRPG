@@ -1,7 +1,7 @@
 "use client";
 
 import { Shield, Swords, Users } from "lucide-react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -48,9 +48,15 @@ export default function Shrine() {
     status: profile.status,
     villageId: profile.villageId,
   }));
-  const { data: sectorData } = api.travel.getSectorData.useQuery(
+  // Other players move shrine HP and declare wars; poll quickly only while one concerns this sector.
+  const { data: sectorData } = api.shrine.getSectorShrine.useQuery(
     { sector: userData?.sector || 0 },
-    { enabled: !!userData, refetchInterval: 10000 },
+    {
+      enabled: !!userData,
+      refetchOnMount: "always",
+      refetchInterval: (query) =>
+        hasSectorWar(query.state.data, userData?.sector) ? 10000 : 30000,
+    },
   );
 
   // Router for forwarding
@@ -106,18 +112,9 @@ export default function Shrine() {
   // Check if there's an active war in this sector
   // For SECTOR_WAR: check war.sector
   // For VILLAGE_WAR/WAR_RAID: check if this sector is either village's home sector
-  const activeWars = sectorData.warData?.filter((war) => {
-    if (war.type === "SECTOR_WAR") {
-      return war.sector === userData.sector;
-    }
-    if (VILLAGE_WAR_TYPES.includes(war.type)) {
-      return (
-        war.attackerVillage?.sector === userData.sector ||
-        war.defenderVillage?.sector === userData.sector
-      );
-    }
-    return false;
-  });
+  const activeWars = sectorData.warData?.filter((war) =>
+    isWarInSector(war, userData.sector),
+  );
 
   // Determine if this sector is owned (for MPVP attacks/defends)
   const sectorOwnerVillageId = sectorData.sectorData?.villageId ?? null;
@@ -149,7 +146,7 @@ export default function Shrine() {
       userData.userId,
       userData.sector,
     )?.rules;
-  const isHome = !!sectorData.village;
+  const isHome = sectorData.isHome;
 
   // Check if user can attack OR defend the shrine in a Village War or Raid
   const userCanBattleVillageWarShrine = sectorData.warData?.some(
@@ -760,3 +757,28 @@ const WarCard = ({
     </div>
   );
 };
+
+/** Whether a war is fought over this sector's shrine. */
+const isWarInSector = (war: SectorShrineWar, sector: number) => {
+  if (war.type === "SECTOR_WAR") return war.sector === sector;
+  if (VILLAGE_WAR_TYPES.includes(war.type)) {
+    return (
+      war.attackerVillage?.sector === sector || war.defenderVillage?.sector === sector
+    );
+  }
+  return false;
+};
+
+/** Whether an open war concerns this sector's shrine or the village that owns it. */
+const hasSectorWar = (data: SectorShrine | undefined, sector: number | undefined) => {
+  const ownerId = data?.sectorData?.villageId;
+  return !!data?.warData?.some(
+    (war) =>
+      (sector !== undefined && isWarInSector(war, sector)) ||
+      (!!ownerId &&
+        (war.attackerVillageId === ownerId || war.defenderVillageId === ownerId)),
+  );
+};
+
+type SectorShrine = RouterOutputs["shrine"]["getSectorShrine"];
+type SectorShrineWar = NonNullable<SectorShrine["warData"]>[number];

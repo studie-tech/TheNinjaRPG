@@ -53,6 +53,27 @@ export const findVillageForInitiateShrineBattle = (
     with: { structures: true, dutyShift: true },
   });
 
+/** Build the viewer lookup for `getSectorShrine`: the fields that decide war sides and objective access. */
+export const findUserDataForGetSectorShrine = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    columns: { userId: true, villageId: true, sector: true, status: true, rank: true },
+    where: eq(userData.userId, userId),
+    with: { village: { columns: { kageId: true } } },
+  });
+
+/** Build the home-village lookup for `getSectorShrine`, selecting only whether one exists. */
+export const findVillageIdForGetSectorShrine = (
+  client: Pick<DrizzleClient, "query">,
+  sectorNumber: number,
+) =>
+  client.query.village.findFirst({
+    columns: { id: true },
+    where: eq(village.sector, sectorNumber),
+  });
+
 /** Build the `sector` listing for `runShrineMaintenance`, using predicates on `nextMaintainanceDueDate`. */
 export const listSectorForRunShrineMaintenance = (
   client: Pick<DrizzleClient, "query">,

@@ -243,6 +243,7 @@ const useMercenaryFeedback = () => {
       utils.war.getObjectiveWarInfo.invalidate(),
       utils.war.getWarCampNotices.invalidate(),
       utils.travel.getSectorData.invalidate(),
+      utils.shrine.getSectorShrine.invalidate(),
     ]);
   };
   return {

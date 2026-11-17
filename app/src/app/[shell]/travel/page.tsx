@@ -1801,13 +1801,11 @@ const StealthControls: React.FC<{
 
           // The server has already consumed the scan. Keep cache maintenance best-effort so a
           // client refresh failure cannot hide results or make the Radar appear retryable.
-          void Promise.allSettled([
-            updateUser(
-              { lastSensoryAt: data.data.lastSensoryAt },
-              { revision, refetch: false, userRecovery: data.userRecovery },
-            ),
-            utils.travel.getSectorData.invalidate(),
-          ]);
+          // Revealed players reach the map through the sector broadcast's arrival read.
+          void updateUser(
+            { lastSensoryAt: data.data.lastSensoryAt },
+            { revision, refetch: false, userRecovery: data.userRecovery },
+          ).catch(() => undefined);
         } else if (data.userRecovery) {
           void updateUser(data, { revision, refetch: false });
         }
