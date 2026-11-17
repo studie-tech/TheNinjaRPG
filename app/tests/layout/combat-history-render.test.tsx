@@ -126,10 +126,10 @@ it("renders rounds newest first, with placeholders, separators and highlighted s
     Array.from(node.querySelectorAll(":scope > div")),
   );
   expect(effects.map((node) => node.className)).toEqual([
-    "text-blue-500",
-    "text-foreground",
-    "text-green-500",
-    "text-red-500",
+    "text-blue-700",
+    "text-black",
+    "text-green-700",
+    "text-red-700",
   ]);
   expect(effects.map((node) => node.textContent)).toEqual([
     "- Ninjutsu Genjutsu Bukijutsu Intelligence Willpower boost ",
@@ -146,14 +146,14 @@ it("renders rounds newest first, with placeholders, separators and highlighted s
     "Ninjutsu:text-blue-600",
     "Genjutsu:text-purple-600",
     "Bukijutsu:text-red-600",
-    "Intelligence:text-teal-600",
-    "Willpower:text-orange-600",
-    "Taijutsu:text-green-600",
-    "Taijutsu:text-green-600",
-    "Taijutsu:text-green-600",
+    "Intelligence:text-teal-700",
+    "Willpower:text-orange-700",
+    "Taijutsu:text-green-700",
+    "Taijutsu:text-green-700",
+    "Taijutsu:text-green-700",
     "Highest:text-stone-500",
     "Strength:text-blue-800",
-    "Speed:text-cyan-600",
+    "Speed:text-cyan-700",
   ]);
   expect(
     Array.from(effects[3]!.querySelectorAll("i")).map((node) => node.textContent),
