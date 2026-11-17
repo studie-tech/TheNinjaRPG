@@ -141,7 +141,6 @@ export const updateUserDataForDailyCounters = (
       dailyTrainings: 0,
       dailyOverworldQuestRolls: 0,
       dailySageActivations: 0,
-      dailyTowerDefenseRuns: 0,
       aiCalls: 0,
       dailyCountersResetAt: dayStart,
     })

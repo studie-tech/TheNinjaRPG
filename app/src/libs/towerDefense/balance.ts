@@ -21,6 +21,7 @@ import {
   TD_DAILY_WAVES,
 } from "@/drizzle/constants";
 import { powi } from "@/libs/towerDefense/rng";
+import { periodStart } from "@/utils/time";
 
 export const TD_TPS = 10;
 export const TD_TICK_SECONDS = 1 / TD_TPS;
@@ -63,6 +64,10 @@ export const tdWavesCleared = (startWave: number, wave: number) =>
 /** Whether a run cleared enough waves to fulfil the daily Guard Hall duty. */
 export const tdFulfilsDailyDuty = (startWave: number, wave: number) =>
   tdWavesCleared(startWave, wave) >= TD_DAILY_WAVES;
+
+/** Whether the daily Guard Hall duty already paid out during the UTC day of `now`. */
+export const tdDailyDutyDone = (paidAt: Date | null | undefined, now: Date) =>
+  !!paidAt && paidAt >= periodStart("daily", now);
 
 /** What the daily Guard Hall duty pays a character of `level`. */
 export const tdDailyReward = (level: number) => ({

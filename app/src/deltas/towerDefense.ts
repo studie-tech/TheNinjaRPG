@@ -1,6 +1,6 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 import type { TdDojoUpgrade } from "@/libs/towerDefense/content";
-import type { UserDelta } from "@/validators/userCache";
+import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 /** The `towerDefense.getProgress` shape these patches apply to. */
 export type TowerDefenseProgress = RouterOutputs["towerDefense"]["getProgress"];
@@ -24,26 +24,24 @@ export const getRunClaimUpdate =
   });
 
 /**
- * The profile changes of a verified claim: a run that fulfilled the daily Guard Hall
- * duty counts toward it and, the first time each day, pays the player and their village.
- * Any other claim leaves the profile as it was.
+ * The profile changes of a verified claim: the daily Guard Hall duty's reward for the
+ * player and their village, and when it was paid, if this claim paid it. Any other claim
+ * leaves the profile as it was.
  */
-export const getDailyDutyUserDelta = (duty: {
-  fulfilsDuty: boolean;
+export const getDailyDutyUserUpdate = (duty: {
   reward: { ryo: number; prestige: number; villageTokens: number } | null;
   villageId: string | null;
-}): UserDelta =>
-  duty.fulfilsDuty
+  paidAt: Date;
+}): { userDelta: UserDelta; userPatch?: UserCachePatch } =>
+  duty.reward
     ? {
-        dailyTowerDefenseRuns: 1,
-        ...(duty.reward
-          ? {
-              money: duty.reward.ryo,
-              villagePrestige: duty.reward.prestige,
-              ...(duty.villageId
-                ? { village: { id: duty.villageId, tokens: duty.reward.villageTokens } }
-                : {}),
-            }
-          : {}),
+        userDelta: {
+          money: duty.reward.ryo,
+          villagePrestige: duty.reward.prestige,
+          ...(duty.villageId
+            ? { village: { id: duty.villageId, tokens: duty.reward.villageTokens } }
+            : {}),
+        },
+        userPatch: { towerDefenseDutyAt: duty.paidAt },
       }
-    : {};
+    : { userDelta: {} };

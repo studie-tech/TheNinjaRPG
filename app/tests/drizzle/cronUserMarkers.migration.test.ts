@@ -8,7 +8,7 @@ import { describeWithDatabase, getTestDatabase } from "../setup/testDatabase";
 describeWithDatabase("daily UserData markers migration", () => {
   it("resets existing players once on migration day while new accounts start current", async () => {
     await withMigrationSandbox(
-      { snapshot: "0161", baseline: ["UserData", "VillageStructure"] },
+      { snapshot: "0161", baseline: ["UserData"] },
       async ({ query }) => {
         await query("SET timestamp = UNIX_TIMESTAMP('2026-01-02 12:00:00')");
         const insert =
@@ -16,8 +16,6 @@ describeWithDatabase("daily UserData markers migration", () => {
         await query(insert, ["existing", "existing"]);
         await query(await readMigration("0162_pink_ulik.sql"));
         await query(insert, ["new", "new"]);
-        // The daily reset below writes columns later migrations add.
-        await query(await readMigration("0163_wise_yellowjacket.sql"));
 
         const db = await getTestDatabase();
         const dayStart = new Date("2026-01-02T00:00:00Z");

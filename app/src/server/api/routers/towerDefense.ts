@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getDailyDutyUserDelta } from "@/deltas/towerDefense";
+import { getDailyDutyUserUpdate } from "@/deltas/towerDefense";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
 import { decodeTdActions } from "@/libs/towerDefense/actionLog";
 import { tdDailyReward, tdFulfilsDailyDuty } from "@/libs/towerDefense/balance";
@@ -25,6 +25,7 @@ import {
   updateUserDataForClaimTowerDefenseRun,
   updateUserDataForPurchaseDojoUpgrade,
   updateUserDataForStartTowerDefenseRun,
+  updateUserDataForTowerDefenseDuty,
   upsertUserTowerDefenseUpgrade,
 } from "@/queries/towerDefense";
 import { incrementVillageTokens } from "@/queries/village";
@@ -46,6 +47,7 @@ import {
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
 import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
+import { periodStart } from "@/utils/time";
 import {
   TD_MAX_LOG_CHARS,
   TD_MAX_TICKS,
@@ -223,23 +225,26 @@ export const towerDefenseRouter = createTRPCRouter({
       });
       // The replay is deterministic, so a refused log stays refused.
       if (!result.ok) return refusedForGood(result.message);
-      const fulfilsDuty = tdFulfilsDailyDuty(token.startWave, result.wave);
-      // The daily count comes from the snapshot above. Only the active run reaches the
-      // payout, so no other claim can pay the duty between the read and the write.
-      const reward =
-        fulfilsDuty && claimant.dailyTowerDefenseRuns === 0
-          ? tdDailyReward(claimant.level)
-          : null;
       const paid = await updateUserDataForClaimTowerDefenseRun(ctx.drizzle, ctx, {
         nonce: token.nonce,
         points: result.points,
         wave: result.wave,
-        fulfilsDuty,
-        reward,
       });
       // A simultaneous claim of this run paid it, or a newer run replaced it meanwhile.
       if (paid.rowsAffected === 0) return refusedForGood(REPLACED_RUN_MESSAGE);
-      await Promise.all([
+      const paidAt = new Date();
+      const dutyReward = tdFulfilsDailyDuty(token.startWave, result.wave)
+        ? tdDailyReward(claimant.level)
+        : null;
+      const [duty] = await Promise.all([
+        dutyReward
+          ? updateUserDataForTowerDefenseDuty(ctx.drizzle, ctx, {
+              ryo: dutyReward.ryo,
+              prestige: dutyReward.prestige,
+              paidAt,
+              dayStart: periodStart("daily", paidAt),
+            })
+          : undefined,
         insertTowerDefenseClaimReceipt(ctx.drizzle, ctx, {
           claimKey,
           wave: result.wave,
@@ -253,22 +258,23 @@ export const towerDefenseRouter = createTRPCRouter({
           kills: result.kills,
           startedAt: new Date(token.issuedAt),
         }),
-        reward && claimant.villageId
-          ? incrementVillageTokens(
-              ctx.drizzle,
-              reward.villageTokens,
-              claimant.villageId,
-            )
-          : undefined,
       ]);
+      // The duty pays only when no payout has happened yet this UTC day.
+      const reward = duty && duty.rowsAffected > 0 ? dutyReward : null;
+      if (reward && claimant.villageId)
+        await incrementVillageTokens(
+          ctx.drizzle,
+          reward.villageTokens,
+          claimant.villageId,
+        );
       const summary =
         result.points > 0
           ? `Reached wave ${result.wave} and earned ${result.points.toLocaleString()} scroll${result.points === 1 ? "" : "s"}!`
           : `Reached wave ${result.wave}.`;
-      const userDelta = getDailyDutyUserDelta({
-        fulfilsDuty,
+      const dutyUpdate = getDailyDutyUserUpdate({
         reward,
         villageId: claimant.villageId,
+        paidAt,
       });
       return {
         success: true,
@@ -279,7 +285,8 @@ export const towerDefenseRouter = createTRPCRouter({
         wave: result.wave,
         kills: result.kills,
         dailyReward: reward ?? undefined,
-        userDelta,
+        userDelta: dutyUpdate.userDelta,
+        userPatch: dutyUpdate.userPatch,
       };
     }),
 

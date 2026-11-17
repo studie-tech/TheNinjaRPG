@@ -66,7 +66,6 @@ export const userDeltaSchema = z.object({
   pvpFights: z.number().optional(),
   dailyOverworldQuestRolls: z.number().optional(),
   dailySageActivations: z.number().optional(),
-  dailyTowerDefenseRuns: z.number().optional(),
 
   bank: z.number().optional(),
   money: z.number().optional(),
@@ -99,6 +98,7 @@ export type UserDelta = z.infer<typeof userDeltaSchema>;
 export const userPatchSchema = z.object({
   federalStatus: z.enum(FederalStatuses).optional(),
   deletionAt: z.date().nullable().optional(),
+  towerDefenseDutyAt: z.date().nullable().optional(),
   isBanned: z.boolean().optional(),
   isSilenced: z.boolean().optional(),
   isTradeBanned: z.boolean().optional(),

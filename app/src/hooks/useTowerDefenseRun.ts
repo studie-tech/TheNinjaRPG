@@ -398,6 +398,9 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       }
       const ticket = {};
       starting.current = ticket;
+      // The server makes every started run the player's only claimable one. Two tabs
+      // starting at the same moment can therefore retire the run the other one keeps; the
+      // cost stays on this account and is one run's scrolls, so the start stays unguarded.
       const result = await startRun({ startWave });
       // A run resumed or left while this request was pending keeps the page.
       if (starting.current !== ticket) return;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
-  getDailyDutyUserDelta,
+  getDailyDutyUserUpdate,
   getDojoPurchaseUpdate,
   getRunClaimUpdate,
   type TowerDefenseProgress,
@@ -37,26 +37,26 @@ describe("tower defense progress deltas", () => {
 describe("tower defense daily duty delta", () => {
   const reward = { ryo: 15_000, prestige: 150, villageTokens: 200 };
 
-  it("pays the player and their village the first time a day", () => {
-    expect(
-      getDailyDutyUserDelta({ fulfilsDuty: true, reward, villageId: "v1" }),
-    ).toEqual({
-      dailyTowerDefenseRuns: 1,
-      money: 15_000,
-      villagePrestige: 150,
-      village: { id: "v1", tokens: 200 },
+  const paidAt = new Date("2026-11-17T09:00:00Z");
+
+  it("pays the player and their village and records when", () => {
+    expect(getDailyDutyUserUpdate({ reward, villageId: "v1", paidAt })).toEqual({
+      userDelta: {
+        money: 15_000,
+        villagePrestige: 150,
+        village: { id: "v1", tokens: 200 },
+      },
+      userPatch: { towerDefenseDutyAt: paidAt },
     });
-    expect(
-      getDailyDutyUserDelta({ fulfilsDuty: true, reward, villageId: null }),
-    ).toEqual({ dailyTowerDefenseRuns: 1, money: 15_000, villagePrestige: 150 });
+    expect(getDailyDutyUserUpdate({ reward, villageId: null, paidAt })).toEqual({
+      userDelta: { money: 15_000, villagePrestige: 150 },
+      userPatch: { towerDefenseDutyAt: paidAt },
+    });
   });
 
-  it("only counts a later run and leaves a short one alone", () => {
-    expect(
-      getDailyDutyUserDelta({ fulfilsDuty: true, reward: null, villageId: "v1" }),
-    ).toEqual({ dailyTowerDefenseRuns: 1 });
-    expect(
-      getDailyDutyUserDelta({ fulfilsDuty: false, reward: null, villageId: "v1" }),
-    ).toEqual({});
+  it("leaves the profile alone when the claim paid no duty", () => {
+    expect(getDailyDutyUserUpdate({ reward: null, villageId: "v1", paidAt })).toEqual({
+      userDelta: {},
+    });
   });
 });

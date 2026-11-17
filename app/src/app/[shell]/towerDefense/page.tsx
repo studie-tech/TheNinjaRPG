@@ -31,7 +31,7 @@ import {
 import { TowerDefenseLobby } from "@/layout/TowerDefenseLobby";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense";
-import { TD_COORD_SCALE } from "@/libs/towerDefense/balance";
+import { TD_COORD_SCALE, tdDailyDutyDone } from "@/libs/towerDefense/balance";
 import { TD_SEALS, TD_ULTIMATES } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
 import { tdCrowdTarget } from "@/libs/towerDefense/sim";
@@ -57,6 +57,7 @@ export default function TowerDefensePage() {
     isClerkLoaded,
     isSignedIn,
     status,
+    timeDiff,
   } = useUserDataSelector((profile) => ({
     userId: profile.userId,
     level: profile.level,
@@ -72,7 +73,7 @@ export default function TowerDefensePage() {
     isOutlaw: profile.isOutlaw,
     bloodlineId: profile.bloodlineId,
     status: profile.status,
-    dailyTowerDefenseRuns: profile.dailyTowerDefenseRuns,
+    towerDefenseDutyAt: profile.towerDefenseDutyAt,
   }));
   const userId = user?.userId;
   const utils = api.useUtils();
@@ -249,7 +250,14 @@ export default function TowerDefensePage() {
         <TowerDefenseLobby
           isGuest={!userId}
           level={user?.level ?? 1}
-          dailyDutyDone={user ? user.dailyTowerDefenseRuns > 0 : undefined}
+          dailyDutyDone={
+            user
+              ? tdDailyDutyDone(
+                  user.towerDefenseDutyAt,
+                  new Date(Date.now() - timeDiff),
+                )
+              : undefined
+          }
           villageName={user?.village?.name}
           progress={progress.data}
           saved={run.saved}

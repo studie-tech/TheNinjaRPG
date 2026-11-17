@@ -5,6 +5,7 @@ import {
   TD_DAILY_VILLAGE_TOKENS,
 } from "@/drizzle/constants";
 import {
+  tdDailyDutyDone,
   tdDailyReward,
   tdFulfilsDailyDuty,
   tdLevelDamageBonus,
@@ -82,6 +83,13 @@ describe("tower defense balance", () => {
         createRun({ seed: "d", startWave: 1, bestWave: 0, level: 1, dojo: {} }).wave,
       ),
     ).toBe(0);
+  });
+
+  it("treats the daily duty as done only for a payout in the current UTC day", () => {
+    const now = new Date("2026-11-17T09:00:00Z");
+    expect(tdDailyDutyDone(null, now)).toBe(false);
+    expect(tdDailyDutyDone(new Date("2026-11-17T00:00:00Z"), now)).toBe(true);
+    expect(tdDailyDutyDone(new Date("2026-11-16T23:59:59Z"), now)).toBe(false);
   });
 
   it("scales the daily duty's ryo with level", () => {

@@ -3330,10 +3330,6 @@ export const userData = mysqlTable(
     dailySageActivations: smallint("dailySageActivations", { unsigned: true })
       .default(0)
       .notNull(),
-    /** Tower defense runs claimed today that cleared the daily Guard Hall duty. */
-    dailyTowerDefenseRuns: smallint("dailyTowerDefenseRuns", { unsigned: true })
-      .default(0)
-      .notNull(),
     dailyMissions: smallint("dailyMissions", { unsigned: true }).default(0).notNull(),
     dailyErrands: smallint("dailyErrands", { unsigned: true }).default(0).notNull(),
     dailyMedicalMissions: smallint("dailyMedicalMissions", { unsigned: true })
@@ -3397,6 +3393,11 @@ export const userData = mysqlTable(
     towerDefenseBestWave: int("towerDefenseBestWave").default(0).notNull(),
     /** Nonce of the latest signed tower defense run; only that run can be claimed. */
     towerDefenseActiveRun: varchar("towerDefenseActiveRun", { length: 21 }),
+    /**
+     * When the daily Guard Hall duty last paid out. The payout is guarded on this falling
+     * before the current UTC day, independent of the daily counter reset.
+     */
+    towerDefenseDutyAt: datetime("towerDefenseDutyAt", { mode: "date", fsp: 3 }),
     occupation: mysqlEnum("occupation", consts.OCCUPATIONS),
     occupationSignupAt: datetime("occupationSignupAt", { mode: "date", fsp: 3 }),
     // Stealth & Sensory stats

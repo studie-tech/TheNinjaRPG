@@ -75,7 +75,7 @@ import {
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
 import { cn } from "@/libs/shadui";
-import { tdDailyReward } from "@/libs/towerDefense/balance";
+import { tdDailyDutyDone, tdDailyReward } from "@/libs/towerDefense/balance";
 import { getMasteryTrainingState, masteryTrainingEndsAt } from "@/libs/train";
 import { moveItem } from "@/utils/array";
 import { calculatePercent } from "@/utils/math";
@@ -477,11 +477,14 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                 }
               />
             )}
-            {userData.dailyTowerDefenseRuns === 0 && (
+            {!tdDailyDutyDone(
+              userData.towerDefenseDutyAt,
+              new Date(Date.now() - timeDiff),
+            ) && (
               <StatusRow
                 label="Guard Hall"
                 title="Daily village defense"
-                detail={`Clear ${TD_DAILY_WAVES} waves in one tower defense run for ${dailyDuty.ryo.toLocaleString()} ryo, ${dailyDuty.prestige} prestige and ${dailyDuty.villageTokens} village tokens`}
+                detail={`Clear ${TD_DAILY_WAVES} waves in one tower defense run for ${dailyDuty.ryo.toLocaleString()} ryo${userData.villageId ? `, ${dailyDuty.prestige} prestige and ${dailyDuty.villageTokens} village tokens` : ` and ${dailyDuty.prestige} prestige`}`}
                 action={
                   <RowAction href="/towerDefense" icon={ShieldCheck}>
                     Defend

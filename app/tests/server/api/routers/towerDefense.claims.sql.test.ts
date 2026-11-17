@@ -15,6 +15,7 @@ import {
   tdWavesCleared,
 } from "@/libs/towerDefense/balance";
 import { TD_SIM_VERSION, type TdRunConfig, tdDojoCost } from "@/libs/towerDefense/sim";
+import { updateUserDataForDailyCounters } from "@/queries/profile";
 import { towerDefenseRouter } from "@/server/api/routers/towerDefense";
 import { TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE } from "@/server/utils/towerDefenseClaims";
 import { encodeLog, playBotRun } from "../../../libs/towerDefense/bot";
@@ -247,7 +248,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     const duty = async () => {
       const [user] = await database
         .select({
-          runs: userData.dailyTowerDefenseRuns,
+          paidAt: userData.towerDefenseDutyAt,
           money: userData.money,
           prestige: userData.villagePrestige,
         })
@@ -266,7 +267,8 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     expect(short.cleared).toBeLessThan(TD_DAILY_WAVES);
     expect(short.result).toMatchObject({ success: true, userDelta: {} });
     expect(short.result.dailyReward).toBeUndefined();
-    expect(await duty()).toEqual({ runs: 0, money: 1000, prestige: 0, tokens: 0 });
+    expect(short.result.userPatch).toBeUndefined();
+    expect(await duty()).toEqual({ paidAt: null, money: 1000, prestige: 0, tokens: 0 });
 
     const long = await claimRun(1, 40_000);
     expect(long.cleared).toBeGreaterThanOrEqual(TD_DAILY_WAVES);
@@ -274,31 +276,44 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
       success: true,
       dailyReward: reward,
       userDelta: {
-        dailyTowerDefenseRuns: 1,
         money: reward.ryo,
         villagePrestige: reward.prestige,
         village: { id: "td-village", tokens: reward.villageTokens },
       },
     });
-    expect(await duty()).toEqual({
-      runs: 1,
+    const paid = await duty();
+    expect(paid).toEqual({
+      paidAt: expect.any(Date),
       money: 1000 + reward.ryo,
       prestige: reward.prestige,
+      tokens: reward.villageTokens,
+    });
+    expect(long.result.userPatch?.towerDefenseDutyAt).toBeInstanceOf(Date);
+
+    // Another qualifying run the same day pays nothing more, even after the daily
+    // counters reset, since the payout is guarded on the day it was made.
+    await updateUserDataForDailyCounters(database, new Date(Date.now() + 60_000), [
+      "td-user",
+    ]);
+    const again = await claimRun(1, 40_000);
+    expect(again.result).toMatchObject({ success: true, userDelta: {} });
+    expect(again.result.dailyReward).toBeUndefined();
+    expect(await duty()).toMatchObject({
+      money: 1000 + reward.ryo,
+      prestige: reward.prestige + 1,
       tokens: reward.villageTokens,
     });
 
-    // The duty counts again, but pays only once a day.
-    const again = await claimRun(1, 40_000);
-    expect(again.result).toMatchObject({
-      success: true,
-      userDelta: { dailyTowerDefenseRuns: 1 },
-    });
-    expect(again.result.dailyReward).toBeUndefined();
-    expect(await duty()).toEqual({
-      runs: 2,
-      money: 1000 + reward.ryo,
-      prestige: reward.prestige,
-      tokens: reward.villageTokens,
+    // The next UTC day pays again.
+    await database
+      .update(userData)
+      .set({ towerDefenseDutyAt: new Date(Date.now() - 25 * 60 * 60 * 1000) })
+      .where(eq(userData.userId, "td-user"));
+    const tomorrow = await claimRun(1, 40_000);
+    expect(tomorrow.result).toMatchObject({ success: true, dailyReward: reward });
+    expect(await duty()).toMatchObject({
+      money: 1000 + 2 * reward.ryo,
+      tokens: 2 * reward.villageTokens,
     });
   });
 

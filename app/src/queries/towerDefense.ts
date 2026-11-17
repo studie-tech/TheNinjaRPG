@@ -1,7 +1,7 @@
 /**
  * Database access for tower defense; authorization and replay stay in callers.
  */
-import { and, desc, eq, exists, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
@@ -48,7 +48,7 @@ export const updateUserDataForStartTowerDefenseRun = (
     .set({ towerDefenseActiveRun: nonce })
     .where(eq(userData.userId, ctx.userId));
 
-/** Build the claimant's active run, daily duty count, level and village. */
+/** Build the claimant's active run, level and village. */
 export const findTowerDefenseClaimant = (
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
@@ -56,7 +56,6 @@ export const findTowerDefenseClaimant = (
   client.query.userData.findFirst({
     columns: {
       towerDefenseActiveRun: true,
-      dailyTowerDefenseRuns: true,
       level: true,
       villageId: true,
     },
@@ -114,20 +113,14 @@ export const insertTowerDefenseClaimReceipt = (
   });
 
 /**
- * Build the payout of a verified claim: scrolls, a best wave that only rises, the daily
- * duty and its reward when one is due. It applies only while the run is still the
- * caller's active one and retires it, so each run pays out once.
+ * Build the payout of a verified claim: scrolls and a best wave that only rises. It
+ * applies only while the run is still the caller's active one and retires it, so each
+ * run pays out once.
  */
 export const updateUserDataForClaimTowerDefenseRun = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
-  claim: {
-    nonce: string;
-    points: number;
-    wave: number;
-    fulfilsDuty: boolean;
-    reward: { ryo: number; prestige: number } | null;
-  },
+  claim: { nonce: string; points: number; wave: number },
 ) =>
   client
     .update(userData)
@@ -135,20 +128,37 @@ export const updateUserDataForClaimTowerDefenseRun = (
       towerDefensePoints: sql`${userData.towerDefensePoints} + ${claim.points}`,
       towerDefenseBestWave: sql`GREATEST(${userData.towerDefenseBestWave}, ${claim.wave})`,
       towerDefenseActiveRun: null,
-      ...(claim.fulfilsDuty
-        ? { dailyTowerDefenseRuns: sql`${userData.dailyTowerDefenseRuns} + 1` }
-        : {}),
-      ...(claim.reward
-        ? {
-            money: sql`${userData.money} + ${claim.reward.ryo}`,
-            villagePrestige: sql`${userData.villagePrestige} + ${claim.reward.prestige}`,
-          }
-        : {}),
     })
     .where(
       and(
         eq(userData.userId, ctx.userId),
         eq(userData.towerDefenseActiveRun, claim.nonce),
+      ),
+    );
+
+/**
+ * Build the daily Guard Hall duty payout, guarded on the last payout falling before
+ * `dayStart`, so it pays at most once per UTC day.
+ */
+export const updateUserDataForTowerDefenseDuty = (
+  client: Pick<DrizzleClient, "update">,
+  ctx: { userId: string },
+  duty: { ryo: number; prestige: number; paidAt: Date; dayStart: Date },
+) =>
+  client
+    .update(userData)
+    .set({
+      money: sql`${userData.money} + ${duty.ryo}`,
+      villagePrestige: sql`${userData.villagePrestige} + ${duty.prestige}`,
+      towerDefenseDutyAt: duty.paidAt,
+    })
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        or(
+          isNull(userData.towerDefenseDutyAt),
+          lt(userData.towerDefenseDutyAt, duty.dayStart),
+        ),
       ),
     );
 
