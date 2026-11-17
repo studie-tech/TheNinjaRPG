@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { DIFFUSE_MAX_PERCENTAGE } from "@/drizzle/constants";
+import { consolidatePreBattleDamageModifiers } from "@/libs/combat/damagePipeline";
 import { applyEffects } from "@/libs/combat/process";
 import { cleanse, clear, copy, mirror } from "@/libs/combat/tags";
 import { alignBattle } from "@/libs/combat/turn";
@@ -140,7 +141,7 @@ describe("Diffuse damage resolution", () => {
     expect(defender(newBattle).curHealth).toBeCloseTo(980);
   });
   it.each(["percentage", "static"] as const)(
-    "preserves total damage under %s DR, including residual hits",
+    "preserves total damage under persistent %s DR, including residual hits",
     (calculation) => {
       for (const isResidual of [false, true]) {
         const hit = () =>
@@ -148,7 +149,7 @@ describe("Diffuse damage resolution", () => {
         const reduction = () =>
           makeEffect(
             "decreasedamagetaken",
-            { power: 50, calculation, rounds: 3 },
+            { power: 50, calculation, rounds: 10 },
             runtime(),
           );
         const actorId = isResidual ? "defender" : "attacker";
@@ -161,7 +162,9 @@ describe("Diffuse damage resolution", () => {
         const totalDamage = 1000 - defender(baseline).curHealth;
         expect(debt(defender(current))).toBeCloseTo(totalDamage * 0.25);
         expect(defender(current).curHealth).toBeCloseTo(1000 - totalDamage * 0.75);
-        current.usersEffects = [];
+        current.usersEffects = current.usersEffects.filter(
+          (effect) => effect.type === "decreasedamagetaken",
+        );
         for (let tick = 0; tick < 2; tick += 1) {
           current.round += 1;
           current = applyEffects(current, "defender").newBattle;
@@ -713,10 +716,10 @@ describe("Diffuse repayment and restrictions", () => {
     expect(debt(defender(result))).toBe(0);
   });
   it.each([
-    ["percentage", 50, 20],
-    ["static", 10, 30],
+    ["percentage", 50, 40],
+    ["static", 10, 40],
   ] as const)(
-    "applies active %s damage reduction to repayments",
+    "keeps the stored repayment when %s DR becomes active",
     (calculation, power, damage) => {
       const current = run([attack(), diffuse({ delayRounds: 1 })]).newBattle;
       current.round += 1;
@@ -726,6 +729,96 @@ describe("Diffuse repayment and restrictions", () => {
       const result = applyEffects(current, "defender").newBattle;
       expect(defender(result).curHealth).toBeCloseTo(960 - damage);
       expect(debt(defender(result))).toBe(0);
+    },
+  );
+  it.each(["gear", "bloodline and static", "cap"] as const)(
+    "preserves the source pipeline's %s reduction across repayment",
+    (source) => {
+      const reductions =
+        source === "gear"
+          ? (["armor", "accessory", "keystone"] as const).map((fromType) =>
+              makeEffect(
+                "decreasedamagetaken",
+                { power: 10, calculation: "percentage", rounds: 10 },
+                { ...runtime(), fromType, id: fromType },
+              ),
+            )
+          : [
+              makeEffect(
+                "decreasedamagetaken",
+                { power: 50, calculation: "percentage", rounds: 10 },
+                { ...runtime(), fromType: "bloodline", id: "bloodline" },
+              ),
+              makeEffect(
+                "decreasedamagetaken",
+                {
+                  power: source === "cap" ? 1000 : 10,
+                  calculation: "static",
+                  rounds: 10,
+                },
+                { ...runtime(), id: "static" },
+              ),
+            ];
+      const { filteredEffects, preBattleGearModifiers } =
+        consolidatePreBattleDamageModifiers(reductions, ["attacker", "defender"]);
+      const initial = battle([attack(), ...filteredEffects]);
+      initial.extraState.preBattleGearModifiers = preBattleGearModifiers;
+      const baseline = applyEffects(structuredClone(initial), "attacker").newBattle;
+      initial.usersEffects.push(diffuse({ delayRounds: 1 }));
+      const deferred = applyEffects(initial, "attacker").newBattle;
+      deferred.usersEffects = deferred.usersEffects.filter(
+        (effect) => effect.type === "decreasedamagetaken",
+      );
+      deferred.round += 1;
+      const paid = applyEffects(deferred, "defender").newBattle;
+      expect(debt(defender(paid))).toBe(0);
+      expect(defender(paid).curHealth).toBeCloseTo(defender(baseline).curHealth);
+      expect(
+        paid.usersState.find((user) => user.userId === "attacker")?.damageDealt,
+      ).toBeCloseTo(1000 - defender(baseline).curHealth);
+    },
+  );
+  it.each(["pierce", "wound"] as const)(
+    "preserves %s damage reduction bypass through repayment",
+    (type) => {
+      const source = makeEffect(
+        type,
+        {
+          power: type === "wound" ? 20 : 100,
+          calculation: type === "wound" ? "percentage" : "static",
+          rounds: type === "wound" ? 3 : 0,
+          ...(type === "wound" ? { timeTracker: { originalDamage: 100 } } : {}),
+        },
+        {
+          ...runtime(),
+          creatorId: "attacker",
+          ...(type === "pierce" ? { createdRound: ROUND, isNew: true } : {}),
+        },
+      );
+      if (source.type === "pierce") source.statTypes = ["Ninjutsu"];
+      const reduction = makeEffect(
+        "decreasedamagetaken",
+        { power: 50, calculation: "percentage", rounds: 10 },
+        runtime(),
+      );
+      const actorId = type === "wound" ? "defender" : "attacker";
+      const baseline = run(
+        [structuredClone(source), structuredClone(reduction)],
+        1000,
+        actorId,
+      ).newBattle;
+      const current = run(
+        [source, reduction, diffuse({ delayRounds: 1 })],
+        1000,
+        actorId,
+      ).newBattle;
+      current.usersEffects = current.usersEffects.filter(
+        (effect) => effect.type === "decreasedamagetaken",
+      );
+      current.round += 1;
+      const paid = applyEffects(current, "defender").newBattle;
+      expect(debt(defender(paid))).toBe(0);
+      expect(defender(paid).curHealth).toBeCloseTo(defender(baseline).curHealth);
     },
   );
   it.each([
