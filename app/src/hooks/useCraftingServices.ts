@@ -39,25 +39,29 @@ export const useCraftingServiceCache = () => {
   ) => {
     if (!result.success) return;
     const update = "serviceUpdate" in result ? result.serviceUpdate : undefined;
+    // Profile reconciliation can start queued crafts and create inventory. Dependent
+    // reads must observe that settlement, and only an accepted profile projection
+    // makes the response's dependent projections safe to apply.
+    const userUpdated = await updateUser(
+      (current) => getServiceRequesterPatch(current, update),
+      { revision: snapshot.user, delta: update?.userDelta },
+    );
+    const dependentUpdate = userUpdated ? update : undefined;
     await Promise.all([
-      updateUser((current) => getServiceRequesterPatch(current, update), {
-        revision: snapshot.user,
-        delta: update?.userDelta,
-      }),
       updateInventory(
-        (rows) => getServiceSubmittedInventory(rows, update),
+        (rows) => getServiceSubmittedInventory(rows, dependentUpdate),
         snapshot.inventory,
       ),
       requests.updateCache(
-        (current) => getSubmittedServiceRequests(current, update),
+        (current) => getSubmittedServiceRequests(current, dependentUpdate),
         snapshot.requests,
       ),
       timers.updateCache(
-        (current) => getServiceSubmissionUnchanged(current, update),
+        (current) => getServiceSubmissionUnchanged(current, dependentUpdate),
         snapshot.timers,
       ),
       queue.updateCache(
-        (current) => getServiceSubmissionUnchanged(current, update),
+        (current) => getServiceSubmissionUnchanged(current, dependentUpdate),
         snapshot.queue,
       ),
     ]);

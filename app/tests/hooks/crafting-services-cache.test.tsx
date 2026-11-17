@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as clerk from "@clerk/nextjs";
 import { QueryClient } from "@tanstack/react-query";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, render, renderHook, waitFor } from "@testing-library/react";
 import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import type { ReactNode } from "react";
@@ -16,6 +17,7 @@ import {
   useCraftingServiceCache,
   useServiceRequests,
 } from "@/hooks/useCraftingServices";
+import * as pusher from "@/layout/PusherHandler";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { deferred } from "../setup/deferred";
@@ -90,7 +92,10 @@ const submission = () =>
     crafterName: "Crafter",
   })!;
 
-const harness = (read: () => Promise<unknown> = async () => []) => {
+const harness = (
+  read: (path: string) => Promise<unknown> = async () => [],
+  { userProvider = false } = {},
+) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -102,7 +107,7 @@ const harness = (read: () => Promise<unknown> = async () => []) => {
         ({ op }) =>
           observable((observer) => {
             calls.push(op.path);
-            void read().then((data) => {
+            void read(op.path).then((data) => {
               observer.next({ result: { data } });
               observer.complete();
             });
@@ -111,19 +116,33 @@ const harness = (read: () => Promise<unknown> = async () => []) => {
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <TrpcTestProviders client={trpc} queryClient={client}>
-      {children}
+      {userProvider ? (
+        <userContext.UserContextProvider initialIsSignedIn>
+          {children}
+        </userContext.UserContextProvider>
+      ) : (
+        children
+      )}
     </TrpcTestProviders>
   );
   const refreshUser = vi.fn(async () => {});
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
-    refreshUser,
-    prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
-    updateUser: (
-      ...[update, mutation]: Parameters<
-        ReturnType<typeof userContext.useUserData>["updateUser"]
-      >
-    ) => updateUserCache(client, profileKey, update, mutation),
-  } as unknown as ReturnType<typeof userContext.useUserData>);
+  if (userProvider) {
+    vi.spyOn(clerk, "useUser").mockReturnValue({
+      isSignedIn: true,
+      isLoaded: true,
+      user: { id: requester.userId },
+    } as never);
+    vi.spyOn(pusher, "usePusherHandler").mockReturnValue(undefined);
+  } else
+    vi.spyOn(userContext, "useUserData").mockReturnValue({
+      refreshUser,
+      prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
+      updateUser: (
+        ...[update, mutation]: Parameters<
+          ReturnType<typeof userContext.useUserData>["updateUser"]
+        >
+      ) => updateUserCache(client, profileKey, update, mutation),
+    } as unknown as ReturnType<typeof userContext.useUserData>);
   return { client, wrapper, refreshUser, calls };
 };
 const seedSubmissionViews = (client: QueryClient) => {
@@ -158,6 +177,103 @@ it("patches confirmed fee, material quantities and equipment escrow across views
     expect(client.getQueryState(key)?.isInvalidated).toBe(false);
   expect(calls).toEqual([]);
 });
+
+it.each(["unknown", "rejected profile projection"])(
+  "settles the profile before dependent reads after origin unmount: %s",
+  async (outcome) => {
+    const response = deferred();
+    const profile = deferred();
+    const finished = deferred();
+    let settled = false;
+    const output = { ...material, id: "queued-output", itemId: "sword", quantity: 1 };
+    const inventory = [{ ...material, quantity: 8 }, output];
+    const { client, wrapper, calls } = harness(
+      async (path) => {
+        if (path === "occupation.submitServiceRequest") {
+          await response.promise;
+          return {
+            success: true,
+            message: "sent",
+            serviceUpdate: outcome === "unknown" ? undefined : submission(),
+          };
+        }
+        if (path === "profile.getUser") {
+          await profile.promise;
+          // Profile settlement can start an overdue queued craft and create its output.
+          settled = true;
+          return {
+            userData: { ...requester, money: 950, items: [] },
+            notifications: [],
+          };
+        }
+        if (path === "item.getUserItemsWithVariants") return settled ? inventory : [];
+        if (path === "occupation.getServiceRequests") return [submission().receipt];
+        if (path === "occupation.getCraftingQueue") return { waiting: [] };
+        if (path === "profile.getSidebarTimers") return { crafting: null };
+        throw new Error(`Unexpected query ${path}`);
+      },
+      { userProvider: true },
+    );
+    seedSubmissionViews(client);
+    client.setQueryData(profileKey, {
+      userData: { ...requester, items: [] },
+      notifications: [],
+    });
+    let submit!: () => void;
+    const Origin = () => {
+      const { prepareServiceUpdate, updateService } = useCraftingServiceCache();
+      const mutation = testApi.occupation.submitServiceRequest.useMutation({
+        onMutate: prepareServiceUpdate,
+        onSuccess: async (result, _input, snapshot) => {
+          await updateService(result, snapshot);
+          finished.resolve();
+        },
+      });
+      submit = () =>
+        mutation.mutate({
+          crafterId: "crafter",
+          service: "IMBUE",
+          expectedFee: 50,
+        });
+      return null;
+    };
+    const DependentViews = () => {
+      testApi.item.getUserItemsWithVariants.useQuery();
+      testApi.occupation.getServiceRequests.useQuery();
+      testApi.occupation.getCraftingQueue.useQuery();
+      testApi.profile.getSidebarTimers.useQuery();
+      return null;
+    };
+    const view = render(<Origin />, { wrapper });
+    await act(async () => submit());
+    if (outcome === "rejected profile projection") {
+      // Only the profile revision changes; dependent revisions still permit the known patches.
+      client.setQueryData(profileKey, {
+        userData: { ...requester, money: 999, items: [] },
+        notifications: [],
+      });
+    }
+    // The global profile provider stays mounted while the mutation's origin unmounts.
+    view.rerender(<DependentViews />);
+    await act(async () => response.resolve());
+    await waitFor(() => expect(calls).toContain("profile.getUser"));
+    expect(calls).toEqual(["occupation.submitServiceRequest", "profile.getUser"]);
+    await act(async () => {
+      profile.resolve();
+      await finished.promise;
+    });
+    expect(client.getQueryData(inventoryKeys[1]!)).toEqual(inventory);
+    expect(calls.slice(2).sort()).toEqual([
+      "item.getUserItemsWithVariants",
+      "occupation.getCraftingQueue",
+      "occupation.getServiceRequests",
+      "profile.getSidebarTimers",
+    ]);
+    expect(client.getQueryState(inventoryKeys[1]!)?.isInvalidated).toBe(false);
+    expect(client.getQueryState(inventoryKeys[1]!)?.fetchStatus).toBe("idle");
+    expect(client.getQueryState(inventoryKeys[0]!)?.isInvalidated).toBe(true);
+  },
+);
 
 it.each(["unknown", "changed revision", "changed stack", "changed identity"])(
   "reconciles %s rather than applying a stale projection",

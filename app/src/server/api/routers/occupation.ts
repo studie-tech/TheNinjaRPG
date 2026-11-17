@@ -319,8 +319,6 @@ export const occupationRouter = createTRPCRouter({
         }
       }
       // Derived
-      if (user.serviceCraftUntil && user.serviceCraftUntil > new Date())
-        return errorResponse("Your crafting slot is occupied by a service request");
       const userCraftingRank = getCraftingRank(user.craftingExperience);
       // Guards - check rank eligibility regardless of item type
       const missingCraftingRank = getMissingCraftingRank(
