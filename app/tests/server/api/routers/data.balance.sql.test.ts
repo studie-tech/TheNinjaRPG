@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { dataBattleAction, jutsu } from "@/drizzle/schema";
+import { dataBattleAction, item, jutsu } from "@/drizzle/schema";
 import { insertDataBattleActionForSaveUsage } from "@/queries/combat";
 import { selectDataBattleActionForUsageStats } from "@/queries/contentReview";
 import {
@@ -8,7 +8,7 @@ import {
 } from "@/queries/data";
 import { dataRouter } from "@/server/api/routers/data";
 import { getBalancePeriodEnd, getBalancePeriodStart } from "@/utils/time";
-import { insertJutsus, jutsuRow } from "../../../setup/factories";
+import { insertItems, insertJutsus, jutsuRow } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerFor,
@@ -30,7 +30,7 @@ describeWithDatabase("fortnightly balance reports", () => {
   afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
     stubRateLimitTransport();
-    await resetTables(dataBattleAction, jutsu);
+    await resetTables(dataBattleAction, item, jutsu);
     await insertJutsus([jutsuRow("fire", { name: "Fire" })]);
   });
 
@@ -85,6 +85,40 @@ describeWithDatabase("fortnightly balance reports", () => {
     expect((await caller.getBalanceArchives()).map((row) => row.periodStart)).toEqual([
       period - 14 * 86400,
     ]);
+  });
+
+  it("applies fractional level bounds consistently to overview and usage reports", async () => {
+    const db = await getTestDatabase();
+    await insertItems([{ id: "kunai", name: "Kunai" }]);
+    await db.insert(dataBattleAction).values(
+      (["jutsu", "item", "participant"] as const).flatMap((type) =>
+        [19, 20, 21].map((userLevel) => ({
+          type,
+          contentId: type === "jutsu" ? "fire" : type === "item" ? "kunai" : "player",
+          periodStart: getBalancePeriodStart(),
+          battleType: "COMBAT" as const,
+          userLevel,
+          userRank: "CHUNIN" as const,
+          battleWon: 1,
+          count: userLevel === 20 ? 3 : 100,
+        })),
+      ),
+    );
+    const caller = await callerFor(dataRouter, "viewer");
+    const filter = { minLevel: 19.5, maxLevel: 20.5 };
+    const [overview, jutsus, items] = await Promise.all([
+      caller.getBalanceOverview(filter),
+      caller.getJutsuBalanceStatistics(filter),
+      caller.getItemBalanceStatistics(filter),
+    ]);
+    expect(overview.content).toHaveLength(2);
+    expect(overview.content.map((row) => row.count)).toEqual([3, 3]);
+    expect(overview.participants).toHaveLength(1);
+    expect(overview.participants[0]).toMatchObject({ userLevel: 20, count: 3 });
+    expect(jutsus).toHaveLength(1);
+    expect(jutsus[0]).toMatchObject({ jutsuId: "fire", count: 3 });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ itemId: "kunai", count: 3 });
   });
 
   it("retains completed and legacy periods when staff clear live data", async () => {

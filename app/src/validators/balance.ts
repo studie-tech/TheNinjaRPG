@@ -5,6 +5,6 @@ import { BattleTypes, MAX_PLAYER_LEVEL, UserRanks } from "@/drizzle/constants";
 export const balanceUsageFilterSchema = z.object({
   battleTypes: z.array(z.enum(BattleTypes)).optional(),
   userRanks: z.array(z.enum(UserRanks)).optional(),
-  minLevel: z.number().int().min(1).max(MAX_PLAYER_LEVEL).optional(),
-  maxLevel: z.number().int().min(1).max(MAX_PLAYER_LEVEL).optional(),
+  minLevel: z.number().min(1).max(MAX_PLAYER_LEVEL).optional(),
+  maxLevel: z.number().min(1).max(MAX_PLAYER_LEVEL).optional(),
 });

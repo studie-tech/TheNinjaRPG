@@ -213,7 +213,7 @@ it.each([
   },
   { name: "item", Page: ManualItemBalance, path: "data.getItemBalanceStatistics" },
 ] as const)(
-  "uses the overview cohort for the first $name usage request",
+  "uses the overview cohort with fractional bounds for the first $name usage request",
   async ({ name, Page, path }) => {
     // A saved jutsu-only selection must survive the incoming common sample filters.
     const seed = renderHook(() =>
@@ -224,8 +224,8 @@ it.each([
     const filter = {
       battleTypes: ["RANKED_PVP" as const],
       userRanks: ["CHUNIN" as const],
-      minLevel: 10,
-      maxLevel: 20,
+      minLevel: 19.5,
+      maxLevel: 20.5,
     };
     window.history.replaceState(null, "", getBalanceUsageHref(name, filter));
     const operations: { path: string; input: unknown }[] = [];
