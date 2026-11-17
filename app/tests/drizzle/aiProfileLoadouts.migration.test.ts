@@ -142,6 +142,24 @@ describeWithDatabase("AI profiles per jutsu loadout migration", () => {
     expect(custom?.aiProfileId).toBeNull();
   });
 
+  it("puts every loadout on the Default rules for a player without an active loadout the previous build switched to them", async () => {
+    await runRawSql(backfill);
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ aiProfileId: null })
+      .where(eq(userData.userId, "unpointed"));
+    await runRawSql(backfill);
+    const flags = await db
+      .select({ id: jutsuLoadout.id, customAi: jutsuLoadout.customAi })
+      .from(jutsuLoadout)
+      .where(eq(jutsuLoadout.userId, "unpointed"));
+    expect(flags.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      { id: "u1", customAi: false },
+      { id: "u2", customAi: false },
+    ]);
+  });
+
   it("keeps custom rules for a player the previous build moved to a new loadout", async () => {
     await runRawSql(backfill);
     const db = await getTestDatabase();

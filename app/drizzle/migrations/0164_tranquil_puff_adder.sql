@@ -78,14 +78,18 @@ WHERE `UserData`.`isAi` = 0
     SELECT 1 FROM `AiProfile` AS `existing` WHERE `existing`.`jutsuLoadoutId` = `JutsuLoadout`.`id`
   );
 -- A player the previous build switched to the Default rules has no pointer while their active
--- loadout fights with its own rules, which the new build never writes; that choice held for the
--- whole character, so every loadout of theirs fights with the Default rules.
+-- loadout, or with no active loadout any of their loadouts, fights with its own rules, which the
+-- new build never writes; that choice held for the whole character, so every loadout of theirs
+-- fights with the Default rules.
 UPDATE `JutsuLoadout`
 JOIN (
   SELECT DISTINCT `UserData`.`userId` FROM `UserData`
-  JOIN `JutsuLoadout` AS `active` ON `active`.`id` = `UserData`.`jutsuLoadout`
+  JOIN `JutsuLoadout` AS `custom` ON `custom`.`userId` = `UserData`.`userId`
+    AND `custom`.`customAi` = true
+  LEFT JOIN `JutsuLoadout` AS `active` ON `active`.`id` = `UserData`.`jutsuLoadout`
     AND `active`.`userId` = `UserData`.`userId`
-  WHERE `UserData`.`isAi` = 0 AND `UserData`.`aiProfileId` IS NULL AND `active`.`customAi` = true
+  WHERE `UserData`.`isAi` = 0 AND `UserData`.`aiProfileId` IS NULL
+    AND (`active`.`id` IS NULL OR `active`.`customAi` = true)
 ) AS `switchedOff` ON `switchedOff`.`userId` = `JutsuLoadout`.`userId`
 SET `JutsuLoadout`.`customAi` = false
 WHERE `JutsuLoadout`.`customAi` = true;
