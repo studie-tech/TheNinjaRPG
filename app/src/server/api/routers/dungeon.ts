@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import {
   getActUserUpdate,
@@ -748,16 +749,19 @@ export const dungeonRouter = createTRPCRouter({
             ? ctx.drizzle.transaction(updateParty)
             : updateParty(ctx.drizzle),
         );
-        // Members poll their party; an invited player outside one learns of it here.
+        // Notify idle invitees after responding so delivery latency never holds up the saved action.
         if (saved && action === "invite" && target)
-          await Promise.allSettled([
-            getServerPusher().trigger(target.userId, "event", {
-              type: "dungeonParty",
-              message: "You were invited to a dungeon party. Open Dungeons to accept.",
-              route: "/dungeon",
-              routeText: "Open Dungeons",
-            }),
-          ]);
+          after(() =>
+            Promise.allSettled([
+              getServerPusher().trigger(target.userId, "event", {
+                type: "dungeonParty",
+                message:
+                  "You were invited to a dungeon party. Open Dungeons to accept.",
+                route: "/dungeon",
+                routeText: "Open Dungeons",
+              }),
+            ]),
+          );
         return actionReadinessResponse(
           saved
             ? {

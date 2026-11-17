@@ -1,5 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
 import * as activeBuffs from "@/layout/ActiveTimedBuffs";
@@ -37,6 +45,7 @@ describe("Kitchen recipe availability", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -106,10 +115,17 @@ describe("Kitchen recipe availability", () => {
       startsIn: -60000,
       readAgo: 120000,
     },
+    { case: "became due before its response arrived", startsIn: -500, readAgo: 0 },
   ])(
     "reads the queue when a waiting job $case, then the inventory it changed",
     async ({ startsIn, readAgo }) => {
+      vi.useFakeTimers();
+      setSystemTime(Date.UTC(2026, 9, 1, 12));
       const order: string[] = [];
+      let finishQueueRead = () => {};
+      const queueRead = new Promise<void>((resolve) => {
+        finishQueueRead = resolve;
+      });
       const invalidate = (name: string) => ({
         invalidate: vi.fn(async () => {
           order.push(name);
@@ -134,6 +150,7 @@ describe("Kitchen recipe availability", () => {
         isError: false,
         refetch: vi.fn(async () => {
           order.push("queue");
+          await queueRead;
         }),
       };
       stubCraftingCache();
@@ -155,11 +172,20 @@ describe("Kitchen recipe availability", () => {
         },
         item: { getUserItems: { useQuery: () => ({ data: [], isPending: false }) } },
       });
-      render(<Kitchen />);
+      const view = render(<Kitchen />);
       expect(queue.refetch).not.toHaveBeenCalled();
-      await waitFor(() => expect(order).toHaveLength(4), { timeout: 3000 });
+      act(() => {
+        vi.advanceTimersByTime(Math.max(0, startsIn) + 1000);
+      });
+      expect(order).toEqual(["queue"]);
+      await act(async () => finishQueueRead());
+      expect(order).toEqual(["queue", "items", "variants", "timers"]);
       expect(queue.refetch).toHaveBeenCalledWith({ cancelRefetch: false });
-      expect(order[0]).toBe("queue");
+      view.rerender(<Kitchen />);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(queue.refetch).toHaveBeenCalledTimes(1);
     },
   );
 });
