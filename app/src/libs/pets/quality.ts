@@ -1,7 +1,5 @@
 /** Structured visual review for sprite usability, identity and visible rank progression. */
-import { openai } from "@ai-sdk/openai";
-import { generateText, Output, type UserContent } from "ai";
-import sharp from "sharp";
+import type { UserContent } from "ai";
 import { OPENAI_REVIEW_MODEL, type PetGender } from "@/drizzle/constants";
 import { MAX_PET_IMAGE_PIXELS } from "@/libs/pets/sprite";
 import { petAppearanceQualitySchema } from "@/validators/pets";
@@ -62,6 +60,10 @@ export const classifyPetAppearanceImage = async (
       });
     }
   }
+  const [{ generateText, Output }, { openai }] = await Promise.all([
+    import("ai"),
+    import("@ai-sdk/openai"),
+  ]);
   signal.throwIfAborted();
   // Use the review model for species and identity; content safety is moderated separately.
   const { output } = await generateText({
@@ -104,6 +106,7 @@ export const validatePetAppearanceQuality = (
 
 /** Give vision an opaque transparency preview without changing the stored sprite. */
 const createPetReviewImage = async (image: Buffer) => {
+  const { default: sharp } = await import("sharp");
   const { width, height } = await sharp(image, {
     limitInputPixels: MAX_PET_IMAGE_PIXELS,
   }).metadata();

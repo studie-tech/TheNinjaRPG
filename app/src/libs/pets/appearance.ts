@@ -1,5 +1,4 @@
 /** Generate, inspect and bound companion artwork before the router accepts it. */
-import sharp from "sharp";
 import { PET_GENERATION_TIMEOUT_MS, type PetArtProvider } from "@/drizzle/constants";
 import type { PetSpecies, UserPet } from "@/drizzle/schema";
 import { validateSceneCharacterImage } from "@/libs/contentReview/sceneCharacter";
@@ -64,11 +63,13 @@ const MAX_PET_IMAGE_BYTES = 5 * 1024 * 1024;
 const PET_REFERENCE_BACKDROP = "#f0f0f0";
 
 /** Give generation references and cutout input the same neutral backdrop. */
-const flattenOnBackdrop = (image: Buffer) =>
-  sharp(image, { limitInputPixels: MAX_PET_IMAGE_PIXELS })
+const flattenOnBackdrop = async (image: Buffer) => {
+  const { default: sharp } = await import("sharp");
+  return sharp(image, { limitInputPixels: MAX_PET_IMAGE_PIXELS })
     .flatten({ background: PET_REFERENCE_BACKDROP })
     .png()
     .toBuffer();
+};
 
 /** Only authored catalogue text enters the model; the player's chosen name is never a prompt. */
 export const getPetAppearancePrompt = (
@@ -157,6 +158,7 @@ export const generatePetAppearance = async (
       );
   }
   signal.throwIfAborted();
+  const { default: sharp } = await import("sharp");
   // Keep profiles and evolution references left-facing without another model prediction.
   // Lossless mirroring preserves the reviewed pixels and transparency.
   const stored =

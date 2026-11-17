@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import { CUTOUT_ALPHA_THRESHOLD } from "@/drizzle/constants";
 
 /** Scene portraits are composited over backgrounds, rather than framed combat icons. */
@@ -11,6 +10,7 @@ export const SCENE_CHARACTER_PREPROMPT =
 
 /** Reject empty cutouts and opaque backgrounds before a generated portrait enters review. */
 export const validateSceneCharacterImage = async (buffer: Buffer) => {
+  const { default: sharp } = await import("sharp");
   const image = sharp(buffer, { limitInputPixels: 1024 * 1024 });
   const metadata = await image.metadata();
   if (!metadata.hasAlpha)

@@ -1,9 +1,7 @@
 import { nanoid } from "nanoid";
-import OpenAI, { toFile } from "openai";
+import type OpenAI from "openai";
+import type Replicate from "replicate";
 import type { FileOutput } from "replicate";
-import Replicate from "replicate";
-import sharp from "sharp";
-import { UTApi, UTFile } from "uploadthing/server";
 import type { IMG_ORIENTATION } from "@/drizzle/constants";
 import type { UserData, UserRank } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
@@ -14,9 +12,10 @@ import type { GenerateAudioInput } from "@/validators/audio";
 
 // Singleton Replicate instance to avoid connection pool exhaustion
 let replicateInstance: Replicate | null = null;
-const getReplicateInstance = () => {
+const getReplicateInstance = async () => {
   if (!replicateInstance) {
-    replicateInstance = new Replicate({ auth: env.REPLICATE_API_TOKEN });
+    const { default: Replicate } = await import("replicate");
+    replicateInstance ??= new Replicate({ auth: env.REPLICATE_API_TOKEN });
   }
   return replicateInstance;
 };
@@ -81,7 +80,7 @@ export const fastTxt2imgReplicate = async (config: {
     mega_pixels = "0.25",
     signal,
   } = config;
-  const replicate = getReplicateInstance();
+  const replicate = await getReplicateInstance();
 
   // Try flux-schnell first
   let output: FileOutput | undefined;
@@ -138,6 +137,7 @@ export const fastTxt2imgReplicate = async (config: {
 
   // Use URL-based upload - UploadThing fetches directly from Replicate
   const replicateUrl = output.url();
+  const { UTApi } = await import("uploadthing/server");
   const utapi = new UTApi();
   const name = `preview-${nanoid()}.webp`;
   const uploadedFile = await runAbortable(
@@ -178,7 +178,8 @@ type Txt2ImgConfig = {
  * @returns The URLs of the uploaded images
  */
 export const txt2imgGPT = async (config: Txt2ImgConfig) => {
-  const client = new OpenAI();
+  const { default: OpenAIClient } = await import("openai");
+  const client = new OpenAIClient();
 
   // Prepare the input image
   const inputImage = config.previousImg
@@ -243,6 +244,7 @@ export const txt2imgGPT = async (config: Txt2ImgConfig) => {
  */
 export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
   const image = await generateNanoBananaImage(config);
+  const { default: sharp } = await import("sharp");
   // Resize to requested bounds (match OpenAI flow)
   const resultBuffer = await sharp(image)
     .resize({ width: config.width, height: config.height, fit: "inside" })
@@ -268,7 +270,7 @@ export const txt2imgNanoBanana = async (config: Txt2ImgConfig) => {
 export const generateNanoBananaImage = async (
   config: Omit<Txt2ImgConfig, "width" | "height">,
 ) => {
-  const replicate = getReplicateInstance();
+  const replicate = await getReplicateInstance();
 
   // nano-banana (Gemini Flash Image) is an image model with no system-prompt
   // concept. Feeding it the long, role-style preprompt ("You are an assistant…")
@@ -360,7 +362,8 @@ export const generateSpriteGPT = async (config: {
   userId: string;
   signal?: AbortSignal;
 }) => {
-  const client = new OpenAI();
+  const { default: OpenAIClient, toFile } = await import("openai");
+  const client = new OpenAIClient();
   const common = {
     model: "gpt-image-2.5-flare",
     prompt: config.prompt,
@@ -411,7 +414,7 @@ export const removeBackgroundReplicate = async (
   signal?: AbortSignal,
   model: BackgroundRemovalModel = "lucataco",
 ) => {
-  const replicate = getReplicateInstance();
+  const replicate = await getReplicateInstance();
   const output = (await runAbortable(
     () =>
       replicate.run(
@@ -460,6 +463,10 @@ export const uploadImageFromOpenAI = async (config: {
 }) => {
   const { prefix, img, idx, width, height } = config;
   if (!img.data) throw new Error("No data");
+  const [{ default: sharp }, { UTApi, UTFile }] = await Promise.all([
+    import("sharp"),
+    import("uploadthing/server"),
+  ]);
   const utapi = new UTApi();
   const resizedImages = await Promise.all(
     img.data.map(async (data, i) => {
@@ -488,6 +495,10 @@ export const createThumbnail = async (
   try {
     const res = await fetch(url);
     const blob = await res.arrayBuffer();
+    const [{ default: sharp }, { UTApi, UTFile }] = await Promise.all([
+      import("sharp"),
+      import("uploadthing/server"),
+    ]);
     const resultBuffer = await sharp(blob)
       .resize(64, 64, {
         fit,
@@ -524,6 +535,7 @@ export const uploadFileFromReplicate = async (
   extension = "webp",
   signal?: AbortSignal,
 ) => {
+  const { UTApi, UTFile } = await import("uploadthing/server");
   const utapi = new UTApi();
   const fileName = `${prefix}-${nanoid()}.${extension}`;
   const utFiles = new UTFile([blob], fileName, { customId: fileName });
@@ -567,7 +579,7 @@ export const generateSoundEffectReplicate = async (config: {
   negativePrompt?: string;
   secondsTotal: number;
 }) => {
-  const replicate = getReplicateInstance();
+  const replicate = await getReplicateInstance();
   const output = (await replicate.run(
     "sepal/audiogen:154b3e5141493cb1b8cec976d9aa90f2b691137e39ad906d2421b74c2a8c52b8",
     {
@@ -590,6 +602,7 @@ export const generateSoundEffectReplicate = async (config: {
  */
 export const generateAndUploadAudio = async (config: GenerateAudioInput) => {
   const { url } = await generateSoundEffectReplicate(config);
+  const { UTApi } = await import("uploadthing/server");
   const utapi = new UTApi();
   const name = `audio-${nanoid()}.mp3`;
   const uploadedFile = await utapi.uploadFilesFromUrl({ url, name, customId: name });
@@ -614,7 +627,7 @@ type Txt2VideoConfig = {
  * @returns The prediction object with ID for status tracking
  */
 export const startVideoGeneration = async (config: Txt2VideoConfig) => {
-  const replicate = getReplicateInstance();
+  const replicate = await getReplicateInstance();
 
   const input: Record<string, unknown> = {
     prompt: config.prompt,
@@ -686,7 +699,7 @@ export const getVideoGenerationStatus = async (predictionId: string) => {
   }
 
   // Use singleton instance with timeout
-  const replicate = getReplicateInstance();
+  const replicate = await getReplicateInstance();
 
   try {
     const prediction = await withTimeout(
@@ -730,6 +743,7 @@ export const getVideoGenerationStatus = async (predictionId: string) => {
  * @returns The uploaded video URL from UploadThing
  */
 export const uploadCompletedVideo = async (outputUrl: string) => {
+  const { UTApi } = await import("uploadthing/server");
   const utapi = new UTApi();
   const name = `video-${nanoid()}.mp4`;
   console.log("Uploading video to UploadThing", outputUrl, name);

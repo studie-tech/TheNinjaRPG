@@ -1,7 +1,6 @@
 import path from "node:path";
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import TextToSVG from "text-to-svg";
 import { z } from "zod";
 import {
   getAwardReputationUserUpdate,
@@ -650,7 +649,7 @@ export const generateCaptcha = async (client: DrizzleClient, userId: string) => 
   if (recentlySolved) return { svg: null };
   // Value to guess
   const value = current?.value ?? randomCaptchaValue();
-  const svg = renderCaptchaSvg(value);
+  const svg = await renderCaptchaSvg(value);
   // Insert into database
   if (!current) {
     // Create a new captcha
@@ -664,7 +663,8 @@ export const generateCaptcha = async (client: DrizzleClient, userId: string) => 
  * Render a captcha value as dark glyphs on a light card, spaced one per slot, so it stays
  * high-contrast on the dark game UI.
  */
-const renderCaptchaSvg = (value: string) => {
+const renderCaptchaSvg = async (value: string) => {
+  const { default: TextToSVG } = await import("text-to-svg");
   const textToSVG = TextToSVG.loadSync(path.resolve("./fonts/OpenSans.ttf"));
   const [fontSize, slot, padding, height] = [48, 44, 16, 72];
   const width = 2 * padding + slot * value.length;

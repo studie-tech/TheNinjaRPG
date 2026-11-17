@@ -1,5 +1,4 @@
 import { and, exists, like, ne, notExists, sql } from "drizzle-orm";
-import OpenAI from "openai";
 import {
   OPENAI_REPORT_EMBEDDING_MODEL,
   REPORT_EMBEDDING_DIMENSIONS,
@@ -90,6 +89,7 @@ export const supportsReportVectorSearch = async (client: DrizzleClient) => {
 export const generateReportEmbeddings = async (
   texts: string[],
 ): Promise<number[][]> => {
+  const { default: OpenAI } = await import("openai");
   const response = await new OpenAI({
     timeout: 10_000,
     maxRetries: 0,

@@ -12,6 +12,7 @@
  */
 import { vi } from "bun:test";
 import * as actualNextServer from "next/server";
+import * as actualOpenAI from "openai";
 import * as actualProfileQueries from "@/queries/profile";
 import * as actualSparringQueries from "@/queries/sparring";
 import * as actualProfile from "@/routers/profile";
@@ -34,6 +35,21 @@ vi.mock("next/server", () => ({
     if (!tasks) return actualAfter(task);
     tasks.push(() => (typeof task === "function" ? task() : task));
   },
+}));
+
+/**
+ * Server code builds OpenAI clients on first use, after the jsdom preload has defined
+ * `window` and `navigator`, which the SDK would otherwise refuse as a browser.
+ */
+class ServerOpenAI extends actualOpenAI.OpenAI {
+  constructor(options: ConstructorParameters<typeof actualOpenAI.OpenAI>[0] = {}) {
+    super({ ...options, dangerouslyAllowBrowser: true });
+  }
+}
+vi.mock("openai", () => ({
+  ...actualOpenAI,
+  default: ServerOpenAI,
+  OpenAI: ServerOpenAI,
 }));
 
 /** Wraps every exported function so a stub can be swapped in per suite; data exports pass through. */

@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import { CUTOUT_ALPHA_THRESHOLD } from "@/drizzle/constants";
 import {
   type FurnitureGeometry,
@@ -34,6 +33,7 @@ export const measureFurnitureImage = async (
   buffer: Buffer,
   useFullFootprint: boolean,
 ) => {
+  const { default: sharp } = await import("sharp");
   const image = sharp(buffer, { limitInputPixels: 16 * 1024 * 1024 });
   const metadata = await image.metadata();
   if (!metadata.hasAlpha) throw new Error("Furniture needs a transparent background");

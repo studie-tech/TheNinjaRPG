@@ -17,7 +17,8 @@ export async function POST(request: Request) {
   let event: Stripe.Event;
   try {
     // Verify the exact bytes before parsing or making any database queries.
-    event = await getStripe().webhooks.constructEventAsync(
+    const stripe = await getStripe();
+    event = await stripe.webhooks.constructEventAsync(
       await request.text(),
       signature,
       env.STRIPE_WEBHOOK_SECRET,

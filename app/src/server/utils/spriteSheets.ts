@@ -1,5 +1,4 @@
 import { nanoid } from "nanoid";
-import { UTApi, UTFile } from "uploadthing/server";
 import {
   readSpriteSheetSize,
   resizeSpriteSheet,
@@ -62,6 +61,7 @@ export const prepareSpriteSheetUrls = async (
 
 /** Raw file-key URLs bypass the CDN optimizer, keeping packed atlases byte-identical. */
 export const uploadToStorage = async (sheet: Buffer, name: string) => {
+  const { UTApi, UTFile } = await import("uploadthing/server");
   const file = new UTFile([new Uint8Array(sheet)], name, { type: "image/webp" });
   const { data, error } = await new UTApi().uploadFiles(file);
   if (error || !data) throw new Error(error?.message ?? "Sprite sheet upload failed");
@@ -71,6 +71,7 @@ export const uploadToStorage = async (sheet: Buffer, name: string) => {
 /** Remove sheets nothing references; a file left behind only costs storage. */
 export const removeFromStorage = async (urls: string[]) => {
   const keys = urls.flatMap((url) => new URL(url).pathname.split("/").slice(-1));
+  const { UTApi } = await import("uploadthing/server");
   await new UTApi().deleteFiles(keys).catch(() => undefined);
 };
 

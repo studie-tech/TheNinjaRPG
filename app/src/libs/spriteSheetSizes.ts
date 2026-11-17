@@ -1,5 +1,3 @@
-import sharp from "sharp";
-
 /** Cell sizes battles request; the loader rejects a sheet with larger cells. */
 export const SPRITE_SHEET_SMALL_CELL = 128;
 export const SPRITE_SHEET_LARGE_CELL = 256;
@@ -17,6 +15,7 @@ export const spriteSheetCell = (
 
 /** Read a sheet's pixel size without decoding it. */
 export const readSpriteSheetSize = async (image: Buffer) => {
+  const { default: sharp } = await import("sharp");
   const { width, height } = await sharp(image, {
     limitInputPixels: MAX_SHEET_PIXELS,
   }).metadata();
@@ -32,6 +31,7 @@ export const resizeSpriteSheet = async (
   grid: { columns: number; rows: number; frameCount: number },
   cell: number,
 ) => {
+  const { default: sharp } = await import("sharp");
   const { data, info } = await sharp(image, { limitInputPixels: MAX_SHEET_PIXELS })
     .ensureAlpha()
     .raw()

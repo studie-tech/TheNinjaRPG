@@ -152,7 +152,7 @@ export const fulfillStripeInvoice = async (
   invoiceId: string,
 ) => {
   if (!stripeIsLive() && env.NODE_ENV === "production") return;
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const invoice = await stripe.invoices.retrieve(invoiceId);
   const subscriptionId = objectId(invoice.parent?.subscription_details?.subscription);
   if (!subscriptionId) return;
@@ -197,7 +197,7 @@ export const fulfillStripeSession = async (
   sessionId: string,
 ) => {
   if (!stripeIsLive() && env.NODE_ENV === "production") return "ignored" as const;
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const session = await stripe.checkout.sessions.retrieve(sessionId, {
     expand: ["subscription"],
   });

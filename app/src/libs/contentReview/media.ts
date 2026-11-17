@@ -1,5 +1,4 @@
 import { nanoid } from "nanoid";
-import { UTApi } from "uploadthing/server";
 import {
   CONTENT_PROPOSAL_MAX_CANDIDATES,
   type ContentProposalMediaKind,
@@ -250,6 +249,7 @@ export const importEpidemicSfx = async (
  */
 export const deleteStoredFiles = async (keys: string[]) => {
   if (keys.length === 0) return;
+  const { UTApi } = await import("uploadthing/server");
   const result = await new UTApi().deleteFiles(keys, { keyType: "customId" });
   if (!result.success)
     throw new Error("Could not delete suggestion media from storage");
@@ -269,6 +269,7 @@ const skipped =
 /** Copy a remote file to our storage under a new customId; returns its served URL and key. */
 const copyToStorage = async (url: string, extension: string) => {
   const customId = extensionCustomId(`file.${extension}`);
+  const { UTApi } = await import("uploadthing/server");
   const uploaded = await new UTApi().uploadFilesFromUrl({
     url,
     name: customId,

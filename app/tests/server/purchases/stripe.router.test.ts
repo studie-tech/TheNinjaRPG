@@ -71,7 +71,7 @@ describeWithDatabase("Stripe router guards and durable checkout terms", () => {
     create.mockClear();
     retrieve.mockClear();
     expire.mockClear();
-    vi.spyOn(stripeClient, "getStripe").mockReturnValue(api);
+    vi.spyOn(stripeClient, "getStripe").mockResolvedValue(api);
   });
   afterEach(() => {
     vi.restoreAllMocks();

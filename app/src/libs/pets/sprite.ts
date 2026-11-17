@@ -1,5 +1,4 @@
 /** Deterministic pixel post-processing that frames every companion cutout the same way. */
-import sharp from "sharp";
 
 /** Stored companion sprites are square canvases of this many pixels. */
 export const PET_SPRITE_SIZE = 512;
@@ -24,6 +23,7 @@ export const MAX_PET_IMAGE_PIXELS = 1024 * 1024;
  * corner check but tints the scene behind the sprite.
  */
 export const hasBackgroundHaze = async (image: Buffer) => {
+  const { default: sharp } = await import("sharp");
   const { data, info } = await sharp(image, { limitInputPixels: MAX_SOURCE_PIXELS })
     .ensureAlpha()
     .raw()
@@ -44,6 +44,7 @@ export const hasBackgroundHaze = async (image: Buffer) => {
  * rank stands on the same ground line. Returns 512x512 WebP bytes with exact alpha.
  */
 export const normalizePetSprite = async (image: Buffer) => {
+  const { default: sharp } = await import("sharp");
   const source = sharp(image, { limitInputPixels: MAX_SOURCE_PIXELS }).ensureAlpha();
   const { data, info } = await source.raw().toBuffer({ resolveWithObject: true });
   const { width, height, channels } = info;

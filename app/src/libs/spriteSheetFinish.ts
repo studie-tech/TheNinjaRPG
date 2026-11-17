@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import {
   readSpriteSheetSize,
   resizeSpriteSheet,
@@ -310,6 +309,7 @@ const colourStats = (frame: Uint8Array) => {
 
 /** Fit the art into one cell the way the sprite pipeline does; opaque art has no outline. */
 const readArt = async (art: Buffer, cell: number) => {
+  const { default: sharp } = await import("sharp");
   const { data } = await sharp(art)
     .ensureAlpha()
     .resize(cell, cell, {
@@ -329,6 +329,7 @@ const readFrames = async (
   grid: { columns: number; frameCount: number },
   cell: number,
 ) => {
+  const { default: sharp } = await import("sharp");
   const { data, info } = await sharp(sheet)
     .ensureAlpha()
     .raw()
@@ -364,6 +365,7 @@ const writeAtlas = async (
       );
     }
   });
+  const { default: sharp } = await import("sharp");
   return sharp(atlas, {
     raw: { width, height: grid.rows * cell, channels: CHANNELS },
   })

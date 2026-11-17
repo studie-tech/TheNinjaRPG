@@ -106,9 +106,8 @@ export const stripeRouter = createTRPCRouter({
           `This checkout cannot be resumed. Its reservation expires ${RESERVATION_HOURS} hours after it started; then start a new checkout.`,
         );
       if (existing?.sessionId) {
-        const session = await getStripe().checkout.sessions.retrieve(
-          existing.sessionId,
-        );
+        const stripe = await getStripe();
+        const session = await stripe.checkout.sessions.retrieve(existing.sessionId);
         if (session.status === "open" && session.url)
           return { success: true, message: "Continue checkout", url: session.url };
         return errorResponse(
@@ -120,7 +119,7 @@ export const stripeRouter = createTRPCRouter({
         reputationPoints + allowanceUsed > dynamicMonthlyRepCap(buyer)
       )
         return errorResponse("This purchase exceeds your monthly reputation limit.");
-      const stripe = getStripe();
+      const stripe = await getStripe();
       if (tier !== "NONE") {
         if (
           pending.some(
@@ -261,7 +260,7 @@ export const stripeRouter = createTRPCRouter({
           message: "Expired checkout closed. Start a new checkout.",
         };
       }
-      const stripe = getStripe();
+      const stripe = await getStripe();
       const session = await stripe.checkout.sessions.retrieve(checkout.sessionId);
       if (session.status === "complete")
         return errorResponse("Payment already completed. Check your payment status.");
@@ -284,7 +283,8 @@ export const stripeRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const session = await getStripe().checkout.sessions.retrieve(input.sessionId);
+      const stripe = await getStripe();
+      const session = await stripe.checkout.sessions.retrieve(input.sessionId);
       const checkout = session.metadata?.tnrCheckoutId
         ? await findStripeCheckoutById(ctx.drizzle, session.metadata.tnrCheckoutId)
         : undefined;
@@ -313,7 +313,7 @@ export const stripeRouter = createTRPCRouter({
   getSubscriptions: protectedProcedure.query(async ({ ctx }) => {
     const checkouts = await selectStripeCheckoutForGetSubscriptions(ctx.drizzle, ctx);
     if (!checkouts.length || !isStripeConfigured()) return [];
-    const stripe = getStripe();
+    const stripe = await getStripe();
     return Promise.all(
       checkouts.map(async ({ checkout, recipientUsername }) => {
         // One missing or rate-limited object must not hide healthy renewal controls.
@@ -348,7 +348,7 @@ export const stripeRouter = createTRPCRouter({
         ![checkout.createdById, checkout.affectedUserId].includes(ctx.userId)
       )
         return errorResponse("You are not associated with this subscription.");
-      const stripe = getStripe();
+      const stripe = await getStripe();
       const subscription = await stripe.subscriptions.retrieve(checkout.subscriptionId);
       if (isEndedSubscriptionStatus(subscription.status))
         return { success: true, message: "This subscription has already ended." };

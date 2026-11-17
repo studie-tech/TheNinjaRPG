@@ -1,6 +1,5 @@
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
-import sharp from "sharp";
 import { z } from "zod";
 import { SpriteGenerationMotions } from "@/drizzle/constants";
 import type { SpriteGeneration, spriteGeneration } from "@/drizzle/schema";
@@ -363,6 +362,7 @@ const staffFailure = async <T>(work: () => Promise<T>) => {
 
 /** gameasset.dev needs a PNG; it removes the background itself when the art has one. */
 const uploadArt = async (url: string, title: string) => {
+  const { default: sharp } = await import("sharp");
   const png = await sharp(await downloadSpriteFile(url))
     .resize(MAX_ART_SIDE, MAX_ART_SIDE, { fit: "inside", withoutEnlargement: true })
     .png()

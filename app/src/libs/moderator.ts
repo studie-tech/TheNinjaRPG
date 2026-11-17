@@ -1,7 +1,5 @@
-import { openai as openaiSdk } from "@ai-sdk/openai";
-import { generateText, Output } from "ai";
 import { nanoid } from "nanoid";
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import type { AutomoderationCategory } from "@/drizzle/constants";
 import {
   type BanStates,
@@ -37,7 +35,22 @@ import {
 } from "@/validators/moderation";
 
 // OpenAI client
-const openai = new OpenAI({ timeout: 20_000 });
+let openaiClient: OpenAI | undefined;
+const getOpenAI = async () => {
+  if (!openaiClient) {
+    const { default: OpenAIClient } = await import("openai");
+    openaiClient ??= new OpenAIClient({ timeout: 20_000 });
+  }
+  return openaiClient;
+};
+
+const loadAiSdk = async () => {
+  const [{ generateText, Output }, { openai }] = await Promise.all([
+    import("ai"),
+    import("@ai-sdk/openai"),
+  ]);
+  return { generateText, Output, openaiSdk: openai };
+};
 
 /**
  * Moderate content
@@ -70,6 +83,7 @@ export const moderateContent = async (
   let stage: "gate" | "decision" | "report" = "gate";
   let reportId: string | null = null;
   try {
+    const openai = await getOpenAI();
     const moderation = await openai.moderations.create({
       model: gateModel,
       input: htmlToModerationInput(content),
@@ -189,6 +203,7 @@ export const generateAiSummary = async (
   evidence: ModerationEvidence,
   abortSignal = AbortSignal.timeout(20_000),
 ) => {
+  const { generateText, openaiSdk } = await loadAiSdk();
   const { text } = await generateText({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
     instructions:
@@ -211,6 +226,7 @@ export const generateModerationDecision = async (
   const abortSignal = AbortSignal.timeout(45_000);
   const aiInterpretation = await generateAiSummary(evidence, abortSignal);
   const previous = await getRelatedReports(client, aiInterpretation, options);
+  const { generateText, Output, openaiSdk } = await loadAiSdk();
   const { output } = await generateText({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
     output: Output.object({ schema: moderationDecisionSchema }),
@@ -261,6 +277,7 @@ const updateReportedStatus = async (
 export const classifyNsfwPrompt = async (
   prompt: string,
 ): Promise<{ isNsfw: boolean; reason: string }> => {
+  const { generateText, Output, openaiSdk } = await loadAiSdk();
   const { output } = await generateText({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
     output: Output.object({ schema: nsfwClassificationSchema }),
@@ -286,6 +303,7 @@ export const classifyNsfwImage = async (
   signal?: AbortSignal,
 ): Promise<{ isNsfw: boolean; reason: string }> => {
   signal?.throwIfAborted();
+  const openai = await getOpenAI();
   const moderation = await openai.moderations.create(
     {
       model: OPENAI_OMNI_MODERATION_MODEL,
@@ -313,6 +331,7 @@ export const validateUserUpdateReason = async (
   update: string,
   reason: string,
 ): Promise<{ allowUpdate: boolean; comment: string }> => {
+  const { generateText, Output, openaiSdk } = await loadAiSdk();
   const { output } = await generateText({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
     output: Output.object({ schema: updateReasonValidationSchema }),
