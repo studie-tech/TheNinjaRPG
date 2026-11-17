@@ -210,7 +210,7 @@ export const createRuntimeEntryCache = <T>({
 }: {
   /** Key prefix and Runtime Cache tag: letters, digits and dashes. */
   name: string;
-  /** Bounds how long unread entries are kept. */
+  /** Entries expire this long after they were written; reads do not extend them. */
   ttlSeconds: number;
   /** Replaces the Runtime Cache, for tests; such caches stay out of `invalidateRuntimeCaches`. */
   store?: RuntimeCache;

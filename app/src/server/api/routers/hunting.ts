@@ -166,7 +166,9 @@ export const huntingRouter = createTRPCRouter({
         findUserRoleById(ctx.drizzle, ctx.userId),
         aiIds.length ? listAiUserIds(ctx.drizzle, aiIds) : [],
         itemIds.length ? listItemForSave(ctx.drizzle, itemIds) : [],
-        fetchPublishedSectorMaps(ctx.drizzle, input.content.sectors),
+        fetchPublishedSectorMaps(ctx.drizzle, input.content.sectors, {
+          revalidate: true,
+        }),
         listHuntingHabitats(ctx.drizzle),
       ]);
       if (!user || !canChangeContent(user.role))
@@ -282,9 +284,12 @@ export const huntingRouter = createTRPCRouter({
           ...getUnchangedHuntingUserUpdate(),
           message: "Your existing encounter is still assigned.",
         };
-      // The contract's sectors are known only after the guards; cached maps skip the blob read.
+      // The contract's sectors are known only after the guards; a metadata probe confirms
+      // they are still published while cached maps skip the blob read.
       const reachableSectors = getReachableHuntingSectors(
-        await fetchPublishedSectorMaps(ctx.drizzle, contract.sectors),
+        await fetchPublishedSectorMaps(ctx.drizzle, contract.sectors, {
+          revalidate: true,
+        }),
       );
       const locations = contract.sectors.filter(
         (s) => habitat.content.sectors.includes(s) && reachableSectors.has(s),
@@ -509,7 +514,7 @@ export const huntingRouter = createTRPCRouter({
       if (!progress || allowance.cooling || allowance.remaining < 1)
         return errorResponse("This contract is on cooldown.");
       const [maps, grantStacks] = await Promise.all([
-        fetchPublishedSectorMaps(ctx.drizzle, [session.sector]),
+        fetchPublishedSectorMaps(ctx.drizzle, [session.sector], { revalidate: true }),
         listItemForGrantUserItems(
           ctx.drizzle,
           ctx.userId,

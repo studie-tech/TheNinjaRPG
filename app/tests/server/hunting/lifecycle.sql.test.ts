@@ -24,7 +24,6 @@ import { huntingRouter } from "@/routers/hunting";
 import { profileRouter } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import * as cookingSettlement from "@/server/utils/cooking";
-import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import * as queueSettlement from "@/server/utils/userQueue";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { IncreaseHuntingYield } from "@/validators/combat";
@@ -361,8 +360,6 @@ describeWithDatabase("Hunting lifecycle", () => {
       normalizedJson: { ...huntingMap(), sector: 2 },
     });
     await db.update(sectorMap).set({ status: "DRAFT" }).where(eq(sectorMap.id, "map"));
-    // Unpublishing evicts this instance's maps, as archiveSectorMap does.
-    invalidatePublishedMapCache();
     const mapReads = vi.spyOn(db.query.sectorMap, "findMany");
     expect(
       await hunter.accept({
@@ -593,8 +590,11 @@ describeWithDatabase("Hunting lifecycle", () => {
     await db.update(huntingProgress).set({ cooldownUntil: new Date(0) });
     const mapReads = vi.spyOn(db.query.sectorMap, "findMany");
     expect((await hunter.start({ id: session.id })).success).toBe(true);
-    // The map accepted for this session is still held, so starting reads no blob.
-    expect(mapReads).not.toHaveBeenCalled();
+    // Starting confirms the held map is still published with a metadata probe alone.
+    expect(mapReads).toHaveBeenCalledTimes(1);
+    expect(await mapReads.mock.results[0]?.value).toEqual([
+      { id: "map", sector: 1, version: 1 },
+    ]);
   });
   it("enforces staff authorization and validates published reachable locations", async () => {
     const hunter = await callerFor(huntingRouter, "hunter");

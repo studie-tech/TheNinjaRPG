@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
+import { after } from "next/server";
 import * as globalMapData from "@/data/hexasphere.json";
 import {
   MAP_SECTOR_ID_MAX,
@@ -40,7 +41,8 @@ export const hashTiledJson = (json: unknown) =>
 // one. Each instance keeps decoded maps and, after a short TTL, compares the highest
 // published row without downloading unchanged blobs. Maps an instance does not hold come
 // from the shared Runtime Cache when its entry names the published row, so a cold
-// instance downloads a blob only for a sector no instance has read since its publish.
+// instance downloads a blob only when the sector was republished or its regional entry
+// has expired, at most a day after it was written.
 const PUBLISHED_MAP_TTL_MS = 60_000;
 const PUBLISHED_MAP_CACHE_LIMIT = 200;
 const sharedPublishedMaps = createRuntimeEntryCache<PublishedMap>({
@@ -58,19 +60,15 @@ const publishedMapCache = new Map<number, PublishedMapCacheEntry>();
 let cacheGeneration = 0;
 
 /**
- * Evict a single sector from this instance's published-map cache, or every map,
- * shared entries included, when no sector is given. Always bumps cacheGeneration so
- * in-flight reads that started before this invalidation cannot re-populate the cache
- * with stale data.
+ * Evict a single sector from this instance's published-map cache, or the whole cache
+ * when no sector is given. Shared entries stay: each names its row, so a read never
+ * serves one for an archived or replaced map. Always bumps cacheGeneration so in-flight
+ * reads that started before this invalidation cannot re-populate the cache with stale data.
  */
 export const invalidatePublishedMapCache = (sector?: number) => {
   cacheGeneration += 1;
-  if (sector !== undefined) {
-    publishedMapCache.delete(sector);
-    return;
-  }
-  publishedMapCache.clear();
-  void sharedPublishedMaps.clear();
+  if (sector === undefined) publishedMapCache.clear();
+  else publishedMapCache.delete(sector);
 };
 
 /**
@@ -314,6 +312,12 @@ export const buildSectorWindowLayout = (sector: number): SectorWindowEntry[] => 
 export const fetchPublishedSectorMaps = async (
   client: DrizzleClient,
   sectors: number[],
+  {
+    revalidate = false,
+  }: {
+    /** Probe even fresh held maps, for checks that must see an unpublish at once. */
+    revalidate?: boolean;
+  } = {},
 ): Promise<Map<number, NormalizedSectorMap>> => {
   const result = new Map<number, NormalizedSectorMap>();
   const missing: number[] = [];
@@ -321,7 +325,7 @@ export const fetchPublishedSectorMaps = async (
   for (const sector of new Set(sectors)) {
     const cached = getCachedPublishedMap(sector);
     if (!cached) missing.push(sector);
-    else if (Date.now() - cached.at < PUBLISHED_MAP_TTL_MS) {
+    else if (!revalidate && Date.now() - cached.at < PUBLISHED_MAP_TTL_MS) {
       result.set(sector, cached.map);
     } else expired.set(sector, cached);
   }
@@ -407,14 +411,23 @@ const fetchUncachedPublishedMaps = async (
       });
     }
   });
+  for (const [sector, entry] of bySector) {
+    setCachedPublishedMap(sector, entry, generation, checkedAt);
+    result.set(sector, entry.map);
+  }
   // An entry names the row it holds, so sharing it needs no generation guard.
-  await Promise.all(
-    [...bySector].map(([sector, entry]) => {
-      setCachedPublishedMap(sector, entry, generation, checkedAt);
-      result.set(sector, entry.map);
-      return sharedPublishedMaps.write(sharedMapKey(sector), entry);
-    }),
-  );
+  const share = () =>
+    Promise.all(
+      [...bySector].map(([sector, entry]) =>
+        sharedPublishedMaps.write(sharedMapKey(sector), entry),
+      ),
+    );
+  try {
+    after(share);
+  } catch {
+    // Outside a request scope (scripts, tests) there is nothing to defer to.
+    void share();
+  }
   return result;
 };
 

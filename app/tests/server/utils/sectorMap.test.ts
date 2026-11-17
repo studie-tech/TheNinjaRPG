@@ -4,6 +4,7 @@ import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { DrizzleClient } from "@/server/db";
+import { invalidateRuntimeCaches } from "@/server/utils/runtimeCache";
 import {
   fetchPublishedSectorMap,
   fetchPublishedSectorMaps,
@@ -182,9 +183,8 @@ describe("published sector map cache", () => {
     }));
     const { client, findMany } = makeClient(rows);
     await fetchPublishedSectorMaps(client, [1, 2]);
-    // Another instance holds no decoded maps, only the shared entries.
-    invalidatePublishedMapCache(1);
-    invalidatePublishedMapCache(2);
+    // Another instance holds no decoded maps; clearing them all leaves shared entries.
+    invalidatePublishedMapCache();
     const maps = await fetchPublishedSectorMaps(client, [1, 2]);
     expect(maps.get(1)).toEqual(rows[0]!.normalizedJson);
     expect(maps.get(2)).toEqual(rows[1]!.normalizedJson);
@@ -218,6 +218,23 @@ describe("published sector map cache", () => {
     invalidatePublishedMapCache(8);
     expect(await fetchPublishedSectorMap(client, 8)).toBe(replacement.normalizedJson);
     expect(readsBlob(findMany, -1)).toBe(true);
+  });
+
+  it("probes fresh held maps on request so an unpublished sector disappears at once", async () => {
+    const rows = [{ sector: 6, version: 1, normalizedJson: makeMap(6) }];
+    const { client, findMany } = makeClient(rows);
+    await fetchPublishedSectorMap(client, 6);
+    expect(
+      (await fetchPublishedSectorMaps(client, [6], { revalidate: true })).has(6),
+    ).toBe(true);
+    expect(findMany).toHaveBeenCalledTimes(3);
+    expect(readsBlob(findMany, 2)).toBe(false);
+    rows.pop();
+    expect((await fetchPublishedSectorMaps(client, [6])).has(6)).toBe(true);
+    expect(
+      (await fetchPublishedSectorMaps(client, [6], { revalidate: true })).has(6),
+    ).toBe(false);
+    expect(findMany).toHaveBeenCalledTimes(4);
   });
 
   it("immediately invalidates a sector without evicting other sectors", async () => {
@@ -346,6 +363,7 @@ describe("published sector map cache", () => {
     now += 60_000;
     await fetchPublishedSectorMap(client, 0);
     expect(findMany).toHaveBeenCalledTimes(6);
+    await invalidateRuntimeCaches();
     invalidatePublishedMapCache();
     await fetchPublishedSectorMap(client, 2);
     expect(readsBlob(findMany, -1)).toBe(true);
