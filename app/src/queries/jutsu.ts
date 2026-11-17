@@ -326,7 +326,8 @@ export const updateUserDataForWriteDefaultPointer = (
     LEFT JOIN ${aiProfile} AS own ON own.jutsuLoadoutId = ${jutsuLoadout.id}
     LEFT JOIN (
       SELECT ${aiProfile.userId} AS userId, MIN(${aiProfile.id}) AS id FROM ${aiProfile}
-      WHERE ${aiProfile.jutsuLoadoutId} IS NULL AND ${aiProfile.id} <> 'Default'
+      WHERE ${aiProfile.userId} = ${ctx.userId}
+        AND ${aiProfile.jutsuLoadoutId} IS NULL AND ${aiProfile.id} <> 'Default'
       GROUP BY ${aiProfile.userId}
     ) AS spare ON spare.userId = ${userData.userId}
     LEFT JOIN ${aiProfile} ON own.id IS NULL
