@@ -141,11 +141,12 @@ describe("inventory reconciliation", () => {
       { id: "one", activeVariantId: null, variants: ["gold"] },
     ]);
     expect(getSelectedVariantInventory(lean, "missing", variant)).toBeUndefined();
-    expect(getSelectedVariantUserPatch(lean, "two", variant)).toEqual({
+    expect(getSelectedVariantUserPatch(lean, "two", variant, true)).toEqual({
       items: [lean[0]!, { id: "two", activeVariantId: "gold", activeVariant: variant }],
     });
-    // The profile lists worn gear only, so another stack leaves it unchanged.
-    expect(getSelectedVariantUserPatch(lean, "carried", variant)).toEqual({});
+    expect(getSelectedVariantUserPatch(lean, "carried", variant, false)).toEqual({});
+    expect(getSelectedVariantUserPatch(lean, "carried", variant, true)).toBeUndefined();
+    expect(getSelectedVariantUserPatch(lean, "two", variant, false)).toBeUndefined();
   });
 
   it("credits a bulk sell's summed ryo", () => {

@@ -92,6 +92,7 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
     onMutate: () => ({
       inventory: prepareInventoryUpdate(),
       user: prepareUserUpdate(),
+      isEquipped: userItem.equipped !== "NONE",
     }),
     onSuccess: async (result, input, snapshot) => {
       showMutationToast(result);
@@ -109,7 +110,12 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
             variant === undefined
               ? undefined
               : (current) =>
-                  getSelectedVariantUserPatch(current.items, input.userItemId, variant),
+                  getSelectedVariantUserPatch(
+                    current.items,
+                    input.userItemId,
+                    variant,
+                    snapshot.isEquipped,
+                  ),
             { revision: snapshot.user },
           ),
           utils.travel.getSectorData.invalidate(),

@@ -591,8 +591,8 @@ export const getSelectedVariantInventory = <
     : undefined;
 
 /**
- * Show the confirmed variant on worn gear. The profile lists only equipped stacks, so a
- * stack it does not list leaves the profile unchanged.
+ * Show the confirmed variant on worn gear when profile membership matches the inventory;
+ * a stale equipment list asks for reconciliation instead of confirming a no-op.
  */
 export const getSelectedVariantUserPatch = <
   T extends Pick<UserItem, "id" | "activeVariantId">,
@@ -600,8 +600,10 @@ export const getSelectedVariantUserPatch = <
   items: T[],
   userItemId: string,
   variant: ItemVariant | null,
+  isEquipped: boolean,
 ) => {
   const updated = getSelectedVariantInventory(items, userItemId, variant);
+  if (Boolean(updated) !== isEquipped) return undefined;
   return updated ? { items: updated } : {};
 };
 

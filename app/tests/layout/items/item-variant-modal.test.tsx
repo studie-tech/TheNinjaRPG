@@ -16,6 +16,7 @@ import { mockCosmetics } from "../../setup/cosmetics";
 import { mockUserContextValue } from "../../setup/userContext";
 
 type Options = {
+  onMutate?: () => unknown;
   onSuccess: (result: unknown, variables: unknown, revision: number) => Promise<void>;
 };
 const captured: Record<string, Options> = {};
@@ -25,16 +26,17 @@ const updateUser = vi.fn(async () => undefined);
 const invalidate = { invalidate: vi.fn(async () => undefined) };
 const userItem = {
   id: "row",
+  equipped: "HEAD",
   activeVariantId: null,
   item: { id: "sword", name: "Sword", image: "/sword.webp", variants: [] },
 } as unknown as UserItemWithVariants;
 
 /** Mounts the modal the way the inspector does: only while an item is chosen. */
-const Host = () => {
+const Host = ({ item = userItem }: { item?: UserItemWithVariants }) => {
   const [chosen, setChosen] = useState(true);
   return chosen ? (
     <ItemVariantModal
-      userItem={userItem}
+      userItem={item}
       allUserItems={[]}
       onClose={() => {
         onClose();
@@ -96,10 +98,10 @@ afterEach(async () => {
   restoreBrowserGlobals();
 });
 
-const mount = () =>
+const mount = (item = userItem) =>
   render(
     <AppRouterContext.Provider value={{} as never}>
-      <Host />
+      <Host item={item} />
     </AppRouterContext.Provider>,
   );
 
@@ -135,7 +137,7 @@ it("patches the inventory and worn gear with the saved variant instead of readin
     captured.selectVariant!.onSuccess(
       { success: true, message: "Done", activeVariant: variant },
       { userItemId: "row", variantId: "gold" },
-      { inventory: "inventory-snapshot", user: 3 } as never,
+      { inventory: "inventory-snapshot", user: 3, isEquipped: true } as never,
     ),
   );
   expect(updateInventory).toHaveBeenCalledWith(
@@ -151,6 +153,27 @@ it("patches the inventory and worn gear with the saved variant instead of readin
     items: [{ id: "row", activeVariantId: "gold" }],
   });
   expect(invalidate.invalidate).toHaveBeenCalledTimes(1);
+});
+
+it("reconciles missing worn gear using the equipment membership captured before selection", async () => {
+  const view = mount();
+  const snapshot = captured.selectVariant!.onMutate!();
+  view.rerender(
+    <AppRouterContext.Provider value={{} as never}>
+      <Host item={{ ...userItem, equipped: "NONE" }} />
+    </AppRouterContext.Provider>,
+  );
+  await act(() =>
+    captured.selectVariant!.onSuccess(
+      { success: true, message: "Done", activeVariant: { id: "gold" } },
+      { userItemId: "row", variantId: "gold" },
+      snapshot as never,
+    ),
+  );
+  const [patch] = updateUser.mock.calls[0] as unknown as [
+    (current: { items: unknown[] }) => unknown,
+  ];
+  expect(patch({ items: [] })).toBeUndefined();
 });
 
 it("reads the inventory and profile again when the saved variant is not reported", async () => {
