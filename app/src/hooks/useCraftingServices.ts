@@ -122,19 +122,17 @@ export const useServiceRequests = () => {
     if (reconciliation.inFlight.has(terminal)) return;
     reconciliation.inFlight.add(terminal);
     void (async () => {
-      try {
-        // Profile settlement can start queued crafts and create inventory.
-        const refreshed = await refreshUser();
-        await Promise.all([
-          invalidateInventory(),
-          utils.profile.getSidebarTimers.invalidate(),
-          utils.comments.getUserConversations.invalidate(),
-        ]);
-        if (refreshed) reconciliation.succeeded = terminal;
-      } finally {
-        reconciliation.inFlight.delete(terminal);
-      }
-    })();
+      // Profile settlement can start queued crafts and create inventory.
+      const refreshed = await refreshUser();
+      await Promise.all([
+        invalidateInventory(),
+        utils.profile.getSidebarTimers.invalidate(),
+        utils.comments.getUserConversations.invalidate(),
+      ]);
+      if (refreshed) reconciliation.succeeded = terminal;
+    })().finally(() => {
+      reconciliation.inFlight.delete(terminal);
+    });
   }, [
     client,
     terminal,
