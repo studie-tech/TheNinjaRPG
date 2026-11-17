@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffects";
 import { getEffectMagnitude, getEffectPower } from "@/libs/combat/power";
 import { invertPower } from "@/libs/combat/tags";
 import type { GroundEffect } from "@/libs/combat/types";
-import { makeEffect } from "../setup/combat";
+import { calcPoolCost } from "@/libs/combat/util";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { makeBattleUser, makeCombatAction, makeEffect } from "../setup/combat";
 
 const userId = "holder";
 const runtime = { targetId: userId, creatorId: userId, fromType: "jutsu" as const };
@@ -19,12 +21,14 @@ const storedCurse = (rounds = 2, damageBonusPercent = 70) =>
   );
 
 beforeEach(() => {
+  installBrowserGlobals();
   window.localStorage.clear();
 });
 
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  restoreBrowserGlobals();
 });
 
 describe("combat active effects", () => {
@@ -161,5 +165,187 @@ describe("combat active effects", () => {
       <VisualizeEffects effects={[expired, settled]} userId={userId} />,
     );
     expect(view.queryByText(/Configured damage bonus:/)).toBeNull();
+  });
+
+  const gearReflect = () =>
+    makeEffect(
+      "reflect",
+      { power: 8, rounds: 3, calculation: "percentage" },
+      { ...runtime, id: "gear-reflect", fromType: "accessory", isNew: false },
+    );
+  const jutsuReflect = () =>
+    makeEffect(
+      "reflect",
+      { power: 30, powerPerLevel: 0.4, rounds: 2, calculation: "percentage" },
+      { ...runtime, id: "jutsu-reflect", level: 25 },
+    );
+
+  it("adds an active Reflect jutsu to Reflect from gear", () => {
+    const view = render(
+      <VisualizeEffects effects={[gearReflect(), jutsuReflect()]} userId={userId} />,
+    );
+    expect(view.getByText("Reflect +48% ↻ 3")).toBeTruthy();
+  });
+
+  it("says which effects the source filter hides and can show them again", () => {
+    window.localStorage.setItem("ve_include_jutsu", "false");
+    const view = render(
+      <VisualizeEffects effects={[gearReflect(), jutsuReflect()]} userId={userId} />,
+    );
+    expect(view.getByText("Reflect +8% ↻ 3")).toBeTruthy();
+    expect(view.getByText(/1 effect hidden by the Jutsu filter/)).toBeTruthy();
+    fireEvent.click(view.getByText("Show all"));
+    expect(view.getByText("Reflect +48% ↻ 3")).toBeTruthy();
+    expect(view.queryByText(/hidden by the/)).toBeNull();
+  });
+
+  it("makes the source filter a focusable button that opens its source controls", () => {
+    const view = render(
+      <VisualizeEffects effects={[jutsuReflect()]} userId={userId} />,
+    );
+    const trigger = view.getByRole("button", { name: "Filter effects by source" });
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger.getAttribute("type")).toBe("button");
+    fireEvent.click(trigger);
+    expect(view.getByRole("switch", { name: "Jutsu" })).toBeTruthy();
+  });
+
+  it("uses player-facing potency target labels", () => {
+    const effect = makeEffect(
+      "increasepotency",
+      {
+        power: 20,
+        rounds: 2,
+        affectedTag: "increasedamagegiven",
+        affectedElements: ["Fire"],
+      },
+      { ...runtime, id: "damage-potency" },
+    );
+    const view = render(<VisualizeEffects effects={[effect]} userId={userId} />);
+    expect(
+      view.getByText("Potency (Increase Damage Given, Fire) +20 ↻ 2"),
+    ).toBeTruthy();
+  });
+
+  it("lists active effects that have no dedicated section", () => {
+    const effects = [
+      makeEffect(
+        "increasepotency",
+        { power: 20, rounds: 2, affectedTag: "reflect" },
+        { ...runtime, id: "potency" },
+      ),
+      makeEffect(
+        "decreasepoolcost",
+        { power: 10, calculation: "percentage" },
+        { ...runtime, id: "poolcost", fromType: "bloodline" },
+      ),
+      makeEffect("visual", { rounds: 2 }, { ...runtime, id: "visual" }),
+    ];
+    const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+    expect(view.getByText("Other Effects")).toBeTruthy();
+    expect(view.getByText("Potency (Reflect) +20 ↻ 2")).toBeTruthy();
+    expect(view.getByText(/^Pool Cost -10%/)).toBeTruthy();
+    expect(view.queryByText(/^Visual/)).toBeNull();
+  });
+
+  it("keeps sequential pool-cost modifiers on individual rows", () => {
+    const effects = [2, 3].map((rounds) =>
+      makeEffect(
+        "decreasepoolcost",
+        { power: 10, calculation: "percentage", poolsAffected: ["Chakra"], rounds },
+        { ...runtime, id: `pool-cost-${rounds}` },
+      ),
+    );
+    const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+    expect(view.getByText("Pool Cost -10% ↻ 2")).toBeTruthy();
+    expect(view.getByText("Pool Cost -10% ↻ 3")).toBeTruthy();
+    expect(view.queryByText(/Pool Cost -20%/)).toBeNull();
+    expect(
+      calcPoolCost(
+        makeCombatAction({ chakraCost: 100 }),
+        effects,
+        makeBattleUser(userId),
+      ).cpCost,
+    ).toBe(81);
+  });
+
+  it("keeps pool-cost rows separate when flat and percentage modifiers are interleaved", () => {
+    const effects = [
+      makeEffect(
+        "increasepoolcost",
+        { power: 10, calculation: "static", poolsAffected: ["Chakra"], rounds: 2 },
+        { ...runtime, id: "flat-before" },
+      ),
+      makeEffect(
+        "decreasepoolcost",
+        { power: 50, calculation: "percentage", poolsAffected: ["Chakra"], rounds: 2 },
+        { ...runtime, id: "percentage" },
+      ),
+      makeEffect(
+        "increasepoolcost",
+        { power: 10, calculation: "static", poolsAffected: ["Chakra"], rounds: 3 },
+        { ...runtime, id: "flat-after" },
+      ),
+    ];
+    const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+    expect(view.getByText("Pool Cost +10 ↻ 2")).toBeTruthy();
+    expect(view.getByText("Pool Cost -50% ↻ 2")).toBeTruthy();
+    expect(view.getByText("Pool Cost +10 ↻ 3")).toBeTruthy();
+    expect(
+      calcPoolCost(
+        makeCombatAction({ chakraCost: 100 }),
+        effects,
+        makeBattleUser(userId),
+      ).cpCost,
+    ).toBe(65);
+  });
+
+  it("distinguishes current enmity from damage-generated aggro", () => {
+    const effects = [
+      makeEffect(
+        "increaseaggro",
+        { power: 20, aggroMode: "ENMITY", rounds: 2 },
+        { ...runtime, id: "enmity" },
+      ),
+      makeEffect(
+        "decreaseaggro",
+        { power: 20, aggroMode: "GENERATION", rounds: 2 },
+        { ...runtime, id: "generation" },
+      ),
+    ];
+    const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+    expect(view.getByText("Aggro (Current Enmity) +20% ↻ 2")).toBeTruthy();
+    expect(view.getByText("Aggro (Generation) -20% ↻ 2")).toBeTruthy();
+    expect(view.queryByText(/Aggro 0%/)).toBeNull();
+  });
+
+  it("keeps percentage heal modifiers under Heal Given only", () => {
+    const effect = makeEffect(
+      "increaseheal",
+      { power: 20, rounds: 2, calculation: "percentage" },
+      { ...runtime, id: "heal-mod" },
+    );
+    const view = render(<VisualizeEffects effects={[effect]} userId={userId} />);
+    expect(view.getByText("Heal Given")).toBeTruthy();
+    expect(view.queryByText("Other Effects")).toBeNull();
+  });
+
+  it("keeps potency for different element selections on separate rows", () => {
+    const potency = (id: string, power: number, affectedElements: string[]) =>
+      makeEffect(
+        "increasepotency",
+        { power, rounds: 2, affectedTag: "reflect", affectedElements } as never,
+        { ...runtime, id },
+      );
+    const view = render(
+      <VisualizeEffects
+        effects={[potency("fire", 20, ["Fire"]), potency("water", 30, ["Water"])]}
+        userId={userId}
+      />,
+    );
+    expect(view.getByText("Potency (Reflect, Fire) +20 ↻ 2")).toBeTruthy();
+    expect(view.getByText("Potency (Reflect, Water) +30 ↻ 2")).toBeTruthy();
+    expect(view.queryByText(/\+50/)).toBeNull();
   });
 });
