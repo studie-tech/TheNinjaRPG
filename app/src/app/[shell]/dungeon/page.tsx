@@ -75,8 +75,7 @@ export default function DungeonPage() {
   // to members, so an open party polls quickly. Invitations to anyone else arrive by websocket.
   const state = api.coop.dungeon.getState.useQuery(undefined, {
     enabled: !!user,
-    refetchInterval: (query) =>
-      hasOpenParty(query.state.data?.runs, user?.userId) ? 3000 : 30000,
+    refetchInterval: (query) => dungeonPollInterval(query.state.data, user?.userId),
   });
   /** Show expected rejections beside the action and refresh party/account state after a mutation. */
   const refresh = async (
@@ -824,16 +823,23 @@ const DungeonRequirements = ({ content }: { content: DungeonContent }) => {
   );
 };
 
-/** Whether the viewer belongs to, or is invited to, a party that has not finished. */
-const hasOpenParty = (
-  runs:
-    | { status: string; state: { memberIds: string[]; invitedIds: string[] } }[]
+/** Poll quickly while the viewer belongs to, or is invited to, a party that has not finished. */
+const dungeonPollInterval = (
+  data:
+    | {
+        runs: {
+          status: string;
+          state: { memberIds: string[]; invitedIds: string[] };
+        }[];
+      }
     | undefined,
   userId: string | undefined,
-) =>
-  !!userId &&
-  !!runs?.some(
+) => {
+  const isOpen = data?.runs.some(
     (run) =>
+      !!userId &&
       !["ENDED", "COMPLETED"].includes(run.status) &&
       (run.state.memberIds.includes(userId) || run.state.invitedIds.includes(userId)),
   );
+  return isOpen ? 3000 : 30000;
+};
