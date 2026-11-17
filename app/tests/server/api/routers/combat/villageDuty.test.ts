@@ -79,7 +79,7 @@ describe("village duty combat isolation", () => {
               lpcProfile: "lpc-blade",
             }),
           },
-        ],
+        ] as never[],
       };
       const before = structuredClone(defender);
       const fake = fakeInitiationClient([
