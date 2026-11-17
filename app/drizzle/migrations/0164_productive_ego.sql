@@ -1,0 +1,1 @@
+CREATE INDEX `Tournament_type_status_idx` ON `Tournament` (`type`,`status`);

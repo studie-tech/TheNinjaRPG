@@ -1332,6 +1332,8 @@ export const tournament = mysqlTable(
   (table) => {
     return {
       nameKey: uniqueIndex("Tournament_name_key").on(table.name),
+      // Every signed-in tab polls event notices; open events are a small range of this index.
+      typeStatusIdx: index("Tournament_type_status_idx").on(table.type, table.status),
     };
   },
 );

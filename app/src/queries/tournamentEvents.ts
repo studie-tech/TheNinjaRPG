@@ -1,13 +1,23 @@
 /**
  * Database access for tournament events; authorization and transaction scopes stay in callers.
  */
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
-import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
-import { tournament, userData, userJutsu } from "@/drizzle/schema";
+import { and, eq, gte, inArray, isNull, notExists, sql } from "drizzle-orm";
+import { IMG_MANUAL_TOURNAMENTS, JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
+import {
+  battle,
+  rankedLoadout,
+  tournament,
+  tournamentMatch,
+  tournamentRewardClaim,
+  userData,
+  userJutsu,
+} from "@/drizzle/schema";
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
+import { ObjectiveReward } from "@/validators/rewards";
+import type { EventTournamentState } from "@/validators/tournament";
 
 /** Load an event and its combat tokens together for synchronization and versioned edits. */
 export const fetchEvent = (client: DrizzleClient, id: string) =>
@@ -89,20 +99,29 @@ export const fetchEventNoticeState = async (client: DrizzleClient, userId: strin
   return { notices, isEventParticipant: participations.length > 0 };
 };
 
-import { isNull, notExists } from "drizzle-orm";
-import { IMG_MANUAL_TOURNAMENTS } from "@/drizzle/constants";
-import {
-  battle,
-  rankedLoadout,
-  tournamentMatch,
-  tournamentRewardClaim,
-} from "@/drizzle/schema";
-import { ObjectiveReward } from "@/validators/rewards";
-
-/** Build the `tournament` listing for `listEvents`, using predicates on `type`. */
+/**
+ * Build the `tournament` listing for `listEvents`, using predicates on `type`. Only the
+ * summary fields leave the database; brackets, games and audit trails stay behind.
+ */
 export const listTournamentForListEvents = (client: Pick<DrizzleClient, "query">) =>
   client.query.tournament.findMany({
     where: eq(tournament.type, "EVENT"),
+    columns: { id: true },
+    extras: {
+      summary:
+        sql<EventListSummary | null>`IF(${tournament.eventData} IS NULL, NULL, JSON_OBJECT(
+        'status', JSON_EXTRACT(${tournament.eventData}, '$.status'),
+        'withdrawn', JSON_EXTRACT(${tournament.eventData}, '$.participants[*].withdrawn'),
+        'config', JSON_OBJECT(
+          'name', JSON_EXTRACT(${tournament.eventData}, '$.config.name'),
+          'description', JSON_EXTRACT(${tournament.eventData}, '$.config.description'),
+          'format', JSON_EXTRACT(${tournament.eventData}, '$.config.format'),
+          'rules', JSON_EXTRACT(${tournament.eventData}, '$.config.rules'),
+          'capacity', JSON_EXTRACT(${tournament.eventData}, '$.config.capacity'),
+          'registrationClosesAt', JSON_EXTRACT(${tournament.eventData}, '$.config.registrationClosesAt')
+        )
+      ))`.as("summary"),
+    },
     orderBy: (t, { desc }) => [desc(t.createdAt)],
     limit: 100,
   });
@@ -297,6 +316,31 @@ export const updateTournamentForPayEventRewards = (
       ),
     );
 
+/**
+ * Build the `tournament` update for `payEventRewards` that records a completed payout, using
+ * predicates on `id`, `type`, `status` and the event's reward flag. The version increment
+ * fences retention cleanup like each payout claim.
+ */
+export const updateTournamentForMarkEventRewardsPaid = (
+  client: Pick<DrizzleClient, "update">,
+  row: { id: string },
+  paidAt: number,
+) =>
+  client
+    .update(tournament)
+    .set({
+      eventData: sql`JSON_SET(${tournament.eventData}, '$.rewardsPaidAt', ${paidAt})`,
+      version: sql`${tournament.version} + 1`,
+    })
+    .where(
+      and(
+        eq(tournament.id, row.id),
+        eq(tournament.type, "EVENT"),
+        eq(tournament.status, "COMPLETED"),
+        sql`JSON_EXTRACT(${tournament.eventData}, '$.payRewards') = true`,
+      ),
+    );
+
 /** Build the `tournamentRewardClaim` insert for `payEventRewards`. */
 export const insertTournamentRewardClaimForPayEventRewards = (
   client: Pick<DrizzleClient, "insert">,
@@ -307,12 +351,26 @@ export const insertTournamentRewardClaimForPayEventRewards = (
     .insert(tournamentRewardClaim)
     .values({ id: `${row.id}:${userId}`, tournamentId: row.id, userId });
 
-/** Build the `tournament` listing for `maintainEventTournaments`, using predicates on `type`. */
+/**
+ * Build the `tournament` listing for `maintainEventTournaments`, using predicates on `type`.
+ * Synchronization loads each event it needs, so the listing carries only the lifecycle
+ * fields that decide whether an event needs it.
+ */
 export const listTournamentForMaintainEventTournaments = (
   client: Pick<DrizzleClient, "query">,
 ) =>
   client.query.tournament.findMany({
     where: eq(tournament.type, "EVENT"),
+    columns: { id: true, version: true },
+    extras: {
+      lifecycle:
+        sql<EventLifecycle | null>`IF(${tournament.eventData} IS NULL, NULL, JSON_OBJECT(
+        'status', JSON_EXTRACT(${tournament.eventData}, '$.status'),
+        'finishedAt', JSON_EXTRACT(${tournament.eventData}, '$.finishedAt'),
+        'payRewards', JSON_EXTRACT(${tournament.eventData}, '$.payRewards'),
+        'rewardsPaidAt', JSON_EXTRACT(${tournament.eventData}, '$.rewardsPaidAt')
+      ))`.as("lifecycle"),
+    },
   });
 
 /** Build the `tournament` deletion for `maintainEventTournaments`, using predicates on `id` and `version`. */
@@ -332,3 +390,20 @@ export const deleteTournamentRewardClaimForMaintainEventTournaments = (
   client
     .delete(tournamentRewardClaim)
     .where(eq(tournamentRewardClaim.tournamentId, row.id));
+
+/** Event summary fields `listEvents` returns, with each participant's withdrawal flag. */
+type EventListSummary = Pick<EventTournamentState, "status"> & {
+  withdrawn: boolean[] | null;
+  config: Pick<
+    EventTournamentState["config"],
+    "name" | "description" | "format" | "rules" | "capacity" | "registrationClosesAt"
+  >;
+};
+
+/** Lifecycle fields deciding whether maintenance must synchronize or remove an event. */
+type EventLifecycle = Pick<
+  EventTournamentState,
+  "status" | "finishedAt" | "payRewards"
+> & {
+  rewardsPaidAt: number | null;
+};

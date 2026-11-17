@@ -28,6 +28,7 @@ import {
   userCookingJob,
   userData,
   userQueue,
+  userRewards,
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
@@ -38,6 +39,7 @@ import {
   createEventState,
   generateEventBracket,
 } from "@/libs/tournament/events";
+import * as questQueries from "@/queries/quests";
 import * as eventQueries from "@/queries/tournamentEvents";
 import { fetchEvent, fetchEventNoticeState } from "@/queries/tournamentEvents";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
@@ -54,7 +56,7 @@ import {
   type EventParticipant,
   eventTournamentConfigSchema,
 } from "@/validators/tournament";
-import { withAfterTasks } from "../../../setup/after";
+import { afterTasks, withAfterTasks } from "../../../setup/after";
 import { deferred } from "../../../setup/deferred";
 import {
   insertDefaultAiProfile,
@@ -97,6 +99,7 @@ describeWithDatabase("event tournament persistence", () => {
       userCookingJob,
       questHistory,
       quest,
+      userRewards,
       userData,
     );
   });
@@ -2147,6 +2150,145 @@ describeWithDatabase("event tournament persistence", () => {
     ).toBeUndefined();
     await maintainEventTournaments(database);
     expect((await database.query.userData.findFirst())?.money).toBe(20);
+  });
+
+  it("records a finished payout and skips receipt reads and maintenance afterwards", async () => {
+    const database = await getTestDatabase();
+    await insertUsers([
+      { userId: "remaining", money: 0 },
+      { userId: "deleted", username: "absent", money: 0 },
+    ]);
+    await database.insert(tournament).values(completedEvent("event"));
+    await Promise.all([
+      syncEventTournament(database, "event"),
+      syncEventTournament(database, "event"),
+    ]);
+    const settled = (await fetchEvent(database, "event"))!;
+    expect(settled.eventData?.rewardsPaidAt).toBeGreaterThan(0);
+    expect(await database.query.tournamentRewardClaim.findMany()).toHaveLength(2);
+    const synced = await recordQueries(() => syncEventTournament(database, "event"));
+    expect(
+      synced.statements.filter((s) => /TournamentRewardClaim/i.test(s)),
+    ).toHaveLength(0);
+    const maintained = await recordQueries(() => maintainEventTournaments(database));
+    expect(maintained.statements).toHaveLength(1);
+    const users = await database.query.userData.findMany();
+    expect(users.map((u) => u.money)).toEqual([10, 10]);
+  });
+
+  it("leaves a payout unrecorded while an entrant's receipt is missing", async () => {
+    const database = await getTestDatabase();
+    await insertUsers([{ userId: "remaining", money: 0 }]);
+    await database.insert(tournament).values(completedEvent("event"));
+    // A payer whose retention claim misses commits no receipt for that entrant.
+    vi.spyOn(eventQueries, "updateTournamentForPayEventRewards").mockImplementationOnce(
+      (() => Promise.resolve({ rowsAffected: 0 })) as never,
+    );
+    await syncEventTournament(database, "event");
+    expect(await database.query.tournamentRewardClaim.findMany()).toHaveLength(1);
+    expect(
+      (await fetchEvent(database, "event"))?.eventData?.rewardsPaidAt,
+    ).toBeUndefined();
+    await maintainEventTournaments(database);
+    expect(await database.query.tournamentRewardClaim.findMany()).toHaveLength(2);
+    expect(
+      (await fetchEvent(database, "event"))?.eventData?.rewardsPaidAt,
+    ).toBeGreaterThan(0);
+    expect((await database.query.userData.findFirst())?.money).toBe(10);
+  });
+
+  it("retries a rolled-back grant duplicate without recording a finished payout", async () => {
+    const database = await getTestDatabase();
+    await insertUsers([{ userId: "remaining", money: 0, reputationPoints: 0 }]);
+    const event = completedEvent("event");
+    event.eventData.participants = event.eventData.participants.filter(
+      (p) => p.userId === "remaining",
+    );
+    event.eventData.config.rewards.participation.reward_reputation = 1;
+    await database.insert(tournament).values(event);
+    await database.insert(userRewards).values({
+      id: "existing-grant",
+      awardedById: "remaining",
+      receiverId: "remaining",
+      reason: "Existing grant",
+    });
+    // Force a grant ID collision after the balance write, independently of the receipt insert.
+    vi.spyOn(questQueries, "insertUserRewardsForUpdateRewards").mockImplementationOnce(
+      (client, user, rewards, reason) =>
+        client.insert(userRewards).values({
+          id: "existing-grant",
+          awardedById: user.userId,
+          receiverId: user.userId,
+          reputationAmount: rewards.reward_reputation,
+          reason,
+        }),
+    );
+    await expect(syncEventTournament(database, "event")).rejects.toThrow();
+    expect(await database.query.tournamentRewardClaim.findMany()).toHaveLength(0);
+    expect((await database.query.userData.findFirst())?.money).toBe(0);
+    expect(
+      (await fetchEvent(database, "event"))?.eventData?.rewardsPaidAt,
+    ).toBeUndefined();
+
+    await maintainEventTournaments(database);
+    await syncEventTournament(database, "event");
+    expect(await database.query.tournamentRewardClaim.findMany()).toHaveLength(1);
+    expect(await database.query.userData.findFirst()).toMatchObject({
+      money: 10,
+      reputationPoints: 1,
+    });
+    expect(
+      (await fetchEvent(database, "event"))?.eventData?.rewardsPaidAt,
+    ).toBeGreaterThan(0);
+  });
+
+  it("pays a finished event after the event read responds", async () => {
+    const database = await getTestDatabase();
+    await insertUsers([{ userId: "remaining", money: 0 }]);
+    await database.insert(tournament).values(completedEvent("event"));
+    const tasks: (() => unknown)[] = [];
+    const reader = tournamentRouter.createCaller({
+      drizzle: database,
+      userId: "remaining",
+    } as never);
+    const read = await afterTasks.run(tasks, () =>
+      reader.getEvent({ tournamentId: "event" }),
+    );
+    expect(read?.eventData?.status).toBe("COMPLETED");
+    expect(await database.query.tournamentRewardClaim.findMany()).toHaveLength(0);
+    expect(tasks).toHaveLength(1);
+    for (const task of tasks) await task();
+    expect((await database.query.userData.findFirst())?.money).toBe(10);
+    expect(await database.query.tournamentRewardClaim.findMany()).toHaveLength(2);
+  });
+
+  it("lists event summaries without withdrawn entrants", async () => {
+    const database = await getTestDatabase();
+    await insertUsers([{ userId: "reader" }]);
+    const event = completedEvent("event");
+    event.eventData.participants.push(
+      participant("gone", { id: "seat-gone", withdrawn: true }),
+    );
+    await database.insert(tournament).values(event);
+    const reader = await callerFor(tournamentRouter, "reader");
+    const { config } = event.eventData;
+    expect(await reader.listEvents()).toEqual([
+      {
+        id: "event",
+        eventData: {
+          status: "COMPLETED",
+          participantCount: 2,
+          config: {
+            name: config.name,
+            description: config.description,
+            format: config.format,
+            rules: config.rules,
+            capacity: config.capacity,
+            registrationClosesAt: config.registrationClosesAt,
+          },
+        },
+      },
+    ]);
   });
 });
 

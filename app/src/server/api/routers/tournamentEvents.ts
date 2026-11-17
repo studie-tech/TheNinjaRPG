@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import {
   EVENT_TOURNAMENT_LAUNCH_RECOVERY_SECONDS,
@@ -49,6 +50,7 @@ import {
   listTournamentForMaintainEventTournaments,
   listTournamentRewardClaimForPayEventRewards,
   listUserDataForLaunchEventGame,
+  updateTournamentForMarkEventRewardsPaid,
   updateTournamentForPayEventRewards,
   updateTournamentForSaveEventState,
   updateTournamentMatchForRecordLaunchFailure,
@@ -124,30 +126,26 @@ export const eventTournamentProcedures = {
       findUserRoleById(ctx.drizzle, ctx.userId),
     ]);
     return events.flatMap((e) => {
-      const state = e.eventData;
-      if (!state) return [];
-      if (state.status === "DRAFT" && !canManageTournaments(user?.role ?? "USER"))
+      const summary = e.summary;
+      if (!summary) return [];
+      if (summary.status === "DRAFT" && !canManageTournaments(user?.role ?? "USER"))
         return [];
       return [
         {
           id: e.id,
           eventData: {
-            status: state.status,
-            participantCount: state.participants.filter((p) => !p.withdrawn).length,
-            config: {
-              name: state.config.name,
-              description: state.config.description,
-              format: state.config.format,
-              rules: state.config.rules,
-              capacity: state.config.capacity,
-              registrationClosesAt: state.config.registrationClosesAt,
-            },
+            status: summary.status,
+            participantCount: (summary.withdrawn ?? []).filter((w) => !w).length,
+            config: summary.config,
           },
         },
       ];
     });
   }),
-  /** Synchronize authorized event reads before returning the bracket and player eligibility. */
+  /**
+   * Synchronize authorized event reads before returning the bracket and player eligibility.
+   * Reward payout runs after the response; maintenance retries any interrupted payout.
+   */
   getEvent: protectedProcedure
     .input(eventTournamentIdSchema)
     .query(async ({ ctx, input }) => {
@@ -165,6 +163,7 @@ export const eventTournamentProcedures = {
         ctx.drizzle,
         input.tournamentId,
         initial,
+        { deferPayout: true },
       );
       const row = needsRefresh
         ? await fetchEvent(ctx.drizzle, input.tournamentId)
@@ -523,8 +522,8 @@ const editEvent = async (
 
 /**
  * Reconcile combat results, recover abandoned launches (never relaunching a battle with the
- * same ID) and apply scheduled starts or event expiry. Terminal events retry unpaid rewards;
- * unscheduled rounds remain under staff control.
+ * same ID) and apply scheduled starts or event expiry. Terminal events retry unpaid rewards,
+ * after the response when `deferPayout` is set; unscheduled rounds remain under staff control.
  * Return whether writes or competing claims require a snapshot refresh, plus observed or
  * newly committed player activity. Reserved launches withhold activity until combat commits.
  */
@@ -532,13 +531,20 @@ export const syncEventTournament = async (
   client: DrizzleClient,
   id: string,
   loadedRow?: EventRow,
+  { deferPayout = false }: { deferPayout?: boolean } = {},
 ): Promise<EventSyncResult> => {
   const row = loadedRow ?? (await fetchEvent(client, id));
   if (!row?.eventData) return { needsRefresh: false, activities: [] };
   const event = structuredClone(row.eventData);
   const now = Date.now();
+  const settleRewards = async (terminal: EventRow) => {
+    if (!terminal.eventData || !hasUnsettledRewards(terminal.eventData)) return false;
+    if (!deferPayout) return payEventRewards(client, terminal);
+    after(() => payEventRewards(client, terminal));
+    return false;
+  };
   if (["COMPLETED", "CANCELLED"].includes(event.status)) {
-    return { needsRefresh: await payEventRewards(client, row), activities: [] };
+    return { needsRefresh: await settleRewards(row), activities: [] };
   }
   if (
     event.status === "DRAFT" ||
@@ -662,7 +668,7 @@ export const syncEventTournament = async (
       activities: activities.map((entry) => ({ ...entry, activity: null })),
     };
   if (["COMPLETED", "CANCELLED"].includes(event.status)) {
-    const paid = await payEventRewards(client, { ...row, eventData: event });
+    const paid = await settleRewards({ ...row, eventData: event });
     return { needsRefresh: changed || paid, activities: [] };
   }
   let needsRefresh = changed;
@@ -830,11 +836,12 @@ const recordLaunchFailure = async (
  * Grant each entrant's configured rewards once. A single guarded update cannot deliver
  * rewards spanning multiple tables, so retention, the receipt and recipient grants commit
  * together. A receipt alone could lose a payout; grants without it could pay twice, and
- * cleanup must not delete receipts while a payer is in flight.
+ * cleanup must not delete receipts while a payer is in flight. Once every entrant holds a
+ * receipt, `rewardsPaidAt` records the finished payout.
  */
 const payEventRewards = async (client: DrizzleClient, row: EventRow) => {
   const event = row.eventData;
-  if (!event?.payRewards) return false;
+  if (!event || !hasUnsettledRewards(event)) return false;
   const users = [
     ...new Set(
       event.participants
@@ -844,43 +851,49 @@ const payEventRewards = async (client: DrizzleClient, row: EventRow) => {
   ];
   const receipts = await listTournamentRewardClaimForPayEventRewards(client, row);
   const unpaid = users.filter((id) => !receipts.some((r) => r.userId === id));
+  let receipted = 0;
   for (const userId of unpaid) {
-    try {
-      await retryOnDeadlock(() =>
-        client.transaction(async (database) => {
-          // Claim the still-retained terminal event, preventing cleanup from removing receipts
-          // while a delayed payer is in flight. The version increment also fences deletion.
-          const retained = await updateTournamentForPayEventRewards(database, row);
-          if (retained.rowsAffected !== 1) return;
-          // Unique receipt and all grants roll back together; a duplicate never grants twice.
+    const committed = await retryOnDeadlock(() =>
+      client.transaction(async (database) => {
+        // Claim the still-retained terminal event, preventing cleanup from removing receipts
+        // while a delayed payer is in flight. The version increment also fences deletion.
+        const retained = await updateTournamentForPayEventRewards(database, row);
+        if (retained.rowsAffected !== 1) return false;
+        try {
           await insertTournamentRewardClaimForPayEventRewards(database, row, userId);
-          const user = await findUserById(database, userId);
-          // Deleted entrants are nonpayable; retain their receipt so payout can finish.
-          if (!user) return;
-          const rewards = eventRewardFor(event, userId);
-          if (!rewards) return;
-          await updateRewards({
-            client: database,
-            inTransaction: true,
-            user,
-            rewards: postProcessRewards(rewards, user),
-            reason: `TOURNAMENT_${row.id}`,
-            persistQuestData: false,
-          });
-        }),
-      );
-    } catch (error) {
-      if (!isMysqlDuplicateKeyError(error)) throw error;
-    }
+        } catch (error) {
+          if (!isMysqlDuplicateKeyError(error)) throw error;
+          // Only a receipt conflict proves another payer committed; grant failures must roll back.
+          return true;
+        }
+        const user = await findUserById(database, userId);
+        // Deleted entrants are nonpayable; retain their receipt so payout can finish.
+        if (!user) return true;
+        const rewards = eventRewardFor(event, userId);
+        if (!rewards) return true;
+        await updateRewards({
+          client: database,
+          inTransaction: true,
+          user,
+          rewards: postProcessRewards(rewards, user),
+          reason: `TOURNAMENT_${row.id}`,
+          persistQuestData: false,
+        });
+        return true;
+      }),
+    );
+    if (committed) receipted++;
   }
-  return unpaid.length > 0;
+  if (receipted === unpaid.length)
+    await updateTournamentForMarkEventRewardsPaid(client, row, Date.now());
+  return true;
 };
 
 /** Synchronize events and remove expired terminal events only after pending payouts finish. */
 export const maintainEventTournaments = async (client: DrizzleClient) => {
   const rows = await listTournamentForMaintainEventTournaments(client);
   for (const row of rows) {
-    const event = row.eventData;
+    const event = row.lifecycle;
     if (!event) continue;
     if (
       event.finishedAt &&
@@ -894,7 +907,11 @@ export const maintainEventTournaments = async (client: DrizzleClient) => {
         deleteTournamentMatches(client, row.id),
         deleteTournamentRewardClaimForMaintainEventTournaments(client, row),
       ]);
-    } else await syncEventTournament(client, row.id);
+    } else if (
+      !["COMPLETED", "CANCELLED"].includes(event.status) ||
+      hasUnsettledRewards(event)
+    )
+      await syncEventTournament(client, row.id);
   }
 };
 /** Freeze the account's current eligibility values for its registration or substitution. */
@@ -943,6 +960,11 @@ const notifyEventParticipant = async (userId: string, originSocketId?: string) =
 /** A player can only take part in an event match while free at Wake Island. */
 const isReadyAtWakeIsland = (user: Pick<UserData, "status" | "battleId" | "sector">) =>
   user.status === "AWAKE" && !user.battleId && user.sector === MAP_WAKE_ISLAND_SECTOR;
+
+/** Whether a rewarded event still needs payout work; settled and unrewarded events skip it. */
+const hasUnsettledRewards = (
+  event: Pick<EventTournamentState, "payRewards"> & { rewardsPaidAt?: number | null },
+) => event.payRewards && !event.rewardsPaidAt;
 
 /** Resolve stored seat IDs against the event's current withdrawal flags. */
 const isSeatWithdrawn = (event: EventTournamentState, seatId: string | null) =>
