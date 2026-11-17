@@ -213,8 +213,12 @@ export const preloadAudioBuffers = async (urls: string[]) => {
   }
 };
 
+/** A playback rate within ±10%, so a sound repeated in quick succession never sounds canned. */
+const randomPitch = () => 0.9 + Math.random() * 0.2;
+
 /**
- * Play a preloaded audio URL (falls back to on-demand if not preloaded).
+ * Play a preloaded audio URL (falls back to on-demand if not preloaded), each time at a
+ * slightly different pitch.
  */
 export const playPreloadedAudio = async (
   source: string,
@@ -247,9 +251,7 @@ export const playPreloadedAudio = async (
       gain.gain.value = vol;
       const source = ctx.createBufferSource();
       source.buffer = buffer;
-      // Add small random pitch variation for variety (±5%)
-      const pitchVariation = 0.9 + Math.random() * 0.2; // Range: 0.9 to 1.1
-      source.playbackRate.value = pitchVariation;
+      source.playbackRate.value = randomPitch();
       source.connect(gain).connect(ctx.destination);
       source.start(0);
       source.onended = () => {
@@ -277,6 +279,9 @@ export const playPreloadedAudio = async (
   }
   const node = audio.cloneNode(true) as HTMLAudioElement;
   node.volume = clamp(volume, 0, 1);
+  // The same variation as buffer playback; the pitch follows the rate.
+  node.preservesPitch = false;
+  node.playbackRate = randomPitch();
   try {
     node.crossOrigin = "anonymous";
   } catch {}

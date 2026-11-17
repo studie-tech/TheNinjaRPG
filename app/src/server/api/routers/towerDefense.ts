@@ -356,11 +356,11 @@ export const towerDefenseRouter = createTRPCRouter({
     ),
 });
 
-/** A refusal the same claim can never overcome; the client discards the run. */
 /** Why a run that is no longer the caller's active one cannot be claimed. */
 const REPLACED_RUN_MESSAGE =
   "This run was already claimed or replaced by a newer run, so it can no longer be claimed.";
 
+/** A refusal the same claim can never overcome; the client discards the run. */
 const refusedForGood = (message: string) => ({
   ...errorResponse(message),
   permanent: true,

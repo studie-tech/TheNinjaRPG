@@ -89,12 +89,70 @@ describe("preloaded sound effects", () => {
       await playPreloadedAudio(upload);
       expect(fetched).toHaveBeenCalledTimes(1);
       expect(started).toHaveBeenCalledWith(buffer);
+      // Each play varies its pitch a little.
+      const rates = new Set<number>();
+      context.createBufferSource = () => {
+        const source = {
+          buffer: null as AudioBuffer | null,
+          playbackRate: {
+            set value(rate: number) {
+              rates.add(rate);
+            },
+          },
+          connect: (next: unknown) => next,
+          disconnect() {},
+          start: () => {},
+          onended: null,
+        };
+        return source as never;
+      };
+      for (let play = 0; play < 8; play++) await playPreloadedAudio(upload);
+      expect(rates.size).toBeGreaterThan(1);
+      for (const rate of rates) {
+        expect(rate).toBeGreaterThanOrEqual(0.9);
+        expect(rate).toBeLessThanOrEqual(1.1);
+      }
     } finally {
       fetched.mockRestore();
       Object.assign(window, {
         __sharedAudioContext: undefined,
         __audioBufferCache: undefined,
         __audioBufferPending: undefined,
+      });
+    }
+  });
+
+  it("varies the pitch the same way when a sound plays before its buffer is ready", async () => {
+    const played: { playbackRate: number; preservesPitch: boolean }[] = [];
+    class FakeAudio {
+      crossOrigin = "";
+      cloneNode() {
+        const node = {
+          volume: 1,
+          crossOrigin: "",
+          playbackRate: 1,
+          preservesPitch: true,
+          play: async () => {
+            played.push(node);
+          },
+        };
+        return node;
+      }
+    }
+    const original = globalThis.Audio;
+    Object.assign(globalThis, { Audio: FakeAudio });
+    Object.assign(window, { __sharedAudioContext: null, __audioCache: undefined });
+    try {
+      await playPreloadedAudio("https://uploadthing.b-cdn.net/f/not-loaded.mp3", 0.5);
+      expect(played).toHaveLength(1);
+      expect(played[0]?.preservesPitch).toBe(false);
+      expect(played[0]?.playbackRate).toBeGreaterThanOrEqual(0.9);
+      expect(played[0]?.playbackRate).toBeLessThanOrEqual(1.1);
+    } finally {
+      Object.assign(globalThis, { Audio: original });
+      Object.assign(window, {
+        __sharedAudioContext: undefined,
+        __audioCache: undefined,
       });
     }
   });

@@ -317,6 +317,38 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     });
   });
 
+  it("ranks each player once, by their best run", async () => {
+    const database = await getTestDatabase();
+    const run = (
+      id: string,
+      userId: string,
+      wave: number,
+      score: number,
+      startedAt: string,
+    ) => ({
+      id,
+      seed: id,
+      userId,
+      wave,
+      score,
+      startWave: 1,
+      startedAt: new Date(startedAt),
+      endedAt: new Date(startedAt),
+    });
+    await database
+      .insert(towerDefenseRun)
+      .values([
+        run("a-low", "td-user", 30, 400, "2026-11-01T10:00:00Z"),
+        run("a-best", "td-user", 55, 900, "2026-11-02T10:00:00Z"),
+        run("a-fewer-kills", "td-user", 55, 700, "2026-11-03T10:00:00Z"),
+        run("a-tie-later", "td-user", 55, 900, "2026-11-04T10:00:00Z"),
+        run("b-only", "td-other", 40, 500, "2026-11-01T11:00:00Z"),
+      ]);
+    const api = await callerFor(towerDefenseRouter, "td-user");
+    const leaderboard = await api.getLeaderboard({ limit: 10 });
+    expect(leaderboard.map((entry) => entry.id)).toEqual(["a-best", "b-only"]);
+  });
+
   it("buys Dojo levels with scrolls and refuses locked or unaffordable ones", async () => {
     const api = await callerFor(towerDefenseRouter, "td-user");
     const bought = await api.purchaseDojoUpgrade({ upgradeId: "dmg" });
