@@ -47,6 +47,14 @@ describe("combat fighter recipes", () => {
     });
     expect(parts[0]?.mask).toBeUndefined();
   });
+  it("draws an ordinary AI opponent without character artwork as its portrait", () => {
+    const parts = combatActorParts(
+      user({ isAi: true, isOriginal: true }),
+      tile,
+      battle,
+    );
+    expect(parts.map((part) => part.kind)).toEqual(["aiAvatar", "tombstone"]);
+  });
   it("draws an AI fighter that carries a character appearance, such as a village patrol, as that character", () => {
     const spriteAppearance = resolveSpriteAppearance({});
     const parts = combatActorParts(
