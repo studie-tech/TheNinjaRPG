@@ -1512,14 +1512,22 @@ export const selectUserDataForCountOnlineUsers = (
   client
     .select({ count: count() })
     .from(userData)
-    .where(gte(userData.updatedAt, secondsFromNow(-ONLINE_WINDOW_MINUTES * 60)));
+    .where(updatedSince(secondsFromNow(-ONLINE_WINDOW_MINUTES * 60)));
 
 /** Build the active-account count using a rolling one-day updatedAt cutoff. */
 export const countUsersActiveInLastDay = (client: Pick<DrizzleClient, "select">) =>
   client
     .select({ count: count() })
     .from(userData)
-    .where(gte(userData.updatedAt, secondsFromNow(-3600 * 24)));
+    .where(updatedSince(secondsFromNow(-3600 * 24)));
+
+/**
+ * Matches every account, AI included, updated since `cutoff`. Naming both `isAi`
+ * values lets `UserData_isAi_updatedAt_idx` serve the cutoff as two index ranges
+ * instead of a scan of every row.
+ */
+const updatedSince = (cutoff: Date) =>
+  and(inArray(userData.isAi, [false, true]), gte(userData.updatedAt, cutoff));
 
 /** Build the `userData` listing for `getStrongestUsers`, using predicates on `isAi`. */
 export const listUserDataForGetStrongestUsers = (

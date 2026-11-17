@@ -161,7 +161,10 @@ const linkedReskinAlias = alias(jutsu, "linkedReskinName");
 
 /** Table alias for parent jutsu alias joins, keeping its columns distinct from other participants. */
 const parentJutsuAlias = alias(jutsu, "parentJutsu");
-/** Build the `actionLog` listing for `getRecentTransfers`, using predicates on `userId`, `relatedMsg`, `createdAt`. */
+/**
+ * Build the `actionLog` listing for `getRecentTransfers`, using predicates on `userId`,
+ * `tableName`, `relatedMsg` and `createdAt`; transfers are always logged against `userjutsu`.
+ */
 export const listActionLogForGetRecentTransfers = (
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
@@ -169,6 +172,7 @@ export const listActionLogForGetRecentTransfers = (
   client.query.actionLog.findMany({
     where: and(
       eq(actionLog.userId, ctx.userId),
+      eq(actionLog.tableName, "userjutsu"),
       eq(actionLog.relatedMsg, "JutsuLevelTransfer"),
       gte(
         actionLog.createdAt,
