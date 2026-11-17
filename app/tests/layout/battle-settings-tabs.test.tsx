@@ -148,12 +148,16 @@ it("keeps the rules read-only while the loadout switches", () => {
   expect(view.getByText("AI profile editor (locked)")).toBeTruthy();
 });
 
-it("keeps the rules read-only while they reset", () => {
+it("keeps the rules and the loadout read-only while they reset", () => {
   playerWithRules("ai");
   resetting = true;
   const view = render(<BattleSettingsEdit userId="actor" />);
   fireEvent.mouseDown(view.getByRole("tab", { name: "AI Profile" }));
   expect(view.getByText("AI profile editor (locked)")).toBeTruthy();
+  expect(
+    (view.getByRole("button", { name: "Jutsu loadout selector" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
 });
 
 it("keeps Reset rules out of reach while the loadout switches", () => {

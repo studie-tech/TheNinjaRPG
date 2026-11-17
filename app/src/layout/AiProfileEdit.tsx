@@ -631,10 +631,9 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
       {showsRuleLimit && unequippedRuleCount > 0 && (
         <p className="px-3 pb-2 text-muted-foreground text-sm">
           {unequippedRuleCount === 1
-            ? "1 rule names"
-            : `${unequippedRuleCount} rules name`}{" "}
-          jutsu or items that aren't equipped. Battles skip those actions until you
-          equip them again.
+            ? "1 rule names jutsu or items you don't have equipped. Battles skip that rule"
+            : `${unequippedRuleCount} rules name jutsu or items you don't have equipped. Battles skip those rules`}
+          , and a combo never gets past a missing step, until they're equipped again.
         </p>
       )}
       {canEdit && showsRuleLimit && !!props.copySources?.length && (
@@ -675,14 +674,14 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   );
 };
 
-/**
- * Rules and the backup-rule switch as they would be saved, ignoring the editor's rule
- * identities, so a value typed back to its saved number is no edit.
- */
 /** A saved jutsu or item the fighter owns but has not equipped, or the fallback when unknown. */
 const unequippedLabel = (name: string | undefined, fallback: string) =>
   name ? `${name} (not equipped)` : fallback;
 
+/**
+ * Rules and the backup-rule switch as they would be saved, ignoring the editor's rule
+ * identities, so a value typed back to its saved number is no edit.
+ */
 const draftKey = (rules: AiRuleType[], includeDefault: boolean | undefined) =>
   JSON.stringify({
     rules: rules.map(({ id: _id, ...rule }) => {

@@ -389,7 +389,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                   variant="dropdown"
                   label="Jutsu loadout"
                   // A Default or Custom switch applies to the loadout active when it lands.
-                  disabled={hasUnsavedRules || isTogglingRules}
+                  disabled={hasUnsavedRules || isTogglingRules || isPending}
                   describedBy={hasUnsavedRules ? unsavedRulesId : undefined}
                   onSelecting={setIsSwitchingLoadout}
                   // Equipping changes the jutsu these rules can use.

@@ -436,7 +436,7 @@ describe("a player's rules for a jutsu loadout", () => {
     const view = player();
     expect(
       view.getByText(
-        "1 rule names jutsu or items that aren't equipped. Battles skip those actions until you equip them again.",
+        "1 rule names jutsu or items you don't have equipped. Battles skip that rule, and a combo never gets past a missing step, until they're equipped again.",
       ),
     ).toBeDefined();
     cleanup();
@@ -444,7 +444,7 @@ describe("a player's rules for a jutsu loadout", () => {
     const onDefault = player({
       userData: { aiProfileId: null, userId: "editor", jutsus: [], items: [] },
     });
-    expect(onDefault.queryByText(/aren't equipped/)).toBeNull();
+    expect(onDefault.queryByText(/don't have equipped/)).toBeNull();
   });
 
   it("tells the caller while the Default or Custom choice switches", () => {

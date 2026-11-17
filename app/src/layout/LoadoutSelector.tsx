@@ -2,7 +2,7 @@
 
 import { ChevronDown, Pencil } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -53,6 +53,7 @@ const LoadoutSelector = <T extends LoadoutData>(
   }));
   const { data, isFetching } = props.config.query;
   const { mutate: selectLoadout, isPending } = props.config.selectMutation;
+  const labelId = useId();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const renameMutation = props.config.renameMutation;
@@ -106,7 +107,11 @@ const LoadoutSelector = <T extends LoadoutData>(
     const canRename = props.renamable && renameMutation && selected && selectedName;
     return (
       <div className="min-w-0 flex-1">
-        {props.label && <p className="mb-1 text-sm">{props.label}</p>}
+        {props.label && (
+          <p id={labelId} className="mb-1 text-sm">
+            {props.label}
+          </p>
+        )}
         {canRename && editingId === selected.id ? (
           <RenameInput
             name={selectedName}
@@ -124,6 +129,7 @@ const LoadoutSelector = <T extends LoadoutData>(
               <SelectTrigger
                 className="h-8 w-full min-w-[8rem]"
                 aria-describedby={props.describedBy}
+                aria-labelledby={props.label ? labelId : undefined}
               >
                 <SelectValue placeholder="Select loadout" />
               </SelectTrigger>
