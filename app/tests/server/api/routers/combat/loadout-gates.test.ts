@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
 import {
   aiProfile,
@@ -28,8 +28,10 @@ import {
   insertUsers,
 } from "../../../../setup/factories";
 import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
+import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -194,6 +196,46 @@ describeWithDatabase("combat lobby jutsu gates", () => {
     // A loadout on the Default rules fights with them.
     await api.updateCombatLoadout({ battleId: BATTLE, jutsuLoadoutId: "gates" });
     expect((await stored()).usersState[0]!.aiProfileId).toBe("Default");
+  });
+
+  it("patches the profile with a saved loadout switch even when the lobby update loses a race", async () => {
+    const db = await getTestDatabase();
+    await db
+      .insert(jutsuLoadout)
+      .values({ id: "rules", userId: USER, jutsuIds: VALID, customAi: true });
+    await db.insert(aiProfile).values({
+      id: "rules-own",
+      userId: USER,
+      jutsuLoadoutId: "rules",
+      rules: [AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) })],
+    });
+    await seedLobby();
+    // Another lobby change lands between the saved loadout and this battle update.
+    const raced = beforeStatements(
+      db,
+      battle,
+      [
+        () =>
+          db
+            .update(battle)
+            .set({ version: sql`${battle.version} + 1` })
+            .where(eq(battle.id, BATTLE)),
+      ],
+      { operations: ["update"] },
+    );
+    const result = await callerForDatabase(
+      combatRouter,
+      USER,
+      raced,
+    ).updateCombatLoadout({
+      battleId: BATTLE,
+      jutsuLoadoutId: "rules",
+    });
+    expect(result.success).toBe(false);
+    expect("userPatch" in result && result.userPatch).toMatchObject({
+      jutsuLoadout: "rules",
+      aiProfileId: "rules-own",
+    });
   });
 
   it.each(["COMBAT", "SPARRING", "RANKED_PVP"] as const)(

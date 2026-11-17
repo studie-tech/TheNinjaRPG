@@ -1318,6 +1318,17 @@ export const combatRouter = createTRPCRouter({
       if (!jutsuLoadoutResult.success && jutsuChanged) {
         return errorResponse(jutsuLoadoutResult.message);
       }
+      // A saved jutsu loadout switch reaches the profile, also when the lobby update fails later.
+      const loadoutPatch =
+        jutsuChanged && selectedJutsuLoadout
+          ? getSelectJutsuLoadoutUserUpdate({
+              id: selectedJutsuLoadout.id,
+              loadoutJutsuIds: selectedJutsuLoadout.jutsuIds,
+              aiProfileId: selectedJutsuLoadout.customAi
+                ? (selectedJutsuLoadout.aiProfile?.id ?? null)
+                : null,
+            })
+          : {};
 
       // An item-only switch can remove a required bloodline item or a mastery buff.
       // Revalidate stored equips too: battle filtering alone leaves invalid equips
@@ -1435,7 +1446,8 @@ export const combatRouter = createTRPCRouter({
         hide: false,
         isSummon: false,
       }).catch(handleSummonPreloadError);
-      if (processed instanceof Error) return errorResponse(processed.message);
+      if (processed instanceof Error)
+        return { ...errorResponse(processed.message), ...loadoutPatch };
       const { userEffects, usersState, extraState } = processed;
 
       const completeUserEffects = [
@@ -1503,19 +1515,13 @@ export const combatRouter = createTRPCRouter({
               : []),
           ].join(". "),
           battle: maskBattle(userBattle, ctx.userId),
-          // The profile follows the selected jutsu loadout and the AI rules it fights with.
-          ...(jutsuChanged && selectedJutsuLoadout
-            ? getSelectJutsuLoadoutUserUpdate({
-                id: selectedJutsuLoadout.id,
-                loadoutJutsuIds: selectedJutsuLoadout.jutsuIds,
-                aiProfileId: selectedJutsuLoadout.customAi
-                  ? (selectedJutsuLoadout.aiProfile?.id ?? null)
-                  : null,
-              })
-            : {}),
+          ...loadoutPatch,
         };
       } else {
-        return errorResponse("Battle state could not be updated");
+        return {
+          ...errorResponse("Battle state could not be updated"),
+          ...loadoutPatch,
+        };
       }
     }),
   iAmHere: protectedProcedure
