@@ -1,10 +1,4 @@
-import { z } from "zod";
-import {
-  BattleTypes,
-  MAX_PLAYER_LEVEL,
-  type UserRank,
-  UserRanks,
-} from "@/drizzle/constants";
+import { MAX_PLAYER_LEVEL, type UserRank, UserRanks } from "@/drizzle/constants";
 import {
   battleTypesField,
   buildFilter,
@@ -14,6 +8,7 @@ import {
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import Link from "@/layout/Link";
+import { balanceUsageFilterSchema } from "@/validators/balance";
 
 /** Player demographics refer to the account at battle initiation, before combat scaling. */
 export const balanceDemographicFields = [
@@ -115,14 +110,7 @@ export const readBalanceUsageFilter = () => {
   const raw = new URLSearchParams(window.location.search).get("balanceFilter");
   if (!raw) return {};
   try {
-    const parsed = z
-      .object({
-        battleTypes: z.array(z.enum(BattleTypes)).optional(),
-        userRanks: z.array(z.enum(UserRanks)).optional(),
-        minLevel: z.number().int().min(1).max(MAX_PLAYER_LEVEL).optional(),
-        maxLevel: z.number().int().min(1).max(MAX_PLAYER_LEVEL).optional(),
-      })
-      .parse(JSON.parse(raw));
+    const parsed = balanceUsageFilterSchema.parse(JSON.parse(raw));
     return {
       battleTypes: parsed.battleTypes ?? [],
       userRanks: parsed.userRanks ?? [],

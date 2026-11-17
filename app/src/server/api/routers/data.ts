@@ -130,6 +130,7 @@ import {
 } from "@/utils/permissions";
 import { getBalancePeriodStart } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
+import { balanceUsageFilterSchema } from "@/validators/balance";
 import { bloodlineFilteringSchema } from "@/validators/bloodline";
 import { itemFilteringSchema } from "@/validators/item";
 import { jutsuFilteringSchema } from "@/validators/jutsu";
@@ -140,12 +141,6 @@ import { bloodlineDatabaseFilter } from "./bloodline";
 import { itemDatabaseFilter } from "./item";
 import { jutsuCatalogueHiddenScope, jutsuDatabaseFilter } from "./jutsu";
 import { skillTreeDatabaseFilter } from "./skillTree";
-
-const balanceDemographicInput = {
-  userRanks: z.array(z.enum(UserRanks)).optional(),
-  minLevel: z.number().int().min(1).max(MAX_PLAYER_LEVEL).optional(),
-  maxLevel: z.number().int().min(1).max(MAX_PLAYER_LEVEL).optional(),
-};
 
 export const dataRouter = createTRPCRouter({
   /** Return full-history variant counts for tests with an event in the last week. */
@@ -741,8 +736,7 @@ export const dataRouter = createTRPCRouter({
     .input(
       z
         .object({
-          ...balanceDemographicInput,
-          battleTypes: z.array(z.enum(BattleTypes)).optional(),
+          ...balanceUsageFilterSchema.shape,
         })
         .refine(
           (input) =>
@@ -786,8 +780,7 @@ export const dataRouter = createTRPCRouter({
   getBloodlineBalanceStatistics: publicProcedure
     .input(
       z.object({
-        ...balanceDemographicInput,
-        battleTypes: z.array(z.enum(BattleTypes)).optional(),
+        ...balanceUsageFilterSchema.shape,
         minCount: z.number().min(1).default(1),
         bloodlineRanks: z.array(z.enum(LetterRanks)).optional(),
         statClassifications: z.array(z.enum(StatTypes)).optional(),
@@ -873,8 +866,7 @@ export const dataRouter = createTRPCRouter({
   getJutsuBalanceStatistics: publicProcedure
     .input(
       z.object({
-        ...balanceDemographicInput,
-        battleTypes: z.array(z.enum(BattleTypes)).optional(),
+        ...balanceUsageFilterSchema.shape,
         minCount: z.number().min(1).default(1),
         jutsuEffects: z.array(z.string()).optional(),
         bloodlineIds: z.array(z.string()).optional(),
@@ -1119,8 +1111,7 @@ export const dataRouter = createTRPCRouter({
   getItemBalanceStatistics: publicProcedure
     .input(
       z.object({
-        ...balanceDemographicInput,
-        battleTypes: z.array(z.enum(BattleTypes)).optional(),
+        ...balanceUsageFilterSchema.shape,
         minCount: z.number().min(1).default(1),
         itemTypes: z.array(z.enum(ItemTypes)).optional(),
         bloodlineIds: z.array(z.string()).optional(),
