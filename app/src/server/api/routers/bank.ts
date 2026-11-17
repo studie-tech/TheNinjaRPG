@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { getBankTransferUserUpdate, getTransferRyoUserUpdate } from "@/deltas/bank";
 import { RYO_CAP } from "@/drizzle/constants";
 
 import { bankAccessBlockMessage, clampToRyoCap } from "@/libs/bank";
 import {
-  fetchUserBalances,
+  fetchBankAccount,
   incrementUserBank,
   insertBankTransfersForTransfer,
   listBankTransfersForGetTransfers,
@@ -16,7 +17,6 @@ import {
   updateUserDataForTransfer,
   updateUserDataForTransferRyo,
 } from "@/queries/bank";
-import { fetchUser } from "@/queries/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -26,27 +26,20 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const bankRouter = createTRPCRouter({
   toBank: protectedProcedure
     .meta({ mcp: { description: "Deposit ryo from pocket to bank" } })
     .input(z.object({ amount: z.number().min(0) }))
-    .output(
-      baseServerResponse.extend({
-        data: z.object({ bank: z.number(), money: z.number() }).optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       return transferRyo(ctx.drizzle, ctx.userId, input.amount, "toBank");
     }),
   toPocket: protectedProcedure
     .meta({ mcp: { description: "Withdraw ryo from bank to pocket" } })
     .input(z.object({ amount: z.number().min(0) }))
-    .output(
-      baseServerResponse.extend({
-        data: z.object({ bank: z.number(), money: z.number() }).optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       return transferRyo(ctx.drizzle, ctx.userId, input.amount, "toPocket");
     }),
@@ -57,16 +50,12 @@ export const bankRouter = createTRPCRouter({
       },
     })
     .input(z.object({ amount: z.number().min(0), targetId: z.string() }))
-    .output(
-      baseServerResponse.extend({
-        data: z.object({ bank: z.number() }).optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [target, user] = await Promise.all([
-        fetchUser(ctx.drizzle, input.targetId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBankAccount(ctx.drizzle, input.targetId),
+        fetchBankAccount(ctx.drizzle, ctx.userId),
       ]);
       // Derived
       const value = clampToRyoCap(target.bank, input.amount);
@@ -82,11 +71,10 @@ export const bankRouter = createTRPCRouter({
         incrementUserBank(ctx.drizzle, value, input.targetId),
         insertBankTransfersForTransfer(ctx.drizzle, ctx, input, value),
       ]);
-      const updatedUser = await fetchUserBalances(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: `Successfully transferred ${value} ryo to ${target.username}`,
-        data: { bank: updatedUser.bank },
+        ...getBankTransferUserUpdate({ value }),
       };
     }),
   getGraph: protectedProcedure
@@ -175,7 +163,7 @@ const transferRyo = async (
   amount: number,
   direction: "toBank" | "toPocket",
 ) => {
-  const user = await fetchUser(client, userId);
+  const user = await fetchBankAccount(client, userId);
   const fromPocket = direction === "toBank";
   const capColumn = fromPocket ? user.bank : user.money;
   const sourceColumn = fromPocket ? user.money : user.bank;
@@ -194,13 +182,12 @@ const transferRyo = async (
       fromPocket ? "Not enough money in pocket" : "Not enough money in bank",
     );
   }
-  const updatedUser = await fetchUserBalances(client, userId);
   return {
     success: true,
     message: fromPocket
       ? `Successfully deposited ${value} ryo`
       : `Successfully withdrew ${value} ryo`,
-    data: { bank: updatedUser.bank, money: updatedUser.money },
+    ...getTransferRyoUserUpdate({ fromPocket, value }),
   };
 };
 

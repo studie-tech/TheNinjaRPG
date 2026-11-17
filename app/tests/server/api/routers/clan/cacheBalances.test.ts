@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { FACTION_REPUTATION_TREASURY_LIMIT } from "@/drizzle/constants";
+import {
+  CLAN_BOOST_CONFIG,
+  CLAN_BOOST_PERCENT_PER_LEVEL,
+  CLAN_POINT_RYO_RATE,
+  FACTION_REPUTATION_TREASURY_LIMIT,
+} from "@/drizzle/constants";
 import { actionLog, clan, userData, userQueue } from "@/drizzle/schema";
 import { clanRouter } from "@/server/api/routers/clan";
 import { insertClans, insertUsers } from "../../../../setup/factories";
 import { queueEnergy } from "../../../../setup/queues";
+import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -49,6 +55,7 @@ describe("clan committed cache responses", () => {
     expect(result).toMatchObject({
       success: true,
       userDelta: { money: -250, clan: { id: "clan-cache-clan", bank: 250 } },
+      clanDelta: { id: "clan-cache-clan", bank: 250 },
     });
     expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
     expect(database.query.clan.findFirst).toHaveBeenCalledTimes(1);
@@ -88,6 +95,7 @@ describe("clan committed cache responses", () => {
         reputationPoints: -10,
         clan: { id: "clan-cache-clan", repTreasury: 10 },
       },
+      clanDelta: { id: "clan-cache-clan", repTreasury: 10 },
     });
     expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
     expect(database.query.clan.findFirst).toHaveBeenCalledTimes(1);
@@ -116,6 +124,7 @@ describe("clan missing bank rejection", () => {
     expect(result.success).toBe(false);
     expect(result.userDelta).toBeUndefined();
     expect(result.userPatch?.clan).toBeUndefined();
+    expect(result.clanDelta).toBeUndefined();
     expect(database.execute).toHaveBeenCalledTimes(1);
     expect(database.update).not.toHaveBeenCalled();
     expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
@@ -161,6 +170,7 @@ describe("clan zero-cost cache responses", () => {
         expect(result.success).toBe(true);
         expect(result.userDelta).toEqual({});
         expect(result.userPatch).toEqual({});
+        expect(result.clanDelta).toEqual({ id: "clan-zero-clan" });
         expect(userRead).toHaveBeenCalledTimes(1);
         expect(clanRead).toHaveBeenCalledTimes(1);
         expect(database.execute).not.toHaveBeenCalled();
@@ -201,6 +211,7 @@ describeWithDatabase("clan mutation cache balances", () => {
     expect(result).toMatchObject({
       success: true,
       userDelta: { money: -250, clan: { id: "clan-cache-clan", bank: 250 } },
+      clanDelta: { id: "clan-cache-clan", bank: 250 },
     });
   });
 
@@ -216,6 +227,7 @@ describeWithDatabase("clan mutation cache balances", () => {
         reputationPoints: -10,
         clan: { id: "clan-cache-clan", repTreasury: 10 },
       },
+      clanDelta: { id: "clan-cache-clan", repTreasury: 10 },
     });
   });
 
@@ -229,6 +241,11 @@ describeWithDatabase("clan mutation cache balances", () => {
       expect(result.success).toBe(true);
       expect(result.userDelta).toBeUndefined();
       expect(result.userPatch?.clan).toBeUndefined();
+      expect(result.clanDelta).toEqual(
+        endpoint === "toBank"
+          ? { id: "clan-cache-clan", bank: 250 }
+          : { id: "clan-cache-clan", repTreasury: 10 },
+      );
     });
   }
 
@@ -256,6 +273,7 @@ describeWithDatabase("clan mutation cache balances", () => {
     );
     expect(result.userDelta).toBeUndefined();
     expect(result.userPatch?.clan).toBeUndefined();
+    expect(result.clanDelta).toBeUndefined();
     expect(reads).toHaveBeenCalledTimes(1);
     const stored = await db.query.userData.findFirst({
       where: eq(userData.userId, "clan-cache-user"),
@@ -267,7 +285,126 @@ describeWithDatabase("clan mutation cache balances", () => {
     const caller = await callerFor(clanRouter, "clan-cache-user");
     const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 1001 });
     expect(result.success).toBe(false);
+    expect(result.clanDelta).toBeUndefined();
     expect(result.userDelta).toBeUndefined();
     expect(result.userPatch?.clan).toBeUndefined();
+  });
+});
+
+describeWithDatabase("clan treasury deltas", () => {
+  const boostCost = CLAN_BOOST_CONFIG.trainingBoost.baseCost;
+  const leaderOn = (database: Awaited<ReturnType<typeof getTestDatabase>>) =>
+    callerForDatabase(clanRouter, "treasury-leader", database);
+  const readClan = async () => {
+    const database = await getTestDatabase();
+    const [row] = await database
+      .select({
+        bank: clan.bank,
+        points: clan.points,
+        trainingBoost: clan.trainingBoost,
+      })
+      .from(clan)
+      .where(eq(clan.id, "treasury-clan"));
+    return row;
+  };
+
+  beforeEach(async () => {
+    await resetTables(clan, userData);
+    await insertUsers([
+      {
+        userId: "treasury-leader",
+        clanId: "treasury-clan",
+        villageId: "treasury-village",
+        money: 1000,
+      },
+    ]);
+    await insertClans([
+      {
+        id: "treasury-clan",
+        leaderId: "treasury-leader",
+        villageId: "treasury-village",
+        bank: boostCost * 2,
+        points: 10,
+      },
+    ]);
+  });
+
+  it("returns the committed boost purchase as a clan delta", async () => {
+    const caller = await callerFor(clanRouter, "treasury-leader");
+    const result = await caller.purchaseBoost({
+      clanId: "treasury-clan",
+      boostType: "trainingBoost",
+    });
+    expect(result).toEqual({
+      success: true,
+      message: "Training boost purchased",
+      clanDelta: {
+        id: "treasury-clan",
+        bank: -boostCost,
+        trainingBoost: CLAN_BOOST_PERCENT_PER_LEVEL,
+      },
+    });
+    expect(await readClan()).toEqual({
+      bank: boostCost,
+      points: 10,
+      trainingBoost: CLAN_BOOST_PERCENT_PER_LEVEL,
+    });
+  });
+
+  it("returns no clan delta when another purchase raised the boost after the read", async () => {
+    const database = await getTestDatabase();
+    const racing = beforeStatements(database, clan, [
+      () =>
+        leaderOn(database).purchaseBoost({
+          clanId: "treasury-clan",
+          boostType: "trainingBoost",
+        }),
+    ]);
+    const result = await leaderOn(racing).purchaseBoost({
+      clanId: "treasury-clan",
+      boostType: "trainingBoost",
+    });
+    expect(result.success).toBe(false);
+    expect(result.clanDelta).toBeUndefined();
+    expect(await readClan()).toEqual({
+      bank: boostCost,
+      points: 10,
+      trainingBoost: CLAN_BOOST_PERCENT_PER_LEVEL,
+    });
+  });
+
+  it("returns the committed point conversion as a clan delta", async () => {
+    const caller = await callerFor(clanRouter, "treasury-leader");
+    const result = await caller.convertPointsToRyo({
+      clanId: "treasury-clan",
+      points: 4,
+    });
+    expect(result).toMatchObject({
+      success: true,
+      clanDelta: { id: "treasury-clan", points: -4, bank: 4 * CLAN_POINT_RYO_RATE },
+    });
+    expect(await readClan()).toMatchObject({
+      bank: boostCost * 2 + 4 * CLAN_POINT_RYO_RATE,
+      points: 6,
+    });
+  });
+
+  it("returns no clan delta when another conversion spent the points after the read", async () => {
+    const database = await getTestDatabase();
+    const racing = beforeStatements(database, clan, [
+      () =>
+        leaderOn(database).convertPointsToRyo({ clanId: "treasury-clan", points: 8 }),
+    ]);
+    const result = await leaderOn(racing).convertPointsToRyo({
+      clanId: "treasury-clan",
+      points: 4,
+    });
+    expect(result.success).toBe(false);
+    expect(result.clanDelta).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(await readClan()).toMatchObject({
+      bank: boostCost * 2 + 8 * CLAN_POINT_RYO_RATE,
+      points: 2,
+    });
   });
 });

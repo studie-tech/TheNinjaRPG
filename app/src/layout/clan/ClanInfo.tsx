@@ -59,6 +59,7 @@ import {
   STRONGHOLD_REESTABLISH_COST,
 } from "@/drizzle/constants";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { useClanCacheUpdate } from "@/hooks/useClanCacheUpdate";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
@@ -147,6 +148,12 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   // Get react query utility
   const utils = api.useUtils();
+  const { prepareClanUpdate, updateClan } = useClanCacheUpdate(clanId);
+  /** Pin the profile and clan cache revisions before a clan balance changes. */
+  const prepareBalanceUpdate = () => ({
+    user: prepareUserUpdate(),
+    clan: prepareClanUpdate(),
+  });
 
   // Deposit to bank
   const money = userData?.money ?? 0;
@@ -241,20 +248,22 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const { mutate: purchaseBoost, isPending: isPurchasingBoost } =
     api.clan.purchaseBoost.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareClanUpdate,
+      onSuccess: async (data, _variables, snapshot) => {
         showMutationToast(data);
-        if (data.success) {
-          await utils.clan.get.invalidate();
-        }
+        if (data.success) await updateClan(data, snapshot);
       },
     });
 
   const { mutateAsync: clanDonate, isPending: isDonatingReputation } =
     api.clan.clanDonate.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: (data, _variables, revision) => {
+      onMutate: prepareBalanceUpdate,
+      onSuccess: (data, _variables, snapshot) => {
         showMutationToast(data);
-        if (data.success) void updateUser(data, { revision, delta: data.userDelta });
+        if (data.success) {
+          void updateUser(data, { revision: snapshot.user, delta: data.userDelta });
+          void updateClan(data, snapshot.clan);
+        }
       },
     });
 
@@ -273,7 +282,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
         // immediately; a cache failure must never recreate a costly action.
         setDonateReps("");
         setIsDonateModalOpen(false);
-        void utils.clan.get.invalidate();
       })
       .catch(ignoreToastedError);
   };
@@ -320,13 +328,13 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     });
 
   const { mutate: toBank, isPending: isDepositing } = api.clan.toBank.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
+    onMutate: prepareBalanceUpdate,
+    onSuccess: async (data, _variables, snapshot) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUser(data, { revision, delta: data.userDelta }),
-          utils.clan.get.invalidate(),
+          updateUser(data, { revision: snapshot.user, delta: data.userDelta }),
+          updateClan(data, snapshot.clan),
         ]);
         toBankForm.reset();
       }
@@ -1363,11 +1371,15 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
   const [error, setError] = useState("");
   // Modal callbacks can repeat before React renders the mutation's pending state.
   const submission = useSingleFlight();
-  const utils = api.useUtils();
+  const { prepareClanUpdate, updateClan } = useClanCacheUpdate(clanId);
   const { mutateAsync: convert, isPending } = api.clan.convertPointsToRyo.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch) await updateUser(data, { revision });
+    onMutate: () => ({ user: prepareUserUpdate(), clan: prepareClanUpdate() }),
+    onSuccess: async (data, _variables, snapshot) => {
+      if (data.success || data.userPatch)
+        await Promise.all([
+          updateUser(data, { revision: snapshot.user }),
+          data.success && updateClan(data, snapshot.clan),
+        ]);
     },
   });
   const isValid = Number.isSafeInteger(amount) && amount > 0 && amount <= points;
@@ -1384,8 +1396,6 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
         }
         setIsOpen(false);
         setAmount(1);
-        // Profile data also embeds clan balances used outside the clan hall.
-        await utils.clan.get.invalidate();
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Could not convert points");
       }
