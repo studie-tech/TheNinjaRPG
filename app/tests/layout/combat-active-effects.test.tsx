@@ -4,8 +4,9 @@ import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffe
 import { getEffectMagnitude, getEffectPower } from "@/libs/combat/power";
 import { invertPower } from "@/libs/combat/tags";
 import type { GroundEffect } from "@/libs/combat/types";
+import { calcPoolCost } from "@/libs/combat/util";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { makeEffect } from "../setup/combat";
+import { makeBattleUser, makeCombatAction, makeEffect } from "../setup/combat";
 
 const userId = "holder";
 const runtime = { targetId: userId, creatorId: userId, fromType: "jutsu" as const };
@@ -218,6 +219,77 @@ describe("combat active effects", () => {
     expect(view.getByText("Potency (Reflect) +20 ↻ 2")).toBeTruthy();
     expect(view.getByText(/^Pool Cost -10%/)).toBeTruthy();
     expect(view.queryByText(/^Visual/)).toBeNull();
+  });
+
+  it("keeps sequential pool-cost modifiers on individual rows", () => {
+    const effects = [2, 3].map((rounds) =>
+      makeEffect(
+        "decreasepoolcost",
+        { power: 10, calculation: "percentage", poolsAffected: ["Chakra"], rounds },
+        { ...runtime, id: `pool-cost-${rounds}` },
+      ),
+    );
+    const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+    expect(view.getByText("Pool Cost -10% ↻ 2")).toBeTruthy();
+    expect(view.getByText("Pool Cost -10% ↻ 3")).toBeTruthy();
+    expect(view.queryByText(/Pool Cost -20%/)).toBeNull();
+    expect(
+      calcPoolCost(
+        makeCombatAction({ chakraCost: 100 }),
+        effects,
+        makeBattleUser(userId),
+      ).cpCost,
+    ).toBe(81);
+  });
+
+  it("keeps pool-cost rows separate when flat and percentage modifiers are interleaved", () => {
+    const effects = [
+      makeEffect(
+        "increasepoolcost",
+        { power: 10, calculation: "static", poolsAffected: ["Chakra"], rounds: 2 },
+        { ...runtime, id: "flat-before" },
+      ),
+      makeEffect(
+        "decreasepoolcost",
+        { power: 50, calculation: "percentage", poolsAffected: ["Chakra"], rounds: 2 },
+        { ...runtime, id: "percentage" },
+      ),
+      makeEffect(
+        "increasepoolcost",
+        { power: 10, calculation: "static", poolsAffected: ["Chakra"], rounds: 3 },
+        { ...runtime, id: "flat-after" },
+      ),
+    ];
+    const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+    expect(view.getByText("Pool Cost +10 ↻ 2")).toBeTruthy();
+    expect(view.getByText("Pool Cost -50% ↻ 2")).toBeTruthy();
+    expect(view.getByText("Pool Cost +10 ↻ 3")).toBeTruthy();
+    expect(
+      calcPoolCost(
+        makeCombatAction({ chakraCost: 100 }),
+        effects,
+        makeBattleUser(userId),
+      ).cpCost,
+    ).toBe(65);
+  });
+
+  it("distinguishes current enmity from damage-generated aggro", () => {
+    const effects = [
+      makeEffect(
+        "increaseaggro",
+        { power: 20, aggroMode: "ENMITY", rounds: 2 },
+        { ...runtime, id: "enmity" },
+      ),
+      makeEffect(
+        "decreaseaggro",
+        { power: 20, aggroMode: "GENERATION", rounds: 2 },
+        { ...runtime, id: "generation" },
+      ),
+    ];
+    const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+    expect(view.getByText("Aggro (Current Enmity) +20% ↻ 2")).toBeTruthy();
+    expect(view.getByText("Aggro (Generation) -20% ↻ 2")).toBeTruthy();
+    expect(view.queryByText(/Aggro 0%/)).toBeNull();
   });
 
   it("keeps percentage heal modifiers under Heal Given only", () => {

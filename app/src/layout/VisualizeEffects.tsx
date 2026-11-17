@@ -40,7 +40,8 @@ type CollapsedEffect = {
   rounds: number[];
   sealed: boolean;
   blocks?: string; // For immunity effects
-  detail?: string; // Keeps potency for different tags apart
+  detail?: string; // Keeps potency tags and aggro modes apart
+  instanceId?: string; // Preserves modifiers whose application order matters
   detailElements?: string; // ...and for different element selections
 };
 
@@ -197,8 +198,15 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         if (val.type === "diffuse") value = Math.min(DIFFUSE_MAX_PERCENTAGE, value);
       }
       const detail =
-        "affectedTag" in val && typeof val.affectedTag === "string"
-          ? val.affectedTag
+        "aggroMode" in val
+          ? val.aggroMode
+          : "affectedTag" in val && typeof val.affectedTag === "string"
+            ? val.affectedTag
+            : undefined;
+      // Pool costs and current enmity apply sequentially, so additive totals are misleading.
+      const instanceId =
+        baseType === "poolcost" || (baseType === "aggro" && detail === "ENMITY")
+          ? val.id
           : undefined;
       // Potency only boosts tags of its selected elements, like getEffectStackKey.
       const detailElements =
@@ -215,6 +223,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
             e.sealed === isSealed &&
             e.blocks === valBlocks &&
             e.detail === detail &&
+            e.instanceId === instanceId &&
             (e.detailElements ?? "") === detailElements,
         );
         if (found) {
@@ -236,6 +245,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
             sealed: isSealed,
             blocks: valBlocks,
             detail,
+            instanceId,
             detailElements,
           });
         }
@@ -461,6 +471,9 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const getOtherLabel = (e: CollapsedEffect) => {
     const label =
       otherLabel[e.type] ?? `${e.type.charAt(0).toUpperCase()}${e.type.slice(1)}`;
+    if (e.type === "aggro") {
+      return `${label} (${e.detail === "ENMITY" ? "Current Enmity" : "Generation"})`;
+    }
     if (e.type !== "potency") return label;
     const parts = [
       ...(e.detail && e.detail !== "all" ? [statusLabel[e.detail] ?? e.detail] : []),
@@ -471,7 +484,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
   const otherVisuals = otherEffects.map((e) => (
     <div
-      key={`${e.type}-${e.category}-${e.calculation}-${e.sealed}-${e.detail || ""}-${e.detailElements || ""}`}
+      key={`${e.type}-${e.category}-${e.calculation}-${e.sealed}-${e.detail || ""}-${e.detailElements || ""}-${e.instanceId || ""}`}
       className="flex flex-row items-center gap-2 text-xs"
     >
       <ElementImage element={e.category} className="h-6 w-6 shrink-0" />
