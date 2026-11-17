@@ -112,6 +112,10 @@ const ENEMY_ART_RETRY_MS = 1_000;
 const GAME_OVER_SETTLE_MS = 2_000;
 /** How long the hero keeps facing its last throw's target before turning to the nearest. */
 const AIM_FACING_MS = 1_200;
+/** Flight target id for projectiles aimed at the hero rather than an enemy. */
+const HERO_TARGET = -1;
+/** Enemy projectiles read as hostile against the hero's white shuriken. */
+const ENEMY_SHOT_TINT = 0xd23a3a;
 /** A frame whose feet are unknown stands on its bottom edge. */
 const FRAME_FOOT: ClipFoot = { x: 0, lift: 0 };
 /** Alpha above which a pixel counts as drawn when finding a frame's feet. */
@@ -712,7 +716,10 @@ export const createTowerDefenseScene = async (options: {
         const flight = flights[i];
         if (!flight) continue;
         const target = enemies.get(flight.targetId);
-        if (target) {
+        if (flight.targetId === HERO_TARGET) {
+          flight.tx = heroX;
+          flight.ty = heroY + 0.6;
+        } else if (target) {
           flight.tx = target.x;
           flight.ty = target.y + 0.5;
         }
@@ -773,15 +780,18 @@ export const createTowerDefenseScene = async (options: {
       game.setAnimating(overSince === null || now - overSince < GAME_OVER_SETTLE_MS);
     });
 
-    const lastSound = new Map<TdSfx, number>();
+    // Gaps are kept per event kind, so a cue shared by two kinds (incoming darts and a
+    // boss charge both whoosh) never silences the other.
+    const lastSound = new Map<string, number>();
     let lastBonusAt = Number.NEGATIVE_INFINITY,
       bonusStack = 0;
     const handleEvent = (event: TdEvent, state: TdState, now: number) => {
       const cue = eventSound(event);
       if (cue && options.playSound) {
         const [name, volume, gapMs] = cue;
-        if (now - (lastSound.get(name) ?? Number.NEGATIVE_INFINITY) >= gapMs) {
-          lastSound.set(name, now);
+        const key = `${event.type}:${name}`;
+        if (now - (lastSound.get(key) ?? Number.NEGATIVE_INFINITY) >= gapMs) {
+          lastSound.set(key, now);
           options.playSound(name, volume);
         }
       }
@@ -820,6 +830,28 @@ export const createTowerDefenseScene = async (options: {
             start: state.tick,
             due: event.due,
             element: event.element,
+          });
+          return;
+        }
+        case "enemyShot": {
+          if (flights.length > 160) return;
+          // An enemy's dart: a dark red star flying at the hero, landing when the hit does.
+          const source = enemies.get(event.sourceId);
+          const sprite =
+            flightPool.pop() ?? new Sprite({ texture: shuriken, anchor: 0.5 });
+          projectileLayer.addChild(sprite);
+          sprite.width = sprite.height = 0.3;
+          sprite.tint = ENEMY_SHOT_TINT;
+          flights.push({
+            sprite,
+            fx: source?.x ?? event.x,
+            fy: (source?.y ?? event.y) + 0.6,
+            tx: heroX,
+            ty: heroY + 0.6,
+            targetId: HERO_TARGET,
+            start: state.tick,
+            due: event.due,
+            element: "physical",
           });
           return;
         }
@@ -1729,6 +1761,9 @@ export const eventSound = (event: TdEvent): [TdSfx, number, number] | null => {
       // Multishot throws several at once and fast throwers stream them; the gap keeps
       // each volley to one swish.
       return event.from === "hero" ? ["throw", 0.12, 70] : null;
+    case "enemyShot":
+      // Incoming darts are what the hero must react to; a volley keeps to one whoosh.
+      return ["whoosh", 0.22, 150];
     case "hit":
       // Physical hits are thrown steel; the gap keeps a ricochet or volley to one bite.
       return event.element === "physical" && !event.shield

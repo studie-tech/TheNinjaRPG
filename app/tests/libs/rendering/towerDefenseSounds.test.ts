@@ -117,4 +117,9 @@ describe("tower defense sounds", () => {
     expect(sound?.[2]).toBeGreaterThan(0);
     expect(sound?.[2]).toBeLessThan(150);
   });
+
+  it("whooshes for darts flying at the hero", () => {
+    const sound = cueOf({ type: "enemyShot", sourceId: 1, x: 0, y: 0, due: 4 });
+    expect(sound?.[0]).toBe("whoosh");
+  });
 });

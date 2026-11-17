@@ -6,7 +6,7 @@ import {
   proceduralDecoration,
 } from "@/libs/rendering/proceduralBiomes";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
-import { buildHexTerrainData } from "@/libs/rendering/terrainData";
+import { buildHexTerrainData, terrainFrost } from "@/libs/rendering/terrainData";
 
 /** World pixels per hex; the arena maps one simulation unit to one hex width. */
 const TD_HEX_SIZE = 100;
@@ -43,10 +43,14 @@ export const prepareTowerDefenseTerrain = (seed: string, size: number) => {
     (tile) => {
       const look = looks.get(`${tile.col},${tile.row}`);
       if (!look) throw new Error("Tower defense terrain look is missing");
+      // The same water shelf, seabed and frozen coasts as combat and sector maps.
       return {
         color: look.spec.colors[look.variant] ?? look.spec.colors[0],
         texture: look.spec.textureUrl,
         depression: look.spec.depression,
+        isWater: look.spec.isWater,
+        waterDepth: look.spec.key === "ocean",
+        frost: terrainFrost(look.spec.key),
         waveOffset: look.spec.isWater ? (Math.floor(prng() * 4) * Math.PI) / 2 : -1,
       };
     },
