@@ -14,6 +14,7 @@ import { refreshMasteries } from "@/libs/combat/mastery";
 import { applyEffects } from "@/libs/combat/process";
 import { clone, getPower } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
+import { anonymousSpriteAppearance } from "@/libs/lpc/appearance";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
@@ -61,6 +62,24 @@ describe("village duty combat isolation", () => {
         ...owner(),
         joinedVillageAt: new Date("2026-01-01"),
         ...(masked ? { anbuId: "squad" } : {}),
+        // A drawn weapon, so the copy's gear can be redrawn when it breaks.
+        items: [
+          {
+            ...makeBattleUserItem({
+              id: "owned-blade",
+              itemId: "blade",
+              equipped: "HAND_1",
+            }),
+            userId: "owner",
+            imbuements: [],
+            item: makeWeapon({
+              id: "blade",
+              itemType: "WEAPON",
+              slot: "HAND_1",
+              lpcProfile: "lpc-blade",
+            }),
+          },
+        ],
       };
       const before = structuredClone(defender);
       const fake = fakeInitiationClient([
@@ -105,8 +124,15 @@ describe("village duty combat isolation", () => {
       expect(copy?.spriteAppearance).toBeDefined();
       // An unmasked copy redraws its gear when it breaks, as players do; a masked one keeps
       // its ANBU uniform.
-      expect(copy?.spriteBaseAppearance !== undefined).toBe(!masked);
-      expect(copy?.spriteEquipment !== undefined).toBe(!masked);
+      if (masked) {
+        expect(copy?.spriteAppearance).toEqual(anonymousSpriteAppearance(true));
+        expect(copy?.spriteBaseAppearance).toBeUndefined();
+        expect(copy?.spriteEquipment).toBeUndefined();
+      } else {
+        expect(copy?.spriteBaseAppearance).toBeDefined();
+        // Gear is keyed by the copy's own item rows, which battle actions wear and break.
+        expect(Object.keys(copy?.spriteEquipment ?? {})).toEqual(["duty:owned-blade"]);
+      }
       expect(predicates.join()).not.toContain('"owner"');
       expect(Pusher.prototype.trigger).not.toHaveBeenCalledWith(
         "owner",
