@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import AiBalanceFiltering, {
   getFilter,
   useFiltering,
@@ -52,9 +53,10 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
   const filter = getFilter(filterState);
 
   // Queries
-  const { data, isPending } = api.data.getAiBalanceStatistics.useQuery(filter);
-
-  const utils = api.useUtils();
+  const { data, isPending } = api.data.getAiBalanceStatistics.useQuery(
+    filter,
+    balanceReportQueryOptions,
+  );
 
   // Process data for table
   const tableData =
@@ -107,13 +109,7 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
         <div className="flex items-center gap-2">
           {navTabs}
           <AiBalanceFiltering state={filterState} />
-          {canDelete && (
-            <ClearBattleDataButton
-              type="ai"
-              label="AI"
-              onCleared={() => utils.data.getAiBalanceStatistics.invalidate()}
-            />
-          )}
+          {canDelete && <ClearBattleDataButton type="ai" label="AI" />}
         </div>
       }
     >

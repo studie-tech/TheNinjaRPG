@@ -272,24 +272,51 @@ describe("ClearBattleDataButton", () => {
   ] as const)("titles the %s dialog", (label, type, title) => {
     const mutate = vi.fn();
     Object.assign(vi.spyOn(client, "api" as never), {
+      useUtils: () => ({}),
       data: {
         deleteAllDataBattleAction: {
           useMutation: () => ({ mutate, isPending: false }),
         },
       },
     });
-    const view = render(
-      <ClearBattleDataButton
-        type={type}
-        label={label}
-        onCleared={async () => undefined}
-      />,
-    );
+    const view = render(<ClearBattleDataButton type={type} label={label} />);
     expect(view.getByText(title)).toBeTruthy();
     expect(view.container.textContent).toContain(
       `clear all ${label} battle action data`,
     );
     fireEvent.click(view.getByRole("button", { name: "Clear Data" }));
     expect(mutate).toHaveBeenCalledWith({ type });
+  });
+  it("refreshes cached overview and detail reports only after a confirmed reset", async () => {
+    const invalidate = vi.fn(async () => undefined);
+    let onSuccess: (result: { success: boolean; message: string }) => Promise<void> =
+      async () => undefined;
+    Object.assign(vi.spyOn(client, "api" as never), {
+      useUtils: () => ({
+        data: Object.fromEntries(
+          [
+            "getBalanceOverview",
+            "getJutsuBalanceStatistics",
+            "getItemBalanceStatistics",
+            "getBloodlineBalanceStatistics",
+            "getAiBalanceStatistics",
+            "getStatistics",
+          ].map((key) => [key, { invalidate }]),
+        ),
+      }),
+      data: {
+        deleteAllDataBattleAction: {
+          useMutation: (options: { onSuccess: typeof onSuccess }) => {
+            onSuccess = options.onSuccess;
+            return { mutate: vi.fn(), isPending: false };
+          },
+        },
+      },
+    });
+    render(<ClearBattleDataButton type="jutsu" label="jutsu" />);
+    await onSuccess({ success: false, message: "Not allowed" });
+    expect(invalidate).not.toHaveBeenCalled();
+    await onSuccess({ success: true, message: "Cleared" });
+    expect(invalidate).toHaveBeenCalledTimes(6);
   });
 });

@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import { useContentDetails } from "@/hooks/useContentDetails";
 import {
   BalanceUsageNote,
@@ -167,10 +168,9 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
 
   // Queries
   const { data, isPending } = api.data.getBloodlineBalanceStatistics.useQuery(filter, {
+    ...balanceReportQueryOptions,
     enabled: filterState.cf.isReady && !invalidRange,
   });
-
-  const utils = api.useUtils();
 
   // Check if user can change content
   const canEdit = canChangeContent(userData?.role ?? "USER");
@@ -228,13 +228,7 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
         <div className="flex items-center gap-2">
           {props.navTabs}
           <BloodlineBalanceFiltering state={filterState} />
-          {canEdit && (
-            <ClearBattleDataButton
-              type="bloodline"
-              label="bloodline"
-              onCleared={() => utils.data.getBloodlineBalanceStatistics.invalidate()}
-            />
-          )}
+          {canEdit && <ClearBattleDataButton type="bloodline" label="bloodline" />}
         </div>
       }
     >

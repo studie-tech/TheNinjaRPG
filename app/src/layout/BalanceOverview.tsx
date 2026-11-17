@@ -4,6 +4,7 @@ import { Download } from "lucide-react";
 import { useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import {
   BalanceFiltering,
   getBalanceFilter,
@@ -27,9 +28,13 @@ export const BalanceOverview = () => {
     typeof filter.maxLevel === "number" &&
     filter.minLevel > filter.maxLevel;
   const overview = api.data.getBalanceOverview.useQuery(filter, {
+    ...balanceReportQueryOptions,
     enabled: state.isReady && !invalidRange,
   });
-  const archives = api.data.getBalanceArchives.useQuery();
+  const archives = api.data.getBalanceArchives.useQuery(
+    undefined,
+    balanceReportQueryOptions,
+  );
   const utils = api.useUtils();
   const [selectedArchive, setSelectedArchive] = useState("");
   const [isDownloading, setIsDownloading] = useState(false);

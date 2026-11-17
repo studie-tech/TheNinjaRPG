@@ -5,6 +5,7 @@ import type React from "react";
 import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import { useContentDetails } from "@/hooks/useContentDetails";
 import {
   BalanceUsageNote,
@@ -163,10 +164,9 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
 
   // Queries
   const { data, isPending } = api.data.getItemBalanceStatistics.useQuery(filter, {
+    ...balanceReportQueryOptions,
     enabled: filterState.cf.isReady && !invalidRange,
   });
-
-  const utils = api.useUtils();
 
   // Process data for table
   const tableData =
@@ -233,13 +233,7 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
         <div className="flex items-center gap-2">
           {props.navTabs}
           <ItemBalanceFiltering state={filterState} />
-          {canDelete && (
-            <ClearBattleDataButton
-              type="item"
-              label="item"
-              onCleared={() => utils.data.getItemBalanceStatistics.invalidate()}
-            />
-          )}
+          {canDelete && <ClearBattleDataButton type="item" label="item" />}
         </div>
       }
     >

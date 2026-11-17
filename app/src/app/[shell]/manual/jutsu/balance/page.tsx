@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import { useContentDetails } from "@/hooks/useContentDetails";
 import {
   BalanceUsageNote,
@@ -162,11 +163,11 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
 
   // Queries
   const { data, isPending } = api.data.getJutsuBalanceStatistics.useQuery(filter, {
+    ...balanceReportQueryOptions,
     enabled: filterState.cf.isReady && !invalidRange,
   });
 
   const isLoading = !invalidRange && (!filterState.cf.isReady || isPending);
-  const utils = api.useUtils();
 
   // Check if user can change content
   const canDelete = canChangeContent(userData?.role ?? "USER");
@@ -232,13 +233,7 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
         <div className="flex items-center gap-2">
           {props.navTabs}
           <JutsuBalanceFiltering state={filterState} />
-          {canDelete && (
-            <ClearBattleDataButton
-              type="jutsu"
-              label="jutsu"
-              onCleared={() => utils.data.getJutsuBalanceStatistics.invalidate()}
-            />
-          )}
+          {canDelete && <ClearBattleDataButton type="jutsu" label="jutsu" />}
         </div>
       }
     >

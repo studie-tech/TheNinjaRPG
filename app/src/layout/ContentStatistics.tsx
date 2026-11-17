@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { api } from "@/app/_trpc/client";
+import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import { ClearContentBattleDataButton } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -25,7 +26,7 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
   const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const { data, isPending } = api.data.getStatistics.useQuery(
     { id, type, ...filterParams },
-    { enabled: !!id },
+    { ...balanceReportQueryOptions, enabled: !!id },
   );
   const info = data?.info;
   const filteredUsage = data?.usage;
