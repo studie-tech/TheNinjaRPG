@@ -177,7 +177,11 @@ export const aiRouter = createTRPCRouter({
         ctx.drizzle,
         target.userId,
       );
-      if (state?.jutsuLoadout !== loadoutId || state.loadout?.customAi !== custom) {
+      if (
+        state?.jutsuLoadout !== loadoutId ||
+        state.loadout?.userId !== target.userId ||
+        state.loadout.customAi !== custom
+      ) {
         return errorResponse("Your jutsu loadout changed. Please try again.");
       }
       return {

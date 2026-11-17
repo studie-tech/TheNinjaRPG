@@ -74,7 +74,7 @@ export const fetchAiLoadoutStateForToggleAiProfile = (
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
     columns: { jutsuLoadout: true, aiProfileId: true },
-    with: { loadout: { columns: { customAi: true } } },
+    with: { loadout: { columns: { userId: true, customAi: true } } },
   });
 
 /**

@@ -121,6 +121,11 @@ describeWithDatabase("AI rules per jutsu loadout", () => {
       .update(userData)
       .set({ jutsuLoadout: "o1" })
       .where(eq(userData.userId, "player"));
+    // The other player's loadout already fights with its own rules, so nothing changes either way.
+    await db
+      .update(jutsuLoadout)
+      .set({ customAi: true })
+      .where(eq(jutsuLoadout.id, "o1"));
     const api = await callerFor(aiRouter, "player");
     const result = await api.toggleAiProfile({ aiId: "player", custom: true });
     expect(result.success).toBe(false);
