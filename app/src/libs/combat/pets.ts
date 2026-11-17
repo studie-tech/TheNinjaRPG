@@ -257,6 +257,11 @@ const createPetBattleUser = (
     avatar: pet.avatar,
     avatarLight: pet.avatar,
     avatarFacing: pet.avatarFacing,
+    // A pet is drawn as its own portrait, never with its owner's character artwork.
+    spriteAppearance: undefined,
+    spriteBaseAppearance: undefined,
+    spriteEquipment: undefined,
+    spriteAction: undefined,
     isAi: true,
     isSummon: true,
     isOriginal: true,

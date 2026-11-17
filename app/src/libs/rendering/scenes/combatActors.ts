@@ -159,7 +159,7 @@ export const createCombatActors = (
         const hudClearance =
           lastMeterIndex * meterHeight + meterHeight / 2 + tile.height * 0.03;
         const hudTop =
-          tile.height * (user.isAi && user.isOriginal ? 1.71 : 1.07) +
+          tile.height * (showsAiPortrait(user) ? 1.71 : 1.07) +
           hudClearance +
           // Keep the same head clearance when the LPC frame is raised within its hex.
           (character ? character.y - character.size / 2 : 0);
@@ -303,7 +303,7 @@ export const createCombatActors = (
                   layers?.ui.attach(entry.sprite);
               // Portrait and badge bounds keep HUD rows above art and ground cues below it.
               // Headgear can fill the LPC frame; ordinary frames retain their compact HUD.
-              if (!(current.user.isAi && current.user.isOriginal)) {
+              if (!showsAiPortrait(current.user)) {
                 const { hp, sp, cp, threat } = current;
                 const { selection, hover } = current;
                 let top = 0,
@@ -763,7 +763,7 @@ export const combatActorParts = (
     ...extra,
   });
   const parts: WorldSpriteDescription[] = [];
-  if (user.isAi && user.isOriginal) {
+  if (showsAiPortrait(user)) {
     parts.push(
       part("aiAvatar", user.avatar || IMG_AVATAR_DEFAULT, h * 1.6, h * 0.9, {
         rendition: 256,
@@ -923,3 +923,15 @@ type Fighter = {
   alive: boolean;
   groundY: number;
 };
+
+/**
+ * An original AI fighter is drawn as its portrait. One that carries a character appearance,
+ * such as a village patrol copied from a player, is drawn as that character, as on the map;
+ * summons such as pets keep their portraits.
+ */
+const showsAiPortrait = (
+  user: Pick<
+    ReturnedUserState,
+    "isAi" | "isOriginal" | "isSummon" | "spriteAppearance"
+  >,
+) => user.isAi && user.isOriginal && (user.isSummon || !user.spriteAppearance);

@@ -47,6 +47,40 @@ describe("combat fighter recipes", () => {
     });
     expect(parts[0]?.mask).toBeUndefined();
   });
+  it("draws an ordinary AI opponent without character artwork as its portrait", () => {
+    const parts = combatActorParts(
+      user({ isAi: true, isOriginal: true }),
+      tile,
+      battle,
+    );
+    expect(parts.map((part) => part.kind)).toEqual(["aiAvatar", "tombstone"]);
+  });
+  it("draws an AI fighter that carries a character appearance, such as a village patrol, as that character", () => {
+    const spriteAppearance = resolveSpriteAppearance({});
+    const parts = combatActorParts(
+      user({ isAi: true, isOriginal: true, spriteAppearance }),
+      tile,
+      battle,
+    );
+    expect(parts.map((part) => part.kind)).not.toContain("aiAvatar");
+    expect(parts.find((part) => part.kind === "avatar")).toMatchObject({
+      character: spriteAppearance,
+    });
+  });
+  it("keeps a summon such as a pet as its portrait even when it carries character artwork", () => {
+    const parts = combatActorParts(
+      user({
+        isAi: true,
+        isOriginal: true,
+        isSummon: true,
+        spriteAppearance: resolveSpriteAppearance({}),
+      }),
+      tile,
+      battle,
+    );
+    expect(parts.map((part) => part.kind)).toContain("aiAvatar");
+    expect(parts.find((part) => part.kind === "avatar")).toBeUndefined();
+  });
   it("scales LPC fighters to 75% and raises them within their tile", () => {
     const spriteAppearance = resolveSpriteAppearance({});
     const parts = combatActorParts(

@@ -6,6 +6,8 @@ import {
   type Jutsu,
   type SkillTree,
   skillTree,
+  type UserItem,
+  userItem,
   userJutsu,
 } from "@/drizzle/schema";
 import { availableUserActions, userItemToAction } from "@/libs/combat/actions";
@@ -14,6 +16,7 @@ import { refreshMasteries } from "@/libs/combat/mastery";
 import { applyEffects } from "@/libs/combat/process";
 import { clone, getPower } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
+import { anonymousSpriteAppearance } from "@/libs/lpc/appearance";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
@@ -50,10 +53,37 @@ describe("village duty combat isolation", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());
-  it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
-    "admits only the attacker for %s and never publishes a battle to the owner",
-    async (battleType) => {
-      const defender = { ...owner(), joinedVillageAt: new Date("2026-01-01") };
+  it.each([
+    ["VILLAGE_PROTECTOR", false],
+    ["SHRINE_WAR", false],
+    ["VILLAGE_PROTECTOR", true],
+  ] as const)(
+    "admits only the attacker for %s (masked %p) and never publishes a battle to the owner",
+    async (battleType, masked) => {
+      const defender = {
+        ...owner(),
+        joinedVillageAt: new Date("2026-01-01"),
+        ...(masked ? { anbuId: "squad" } : {}),
+        // A drawn weapon, so the copy's gear can be redrawn when it breaks.
+        items: [
+          {
+            ...(tableDefaults(userItem) as UserItem),
+            ...makeBattleUserItem({
+              id: "owned-blade",
+              itemId: "blade",
+              equipped: "HAND_1",
+            }),
+            userId: "owner",
+            imbuements: [],
+            item: makeWeapon({
+              id: "blade",
+              itemType: "WEAPON",
+              slot: "HAND_1",
+              lpcProfile: "lpc-blade",
+            }),
+          },
+        ],
+      };
       const before = structuredClone(defender);
       const fake = fakeInitiationClient([
         makeInitiationUser({ userId: "attacker", villageId: "enemy" }),
@@ -95,6 +125,17 @@ describe("village duty combat isolation", () => {
       expect(copy?.userId).not.toBe("owner");
       expect(copy?.curHealth).toBe(copy?.maxHealth);
       expect(copy?.spriteAppearance).toBeDefined();
+      // An unmasked copy redraws its gear when it breaks, as players do; a masked one keeps
+      // its ANBU uniform.
+      if (masked) {
+        expect(copy?.spriteAppearance).toEqual(anonymousSpriteAppearance(true));
+        expect(copy?.spriteBaseAppearance).toBeUndefined();
+        expect(copy?.spriteEquipment).toBeUndefined();
+      } else {
+        expect(copy?.spriteBaseAppearance).toBeDefined();
+        // Gear is keyed by the copy's own item rows, which battle actions wear and break.
+        expect(Object.keys(copy?.spriteEquipment ?? {})).toEqual(["duty:owned-blade"]);
+      }
       expect(predicates.join()).not.toContain('"owner"');
       expect(Pusher.prototype.trigger).not.toHaveBeenCalledWith(
         "owner",

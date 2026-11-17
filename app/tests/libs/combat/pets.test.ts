@@ -22,6 +22,7 @@ import {
   getBattleGrid,
   resolveDamageCreditUser,
 } from "@/libs/combat/util";
+import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { DrizzleClient } from "@/server/db";
 import { AiRule } from "@/validators/ai";
 import {
@@ -201,6 +202,27 @@ describe("owned pets in combat", () => {
   });
   afterEach(() => {
     PET_BATTLE_CONFIG.enabled = previousBattleEnabled;
+  });
+
+  it("draws a pet as its own portrait, not with its owner's character artwork", () => {
+    const battle = scenario();
+    const owner = battle.usersState.find((user) => user.userId === "owner")!;
+    const appearance = resolveSpriteAppearance({});
+    owner.spriteAppearance = appearance;
+    owner.spriteBaseAppearance = appearance;
+    owner.spriteEquipment = {};
+    owner.spriteAction = {
+      id: "owner-swing",
+      animation: "slash",
+      longitude: 0,
+      latitude: 0,
+    };
+    add(battle);
+    const pet = battle.usersState.find((user) => user.petId)!;
+    expect(pet.spriteAppearance).toBeUndefined();
+    expect(pet.spriteBaseAppearance).toBeUndefined();
+    expect(pet.spriteEquipment).toBeUndefined();
+    expect(pet.spriteAction).toBeUndefined();
   });
 
   it("spawns both selected solo dungeon pets with independent actors and distinct cells", () => {
