@@ -198,8 +198,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Victory!",
     description:
       "Well fought! Winning completed your first objective. Objective rewards wait in your quest log until you claim them.",
-    action: "Claim your reward.",
-    elementIds: [starterLogbookEntry],
+    // The logbook entry only offers a small gift icon; point at the lesson's Claim instead.
+    action: "Tap Claim below to collect your reward.",
     page: "/profile",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.arena,

@@ -771,12 +771,26 @@ describe("quest steps", () => {
     expect(document.querySelector("[data-tutorial-claim-highlight]")).toBeNull();
     expect(overlay()).toBeNull();
     cleanup();
-    // A claim step that highlights its logbook entry keeps the page highlight instead.
-    const logbookClaim = TUTORIAL_STEPS.findIndex(
-      (step) => step.advanceOn === "questReward" && !!step.elementIds?.length,
+    // The first fight's reward: the logbook entry on the profile only has a gift icon.
+    const fightClaim = TUTORIAL_STEPS.findIndex(
+      (step) => step.id === "combat-claim-reward",
     );
-    show(logbookClaim, starterQuest(logbookClaim, true));
-    expect(document.querySelector("[data-tutorial-claim-highlight]")).toBeNull();
+    const fight = show(fightClaim, starterQuest(fightClaim, true));
+    const fightButton = fight.getByRole("button", { name: "Claim 1,000 XP" });
+    expect(fightButton.closest("[data-tutorial-claim-highlight]")).toBeTruthy();
+    expect(overlay()).toBeTruthy();
+    fireEvent.click(fightButton);
+    expect(state.checkRewards).toHaveBeenLastCalledWith({
+      questId: String(TUTORIAL_STEPS[fightClaim]?.relatedValue),
+    });
+  });
+
+  it("sends every claim step to the lesson's Claim button", () => {
+    const claimSteps = TUTORIAL_STEPS.filter(
+      (step) => step.advanceOn === "questReward",
+    );
+    expect(claimSteps.map((step) => step.id)).toContain("combat-claim-reward");
+    for (const step of claimSteps) expect(step.elementIds ?? []).toEqual([]);
   });
 
   describe("after the tutorial", () => {
