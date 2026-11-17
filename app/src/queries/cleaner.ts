@@ -96,9 +96,22 @@ export const updateHuntingSessionForGET = (
       ),
     );
 
-/** Build the `userData` update for `GET`, using predicates on `battleId` and `id`. */
+/** Players whose battleId points at a battle that no longer exists. */
+export const missingBattleUserDataWhere = (client: Pick<DrizzleClient, "select">) =>
+  and(
+    isNotNull(userData.battleId),
+    notExists(
+      client
+        .select({ id: battle.id })
+        .from(battle)
+        .where(eq(battle.id, userData.battleId)),
+    ),
+  );
+
+/** Build the missing-battle release for one batch of players, rechecking the battle. */
 export const updateUserDataForGET = (
   client: Pick<DrizzleClient, "update" | "select">,
+  batch: string[],
 ) =>
   client
     .update(userData)
@@ -125,17 +138,7 @@ export const updateUserDataForGET = (
       )} THEN 'BATTLE' ELSE 'AWAKE' END`,
       travelFinishAt: null,
     })
-    .where(
-      and(
-        isNotNull(userData.battleId),
-        notExists(
-          client
-            .select({ id: battle.id })
-            .from(battle)
-            .where(eq(battle.id, userData.battleId)),
-        ),
-      ),
-    );
+    .where(and(inArray(userData.userId, batch), missingBattleUserDataWhere(client)));
 
 /** Build the `userLiveActivity` deletion for `GET`, using predicates on `endsAt`. */
 export const deleteUserLiveActivityForGET = (client: Pick<DrizzleClient, "delete">) =>
@@ -296,21 +299,24 @@ export const deleteHistoricalAvatarForGET = (client: Pick<DrizzleClient, "delete
       ),
     );
 
-/** Build the `userData` update for `GET`, setting `clanId`, using predicates on `clanId` and `id`. */
+/** Players whose clanId points at a clan that no longer exists. */
+export const missingClanUserDataWhere = (client: Pick<DrizzleClient, "select">) =>
+  and(
+    isNotNull(userData.clanId),
+    notExists(
+      client.select({ id: clan.id }).from(clan).where(eq(clan.id, userData.clanId)),
+    ),
+  );
+
+/** Build the missing-clan release for one batch of players, rechecking the clan. */
 export const updateUserDataForGET2 = (
   client: Pick<DrizzleClient, "update" | "select">,
+  batch: string[],
 ) =>
   client
     .update(userData)
     .set({ clanId: null })
-    .where(
-      and(
-        isNotNull(userData.clanId),
-        notExists(
-          client.select({ id: clan.id }).from(clan).where(eq(clan.id, userData.clanId)),
-        ),
-      ),
-    );
+    .where(and(inArray(userData.userId, batch), missingClanUserDataWhere(client)));
 
 /** Build the `trainingLog` deletion for `GET`, using predicates on `trainingFinishedAt`. */
 export const deleteTrainingLogForGET = (
@@ -414,11 +420,29 @@ export const executeRowsForGET9 = (client: Pick<DrizzleClient, "execute">) =>
           `,
   );
 
-/** Execute the database statement for `GET`. */
-export const executeRowsForGET10 = (client: Pick<DrizzleClient, "update">) =>
+/**
+ * Players whose tavern message count has not decayed yet for the day starting at
+ * `dayStart`; FLOOR(0 * 0.95) leaves zero unchanged.
+ */
+export const tavernActiveUserDataWhere = (dayStart: Date) =>
+  and(gt(userData.tavernMessages, 0), lt(userData.tavernDecayAt, dayStart));
+
+/**
+ * Build the daily tavern message decay for one batch of players. Each row records
+ * `dayStart`, so a retried run skips the players an earlier attempt already decayed.
+ */
+export const executeRowsForGET10 = (
+  client: Pick<DrizzleClient, "update">,
+  dayStart: Date,
+  batch: string[],
+) =>
   client
     .update(userData)
-    .set({ tavernMessages: sql`FLOOR(${userData.tavernMessages} * 0.95)` });
+    .set({
+      tavernMessages: sql`FLOOR(${userData.tavernMessages} * 0.95)`,
+      tavernDecayAt: dayStart,
+    })
+    .where(and(inArray(userData.userId, batch), tavernActiveUserDataWhere(dayStart)));
 
 /** Build the `automatedModeration` deletion for `GET`, using predicates on `createdAt`. */
 export const deleteAutomatedModerationForGET = (
@@ -583,6 +607,24 @@ export const updateTableForProcessContentUrls = (
   newContent: string,
   item: { id: string },
 ) => client.update(table).set({ content: newContent }).where(eq(table.id, item.id));
+
+/**
+ * Build the next primary-key page of players matching `pending` for
+ * `updateUserDataCandidates`. A plain consistent read in primary-key order stops after
+ * `batchSize` matches instead of materializing every match.
+ */
+export const selectUserIdsForUpdateUserDataCandidates = (
+  client: Pick<DrizzleClient, "select">,
+  pending: SQL,
+  after: string | undefined,
+  batchSize: number,
+) =>
+  client
+    .select({ userId: userData.userId })
+    .from(userData)
+    .where(and(pending, after === undefined ? undefined : gt(userData.userId, after)))
+    .orderBy(userData.userId)
+    .limit(batchSize);
 
 /** Build the `table` distinct selection for `deleteCleanupCandidates`, using the configured predicates. */
 export const selectDistinctKeyForDeleteCleanupCandidates = (

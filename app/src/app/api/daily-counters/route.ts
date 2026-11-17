@@ -1,7 +1,12 @@
 import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
-import { updateUserDataForGET } from "@/queries/profile";
+import {
+  dailyCountersPendingWhere,
+  updateUserDataForDailyCounters,
+} from "@/queries/profile";
 import { drizzleDB } from "@/server/db";
+import { updateUserDataCandidates } from "@/server/utils/cleaner";
 import { authenticateCronRequest } from "@/server/utils/cron";
+import { periodStart } from "@/utils/time";
 
 const ENDPOINT_NAME = "daily-counters";
 
@@ -14,8 +19,14 @@ export async function GET(request: Request) {
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
 
   return runClaimedCron(timerCheck, "/api/daily-counters", async () => {
-    // For all users, increment villagePrestige by 1
-    await updateUserDataForGET(drizzleDB);
+    // Players are reset in primary-key batches, each guarded by its own reset day, so a
+    // retry after a partial failure finishes the rest without a second prestige grant.
+    const dayStart = periodStart("daily", new Date());
+    await updateUserDataCandidates(
+      drizzleDB,
+      dailyCountersPendingWhere(dayStart),
+      (batch) => updateUserDataForDailyCounters(drizzleDB, dayStart, batch),
+    );
 
     return Response.json(`OK`);
   });
