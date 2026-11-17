@@ -41,6 +41,7 @@ type CollapsedEffect = {
   sealed: boolean;
   blocks?: string; // For immunity effects
   detail?: string; // Keeps potency for different tags apart
+  detailElements?: string; // ...and for different element selections
 };
 
 /** Tags that only drive visuals, actions or one-off placement, so they have no lasting row. */
@@ -199,6 +200,11 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         "affectedTag" in val && typeof val.affectedTag === "string"
           ? val.affectedTag
           : undefined;
+      // Potency only boosts tags of its selected elements, like getEffectStackKey.
+      const detailElements =
+        "affectedElements" in val && Array.isArray(val.affectedElements)
+          ? [...new Set(val.affectedElements as string[])].sort().join(", ")
+          : "";
       cats.forEach((cat) => {
         const valBlocks = "blocks" in val ? (val.blocks as string) : undefined;
         const found = acc.find(
@@ -208,7 +214,8 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
             e.category === cat &&
             e.sealed === isSealed &&
             e.blocks === valBlocks &&
-            e.detail === detail,
+            e.detail === detail &&
+            (e.detailElements ?? "") === detailElements,
         );
         if (found) {
           // Diffuse uses the strongest active percentage rather than adding effects.
@@ -229,6 +236,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
             sealed: isSealed,
             blocks: valBlocks,
             detail,
+            detailElements,
           });
         }
       });
@@ -453,15 +461,17 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const getOtherLabel = (e: CollapsedEffect) => {
     const label =
       otherLabel[e.type] ?? `${e.type.charAt(0).toUpperCase()}${e.type.slice(1)}`;
-    if (e.type === "potency" && e.detail && e.detail !== "all") {
-      return `${label} (${statusLabel[e.detail] ?? e.detail})`;
-    }
-    return label;
+    if (e.type !== "potency") return label;
+    const parts = [
+      ...(e.detail && e.detail !== "all" ? [statusLabel[e.detail] ?? e.detail] : []),
+      ...(e.detailElements ? [e.detailElements] : []),
+    ];
+    return parts.length > 0 ? `${label} (${parts.join(", ")})` : label;
   };
 
   const otherVisuals = otherEffects.map((e) => (
     <div
-      key={`${e.type}-${e.category}-${e.calculation}-${e.detail || ""}`}
+      key={`${e.type}-${e.category}-${e.calculation}-${e.sealed}-${e.detail || ""}-${e.detailElements || ""}`}
       className="flex flex-row items-center gap-2 text-xs"
     >
       <ElementImage element={e.category} className="h-6 w-6 shrink-0" />

@@ -230,4 +230,22 @@ describe("combat active effects", () => {
     expect(view.getByText("Heal Given")).toBeTruthy();
     expect(view.queryByText("Other Effects")).toBeNull();
   });
+
+  it("keeps potency for different element selections on separate rows", () => {
+    const potency = (id: string, power: number, affectedElements: string[]) =>
+      makeEffect(
+        "increasepotency",
+        { power, rounds: 2, affectedTag: "reflect", affectedElements } as never,
+        { ...runtime, id },
+      );
+    const view = render(
+      <VisualizeEffects
+        effects={[potency("fire", 20, ["Fire"]), potency("water", 30, ["Water"])]}
+        userId={userId}
+      />,
+    );
+    expect(view.getByText("Potency (Reflect, Fire) +20 ↻ 2")).toBeTruthy();
+    expect(view.getByText("Potency (Reflect, Water) +30 ↻ 2")).toBeTruthy();
+    expect(view.queryByText(/\+50/)).toBeNull();
+  });
 });
