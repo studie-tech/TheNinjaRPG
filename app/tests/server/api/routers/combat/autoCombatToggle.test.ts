@@ -8,6 +8,7 @@ import {
 import { battle, userData } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
+import { afterTasks } from "../../../../setup/after";
 import { makeCompleteBattle, makeUser } from "../../../../setup/combat";
 import { insertUsers } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
@@ -16,6 +17,7 @@ import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
+  resolverOf,
 } from "../../../../setup/testDatabase";
 
 const USER = "auto-toggle-player";
@@ -90,12 +92,21 @@ describeWithDatabase("battle AI control preference scope", () => {
     ).toBe(true);
   });
 
-  it("retains the saved non-PvP preference for arena handovers", async () => {
-    const { db, caller } = await seed("ARENA", false);
-    for (const enabled of [true, false]) {
-      expect(
-        await caller.toggleAutoCombat({ battleId: BATTLE, enabled }),
-      ).toMatchObject({ success: true, userPatch: { defaultAutoCombat: enabled } });
+  it("saves the arena preference before responding, including repeated requests", async () => {
+    const { db } = await seed("ARENA", false);
+    const toggle = resolverOf(combatRouter.toggleAutoCombat);
+    for (const enabled of [true, true, false, false]) {
+      // Read the preference before HTTP after-tasks run, as the next battle request does.
+      const response = await afterTasks.run([], () =>
+        toggle({
+          ctx: { drizzle: db, userId: USER },
+          input: { battleId: BATTLE, enabled },
+        }),
+      );
+      expect(response).toMatchObject({
+        success: true,
+        userPatch: { defaultAutoCombat: enabled },
+      });
       expect(
         (await db.query.userData.findFirst({ where: eq(userData.userId, USER) }))!
           .defaultAutoCombat,

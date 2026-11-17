@@ -11,16 +11,12 @@ import * as clerk from "@clerk/nextjs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render } from "@testing-library/react";
 import * as trpc from "@trpc/react-query";
-import { type ContextType, type ReactNode, useContext, useState } from "react";
+import { type ReactNode, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import * as pusher from "@/layout/PusherHandler";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import {
-  UserContextProvider,
-  useUserData,
-  useUserDataSelector,
-  useUserInfo,
-} from "@/utils/UserContext";
+import type { useUserData } from "@/utils/UserContext";
+import { UserContextProvider, useUserDataSelector } from "@/utils/UserContext";
 
 const BASE = Date.UTC(2026, 9, 24, 12);
 const refetch = vi.fn();
@@ -53,9 +49,11 @@ afterEach(() => {
 const mount = (
   fields: Record<string, unknown>,
   children: ReactNode = <div>Recipe</div>,
+  snapshotAt = new Date(BASE - 2000),
 ) => {
   const response = {
     serverTime: BASE - 2000,
+    snapshotAt,
     notifications: [
       otherBoostNotice,
       {
@@ -106,6 +104,18 @@ const mount = (
 };
 
 describe("global timed bonus refresh", () => {
+  it.each([
+    { raidBuffs: [{ expiresAt: new Date(BASE - 3000) }] },
+    { village: { territoryWarBoostUntil: new Date(BASE - 3000) } },
+    { cookingJobs: [{ finishesAt: new Date(BASE - 3000) }] },
+  ])("refreshes a deadline crossed while preparing the profile %j", (fields) => {
+    mount(fields, undefined, new Date(BASE - 5000));
+    act(() => advance(1000));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    act(() => advance(20_000));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     { village: { territoryWarBoostUntil: new Date(BASE + 5000) } },
     {

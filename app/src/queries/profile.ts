@@ -760,44 +760,36 @@ export const insertRecruitmentRewardsForLevelUp = (
     type: "MONEY",
   });
 
-/** Build the `farmPlot` selection for `getUser`, using predicates on `userId`, `seedItemId`, `finishAt`. */
-export const selectFarmPlotForGetUser = (
-  client: Pick<DrizzleClient, "select">,
-  ctx: { userId: string },
-  now: Date,
-) =>
-  client
-    .select({ count: count() })
-    .from(farmPlot)
-    .where(
-      and(
-        eq(farmPlot.userId, ctx.userId),
-        isNotNull(farmPlot.seedItemId),
-        isNotNull(farmPlot.finishAt),
-        lte(farmPlot.finishAt, now),
-      ),
-    );
-
-/** Build the `farmPlot` selection for `getUser`, including predicates on `userId`, `seedItemId`, `finishAt`. */
-export const selectFarmPlotForGetUser2 = (
+/**
+ * Count the caller's planted plots for `getUser` in one statement: those ready to harvest,
+ * and those still growing that have not been watered since `currentDayCycleStartedAt`.
+ */
+export const selectFarmPlotCountsForGetUser = (
   client: Pick<DrizzleClient, "select">,
   ctx: { userId: string },
   now: Date,
   currentDayCycleStartedAt: Date,
 ) =>
   client
-    .select({ count: count() })
+    .select({
+      ready:
+        sql<number>`COUNT(CASE WHEN ${lte(farmPlot.finishAt, now)} THEN 1 END)`.mapWith(
+          Number,
+        ),
+      waterable: sql<number>`COUNT(CASE WHEN ${and(
+        gt(farmPlot.finishAt, now),
+        or(
+          isNull(farmPlot.lastWateredAt),
+          lt(farmPlot.lastWateredAt, currentDayCycleStartedAt),
+        ),
+      )} THEN 1 END)`.mapWith(Number),
+    })
     .from(farmPlot)
     .where(
       and(
         eq(farmPlot.userId, ctx.userId),
         isNotNull(farmPlot.seedItemId),
         isNotNull(farmPlot.finishAt),
-        gt(farmPlot.finishAt, now),
-        or(
-          isNull(farmPlot.lastWateredAt),
-          lt(farmPlot.lastWateredAt, currentDayCycleStartedAt),
-        ),
       ),
     );
 

@@ -358,12 +358,10 @@ const MenuBoxProfile: React.FC = () => {
                         targetDate={buff.expiresAt}
                         timeDiff={timeDiff}
                         onEndShow="Expired"
+                        // UserContext refreshes the profile at every buff expiry.
                         onFinish={async () => {
                           refreshTime();
-                          await Promise.all([
-                            utils.raids.getUserRaidBuffs.invalidate(),
-                            utils.profile.getUser.invalidate(),
-                          ]);
+                          await utils.raids.getUserRaidBuffs.invalidate();
                         }}
                       />
                     </span>

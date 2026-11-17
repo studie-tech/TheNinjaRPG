@@ -7,7 +7,6 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 
 /** Meals and raid rewards use the same visible timed-effect surface. */
 export const ActiveTimedBuffs = () => {
-  const utils = api.useUtils();
   const { data, refetch, isError } = api.raids.getUserRaidBuffs.useQuery(undefined, {
     refetchInterval: 30000,
   });
@@ -59,9 +58,9 @@ export const ActiveTimedBuffs = () => {
               <Countdown
                 targetDate={buff.expiresAt}
                 onEndShow="Expired"
+                // UserContext refreshes the profile at every buff expiry.
                 onFinish={() => {
                   void refetch();
-                  void utils.profile.getUser.invalidate();
                 }}
               />
             </p>

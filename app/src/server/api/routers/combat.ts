@@ -2,6 +2,7 @@ import { randomInt as secureRandomInt } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { eq, ne, notInArray, or, SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
@@ -506,7 +507,8 @@ export const combatRouter = createTRPCRouter({
         const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
 
         // Cache only the settled, viewer-masked response; recovery never reruns reward writes.
-        await combatCompletionStore().save(ctx.userId, newMaskedBattle, result);
+        // The receipt is display-only and recovery polls for it, so it is stored after responding.
+        after(() => combatCompletionStore().save(ctx.userId, newMaskedBattle, result));
 
         // Return the new battle + result state if applicable
         return { battle: newMaskedBattle, result: result };
@@ -978,7 +980,8 @@ export const combatRouter = createTRPCRouter({
             playback: playback.steps,
           };
 
-          await combatCompletionStore().save(suid, newMaskedBattle, result);
+          // The receipt is display-only and recovery polls for it, so it is stored after responding.
+          after(() => combatCompletionStore().save(suid, newMaskedBattle, result));
 
           // Notify after logs are persisted, including the terminal action.
           // Polling clients may have read the claimed state before its log insert.

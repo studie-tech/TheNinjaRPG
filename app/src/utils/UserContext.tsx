@@ -239,6 +239,7 @@ export function UserContextProvider(props: {
     },
     timeDiff,
     !!userId && !!isSignedIn && isLoaded,
+    data?.snapshotAt,
   );
 
   // Listen on user channel for live updates on things
