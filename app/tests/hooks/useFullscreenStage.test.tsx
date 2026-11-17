@@ -9,6 +9,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  Reflect.deleteProperty(document, "fullscreenElement");
+  Reflect.deleteProperty(document, "exitFullscreen");
   restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
@@ -58,5 +60,36 @@ describe("useFullscreenStage", () => {
       window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(view.getByTestId("stage").dataset.full).toBe("false");
+  });
+
+  it("hands back a fullscreen request that lands after the player left", async () => {
+    const view = render(<Stage />);
+    const stage = view.getByTestId("stage");
+    let grant: () => void = () => undefined;
+    const request = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          grant = () => {
+            Object.defineProperty(document, "fullscreenElement", {
+              configurable: true,
+              value: stage,
+            });
+            resolve();
+          };
+        }),
+    );
+    const release = vi.fn(() => Promise.resolve());
+    Object.assign(stage, { requestFullscreen: request });
+    Object.assign(document, { exitFullscreen: release });
+
+    fireEvent.click(view.getByText("toggle"));
+    fireEvent.click(view.getByText("toggle"));
+    expect(release).not.toHaveBeenCalled();
+    await act(async () => {
+      grant();
+      await Promise.resolve();
+    });
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(stage.dataset.full).toBe("false");
   });
 });

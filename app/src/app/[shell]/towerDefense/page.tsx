@@ -295,7 +295,6 @@ export default function TowerDefensePage() {
       noRightAlign
       padding={false}
     >
-      {leaveGuard.dialog}
       {/*
         Full screen keeps the arena at the same place in the tree, so it never reloads.
         Wide screens put the controls and the whole shop in a column beside a full-height
@@ -311,6 +310,7 @@ export default function TowerDefensePage() {
         }
       >
         <PortalContainerContext.Provider value={isFullscreen ? stageElement : null}>
+          {leaveGuard.dialog}
           <div className={isFullscreen ? "contents" : undefined}>
             <div
               className={cn(

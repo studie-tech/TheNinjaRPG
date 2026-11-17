@@ -14,8 +14,14 @@ export const useFullscreenStage = <T extends HTMLElement = HTMLDivElement>() => 
   const [isFullscreen, setIsFullscreen] = useState(false);
   /** Whether this stage put its element into browser fullscreen. */
   const ownsFullscreen = useRef(false);
+  /**
+   * Whether the stage still wants the screen. A fullscreen request settles later; one that
+   * lands after the player left, or after the stage unmounted, is handed straight back.
+   */
+  const wantsFullscreen = useRef(false);
 
   const exit = useCallback(() => {
+    wantsFullscreen.current = false;
     setIsFullscreen(false);
     if (ownsFullscreen.current && document.fullscreenElement)
       void document.exitFullscreen().catch(() => undefined);
@@ -23,12 +29,15 @@ export const useFullscreenStage = <T extends HTMLElement = HTMLDivElement>() => 
   }, []);
 
   const enter = useCallback(() => {
+    wantsFullscreen.current = true;
     setIsFullscreen(true);
     if (element?.requestFullscreen && !document.fullscreenElement)
       element
         .requestFullscreen({ navigationUI: "hide" })
         .then(() => {
-          ownsFullscreen.current = true;
+          if (wantsFullscreen.current) ownsFullscreen.current = true;
+          else if (document.fullscreenElement === element)
+            void document.exitFullscreen().catch(() => undefined);
         })
         .catch(() => undefined);
   }, [element]);
@@ -43,12 +52,15 @@ export const useFullscreenStage = <T extends HTMLElement = HTMLDivElement>() => 
     const onFullscreenChange = () => {
       if (ownsFullscreen.current && !document.fullscreenElement) {
         ownsFullscreen.current = false;
+        wantsFullscreen.current = false;
         setIsFullscreen(false);
       }
     };
     // Without browser fullscreen, Escape is still the way out.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.fullscreenElement) setIsFullscreen(false);
+      if (event.key !== "Escape" || document.fullscreenElement) return;
+      wantsFullscreen.current = false;
+      setIsFullscreen(false);
     };
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -66,6 +78,7 @@ export const useFullscreenStage = <T extends HTMLElement = HTMLDivElement>() => 
   // A stage that unmounts while full also hands the screen back.
   useEffect(
     () => () => {
+      wantsFullscreen.current = false;
       if (ownsFullscreen.current && document.fullscreenElement)
         void document.exitFullscreen().catch(() => undefined);
     },
