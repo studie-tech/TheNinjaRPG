@@ -167,7 +167,6 @@ describe("combat active effects", () => {
     expect(view.queryByText(/Configured damage bonus:/)).toBeNull();
   });
 
-  // Kyrenjin, 16 Nov: a 40% Reflect jutsu over 8% Reflect from gear.
   const gearReflect = () =>
     makeEffect(
       "reflect",
