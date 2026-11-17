@@ -25,6 +25,21 @@ export const getOrderedJutsuLoadouts = <T extends { id: string; jutsuIds: string
   return loadouts.map((entry) => (entry.id === id ? { ...entry, jutsuIds } : entry));
 };
 
+/**
+ * Empty the item loadout a confirmed unequip-all cleared; null confirms that no loadout
+ * changed. A cleared loadout missing from the loaded rows asks for a read.
+ */
+export const getClearedItemLoadouts = <T extends { id: string; itemData: unknown[] }>(
+  loadouts: T[],
+  clearedLoadoutId: string | null,
+): T[] | undefined => {
+  if (clearedLoadoutId === null) return loadouts;
+  if (!loadouts.some((loadout) => loadout.id === clearedLoadoutId)) return;
+  return loadouts.map((loadout) =>
+    loadout.id === clearedLoadoutId ? { ...loadout, itemData: [] } : loadout,
+  );
+};
+
 /** Apply a confirmed equip operation only to the loaded server baseline; uncertain memberships refetch. */
 export const getEquippedJutsuLoadouts = <T extends { id: string; jutsuIds: string[] }>(
   loadouts: T[],

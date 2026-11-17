@@ -4,7 +4,10 @@ import { CircleDollarSign, Undo2, Wrench, Zap } from "lucide-react";
 import { useId, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { getEquippedInventory } from "@/deltas/item";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
+import { useItemLoadoutCacheUpdate } from "@/hooks/useItemLoadoutCacheUpdate";
 import Confirm from "@/layout/Confirm";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
@@ -26,19 +29,22 @@ import { useRequiredUserInfo } from "@/utils/UserContext";
 export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const utils = api.useUtils();
+  const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
+  const { prepareLoadoutUpdate, updateClearedLoadout } = useItemLoadoutCacheUpdate();
   // Phones show the secondary actions on request; wider screens always show them.
   const [showMore, setShowMore] = useState(false);
   const moreActionsId = useId();
 
   const { mutate: autoEquipOptimal, isPending: isAutoEquipping } =
     api.item.autoEquipOptimal.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareInventoryUpdate,
+      onSuccess: async (data, _variables, snapshot) => {
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([
-            utils.item.getUserItemsWithVariants.invalidate(),
-            utils.item.getUserItems.invalidate(),
-          ]);
+          await updateInventory(
+            (rows) => getEquippedInventory(rows, data.equipmentChanges),
+            snapshot,
+          );
         }
       },
     });
@@ -75,15 +81,30 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
 
   const { mutate: unequipAllItems, isPending: isUnequippingAll } =
     api.item.unequipAllItems.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
+      onMutate: () => ({
+        user: prepareUserUpdate(),
+        inventory: prepareInventoryUpdate(),
+        loadouts: prepareLoadoutUpdate(),
+      }),
+      onSuccess: async (data, _variables, snapshot) => {
         showMutationToast(data);
-        if (!data.success) return;
+        if (!data.success) {
+          // The response withholds equipment and profile changes, so both reconcile.
+          if (data.isPartiallySaved) {
+            await Promise.all([
+              updateInventory(undefined, snapshot.inventory),
+              updateUser(data, { revision: snapshot.user }),
+            ]);
+          }
+          return;
+        }
         await Promise.all([
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.item.getUserItems.invalidate(),
-          updateUser(data, { revision }),
-          utils.item.getItemLoadouts.invalidate(),
+          updateInventory(
+            (rows) => getEquippedInventory(rows, data.equipmentChanges),
+            snapshot.inventory,
+          ),
+          updateUser(data, { revision: snapshot.user }),
+          updateClearedLoadout(data.clearedLoadoutId, snapshot.loadouts),
         ]);
       },
       onError: (error) => {

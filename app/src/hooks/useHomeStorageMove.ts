@@ -1,11 +1,12 @@
 "use client";
 
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import { getHomeStorageMovedInventory, getInventoryQuantities } from "@/deltas/item";
+import { getHomeStorageMergedInventory } from "@/deltas/item";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { showMutationToast } from "@/libs/toast";
 
 type HomeStorageMoveResult = RouterOutputs["home"]["moveUserItems"];
+type HomeStorageToggleResult = RouterOutputs["home"]["toggleStoreItem"];
 
 /**
  * Store stacks in home storage or take them out, one or many per request, and reconcile both
@@ -33,11 +34,16 @@ export const useHomeStorageMove = ({
       }
       const moved = data.movedUserItemIds;
       await (moved
-        ? updateInventory((rows) => {
-            const switched = getHomeStorageMovedInventory(rows, moved, input.toHome);
-            // Then the moved stacks join the stacks already at their destination.
-            return switched && getInventoryQuantities(switched, data.inventoryChanges);
-          }, snapshot)
+        ? updateInventory(
+            (rows) =>
+              getHomeStorageMergedInventory(
+                rows,
+                moved,
+                input.toHome,
+                data.inventoryChanges,
+              ),
+            snapshot,
+          )
         : invalidateInventory());
     },
     onError: async (error) => {
@@ -54,5 +60,54 @@ export const useHomeStorageMove = ({
     moveItems: (userItemIds: string[], toHome: boolean) =>
       mutate({ userItemIds, toHome }),
     isMoving: isPending,
+  };
+};
+
+/**
+ * Store one stack at home or take it out, whichever side it is on, and reconcile both
+ * inventory views as a bulk move does. A rejection leaves the caches alone so the player can
+ * read the feedback and retry; a move that did not finish joining stacks reads them again.
+ */
+export const useHomeStorageToggle = ({
+  onToggled,
+}: {
+  onToggled?: (result: HomeStorageToggleResult) => void;
+} = {}) => {
+  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
+    useInventoryCacheUpdate();
+
+  const { mutate, isPending } = api.home.toggleStoreItem.useMutation({
+    onMutate: prepareInventoryUpdate,
+    onSuccess: async (data, _input, snapshot) => {
+      showMutationToast(data);
+      onToggled?.(data);
+      if (!data.success) return;
+      const { movedUserItemIds: moved, storedAtHome } = data;
+      await (moved && storedAtHome !== undefined
+        ? updateInventory(
+            (rows) =>
+              getHomeStorageMergedInventory(
+                rows,
+                moved,
+                storedAtHome,
+                data.inventoryChanges,
+              ),
+            snapshot,
+          )
+        : invalidateInventory());
+    },
+    onError: async (error) => {
+      showMutationToast({
+        success: false,
+        message: error.message,
+        variant: "destructive",
+      });
+      await invalidateInventory();
+    },
+  });
+
+  return {
+    toggleStoreItem: (userItemId: string) => mutate({ userItemId }),
+    isToggling: isPending,
   };
 };

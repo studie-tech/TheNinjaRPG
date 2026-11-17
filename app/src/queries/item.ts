@@ -1381,11 +1381,11 @@ export const updateItemLoadoutForUnequipAllItems = (
 
 /**
  * Build the `userItem` update for `unequipAllItems`, setting `equipped` and
- * `updatedAt`, including predicates on `id`, `userId`, `isInAuction`.
+ * `updatedAt` on every listed row, including predicates on `id`, `userId`, `isInAuction`.
  */
 export const updateUserItemForUnequipAllItems = (
   client: Pick<DrizzleClient, "update">,
-  ui: { id: string },
+  userItemIds: string[],
   ctx: { userId: string },
 ) =>
   client
@@ -1396,7 +1396,7 @@ export const updateUserItemForUnequipAllItems = (
     })
     .where(
       and(
-        eq(userItem.id, ui.id),
+        inArray(userItem.id, userItemIds),
         eq(userItem.userId, ctx.userId),
         eq(userItem.isInAuction, false),
         gt(userItem.quantity, 0),
@@ -1710,27 +1710,54 @@ export const updateItemPurchaseCounterForBuy = (
     );
 
 /**
- * Build the `userItem` update for `autoEquipOptimal`, setting `equipped`, including
- * predicates on `id`, `userId`, `equipped`.
+ * Build the `userItem` update for `autoEquipOptimal`, setting each assigned row's
+ * `equipped` slot in one statement. A row is written only while it is still unequipped,
+ * available at `now`, its slot is still empty and no hunting battle owns the inventory, so
+ * each row counts in `rowsAffected` only when its slot was saved.
  */
 export const updateUserItemForAutoEquipOptimal = (
   client: Pick<DrizzleClient, "update" | "select">,
-  assignment: { slot: import("@/drizzle/schema").ItemSlot; userItemId: string },
+  assignments: { slot: ItemSlot; userItemId: string }[],
   user: { userId: string },
   now: Date,
-) =>
-  client
+) => {
+  const assignedSlot = sql`(case ${sql.join(
+    assignments.map((a) => sql`when ${userItem.id} = ${a.userItemId} then ${a.slot}`),
+    sql` `,
+  )} else ${userItem.equipped} end)`;
+  return client
     .update(userItem)
-    .set({ equipped: assignment.slot })
+    .set({ equipped: assignedSlot })
     .where(
       and(
-        eq(userItem.id, assignment.userItemId),
+        inArray(
+          userItem.id,
+          assignments.map((a) => a.userItemId),
+        ),
         eq(userItem.userId, user.userId),
         eq(userItem.equipped, "NONE"),
         gt(userItem.quantity, 0),
-        userItemAvailableAt(client, assignment.userItemId, now),
+        or(
+          ...assignments.map((a) =>
+            and(
+              eq(userItem.id, a.userItemId),
+              userItemAvailableAt(client, a.userItemId, now),
+            ),
+          ),
+        ),
+        // MySQL reads the updated table in a subquery only through a materialized derived
+        // table; DISTINCT keeps it from being merged. It is built before this statement's
+        // own writes, so rows assigned together never block each other.
+        sql`NOT EXISTS (SELECT 1 FROM (SELECT DISTINCT ${userItem.equipped} AS slot FROM ${userItem}
+          WHERE ${and(
+            eq(userItem.userId, user.userId),
+            gt(userItem.quantity, 0),
+            ne(userItem.equipped, "NONE"),
+          )}) AS occupied WHERE occupied.slot = ${assignedSlot})`,
+        hasNoHuntingBattle(user.userId),
       ),
     );
+};
 
 /**
  * Whether a user item can be equipped at `now`: not stored at home, not in an auction,
@@ -1909,6 +1936,20 @@ export const listQuestForGetItemRelations = (
         OR JSON_SEARCH(${quest.content}, 'one', ${itemId}, NULL, '$.objectives[*].reward_hunter_items_ids[*]') IS NOT NULL
         OR JSON_SEARCH(${quest.content}, 'one', ${itemId}, NULL, '$.objectives[*].reward_gathering_items_ids[*]') IS NOT NULL
       )`,
+  });
+
+/**
+ * Load the row `toggleEquip` targets, including a merge-claimed stack, so stale claim
+ * recovery applies to it as it does to the full inventory.
+ */
+export const listUserItemForToggleEquip = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+  userItemId: string,
+) =>
+  client.query.userItem.findMany({
+    where: and(eq(userItem.userId, userId), eq(userItem.id, userItemId)),
+    with: { item: true, imbuements: { with: { item: true } } },
   });
 
 /** Load inventory with its selected variant; this lean query omits the full variant catalogue. */

@@ -1,10 +1,29 @@
 import { describe, expect, it } from "bun:test";
 import { getEquippedJutsuProfilePatch } from "@/deltas/jutsu";
 import {
+  getClearedItemLoadouts,
   getEquippedJutsuLoadouts,
   getLoadoutsWithHotkeys,
   getOrderedJutsuLoadouts,
 } from "@/deltas/loadout";
+
+describe("cleared item loadouts", () => {
+  const rows = [
+    { id: "main", itemData: [{ userItemId: "a" }] },
+    { id: "spare", itemData: [{ userItemId: "b" }] },
+  ];
+  it("empties only the loadout an unequip-all cleared", () => {
+    expect(getClearedItemLoadouts(rows, "main")).toEqual([
+      { id: "main", itemData: [] },
+      rows[1]!,
+    ]);
+  });
+
+  it("keeps the loaded list when no loadout changed and reads a missing one again", () => {
+    expect(getClearedItemLoadouts(rows, null)).toBe(rows);
+    expect(getClearedItemLoadouts(rows, "missing")).toBeUndefined();
+  });
+});
 
 it("applies confirmed equip membership against its server baseline without replacing other loadouts", () => {
   const rows = [

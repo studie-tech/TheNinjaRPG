@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import {
+  getAutoEquippedChanges,
   getBulkSoldInventory,
+  getClearedLoadoutId,
   getConsumedRaidBuffs,
   getEquippedInventory,
+  getHomeStorageMergedInventory,
   getHomeStorageMovedInventory,
   getImbuementRemovedInventory,
   getInventoryDurabilities,
@@ -10,7 +13,10 @@ import {
   getInventoryQuantities,
   getInventoryQuantityChanges,
   getSaleUserUpdate,
+  getSelectedVariantInventory,
+  getSelectedVariantUserPatch,
   getSoldInventory,
+  getUnequippedEquipmentChanges,
 } from "@/deltas/item";
 import {
   getEquippedJutsus,
@@ -18,7 +24,7 @@ import {
   getTransferredJutsus,
   getUnequippedJutsus,
 } from "@/deltas/jutsu";
-import type { UserItem } from "@/drizzle/schema";
+import type { ItemVariant, UserItem } from "@/drizzle/schema";
 
 const rows = [
   { id: "one", equipped: "NONE" as const, variants: ["red"] },
@@ -68,6 +74,79 @@ describe("inventory reconciliation", () => {
   it("asks for reconciliation when a moved stack is not loaded", () => {
     const carried = rows.map((row) => ({ ...row, storedAtHome: false }));
     expect(getHomeStorageMovedInventory(carried, ["missing"], true)).toBeUndefined();
+  });
+
+  it("moves a stack home and joins it to the stack stored there", () => {
+    const stacks = [
+      { id: "carried", itemId: "herb", quantity: 4, storedAtHome: false },
+      { id: "stored", itemId: "herb", quantity: 5, storedAtHome: true },
+    ];
+    expect(
+      getHomeStorageMergedInventory(stacks, ["carried"], true, [
+        { id: "stored", itemId: "herb", beforeQuantity: 5, quantity: 9 },
+        { id: "carried", itemId: "herb", beforeQuantity: 4, quantity: 0 },
+      ]),
+    ).toEqual([{ id: "stored", itemId: "herb", quantity: 9, storedAtHome: true }]);
+    expect(getHomeStorageMergedInventory(stacks, ["carried"], true, [])).toEqual([
+      { ...stacks[0]!, storedAtHome: true },
+      stacks[1]!,
+    ]);
+    expect(getHomeStorageMergedInventory(stacks, ["carried"], true, undefined)).toBe(
+      undefined,
+    );
+    expect(getHomeStorageMergedInventory(stacks, ["missing"], true, [])).toBe(
+      undefined,
+    );
+  });
+
+  it("describes the slots unequip-all and auto-equip saved", () => {
+    expect(getUnequippedEquipmentChanges(rows)).toEqual([
+      { id: "one", equipped: "NONE", beforeEquipped: "NONE" },
+      { id: "two", equipped: "NONE", beforeEquipped: "HEAD" },
+    ]);
+    const filled = getAutoEquippedChanges([{ userItemId: "one", slot: "FEET" }]);
+    expect(
+      getEquippedInventory(rows, filled)?.map((row): string => row.equipped),
+    ).toEqual(["FEET", "HEAD"]);
+  });
+
+  it("names the cleared loadout, confirms an untouched one and withholds an unconfirmed one", () => {
+    expect(getClearedLoadoutId({ id: "main" }, { rowsAffected: 1 })).toBe("main");
+    expect(getClearedLoadoutId(undefined, undefined)).toBeNull();
+    expect(getClearedLoadoutId({ id: "main" }, { rowsAffected: 0 })).toBeUndefined();
+  });
+
+  it("points a stack at its saved variant in every view and the worn gear", () => {
+    const variant = { id: "gold" } as ItemVariant;
+    type Lean = {
+      id: string;
+      activeVariantId: string | null;
+      activeVariant: ItemVariant | null;
+    };
+    const lean: Lean[] = [
+      { id: "one", activeVariantId: null, activeVariant: null },
+      { id: "two", activeVariantId: null, activeVariant: null },
+    ];
+    const withVariants: {
+      id: string;
+      activeVariantId: string | null;
+      variants: string[];
+    }[] = [{ id: "one", activeVariantId: "old", variants: ["gold"] }];
+    expect(getSelectedVariantInventory(lean, "one", variant)?.[0]).toEqual({
+      id: "one",
+      activeVariantId: "gold",
+      activeVariant: variant,
+    });
+    expect(getSelectedVariantInventory(withVariants, "one", null)).toEqual([
+      { id: "one", activeVariantId: null, variants: ["gold"] },
+    ]);
+    expect(getSelectedVariantInventory(lean, "missing", variant)).toBeUndefined();
+    expect(getSelectedVariantUserPatch(lean, "two", variant, true)).toEqual({
+      items: [lean[0]!, { id: "two", activeVariantId: "gold", activeVariant: variant }],
+    });
+    expect(getSelectedVariantUserPatch(lean, "carried", variant, false)).toEqual({});
+    expect(getSelectedVariantUserPatch(lean, "carried", variant, true)).toBeUndefined();
+    expect(getSelectedVariantUserPatch(lean, "two", variant, false)).toBeUndefined();
   });
 
   it("credits a bulk sell's summed ryo", () => {

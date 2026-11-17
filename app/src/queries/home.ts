@@ -225,30 +225,6 @@ export const executeResultForUpgradeHome = (
             )}
           `);
 
-/** Execute the database statement for `toggleStoreItem`. */
-export const executeResultForToggleStoreItem = (
-  client: Pick<DrizzleClient, "execute">,
-  user: { updatedAt: Date },
-  userItemResult: { storedAtHome: false | true },
-  ctx: { userId: string },
-  input: { userItemId: string },
-) =>
-  client.execute(sql`
-          UPDATE ${userData}
-          INNER JOIN ${userItem} ON ${userItem.userId} = ${userData.userId}
-          SET ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt)},
-              ${userItem.storedAtHome} = ${!userItemResult.storedAtHome}
-          WHERE ${and(
-            eq(userData.userId, ctx.userId),
-            eq(userData.updatedAt, user.updatedAt),
-            eq(userItem.id, input.userItemId),
-            eq(userItem.storedAtHome, userItemResult.storedAtHome),
-            gt(userItem.quantity, 0),
-            // Never move auction/offer escrow into home storage.
-            userItemResult.storedAtHome ? undefined : eq(userItem.isInAuction, false),
-          )}
-        `);
-
 /**
  * Move the planned stacks between backpack and home storage in one statement. The profile
  * snapshot CAS rejects the move when capacity changed since it was planned; each stack must

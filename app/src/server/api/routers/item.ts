@@ -17,7 +17,9 @@ import {
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getAutoEquippedChanges,
   getBuyUserUpdate,
+  getClearedLoadoutId,
   getConsumedItemUserUpdate,
   getConsumedMealUserUpdate,
   getEvolvedItemUserUpdate,
@@ -30,6 +32,7 @@ import {
   getSaleUserUpdate,
   getSelectItemLoadoutUserUpdate,
   getUnchangedEquipmentUserUpdate,
+  getUnequippedEquipmentChanges,
   getUnequippedUserUpdate,
 } from "@/deltas/item";
 import { getUserProgressionUpdate } from "@/deltas/profile";
@@ -55,6 +58,7 @@ import {
 import {
   type Item,
   type ItemLoadout,
+  type ItemVariant,
   item,
   type UserData,
   type UserItem,
@@ -237,6 +241,7 @@ import {
   listUserItemForFetchUserItems,
   listUserItemForFetchUserItemsWithVariants,
   listUserItemForMergeAllStacks,
+  listUserItemForToggleEquip,
   listUserItemsForSellUserItems,
   listUserPetForConsume,
   listVariantNames,
@@ -456,6 +461,17 @@ const UserUnlockedVariantResponseSchema = z.object({
   variantId: z.string(),
   createdAt: z.date(),
 });
+
+/** Saved equipment slots with their loaded baselines; omission keeps clients on authoritative reads. */
+const equipmentChangesSchema = z
+  .array(
+    z.object({
+      id: z.string(),
+      equipped: z.enum(ItemSlots),
+      beforeEquipped: z.enum(ItemSlots),
+    }),
+  )
+  .optional();
 
 /** Meals require a stack snapshot; collection grants and weighted caches require a retry ID. */
 const consumeItemInputSchema = z.object({
@@ -1532,7 +1548,12 @@ export const itemRouter = createTRPCRouter({
         variantId: z.string().nullable(),
       }),
     )
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        // The saved variant, null for the base look; omitted on rejection.
+        activeVariant: z.custom<ItemVariant>().nullable().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, ui, unlock] = await Promise.all([
@@ -1583,7 +1604,11 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("Item no longer available — please refresh and try again");
       }
 
-      return { success: true, message: "Active variant updated" };
+      return {
+        success: true,
+        message: "Active variant updated",
+        activeVariant: ui.item.variants.find((v) => v.id === input.variantId) ?? null,
+      };
     }),
   // Consume a Variant Token item to unlock a VARIANT_TOKEN-gated variant
   consumeVariantToken: protectedProcedure
@@ -2064,28 +2089,23 @@ export const itemRouter = createTRPCRouter({
   toggleEquip: protectedProcedure
     .meta({ mcp: { description: "Toggle item equip status" } })
     .input(z.object({ userItemId: z.string(), slot: z.enum(ItemSlots).optional() }))
-    .output(
-      baseServerResponse.extend({
-        // Omission keeps clients on authoritative reads when no projection is supplied.
-        equipmentChanges: z
-          .array(
-            z.object({
-              id: z.string(),
-              equipped: z.enum(ItemSlots),
-              beforeEquipped: z.enum(ItemSlots),
-            }),
-          )
-          .optional(),
-      }),
-    )
+    .output(baseServerResponse.extend({ equipmentChanges: equipmentChangesSchema }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [useritems, user, loadouts] = await Promise.all([
-        fetchUserItems(ctx.drizzle, ctx.userId),
+      const [target, user, loadouts] = await Promise.all([
+        withStaleMergeClaimRecovery(ctx.drizzle, ctx.userId, () =>
+          listUserItemForToggleEquip(ctx.drizzle, ctx.userId, input.userItemId),
+        ),
         fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
       ]);
       if (!user) return errorResponse("User not found");
+      // Equip rules read only the target and the worn gear; hidden items stay out of
+      // both, as they do in the full inventory.
+      const useritems = [
+        ...target,
+        ...user.items.filter((ui) => ui.id !== input.userItemId),
+      ].filter((ui) => ui.item && !ui.item.hidden);
       // Mutate
       const result = await toggleEquipItem(
         ctx.drizzle,
@@ -2131,7 +2151,15 @@ export const itemRouter = createTRPCRouter({
           "Unequip all items on the character and clear the active item loadout",
       },
     })
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        equipmentChanges: equipmentChangesSchema,
+        // The loadout whose items were cleared, null when none changed; omitted when unknown.
+        clearedLoadoutId: z.string().nullable().optional(),
+        // A failed request that still unequipped some rows.
+        isPartiallySaved: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx }) => {
       // Equipped rows only (fetchUserItems omits hidden items).
       const [user, loadouts] = await Promise.all([
@@ -2144,46 +2172,57 @@ export const itemRouter = createTRPCRouter({
       const currentLoadout = user.itemLoadout
         ? loadouts.find((l) => l.id === user.itemLoadout)
         : undefined;
-      const shouldClearLoadout = !!currentLoadout && currentLoadout.itemData.length > 0;
+      const loadoutToClear =
+        currentLoadout && currentLoadout.itemData.length > 0
+          ? currentLoadout
+          : undefined;
 
       if (equippedItems.length === 0) {
-        if (shouldClearLoadout && currentLoadout) {
-          await updateItemLoadoutForUnequipAllItems(ctx.drizzle, currentLoadout, ctx);
-        }
+        const cleared = loadoutToClear
+          ? await updateItemLoadoutForUnequipAllItems(ctx.drizzle, loadoutToClear, ctx)
+          : undefined;
         return {
           success: true,
-          message: shouldClearLoadout ? "Cleared active loadout" : "Nothing equipped",
+          message: loadoutToClear ? "Cleared active loadout" : "Nothing equipped",
+          equipmentChanges: [],
+          clearedLoadoutId: getClearedLoadoutId(loadoutToClear, cleared),
           ...getUnchangedEquipmentUserUpdate({ user }),
         };
       }
 
-      // The timestamp acknowledges an already-unequipped row, while the hunting
-      // guard rejects a stale request after encounter admission.
-      const itemUnequipPromises: Promise<{ rowsAffected: number }>[] =
-        equippedItems.map((ui) =>
-          updateUserItemForUnequipAllItems(ctx.drizzle, ui, ctx),
-        );
+      // The timestamp acknowledges an already-unequipped row, so every listed row counts,
+      // while the hunting guard rejects a stale request after encounter admission.
+      const equippedIds = equippedItems.map((ui) => ui.id);
+      const unequipped = await retryOnDeadlock(async () =>
+        updateUserItemForUnequipAllItems(ctx.drizzle, equippedIds, ctx),
+      );
+      if (unequipped.rowsAffected !== equippedIds.length) {
+        return {
+          ...errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE),
+          // Saved rows are not identified, so the client reads its equipment again.
+          isPartiallySaved: unequipped.rowsAffected > 0,
+        };
+      }
 
       // Save committed unequips even if a hunt starts afterward; clearing the
       // template cannot alter the encounter's equipment.
-      const loadoutClearPromise =
-        shouldClearLoadout && currentLoadout
-          ? updateItemLoadoutForUnequipAllItems(ctx.drizzle, currentLoadout, ctx)
-          : undefined;
-
-      const outcomes = await Promise.all(
-        itemUnequipPromises.map((write) => retryOnDeadlock(async () => write)),
-      );
-      if (outcomes.some((saved) => saved.rowsAffected !== 1))
-        return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
-      if (loadoutClearPromise)
-        outcomes.push(await retryOnDeadlock(async () => loadoutClearPromise));
+      const cleared = loadoutToClear
+        ? await retryOnDeadlock(async () =>
+            updateItemLoadoutForUnequipAllItems(ctx.drizzle, loadoutToClear, ctx),
+          )
+        : undefined;
+      const clearedLoadoutId = getClearedLoadoutId(loadoutToClear, cleared);
 
       return {
         success: true,
-        ...getUnequippedUserUpdate({ outcomes, user, equippedItems }),
-
-        message: `Unequipped ${equippedItems.length} item${equippedItems.length === 1 ? "" : "s"}${loadoutClearPromise ? " and cleared active loadout" : ""}`,
+        ...getUnequippedUserUpdate({
+          isConfirmed: clearedLoadoutId !== undefined,
+          user,
+          equippedItems,
+        }),
+        equipmentChanges: getUnequippedEquipmentChanges(equippedItems),
+        clearedLoadoutId,
+        message: `Unequipped ${equippedItems.length} item${equippedItems.length === 1 ? "" : "s"}${loadoutToClear ? " and cleared active loadout" : ""}`,
       };
     }),
 
@@ -3585,7 +3624,8 @@ export const itemRouter = createTRPCRouter({
   // Auto-equip optimal items based on cost
   autoEquipOptimal: protectedProcedure
     .meta({ mcp: { description: "Auto-equip best items by cost" } })
-    .output(baseServerResponse)
+    // Changes are omitted when an assigned row or its slot changed before the write.
+    .output(baseServerResponse.extend({ equipmentChanges: equipmentChangesSchema }))
     .mutation(async ({ ctx }) => {
       const [useritems, user] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
@@ -3594,10 +3634,10 @@ export const itemRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
 
       // Slot exclusivity and category / maxEquips limits are decided against one
-      // in-memory snapshot. Writes are a single Promise.all so validation is not
-      // serialized per item. The same `now` is reused in the write predicates so
-      // a row that moves home / auction / crafting / imbue after the snapshot
-      // is not equipped.
+      // in-memory snapshot and saved in one statement. The same `now` is reused in
+      // the write predicates so a row that moves home / auction / crafting / imbue
+      // after the snapshot is not equipped, and a slot another equip filled since
+      // the read stays with that item.
       const now = new Date();
       const masteries = effectiveMasteries(user);
       const { assignments, hasUnequipped, hasAvailableSlots } =
@@ -3610,19 +3650,25 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("No available slots to equip items");
       }
 
-      let nEquipped = 0;
-      if (assignments.length > 0) {
-        const results = await Promise.all(
-          assignments.map((assignment) =>
-            updateUserItemForAutoEquipOptimal(ctx.drizzle, assignment, user, now),
-          ),
-        );
-        nEquipped = results.reduce((sum, result) => sum + result.rowsAffected, 0);
-      }
+      const nEquipped =
+        assignments.length > 0
+          ? (
+              await retryOnDeadlock(async () =>
+                updateUserItemForAutoEquipOptimal(ctx.drizzle, assignments, user, now),
+              )
+            ).rowsAffected
+          : 0;
+      if (assignments.length > 0 && nEquipped === 0)
+        return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
 
       return {
         success: true,
         message: `Equipped ${nEquipped} item${nEquipped === 1 ? "" : "s"}`,
+        // Each saved row counts once, so a full count confirms every assignment.
+        equipmentChanges:
+          nEquipped === assignments.length
+            ? getAutoEquippedChanges(assignments)
+            : undefined,
       };
     }),
   getItemLoadouts: protectedProcedure
@@ -3661,17 +3707,7 @@ export const itemRouter = createTRPCRouter({
     .meta({ mcp: { description: "Select an item loadout" } })
     .input(idSchema)
     .output(
-      userDeltaResponseSchema.extend({
-        equipmentChanges: z
-          .array(
-            z.object({
-              id: z.string(),
-              equipped: z.enum(ItemSlots),
-              beforeEquipped: z.enum(ItemSlots),
-            }),
-          )
-          .optional(),
-      }),
+      userDeltaResponseSchema.extend({ equipmentChanges: equipmentChangesSchema }),
     )
     .mutation(async ({ ctx, input }) => {
       // Query

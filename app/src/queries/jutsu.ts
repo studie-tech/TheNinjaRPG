@@ -41,6 +41,7 @@ import {
   skillTree,
   userData,
   userJutsu,
+  userQueue,
 } from "@/drizzle/schema";
 import type { JutsuCapFlags, JutsuEquipCap } from "@/libs/jutsu";
 import { JUTSU_FREE_TRANSFER_MARKER } from "@/libs/jutsu";
@@ -545,11 +546,44 @@ export const insertActionLogForDelete = (
     relatedImage: entry.image,
   });
 
-/** Build the `userJutsu` deletion for `forget`, using predicates on `id`. */
+/**
+ * Build the `userJutsu` deletion for `forget`: the caller's row by `id`, only while no
+ * queued training targets its jutsu.
+ */
 export const deleteUserJutsuForForget = (
-  client: Pick<DrizzleClient, "delete">,
+  client: Pick<DrizzleClient, "delete" | "select">,
   input: { id: string },
-) => client.delete(userJutsu).where(eq(userJutsu.id, input.id));
+  ctx: { userId: string },
+) =>
+  client.delete(userJutsu).where(
+    and(
+      eq(userJutsu.id, input.id),
+      eq(userJutsu.userId, ctx.userId),
+      notExists(
+        client
+          .select({ one: sql`1` })
+          .from(userQueue)
+          .where(
+            and(
+              eq(userQueue.userId, ctx.userId),
+              eq(userQueue.kind, "JUTSU"),
+              eq(userQueue.jutsuId, userJutsu.jutsuId),
+            ),
+          ),
+      ),
+    ),
+  );
+
+/** Build the `userJutsu` lookup that explains a refused `forget`, selecting only `id`. */
+export const findUserJutsuForForget = (
+  client: Pick<DrizzleClient, "query">,
+  input: { id: string },
+  ctx: { userId: string },
+) =>
+  client.query.userJutsu.findFirst({
+    columns: { id: true },
+    where: and(eq(userJutsu.id, input.id), eq(userJutsu.userId, ctx.userId)),
+  });
 
 /** Build the `jutsu` listing for `getEvolutions`, using predicates on `parentJutsuId`. */
 export const listJutsuForGetEvolutions = (
