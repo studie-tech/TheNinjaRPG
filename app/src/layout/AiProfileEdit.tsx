@@ -484,7 +484,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                   <RuleConditionsEditor
                     rule={rule}
                     ruleIndex={ruleIndex}
-                    canEdit={canEdit}
+                    canEdit={canEdit && !(includeDefault && isBackupRule)}
                     setRules={setRules}
                     updateCondition={updateCondition}
                   />
@@ -494,7 +494,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                   <RuleActionEditor
                     rule={rule}
                     ruleIndex={ruleIndex}
-                    canEdit={canEdit}
+                    canEdit={canEdit && !(includeDefault && isBackupRule)}
                     jutsus={jutsus}
                     items={items}
                     updateAction={updateAction}
@@ -624,8 +624,8 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                 button={trigger}
                 onAccept={() => void copyRulesFrom(source.id, source.name)}
               >
-                Replace your unsaved rules with the rules of {source.name}? You can
-                still discard the copy before saving.
+                Replace your unsaved rules with the rules of {source.name}? Your unsaved
+                edits are lost; Discard changes returns to your saved rules.
               </Confirm>
             ) : (
               <span key={source.id}>{trigger}</span>

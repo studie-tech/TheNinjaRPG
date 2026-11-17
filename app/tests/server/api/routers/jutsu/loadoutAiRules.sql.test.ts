@@ -110,6 +110,11 @@ describeWithDatabase("jutsu loadouts carry their AI rules", () => {
     ]);
     const legacy = await (await callerFor(jutsuRouter, "legacy")).getLoadouts();
     const first = legacy[0]?.id as string;
+    // The answer already shows the rules the first loadout fights with.
+    expect(legacy[0]).toMatchObject({
+      customAi: true,
+      aiProfile: { id: "rules-legacy" },
+    });
     expect(await pointer("legacy")).toEqual({
       jutsuLoadout: first,
       aiProfileId: "rules-legacy",

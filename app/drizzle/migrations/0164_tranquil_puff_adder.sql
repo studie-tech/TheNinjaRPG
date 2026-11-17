@@ -63,6 +63,20 @@ LEFT JOIN (
 ) AS `chosen` ON `chosen`.`userId` = `JutsuLoadout`.`userId`
 SET `JutsuLoadout`.`customAi` = true
 WHERE `JutsuLoadout`.`customAi` = false AND `chosen`.`userId` IS NULL;
+-- A player who fights with custom rules on an active loadout that has none, such as a slot the
+-- previous build added and switched to, keeps fighting with them: that loadout gets a copy.
+INSERT INTO `AiProfile` (`id`, `userId`, `jutsuLoadoutId`, `rules`, `includeDefaultRules`)
+SELECT CONCAT(`AiProfile`.`id`, '-', `JutsuLoadout`.`id`), `UserData`.`userId`,
+  `JutsuLoadout`.`id`, `AiProfile`.`rules`, `AiProfile`.`includeDefaultRules`
+FROM `UserData`
+JOIN `JutsuLoadout` ON `JutsuLoadout`.`id` = `UserData`.`jutsuLoadout`
+  AND `JutsuLoadout`.`userId` = `UserData`.`userId`
+JOIN `AiProfile` ON `AiProfile`.`id` = `UserData`.`aiProfileId`
+  AND `AiProfile`.`userId` = `UserData`.`userId`
+WHERE `UserData`.`isAi` = 0
+  AND NOT EXISTS (
+    SELECT 1 FROM `AiProfile` AS `existing` WHERE `existing`.`jutsuLoadoutId` = `JutsuLoadout`.`id`
+  );
 -- A player's rules pointer names their active loadout's own rules when they fight with custom
 -- rules, which the previous build did not keep when it switched loadouts. It runs last, keeps
 -- the player's choice between custom and Default rules for the active loadout, and changes

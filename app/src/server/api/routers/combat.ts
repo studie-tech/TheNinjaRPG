@@ -342,7 +342,11 @@ import {
   sectorLatitudeSchema,
   sectorLongitudeSchema,
 } from "@/validators/travel";
-import type { UserCachePatch, UserDelta } from "@/validators/userCache";
+import type {
+  UserCachePatch,
+  UserDelta,
+  UserDeltaResponse,
+} from "@/validators/userCache";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUpdatedUser } from "./profile";
 
@@ -1318,17 +1322,21 @@ export const combatRouter = createTRPCRouter({
       if (!jutsuLoadoutResult.success && jutsuChanged) {
         return errorResponse(jutsuLoadoutResult.message);
       }
-      // A saved jutsu loadout switch reaches the profile, also when the lobby update fails later.
-      const loadoutPatch =
-        jutsuChanged && selectedJutsuLoadout
-          ? getSelectJutsuLoadoutUserUpdate({
-              id: selectedJutsuLoadout.id,
-              loadoutJutsuIds: selectedJutsuLoadout.jutsuIds,
-              aiProfileId: selectedJutsuLoadout.customAi
-                ? (selectedJutsuLoadout.aiProfile?.id ?? null)
-                : null,
-            })
-          : {};
+      // A saved jutsu loadout reaches the profile, also when the lobby update fails later.
+      // An item-only switch reapplies the battle's jutsu loadout, which the profile follows too.
+      const appliedJutsuLoadout =
+        jutsuLoadoutResult.success && jutsuLoadoutIdToApply
+          ? jutsuLoadouts.find((loadout) => loadout.id === jutsuLoadoutIdToApply)
+          : undefined;
+      const loadoutPatch: Pick<UserDeltaResponse, "userPatch"> = appliedJutsuLoadout
+        ? getSelectJutsuLoadoutUserUpdate({
+            id: appliedJutsuLoadout.id,
+            loadoutJutsuIds: appliedJutsuLoadout.jutsuIds,
+            aiProfileId: appliedJutsuLoadout.customAi
+              ? (appliedJutsuLoadout.aiProfile?.id ?? null)
+              : null,
+          })
+        : {};
 
       // An item-only switch can remove a required bloodline item or a mastery buff.
       // Revalidate stored equips too: battle filtering alone leaves invalid equips

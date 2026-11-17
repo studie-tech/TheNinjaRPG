@@ -118,6 +118,27 @@ describeWithDatabase("AI profiles per jutsu loadout migration", () => {
     expect(u2?.customAi).toBe(false);
   });
 
+  it("keeps custom rules for a player the previous build moved to a new loadout", async () => {
+    await runRawSql(backfill);
+    const db = await getTestDatabase();
+    // The previous build adds a loadout slot and switches to it, keeping the rules pointer.
+    await db.insert(jutsuLoadout).values(loadout("c3", "custom", "2026-01-03"));
+    await db
+      .update(userData)
+      .set({ jutsuLoadout: "c3" })
+      .where(eq(userData.userId, "custom"));
+    await runRawSql(backfill);
+    const custom = await db.query.userData.findFirst({
+      where: eq(userData.userId, "custom"),
+      columns: { aiProfileId: true },
+    });
+    expect(custom?.aiProfileId).toBe("p-custom-c3");
+    const c3 = await db.query.jutsuLoadout.findFirst({
+      where: eq(jutsuLoadout.id, "c3"),
+    });
+    expect(c3?.customAi).toBe(true);
+  });
+
   it("leaves the rules players chose per loadout alone when it runs again", async () => {
     await runRawSql(backfill);
     const db = await getTestDatabase();

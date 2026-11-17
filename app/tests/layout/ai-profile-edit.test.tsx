@@ -226,6 +226,17 @@ describe("a player's rules for a jutsu loadout", () => {
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
   });
 
+  it("locks the fallback rules' conditions and actions for players", () => {
+    const view = player();
+    const fallback = headers(view).find((header) =>
+      header.textContent?.startsWith("Fallback rule 1:"),
+    );
+    fireEvent.click(fallback!);
+    // Its "distance higher than 2" condition can't be changed.
+    const value = view.getByDisplayValue("2") as HTMLInputElement;
+    expect(value.disabled).toBe(true);
+  });
+
   it("reports unsaved edits and discards them on request", () => {
     const onDirtyChange = vi.fn();
     const view = player({ onDirtyChange });

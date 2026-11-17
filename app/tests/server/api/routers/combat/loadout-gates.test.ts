@@ -4,6 +4,7 @@ import type { BattleType } from "@/drizzle/constants";
 import {
   aiProfile,
   battle,
+  itemLoadout,
   jutsu,
   jutsuEquipLimit,
   jutsuLoadout,
@@ -111,7 +112,15 @@ describeWithDatabase("combat lobby jutsu gates", () => {
     await resetTables(jutsuEquipLimit);
     await (await getTestDatabase()).insert(jutsuEquipLimit).values(equipLimitFixture);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await resetTables(battle, aiProfile, userJutsu, jutsuLoadout, jutsu, userData);
+    await resetTables(
+      battle,
+      aiProfile,
+      itemLoadout,
+      userJutsu,
+      jutsuLoadout,
+      jutsu,
+      userData,
+    );
     // JONIN (9) + gold federal (3) + 2 extra slots + 1 base = 15 equip slots.
     await insertUsers([
       {
@@ -196,6 +205,37 @@ describeWithDatabase("combat lobby jutsu gates", () => {
     // A loadout on the Default rules fights with them.
     await api.updateCombatLoadout({ battleId: BATTLE, jutsuLoadoutId: "gates" });
     expect((await stored()).usersState[0]!.aiProfileId).toBe("Default");
+  });
+
+  it("patches the profile when an item switch in the lobby reapplies the battle's jutsu loadout", async () => {
+    const db = await getTestDatabase();
+    await db
+      .insert(jutsuLoadout)
+      .values({ id: "rules", userId: USER, jutsuIds: VALID, customAi: true });
+    await db.insert(aiProfile).values({
+      id: "rules-own",
+      userId: USER,
+      jutsuLoadoutId: "rules",
+      rules: [AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) })],
+    });
+    await db.insert(itemLoadout).values([
+      { id: "items-a", userId: USER, itemData: [] },
+      { id: "items-b", userId: USER, itemData: [] },
+    ]);
+    await seedLobby();
+    const api = await callerFor(combatRouter, USER);
+    await api.updateCombatLoadout({ battleId: BATTLE, jutsuLoadoutId: "rules" });
+    // Elsewhere the player selects another jutsu loadout; the battle still holds "rules".
+    await (await callerFor(jutsuRouter, USER)).selectJutsuLoadout({ id: "gates" });
+    const items = await api.updateCombatLoadout({
+      battleId: BATTLE,
+      itemLoadoutId: "items-b",
+    });
+    expect(items.success).toBe(true);
+    expect("userPatch" in items && items.userPatch).toMatchObject({
+      jutsuLoadout: "rules",
+      aiProfileId: "rules-own",
+    });
   });
 
   it("patches the profile with a saved loadout switch even when the lobby update loses a race", async () => {

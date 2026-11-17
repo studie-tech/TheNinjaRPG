@@ -564,7 +564,9 @@ export const jutsuRouter = createTRPCRouter({
         },
         new Date(),
       );
-      return backfillLoadouts<JutsuLoadout & { aiProfile: { id: string } | null }>({
+      const rows = await backfillLoadouts<
+        JutsuLoadout & { aiProfile: { id: string } | null }
+      >({
         loadouts,
         missing,
         maxLoadouts,
@@ -575,6 +577,9 @@ export const jutsuRouter = createTRPCRouter({
           // a concurrent select that set it first is not overwritten.
           updateUserDataForWriteDefaultPointer(ctx.drizzle, id, ctx),
       });
+      if (user?.jutsuLoadout) return rows;
+      // The first active loadout may take over AI rules the player wrote before owning one.
+      return (await fetchJutsuLoadouts(ctx.drizzle, ctx.userId)).slice(0, maxLoadouts);
     }),
 
   selectJutsuLoadout: protectedProcedure
