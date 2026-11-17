@@ -22,11 +22,13 @@ const meal = {
   item: { name: "Stew", image: null },
   quest: null,
   effects: [],
-  createdAt: new Date(Date.now() - 60_000),
-  expiresAt: new Date(Date.now() + 60_000),
+  createdAt: new Date(0),
+  expiresAt: new Date(0),
 };
 
 beforeEach(() => {
+  meal.createdAt = new Date(Date.now() - 60_000);
+  meal.expiresAt = new Date(Date.now() + 60_000);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
       raids: { getUserRaidBuffs: { invalidate: invalidateBuffs } },
