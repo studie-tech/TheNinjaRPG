@@ -244,7 +244,6 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                         : "",
                       bgColor,
                       bgColor && "text-slate-900",
-                      isGreyed ? "opacity-20" : "",
                     )}
                     isGreyed={isGreyed}
                     count={counts?.find((c) => c.id === item.id)?.quantity}
@@ -318,11 +317,17 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
       className={cn(
         "relative z-0 flex flex-col items-center justify-start rounded-md text-center",
         insufficientAP ? "cursor-not-allowed" : "cursor-pointer",
-        props.isGreyed ? "hover:opacity-80" : insufficientAP ? "" : "hover:opacity-90",
+        !props.isGreyed && !insufficientAP && "hover:opacity-90",
         props.className,
       )}
     >
-      <div className="relative w-full">
+      {/* Keep names opaque against their category color when the artwork is dimmed. */}
+      <div
+        className={cn(
+          "relative w-full",
+          props.isGreyed && "opacity-20 hover:opacity-80",
+        )}
+      >
         {item.assetType === "SFX" && item.url ? (
           // biome-ignore lint/a11y/useKeyWithClickEvents: Container click is supplementary - audio controls are the primary interaction
           // biome-ignore lint/a11y/noStaticElementInteractions: Click handler supplements audio controls

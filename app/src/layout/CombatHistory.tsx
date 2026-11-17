@@ -5,7 +5,6 @@ import { api } from "@/app/_trpc/client";
 import { BATTLE_LOG_DEFAULT_LIMIT, BATTLE_LOG_FULL_LIMIT } from "@/drizzle/constants";
 import ElementImage from "@/layout/ElementImage";
 import Loader from "@/layout/Loader";
-import { EFFECT_TEXT_COLORS } from "@/libs/combat/constants";
 import type { ActionEffect, CombatResult } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
 import { groupBy } from "@/utils/grouping";
@@ -118,8 +117,8 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
         type="button"
         key={`header-${round}`}
         className={cn(
-          "flex w-full cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-accent",
-          isOpen && "bg-accent",
+          "flex w-full cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-slate-100",
+          isOpen && "bg-slate-100",
         )}
         onClick={() => {
           setRoundChoices((prev) => ({
@@ -131,16 +130,16 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
           }));
         }}
       >
-        <div className="h-2 w-2 rounded-full bg-muted-foreground" />
+        <div className="h-2 w-2 rounded-full bg-slate-600" />
         <ChevronsDown
           className={cn(
-            "h-4 w-4 text-muted-foreground transition-transform",
+            "h-4 w-4 text-slate-600 transition-transform",
             !isOpen && "-rotate-90",
           )}
         />
-        <span className="font-semibold text-foreground text-sm">Round {round}</span>
+        <span className="font-semibold text-sm">Round {round}</span>
         {timeString && (
-          <span className="ml-auto text-muted-foreground text-xs">{timeString}</span>
+          <span className="ml-auto text-slate-600 text-xs">{timeString}</span>
         )}
       </button>
     );
@@ -162,7 +161,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
               return (
                 <div
                   key={`v-${entry.battleVersion}`}
-                  className="py-1 pl-4 font-normal text-muted-foreground text-sm"
+                  className="py-1 pl-4 font-normal text-sm"
                 >
                   {isNewUser && !isLastEntry ? <hr className="mt-0 mb-3" /> : null}
                   {userData?.showBattleDescription ? (
@@ -174,7 +173,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
                   )}
                   {effects?.map((effect, effectIdx) => {
                     const effectKey = `${entry.battleVersion}-${effectIdx}`;
-                    const color = EFFECT_TEXT_COLORS[effect.color] ?? "text-foreground";
+                    const color = LOG_EFFECT_TEXT_COLORS[effect.color] ?? "text-black";
                     const text = insertComponentsIntoText(
                       effect.txt,
                       STAT_KEYWORD_HIGHLIGHTS,
@@ -204,7 +203,8 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
 
   // Show component
   return (
-    <div className="relative flex flex-col overflow-auto rounded-lg border bg-card text-card-foreground pt-2">
+    // The log keeps a light reading surface; effect and stat colors are chosen for white.
+    <div className="relative flex flex-col overflow-auto rounded-lg border bg-white pt-2 text-black">
       {isFetching && (
         <div className="absolute top-2 right-2">
           <Loader />
@@ -217,18 +217,30 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
 
 export default CombatHistory;
 
+/** Effect colors with readable contrast on the log's fixed white surface. */
+const LOG_EFFECT_TEXT_COLORS: Record<ActionEffect["color"], string> = {
+  red: "text-red-700",
+  green: "text-green-700",
+  blue: "text-blue-700",
+  yellow: "text-yellow-800",
+  purple: "text-purple-700",
+  orange: "text-orange-700",
+  pink: "text-pink-700",
+  gray: "text-gray-600",
+};
+
 /** Stat words a battle log effect highlights wherever they appear. */
 const STAT_KEYWORD_HIGHLIGHTS: Record<string, React.ReactNode> = Object.fromEntries(
   Object.entries({
     Highest: "text-stone-500",
-    Taijutsu: "text-green-600",
+    Taijutsu: "text-green-700",
     Bukijutsu: "text-red-600",
     Ninjutsu: "text-blue-600",
     Genjutsu: "text-purple-600",
     Strength: "text-blue-800",
-    Intelligence: "text-teal-600",
-    Willpower: "text-orange-600",
-    Speed: "text-cyan-600",
+    Intelligence: "text-teal-700",
+    Willpower: "text-orange-700",
+    Speed: "text-cyan-700",
   }).map(([word, className]) => [
     word,
     <span key={word} className={className}>

@@ -15,7 +15,13 @@ const lightOnly =
 const themedFiles: Record<string, string[]> = {
   "components/ui/button.tsx": [],
   "layout/ClanSearchSelect.tsx": [],
-  "layout/CombatHistory.tsx": [],
+  // Battle logs use a fixed white reading surface with dark text and effect colors.
+  "layout/CombatHistory.tsx": [
+    '?? "text-black"',
+    "border bg-white pt-2 text-black",
+    'isOpen && "bg-slate-100"',
+    "py-1 hover:bg-slate-100",
+  ],
   "layout/CombatTimeline.tsx": ['gray: "bg-gray-100"'],
   "layout/Pagination.tsx": [],
   "layout/UserSearchSelect.tsx": [],
