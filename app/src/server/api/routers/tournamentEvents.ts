@@ -853,37 +853,36 @@ const payEventRewards = async (client: DrizzleClient, row: EventRow) => {
   const unpaid = users.filter((id) => !receipts.some((r) => r.userId === id));
   let receipted = 0;
   for (const userId of unpaid) {
-    try {
-      const committed = await retryOnDeadlock(() =>
-        client.transaction(async (database) => {
-          // Claim the still-retained terminal event, preventing cleanup from removing receipts
-          // while a delayed payer is in flight. The version increment also fences deletion.
-          const retained = await updateTournamentForPayEventRewards(database, row);
-          if (retained.rowsAffected !== 1) return false;
-          // Unique receipt and all grants roll back together; a duplicate never grants twice.
+    const committed = await retryOnDeadlock(() =>
+      client.transaction(async (database) => {
+        // Claim the still-retained terminal event, preventing cleanup from removing receipts
+        // while a delayed payer is in flight. The version increment also fences deletion.
+        const retained = await updateTournamentForPayEventRewards(database, row);
+        if (retained.rowsAffected !== 1) return false;
+        try {
           await insertTournamentRewardClaimForPayEventRewards(database, row, userId);
-          const user = await findUserById(database, userId);
-          // Deleted entrants are nonpayable; retain their receipt so payout can finish.
-          if (!user) return true;
-          const rewards = eventRewardFor(event, userId);
-          if (!rewards) return true;
-          await updateRewards({
-            client: database,
-            inTransaction: true,
-            user,
-            rewards: postProcessRewards(rewards, user),
-            reason: `TOURNAMENT_${row.id}`,
-            persistQuestData: false,
-          });
+        } catch (error) {
+          if (!isMysqlDuplicateKeyError(error)) throw error;
+          // Only a receipt conflict proves another payer committed; grant failures must roll back.
           return true;
-        }),
-      );
-      if (committed) receipted++;
-    } catch (error) {
-      if (!isMysqlDuplicateKeyError(error)) throw error;
-      // A concurrent payer already committed this entrant's receipt.
-      receipted++;
-    }
+        }
+        const user = await findUserById(database, userId);
+        // Deleted entrants are nonpayable; retain their receipt so payout can finish.
+        if (!user) return true;
+        const rewards = eventRewardFor(event, userId);
+        if (!rewards) return true;
+        await updateRewards({
+          client: database,
+          inTransaction: true,
+          user,
+          rewards: postProcessRewards(rewards, user),
+          reason: `TOURNAMENT_${row.id}`,
+          persistQuestData: false,
+        });
+        return true;
+      }),
+    );
+    if (committed) receipted++;
   }
   if (receipted === unpaid.length)
     await updateTournamentForMarkEventRewardsPaid(client, row, Date.now());

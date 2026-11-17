@@ -28,6 +28,7 @@ import {
   userCookingJob,
   userData,
   userQueue,
+  userRewards,
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
@@ -38,6 +39,7 @@ import {
   createEventState,
   generateEventBracket,
 } from "@/libs/tournament/events";
+import * as questQueries from "@/queries/quests";
 import * as eventQueries from "@/queries/tournamentEvents";
 import { fetchEvent, fetchEventNoticeState } from "@/queries/tournamentEvents";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
@@ -97,6 +99,7 @@ describeWithDatabase("event tournament persistence", () => {
       userCookingJob,
       questHistory,
       quest,
+      userRewards,
       userData,
     );
   });
@@ -2192,6 +2195,51 @@ describeWithDatabase("event tournament persistence", () => {
       (await fetchEvent(database, "event"))?.eventData?.rewardsPaidAt,
     ).toBeGreaterThan(0);
     expect((await database.query.userData.findFirst())?.money).toBe(10);
+  });
+
+  it("retries a rolled-back grant duplicate without recording a finished payout", async () => {
+    const database = await getTestDatabase();
+    await insertUsers([{ userId: "remaining", money: 0, reputationPoints: 0 }]);
+    const event = completedEvent("event");
+    event.eventData.participants = event.eventData.participants.filter(
+      (p) => p.userId === "remaining",
+    );
+    event.eventData.config.rewards.participation.reward_reputation = 1;
+    await database.insert(tournament).values(event);
+    await database.insert(userRewards).values({
+      id: "existing-grant",
+      awardedById: "remaining",
+      receiverId: "remaining",
+      reason: "Existing grant",
+    });
+    // Force a grant ID collision after the balance write, independently of the receipt insert.
+    vi.spyOn(questQueries, "insertUserRewardsForUpdateRewards").mockImplementationOnce(
+      (client, user, rewards, reason) =>
+        client.insert(userRewards).values({
+          id: "existing-grant",
+          awardedById: user.userId,
+          receiverId: user.userId,
+          reputationAmount: rewards.reward_reputation,
+          reason,
+        }),
+    );
+    await expect(syncEventTournament(database, "event")).rejects.toThrow();
+    expect(await database.query.tournamentRewardClaim.findMany()).toHaveLength(0);
+    expect((await database.query.userData.findFirst())?.money).toBe(0);
+    expect(
+      (await fetchEvent(database, "event"))?.eventData?.rewardsPaidAt,
+    ).toBeUndefined();
+
+    await maintainEventTournaments(database);
+    await syncEventTournament(database, "event");
+    expect(await database.query.tournamentRewardClaim.findMany()).toHaveLength(1);
+    expect(await database.query.userData.findFirst()).toMatchObject({
+      money: 10,
+      reputationPoints: 1,
+    });
+    expect(
+      (await fetchEvent(database, "event"))?.eventData?.rewardsPaidAt,
+    ).toBeGreaterThan(0);
   });
 
   it("pays a finished event after the event read responds", async () => {
