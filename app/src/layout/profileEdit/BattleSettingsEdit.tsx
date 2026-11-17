@@ -391,9 +391,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                   describedBy={hasUnsavedRules ? unsavedRulesId : undefined}
                   onSelecting={setIsSwitchingLoadout}
                   // Equipping changes the jutsu these rules can use.
-                  onSelected={() =>
-                    void utils.profile.getPublicUser.invalidate({ userId })
-                  }
+                  onSelected={() => utils.profile.getPublicUser.invalidate({ userId })}
                 />
               </div>
               {hasUnsavedRules && (
@@ -456,7 +454,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={isPending || hasUnsavedRules}
+                      disabled={isPending || hasUnsavedRules || isSwitchingLoadout}
                     >
                       {isPending ? <Loader size={5} /> : "Reset rules"}
                     </Button>

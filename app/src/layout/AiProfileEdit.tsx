@@ -235,10 +235,12 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   }, [profile, isStaff, isControlled, hydration]);
 
   // Edits, a switch to other rules or a reload while copying made a new draft; that one stays.
+  // Rules locked meanwhile are about to be replaced, so the copy is dropped too.
   useEffect(() => {
     if (!pendingCopy) return;
     setPendingCopy(null);
-    if (rules !== pendingCopy.draft || profile !== pendingCopy.profile) return;
+    if (!canEdit || rules !== pendingCopy.draft || profile !== pendingCopy.profile)
+      return;
     setRules(pendingCopy.rules);
     setActiveElement("");
     const copied = draftKey(pendingCopy.rules, includeDefault);
@@ -251,7 +253,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
             ? `Copied the rules of ${pendingCopy.name}, which match your saved rules.`
             : `Copied the rules of ${pendingCopy.name}. Save to keep them.`,
     });
-  }, [pendingCopy, rules, profile, includeDefault, savedDraft]);
+  }, [pendingCopy, rules, profile, includeDefault, savedDraft, canEdit]);
 
   const isDirty = savedDraft !== "" && draftKey(rules, includeDefault) !== savedDraft;
   const { onDirtyChange } = props;
@@ -360,6 +362,8 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
       topRightContent={
         props.configuration ? undefined : isToggling ? (
           <Loader explanation="Toggling AI Profile" />
+        ) : props.locked ? (
+          <Loader />
         ) : (
           <NavTabs
             id="profileSelection"
@@ -539,7 +543,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
           <Toggle
             id="catchAllRules"
             value={includeDefault}
-            disabled={isDefault || isSaving || props.configuration?.disabled}
+            disabled={isDefault || !canEdit}
             setShowActive={(value) => {
               setIncludeDefault(value);
               if (value)

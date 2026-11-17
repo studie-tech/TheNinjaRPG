@@ -177,6 +177,19 @@ const custom = (count: number): AiRuleType[] =>
     AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) }),
   );
 
+it("keeps the staff CatchAll switch off limits while the rules are locked", () => {
+  const component = (locked: boolean) => (
+    <AiProfileEdit
+      userData={{ aiProfileId: "custom", userId: "bot", jutsus: [], items: [] }}
+      locked={locked}
+    />
+  );
+  const view = render(component(false));
+  expect((view.getByRole("switch") as HTMLButtonElement).disabled).toBe(false);
+  view.rerender(component(true));
+  expect((view.getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
+});
+
 describe("a player's rules for a jutsu loadout", () => {
   const player = (props: Partial<React.ComponentProps<typeof AiProfileEdit>> = {}) => {
     mocks.role = "USER";
@@ -409,6 +422,38 @@ describe("a player's rules for a jutsu loadout", () => {
 
   it("keeps the rules read-only while the caller switches or resets them", () => {
     readOnly(player({ copySources: [{ id: "pvp", name: "PvP" }], locked: true }));
+  });
+
+  it("keeps the Default or Custom choice out of reach while the rules are locked", () => {
+    const view = player({ locked: true });
+    expect(view.queryByRole("button", { name: "Default" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Custom" })).toBeNull();
+  });
+
+  it("drops copied rules that arrive while the rules are locked", async () => {
+    let resolve: (profile: unknown) => void = () => undefined;
+    mocks.fetchProfile.mockReturnValue(new Promise((done) => (resolve = done)));
+    const component = (locked: boolean) => (
+      <AiProfileEdit
+        userData={{ aiProfileId: "custom", userId: "editor", jutsus: [], items: [] }}
+        maxCustomRules={2}
+        copySources={[{ id: "pvp", name: "PvP" }]}
+        locked={locked}
+      />
+    );
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    view.rerender(component(true));
+    await act(async () =>
+      resolve({
+        id: "pvp",
+        includeDefaultRules: true,
+        rules: [...custom(2), ...getBackupRules()],
+      }),
+    );
+    view.rerender(component(false));
+    expect(view.getByText("1 / 2 rules")).toBeDefined();
+    expect(copiedToasts()).toHaveLength(0);
   });
 
   it("says so when the copied rules are the rules already saved", async () => {

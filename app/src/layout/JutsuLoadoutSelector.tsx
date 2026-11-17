@@ -14,8 +14,9 @@ import { useUserDataSelector } from "@/utils/UserContext";
 
 const JutsuLoadoutSelector: React.FC<
   LoadoutSelectorDisplayProps & {
-    /** Runs once a selection is saved, for views that show what the loadout equips. */
-    onSelected?: () => void;
+    /** Runs once a selection is saved, for views that show what the loadout equips; the
+     * selection finishes once a returned promise settles. */
+    onSelected?: () => unknown;
     /** Hears when a selection starts and when it has finished, for views that lock meanwhile. */
     onSelecting?: (isSelecting: boolean) => void;
   }
@@ -56,7 +57,7 @@ const JutsuLoadoutSelector: React.FC<
           updateUser(data, { revision }),
           utils.jutsu.getUserJutsus.invalidate(),
         ]);
-        onSelected?.();
+        await onSelected?.();
       }
     },
   });
