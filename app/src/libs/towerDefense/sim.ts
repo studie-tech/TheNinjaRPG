@@ -442,7 +442,7 @@ export const tdSentryCost = (type: TdSentry, level = 0) =>
 export const tdSentryRange = (sentry: TdSentrySlot) =>
   TD_SENTRY_INFO[sentry.type].range + sentry.level * 0.25;
 
-/** Scroll cost of the next Dojo level. */
+/** Scroll cost of the next Guard Hall level. */
 export const tdDojoCost = (id: TdDojoUpgrade, level: number) => {
   const info = TD_DOJO_INFO[id];
   return geometricCost(info.base, info.growth, level);
@@ -690,7 +690,7 @@ const refreshStats = (state: TdState) => {
 
 const ultimatePower = (state: TdState, ultimate: TdUltimate) =>
   powi(1.1, Math.max(0, dojoLevel(state.config, `ul_${ultimate}`) - 1));
-/** Ticks an ultimate takes to recharge after a cast, with its Dojo reduction. */
+/** Ticks an ultimate takes to recharge after a cast, with its Guard Hall reduction. */
 export const tdUltimateCooldownTicks = (state: TdState, ultimate: TdUltimate) =>
   Math.floor(
     TD_ULTIMATE_INFO[ultimate].cooldown *

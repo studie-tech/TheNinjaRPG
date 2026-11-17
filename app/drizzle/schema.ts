@@ -3391,6 +3391,13 @@ export const userData = mysqlTable(
     skillPoints: int("skillPoints").default(0).notNull(),
     towerDefensePoints: int("towerDefensePoints").default(0).notNull(),
     towerDefenseBestWave: int("towerDefenseBestWave").default(0).notNull(),
+    /** Nonce of the latest signed tower defense run; only that run can be claimed. */
+    towerDefenseActiveRun: varchar("towerDefenseActiveRun", { length: 21 }),
+    /**
+     * When the daily Guard Hall duty last paid out. The payout is guarded on this falling
+     * before the current UTC day, independent of the daily counter reset.
+     */
+    towerDefenseDutyAt: datetime("towerDefenseDutyAt", { mode: "date", fsp: 3 }),
     occupation: mysqlEnum("occupation", consts.OCCUPATIONS),
     occupationSignupAt: datetime("occupationSignupAt", { mode: "date", fsp: 3 }),
     // Stealth & Sensory stats
@@ -6748,7 +6755,7 @@ export type VisitorLog = InferSelectModel<typeof visitorLog>;
 // Tower Defense Tables
 // ============================================
 
-/** Permanent Dojo levels; `upgradeId` is a `TdDojoUpgrade` key from `libs/towerDefense/content`. */
+/** Permanent Guard Hall levels; `upgradeId` is a `TdDojoUpgrade` key from `libs/towerDefense/content`. */
 export const userTowerDefenseUpgrade = mysqlTable(
   "UserTowerDefenseUpgrade",
   {

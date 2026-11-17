@@ -3,7 +3,7 @@
  *
  * Enemy health grows geometrically with a per-wave rate that steps down in later eras,
  * while damage and bounty grow more slowly. In-run upgrades are paid from bounty, so
- * they cover most but not all of each wave's growth; the gap is what permanent Dojo
+ * they cover most but not all of each wave's growth; the gap is what permanent Guard Hall
  * levels close. Each era boundary also adds new enemy rules (affixes, mutators, more
  * bosses), so the best build keeps changing as the wave count climbs.
  *
@@ -14,7 +14,14 @@
  * growth, so even a perfect build eventually falls behind.
  */
 
+import {
+  TD_DAILY_PRESTIGE,
+  TD_DAILY_RYO_PER_LEVEL,
+  TD_DAILY_VILLAGE_TOKENS,
+  TD_DAILY_WAVES,
+} from "@/drizzle/constants";
 import { powi } from "@/libs/towerDefense/rng";
+import { periodStart } from "@/utils/time";
 
 export const TD_TPS = 10;
 export const TD_TICK_SECONDS = 1 / TD_TPS;
@@ -46,6 +53,28 @@ export const TD_COORD_SCALE = 100;
 export const TD_LEVEL_BONUS_MAX_LEVEL = 100;
 /** Extra damage at that level, rising linearly from nothing at level 1. */
 export const TD_LEVEL_BONUS_MAX = 1;
+
+/**
+ * Waves a run cleared: a wave counts once the next one starts, so a run started at
+ * `startWave` that fell during `wave` cleared everything in between.
+ */
+export const tdWavesCleared = (startWave: number, wave: number) =>
+  Math.max(0, wave - startWave);
+
+/** Whether a run cleared enough waves to fulfil the daily Guard Hall duty. */
+export const tdFulfilsDailyDuty = (startWave: number, wave: number) =>
+  tdWavesCleared(startWave, wave) >= TD_DAILY_WAVES;
+
+/** Whether the daily Guard Hall duty already paid out during the UTC day of `now`. */
+export const tdDailyDutyDone = (paidAt: Date | null | undefined, now: Date) =>
+  !!paidAt && paidAt >= periodStart("daily", now);
+
+/** What the daily Guard Hall duty pays a character of `level`. */
+export const tdDailyReward = (level: number) => ({
+  ryo: TD_DAILY_RYO_PER_LEVEL * Math.max(1, Math.floor(level)),
+  prestige: TD_DAILY_PRESTIGE,
+  villageTokens: TD_DAILY_VILLAGE_TOKENS,
+});
 
 /** Share of extra damage a character level brings: 0 at level 1, the maximum at 100. */
 export const tdLevelDamageBonus = (level: number) =>

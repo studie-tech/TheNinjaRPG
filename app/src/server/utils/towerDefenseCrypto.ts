@@ -1,7 +1,7 @@
 /**
  * Signed tower-defense run tokens.
  *
- * `startRun` signs the run's seed, start wave, best wave and Dojo levels for one user.
+ * `startRun` signs the run's seed, start wave, best wave and Guard Hall levels for one user.
  * The browser plays the run locally and returns the token with its action log when
  * claiming; the server verifies the signature and replays the log, so neither the
  * configuration nor the result can be forged.

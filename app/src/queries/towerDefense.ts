@@ -1,7 +1,7 @@
 /**
  * Database access for tower defense; authorization and replay stay in callers.
  */
-import { and, desc, eq, exists, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
@@ -17,7 +17,7 @@ import type { DrizzleClient } from "@/server/db";
 export const deleteTowerDefenseRunForGET = (client: Pick<DrizzleClient, "delete">) =>
   client.delete(towerDefenseRun);
 
-/** Build the caller's Dojo levels. */
+/** Build the caller's Guard Hall levels. */
 export const listUserTowerDefenseUpgrades = (
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
@@ -37,7 +37,32 @@ export const findTowerDefenseProgress = (
     where: eq(userData.userId, ctx.userId),
   });
 
-/** Build the scroll deduction for a Dojo purchase, guarded on the balance. */
+/** Build the run nonce that `startRun` makes the caller's only claimable run. */
+export const updateUserDataForStartTowerDefenseRun = (
+  client: Pick<DrizzleClient, "update">,
+  ctx: { userId: string },
+  nonce: string,
+) =>
+  client
+    .update(userData)
+    .set({ towerDefenseActiveRun: nonce })
+    .where(eq(userData.userId, ctx.userId));
+
+/** Build the claimant's active run, level and village. */
+export const findTowerDefenseClaimant = (
+  client: Pick<DrizzleClient, "query">,
+  ctx: { userId: string },
+) =>
+  client.query.userData.findFirst({
+    columns: {
+      towerDefenseActiveRun: true,
+      level: true,
+      villageId: true,
+    },
+    where: eq(userData.userId, ctx.userId),
+  });
+
+/** Build the scroll deduction for a Guard Hall purchase, guarded on the balance. */
 export const updateUserDataForPurchaseDojoUpgrade = (
   client: Pick<DrizzleClient, "update">,
   cost: number,
@@ -50,7 +75,7 @@ export const updateUserDataForPurchaseDojoUpgrade = (
       and(eq(userData.userId, ctx.userId), gte(userData.towerDefensePoints, cost)),
     );
 
-/** Build the Dojo level upsert after a purchase. */
+/** Build the Guard Hall level upsert after a purchase. */
 export const upsertUserTowerDefenseUpgrade = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
@@ -72,7 +97,7 @@ export const findTowerDefenseClaimReceipt = (
     where: eq(towerDefenseClaimReceipt.claimKey, claimKey),
   });
 
-/** Build the claim receipt; its unique key on the run nonce makes each run claimable once. */
+/** Build the claim receipt that answers a claim retried after its response was lost. */
 export const insertTowerDefenseClaimReceipt = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
@@ -87,19 +112,55 @@ export const insertTowerDefenseClaimReceipt = (
     pointsEarned: claim.points,
   });
 
-/** Build the scroll payout and best-wave raise for a verified claim. */
+/**
+ * Build the payout of a verified claim: scrolls and a best wave that only rises. It
+ * applies only while the run is still the caller's active one and retires it, so each
+ * run pays out once.
+ */
 export const updateUserDataForClaimTowerDefenseRun = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
-  claim: { points: number; wave: number },
+  claim: { nonce: string; points: number; wave: number },
 ) =>
   client
     .update(userData)
     .set({
       towerDefensePoints: sql`${userData.towerDefensePoints} + ${claim.points}`,
       towerDefenseBestWave: sql`GREATEST(${userData.towerDefenseBestWave}, ${claim.wave})`,
+      towerDefenseActiveRun: null,
     })
-    .where(eq(userData.userId, ctx.userId));
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        eq(userData.towerDefenseActiveRun, claim.nonce),
+      ),
+    );
+
+/**
+ * Build the daily Guard Hall duty payout, guarded on the last payout falling before
+ * `dayStart`, so it pays at most once per UTC day.
+ */
+export const updateUserDataForTowerDefenseDuty = (
+  client: Pick<DrizzleClient, "update">,
+  ctx: { userId: string },
+  duty: { ryo: number; prestige: number; paidAt: Date; dayStart: Date },
+) =>
+  client
+    .update(userData)
+    .set({
+      money: sql`${userData.money} + ${duty.ryo}`,
+      villagePrestige: sql`${userData.villagePrestige} + ${duty.prestige}`,
+      towerDefenseDutyAt: duty.paidAt,
+    })
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        or(
+          isNull(userData.towerDefenseDutyAt),
+          lt(userData.towerDefenseDutyAt, duty.dayStart),
+        ),
+      ),
+    );
 
 /** Build the leaderboard entry for a verified claim. */
 export const insertTowerDefenseRun = (

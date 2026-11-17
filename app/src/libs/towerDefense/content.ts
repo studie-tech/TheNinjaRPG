@@ -1,6 +1,6 @@
 /**
  * Tower-defense content: enemies, affixes, eras, jutsu, sentries, seal arts, ultimates,
- * perks, the in-run shop and the permanent Dojo. Everything here is data read by the
+ * perks, the in-run shop and the permanent Guard Hall. Everything here is data read by the
  * deterministic simulation (`sim.ts`), the server replay and the UI, so balance changes
  * apply to all three at once. A value the simulation reads changes how recorded runs
  * replay, so changing one means bumping `TD_SIM_VERSION`.
@@ -1087,7 +1087,7 @@ export const TD_SPEND_WEIGHTS: Record<TdShopItem, number> = {
 };
 
 // ============================================
-// Permanent Dojo upgrades (scrolls)
+// Permanent Guard Hall upgrades (scrolls)
 // ============================================
 
 export const TD_DOJO_CATEGORIES = [
@@ -1100,6 +1100,10 @@ export const TD_DOJO_CATEGORIES = [
 ] as const;
 export type TdDojoCategory = (typeof TD_DOJO_CATEGORIES)[number];
 
+/**
+ * The Guard Hall's upgrades. Code, signed run tokens and saved runs call it `dojo`, so
+ * those names stay stable while players see the Guard Hall.
+ */
 export const TD_DOJO = [
   "dmg",
   "rate",
@@ -1156,7 +1160,7 @@ export interface TdDojoInfo {
   unlockWave: number;
 }
 
-/** The Dojo upgrade that unlocks a jutsu and then raises its damage. */
+/** The Guard Hall upgrade that unlocks a jutsu and then raises its damage. */
 const jutsuDojo = (
   jutsu: TdJutsu,
   name: string,
@@ -1172,7 +1176,7 @@ const jutsuDojo = (
   unlockWave,
 });
 
-/** The Dojo upgrade that unlocks an ultimate and then strengthens it. */
+/** The Guard Hall upgrade that unlocks an ultimate and then strengthens it. */
 const ultimateDojo = (
   ultimate: TdUltimate,
   base: number,

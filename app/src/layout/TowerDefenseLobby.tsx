@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CheckCircle2,
   Coins,
   Crosshair,
   Crown,
@@ -12,6 +13,7 @@ import {
   Play,
   RotateCcw,
   ScrollText,
+  Shield,
   Sparkles,
   Swords,
   Trash2,
@@ -23,11 +25,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TD_STAGE_IMAGE_URLS } from "@/drizzle/constants";
+import { TD_DAILY_WAVES, TD_STAGE_IMAGE_URLS } from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { SEAL_GLYPHS, SEAL_HOTKEYS } from "@/layout/TowerDefenseHud";
+import { TowerDefenseLanding } from "@/layout/TowerDefenseLanding";
 import { cn } from "@/libs/shadui";
 import {
   TD_HERO_BASE,
@@ -36,6 +39,7 @@ import {
   TD_PIERCING_AFTER_WAVE,
   TD_SEAL_GAP_TICKS,
   TD_TICK_SECONDS,
+  tdDailyReward,
   tdLevelDamageBonus,
 } from "@/libs/towerDefense/balance";
 import {
@@ -79,22 +83,29 @@ const CATEGORY_LABELS: Record<TdDojoCategory, string> = {
   ultimate: "Ultimates",
 };
 
-/** Start or resume a run, spend scrolls in the Dojo and learn how the game works. */
+/** Start or resume a run, spend scrolls in the Guard Hall and learn how the game works. */
 export const TowerDefenseLobby = (props: {
   isGuest: boolean;
   /** The character's level, which raises damage in every run it starts. */
   level: number;
+  /** Whether today's Guard Hall duty is done; absent for guests. */
+  dailyDutyDone?: boolean;
+  /** The village the player defends, when they belong to one. */
+  villageName?: string;
   progress: { points: number; bestWave: number; dojo: TdDojoLevels } | undefined;
   saved: { wave: number; over: boolean } | null;
   isStarting: boolean;
   isResuming: boolean;
   isPurchasing: boolean;
+  /** Sign-in is still being confirmed, so no run may start yet. */
+  isLoading?: boolean;
   /** `replaceSaved` confirms that the saved run may be discarded. */
   onStart: (startWave: number, replaceSaved: boolean) => void;
   onResume: () => void;
   onDiscard: () => void;
   onBuy: (upgradeId: TdDojoUpgrade) => void;
 }) => {
+  const busy = props.isStarting || props.isResuming || !!props.isLoading;
   const bestWave = props.progress?.bestWave ?? 0;
   const checkpoints = tdCheckpoints(bestWave);
   const [startWave, setStartWave] = useState<number | null>(null);
@@ -109,7 +120,7 @@ export const TowerDefenseLobby = (props: {
     <Button
       className="w-full"
       size="lg"
-      disabled={props.isStarting || props.isResuming}
+      disabled={busy}
       onClick={props.saved ? undefined : () => props.onStart(chosen, false)}
     >
       <Play className="mr-2 h-5 w-5" />
@@ -122,13 +133,27 @@ export const TowerDefenseLobby = (props: {
   return (
     <div className="space-y-4">
       {props.isGuest && (
+        <TowerDefenseLanding
+          isStarting={props.isStarting}
+          disabled={busy}
+          onPlay={() => props.onStart(1, false)}
+        />
+      )}
+      {props.isGuest && (
         <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-3 text-sm">
           Playing as a guest: runs are not saved and earn no scrolls.{" "}
           <Link className="font-semibold underline" href="/login">
             Log in
           </Link>{" "}
-          to train in the Dojo and climb the leaderboard.
+          to train in the Guard Hall and climb the leaderboard.
         </div>
+      )}
+      {props.dailyDutyDone !== undefined && (
+        <DailyDuty
+          done={props.dailyDutyDone}
+          level={props.level}
+          villageName={props.villageName}
+        />
       )}
       <div className="grid gap-4">
         <Card>
@@ -144,11 +169,7 @@ export const TowerDefenseLobby = (props: {
                   {props.saved.over ? "Unclaimed run" : "Unfinished run"} at wave{" "}
                   <strong>{props.saved.wave}</strong>
                 </span>
-                <Button
-                  size="sm"
-                  disabled={props.isResuming || props.isStarting}
-                  onClick={props.onResume}
-                >
+                <Button size="sm" disabled={busy} onClick={props.onResume}>
                   {props.saved.over ? (
                     <ScrollText className="mr-1 h-4 w-4" />
                   ) : (
@@ -163,16 +184,12 @@ export const TowerDefenseLobby = (props: {
                 <Confirm
                   title="Discard this run?"
                   button={
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={props.isResuming || props.isStarting}
-                    >
+                    <Button size="sm" variant="outline" disabled={busy}>
                       <Trash2 className="mr-1 h-4 w-4" /> Discard
                     </Button>
                   }
-                  disabled={props.isResuming || props.isStarting}
-                  confirmDisabled={props.isResuming || props.isStarting}
+                  disabled={busy}
+                  confirmDisabled={busy}
                   tone="destructive"
                   proceed_label="Discard"
                   onAccept={props.onDiscard}
@@ -245,7 +262,7 @@ export const TowerDefenseLobby = (props: {
               <Confirm
                 title="Start a new run?"
                 button={startButton}
-                disabled={props.isStarting || props.isResuming}
+                disabled={busy}
                 tone="destructive"
                 proceed_label="Discard and start"
                 proceed_loading_label="Preparing"
@@ -280,6 +297,37 @@ export const TowerDefenseLobby = (props: {
           onBuy={props.onBuy}
         />
       )}
+    </div>
+  );
+};
+
+/** Today's Guard Hall duty: what one long enough run pays the player and their village. */
+const DailyDuty = (props: { done: boolean; level: number; villageName?: string }) => {
+  const reward = tdDailyReward(props.level);
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-lg border p-3 text-sm",
+        props.done
+          ? "border-green-600/40 bg-green-600/10"
+          : "border-amber-500/50 bg-amber-500/10",
+      )}
+    >
+      {props.done ? (
+        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+      ) : (
+        <Shield className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+      )}
+      <div className="space-y-0.5">
+        <p className="font-semibold">
+          {props.done ? "Guard Hall duty done for today" : "Daily Guard Hall duty"}
+        </p>
+        <p>
+          {props.done
+            ? `${props.villageName ?? "Your village"} rests easy. A new duty comes with tomorrow's raiders.`
+            : `Raiders march on ${props.villageName ?? "the village"} every day. Clear ${TD_DAILY_WAVES} waves in one run to earn ${reward.ryo.toLocaleString()} ryo${props.villageName ? `, ${reward.prestige} prestige and ${reward.villageTokens} tokens for ${props.villageName}` : ` and ${reward.prestige} prestige`}.`}
+        </p>
+      </div>
     </div>
   );
 };
@@ -366,7 +414,7 @@ const Journey = ({ bestWave }: { bestWave: number }) => {
           Tap a stage to see what it brings. The sky darkens and the battlefield grows
           wilder with every stage: new enemy families, elite affixes, era rules stacking
           two and three at a time, and a titan every {TD_TITAN_INTERVAL} waves. Each run
-          pushes a little further as the Dojo makes you stronger.
+          pushes a little further as the Guard Hall makes you stronger.
         </p>
       </CardContent>
     </Card>
@@ -455,7 +503,7 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
           tone="bg-purple-500/15 text-purple-600 dark:text-purple-400"
           title="Scrolls make you stronger forever"
         >
-          Every cleared wave earns scrolls. Train in the Dojo between runs to go
+          Every cleared wave earns scrolls. Train in the Guard Hall between runs to go
           further.
         </Rule>
         <Rule
@@ -575,7 +623,7 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
           <Control
             keys={["1", "–", `${TD_ULTIMATES.length}`]}
             name="Ultimates"
-            description="Your strongest techniques, unlocked in the Dojo, each on a long cooldown."
+            description="Your strongest techniques, unlocked in the Guard Hall, each on a long cooldown."
           />
           <Control
             keys={["N"]}
@@ -584,7 +632,7 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
           />
         </div>
         <p className="text-muted-foreground mt-2">
-          The Dojo shortens these cooldowns and adds tag charges.
+          The Guard Hall shortens these cooldowns and adds tag charges.
         </p>
       </div>
     </CardContent>
@@ -655,7 +703,7 @@ const Dojo = (props: {
     <CardHeader>
       <CardTitle className="flex items-center justify-between gap-2 text-lg">
         <span className="flex items-center gap-2">
-          <ScrollText className="h-5 w-5" /> Dojo
+          <ScrollText className="h-5 w-5" /> Guard Hall
         </span>
         <Badge variant="secondary" className="text-sm">
           {`${formatTdNumber(props.progress.points)} scroll${props.progress.points === 1 ? "" : "s"}`}

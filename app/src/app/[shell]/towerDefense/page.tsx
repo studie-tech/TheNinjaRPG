@@ -31,7 +31,7 @@ import {
 import { TowerDefenseLobby } from "@/layout/TowerDefenseLobby";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense";
-import { TD_COORD_SCALE } from "@/libs/towerDefense/balance";
+import { TD_COORD_SCALE, tdDailyDutyDone } from "@/libs/towerDefense/balance";
 import { TD_SEALS, TD_ULTIMATES } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
 import { tdCrowdTarget } from "@/libs/towerDefense/sim";
@@ -57,6 +57,7 @@ export default function TowerDefensePage() {
     isClerkLoaded,
     isSignedIn,
     status,
+    timeDiff,
   } = useUserDataSelector((profile) => ({
     userId: profile.userId,
     level: profile.level,
@@ -72,6 +73,7 @@ export default function TowerDefensePage() {
     isOutlaw: profile.isOutlaw,
     bloodlineId: profile.bloodlineId,
     status: profile.status,
+    towerDefenseDutyAt: profile.towerDefenseDutyAt,
   }));
   const userId = user?.userId;
   const utils = api.useUtils();
@@ -215,9 +217,10 @@ export default function TowerDefensePage() {
     proceedLabel: "Leave",
   });
 
-  // A signed-in player's runs are claimable only once the profile names them, so the
-  // guest lobby waits until the profile has loaded.
-  if (!isClerkLoaded || (isSignedIn && !user && status === "pending"))
+  // A signed-in player's runs are claimable only once the profile names them, so their
+  // lobby waits for it. Visitors who look signed out see the guest lobby at once, which
+  // also puts it in the prerendered page; no run starts until sign-in is confirmed.
+  if (isSignedIn && (!isClerkLoaded || (!user && status === "pending")))
     return <Loader explanation="Loading user data..." />;
   // Without the profile a signed-in player would fall through to an unpaid guest run.
   if (isSignedIn && !user && status === "error")
@@ -235,19 +238,33 @@ export default function TowerDefensePage() {
   if (run.phase === "lobby")
     return (
       <ContentBox
-        title="Tower Defense"
-        subtitle="Hold the line for as many waves as you can"
+        title={userId ? "Tower Defense" : "Ninja Tower Defense"}
+        subtitle={
+          userId
+            ? "Defend the village against endless raiders"
+            : "Free to play in your browser"
+        }
         defaultBackHref="/minigames"
         topRightContent={<LeaderboardLink />}
       >
         <TowerDefenseLobby
           isGuest={!userId}
           level={user?.level ?? 1}
+          dailyDutyDone={
+            user
+              ? tdDailyDutyDone(
+                  user.towerDefenseDutyAt,
+                  new Date(Date.now() - timeDiff),
+                )
+              : undefined
+          }
+          villageName={user?.village?.name}
           progress={progress.data}
           saved={run.saved}
           isStarting={run.isStarting}
           isResuming={run.isResuming}
           isPurchasing={run.isPurchasing}
+          isLoading={!isClerkLoaded}
           onStart={(startWave, replaceSaved) => void run.start(startWave, replaceSaved)}
           onResume={run.resume}
           onDiscard={run.discardSaved}
@@ -367,7 +384,9 @@ const Results = (props: {
               <p className="text-sm">{props.outcome.message}</p>
             )}
             {props.isGuest && (
-              <p className="text-sm">Log in to keep scrolls and train in the Dojo.</p>
+              <p className="text-sm">
+                Log in to keep scrolls and train in the Guard Hall.
+              </p>
             )}
             {props.isOnlyInTab && (
               <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
@@ -386,7 +405,7 @@ const Results = (props: {
                   Reload
                 </Button>
               )}
-              <Button onClick={props.onLeave}>Back to the Dojo</Button>
+              <Button onClick={props.onLeave}>Back to the Guard Hall</Button>
             </div>
           </>
         )}

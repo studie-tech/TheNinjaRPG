@@ -38,6 +38,7 @@ import {
 } from "@/libs/towerDefense/sim";
 import { isRetryableTrpcError } from "@/utils/error";
 import { clamp } from "@/utils/math";
+import { useUserInfo } from "@/utils/UserContext";
 import {
   TD_MAX_ACTIONS,
   TD_MAX_LOG_CHARS,
@@ -121,6 +122,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const [hud, setHud] = useState<TdState | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser, refreshUser } = useUserInfo();
   const { prepareUpdate, updateCache } = useQueryCacheUpdate<
     RouterOutputs["towerDefense"]["getProgress"]
   >(getQueryKey(api.towerDefense.getProgress, undefined, "query"));
@@ -242,6 +244,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     };
     setPhase("claiming");
     const snapshot = prepareUpdate();
+    const userRevision = prepareUserUpdate();
     const response = await claimRun({
       token,
       actions: encodedLog(current.log),
@@ -284,10 +287,13 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         }),
         snapshot,
       );
+      // The daily Guard Hall duty and its reward.
+      void updateUser(result, { revision: userRevision });
       settle();
     } else if (result.alreadyClaimed) {
       // An earlier attempt paid out, but its response never arrived.
       void utils.towerDefense.getProgress.invalidate();
+      void refreshUser();
       settle();
     } else if (result.permanent) {
       // The server refused the run itself; claiming it again can only repeat that.
@@ -307,9 +313,12 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     forget,
     persist,
     prepareUpdate,
+    prepareUserUpdate,
     refreshSaved,
+    refreshUser,
     storageKey,
     updateCache,
+    updateUser,
     utils,
   ]);
 
@@ -389,6 +398,9 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       }
       const ticket = {};
       starting.current = ticket;
+      // The server makes every started run the player's only claimable one. Two tabs
+      // starting at the same moment can therefore retire the run the other one keeps; the
+      // cost stays on this account and is one run's scrolls, so the start stays unguarded.
       const result = await startRun({ startWave });
       // A run resumed or left while this request was pending keeps the page.
       if (starting.current !== ticket) return;

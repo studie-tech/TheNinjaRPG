@@ -4112,6 +4112,15 @@ export const getCombatStatCap = (
 // ============================================
 // Game balance lives in `libs/towerDefense/content.ts` and `balance.ts`.
 
+/** Waves one run must clear past its start wave to fulfil the daily Guard Hall duty. */
+export const TD_DAILY_WAVES = 10;
+/** Ryo per character level paid for the daily Guard Hall duty. */
+export const TD_DAILY_RYO_PER_LEVEL = 250;
+/** Village prestige paid for the daily Guard Hall duty. */
+export const TD_DAILY_PRESTIGE = 150;
+/** Tokens the player's village receives for their daily Guard Hall duty. */
+export const TD_DAILY_VILLAGE_TOKENS = 200;
+
 /** Game sound effects tower defense plays for its events, by cue. */
 export const TD_SFX = {
   throw: "td-shuriken-throw",
