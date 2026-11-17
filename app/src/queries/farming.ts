@@ -13,6 +13,7 @@ import {
   lt,
   lte,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -155,6 +156,90 @@ export const updateFarmPlotsForPlant = (
         isNull(farmPlot.seedItemId),
       ),
     );
+
+/** Plant one empty plot from one in-hand seed stack within the owner's guarded account claim. */
+export const plantFarmPlotWithSeed = (
+  client: Pick<DrizzleClient, "execute">,
+  userId: string,
+  plot: { id: string; seedItemId: string; finishAt: Date },
+  seedStack: { id: string; quantity: number },
+  account: FarmAccountClaim,
+  now: Date,
+) =>
+  spendFarmItemOnPlot(
+    client,
+    userId,
+    sql`${farmPlot.seedItemId} = ${plot.seedItemId},
+        ${farmPlot.plantedAt} = ${now},
+        ${farmPlot.finishAt} = ${plot.finishAt},
+        ${farmPlot.lastWateredAt} = NULL,
+        ${farmPlot.fertilizerApplied} = false,`,
+    and(eq(farmPlot.id, plot.id), isNull(farmPlot.seedItemId)),
+    seedStack,
+    account,
+    now,
+  );
+
+/** Fertilize one growing plot from one in-hand stack within the owner's guarded account claim. */
+export const fertilizeFarmPlotWithStack = (
+  client: Pick<DrizzleClient, "execute">,
+  userId: string,
+  plot: { id: string; seedItemId: string; finishAt: Date; newFinishAt: Date },
+  stack: { id: string; quantity: number },
+  account: FarmAccountClaim,
+  now: Date,
+) =>
+  spendFarmItemOnPlot(
+    client,
+    userId,
+    sql`${farmPlot.finishAt} = ${plot.newFinishAt},
+        ${farmPlot.fertilizerApplied} = true,`,
+    and(
+      eq(farmPlot.id, plot.id),
+      eq(farmPlot.seedItemId, plot.seedItemId),
+      eq(farmPlot.finishAt, plot.finishAt),
+      eq(farmPlot.fertilizerApplied, false),
+    ),
+    stack,
+    account,
+    now,
+  );
+
+/**
+ * Change one plot, debit one unit of an owned stack and commit the owner's snapshot claim in
+ * one joined statement, so a changed plot, stack or account leaves all three rows untouched.
+ * Success affects exactly three rows. An exhausted stack keeps a zero-quantity tombstone,
+ * which inventory reads and grants exclude.
+ */
+const spendFarmItemOnPlot = (
+  client: Pick<DrizzleClient, "execute">,
+  userId: string,
+  plotSet: SQL,
+  plotWhere: SQL | undefined,
+  stack: { id: string; quantity: number },
+  account: FarmAccountClaim,
+  now: Date,
+) =>
+  client.execute(sql`
+  UPDATE ${userData}
+  INNER JOIN ${farmPlot} ON ${eq(farmPlot.userId, userData.userId)}
+  INNER JOIN ${userItem} ON ${eq(userItem.userId, userData.userId)}
+  SET ${actionReadinessSqlSet(account, [])}
+      ${userData.updatedAt} = ${account.claimedAt},
+      ${plotSet}
+      ${farmPlot.updatedAt} = ${now},
+      ${userItem.quantity} = ${stack.quantity - 1},
+      ${userItem.updatedAt} = ${now}
+  WHERE ${and(
+    eq(userData.userId, userId),
+    eq(userData.updatedAt, account.updatedAt),
+    account.where,
+    plotWhere,
+    eq(userItem.id, stack.id),
+    eq(userItem.quantity, stack.quantity),
+    hasNoHuntingBattle(userId),
+  )}
+`);
 
 /** Build the `farmPlot` update for watering, including predicates on `id`, `userId`, `seedItemId`. */
 export const updateFarmPlotForWater = (
@@ -676,10 +761,7 @@ export const updateUserDataForAwardFarmingProgress = (
     })
     .where(eq(userData.userId, user.userId));
 
-/**
- * Build the `item` listing for `getFarmCollectionState`, including predicates on
- * `isFarmSeed`, `hidden`, `farmYieldItemId`.
- */
+/** Load the plantable visible seeds with their yield items, which form the collection catalog. */
 export const listItemForGetFarmCollectionState = (
   client: Pick<DrizzleClient, "query">,
 ) =>
@@ -691,32 +773,18 @@ export const listItemForGetFarmCollectionState = (
       gt(item.farmGrowTimeSeconds, 0),
     ),
     columns: { farmYieldItemId: true, farmMinLevel: true },
+    with: {
+      farmYieldItem: { columns: { id: true, name: true, image: true, hidden: true } },
+    },
   });
 
-/** Build the `item` listing for `getFarmCollectionState`, using predicates on `id` and `hidden`. */
-export const listItemForGetFarmCollectionState2 = (
-  client: Pick<DrizzleClient, "query">,
-  yieldItemIds: string[],
-) =>
-  client.query.item.findMany({
-    where: and(inArray(item.id, yieldItemIds), eq(item.hidden, false)),
-    columns: { id: true, name: true, image: true },
-  });
-
-/**
- * Build the `farmCollectionLog` listing for `getFarmCollectionState`, selecting only
- * `itemId` and `firstHarvestedAt`, using predicates on `userId` and `itemId`.
- */
+/** Load one user's first-harvest rows; the catalog decides which of them count. */
 export const listFarmCollectionLogForGetFarmCollectionState = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
-  yieldItemIds: string[],
 ) =>
   client.query.farmCollectionLog.findMany({
-    where: and(
-      eq(farmCollectionLog.userId, userId),
-      inArray(farmCollectionLog.itemId, yieldItemIds),
-    ),
+    where: eq(farmCollectionLog.userId, userId),
     columns: { itemId: true, firstHarvestedAt: true },
   });
 
@@ -763,3 +831,6 @@ export const reduceActiveFarmPlotTimers = (
         gt(farmPlot.finishAt, now),
       ),
     );
+
+/** The owner's snapshot claim: recovery and progress columns, its guards and the CAS revision. */
+type FarmAccountClaim = ActionReadinessWrite & { updatedAt: Date; claimedAt: Date };

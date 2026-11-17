@@ -3,7 +3,6 @@ import {
   insertFarmCollectionLogForRecordFirstFarmHarvests,
   listFarmCollectionLogForGetFarmCollectionState,
   listItemForGetFarmCollectionState,
-  listItemForGetFarmCollectionState2,
 } from "@/queries/farming";
 import type { DrizzleClient } from "@/server/db";
 import { queryInTransaction } from "@/server/utils/concurrency";
@@ -84,25 +83,22 @@ export const getFarmCollectionState = async (
   userId: string,
   inTransaction = false,
 ): Promise<FarmCollectionState> => {
-  const seeds = await listItemForGetFarmCollectionState(client);
-  const yieldItemIds = [
-    ...new Set(
-      seeds
-        .map((seed) => seed.farmYieldItemId)
-        .filter((itemId): itemId is string => itemId !== null),
-    ),
-  ];
-  if (yieldItemIds.length === 0) {
-    return { collected: 0, total: 0, items: [] };
-  }
-
   const queries = [
-    listItemForGetFarmCollectionState2(client, yieldItemIds),
-    listFarmCollectionLogForGetFarmCollectionState(client, userId, yieldItemIds),
+    listItemForGetFarmCollectionState(client),
+    listFarmCollectionLogForGetFarmCollectionState(client, userId),
   ] as const;
-  const [yieldItems, collectionRows] = inTransaction
+  const [seeds, collectionRows] = inTransaction
     ? await queryInTransaction(queries)
     : await Promise.all(queries);
+  const yieldItems = [
+    ...new Map(
+      seeds.flatMap((seed) =>
+        seed.farmYieldItem && !seed.farmYieldItem.hidden
+          ? [[seed.farmYieldItem.id, seed.farmYieldItem] as const]
+          : [],
+      ),
+    ).values(),
+  ];
 
   return buildFarmCollectionState(seeds, yieldItems, collectionRows);
 };
