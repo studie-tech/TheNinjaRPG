@@ -1281,14 +1281,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                               {parsedEffect.generalTypes.join(", ")}
                             </span>
                           )}
-                        {"statTypes" in parsedEffect &&
-                          parsedEffect.statTypes &&
-                          parsedEffect.statTypes.length > 0 && (
-                            <span>
-                              <b>Stats: </b>
-                              {getStatTypeLabels(parsedEffect).join(", ")}
-                            </span>
-                          )}
+                        {getStatTypeLabels(parsedEffect).length > 0 && (
+                          <span>
+                            <b>Stats: </b>
+                            {getStatTypeLabels(parsedEffect).join(", ")}
+                          </span>
+                        )}
                         {"masteryTypes" in parsedEffect &&
                           parsedEffect.masteryTypes &&
                           parsedEffect.masteryTypes.length > 0 && (

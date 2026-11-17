@@ -37,7 +37,7 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
         range: 0,
         requiredRank: "GENIN" as const,
         jutsuType: "NORMAL" as const,
-        effects: [DamageTag.parse({ statTypes: ["Ninjutsu"] })],
+        effects: [DamageTag.parse({})],
         updatedAt: new Date(Date.UTC(2026, 0, 10)),
       })),
     );

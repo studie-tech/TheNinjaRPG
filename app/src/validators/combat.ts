@@ -276,18 +276,6 @@ const IncludeGeneralsAndElements = {
   elements: z.array(z.enum(ElementNames)).optional(),
 };
 
-/** Stat selection where "Highest" is stored as None and resolved at runtime. */
-const statTypesField = z.array(
-  z
-    .enum([...StatTypes, "Highest"])
-    .transform((value) => (value === "Highest" ? "None" : value)),
-);
-
-const IncludeStats = {
-  statTypes: statTypesField.optional(),
-  ...IncludeGeneralsAndElements,
-};
-
 /******************** */
 /*******  TAGS  *******/
 /******************** */
@@ -489,7 +477,7 @@ export const DecreaseMaxPoolsTag = z.object({
 
 const TimeShiftAttributes = {
   ...BaseAttributes,
-  ...IncludeStats,
+  ...IncludeGeneralsAndElements,
   ...PowerAttributes,
   ...PercentageCalculation,
   rounds: z.coerce.number().int().min(1).max(20).prefault(1),
@@ -509,7 +497,7 @@ export const TimeDilationTag = z.object({
 
 export const RedirectionTag = z.object({
   ...BaseAttributes,
-  ...IncludeStats,
+  ...IncludeGeneralsAndElements,
   ...PowerAttributes,
   type: tagType("redirection"),
   description: msg(
@@ -557,10 +545,10 @@ export const IncreaseRegenerationTag = z.object({
 
 const StatModifierAttributes = {
   ...BaseAttributes,
-  ...IncludeStats,
+  ...IncludeGeneralsAndElements,
   ...PowerAttributes,
   ...PercentageCalculation,
-  direction: z.enum(["offence", "defence", "both"]).prefault("both"),
+  direction: z.enum(["offence", "defence", "both", "none"]).prefault("both"),
 };
 
 export const IncreaseStatTag = z.object({
@@ -638,7 +626,7 @@ export const CloneTag = z.object({
 
 export const DamageTag = z.object({
   ...BaseAttributes,
-  ...IncludeStats,
+  ...IncludeGeneralsAndElements,
   ...PowerAttributes,
   type: tagType("damage"),
   description: msg("Deals damage to target"),
@@ -885,7 +873,7 @@ export const RobPreventTag = simpleTag("robprevent", "Prevents robbing of the ta
 
 export const RobTag = z.object({
   ...BaseAttributes,
-  ...IncludeStats,
+  ...IncludeGeneralsAndElements,
   ...PowerAttributes,
   type: tagType("rob"),
   description: msg("Robs money from the target"),
@@ -1027,7 +1015,6 @@ export const WeaknessTag = z.object({
   items: z.array(z.string()).prefault([]),
   jutsus: z.array(z.string()).prefault([]),
   elements: z.array(z.enum(ElementNames)).prefault([]),
-  statTypes: statTypesField.prefault([]),
   generalTypes: z.array(z.enum(GeneralTypes)).prefault([]),
   description: msg("Extra raw damage from specific things"),
   dmgModifier: z.coerce.number().min(1).max(50).prefault(1).optional(),
@@ -2220,7 +2207,6 @@ export type AssignableUserStats = StatSchemaType &
 
 export const actSchema = z.object({
   power: z.coerce.number().min(1).max(100).prefault(1),
-  statTypes: statTypesField.prefault(["Ninjutsu"]),
   generalTypes: z.array(z.enum(GeneralTypes)).prefault(["Strength"]),
 });
 

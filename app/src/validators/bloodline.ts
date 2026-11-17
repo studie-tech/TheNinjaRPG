@@ -1,12 +1,11 @@
 import { z } from "zod";
-import { LetterRanks, StatTypes } from "@/drizzle/constants";
-import { statFilters } from "@/validators/statFilters";
+import { GeneralTypes, LetterRanks, StatTypes } from "@/drizzle/constants";
 
 export const bloodlineFilteringSchema = z.object({
   name: z.string().max(256).optional(),
   classification: z.enum(StatTypes).optional(),
   village: z.string().optional(),
-  stat: z.array(z.enum(statFilters)).optional(),
+  stat: z.array(z.enum(GeneralTypes)).optional(),
   effect: z.array(z.string()).optional(),
   rank: z.enum(LetterRanks).optional(),
   element: z.array(z.string()).optional(),

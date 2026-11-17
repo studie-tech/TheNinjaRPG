@@ -2162,7 +2162,6 @@ describe("schema-derived field visibility", () => {
         "Target",
         "Friendly fire",
         "Calculation",
-        "Stat types",
         "General types",
         "Elements",
         "Residual modifier",

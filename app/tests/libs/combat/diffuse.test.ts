@@ -191,7 +191,7 @@ describe("Diffuse damage resolution", () => {
             ...(type === "pierce" ? { isNew: true, createdRound: ROUND } : {}),
           },
         );
-        if ("statTypes" in effect) effect.statTypes = ["Ninjutsu"];
+
         if (effect.type === "drain") effect.poolsAffected = ["Health"];
         if (effect.type === "wound") effect.timeTracker = { originalDamage: 100 };
         return effect;
@@ -609,7 +609,6 @@ describe("Diffuse damage resolution", () => {
         power: 100,
         rounds: 0,
         calculation: "static",
-        statTypes: ["Ninjutsu"],
       },
       { ...runtime(), creatorId: "attacker", createdRound: ROUND, isNew: true },
     );
@@ -795,7 +794,6 @@ describe("Diffuse repayment and restrictions", () => {
           ...(type === "pierce" ? { createdRound: ROUND, isNew: true } : {}),
         },
       );
-      if (source.type === "pierce") source.statTypes = ["Ninjutsu"];
       const reduction = makeEffect(
         "decreasedamagetaken",
         { power: 50, calculation: "percentage", rounds: 10 },

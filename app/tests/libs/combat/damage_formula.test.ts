@@ -173,11 +173,9 @@ describe("damageCalc HP-based formula", () => {
 
   it("general stats contribute to damage via gen_weight", () => {
     const effectWithGens = makeDamageEffect({
-      statTypes: ["Ninjutsu"],
       generalTypes: ["Strength"],
     });
     const effectWithoutGens = makeDamageEffect({
-      statTypes: ["Ninjutsu"],
       generalTypes: [],
     });
 

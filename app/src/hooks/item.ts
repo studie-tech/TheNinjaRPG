@@ -176,9 +176,7 @@ export const useItemEditForm = (
       form.setValue(field as keyof ZodItemInput, value, { shouldDirty: true });
     }
     if (!form.getValues("effects")?.length)
-      form.setValue("effects", [
-        IncreaseStatTag.parse({ statTypes: ["Ninjutsu"], target: "SELF" }),
-      ]);
+      form.setValue("effects", [IncreaseStatTag.parse({ target: "SELF" })]);
   }, [form, isMeal]);
 
   // All item names, shared by the crafting, farming, and evolution pickers.

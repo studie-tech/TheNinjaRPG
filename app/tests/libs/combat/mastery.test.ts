@@ -84,7 +84,6 @@ describe("updateStatUsage", () => {
     updateStatUsage(
       user,
       makeEffect("increasestat", {
-        statTypes: ["Ninjutsu"],
         direction: "both",
       }),
     );
@@ -99,7 +98,6 @@ describe("increaseStats", () => {
     const effect = makeEffect(
       "increasestat",
       {
-        statTypes: ["Ninjutsu"],
         direction: "offence",
         calculation: "static",
         power: 250,
@@ -341,7 +339,7 @@ describe("applyEffects mastery persistence", () => {
 
 describe("damage ignores mastery", () => {
   it("does not change damage when only mastery differs", () => {
-    const effect = makeDamageEffect({ statTypes: ["Ninjutsu"] });
+    const effect = makeDamageEffect({});
     const defender = makeUser({ userId: "defender" });
     const lowMastery = makeUser({
       userId: "attacker",

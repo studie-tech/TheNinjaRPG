@@ -12,7 +12,7 @@ export const statFilters = [
   "Speed",
 ] as const;
 export const rarities = ["ALL", ...LetterRanks] as const;
-/** Quick filters over the stat a jutsu scales with; "Highest" jutsu use the user's best stat. */
+/** Quick filters over jutsu classifications and the Highest general selector. */
 export const jutsuStatQuickFilters = [
   "All",
   "Ninjutsu",

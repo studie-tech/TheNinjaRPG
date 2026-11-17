@@ -4,8 +4,8 @@ import type { LpcAnimation } from "@/validators/lpc";
 export const spriteActionAnimation = (action: {
   id: string;
   type: string;
-  data?: object;
-  effects: { type: string; statTypes?: string[] }[];
+  data?: { statClassification?: string | null; weaponType?: string };
+  effects: { type: string }[];
 }): LpcAnimation => {
   if (["move", "flee", "replacementTechnique"].includes(action.id)) return "walk";
   if (["wait", "meditate", "defensiveStance", "offensiveStance"].includes(action.id))
@@ -21,9 +21,7 @@ export const spriteActionAnimation = (action: {
   if (weapon && weapon !== "NONE") return "slash";
   if (
     action.id === "basicAttack" ||
-    action.effects.some((effect) =>
-      effect.statTypes?.some((stat) => stat === "Taijutsu" || stat === "Bukijutsu"),
-    )
+    ["Taijutsu", "Bukijutsu"].includes(action.data?.statClassification ?? "")
   )
     return "slash";
   return "spellcast";

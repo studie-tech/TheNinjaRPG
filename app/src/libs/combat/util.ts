@@ -5,7 +5,6 @@ import type {
   CombatStatType,
   ElementName,
   PoolType,
-  StatType,
 } from "@/drizzle/constants";
 import {
   AutoBattleTypes,
@@ -1519,25 +1518,15 @@ export const getPreventTypeName = (preventType: string): string => {
   return preventType.replace(/prevent$/, "");
 };
 
-/**
- * What an effect's statTypes stand for. increasestat/decreasestat move the unified
- * Offence/Defence, picked by direction, and any statTypes only switch that on; every
- * other tag that supports statTypes uses them to match jutsu types.
- */
+/** Labels the unified combat stats selected by a stat modifier's direction. */
 export const getStatTypeLabels = (effect: {
   type: string;
-  statTypes?: readonly StatType[] | null;
   direction?: string;
   elements?: readonly ElementName[] | null;
-}): (StatType | CombatStatType | "All damage")[] => {
+}): (CombatStatType | "All damage")[] => {
   if (damageModifierTypes.includes(effect.type))
     return effect.elements?.length ? [] : ["All damage"];
-  if (damageDerivedTagTypes.includes(effect.type)) return [];
-  const statTypes = effect.statTypes ?? [];
-  if (effect.type !== "increasestat" && effect.type !== "decreasestat") {
-    return [...statTypes];
-  }
-  if (statTypes.length === 0) return [];
+  if (effect.type !== "increasestat" && effect.type !== "decreasestat") return [];
   const direction = effect.direction ?? "both";
   return CombatStatTypes.filter(
     (stat) => direction === "both" || direction === stat.toLowerCase(),

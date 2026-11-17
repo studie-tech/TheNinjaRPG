@@ -271,7 +271,7 @@ export const makeEffect = <T extends TagType>(
 /**
  * Creates the default formula damage effect used by damage-pipeline tests.
  *
- * Overrides may include either tag fields, such as `power` or `statTypes`, or
+ * Overrides may include either tag fields, such as `power` or `generalTypes`, or
  * runtime fields, such as `creatorId`, `targetId`, and `castThisRound`.
  */
 export const makeDamageEffect = (overrides: Partial<UserEffect> = {}): UserEffect =>
@@ -280,7 +280,6 @@ export const makeDamageEffect = (overrides: Partial<UserEffect> = {}): UserEffec
     {
       power: 40,
       calculation: "formula",
-      statTypes: ["Ninjutsu"],
       generalTypes: [],
       elements: [],
       ...(overrides as TagFields<"damage">),
@@ -342,7 +341,6 @@ export const makeDamageModifierEffect = (params: {
   power?: number;
   calculation?: "static" | "percentage";
   tag?: TagFields<DamageModifierType> & {
-    statTypes?: string[];
     generalTypes?: string[];
     elements?: string[];
   };
@@ -354,7 +352,6 @@ export const makeDamageModifierEffect = (params: {
       power: params.power ?? 10,
       rounds: params.rounds ?? 10,
       calculation: params.calculation ?? "percentage",
-      statTypes: ["Ninjutsu"],
       generalTypes: [],
       ...params.tag,
     } as TagFields<typeof params.type>,
@@ -517,7 +514,6 @@ export const makeWeapon = (
         power: 22,
         powerPerLevel: 1,
         calculation: "formula",
-        statTypes: ["None"],
         generalTypes: ["Highest"],
         ...damage,
       }),

@@ -7,7 +7,6 @@ import type {
   GeneralType,
   MasteryType,
   PoolType,
-  StatType,
 } from "@/drizzle/constants";
 import {
   COPY_MAX_TAGS,
@@ -113,12 +112,6 @@ export const realizeTag = <T extends BattleEffect>(props: {
   const tag = resolveElementalDamage(props.tag, user) as T;
   if ("rounds" in tag || tag.type === "increaseaggro" || tag.type === "decreaseaggro") {
     tag.timeTracker = {};
-  }
-  // Older catalog JSON uses Highest as an unclassified marker; it never resolves from mastery.
-  if ("statTypes" in tag) {
-    tag.statTypes = tag.statTypes?.map((type) =>
-      (type as string) === "Highest" ? "None" : type,
-    );
   }
   tag.id = nanoid();
   tag.createdRound = round || 0;
@@ -652,7 +645,7 @@ export const getAffected = (effect: UserEffect) => {
       ? `${effect.elements.join(", ")} damage`
       : "all damage";
   const stats: string[] = [];
-  if ("statTypes" in effect && effect.statTypes?.length) {
+  if (effect.type === "increasestat" || effect.type === "decreasestat") {
     const direction = "direction" in effect ? effect.direction : "both";
     if (direction === "offence" || direction === "both") stats.push("Offence");
     if (direction === "defence" || direction === "both") stats.push("Defence");
@@ -722,16 +715,16 @@ const applyStatChange = (
 export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
   const { power, adverb, qualifier } = getPower(effect);
   const affected = getAffected(effect);
-  if ("statTypes" in effect || "generalTypes" in effect) {
-    if (!effect.isNew && !effect.castThisRound) {
-      if ("statTypes" in effect && effect.statTypes?.length) {
-        if (effect.direction === "offence" || effect.direction === "both") {
-          applyStatChange(target, "offence", power, effect.calculation);
-        }
-        if (effect.direction === "defence" || effect.direction === "both") {
-          applyStatChange(target, "defence", power, effect.calculation);
-        }
+  if (!effect.isNew && !effect.castThisRound) {
+    if (effect.type === "increasestat" || effect.type === "decreasestat") {
+      if (effect.direction === "offence" || effect.direction === "both") {
+        applyStatChange(target, "offence", power, effect.calculation);
       }
+      if (effect.direction === "defence" || effect.direction === "both") {
+        applyStatChange(target, "defence", power, effect.calculation);
+      }
+    }
+    if ("generalTypes" in effect) {
       getLowerGenerals(effect.generalTypes, target.highestGenerals).forEach((gen) => {
         applyStatChange(target, gen as GenName, power, effect.calculation);
       });
@@ -742,6 +735,7 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
   if (
     "direction" in effect &&
     effect.direction &&
+    effect.direction !== "none" &&
     (effect.type === "increasestat" || effect.type === "decreasestat")
   ) {
     if (effect.direction === "both") {
@@ -1299,7 +1293,13 @@ export const updateStatUsage = (
   effect: UserEffect | GroundEffect,
   inverse = false,
 ) => {
-  if ("statTypes" in effect && "direction" in effect && effect.statTypes?.length) {
+  if (
+    effect.type === "damage" ||
+    effect.type === "elementaldamage" ||
+    effect.type === "pierce" ||
+    effect.type === "increasestat" ||
+    effect.type === "decreasestat"
+  ) {
     if (effect.direction === "both") {
       user.usedStats.offence += 1;
       user.usedStats.defence += 1;
@@ -1308,7 +1308,7 @@ export const updateStatUsage = (
       (effect.direction === "defence" && inverse)
     ) {
       user.usedStats.offence += 1;
-    } else {
+    } else if (effect.direction === "offence" || effect.direction === "defence") {
       user.usedStats.defence += 1;
     }
   }
@@ -1360,15 +1360,9 @@ export const damageCalc = (
   let dmg = power;
 
   if (effect.calculation === "formula" && origin) {
-    // Any statTypes add one offence-versus-defence term; the listed types only matter
-    // when other tags are matched against this damage.
-    let atkPowerFromStats = 0;
-    let defPowerFromStats = 0;
-
-    if (effect.statTypes && effect.statTypes.length > 0) {
-      atkPowerFromStats += Math.sqrt(Math.max(0, origin.offence));
-      defPowerFromStats += Math.sqrt(Math.max(0, target.defence));
-    }
+    // Formula damage always compares unified Offence against Defence.
+    const atkPowerFromStats = Math.sqrt(Math.max(0, origin.offence));
+    const defPowerFromStats = Math.sqrt(Math.max(0, target.defence));
 
     // Accumulate attack and defense power from generals (weighted 2x per formula)
     let atkPowerFromGens = 0;
@@ -1427,13 +1421,10 @@ export const calcDmgModifier = (
       const check3 = e.elements.some((we: ElementName) =>
         dmgEffect?.elements?.includes(we),
       );
-      const check4 = e.statTypes.some((we: StatType) =>
-        dmgEffect?.statTypes?.includes(we),
-      );
       const check5 = e.generalTypes.some((we: GeneralType) =>
         dmgEffect?.generalTypes?.includes(we),
       );
-      return check1 || check2 || check3 || check4 || check5;
+      return check1 || check2 || check3 || check5;
     })
     .sort((a, v) => v.power - a.power);
   const biggestWeakness = weaknesses[0];
@@ -1463,7 +1454,6 @@ export const damageUser = (
   // Fetch types to show to the user
   const types = [
     effect.type,
-    ...("statTypes" in effect && effect.statTypes ? effect.statTypes : []),
     ...("generalTypes" in effect && effect.generalTypes ? effect.generalTypes : []),
     ...("elements" in effect && effect.elements ? effect.elements : []),
     ...("poolsAffected" in effect && effect.poolsAffected
@@ -2949,11 +2939,6 @@ export const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) =>
   // We need to get the list of dmgEffect stats/gens/elements and effect stats/gens/elements
   const getTags = (e: UserEffect) => {
     const tags: string[] = [];
-    if ("statTypes" in e) {
-      e.statTypes?.forEach((statType: StatType) => {
-        tags.push(statType);
-      });
-    }
     if ("generalTypes" in e) {
       tags.push(...getLowerGenerals(e.generalTypes, e.highestGenerals));
     }

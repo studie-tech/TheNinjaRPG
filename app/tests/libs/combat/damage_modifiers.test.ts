@@ -526,7 +526,6 @@ describe("computeDamagePacket", () => {
     const rawDamage = 742.44;
 
     const damageEffect = makeDamageEffect({
-      statTypes: ["None"],
       generalTypes: ["Highest"],
       elements: ["Fire"],
       highestGenerals: ["strength", "speed"],
@@ -557,7 +556,6 @@ describe("computeDamagePacket", () => {
         power: 20,
         tag: {
           powerPerLevel: 0.4,
-          statTypes: ["Bukijutsu"],
           elements: ["Wind"],
         },
         runtime: { level: 25 },
@@ -567,7 +565,7 @@ describe("computeDamagePacket", () => {
         targetId: "defender",
         fromType: "jutsu",
         power: 20,
-        tag: { powerPerLevel: 0.4, statTypes: ["Bukijutsu"] },
+        tag: { powerPerLevel: 0.4 },
         runtime: { level: 25 },
       }),
       namedModifier("fire-release-inc-taken", {
@@ -597,7 +595,7 @@ describe("computeDamagePacket", () => {
         targetId: "defender",
         fromType: "item",
         power: 15,
-        tag: { statTypes: ["None"] },
+        tag: {},
       }),
     ];
 
@@ -609,7 +607,6 @@ describe("computeDamagePacket", () => {
         power: 15,
         tag: {
           powerPerLevel: 0.4,
-          statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"],
         },
         runtime: { level: 25 },
       }),
@@ -618,14 +615,14 @@ describe("computeDamagePacket", () => {
         targetId: "defender",
         fromType: "item",
         power: 15,
-        tag: { statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"] },
+        tag: {},
       }),
       namedModifier("elite-smoke-bomb-dr-taken", {
         type: "decreasedamagetaken",
         targetId: "defender",
         fromType: "item",
         power: 25,
-        tag: { statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"] },
+        tag: {},
       }),
     ];
 
@@ -634,7 +631,7 @@ describe("computeDamagePacket", () => {
       targetId: "attacker",
       fromType: "item",
       power: 70,
-      tag: { statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"] },
+      tag: {},
     });
 
     const beforeBreakpointDamage = packetDamage(

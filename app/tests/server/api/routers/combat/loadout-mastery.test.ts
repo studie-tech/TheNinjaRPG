@@ -278,9 +278,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
         itemId: null,
         createdAt: new Date(),
         expiresAt,
-        effects: [
-          getTagSchema("increasestat").parse({ statTypes: ["Ninjutsu"], power: 20 }),
-        ],
+        effects: [getTagSchema("increasestat").parse({ power: 20 })],
       },
       {
         id: "raid-bonus",

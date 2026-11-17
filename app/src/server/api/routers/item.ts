@@ -4273,7 +4273,9 @@ export const itemDatabaseFilter = (
 
     // Stat filter
     ...(input?.stat
-      ? [sql`JSON_SEARCH(${item.effects},'one',${input.stat}) IS NOT NULL`]
+      ? [
+          sql`JSON_SEARCH(${item.effects},'one',${input.stat}, NULL, '$[*].generalTypes[*]') IS NOT NULL`,
+        ]
       : []),
 
     // Event items filter

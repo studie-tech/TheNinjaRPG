@@ -493,7 +493,6 @@ export const getDefaultBasicActions = (
 ): BasicActions => {
   const healPower = calcCombatHealPercentage(user);
   const basicAttackCooldown = user?.rank === "STUDENT" ? 0 : 1;
-  const jutsuStatTypes = ["Ninjutsu", "Genjutsu", "Taijutsu", "Bukijutsu"] as const;
   const lastUsed = (id: string, def = -10) =>
     user?.basicActions?.find((ba) => ba.id === id)?.lastUsedRound ?? def;
 
@@ -520,7 +519,6 @@ export const getDefaultBasicActions = (
         DamageTag.parse({
           power: 10,
           powerPerLevel: 0.05,
-          statTypes: ["None"],
           generalTypes: ["Highest"],
           rounds: 0,
           appearAnimation: ID_ANIMATION_HIT,
@@ -552,7 +550,6 @@ export const getDefaultBasicActions = (
           power: 15,
           powerPerLevel: 0,
           calculation: "percentage",
-          statTypes: [...jutsuStatTypes],
           rounds: 1,
         }),
       ],
@@ -580,7 +577,6 @@ export const getDefaultBasicActions = (
           power: 15,
           powerPerLevel: 0,
           calculation: "percentage",
-          statTypes: [...jutsuStatTypes],
           rounds: 1,
         }),
       ],

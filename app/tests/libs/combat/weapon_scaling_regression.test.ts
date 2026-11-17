@@ -17,7 +17,6 @@ const scalingWeaponBattle = () =>
     damage: {
       power: 22,
       powerPerLevel: 1,
-      statTypes: ["Ninjutsu"],
       generalTypes: [],
     },
   });
@@ -70,7 +69,6 @@ describe("weapon action scaling", () => {
       damage: {
         power: 30,
         powerPerLevel: 1,
-        statTypes: ["Ninjutsu"],
         generalTypes: [],
       },
     });
@@ -87,7 +85,6 @@ describe("weapon action scaling", () => {
     };
     const jutsuDamageEffect = makeDamageEffect({
       power: 50,
-      statTypes: ["Ninjutsu"],
       generalTypes: [],
       level: 1,
     });

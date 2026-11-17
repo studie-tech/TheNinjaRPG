@@ -1093,7 +1093,8 @@ export const bloodlineDatabaseFilter = (
       ? [
           and(
             ...input.stat.map(
-              (s) => sql`JSON_SEARCH(${bloodline.effects},'one',${s}) IS NOT NULL`,
+              (s) =>
+                sql`JSON_SEARCH(${bloodline.effects},'one',${s}, NULL, '$[*].generalTypes[*]') IS NOT NULL`,
             ),
           ),
         ]

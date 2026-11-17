@@ -39,7 +39,6 @@ const makeTransferEffect = (
     {
       power,
       rounds: 5,
-      statTypes: ["Ninjutsu"],
       generalTypes: [],
       elements: [],
     } as never,

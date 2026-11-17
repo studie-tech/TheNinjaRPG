@@ -1229,7 +1229,6 @@ describeWithDatabase("CAS combat settlement", () => {
           power: 8,
           calculation: "static",
           rounds: 2,
-          statTypes: [],
           generalTypes: [],
           elements: [],
         },

@@ -280,7 +280,6 @@ describe("active Consume damage conversion", () => {
       power: 100,
       powerPerLevel: 0,
       calculation: "static",
-      statTypes: ["None"],
     } as Partial<UserEffect>);
   const shieldHp = (battle: CompleteBattle, userId = "attacker") =>
     battle.usersEffects
@@ -525,7 +524,6 @@ describe("active Consume damage conversion", () => {
                 power: 100,
                 calculation: "static",
                 rounds: 3,
-                statTypes: ["None"],
               }),
             ],
           }),
@@ -663,7 +661,6 @@ describe("active Consume damage conversion", () => {
             rounds: 0,
             target: "SELF",
             friendlyFire: "FRIENDLY",
-            statTypes: ["None"],
           }),
         ],
       }),
