@@ -128,7 +128,7 @@ export const TowerDefenseLanding = (props: {
       <div className="divide-y rounded-lg border bg-card">
         {TD_LANDING_FAQ.map((entry) => (
           <details key={entry.question} className="group px-4 py-3">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold [&::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-base [&::-webkit-details-marker]:hidden">
               {entry.question}
               <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
             </summary>
@@ -155,7 +155,7 @@ const Feature = (props: {
   <div className="flex gap-3 rounded-lg border bg-card p-3">
     <props.icon className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
     <div>
-      <h3 className="font-semibold">{props.title}</h3>
+      <h3 className="font-semibold text-base">{props.title}</h3>
       <p className="text-muted-foreground text-sm">{props.children}</p>
     </div>
   </div>
