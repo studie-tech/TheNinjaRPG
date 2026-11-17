@@ -7,6 +7,8 @@ interface PaginationProps {
   current: number;
   total: number;
   setPage: (page: number) => void;
+  /** Adjust navigation spacing when sharing a toolbar with other controls. */
+  className?: string;
 }
 
 /**
@@ -16,7 +18,7 @@ interface PaginationProps {
 const Pagination: React.FC<PaginationProps> = (props) => {
   const pages = getPageWindow(props.current, props.total);
   return (
-    <nav aria-label="Pages" className="my-4 flex justify-center">
+    <nav aria-label="Pages" className={cn("my-4 flex justify-center", props.className)}>
       <ul className="flex flex-wrap items-center justify-center gap-1">
         <li>
           <Button

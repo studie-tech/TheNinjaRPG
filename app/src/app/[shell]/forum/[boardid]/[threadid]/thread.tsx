@@ -14,6 +14,7 @@ import {
   forumLevelMessage,
 } from "@/drizzle/constants";
 import { useForumCacheUpdate } from "@/hooks/useForumCacheUpdate";
+import { useRenderedForViewer } from "@/hooks/useRenderedForViewer";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ForumComposer, ForumNavigation, ForumWatchButton } from "@/layout/Forum";
@@ -34,9 +35,22 @@ import { useUserDataSelector } from "@/utils/UserContext";
 export default function Thread({
   threadId,
   initialPage,
+  initialCursor,
+  linkedPost,
+  initialContext,
+  renderedFor,
+  fetchedAt,
 }: {
   threadId: string;
   initialPage: ThreadData;
+  initialCursor: number;
+  /** The `?post=` link the server resolved; `target` is null when it is unavailable. */
+  linkedPost: { postId: string; target: ResolvedPost } | null;
+  initialContext: RouterOutputs["forum"]["getContext"];
+  /** The account the server rendered the seeds for, or null for a guest. */
+  renderedFor: string | null;
+  /** Server render time; a replayed render's seed data is stale rather than fresh. */
+  fetchedAt: number;
 }) {
   const { data: user } = useUserDataSelector((u) => ({
     userId: u.userId,
@@ -47,40 +61,50 @@ export default function Thread({
   const router = useRouter();
   const utils = api.useUtils();
   const { updateReaction } = useForumCacheUpdate(threadId);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(initialCursor);
   const [quote, setQuote] = useState("");
   const [tools, setTools] = useState(false);
   const [selectedPosts, setSelectedPosts] = useState<string[]>([]);
   const postId = params.get("post");
+  const seeded = useRenderedForViewer(renderedFor);
+  // Seed the navigation context the server already computed for the shared forum header.
+  api.forum.getContext.useQuery(undefined, {
+    initialData: seeded ? initialContext : undefined,
+    initialDataUpdatedAt: fetchedAt,
+  });
   const resolved = api.forum.resolvePost.useQuery(
     { postId: postId ?? "" },
-    { enabled: !!postId },
+    {
+      enabled: !!postId,
+      initialData:
+        seeded && linkedPost?.postId === postId ? linkedPost?.target : undefined,
+      initialDataUpdatedAt: fetchedAt,
+      staleTime: 15000,
+    },
   );
   const comments = api.comments.getForumComments.useQuery(
     { thread_id: threadId, limit: FORUM_THREAD_POSTS_PER_PAGE, cursor: page },
     {
-      initialData: page === 0 ? initialPage : undefined,
+      initialData: seeded && page === initialCursor ? initialPage : undefined,
+      initialDataUpdatedAt: fetchedAt,
       // Keep the current page on screen, dimmed, while the next one loads.
       placeholderData: (previous) => previous,
       staleTime: 15000,
-      refetchOnMount: "always",
       refetchInterval: 20000,
     },
   );
   const thread = comments.data?.thread;
   const board = comments.data?.board;
   const postsTopRef = useRef<HTMLDivElement>(null);
-  /** Open either pagination control at the top of the newly selected post page. */
+  /** Show the first post when either pagination control changes the page. */
   const goToPage = (nextPage: number) => {
     setPage(nextPage);
     postsTopRef.current?.scrollIntoView({ block: "start" });
   };
   const reply = api.comments.createForumComment.useMutation();
+  // Alerts render only on the forum index, which reloads the stale list on its next visit.
   const read = api.forum.markRead.useMutation({
-    onSuccess: () => {
-      void utils.forum.personal.invalidate();
-      void utils.forum.alerts.invalidate();
-    },
+    onSuccess: () => void utils.forum.alerts.invalidate(),
   });
   const observedPosts = useRef(new Set<string>());
   const scrolledPost = useRef<string | null>(null);
@@ -227,7 +251,7 @@ export default function Thread({
     await Promise.all([
       utils.comments.getForumComments.invalidate(),
       utils.forum.getThreads.invalidate(),
-      utils.forum.getAll.invalidate(),
+      utils.forum.getContext.invalidate(undefined, { refetchType: "none" }),
     ]);
   };
   // A list apart from the composer keeps quoting from re-rendering every post.
@@ -291,7 +315,7 @@ export default function Thread({
       )}
       {thread && board && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span>
                 {comments.data?.totalComments}{" "}
@@ -316,7 +340,27 @@ export default function Thread({
                 </Link>
               ))}
             </div>
-            <ForumWatchButton scope="THREAD" scopeId={thread.id} />
+            {comments.data && comments.data.totalPages > 1 && (
+              <Pagination
+                current={page}
+                total={comments.data.totalPages}
+                setPage={goToPage}
+                className="order-last my-0 w-full sm:order-none sm:w-auto"
+              />
+            )}
+            <div className="ml-auto flex items-center gap-2 sm:ml-0">
+              {board.permissions.moderate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-expanded={tools}
+                  onClick={() => setTools((t) => !t)}
+                >
+                  {tools ? "Close topic tools" : "Moderate topic"}
+                </Button>
+              )}
+              <ForumWatchButton scope="THREAD" scopeId={thread.id} />
+            </div>
           </div>
           {thread.summary && (
             <section
@@ -345,21 +389,14 @@ export default function Thread({
               Jump to the accepted answer
             </Link>
           )}
-          {board.permissions.moderate && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setTools((t) => !t)}>
-                {tools ? "Close topic tools" : "Moderate topic"}
-              </Button>
-              {tools && (
-                <ForumTopicTools
-                  ids={[thread.id]}
-                  thread={thread}
-                  onDone={() => {
-                    setTools(false);
-                  }}
-                />
-              )}
-            </>
+          {board.permissions.moderate && tools && (
+            <ForumTopicTools
+              ids={[thread.id]}
+              thread={thread}
+              onDone={() => {
+                setTools(false);
+              }}
+            />
           )}
           {board.permissions.moderate && tools && (
             <ForumTopicExtras key={thread.id} thread={thread} onDone={refresh} />
@@ -374,17 +411,10 @@ export default function Thread({
               }}
             />
           )}
-          <div ref={postsTopRef} className="scroll-mt-4" />
-          {comments.data && comments.data.totalPages > 1 && (
-            <Pagination
-              current={page}
-              total={comments.data.totalPages}
-              setPage={goToPage}
-            />
-          )}
           <div
+            ref={postsTopRef}
             className={cn(
-              "contents",
+              "scroll-mt-4 space-y-4",
               comments.isPlaceholderData && "[&>*]:opacity-60 [&>*]:transition-opacity",
             )}
             aria-busy={comments.isPlaceholderData}
@@ -816,5 +846,6 @@ function ForumPost({
 /** Reactions offered under each post, in display order. */
 const FORUM_REACTIONS = ["helpful", "❤️", "😂", "👏"] as const;
 
+type ResolvedPost = RouterOutputs["forum"]["resolvePost"];
 type ThreadData = RouterOutputs["comments"]["getForumComments"];
 type ForumReaction = (typeof FORUM_REACTIONS)[number];

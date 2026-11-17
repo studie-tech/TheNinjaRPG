@@ -95,7 +95,8 @@ function ForumBrowse({
     }
     if (url.href !== window.location.href) updateUrl(url);
   }, [boardId, appliedAuthor, appliedSince, appliedUntil, updateUrl]);
-  const { data: boards, isPending, error, refetch } = api.forum.getAll.useQuery();
+  const { data: context, isPending, error, refetch } = api.forum.getContext.useQuery();
+  const boards = context?.boards;
   const topics = api.forum.getThreads.useInfiniteQuery(
     {
       limit: 20,

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getForumContext } from "@/libs/forum";
+import { getPageForumContext } from "@/app/[shell]/forum/pageData";
 import { buildMetadata, noindexMetadata } from "@/libs/seo";
 import { fetchThread } from "@/queries/forum";
 import { drizzleDB } from "@/server/db";
@@ -10,7 +10,7 @@ export async function generateMetadata(props: {
 }): Promise<Metadata> {
   const params = await props.params;
   const [context, thread] = await Promise.all([
-    getForumContext(drizzleDB),
+    getPageForumContext(null),
     fetchThread(drizzleDB, params.threadid),
   ]);
   const board = context.boards.find(

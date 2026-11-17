@@ -175,7 +175,7 @@ export const commentsRouter = createTRPCRouter({
       return await fetchForumThreadPage(
         ctx.drizzle,
         input,
-        await getForumContext(ctx.drizzle, ctx.userId),
+        getForumContext(ctx.drizzle, ctx.userId),
       );
     }),
   createForumComment: protectedProcedure

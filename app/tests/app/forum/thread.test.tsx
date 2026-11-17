@@ -1,6 +1,7 @@
 /** Exercise application removal/recovery with real query/tRPC state and controlled transport failures. */
 
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as clerk from "@clerk/nextjs";
 import { QueryClient } from "@tanstack/react-query";
 import {
   act,
@@ -41,6 +42,8 @@ let moderator: boolean;
 let refreshDuringRemoval: boolean;
 let removalPaths: string[];
 let requestedPages: number[];
+let requestedPaths: string[];
+let clientViewer: { isLoaded: boolean; userId: string | null };
 let holdPageTwo: boolean;
 let holdReaction: boolean;
 let finishPageTwo: (() => void) | undefined;
@@ -59,6 +62,8 @@ beforeEach(() => {
   refreshDuringRemoval = false;
   removalPaths = [];
   requestedPages = [];
+  requestedPaths = [];
+  clientViewer = { isLoaded: true, userId: "reader" };
   posts = ["opening", "reply"].map((id) => ({
     id,
     authorId: "reader",
@@ -76,6 +81,13 @@ beforeEach(() => {
       disconnect() {}
     },
   });
+  vi.spyOn(clerk, "useUser").mockImplementation(
+    () =>
+      ({
+        isLoaded: clientViewer.isLoaded,
+        user: clientViewer.userId ? { id: clientViewer.userId } : null,
+      }) as ReturnType<typeof clerk.useUser>,
+  );
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(
     new URLSearchParams() as never,
   );
@@ -117,7 +129,10 @@ beforeEach(() => {
   vi.spyOn(Forum, "ForumWatchButton").mockImplementation(() => null);
   vi.spyOn(Forum, "ForumComposer").mockImplementation(() => <></>);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // Matches the application client, whose reads stay fresh until invalidated.
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
 });
 
 afterEach(() => {
@@ -158,14 +173,39 @@ function threadPage(cursor = 0, threadId = "topic"): ThreadData {
   } as unknown as ThreadData;
 }
 
-/** Mount the actual discussion with an in-memory transport that can reject reads after successful writes. */
-function renderThread() {
+/**
+ * Mount the actual discussion with an in-memory transport that can reject reads after successful writes.
+ * The seed defaults to a replayed server render, which is stale on mount.
+ */
+function renderThread(
+  seed: {
+    fetchedAt?: number;
+    renderedFor?: string | null;
+    initialCursor?: number;
+    linkedPost?: Parameters<typeof Thread>[0]["linkedPost"];
+  } = {},
+) {
   const trpcClient = testApi.createClient({
     links: [
       () =>
         ({ op }) =>
           observable((observer) => {
             let data: unknown = [];
+            requestedPaths.push(op.path);
+            if (op.path === "forum.getContext")
+              data = { boards: [], canManage: false, canModerate: false };
+            if (op.path === "forum.resolvePost") {
+              const { postId } = op.input as { postId: string };
+              data = {
+                boardId: "board",
+                threadId: "topic",
+                postId,
+                page: Math.floor(
+                  posts.findIndex((post) => post.id === postId) /
+                    FORUM_THREAD_POSTS_PER_PAGE,
+                ),
+              };
+            }
             if (op.path === "comments.getForumComments") {
               const { cursor, thread_id } = op.input as {
                 cursor: number;
@@ -225,15 +265,25 @@ function renderThread() {
           }),
     ],
   });
-  const discussion = (threadId: string) => (
+  const discussion = (threadId: string, fetchedAt = seed.fetchedAt ?? 0) => (
     <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
-      <Thread threadId={threadId} initialPage={threadPage(0, threadId)} />
+      <Thread
+        threadId={threadId}
+        initialPage={threadPage(seed.initialCursor ?? 0, threadId)}
+        initialCursor={seed.initialCursor ?? 0}
+        linkedPost={seed.linkedPost ?? null}
+        initialContext={{ boards: [], canManage: false, canModerate: false }}
+        renderedFor={seed.renderedFor === undefined ? "reader" : seed.renderedFor}
+        fetchedAt={fetchedAt}
+      />
     </TrpcTestProviders>
   );
   const view = render(discussion("topic"));
   return {
     ...view,
-    rerenderThread: (threadId: string) => view.rerender(discussion(threadId)),
+    // A route change arrives with a freshly rendered server seed.
+    rerenderThread: (threadId: string) =>
+      view.rerender(discussion(threadId, Date.now())),
   };
 }
 
@@ -416,5 +466,105 @@ it.each([false, true])(
     );
     expect(view.container.querySelector("#post-entry-0")).toBeNull();
     expect(requestedPages).toEqual([0, 1]);
+  },
+);
+
+it.each([
+  [true, []],
+  [false, ["comments.getForumComments"]],
+])(
+  "reuses a fresh server seed and refreshes a replayed one on mount (fresh=%p)",
+  async (isFresh, expected) => {
+    const view = renderThread({ fetchedAt: isFresh ? Date.now() : 0 });
+    expect(view.getByText("opening content")).toBeTruthy();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect([...requestedPaths].sort()).toEqual([...expected].sort());
+  },
+);
+
+it("opens the page of a server-resolved linked post without resolving it again", async () => {
+  const opening = posts[0]!;
+  posts = Array.from({ length: FORUM_THREAD_POSTS_PER_PAGE + 2 }, (_, index) => ({
+    ...opening,
+    id: `entry-${index}`,
+    content: `<p>entry ${index}</p>`,
+  }));
+  const postId = `entry-${FORUM_THREAD_POSTS_PER_PAGE + 1}`;
+  vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+    new URLSearchParams({ post: postId }) as never,
+  );
+  const view = renderThread({
+    fetchedAt: Date.now(),
+    initialCursor: 1,
+    linkedPost: {
+      postId,
+      target: { boardId: "board", threadId: "topic", postId, page: 1 },
+    },
+  });
+  expect(view.container.querySelector(`#post-${postId}`)).not.toBeNull();
+  expect(view.container.querySelector("#post-entry-0")).toBeNull();
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+  expect(requestedPaths).toEqual([]);
+});
+
+it("refreshes a replayed linked-post seed and follows the post's current page", async () => {
+  const opening = posts[0]!;
+  posts = Array.from({ length: FORUM_THREAD_POSTS_PER_PAGE + 2 }, (_, index) => ({
+    ...opening,
+    id: `entry-${index}`,
+    content: `<p>entry ${index}</p>`,
+  }));
+  const postId = "entry-0";
+  vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+    new URLSearchParams({ post: postId }) as never,
+  );
+  const view = renderThread({
+    fetchedAt: 0,
+    initialCursor: 1,
+    linkedPost: {
+      postId,
+      target: { boardId: "board", threadId: "topic", postId, page: 1 },
+    },
+  });
+  await waitFor(() =>
+    expect(view.container.querySelector(`#post-${postId}`)).not.toBeNull(),
+  );
+  expect(requestedPaths).toContain("forum.resolvePost");
+  expect(requestedPages).toContain(0);
+});
+
+it.each([
+  ["the same account", "reader", { isLoaded: true, userId: "reader" }, []],
+  [
+    "the cookie account while Clerk loads",
+    "reader",
+    { isLoaded: false, userId: null },
+    [],
+  ],
+  [
+    "another account",
+    "previous",
+    { isLoaded: true, userId: "reader" },
+    ["comments.getForumComments", "forum.getContext"],
+  ],
+  [
+    "a guest",
+    null,
+    { isLoaded: true, userId: "reader" },
+    ["comments.getForumComments", "forum.getContext"],
+  ],
+  [
+    "a signed-out client",
+    "previous",
+    { isLoaded: true, userId: null },
+    ["comments.getForumComments", "forum.getContext"],
+  ],
+])(
+  "seeds queries only with a render made for the current viewer (%s)",
+  async (_case, renderedFor, viewer, expected) => {
+    clientViewer = viewer;
+    renderThread({ fetchedAt: Date.now(), renderedFor });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect([...requestedPaths].sort()).toEqual(expected);
   },
 );

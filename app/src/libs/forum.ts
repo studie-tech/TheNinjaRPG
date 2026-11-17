@@ -7,7 +7,7 @@ import {
   countForumPosts,
   fetchThread,
   findForumActor,
-  findForumPost,
+  findForumPostWithThread,
   findUserDataForFetchForumPageData,
   forumPostPosition,
   listForumBoards,
@@ -20,20 +20,53 @@ import {
   listForumWatches,
 } from "@/queries/forum";
 import type { DrizzleClient } from "@/server/db";
+import { scopedRead } from "@/server/requestScope";
 import { canCreateNews } from "@/utils/permissions";
 
-/** One access snapshot shared by all forum reads and mutations, including server-rendered pages. */
+/**
+ * One access snapshot shared by all forum reads and mutations, including server-rendered pages.
+ * Within a tRPC batch the board structure and each account's access rows are read once.
+ */
 export const getForumContext = async (
   client: DrizzleClient,
   userId?: string | null,
 ) => {
-  const [boards, sections, actor, grants, restrictions] = await Promise.all([
-    listForumBoards(client),
-    listForumSections(client),
-    userId ? findForumActor(client, userId) : null,
-    userId ? listForumGrants(client, userId) : [],
-    userId ? listForumRestrictions(client, userId) : [],
+  const [structure, access] = await Promise.all([
+    loadForumStructure(client),
+    loadForumAccess(client, userId),
   ]);
+  return buildForumContext(structure, access);
+};
+export type ForumContext = Awaited<ReturnType<typeof getForumContext>>;
+/** Read boards and sections once per request; they carry no per-account state. */
+export const loadForumStructure = (client: DrizzleClient) =>
+  scopedRead("forumStructure", async () => {
+    const [boards, sections] = await Promise.all([
+      listForumBoards(client),
+      listForumSections(client),
+    ]);
+    return { boards, sections };
+  });
+/** Read one account's identity, grants and restrictions once per request; guests have none. */
+export const loadForumAccess = async (
+  client: DrizzleClient,
+  userId?: string | null,
+) => {
+  if (!userId) return { actor: null, grants: [], restrictions: [] };
+  return scopedRead(`forumAccess:${userId}`, async () => {
+    const [actor, grants, restrictions] = await Promise.all([
+      findForumActor(client, userId),
+      listForumGrants(client, userId),
+      listForumRestrictions(client, userId),
+    ]);
+    return { actor: actor ?? null, grants, restrictions };
+  });
+};
+/** Derive effective board permissions, restrictions and display order from loaded rows. */
+export const buildForumContext = (
+  { boards, sections }: ForumStructure,
+  { actor, grants, restrictions }: ForumAccess,
+) => {
   const canManage =
     !!actor &&
     !actor.isBanned &&
@@ -102,7 +135,14 @@ export const getForumContext = async (
     canManage,
   };
 };
-export type ForumContext = Awaited<ReturnType<typeof getForumContext>>;
+/** The discoverable boards and staff capabilities that forum navigation renders. */
+export const forumNavigationContext = (context: ForumContext) => ({
+  boards: context.boards.filter((b) => b.permissions.view),
+  canManage: context.canManage,
+  canModerate: context.boards.some(
+    (b) => b.permissions.moderate || b.permissions.approve,
+  ),
+});
 /** Return readable topics with stable paging and account-specific unread/resume state. */
 export const getInfiniteThreads = async (props: {
   client: DrizzleClient;
@@ -190,15 +230,22 @@ export const fetchForumPageData = async (
     canPost: userRow ? canCreateNews(userRow.role) : null,
   };
 };
-/** Return only a readable, published topic and its visible posts; denied topics have an empty result. */
+/**
+ * Return only a readable, published topic and its visible posts; denied topics have an empty result.
+ * Access, topic and posts load in one wave; rows leave only after the access check.
+ * Load a fresh topic rather than authorizing posts against metadata's earlier snapshot.
+ */
 export const fetchForumThreadPage = async (
   client: DrizzleClient,
   input: { thread_id: string; limit: number; cursor?: number | null },
-  context?: ForumContext,
+  context: ForumContext | PromiseLike<ForumContext>,
 ) => {
-  const [access, thread] = await Promise.all([
-    context ?? getForumContext(client),
+  const offset = (input.cursor ?? 0) * input.limit;
+  const [access, thread, comments, counts] = await Promise.all([
+    context,
     fetchThread(client, input.thread_id),
+    listForumPosts(client, input.thread_id, offset, input.limit),
+    countForumPosts(client, input.thread_id),
   ]);
   const board = access.boards.find((b) => b.id === thread?.boardId);
   const visible =
@@ -212,10 +259,6 @@ export const fetchForumThreadPage = async (
       totalPages: 0,
       board: null,
     };
-  const [comments, counts] = await Promise.all([
-    listForumPosts(client, thread.id, (input.cursor ?? 0) * input.limit, input.limit),
-    countForumPosts(client, thread.id),
-  ]);
   const totalComments = counts[0]?.count ?? 0;
   return {
     thread,
@@ -229,26 +272,41 @@ export const fetchForumThreadPage = async (
     board,
   };
 };
+/** Load a post with its topic, returning both only while the caller may read them. */
+export const findReadableForumPost = async (
+  client: DrizzleClient,
+  postId: string,
+  context: ForumContext | PromiseLike<ForumContext>,
+) => {
+  const [access, post] = await Promise.all([
+    context,
+    findForumPostWithThread(client, postId),
+  ]);
+  const thread = post?.thread;
+  if (
+    !post ||
+    post.deletedAt ||
+    !post.isApproved ||
+    !thread ||
+    thread.deletedAt ||
+    !thread.isApproved ||
+    !access.boards.find((b) => b.id === thread.boardId)?.permissions.read
+  )
+    return null;
+  return post;
+};
 /** A stable post ID resolves its current topic and page after moves, deletions and splits. */
 export const resolveForumPost = async (
   client: DrizzleClient,
   postId: string,
-  context: ForumContext,
+  context: ForumContext | PromiseLike<ForumContext>,
 ) => {
-  const post = await findForumPost(client, postId);
-  if (!post || post.deletedAt || !post.isApproved) return null;
-  const thread = await fetchThread(client, post.threadId);
-  if (
-    !thread ||
-    thread.deletedAt ||
-    !thread.isApproved ||
-    !context.boards.find((b) => b.id === thread.boardId)?.permissions.read
-  )
-    return null;
+  const post = await findReadableForumPost(client, postId, context);
+  if (!post) return null;
   const position = await forumPostPosition(client, post);
   return {
-    boardId: thread.boardId,
-    threadId: thread.id,
+    boardId: post.thread.boardId,
+    threadId: post.thread.id,
     postId,
     page: Math.floor(
       Math.max(0, (position[0]?.count ?? 1) - 1) / FORUM_THREAD_POSTS_PER_PAGE,
@@ -308,3 +366,6 @@ const applyPostingRestriction = (
   restriction && restriction.expiresAt > new Date()
     ? { ...permissions, create: false, reply: false, edit: false, vote: false }
     : permissions;
+
+type ForumStructure = Awaited<ReturnType<typeof loadForumStructure>>;
+type ForumAccess = Awaited<ReturnType<typeof loadForumAccess>>;

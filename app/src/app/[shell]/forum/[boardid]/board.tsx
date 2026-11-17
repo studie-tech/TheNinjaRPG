@@ -11,6 +11,7 @@ import {
   FORUM_MIN_LEVEL,
   forumLevelMessage,
 } from "@/drizzle/constants";
+import { useRenderedForViewer } from "@/hooks/useRenderedForViewer";
 import ContentBox from "@/layout/ContentBox";
 import {
   ForumComposer,
@@ -29,9 +30,17 @@ import { useUserDataSelector } from "@/utils/UserContext";
 export default function Board({
   boardId,
   initialThreads,
+  initialContext,
+  renderedFor,
+  fetchedAt,
 }: {
   boardId: string;
   initialThreads: RouterOutputs["forum"]["getThreads"];
+  initialContext: RouterOutputs["forum"]["getContext"];
+  /** The account the server rendered the seeds for, or null for a guest. */
+  renderedFor: string | null;
+  /** Server render time; a replayed render's seed data is stale rather than fresh. */
+  fetchedAt: number;
 }) {
   const { data: user } = useUserDataSelector((u) => ({
     userId: u.userId,
@@ -43,14 +52,21 @@ export default function Board({
   const query = params.get("q") ?? "";
   const [compose, setCompose] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const seeded = useRenderedForViewer(renderedFor);
+  // Seed the navigation context the server already computed for the shared forum header.
+  api.forum.getContext.useQuery(undefined, {
+    initialData: seeded ? initialContext : undefined,
+    initialDataUpdatedAt: fetchedAt,
+  });
   const threads = api.forum.getThreads.useInfiniteQuery(
     { boardId, limit: FORUM_BOARD_THREADS_PER_PAGE, query: query || undefined },
     {
-      initialData: !query ? { pages: [initialThreads], pageParams: [0] } : undefined,
+      initialData:
+        seeded && !query ? { pages: [initialThreads], pageParams: [0] } : undefined,
+      initialDataUpdatedAt: fetchedAt,
       placeholderData: (previous) => previous,
       getNextPageParam: (p) => p.nextCursor,
       staleTime: 15000,
-      refetchOnMount: "always",
     },
   );
   const board = threads.data?.pages[0]?.board;
@@ -131,7 +147,7 @@ export default function Board({
                 showMutationToast(result);
                 if (!result.success) return false;
                 await Promise.all([
-                  utils.forum.getAll.invalidate(),
+                  utils.forum.getContext.invalidate(undefined, { refetchType: "none" }),
                   utils.forum.getThreads.invalidate(),
                 ]);
                 setCompose(false);
