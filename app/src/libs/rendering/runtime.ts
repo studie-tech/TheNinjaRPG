@@ -347,6 +347,15 @@ export const createGameRenderer = async (options: {
       else updateSubscription();
     },
     dispose,
+    /**
+     * Re-measures the mount after it moves into a layout whose height rule differs; observing
+     * it again delivers a fresh notification even when its box kept its size.
+     */
+    fit: () => {
+      if (disposed) return;
+      resizeObserver.unobserve(mount);
+      resizeObserver.observe(mount);
+    },
     /** Registers resource cleanup; registering after disposal runs it immediately. */
     own: (cleanup: () => void) => {
       if (disposed) cleanup();

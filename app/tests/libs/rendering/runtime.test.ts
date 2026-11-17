@@ -124,6 +124,46 @@ describe("renderer context loss", () => {
     callback?.(now);
   };
 
+  it("refits to a mount whose height rule changed without a size change", async () => {
+    const { resize } = await start(vi.fn());
+    const observed: (() => void)[] = [];
+    let observations = 0;
+    globalThis.ResizeObserver = class {
+      constructor(callback: () => void) {
+        observed.push(callback);
+      }
+      observe() {
+        observations++;
+      }
+      unobserve() {}
+      disconnect() {}
+    } as never;
+    let height = 100;
+    const game = await createGameRenderer({
+      surface: "character-preview",
+      mount: document.createElement("div"),
+      signal: new window.AbortController().signal,
+      width: 100,
+      height: () => height,
+      onError: vi.fn(),
+    });
+    games.push(game);
+    const notify = () => observed.at(-1)?.();
+    resize.mockClear();
+    // Observing again is what makes the browser report a box whose size did not change.
+    game.fit();
+    expect(observations).toBe(2);
+    notify();
+    expect(resize).not.toHaveBeenCalled();
+    height = 240;
+    game.fit();
+    notify();
+    expect(resize.mock.calls.at(-1)?.slice(0, 2)).toEqual([100, 240]);
+    game.dispose();
+    game.fit();
+    expect(observations).toBe(3);
+  });
+
   it("skips frames while the context is lost before its event arrives, then resumes on restore", async () => {
     const onError = vi.fn();
     const { canvas, render, destroy } = await start(onError);
