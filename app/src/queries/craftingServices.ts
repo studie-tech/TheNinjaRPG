@@ -7,10 +7,12 @@ import {
   inArray,
   isNull,
   lte,
+  ne,
   notExists,
   or,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { CraftingServiceRequest, UserData, UserItem } from "@/drizzle/schema";
 import {
@@ -24,6 +26,7 @@ import {
   userItem,
   userItemImbuement,
 } from "@/drizzle/schema";
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
@@ -108,11 +111,10 @@ export const transitionServiceRequest = (
   db: DrizzleClient,
   request: CraftingServiceRequest,
   status: CraftingServiceRequest["status"],
-  finishesAt?: Date,
 ) =>
   db
     .update(craftingServiceRequest)
-    .set({ status, ...(finishesAt ? { finishesAt, startedAt: new Date() } : {}) })
+    .set({ status })
     .where(
       and(
         eq(craftingServiceRequest.id, request.id),
@@ -126,10 +128,11 @@ export const consumeServiceMaterial = (
   db: DrizzleClient,
   row: UserItem,
   quantity: number,
+  updatedAt: Date,
 ) =>
   db
     .update(userItem)
-    .set({ quantity: sql`${userItem.quantity} - ${quantity}`, updatedAt: new Date() })
+    .set({ quantity: sql`${userItem.quantity} - ${quantity}`, updatedAt })
     .where(
       and(
         eq(userItem.id, row.id),
@@ -238,32 +241,44 @@ export const rewardServiceUser = (db: DrizzleClient, userId: string, fee: number
       updatedAt: nextSnapshotSql(userData.updatedAt),
     })
     .where(eq(userData.userId, userId));
-/** Persist XP and quest progress under the crafter's exact snapshot. */
-export const progressServiceCrafter = (
+/** Claim the receipt, both live identities and the crafter's exact slot/progression snapshot atomically. */
+export const acceptServiceRequest = (
   db: DrizzleClient,
+  request: CraftingServiceRequest,
   user: Pick<UserData, "userId" | "updatedAt">,
   experience: number,
   questData: UserData["questData"],
-  serviceCraftUntil: Date,
+  finishesAt: Date,
   readiness?: ActionReadinessWrite,
-) =>
-  db
-    .update(userData)
-    .set({
-      ...readiness?.set,
-      craftingExperience: sql`${userData.craftingExperience} + ${experience}`,
-      questData,
-      serviceCraftUntil,
-      updatedAt: nextSnapshotSql(userData.updatedAt),
-    })
-    .where(
-      and(
-        eq(userData.userId, user.userId),
-        eq(userData.updatedAt, user.updatedAt),
-        liveServiceIdentity(db, user.userId),
-        readiness?.where ?? eq(userData.status, "AWAKE"),
-      ),
-    );
+) => {
+  const requester = alias(userData, "serviceRequester");
+  return db.execute(sql`
+    UPDATE ${craftingServiceRequest}
+    INNER JOIN ${userData} ON ${userData.userId} = ${craftingServiceRequest.crafterId}
+    INNER JOIN ${userData} AS ${requester} ON ${requester.userId} = ${craftingServiceRequest.requesterId}
+    SET ${actionReadinessSqlSet(readiness, ["craftingExperience", "questData", "serviceCraftUntil", "updatedAt"])}
+      ${craftingServiceRequest.status} = 'ACTIVE',
+      ${craftingServiceRequest.startedAt} = ${sql.param(new Date(), craftingServiceRequest.startedAt)},
+      ${craftingServiceRequest.finishesAt} = ${sql.param(finishesAt, craftingServiceRequest.finishesAt)},
+      ${userData.craftingExperience} = ${userData.craftingExperience} + ${experience},
+      ${userData.questData} = CAST(${JSON.stringify(questData)} AS JSON),
+      ${userData.serviceCraftUntil} = ${sql.param(finishesAt, userData.serviceCraftUntil)},
+      ${userData.updatedAt} = ${nextSnapshotSql(userData.updatedAt)},
+      ${requester.updatedAt} = ${nextSnapshotSql(requester.updatedAt)}
+    WHERE ${and(
+      eq(craftingServiceRequest.id, request.id),
+      eq(craftingServiceRequest.status, "PENDING"),
+      ne(craftingServiceRequest.requesterId, craftingServiceRequest.crafterId),
+      eq(craftingServiceRequest.requesterId, request.requesterId),
+      eq(craftingServiceRequest.crafterId, request.crafterId),
+      eq(userData.userId, user.userId),
+      eq(userData.updatedAt, user.updatedAt),
+      liveServiceIdentity(db, user.userId),
+      liveServiceIdentity(db, request.requesterId),
+      readiness?.where ?? eq(userData.status, "AWAKE"),
+    )}
+  `);
+};
 /** Move both participant identities and public prices during staff account renames. */
 export const renameCraftingServices = async (
   db: DrizzleClient,
@@ -396,20 +411,11 @@ export const claimServiceOffer = (
       ),
     );
 /** Serialize settlement against renaming and deletion without granting to a retired ID. */
-export const lockServiceParticipant = (
-  db: DrizzleClient,
-  userId: string,
-  requireLive = false,
-) =>
+export const lockServiceParticipant = (db: DrizzleClient, userId: string) =>
   db
     .update(userData)
     .set({ updatedAt: nextSnapshotSql(userData.updatedAt) })
-    .where(
-      and(
-        eq(userData.userId, userId),
-        ...(requireLive ? [liveServiceIdentity(db, userId)] : []),
-      ),
-    );
+    .where(eq(userData.userId, userId));
 /** Load all open requests with their public participants for the service desk. */
 export const findVisibleOpenServiceRequests = (db: DrizzleClient, userId: string) =>
   db.query.craftingServiceRequest.findMany({

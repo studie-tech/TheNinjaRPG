@@ -1,36 +1,65 @@
 import { getQueryKey } from "@trpc/react-query";
 import { useEffect, useRef } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
+import {
+  getServiceRequesterPatch,
+  getServiceSubmissionUnchanged,
+  getServiceSubmittedInventory,
+  getSubmittedServiceRequests,
+} from "@/deltas/craftingServices";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { useUserData } from "@/utils/UserContext";
 
 /** Reconcile receipt-driven inventory, profile progression and timers after service mutations. */
 export const useCraftingServiceCache = () => {
-  const utils = api.useUtils();
   const { prepareUserUpdate, updateUser } = useUserData();
   const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
   const requests = useQueryCacheUpdate<
     RouterOutputs["occupation"]["getServiceRequests"]
   >(getQueryKey(api.occupation.getServiceRequests, undefined, "query"));
+  const queue = useQueryCacheUpdate<RouterOutputs["occupation"]["getCraftingQueue"]>(
+    getQueryKey(api.occupation.getCraftingQueue, undefined, "query"),
+  );
+  const timers = useQueryCacheUpdate<RouterOutputs["profile"]["getSidebarTimers"]>(
+    getQueryKey(api.profile.getSidebarTimers, undefined, "query"),
+  );
   const prepareServiceUpdate = () => ({
     user: prepareUserUpdate(),
     inventory: prepareInventoryUpdate(),
     requests: requests.prepareUpdate(),
+    queue: queue.prepareUpdate(),
+    timers: timers.prepareUpdate(),
   });
   const updateService = async (
-    result: { success: boolean },
+    result:
+      | RouterOutputs["occupation"]["submitServiceRequest"]
+      | RouterOutputs["occupation"]["respondToServiceRequest"],
     snapshot: ReturnType<typeof prepareServiceUpdate>,
   ) => {
     if (!result.success) return;
-    // Server settlement may deliver other due receipts and apply quest consequences;
-    // their resulting rows are intentionally withheld for authoritative reconciliation.
+    const update = "serviceUpdate" in result ? result.serviceUpdate : undefined;
     await Promise.all([
-      updateUser(undefined, { revision: snapshot.user }),
-      updateInventory(undefined, snapshot.inventory),
-      requests.updateCache(undefined, snapshot.requests),
-      utils.profile.getSidebarTimers.invalidate(),
-      utils.occupation.getCraftingQueue.invalidate(),
+      updateUser((current) => getServiceRequesterPatch(current, update), {
+        revision: snapshot.user,
+        delta: update?.userDelta,
+      }),
+      updateInventory(
+        (rows) => getServiceSubmittedInventory(rows, update),
+        snapshot.inventory,
+      ),
+      requests.updateCache(
+        (current) => getSubmittedServiceRequests(current, update),
+        snapshot.requests,
+      ),
+      timers.updateCache(
+        (current) => getServiceSubmissionUnchanged(current, update),
+        snapshot.timers,
+      ),
+      queue.updateCache(
+        (current) => getServiceSubmissionUnchanged(current, update),
+        snapshot.queue,
+      ),
     ]);
   };
   return { prepareServiceUpdate, updateService };
@@ -52,12 +81,12 @@ export const useServiceRequests = () => {
   const utils = api.useUtils();
   const { refreshUser } = useUserData();
   const { invalidateInventory } = useInventoryCacheUpdate();
-  const observed = useRef("");
   const terminal = (query.data ?? [])
     .filter((row) => row.status === "COMPLETED" || row.status === "REFUNDED")
     .map((row) => `${row.id}:${row.status}`)
     .sort()
     .join("|");
+  const observed = useRef(terminal);
   useEffect(() => {
     if (!terminal || observed.current === terminal) return;
     observed.current = terminal;

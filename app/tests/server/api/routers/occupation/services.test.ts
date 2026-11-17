@@ -20,6 +20,7 @@ import {
 import { Pusher } from "@/libs/pusher";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import {
+  acceptServiceRequest,
   claimServiceOffer,
   findOpenServiceRequests,
   findServicePrices,
@@ -48,6 +49,7 @@ import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
+  recordQueries,
   resetTables,
 } from "../../../../setup/testDatabase";
 import { requireUser } from "../../../../setup/userReads";
@@ -178,9 +180,18 @@ describeWithDatabase("crafting services escrow and delivery", () => {
   };
 
   it("reserves recipe materials/fee and cancels once with a full refund", async () => {
-    expect(await submit()).toMatchObject({ success: true });
+    const submitted = await submit();
+    expect(submitted).toMatchObject({
+      success: true,
+      serviceUpdate: { requesterId: "requester", userDelta: { money: -50 } },
+    });
     const db = await getTestDatabase(),
       request = await receipt();
+    expect(
+      submitted.success &&
+        "serviceUpdate" in submitted &&
+        submitted.serviceUpdate?.inventoryChanges[0]?.updatedAt,
+    ).toEqual(request.createdAt);
     expect((await requireUser("requester")).money).toBe(950);
     expect(
       (await db.query.userItem.findFirst({ where: eq(userItem.id, "iron") }))?.quantity,
@@ -220,6 +231,114 @@ describeWithDatabase("crafting services escrow and delivery", () => {
         where: and(eq(userItem.userId, "requester"), eq(userItem.itemId, "recipe")),
       }),
     ).toHaveLength(2);
+  });
+  it("atomically claims both participants and progression once, rejecting stale identities and snapshots", async () => {
+    await submit();
+    const db = await getTestDatabase();
+    const request = await receipt();
+    const crafter = await requireUser("crafter");
+    const requester = await requireUser("requester");
+    const finishesAt = new Date(Date.now() + 60000);
+    const questData = [
+      { id: "service-progress", startAt: new Date().toISOString(), goals: [] },
+    ];
+    const claim = (user = crafter, row = request) =>
+      acceptServiceRequest(db, row, user, 7, questData, finishesAt);
+    expect((await claim({ ...crafter, updatedAt: new Date(0) })).rowsAffected).toBe(0);
+    expect(
+      (await claim(crafter, { ...request, requesterId: "another" })).rowsAffected,
+    ).toBe(0);
+    for (const userId of ["requester", "crafter"]) {
+      await db
+        .insert(storeUserIdAlias)
+        .values({ oldUserId: userId, newUserId: `deleted:${userId}` });
+      expect((await claim()).rowsAffected).toBe(0);
+      await db.delete(storeUserIdAlias);
+    }
+    await db
+      .update(craftingServiceRequest)
+      .set({ requesterId: "crafter" })
+      .where(eq(craftingServiceRequest.id, request.id));
+    expect(
+      (await claim(crafter, { ...request, requesterId: "crafter" })).rowsAffected,
+    ).toBe(0);
+    await db
+      .update(craftingServiceRequest)
+      .set({ requesterId: "requester" })
+      .where(eq(craftingServiceRequest.id, request.id));
+    expect((await receipt()).status).toBe("PENDING");
+    expect((await requireUser("requester")).updatedAt).toEqual(requester.updatedAt);
+    expect((await requireUser("crafter")).craftingExperience).toBe(
+      crafter.craftingExperience,
+    );
+    expect((await claim()).rowsAffected).toBe(3);
+    expect((await claim()).rowsAffected).toBe(0);
+    expect((await receipt()).status).toBe("ACTIVE");
+    expect((await requireUser("requester")).updatedAt.getTime()).toBeGreaterThan(
+      requester.updatedAt.getTime(),
+    );
+    expect((await requireUser("crafter")).craftingExperience).toBe(
+      crafter.craftingExperience + 7,
+    );
+    expect((await requireUser("crafter")).serviceCraftUntil).toEqual(finishesAt);
+    expect((await requireUser("crafter")).questData).toEqual(questData);
+  });
+  it("commits opted-in crafter recovery together with the acceptance slot and progression", async () => {
+    await submit();
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ status: "ASLEEP", autoWakeUp: true })
+      .where(eq(userData.userId, "crafter"));
+    expect(await accept()).toMatchObject({
+      success: true,
+      actionNotice: "This action woke you up.",
+    });
+    const crafter = await requireUser("crafter");
+    expect(crafter.status).toBe("AWAKE");
+    expect(crafter.serviceCraftUntil).toEqual((await receipt()).finishesAt);
+    expect(crafter.craftingExperience).toBeGreaterThan(CRAFTING_REQUIRED_EXP.MASTER);
+  });
+  it("loads idle and pending service desks in one pair of independent reads", async () => {
+    const caller = await callerFor(occupationRouter, "requester");
+    const empty = await recordQueries(() => caller.getServiceRequests());
+    expect(empty.statements).toHaveLength(2);
+    expect(empty.roundTrips).toBe(1);
+    await submit();
+    const pending = await recordQueries(() => caller.getServiceRequests());
+    expect(pending.result).toHaveLength(1);
+    expect(pending.statements).toHaveLength(2);
+    expect(pending.roundTrips).toBe(1);
+  });
+  it("rereads a due receipt when another reader already won its delivery claim", async () => {
+    await submit();
+    await accept();
+    const request = await due();
+    const db = await getTestDatabase();
+    let delivered = false;
+    const observed = overrideQuery(db, "craftingServiceRequest", {
+      findMany: async (read, ...args) => {
+        const rows = await read(...args);
+        if (
+          !delivered &&
+          rows.some((row) => row.id === request.id && row.status === "ACTIVE")
+        ) {
+          delivered = true;
+          await completeCraftingService(db, request);
+        }
+        return rows;
+      },
+    });
+    const rows = await callerForDatabase(
+      occupationRouter,
+      "requester",
+      observed,
+    ).getServiceRequests();
+    expect(rows.find((row) => row.id === request.id)).toMatchObject({
+      status: "COMPLETED",
+      settlementError: null,
+    });
+    expect((await requireUser("crafter")).money).toBe(150);
   });
   it("repairs instantly above maximum and sends readable inbox notifications", async () => {
     expect(await submit("REPAIR")).toMatchObject({ success: true });
@@ -496,6 +615,7 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     expect(await submit()).toMatchObject({
       success: true,
       actionNotice: "This action woke you up.",
+      serviceUpdate: undefined,
     });
     expect((await requireUser("requester")).status).toBe("AWAKE");
     const request = await receipt();

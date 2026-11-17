@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getServiceSubmissionCacheUpdate } from "@/deltas/craftingServices";
 import {
   CRAFTING_SERVICE_MAX_FEE,
   CRAFTING_SERVICES,
@@ -30,6 +31,7 @@ import {
 import { needsInventoryRepair } from "@/libs/repair";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import {
+  acceptServiceRequest,
   claimServiceCrafter,
   claimServiceOffer,
   claimServiceUser,
@@ -41,11 +43,8 @@ import {
   findServicePrices,
   findVisibleOpenServiceRequests,
   insertServiceRequest,
-  lockServiceParticipant,
   notifyServiceRequest,
-  progressServiceCrafter,
   saveServicePrice,
-  transitionServiceRequest,
 } from "@/queries/craftingServices";
 import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { fetchUser } from "@/queries/profile";
@@ -102,12 +101,21 @@ export const craftingServiceProcedures = {
       return { success: true, message: "Service price saved" };
     }),
   getServiceRequests: protectedProcedure.query(async ({ ctx }) => {
-    const open = await findOpenServiceRequests(ctx.drizzle, ctx.userId);
-    const settlement = await settleCraftingServices(ctx.drizzle, open);
-    const [pending, history] = await Promise.all([
+    let [pending, history] = await Promise.all([
       findVisibleOpenServiceRequests(ctx.drizzle, ctx.userId),
       findServiceHistory(ctx.drizzle, ctx.userId),
     ]);
+    const now = new Date();
+    const hasDue = pending.some(
+      (row) => row.status === "ACTIVE" && row.finishesAt && row.finishesAt <= now,
+    );
+    const settlement = await settleCraftingServices(ctx.drizzle, pending, now);
+    // A competing reader can win delivery, so reread even when this reader changed no rows.
+    if (hasDue)
+      [pending, history] = await Promise.all([
+        findVisibleOpenServiceRequests(ctx.drizzle, ctx.userId),
+        findServiceHistory(ctx.drizzle, ctx.userId),
+      ]);
     const failed = new Set(settlement.failedRequestIds);
     return [
       ...new Map([...pending, ...history].map((row) => [row.id, row])).values(),
@@ -307,8 +315,14 @@ export const craftingServiceProcedures = {
               );
             for (const take of consumptions)
               if (
-                (await consumeServiceMaterial(tx, take.row, take.quantity))
-                  .rowsAffected !== 1
+                (
+                  await consumeServiceMaterial(
+                    tx,
+                    take.row,
+                    take.quantity,
+                    request.createdAt,
+                  )
+                ).rowsAffected !== 1
               )
                 throw new CraftingServiceConflict(
                   "Materials changed. Please try again",
@@ -330,6 +344,17 @@ export const craftingServiceProcedures = {
         return actionReadinessResponse(
           {
             success: true,
+            serviceUpdate: getServiceSubmissionCacheUpdate({
+              requester: initialRequester,
+              requesterResult,
+              crafterResult,
+              request,
+              consumptions,
+              equipment: input.service === "CRAFT" ? undefined : target,
+              crafterName: crafter.username,
+              crystalName:
+                input.service === "IMBUE" ? crystal?.item.name : imbuement?.item.name,
+            }),
             message:
               input.service === "REPAIR"
                 ? "Repair completed and delivered to your inventory"
@@ -460,41 +485,21 @@ export const craftingServiceProcedures = {
         true,
       );
       try {
-        // The slot claim, receipt transition and quest progress must commit together;
-        // a single UPDATE cannot persist the independently keyed receipt and JSON trackers.
-        await retryOnDeadlock(() =>
-          ctx.drizzle.transaction(async (tx) => {
-            if (
-              (await transitionServiceRequest(tx, request, "ACTIVE", finishesAt))
-                .rowsAffected !== 1
-            )
-              throw new CraftingServiceConflict(
-                "This request has already been handled",
-              );
-            if (
-              (await lockServiceParticipant(tx, request.requesterId, true))
-                .rowsAffected !== 1
-            )
-              throw new CraftingServiceConflict(
-                "The requester account changed. Please decline the request",
-              );
-            if (
-              (
-                await progressServiceCrafter(
-                  tx,
-                  user,
-                  experience,
-                  questData,
-                  finishesAt,
-                  readiness,
-                )
-              ).rowsAffected !== 1
-            )
-              throw new CraftingServiceConflict(
-                "Your crafting state changed. Please try again",
-              );
-          }),
+        const accepted = await retryOnDeadlock(() =>
+          acceptServiceRequest(
+            ctx.drizzle,
+            request,
+            user,
+            experience,
+            questData,
+            finishesAt,
+            readiness,
+          ),
         );
+        if (accepted.rowsAffected !== 3)
+          throw new CraftingServiceConflict(
+            "The request or participant state changed. Please refresh and try again",
+          );
         return actionReadinessResponse(
           {
             success: true,
