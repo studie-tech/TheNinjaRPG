@@ -594,11 +594,11 @@ describeWithDatabase("crafting queue", () => {
             get(target, property, receiver) {
               if (property === "select") {
                 return () => {
-                  const selection = {
+                  const selection = Object.assign(Promise.resolve([]), {
                     from: () => selection,
                     where: () => selection,
-                    unionAll: async () => [],
-                  };
+                    unionAll: () => selection,
+                  });
                   return selection;
                 };
               }

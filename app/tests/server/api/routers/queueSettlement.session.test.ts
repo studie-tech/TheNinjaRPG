@@ -33,7 +33,14 @@ it("reschedules remaining crafts in one statement on the transaction", async () 
     finishesAt: new Date(now.getTime() + position * 60_000),
     item: null,
   })) as QueuedCraft[];
-  const select = (value: unknown[]) => ({ from: () => ({ where: async () => value }) });
+  const select = (value: unknown[]) => {
+    const selection = Object.assign(Promise.resolve(value), {
+      from: () => selection,
+      where: () => selection,
+      unionAll: () => selection,
+    });
+    return selection;
+  };
   const tx = {
     select: () => select([{ finish: activeFinish }]),
     update: (table: unknown) => ({
@@ -77,7 +84,14 @@ it("returns multiple reserved materials without overlapping transaction statemen
   let committed = false;
   const mergeWrites: unknown[] = [];
   const inserts: (typeof userItem.$inferInsert)[][] = [];
-  const select = () => ({ from: () => ({ where: async () => [] }) });
+  const select = () => {
+    const selection = Object.assign(Promise.resolve([]), {
+      from: () => selection,
+      where: () => selection,
+      unionAll: () => selection,
+    });
+    return selection;
+  };
   const tx = {
     select,
     delete: () => ({ where: async () => ({ rowsAffected: 1 }) }),
