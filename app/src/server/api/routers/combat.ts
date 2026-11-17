@@ -2,6 +2,7 @@ import { randomInt as secureRandomInt } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { eq, ne, notInArray, or, SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
@@ -506,7 +507,8 @@ export const combatRouter = createTRPCRouter({
         const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
 
         // Cache only the settled, viewer-masked response; recovery never reruns reward writes.
-        await combatCompletionStore().save(ctx.userId, newMaskedBattle, result);
+        // The receipt is display-only and recovery polls for it, so it is stored after responding.
+        after(() => combatCompletionStore().save(ctx.userId, newMaskedBattle, result));
 
         // Return the new battle + result state if applicable
         return { battle: newMaskedBattle, result: result };
@@ -978,7 +980,8 @@ export const combatRouter = createTRPCRouter({
             playback: playback.steps,
           };
 
-          await combatCompletionStore().save(suid, newMaskedBattle, result);
+          // The receipt is display-only and recovery polls for it, so it is stored after responding.
+          after(() => combatCompletionStore().save(suid, newMaskedBattle, result));
 
           // Notify after logs are persisted, including the terminal action.
           // Polling clients may have read the claimed state before its log insert.
@@ -1577,11 +1580,20 @@ export const combatRouter = createTRPCRouter({
       let attempts = 0;
 
       // PvP handovers belong to this encounter; only PvE toggles update the
-      // non-PvP default, after the battle change succeeds.
-      const rememberPreference = async (battleType: BattleType) => {
+      // non-PvP default, after the battle change succeeds. The response already carries
+      // the patch, and a lost write only keeps the previous default, so it runs after responding.
+      const rememberPreference = (battleType: BattleType) => {
         const patch = getAutoCombatPreferencePatch(battleType, input.enabled);
         if ("defaultAutoCombat" in patch)
-          await updateUserDataForRememberPreference(ctx.drizzle, input, ctx);
+          after(async () => {
+            try {
+              await updateUserDataForRememberPreference(ctx.drizzle, input, ctx);
+            } catch (error) {
+              Sentry.captureException(error, {
+                tags: { source: "rememberPreference" },
+              });
+            }
+          });
         return patch;
       };
 
@@ -1616,7 +1628,7 @@ export const combatRouter = createTRPCRouter({
         // with a version here — the battle already reads the way the player
         // asked for, so their choice is safe to remember.
         if (!!user.isAutoCombat === input.enabled) {
-          const userPatch = await rememberPreference(userBattle.battleType);
+          const userPatch = rememberPreference(userBattle.battleType);
           return {
             success: true,
             userPatch,
@@ -1645,7 +1657,7 @@ export const combatRouter = createTRPCRouter({
         );
 
         if (result.rowsAffected > 0) {
-          const userPatch = await rememberPreference(userBattle.battleType);
+          const userPatch = rememberPreference(userBattle.battleType);
           announceLobbyChange(userBattle);
           return {
             success: true,

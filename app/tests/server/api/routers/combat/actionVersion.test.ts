@@ -9,12 +9,14 @@ import { extractToolsFromProcedures } from "@/libs/mcp/tools";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
+import { withAfterTasks } from "../../../../setup/after";
 import { makeBattleUser, makeCompleteBattle } from "../../../../setup/combat";
 import { resolverOf } from "../../../../setup/testDatabase";
 
 type ActionInput = inferProcedureInput<typeof combatRouter.performAction>;
 
-const resolver = resolverOf(combatRouter.performAction);
+// Direct resolver calls have no HTTP response to defer the completion receipt behind.
+const resolver = withAfterTasks(resolverOf(combatRouter.performAction));
 const schema = combatRouter.performAction._def.inputs[0] as z.ZodType<ActionInput>;
 const manual = {
   battleId: "version-battle",
