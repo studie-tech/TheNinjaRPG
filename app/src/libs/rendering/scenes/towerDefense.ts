@@ -780,15 +780,18 @@ export const createTowerDefenseScene = async (options: {
       game.setAnimating(overSince === null || now - overSince < GAME_OVER_SETTLE_MS);
     });
 
-    const lastSound = new Map<TdSfx, number>();
+    // Gaps are kept per event kind, so a cue shared by two kinds (incoming darts and a
+    // boss charge both whoosh) never silences the other.
+    const lastSound = new Map<string, number>();
     let lastBonusAt = Number.NEGATIVE_INFINITY,
       bonusStack = 0;
     const handleEvent = (event: TdEvent, state: TdState, now: number) => {
       const cue = eventSound(event);
       if (cue && options.playSound) {
         const [name, volume, gapMs] = cue;
-        if (now - (lastSound.get(name) ?? Number.NEGATIVE_INFINITY) >= gapMs) {
-          lastSound.set(name, now);
+        const key = `${event.type}:${name}`;
+        if (now - (lastSound.get(key) ?? Number.NEGATIVE_INFINITY) >= gapMs) {
+          lastSound.set(key, now);
           options.playSound(name, volume);
         }
       }
