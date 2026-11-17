@@ -403,6 +403,27 @@ describe("renderer context loss", () => {
     expect(render).toHaveBeenCalledTimes(3);
   });
 
+  it("gives a reused renderer the density its surface settled on", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    const { game, render, init, create } = await start(vi.fn(), { resolution: 2 });
+    render.mockImplementation(() => {});
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 400 && game.renderer.resolution === 2; i++) {
+      now += 33;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(1.5);
+    const renderer = game.renderer;
+    game.dispose();
+    // The parked renderer is first sized at the base density, then at the remembered level.
+    const next = await create();
+    expect(next.game.renderer).toBe(renderer);
+    expect(init).toHaveBeenCalledTimes(1);
+    expect(next.game.renderer.resolution).toBe(1.5);
+    expect(next.game.visualEffects.shadows).toBe(true);
+  });
+
   it("lowers resolution under sustained slow frames unless the player chose high quality", async () => {
     Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
     const { game, render } = await start(vi.fn(), { resolution: 2 });
