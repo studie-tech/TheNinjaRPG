@@ -2,10 +2,10 @@
 
 import { useClerk } from "@clerk/nextjs";
 import { useAtomValue, useStore } from "jotai";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useNavigationRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Welcome from "@/layout/Welcome";
@@ -34,7 +34,7 @@ export const HomeLanding: React.FC = () => {
   const [isRetrying, setIsRetrying] = useState(false);
 
   // Navigation
-  const router = useRouter();
+  const router = useNavigationRouter();
   const store = useStore();
   const nativeRedirect = useAtomValue(nativeHomeRedirectAtom);
 

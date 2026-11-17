@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useNavigationRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
@@ -13,7 +13,7 @@ import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Manage active and archived catalog entries without exposing private legacy player labels. */
 export default function ManualTitles() {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { data: user } = useUserDataSelector((profile) => ({ role: profile.role }));
   const canEdit = !!user && canChangeContent(user.role);
   const { data, isPending, isError, refetch } = api.title.getAll.useQuery(undefined, {

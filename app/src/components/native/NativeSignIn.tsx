@@ -8,9 +8,9 @@ import {
   SiGoogle,
 } from "@icons-pack/react-simple-icons";
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { type NativeAuthResult, useNativeAuth } from "@/hooks/useNativeAuth";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { appleAuth, haptics, type oauthBrowser } from "@/libs/native";
@@ -41,7 +41,7 @@ const READY_TIMEOUT_MS = 10_000;
 export default function NativeSignIn() {
   const isNativeShell = useNativeShell();
   const { isLoaded, isSignedIn } = useSession();
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { isReady, isPending, signInWithApple, signInWithProvider } = useNativeAuth();
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

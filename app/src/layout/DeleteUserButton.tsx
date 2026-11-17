@@ -2,7 +2,6 @@
 
 import { sendGTMEvent } from "@next/third-parties/google";
 import { Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ import {
   CHARACTER_DELETION_CONFIRMATION,
   CHARACTER_DELETION_DELAY_DAYS,
 } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import Countdown from "@/layout/Countdown";
 import Modal from "@/layout/Modal";
 import { cn } from "@/libs/shadui";
@@ -69,7 +69,7 @@ function DeletionControls({ userData, label, className }: DeleteUserButtonProps)
     updateUser,
   } = useRequiredUserData();
   const utils = api.useUtils();
-  const router = useRouter();
+  const router = useNavigationRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);

@@ -1,5 +1,5 @@
-import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { showMutationToast } from "@/libs/toast";
 
 type ContentMutationResult = { success: boolean; message: string };
@@ -14,7 +14,7 @@ export const useContentListActions = (
   refetch: () => Promise<unknown>,
   editPath: string,
 ) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const [isOpeningCreated, startOpening] = useTransition();
   return {
     isOpeningCreated,

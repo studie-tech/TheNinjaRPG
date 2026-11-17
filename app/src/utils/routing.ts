@@ -1,4 +1,4 @@
-import { usePathname, type useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
@@ -57,7 +57,7 @@ let navigatedBattleId: string | null = null;
  * fallback for each other if one never arrives.
  */
 export const pushToCombat = (
-  router: ReturnType<typeof useRouter>,
+  router: ReturnType<typeof useNavigationRouter>,
   battleId: string | null | undefined,
 ) => {
   if (battleId && navigatedBattleId === battleId) return;

@@ -15,7 +15,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,7 @@ import {
   PET_SANCTUARY_NAME,
 } from "@/drizzle/constants";
 import type { UserItemWithItem, UserItemWithRelations } from "@/drizzle/schema";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useSleepToggle } from "@/hooks/sleep";
 import { useHomeStorageToggle } from "@/hooks/useHomeStorageMove";
 import BanInfo from "@/layout/BanInfo";
@@ -90,7 +91,7 @@ export default function HomePage() {
 /** Residence hub for shared sleep actions and owner-only storage and home management. */
 function Residence() {
   const { userData, sectorVillage, access, ownVillage } = useRequireInVillage("/home");
-  const router = useRouter();
+  const router = useNavigationRouter();
   const searchParams = useSearchParams();
   const isOwnerView = !!userData && access && ownVillage;
 

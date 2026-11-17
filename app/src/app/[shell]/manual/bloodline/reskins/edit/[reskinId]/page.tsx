@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
@@ -10,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
@@ -34,7 +34,7 @@ export default function BloodlineReskinEdit(props: {
 }
 
 function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { userData, hasAccess } = useRequireRole(
     canModerateReskin,
     "/manual/bloodline/reskins",

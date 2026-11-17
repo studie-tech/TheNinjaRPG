@@ -1,8 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { useNavigationRouter } from "@/hooks/navigation";
 import Loader from "@/layout/Loader";
 import {
   getIsolatedPyramid,
@@ -25,7 +25,7 @@ export const PyramidRunBoundary = ({ children }: { children: React.ReactNode }) 
     questData: user.questData,
   }));
   const pathname = usePublicPathname();
-  const router = useRouter();
+  const router = useNavigationRouter();
   const isolated = getIsolatedPyramid(user);
   const isAuthHandoff = pathname === "/native-sign-in";
   const mustReturn = !!isolated && pathname !== "/combat" && !isAuthHandoff;

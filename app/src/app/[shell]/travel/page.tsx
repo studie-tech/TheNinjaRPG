@@ -20,7 +20,7 @@ import {
   ZapOff,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   Fragment,
   Suspense,
@@ -59,6 +59,7 @@ import { useAutoAttackMode } from "@/hooks/autoAttack";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useMap } from "@/hooks/map";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useConsumeItem } from "@/hooks/useItemActions";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
@@ -514,7 +515,7 @@ function Travel() {
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
   // Router for forwarding
-  const router = useRouter();
+  const router = useNavigationRouter();
 
   // Sector tab link
   const currentSector = userData?.sector;

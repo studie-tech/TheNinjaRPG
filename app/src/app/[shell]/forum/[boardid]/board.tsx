@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
@@ -11,6 +11,7 @@ import {
   FORUM_MIN_LEVEL,
   forumLevelMessage,
 } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useRenderedForViewer } from "@/hooks/useRenderedForViewer";
 import ContentBox from "@/layout/ContentBox";
 import {
@@ -46,7 +47,7 @@ export default function Board({
     userId: u.userId,
     level: u.level,
   }));
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const params = useSearchParams();
   const query = params.get("q") ?? "";

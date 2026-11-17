@@ -1,9 +1,9 @@
 "use client";
 
 import { useSetAtom } from "jotai";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { useNativePush } from "@/hooks/useNativePush";
 import { calcUserHealFinish } from "@/libs/hospital";
@@ -48,7 +48,7 @@ export default function NativeBridge() {
     status,
     timeDiff,
   } = useUserDataSelector((user) => (isNative() ? user : undefined));
-  const router = useRouter();
+  const router = useNavigationRouter();
   const pathname = usePublicPathname();
   const setNativeHomeRedirect = useSetAtom(nativeHomeRedirectAtom);
   const [isOutdated, setIsOutdated] = useState(false);

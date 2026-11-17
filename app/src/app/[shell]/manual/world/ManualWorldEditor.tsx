@@ -2,10 +2,10 @@
 
 import { Images, MapPlus } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { useMap } from "@/hooks/map";
+import { useNavigationRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
@@ -14,7 +14,7 @@ import MapError from "@/layout/MapError";
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 
 export const ManualWorldEditor: React.FC = () => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { globe, mapError } = useMap();
   const { data: villages } = api.village.getAll.useQuery(undefined);
 

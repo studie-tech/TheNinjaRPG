@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, Link2, LockKeyhole, Quote, ThumbsUp } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
@@ -13,6 +13,7 @@ import {
   FORUM_THREAD_POSTS_PER_PAGE,
   forumLevelMessage,
 } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useForumCacheUpdate } from "@/hooks/useForumCacheUpdate";
 import { useRenderedForViewer } from "@/hooks/useRenderedForViewer";
 import Confirm from "@/layout/Confirm";
@@ -58,7 +59,7 @@ export default function Thread({
     level: u.level,
   }));
   const params = useSearchParams();
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const { updateReaction } = useForumCacheUpdate(threadId);
   const [page, setPage] = useState(initialCursor);

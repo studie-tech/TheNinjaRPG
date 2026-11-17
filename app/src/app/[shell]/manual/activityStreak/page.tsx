@@ -1,7 +1,6 @@
 "use client";
 
 import { FilePlus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ActivityStreakType } from "@/drizzle/constants";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useContentListActions } from "@/hooks/useContentListActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -30,7 +30,7 @@ export default function ActivityStreakListPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedConfig, setSelectedConfig] = useState<ConfigWithRewards | null>(null);
   const [typeFilter, setTypeFilter] = useState<"all" | ActivityStreakType>("all");
-  const router = useRouter();
+  const router = useNavigationRouter();
 
   const {
     data: allConfigs,

@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle, FileText, Info, Plus, Tag, X } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -36,6 +35,7 @@ import {
   SupportTicketPriorities,
   type SupportTicketPriority,
 } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
@@ -48,7 +48,7 @@ type CreateTicketFormData = z.infer<typeof createSupportTicketSchema>;
 type CreateTicketFormDataInput = z.input<typeof createSupportTicketSchema>;
 
 export default function CreateSupportTicket() {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { data: userData } = useRequiredUserInfo();
   const [currentTag, setCurrentTag] = useState("");
   const [imageUploading, setImageUploading] = useState(false);

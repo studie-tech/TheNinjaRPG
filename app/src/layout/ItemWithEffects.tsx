@@ -1,7 +1,6 @@
 "use client";
 
 import { BarChartBig, MessageSquarePlus, SquarePen, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { QUEST_LIMIT_UNLIMITED } from "@/drizzle/constants";
@@ -14,6 +13,7 @@ import type {
   Quest,
   SageMode,
 } from "@/drizzle/schema";
+import { useNavigationRouter } from "@/hooks/navigation";
 import Confirm from "@/layout/Confirm";
 import {
   type CloneSource,
@@ -129,7 +129,7 @@ export interface ItemWithEffectsProps {
 
 /** Clone the confirmed quest, refresh its listing, and open the saved copy's editor. */
 const QuestCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const { mutateAsync: cloneQuest, isPending } = api.quests.clone.useMutation();
 
@@ -162,7 +162,7 @@ const QuestCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
 
 /** Clone the confirmed AI, refresh its listing, and open the saved copy's editor. */
 const AiCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const { mutateAsync: cloneAi, isPending } = api.profile.cloneAi.useMutation();
 
@@ -195,7 +195,7 @@ const AiCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
 
 /** Clone the confirmed item, refresh its listing, and open the saved copy's editor. */
 const ItemCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const { mutateAsync: cloneItem, isPending } = api.item.clone.useMutation();
 
@@ -229,7 +229,7 @@ const ItemCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
 
 /** Clone the confirmed jutsu, refresh its listing, and open the saved copy's editor. */
 const JutsuCloneControl: React.FC<{ source: CloneSource }> = ({ source }) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const { mutateAsync: cloneJutsu, isPending } = api.jutsu.clone.useMutation();
 

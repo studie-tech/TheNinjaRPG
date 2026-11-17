@@ -1,7 +1,6 @@
 "use client";
 
 import { FilePlus, Pencil, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ import {
   IMG_MANUAL_COMBAT,
 } from "@/drizzle/constants";
 import type { GuideArticle } from "@/drizzle/schema";
+import { useNavigationRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -29,7 +29,7 @@ const ALL_TAB = "All";
 
 export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
   const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
-  const router = useRouter();
+  const router = useNavigationRouter();
   const isStaff = Boolean(userData && canChangeContent(userData.role));
   const [category, setCategory] = useState<string>(ALL_TAB);
   const [search, setSearch] = useState("");

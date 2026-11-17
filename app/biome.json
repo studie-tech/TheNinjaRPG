@@ -57,6 +57,13 @@
                   "next/link"
                 ],
                 "message": "Import Link from @/layout/Link, which keeps viewport prefetch off, warms routes on intent and reports navigation pending state."
+              },
+              {
+                "group": [
+                  "next/navigation"
+                ],
+                "importNamePattern": "useRouter",
+                "message": "Navigate through useNavigationRouter from @/hooks/navigation, whose push and replace show the shell's navigation progress while the destination loads."
               }
             ],
             "paths": {
@@ -98,7 +105,9 @@
     {
       "includes": [
         "src/libs/native/**",
+        "src/hooks/navigation.ts",
         "src/layout/Link.tsx",
+        "src/layout/NavigationProvider.tsx",
         "src/utils/routing.ts",
         "tests/libs/native/**",
         "tests/layout/navigation.test.tsx"

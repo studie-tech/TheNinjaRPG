@@ -11,7 +11,6 @@ import {
   Trash2,
   Video,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -25,6 +24,7 @@ import {
   IMG_ICON_REDDIT,
   IMG_ICON_TWITTER,
 } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { type ConceptEmotion, ConceptReactions } from "@/layout/ConceptReactions";
 import Confirm from "@/layout/Confirm";
@@ -54,7 +54,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
     userId: u.userId,
     role: u.role,
   }));
-  const router = useRouter();
+  const router = useNavigationRouter();
   const [copied, setCopied] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const hasInvalidatedRef = useRef(false);

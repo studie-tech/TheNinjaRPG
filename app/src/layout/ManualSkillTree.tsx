@@ -1,7 +1,6 @@
 "use client";
 
 import { ChartCandlestick, FilePlus, FolderOpen } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -13,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MAX_BLOODRIGHT_TIERS } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useSkillTreeCatalogInvalidation } from "@/hooks/skillTree";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -45,7 +45,7 @@ export default function ManualSkillTree({
   });
 
   // Router for forwarding
-  const router = useRouter();
+  const router = useNavigationRouter();
 
   // Data
   const {

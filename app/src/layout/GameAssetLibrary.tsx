@@ -21,7 +21,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { type GameAssetType, GameAssetTypes } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import { useLpcCatalogInvalidation } from "@/hooks/lpc";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -51,7 +52,7 @@ import { gameAssetValidator } from "@/validators/asset";
 /** Search and browse assets with URL-backed filters and permission-gated editing. */
 export function GameAssetLibrary() {
   const params = useSearchParams();
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const invalidateLpcCatalog = useLpcCatalogInvalidation();
   const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
@@ -1164,7 +1165,7 @@ function CreateAssetDialog({
   returnFocusRef: React.RefObject<HTMLElement | null>;
   onCreated: () => Promise<void>;
 }) {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { data: allFolders } = api.gameAsset.getAllFolders.useQuery();
   const [name, setName] = useState("");
   const [assetType, setAssetType] = useState<GameAssetType>(

@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { type SetStateAction, useEffect, useRef, useState } from "react";
+import { useNavigationRouter } from "@/hooks/navigation";
 import Modal from "@/layout/Modal";
 
 /**
@@ -19,7 +19,7 @@ export const useUnsavedChangesGuard = (
   isDirty: boolean,
   copy: UnsavedChangesCopy = {},
 ) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   // Set while a confirmed back-button click is replayed, so the guard lets it through.
   const isReplaying = useRef(false);

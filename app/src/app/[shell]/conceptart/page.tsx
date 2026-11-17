@@ -13,7 +13,6 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -53,6 +52,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import ConceptImage from "@/layout/ConceptImage";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -94,7 +94,7 @@ export default function ConceptArt() {
   }));
 
   // Routing
-  const router = useRouter();
+  const router = useNavigationRouter();
 
   // tRPC Utility
   const utils = api.useUtils();
