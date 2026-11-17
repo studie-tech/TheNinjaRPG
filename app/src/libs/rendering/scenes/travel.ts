@@ -1217,6 +1217,7 @@ export const createTravelScene = async (options: {
     return {
       dispose: game.dispose,
       sectors,
+      fit: game.fit,
       updateWindow: requestWindowUpdate,
       setBackground,
       /** Resume smooth character tracking after inspecting the map with a drag. */

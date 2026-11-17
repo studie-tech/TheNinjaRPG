@@ -328,6 +328,33 @@ describe("renderer context loss", () => {
     expect(render).toHaveBeenCalledTimes(3);
   });
 
+  it("refits to a mount whose height rule changed without a size change", async () => {
+    const { resize } = await start(vi.fn());
+    let height = 100;
+    const game = await createGameRenderer({
+      surface: "character-preview",
+      mount: document.createElement("div"),
+      signal: new window.AbortController().signal,
+      width: 100,
+      height: () => height,
+      onError: vi.fn(),
+    });
+    games.push(game);
+    const sizes: [number, number][] = [];
+    game.setResize((width, nextHeight) => sizes.push([width, nextHeight]));
+    resize.mockClear();
+    game.fit();
+    expect(resize).not.toHaveBeenCalled();
+    height = 240;
+    game.fit();
+    expect(resize).toHaveBeenCalledWith(100, 240);
+    expect(sizes.at(-1)).toEqual([100, 240]);
+    game.dispose();
+    height = 300;
+    game.fit();
+    expect(resize).toHaveBeenCalledTimes(1);
+  });
+
   it("sleeps between the frames of a slow scene and wakes on a timer", async () => {
     const { game, render } = await start(vi.fn());
     render.mockImplementation(() => {});

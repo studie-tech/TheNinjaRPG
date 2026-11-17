@@ -237,14 +237,16 @@ export const createGameRenderer = async (options: {
     updateSubscription();
   });
   observer.observe(canvas);
-  const resizeObserver = new ResizeObserver(() => {
+  const fit = () => {
+    if (disposed) return;
     const width = Math.max(1, options.width ?? mount.clientWidth);
     const height = options.height(width);
     if (width === renderer.width && height === renderer.height) return;
     renderer.resize(width, height);
     resize(width, height);
     invalidate();
-  });
+  };
+  const resizeObserver = new ResizeObserver(fit);
   resizeObserver.observe(mount);
   const listen = <K extends keyof HTMLElementEventMap>(
     type: K,
@@ -347,6 +349,8 @@ export const createGameRenderer = async (options: {
       else updateSubscription();
     },
     dispose,
+    /** Re-measures the mount, e.g. after it moves into a layout whose height rule differs. */
+    fit,
     /** Registers resource cleanup; registering after disposal runs it immediately. */
     own: (cleanup: () => void) => {
       if (disposed) cleanup();

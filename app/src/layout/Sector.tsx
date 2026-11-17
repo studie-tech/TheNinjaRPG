@@ -6,7 +6,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { Minimize2, Swords } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
@@ -247,6 +247,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
   // References which shouldn't update
   const originRef = useRef<TerrainHex | undefined>(undefined);
+  // The renderer's host outlives the in-page and expanded layouts, so the scene moves between them.
   const mountRef = useRef<HTMLDivElement | null>(null);
   const pathFinderRef = useRef<PathCalculator | null>(null);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
@@ -2509,8 +2510,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }
         },
       }),
-    `${lightLayout}:${isWorldExpanded}:${travelLightingMode(sector)}`,
+    `${lightLayout}:${travelLightingMode(sector)}`,
   );
+  const attachSceneHost = useCallback((slot: HTMLDivElement | null) => {
+    if (!slot) return;
+    mountRef.current ??= document.createElement("div");
+    slot.appendChild(mountRef.current);
+  }, []);
+  // The expanded layout fills the viewport's height, which a same-width move does not report.
+  useEffect(() => {
+    if (travel.isReady) travel.scene.current?.fit();
+  }, [isWorldExpanded, travel.isReady]);
   const [showWorldLoader, setShowWorldLoader] = useState(false);
   useEffect(() => {
     if (travel.isReady || travel.error) {
@@ -2576,7 +2586,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       <div className="relative">
         <div
           id="tutorial-travel-sector"
-          ref={mountRef}
+          ref={attachSceneHost}
           aria-busy={!travel.isReady && !travel.error}
           className={!travel.isReady && !travel.error ? "min-h-60" : undefined}
         ></div>
