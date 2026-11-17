@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { nanoid } from "nanoid";
 import { after } from "next/server";
 import type { CraftingServiceRequest } from "@/drizzle/schema";
@@ -150,11 +151,24 @@ export const settleCraftingServices = async (
   now = new Date(),
 ) => {
   let changed = false;
+  const failedRequestIds: string[] = [];
   for (const request of requests) {
-    if (request.status === "ACTIVE" && request.finishesAt && request.finishesAt <= now)
+    if (request.status !== "ACTIVE" || !request.finishesAt || request.finishesAt > now)
+      continue;
+    try {
       changed = (await completeCraftingService(db, request)) || changed;
+    } catch (error) {
+      // Failed receipts retain their escrow and a retryable status. The service desk
+      // shows delivery feedback while unrelated receipts and profile actions stay usable.
+      failedRequestIds.push(request.id);
+      Sentry.captureException(error, {
+        level: "warning",
+        tags: { source: "settleCraftingServices" },
+        extra: { requestId: request.id, service: request.service },
+      });
+    }
   }
-  return changed;
+  return { changed, failedRequestIds };
 };
 
 /** Refund outstanding cross-player escrow before either participant's account is removed. */

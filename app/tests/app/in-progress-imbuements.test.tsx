@@ -449,3 +449,28 @@ it("lists each crafting rank's experience range and craftable rarity times", () 
     expect(list.className).toBe("space-y-1 text-muted-foreground");
   }
 });
+
+it.each(["viewer", "another-crafter"])(
+  "only displays active service work owned by %s",
+  (crafterId) => {
+    stubApi({}, [], {
+      getServiceRequests: {
+        useQuery: () => ({
+          data: [
+            {
+              id: "service-slot",
+              crafterId,
+              status: "ACTIVE",
+              finishesAt: new Date(Date.now() + 60000),
+              itemName: "Commissioned Blade",
+            },
+          ],
+        }),
+      },
+    });
+    renderCrafting();
+    expect(screen.queryByText("Service work: Commissioned Blade") !== null).toBe(
+      crafterId === "viewer",
+    );
+  },
+);

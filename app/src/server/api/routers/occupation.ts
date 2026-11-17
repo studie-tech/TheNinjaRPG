@@ -884,11 +884,7 @@ export const occupationRouter = createTRPCRouter({
         );
       } catch (error) {
         if (error instanceof CraftingServiceConflict)
-          return actionReadinessResponse(
-            errorResponse(error.message),
-            readiness,
-            ctx.drizzle,
-          );
+          return errorResponse(error.message);
         throw error;
       }
 

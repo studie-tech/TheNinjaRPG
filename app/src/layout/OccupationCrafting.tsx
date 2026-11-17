@@ -432,6 +432,7 @@ export default function OccupationCrafting({
 
   const activeService = serviceWork?.find(
     (request) =>
+      request.crafterId === userData?.userId &&
       request.status === "ACTIVE" &&
       request.finishesAt &&
       request.finishesAt > new Date(),

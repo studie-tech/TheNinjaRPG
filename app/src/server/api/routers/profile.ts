@@ -929,6 +929,22 @@ export const profileRouter = createTRPCRouter({
           color: "green",
           notificationCount: pendingServices,
         });
+      const delayedServices = [
+        ...(user?.serviceRequests ?? []),
+        ...(user?.outgoingServiceRequests ?? []),
+      ].filter(
+        (request) =>
+          request.status === "ACTIVE" &&
+          request.finishesAt &&
+          request.finishesAt <= now,
+      ).length;
+      if (delayedServices)
+        notifications.push({
+          name: "Service delivery delayed",
+          href: "/occupation?tab=services",
+          color: "red",
+          notificationCount: delayedServices,
+        });
       if (activeDungeon && !["ENDED"].includes(activeDungeon.status)) {
         notifications.push(activeDungeonNotification);
       }
@@ -2737,17 +2753,30 @@ const fetchUpdatedUserOnce = async (
       })
     | undefined = fetchedUser;
 
-  if (
-    user &&
-    (await settleCraftingServices(
-      client,
-      [...user.serviceRequests, ...user.outgoingServiceRequests],
-      now,
-    ))
-  ) {
-    user = await queryUpdatedUser();
-    settlement.craftingItemsChanged = true;
-    requiresUserRefresh = true;
+  if (user) {
+    try {
+      const services = await settleCraftingServices(
+        client,
+        [...user.serviceRequests, ...user.outgoingServiceRequests],
+        now,
+      );
+      if (services.changed || services.failedRequestIds.length > 0) {
+        requiresProgressionRefresh ||= services.failedRequestIds.length > 0;
+        settlement.craftingItemsChanged = true;
+        requiresUserRefresh = true;
+        user = await queryUpdatedUser();
+      }
+    } catch (error) {
+      // Committed receipts may precede a failed reread. Preserve the usable display
+      // snapshot and withhold cache projections until authoritative reconciliation.
+      settlement.craftingItemsChanged = true;
+      requiresUserRefresh = true;
+      requiresProgressionRefresh = true;
+      Sentry.captureException(error, {
+        level: "warning",
+        tags: { source: "settleCraftingServices.profile" },
+      });
+    }
   }
 
   // Queued learning can create ownership after the opening snapshot was read.

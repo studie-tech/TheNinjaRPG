@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -152,15 +152,29 @@ export function CraftingServices() {
                           </ul>
                         </details>
                       )}
-                      {row.status === "ACTIVE" && row.finishesAt && (
-                        <p>
-                          Ready in{" "}
-                          <Countdown
-                            targetDate={row.finishesAt}
-                            onFinish={() => void requests.refetch()}
-                          />
-                        </p>
+                      {row.settlementError && (
+                        <div role="alert" className="mt-2">
+                          <p>{row.settlementError}</p>
+                          <Button
+                            variant="outline"
+                            disabled={requests.isFetching}
+                            onClick={() => void requests.refetch()}
+                          >
+                            Retry delivery
+                          </Button>
+                        </div>
                       )}
+                      {row.status === "ACTIVE" &&
+                        row.finishesAt &&
+                        !row.settlementError && (
+                          <p>
+                            Ready in{" "}
+                            <Countdown
+                              targetDate={row.finishesAt}
+                              onFinish={() => void requests.refetch()}
+                            />
+                          </p>
+                        )}
                       {row.status === "PENDING" && (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {direction === "incoming" ? (
@@ -460,8 +474,7 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
 function ServicePrices({ crafterId }: { crafterId: string }) {
   const [service, setService] = useState<(typeof CRAFTING_SERVICES)[number]>("CRAFT");
   const [rarity, setRarity] = useState<(typeof ItemRarities)[number]>("COMMON");
-  const [fee, setFee] = useState("0");
-  const [enabled, setEnabled] = useState(true);
+  const [draft, setDraft] = useState<{ fee: string; enabled: boolean }>();
   const [message, setMessage] = useState("");
   const prices = api.occupation.getServicePrices.useQuery({ crafterId });
   const cache = useCraftingServicePriceCache(crafterId);
@@ -477,10 +490,18 @@ function ServicePrices({ crafterId }: { crafterId: string }) {
   const currentPrice = prices.data?.prices.find(
     (row) => row.service === service && row.rarity === rarity,
   );
-  useEffect(() => {
-    setFee(String(currentPrice?.fee ?? 0));
-    setEnabled(currentPrice?.enabled ?? true);
-  }, [currentPrice]);
+  const fee = draft?.fee ?? String(currentPrice?.fee ?? 0);
+  const enabled = draft?.enabled ?? currentPrice?.enabled ?? true;
+  if (prices.isPending) return <Loader explanation="Loading service prices" />;
+  if (prices.isError)
+    return (
+      <div role="alert">
+        <p>Could not load service prices.</p>
+        <Button disabled={prices.isFetching} onClick={() => void prices.refetch()}>
+          Retry prices
+        </Button>
+      </div>
+    );
   return (
     <div data-service-prices className="space-y-4 pt-3">
       <p className="text-muted-foreground text-sm">
@@ -495,14 +516,24 @@ function ServicePrices({ crafterId }: { crafterId: string }) {
           label: SERVICE_LABELS[value],
         }))}
         placeholder="Select service"
-        onChange={(value) => setService(value as typeof service)}
+        disabled={save.isPending}
+        onChange={(value) => {
+          setService(value as typeof service);
+          setDraft(undefined);
+          setMessage("");
+        }}
       />
       <SearchSelect
         label="Rarity"
         value={rarity}
         options={ItemRarities.map((value) => ({ value, label: value }))}
         placeholder="Select rarity"
-        onChange={(value) => setRarity(value as typeof rarity)}
+        disabled={save.isPending}
+        onChange={(value) => {
+          setRarity(value as typeof rarity);
+          setDraft(undefined);
+          setMessage("");
+        }}
       />
       <div>
         <Label htmlFor="service-fee">Fee in ryo</Label>
@@ -512,14 +543,16 @@ function ServicePrices({ crafterId }: { crafterId: string }) {
           max={CRAFTING_SERVICE_MAX_FEE}
           step={1}
           value={fee}
-          onTextChange={setFee}
+          disabled={save.isPending}
+          onTextChange={(fee) => setDraft({ fee, enabled })}
         />
       </div>
       <Label className="flex items-center gap-2">
         <input
           type="checkbox"
           checked={enabled}
-          onChange={(event) => setEnabled(event.target.checked)}
+          disabled={save.isPending}
+          onChange={(event) => setDraft({ fee, enabled: event.target.checked })}
         />
         Offer this service
       </Label>

@@ -103,12 +103,20 @@ export const craftingServiceProcedures = {
     }),
   getServiceRequests: protectedProcedure.query(async ({ ctx }) => {
     const open = await findOpenServiceRequests(ctx.drizzle, ctx.userId);
-    await settleCraftingServices(ctx.drizzle, open);
+    const settlement = await settleCraftingServices(ctx.drizzle, open);
     const [pending, history] = await Promise.all([
       findVisibleOpenServiceRequests(ctx.drizzle, ctx.userId),
       findServiceHistory(ctx.drizzle, ctx.userId),
     ]);
-    return [...pending, ...history];
+    const failed = new Set(settlement.failedRequestIds);
+    return [
+      ...new Map([...pending, ...history].map((row) => [row.id, row])).values(),
+    ].map((row) => ({
+      ...row,
+      settlementError: failed.has(row.id)
+        ? "Delivery is delayed. Your request is recorded; retry or contact support."
+        : null,
+    }));
   }),
   submitServiceRequest: protectedProcedure
     .input(
@@ -343,10 +351,9 @@ export const craftingServiceProcedures = {
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [open, updated, inventory] = await Promise.all([
+      const [open, updated] = await Promise.all([
         findOpenServiceRequests(ctx.drizzle, ctx.userId),
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
       const request = open.find((row) => row.id === input.requestId);
       if (request?.status !== "PENDING" || request.service === "REPAIR")
@@ -371,6 +378,9 @@ export const craftingServiceProcedures = {
         return errorResponse("Select the Crafting occupation to accept work");
       const block = craftingStartBlockMessage(user);
       if (block) return errorResponse(block);
+      // Inventory must follow the account snapshot: an intervening personal job either
+      // appears in inventory or changes updatedAt and loses the transactional slot CAS.
+      const inventory = await fetchUserItems(ctx.drizzle, ctx.userId);
       if (
         (user.serviceCraftUntil && user.serviceCraftUntil > new Date()) ||
         user.queue.some((row) => row.kind === "CRAFT") ||

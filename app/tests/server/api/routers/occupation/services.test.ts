@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/nextjs";
 import { and, eq } from "drizzle-orm";
 import { CRAFTING_REQUIRED_EXP } from "@/drizzle/constants";
 import {
@@ -17,6 +18,7 @@ import {
   userVote,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import {
   claimServiceOffer,
   findOpenServiceRequests,
@@ -32,14 +34,17 @@ import {
 } from "@/server/utils/craftingServices";
 import { settleCraftingQueue } from "@/server/utils/userQueue";
 import { withAfterTasks } from "../../../../setup/after";
+import { deferred } from "../../../../setup/deferred";
 import {
   insertItems,
   insertUserItems,
   insertUsers,
   insertUserVotes,
 } from "../../../../setup/factories";
+import { overrideQuery } from "../../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -53,6 +58,7 @@ describeWithDatabase("crafting services escrow and delivery", () => {
   afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    vi.spyOn(Sentry, "captureException").mockReturnValue("service-test-event");
     await resetTables(
       craftingServicePrice,
       craftingServiceRequest,
@@ -436,5 +442,127 @@ describeWithDatabase("crafting services escrow and delivery", () => {
       }),
     ).toMatchObject({ success: true });
     expect((await requireUser("requester")).status).toBe("ASLEEP");
+  });
+  it("rejects acceptance when personal crafting starts after its account snapshot", async () => {
+    await submit();
+    const db = await getTestDatabase(),
+      request = await receipt(),
+      before = await requireUser("crafter");
+    let inventoryStarted = false;
+    let injected = false;
+    const committed = deferred<void>();
+    const observed = overrideQuery(
+      overrideQuery(db, "userItem", {
+        findMany: async (read, ...args) => {
+          inventoryStarted = true;
+          const rows = await read(...args);
+          if (!injected) {
+            injected = true;
+            await db.transaction(async (tx) => {
+              await tx.insert(userItem).values({
+                id: "concurrent-craft",
+                userId: "crafter",
+                itemId: "recipe",
+                craftingFinishedAt: new Date(Date.now() + 60000),
+              });
+              await tx
+                .update(userData)
+                .set({ updatedAt: nextSnapshotSql(userData.updatedAt) })
+                .where(eq(userData.userId, "crafter"));
+            });
+            committed.resolve();
+          }
+          return rows;
+        },
+      }),
+      "userData",
+      {
+        findFirst: async (read, ...args) => {
+          if (args[0]?.with?.queue) {
+            await Promise.resolve();
+            if (inventoryStarted) await committed.promise;
+          }
+          return read(...args);
+        },
+      },
+    );
+    const caller = callerForDatabase(occupationRouter, "crafter", observed);
+    expect(
+      await caller.respondToServiceRequest({ requestId: request.id, action: "ACCEPT" }),
+    ).toMatchObject({ success: false });
+    expect((await receipt()).status).toBe("PENDING");
+    const after = await requireUser("crafter");
+    expect(after.serviceCraftUntil).toBeNull();
+    expect(after.craftingExperience).toBe(before.craftingExperience);
+    expect(
+      await db.query.userItem.findFirst({ where: eq(userItem.id, "concurrent-craft") }),
+    ).toBeTruthy();
+  });
+  it("keeps profiles and healthy deliveries usable beside a failed escrow receipt", async () => {
+    await submit();
+    await accept();
+    const db = await getTestDatabase(),
+      good = await due();
+    const bad = {
+      ...good,
+      id: "service:0-bad",
+      service: "IMBUE" as const,
+      targetUserItemId: "missing-equipment",
+      crystalItemId: "crystal",
+      fee: 0,
+    };
+    await db.insert(craftingServiceRequest).values(bad);
+    const profile = await (await callerFor(profileRouter, "requester")).getUser();
+    expect(profile.userData?.userId).toBe("requester");
+    expect(
+      (
+        await db.query.craftingServiceRequest.findFirst({
+          where: eq(craftingServiceRequest.id, good.id),
+        })
+      )?.status,
+    ).toBe("COMPLETED");
+    expect(
+      (
+        await db.query.craftingServiceRequest.findFirst({
+          where: eq(craftingServiceRequest.id, bad.id),
+        })
+      )?.status,
+    ).toBe("ACTIVE");
+    const rows = await (
+      await callerFor(occupationRouter, "requester")
+    ).getServiceRequests();
+    expect(rows.find((row) => row.id === bad.id)?.settlementError).toContain(
+      "Delivery is delayed",
+    );
+    expect(rows.find((row) => row.id === good.id)?.settlementError).toBeNull();
+    expect((await requireUser("crafter")).money).toBe(150);
+    expect(Sentry.captureException).toHaveBeenCalled();
+  });
+  it("does not report awakening or consume a crystal when an imbue transaction rolls back", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userItem)
+      .set({ userId: "crafter" })
+      .where(eq(userItem.userId, "requester"));
+    await db
+      .update(userItem)
+      .set({ storedAtHome: true })
+      .where(eq(userItem.id, "sword"));
+    await db
+      .update(userData)
+      .set({ status: "ASLEEP", autoWakeUp: true })
+      .where(eq(userData.userId, "crafter"));
+    const result = await (await callerFor(occupationRouter, "crafter")).imbueItem({
+      userItemId: "sword",
+      userCrystalItemId: "gem",
+    });
+    expect(result.success).toBe(false);
+    expect("actionNotice" in result).toBe(false);
+    expect("userRecovery" in result).toBe(false);
+    expect((await requireUser("crafter")).status).toBe("ASLEEP");
+    expect(
+      (await db.query.userItem.findFirst({ where: eq(userItem.id, "gem") }))?.quantity,
+    ).toBe(1);
+    expect(await db.query.userItemImbuement.findMany()).toHaveLength(0);
   });
 });
