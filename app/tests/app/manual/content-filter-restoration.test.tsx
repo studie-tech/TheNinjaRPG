@@ -6,15 +6,21 @@ import * as navigation from "next/navigation";
 import superjson from "superjson";
 import * as client from "@/app/_trpc/client";
 import ManualAI from "@/app/[shell]/manual/ai/page";
+import ManualBloodlineBalance from "@/app/[shell]/manual/bloodline/balance/page";
 import ManualBloodlines from "@/app/[shell]/manual/bloodline/page";
+import ManualItemBalance from "@/app/[shell]/manual/item/balance/page";
 import ManualItems from "@/app/[shell]/manual/item/page";
 import ManualJutsusBalance from "@/app/[shell]/manual/jutsu/balance/page";
 import ManualJutsus from "@/app/[shell]/manual/jutsu/page";
 import ManualQuests from "@/app/[shell]/manual/quest/page";
+import { getBalanceUsageHref, readBalanceUsageFilter } from "@/layout/BalanceFiltering";
 import { useFiltering as useBloodlineFiltering } from "@/layout/BloodlineFiltering";
 import * as ContentBox from "@/layout/ContentBox";
 import { useFiltering as useItemFiltering } from "@/layout/ItemFiltering";
-import { useFiltering as useJutsuBalanceFiltering } from "@/layout/JutsuBalanceFiltering";
+import {
+  getFilter as getJutsuBalanceFilter,
+  useFiltering as useJutsuBalanceFiltering,
+} from "@/layout/JutsuBalanceFiltering";
 import { useFiltering as useJutsuFiltering } from "@/layout/JutsuFiltering";
 import { useFiltering as useQuestFiltering } from "@/layout/QuestFiltering";
 import { useFiltering as useUserFiltering } from "@/layout/UserFiltering";
@@ -25,6 +31,7 @@ import { mockUserContextValue } from "../../setup/userContext";
 let queryClient: QueryClient;
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   window.sessionStorage.clear();
   window.localStorage.clear();
   queryClient = new QueryClient({
@@ -50,6 +57,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, "", "/");
   queryClient.clear();
   vi.restoreAllMocks();
 });
@@ -195,3 +203,101 @@ it.each(
     expect(operations).toHaveLength(1);
   },
 );
+
+it.each([
+  { name: "jutsu", Page: ManualJutsusBalance, path: "data.getJutsuBalanceStatistics" },
+  {
+    name: "bloodline",
+    Page: ManualBloodlineBalance,
+    path: "data.getBloodlineBalanceStatistics",
+  },
+  { name: "item", Page: ManualItemBalance, path: "data.getItemBalanceStatistics" },
+] as const)(
+  "uses the overview cohort for the first $name usage request",
+  async ({ name, Page, path }) => {
+    // A saved jutsu-only selection must survive the incoming common sample filters.
+    const seed = renderHook(() =>
+      useJutsuBalanceFiltering({ persistKey: "manual-jutsu-balance" }),
+    );
+    act(() => seed.result.current.cf.setters.jutsuEffects(["damage"]));
+    seed.unmount();
+    const filter = {
+      battleTypes: ["RANKED_PVP" as const],
+      userRanks: ["CHUNIN" as const],
+      minLevel: 10,
+      maxLevel: 20,
+    };
+    window.history.replaceState(null, "", getBalanceUsageHref(name, filter));
+    const operations: { path: string; input: unknown }[] = [];
+    const trpc = testApi.createClient({
+      links: [
+        httpBatchLink({
+          url: "http://localhost/api/trpc",
+          transformer: superjson,
+          fetch: async (url, options) => {
+            const parsed = new URL(String(url));
+            const paths = parsed.pathname.split("/").at(-1)?.split(",") ?? [];
+            const inputs = JSON.parse(
+              parsed.searchParams.get("input") ?? String(options?.body),
+            ) as Record<string, ReturnType<typeof superjson.serialize>>;
+            paths.forEach((operationPath, index) =>
+              operations.push({
+                path: operationPath,
+                input: superjson.deserialize(inputs[String(index)]!),
+              }),
+            );
+            return Response.json(
+              paths.map(() => ({ result: { data: superjson.serialize([]) } })),
+            );
+          },
+        }),
+      ],
+    });
+    render(
+      <TrpcTestProviders client={trpc} queryClient={queryClient}>
+        <Page />
+      </TrpcTestProviders>,
+    );
+    await waitFor(() => expect(operations).toHaveLength(1));
+    expect(operations[0]?.path).toBe(path);
+    expect(operations[0]?.input).toMatchObject(filter);
+    if (name === "jutsu")
+      expect(operations[0]?.input).toMatchObject({ jutsuEffects: ["damage"] });
+    expect(window.location.hash).toBe("#Usage");
+  },
+);
+
+it("clears saved demographics and battle restrictions when drilling into an unfiltered cohort", () => {
+  const seed = renderHook(() =>
+    useJutsuBalanceFiltering({ persistKey: "manual-jutsu-balance" }),
+  );
+  act(() => {
+    seed.result.current.cf.setters.battleTypes(["COMBAT"]);
+    seed.result.current.cf.setters.userRanks(["JONIN"]);
+    seed.result.current.cf.setters.minLevel(30);
+    seed.result.current.cf.setters.maxLevel(50);
+    seed.result.current.cf.setters.jutsuEffects(["damage"]);
+  });
+  seed.unmount();
+  window.history.replaceState(null, "", getBalanceUsageHref("jutsu", {}));
+  const destination = renderHook(() =>
+    useJutsuBalanceFiltering({ persistKey: "manual-jutsu-balance" }),
+  );
+  expect(destination.result.current.cf.isReady).toBe(true);
+  expect(getJutsuBalanceFilter(destination.result.current)).toEqual({
+    jutsuEffects: ["damage"],
+  });
+});
+
+it.each([
+  "invalid-json",
+  JSON.stringify({ battleTypes: ["invalid"] }),
+  JSON.stringify({ maxLevel: -1 }),
+])("ignores malformed cohort handoff %s", (value) => {
+  window.history.replaceState(
+    null,
+    "",
+    `/?${new URLSearchParams({ balanceFilter: value })}#Usage`,
+  );
+  expect(readBalanceUsageFilter()).toEqual({});
+});

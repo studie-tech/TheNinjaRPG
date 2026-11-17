@@ -92,7 +92,7 @@ it("links each balance data source from its content row and column", () => {
     ],
     ["Combat", "", "", "", "", "/manual/combat"],
   ]);
-  for (const link of view.getAllByRole("link")) {
+  for (const link of view.getByRole("table").querySelectorAll("a")) {
     expect(link.querySelector("svg")?.getAttribute("class")).toContain("h-4 w-4");
   }
 });
@@ -131,4 +131,30 @@ it("creates a backup of the content type named on each button", () => {
     [{ type: "item" }],
     [{ type: "ai" }],
   ]);
+});
+
+it("offers section shortcuts before the overview and report tables", () => {
+  vi.spyOn(BalanceOverview, "BalanceOverview").mockImplementation(() => (
+    <section id="balance-overview">Overview data</section>
+  ));
+  const view = render(
+    <AppRouterContext.Provider value={{} as never}>
+      <ManualBalance />
+    </AppRouterContext.Provider>,
+  );
+  const nav = view.getByRole("navigation", { name: "Balance sections" });
+  expect(
+    within(nav)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href")),
+  ).toEqual([
+    "#balance-overview",
+    "#balance-starting-turn",
+    "#balance-archives",
+    "#balance-reports",
+  ]);
+  expect(
+    nav.compareDocumentPosition(view.getByText("Overview data")) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 });

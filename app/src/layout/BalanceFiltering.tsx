@@ -1,4 +1,10 @@
-import { MAX_PLAYER_LEVEL, type UserRank, UserRanks } from "@/drizzle/constants";
+import { z } from "zod";
+import {
+  BattleTypes,
+  MAX_PLAYER_LEVEL,
+  type UserRank,
+  UserRanks,
+} from "@/drizzle/constants";
 import {
   battleTypesField,
   buildFilter,
@@ -94,3 +100,36 @@ export const BalanceUsageNote = ({ invalidRange }: { invalidRange: boolean }) =>
     )}
   </div>
 );
+
+/** Carry the overview sample into a usage report without changing its tab fragment. */
+export const getBalanceUsageHref = (
+  type: "jutsu" | "bloodline" | "item",
+  filter: ReturnType<typeof getBalanceFilter>,
+) => {
+  const params = new URLSearchParams({ balanceFilter: JSON.stringify(filter) });
+  return `/manual/${type}/balance?${params}#Usage`;
+};
+
+/** Restore only the shared sample fields, leaving content-specific filters intact. */
+export const readBalanceUsageFilter = () => {
+  const raw = new URLSearchParams(window.location.search).get("balanceFilter");
+  if (!raw) return {};
+  try {
+    const parsed = z
+      .object({
+        battleTypes: z.array(z.enum(BattleTypes)).optional(),
+        userRanks: z.array(z.enum(UserRanks)).optional(),
+        minLevel: z.number().int().min(1).max(MAX_PLAYER_LEVEL).optional(),
+        maxLevel: z.number().int().min(1).max(MAX_PLAYER_LEVEL).optional(),
+      })
+      .parse(JSON.parse(raw));
+    return {
+      battleTypes: parsed.battleTypes ?? [],
+      userRanks: parsed.userRanks ?? [],
+      minLevel: parsed.minLevel,
+      maxLevel: parsed.maxLevel,
+    };
+  } catch {
+    return {};
+  }
+};

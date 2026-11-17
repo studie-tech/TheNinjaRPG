@@ -1,5 +1,8 @@
 import { ItemTypes } from "@/drizzle/constants";
-import { balanceDemographicFields } from "@/layout/BalanceFiltering";
+import {
+  balanceDemographicFields,
+  readBalanceUsageFilter,
+} from "@/layout/BalanceFiltering";
 import {
   battleTypesField,
   buildFilter,
@@ -53,7 +56,9 @@ export const getFilter = (state: ItemBalanceFilteringState) =>
   buildFilter(state.cf, ITEM_BALANCE_FILTERING_SCHEMA);
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(ITEM_BALANCE_FILTERING_SCHEMA);
+  const cf = useContentFiltering(ITEM_BALANCE_FILTERING_SCHEMA, {
+    initialValues: readBalanceUsageFilter,
+  });
   return {
     ...cf.values,
     cf,

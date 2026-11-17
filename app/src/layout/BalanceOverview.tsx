@@ -8,6 +8,7 @@ import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import {
   BalanceFiltering,
   getBalanceFilter,
+  getBalanceUsageHref,
   useBalanceFiltering,
 } from "@/layout/BalanceFiltering";
 import ContentBox from "@/layout/ContentBox";
@@ -80,6 +81,7 @@ export const BalanceOverview = () => {
   return (
     <>
       <ContentBox
+        id="balance-overview"
         title="Balance overview"
         subtitle="Current two-week reporting period"
         defaultBackHref="/manual"
@@ -117,7 +119,7 @@ export const BalanceOverview = () => {
                 return (
                   <Link
                     key={type}
-                    href={`/manual/${type}/balance#Usage`}
+                    href={getBalanceUsageHref(type, filter)}
                     className="rounded-lg border p-4 hover:bg-accent"
                   >
                     <h3 className="font-semibold capitalize">
@@ -142,6 +144,10 @@ export const BalanceOverview = () => {
               are not archived.
             </p>
             <h3 className="mb-2 font-semibold">Most-used content</h3>
+            <p className="text-muted-foreground mb-2 text-sm">
+              Individual content links open statistics across all player levels and
+              ranks, with their own battle and date filters.
+            </p>
             <Table
               data={Array.from(
                 groupBy(
@@ -180,6 +186,7 @@ export const BalanceOverview = () => {
         )}
       </ContentBox>
       <ContentBox
+        id="balance-starting-turn"
         title="Starting-turn win rates"
         subtitle="One outcome sample per player in head-to-head PvP"
       >
@@ -231,6 +238,7 @@ export const BalanceOverview = () => {
         )}
       </ContentBox>
       <ContentBox
+        id="balance-archives"
         title="Balance archives"
         subtitle="Download completed reporting periods"
       >

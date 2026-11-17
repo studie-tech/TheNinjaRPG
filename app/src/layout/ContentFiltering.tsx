@@ -259,7 +259,7 @@ export interface ContentFilteringState<
     | readonly ExclusionCategoryConfig<string>[]
     | undefined,
 > {
-  /** Persisted values have been restored, or this filter has no persistence key. */
+  /** Saved and navigation values have been restored, or no restoration is needed. */
   isReady: boolean;
   values: ValuesFromSchema<F>;
   debounced: ValuesFromSchema<F>;
@@ -272,12 +272,16 @@ export interface ContentFilteringState<
 }
 
 /** Options of `useContentFiltering`. */
-export interface ContentFilteringOptions {
+export interface ContentFilteringOptions<
+  F extends readonly AnyFieldConfig[] = readonly AnyFieldConfig[],
+> {
   /**
    * Keep the filter for the rest of the browser session under this key, so a list opened
    * again (e.g. with Back from an entry) shows the filter it was left with.
    */
   persistKey?: string;
+  /** Resolve navigation values after mount, overriding only those saved fields. */
+  initialValues?: () => Partial<ValuesFromSchema<F>>;
 }
 
 /** Debounce delay for free-typing filter changes */
@@ -337,7 +341,7 @@ export const useContentFiltering = <
     | undefined,
 >(
   schema: FilteringSchema<F, E>,
-  options: ContentFilteringOptions = {},
+  options: ContentFilteringOptions<F> = {},
 ): ContentFilteringState<F, E> => {
   const storageKey = options.persistKey
     ? `${FILTER_STORAGE_PREFIX}${options.persistKey}`
@@ -442,16 +446,18 @@ export const useContentFiltering = <
     if (appliedDefaultsKey !== defaultsKey) setExcludedState(initialExcluded);
   }, [appliedDefaultsKey, defaultsKey, initialExcluded]);
 
-  // A stored filter applies after mount, so prerendered markup matches the first render.
+  // Saved and navigation values apply together after mount, preserving hydration and one initial query.
   // Its defaults key must match: a filter saved under other defaults or fields is dropped.
   const restorationKey = `${storageKey}:${defaultsKey}`;
   const [restoredKey, setRestoredKey] = useState<string | undefined>(undefined);
   useEffect(() => {
-    if (!storageKey || restoredKey === restorationKey) return;
-    const stored = readStoredFilter(storageKey, defaultsKey);
+    if ((!storageKey && !options.initialValues) || restoredKey === restorationKey)
+      return;
+    const stored = storageKey ? readStoredFilter(storageKey, defaultsKey) : null;
     const restoredValues = {
       ...initialValues,
       ...stored?.values,
+      ...options.initialValues?.(),
     } as ValuesFromSchema<F>;
     setFieldState({
       values: restoredValues,
@@ -470,6 +476,7 @@ export const useContentFiltering = <
     defaultsKey,
     initialValues,
     initialExcluded,
+    options.initialValues,
   ]);
 
   useEffect(() => {
@@ -521,7 +528,7 @@ export const useContentFiltering = <
   };
 
   return {
-    isReady: !storageKey || restoredKey === restorationKey,
+    isReady: (!storageKey && !options.initialValues) || restoredKey === restorationKey,
     values,
     debounced,
     setters,

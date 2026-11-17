@@ -67,8 +67,21 @@ export default function ManualBalance() {
 
   return (
     <>
+      <nav aria-label="Balance sections" className="flex gap-4 overflow-x-auto text-sm">
+        {[
+          ["balance-overview", "Overview"],
+          ["balance-starting-turn", "Starting turns"],
+          ["balance-archives", "Archives"],
+          ["balance-reports", "Reports"],
+        ].map(([id, label]) => (
+          <a key={id} href={`#${id}`} className="min-h-11 shrink-0 py-3 underline">
+            {label}
+          </a>
+        ))}
+      </nav>
       <BalanceOverview />
       <ContentBox
+        id="balance-reports"
         title="Detailed balance reports"
         subtitle="Usage, power and completeness"
         defaultBackHref="/manual"
