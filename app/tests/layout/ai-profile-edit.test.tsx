@@ -737,13 +737,13 @@ describe("AI action pickers", () => {
     const view = picker([jutsus[1]!], { fire: "Fire Ball" });
     expect(
       view.getByRole("combobox", { name: "Specific jutsu" }).textContent,
-    ).toContain("Fire Ball (not equipped)");
+    ).toContain("Not equipped: Fire Ball");
   });
   it("names a saved item that is not equipped", () => {
     mocks.profile.rules[0]!.action = ActionUseSpecificItem.parse({ itemId: "pill" });
     const view = picker(jutsus, { pill: "Chakra Pill" });
     expect(view.getByRole("combobox", { name: "Specific item" }).textContent).toContain(
-      "Chakra Pill (not equipped)",
+      "Not equipped: Chakra Pill",
     );
   });
   it("deduplicates owned copies and handles an empty loadout", () => {
@@ -781,10 +781,10 @@ describe("AI action pickers", () => {
   it("names unavailable combo selections without offering them or discarding saved IDs", () => {
     const view = comboPicker();
     expect(
-      view.getByRole("button", { name: "Remove Fire Ball (not equipped)" }),
+      view.getByRole("button", { name: "Remove Not equipped: Fire Ball" }),
     ).toBeTruthy();
     expect(
-      view.getByRole("button", { name: "Remove Chakra Pill (not equipped)" }),
+      view.getByRole("button", { name: "Remove Not equipped: Chakra Pill" }),
     ).toBeTruthy();
     expect(
       view.getByRole("button", { name: "Remove Unavailable action" }),
@@ -805,7 +805,7 @@ describe("AI action pickers", () => {
   it("removes unavailable combo actions only when requested", () => {
     const view = comboPicker();
     fireEvent.click(
-      view.getByRole("button", { name: "Remove Fire Ball (not equipped)" }),
+      view.getByRole("button", { name: "Remove Not equipped: Fire Ball" }),
     );
     expect(save(view).rules[0]?.action).toMatchObject({
       comboIds: ["pill", "missing", "water"],

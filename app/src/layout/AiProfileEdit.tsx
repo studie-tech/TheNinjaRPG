@@ -676,7 +676,8 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
 
 /** A saved jutsu or item the fighter owns but has not equipped, or the fallback when unknown. */
 const unequippedLabel = (name: string | undefined, fallback: string) =>
-  name ? `${name} (not equipped)` : fallback;
+  // The status leads, so a long name cut short by the picker still shows it.
+  name ? `Not equipped: ${name}` : fallback;
 
 /**
  * Rules and the backup-rule switch as they would be saved, ignoring the editor's rule
