@@ -1519,9 +1519,10 @@ export const conversationComment = mysqlTable(
     return {
       userIdIdx: index("ConversationComment_userId_idx").on(table.userId),
       createdAtIdx: index("ConversationComment_createdAt_idx").on(table.createdAt),
-      conversationIdIdx: index("ConversationComment_conversationId_idx").on(
-        table.conversationId,
-      ),
+      // Serves newest-first conversation pages and covers the private-sender DISTINCT.
+      conversationIdCreatedAtUserIdIdx: index(
+        "ConversationComment_conversationId_createdAt_userId_idx",
+      ).on(table.conversationId, table.createdAt, table.userId),
     };
   },
 );
@@ -2894,10 +2895,11 @@ export const actionLog = mysqlTable(
   },
   (table) => {
     return {
-      userIdTableNameIdx: index("ActionLog_userId_tableName_idx").on(
-        table.userId,
-        table.tableName,
-      ),
+      // Its (userId, tableName) prefix serves per-user log reads; relatedText and
+      // createdAt narrow message lookups such as jutsu transfers and bloodline swaps.
+      userIdTableNameRelatedTextCreatedAtIdx: index(
+        "ActionLog_userId_tableName_relatedText_createdAt_idx",
+      ).on(table.userId, table.tableName, table.relatedMsg, table.createdAt),
       relatedIdIdx: index("ActionLog_relatedId_idx").on(table.relatedId),
       tableNameIdx: index("ActionLog_tableName_idx").on(table.tableName),
       createdAtIdx: index("ActionLog_createdAt_idx").on(table.createdAt),
