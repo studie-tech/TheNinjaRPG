@@ -125,6 +125,7 @@ import {
   fetchJutsu,
   fetchJutsuLoadouts,
   fetchReskin,
+  fetchUserDataForSelectJutsuLoadout,
   fetchUserReskins,
   findBloodlineReskinById,
   findItemForUpdate,
@@ -615,13 +616,13 @@ export const jutsuRouter = createTRPCRouter({
           }),
       );
       const loadout = loadouts.find((loadout) => loadout.id === id);
-      return result.success && loadout
+      return "aiProfileId" in result && loadout
         ? {
             ...result,
             ...getSelectJutsuLoadoutUserUpdate({
               id,
               loadoutJutsuIds: loadout.jutsuIds,
-              aiProfileId: loadout.customAi ? (loadout.aiProfile?.id ?? null) : null,
+              aiProfileId: result.aiProfileId,
             }),
           }
         : result;
@@ -2905,6 +2906,11 @@ export const selectJutsuLoadout = async (
       ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equipIds)} THEN 1 ELSE 0 END`
       : sql`0`;
   await executeRowsForSelectJutsuLoadout(client, loadout, equippedAssignment, user);
+  // The write reads the loadout's AI rules choice live, so read back what it stored.
+  const stored = await fetchUserDataForSelectJutsuLoadout(client, user.userId);
+  if (stored?.jutsuLoadout !== loadout.id) {
+    return errorResponse("Your jutsu loadout changed. Please try again.");
+  }
 
   const message =
     invalidJutsus.length > 0
@@ -2915,6 +2921,7 @@ export const selectJutsuLoadout = async (
     success: true,
     message,
     jutsus: userjutsus.filter((u) => equipIds.includes(u.jutsuId)),
+    aiProfileId: stored.aiProfileId,
   };
 };
 

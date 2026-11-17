@@ -3,8 +3,10 @@ import { eq } from "drizzle-orm";
 import { aiProfile, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { insertUsers } from "../../../../setup/factories";
+import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -55,6 +57,31 @@ describeWithDatabase("jutsu loadouts carry their AI rules", () => {
     const toMain = await api.selectJutsuLoadout({ id: "main" });
     expect(await pointer()).toEqual({ jutsuLoadout: "main", aiProfileId: null });
     expect(toMain.userPatch).toMatchObject({ jutsuLoadout: "main", aiProfileId: null });
+  });
+
+  it("patches the profile with the rules the selection stored when they switch mid-request", async () => {
+    const db = await getTestDatabase();
+    // Another tab switches the loadout to the Default rules after this request read it.
+    const raced = beforeStatements(
+      db,
+      jutsuLoadout,
+      [
+        () =>
+          db
+            .update(jutsuLoadout)
+            .set({ customAi: false })
+            .where(eq(jutsuLoadout.id, "pvp")),
+      ],
+      { operations: ["execute"] },
+    );
+    const result = await callerForDatabase(
+      jutsuRouter,
+      userId,
+      raced,
+    ).selectJutsuLoadout({ id: "pvp" });
+    expect(await pointer()).toEqual({ jutsuLoadout: "pvp", aiProfileId: null });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toMatchObject({ jutsuLoadout: "pvp", aiProfileId: null });
   });
 
   it("keeps the rules a first loadout already owns when it becomes the active one", async () => {

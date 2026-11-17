@@ -1479,6 +1479,16 @@ export const executeRowsForSelectJutsuLoadout = (
     WHERE ${userData.userId} = ${user.userId}
   `);
 
+/** Read back the loadout and AI rules `selectJutsuLoadout` stored on the profile. */
+export const fetchUserDataForSelectJutsuLoadout = (
+  client: DrizzleClient,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: { jutsuLoadout: true, aiProfileId: true },
+  });
+
 /**
  * Build the `userJutsu` update for `rollbackEquipIfOverCap`, setting `equipped`, using
  * predicates on `id`, `userId`, `equipped`.

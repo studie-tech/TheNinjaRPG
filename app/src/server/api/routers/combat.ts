@@ -1324,19 +1324,17 @@ export const combatRouter = createTRPCRouter({
       }
       // A saved jutsu loadout reaches the profile, also when the lobby update fails later.
       // An item-only switch reapplies the battle's jutsu loadout, which the profile follows too.
-      const appliedJutsuLoadout =
-        jutsuLoadoutResult.success && jutsuLoadoutIdToApply
-          ? jutsuLoadouts.find((loadout) => loadout.id === jutsuLoadoutIdToApply)
-          : undefined;
-      const loadoutPatch: Pick<UserDeltaResponse, "userPatch"> = appliedJutsuLoadout
-        ? getSelectJutsuLoadoutUserUpdate({
-            id: appliedJutsuLoadout.id,
-            loadoutJutsuIds: appliedJutsuLoadout.jutsuIds,
-            aiProfileId: appliedJutsuLoadout.customAi
-              ? (appliedJutsuLoadout.aiProfile?.id ?? null)
-              : null,
-          })
-        : {};
+      const appliedJutsuLoadout = jutsuLoadouts.find(
+        (loadout) => loadout.id === jutsuLoadoutIdToApply,
+      );
+      const loadoutPatch: Pick<UserDeltaResponse, "userPatch"> =
+        appliedJutsuLoadout && "aiProfileId" in jutsuLoadoutResult
+          ? getSelectJutsuLoadoutUserUpdate({
+              id: appliedJutsuLoadout.id,
+              loadoutJutsuIds: appliedJutsuLoadout.jutsuIds,
+              aiProfileId: jutsuLoadoutResult.aiProfileId,
+            })
+          : {};
 
       // An item-only switch can remove a required bloodline item or a mastery buff.
       // Revalidate stored equips too: battle filtering alone leaves invalid equips

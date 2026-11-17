@@ -238,6 +238,50 @@ describeWithDatabase("combat lobby jutsu gates", () => {
     });
   });
 
+  it("patches the profile with the rules the lobby's loadout switch stored when they switch mid-request", async () => {
+    const db = await getTestDatabase();
+    await db
+      .insert(jutsuLoadout)
+      .values({ id: "rules", userId: USER, jutsuIds: VALID, customAi: true });
+    await db.insert(aiProfile).values({
+      id: "rules-own",
+      userId: USER,
+      jutsuLoadoutId: "rules",
+      rules: [AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) })],
+    });
+    await seedLobby();
+    // Another tab switches the loadout to the Default rules after the lobby read it.
+    const raced = beforeStatements(
+      db,
+      jutsuLoadout,
+      [
+        () =>
+          db
+            .update(jutsuLoadout)
+            .set({ customAi: false })
+            .where(eq(jutsuLoadout.id, "rules")),
+      ],
+      { operations: ["execute"] },
+    );
+    const result = await callerForDatabase(
+      combatRouter,
+      USER,
+      raced,
+    ).updateCombatLoadout({
+      battleId: BATTLE,
+      jutsuLoadoutId: "rules",
+    });
+    const stored = await db.query.userData.findFirst({
+      where: eq(userData.userId, USER),
+      columns: { jutsuLoadout: true, aiProfileId: true },
+    });
+    expect(stored).toEqual({ jutsuLoadout: "rules", aiProfileId: null });
+    expect("userPatch" in result && result.userPatch).toMatchObject({
+      jutsuLoadout: "rules",
+      aiProfileId: null,
+    });
+  });
+
   it("patches the profile with a saved loadout switch even when the lobby update loses a race", async () => {
     const db = await getTestDatabase();
     await db
