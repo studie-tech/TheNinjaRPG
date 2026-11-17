@@ -121,6 +121,7 @@ export default function TowerDefensePage() {
     [user],
   );
   const [mode, setMode] = useState<TowerDefenseInputMode>("aim");
+  const [buyMax, setBuyMax] = useState(false);
   const reticle = useRef<{ x: number; y: number } | null>(null);
 
   // Handlers depend on the run's stable members, never on the object returned per render.
@@ -377,7 +378,12 @@ export default function TowerDefensePage() {
                   layout="grid"
                 />
                 {run.unsaved && <UnsavedNotice />}
-                <TowerDefensePanel state={playing} act={act} />
+                <TowerDefensePanel
+                  state={playing}
+                  act={act}
+                  buyMax={buyMax}
+                  onBuyMax={setBuyMax}
+                />
               </aside>
             )}
           </div>
@@ -391,7 +397,12 @@ export default function TowerDefensePage() {
                 aim={aim}
               />
               {run.unsaved && <UnsavedNotice />}
-              <TowerDefensePanel state={playing} act={act} />
+              <TowerDefensePanel
+                state={playing}
+                act={act}
+                buyMax={buyMax}
+                onBuyMax={setBuyMax}
+              />
             </>
           )}
         </PortalContainerContext.Provider>

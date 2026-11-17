@@ -14,7 +14,7 @@ import {
   VolumeX,
   Zap,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -422,16 +422,18 @@ export const TowerDefenseActionBar = (props: {
 export const TowerDefensePanel = (props: {
   state: TdState;
   act: (command: TdCommand) => void;
+  /** Buy as many levels as affordable per tap; owned by the page so it survives a layout switch. */
+  buyMax: boolean;
+  onBuyMax: (buyMax: boolean) => void;
 }) => {
-  const { state, act } = props;
-  const [buyMax, setBuyMax] = useState(false);
+  const { state, act, buyMax } = props;
   const buying = (
     <div className="ml-auto flex gap-1">
       <Button
         size="sm"
         variant="outline"
         className="h-8 px-2"
-        onClick={() => setBuyMax((value) => !value)}
+        onClick={() => props.onBuyMax(!buyMax)}
         title="Buy one level per tap, or as many as you can afford"
       >
         Buy {buyMax ? "max" : "×1"}
