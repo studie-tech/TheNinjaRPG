@@ -31,6 +31,7 @@ const mocks = {
   /** A profile id whose rules are still loading. */
   loadingId: "",
   toggle: vi.fn(),
+  toggling: false,
   save: vi.fn(),
   invalidate: vi.fn(async () => undefined),
   query: vi.fn(),
@@ -54,7 +55,7 @@ const api = {
       },
     },
     toggleAiProfile: {
-      useMutation: () => ({ mutate: mocks.toggle, isPending: false }),
+      useMutation: () => ({ mutate: mocks.toggle, isPending: mocks.toggling }),
     },
     updateAiProfile: { useMutation: () => ({ mutate: mocks.save, isPending: false }) },
   },
@@ -84,6 +85,7 @@ beforeEach(() => {
   };
   mocks.role = "CONTENT-ADMIN";
   mocks.loadingId = "";
+  mocks.toggling = false;
 });
 
 describe("controlled companion AI configuration", () => {
@@ -373,6 +375,40 @@ describe("a player's rules for a jutsu loadout", () => {
     cleanup();
     await flushRadixFocus();
     restoreBrowserGlobals();
+  });
+
+  it("says the copy replaced unsaved edits when it matches the saved rules", async () => {
+    installBrowserGlobals();
+    mocks.fetchProfile.mockResolvedValue({ ...mocks.profile, id: "pvp" });
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    fireEvent.click(view.getByRole("button", { name: "Add Rule" }));
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    fireEvent.click(view.getByRole("button", { name: "Proceed" }));
+    await waitFor(() =>
+      expect(toast.showMutationToast).toHaveBeenCalledWith({
+        success: true,
+        message: "Copied the rules of PvP, which match your saved rules.",
+      }),
+    );
+    expect(view.getByText("1 / 2 rules")).toBeDefined();
+    cleanup();
+    await flushRadixFocus();
+    restoreBrowserGlobals();
+  });
+
+  const readOnly = (view: ReturnType<typeof player>) => {
+    expect(view.queryByRole("button", { name: "Add Rule" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Copy rules from PvP" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Save Profile" })).toBeNull();
+  };
+
+  it("keeps the rules read-only while the Default or Custom choice switches", () => {
+    mocks.toggling = true;
+    readOnly(player({ copySources: [{ id: "pvp", name: "PvP" }] }));
+  });
+
+  it("keeps the rules read-only while the caller switches or resets them", () => {
+    readOnly(player({ copySources: [{ id: "pvp", name: "PvP" }], locked: true }));
   });
 
   it("says so when the copied rules are the rules already saved", async () => {

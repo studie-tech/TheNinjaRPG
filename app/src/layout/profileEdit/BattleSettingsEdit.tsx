@@ -75,6 +75,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
   }));
   const { data: loadouts } = api.jutsu.getLoadouts.useQuery();
   const [hasUnsavedRules, setHasUnsavedRules] = useState(false);
+  const [isSwitchingLoadout, setIsSwitchingLoadout] = useState(false);
   const [tab, setTab] = useState("preferred");
   const unsavedRulesId = useId();
   const { prepareLoadoutUpdate, updateToggledAiLoadout } = useJutsuLoadoutCacheUpdate();
@@ -388,6 +389,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                   label="Jutsu loadout"
                   disabled={hasUnsavedRules}
                   describedBy={hasUnsavedRules ? unsavedRulesId : undefined}
+                  onSelecting={setIsSwitchingLoadout}
                   // Equipping changes the jutsu these rules can use.
                   onSelected={() =>
                     void utils.profile.getPublicUser.invalidate({ userId })
@@ -421,6 +423,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
               ])}
               maxCustomRules={AI_PROFILE_MAX_RULES}
               onDirtyChange={setHasUnsavedRules}
+              locked={isSwitchingLoadout || isPending}
               toggleCache={{
                 prepare: prepareLoadoutUpdate,
                 update: (toggled, snapshot) =>

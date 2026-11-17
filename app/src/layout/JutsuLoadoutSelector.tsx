@@ -16,8 +16,10 @@ const JutsuLoadoutSelector: React.FC<
   LoadoutSelectorDisplayProps & {
     /** Runs once a selection is saved, for views that show what the loadout equips. */
     onSelected?: () => void;
+    /** Hears when a selection starts and when it has finished, for views that lock meanwhile. */
+    onSelecting?: (isSelecting: boolean) => void;
   }
-> = ({ onSelected, ...props }) => {
+> = ({ onSelected, onSelecting, ...props }) => {
   // State
   const {
     data: availableSlots,
@@ -41,7 +43,11 @@ const JutsuLoadoutSelector: React.FC<
 
   // Mutations
   const mutationResult = api.jutsu.selectJutsuLoadout.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: () => {
+      onSelecting?.(true);
+      return prepareUserUpdate();
+    },
+    onSettled: () => onSelecting?.(false),
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {

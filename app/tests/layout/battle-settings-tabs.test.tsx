@@ -9,7 +9,11 @@ import { BattleSettingsEdit } from "@/layout/profileEdit/BattleSettingsEdit";
 import * as toast from "@/libs/toast";
 import { mockUserContextValue } from "../setup/userContext";
 
+/** Whether a "Reset rules" request is running. */
+let resetting = false;
+
 beforeEach(() => {
+  resetting = false;
   const mutation = {
     useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   };
@@ -25,18 +29,24 @@ beforeEach(() => {
       updateBattleDescription: mutation,
       updatePreferences: mutation,
     },
-    ai: { updateAiProfile: mutation },
+    ai: {
+      updateAiProfile: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: resetting }),
+      },
+    },
     jutsu: { getLoadouts: { useQuery: () => ({ data: [] }) } },
   });
   playerWithRules(null);
   vi.spyOn(combat, "useAutoCombatSetting").mockImplementation(() => [false, vi.fn()]);
   vi.spyOn(AiProfileEdit, "default").mockImplementation((({
     onDirtyChange,
+    locked,
   }: {
     onDirtyChange?: (isDirty: boolean) => void;
+    locked?: boolean;
   }) => (
     <button type="button" onClick={() => onDirtyChange?.(true)}>
-      AI profile editor
+      {locked ? "AI profile editor (locked)" : "AI profile editor"}
     </button>
   )) as never);
   vi.spyOn(loadoutCache, "useJutsuLoadoutCacheUpdate").mockReturnValue({
@@ -46,8 +56,14 @@ beforeEach(() => {
     updateToggledAiLoadout: vi.fn(),
   } as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(JutsuLoadoutSelector, "default").mockImplementation((() => (
-    <p>Jutsu loadout selector</p>
+  vi.spyOn(JutsuLoadoutSelector, "default").mockImplementation((({
+    onSelecting,
+  }: {
+    onSelecting?: (isSelecting: boolean) => void;
+  }) => (
+    <button type="button" onClick={() => onSelecting?.(true)}>
+      Jutsu loadout selector
+    </button>
   )) as never);
 });
 
@@ -112,4 +128,21 @@ it("tells a player on the Default rules how to give the loadout its own", () => 
   expect(
     view.queryByText(/These rules belong to your active jutsu loadout/),
   ).toBeNull();
+});
+
+it("keeps the rules read-only while the loadout switches", () => {
+  playerWithRules("ai");
+  const view = render(<BattleSettingsEdit userId="actor" />);
+  fireEvent.mouseDown(view.getByRole("tab", { name: "AI Profile" }));
+  expect(view.getByText("AI profile editor")).toBeTruthy();
+  fireEvent.click(view.getByText("Jutsu loadout selector"));
+  expect(view.getByText("AI profile editor (locked)")).toBeTruthy();
+});
+
+it("keeps the rules read-only while they reset", () => {
+  playerWithRules("ai");
+  resetting = true;
+  const view = render(<BattleSettingsEdit userId="actor" />);
+  fireEvent.mouseDown(view.getByRole("tab", { name: "AI Profile" }));
+  expect(view.getByText("AI profile editor (locked)")).toBeTruthy();
 });

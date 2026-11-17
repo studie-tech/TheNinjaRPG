@@ -71,6 +71,8 @@ interface AiProfileEditProps {
   maxCustomRules?: number;
   /** Hear whether the draft holds edits that are not saved yet. */
   onDirtyChange?: (isDirty: boolean) => void;
+  /** Keep the rules read-only while the caller changes which rules these are or resets them. */
+  locked?: boolean;
   /** Other saved profiles whose rules can be copied into the draft. */
   copySources?: { id: string; name: string }[];
   /**
@@ -178,8 +180,13 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
       },
     });
   const isSaving = props.configuration?.isSaving ?? isUpdatingProfile;
+  // Edits made while other rules load would be replaced by them.
   const canEdit =
-    !isSaving && !props.configuration?.disabled && (isStaff || !isDefault);
+    !isSaving &&
+    !isToggling &&
+    !props.locked &&
+    !props.configuration?.disabled &&
+    (isStaff || !isDefault);
   // Rules store definition IDs, so multiple owned copies must produce one choice.
   const jutsus = getUnique(props.userData.jutsus, "jutsuId");
   const items = getUnique(props.userData.items, "itemId");
@@ -234,12 +241,15 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
     if (rules !== pendingCopy.draft || profile !== pendingCopy.profile) return;
     setRules(pendingCopy.rules);
     setActiveElement("");
-    const unchanged = draftKey(pendingCopy.rules, includeDefault) === savedDraft;
+    const copied = draftKey(pendingCopy.rules, includeDefault);
     showMutationToast({
       success: true,
-      message: unchanged
-        ? `Your rules already match the rules of ${pendingCopy.name}.`
-        : `Copied the rules of ${pendingCopy.name}. Save to keep them.`,
+      message:
+        copied === draftKey(pendingCopy.draft, includeDefault)
+          ? `Your rules already match the rules of ${pendingCopy.name}.`
+          : copied === savedDraft
+            ? `Copied the rules of ${pendingCopy.name}, which match your saved rules.`
+            : `Copied the rules of ${pendingCopy.name}. Save to keep them.`,
     });
   }, [pendingCopy, rules, profile, includeDefault, savedDraft]);
 
