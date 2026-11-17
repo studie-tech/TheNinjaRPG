@@ -407,7 +407,7 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           durability ({target.item.maxDurability} normal maximum).
         </p>
       )}
-      {info && (
+      {info && rarity && (
         <p className="font-medium">
           {price
             ? `Service fee: ${price.fee.toLocaleString()} ryo`

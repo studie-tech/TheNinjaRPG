@@ -9,6 +9,8 @@ import {
   craftingServicePrice,
   craftingServiceRequest,
   item,
+  quest,
+  questHistory,
   storeUserIdAlias,
   user2conversation,
   userData,
@@ -35,15 +37,26 @@ import {
   retireCraftingServices as retireServices,
 } from "@/server/utils/craftingServices";
 import { settleCraftingQueue } from "@/server/utils/userQueue";
+import { getNextUserSnapshotAt } from "@/utils/time";
+import { AllObjectives, QuestTracker } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
 import { withAfterTasks } from "../../../../setup/after";
 import { deferred } from "../../../../setup/deferred";
 import {
   insertItems,
+  insertQuestHistory,
+  insertQuests,
   insertUserItems,
   insertUsers,
   insertUserVotes,
 } from "../../../../setup/factories";
-import { overrideQuery } from "../../../../setup/statements";
+import {
+  barrier,
+  beforeStatements,
+  beforeTransaction,
+  overrideQuery,
+  withoutTransactions,
+} from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -63,6 +76,8 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     vi.spyOn(Sentry, "captureException").mockReturnValue("service-test-event");
     await resetTables(
+      questHistory,
+      quest,
       craftingServicePrice,
       craftingServiceRequest,
       craftingRequirement,
@@ -242,8 +257,16 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     const questData = [
       { id: "service-progress", startAt: new Date().toISOString(), goals: [] },
     ];
+    const claimedAt = getNextUserSnapshotAt(crafter.updatedAt);
     const claim = (user = crafter, row = request) =>
-      acceptServiceRequest(db, row, user, 7, questData, finishesAt);
+      acceptServiceRequest(
+        db,
+        row,
+        user,
+        7,
+        { set: { questData }, claimedAt },
+        finishesAt,
+      );
     expect((await claim({ ...crafter, updatedAt: new Date(0) })).rowsAffected).toBe(0);
     expect(
       (await claim(crafter, { ...request, requesterId: "another" })).rowsAffected,
@@ -271,6 +294,22 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     expect((await requireUser("crafter")).craftingExperience).toBe(
       crafter.craftingExperience,
     );
+    expect(
+      (
+        await acceptServiceRequest(
+          db,
+          request,
+          crafter,
+          7,
+          {
+            set: { questData },
+            claimedAt,
+            where: [eq(userData.questPartyId, "changed-party")],
+          },
+          finishesAt,
+        )
+      ).rowsAffected,
+    ).toBe(0);
     expect((await claim()).rowsAffected).toBe(3);
     expect((await claim()).rowsAffected).toBe(0);
     expect((await receipt()).status).toBe("ACTIVE");
@@ -282,7 +321,343 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     );
     expect((await requireUser("crafter")).serviceCraftUntil).toEqual(finishesAt);
     expect((await requireUser("crafter")).questData).toEqual(questData);
+    expect((await requireUser("crafter")).updatedAt).toEqual(claimedAt);
   });
+  it.each(["CRAFT", "IMBUE", "REPAIR"] as const)(
+    "rejects an awake banned requester before submitting %s escrow",
+    async (service) => {
+      const db = await getTestDatabase();
+      await db
+        .update(userData)
+        .set({ isBanned: true })
+        .where(eq(userData.userId, "requester"));
+      expect(await submit(service)).toMatchObject({
+        success: false,
+        message: "You are banned",
+      });
+      expect((await requireUser("requester")).money).toBe(1000);
+      expect(await db.query.craftingServiceRequest.findMany()).toHaveLength(0);
+      expect(
+        (await db.query.userItem.findFirst({ where: eq(userItem.id, "iron") }))
+          ?.quantity,
+      ).toBe(20);
+      expect(
+        (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))
+          ?.userId,
+      ).toBe("requester");
+      expect(
+        (await db.query.userItem.findFirst({ where: eq(userItem.id, "gem") }))
+          ?.quantity,
+      ).toBe(1);
+    },
+  );
+  it("rejects an awake banned crafter before accepting work", async () => {
+    await submit();
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ isBanned: true })
+      .where(eq(userData.userId, "crafter"));
+    expect(await accept()).toMatchObject({ success: false, message: "You are banned" });
+    expect((await receipt()).status).toBe("PENDING");
+    expect((await requireUser("crafter")).serviceCraftUntil).toBeNull();
+    expect((await requireUser("crafter")).craftingExperience).toBe(
+      CRAFTING_REQUIRED_EXP.MASTER,
+    );
+  });
+  it("rejects a requester banned after the snapshot without a revision bump", async () => {
+    const db = await getTestDatabase();
+    let injected = false;
+    const observed = beforeTransaction(db, async () => {
+      injected = true;
+      const before = await requireUser("requester");
+      await db
+        .update(userData)
+        .set({ isBanned: true })
+        .where(eq(userData.userId, "requester"));
+      expect((await requireUser("requester")).updatedAt).toEqual(before.updatedAt);
+    });
+    expect(
+      await callerForDatabase(
+        occupationRouter,
+        "requester",
+        observed,
+      ).submitServiceRequest({
+        crafterId: "crafter",
+        service: "IMBUE",
+        userItemId: "sword",
+        userCrystalItemId: "gem",
+        expectedFee: 50,
+      }),
+    ).toMatchObject({ success: false });
+    expect(injected).toBe(true);
+    expect((await requireUser("requester")).money).toBe(1000);
+    expect(await db.query.craftingServiceRequest.findMany()).toHaveLength(0);
+    expect(
+      (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))?.userId,
+    ).toBe("requester");
+    expect(
+      (await db.query.userItem.findFirst({ where: eq(userItem.id, "gem") }))?.quantity,
+    ).toBe(1);
+  });
+  it.each(["CANCEL", "DECLINE"] as const)(
+    "allows a banned actor to %s pending escrow",
+    async (action) => {
+      await submit("IMBUE");
+      const db = await getTestDatabase();
+      const request = await receipt();
+      await db.update(userData).set({ isBanned: true });
+      const actor = action === "CANCEL" ? "requester" : "crafter";
+      expect(
+        await (await callerFor(occupationRouter, actor)).respondToServiceRequest({
+          requestId: request.id,
+          action,
+        }),
+      ).toMatchObject({ success: true });
+      expect((await requireUser("requester")).money).toBe(1000);
+      expect(
+        (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))
+          ?.userId,
+      ).toBe("requester");
+      expect(
+        (
+          await db.query.userItem.findMany({
+            where: and(
+              eq(userItem.userId, "requester"),
+              eq(userItem.itemId, "crystal"),
+            ),
+          })
+        ).reduce((sum, row) => sum + row.quantity, 0),
+      ).toBe(1);
+    },
+  );
+  it("settles existing escrow when both participants are banned", async () => {
+    await submit("IMBUE");
+    await accept();
+    const request = await due();
+    const db = await getTestDatabase();
+    await db.update(userData).set({ isBanned: true });
+    expect(await completeCraftingService(db, request)).toBe(true);
+    expect((await requireUser("crafter")).money).toBe(150);
+    expect(
+      (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))?.userId,
+    ).toBe("requester");
+  });
+
+  const seedCraftFollowup = async () => {
+    const db = await getTestDatabase();
+    await insertQuests([
+      {
+        id: "unloaded-achievement",
+        questType: "achievement",
+        content: {
+          objectives: [
+            AllObjectives.parse({
+              id: "saved-counter",
+              task: "ranked_wins",
+              value: 100,
+            }),
+          ],
+        },
+      },
+      {
+        id: "craft-chain",
+        questType: "mission",
+        consecutiveObjectives: true,
+        maxAttempts: 100,
+        maxCompletes: 100,
+        content: {
+          objectives: [
+            AllObjectives.parse({
+              id: "craft-one",
+              task: "items_crafted",
+              value: 1,
+              nextObjectiveId: "start-next",
+            }),
+            AllObjectives.parse({
+              id: "start-next",
+              task: "new_quest",
+              newQuestIds: ["followup"],
+            }),
+          ],
+        },
+      },
+      {
+        id: "followup",
+        questType: "story",
+        content: {
+          objectives: [
+            AllObjectives.parse({ id: "later", task: "items_crafted", value: 5 }),
+          ],
+        },
+      },
+    ]);
+    await insertQuestHistory([
+      { userId: "crafter", questId: "craft-chain", questType: "mission" },
+    ]);
+    await db
+      .update(userData)
+      .set({
+        questData: [
+          QuestTracker.parse({
+            id: "craft-chain",
+            goals: [
+              { id: "craft-one", value: 0, done: false },
+              { id: "start-next", done: false },
+            ],
+          }),
+          QuestTracker.parse({
+            id: "unloaded-achievement",
+            goals: [{ id: "saved-counter", value: 3, done: false }],
+          }),
+        ],
+      })
+      .where(eq(userData.userId, "crafter"));
+  };
+  it("starts a follow-up quest once after the atomic service claim and preserves sparse counters", async () => {
+    await seedCraftFollowup();
+    await submit();
+    const request = await receipt();
+    const db = await getTestDatabase();
+    const arrive = barrier(2);
+    const observed = beforeStatements(db, craftingServiceRequest, [arrive, arrive], {
+      operations: ["execute"],
+    });
+    const caller = callerForDatabase(
+      occupationRouter,
+      "crafter",
+      withoutTransactions(observed),
+    );
+    const results = await Promise.all([
+      caller.respondToServiceRequest({ requestId: request.id, action: "ACCEPT" }),
+      caller.respondToServiceRequest({ requestId: request.id, action: "ACCEPT" }),
+    ]);
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    const persisted = (await requireUser("crafter")).questData;
+    expect(persisted?.find((row) => row.id === "craft-chain")?.goals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "craft-one", value: 1, done: true }),
+        expect.objectContaining({ id: "start-next", done: true }),
+      ]),
+    );
+    expect(
+      persisted?.find((row) => row.id === "unloaded-achievement")?.goals[0]?.value,
+    ).toBe(3);
+    const historyBefore = await db.query.questHistory.findMany({
+      where: eq(questHistory.questId, "followup"),
+    });
+    expect(historyBefore).toHaveLength(1);
+    const after = await requireUser("crafter");
+    expect(
+      await caller.respondToServiceRequest({ requestId: request.id, action: "ACCEPT" }),
+    ).toMatchObject({ success: false });
+    const profile = await callerFor(profileRouter, "crafter");
+    await profile.getUser();
+    await profile.getUser();
+    expect(
+      await db.query.questHistory.findMany({
+        where: eq(questHistory.questId, "followup"),
+      }),
+    ).toEqual(historyBefore);
+    expect((await requireUser("crafter")).craftingExperience).toBe(
+      after.craftingExperience,
+    );
+  });
+  it("persists quest resets supplied by the consequence handler in the acceptance claim", async () => {
+    await seedCraftFollowup();
+    const db = await getTestDatabase();
+    await db
+      .update(quest)
+      .set({
+        content: {
+          objectives: [
+            AllObjectives.parse({
+              id: "craft-one",
+              task: "items_crafted",
+              value: 1,
+              nextObjectiveId: "start-next",
+            }),
+            AllObjectives.parse({
+              id: "start-next",
+              task: "reset_quest",
+              resetObjectiveId: "craft-one",
+            }),
+          ],
+          reward: ObjectiveReward.parse({}),
+          sceneBackground: "",
+          sceneCharacters: [],
+        },
+      })
+      .where(eq(quest.id, "craft-chain"));
+    await submit();
+    expect(await accept()).toMatchObject({ success: true });
+    const persisted = (await requireUser("crafter")).questData;
+    expect(
+      persisted
+        ?.find((row) => row.id === "craft-chain")
+        ?.goals.some((row) => row.id === "craft-one"),
+    ).toBe(false);
+    expect((await receipt()).status).toBe("ACTIVE");
+    expect(
+      await db.query.questHistory.findMany({
+        where: eq(questHistory.questId, "followup"),
+      }),
+    ).toHaveLength(0);
+  });
+  it.each(["ban", "snapshot"] as const)(
+    "publishes no quest effects when the service claim loses a %s race",
+    async (race) => {
+      await seedCraftFollowup();
+      await submit();
+      const request = await receipt();
+      const db = await getTestDatabase();
+      let injected = false;
+      const before = await requireUser("crafter");
+      const observed = beforeStatements(
+        db,
+        craftingServiceRequest,
+        [
+          async () => {
+            injected = true;
+            const actor = await requireUser("crafter");
+            await db
+              .update(userData)
+              .set(
+                race === "ban"
+                  ? { isBanned: true }
+                  : { updatedAt: nextSnapshotSql(userData.updatedAt) },
+              )
+              .where(eq(userData.userId, "crafter"));
+            if (race === "ban")
+              expect((await requireUser("crafter")).updatedAt).toEqual(actor.updatedAt);
+          },
+        ],
+        { operations: ["execute"] },
+      );
+      const caller = callerForDatabase(
+        occupationRouter,
+        "crafter",
+        withoutTransactions(observed),
+      );
+      expect(
+        await caller.respondToServiceRequest({
+          requestId: request.id,
+          action: "ACCEPT",
+        }),
+      ).toMatchObject({ success: false });
+      expect(injected).toBe(true);
+      expect((await receipt()).status).toBe("PENDING");
+      const after = await requireUser("crafter");
+      expect(after.serviceCraftUntil).toBeNull();
+      expect(after.craftingExperience).toBe(before.craftingExperience);
+      expect(after.questData).toEqual(before.questData);
+      expect(
+        await db.query.questHistory.findMany({
+          where: eq(questHistory.questId, "followup"),
+        }),
+      ).toHaveLength(0);
+    },
+  );
   it("commits opted-in crafter recovery together with the acceptance slot and progression", async () => {
     await submit();
     const db = await getTestDatabase();

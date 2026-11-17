@@ -30,6 +30,7 @@ import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
+import type { QueryCondition } from "@/utils/typeutils";
 
 /** Public offers, including disabled offers when editing one's prices. */
 export const findServicePrices = (db: DrizzleClient, userId: string) =>
@@ -96,6 +97,7 @@ export const claimServiceUser = (
       and(
         eq(userData.userId, user.userId),
         eq(userData.updatedAt, user.updatedAt),
+        eq(userData.isBanned, false),
         readiness?.where ?? eq(userData.status, "AWAKE"),
         gte(userData.money, fee),
         liveServiceIdentity(db, user.userId),
@@ -247,7 +249,11 @@ export const acceptServiceRequest = (
   request: CraftingServiceRequest,
   user: Pick<UserData, "userId" | "updatedAt">,
   experience: number,
-  questData: UserData["questData"],
+  questState: {
+    set: Record<string, unknown>;
+    where?: QueryCondition[];
+    claimedAt: Date;
+  },
   finishesAt: Date,
   readiness?: ActionReadinessWrite,
 ) => {
@@ -256,14 +262,16 @@ export const acceptServiceRequest = (
     UPDATE ${craftingServiceRequest}
     INNER JOIN ${userData} ON ${userData.userId} = ${craftingServiceRequest.crafterId}
     INNER JOIN ${userData} AS ${requester} ON ${requester.userId} = ${craftingServiceRequest.requesterId}
-    SET ${actionReadinessSqlSet(readiness, ["craftingExperience", "questData", "serviceCraftUntil", "updatedAt"])}
+    SET ${actionReadinessSqlSet(
+      { set: { ...readiness?.set, ...questState.set }, where: readiness?.where },
+      ["craftingExperience", "serviceCraftUntil", "updatedAt"],
+    )}
       ${craftingServiceRequest.status} = 'ACTIVE',
       ${craftingServiceRequest.startedAt} = ${sql.param(new Date(), craftingServiceRequest.startedAt)},
       ${craftingServiceRequest.finishesAt} = ${sql.param(finishesAt, craftingServiceRequest.finishesAt)},
       ${userData.craftingExperience} = ${userData.craftingExperience} + ${experience},
-      ${userData.questData} = CAST(${JSON.stringify(questData)} AS JSON),
       ${userData.serviceCraftUntil} = ${sql.param(finishesAt, userData.serviceCraftUntil)},
-      ${userData.updatedAt} = ${nextSnapshotSql(userData.updatedAt)},
+      ${userData.updatedAt} = ${sql.param(questState.claimedAt, userData.updatedAt)},
       ${requester.updatedAt} = ${nextSnapshotSql(requester.updatedAt)}
     WHERE ${and(
       eq(craftingServiceRequest.id, request.id),
@@ -273,6 +281,8 @@ export const acceptServiceRequest = (
       eq(craftingServiceRequest.crafterId, request.crafterId),
       eq(userData.userId, user.userId),
       eq(userData.updatedAt, user.updatedAt),
+      eq(userData.isBanned, false),
+      ...(questState.where ?? []),
       liveServiceIdentity(db, user.userId),
       liveServiceIdentity(db, request.requesterId),
       readiness?.where ?? eq(userData.status, "AWAKE"),

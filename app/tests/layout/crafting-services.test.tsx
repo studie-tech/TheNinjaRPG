@@ -4,7 +4,7 @@ import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
 import * as serviceCache from "@/hooks/useCraftingServices";
 import * as contentBox from "@/layout/ContentBox";
-import { CraftingServices } from "@/layout/CraftingServices";
+import { CraftForMe, CraftingServices } from "@/layout/CraftingServices";
 import * as userContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
@@ -16,6 +16,7 @@ let query: {
   isFetching: boolean;
   data?: {
     prices: { service: string; rarity: string; fee: number; enabled: boolean }[];
+    crafter?: { rank: string; occupation: string; username: string };
   };
   refetch: typeof retry;
 };
@@ -53,6 +54,42 @@ beforeEach(() => {
       },
       getServicePrices: { useQuery: () => query },
       setServicePrice: { useMutation: () => ({ mutate: save, isPending: false }) },
+      getCraftableItems: { useQuery: () => ({ data: [] }) },
+      submitServiceRequest: { useMutation: () => ({ mutate: save, isPending: false }) },
+    },
+    item: {
+      getUserItems: {
+        useQuery: () => ({
+          data: [
+            {
+              id: "sword",
+              quantity: 1,
+              equipped: "NONE",
+              isInAuction: false,
+              storedAtHome: false,
+              durability: 50,
+              item: {
+                name: "Service Sword",
+                rarity: "COMMON",
+                maxDurability: 100,
+                canBeImbued: true,
+              },
+              imbuements: [
+                {
+                  id: "imb",
+                  craftingFinishedAt: new Date(0),
+                  item: { name: "Bound Crystal", rarity: "COMMON" },
+                },
+              ],
+            },
+            {
+              id: "gem",
+              quantity: 1,
+              item: { name: "Service Crystal", rarity: "COMMON", itemType: "CRYSTAL" },
+            },
+          ],
+        }),
+      },
     },
   });
   vi.spyOn(contentBox, "default").mockImplementation(
@@ -148,5 +185,43 @@ it.each([undefined, 80])(
       fee: 125,
       enabled: false,
     });
+  },
+);
+
+it.each(["IMBUE", "DISIMBUE"] as const)(
+  "waits for the %s crystal selection before reporting price availability",
+  (service) => {
+    query.data = {
+      prices: [],
+      crafter: { rank: "MASTER", occupation: "CRAFTING", username: "Crafter" },
+    };
+    const view = render(<CraftForMe crafterId="crafter" />);
+    fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: service === "IMBUE" ? "Imbue an Item" : "Disimbue an Item",
+      }),
+    );
+    fireEvent.click(screen.getByRole("combobox", { name: "Your item" }));
+    fireEvent.click(screen.getByRole("option", { name: /Service Sword/ }));
+    expect(screen.queryByText(/has not enabled a price/)).toBeNull();
+    const label = service === "IMBUE" ? "Crystal" : "Imbuement";
+    expect(screen.getByRole("combobox", { name: label }).textContent).toContain(
+      service === "IMBUE" ? "Select your crystal" : "Select the crystal to return",
+    );
+    fireEvent.click(screen.getByRole("combobox", { name: label }));
+    fireEvent.click(
+      screen.getByRole("option", {
+        name: service === "IMBUE" ? /Service Crystal/ : "Bound Crystal",
+      }),
+    );
+    expect(screen.getByText(/has not enabled a price/)).toBeTruthy();
+    query.data = {
+      ...query.data,
+      prices: [{ service, rarity: "COMMON", fee: 50, enabled: true }],
+    };
+    view.rerender(<CraftForMe crafterId="crafter" />);
+    expect(screen.getByText("Service fee: 50 ryo")).toBeTruthy();
+    expect(screen.queryByText(/has not enabled a price/)).toBeNull();
   },
 );

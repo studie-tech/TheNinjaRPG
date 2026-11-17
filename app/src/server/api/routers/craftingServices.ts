@@ -63,6 +63,8 @@ import {
   settleCraftingServices,
 } from "@/server/utils/craftingServices";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { handleQuestConsequences } from "@/server/utils/questConsequences";
+import { getNextUserSnapshotAt } from "@/utils/time";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import type { CraftingQueueMaterial } from "@/validators/train";
 
@@ -153,6 +155,7 @@ export const craftingServiceProcedures = {
         ]);
       const initialRequester = requesterResult.user;
       if (!initialRequester) return errorResponse("Requester not found");
+      if (initialRequester.isBanned) return errorResponse("You are banned");
       const readiness = prepareActionReadiness(
         initialRequester,
         requesterResult.settings,
@@ -397,6 +400,7 @@ export const craftingServiceProcedures = {
         };
       const initialUser = updated.user;
       if (!initialUser) return errorResponse("User not found");
+      if (initialUser.isBanned) return errorResponse("You are banned");
       const readiness = prepareActionReadiness(initialUser, updated.settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -405,7 +409,7 @@ export const craftingServiceProcedures = {
       const block = craftingStartBlockMessage(user);
       if (block) return errorResponse(block);
       // Inventory must follow the account snapshot: an intervening personal job either
-      // appears in inventory or changes updatedAt and loses the transactional slot CAS.
+      // appears in inventory or changes updatedAt and loses the slot CAS.
       const inventory = await fetchUserItems(ctx.drizzle, ctx.userId);
       if (
         (user.serviceCraftUntil && user.serviceCraftUntil > new Date()) ||
@@ -476,38 +480,73 @@ export const craftingServiceProcedures = {
         request.service === "CRAFT"
           ? getCraftTrackerTasks(experience, request.outputQuantity, request.itemId)
           : [{ task: "crafting_experience_gained" as const, increment: experience }];
-      const questData = filterQuestTrackersForDbPersist(
-        getNewTrackers(
-          { ...user, craftingExperience: user.craftingExperience + experience },
-          tasks,
-        ).trackers,
-        user,
-        true,
+      const progressedUser = {
+        ...user,
+        craftingExperience: user.craftingExperience + experience,
+        serviceCraftUntil: finishesAt,
+      };
+      const { trackers, consequences, notifications } = getNewTrackers(
+        progressedUser,
+        tasks,
       );
+      progressedUser.questData = filterQuestTrackersForDbPersist(trackers, user, true);
       try {
-        const accepted = await retryOnDeadlock(() =>
-          acceptServiceRequest(
-            ctx.drizzle,
-            request,
-            user,
-            experience,
-            questData,
-            finishesAt,
+        const result = await handleQuestConsequences(
+          ctx.drizzle,
+          progressedUser,
+          consequences,
+          notifications,
+          {
             readiness,
-          ),
+            alwaysClaimUserState: true,
+            partyTrackers: trackers,
+            claimUserState: async ({
+              userId,
+              updatedAt,
+              set = {},
+              where,
+              readiness,
+            }) => {
+              const claimedAt = getNextUserSnapshotAt(updatedAt);
+              const accepted = await retryOnDeadlock(() =>
+                acceptServiceRequest(
+                  ctx.drizzle,
+                  request,
+                  { userId, updatedAt },
+                  experience,
+                  { set, where, claimedAt },
+                  finishesAt,
+                  readiness,
+                ),
+              );
+              return { success: accepted.rowsAffected === 3, claimedAt };
+            },
+          },
         );
-        if (accepted.rowsAffected !== 3)
+        if (!result.claimed)
           throw new CraftingServiceConflict(
             "The request or participant state changed. Please refresh and try again",
           );
         return actionReadinessResponse(
           {
             success: true,
-            message:
+            message: [
               "Service started. Delivery and payment happen automatically when it finishes",
+              ...result.notifications,
+            ].join("\n"),
+            itemsChanged:
+              result.battleAttempted ||
+              consequences.some(
+                (entry) => entry.type === "add_item" || entry.type === "remove_item",
+              ),
+            inventoryChanges: result.battleAttempted
+              ? undefined
+              : result.inventoryChanges,
+            ...result.battleUserUpdate,
           },
           readiness,
           ctx.drizzle,
+          result.committedActivity,
         );
       } catch (error) {
         if (error instanceof CraftingServiceConflict)
