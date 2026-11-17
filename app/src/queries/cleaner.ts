@@ -34,6 +34,7 @@ import {
   clan,
   conversation,
   conversationComment,
+  craftingServiceRequest,
   dailyBankInterest,
   forumPost,
   historicalAvatar,
@@ -47,6 +48,7 @@ import {
   trainingLog,
   userActivityEvent,
   userData,
+  userItem,
   userLiveActivity,
   userNindo,
   userRequest,
@@ -714,6 +716,20 @@ export const selectParentForMissing = (
   childKey: AnyMySqlColumn,
 ) =>
   client.select({ id: parentKey }).from(parent).where(eq(parentKey, childKey)).limit(1);
+
+/** Match only the equipment copy held by an unsettled service receipt. */
+export const selectOpenServiceForEscrowItem = (client: Pick<DrizzleClient, "select">) =>
+  client
+    .select({ id: craftingServiceRequest.id })
+    .from(craftingServiceRequest)
+    .where(
+      and(
+        eq(craftingServiceRequest.id, userItem.userId),
+        eq(craftingServiceRequest.targetUserItemId, userItem.id),
+        inArray(craftingServiceRequest.status, ["PENDING", "ACTIVE"]),
+      ),
+    )
+    .limit(1);
 
 /** Read one scalar cleanup key from a selected row; reject unsupported values before composing delete parameters. */
 const cleanupKeyValue = (row: Record<string, string | number>, name: string) => {

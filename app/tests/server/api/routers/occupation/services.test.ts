@@ -28,6 +28,7 @@ import {
 import { commentsRouter } from "@/server/api/routers/comments";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { profileRouter } from "@/server/api/routers/profile";
+import { cleanupOrphanRows } from "@/server/utils/cleaner";
 import {
   completeCraftingService as completeService,
   retireCraftingServices as retireServices,
@@ -268,13 +269,46 @@ describeWithDatabase("crafting services escrow and delivery", () => {
       ).reduce((sum, row) => sum + row.quantity, 0),
     ).toBe(1);
   });
-  it("imbues in escrow and delivers exactly once through normal profile reads", async () => {
+  it("keeps pending equipment cancellable after daily orphan cleanup", async () => {
+    expect(await submit("IMBUE")).toMatchObject({ success: true });
+    const request = await receipt();
+    const db = await getTestDatabase();
+    await insertUserItems([{ id: "orphan", userId: "missing", itemId: "recipe" }]);
+    await cleanupOrphanRows(db);
+    expect(
+      (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))?.userId,
+    ).toBe(request.id);
+    expect(
+      await db.query.userItem.findFirst({ where: eq(userItem.id, "orphan") }),
+    ).toBeUndefined();
+    const caller = await callerFor(occupationRouter, "requester");
+    expect(
+      await caller.respondToServiceRequest({ requestId: request.id, action: "CANCEL" }),
+    ).toMatchObject({ success: true });
+    expect((await requireUser("requester")).money).toBe(1000);
+    expect(
+      (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))?.userId,
+    ).toBe("requester");
+    expect(
+      (
+        await db.query.userItem.findMany({
+          where: and(eq(userItem.userId, "requester"), eq(userItem.itemId, "crystal")),
+        })
+      ).reduce((sum, row) => sum + row.quantity, 0),
+    ).toBe(1);
+  });
+  it("delivers active escrow exactly once after daily orphan cleanup", async () => {
     expect(await submit("IMBUE")).toMatchObject({ success: true });
     expect(await accept()).toMatchObject({ success: true });
+    const db = await getTestDatabase();
+    const request = await receipt();
+    await cleanupOrphanRows(db);
+    expect(
+      (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))?.userId,
+    ).toBe(request.id);
     await due();
     const caller = await callerFor(profileRouter, "requester");
     await caller.getUser();
-    const db = await getTestDatabase();
     expect(
       (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))?.userId,
     ).toBe("requester");

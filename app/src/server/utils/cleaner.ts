@@ -1,4 +1,4 @@
-import { notExists, type SQL } from "drizzle-orm";
+import { and, notExists, type SQL } from "drizzle-orm";
 import type { AnyMySqlColumn, MySqlTable } from "drizzle-orm/mysql-core";
 import {
   bankTransfers,
@@ -21,6 +21,7 @@ import {
 import {
   executeStatementForDeleteCleanupCandidates,
   selectDistinctKeyForDeleteCleanupCandidates,
+  selectOpenServiceForEscrowItem,
   selectParentForMissing,
   selectUserIdsForUpdateUserDataCandidates,
 } from "@/queries/cleaner";
@@ -222,7 +223,11 @@ export const cleanupOrphanRows = async (
     {
       table: userItem,
       key: { id: userItem.id },
-      predicate: withoutUser(userItem.userId),
+      // Open service receipts own their target equipment until delivery or refund.
+      predicate: and(
+        withoutUser(userItem.userId),
+        notExists(selectOpenServiceForEscrowItem(client)),
+      )!,
     },
   ];
   // Keep full-table consistent scans sequential to avoid saturating the database.
