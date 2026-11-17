@@ -779,7 +779,7 @@ describeWithDatabase("Hunting inventory admission", () => {
         }),
       ).toMatchObject({
         success: false,
-        message: "Could not consume seed — please try again",
+        message: "Could not plant — please try again",
       });
       expect(await db.query.farmPlot.findFirst()).toMatchObject({
         seedItemId: null,

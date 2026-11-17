@@ -62,6 +62,7 @@ import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   deleteFarmExtractionForExtractSeeds,
   deleteFarmExtractionForPayOutExtractions,
+  fertilizeFarmPlotWithStack,
   fetchFarmPlots,
   fetchFarmPlotsWithItems,
   fetchFarmPlotWithItems,
@@ -76,6 +77,7 @@ import {
   listFarmPlotForPlantAllEmpty,
   listFarmPlotForWaterAll,
   listItemForBuildFarmState,
+  plantFarmPlotWithSeed,
   rollbackBulkPlant,
   sellFarmCrop,
   updateFarmExtractionForPayOutExtractions,
@@ -173,16 +175,6 @@ export const farmingRouter = createTRPCRouter({
       )[0];
       if (!seedStack) return errorResponse("Seed not available in inventory");
 
-      const claim = await claimUserSnapshot({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
-        readiness,
-      });
-      if (!claim.success) {
-        return errorResponse("Could not plant — please try again");
-      }
-
       const now = new Date();
       const growTimeSeconds = getFarmGrowTimeSeconds(
         seedItem.farmGrowTimeSeconds,
@@ -190,56 +182,28 @@ export const farmingRouter = createTRPCRouter({
         farmingReductionPercent,
       );
       const finishAt = new Date(now.getTime() + growTimeSeconds * 1000);
-      const baseXpGain = getFarmPlantExperience(seedItem);
-
-      const planted = await plantFarmPlots(
+      const progress = planFarmingProgress(
+        user,
+        questState,
+        readiness,
+        getFarmPlantExperience(seedItem),
+        "seeds_planted",
+        now,
+      );
+      const planted = await plantFarmPlotWithSeed(
         ctx.drizzle,
         ctx.userId,
-        seedItem.id,
-        [plot.id],
-        [seedStack],
+        { id: plot.id, seedItemId: seedItem.id, finishAt },
+        seedStack,
+        progress.claim,
         now,
-        finishAt,
       );
-      if (planted === "plotsChanged") {
-        return actionReadinessResponse(
-          {
-            ...errorResponse("Could not plant — please try again"),
-            ...getFarmProfileUpdate({}),
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
-      if (planted === "seedsChanged") {
-        return actionReadinessResponse(
-          {
-            ...errorResponse("Could not consume seed — please try again"),
-            ...getFarmProfileUpdate({}),
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
-
-      const progress = await awardFarmingProgress(
-        ctx.drizzle,
-        user,
-        baseXpGain,
-        farmingQuestStateAfterClaim(
-          questState,
-          user.updatedAt,
-          claim.claimedAt,
-          readiness,
-        ),
-        "seeds_planted",
-      );
-      if (progress === null) {
-        return actionReadinessResponse(
-          errorResponse("Planted seed but failed to update farming progress"),
-          readiness,
-          ctx.drizzle,
-        );
+      // A lost guard can mean a plot changed elsewhere, so the client reconciles its farm view.
+      if (planted.rowsAffected !== 3) {
+        return {
+          ...errorResponse("Could not plant — please try again"),
+          ...getFarmProfileUpdate({}),
+        };
       }
       const { xpGain, userUpdate } = progress;
 
@@ -392,69 +356,38 @@ export const farmingRouter = createTRPCRouter({
         return errorResponse("This item is not fertilizer");
       }
 
-      const claim = await claimUserSnapshot({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
-        readiness,
-      });
-      if (!claim.success)
-        return errorResponse("Could not apply fertilizer — please try again");
-
       const now = new Date();
       const newFinishAt = applyFertilizerReduction(
         plot.finishAt,
         fertilizerStack.item.farmTimeReductionSeconds,
         now,
       );
-      const baseXpGain = getFertilizerExperience(fertilizerStack.item);
-
-      const fertilized = await fertilizeFarmPlots(
-        ctx.drizzle,
-        ctx.userId,
-        [plot],
-        fertilizerStack,
+      const progress = planFarmingProgress(
+        user,
+        questState,
+        readiness,
+        getFertilizerExperience(fertilizerStack.item),
+        "plants_fertilized",
         now,
       );
-      if (fertilized === "plotsChanged") {
-        return actionReadinessResponse(
-          {
-            ...errorResponse("Could not apply fertilizer — please try again"),
-            ...getFarmProfileUpdate({}),
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
-      if (fertilized === "stackChanged") {
-        return actionReadinessResponse(
-          {
-            ...errorResponse("Could not consume fertilizer — please try again"),
-            ...getFarmProfileUpdate({}),
-          },
-          readiness,
-          ctx.drizzle,
-        );
-      }
-
-      const progress = await awardFarmingProgress(
+      const fertilized = await fertilizeFarmPlotWithStack(
         ctx.drizzle,
-        user,
-        baseXpGain,
-        farmingQuestStateAfterClaim(
-          questState,
-          user.updatedAt,
-          claim.claimedAt,
-          readiness,
-        ),
-        "plants_fertilized",
+        ctx.userId,
+        {
+          id: plot.id,
+          seedItemId: plot.seedItemId,
+          finishAt: plot.finishAt,
+          newFinishAt,
+        },
+        fertilizerStack,
+        progress.claim,
+        now,
       );
-      if (progress === null) {
-        return actionReadinessResponse(
-          errorResponse("Applied fertilizer but failed to update farming progress"),
-          readiness,
-          ctx.drizzle,
-        );
+      if (fertilized.rowsAffected !== 3) {
+        return {
+          ...errorResponse("Could not apply fertilizer — please try again"),
+          ...getFarmProfileUpdate({}),
+        };
       }
       const { xpGain, userUpdate } = progress;
 
@@ -1821,6 +1754,7 @@ const buildFarmState = async (
   const now = new Date();
   const userPromise = fetchUser(client, userId);
   const extractionsPromise = settleFarmExtractions(client, userId, now);
+  const inventoryPromise = fetchUserItems(client, userId);
   const plotsPromise = Promise.all([userPromise, fetchFarmPlots(client, userId)]).then(
     ([user, existingPlots]) =>
       ensureFarmPlots(
@@ -1832,7 +1766,7 @@ const buildFarmState = async (
   );
   const [
     user,
-    activeSeedExtractions,
+    { activeSeedExtractions },
     plotsRaw,
     shopItems,
     collectionLog,
@@ -1848,8 +1782,12 @@ const buildFarmState = async (
     // The small configured yield catalog is independent of inventory and plot reads.
     // Include hidden/non-seed references too: owned seeds and planted crops still need them.
     listItemForBuildFarmState(client),
-    // Settlement can grant seeds; the response must include those newly delivered stacks.
-    extractionsPromise.then(() => fetchUserItems(client, userId)),
+    // Settlement can grant seeds; only a payout attempt re-reads for the delivered stacks.
+    extractionsPromise.then(({ attemptedPayout }) =>
+      attemptedPayout
+        ? inventoryPromise.then(() => fetchUserItems(client, userId))
+        : inventoryPromise,
+    ),
     fetchMasterySources(client, userId),
   ]);
   const { farmingReductionPercent } = getActivityBonuses({
@@ -2042,7 +1980,10 @@ const settleFarmExtractions = async (
   client: DrizzleClient,
   userId: string,
   now: Date,
-): Promise<FarmStateResponse["activeSeedExtractions"]> => {
+): Promise<{
+  activeSeedExtractions: FarmStateResponse["activeSeedExtractions"];
+  attemptedPayout: boolean;
+}> => {
   const extractions = await fetchUserExtractions(client, userId);
 
   const completedExtractions = extractions.filter(
@@ -2056,7 +1997,7 @@ const settleFarmExtractions = async (
   // Anything still on the books is still the player's, finished or not. A payout held back
   // for want of inventory space keeps its row, and showing it keeps the extractor from
   // looking empty while it is in fact still holding seeds.
-  return extractions
+  const activeSeedExtractions = extractions
     .filter(
       (extraction) =>
         !settledIds.has(extraction.id) && extraction.cropItem && extraction.seedItem,
@@ -2075,6 +2016,7 @@ const settleFarmExtractions = async (
       startedAt: extraction.startedAt,
       finishAt: extraction.finishAt,
     }));
+  return { activeSeedExtractions, attemptedPayout: completedExtractions.length > 0 };
 };
 
 /** How long a settlement claim is honoured before another request may take it over. */
@@ -2441,6 +2383,62 @@ const farmingQuestStateAfterClaim = (
       }
     : questState;
 
+/**
+ * Plans one plot action's XP and quest progress from its prefetched snapshot as columns of
+ * the action's own account claim. The claim's CAS on the snapshot revision protects the
+ * rewritten quest JSON, so a concurrent account write rejects the whole action instead of
+ * replaying progress against a newer document.
+ */
+const planFarmingProgress = (
+  user: Awaited<ReturnType<typeof fetchUser>>,
+  questState: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
+  readiness: ActionReadiness,
+  baseXpGain: number,
+  task: FarmingQuestTask,
+  now: Date,
+) => {
+  const claimedAt = getNextUserSnapshotAt(user.updatedAt, now);
+  const snapshotQuests = farmingQuestStateAfterClaim(
+    questState,
+    user.updatedAt,
+    claimedAt,
+    readiness,
+  );
+  const xpGain = getFarmingXpGain(user, baseXpGain);
+  const update = getFarmingQuestUpdate(user, snapshotQuests, {
+    xpGain,
+    task,
+    increment: 1,
+  });
+  return {
+    xpGain,
+    claim: {
+      set: {
+        ...readiness.set,
+        ...(xpGain > 0
+          ? { farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` }
+          : {}),
+        ...(update.questData ? { questData: update.questData } : {}),
+      },
+      where: readiness.where,
+      updatedAt: user.updatedAt,
+      claimedAt,
+    },
+    userUpdate:
+      update.advancesObjective && snapshotQuests
+        ? getFarmProfileUpdate(
+            { farmingExperienceDelta: xpGain },
+            {
+              ...user,
+              questData: update.questData ?? null,
+              userQuests: snapshotQuests.userQuests,
+            },
+            claimedAt,
+          )
+        : getFarmProfileUpdate({ farmingExperienceDelta: xpGain }),
+  };
+};
+
 /** Max read-modify-write passes before a contended quest update gives up. */
 const QUEST_PROGRESS_ATTEMPTS = 3;
 
@@ -2462,12 +2460,8 @@ const awardFarmingProgress = async (
   increment = 1,
   loadFarmingCollectionCount?: () => Promise<number>,
 ) => {
-  xpGain = Math.floor(xpGain * (1 + getTerritoryWarBoost(user)));
-  const emittedTasks = new Set<AllObjectiveTask>([
-    task,
-    ...(xpGain > 0 ? (["farming_level"] as const) : []),
-    ...(loadFarmingCollectionCount ? (["farming_collection_log"] as const) : []),
-  ]);
+  xpGain = getFarmingXpGain(user, xpGain);
+  const tracksCollection = !!loadFarmingCollectionCount;
 
   let collectionCountPromise: Promise<number> | undefined;
   /** Trackers this action would produce from one snapshot of the user's quest state. */
@@ -2475,73 +2469,19 @@ const awardFarmingProgress = async (
     snapshotUser: Awaited<ReturnType<typeof fetchUser>>,
     snapshotQuests: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
   ) => {
-    const advancesObjective = snapshotQuests?.userQuests.some((uq) =>
-      uq.quest?.content.objectives.some((objective) => {
-        if (!emittedTasks.has(objective.task)) return false;
-        const goal = snapshotQuests.questData
-          ?.find((tracker) => tracker.id === uq.questId)
-          ?.goals.find((entry) => entry.id === objective.id);
-        return !goal?.done;
-      }),
-    );
-    if (!snapshotQuests || !advancesObjective) {
-      return {
-        advancesObjective: false,
-        questData: undefined as
-          | ReturnType<typeof filterQuestTrackersForDbPersist>
-          | undefined,
-      };
-    }
-    const needsCollectionCount = snapshotQuests.userQuests.some((uq) =>
-      uq.quest?.content.objectives.some(
-        (objective) =>
-          objective.task === "farming_collection_log" &&
-          !snapshotQuests.questData
-            ?.find((tracker) => tracker.id === uq.questId)
-            ?.goals.find((goal) => goal.id === objective.id)?.done,
-      ),
-    );
     // Recheck after a lost CAS as well: a collection objective may have become active.
-    if (needsCollectionCount && loadFarmingCollectionCount) {
+    if (loadFarmingCollectionCount && needsFarmingCollectionCount(snapshotQuests)) {
       collectionCountPromise ??= loadFarmingCollectionCount();
     }
-    const farmingCollectionCount = collectionCountPromise
-      ? await collectionCountPromise
-      : undefined;
-    const trackerUser = {
-      ...snapshotUser,
-      farmingExperience: snapshotUser.farmingExperience + xpGain,
-      farmingCollectionCount,
-      questData: snapshotQuests.questData,
-      userQuests: snapshotQuests.userQuests,
-      completedQuests: snapshotQuests.completedQuests,
-    } as unknown as Parameters<typeof getNewTrackers>[0];
-    const taskUpdates: ObjectiveTrackerTaskInput[] = [
-      { task, increment },
-      ...(xpGain > 0
-        ? [
-            {
-              task: "farming_level" as const,
-              value: getFarmingLevel(snapshotUser.farmingExperience + xpGain),
-            },
-          ]
-        : []),
-      ...(farmingCollectionCount !== undefined
-        ? [
-            {
-              task: "farming_collection_log" as const,
-              value: farmingCollectionCount,
-            },
-          ]
-        : []),
-    ];
-    const { trackers } = getNewTrackers(trackerUser, taskUpdates);
-    return {
-      advancesObjective: true,
-      questData: filterQuestTrackersForDbPersist(trackers, trackerUser, true) as
-        | ReturnType<typeof filterQuestTrackersForDbPersist>
-        | undefined,
-    };
+    return getFarmingQuestUpdate(snapshotUser, snapshotQuests, {
+      xpGain,
+      task,
+      increment,
+      tracksCollection,
+      farmingCollectionCount: collectionCountPromise
+        ? await collectionCountPromise
+        : undefined,
+    });
   };
 
   const first = await questUpdateFor(user, questState);
@@ -2625,4 +2565,98 @@ const awardFarmingProgress = async (
       };
   }
   return null;
+};
+
+/** Farming XP after the actor's territory war boost. */
+const getFarmingXpGain = (
+  user: Awaited<ReturnType<typeof fetchUser>>,
+  xpGain: number,
+) => Math.floor(xpGain * (1 + getTerritoryWarBoost(user)));
+
+/** Whether an unfinished collection objective needs the user's current collection count. */
+const needsFarmingCollectionCount = (
+  snapshotQuests: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
+) =>
+  !!snapshotQuests?.userQuests.some((uq) =>
+    uq.quest?.content.objectives.some(
+      (objective) =>
+        objective.task === "farming_collection_log" &&
+        !snapshotQuests.questData
+          ?.find((tracker) => tracker.id === uq.questId)
+          ?.goals.find((goal) => goal.id === objective.id)?.done,
+    ),
+  );
+
+/**
+ * Trackers one farming action produces from one snapshot of the user's quest state.
+ * questData is undefined when the action advances no unfinished objective.
+ */
+const getFarmingQuestUpdate = (
+  snapshotUser: Awaited<ReturnType<typeof fetchUser>>,
+  snapshotQuests: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
+  {
+    xpGain,
+    task,
+    increment,
+    tracksCollection = false,
+    farmingCollectionCount,
+  }: {
+    xpGain: number;
+    task: FarmingQuestTask;
+    increment: number;
+    tracksCollection?: boolean;
+    farmingCollectionCount?: number;
+  },
+) => {
+  const emittedTasks = new Set<AllObjectiveTask>([
+    task,
+    ...(xpGain > 0 ? (["farming_level"] as const) : []),
+    ...(tracksCollection ? (["farming_collection_log"] as const) : []),
+  ]);
+  const advancesObjective = snapshotQuests?.userQuests.some((uq) =>
+    uq.quest?.content.objectives.some((objective) => {
+      if (!emittedTasks.has(objective.task)) return false;
+      const goal = snapshotQuests.questData
+        ?.find((tracker) => tracker.id === uq.questId)
+        ?.goals.find((entry) => entry.id === objective.id);
+      return !goal?.done;
+    }),
+  );
+  if (!snapshotQuests || !advancesObjective) {
+    return {
+      advancesObjective: false,
+      questData: undefined as
+        | ReturnType<typeof filterQuestTrackersForDbPersist>
+        | undefined,
+    };
+  }
+  const trackerUser = {
+    ...snapshotUser,
+    farmingExperience: snapshotUser.farmingExperience + xpGain,
+    farmingCollectionCount,
+    questData: snapshotQuests.questData,
+    userQuests: snapshotQuests.userQuests,
+    completedQuests: snapshotQuests.completedQuests,
+  } as unknown as Parameters<typeof getNewTrackers>[0];
+  const taskUpdates: ObjectiveTrackerTaskInput[] = [
+    { task, increment },
+    ...(xpGain > 0
+      ? [
+          {
+            task: "farming_level" as const,
+            value: getFarmingLevel(snapshotUser.farmingExperience + xpGain),
+          },
+        ]
+      : []),
+    ...(farmingCollectionCount !== undefined
+      ? [{ task: "farming_collection_log" as const, value: farmingCollectionCount }]
+      : []),
+  ];
+  const { trackers } = getNewTrackers(trackerUser, taskUpdates);
+  return {
+    advancesObjective: true,
+    questData: filterQuestTrackersForDbPersist(trackers, trackerUser, true) as
+      | ReturnType<typeof filterQuestTrackersForDbPersist>
+      | undefined,
+  };
 };

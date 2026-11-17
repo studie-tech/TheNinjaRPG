@@ -86,21 +86,19 @@ const makeClient = (
   const values = vi.fn(() => ({ onDuplicateKeyUpdate }));
   const insert = vi.fn(() => ({ values }));
   const findFirst = vi.fn().mockResolvedValue(assignedQuest);
-  // Farm collection catalog: seeds, then their yield crops, then the player's log.
-  const findItems = vi
-    .fn()
-    .mockResolvedValueOnce([
-      {
-        isFarmSeed: true,
+  // Farm collection catalog: seeds with their yield crops, beside the player's log.
+  const findItems = vi.fn().mockResolvedValueOnce([
+    {
+      farmYieldItemId: "crop-1",
+      farmMinLevel: 1,
+      farmYieldItem: {
+        id: "crop-1",
+        name: "Carrot",
+        image: "/carrot.png",
         hidden: false,
-        farmYieldItemId: "crop-1",
-        farmMinLevel: 1,
-        farmGrowTimeSeconds: 60,
       },
-    ])
-    .mockResolvedValueOnce([
-      { id: "crop-1", name: "Carrot", image: "/carrot.png", hidden: false },
-    ]);
+    },
+  ]);
   const findCollectionRows = vi
     .fn()
     .mockResolvedValue([
