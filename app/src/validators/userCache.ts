@@ -292,6 +292,8 @@ export const userPatchSchema = z.object({
   avatar: z.string().nullable().optional(),
   avatarLight: z.string().nullable().optional(),
   jutsuLoadout: z.string().optional(),
+  /** The active jutsu loadout's own AI rules, or null when it fights with the Default ones. */
+  aiProfileId: z.string().nullable().optional(),
   loadout: z.object({ jutsuIds: z.array(z.string()) }).optional(),
   village: z
     .custom<

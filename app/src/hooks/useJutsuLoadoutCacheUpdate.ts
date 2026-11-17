@@ -1,5 +1,6 @@
 import { getQueryKey } from "@trpc/react-query";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { getToggledAiLoadouts } from "@/deltas/ai";
 import { getEquippedJutsuLoadouts, getOrderedJutsuLoadouts } from "@/deltas/loadout";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 
@@ -22,5 +23,15 @@ export const useJutsuLoadoutCacheUpdate = () => {
     snapshot: ReturnType<typeof prepareLoadoutUpdate>,
   ) =>
     cache.updateCache((rows) => getOrderedJutsuLoadouts(rows, id, jutsuIds), snapshot);
-  return { prepareLoadoutUpdate, updateEquippedLoadout, updateLoadoutOrder };
+  /** Record which AI rules a toggled loadout fights with. */
+  const updateToggledAiLoadout = (
+    toggled: { jutsuLoadout: string; aiProfileId: string | null },
+    snapshot: ReturnType<typeof prepareLoadoutUpdate>,
+  ) => cache.updateCache((rows) => getToggledAiLoadouts(rows, toggled), snapshot);
+  return {
+    prepareLoadoutUpdate,
+    updateEquippedLoadout,
+    updateLoadoutOrder,
+    updateToggledAiLoadout,
+  };
 };

@@ -40,7 +40,13 @@ const setup = (rules: AiRuleType[] = [endTurn], count = 2) => {
     roundStartAt: new Date(0),
     extraState: {
       aiProfiles: {
-        [PROFILE]: { id: PROFILE, userId: "actor", includeDefaultRules: false, rules },
+        [PROFILE]: {
+          id: PROFILE,
+          userId: "actor",
+          jutsuLoadoutId: null,
+          includeDefaultRules: false,
+          rules,
+        },
       },
     },
   });

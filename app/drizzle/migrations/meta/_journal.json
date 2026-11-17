@@ -1163,6 +1163,13 @@
       "when": 1794931350278,
       "tag": "0166_futuristic_bug",
       "breakpoints": false
+    },
+    {
+      "idx": 167,
+      "version": "5",
+      "when": 1794937401283,
+      "tag": "0167_quiet_the_renegades",
+      "breakpoints": false
     }
   ]
 }

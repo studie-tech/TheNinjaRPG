@@ -1,13 +1,16 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getToggleAiProfileUserUpdate } from "@/deltas/ai";
 import { AI_PROFILE_MAX_RULES, TRANSFORMATION_ACTION } from "@/drizzle/constants";
 import type { AiTransformation } from "@/drizzle/schema";
 import { bossChainIssue, bossFormsFrom } from "@/libs/combat/bossFight";
 import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate";
 import {
   deleteAiTransformation,
+  executeRowsForToggleAiProfile,
+  fetchAiLoadoutStateForToggleAiProfile,
   fetchAiProfileById,
-  fetchAiProfileByUserId,
+  fetchUnlinkedAiProfileByUserId,
   insertAiProfileForToggleAiProfile,
   listAiForBossFight,
   listAiTransformations,
@@ -18,6 +21,7 @@ import {
   setUserAiProfile,
   updateAiProfileForUpdateAiProfile,
   updateUserDataForToggleAiProfile,
+  upsertAiProfileForToggleAiProfile,
 } from "@/queries/ai";
 import { fetchUser } from "@/queries/profile";
 import {
@@ -35,8 +39,13 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent, canChangeDefaultAiProfile } from "@/utils/permissions";
-import { updateAiProfileSchema, updateAiTransformationSchema } from "@/validators/ai";
+import {
+  countCustomRules,
+  updateAiProfileSchema,
+  updateAiTransformationSchema,
+} from "@/validators/ai";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const aiRouter = createTRPCRouter({
   getAiProfile: protectedProcedure
@@ -52,9 +61,11 @@ export const aiRouter = createTRPCRouter({
       if (!profile) {
         throw serverError("NOT_FOUND", "Profile not found");
       }
+      // Players read the rules of each of their own jutsu loadouts, not only the active one.
       if (
         !canChangeContent(user.role) &&
-        input.id !== (user.aiProfileId ?? "Default")
+        profile.id !== "Default" &&
+        profile.userId !== user.userId
       ) {
         throw serverError("UNAUTHORIZED", "Unauthorized");
       }
@@ -78,7 +89,14 @@ export const aiRouter = createTRPCRouter({
       if (profile.id === "Default" && !canChangeDefaultAiProfile(user.role)) {
         return errorResponse("Default profile only modifiable by content admin");
       }
-      if (input.rules.length > AI_PROFILE_MAX_RULES) {
+      // A jutsu loadout's rules end with the backup rules, which do not count toward the limit.
+      if (profile.jutsuLoadoutId) {
+        if (countCustomRules(input.rules) > AI_PROFILE_MAX_RULES) {
+          return errorResponse(
+            `Maximum of ${AI_PROFILE_MAX_RULES} custom rules allowed`,
+          );
+        }
+      } else if (input.rules.length > AI_PROFILE_MAX_RULES) {
         return errorResponse(`Maximum of ${AI_PROFILE_MAX_RULES} rules allowed`);
       }
       if (profile.userId === user.userId) {
@@ -100,25 +118,33 @@ export const aiRouter = createTRPCRouter({
       await updateAiProfileForUpdateAiProfile(ctx.drizzle, input);
       return { success: true, message: "AiProfile updated" };
     }),
+  /**
+   * Switch between custom and Default AI rules. A player's rules belong to their active jutsu
+   * loadout; a staff AI has a single profile.
+   */
   toggleAiProfile: protectedProcedure
-    .input(z.object({ aiId: z.string() }))
-    .output(baseServerResponse)
+    // Without `custom`, the current choice flips.
+    .input(z.object({ aiId: z.string(), custom: z.boolean().optional() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, target, profile] = await Promise.all([
+      const [user, target] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.aiId),
-        fetchAiProfileByUserId(ctx.drizzle, input.aiId),
       ]);
       // Guard
       if (!canChangeContent(user.role) && user.userId !== target.userId) {
         return errorResponse("Unauthorized");
       }
-      // Update
-      if (target.aiProfileId) {
-        await updateUserDataForToggleAiProfile(ctx.drizzle, target);
-      } else {
-        if (profile) {
+      const custom = input.custom ?? !target.aiProfileId;
+      if (target.isAi) {
+        const profile = await fetchUnlinkedAiProfileByUserId(
+          ctx.drizzle,
+          target.userId,
+        );
+        if (!custom) {
+          await updateUserDataForToggleAiProfile(ctx.drizzle, target);
+        } else if (profile) {
           await setUserAiProfile(ctx.drizzle, profile.id, target.userId);
         } else {
           const id = nanoid();
@@ -127,8 +153,44 @@ export const aiRouter = createTRPCRouter({
             setUserAiProfile(ctx.drizzle, id, target.userId),
           ]);
         }
+        return { success: true, message: "AiProfile updated" };
       }
-      return { success: true, message: "AiProfile updated" };
+      const loadoutId = target.jutsuLoadout;
+      if (!loadoutId) return errorResponse("Choose a jutsu loadout above first");
+      // Update
+      if (custom) {
+        await upsertAiProfileForToggleAiProfile(
+          ctx.drizzle,
+          nanoid(),
+          target.userId,
+          loadoutId,
+        );
+      }
+      await executeRowsForToggleAiProfile(
+        ctx.drizzle,
+        target.userId,
+        loadoutId,
+        custom,
+      );
+      // The write is guarded on the active loadout; read back what the player now fights with.
+      const state = await fetchAiLoadoutStateForToggleAiProfile(
+        ctx.drizzle,
+        target.userId,
+      );
+      if (
+        state?.jutsuLoadout !== loadoutId ||
+        state.loadout?.userId !== target.userId ||
+        state.loadout.customAi !== custom
+      ) {
+        return errorResponse("Your jutsu loadout changed. Please try again.");
+      }
+      return {
+        success: true,
+        message: custom ? "Custom AI rules enabled" : "Default AI rules enabled",
+        ...(target.userId === ctx.userId
+          ? getToggleAiProfileUserUpdate(loadoutId, state.aiProfileId)
+          : {}),
+      };
     }),
   /** One boss fight as staff see it: this AI's link and every form with its readiness. */
   getBossFight: protectedProcedure

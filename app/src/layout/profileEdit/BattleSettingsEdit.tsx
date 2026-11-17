@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -26,11 +26,17 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BasicElementName, GeneralTypes } from "@/drizzle/constants";
+import {
+  AI_PROFILE_MAX_RULES,
+  BasicElementName,
+  GeneralTypes,
+} from "@/drizzle/constants";
 import { useAutoCombatSetting } from "@/hooks/combat";
+import { useJutsuLoadoutCacheUpdate } from "@/hooks/useJutsuLoadoutCacheUpdate";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import Confirm from "@/layout/Confirm";
+import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Loader from "@/layout/Loader";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { showMutationToast } from "@/libs/toast";
@@ -63,7 +69,17 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
     primaryElement: u.primaryElement,
     showBattleDescription: u.showBattleDescription,
     showPvpRecord: u.showPvpRecord,
+    // The active jutsu loadout and its rules, kept current by loadout and rule switches.
+    aiProfileId: u.aiProfileId,
+    jutsuLoadout: u.jutsuLoadout,
   }));
+  const { data: loadouts } = api.jutsu.getLoadouts.useQuery();
+  const [hasUnsavedRules, setHasUnsavedRules] = useState(false);
+  const [isSwitchingLoadout, setIsSwitchingLoadout] = useState(false);
+  const [isTogglingRules, setIsTogglingRules] = useState(false);
+  const [tab, setTab] = useState("preferred");
+  const unsavedRulesId = useId();
+  const { prepareLoadoutUpdate, updateToggledAiLoadout } = useJutsuLoadoutCacheUpdate();
   const utils = api.useUtils();
   const [battleDescriptionDraft, setBattleDescriptionDraft] = useState(
     userData?.showBattleDescription ?? false,
@@ -121,12 +137,12 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
   };
 
   const { mutate: updateAiProfile, isPending } = api.ai.updateAiProfile.useMutation({
-    onSuccess: async (data) => {
+    onSuccess: async (data, input) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
+          utils.ai.getAiProfile.invalidate({ id: input.id }),
           utils.profile.getAi.invalidate(),
-          utils.profile.getPublicUser.invalidate(),
         ]);
       }
     },
@@ -174,7 +190,18 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
     <div className="pb-3">
       <div className="m-2 mb-4 flex items-center space-x-2">
         <Tabs
-          defaultValue="preferred"
+          value={tab}
+          onValueChange={(next) => {
+            // Leaving the AI Profile tab would drop its unsaved rules.
+            if (tab === "aiprofile" && hasUnsavedRules) {
+              showMutationToast({
+                success: false,
+                message: "Save or discard your rule changes first",
+              });
+              return;
+            }
+            setTab(next);
+          }}
           className="flex w-full flex-col items-center justify-center"
         >
           <TabsList className="text-center">
@@ -351,47 +378,39 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
               onCheckedChange={setAutoCombat}
             />
             <Label htmlFor="default-auto-combat">
-              Start non-PvP battles with auto combat (your AI profile fights for you)
+              Start non-PvP battles with auto combat (your rules for the active jutsu
+              loadout fight for you)
             </Label>
-            <br />
-            <br />
-            <Confirm
-              title="Reset AI Profile"
-              button={
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={!profile?.aiProfileId || isPending}
-                >
-                  {isPending ? <Loader size={5} /> : "Reset AI Profile"}
-                </Button>
-              }
-              onAccept={() => {
-                if (!profile?.aiProfileId) return;
-                const defaultAiProfilePayload = {
-                  id: profile.aiProfileId,
-                  rules: [
-                    AiRule.parse({
-                      conditions: [ConditionDistanceHigherThan.parse({ value: 2 })],
-                      action: ActionMoveTowardsOpponent.parse({}),
-                    }),
-                  ],
-                  includeDefaultRules: true,
-                };
-                updateAiProfile(defaultAiProfilePayload);
-              }}
-            >
-              This will reset your AI profile to default settings. This action cannot be
-              undone. Are you sure you want to continue?
-            </Confirm>
           </TabsContent>
           <TabsContent value="aiprofile">
-            <p className="mb-3 text-muted-foreground text-sm">
-              Only currently tagged jutsu and items are available for selection.
-            </p>
+            <div className="mb-3 flex flex-col gap-2 px-3">
+              <div className="max-w-xs">
+                <JutsuLoadoutSelector
+                  variant="dropdown"
+                  label="Jutsu loadout"
+                  // A Default or Custom switch applies to the loadout active when it lands.
+                  disabled={hasUnsavedRules || isTogglingRules || isPending}
+                  describedBy={hasUnsavedRules ? unsavedRulesId : undefined}
+                  onSelecting={setIsSwitchingLoadout}
+                  // Equipping changes the jutsu these rules can use.
+                  onSelected={() => utils.profile.getPublicUser.invalidate({ userId })}
+                />
+              </div>
+              {hasUnsavedRules && (
+                <p id={unsavedRulesId} className="text-muted-foreground text-sm">
+                  Save or discard your rule changes to switch loadout.
+                </p>
+              )}
+              <p className="text-muted-foreground text-sm">
+                {userData?.aiProfileId
+                  ? "These rules belong to your active jutsu loadout. Kage seat, patrol and auto combat use whichever loadout is active. Changing loadout here also equips its jutsu. Only jutsu this loadout equips and your equipped items can be chosen."
+                  : "Your active jutsu loadout fights with the Default rules. Choose Custom to write its own rules. Kage seat, patrol and auto combat use whichever loadout is active. Changing loadout here also equips its jutsu."}
+              </p>
+            </div>
             <AiProfileEdit
               userData={{
                 ...profile,
+                aiProfileId: userData?.aiProfileId ?? null,
                 jutsus: profile.jutsus.filter((entry) => entry.equipped),
                 items: profile.items.filter(
                   (entry) => entry.equipped !== "NONE" && entry.quantity > 0,
@@ -402,15 +421,79 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                 ...profile.jutsus.map((entry) => [entry.jutsuId, entry.jutsu.name]),
                 ...profile.items.map((entry) => [entry.itemId, entry.item.name]),
               ])}
+              maxCustomRules={AI_PROFILE_MAX_RULES}
+              onDirtyChange={setHasUnsavedRules}
+              onTogglingChange={setIsTogglingRules}
+              locked={isSwitchingLoadout || isPending}
+              toggleCache={{
+                prepare: prepareLoadoutUpdate,
+                update: (toggled, snapshot) =>
+                  updateToggledAiLoadout(
+                    toggled,
+                    snapshot as ReturnType<typeof prepareLoadoutUpdate>,
+                  ),
+              }}
+              copySources={(loadouts ?? []).flatMap((loadout, index) =>
+                loadout.customAi &&
+                loadout.aiProfile &&
+                loadout.id !== userData?.jutsuLoadout &&
+                loadout.aiProfile.id !== userData?.aiProfileId
+                  ? [
+                      {
+                        id: loadout.aiProfile.id,
+                        name: loadout.name || `Jutsu loadout ${index + 1}`,
+                      },
+                    ]
+                  : [],
+              )}
               hideTitle
             />
+            {userData?.aiProfileId && (
+              <div className="px-3">
+                <Confirm
+                  title="Reset rules"
+                  tone="destructive"
+                  button={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        isPending ||
+                        hasUnsavedRules ||
+                        isSwitchingLoadout ||
+                        isTogglingRules
+                      }
+                    >
+                      {isPending ? <Loader size={5} /> : "Reset rules"}
+                    </Button>
+                  }
+                  onAccept={() => {
+                    if (!userData?.aiProfileId) return;
+                    updateAiProfile({
+                      id: userData.aiProfileId,
+                      rules: [
+                        AiRule.parse({
+                          conditions: [ConditionDistanceHigherThan.parse({ value: 2 })],
+                          action: ActionMoveTowardsOpponent.parse({}),
+                        }),
+                      ],
+                      includeDefaultRules: true,
+                    });
+                  }}
+                >
+                  Replace all rules for your active jutsu loadout with a single "move
+                  towards opponent" rule plus the fallback rules? Other loadouts are not
+                  affected. This cannot be undone.
+                </Confirm>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
 
       <p className="italic">
-        This allows you to change how your character behaves in the game in e.g. kage
-        battles.
+        This changes how your character fights when it fights for you, e.g. in Kage seat
+        battles, village patrols and auto combat.
       </p>
     </div>
   );

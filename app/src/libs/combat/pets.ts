@@ -147,6 +147,7 @@ export const addPetsToBattle = (info: {
     extraState.aiProfiles[aiProfileId] = {
       id: aiProfileId,
       userId: owner.userId,
+      jutsuLoadoutId: null,
       rules: structuredClone(pet.aiRules),
       includeDefaultRules: pet.includeDefaultRules,
     };

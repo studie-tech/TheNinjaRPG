@@ -30,6 +30,7 @@ import {
 } from "@/drizzle/constants";
 import {
   actionLog,
+  aiProfile,
   bloodline,
   bloodlineReskin,
   item,
@@ -62,6 +63,7 @@ import type { QuestTrackerType } from "@/validators/objectives";
 export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) => {
   return await client.query.jutsuLoadout.findMany({
     where: eq(jutsuLoadout.userId, userId),
+    with: { aiProfile: { columns: { id: true } } },
     // id is the deterministic tie-breaker so ties on createdAt (possible after a
     // batched backfill) keep a stable order across reads.
     orderBy: (table) => [asc(table.createdAt), asc(table.id)],
@@ -303,18 +305,42 @@ export const insertJutsuLoadoutForInsertMissing = (
     .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
 /**
- * Build the `userData` update for `writeDefaultPointer`, setting `jutsuLoadout`, using
- * predicates on `userId` and `jutsuLoadout`.
+ * Build the update giving a player without an active jutsu loadout their first one. AI rules
+ * the loadout owns stay its rules; otherwise AI rules the player wrote before owning a loadout
+ * become its rules. The loadout fights with them when the player did, and the profile points at
+ * the rules the loadout now fights with.
  */
 export const updateUserDataForWriteDefaultPointer = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "execute">,
   id: string,
   ctx: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({ jutsuLoadout: id })
-    .where(and(eq(userData.userId, ctx.userId), isNull(userData.jutsuLoadout)));
+) => {
+  // MySQL may apply the profile pointer before the loadout flag reads it. Both assignments then
+  // agree, because the new pointer gives the same answer: keep `fightsWithRules` a fixed point.
+  const rules = sql`COALESCE(own.id, ${aiProfile.id})`;
+  const fightsWithRules = sql`(${rules} IS NOT NULL AND ${rules} <=> ${userData.aiProfileId})`;
+  return client.execute(sql`
+    UPDATE ${userData}
+    JOIN ${jutsuLoadout} ON ${jutsuLoadout.id} = ${id}
+      AND ${jutsuLoadout.userId} = ${userData.userId}
+    LEFT JOIN ${aiProfile} AS own ON own.jutsuLoadoutId = ${jutsuLoadout.id}
+    LEFT JOIN (
+      SELECT ${aiProfile.userId} AS userId, MIN(${aiProfile.id}) AS id FROM ${aiProfile}
+      WHERE ${aiProfile.userId} = ${ctx.userId}
+        AND ${aiProfile.jutsuLoadoutId} IS NULL AND ${aiProfile.id} <> 'Default'
+      GROUP BY ${aiProfile.userId}
+    ) AS spare ON spare.userId = ${userData.userId}
+    LEFT JOIN ${aiProfile} ON own.id IS NULL
+      AND ${aiProfile.userId} = ${userData.userId}
+      AND ${aiProfile.jutsuLoadoutId} IS NULL
+      AND ${aiProfile.id} = COALESCE(${userData.aiProfileId}, spare.id)
+    SET ${userData.jutsuLoadout} = ${jutsuLoadout.id},
+        ${userData.aiProfileId} = IF(${fightsWithRules}, ${rules}, NULL),
+        ${aiProfile.jutsuLoadoutId} = ${jutsuLoadout.id},
+        ${jutsuLoadout.customAi} = ${fightsWithRules}
+    WHERE ${userData.userId} = ${ctx.userId} AND ${userData.jutsuLoadout} IS NULL
+  `);
+};
 
 /** Build the `jutsuLoadout` selection for `importJutsuLoadout`, using the configured predicates. */
 export const selectJutsuLoadoutForImportJutsuLoadout = (
@@ -1443,11 +1469,26 @@ export const executeRowsForSelectJutsuLoadout = (
 ) =>
   client.execute(sql`
     UPDATE ${userData}
+    JOIN ${jutsuLoadout} ON ${jutsuLoadout.id} = ${loadout.id}
+      AND ${jutsuLoadout.userId} = ${userData.userId}
+    LEFT JOIN ${aiProfile} ON ${aiProfile.jutsuLoadoutId} = ${jutsuLoadout.id}
+      AND ${aiProfile.userId} = ${userData.userId}
     LEFT JOIN ${userJutsu} ON ${userJutsu.userId} = ${userData.userId}
-    SET ${userData.jutsuLoadout} = ${loadout.id},
+    SET ${userData.jutsuLoadout} = ${jutsuLoadout.id},
+        ${userData.aiProfileId} = IF(${jutsuLoadout.customAi}, ${aiProfile.id}, NULL),
         ${userJutsu.equipped} = ${equippedAssignment}
     WHERE ${userData.userId} = ${user.userId}
   `);
+
+/** Read back the loadout and AI rules `selectJutsuLoadout` stored on the profile. */
+export const fetchUserDataForSelectJutsuLoadout = (
+  client: DrizzleClient,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: { jutsuLoadout: true, aiProfileId: true },
+  });
 
 /**
  * Build the `userJutsu` update for `rollbackEquipIfOverCap`, setting `equipped`, using

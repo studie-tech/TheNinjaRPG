@@ -1167,6 +1167,7 @@ describe("owned pets in combat", () => {
     battle.extraState.aiProfiles.Default = {
       id: "Default",
       userId: "owner",
+      jutsuLoadoutId: null,
       includeDefaultRules: false,
       rules: [
         AiRule.parse({

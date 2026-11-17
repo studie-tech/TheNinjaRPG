@@ -416,12 +416,17 @@ export const aiProfile = mysqlTable(
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
+    /** The player's jutsu loadout these rules belong to; staff AI profiles have none. */
+    jutsuLoadoutId: varchar("jutsuLoadoutId", { length: 191 }),
     rules: json("rules").$type<AiRuleType[]>().notNull(),
     includeDefaultRules: boolean("includeDefaultRules").default(true).notNull(),
   },
   (table) => {
     return {
-      userIdIdx: uniqueIndex("AiProfile_userId_idx").on(table.userId),
+      userIdIdx: index("AiProfile_userId_idx").on(table.userId),
+      jutsuLoadoutIdKey: uniqueIndex("AiProfile_jutsuLoadoutId_key").on(
+        table.jutsuLoadoutId,
+      ),
     };
   },
 );
@@ -432,6 +437,10 @@ export const aiProfileRelations = relations(aiProfile, ({ one }) => ({
   user: one(userData, {
     fields: [aiProfile.userId],
     references: [userData.userId],
+  }),
+  jutsuLoadout: one(jutsuLoadout, {
+    fields: [aiProfile.jutsuLoadoutId],
+    references: [jutsuLoadout.id],
   }),
 }));
 
@@ -2403,6 +2412,8 @@ export const jutsuLoadout = mysqlTable(
     name: varchar("name", { length: consts.LOADOUT_NAME_MAX_LENGTH })
       .default("")
       .notNull(),
+    /** Fight with this loadout's own AI rules (its `AiProfile`) instead of the Default ones. */
+    customAi: boolean("customAi").default(false).notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -2414,6 +2425,13 @@ export const jutsuLoadout = mysqlTable(
   },
 );
 export type JutsuLoadout = InferSelectModel<typeof jutsuLoadout>;
+
+export const jutsuLoadoutRelations = relations(jutsuLoadout, ({ one }) => ({
+  aiProfile: one(aiProfile, {
+    fields: [jutsuLoadout.id],
+    references: [aiProfile.jutsuLoadoutId],
+  }),
+}));
 
 export const itemLoadout = mysqlTable(
   "ItemLoadout",

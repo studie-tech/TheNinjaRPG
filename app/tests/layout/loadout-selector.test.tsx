@@ -15,7 +15,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const renderDropdown = (props: { renamable?: boolean } = {}) => {
+const renderDropdown = (props: { renamable?: boolean; label?: string } = {}) => {
   const rename = vi.fn();
   render(
     <LoadoutSelector
@@ -71,4 +71,9 @@ it("keeps the name when the rename is cancelled with Escape", () => {
 it("offers no rename on dropdowns that do not ask for it", () => {
   renderDropdown();
   expect(screen.queryByRole("button", { name: /Rename/ })).toBeNull();
+});
+
+it("names the dropdown by its label", () => {
+  renderDropdown({ label: "Jutsu loadout" });
+  expect(screen.getByRole("combobox", { name: "Jutsu loadout" })).toBeTruthy();
 });

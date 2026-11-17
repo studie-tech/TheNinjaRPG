@@ -19,6 +19,7 @@ import {
   getAutoCombatPreferencePatch,
   getCombatAdmissionUserUpdate,
 } from "@/deltas/combat";
+import { getSelectJutsuLoadoutUserUpdate } from "@/deltas/jutsu";
 import {
   AdjustableBasicActions,
   AutoBattleTypes,
@@ -219,6 +220,7 @@ import {
   deleteBattleById,
   deleteBattleHistoryByBattleId,
   executeResultsForListOngoingBattles,
+  fetchAiProfilesForUpdateCombatLoadout,
   fetchBattle,
   fetchBattleEssentials,
   findBattleHistoryForGetBattleHistoryEntry,
@@ -340,7 +342,11 @@ import {
   sectorLatitudeSchema,
   sectorLongitudeSchema,
 } from "@/validators/travel";
-import type { UserCachePatch, UserDelta } from "@/validators/userCache";
+import type {
+  UserCachePatch,
+  UserDelta,
+  UserDeltaResponse,
+} from "@/validators/userCache";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUpdatedUser } from "./profile";
 
@@ -1160,6 +1166,7 @@ export const combatRouter = createTRPCRouter({
         useritems,
         userjutsus,
         userSkills,
+        loadoutAiProfiles,
       ] = await Promise.all([
         fetchBattleEssentials(ctx.drizzle),
         fetchBattle(ctx.drizzle, input.battleId),
@@ -1168,6 +1175,7 @@ export const combatRouter = createTRPCRouter({
         fetchUserItemsWithVariants(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId, undefined, { applyReskins: false }),
         fetchUserSkills(ctx.drizzle, ctx.userId),
+        fetchAiProfilesForUpdateCombatLoadout(ctx.drizzle, ctx.userId),
       ]);
 
       // Derived
@@ -1251,10 +1259,9 @@ export const combatRouter = createTRPCRouter({
         ? (userBattle.extraState.villages?.[user.villageId] as CombatQueryVillage)
         : null;
       const questData = userBattle.extraState.questData?.[user.controllerId];
-      const aiProfile =
-        user.aiProfileId && user.aiProfileId !== "Default"
-          ? userBattle.extraState.aiProfiles?.[user.aiProfileId]
-          : userBattle.extraState.aiProfiles?.Default;
+      const aiProfile = user.aiProfileId
+        ? userBattle.extraState.aiProfiles?.[user.aiProfileId]
+        : userBattle.extraState.aiProfiles?.Default;
       // Relations battle state keeps apart, rebuilt from extraState and fresh skills.
       const combatant = {
         ...user,
@@ -1309,6 +1316,19 @@ export const combatRouter = createTRPCRouter({
       if (!jutsuLoadoutResult.success && jutsuChanged) {
         return errorResponse(jutsuLoadoutResult.message);
       }
+      // A saved jutsu loadout reaches the profile, also when the lobby update fails later.
+      // An item-only switch reapplies the battle's jutsu loadout, which the profile follows too.
+      const appliedJutsuLoadout = jutsuLoadouts.find(
+        (loadout) => loadout.id === jutsuLoadoutIdToApply,
+      );
+      const loadoutPatch: Pick<UserDeltaResponse, "userPatch"> =
+        appliedJutsuLoadout && "aiProfileId" in jutsuLoadoutResult
+          ? getSelectJutsuLoadoutUserUpdate({
+              id: appliedJutsuLoadout.id,
+              loadoutJutsuIds: appliedJutsuLoadout.jutsuIds,
+              aiProfileId: jutsuLoadoutResult.aiProfileId,
+            })
+          : {};
 
       // An item-only switch can remove a required bloodline item or a mastery buff.
       // Revalidate stored equips too: battle filtering alone leaves invalid equips
@@ -1401,6 +1421,14 @@ export const combatRouter = createTRPCRouter({
       // The jutsus/items are reconstructed from refs + static data with all required fields
       const rawUserForProcessing = {
         ...combatant,
+        // The selector reads the live AI choice while saving, including item-only
+        // reapplications. Rebuild combat from that confirmed choice and upfront rules.
+        aiProfile:
+          "aiProfileId" in jutsuLoadoutResult
+            ? (loadoutAiProfiles.find(
+                (profile) => profile.id === jutsuLoadoutResult.aiProfileId,
+              ) ?? data.defaultProfile)
+            : combatant.aiProfile,
         sageMode: equippedSageMode ?? null,
         jutsuLoadout: jId ?? user.jutsuLoadout,
         itemLoadout: iId ?? user.itemLoadout,
@@ -1426,7 +1454,8 @@ export const combatRouter = createTRPCRouter({
         hide: false,
         isSummon: false,
       }).catch(handleSummonPreloadError);
-      if (processed instanceof Error) return errorResponse(processed.message);
+      if (processed instanceof Error)
+        return { ...errorResponse(processed.message), ...loadoutPatch };
       const { userEffects, usersState, extraState } = processed;
 
       const completeUserEffects = [
@@ -1494,9 +1523,13 @@ export const combatRouter = createTRPCRouter({
               : []),
           ].join(". "),
           battle: maskBattle(userBattle, ctx.userId),
+          ...loadoutPatch,
         };
       } else {
-        return errorResponse("Battle state could not be updated");
+        return {
+          ...errorResponse("Battle state could not be updated"),
+          ...loadoutPatch,
+        };
       }
     }),
   iAmHere: protectedProcedure

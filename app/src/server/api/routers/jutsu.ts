@@ -125,6 +125,7 @@ import {
   fetchJutsu,
   fetchJutsuLoadouts,
   fetchReskin,
+  fetchUserDataForSelectJutsuLoadout,
   fetchUserReskins,
   findBloodlineReskinById,
   findItemForUpdate,
@@ -556,10 +557,17 @@ export const jutsuRouter = createTRPCRouter({
         "jutsu",
         loadouts.length,
         maxLoadouts,
-        { jutsuIds: [] as JutsuLoadout["jutsuIds"], hotkeys },
+        {
+          jutsuIds: [] as JutsuLoadout["jutsuIds"],
+          hotkeys,
+          customAi: false,
+          aiProfile: null,
+        },
         new Date(),
       );
-      return backfillLoadouts<JutsuLoadout>({
+      const rows = await backfillLoadouts<
+        JutsuLoadout & { aiProfile: { id: string } | null }
+      >({
         loadouts,
         missing,
         maxLoadouts,
@@ -570,6 +578,9 @@ export const jutsuRouter = createTRPCRouter({
           // a concurrent select that set it first is not overwritten.
           updateUserDataForWriteDefaultPointer(ctx.drizzle, id, ctx),
       });
+      if (user?.jutsuLoadout) return rows;
+      // The first active loadout may take over AI rules the player wrote before owning one.
+      return (await fetchJutsuLoadouts(ctx.drizzle, ctx.userId)).slice(0, maxLoadouts);
     }),
 
   selectJutsuLoadout: protectedProcedure
@@ -605,12 +616,13 @@ export const jutsuRouter = createTRPCRouter({
           }),
       );
       const loadout = loadouts.find((loadout) => loadout.id === id);
-      return result.success && loadout
+      return "aiProfileId" in result && loadout
         ? {
             ...result,
             ...getSelectJutsuLoadoutUserUpdate({
               id,
               loadoutJutsuIds: loadout.jutsuIds,
+              aiProfileId: result.aiProfileId,
             }),
           }
         : result;
@@ -2894,6 +2906,11 @@ export const selectJutsuLoadout = async (
       ? sql`CASE WHEN ${inArray(userJutsu.jutsuId, equipIds)} THEN 1 ELSE 0 END`
       : sql`0`;
   await executeRowsForSelectJutsuLoadout(client, loadout, equippedAssignment, user);
+  // The write reads the loadout's AI rules choice live, so read back what it stored.
+  const stored = await fetchUserDataForSelectJutsuLoadout(client, user.userId);
+  if (stored?.jutsuLoadout !== loadout.id) {
+    return errorResponse("Your jutsu loadout changed. Please try again.");
+  }
 
   const message =
     invalidJutsus.length > 0
@@ -2904,6 +2921,7 @@ export const selectJutsuLoadout = async (
     success: true,
     message,
     jutsus: userjutsus.filter((u) => equipIds.includes(u.jutsuId)),
+    aiProfileId: stored.aiProfileId,
   };
 };
 

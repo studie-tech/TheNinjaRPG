@@ -52,16 +52,22 @@ export const getTransferLevelUserUpdate = ({
     : { reputationPoints: needsReputation ? -transferCost : 0 },
 });
 
-/** Point the profile at the selected jutsu loadout and its ordered jutsu IDs. */
+/**
+ * Point the profile at the selected jutsu loadout, its ordered jutsu IDs and the AI rules it
+ * fights with (null for the Default rules).
+ */
 export const getSelectJutsuLoadoutUserUpdate = ({
   id,
   loadoutJutsuIds,
+  aiProfileId,
 }: {
   id: string;
   loadoutJutsuIds: string[];
+  aiProfileId: string | null;
 }) => ({
   userPatch: {
     jutsuLoadout: id,
+    aiProfileId,
     loadout: { jutsuIds: loadoutJutsuIds },
   },
 });

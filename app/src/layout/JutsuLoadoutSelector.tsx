@@ -12,7 +12,15 @@ import { showMutationToast } from "@/libs/toast";
 import { fedJutsuLoadouts } from "@/utils/paypal";
 import { useUserDataSelector } from "@/utils/UserContext";
 
-const JutsuLoadoutSelector: React.FC<LoadoutSelectorDisplayProps> = (props) => {
+const JutsuLoadoutSelector: React.FC<
+  LoadoutSelectorDisplayProps & {
+    /** Runs once a selection is saved, for views that show what the loadout equips; the
+     * selection finishes once a returned promise settles. */
+    onSelected?: () => unknown;
+    /** Hears when a selection starts and when it has finished, for views that lock meanwhile. */
+    onSelecting?: (isSelecting: boolean) => void;
+  }
+> = ({ onSelected, onSelecting, ...props }) => {
   // State
   const {
     data: availableSlots,
@@ -36,7 +44,11 @@ const JutsuLoadoutSelector: React.FC<LoadoutSelectorDisplayProps> = (props) => {
 
   // Mutations
   const mutationResult = api.jutsu.selectJutsuLoadout.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: () => {
+      onSelecting?.(true);
+      return prepareUserUpdate();
+    },
+    onSettled: () => onSelecting?.(false),
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
@@ -45,6 +57,7 @@ const JutsuLoadoutSelector: React.FC<LoadoutSelectorDisplayProps> = (props) => {
           updateUser(data, { revision }),
           utils.jutsu.getUserJutsus.invalidate(),
         ]);
+        await onSelected?.();
       }
     },
   });

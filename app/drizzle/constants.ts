@@ -2290,6 +2290,10 @@ export const CONSUMABLE_CRAFTING_TIMES_MINS: Record<CRAFTING_RANK, number> = {
 
 // Ai profile config
 export const MAX_STORED_POOL = 5_000_000;
+/**
+ * Rules per AI profile. A player's jutsu loadout rules end with the backup rules, which do not
+ * count; other profiles count every rule.
+ */
 export const AI_PROFILE_MAX_RULES = 20;
 
 // Training config

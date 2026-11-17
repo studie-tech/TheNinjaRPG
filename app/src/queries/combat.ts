@@ -56,6 +56,7 @@ import {
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
 import {
+  aiProfile,
   anbuSquad,
   type BattleAction,
   battle,
@@ -2784,3 +2785,12 @@ const hospitalPlacement = (
     ? fighter.sector
     : getVillage(battle, fighter.villageId)?.sector,
 });
+
+/** Preload the player's loadout AI rules so a lobby selection can use its confirmed saved choice. */
+export const fetchAiProfilesForUpdateCombatLoadout = (
+  client: DrizzleClient,
+  userId: string,
+) =>
+  client.query.aiProfile.findMany({
+    where: eq(aiProfile.userId, userId),
+  });
