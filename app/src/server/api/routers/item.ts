@@ -2156,6 +2156,8 @@ export const itemRouter = createTRPCRouter({
         equipmentChanges: equipmentChangesSchema,
         // The loadout whose items were cleared, null when none changed; omitted when unknown.
         clearedLoadoutId: z.string().nullable().optional(),
+        // A failed request that still unequipped some rows.
+        isPartiallySaved: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx }) => {
@@ -2194,8 +2196,13 @@ export const itemRouter = createTRPCRouter({
       const unequipped = await retryOnDeadlock(async () =>
         updateUserItemForUnequipAllItems(ctx.drizzle, equippedIds, ctx),
       );
-      if (unequipped.rowsAffected !== equippedIds.length)
-        return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
+      if (unequipped.rowsAffected !== equippedIds.length) {
+        return {
+          ...errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE),
+          // Saved rows are not identified, so the client reads its equipment again.
+          isPartiallySaved: unequipped.rowsAffected > 0,
+        };
+      }
 
       // Save committed unequips even if a hunt starts afterward; clearing the
       // template cannot alter the encounter's equipment.
@@ -3617,7 +3624,7 @@ export const itemRouter = createTRPCRouter({
   // Auto-equip optimal items based on cost
   autoEquipOptimal: protectedProcedure
     .meta({ mcp: { description: "Auto-equip best items by cost" } })
-    // Changes are omitted when an assigned row changed before the write.
+    // Changes are omitted when an assigned row or its slot changed before the write.
     .output(baseServerResponse.extend({ equipmentChanges: equipmentChangesSchema }))
     .mutation(async ({ ctx }) => {
       const [useritems, user] = await Promise.all([
@@ -3629,7 +3636,8 @@ export const itemRouter = createTRPCRouter({
       // Slot exclusivity and category / maxEquips limits are decided against one
       // in-memory snapshot and saved in one statement. The same `now` is reused in
       // the write predicates so a row that moves home / auction / crafting / imbue
-      // after the snapshot is not equipped.
+      // after the snapshot is not equipped, and a slot another equip filled since
+      // the read stays with that item.
       const now = new Date();
       const masteries = effectiveMasteries(user);
       const { assignments, hasUnequipped, hasAvailableSlots } =
@@ -3645,14 +3653,13 @@ export const itemRouter = createTRPCRouter({
       const nEquipped =
         assignments.length > 0
           ? (
-              await updateUserItemForAutoEquipOptimal(
-                ctx.drizzle,
-                assignments,
-                user,
-                now,
+              await retryOnDeadlock(async () =>
+                updateUserItemForAutoEquipOptimal(ctx.drizzle, assignments, user, now),
               )
             ).rowsAffected
           : 0;
+      if (assignments.length > 0 && nEquipped === 0)
+        return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
 
       return {
         success: true,

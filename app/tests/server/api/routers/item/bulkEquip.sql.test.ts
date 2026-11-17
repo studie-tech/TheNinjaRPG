@@ -1,6 +1,12 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { item, itemLoadout, userData, userItem } from "@/drizzle/schema";
+import {
+  huntingSession,
+  item,
+  itemLoadout,
+  userData,
+  userItem,
+} from "@/drizzle/schema";
 import { itemRouter } from "@/server/api/routers/item";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
@@ -25,6 +31,18 @@ const slots = async () =>
     ).map((row) => [row.id, row.equipped]),
   );
 
+/** Admit a hunting encounter, which takes ownership of the carried inventory. */
+const startHunt = async () =>
+  (await getTestDatabase()).insert(huntingSession).values({
+    userId,
+    id: "bulk-equip-hunt",
+    habitatId: "habitat",
+    contractId: "contract",
+    sector: 1,
+    battleId: "bulk-equip-battle",
+    startedAt: new Date(),
+  });
+
 const byId = <T extends { id: string }>(rows: T[] | undefined) =>
   [...(rows ?? [])].sort((a, b) => a.id.localeCompare(b.id));
 
@@ -33,7 +51,7 @@ const itemUpdates = (statements: string[]) =>
 
 describeWithDatabase("bulk item equipment", () => {
   beforeEach(async () => {
-    await resetTables(itemLoadout, userItem, item, userData);
+    await resetTables(huntingSession, itemLoadout, userItem, item, userData);
     await insertUsers([
       {
         userId,
@@ -109,6 +127,25 @@ describeWithDatabase("bulk item equipment", () => {
     const result = await api.unequipAllItems();
     expect(result.success).toBe(false);
     expect(result).not.toHaveProperty("equipmentChanges");
+    expect(result).not.toHaveProperty("userPatch");
+    expect(result.isPartiallySaved).toBe(true);
+    expect(await slots()).toMatchObject({
+      "worn-helmet": "NONE",
+      "worn-cape": "CHEST",
+    });
+  });
+
+  it("rejects unequip-all without saving once a hunting battle owns the inventory", async () => {
+    const db = await getTestDatabase();
+    const huntFirst = beforeStatements(db, userItem, [startHunt]);
+    const api = callerForDatabase(itemRouter, userId, huntFirst);
+    const result = await api.unequipAllItems();
+    expect(result.success).toBe(false);
+    expect(result.isPartiallySaved).toBe(false);
+    expect(await slots()).toMatchObject({
+      "worn-helmet": "HEAD",
+      "worn-cape": "CHEST",
+    });
   });
 
   it("auto-equips every assignment in one statement and reports the filled slots", async () => {
@@ -145,6 +182,39 @@ describeWithDatabase("bulk item equipment", () => {
     expect(result.equipmentChanges).toBeUndefined();
     expect(await slots()).toMatchObject({
       "spare-boots": "FEET",
+      "spare-belt": "NONE",
+    });
+  });
+
+  it("leaves a slot to the item another equip placed in it after the read", async () => {
+    const db = await getTestDatabase();
+    const equipFirst = beforeStatements(db, userItem, [
+      () =>
+        db
+          .update(userItem)
+          .set({ equipped: "FEET" })
+          .where(eq(userItem.id, "spare-cheap-boots")),
+    ]);
+    const api = callerForDatabase(itemRouter, userId, equipFirst);
+    const result = await api.autoEquipOptimal();
+    expect(result).toMatchObject({ success: true, message: "Equipped 1 item" });
+    expect(result.equipmentChanges).toBeUndefined();
+    expect(await slots()).toMatchObject({
+      "spare-boots": "NONE",
+      "spare-cheap-boots": "FEET",
+      "spare-belt": "WAIST",
+    });
+  });
+
+  it("rejects auto-equip without saving once a hunting battle owns the inventory", async () => {
+    const db = await getTestDatabase();
+    const huntFirst = beforeStatements(db, userItem, [startHunt]);
+    const api = callerForDatabase(itemRouter, userId, huntFirst);
+    const result = await api.autoEquipOptimal();
+    expect(result.success).toBe(false);
+    expect(result).not.toHaveProperty("equipmentChanges");
+    expect(await slots()).toMatchObject({
+      "spare-boots": "NONE",
       "spare-belt": "NONE",
     });
   });

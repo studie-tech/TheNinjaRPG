@@ -1711,25 +1711,23 @@ export const updateItemPurchaseCounterForBuy = (
 
 /**
  * Build the `userItem` update for `autoEquipOptimal`, setting each assigned row's
- * `equipped` slot in one statement. A row is written only while it is still unequipped
- * and available at `now`, so each row counts in `rowsAffected` only when its slot was saved.
+ * `equipped` slot in one statement. A row is written only while it is still unequipped,
+ * available at `now`, its slot is still empty and no hunting battle owns the inventory, so
+ * each row counts in `rowsAffected` only when its slot was saved.
  */
 export const updateUserItemForAutoEquipOptimal = (
   client: Pick<DrizzleClient, "update" | "select">,
   assignments: { slot: ItemSlot; userItemId: string }[],
   user: { userId: string },
   now: Date,
-) =>
-  client
+) => {
+  const assignedSlot = sql`(case ${sql.join(
+    assignments.map((a) => sql`when ${userItem.id} = ${a.userItemId} then ${a.slot}`),
+    sql` `,
+  )} else ${userItem.equipped} end)`;
+  return client
     .update(userItem)
-    .set({
-      equipped: sql`(case ${sql.join(
-        assignments.map(
-          (a) => sql`when ${userItem.id} = ${a.userItemId} then ${a.slot}`,
-        ),
-        sql` `,
-      )} else ${userItem.equipped} end)`,
-    })
+    .set({ equipped: assignedSlot })
     .where(
       and(
         inArray(
@@ -1747,8 +1745,19 @@ export const updateUserItemForAutoEquipOptimal = (
             ),
           ),
         ),
+        // MySQL reads the updated table in a subquery only through a materialized derived
+        // table; DISTINCT keeps it from being merged. It is built before this statement's
+        // own writes, so rows assigned together never block each other.
+        sql`NOT EXISTS (SELECT 1 FROM (SELECT DISTINCT ${userItem.equipped} AS slot FROM ${userItem}
+          WHERE ${and(
+            eq(userItem.userId, user.userId),
+            gt(userItem.quantity, 0),
+            ne(userItem.equipped, "NONE"),
+          )}) AS occupied WHERE occupied.slot = ${assignedSlot})`,
+        hasNoHuntingBattle(user.userId),
       ),
     );
+};
 
 /**
  * Whether a user item can be equipped at `now`: not stored at home, not in an auction,

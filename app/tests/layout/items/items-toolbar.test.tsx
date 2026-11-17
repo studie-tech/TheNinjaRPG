@@ -241,3 +241,25 @@ it("applies a confirmed unequip-all to the inventory, profile and cleared loadou
   expect(updateUser).toHaveBeenCalledWith(data, { revision: 7 });
   expect(updateClearedLoadout).toHaveBeenCalledWith("main", "loadouts");
 });
+
+it("reconciles the inventory and profile when a failed unequip-all saved some rows", async () => {
+  render(<ItemsToolbar userData={player("NONE")} userItems={[]} />);
+  const options = captured.unequipAllItems!;
+  const data = { success: false, message: "Inventory changed", isPartiallySaved: true };
+  await options.onSuccess(data, undefined, options.onMutate());
+  expect(updateInventory).toHaveBeenCalledWith(undefined, "inventory");
+  expect(updateUser).toHaveBeenCalledWith(data, { revision: 7 });
+  expect(updateClearedLoadout).not.toHaveBeenCalled();
+});
+
+it("leaves the caches alone when a failed unequip-all saved nothing", async () => {
+  render(<ItemsToolbar userData={player("NONE")} userItems={[]} />);
+  const options = captured.unequipAllItems!;
+  await options.onSuccess(
+    { success: false, message: "Inventory changed", isPartiallySaved: false },
+    undefined,
+    options.onMutate(),
+  );
+  expect(updateInventory).not.toHaveBeenCalled();
+  expect(updateUser).not.toHaveBeenCalled();
+});

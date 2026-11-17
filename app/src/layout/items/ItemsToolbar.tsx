@@ -88,7 +88,16 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
       }),
       onSuccess: async (data, _variables, snapshot) => {
         showMutationToast(data);
-        if (!data.success) return;
+        if (!data.success) {
+          // The response withholds equipment and profile changes, so both reconcile.
+          if (data.isPartiallySaved) {
+            await Promise.all([
+              updateInventory(undefined, snapshot.inventory),
+              updateUser(data, { revision: snapshot.user }),
+            ]);
+          }
+          return;
+        }
         await Promise.all([
           updateInventory(
             (rows) => getEquippedInventory(rows, data.equipmentChanges),
