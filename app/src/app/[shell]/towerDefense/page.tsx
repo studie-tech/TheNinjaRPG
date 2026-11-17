@@ -1,12 +1,11 @@
 "use client";
 
-import { ShoppingBag, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { PortalContainerContext } from "@/components/ui/portal-container";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   ID_ANIMATION_HIT,
   ID_ANIMATION_SMOKE,
@@ -297,21 +296,27 @@ export default function TowerDefensePage() {
       padding={false}
     >
       {leaveGuard.dialog}
-      {/* Full screen keeps the same tree in place, so the arena never reloads. */}
+      {/*
+        Full screen keeps the arena at the same place in the tree, so it never reloads.
+        Wide screens put the controls and the whole shop in a column beside a full-height
+        arena. Tall ones stack them under the arena, which takes whatever height they leave;
+        when they need more than that, the arena keeps a playable minimum and they scroll.
+      */}
       <div
         ref={setStageElement}
         className={
           isFullscreen
-            ? "fixed inset-0 z-[100] flex flex-col gap-1.5 bg-background p-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] pb-[max(0.375rem,env(safe-area-inset-bottom))]"
+            ? "bg-background fixed inset-0 z-[100] flex flex-col gap-1.5 p-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] pb-[max(0.375rem,env(safe-area-inset-bottom))] landscape:flex-row"
             : "space-y-1.5 p-1.5"
         }
       >
         <PortalContainerContext.Provider value={isFullscreen ? stageElement : null}>
-          <div className={isFullscreen ? "flex min-h-0 flex-1 gap-1.5" : undefined}>
+          <div className={isFullscreen ? "contents" : undefined}>
             <div
               className={cn(
                 "relative overflow-hidden rounded-lg",
-                isFullscreen && "min-h-0 min-w-0 flex-1",
+                isFullscreen && "min-h-0 min-w-0 flex-1 basis-0",
+                isFullscreen && playing && "portrait:min-h-[min(80vw,62dvh)]",
               )}
             >
               {roster.isPending ? (
@@ -361,55 +366,32 @@ export default function TowerDefensePage() {
                 />
               )}
             </div>
-            {/* Wide screens keep the shop beside the arena. */}
             {isFullscreen && playing && (
-              <aside className="hidden w-80 shrink-0 overflow-y-auto overscroll-contain lg:block">
+              <aside className="flex min-h-0 min-w-0 flex-initial [scrollbar-width:thin] flex-col gap-2 overflow-y-auto overscroll-contain landscape:w-[clamp(17rem,40vw,30rem)] landscape:flex-none">
+                <TowerDefenseActionBar
+                  state={playing}
+                  mode={mode}
+                  onMode={setMode}
+                  act={act}
+                  aim={aim}
+                  layout="grid"
+                />
+                {run.unsaved && <UnsavedNotice />}
                 <TowerDefensePanel state={playing} act={act} />
               </aside>
             )}
           </div>
-          {playing && (
+          {!isFullscreen && playing && (
             <>
-              <div className={isFullscreen ? "flex items-end gap-1.5" : undefined}>
-                <div className="min-w-0 flex-1">
-                  <TowerDefenseActionBar
-                    state={playing}
-                    mode={mode}
-                    onMode={setMode}
-                    act={act}
-                    aim={aim}
-                  />
-                </div>
-                {/* Narrow screens open the shop as a sheet over the arena. */}
-                {isFullscreen && (
-                  <Sheet>
-                    <SheetTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="shrink-0 lg:hidden"
-                      >
-                        <ShoppingBag className="mr-1 h-4 w-4" /> Shop
-                      </Button>
-                    </SheetTrigger>
-                    <SheetContent
-                      side="bottom"
-                      // The sheet is size-contained, so it needs a height of its own.
-                      className="h-[50dvh] overflow-y-auto p-3"
-                    >
-                      <SheetTitle className="sr-only">Upgrades</SheetTitle>
-                      <TowerDefensePanel state={playing} act={act} />
-                    </SheetContent>
-                  </Sheet>
-                )}
-              </div>
-              {run.unsaved && !isFullscreen && (
-                <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
-                  This run is no longer saved on this device. Finish it in this tab:
-                  leaving or reloading loses its latest progress.
-                </p>
-              )}
-              {!isFullscreen && <TowerDefensePanel state={playing} act={act} />}
+              <TowerDefenseActionBar
+                state={playing}
+                mode={mode}
+                onMode={setMode}
+                act={act}
+                aim={aim}
+              />
+              {run.unsaved && <UnsavedNotice />}
+              <TowerDefensePanel state={playing} act={act} />
             </>
           )}
         </PortalContainerContext.Provider>
@@ -417,6 +399,13 @@ export default function TowerDefensePage() {
     </ContentBox>
   );
 }
+
+const UnsavedNotice = () => (
+  <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
+    This run is no longer saved on this device. Finish it in this tab: leaving or
+    reloading loses its latest progress.
+  </p>
+);
 
 const Results = (props: {
   phase: string;
