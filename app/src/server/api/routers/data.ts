@@ -793,11 +793,6 @@ export const dataRouter = createTRPCRouter({
         ...balanceConditions(input),
       ];
 
-      // Add battle type filter
-      if (input.battleTypes && input.battleTypes.length > 0) {
-        whereConditions.push(inArray(dataBattleAction.battleType, input.battleTypes));
-      }
-
       // Build bloodline rank filter if needed
       const bloodlineWhereConditions: QueryCondition[] = [];
       if (input.bloodlineRanks && input.bloodlineRanks.length > 0) {
@@ -1508,9 +1503,6 @@ const contentBalanceConditions = (
 ): QueryCondition[] => [
   eq(dataBattleAction.type, type),
   ...balanceConditions(input),
-  ...(input.battleTypes?.length
-    ? [inArray(dataBattleAction.battleType, input.battleTypes)]
-    : []),
   ...(input.bloodlineIds?.length
     ? [inArray(dataBattleAction.relatedBloodlineId, input.bloodlineIds)]
     : []),

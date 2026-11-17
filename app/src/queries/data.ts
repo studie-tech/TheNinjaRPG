@@ -708,7 +708,7 @@ export const selectDataBattleActionForGetBloodlineBalanceStatistics = (
     .from(dataBattleAction)
     .innerJoin(bloodline, eq(dataBattleAction.contentId, bloodline.id))
     .groupBy(bloodline.name, bloodline.id, dataBattleAction.battleWon)
-    .where(and(...whereConditions, ...balanceConditions()))
+    .where(and(...whereConditions))
     .having(gte(sum(dataBattleAction.count), input.minCount));
 
 /** Build the `userJutsu` selection for `getJutsuBalanceStatistics`. */
@@ -747,7 +747,7 @@ export const selectDataBattleActionForGetJutsuBalanceStatistics = (
       dataBattleAction.battleWon,
       dataBattleAction.battleType,
     )
-    .where(and(...whereConditions, ...balanceConditions()))
+    .where(and(...whereConditions))
     .having(havingClause);
 
 /** Build the `jutsu` listing for `getJutsuEffectsBalanceStatistics`, using the configured predicates. */
@@ -898,7 +898,7 @@ export const selectDataBattleActionForGetItemBalanceStatistics = (
       dataBattleAction.battleWon,
       dataBattleAction.battleType,
     )
-    .where(and(...whereConditions, ...balanceConditions()))
+    .where(and(...whereConditions))
     .having(havingClause);
 
 /** Build the `dataBattleAction` selection for `getAiBalanceStatistics`, using the configured predicates. */

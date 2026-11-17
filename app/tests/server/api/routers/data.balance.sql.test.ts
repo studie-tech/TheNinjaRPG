@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { dataBattleAction, item, jutsu } from "@/drizzle/schema";
+import { bloodline, dataBattleAction, item, jutsu } from "@/drizzle/schema";
 import { insertDataBattleActionForSaveUsage } from "@/queries/combat";
 import { selectDataBattleActionForUsageStats } from "@/queries/contentReview";
 import {
@@ -30,7 +30,7 @@ describeWithDatabase("fortnightly balance reports", () => {
   afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
     stubRateLimitTransport();
-    await resetTables(dataBattleAction, item, jutsu);
+    await resetTables(dataBattleAction, bloodline, item, jutsu);
     await insertJutsus([jutsuRow("fire", { name: "Fire" })]);
   });
 
@@ -87,39 +87,63 @@ describeWithDatabase("fortnightly balance reports", () => {
     ]);
   });
 
-  it("applies fractional level bounds consistently to overview and usage reports", async () => {
+  it("applies active-period cohorts and fractional levels consistently to overview and usage reports", async () => {
     const db = await getTestDatabase();
     await insertItems([{ id: "kunai", name: "Kunai" }]);
+    await db.insert(bloodline).values({
+      id: "fire",
+      name: "Fire",
+      rank: "D",
+      image: "",
+      description: "Fire",
+      effects: [],
+    });
     await db.insert(dataBattleAction).values(
-      (["jutsu", "item", "participant"] as const).flatMap((type) =>
-        [19, 20, 21].map((userLevel) => ({
-          type,
-          contentId: type === "jutsu" ? "fire" : type === "item" ? "kunai" : "player",
-          periodStart: getBalancePeriodStart(),
-          battleType: "COMBAT" as const,
-          userLevel,
-          userRank: "CHUNIN" as const,
-          battleWon: 1,
-          turnOrder: 1,
-          count: userLevel === 20 ? 3 : 100,
-        })),
-      ),
+      (["jutsu", "item", "bloodline", "participant"] as const)
+        .flatMap((type) =>
+          [19, 20, 21].map((userLevel) => ({
+            type,
+            contentId:
+              type === "participant" ? "player" : type === "item" ? "kunai" : "fire",
+            periodStart: getBalancePeriodStart(),
+            battleType: "COMBAT" as const,
+            userLevel,
+            userRank: "CHUNIN" as const,
+            battleWon: 1,
+            turnOrder: 1,
+            count: userLevel === 20 ? 3 : 100,
+          })),
+        )
+        .flatMap((row) => [
+          row,
+          { ...row, periodStart: row.periodStart - 14 * 86400, count: 100 },
+          { ...row, battleType: "ARENA" as const, count: 100 },
+          { ...row, userRank: "JONIN" as const, count: 100 },
+        ]),
     );
     const caller = await callerFor(dataRouter, "viewer");
-    const filter = { minLevel: 19.5, maxLevel: 20.5 };
-    const [overview, jutsus, items] = await Promise.all([
+    const filter = {
+      battleTypes: ["COMBAT" as const],
+      userRanks: ["CHUNIN" as const],
+      minLevel: 19.5,
+      maxLevel: 20.5,
+    };
+    const [overview, jutsus, items, bloodlines] = await Promise.all([
       caller.getBalanceOverview(filter),
       caller.getJutsuBalanceStatistics(filter),
       caller.getItemBalanceStatistics(filter),
+      caller.getBloodlineBalanceStatistics(filter),
     ]);
-    expect(overview.content).toHaveLength(2);
-    expect(overview.content.map((row) => row.count)).toEqual([3, 3]);
+    expect(overview.content).toHaveLength(3);
+    expect(overview.content.map((row) => row.count)).toEqual([3, 3, 3]);
     expect(overview.participants).toHaveLength(1);
     expect(overview.participants[0]).toMatchObject({ userLevel: 20, count: 3 });
     expect(jutsus).toHaveLength(1);
     expect(jutsus[0]).toMatchObject({ jutsuId: "fire", count: 3 });
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ itemId: "kunai", count: 3 });
+    expect(bloodlines).toHaveLength(1);
+    expect(bloodlines[0]).toMatchObject({ bloodlineId: "fire", totalUsage: 3 });
   });
 
   it("retains completed and legacy periods when staff clear live data", async () => {

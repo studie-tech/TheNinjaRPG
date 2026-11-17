@@ -9,6 +9,7 @@ import {
   BalanceFiltering,
   getBalanceFilter,
   getBalanceUsageHref,
+  hasInvalidBalanceLevelRange,
   useBalanceFiltering,
 } from "@/layout/BalanceFiltering";
 import ContentBox from "@/layout/ContentBox";
@@ -24,10 +25,7 @@ import { getBalancePeriodEnd } from "@/utils/time";
 export const BalanceOverview = () => {
   const state = useBalanceFiltering();
   const filter = getBalanceFilter(state);
-  const invalidRange =
-    typeof filter.minLevel === "number" &&
-    typeof filter.maxLevel === "number" &&
-    filter.minLevel > filter.maxLevel;
+  const invalidRange = hasInvalidBalanceLevelRange(filter);
   const overview = api.data.getBalanceOverview.useQuery(filter, {
     ...balanceReportQueryOptions,
     enabled: state.isReady && !invalidRange,
