@@ -59,6 +59,20 @@ describe("combat fighter recipes", () => {
       character: spriteAppearance,
     });
   });
+  it("keeps a summon such as a pet as its portrait even when it carries character artwork", () => {
+    const parts = combatActorParts(
+      user({
+        isAi: true,
+        isOriginal: true,
+        isSummon: true,
+        spriteAppearance: resolveSpriteAppearance({}),
+      }),
+      tile,
+      battle,
+    );
+    expect(parts.map((part) => part.kind)).toContain("aiAvatar");
+    expect(parts.find((part) => part.kind === "avatar")).toBeUndefined();
+  });
   it("scales LPC fighters to 75% and raises them within their tile", () => {
     const spriteAppearance = resolveSpriteAppearance({});
     const parts = combatActorParts(

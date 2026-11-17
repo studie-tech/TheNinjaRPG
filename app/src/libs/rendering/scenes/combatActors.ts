@@ -926,8 +926,12 @@ type Fighter = {
 
 /**
  * An original AI fighter is drawn as its portrait. One that carries a character appearance,
- * such as a village patrol copied from a player, is drawn as that character, as on the map.
+ * such as a village patrol copied from a player, is drawn as that character, as on the map;
+ * summons such as pets keep their portraits.
  */
 const showsAiPortrait = (
-  user: Pick<ReturnedUserState, "isAi" | "isOriginal" | "spriteAppearance">,
-) => user.isAi && user.isOriginal && !user.spriteAppearance;
+  user: Pick<
+    ReturnedUserState,
+    "isAi" | "isOriginal" | "isSummon" | "spriteAppearance"
+  >,
+) => user.isAi && user.isOriginal && (user.isSummon || !user.spriteAppearance);
