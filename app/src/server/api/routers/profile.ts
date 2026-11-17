@@ -234,8 +234,7 @@ import {
   listUserJutsuByUserId,
   listUserPetForGetPetImageGenerationForStaff,
   selectContentProposalForGetUser,
-  selectFarmPlotForGetUser,
-  selectFarmPlotForGetUser2,
+  selectFarmPlotCountsForGetUser,
   selectQuestForFetchQuestBootstrap,
   selectQuestHistoryForWhere,
   selectStaffApplicationForGetUser,
@@ -312,7 +311,11 @@ import {
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { offsetPage } from "@/server/utils/pagination";
-import { consumeUserAnnouncements, fetchPublicUsers } from "@/server/utils/profile";
+import {
+  deliverUserAnnouncements,
+  fetchPublicUsers,
+  listUserAnnouncements,
+} from "@/server/utils/profile";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { insertNextQuest } from "@/server/utils/questAssignment";
 import {
@@ -848,15 +851,13 @@ export const profileRouter = createTRPCRouter({
       // Query
       const [
         initialUser,
-        readyFarmPlotsResult,
-        waterableFarmPlotsResult,
+        farmPlotCounts,
         questInvitations,
         tournamentNoticeState,
         activeDungeonRuns,
       ] = await Promise.all([
         fetchUser(),
-        selectFarmPlotForGetUser(ctx.drizzle, ctx, now),
-        selectFarmPlotForGetUser2(ctx.drizzle, ctx, now, currentDayCycleStartedAt),
+        selectFarmPlotCountsForGetUser(ctx.drizzle, ctx, now, currentDayCycleStartedAt),
         listQuestPartyForGetUser(ctx.drizzle, ctx),
         fetchEventNoticeState(ctx.drizzle, ctx.userId),
         findActiveDungeonRun(ctx.drizzle, ctx.userId),
@@ -876,8 +877,8 @@ export const profileRouter = createTRPCRouter({
         activeDungeon = refreshedRuns[0]?.run;
       }
       const { user, settings, toastMessages, hasUnvotedPolls } = updatedUser;
-      const readyFarmPlots = readyFarmPlotsResult[0]?.count ?? 0;
-      const waterableFarmPlots = waterableFarmPlotsResult[0]?.count ?? 0;
+      const readyFarmPlots = farmPlotCounts[0]?.ready ?? 0;
+      const waterableFarmPlots = farmPlotCounts[0]?.waterable ?? 0;
       // Ship achievement progress on its own; the definitions come from the catalogue query
       let achievementProgress: AchievementProgress[] = [];
       if (user) {
@@ -888,20 +889,36 @@ export const profileRouter = createTRPCRouter({
         user.userQuests = split.userQuests;
         achievementProgress = split.achievementProgress;
       }
+      // The dungeon queue claim, staff counts and announcement feed depend only on the
+      // settled profile and run, so they share one wave; the announcement claim follows it.
+      const isModerator = !!user && canModerate(user.role);
+      const approvalGroup = user ? getApprovalGroup(user.role) : null;
+      const canReviewContent = !!user && canChangeContent(user.role);
+      const [
+        dungeonClaim,
+        reportCounts,
+        ticketCounts,
+        applicationCounts,
+        reviewCounts,
+        unreadAnnouncements,
+      ] = await Promise.all([
+        user?.status === "AWAKE" &&
+        activeDungeon &&
+        ["LOBBY", "BETWEEN", "PAUSED"].includes(activeDungeon.status)
+          ? claimDungeonQueue(ctx.drizzle, ctx.userId, activeDungeon.id)
+          : null,
+        isModerator ? selectUserReportForGetUser(ctx.drizzle) : null,
+        isModerator ? selectSupportTicketForGetUser(ctx.drizzle) : null,
+        approvalGroup && user
+          ? selectStaffApplicationForGetUser(ctx.drizzle, approvalGroup, user)
+          : null,
+        canReviewContent ? selectContentProposalForGetUser(ctx.drizzle) : null,
+        user ? listUserAnnouncements(ctx.drizzle, user) : [],
+      ]);
+      if (user && dungeonClaim?.rowsAffected === 1) user.status = "QUEUED";
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
       if (activeDungeon && !["ENDED"].includes(activeDungeon.status)) {
-        if (
-          user?.status === "AWAKE" &&
-          ["LOBBY", "BETWEEN", "PAUSED"].includes(activeDungeon.status)
-        ) {
-          const claim = await claimDungeonQueue(
-            ctx.drizzle,
-            ctx.userId,
-            activeDungeon.id,
-          );
-          if (claim.rowsAffected === 1) user.status = "QUEUED";
-        }
         notifications.push(activeDungeonNotification);
       }
       // Ignore stale invitations for disabled or terminal teams, as the discovery page does.
@@ -1028,22 +1045,8 @@ export const profileRouter = createTRPCRouter({
           });
         }
 
-        // Get moderation, application and content review counts in parallel for staff.
-        const approvalGroup = getApprovalGroup(user.role);
-        const canReviewContent = canChangeContent(user.role);
-        if (canModerate(user.role) || approvalGroup || canReviewContent) {
-          const [reportCounts, ticketCounts, applicationCounts, reviewCounts] =
-            await Promise.all([
-              canModerate(user.role) ? selectUserReportForGetUser(ctx.drizzle) : null,
-              canModerate(user.role)
-                ? selectSupportTicketForGetUser(ctx.drizzle)
-                : null,
-              approvalGroup
-                ? selectStaffApplicationForGetUser(ctx.drizzle, approvalGroup, user)
-                : null,
-              canReviewContent ? selectContentProposalForGetUser(ctx.drizzle) : null,
-            ]);
-
+        // Moderation, application and content review counts for staff.
+        if (isModerator || approvalGroup || canReviewContent) {
           const userReports = reportCounts?.[0]?.count ?? 0;
           if (userReports > 0) {
             notifications.push({
@@ -1158,7 +1161,11 @@ export const profileRouter = createTRPCRouter({
             notificationCount: user.unreadNews,
           });
         }
-        const receipt = await consumeUserAnnouncements(ctx.drizzle, user);
+        const receipt = await deliverUserAnnouncements(
+          ctx.drizzle,
+          user,
+          unreadAnnouncements,
+        );
         notifications.push(...(receipt?.announcements ?? []));
       }
       return {

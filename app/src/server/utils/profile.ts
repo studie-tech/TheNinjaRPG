@@ -16,13 +16,26 @@ import type { GetPublicUsersSchema } from "@/validators/user";
  */
 export const consumeUserAnnouncements = async (
   client: DrizzleClient,
-  user: { userId: string; unreadNotifications: number; unreadRecruitRewards: number },
+  user: AnnouncementCounters,
+) => deliverUserAnnouncements(client, user, await listUserAnnouncements(client, user));
+
+/** Load the news entries behind the unread counter, without a query when nothing is unread. */
+export const listUserAnnouncements = (
+  client: DrizzleClient,
+  user: { unreadNotifications: number },
+) =>
+  user.unreadNotifications
+    ? listNotificationForGetUser(client, user)
+    : Promise.resolve([] as Awaited<ReturnType<typeof listNotificationForGetUser>>);
+
+/** Claim the counters that `unread` was loaded for; only the claim owner delivers the messages. */
+export const deliverUserAnnouncements = async (
+  client: DrizzleClient,
+  user: AnnouncementCounters,
+  unread: Awaited<ReturnType<typeof listUserAnnouncements>>,
 ) => {
   if (!user.unreadNotifications && !user.unreadRecruitRewards)
     return { announcements: [] };
-  const unread = user.unreadNotifications
-    ? await listNotificationForGetUser(client, user)
-    : [];
   const claimedAt = new Date();
   if ((await claimUserAnnouncements(client, user, claimedAt)).rowsAffected !== 1)
     return;
@@ -86,4 +99,10 @@ export const fetchPublicUsers = async (info: {
     data: users,
     nextCursor: nextCursor,
   };
+};
+
+type AnnouncementCounters = {
+  userId: string;
+  unreadNotifications: number;
+  unreadRecruitRewards: number;
 };
