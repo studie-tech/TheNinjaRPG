@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  getDailyDutyUserDelta,
   getDojoPurchaseUpdate,
   getRunClaimUpdate,
   type TowerDefenseProgress,
@@ -30,5 +31,32 @@ describe("tower defense progress deltas", () => {
       points: 900,
       bestWave: 40,
     });
+  });
+});
+
+describe("tower defense daily duty delta", () => {
+  const reward = { ryo: 15_000, prestige: 150, villageTokens: 200 };
+
+  it("pays the player and their village the first time a day", () => {
+    expect(
+      getDailyDutyUserDelta({ fulfilsDuty: true, reward, villageId: "v1" }),
+    ).toEqual({
+      dailyTowerDefenseRuns: 1,
+      money: 15_000,
+      villagePrestige: 150,
+      village: { id: "v1", tokens: 200 },
+    });
+    expect(
+      getDailyDutyUserDelta({ fulfilsDuty: true, reward, villageId: null }),
+    ).toEqual({ dailyTowerDefenseRuns: 1, money: 15_000, villagePrestige: 150 });
+  });
+
+  it("only counts a later run and leaves a short one alone", () => {
+    expect(
+      getDailyDutyUserDelta({ fulfilsDuty: true, reward: null, villageId: "v1" }),
+    ).toEqual({ dailyTowerDefenseRuns: 1 });
+    expect(
+      getDailyDutyUserDelta({ fulfilsDuty: false, reward: null, villageId: "v1" }),
+    ).toEqual({});
   });
 });

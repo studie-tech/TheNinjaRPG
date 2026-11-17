@@ -1,7 +1,9 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getDailyDutyUserDelta } from "@/deltas/towerDefense";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
 import { decodeTdActions } from "@/libs/towerDefense/actionLog";
+import { tdDailyReward, tdFulfilsDailyDuty } from "@/libs/towerDefense/balance";
 import {
   TD_DOJO,
   TD_DOJO_INFO,
@@ -11,6 +13,7 @@ import {
 } from "@/libs/towerDefense/content";
 import { TD_SIM_VERSION, tdDojoCost } from "@/libs/towerDefense/sim";
 import {
+  findTowerDefenseClaimant,
   findTowerDefenseClaimReceipt,
   findTowerDefenseProgress,
   insertTowerDefenseClaimReceipt,
@@ -21,8 +24,10 @@ import {
   listUserTowerDefenseUpgrades,
   updateUserDataForClaimTowerDefenseRun,
   updateUserDataForPurchaseDojoUpgrade,
+  updateUserDataForStartTowerDefenseRun,
   upsertUserTowerDefenseUpgrade,
 } from "@/queries/towerDefense";
+import { incrementVillageTokens } from "@/queries/village";
 import {
   baseServerResponse,
   cdnCachedProcedure,
@@ -31,7 +36,6 @@ import {
   protectedProcedure,
   ratelimitMiddleware,
 } from "@/server/api/trpc";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   areTowerDefenseClaimsEnabled,
   checkTowerDefenseClaimTiming,
@@ -47,12 +51,15 @@ import {
   TD_MAX_TICKS,
   towerDefenseRunTokenSchema,
 } from "@/validators/towerDefense";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const towerDefenseRouter = createTRPCRouter({
-  /** The caller's scrolls, best wave and Dojo levels. */
+  /** The caller's scrolls, best wave and Guard Hall levels. */
   getProgress: protectedProcedure
     .meta({
-      mcp: { description: "Get tower defense scrolls, best wave and Dojo levels" },
+      mcp: {
+        description: "Get tower defense scrolls, best wave and Guard Hall levels",
+      },
     })
     .use(ratelimitMiddleware)
     .query(async ({ ctx }) => {
@@ -113,10 +120,13 @@ export const towerDefenseRouter = createTRPCRouter({
         level: progress.level,
         dojo: dojoLevels(upgrades),
       };
+      const nonce = nanoid();
+      // Only the latest run can be claimed, so runs are never played side by side.
+      await updateUserDataForStartTowerDefenseRun(ctx.drizzle, ctx, nonce);
       const token = signRunToken({
         v: 1,
         userId: ctx.userId,
-        nonce: nanoid(),
+        nonce,
         ...config,
         issuedAt: Date.now(),
       });
@@ -126,8 +136,10 @@ export const towerDefenseRouter = createTRPCRouter({
   /**
    * Claim a finished run. The server replays the signed run with the submitted action log
    * and pays out what the replay earned. Everything that can refuse a claim without the
-   * replay runs first, and replays have their own tighter limit. The receipt keyed on
-   * the run nonce is inserted before anything is granted, so each run pays out once.
+   * replay runs first, and replays have their own tighter limit. Only the caller's latest
+   * run can be claimed, and the payout retires it, so each run pays out once; its receipt
+   * then answers a retry whose response was lost. A run that clears the daily duty's
+   * waves also pays the daily Guard Hall reward, once per day.
    * `permanent` marks refusals that claiming the same run again can only repeat.
    */
   claimRun: protectedProcedure
@@ -145,13 +157,16 @@ export const towerDefenseRouter = createTRPCRouter({
       }),
     )
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         permanent: z.boolean().optional(),
         reloadRequired: z.boolean().optional(),
         alreadyClaimed: z.boolean().optional(),
         pointsEarned: z.number().optional(),
         wave: z.number().optional(),
         kills: z.number().optional(),
+        dailyReward: z
+          .object({ ryo: z.number(), prestige: z.number(), villageTokens: z.number() })
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -184,9 +199,10 @@ export const towerDefenseRouter = createTRPCRouter({
       // The replay is reserved alongside the receipt lookup to keep one round trip. A
       // retry of a run already paid spends a reservation it does not use, which only
       // happens when a claim's response is lost.
-      const [receipt, canReplay] = await Promise.all([
+      const [receipt, canReplay, claimant] = await Promise.all([
         findTowerDefenseClaimReceipt(ctx.drizzle, claimKey),
         reserveTowerDefenseReplay(ctx.userId, input.endTick),
+        findTowerDefenseClaimant(ctx.drizzle, ctx),
       ]);
       if (receipt)
         return alreadyClaimed({
@@ -194,6 +210,9 @@ export const towerDefenseRouter = createTRPCRouter({
           kills: receipt.score,
           points: receipt.pointsEarned,
         });
+      if (!claimant) return errorResponse("User not found.");
+      if (claimant.towerDefenseActiveRun !== token.nonce)
+        return refusedForGood(REPLACED_RUN_MESSAGE);
       if (!canReplay) return errorResponse(TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE);
       const actions = decodeTdActions(input.actions);
       if (!actions) return refusedForGood("This run's record could not be read.");
@@ -204,27 +223,29 @@ export const towerDefenseRouter = createTRPCRouter({
       });
       // The replay is deterministic, so a refused log stays refused.
       if (!result.ok) return refusedForGood(result.message);
-      try {
-        await insertTowerDefenseClaimReceipt(ctx.drizzle, ctx, {
+      const fulfilsDuty = tdFulfilsDailyDuty(token.startWave, result.wave);
+      // The daily count comes from the snapshot above. Only the active run reaches the
+      // payout, so no other claim can pay the duty between the read and the write.
+      const reward =
+        fulfilsDuty && claimant.dailyTowerDefenseRuns === 0
+          ? tdDailyReward(claimant.level)
+          : null;
+      const paid = await updateUserDataForClaimTowerDefenseRun(ctx.drizzle, ctx, {
+        nonce: token.nonce,
+        points: result.points,
+        wave: result.wave,
+        fulfilsDuty,
+        reward,
+      });
+      // A simultaneous claim of this run paid it, or a newer run replaced it meanwhile.
+      if (paid.rowsAffected === 0) return refusedForGood(REPLACED_RUN_MESSAGE);
+      await Promise.all([
+        insertTowerDefenseClaimReceipt(ctx.drizzle, ctx, {
           claimKey,
           wave: result.wave,
           kills: result.kills,
           points: result.points,
-        });
-      } catch (error) {
-        if (!isMysqlDuplicateKeyError(error)) throw error;
-        // A simultaneous claim of the same run won with its own log; report what it paid.
-        // A duplicate with no receipt for this run is some other collision, not a claim.
-        const winner = await findTowerDefenseClaimReceipt(ctx.drizzle, claimKey);
-        if (!winner) throw error;
-        return alreadyClaimed({
-          wave: winner.wave,
-          kills: winner.score,
-          points: winner.pointsEarned,
-        });
-      }
-      const [updated] = await Promise.all([
-        updateUserDataForClaimTowerDefenseRun(ctx.drizzle, ctx, result),
+        }),
         insertTowerDefenseRun(ctx.drizzle, ctx, {
           seed: token.seed,
           startWave: token.startWave,
@@ -232,25 +253,39 @@ export const towerDefenseRouter = createTRPCRouter({
           kills: result.kills,
           startedAt: new Date(token.issuedAt),
         }),
+        reward && claimant.villageId
+          ? incrementVillageTokens(
+              ctx.drizzle,
+              reward.villageTokens,
+              claimant.villageId,
+            )
+          : undefined,
       ]);
-      // MySQL counts changed rows: a run that earned nothing and set no record changes none.
-      if (updated.rowsAffected === 0 && result.points > 0)
-        return errorResponse("Failed to award scrolls. User data might be missing.");
+      const summary =
+        result.points > 0
+          ? `Reached wave ${result.wave} and earned ${result.points.toLocaleString()} scroll${result.points === 1 ? "" : "s"}!`
+          : `Reached wave ${result.wave}.`;
+      const userDelta = getDailyDutyUserDelta({
+        fulfilsDuty,
+        reward,
+        villageId: claimant.villageId,
+      });
       return {
         success: true,
-        message:
-          result.points > 0
-            ? `Reached wave ${result.wave} and earned ${result.points.toLocaleString()} scroll${result.points === 1 ? "" : "s"}!`
-            : `Reached wave ${result.wave}.`,
+        message: reward
+          ? `${summary} Daily Guard Hall duty done: +${reward.ryo.toLocaleString()} ryo, +${reward.prestige} prestige${claimant.villageId ? ` and +${reward.villageTokens} tokens for your village` : ""}.`
+          : summary,
         pointsEarned: result.points,
         wave: result.wave,
         kills: result.kills,
+        dailyReward: reward ?? undefined,
+        userDelta,
       };
     }),
 
-  /** Buy the next level of a Dojo upgrade with scrolls. */
+  /** Buy the next level of a Guard Hall upgrade with scrolls. */
   purchaseDojoUpgrade: protectedProcedure
-    .meta({ mcp: { description: "Buy a tower defense Dojo upgrade" } })
+    .meta({ mcp: { description: "Buy a tower defense Guard Hall upgrade" } })
     .use(ratelimitMiddleware)
     .input(z.object({ upgradeId: z.enum(TD_DOJO) }))
     .output(
@@ -315,6 +350,10 @@ export const towerDefenseRouter = createTRPCRouter({
 });
 
 /** A refusal the same claim can never overcome; the client discards the run. */
+/** Why a run that is no longer the caller's active one cannot be claimed. */
+const REPLACED_RUN_MESSAGE =
+  "This run was already claimed or replaced by a newer run, so it can no longer be claimed.";
+
 const refusedForGood = (message: string) => ({
   ...errorResponse(message),
   permanent: true,
@@ -329,7 +368,7 @@ const alreadyClaimed = (earned: { wave: number; kills: number; points: number })
   pointsEarned: earned.points,
 });
 
-/** Dojo levels keyed by upgrade, ignoring rows for upgrades that no longer exist. */
+/** Guard Hall levels keyed by upgrade, ignoring rows for upgrades that no longer exist. */
 const dojoLevels = (rows: { upgradeId: string; level: number }[]): TdDojoLevels => {
   const levels: TdDojoLevels = {};
   for (const row of rows)

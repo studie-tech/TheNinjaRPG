@@ -17,7 +17,7 @@ import type { DrizzleClient } from "@/server/db";
 export const deleteTowerDefenseRunForGET = (client: Pick<DrizzleClient, "delete">) =>
   client.delete(towerDefenseRun);
 
-/** Build the caller's Dojo levels. */
+/** Build the caller's Guard Hall levels. */
 export const listUserTowerDefenseUpgrades = (
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
@@ -37,7 +37,33 @@ export const findTowerDefenseProgress = (
     where: eq(userData.userId, ctx.userId),
   });
 
-/** Build the scroll deduction for a Dojo purchase, guarded on the balance. */
+/** Build the run nonce that `startRun` makes the caller's only claimable run. */
+export const updateUserDataForStartTowerDefenseRun = (
+  client: Pick<DrizzleClient, "update">,
+  ctx: { userId: string },
+  nonce: string,
+) =>
+  client
+    .update(userData)
+    .set({ towerDefenseActiveRun: nonce })
+    .where(eq(userData.userId, ctx.userId));
+
+/** Build the claimant's active run, daily duty count, level and village. */
+export const findTowerDefenseClaimant = (
+  client: Pick<DrizzleClient, "query">,
+  ctx: { userId: string },
+) =>
+  client.query.userData.findFirst({
+    columns: {
+      towerDefenseActiveRun: true,
+      dailyTowerDefenseRuns: true,
+      level: true,
+      villageId: true,
+    },
+    where: eq(userData.userId, ctx.userId),
+  });
+
+/** Build the scroll deduction for a Guard Hall purchase, guarded on the balance. */
 export const updateUserDataForPurchaseDojoUpgrade = (
   client: Pick<DrizzleClient, "update">,
   cost: number,
@@ -50,7 +76,7 @@ export const updateUserDataForPurchaseDojoUpgrade = (
       and(eq(userData.userId, ctx.userId), gte(userData.towerDefensePoints, cost)),
     );
 
-/** Build the Dojo level upsert after a purchase. */
+/** Build the Guard Hall level upsert after a purchase. */
 export const upsertUserTowerDefenseUpgrade = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
@@ -72,7 +98,7 @@ export const findTowerDefenseClaimReceipt = (
     where: eq(towerDefenseClaimReceipt.claimKey, claimKey),
   });
 
-/** Build the claim receipt; its unique key on the run nonce makes each run claimable once. */
+/** Build the claim receipt that answers a claim retried after its response was lost. */
 export const insertTowerDefenseClaimReceipt = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
@@ -87,19 +113,44 @@ export const insertTowerDefenseClaimReceipt = (
     pointsEarned: claim.points,
   });
 
-/** Build the scroll payout and best-wave raise for a verified claim. */
+/**
+ * Build the payout of a verified claim: scrolls, a best wave that only rises, the daily
+ * duty and its reward when one is due. It applies only while the run is still the
+ * caller's active one and retires it, so each run pays out once.
+ */
 export const updateUserDataForClaimTowerDefenseRun = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
-  claim: { points: number; wave: number },
+  claim: {
+    nonce: string;
+    points: number;
+    wave: number;
+    fulfilsDuty: boolean;
+    reward: { ryo: number; prestige: number } | null;
+  },
 ) =>
   client
     .update(userData)
     .set({
       towerDefensePoints: sql`${userData.towerDefensePoints} + ${claim.points}`,
       towerDefenseBestWave: sql`GREATEST(${userData.towerDefenseBestWave}, ${claim.wave})`,
+      towerDefenseActiveRun: null,
+      ...(claim.fulfilsDuty
+        ? { dailyTowerDefenseRuns: sql`${userData.dailyTowerDefenseRuns} + 1` }
+        : {}),
+      ...(claim.reward
+        ? {
+            money: sql`${userData.money} + ${claim.reward.ryo}`,
+            villagePrestige: sql`${userData.villagePrestige} + ${claim.reward.prestige}`,
+          }
+        : {}),
     })
-    .where(eq(userData.userId, ctx.userId));
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        eq(userData.towerDefenseActiveRun, claim.nonce),
+      ),
+    );
 
 /** Build the leaderboard entry for a verified claim. */
 export const insertTowerDefenseRun = (

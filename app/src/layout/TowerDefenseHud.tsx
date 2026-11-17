@@ -772,8 +772,8 @@ const BoostsButton = ({ state }: { state: TdState }) => {
             <BoostRow key={label} label={label} value={value} />
           ))}
           <p className="text-muted-foreground text-xs">
-            Every kill also pays its bounty, ×{stats.ryoMult.toFixed(2)} with your Dojo
-            and perks.
+            Every kill also pays its bounty, ×{stats.ryoMult.toFixed(2)} with your Guard
+            Hall and perks.
           </p>
         </BoostSection>
         <BoostSection title="Your ninja">

@@ -1,9 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import {
+  TD_DAILY_PRESTIGE,
+  TD_DAILY_RYO_PER_LEVEL,
+  TD_DAILY_VILLAGE_TOKENS,
+} from "@/drizzle/constants";
+import {
+  tdDailyReward,
+  tdFulfilsDailyDuty,
   tdLevelDamageBonus,
   tdReferenceBounty,
   tdReferenceDamage,
   tdReferenceHealth,
+  tdWavesCleared,
 } from "@/libs/towerDefense/balance";
 import { tdCheckpoints } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
@@ -56,6 +64,33 @@ describe("tower defense balance", () => {
       createRun({ seed: "lvl", startWave: 1, bestWave: 0, level, dojo: {} }).stats
         .damage;
     expect(damageAt(100)).toBeCloseTo(damageAt(1) * 2);
+  });
+
+  it("counts the daily duty's waves from where the run started", () => {
+    // A wave counts once the next starts: falling during wave 11 cleared waves 1 to 10.
+    expect(tdWavesCleared(1, 11)).toBe(10);
+    expect(tdFulfilsDailyDuty(1, 11)).toBe(true);
+    expect(tdFulfilsDailyDuty(1, 10)).toBe(false);
+    // A checkpoint start has to clear ten waves of its own.
+    expect(tdFulfilsDailyDuty(51, 60)).toBe(false);
+    expect(tdFulfilsDailyDuty(51, 61)).toBe(true);
+    expect(tdWavesCleared(31, 30)).toBe(0);
+    // A run that ends before its first wave clears nothing.
+    expect(
+      tdWavesCleared(
+        1,
+        createRun({ seed: "d", startWave: 1, bestWave: 0, level: 1, dojo: {} }).wave,
+      ),
+    ).toBe(0);
+  });
+
+  it("scales the daily duty's ryo with level", () => {
+    expect(tdDailyReward(1).ryo).toBe(TD_DAILY_RYO_PER_LEVEL);
+    expect(tdDailyReward(100)).toEqual({
+      ryo: 100 * TD_DAILY_RYO_PER_LEVEL,
+      prestige: TD_DAILY_PRESTIGE,
+      villageTokens: TD_DAILY_VILLAGE_TOKENS,
+    });
   });
 
   it("offers checkpoints just after each boss, up to 70% of the best wave", () => {
