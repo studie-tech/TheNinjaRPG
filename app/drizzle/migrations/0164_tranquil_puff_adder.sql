@@ -77,6 +77,18 @@ WHERE `UserData`.`isAi` = 0
   AND NOT EXISTS (
     SELECT 1 FROM `AiProfile` AS `existing` WHERE `existing`.`jutsuLoadoutId` = `JutsuLoadout`.`id`
   );
+-- A player the previous build switched to the Default rules has no pointer while their active
+-- loadout fights with its own rules, which the new build never writes; that choice held for the
+-- whole character, so every loadout of theirs fights with the Default rules.
+UPDATE `JutsuLoadout`
+JOIN (
+  SELECT DISTINCT `UserData`.`userId` FROM `UserData`
+  JOIN `JutsuLoadout` AS `active` ON `active`.`id` = `UserData`.`jutsuLoadout`
+    AND `active`.`userId` = `UserData`.`userId`
+  WHERE `UserData`.`isAi` = 0 AND `UserData`.`aiProfileId` IS NULL AND `active`.`customAi` = true
+) AS `switchedOff` ON `switchedOff`.`userId` = `JutsuLoadout`.`userId`
+SET `JutsuLoadout`.`customAi` = false
+WHERE `JutsuLoadout`.`customAi` = true;
 -- A player's rules pointer names their active loadout's own rules when they fight with custom
 -- rules, which the previous build did not keep when it switched loadouts. It runs last, keeps
 -- the player's choice between custom and Default rules for the active loadout, and changes

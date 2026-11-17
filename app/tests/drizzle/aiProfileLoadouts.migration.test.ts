@@ -118,6 +118,30 @@ describeWithDatabase("AI profiles per jutsu loadout migration", () => {
     expect(u2?.customAi).toBe(false);
   });
 
+  it("puts every loadout on the Default rules for a player the previous build switched to them", async () => {
+    await runRawSql(backfill);
+    const db = await getTestDatabase();
+    // The previous build's Default choice holds for the whole character, not one loadout.
+    await db
+      .update(userData)
+      .set({ aiProfileId: null })
+      .where(eq(userData.userId, "custom"));
+    await runRawSql(backfill);
+    const flags = await db
+      .select({ id: jutsuLoadout.id, customAi: jutsuLoadout.customAi })
+      .from(jutsuLoadout)
+      .where(eq(jutsuLoadout.userId, "custom"));
+    expect(flags.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      { id: "c1", customAi: false },
+      { id: "c2", customAi: false },
+    ]);
+    const custom = await db.query.userData.findFirst({
+      where: eq(userData.userId, "custom"),
+      columns: { aiProfileId: true },
+    });
+    expect(custom?.aiProfileId).toBeNull();
+  });
+
   it("keeps custom rules for a player the previous build moved to a new loadout", async () => {
     await runRawSql(backfill);
     const db = await getTestDatabase();
