@@ -21,7 +21,6 @@ import {
   huntingReceipt,
   huntingSession,
   item,
-  sectorMap,
   userData,
 } from "@/drizzle/schema";
 import { nextSnapshotSql } from "@/queries/concurrency";
@@ -237,16 +236,6 @@ export const findHuntingProgressForAccept = (
       eq(huntingProgress.userId, ctx.userId),
       eq(huntingProgress.contractId, input.contractId),
     ),
-  });
-
-/** Build published hunting maps for the selected sectors, loading only the sector and normalized map. */
-export const listPublishedHuntingMaps = (
-  client: Pick<DrizzleClient, "query">,
-  sectors: number[],
-) =>
-  client.query.sectorMap.findMany({
-    columns: { sector: true, normalizedJson: true },
-    where: and(inArray(sectorMap.sector, sectors), eq(sectorMap.status, "PUBLISHED")),
   });
 
 /** Build the `huntingProgress` insert for `accept`, updating duplicate keys. */

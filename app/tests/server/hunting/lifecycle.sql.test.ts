@@ -296,7 +296,8 @@ describeWithDatabase("Hunting lifecycle", () => {
       status: "PUBLISHED",
       normalizedJson: { ...huntingMap(), sector: 2 },
     });
-    const mapReads = vi.spyOn(db.query.sectorMap, "findMany");
+    const probes = vi.spyOn(db.query.sectorMap, "findMany");
+    const blobs = vi.spyOn(db.query.sectorMap, "findFirst");
     const hunter = await callerFor(huntingRouter, "hunter");
     expect(
       (
@@ -307,11 +308,17 @@ describeWithDatabase("Hunting lifecycle", () => {
         })
       ).success,
     ).toBe(true);
-    expect(mapReads).toHaveBeenCalledTimes(1);
-    expect(await mapReads.mock.results[0]?.value).toEqual([
-      { sector: 1, normalizedJson: huntingMap() },
+    expect(probes).toHaveBeenCalledTimes(1);
+    expect(await probes.mock.results[0]?.value).toEqual([
+      { id: "map", sector: 1, version: 1 },
     ]);
-    mapReads.mockClear();
+    expect(blobs).toHaveBeenCalledTimes(1);
+    expect(await blobs.mock.results[0]?.value).toMatchObject({
+      sector: 1,
+      normalizedJson: huntingMap(),
+    });
+    probes.mockClear();
+    blobs.mockClear();
     const session = (await hunter.getBoard()).session!;
     expect(
       await hunter.accept({
@@ -336,7 +343,8 @@ describeWithDatabase("Hunting lifecycle", () => {
       success: false,
       message: "Finish preparing before starting combat.",
     });
-    expect(mapReads).not.toHaveBeenCalled();
+    expect(probes).not.toHaveBeenCalled();
+    expect(blobs).not.toHaveBeenCalled();
   });
   it("rejects unpublished encounter maps without loading another sector's published map", async () => {
     const { hunter, session } = await accept();
@@ -582,8 +590,10 @@ describeWithDatabase("Hunting lifecycle", () => {
     await db.update(huntingProgress).set({ cooldownUntil: new Date(0) });
     const mapReads = vi.spyOn(db.query.sectorMap, "findMany");
     expect((await hunter.start({ id: session.id })).success).toBe(true);
+    // Starting confirms the held map is still published with a metadata probe alone.
+    expect(mapReads).toHaveBeenCalledTimes(1);
     expect(await mapReads.mock.results[0]?.value).toEqual([
-      { sector: 1, normalizedJson: huntingMap() },
+      { id: "map", sector: 1, version: 1 },
     ]);
   });
   it("enforces staff authorization and validates published reachable locations", async () => {

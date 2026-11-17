@@ -10,6 +10,7 @@ import {
 import type { RuntimeCache } from "@vercel/functions";
 import {
   createRuntimeCache,
+  createRuntimeEntryCache,
   invalidateRuntimeCaches,
 } from "@/server/utils/runtimeCache";
 import { deferred } from "../../setup/deferred";
@@ -233,5 +234,53 @@ describe("createRuntimeCache", () => {
     await invalidateRuntimeCaches();
     expect(await caches[0]!.read({})).toEqual([2]);
     expect(await caches[1]!.read({})).toEqual([4]);
+  });
+});
+
+describe("createRuntimeEntryCache", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shares keyed entries between instances under one tag and TTL", async () => {
+    const { store, entries } = memoryStore();
+    const writer = createRuntimeEntryCache<{ rev: number }>({
+      name: "test-entries",
+      ttlSeconds: TTL_SECONDS,
+      store,
+    });
+    const reader = createRuntimeEntryCache<{ rev: number }>({
+      name: "test-entries",
+      ttlSeconds: TTL_SECONDS,
+      store,
+    });
+    await writer.write("a", { rev: 1 });
+    const found = await reader.read(["a", "b"]);
+    expect([...found]).toEqual([["a", { rev: 1 }]]);
+    expect(store.set).toHaveBeenCalledWith(
+      "test-entries:a",
+      { rev: 1 },
+      { ttl: TTL_SECONDS, tags: ["test-entries:entries"] },
+    );
+    await reader.clear();
+    expect(entries.size).toBe(0);
+    expect((await writer.read(["a"])).size).toBe(0);
+  });
+
+  it("treats failed reads and writes as misses", async () => {
+    const { store } = memoryStore();
+    const cache = createRuntimeEntryCache<{ rev: number }>({
+      name: "failing-entries",
+      ttlSeconds: TTL_SECONDS,
+      store,
+    });
+    await cache.write("a", { rev: 1 });
+    store.set.mockRejectedValue(new Error("cache unavailable"));
+    await expect(cache.write("b", { rev: 2 })).resolves.toBeUndefined();
+    store.get.mockImplementation(async (key: string) => {
+      if (key.endsWith(":a")) throw new Error("cache unavailable");
+      return null;
+    });
+    expect((await cache.read(["a", "b"])).size).toBe(0);
+    store.expireTag.mockRejectedValue(new Error("cache unavailable"));
+    await expect(cache.clear()).resolves.toBeUndefined();
   });
 });

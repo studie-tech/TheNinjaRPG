@@ -5,6 +5,7 @@ import { getUnchangedHuntingUserUpdate } from "@/deltas/hunting";
 import { huntingHabitat, huntingSession } from "@/drizzle/schema";
 import { huntingAllowance, huntingEligibility } from "@/libs/hunting/contracts";
 import { getEffectiveStackSize } from "@/libs/item";
+import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiUserIds } from "@/queries/ai";
@@ -25,7 +26,6 @@ import {
   listHuntingHabitats,
   listHuntingProgressForGetBoard,
   listItemForSave,
-  listPublishedHuntingMaps,
   listUserDataForGetBoard,
   selectHuntingSessionForGetSession,
   updateHuntingHabitatForSave,
@@ -53,6 +53,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
 import { getRandomElement } from "@/utils/array";
 import { canChangeContent } from "@/utils/permissions";
 import { huntingHabitatSchema } from "@/validators/hunting";
@@ -165,7 +166,9 @@ export const huntingRouter = createTRPCRouter({
         findUserRoleById(ctx.drizzle, ctx.userId),
         aiIds.length ? listAiUserIds(ctx.drizzle, aiIds) : [],
         itemIds.length ? listItemForSave(ctx.drizzle, itemIds) : [],
-        listPublishedHuntingMaps(ctx.drizzle, input.content.sectors),
+        fetchPublishedSectorMaps(ctx.drizzle, input.content.sectors, {
+          revalidate: true,
+        }),
         listHuntingHabitats(ctx.drizzle),
       ]);
       if (!user || !canChangeContent(user.role))
@@ -281,9 +284,12 @@ export const huntingRouter = createTRPCRouter({
           ...getUnchangedHuntingUserUpdate(),
           message: "Your existing encounter is still assigned.",
         };
-      // Maps carry large JSON payloads, so they load only after the guards above.
+      // The contract's sectors are known only after the guards; a metadata probe confirms
+      // they are still published while cached maps skip the blob read.
       const reachableSectors = getReachableHuntingSectors(
-        await listPublishedHuntingMaps(ctx.drizzle, contract.sectors),
+        await fetchPublishedSectorMaps(ctx.drizzle, contract.sectors, {
+          revalidate: true,
+        }),
       );
       const locations = contract.sectors.filter(
         (s) => habitat.content.sectors.includes(s) && reachableSectors.has(s),
@@ -508,7 +514,7 @@ export const huntingRouter = createTRPCRouter({
       if (!progress || allowance.cooling || allowance.remaining < 1)
         return errorResponse("This contract is on cooldown.");
       const [maps, grantStacks] = await Promise.all([
-        listPublishedHuntingMaps(ctx.drizzle, [session.sector]),
+        fetchPublishedSectorMaps(ctx.drizzle, [session.sector], { revalidate: true }),
         listItemForGrantUserItems(
           ctx.drizzle,
           ctx.userId,
@@ -591,13 +597,9 @@ const reconcileInactiveAllowance = async (
 };
 
 /** Sectors whose published map offers a reachable coordinate. */
-const getReachableHuntingSectors = (
-  maps: Awaited<ReturnType<typeof listPublishedHuntingMaps>>,
-) =>
+const getReachableHuntingSectors = (maps: Map<number, NormalizedSectorMap>) =>
   new Set(
-    maps
-      .filter((map) =>
-        findNearestReachableCoordinate(map.normalizedJson, { x: 0, y: 0 }),
-      )
-      .map((map) => map.sector),
+    [...maps]
+      .filter(([, map]) => findNearestReachableCoordinate(map, { x: 0, y: 0 }))
+      .map(([sector]) => sector),
   );

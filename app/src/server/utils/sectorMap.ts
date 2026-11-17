@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
+import { after } from "next/server";
 import * as globalMapData from "@/data/hexasphere.json";
 import {
   MAP_SECTOR_ID_MAX,
@@ -24,6 +25,7 @@ import {
   listVillagesForSectorWindow,
 } from "@/queries/worldMap";
 import type { DrizzleClient } from "@/server/db";
+import { createRuntimeEntryCache } from "@/server/utils/runtimeCache";
 
 const globalMap = globalMapData as unknown as GlobalMapData;
 
@@ -35,14 +37,21 @@ const globalMap = globalMapData as unknown as GlobalMapData;
 export const hashTiledJson = (json: unknown) =>
   createHash("sha256").update(JSON.stringify(json)).digest("hex");
 
-// A sector's published map is immutable per version (publishing inserts a new
-// row and archives the old), so cache the deserialized normalizedJson blob to
-// spare a DB round-trip and blob transfer on every travel step / battle start.
-// Revalidate versions after a short TTL to bound cross-process staleness without
-// downloading unchanged blobs. Same-process publishes invalidate immediately.
+// A published row never changes: publishing writes a new version and archives the old
+// one. Each instance keeps decoded maps and, after a short TTL, compares the highest
+// published row without downloading unchanged blobs. Maps an instance does not hold come
+// from the shared Runtime Cache when its entry names the published row, so a cold
+// instance downloads a blob only when the sector was republished or its regional entry
+// has expired, at most a day after it was written.
 const PUBLISHED_MAP_TTL_MS = 60_000;
 const PUBLISHED_MAP_CACHE_LIMIT = 200;
-type PublishedMapCacheEntry = { map: NormalizedSectorMap; version: number; at: number };
+const sharedPublishedMaps = createRuntimeEntryCache<PublishedMap>({
+  name: "published-sector-map",
+  ttlSeconds: 24 * 60 * 60,
+});
+// Environments read different databases, so each keeps its own entries.
+const sharedMapKey = (sector: number) =>
+  `${process.env.VERCEL_ENV ?? "local"}:${sector}`;
 const publishedMapCache = new Map<number, PublishedMapCacheEntry>();
 // Bumped on every invalidation. A read captures it before its DB query and only
 // caches the row if it is still current, so a read that started before a publish
@@ -51,9 +60,10 @@ const publishedMapCache = new Map<number, PublishedMapCacheEntry>();
 let cacheGeneration = 0;
 
 /**
- * Evict a single sector from the published-map cache, or the whole cache when
- * no sector is given. Always bumps cacheGeneration so in-flight reads that
- * started before this invalidation cannot re-populate the cache with stale data.
+ * Evict a single sector from this instance's published-map cache, or the whole cache
+ * when no sector is given. Shared entries stay: each names its row, so a read never
+ * serves one for an archived or replaced map. Always bumps cacheGeneration so in-flight
+ * reads that started before this invalidation cannot re-populate the cache with stale data.
  */
 export const invalidatePublishedMapCache = (sector?: number) => {
   cacheGeneration += 1;
@@ -80,19 +90,22 @@ const getCachedPublishedMap = (sector: number): PublishedMapCacheEntry | undefin
  */
 const setCachedPublishedMap = (
   sector: number,
-  map: NormalizedSectorMap,
-  version: number,
+  { id, version, map }: PublishedMap,
   generation: number,
   at: number,
 ) => {
   if (generation !== cacheGeneration) return; // an invalidation raced this read
   publishedMapCache.delete(sector);
-  publishedMapCache.set(sector, { map, version, at });
+  publishedMapCache.set(sector, { id, version, map, at });
   while (publishedMapCache.size > PUBLISHED_MAP_CACHE_LIMIT) {
     const oldestSector = publishedMapCache.keys().next().value;
     if (oldestSector !== undefined) publishedMapCache.delete(oldestSector);
   }
 };
+
+/** Whether a cached map holds the published row the probe named. */
+const holdsRevision = (cached: PublishedMapRevision, latest: PublishedMapRevision) =>
+  cached.id === latest.id && cached.version === latest.version;
 
 export const SectorNeighborDirections = ["north", "east", "south", "west"] as const;
 export type SectorNeighborDirection = (typeof SectorNeighborDirections)[number];
@@ -295,10 +308,16 @@ export const buildSectorWindowLayout = (sector: number): SectorWindowEntry[] => 
   ].filter((entry) => entry.sector >= 0);
 };
 
-/** Fetch missing maps and revalidate expired entries without unchanged blobs. */
+/** Serve held maps, then shared entries, and download only blobs neither cache holds. */
 export const fetchPublishedSectorMaps = async (
   client: DrizzleClient,
   sectors: number[],
+  {
+    revalidate = false,
+  }: {
+    /** Probe even fresh held maps, for checks that must see an unpublish at once. */
+    revalidate?: boolean;
+  } = {},
 ): Promise<Map<number, NormalizedSectorMap>> => {
   const result = new Map<number, NormalizedSectorMap>();
   const missing: number[] = [];
@@ -306,7 +325,7 @@ export const fetchPublishedSectorMaps = async (
   for (const sector of new Set(sectors)) {
     const cached = getCachedPublishedMap(sector);
     if (!cached) missing.push(sector);
-    else if (Date.now() - cached.at < PUBLISHED_MAP_TTL_MS) {
+    else if (!revalidate && Date.now() - cached.at < PUBLISHED_MAP_TTL_MS) {
       result.set(sector, cached.map);
     } else expired.set(sector, cached);
   }
@@ -315,29 +334,36 @@ export const fetchPublishedSectorMaps = async (
   const generation = cacheGeneration;
   // A slow probe must not extend the lifetime of its older snapshot.
   const checkedAt = Date.now();
-  // Cold loads and version probes are independent; only a changed version needs
-  // a subsequent blob query. Selecting metadata alone also handles overlapping
-  // publishes: compare the highest PUBLISHED version, never an archived version.
-  const [loaded, versions] = await Promise.all([
-    fetchUncachedPublishedMaps(client, missing, generation),
-    expired.size > 0
-      ? listSectorMapForFetchPublishedSectorMaps(client, expired)
-      : Promise.resolve([]),
+  // The metadata probe names each sector's highest PUBLISHED row, never an archived
+  // one, while shared entries load beside it; only unmatched sectors need a blob.
+  const [rows, shared] = await Promise.all([
+    listSectorMapForFetchPublishedSectorMaps(client, [...missing, ...expired.keys()]),
+    missing.length > 0
+      ? sharedPublishedMaps.read(missing.map(sharedMapKey))
+      : Promise.resolve(new Map<string, PublishedMap>()),
   ]);
-  const latestVersions = new Map<number, number>();
-  for (const row of versions) {
-    latestVersions.set(
-      row.sector,
-      Math.max(latestVersions.get(row.sector) ?? 0, row.version),
-    );
+  const published = new Map<number, PublishedMapRevision>();
+  for (const row of rows) {
+    if (row.version > (published.get(row.sector)?.version ?? 0)) {
+      published.set(row.sector, row);
+    }
   }
   const changed: number[] = [];
-  for (const [sector, entry] of expired) {
-    const version = latestVersions.get(sector);
-    if (version === entry.version) {
-      setCachedPublishedMap(sector, entry.map, entry.version, generation, checkedAt);
+  for (const sector of missing) {
+    const latest = published.get(sector);
+    if (!latest) continue;
+    const entry = shared.get(sharedMapKey(sector));
+    if (entry && holdsRevision(entry, latest)) {
+      setCachedPublishedMap(sector, entry, generation, checkedAt);
       result.set(sector, entry.map);
-    } else if (version !== undefined) changed.push(sector);
+    } else changed.push(sector);
+  }
+  for (const [sector, entry] of expired) {
+    const latest = published.get(sector);
+    if (latest && holdsRevision(entry, latest)) {
+      setCachedPublishedMap(sector, entry, generation, checkedAt);
+      result.set(sector, entry.map);
+    } else if (latest) changed.push(sector);
     else if (
       generation === cacheGeneration &&
       publishedMapCache.get(sector) === entry
@@ -345,12 +371,12 @@ export const fetchPublishedSectorMaps = async (
       publishedMapCache.delete(sector);
     }
   }
-  const updated = await fetchUncachedPublishedMaps(client, changed, generation);
-  for (const [sector, map] of [...loaded, ...updated]) result.set(sector, map);
+  const loaded = await fetchUncachedPublishedMaps(client, changed, generation);
+  for (const [sector, map] of loaded) result.set(sector, map);
   return result;
 };
 
-/** Download blobs only for cold or changed sectors; empty sets need no query. */
+/** Download and share the blobs of unmatched sectors; empty sets need no query. */
 const fetchUncachedPublishedMaps = async (
   client: DrizzleClient,
   sectors: number[],
@@ -359,7 +385,12 @@ const fetchUncachedPublishedMaps = async (
   const result = new Map<number, NormalizedSectorMap>();
   if (sectors.length === 0) return result;
   const checkedAt = Date.now();
-  const columns = { sector: true, version: true, normalizedJson: true } as const;
+  const columns = {
+    id: true,
+    sector: true,
+    version: true,
+    normalizedJson: true,
+  } as const;
   const where = and(
     inArray(sectorMap.sector, sectors),
     eq(sectorMap.status, "PUBLISHED"),
@@ -370,16 +401,32 @@ const fetchUncachedPublishedMaps = async (
           await findSectorMapForFetchUncachedPublishedMaps(client, columns, where),
         ].filter((row) => row !== undefined)
       : await listSectorMapForFetchUncachedPublishedMaps(client, columns, where);
-  const bySector = new Map<number, { version: number; map: NormalizedSectorMap }>();
+  const bySector = new Map<number, PublishedMap>();
   rows.forEach((row) => {
-    const existing = bySector.get(row.sector);
-    if (!existing || row.version > existing.version) {
-      bySector.set(row.sector, { version: row.version, map: row.normalizedJson });
+    if (row.version > (bySector.get(row.sector)?.version ?? 0)) {
+      bySector.set(row.sector, {
+        id: row.id,
+        version: row.version,
+        map: row.normalizedJson,
+      });
     }
   });
-  for (const [sector, { map, version }] of bySector) {
-    setCachedPublishedMap(sector, map, version, generation, checkedAt);
-    result.set(sector, map);
+  for (const [sector, entry] of bySector) {
+    setCachedPublishedMap(sector, entry, generation, checkedAt);
+    result.set(sector, entry.map);
+  }
+  // An entry names the row it holds, so sharing it needs no generation guard.
+  const share = () =>
+    Promise.all(
+      [...bySector].map(([sector, entry]) =>
+        sharedPublishedMaps.write(sharedMapKey(sector), entry),
+      ),
+    );
+  try {
+    after(share);
+  } catch {
+    // Outside a request scope (scripts, tests) there is nothing to defer to.
+    void share();
   }
   return result;
 };
@@ -448,3 +495,8 @@ export const fetchSectorWindowEntries = async (
   }
   return entries;
 };
+
+/** The published row a cached map was read from. */
+type PublishedMapRevision = { id: string; version: number };
+type PublishedMap = PublishedMapRevision & { map: NormalizedSectorMap };
+type PublishedMapCacheEntry = PublishedMap & { at: number };

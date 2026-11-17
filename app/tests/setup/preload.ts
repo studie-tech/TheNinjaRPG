@@ -16,6 +16,7 @@ import Link from "@/layout/Link";
 import * as toast from "@/libs/toast";
 import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
 import { invalidateRuntimeCaches } from "@/server/utils/runtimeCache";
+import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import * as userContext from "@/utils/UserContext";
 import {
   closeTestDatabase,
@@ -34,6 +35,7 @@ export const actualUseAbVariant = useAbVariant;
 // Suites seed their own players and content, so none may read another suite's cache.
 beforeEach(async () => {
   resetPvpExperienceAverageCache();
+  invalidatePublishedMapCache();
   await invalidateRuntimeCaches();
 });
 
