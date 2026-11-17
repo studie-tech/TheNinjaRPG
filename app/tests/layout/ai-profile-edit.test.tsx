@@ -424,6 +424,23 @@ describe("a player's rules for a jutsu loadout", () => {
     readOnly(player({ copySources: [{ id: "pvp", name: "PvP" }], locked: true }));
   });
 
+  it("tells the caller while the Default or Custom choice switches", () => {
+    mocks.toggling = true;
+    const onTogglingChange = vi.fn();
+    player({ onTogglingChange });
+    expect(onTogglingChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("holds Save while copied rules are still loading", () => {
+    mocks.fetchProfile.mockReturnValue(new Promise(() => undefined));
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    const saveButton = () =>
+      view.getByRole("button", { name: "Save Profile" }) as HTMLButtonElement;
+    expect(saveButton().disabled).toBe(false);
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    expect(saveButton().disabled).toBe(true);
+  });
+
   it("keeps the Default or Custom choice out of reach while the rules are locked", () => {
     const view = player({ locked: true });
     expect(view.queryByRole("button", { name: "Default" })).toBeNull();

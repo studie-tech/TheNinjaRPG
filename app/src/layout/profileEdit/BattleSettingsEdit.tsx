@@ -76,6 +76,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
   const { data: loadouts } = api.jutsu.getLoadouts.useQuery();
   const [hasUnsavedRules, setHasUnsavedRules] = useState(false);
   const [isSwitchingLoadout, setIsSwitchingLoadout] = useState(false);
+  const [isTogglingRules, setIsTogglingRules] = useState(false);
   const [tab, setTab] = useState("preferred");
   const unsavedRulesId = useId();
   const { prepareLoadoutUpdate, updateToggledAiLoadout } = useJutsuLoadoutCacheUpdate();
@@ -387,7 +388,8 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                 <JutsuLoadoutSelector
                   variant="dropdown"
                   label="Jutsu loadout"
-                  disabled={hasUnsavedRules}
+                  // A Default or Custom switch applies to the loadout active when it lands.
+                  disabled={hasUnsavedRules || isTogglingRules}
                   describedBy={hasUnsavedRules ? unsavedRulesId : undefined}
                   onSelecting={setIsSwitchingLoadout}
                   // Equipping changes the jutsu these rules can use.
@@ -421,6 +423,7 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
               ])}
               maxCustomRules={AI_PROFILE_MAX_RULES}
               onDirtyChange={setHasUnsavedRules}
+              onTogglingChange={setIsTogglingRules}
               locked={isSwitchingLoadout || isPending}
               toggleCache={{
                 prepare: prepareLoadoutUpdate,
@@ -454,7 +457,12 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={isPending || hasUnsavedRules || isSwitchingLoadout}
+                      disabled={
+                        isPending ||
+                        hasUnsavedRules ||
+                        isSwitchingLoadout ||
+                        isTogglingRules
+                      }
                     >
                       {isPending ? <Loader size={5} /> : "Reset rules"}
                     </Button>

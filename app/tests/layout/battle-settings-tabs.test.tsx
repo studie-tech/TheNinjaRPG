@@ -40,14 +40,21 @@ beforeEach(() => {
   vi.spyOn(combat, "useAutoCombatSetting").mockImplementation(() => [false, vi.fn()]);
   vi.spyOn(AiProfileEdit, "default").mockImplementation((({
     onDirtyChange,
+    onTogglingChange,
     locked,
   }: {
     onDirtyChange?: (isDirty: boolean) => void;
+    onTogglingChange?: (isToggling: boolean) => void;
     locked?: boolean;
   }) => (
-    <button type="button" onClick={() => onDirtyChange?.(true)}>
-      {locked ? "AI profile editor (locked)" : "AI profile editor"}
-    </button>
+    <>
+      <button type="button" onClick={() => onDirtyChange?.(true)}>
+        {locked ? "AI profile editor (locked)" : "AI profile editor"}
+      </button>
+      <button type="button" onClick={() => onTogglingChange?.(true)}>
+        Switch to Default
+      </button>
+    </>
   )) as never);
   vi.spyOn(loadoutCache, "useJutsuLoadoutCacheUpdate").mockReturnValue({
     prepareLoadoutUpdate: vi.fn(),
@@ -58,10 +65,12 @@ beforeEach(() => {
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(JutsuLoadoutSelector, "default").mockImplementation((({
     onSelecting,
+    disabled,
   }: {
     onSelecting?: (isSelecting: boolean) => void;
+    disabled?: boolean;
   }) => (
-    <button type="button" onClick={() => onSelecting?.(true)}>
+    <button type="button" disabled={disabled} onClick={() => onSelecting?.(true)}>
       Jutsu loadout selector
     </button>
   )) as never);
@@ -155,5 +164,19 @@ it("keeps Reset rules out of reach while the loadout switches", () => {
     view.getByRole("button", { name: "Reset rules" }) as HTMLButtonElement;
   expect(reset().disabled).toBe(false);
   fireEvent.click(view.getByText("Jutsu loadout selector"));
+  expect(reset().disabled).toBe(true);
+});
+
+it("keeps the loadout and Reset rules out of reach while the Default or Custom choice switches", () => {
+  playerWithRules("ai");
+  const view = render(<BattleSettingsEdit userId="actor" />);
+  fireEvent.mouseDown(view.getByRole("tab", { name: "AI Profile" }));
+  const selector = () =>
+    view.getByRole("button", { name: "Jutsu loadout selector" }) as HTMLButtonElement;
+  const reset = () =>
+    view.getByRole("button", { name: "Reset rules" }) as HTMLButtonElement;
+  expect(selector().disabled).toBe(false);
+  fireEvent.click(view.getByRole("button", { name: "Switch to Default" }));
+  expect(selector().disabled).toBe(true);
   expect(reset().disabled).toBe(true);
 });

@@ -71,6 +71,8 @@ interface AiProfileEditProps {
   maxCustomRules?: number;
   /** Hear whether the draft holds edits that are not saved yet. */
   onDirtyChange?: (isDirty: boolean) => void;
+  /** Hear whether a switch between the Default and Custom rules is running. */
+  onTogglingChange?: (isToggling: boolean) => void;
   /** Keep the rules read-only while the caller changes which rules these are or resets them. */
   locked?: boolean;
   /** Other saved profiles whose rules can be copied into the draft. */
@@ -256,10 +258,13 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   }, [pendingCopy, rules, profile, includeDefault, savedDraft, canEdit]);
 
   const isDirty = savedDraft !== "" && draftKey(rules, includeDefault) !== savedDraft;
-  const { onDirtyChange } = props;
+  const { onDirtyChange, onTogglingChange } = props;
   useEffect(() => {
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
+  useEffect(() => {
+    onTogglingChange?.(isToggling);
+  }, [isToggling, onTogglingChange]);
 
   const groups = getUnique(
     rules.flatMap((rule) => (rule.group ? [rule.group] : [])),
@@ -583,6 +588,8 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
         )}
         {canEdit && (props.configuration || rules.length > 0) && (
           <Button
+            // Copied rules that are still loading would land in the draft after it is saved.
+            disabled={copyingId !== null}
             onClick={() => {
               const parsed = updateAiProfileSchema.safeParse({
                 id: aiProfileId,
