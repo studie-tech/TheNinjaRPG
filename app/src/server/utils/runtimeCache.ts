@@ -196,6 +196,58 @@ export const createRuntimeCache = <Client, T>({
   };
 };
 
+/**
+ * Keyed entries in the Vercel Runtime Cache whose freshness the caller proves against
+ * the database, for content too large to share as one `createRuntimeCache` value. Each
+ * entry must carry the revision it was read at (for example an immutable row's id and
+ * version), and callers serve it only when that matches a revision they have just read,
+ * so a write needs no invalidation. Reads and writes that fail behave as misses.
+ */
+export const createRuntimeEntryCache = <T>({
+  name,
+  ttlSeconds,
+  store,
+}: {
+  /** Key prefix and Runtime Cache tag: letters, digits and dashes. */
+  name: string;
+  /** Bounds how long unread entries are kept. */
+  ttlSeconds: number;
+  /** Replaces the Runtime Cache, for tests; such caches stay out of `invalidateRuntimeCaches`. */
+  store?: RuntimeCache;
+}) => {
+  const cache = store ?? runtimeCache;
+  const tag = `${name}:entries`;
+  const entryKey = (key: string) => `${name}:${key}`;
+  const clear = () => cache.expireTag(tag).catch(() => undefined);
+  if (!store) invalidators.add(clear);
+
+  return {
+    /** The stored entries among `keys`. */
+    read: async (keys: string[]): Promise<Map<string, T>> => {
+      const values = await Promise.all(
+        keys.map((key) =>
+          cache.get(entryKey(key)).then(
+            (value) => value as T | null,
+            () => null,
+          ),
+        ),
+      );
+      const found = new Map<string, T>();
+      keys.forEach((key, index) => {
+        const value = values[index];
+        if (value) found.set(key, value);
+      });
+      return found;
+    },
+    write: (key: string, value: T): Promise<void> =>
+      cache
+        .set(entryKey(key), value, { ttl: ttlSeconds, tags: [tag] })
+        .catch(() => undefined),
+    /** Drop every entry; freshness never depends on it. */
+    clear,
+  };
+};
+
 /** Invalidate every Runtime Cache. Used by tests that seed their own content. */
 export const invalidateRuntimeCaches = async () => {
   await Promise.all([...invalidators].map((invalidate) => invalidate()));

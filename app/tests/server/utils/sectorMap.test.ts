@@ -25,9 +25,14 @@ const makeMap = (sector: number, name = "map"): NormalizedSectorMap => ({
   metadata: { importedAt: "2026-01-01T00:00:00.000Z", source: "tiled" },
 });
 
-type MapRow = { sector: number; version: number; normalizedJson: NormalizedSectorMap };
+type MapRow = {
+  id?: string;
+  sector: number;
+  version: number;
+  normalizedJson: NormalizedSectorMap;
+};
 type MapQuery = {
-  columns: { sector: true; version: true; normalizedJson?: true };
+  columns: { id: true; sector: true; version: true; normalizedJson?: true };
   where: SQL;
 };
 
@@ -37,9 +42,12 @@ const makeClient = (rows: MapRow[]) => {
     const { params } = new MySqlDialect().sqlToQuery(where);
     return rows
       .filter((row) => params.includes(row.sector))
-      .map((row) =>
-        columns.normalizedJson ? row : { sector: row.sector, version: row.version },
-      );
+      .map((row) => {
+        const id = row.id ?? `${row.sector}-${row.version}`;
+        return columns.normalizedJson
+          ? { ...row, id }
+          : { id, sector: row.sector, version: row.version };
+      });
   });
   const client = {
     query: {
@@ -65,6 +73,12 @@ describe("published sector map cache", () => {
     invalidatePublishedMapCache();
   });
 
+  /** Whether a recorded query downloaded map blobs. */
+  const readsBlob = (
+    findMany: ReturnType<typeof makeClient>["findMany"],
+    call: number,
+  ) => findMany.mock.calls.at(call)![0].columns.normalizedJson === true;
+
   it("shares the highest published version between batch and single-sector reads", async () => {
     const newest = makeMap(5, "newest");
     const { client, findMany } = makeClient([
@@ -74,7 +88,9 @@ describe("published sector map cache", () => {
     ]);
     expect((await fetchPublishedSectorMaps(client, [5, 5])).get(5)).toBe(newest);
     expect(await fetchPublishedSectorMap(client, 5)).toBe(newest);
-    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(readsBlob(findMany, 0)).toBe(false);
+    expect(readsBlob(findMany, 1)).toBe(true);
   });
 
   it("revalidates expired maps with metadata only and renews the TTL", async () => {
@@ -85,11 +101,15 @@ describe("published sector map cache", () => {
     await fetchPublishedSectorMap(client, 4);
     now += 60_000;
     expect(await fetchPublishedSectorMap(client, 4)).toBe(map);
-    expect(findMany).toHaveBeenCalledTimes(2);
-    expect(findMany.mock.calls[1]![0].columns).toEqual({ sector: true, version: true });
+    expect(findMany).toHaveBeenCalledTimes(3);
+    expect(findMany.mock.calls[2]![0].columns).toEqual({
+      id: true,
+      sector: true,
+      version: true,
+    });
     now += 59_999;
     expect((await fetchPublishedSectorMaps(client, [4])).get(4)).toBe(map);
-    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(findMany).toHaveBeenCalledTimes(3);
   });
 
   it("downloads only changed sectors and compares the highest published version", async () => {
@@ -107,9 +127,9 @@ describe("published sector map cache", () => {
     const maps = await fetchPublishedSectorMaps(client, [1, 2]);
     expect(maps.get(1)).toBe(rows[0]!.normalizedJson);
     expect(maps.get(2)).toBe(changed);
-    expect(findMany).toHaveBeenCalledTimes(3);
-    await expect(findMany.mock.results[2]!.value).resolves.toHaveLength(3);
-    const { params } = new MySqlDialect().sqlToQuery(findMany.mock.calls[2]![0].where);
+    expect(findMany).toHaveBeenCalledTimes(4);
+    await expect(findMany.mock.results[3]!.value).resolves.toHaveLength(3);
+    const { params } = new MySqlDialect().sqlToQuery(findMany.mock.calls[3]![0].where);
     expect(params).toEqual([2, "PUBLISHED"]);
   });
 
@@ -117,42 +137,87 @@ describe("published sector map cache", () => {
     const old = { sector: 8, version: 1, normalizedJson: makeMap(8, "old") };
     const rows = [old, { sector: 8, version: 2, normalizedJson: makeMap(8, "new") }];
     const { client, findMany } = makeClient(rows);
-    await fetchPublishedSectorMap(client, 8);
+    expect((await fetchPublishedSectorMap(client, 8)).name).toBe("new");
     rows.pop();
     now += 60_000;
     expect(await fetchPublishedSectorMap(client, 8)).toBe(old.normalizedJson);
     rows.pop();
     now += 60_000;
     expect((await fetchPublishedSectorMaps(client, [8])).has(8)).toBe(false);
-    expect(findMany.mock.calls.at(-1)![0].columns).toEqual({
-      sector: true,
-      version: true,
-    });
+    expect(readsBlob(findMany, -1)).toBe(false);
     await expect(fetchPublishedSectorMap(client, 8)).rejects.toThrow(
       "No published sector map",
     );
-    expect(findMany.mock.calls.at(-1)![0].columns.normalizedJson).toBe(true);
+    // An unpublished sector costs the metadata probe alone.
+    expect(readsBlob(findMany, -1)).toBe(false);
   });
 
-  it("starts cold loads and expired version probes together", async () => {
-    const { client, findMany } = makeClient([
-      { sector: 1, version: 1, normalizedJson: makeMap(1) },
-    ]);
+  it("probes cold and expired sectors together and downloads only the cold blob", async () => {
+    const rows = [{ sector: 1, version: 1, normalizedJson: makeMap(1) }];
+    const { client, findMany } = makeClient(rows);
     await fetchPublishedSectorMap(client, 1);
+    rows.push({ sector: 2, version: 1, normalizedJson: makeMap(2) });
     now += 60_000;
-    let release: (rows: MapRow[]) => void = () => {};
-    findMany.mockImplementationOnce(
-      () =>
-        new Promise<MapRow[]>((resolve) => {
-          release = resolve;
-        }),
-    );
-    const pending = fetchPublishedSectorMaps(client, [1, 2]);
+    expect((await fetchPublishedSectorMaps(client, [1, 2])).size).toBe(2);
+    expect(findMany).toHaveBeenCalledTimes(4);
+    const dialect = new MySqlDialect();
+    expect(readsBlob(findMany, 2)).toBe(false);
+    expect(dialect.sqlToQuery(findMany.mock.calls[2]![0].where).params).toEqual([
+      2,
+      1,
+      "PUBLISHED",
+    ]);
+    expect(readsBlob(findMany, 3)).toBe(true);
+    expect(dialect.sqlToQuery(findMany.mock.calls[3]![0].where).params).toEqual([
+      2,
+      "PUBLISHED",
+    ]);
+  });
+
+  it("serves a new instance from shared entries without downloading blobs", async () => {
+    const rows = [1, 2].map((sector) => ({
+      sector,
+      version: 1,
+      normalizedJson: makeMap(sector),
+    }));
+    const { client, findMany } = makeClient(rows);
+    await fetchPublishedSectorMaps(client, [1, 2]);
+    // Another instance holds no decoded maps, only the shared entries.
+    invalidatePublishedMapCache(1);
+    invalidatePublishedMapCache(2);
+    const maps = await fetchPublishedSectorMaps(client, [1, 2]);
+    expect(maps.get(1)).toEqual(rows[0]!.normalizedJson);
+    expect(maps.get(2)).toEqual(rows[1]!.normalizedJson);
     expect(findMany).toHaveBeenCalledTimes(3);
-    expect(findMany.mock.calls[1]![0].columns.normalizedJson).toBe(true);
-    expect(findMany.mock.calls[2]![0].columns.normalizedJson).toBeUndefined();
-    release([{ sector: 2, version: 1, normalizedJson: makeMap(2) }]);
-    expect((await pending).size).toBe(2);
+    expect(readsBlob(findMany, 2)).toBe(false);
+    // The served copy is now held, so the next call needs no query.
+    await fetchPublishedSectorMaps(client, [1, 2]);
+    expect(findMany).toHaveBeenCalledTimes(3);
+  });
+
+  it("never serves a shared entry for a row that is no longer the published one", async () => {
+    const old = { sector: 8, version: 1, normalizedJson: makeMap(8, "old") };
+    const rows: MapRow[] = [
+      old,
+      { sector: 8, version: 2, normalizedJson: makeMap(8, "new") },
+    ];
+    const { client, findMany } = makeClient(rows);
+    await fetchPublishedSectorMap(client, 8);
+    rows.pop();
+    invalidatePublishedMapCache(8);
+    expect(await fetchPublishedSectorMap(client, 8)).toBe(old.normalizedJson);
+    expect(readsBlob(findMany, -1)).toBe(true);
+    // A republished row with a reused version still differs by id.
+    const replacement = {
+      id: "other",
+      sector: 8,
+      version: 1,
+      normalizedJson: makeMap(8),
+    };
+    rows[0] = replacement;
+    invalidatePublishedMapCache(8);
+    expect(await fetchPublishedSectorMap(client, 8)).toBe(replacement.normalizedJson);
+    expect(readsBlob(findMany, -1)).toBe(true);
   });
 
   it("immediately invalidates a sector without evicting other sectors", async () => {
@@ -168,42 +233,65 @@ describe("published sector map cache", () => {
     expect((await fetchPublishedSectorMaps(client, [1, 2])).get(1)?.name).toBe(
       "republished",
     );
-    expect(
-      new MySqlDialect().sqlToQuery(findMany.mock.calls[1]![0].where).params,
-    ).toEqual([1, "PUBLISHED"]);
-    expect(findMany.mock.calls[1]![0].columns.normalizedJson).toBe(true);
+    const dialect = new MySqlDialect();
+    expect(dialect.sqlToQuery(findMany.mock.calls[2]![0].where).params).toEqual([
+      1,
+      "PUBLISHED",
+    ]);
+    expect(dialect.sqlToQuery(findMany.mock.calls[3]![0].where).params).toEqual([
+      1,
+      "PUBLISHED",
+    ]);
+    expect(readsBlob(findMany, 3)).toBe(true);
   });
 
   for (const stage of ["cold load", "unchanged probe", "changed load"] as const) {
     it(`does not repopulate the cache when invalidation races a ${stage}`, async () => {
-      const rows = [{ sector: 3, version: 1, normalizedJson: makeMap(3, "before") }];
+      const rows: MapRow[] = [
+        { id: "3-1", sector: 3, version: 1, normalizedJson: makeMap(3, "before") },
+      ];
       const { client, findMany } = makeClient(rows);
       if (stage !== "cold load") {
         await fetchPublishedSectorMap(client, 3);
         now += 60_000;
       }
       if (stage === "changed load") {
-        rows[0] = { sector: 3, version: 2, normalizedJson: makeMap(3, "new") };
-        findMany.mockImplementationOnce(async () => [{ sector: 3, version: 2 }]);
+        rows[0] = {
+          id: "3-2",
+          sector: 3,
+          version: 2,
+          normalizedJson: makeMap(3, "new"),
+        };
+        findMany.mockImplementationOnce(async () => [
+          { id: "3-2", sector: 3, version: 2 } as never,
+        ]);
       }
-      let release: (rows: MapRow[]) => void = () => {};
+      // The released rows stand in for whichever projection the paused query selected.
+      let release: (rows: never[]) => void = () => {};
       const { promise: started, resolve: markStarted } = deferred<void>();
       findMany.mockImplementationOnce(() => {
         markStarted();
-        return new Promise<MapRow[]>((resolve) => {
+        return new Promise<never[]>((resolve) => {
           release = resolve;
         });
       });
       const pending = fetchPublishedSectorMap(client, 3);
       await started;
       invalidatePublishedMapCache(stage === "unchanged probe" ? undefined : 3);
-      release([...rows]);
+      release([...rows] as never[]);
       await pending;
       const calls = findMany.mock.calls.length;
-      rows[0] = { sector: 3, version: 3, normalizedJson: makeMap(3, "after") };
+      rows[0] = {
+        id: "3-3",
+        sector: 3,
+        version: 3,
+        normalizedJson: makeMap(3, "after"),
+      };
       expect((await fetchPublishedSectorMap(client, 3)).name).toBe("after");
-      expect(findMany).toHaveBeenCalledTimes(calls + 1);
-      expect(findMany.mock.calls.at(-1)![0].columns.normalizedJson).toBe(true);
+      // The probe proves no decoded map survived; only then does the blob load.
+      expect(findMany).toHaveBeenCalledTimes(calls + 2);
+      expect(readsBlob(findMany, calls)).toBe(false);
+      expect(readsBlob(findMany, -1)).toBe(true);
     });
   }
 
@@ -216,12 +304,12 @@ describe("published sector map cache", () => {
     findMany.mockRejectedValueOnce(new Error("unavailable"));
     await expect(fetchPublishedSectorMap(client, 1)).rejects.toThrow("unavailable");
     await fetchPublishedSectorMap(client, 1);
-    expect(findMany).toHaveBeenCalledTimes(3);
-    expect(findMany.mock.calls[2]![0].columns.normalizedJson).toBeUndefined();
+    expect(findMany).toHaveBeenCalledTimes(4);
+    expect(readsBlob(findMany, 3)).toBe(false);
   });
 
   it("does not extend a slow version probe's snapshot beyond the TTL", async () => {
-    const row = { sector: 1, version: 1, normalizedJson: makeMap(1) };
+    const row = { id: "1-1", sector: 1, version: 1, normalizedJson: makeMap(1) };
     const { client, findMany } = makeClient([row]);
     await fetchPublishedSectorMap(client, 1);
     now += 60_000;
@@ -231,8 +319,8 @@ describe("published sector map cache", () => {
     });
     await fetchPublishedSectorMap(client, 1);
     await fetchPublishedSectorMap(client, 1);
-    expect(findMany).toHaveBeenCalledTimes(3);
-    expect(findMany.mock.calls[2]![0].columns.normalizedJson).toBeUndefined();
+    expect(findMany).toHaveBeenCalledTimes(4);
+    expect(readsBlob(findMany, 3)).toBe(false);
   });
 
   it("bounds retained entries at 200 and evicts the least recently used sector", async () => {
@@ -249,15 +337,18 @@ describe("published sector map cache", () => {
     await fetchPublishedSectorMap(client, 0); // Protect the oldest insertion by using it.
     await fetchPublishedSectorMap(client, 200);
     await fetchPublishedSectorMap(client, 0);
-    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(findMany).toHaveBeenCalledTimes(4);
+    // The evicted sector returns from its shared entry after a metadata probe.
     await fetchPublishedSectorMap(client, 1);
-    expect(findMany).toHaveBeenCalledTimes(3);
+    expect(findMany).toHaveBeenCalledTimes(5);
+    expect(readsBlob(findMany, -1)).toBe(false);
     // Retention remains bounded even when entries are all expired.
     now += 60_000;
     await fetchPublishedSectorMap(client, 0);
-    expect(findMany.mock.calls.at(-1)![0].columns.normalizedJson).toBeUndefined();
+    expect(findMany).toHaveBeenCalledTimes(6);
+    invalidatePublishedMapCache();
     await fetchPublishedSectorMap(client, 2);
-    expect(findMany.mock.calls.at(-1)![0].columns.normalizedJson).toBe(true);
+    expect(readsBlob(findMany, -1)).toBe(true);
   });
 
   it("validates single-sector IDs and skips database work for an empty batch", async () => {
@@ -269,25 +360,31 @@ describe("published sector map cache", () => {
     expect(findMany).not.toHaveBeenCalled();
   });
 
-  it("sends no normalizedJson column over the wire when an expired version is unchanged", async () => {
+  it("sends no normalizedJson column over the wire unless a blob is missing", async () => {
     const json = JSON.stringify(makeMap(4));
     const { database, statements } = planetScaleFixture((query) => {
       const hasBlob = query.includes("normalizedJson");
       return {
         fields: [
+          { name: "id", type: "VARCHAR" },
           { name: "sector", type: "INT32" },
           { name: "version", type: "INT32" },
           ...(hasBlob ? [{ name: "normalizedJson", type: "JSON" as const }] : []),
         ],
-        rows: [hasBlob ? ["4", "1", json] : ["4", "1"]],
+        rows: [hasBlob ? ["map-4", "4", "1", json] : ["map-4", "4", "1"]],
       };
     });
     const map = await fetchPublishedSectorMap(database, 4);
     now += 60_000;
     expect(await fetchPublishedSectorMap(database, 4)).toBe(map);
-    expect(statements).toHaveLength(2);
-    expect(statements[0]).toContain("normalizedJson");
-    expect(statements[1]).not.toContain("normalizedJson");
-    expect(statements[1]).toContain("PUBLISHED");
+    invalidatePublishedMapCache(4);
+    expect(await fetchPublishedSectorMap(database, 4)).toEqual(map);
+    expect(statements).toHaveLength(4);
+    expect(statements[0]).not.toContain("normalizedJson");
+    expect(statements[1]).toContain("normalizedJson");
+    for (const statement of statements.slice(2)) {
+      expect(statement).not.toContain("normalizedJson");
+      expect(statement).toContain("PUBLISHED");
+    }
   });
 });

@@ -64,29 +64,23 @@ export const findDungeonForIsStructureAssetUsed = (
     where: sql`JSON_UNQUOTE(JSON_EXTRACT(${dungeon.content}, '$.structureAssetId')) = ${assetId}`,
   });
 
-/** Normalized map, version and read timestamp retained for published-map cache checks. */
-type PublishedMapCacheEntry = { map: NormalizedSectorMap; version: number; at: number };
-
 /**
- * Build the `sectorMap` listing for `fetchPublishedSectorMaps`, selecting only
- * `sector` and `version`, using predicates on `sector` and `status`.
+ * Build the `sectorMap` listing for `fetchPublishedSectorMaps`, selecting only the
+ * `sector`, `version` and `id` of published rows.
  */
 export const listSectorMapForFetchPublishedSectorMaps = (
   client: Pick<DrizzleClient, "query">,
-  expired: Map<number, PublishedMapCacheEntry>,
+  sectors: number[],
 ) =>
   client.query.sectorMap.findMany({
-    columns: { sector: true, version: true },
-    where: and(
-      inArray(sectorMap.sector, [...expired.keys()]),
-      eq(sectorMap.status, "PUBLISHED"),
-    ),
+    columns: { id: true, sector: true, version: true },
+    where: and(inArray(sectorMap.sector, sectors), eq(sectorMap.status, "PUBLISHED")),
   });
 
 /** Build the `sectorMap` lookup for `fetchUncachedPublishedMaps`, using the configured predicates. */
 export const findSectorMapForFetchUncachedPublishedMaps = (
   client: Pick<DrizzleClient, "query">,
-  columns: { sector: true; version: true; normalizedJson: true },
+  columns: PublishedMapColumns,
   where: undefined | SQL<unknown>,
 ) =>
   client.query.sectorMap.findFirst({
@@ -98,7 +92,7 @@ export const findSectorMapForFetchUncachedPublishedMaps = (
 /** Build the `sectorMap` listing for `fetchUncachedPublishedMaps`, using the configured predicates. */
 export const listSectorMapForFetchUncachedPublishedMaps = (
   client: Pick<DrizzleClient, "query">,
-  columns: { sector: true; version: true; normalizedJson: true },
+  columns: PublishedMapColumns,
   where: undefined | SQL<unknown>,
 ) => client.query.sectorMap.findMany({ columns, where });
 
@@ -166,7 +160,7 @@ export const insertSectorMapForSaveTiledSectorMap = (
   client: Pick<DrizzleClient, "insert">,
   id: string,
   input: { sector: number; name: string; tiledJson: unknown; publish: false | true },
-  normalizedMap: import("@/libs/sector-map/types").NormalizedSectorMap,
+  normalizedMap: NormalizedSectorMap,
   status: "DRAFT" | "PUBLISHED",
   version: number,
   sourceHash: string,
@@ -222,7 +216,7 @@ export const findSectorMapForPublishSectorMap = (
 export const updateSectorMapForPublishSectorMap = (
   client: Pick<DrizzleClient, "update">,
   version: number,
-  result: { map: import("@/libs/sector-map/types").NormalizedSectorMap },
+  result: { map: NormalizedSectorMap },
   now: Date,
   ctx: { userId: string },
   input: { id: string },
@@ -321,3 +315,11 @@ export const listVillagesForSectorWindow = (
     where: (table, { inArray }) => inArray(table.sector, sectors),
     with: { structures: true },
   });
+
+/** Columns that published-map blob reads select. */
+type PublishedMapColumns = {
+  id: true;
+  sector: true;
+  version: true;
+  normalizedJson: true;
+};
