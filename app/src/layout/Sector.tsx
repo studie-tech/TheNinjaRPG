@@ -4,7 +4,6 @@ import { getMutationKey } from "@trpc/react-query";
 import type { Grid } from "honeycomb-grid";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Minimize2, Swords } from "lucide-react";
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -26,6 +25,7 @@ import { AUTO_ATTACK_SETTINGS, readAutoAttackSetting } from "@/hooks/autoAttack"
 import { useCombatEntry } from "@/hooks/combatEntry";
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
@@ -660,7 +660,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
 
   // Router for forwarding
-  const router = useRouter();
+  const router = useNavigationRouter();
 
   // Movement based on ASDQWE keys
   const onDocumentKeyDown = (event: KeyboardEvent) => {
