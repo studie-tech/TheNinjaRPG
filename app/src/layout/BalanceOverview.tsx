@@ -68,7 +68,11 @@ export const BalanceOverview = () => {
     setDownloadError("");
     try {
       await downloadArchive(Number(archiveId), (input) =>
-        utils.data.getBalanceArchivePage.fetch(input),
+        utils.data.getBalanceArchivePage.fetch(input, {
+          retry: (failureCount, error) =>
+            error.data?.code === "TOO_MANY_REQUESTS" && failureCount < 2,
+          retryDelay: 60_000,
+        }),
       );
     } catch {
       setDownloadError("The archive could not be downloaded. Please try again.");
@@ -292,6 +296,11 @@ export const BalanceOverview = () => {
               <Download className="mr-2 h-4 w-4" />
               {isDownloading ? "Downloading…" : "Download JSON"}
             </Button>
+            {isDownloading && (
+              <span role="status" className="text-muted-foreground text-sm">
+                Large archives may pause briefly for request limits.
+              </span>
+            )}
           </div>
         )}
         {downloadError && (
