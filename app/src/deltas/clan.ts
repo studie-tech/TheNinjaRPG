@@ -1,13 +1,18 @@
 import type { UserQueueState } from "@/deltas/profile";
 import { getMembershipUserPatch } from "@/deltas/social";
 import {
+  CLAN_BOOST_PERCENT_PER_LEVEL,
   CLAN_COLOR_CHANGE_REP_COST,
+  type ClanBoostType,
   STRONGHOLD_REESTABLISH_COST,
 } from "@/drizzle/constants";
 import type { Clan, GameSetting, UserData } from "@/drizzle/schema";
 import { hasEnergyQueue } from "@/libs/queue";
 
+import type { fetchClan } from "@/queries/clan";
 import type { findMembershipUserCache } from "@/queries/socialUserCache";
+import { mergeQueryChanges } from "@/utils/queryCache";
+import type { ClanDelta } from "@/validators/clan";
 import type { UserCachePatch } from "@/validators/userCache";
 
 /** Debit the clan treasury and project the confirmed stronghold type and maintenance state. */
@@ -32,14 +37,15 @@ export const getUpgradeHideoutToStrongholdUserUpdate = ({
 });
 
 /** Confirm that a clan operation changed neither profile fields nor cached balances. */
-export const getUnchangedClanUserUpdate = () => ({
+export const getUnchangedClanUserUpdate = ({ clanId }: { clanId: string }) => ({
   userDelta: {},
   userPatch: {},
+  clanDelta: { id: clanId },
 });
 
 /**
  * Debit personal reputation and credit the clan treasury by the whole donated amount.
- * Queued energy work withholds the delta.
+ * Queued energy work withholds the profile delta; the treasury credit stays known.
  */
 export const getClanDonationUserUpdate = ({
   user,
@@ -56,6 +62,7 @@ export const getClanDonationUserUpdate = ({
         reputationPoints: -repsCost,
         clan: { id: fetchedClanId, repTreasury: repsCost },
       },
+  clanDelta: { id: fetchedClanId, repTreasury: repsCost },
 });
 
 /**
@@ -216,11 +223,12 @@ export const getConvertPointsToRyoUserUpdate = ({
   ryo: number;
 }) => ({
   userDelta: { clan: { id: fetchedClanId, points: -inputPoints, bank: ryo } },
+  clanDelta: { id: fetchedClanId, points: -inputPoints, bank: ryo },
 });
 
 /**
- * Transfer personal ryo into the clan treasury unless the opening profile requires
- * reconciliation.
+ * Transfer personal ryo into the clan treasury. The profile delta is withheld when the
+ * opening profile requires reconciliation; the treasury credit stays known.
  */
 export const getToBankUserUpdate = ({
   needsUserRefresh,
@@ -234,7 +242,36 @@ export const getToBankUserUpdate = ({
   userDelta: needsUserRefresh
     ? undefined
     : { money: -inputAmount, clan: { id: fetchedClanId, bank: inputAmount } },
+  clanDelta: { id: fetchedClanId, bank: inputAmount },
 });
+
+/**
+ * Debit the boost cost from the clan bank and raise the purchased boost by one level. The
+ * write matched the boost value it read, so the increment is exact.
+ */
+export const getPurchaseBoostClanUpdate = ({
+  clanId,
+  boostType,
+  cost,
+}: {
+  clanId: string;
+  boostType: ClanBoostType;
+  cost: number;
+}): { clanDelta: ClanDelta } => ({
+  clanDelta: { id: clanId, bank: -cost, [boostType]: CLAN_BOOST_PERCENT_PER_LEVEL },
+});
+
+/**
+ * Apply a confirmed clan delta to a cached `clan.get` result. Return undefined when the
+ * cache holds no clan or a different one, so the query is fetched again.
+ */
+export const applyClanDelta = (
+  current: CachedClan | null | undefined,
+  delta: ClanDelta,
+): CachedClan | undefined => {
+  if (!current) return undefined;
+  return mergeQueryChanges(current, {}, delta);
+};
 
 /** Project the caller's confirmed admission to a clan battle queue. */
 export const getJoinClanBattleUserUpdate = () => ({
@@ -304,3 +341,6 @@ export const getInstantJoinAndLeadUserUpdate = ({
           settings,
         ),
 });
+
+/** The clan row and relations that `clan.get` caches. */
+type CachedClan = NonNullable<Awaited<ReturnType<typeof fetchClan>>>;

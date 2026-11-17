@@ -1,11 +1,34 @@
 import { z } from "zod";
-import { CLAN_ASSASSIN_SLOTS } from "@/drizzle/constants";
+import {
+  CLAN_ASSASSIN_SLOTS,
+  type ClanBoostType,
+  ClanBoostTypes,
+} from "@/drizzle/constants";
 import type { Clan } from "@/drizzle/schema";
 import {
   createReservedNameField,
   looseFactionNameField,
   RESERVED_FACTION_NAMES,
 } from "@/validators/reservedName";
+
+/** Optional numeric change for each purchasable clan boost percentage. */
+const clanBoostDeltaShape = Object.fromEntries(
+  ClanBoostTypes.map((type) => [type, z.number().optional()]),
+) as Record<ClanBoostType, z.ZodOptional<z.ZodNumber>>;
+
+/**
+ * Numeric changes a guarded clan write committed to one clan row, applied on top of the
+ * cached `clan.get` result. The id asserts that the cached clan is the one that changed.
+ */
+export const clanDeltaSchema = z.object({
+  id: z.string(),
+  bank: z.number().optional(),
+  points: z.number().optional(),
+  repTreasury: z.number().optional(),
+  ...clanBoostDeltaShape,
+});
+
+export type ClanDelta = z.infer<typeof clanDeltaSchema>;
 
 /** Whole, positive points within the signed SQL integer range stored by the clan. */
 export const clanPointConversionSchema = z.object({

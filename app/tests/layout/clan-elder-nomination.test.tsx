@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
 import * as SelectModule from "@/components/ui/select";
 import * as navigation from "@/hooks/navigation";
+import * as clanCache from "@/hooks/useClanCacheUpdate";
 import * as AvatarImage from "@/layout/Avatar";
 import * as ContentBox from "@/layout/ContentBox";
 import { ClanInfo } from "@/layout/clan/ClanInfo";
@@ -84,6 +85,10 @@ beforeEach(() => {
       },
     ),
   });
+  vi.spyOn(clanCache, "useClanCacheUpdate").mockReturnValue({
+    prepareClanUpdate: vi.fn(),
+    updateClan: vi.fn(),
+  } as never);
   vi.spyOn(navigation, "useNavigationRouter").mockImplementation(
     () => ({ push: vi.fn() }) as never,
   );

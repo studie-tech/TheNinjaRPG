@@ -16,6 +16,7 @@ import {
   getLeaveClanBattleUserUpdate,
   getLeaveClanUserUpdate,
   getPromoteMemberUserUpdate,
+  getPurchaseBoostClanUpdate,
   getToBankUserUpdate,
   getUnchangedClanUserUpdate,
   getUpgradeHideoutToStrongholdUserUpdate,
@@ -151,6 +152,7 @@ import {
   checkClanLeadership,
   checkCoLeader,
   clanCreateSchema,
+  clanDeltaSchema,
   clanPointConversionSchema,
   factionColorEditSchema,
   factionEditSchema,
@@ -312,7 +314,7 @@ export const clanRouter = createTRPCRouter({
         clanId: z.string(),
       }),
     )
-    .output(userDeltaResponseSchema)
+    .output(userDeltaResponseSchema.extend({ clanDelta: clanDeltaSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -339,7 +341,7 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message: `${user.username} donated 0 reputation points to faction`,
-          ...getUnchangedClanUserUpdate(),
+          ...getUnchangedClanUserUpdate({ clanId: fetchedClan.id }),
         };
       }
       // Mutate
@@ -1144,7 +1146,7 @@ export const clanRouter = createTRPCRouter({
   convertPointsToRyo: protectedProcedure
     .meta({ mcp: { description: "Convert clan points into clan bank ryo" } })
     .input(clanPointConversionSchema)
-    .output(userDeltaResponseSchema)
+    .output(userDeltaResponseSchema.extend({ clanDelta: clanDeltaSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       const [user, fetchedClan] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -1182,7 +1184,7 @@ export const clanRouter = createTRPCRouter({
   toBank: protectedProcedure
     .meta({ mcp: { description: "Deposit ryo to clan bank" } })
     .input(clanBankDepositSchema)
-    .output(userDeltaResponseSchema)
+    .output(userDeltaResponseSchema.extend({ clanDelta: clanDeltaSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       const [user, fetchedClan] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -1197,7 +1199,7 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message: "Successfully deposited 0 ryo",
-          ...getUnchangedClanUserUpdate(),
+          ...getUnchangedClanUserUpdate({ clanId: fetchedClan.id }),
         };
       }
       const result = await executeResultForToBank(ctx.drizzle, input, ctx);
@@ -1219,7 +1221,7 @@ export const clanRouter = createTRPCRouter({
   purchaseBoost: protectedProcedure
     .meta({ mcp: { description: "Purchase clan stat boost" } })
     .input(z.object({ clanId: z.string(), boostType: clanBoostTypeSchema }))
-    .output(baseServerResponse)
+    .output(baseServerResponse.extend({ clanDelta: clanDeltaSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       const config = CLAN_BOOST_CONFIG[input.boostType];
       // Query
@@ -1264,7 +1266,15 @@ export const clanRouter = createTRPCRouter({
           `The ${groupLabel} balance or boost changed; refresh and try again`,
         );
       }
-      return { success: true, message: `${config.label} purchased` };
+      return {
+        success: true,
+        message: `${config.label} purchased`,
+        ...getPurchaseBoostClanUpdate({
+          clanId: clanData.id,
+          boostType: input.boostType,
+          cost,
+        }),
+      };
     }),
   nominateElder: protectedProcedure
     .meta({

@@ -96,7 +96,7 @@ export default function Bank() {
   });
 
   // Mutations
-  // Deposits and withdrawals return both balances and clear their own form
+  // Deposits and withdrawals return their balance delta and clear their own form
   const moveMoneyOptions = (form: typeof toBankForm) => ({
     onMutate: prepareUserUpdate,
     onSuccess: async (
@@ -105,14 +105,8 @@ export default function Bank() {
       revision: number | undefined,
     ) => {
       showMutationToast(data);
-      if (data.success && data.data) {
-        await updateUser(
-          {
-            bank: data.data.bank,
-            money: data.data.money,
-          },
-          { revision },
-        );
+      if (data.success) {
+        await updateUser(data, { revision });
         form.reset();
       }
     },
@@ -128,13 +122,8 @@ export default function Bank() {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
-      if (data.success && data.data) {
-        await updateUser(
-          {
-            bank: data.data.bank,
-          },
-          { revision },
-        );
+      if (data.success) {
+        await updateUser(data, { revision });
         toUserForm.reset();
         setPendingTransfer(null);
       }

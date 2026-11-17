@@ -105,7 +105,7 @@ describe("bank transfers", () => {
     }
   });
 
-  it("applies the returned balances and clears only the form that moved money", async () => {
+  it("applies the returned balance deltas and clears only the form that moved money", async () => {
     renderPage(<Bank />);
     const toBank = screen.getByPlaceholderText("Transfer to bank") as HTMLInputElement;
     const toPocket = screen.getByPlaceholderText(
@@ -121,38 +121,27 @@ describe("bank transfers", () => {
     for (const name of ["toBank", "toPocket", "transfer"]) {
       expect(captured[name]?.onMutate).toBe(prepareUserUpdate);
     }
+    const deposit = { success: true, message: "ok", userDelta: { money: -2, bank: 2 } };
+    const withdrawal = {
+      success: true,
+      message: "ok",
+      userDelta: { money: 5, bank: -5 },
+    };
+    const sent = { success: true, message: "ok", userDelta: { bank: -8 } };
 
     typeAll();
-    await act(() =>
-      captured.toBank!.onSuccess(
-        { success: true, message: "ok", data: { bank: 1, money: 2 } },
-        {},
-        3,
-      ),
-    );
+    await act(() => captured.toBank!.onSuccess(deposit, {}, 3));
     expect([toBank.value, toPocket.value, toUser.value]).toEqual(["", "25", "25"]);
     typeAll();
-    await act(() =>
-      captured.toPocket!.onSuccess(
-        { success: true, message: "ok", data: { bank: 4, money: 5 } },
-        {},
-        6,
-      ),
-    );
+    await act(() => captured.toPocket!.onSuccess(withdrawal, {}, 6));
     expect([toBank.value, toPocket.value, toUser.value]).toEqual(["25", "", "25"]);
     typeAll();
-    await act(() =>
-      captured.transfer!.onSuccess(
-        { success: true, message: "ok", data: { bank: 8 } },
-        {},
-        9,
-      ),
-    );
+    await act(() => captured.transfer!.onSuccess(sent, {}, 9));
     expect([toBank.value, toPocket.value, toUser.value]).toEqual(["25", "25", ""]);
     expect(updateUser.mock.calls).toEqual([
-      [{ bank: 1, money: 2 }, { revision: 3 }],
-      [{ bank: 4, money: 5 }, { revision: 6 }],
-      [{ bank: 8 }, { revision: 9 }],
+      [deposit, { revision: 3 }],
+      [withdrawal, { revision: 6 }],
+      [sent, { revision: 9 }],
     ]);
 
     typeAll();

@@ -24,14 +24,13 @@ import { missingUserMessage } from "@/server/utils/sentry";
 import { getBankInterestDateRange } from "@/utils/time";
 
 /**
- * Post-CAS pocket/bank read. Concurrent grants can change either column after
- * the increment, so callers cannot derive balances from the pre-update snapshot.
- * Only these two columns are returned to the UI.
+ * Read the balances, name and bank access state that pocket/bank moves and transfers
+ * check before their guarded writes.
  */
-export const fetchUserBalances = async (client: DrizzleClient, userId: string) => {
+export const fetchBankAccount = async (client: DrizzleClient, userId: string) => {
   const user = await client.query.userData.findFirst({
     where: eq(userData.userId, userId),
-    columns: { money: true, bank: true },
+    columns: { username: true, money: true, bank: true, isBanned: true, status: true },
   });
   if (!user) {
     throw serverError("NOT_FOUND", missingUserMessage(userId));
