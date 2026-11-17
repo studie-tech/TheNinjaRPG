@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffects";
 import { getEffectMagnitude, getEffectPower } from "@/libs/combat/power";
 import { invertPower } from "@/libs/combat/tags";
 import type { GroundEffect } from "@/libs/combat/types";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { makeEffect } from "../setup/combat";
 
 const userId = "holder";
@@ -19,12 +20,14 @@ const storedCurse = (rounds = 2, damageBonusPercent = 70) =>
   );
 
 beforeEach(() => {
+  installBrowserGlobals();
   window.localStorage.clear();
 });
 
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  restoreBrowserGlobals();
 });
 
 describe("combat active effects", () => {
@@ -161,5 +164,70 @@ describe("combat active effects", () => {
       <VisualizeEffects effects={[expired, settled]} userId={userId} />,
     );
     expect(view.queryByText(/Configured damage bonus:/)).toBeNull();
+  });
+
+  // Kyrenjin, 16 Nov: a 40% Reflect jutsu over 8% Reflect from gear.
+  const gearReflect = () =>
+    makeEffect(
+      "reflect",
+      { power: 8, rounds: 3, calculation: "percentage" },
+      { ...runtime, id: "gear-reflect", fromType: "accessory", isNew: false },
+    );
+  const jutsuReflect = () =>
+    makeEffect(
+      "reflect",
+      { power: 30, powerPerLevel: 0.4, rounds: 2, calculation: "percentage" },
+      { ...runtime, id: "jutsu-reflect", level: 25 },
+    );
+
+  it("adds an active Reflect jutsu to Reflect from gear", () => {
+    const view = render(
+      <VisualizeEffects effects={[gearReflect(), jutsuReflect()]} userId={userId} />,
+    );
+    expect(view.getByText("Reflect +48% ↻ 3")).toBeTruthy();
+  });
+
+  it("says which effects the source filter hides and can show them again", () => {
+    window.localStorage.setItem("ve_include_jutsu", "false");
+    const view = render(
+      <VisualizeEffects effects={[gearReflect(), jutsuReflect()]} userId={userId} />,
+    );
+    expect(view.getByText("Reflect +8% ↻ 3")).toBeTruthy();
+    expect(view.getByText(/1 effect hidden by the Jutsu filter/)).toBeTruthy();
+    fireEvent.click(view.getByText("Show all"));
+    expect(view.getByText("Reflect +48% ↻ 3")).toBeTruthy();
+    expect(view.queryByText(/hidden by the/)).toBeNull();
+  });
+
+  it("lists active effects that have no dedicated section", () => {
+    const effects = [
+      makeEffect(
+        "increasepotency",
+        { power: 20, rounds: 2, affectedTag: "reflect" },
+        { ...runtime, id: "potency" },
+      ),
+      makeEffect(
+        "decreasepoolcost",
+        { power: 10, calculation: "percentage" },
+        { ...runtime, id: "poolcost", fromType: "bloodline" },
+      ),
+      makeEffect("visual", { rounds: 2 }, { ...runtime, id: "visual" }),
+    ];
+    const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+    expect(view.getByText("Other Effects")).toBeTruthy();
+    expect(view.getByText("Potency (Reflect) +20 ↻ 2")).toBeTruthy();
+    expect(view.getByText(/^Pool Cost -10%/)).toBeTruthy();
+    expect(view.queryByText(/^Visual/)).toBeNull();
+  });
+
+  it("keeps percentage heal modifiers under Heal Given only", () => {
+    const effect = makeEffect(
+      "increaseheal",
+      { power: 20, rounds: 2, calculation: "percentage" },
+      { ...runtime, id: "heal-mod" },
+    );
+    const view = render(<VisualizeEffects effects={[effect]} userId={userId} />);
+    expect(view.getByText("Heal Given")).toBeTruthy();
+    expect(view.queryByText("Other Effects")).toBeNull();
   });
 });

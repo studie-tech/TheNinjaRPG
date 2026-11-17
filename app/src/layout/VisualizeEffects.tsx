@@ -40,7 +40,29 @@ type CollapsedEffect = {
   rounds: number[];
   sealed: boolean;
   blocks?: string; // For immunity effects
+  detail?: string; // Keeps potency for different tags apart
 };
+
+/** Tags that only drive visuals, actions or one-off placement, so they have no lasting row. */
+const UNLISTED_TYPES = new Set([
+  "visual",
+  "injectjutsus",
+  "activatesagemode",
+  "move",
+  "clone",
+  "summon",
+  "barrier",
+  "flee",
+]);
+
+const SOURCE_FILTERS = [
+  { id: "jutsu", label: "Jutsu" },
+  { id: "armor", label: "Armor" },
+  { id: "item", label: "Item" },
+  { id: "bloodline", label: "Bloodline" },
+  { id: "village", label: "Village" },
+  { id: "skill", label: "Skill" },
+] as const;
 
 interface VisualizeEffectsProps {
   effects: UserEffect[];
@@ -102,6 +124,27 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
   // Filter effects before processing
   const filteredEffects = effects.filter((e) => includeEffect(e.fromType));
+  // Effects on this character that the source filter currently hides
+  const hiddenEffects = effects.filter(
+    (e) =>
+      !includeEffect(e.fromType) &&
+      e.targetId === userId &&
+      isEffectActive(e) &&
+      !UNLISTED_TYPES.has(e.type),
+  );
+  const sourceToggles = {
+    jutsu: [includeJutsu, setIncludeJutsu],
+    armor: [includeArmor, setIncludeArmor],
+    item: [includeItem, setIncludeItem],
+    bloodline: [includeBloodline, setIncludeBloodline],
+    village: [includeVillage, setIncludeVillage],
+    skill: [includeSkill, setIncludeSkill],
+  } as const;
+  const hiddenSources = SOURCE_FILTERS.filter(({ id }) => !sourceToggles[id][0]);
+  const showAllSources = () =>
+    Object.values(sourceToggles).forEach(([checked, set]) => {
+      if (!checked) set(true);
+    });
 
   // Get sealing effects among the filtered ones (used for strike-through calculation)
   const sealEffects = filteredEffects.filter((e) => e.type === "seal" && !e.isNew);
@@ -152,6 +195,10 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         value = getEffectMagnitude(val) * sign;
         if (val.type === "diffuse") value = Math.min(DIFFUSE_MAX_PERCENTAGE, value);
       }
+      const detail =
+        "affectedTag" in val && typeof val.affectedTag === "string"
+          ? val.affectedTag
+          : undefined;
       cats.forEach((cat) => {
         const valBlocks = "blocks" in val ? (val.blocks as string) : undefined;
         const found = acc.find(
@@ -160,7 +207,8 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
             e.calculation === val.calculation &&
             e.category === cat &&
             e.sealed === isSealed &&
-            e.blocks === valBlocks,
+            e.blocks === valBlocks &&
+            e.detail === detail,
         );
         if (found) {
           // Diffuse uses the strongest active percentage rather than adding effects.
@@ -180,6 +228,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
             rounds: val.rounds ? [val.rounds] : [],
             sealed: isSealed,
             blocks: valBlocks,
+            detail,
           });
         }
       });
@@ -318,6 +367,23 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const damageEffects = collapsedEffects.filter(
     (e) => e.type === "damage" || e.type === "wound",
   );
+  // Everything else still active (potency, pool cost, aggro, regeneration, ...)
+  const listedTypes = new Set([
+    ...STATUS_TYPES,
+    "damagegiven",
+    "damagetaken",
+    "stat",
+    "mastery",
+    "damage",
+    "wound",
+  ]);
+  const otherEffects = collapsedEffects.filter(
+    (e) =>
+      !listedTypes.has(e.type) &&
+      !UNLISTED_TYPES.has(e.type) &&
+      // Percentage heal modifiers are summarized under Heal Given
+      !(e.type === "heal" && e.upDownEffect && e.calculation === "percentage"),
+  );
 
   const statusLabel: Record<string, string> = {
     reflect: "Reflect",
@@ -366,6 +432,45 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     return statusLabel[e.type] || e.type;
   };
 
+  const otherLabel: Record<string, string> = {
+    aggro: "Aggro",
+    poolcost: "Pool Cost",
+    potency: "Potency",
+    regeneration: "Regeneration",
+    heal: "Heal",
+    pierce: "Pierce",
+    consume: "Consume",
+    elementaldamage: "Elemental Damage",
+    weakness: "Weakness",
+    siphon: "Siphon",
+    vamp: "Vamp",
+    mirror: "Mirror",
+    copy: "Copy",
+    rob: "Rob",
+    onehitkill: "One-Hit Kill",
+    jutsuslots: "Jutsu Slots",
+  };
+  const getOtherLabel = (e: CollapsedEffect) => {
+    const label =
+      otherLabel[e.type] ?? `${e.type.charAt(0).toUpperCase()}${e.type.slice(1)}`;
+    if (e.type === "potency" && e.detail && e.detail !== "all") {
+      return `${label} (${statusLabel[e.detail] ?? e.detail})`;
+    }
+    return label;
+  };
+
+  const otherVisuals = otherEffects.map((e) => (
+    <div
+      key={`${e.type}-${e.category}-${e.calculation}-${e.detail || ""}`}
+      className="flex flex-row items-center gap-2 text-xs"
+    >
+      <ElementImage element={e.category} className="h-6 w-6 shrink-0" />
+      <div
+        className={cn(e.sealed && "line-through")}
+      >{`${getOtherLabel(e)} ${valueTxt(e)} ${roundsTxt(e)}`}</div>
+    </div>
+  ));
+
   const statusVisuals = statusEffects.map((e) => (
     <div
       key={`${e.type}-${e.category}-${e.blocks || ""}`}
@@ -412,60 +517,46 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
       {effects.length > 0 && (
         <Popover>
           <PopoverTrigger asChild>
-            <Filter className="absolute top-0 right-0 h-5 w-5 hover:cursor-pointer hover:text-orange-500" />
+            <Filter
+              aria-label="Filter effects by source"
+              className={cn(
+                "absolute top-0 right-0 h-5 w-5 hover:cursor-pointer hover:text-orange-500",
+                hiddenSources.length > 0 && "text-orange-500",
+              )}
+            />
           </PopoverTrigger>
           <PopoverContent align="end" className="w-max p-2 text-xs">
             <div className="flex flex-col gap-2">
-              {[
-                {
-                  id: "jutsu",
-                  label: "Jutsu",
-                  checked: includeJutsu,
-                  onChange: setIncludeJutsu,
-                },
-                {
-                  id: "armor",
-                  label: "Armor",
-                  checked: includeArmor,
-                  onChange: setIncludeArmor,
-                },
-                {
-                  id: "item",
-                  label: "Item",
-                  checked: includeItem,
-                  onChange: setIncludeItem,
-                },
-                {
-                  id: "bloodline",
-                  label: "Bloodline",
-                  checked: includeBloodline,
-                  onChange: setIncludeBloodline,
-                },
-                {
-                  id: "village",
-                  label: "Village",
-                  checked: includeVillage,
-                  onChange: setIncludeVillage,
-                },
-                {
-                  id: "skill",
-                  label: "Skill",
-                  checked: includeSkill,
-                  onChange: setIncludeSkill,
-                },
-              ].map(({ id, label, checked, onChange }) => (
-                <div key={id} className="flex items-center gap-2">
-                  <Switch
-                    id={`ve-toggle-${id}`}
-                    checked={checked}
-                    onCheckedChange={onChange}
-                  />
-                  <label htmlFor={`ve-toggle-${id}`}>{label}</label>
-                </div>
-              ))}
+              {SOURCE_FILTERS.map(({ id, label }) => {
+                const [checked, onChange] = sourceToggles[id];
+                return (
+                  <div key={id} className="flex items-center gap-2">
+                    <Switch
+                      id={`ve-toggle-${id}`}
+                      checked={checked}
+                      onCheckedChange={onChange}
+                    />
+                    <label htmlFor={`ve-toggle-${id}`}>{label}</label>
+                  </div>
+                );
+              })}
             </div>
           </PopoverContent>
         </Popover>
+      )}
+
+      {hiddenEffects.length > 0 && (
+        <div className="pr-6 text-orange-500 text-xs">
+          {hiddenEffects.length} {hiddenEffects.length === 1 ? "effect" : "effects"}{" "}
+          hidden by the {hiddenSources.map((s) => s.label).join(", ")} filter.{" "}
+          <button
+            type="button"
+            className="underline hover:cursor-pointer"
+            onClick={showAllSources}
+          >
+            Show all
+          </button>
+        </div>
       )}
 
       {statusVisuals.length > 0 && (
@@ -553,6 +644,13 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           <div className="grid grid-cols-2 gap-1">
             {damageEffects.map(renderCompact)}
           </div>
+        </div>
+      )}
+
+      {otherVisuals.length > 0 && (
+        <div>
+          <div className="mb-1 font-semibold">Other Effects</div>
+          <div className="flex flex-col gap-1">{otherVisuals}</div>
         </div>
       )}
     </div>
