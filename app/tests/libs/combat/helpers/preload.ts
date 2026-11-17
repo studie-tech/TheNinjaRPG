@@ -13,6 +13,7 @@ import {
 import { refreshMasteries } from "@/libs/combat/mastery";
 import type {
   CombatQueryUser,
+  CombatQueryUserItem,
   CombatQueryUserJutsu,
   CompleteBattle,
 } from "@/libs/combat/types";
@@ -177,7 +178,7 @@ export const makeInitiationUser = (
     status: "AWAKE",
     ...overrides,
   }),
-  items: [],
+  items: [] as CombatQueryUserItem[],
   jutsus: [] as CombatQueryUserJutsu[],
   userSkills: [],
   queue: [],

@@ -211,6 +211,12 @@ describe("owned pets in combat", () => {
     owner.spriteAppearance = appearance;
     owner.spriteBaseAppearance = appearance;
     owner.spriteEquipment = {};
+    owner.spriteAction = {
+      id: "owner-swing",
+      animation: "slash",
+      longitude: 0,
+      latitude: 0,
+    };
     add(battle);
     const pet = battle.usersState.find((user) => user.petId)!;
     expect(pet.spriteAppearance).toBeUndefined();

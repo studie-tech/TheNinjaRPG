@@ -6,6 +6,8 @@ import {
   type Jutsu,
   type SkillTree,
   skillTree,
+  type UserItem,
+  userItem,
   userJutsu,
 } from "@/drizzle/schema";
 import { availableUserActions, userItemToAction } from "@/libs/combat/actions";
@@ -65,6 +67,7 @@ describe("village duty combat isolation", () => {
         // A drawn weapon, so the copy's gear can be redrawn when it breaks.
         items: [
           {
+            ...(tableDefaults(userItem) as UserItem),
             ...makeBattleUserItem({
               id: "owned-blade",
               itemId: "blade",
@@ -79,7 +82,7 @@ describe("village duty combat isolation", () => {
               lpcProfile: "lpc-blade",
             }),
           },
-        ] as never[],
+        ],
       };
       const before = structuredClone(defender);
       const fake = fakeInitiationClient([
