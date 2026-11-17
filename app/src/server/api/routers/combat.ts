@@ -4435,7 +4435,10 @@ export const processUsersForBattle = async (
 
     summonDependencies.set(inputUser.userId, dependencies);
     // Capture visual inputs during initiation/loadout processing, never during performAction.
-    if (!inputUser.isAi && !user.isMasked && user.username !== "ANBU Member") {
+    // An unmasked patrol copy wears its player's look, so its gear is redrawn like theirs.
+    const wearsOwnLook =
+      !inputUser.isAi || (!!inputUser.isVillageDutyCopy && !inputUser.anbuId);
+    if (wearsOwnLook && !user.isMasked && user.username !== "ANBU Member") {
       user.spriteBaseAppearance ??= resolveSpriteAppearance({
         ...inputUser,
         items: [],

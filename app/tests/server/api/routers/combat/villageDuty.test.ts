@@ -50,10 +50,18 @@ describe("village duty combat isolation", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());
-  it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
-    "admits only the attacker for %s and never publishes a battle to the owner",
-    async (battleType) => {
-      const defender = { ...owner(), joinedVillageAt: new Date("2026-01-01") };
+  it.each([
+    ["VILLAGE_PROTECTOR", false],
+    ["SHRINE_WAR", false],
+    ["VILLAGE_PROTECTOR", true],
+  ] as const)(
+    "admits only the attacker for %s (masked %p) and never publishes a battle to the owner",
+    async (battleType, masked) => {
+      const defender = {
+        ...owner(),
+        joinedVillageAt: new Date("2026-01-01"),
+        ...(masked ? { anbuId: "squad" } : {}),
+      };
       const before = structuredClone(defender);
       const fake = fakeInitiationClient([
         makeInitiationUser({ userId: "attacker", villageId: "enemy" }),
@@ -95,6 +103,10 @@ describe("village duty combat isolation", () => {
       expect(copy?.userId).not.toBe("owner");
       expect(copy?.curHealth).toBe(copy?.maxHealth);
       expect(copy?.spriteAppearance).toBeDefined();
+      // An unmasked copy redraws its gear when it breaks, as players do; a masked one keeps
+      // its ANBU uniform.
+      expect(copy?.spriteBaseAppearance !== undefined).toBe(!masked);
+      expect(copy?.spriteEquipment !== undefined).toBe(!masked);
       expect(predicates.join()).not.toContain('"owner"');
       expect(Pusher.prototype.trigger).not.toHaveBeenCalledWith(
         "owner",
