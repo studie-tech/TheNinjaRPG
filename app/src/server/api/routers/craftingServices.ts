@@ -380,10 +380,13 @@ export const craftingServiceProcedures = {
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [open, updated] = await Promise.all([
-        findOpenServiceRequests(ctx.drizzle, ctx.userId),
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-      ]);
+      const updated =
+        input.action === "ACCEPT"
+          ? await fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId })
+          : undefined;
+      const open = updated?.user
+        ? [...updated.user.serviceRequests, ...updated.user.outgoingServiceRequests]
+        : await findOpenServiceRequests(ctx.drizzle, ctx.userId);
       const request = open.find((row) => row.id === input.requestId);
       if (request?.status !== "PENDING" || request.service === "REPAIR")
         return errorResponse("This request has already been handled");
@@ -398,8 +401,8 @@ export const craftingServiceProcedures = {
           success: await refundCraftingService(ctx.drizzle, request),
           message: "Request refunded",
         };
+      if (!updated?.user) return errorResponse("User not found");
       const initialUser = updated.user;
-      if (!initialUser) return errorResponse("User not found");
       if (initialUser.isBanned) return errorResponse("You are banned");
       const readiness = prepareActionReadiness(initialUser, updated.settings);
       if (readiness.error) return errorResponse(readiness.error);

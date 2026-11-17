@@ -247,6 +247,64 @@ describeWithDatabase("crafting services escrow and delivery", () => {
       }),
     ).toHaveLength(2);
   });
+  it("accepts from the hydrated receipt relations without rediscovering open receipts", async () => {
+    await submit();
+    const db = await getTestDatabase();
+    const request = await receipt();
+    const observed = overrideQuery(db, "craftingServiceRequest", {
+      findMany: () => {
+        throw new Error("Acceptance must use its account snapshot receipts");
+      },
+    });
+    expect(
+      await callerForDatabase(
+        occupationRouter,
+        "crafter",
+        observed,
+      ).respondToServiceRequest({ requestId: request.id, action: "ACCEPT" }),
+    ).toMatchObject({ success: true });
+    expect((await receipt()).status).toBe("ACTIVE");
+  });
+  it("rejects accepting a due receipt after a competing reader delivers it", async () => {
+    await submit();
+    await accept();
+    const request = await due();
+    const db = await getTestDatabase();
+    const before = await requireUser("crafter");
+    let delivered = false;
+    const observed = overrideQuery(db, "userData", {
+      findFirst: async (read, ...args) => {
+        const row = await read(...args);
+        if (!delivered && args[0]?.with?.queue) {
+          delivered = true;
+          expect(await completeCraftingService(db, request)).toBe(true);
+        }
+        return row;
+      },
+    });
+    expect(
+      await callerForDatabase(
+        occupationRouter,
+        "crafter",
+        observed,
+      ).respondToServiceRequest({ requestId: request.id, action: "ACCEPT" }),
+    ).toMatchObject({
+      success: false,
+      message: "This request has already been handled",
+    });
+    expect(delivered).toBe(true);
+    expect((await requireUser("crafter")).craftingExperience).toBe(
+      before.craftingExperience,
+    );
+    expect((await requireUser("crafter")).money).toBe(150);
+    expect(
+      (
+        await db.query.craftingServiceRequest.findFirst({
+          where: eq(craftingServiceRequest.id, request.id),
+        })
+      )?.status,
+    ).toBe("COMPLETED");
+  });
   it("atomically claims both participants and progression once, rejecting stale identities and snapshots", async () => {
     await submit();
     const db = await getTestDatabase();
@@ -401,18 +459,24 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     ).toBe(1);
   });
   it.each(["CANCEL", "DECLINE"] as const)(
-    "allows a banned actor to %s pending escrow",
+    "allows a banned actor to %s pending escrow without account hydration",
     async (action) => {
       await submit("IMBUE");
       const db = await getTestDatabase();
       const request = await receipt();
       await db.update(userData).set({ isBanned: true });
       const actor = action === "CANCEL" ? "requester" : "crafter";
+      const observed = overrideQuery(db, "userData", {
+        findFirst: () => {
+          throw new Error("Refunds must not hydrate the actor");
+        },
+      });
       expect(
-        await (await callerFor(occupationRouter, actor)).respondToServiceRequest({
-          requestId: request.id,
-          action,
-        }),
+        await callerForDatabase(
+          occupationRouter,
+          actor,
+          observed,
+        ).respondToServiceRequest({ requestId: request.id, action }),
       ).toMatchObject({ success: true });
       expect((await requireUser("requester")).money).toBe(1000);
       expect(
@@ -429,6 +493,97 @@ describeWithDatabase("crafting services escrow and delivery", () => {
           })
         ).reduce((sum, row) => sum + row.quantity, 0),
       ).toBe(1);
+    },
+  );
+  it.each(["CANCEL", "DECLINE"] as const)(
+    "%s defers unrelated due delivery until profile reconciliation",
+    async (action) => {
+      await submit();
+      const db = await getTestDatabase();
+      const request = await receipt();
+      await db.insert(craftingServiceRequest).values({
+        ...request,
+        id: "due-neighbor",
+        status: "ACTIVE",
+        finishesAt: new Date(Date.now() - 1000),
+        fee: 0,
+        materials: [],
+      });
+      const actor = action === "CANCEL" ? "requester" : "crafter";
+      expect(
+        await (await callerFor(occupationRouter, actor)).respondToServiceRequest({
+          requestId: request.id,
+          action,
+        }),
+      ).toMatchObject({ success: true });
+      expect((await receipt()).status).toBe("ACTIVE");
+      expect((await requireUser("requester")).money).toBe(1000);
+      await (await callerFor(profileRouter, actor)).getUser();
+      expect(await findOpenServiceRequests(db, actor)).toHaveLength(0);
+      expect(
+        (
+          await db.query.craftingServiceRequest.findFirst({
+            where: eq(craftingServiceRequest.id, "due-neighbor"),
+          })
+        )?.status,
+      ).toBe("COMPLETED");
+    },
+  );
+  it.each(["ACCEPT", "DECLINE", "CANCEL"] as const)(
+    "rejects %s from the wrong participant",
+    async (action) => {
+      await submit();
+      const request = await receipt();
+      const actor = action === "CANCEL" ? "crafter" : "requester";
+      expect(
+        await (await callerFor(occupationRouter, actor)).respondToServiceRequest({
+          requestId: request.id,
+          action,
+        }),
+      ).toMatchObject({ success: false, message: "You cannot manage this request" });
+      expect((await receipt()).status).toBe("PENDING");
+      expect((await requireUser("requester")).money).toBe(950);
+    },
+  );
+  it("reports a missing accepting actor without claiming escrow", async () => {
+    await submit();
+    const request = await receipt();
+    const db = await getTestDatabase();
+    await db.delete(userData).where(eq(userData.userId, "crafter"));
+    expect(
+      await callerForDatabase(occupationRouter, "crafter", db).respondToServiceRequest({
+        requestId: request.id,
+        action: "ACCEPT",
+      }),
+    ).toMatchObject({ success: false, message: "User not found" });
+    expect(
+      await callerForDatabase(occupationRouter, "crafter", db).respondToServiceRequest({
+        requestId: "missing-receipt",
+        action: "ACCEPT",
+      }),
+    ).toMatchObject({
+      success: false,
+      message: "This request has already been handled",
+    });
+    expect((await receipt()).status).toBe("PENDING");
+    expect((await requireUser("requester")).money).toBe(950);
+  });
+  it.each(["CANCEL", "DECLINE"] as const)(
+    "%s rolls back escrow when the actor account is missing",
+    async (action) => {
+      await submit();
+      const request = await receipt();
+      const db = await getTestDatabase();
+      const actor = action === "CANCEL" ? "requester" : "crafter";
+      await db.delete(userData).where(eq(userData.userId, actor));
+      await expect(
+        callerForDatabase(occupationRouter, actor, db).respondToServiceRequest({
+          requestId: request.id,
+          action,
+        }),
+      ).rejects.toThrow("A service participant changed");
+      expect((await receipt()).status).toBe("PENDING");
+      expect(await db.query.conversationComment.findMany()).toHaveLength(1);
     },
   );
   it("settles existing escrow when both participants are banned", async () => {
