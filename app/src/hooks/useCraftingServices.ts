@@ -1,3 +1,5 @@
+import type { QueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { useEffect, useRef } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
@@ -79,6 +81,7 @@ export const useCraftingServicePriceCache = (crafterId: string) => {
 
 /** Reconcile deliveries observed by polling, including completion performed by another reader. */
 export const useServiceRequests = () => {
+  const client = useQueryClient();
   const query = api.occupation.getServiceRequests.useQuery(undefined, {
     refetchInterval: 15_000,
   });
@@ -90,19 +93,63 @@ export const useServiceRequests = () => {
     .map((row) => `${row.id}:${row.status}`)
     .sort()
     .join("|");
-  const observed = useRef(terminal);
+  const attempted = useRef<{
+    client: QueryClient;
+    terminal: string;
+    revision: number;
+  }>(undefined);
+  const { dataUpdatedAt, isFetching } = query;
   useEffect(() => {
-    if (!terminal || observed.current === terminal) return;
-    observed.current = terminal;
+    if (!terminal || isFetching) return;
+    let reconciliation = serviceReconciliations.get(client);
+    if (!reconciliation) {
+      reconciliation = { inFlight: new Set() };
+      serviceReconciliations.set(client, reconciliation);
+    }
+    if (reconciliation.succeeded === terminal) return;
+    const revision =
+      client.getQueryState(
+        getQueryKey(api.occupation.getServiceRequests, undefined, "query"),
+      )?.dataUpdateCount ?? 0;
+    // A failed attempt retries on the next receipt update or mount, never a callback rerender.
+    if (
+      attempted.current?.client === client &&
+      attempted.current.terminal === terminal &&
+      attempted.current.revision === revision
+    )
+      return;
+    attempted.current = { client, terminal, revision };
+    if (reconciliation.inFlight.has(terminal)) return;
+    reconciliation.inFlight.add(terminal);
     void (async () => {
-      // Profile settlement can start queued crafts and create inventory.
-      await refreshUser();
-      await Promise.all([
-        invalidateInventory(),
-        utils.profile.getSidebarTimers.invalidate(),
-        utils.comments.getUserConversations.invalidate(),
-      ]);
+      try {
+        // Profile settlement can start queued crafts and create inventory.
+        const refreshed = await refreshUser();
+        await Promise.all([
+          invalidateInventory(),
+          utils.profile.getSidebarTimers.invalidate(),
+          utils.comments.getUserConversations.invalidate(),
+        ]);
+        if (refreshed) reconciliation.succeeded = terminal;
+      } finally {
+        reconciliation.inFlight.delete(terminal);
+      }
     })();
-  }, [terminal, invalidateInventory, refreshUser, utils]);
+  }, [
+    client,
+    terminal,
+    dataUpdatedAt,
+    isFetching,
+    invalidateInventory,
+    refreshUser,
+    utils,
+  ]);
   return query;
 };
+
+// Receipt cache data alone cannot establish that profile settlement succeeded. Keep
+// that watermark across observers, scoped to the authenticated client's lifetime.
+const serviceReconciliations = new WeakMap<
+  QueryClient,
+  { succeeded?: string; inFlight: Set<string> }
+>();

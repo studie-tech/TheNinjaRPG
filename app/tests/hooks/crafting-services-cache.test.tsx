@@ -108,10 +108,13 @@ const harness = (
         ({ op }) =>
           observable((observer) => {
             calls.push(op.path);
-            void read(op.path).then((data) => {
-              observer.next({ result: { data } });
-              observer.complete();
-            });
+            void read(op.path).then(
+              (data) => {
+                observer.next({ result: { data } });
+                observer.complete();
+              },
+              (error) => observer.error(error),
+            );
           }),
     ],
   });
@@ -126,7 +129,7 @@ const harness = (
       )}
     </TrpcTestProviders>
   );
-  const refreshUser = vi.fn(async () => {});
+  const refreshUser = vi.fn(async () => true);
   if (userProvider) {
     vi.spyOn(clerk, "useUser").mockReturnValue({
       isSignedIn: true,
@@ -370,21 +373,143 @@ it.each(["ASLEEP", "REPAIR"])("withholds submission projections for %s", (kind) 
   ).toBeUndefined();
 });
 
-it("does not reconcile cached terminal history again on remount but observes later transitions", async () => {
-  const { client, wrapper, refreshUser } = harness();
+it("reconciles cached terminal history once, suppresses successful remounts and observes later transitions", async () => {
+  const { client, wrapper, calls } = harness(
+    async (path) => {
+      if (path === "profile.getUser")
+        return { userData: { ...requester, items: [] }, notifications: [] };
+      return [];
+    },
+    { userProvider: true },
+  );
+  seedSubmissionViews(client);
+  client.setQueryData(profileKey, {
+    userData: { ...requester, items: [] },
+    notifications: [],
+  });
   client.setQueryData(requestsKey, [{ id: "old", status: "COMPLETED" }]);
-  const first = renderHook(useServiceRequests, { wrapper });
-  first.unmount();
-  const second = renderHook(useServiceRequests, { wrapper });
-  expect(refreshUser).not.toHaveBeenCalled();
+  const Observer = () => {
+    useServiceRequests();
+    return null;
+  };
+  const view = render(<Observer />, { wrapper });
+  await waitFor(() => expect(calls).toEqual(["profile.getUser"]));
+  await waitFor(() =>
+    expect(client.getQueryState(inventoryKeys[0]!)?.isInvalidated).toBe(true),
+  );
+  view.rerender(<div />);
+  view.rerender(<Observer />);
+  await act(async () => {});
+  expect(calls).toEqual(["profile.getUser"]);
   await act(async () => {
     client.setQueryData(requestsKey, [
       { id: "old", status: "COMPLETED" },
       { id: "new", status: "REFUNDED" },
     ]);
   });
-  await waitFor(() => expect(refreshUser).toHaveBeenCalledTimes(1));
-  second.unmount();
+  await waitFor(() => expect(calls).toEqual(["profile.getUser", "profile.getUser"]));
+});
+
+it("retries failed profile reconciliation on identical receipt polls and observer remount without a render loop", async () => {
+  let profileReads = 0;
+  const terminal = [{ ...receipt, status: "REFUNDED" }];
+  const { client, wrapper, calls } = harness(
+    async (path) => {
+      if (path === "profile.getUser") {
+        profileReads++;
+        if (profileReads < 4) throw new Error("profile temporarily unavailable");
+        return {
+          userData: { ...requester, money: 1050, items: [] },
+          notifications: [],
+        };
+      }
+      if (path === "occupation.getServiceRequests") return terminal;
+      return [];
+    },
+    { userProvider: true },
+  );
+  seedSubmissionViews(client);
+  client.setQueryData(profileKey, {
+    userData: { ...requester, items: [] },
+    notifications: [],
+  });
+  const Observer = () => {
+    useServiceRequests();
+    return null;
+  };
+  const view = render(<Observer />, { wrapper });
+  await act(async () => client.setQueryData(requestsKey, terminal));
+  const failedAttempt = async (count: number) => {
+    await waitFor(() => {
+      expect(profileReads).toBe(count);
+      expect(client.getQueryState(profileKey)?.status).toBe("error");
+      expect(client.getQueryState(profileKey)?.fetchStatus).toBe("idle");
+    });
+    // Inventory callbacks are recreated on renders; they must not trigger another attempt.
+    for (let i = 0; i < 3; i++) view.rerender(<Observer />);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 25)));
+    expect(profileReads).toBe(count);
+    expect(client.getQueryData<UserCache>(profileKey)?.userData?.money).toBe(1000);
+  };
+  await failedAttempt(1);
+  const cachedTerminal = client.getQueryData(requestsKey);
+  await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+  await failedAttempt(2);
+  expect(client.getQueryData(requestsKey)).toBe(cachedTerminal);
+  view.rerender(<div />);
+  view.rerender(<Observer />);
+  await failedAttempt(3);
+  await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+  await waitFor(() =>
+    expect(client.getQueryData<UserCache>(profileKey)?.userData?.money).toBe(1050),
+  );
+  expect(profileReads).toBe(4);
+  view.rerender(<div />);
+  view.rerender(<Observer />);
+  await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+  expect(profileReads).toBe(4);
+  expect(calls.filter((path) => path === "occupation.getServiceRequests")).toHaveLength(
+    3,
+  );
+});
+
+it("shares an in-flight terminal reconciliation between observers", async () => {
+  const profile = deferred();
+  const { client, wrapper, calls } = harness(
+    async (path) => {
+      if (path === "profile.getUser") {
+        await profile.promise;
+        return { userData: { ...requester, items: [] }, notifications: [] };
+      }
+      return [];
+    },
+    { userProvider: true },
+  );
+  seedSubmissionViews(client);
+  client.setQueryData(profileKey, {
+    userData: { ...requester, items: [] },
+    notifications: [],
+  });
+  client.setQueryData(requestsKey, [{ ...receipt, status: "COMPLETED" }]);
+  const Observer = () => {
+    useServiceRequests();
+    return null;
+  };
+  const view = render(
+    <>
+      <Observer />
+      <Observer />
+    </>,
+    { wrapper },
+  );
+  await waitFor(() => expect(calls).toEqual(["profile.getUser"]));
+  view.rerender(<Observer />);
+  expect(calls).toEqual(["profile.getUser"]);
+  await act(async () => profile.resolve());
+  await waitFor(() =>
+    expect(client.getQueryState(inventoryKeys[0]!)?.isInvalidated).toBe(true),
+  );
+  expect(calls).toEqual(["profile.getUser"]);
 });
 
 it("reconciles a terminal delivery on a cold query's first response", async () => {
