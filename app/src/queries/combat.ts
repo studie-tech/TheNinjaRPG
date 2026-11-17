@@ -2786,20 +2786,11 @@ const hospitalPlacement = (
     : getVillage(battle, fighter.villageId)?.sector,
 });
 
-/**
- * The AI rules owned by one of the player's jutsu loadouts, which the lobby loads into the
- * battle when the player switches to that loadout.
- */
-export const fetchAiProfileForUpdateCombatLoadout = (
+/** Preload the player's loadout AI rules so a lobby selection can use its confirmed saved choice. */
+export const fetchAiProfilesForUpdateCombatLoadout = (
   client: DrizzleClient,
   userId: string,
-  jutsuLoadoutId: string | undefined,
 ) =>
-  jutsuLoadoutId
-    ? client.query.aiProfile.findFirst({
-        where: and(
-          eq(aiProfile.userId, userId),
-          eq(aiProfile.jutsuLoadoutId, jutsuLoadoutId),
-        ),
-      })
-    : undefined;
+  client.query.aiProfile.findMany({
+    where: eq(aiProfile.userId, userId),
+  });

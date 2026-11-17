@@ -220,7 +220,7 @@ import {
   deleteBattleById,
   deleteBattleHistoryByBattleId,
   executeResultsForListOngoingBattles,
-  fetchAiProfileForUpdateCombatLoadout,
+  fetchAiProfilesForUpdateCombatLoadout,
   fetchBattle,
   fetchBattleEssentials,
   findBattleHistoryForGetBattleHistoryEntry,
@@ -1166,7 +1166,7 @@ export const combatRouter = createTRPCRouter({
         useritems,
         userjutsus,
         userSkills,
-        loadoutAiProfile,
+        loadoutAiProfiles,
       ] = await Promise.all([
         fetchBattleEssentials(ctx.drizzle),
         fetchBattle(ctx.drizzle, input.battleId),
@@ -1175,7 +1175,7 @@ export const combatRouter = createTRPCRouter({
         fetchUserItemsWithVariants(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId, undefined, { applyReskins: false }),
         fetchUserSkills(ctx.drizzle, ctx.userId),
-        fetchAiProfileForUpdateCombatLoadout(ctx.drizzle, ctx.userId, jId),
+        fetchAiProfilesForUpdateCombatLoadout(ctx.drizzle, ctx.userId),
       ]);
 
       // Derived
@@ -1259,15 +1259,9 @@ export const combatRouter = createTRPCRouter({
         ? (userBattle.extraState.villages?.[user.villageId] as CombatQueryVillage)
         : null;
       const questData = userBattle.extraState.questData?.[user.controllerId];
-      const selectedJutsuLoadout = jutsuLoadouts.find((loadout) => loadout.id === jId);
-      // A new jutsu loadout brings its own AI rules, or the Default ones.
-      const aiProfile = jutsuChanged
-        ? selectedJutsuLoadout?.customAi && loadoutAiProfile
-          ? loadoutAiProfile
-          : userBattle.extraState.aiProfiles?.Default
-        : user.aiProfileId && user.aiProfileId !== "Default"
-          ? userBattle.extraState.aiProfiles?.[user.aiProfileId]
-          : userBattle.extraState.aiProfiles?.Default;
+      const aiProfile = user.aiProfileId
+        ? userBattle.extraState.aiProfiles?.[user.aiProfileId]
+        : userBattle.extraState.aiProfiles?.Default;
       // Relations battle state keeps apart, rebuilt from extraState and fresh skills.
       const combatant = {
         ...user,
@@ -1427,6 +1421,14 @@ export const combatRouter = createTRPCRouter({
       // The jutsus/items are reconstructed from refs + static data with all required fields
       const rawUserForProcessing = {
         ...combatant,
+        // The selector reads the live AI choice while saving, including item-only
+        // reapplications. Rebuild combat from that confirmed choice and upfront rules.
+        aiProfile:
+          "aiProfileId" in jutsuLoadoutResult
+            ? (loadoutAiProfiles.find(
+                (profile) => profile.id === jutsuLoadoutResult.aiProfileId,
+              ) ?? data.defaultProfile)
+            : combatant.aiProfile,
         sageMode: equippedSageMode ?? null,
         jutsuLoadout: jId ?? user.jutsuLoadout,
         itemLoadout: iId ?? user.itemLoadout,

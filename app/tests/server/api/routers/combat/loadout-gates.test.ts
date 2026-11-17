@@ -207,80 +207,109 @@ describeWithDatabase("combat lobby jutsu gates", () => {
     expect((await stored()).usersState[0]!.aiProfileId).toBe("Default");
   });
 
-  it("patches the profile when an item switch in the lobby reapplies the battle's jutsu loadout", async () => {
-    const db = await getTestDatabase();
-    await db
-      .insert(jutsuLoadout)
-      .values({ id: "rules", userId: USER, jutsuIds: VALID, customAi: true });
-    await db.insert(aiProfile).values({
-      id: "rules-own",
-      userId: USER,
-      jutsuLoadoutId: "rules",
-      rules: [AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) })],
-    });
-    await db.insert(itemLoadout).values([
-      { id: "items-a", userId: USER, itemData: [] },
-      { id: "items-b", userId: USER, itemData: [] },
-    ]);
-    await seedLobby();
-    const api = await callerFor(combatRouter, USER);
-    await api.updateCombatLoadout({ battleId: BATTLE, jutsuLoadoutId: "rules" });
-    // Elsewhere the player selects another jutsu loadout; the battle still holds "rules".
-    await (await callerFor(jutsuRouter, USER)).selectJutsuLoadout({ id: "gates" });
-    const items = await api.updateCombatLoadout({
-      battleId: BATTLE,
-      itemLoadoutId: "items-b",
-    });
-    expect(items.success).toBe(true);
-    expect("userPatch" in items && items.userPatch).toMatchObject({
-      jutsuLoadout: "rules",
-      aiProfileId: "rules-own",
-    });
-  });
+  it.each([false, true])(
+    "reapplies the jutsu loadout's custom AI choice %s to the profile and battle when switching items",
+    async (customAi) => {
+      const db = await getTestDatabase();
+      await db
+        .insert(jutsuLoadout)
+        .values({ id: "rules", userId: USER, jutsuIds: VALID, customAi: !customAi });
+      await db.insert(aiProfile).values({
+        id: "rules-own",
+        userId: USER,
+        jutsuLoadoutId: "rules",
+        rules: [AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) })],
+      });
+      await db.insert(itemLoadout).values([
+        { id: "items-a", userId: USER, itemData: [] },
+        { id: "items-b", userId: USER, itemData: [] },
+      ]);
+      await seedLobby();
+      const api = await callerFor(combatRouter, USER);
+      await api.updateCombatLoadout({ battleId: BATTLE, jutsuLoadoutId: "rules" });
+      // Elsewhere the player selects another jutsu loadout; the battle still holds "rules".
+      await (await callerFor(jutsuRouter, USER)).selectJutsuLoadout({ id: "gates" });
+      await db
+        .update(jutsuLoadout)
+        .set({ customAi })
+        .where(eq(jutsuLoadout.id, "rules"));
+      const items = await api.updateCombatLoadout({
+        battleId: BATTLE,
+        itemLoadoutId: "items-b",
+      });
+      expect(items.success).toBe(true);
+      expect("userPatch" in items && items.userPatch).toMatchObject({
+        jutsuLoadout: "rules",
+        aiProfileId: customAi ? "rules-own" : null,
+      });
+      const savedBattle = (await db.query.battle.findFirst({
+        where: eq(battle.id, BATTLE),
+      }))!;
+      expect(savedBattle.usersState[0]!.aiProfileId).toBe(
+        customAi ? "rules-own" : "Default",
+      );
+      if (customAi)
+        expect(savedBattle.extraState.aiProfiles["rules-own"]?.rules).toHaveLength(1);
+    },
+  );
 
-  it("patches the profile with the rules the lobby's loadout switch stored when they switch mid-request", async () => {
-    const db = await getTestDatabase();
-    await db
-      .insert(jutsuLoadout)
-      .values({ id: "rules", userId: USER, jutsuIds: VALID, customAi: true });
-    await db.insert(aiProfile).values({
-      id: "rules-own",
-      userId: USER,
-      jutsuLoadoutId: "rules",
-      rules: [AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) })],
-    });
-    await seedLobby();
-    // Another tab switches the loadout to the Default rules after the lobby read it.
-    const raced = beforeStatements(
-      db,
-      jutsuLoadout,
-      [
-        () =>
-          db
-            .update(jutsuLoadout)
-            .set({ customAi: false })
-            .where(eq(jutsuLoadout.id, "rules")),
-      ],
-      { operations: ["execute"] },
-    );
-    const result = await callerForDatabase(
-      combatRouter,
-      USER,
-      raced,
-    ).updateCombatLoadout({
-      battleId: BATTLE,
-      jutsuLoadoutId: "rules",
-    });
-    const stored = await db.query.userData.findFirst({
-      where: eq(userData.userId, USER),
-      columns: { jutsuLoadout: true, aiProfileId: true },
-    });
-    expect(stored).toEqual({ jutsuLoadout: "rules", aiProfileId: null });
-    expect("userPatch" in result && result.userPatch).toMatchObject({
-      jutsuLoadout: "rules",
-      aiProfileId: null,
-    });
-  });
+  it.each([false, true])(
+    "applies the saved custom AI choice %s to the profile and battle when it changes mid-request",
+    async (customAi) => {
+      const db = await getTestDatabase();
+      await db
+        .insert(jutsuLoadout)
+        .values({ id: "rules", userId: USER, jutsuIds: VALID, customAi: !customAi });
+      await db.insert(aiProfile).values({
+        id: "rules-own",
+        userId: USER,
+        jutsuLoadoutId: "rules",
+        rules: [AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) })],
+      });
+      await seedLobby();
+      // Another tab changes the AI choice after the lobby reads the loadout.
+      const raced = beforeStatements(
+        db,
+        jutsuLoadout,
+        [
+          () =>
+            db
+              .update(jutsuLoadout)
+              .set({ customAi })
+              .where(eq(jutsuLoadout.id, "rules")),
+        ],
+        { operations: ["execute"] },
+      );
+      const result = await callerForDatabase(
+        combatRouter,
+        USER,
+        raced,
+      ).updateCombatLoadout({
+        battleId: BATTLE,
+        jutsuLoadoutId: "rules",
+      });
+      const stored = await db.query.userData.findFirst({
+        where: eq(userData.userId, USER),
+        columns: { jutsuLoadout: true, aiProfileId: true },
+      });
+      expect(stored).toEqual({
+        jutsuLoadout: "rules",
+        aiProfileId: customAi ? "rules-own" : null,
+      });
+      expect("userPatch" in result && result.userPatch).toMatchObject({
+        jutsuLoadout: "rules",
+        aiProfileId: customAi ? "rules-own" : null,
+      });
+      const savedBattle = (await db.query.battle.findFirst({
+        where: eq(battle.id, BATTLE),
+      }))!;
+      expect(savedBattle.usersState[0]!.aiProfileId).toBe(
+        customAi ? "rules-own" : "Default",
+      );
+      if (customAi)
+        expect(savedBattle.extraState.aiProfiles["rules-own"]?.rules).toHaveLength(1);
+    },
+  );
 
   it("patches the profile with a saved loadout switch even when the lobby update loses a race", async () => {
     const db = await getTestDatabase();
