@@ -325,7 +325,7 @@ const runWithEnemies = (count: number): TdState => {
 const actorLayer = (stage: Container) => {
   const camera = stage.children[0];
   const world = camera?.children[0];
-  const layer = world?.children.find((child) => child.sortableChildren);
+  const layer = world?.children.find((child) => child.label === "tower-defense-actors");
   if (!layer) throw new Error("Actor layer missing");
   return layer;
 };

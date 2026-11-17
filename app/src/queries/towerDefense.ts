@@ -1,7 +1,20 @@
 /**
  * Database access for tower defense; authorization and replay stay in callers.
  */
-import { and, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
@@ -227,12 +240,40 @@ export const listTowerDefenseRunForGetRunHistory = (
     .limit(input.limit + 1);
 };
 
-/** Build the leaderboard: highest wave first, then most enemies defeated. */
+/**
+ * Build the leaderboard: each player's best run, highest wave first, then most enemies
+ * defeated. A run stays only while the same player has no better one; ties on wave and
+ * kills keep the earlier run.
+ */
 export const listTowerDefenseRunForGetLeaderboard = (
-  client: Pick<DrizzleClient, "query">,
+  client: Pick<DrizzleClient, "query" | "select">,
   input: { limit: number },
-) =>
-  client.query.towerDefenseRun.findMany({
+) => {
+  const better = alias(towerDefenseRun, "betterRun");
+  return client.query.towerDefenseRun.findMany({
+    where: (run) =>
+      notExists(
+        client
+          .select({ id: better.id })
+          .from(better)
+          .where(
+            and(
+              eq(better.userId, run.userId),
+              or(
+                gt(better.wave, run.wave),
+                and(eq(better.wave, run.wave), gt(better.score, run.score)),
+                and(
+                  eq(better.wave, run.wave),
+                  eq(better.score, run.score),
+                  or(
+                    lt(better.startedAt, run.startedAt),
+                    and(eq(better.startedAt, run.startedAt), lt(better.id, run.id)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ),
     orderBy: [desc(towerDefenseRun.wave), desc(towerDefenseRun.score)],
     limit: input.limit,
     with: {
@@ -241,6 +282,7 @@ export const listTowerDefenseRunForGetLeaderboard = (
       },
     },
   });
+};
 
 /** Sheets the arena draws enemies with. */
 const TD_ROSTER_ACTIONS = ["idle", "move"];

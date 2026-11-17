@@ -5,12 +5,14 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { PortalContainerContext } from "@/components/ui/portal-container";
 import {
   ID_ANIMATION_HIT,
   ID_ANIMATION_SMOKE,
   TD_SFX,
   type TdSfx,
 } from "@/drizzle/constants";
+import { useFullscreenStage } from "@/hooks/useFullscreenStage";
 import {
   type TowerDefenseOutcome,
   useTowerDefenseRun,
@@ -31,6 +33,7 @@ import {
 import { TowerDefenseLobby } from "@/layout/TowerDefenseLobby";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense";
+import { cn } from "@/libs/shadui";
 import { TD_COORD_SCALE, tdDailyDutyDone } from "@/libs/towerDefense/balance";
 import { TD_SEALS, TD_ULTIMATES } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
@@ -118,6 +121,7 @@ export default function TowerDefensePage() {
     [user],
   );
   const [mode, setMode] = useState<TowerDefenseInputMode>("aim");
+  const [buyMax, setBuyMax] = useState(false);
   const reticle = useRef<{ x: number; y: number } | null>(null);
 
   // Handlers depend on the run's stable members, never on the object returned per render.
@@ -216,6 +220,17 @@ export default function TowerDefensePage() {
       "This run is not saved on this device, so leaving or reloading before it is claimed can lose it and its scrolls.",
     proceedLabel: "Leave",
   });
+  const {
+    setStageElement,
+    element: stageElement,
+    isFullscreen,
+    toggle: toggleFullscreen,
+    exit: exitFullscreen,
+  } = useFullscreenStage();
+  // The lobby is a page, not a stage: back there, the screen is handed back.
+  useEffect(() => {
+    if (run.phase === "lobby") exitFullscreen();
+  }, [exitFullscreen, run.phase]);
 
   // A signed-in player's runs are claimable only once the profile names them, so their
   // lobby waits for it. Visitors who look signed out see the guest lobby at once, which
@@ -281,73 +296,127 @@ export default function TowerDefensePage() {
       noRightAlign
       padding={false}
     >
-      {leaveGuard.dialog}
-      <div className="space-y-1.5 p-1.5">
-        <div className="relative overflow-hidden rounded-lg">
-          {roster.isPending ? (
-            <div className="flex h-[400px] items-center justify-center">
-              <Loader explanation="Gathering enemies..." />
+      {/*
+        Full screen keeps the arena at the same place in the tree, so it never reloads.
+        Wide screens put the controls and the whole shop in a column beside a full-height
+        arena. Tall ones stack them under the arena, which takes whatever height they leave;
+        when they need more than that, the arena keeps a playable minimum and they scroll.
+      */}
+      <div
+        ref={setStageElement}
+        className={
+          isFullscreen
+            ? "bg-background fixed inset-0 z-[100] flex flex-col gap-1.5 p-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] pb-[max(0.375rem,env(safe-area-inset-bottom))] landscape:flex-row"
+            : "space-y-1.5 p-1.5"
+        }
+      >
+        <PortalContainerContext.Provider value={isFullscreen ? stageElement : null}>
+          {leaveGuard.dialog}
+          <div className={isFullscreen ? "contents" : undefined}>
+            <div
+              className={cn(
+                "relative overflow-hidden rounded-lg",
+                isFullscreen && "min-h-0 min-w-0 flex-1 basis-0",
+                isFullscreen && playing && "portrait:min-h-[min(80vw,62dvh)]",
+              )}
+            >
+              {roster.isPending ? (
+                <div className="flex h-[400px] items-center justify-center">
+                  <Loader explanation="Gathering enemies..." />
+                </div>
+              ) : (
+                run.runId && (
+                  <TowerDefenseArena
+                    runId={run.runId}
+                    appearance={appearance}
+                    roster={roster.data ?? []}
+                    hitAsset={assets?.find((asset) => asset.id === ID_ANIMATION_HIT)}
+                    smokeAsset={assets?.find(
+                      (asset) => asset.id === ID_ANIMATION_SMOKE,
+                    )}
+                    fill={isFullscreen}
+                    onFrame={run.advance}
+                    playSound={playSound}
+                    getView={getView}
+                    onTap={onTap}
+                  />
+                )
+              )}
+              {playing && (
+                <TowerDefenseOverlay
+                  state={playing}
+                  speed={run.speed}
+                  soundOn={!!sfxOn}
+                  mode={mode}
+                  isFullscreen={isFullscreen}
+                  onSpeed={run.setSpeed}
+                  onSound={setSfxEnabled}
+                  onFullscreen={toggleFullscreen}
+                  act={act}
+                />
+              )}
+              {playing && <TowerDefenseDraft state={playing} act={act} />}
+              {run.phase !== "playing" && (
+                <Results
+                  phase={run.phase}
+                  outcome={run.outcome}
+                  isGuest={!userId}
+                  isOnlyInTab={isOnlyInTab}
+                  onRetry={run.retryClaim}
+                  onLeave={() => leaveGuard.confirmDiscard(run.leave)}
+                />
+              )}
             </div>
-          ) : (
-            run.runId && (
-              <TowerDefenseArena
-                runId={run.runId}
-                appearance={appearance}
-                roster={roster.data ?? []}
-                hitAsset={assets?.find((asset) => asset.id === ID_ANIMATION_HIT)}
-                smokeAsset={assets?.find((asset) => asset.id === ID_ANIMATION_SMOKE)}
-                onFrame={run.advance}
-                playSound={playSound}
-                getView={getView}
-                onTap={onTap}
-              />
-            )
-          )}
-          {playing && (
-            <TowerDefenseOverlay
-              state={playing}
-              speed={run.speed}
-              soundOn={!!sfxOn}
-              mode={mode}
-              onSpeed={run.setSpeed}
-              onSound={setSfxEnabled}
-              act={act}
-            />
-          )}
-          {playing && <TowerDefenseDraft state={playing} act={act} />}
-          {run.phase !== "playing" && (
-            <Results
-              phase={run.phase}
-              outcome={run.outcome}
-              isGuest={!userId}
-              isOnlyInTab={isOnlyInTab}
-              onRetry={run.retryClaim}
-              onLeave={() => leaveGuard.confirmDiscard(run.leave)}
-            />
-          )}
-        </div>
-        {playing && (
-          <>
-            <TowerDefenseActionBar
-              state={playing}
-              mode={mode}
-              onMode={setMode}
-              act={act}
-              aim={aim}
-            />
-            {run.unsaved && (
-              <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
-                This run is no longer saved on this device. Finish it in this tab:
-                leaving or reloading loses its latest progress.
-              </p>
+            {isFullscreen && playing && (
+              <aside className="flex min-h-0 min-w-0 flex-initial [scrollbar-width:thin] flex-col gap-2 overflow-y-auto overscroll-contain landscape:w-[clamp(17rem,40vw,30rem)] landscape:flex-none">
+                <TowerDefenseActionBar
+                  state={playing}
+                  mode={mode}
+                  onMode={setMode}
+                  act={act}
+                  aim={aim}
+                  layout="grid"
+                />
+                {run.unsaved && <UnsavedNotice />}
+                <TowerDefensePanel
+                  state={playing}
+                  act={act}
+                  buyMax={buyMax}
+                  onBuyMax={setBuyMax}
+                />
+              </aside>
             )}
-            <TowerDefensePanel state={playing} act={act} />
-          </>
-        )}
+          </div>
+          {!isFullscreen && playing && (
+            <>
+              <TowerDefenseActionBar
+                state={playing}
+                mode={mode}
+                onMode={setMode}
+                act={act}
+                aim={aim}
+              />
+              {run.unsaved && <UnsavedNotice />}
+              <TowerDefensePanel
+                state={playing}
+                act={act}
+                buyMax={buyMax}
+                onBuyMax={setBuyMax}
+              />
+            </>
+          )}
+        </PortalContainerContext.Provider>
       </div>
     </ContentBox>
   );
 }
+
+const UnsavedNotice = () => (
+  <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
+    This run is no longer saved on this device. Finish it in this tab: leaving or
+    reloading loses its latest progress.
+  </p>
+);
 
 const Results = (props: {
   phase: string;

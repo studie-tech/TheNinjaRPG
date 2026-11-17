@@ -9,6 +9,7 @@ import {
   type TowerDefenseRosterEntry,
   type TowerDefenseSceneView,
 } from "@/libs/rendering/scenes/towerDefense";
+import { cn } from "@/libs/shadui";
 import type { SpriteAppearance } from "@/validators/lpc";
 
 /** The arena canvas; live run data reaches the renderer through refs, not renders. */
@@ -41,7 +42,16 @@ const TowerDefenseArenaInner = (props: TowerDefenseArenaProps) => {
     props.runId,
   );
   if (error) return <WebGlError />;
-  return <div ref={mount} className="w-full touch-none select-none" />;
+  // The box sets the canvas size: 5:4 within the page, or the whole stage in full screen.
+  return (
+    <div
+      ref={mount}
+      className={cn(
+        "relative w-full touch-none select-none overflow-hidden [&>canvas]:absolute [&>canvas]:inset-0",
+        props.fill ? "h-full" : "aspect-[5/4] max-h-[70vh] min-h-[320px]",
+      )}
+    />
+  );
 };
 
 export const TowerDefenseArena = memo(TowerDefenseArenaInner);
@@ -52,6 +62,8 @@ interface TowerDefenseArenaProps {
   roster: TowerDefenseRosterEntry[];
   hitAsset?: GameAsset;
   smokeAsset?: GameAsset;
+  /** Fill the container's height, as in full screen, instead of sizing from the width. */
+  fill?: boolean;
   onFrame: (delta: number) => void;
   playSound: (cue: TdSfx, volume: number) => void;
   getView: () => TowerDefenseSceneView;

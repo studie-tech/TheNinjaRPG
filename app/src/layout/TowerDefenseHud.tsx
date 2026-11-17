@@ -6,18 +6,19 @@ import {
   FastForward,
   Flag,
   Info,
+  Maximize,
+  Minimize,
   ScrollText,
   Skull,
   Volume2,
   VolumeX,
   Zap,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Confirm from "@/layout/Confirm";
 import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense";
 import { cn } from "@/libs/shadui";
@@ -98,8 +99,10 @@ export const TowerDefenseOverlay = (props: {
   speed: number;
   soundOn: boolean;
   mode: TowerDefenseInputMode;
+  isFullscreen: boolean;
   onSpeed: (speed: number) => void;
   onSound: (enabled: boolean) => void;
+  onFullscreen: () => void;
   act: (command: TdCommand) => void;
 }) => {
   const { state } = props;
@@ -195,6 +198,16 @@ export const TowerDefenseOverlay = (props: {
             Retreating ends this run at wave {state.wave} and banks the scrolls it
             earned.
           </Confirm>
+          <OverlayButton
+            label={props.isFullscreen ? "Exit full screen" : "Full screen"}
+            onClick={props.onFullscreen}
+          >
+            {props.isFullscreen ? (
+              <Minimize className="h-4 w-4" />
+            ) : (
+              <Maximize className="h-4 w-4" />
+            )}
+          </OverlayButton>
         </div>
       </div>
       {sealCount > 0 && props.mode === "aim" && (
@@ -272,6 +285,8 @@ export const TowerDefenseActionBar = (props: {
   onMode: (mode: TowerDefenseInputMode) => void;
   act: (command: TdCommand) => void;
   aim: () => [number, number];
+  /** `grid` lays the controls out in fixed rows for a side column or the space under a full-screen arena. */
+  layout?: "bar" | "grid";
 }) => {
   const { state, act } = props;
   const tick = state.tick;
@@ -279,18 +294,18 @@ export const TowerDefenseActionBar = (props: {
   const ultimates = TD_ULTIMATES.filter((ultimate) =>
     tdUltimateUnlocked(state.config, ultimate),
   );
-  return (
-    <div className="flex w-full flex-wrap gap-1">
-      {TD_SEALS.map((seal) => (
-        <ActionButton
-          key={seal}
-          title={`${seal} seal (${SEAL_HOTKEYS[seal]})`}
-          onClick={() => act(["seal", seal, ...props.aim()])}
-          hotkey={SEAL_HOTKEYS[seal]}
-        >
-          <span className="text-lg leading-none">{SEAL_GLYPHS[seal]}</span>
-        </ActionButton>
-      ))}
+  const seals = TD_SEALS.map((seal) => (
+    <ActionButton
+      key={seal}
+      title={`${seal} seal (${SEAL_HOTKEYS[seal]})`}
+      onClick={() => act(["seal", seal, ...props.aim()])}
+      hotkey={SEAL_HOTKEYS[seal]}
+    >
+      <span className="text-lg leading-none">{SEAL_GLYPHS[seal]}</span>
+    </ActionButton>
+  ));
+  const moves = (
+    <>
       <ActionButton
         title="Substitution: dodge the next hit; time it on a boss attack to counter (Space)"
         onClick={() => act(["sub"])}
@@ -322,6 +337,10 @@ export const TowerDefenseActionBar = (props: {
       >
         <span className="text-xs font-semibold">Tag ×{hero.trapCharges}</span>
       </ActionButton>
+    </>
+  );
+  const specials = (
+    <>
       {ultimates.map((ultimate) => {
         const info = TD_ULTIMATE_INFO[ultimate];
         const remaining = tdUltimateCooldown(state, ultimate);
@@ -354,132 +373,170 @@ export const TowerDefenseActionBar = (props: {
           </span>
         </ActionButton>
       )}
-      <label className="flex h-11 min-w-28 flex-1 items-center gap-1 rounded-md border px-1.5 text-sm">
-        <Crosshair className="h-4 w-4 shrink-0" />
-        <select
-          className="bg-background h-full min-w-0 flex-1 text-sm outline-none"
-          value={state.aim}
-          onChange={(event) => act(["aim", event.target.value as TdTargetMode])}
-          aria-label="Shuriken targeting"
-        >
-          {TD_TARGET_MODES.map((mode) => (
-            <option key={mode} value={mode}>
-              {TARGET_LABELS[mode]}
-            </option>
-          ))}
-        </select>
-      </label>
+    </>
+  );
+  const targeting = (
+    <label className="flex h-11 min-w-0 items-center gap-1 rounded-md border px-1.5 text-sm">
+      <Crosshair className="h-4 w-4 shrink-0 @max-[32rem]:hidden" />
+      <select
+        className="bg-background h-full min-w-0 flex-1 text-sm outline-none"
+        value={state.aim}
+        onChange={(event) => act(["aim", event.target.value as TdTargetMode])}
+        aria-label="Shuriken targeting"
+      >
+        {TD_TARGET_MODES.map((mode) => (
+          <option key={mode} value={mode}>
+            {TARGET_LABELS[mode]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  if (props.layout === "grid")
+    return (
+      <div className="@container grid gap-1">
+        <div className="grid grid-cols-4 gap-1">{seals}</div>
+        <div className="grid grid-cols-4 gap-1">
+          {moves}
+          {targeting}
+        </div>
+        {(ultimates.length > 0 || (state.config.dojo.ul_auto ?? 0) > 0) && (
+          <div className="grid grid-cols-3 gap-1 @[360px]:grid-cols-6">{specials}</div>
+        )}
+      </div>
+    );
+  return (
+    <div className="@container flex w-full flex-wrap gap-1">
+      {seals}
+      {moves}
+      {specials}
+      <div className="flex min-w-28 flex-[1.5]">{targeting}</div>
     </div>
   );
 };
 
-/** Shop, sentry posts and seal-art recipes, one tab at a time. */
+/**
+ * Shop, sentry posts and seal-art recipes, each under its own heading. Grids follow the
+ * width the panel gets, so names and effects never truncate in a narrow column.
+ */
 export const TowerDefensePanel = (props: {
   state: TdState;
   act: (command: TdCommand) => void;
+  /** Buy as many levels as affordable per tap; owned by the page so it survives a layout switch. */
+  buyMax: boolean;
+  onBuyMax: (buyMax: boolean) => void;
 }) => {
-  const { state, act } = props;
-  const [buyMax, setBuyMax] = useState(false);
+  const { state, act, buyMax } = props;
+  const buying = (
+    <div className="ml-auto flex gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8 px-2"
+        onClick={() => props.onBuyMax(!buyMax)}
+        title="Buy one level per tap, or as many as you can afford"
+      >
+        Buy {buyMax ? "max" : "×1"}
+      </Button>
+      <Button
+        size="sm"
+        className="h-8 px-2"
+        disabled={state.ryo <= 0}
+        onClick={() => act(["spend"])}
+        title="Spread all ryo over your upgrades"
+      >
+        <Coins className="mr-1 h-4 w-4" /> Spend all
+      </Button>
+    </div>
+  );
+  const shop = (
+    <div className="grid grid-cols-1 gap-1 @[300px]:grid-cols-2 @[620px]:grid-cols-3">
+      {TD_SHOP.filter((item) => {
+        const jutsu = TD_SHOP_INFO[item].jutsu;
+        return !jutsu || tdJutsuUnlocked(state.config, jutsu);
+      }).map((item: TdShopItem) => {
+        const info = TD_SHOP_INFO[item];
+        const level = state.shop[item] ?? 0;
+        const cost = tdShopCost(state, item);
+        const maxed = level >= info.max;
+        return (
+          <button
+            type="button"
+            key={item}
+            disabled={maxed || state.ryo < cost}
+            onClick={(event) =>
+              act(buyMax || event.shiftKey ? ["max", item] : ["buy", item])
+            }
+            title={`${info.description}${info.jutsu ? `. ${TD_JUTSU_INFO[info.jutsu].description}` : ""}`}
+            className="hover:bg-muted flex items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-sm disabled:opacity-50"
+          >
+            <span className="min-w-0">
+              <span className="block">
+                {info.name} <span className="text-muted-foreground">{level}</span>
+              </span>
+              <span className="text-muted-foreground block text-xs leading-tight">
+                {info.description}
+              </span>
+            </span>
+            <span className="shrink-0 font-semibold text-amber-600 dark:text-amber-400">
+              {maxed ? "Max" : formatTdNumber(cost)}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+  const arts = (
+    <div className="grid grid-cols-1 gap-1 text-sm @[440px]:grid-cols-2">
+      {TD_SEAL_ARTS.map((art) => {
+        const info = TD_SEAL_ART_INFO[art];
+        const open = tdSealArtUnlocked(state.config, art);
+        return (
+          <div
+            key={art}
+            className={cn(
+              "flex items-center gap-2 rounded-md border px-2 py-1",
+              !open && "opacity-40",
+              open && state.hero.chakra >= info.chakra && "border-sky-500",
+            )}
+          >
+            <span className="shrink-0 text-base tracking-widest">
+              {info.seals.map((seal) => SEAL_GLYPHS[seal]).join("")}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block">{info.name}</span>
+              <span className="text-muted-foreground block text-xs leading-tight">
+                {info.description}
+              </span>
+            </span>
+            <span className="text-muted-foreground shrink-0">
+              {open ? `${info.chakra} chakra` : `wave ${info.firstWave}`}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
   return (
-    <Tabs defaultValue="shop" className="rounded-lg border p-1">
-      <div className="flex flex-wrap items-center gap-1">
-        <TabsList className="h-8 w-auto">
-          <TabsTrigger value="shop" className="px-2 text-sm">
-            Upgrades
-          </TabsTrigger>
-          {state.stats.sentrySlots > 0 && (
-            <TabsTrigger value="sentries" className="px-2 text-sm">
-              Sentries
-            </TabsTrigger>
-          )}
-          <TabsTrigger value="arts" className="px-2 text-sm">
-            Seal arts
-          </TabsTrigger>
-        </TabsList>
-        <div className="ml-auto flex gap-1">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 px-2"
-            onClick={() => setBuyMax((value) => !value)}
-            title="Buy one level per tap, or as many as you can afford"
-          >
-            Buy {buyMax ? "max" : "×1"}
-          </Button>
-          <Button
-            size="sm"
-            className="h-8 px-2"
-            disabled={state.ryo <= 0}
-            onClick={() => act(["spend"])}
-            title="Spread all ryo over your upgrades"
-          >
-            <Coins className="mr-1 h-4 w-4" /> Spend all
-          </Button>
+    <div className="@container grid gap-3">
+      <section className="grid gap-1.5">
+        <div className="flex flex-wrap items-center gap-1">
+          <h3 className="font-semibold">Upgrades</h3>
+          {buying}
         </div>
-      </div>
-      <TabsContent value="shop" className="mt-1">
-        <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
-          {TD_SHOP.filter((item) => {
-            const jutsu = TD_SHOP_INFO[item].jutsu;
-            return !jutsu || tdJutsuUnlocked(state.config, jutsu);
-          }).map((item: TdShopItem) => {
-            const info = TD_SHOP_INFO[item];
-            const level = state.shop[item] ?? 0;
-            const cost = tdShopCost(state, item);
-            const maxed = level >= info.max;
-            return (
-              <button
-                type="button"
-                key={item}
-                disabled={maxed || state.ryo < cost}
-                onClick={(event) =>
-                  act(buyMax || event.shiftKey ? ["max", item] : ["buy", item])
-                }
-                title={`${info.description}${info.jutsu ? `. ${TD_JUTSU_INFO[info.jutsu].description}` : ""}`}
-                className="hover:bg-muted flex items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-sm disabled:opacity-50"
-              >
-                <span className="min-w-0 truncate">
-                  {info.name} <span className="text-muted-foreground">{level}</span>
-                </span>
-                <span className="shrink-0 font-semibold text-amber-600 dark:text-amber-400">
-                  {maxed ? "Max" : formatTdNumber(cost)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </TabsContent>
-      <TabsContent value="sentries" className="mt-1">
-        <Sentries state={state} act={act} />
-      </TabsContent>
-      <TabsContent value="arts" className="mt-1">
-        <div className="grid gap-1 text-sm sm:grid-cols-2">
-          {TD_SEAL_ARTS.map((art) => {
-            const info = TD_SEAL_ART_INFO[art];
-            const open = tdSealArtUnlocked(state.config, art);
-            return (
-              <div
-                key={art}
-                className={cn(
-                  "flex items-center gap-2 rounded-md border px-2 py-1",
-                  !open && "opacity-40",
-                  open && state.hero.chakra >= info.chakra && "border-sky-500",
-                )}
-                title={info.description}
-              >
-                <span className="text-base tracking-widest">
-                  {info.seals.map((seal) => SEAL_GLYPHS[seal]).join("")}
-                </span>
-                <span className="min-w-0 flex-1 truncate">{info.name}</span>
-                <span className="text-muted-foreground shrink-0">
-                  {open ? `${info.chakra} chakra` : `wave ${info.firstWave}`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </TabsContent>
-    </Tabs>
+        {shop}
+      </section>
+      {state.stats.sentrySlots > 0 && (
+        <section className="grid gap-1.5">
+          <h3 className="font-semibold">Sentries</h3>
+          <Sentries state={state} act={act} />
+        </section>
+      )}
+      <section className="grid gap-1.5">
+        <h3 className="font-semibold">Seal arts</h3>
+        {arts}
+      </section>
+    </div>
   );
 };
 
@@ -554,7 +611,7 @@ const Sentries = ({
   state: TdState;
   act: (command: TdCommand) => void;
 }) => (
-  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
+  <div className="grid grid-cols-1 gap-1 @[440px]:grid-cols-2 @[680px]:grid-cols-3">
     {Array.from({ length: state.stats.sentrySlots }, (_, slot) => {
       const sentry = state.sentries[slot];
       if (!sentry)
