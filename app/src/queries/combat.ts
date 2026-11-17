@@ -145,6 +145,7 @@ import { questAttemptIsActive } from "@/server/utils/questEntry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { getContentRole } from "@/utils/permissions";
 import {
+  getBalancePeriodStart,
   periodStart,
   postCombatStealthCooldownAt,
   secondsFromDate,
@@ -1857,6 +1858,9 @@ export type DataBattleAction = {
   battleType: (typeof BattleTypes)[number];
   battleWon: number;
   relatedBloodlineId?: string;
+  userLevel?: number;
+  userRank?: typeof dataBattleAction.$inferInsert.userRank;
+  turnOrder?: number;
 };
 
 /** Build a version-guarded battle deletion so settlement cannot remove a newer battle snapshot. */
@@ -2015,6 +2019,7 @@ export const deleteMpvpBattleQueueForFinishBattle = (
 export const insertDataBattleActionForSaveUsage = (
   client: Pick<DrizzleClient, "insert">,
   uniqueData: DataBattleAction[],
+  periodStart = getBalancePeriodStart(),
 ) =>
   client
     .insert(dataBattleAction)
@@ -2024,6 +2029,7 @@ export const insertDataBattleActionForSaveUsage = (
     .values(
       uniqueData.map((entry) => ({
         ...entry,
+        periodStart,
         relatedBloodlineId: entry.relatedBloodlineId ?? "",
       })),
     )

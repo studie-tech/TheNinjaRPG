@@ -1,4 +1,5 @@
 import { ItemTypes } from "@/drizzle/constants";
+import { balanceDemographicFields } from "@/layout/BalanceFiltering";
 import {
   battleTypesField,
   buildFilter,
@@ -18,6 +19,7 @@ const ITEM_BALANCE_FILTERING_SCHEMA = defineFilteringSchema({
   fields: [
     battleTypesField(["RANKED_PVP", "COMBAT", "RANKED_SPARRING", "SPARRING"]),
     minCountField,
+    ...balanceDemographicFields,
     {
       id: "itemTypes",
       label: "Item Types",

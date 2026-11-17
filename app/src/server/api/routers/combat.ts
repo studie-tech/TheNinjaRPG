@@ -2889,6 +2889,12 @@ export const initiateBattle = async (
   );
   if (!gridSize) return errorResponse("Too many NPCs for this battlefield");
 
+  const balanceParticipants = Object.fromEntries(
+    users
+      .filter((u) => !u.isAi)
+      .map((u) => [u.userId, { level: u.level, rank: u.rank, turnOrder: 0 }]),
+  );
+
   // Team bracket eligibility uses the initiating player; village and activity guards still apply to every member.
   const now = new Date();
   const nonAiTargets = users.filter((u) => targetIds.includes(u.userId) && !u.isAi);
@@ -3268,6 +3274,18 @@ export const initiateBattle = async (
     .sort((a, b) => b.initiative - a.initiative)
     .filter((u) => u.curHealth > 0);
   const activeUserId = attackerFirst ? users[0]?.userId : activeUser[0]?.userId;
+  // Only head-to-head human battles have an unambiguous first/second player cohort.
+  if (
+    users.length === 2 &&
+    users.every((u) => !u.isAi) &&
+    activeUserId &&
+    balanceParticipants[activeUserId]
+  ) {
+    for (const [id, snapshot] of Object.entries(balanceParticipants)) {
+      snapshot.turnOrder = id === activeUserId ? 1 : 2;
+    }
+  }
+  extraState.balanceParticipants = balanceParticipants;
 
   // When to start the battle
   const startTime = !PvpBattleTypes.includes(battleType)

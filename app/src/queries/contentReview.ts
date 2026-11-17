@@ -43,6 +43,7 @@ import {
   userItem,
   userJutsu,
 } from "@/drizzle/schema";
+import { balanceConditions } from "@/queries/balance";
 import type { DrizzleClient } from "@/server/db";
 import { getUtcDayWindowStart, secondsFromNow } from "@/utils/time";
 
@@ -734,7 +735,12 @@ export const selectDataBattleActionForUsageStats = (
       n: sum(dataBattleAction.count).mapWith(Number),
     })
     .from(dataBattleAction)
-    .where(inArray(dataBattleAction.type, ["jutsu", "item", "bloodline"]))
+    .where(
+      and(
+        ...balanceConditions(),
+        inArray(dataBattleAction.type, ["jutsu", "item", "bloodline"]),
+      ),
+    )
     .groupBy(
       dataBattleAction.type,
       dataBattleAction.contentId,

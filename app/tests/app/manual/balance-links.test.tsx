@@ -4,6 +4,7 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import * as client from "@/app/_trpc/client";
 import ManualBalance from "@/app/[shell]/manual/balance/page";
 import ManualBackupPage from "@/app/[shell]/manual/content_backups/page";
+import * as BalanceOverview from "@/layout/BalanceOverview";
 import * as ContentBox from "@/layout/ContentBox";
 import * as UserContext from "@/utils/UserContext";
 import { mockUserContextValue } from "../../setup/userContext";
@@ -25,6 +26,7 @@ afterEach(() => {
 });
 
 it("links each balance data source from its content row and column", () => {
+  vi.spyOn(BalanceOverview, "BalanceOverview").mockImplementation(() => <></>);
   const view = render(
     <AppRouterContext.Provider value={{} as never}>
       <ManualBalance />

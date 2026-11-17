@@ -11,6 +11,7 @@ import {
   visitorLog,
 } from "@/drizzle/schema";
 import { dataRouter } from "@/server/api/routers/data";
+import { getBalancePeriodStart } from "@/utils/time";
 import { insertItems, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
@@ -63,6 +64,7 @@ describeWithDatabase("statistics date ranges", () => {
         ] as const
       ).map(([battleType, createdAt]) => ({
         type: "item" as const,
+        periodStart: getBalancePeriodStart(),
         contentId: "kunai",
         battleType,
         battleWon: 1,

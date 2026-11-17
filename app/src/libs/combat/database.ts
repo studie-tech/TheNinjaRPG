@@ -452,8 +452,27 @@ export const saveUsage = async (
       outcome === "Won" ? "Lost" : outcome === "Lost" ? "Won" : "Fled";
     const oppositeBattleWon =
       oppositeOutcome === "Won" ? 1 : oppositeOutcome === "Fled" ? 2 : 0;
-    // Basic actions from this user
-    const data: DataBattleAction[] = [];
+    const snapshot = curBattle.extraState.balanceParticipants?.[userId];
+    // Ongoing battles without an initiation snapshot retain unknown demographics/order.
+    const demographics = {
+      userLevel: snapshot?.level ?? 0,
+      userRank: snapshot?.rank ?? ("NONE" as const),
+      turnOrder:
+        curBattle.usersState.filter((u) => !u.isAi && !u.isSummon).length === 2
+          ? (snapshot?.turnOrder ?? 0)
+          : 0,
+    };
+    // One outcome sample per player, independent of how many actions they used.
+    const data: DataBattleAction[] = user.isAi
+      ? []
+      : [
+          {
+            type: "participant",
+            contentId: "player",
+            battleType,
+            battleWon,
+          },
+        ];
     user.usedActions?.forEach((action) => {
       data.push({
         type: action.type,
@@ -500,7 +519,10 @@ export const saveUsage = async (
     }, [] as DataBattleAction[]);
     // Upsert dataBattleActions
     if (uniqueData.length > 0) {
-      await insertDataBattleActionForSaveUsage(client, uniqueData);
+      await insertDataBattleActionForSaveUsage(
+        client,
+        uniqueData.map((entry) => ({ ...entry, ...demographics })),
+      );
     }
   }
 };

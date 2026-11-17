@@ -50,9 +50,10 @@ export const ClearBattleDataButton: React.FC<ClearBattleDataButtonProps> = (prop
         <Loader explanation="Deleting data" />
       ) : (
         <>
-          Are you sure you want to clear all {label} battle action data? This action
-          cannot be undone and will reset all {label} usage statistics. This action will
-          be logged for future audit and review.
+          Are you sure you want to clear all {label} battle action data? This resets the
+          current reporting period only; completed archives are retained. This action
+          cannot be undone and will reset current {label} usage statistics. This action
+          will be logged for future audit and review.
         </>
       )}
     </ClearDataConfirm>
@@ -83,9 +84,9 @@ export const ClearContentBattleDataButton: React.FC<
       ) : (
         <>
           Are you sure you want to clear all battle action data for{" "}
-          <strong>{name}</strong>? This action cannot be undone and will reset all usage
-          statistics for this {label}. This action will be logged for future audit and
-          review.
+          <strong>{name}</strong>? Completed archives are retained. This action cannot
+          be undone and will reset current usage statistics for this {label}. This
+          action will be logged for future audit and review.
         </>
       )}
     </ClearDataConfirm>

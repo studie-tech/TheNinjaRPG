@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import type { RetryQuestDelay, TimeUnit } from "@/drizzle/constants";
 import {
+  BALANCE_PERIOD_DAYS,
   BANK_INTEREST_CLAIM_DAYS,
   PET_FEED_COOLDOWN_HOURS,
   REGEN_SECONDS,
@@ -488,3 +489,14 @@ export const getUtcHourStart = (now = new Date()) =>
       now.getUTCHours(),
     ),
   );
+
+/** Fixed fortnightly UTC windows, anchored to Monday 16 November 2026; zero identifies legacy data. */
+export const getBalancePeriodStart = (now = new Date()) => {
+  const anchor = Date.UTC(2026, 10, 16) / 1000;
+  const duration = BALANCE_PERIOD_DAYS * 86400;
+  return anchor + Math.floor((now.getTime() / 1000 - anchor) / duration) * duration;
+};
+
+/** Exclusive end of a fortnightly balance reporting window. */
+export const getBalancePeriodEnd = (start: number) =>
+  start + BALANCE_PERIOD_DAYS * 86400;

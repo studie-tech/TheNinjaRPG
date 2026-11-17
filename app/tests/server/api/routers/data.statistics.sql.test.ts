@@ -9,6 +9,7 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import { dataRouter } from "@/server/api/routers/data";
+import { getBalancePeriodStart } from "@/utils/time";
 import {
   insertItems,
   insertJutsus,
@@ -73,13 +74,21 @@ describeWithDatabase("data.getStatistics", () => {
     ]);
     await db.insert(dataBattleAction).values([
       {
+        periodStart: getBalancePeriodStart(),
         type: "jutsu",
         contentId: "fireball",
         battleType: "ARENA",
         battleWon: 1,
         count: 4,
       },
-      { type: "item", contentId: "kunai", battleType: "ARENA", battleWon: 0, count: 2 },
+      {
+        periodStart: getBalancePeriodStart(),
+        type: "item",
+        contentId: "kunai",
+        battleType: "ARENA",
+        battleWon: 0,
+        count: 2,
+      },
     ]);
   });
 

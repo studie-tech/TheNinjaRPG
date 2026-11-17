@@ -5,6 +5,10 @@ import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useContentDetails } from "@/hooks/useContentDetails";
+import {
+  BalanceUsageNote,
+  hasInvalidBalanceLevelRange,
+} from "@/layout/BalanceFiltering";
 import { ClearBattleDataButton } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
 import { ContentDetailsModal } from "@/layout/ContentDetailsModal";
@@ -154,13 +158,14 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
 
   // Get filter object
   const filter = getFilter(filterState);
+  const invalidRange = hasInvalidBalanceLevelRange(filter);
 
   // Queries
   const { data, isPending } = api.data.getJutsuBalanceStatistics.useQuery(filter, {
-    enabled: filterState.cf.isReady,
+    enabled: filterState.cf.isReady && !invalidRange,
   });
 
-  const isLoading = !filterState.cf.isReady || isPending;
+  const isLoading = !invalidRange && (!filterState.cf.isReady || isPending);
   const utils = api.useUtils();
 
   // Check if user can change content
@@ -220,7 +225,7 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
   return (
     <ContentBox
       title="Jutsu Balance"
-      subtitle="Data since last reset"
+      subtitle="Current two-week reporting period"
       defaultBackHref="/manual/jutsu"
       padding={false}
       topRightContent={
@@ -237,13 +242,16 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
         </div>
       }
     >
+      <BalanceUsageNote invalidRange={invalidRange} />
       <p className="p-3">
         Here we aim to give an overview of jutsu usage & win-statistics, so as to make
         it transparent if any jutsu or combination of jutsus is over/under-powered and
         in need of balance adjustment.
       </p>
       {isLoading && <Loader explanation="Loading data" />}
-      {!isLoading && tableData && <Table data={tableData} columns={columns} />}
+      {!invalidRange && !isLoading && tableData && (
+        <Table data={tableData} columns={columns} />
+      )}
 
       <ContentDetailsModal type="jutsu" {...details} />
     </ContentBox>

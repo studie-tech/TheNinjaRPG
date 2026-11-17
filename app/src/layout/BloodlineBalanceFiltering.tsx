@@ -1,4 +1,5 @@
 import { LetterRanks, StatTypes } from "@/drizzle/constants";
+import { balanceDemographicFields } from "@/layout/BalanceFiltering";
 import {
   battleTypesField,
   buildFilter,
@@ -17,6 +18,7 @@ const BLOODLINE_BALANCE_FILTERING_SCHEMA = defineFilteringSchema({
   fields: [
     battleTypesField(["COMBAT", "SPARRING"]),
     minCountField,
+    ...balanceDemographicFields,
     {
       id: "bloodlineRanks",
       label: "Bloodline Ranks",

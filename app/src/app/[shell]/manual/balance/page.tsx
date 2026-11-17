@@ -1,6 +1,7 @@
 "use client";
 
 import { SquareArrowOutUpRight } from "lucide-react";
+import { BalanceOverview } from "@/layout/BalanceOverview";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
@@ -65,22 +66,25 @@ export default function ManualBalance() {
   ];
 
   return (
-    <ContentBox
-      title="Balance"
-      subtitle="Links to Balance Data"
-      defaultBackHref="/manual"
-      padding={false}
-    >
-      <p className="p-3">
-        We believe the bath to getting the best balanced game is to be as data driven as
-        possible. This page is a collection of links to the various data sources that we
-        use to balance the game. Feel free to browse the data and see if you can find
-        any interesting patterns, which may help us improve the game. Also, if you
-        believe certain data visualizations would help us further in balancing efforts,
-        please write us a suggestion, e.g. in a ticket or on github.
-      </p>
-      <Table data={data} columns={columns} />
-    </ContentBox>
+    <>
+      <BalanceOverview />
+      <ContentBox
+        title="Detailed balance reports"
+        subtitle="Usage, power and completeness"
+        defaultBackHref="/manual"
+        padding={false}
+      >
+        <p className="p-3">
+          We believe the path to getting the best balanced game is to be as data driven
+          as possible. This page is a collection of links to the various data sources
+          that we use to balance the game. Feel free to browse the data and see if you
+          can find any interesting patterns, which may help us improve the game. Also,
+          if you believe certain data visualizations would help us further in balancing
+          efforts, please write us a suggestion, e.g. in a ticket or on github.
+        </p>
+        <Table data={data} columns={columns} />
+      </ContentBox>
+    </>
   );
 }
 

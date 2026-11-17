@@ -1229,12 +1229,16 @@ export const AutoCombatBattleTypes: BattleType[] = BattleTypes.filter(
   (type) => !ManualStartBattleTypes.includes(type),
 );
 
+/** Length of a UTC balance reporting window. */
+export const BALANCE_PERIOD_DAYS = 14;
+
 export const BattleDataEntryType = [
   "jutsu",
   "item",
   "bloodline",
   "basic",
   "ai",
+  "participant",
 ] as const;
 
 export const RetryQuestDelays = ["daily", "weekly", "monthly", "none"] as const;

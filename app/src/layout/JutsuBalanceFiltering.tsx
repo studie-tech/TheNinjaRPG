@@ -1,3 +1,4 @@
+import { balanceDemographicFields } from "@/layout/BalanceFiltering";
 import {
   battleTypesField,
   buildFilter,
@@ -18,6 +19,7 @@ const JUTSU_BALANCE_FILTERING_SCHEMA = defineFilteringSchema({
   fields: [
     battleTypesField(["RANKED_PVP", "COMBAT", "RANKED_SPARRING", "SPARRING"]),
     minCountField,
+    ...balanceDemographicFields,
     {
       id: "jutsuEffects",
       label: "Jutsu Effects",

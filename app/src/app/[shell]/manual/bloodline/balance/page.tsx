@@ -5,6 +5,10 @@ import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useContentDetails } from "@/hooks/useContentDetails";
+import {
+  BalanceUsageNote,
+  hasInvalidBalanceLevelRange,
+} from "@/layout/BalanceFiltering";
 import BloodlineBalanceFiltering, {
   getFilter,
   useFiltering,
@@ -159,9 +163,12 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
 
   // Get filter object
   const filter = getFilter(filterState);
+  const invalidRange = hasInvalidBalanceLevelRange(filter);
 
   // Queries
-  const { data, isPending } = api.data.getBloodlineBalanceStatistics.useQuery(filter);
+  const { data, isPending } = api.data.getBloodlineBalanceStatistics.useQuery(filter, {
+    enabled: filterState.cf.isReady && !invalidRange,
+  });
 
   const utils = api.useUtils();
 
@@ -214,7 +221,7 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
   return (
     <ContentBox
       title="Bloodline Balance"
-      subtitle="Data since last reset"
+      subtitle="Current two-week reporting period"
       defaultBackHref="/manual/bloodline"
       padding={false}
       topRightContent={
@@ -231,13 +238,16 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
         </div>
       }
     >
+      <BalanceUsageNote invalidRange={invalidRange} />
       <p className="p-3">
         Here we aim to give an overview of bloodline usage & win-statistics, so as to
         make it transparent if any bloodline is over/under-powered and in need of
         balance adjustment.
       </p>
-      {isPending && <Loader explanation="Loading data" />}
-      {!isPending && tableData && <Table data={tableData} columns={columns} />}
+      {!invalidRange && isPending && <Loader explanation="Loading data" />}
+      {!invalidRange && !isPending && tableData && (
+        <Table data={tableData} columns={columns} />
+      )}
 
       <ContentDetailsModal type="bloodline" {...details} />
     </ContentBox>

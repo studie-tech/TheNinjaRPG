@@ -48,6 +48,7 @@ import {
   userSkill,
   visitorLog,
 } from "@/drizzle/schema";
+import { balanceConditions } from "@/queries/balance";
 import type { DrizzleClient } from "@/server/db";
 import { getDateRangeEndExclusive, WEEK_S } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
@@ -604,12 +605,16 @@ export const selectUserDataForGetRecruitmentDailyCountsBySource3 = (
 /** Build the `dataBattleAction` deletion for `deleteSingleDataBattleAction`, using predicates on `contentId` and `type`. */
 export const deleteDataBattleActionForDeleteSingleDataBattleAction = (
   client: Pick<DrizzleClient, "delete">,
-  input: { contentId: string; type: "item" | "jutsu" | "bloodline" | "ai" | "basic" },
+  input: {
+    contentId: string;
+    type: "item" | "jutsu" | "bloodline" | "ai" | "basic" | "participant";
+  },
 ) =>
   client
     .delete(dataBattleAction)
     .where(
       and(
+        ...balanceConditions(),
         eq(dataBattleAction.contentId, input.contentId),
         eq(dataBattleAction.type, input.type),
       ),
@@ -619,7 +624,10 @@ export const deleteDataBattleActionForDeleteSingleDataBattleAction = (
 export const insertActionLogForDeleteSingleDataBattleAction = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
-  input: { type: "item" | "jutsu" | "bloodline" | "ai" | "basic"; contentId: string },
+  input: {
+    type: "item" | "jutsu" | "bloodline" | "ai" | "basic" | "participant";
+    contentId: string;
+  },
 ) =>
   client.insert(actionLog).values({
     id: nanoid(),
@@ -634,14 +642,17 @@ export const insertActionLogForDeleteSingleDataBattleAction = (
 /** Build the `dataBattleAction` deletion for `deleteAllDataBattleAction`, using predicates on `type`. */
 export const deleteDataBattleActionForDeleteAllDataBattleAction = (
   client: Pick<DrizzleClient, "delete">,
-  input: { type: "item" | "jutsu" | "bloodline" | "ai" | "basic" },
-) => client.delete(dataBattleAction).where(eq(dataBattleAction.type, input.type));
+  input: { type: "item" | "jutsu" | "bloodline" | "ai" | "basic" | "participant" },
+) =>
+  client
+    .delete(dataBattleAction)
+    .where(and(...balanceConditions(), eq(dataBattleAction.type, input.type)));
 
 /** Build the `actionLog` insert for `deleteAllDataBattleAction`. */
 export const insertActionLogForDeleteAllDataBattleAction = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
-  input: { type: "item" | "jutsu" | "bloodline" | "ai" | "basic" },
+  input: { type: "item" | "jutsu" | "bloodline" | "ai" | "basic" | "participant" },
 ) =>
   client.insert(actionLog).values({
     id: nanoid(),
@@ -697,7 +708,7 @@ export const selectDataBattleActionForGetBloodlineBalanceStatistics = (
     .from(dataBattleAction)
     .innerJoin(bloodline, eq(dataBattleAction.contentId, bloodline.id))
     .groupBy(bloodline.name, bloodline.id, dataBattleAction.battleWon)
-    .where(and(...whereConditions))
+    .where(and(...whereConditions, ...balanceConditions()))
     .having(gte(sum(dataBattleAction.count), input.minCount));
 
 /** Build the `userJutsu` selection for `getJutsuBalanceStatistics`. */
@@ -736,7 +747,7 @@ export const selectDataBattleActionForGetJutsuBalanceStatistics = (
       dataBattleAction.battleWon,
       dataBattleAction.battleType,
     )
-    .where(and(...whereConditions))
+    .where(and(...whereConditions, ...balanceConditions()))
     .having(havingClause);
 
 /** Build the `jutsu` listing for `getJutsuEffectsBalanceStatistics`, using the configured predicates. */
@@ -887,7 +898,7 @@ export const selectDataBattleActionForGetItemBalanceStatistics = (
       dataBattleAction.battleWon,
       dataBattleAction.battleType,
     )
-    .where(and(...whereConditions))
+    .where(and(...whereConditions, ...balanceConditions()))
     .having(havingClause);
 
 /** Build the `dataBattleAction` selection for `getAiBalanceStatistics`, using the configured predicates. */
@@ -906,7 +917,7 @@ export const selectDataBattleActionForGetAiBalanceStatistics = (
     .from(dataBattleAction)
     .innerJoin(userData, eq(dataBattleAction.contentId, userData.userId))
     .groupBy(userData.userId, dataBattleAction.battleWon, dataBattleAction.battleType)
-    .where(and(...whereConditions))
+    .where(and(...whereConditions, ...balanceConditions()))
     .having(havingClause);
 
 /** Build the `logBattleLengths` selection for `getBattleLengthStatistics`, using the configured predicates. */
@@ -1066,12 +1077,13 @@ export const selectDataBattleActionForGetStatistics = (
     .select({
       battleWon: dataBattleAction.battleWon,
       battleType: dataBattleAction.battleType,
-      count: count(dataBattleAction.id),
+      count: sum(dataBattleAction.count).mapWith(Number),
     })
     .from(dataBattleAction)
     .groupBy(dataBattleAction.battleWon, dataBattleAction.battleType)
     .where(
       and(
+        ...balanceConditions(),
         eq(dataBattleAction.contentId, input.id),
         ...(input.battleType
           ? [eq(dataBattleAction.battleType, input.battleType)]
