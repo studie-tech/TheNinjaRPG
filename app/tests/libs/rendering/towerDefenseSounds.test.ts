@@ -37,6 +37,24 @@ describe("tower defense sounds", () => {
     cueOf({ type: "wave", boss: true, titan: false, eras: [] });
   });
 
+  it("clinks a coin for a kill's bounty, softer than picked-up ryo", () => {
+    const kill: TdEvent = {
+      type: "kill",
+      id: 1,
+      x: 0,
+      y: 0,
+      boss: false,
+      elite: false,
+      kind: "grunt",
+      ryo: 12,
+    };
+    const bounty = eventSound(kill);
+    const pickup = eventSound({ type: "loot", kind: "ryo", collected: true });
+    expect(bounty?.[0]).toBe("coin");
+    expect(bounty?.[1]).toBeLessThan(pickup?.[1] ?? 0);
+    expect(bounty?.[2]).toBeGreaterThan(0);
+  });
+
   it("keeps the automatic stream of combat silent", () => {
     const silent: TdEvent[] = [
       {

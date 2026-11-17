@@ -1768,9 +1768,9 @@ export const createTowerDefenseScene = async (options: {
 
 /**
  * The sound for a simulation event: cue, relative volume and minimum gap in ms. Sound
- * marks what the player did and what demands attention, plus the hero's own throws and
- * the shuriken that land; kills, jutsu casts and small blasts stay silent so a crowded
- * wave stays calm.
+ * marks what the player did and what demands attention, plus the hero's own throws, the
+ * shuriken that land and the ryo each kill pays; jutsu casts and small blasts stay silent
+ * so a crowded wave stays calm.
  */
 export const eventSound = (event: TdEvent): [TdSfx, number, number] | null => {
   switch (event.type) {
@@ -1787,7 +1787,12 @@ export const eventSound = (event: TdEvent): [TdSfx, number, number] | null => {
         ? ["impact", event.crit ? 0.16 : 0.09, 60]
         : null;
     case "kill":
-      return event.boss ? ["explosion", 0.9, 0] : null;
+      // A bounty clinks like picked-up ryo, softer and spaced so a cleared crowd jingles.
+      return event.boss
+        ? ["explosion", 0.9, 0]
+        : event.ryo > 0
+          ? ["coin", 0.25, 90]
+          : null;
     case "art":
       return event.art === "fizzle"
         ? ["smoke", 0.4, 0]
