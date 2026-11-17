@@ -1783,10 +1783,9 @@ const buildFarmState = async (
     // Include hidden/non-seed references too: owned seeds and planted crops still need them.
     listItemForBuildFarmState(client),
     // Settlement can grant seeds; only a payout attempt re-reads for the delivered stacks.
-    extractionsPromise.then(({ attemptedPayout }) =>
-      attemptedPayout
-        ? inventoryPromise.then(() => fetchUserItems(client, userId))
-        : inventoryPromise,
+    Promise.all([extractionsPromise, inventoryPromise]).then(
+      ([{ attemptedPayout }, inventory]) =>
+        attemptedPayout ? fetchUserItems(client, userId) : inventory,
     ),
     fetchMasterySources(client, userId),
   ]);
