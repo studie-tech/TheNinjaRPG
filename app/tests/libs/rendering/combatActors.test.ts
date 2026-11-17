@@ -47,6 +47,18 @@ describe("combat fighter recipes", () => {
     });
     expect(parts[0]?.mask).toBeUndefined();
   });
+  it("draws an AI fighter that carries a character appearance, such as a village patrol, as that character", () => {
+    const spriteAppearance = resolveSpriteAppearance({});
+    const parts = combatActorParts(
+      user({ isAi: true, isOriginal: true, spriteAppearance }),
+      tile,
+      battle,
+    );
+    expect(parts.map((part) => part.kind)).not.toContain("aiAvatar");
+    expect(parts.find((part) => part.kind === "avatar")).toMatchObject({
+      character: spriteAppearance,
+    });
+  });
   it("scales LPC fighters to 75% and raises them within their tile", () => {
     const spriteAppearance = resolveSpriteAppearance({});
     const parts = combatActorParts(
