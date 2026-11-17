@@ -36,6 +36,13 @@ describeWithDatabase("ActionLog message lookups", () => {
       },
       {
         userId: "player",
+        tableName: "user",
+        relatedMsg: "JutsuLevelTransfer",
+        relatedId: "other-transfer-table",
+        createdAt: daysAgo(1),
+      },
+      {
+        userId: "player",
         tableName: "userjutsu",
         relatedMsg: "JutsuLevelTransfer",
         relatedId: "expired",
