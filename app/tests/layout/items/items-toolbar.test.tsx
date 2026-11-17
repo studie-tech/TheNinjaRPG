@@ -2,6 +2,8 @@ import { afterEach, beforeAll, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import * as inventoryCache from "@/hooks/useInventoryCacheUpdate";
+import * as loadoutCache from "@/hooks/useItemLoadoutCacheUpdate";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import type { ItemsToolbar as ItemsToolbarComponent } from "@/layout/items/ItemsToolbar";
 import * as mergeAll from "@/layout/MergeAllStacksButton";
@@ -12,17 +14,30 @@ import {
 } from "../../setup/browserGlobals";
 import { mockUserContextValue } from "../../setup/userContext";
 
-const mutation = () => ({ useMutation: () => ({ mutate: vi.fn(), isPending: false }) });
+type Options = {
+  onMutate: () => unknown;
+  onSuccess: (data: unknown, variables: unknown, snapshot: unknown) => Promise<void>;
+};
+const captured: Record<string, Options> = {};
+const mutation = (name?: string) => ({
+  useMutation: (options: Options) => {
+    if (name) captured[name] = options;
+    return { mutate: vi.fn(), isPending: false };
+  },
+});
+const updateInventory = vi.fn(async () => undefined);
+const updateUser = vi.fn(async () => undefined);
+const updateClearedLoadout = vi.fn(async () => undefined);
 let ItemsToolbar: typeof ItemsToolbarComponent;
 
 const mockClient = () =>
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     item: {
-      autoEquipOptimal: mutation(),
+      autoEquipOptimal: mutation("autoEquipOptimal"),
       useRepairAll: mutation(),
       repairAll: mutation(),
-      unequipAllItems: mutation(),
+      unequipAllItems: mutation("unequipAllItems"),
     },
   });
 
@@ -34,11 +49,18 @@ beforeAll(async () => {
 
 beforeEach(() => {
   installBrowserGlobals();
+  for (const fn of [updateInventory, updateUser, updateClearedLoadout]) fn.mockClear();
   mockClient();
   mockUserContextValue({
-    prepareUserUpdate: vi.fn(),
-    updateUser: vi.fn(),
+    prepareUserUpdate: vi.fn(() => 7),
+    updateUser,
   } as never);
+  vi.spyOn(inventoryCache, "useInventoryCacheUpdate").mockImplementation(
+    () => ({ prepareInventoryUpdate: () => "inventory", updateInventory }) as never,
+  );
+  vi.spyOn(loadoutCache, "useItemLoadoutCacheUpdate").mockImplementation(
+    () => ({ prepareLoadoutUpdate: () => "loadouts", updateClearedLoadout }) as never,
+  );
   vi.spyOn(itemLoadout, "default").mockImplementation((() => (
     <p>Item loadout</p>
   )) as never);
@@ -185,3 +207,37 @@ it.each([
     expect(screen.queryByRole("dialog")).toBeNull();
   },
 );
+
+it("places auto-equipped gear from the confirmed slots without reading the inventory", async () => {
+  render(<ItemsToolbar userData={player("NONE")} userItems={[]} />);
+  const options = captured.autoEquipOptimal!;
+  const changes = [{ id: "boots", equipped: "FEET", beforeEquipped: "NONE" }];
+  await options.onSuccess(
+    { success: true, message: "Equipped", equipmentChanges: changes },
+    undefined,
+    options.onMutate(),
+  );
+  const [update, snapshot] = updateInventory.mock.calls[0] as unknown as [
+    (rows: { id: string; equipped: string }[]) => unknown,
+    unknown,
+  ];
+  expect(snapshot).toBe("inventory");
+  expect(update([{ id: "boots", equipped: "NONE" }])).toEqual([
+    { id: "boots", equipped: "FEET" },
+  ]);
+});
+
+it("applies a confirmed unequip-all to the inventory, profile and cleared loadout", async () => {
+  render(<ItemsToolbar userData={player("NONE")} userItems={[]} />);
+  const options = captured.unequipAllItems!;
+  const data = {
+    success: true,
+    message: "Unequipped",
+    equipmentChanges: [{ id: "helmet", equipped: "NONE", beforeEquipped: "HEAD" }],
+    clearedLoadoutId: "main",
+  };
+  await options.onSuccess(data, undefined, options.onMutate());
+  expect(updateInventory).toHaveBeenCalledWith(expect.any(Function), "inventory");
+  expect(updateUser).toHaveBeenCalledWith(data, { revision: 7 });
+  expect(updateClearedLoadout).toHaveBeenCalledWith("main", "loadouts");
+});

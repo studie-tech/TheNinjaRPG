@@ -135,6 +135,7 @@ import {
   findJutsuReskinForEvolveJutsu,
   findJutsuReskinForUpdateReskin,
   findPetSpeciesForUpdate,
+  findUserJutsuForForget,
   findUserJutsuForRemoveReskin,
   findUserJutsuForUpdateReskin,
   insertActionLogForAdjustUserJutsu,
@@ -846,23 +847,18 @@ export const jutsuRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [userjutsus, queuedJutsuIds] = await Promise.all([
-        fetchUserJutsus(ctx.drizzle, ctx.userId),
-        fetchQueuedJutsuIds(ctx.drizzle, ctx.userId),
-      ]);
-      const userjutsuObj = userjutsus.find((j) => j.id === input.id);
-      if (userjutsuObj && queuedJutsuIds.has(userjutsuObj.jutsuId)) {
-        return errorResponse(
-          "Cancel queued training of this jutsu before forgetting it",
-        );
+      // The deletion itself checks ownership and the training queue.
+      const deleted = await deleteUserJutsuForForget(ctx.drizzle, input, ctx);
+      if (deleted.rowsAffected === 1) {
+        return { success: true, message: "Jutsu forgotten" };
       }
-      if (userjutsuObj) {
-        const res1 = await deleteUserJutsuForForget(ctx.drizzle, input);
-        if (res1.rowsAffected === 1) {
-          return { success: true, message: "Jutsu forgotten" };
-        }
-      }
-      return errorResponse(`Could not find jutsu to delete`);
+      // A row that is still there was kept by its queued training.
+      const kept = await findUserJutsuForForget(ctx.drizzle, input, ctx);
+      return errorResponse(
+        kept
+          ? "Cancel queued training of this jutsu before forgetting it"
+          : "Could not find jutsu to delete",
+      );
     }),
 
   getEvolutions: publicProcedure

@@ -145,6 +145,57 @@ describeWithDatabase("home.moveUserItems", () => {
       message: "You cannot use your home storage right now",
     });
   });
+
+  it("refuses a banned player on both storage actions without moving anything", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ isBanned: true })
+      .where(eq(userData.userId, userId));
+    const home = await callerFor(homeRouter, userId);
+    expect(await home.toggleStoreItem({ userItemId: "sword-a" })).toMatchObject({
+      success: false,
+      message: "You are banned",
+    });
+    expect(
+      await home.moveUserItems({ userItemIds: ["sword-a"], toHome: true }),
+    ).toMatchObject({ success: false, message: "You are banned" });
+    expect(await storedIds()).toEqual([]);
+  });
+
+  it("reports the stack a toggle moved and its new side", async () => {
+    const home = await callerFor(homeRouter, userId);
+    expect(await home.toggleStoreItem({ userItemId: "sword-a" })).toMatchObject({
+      success: true,
+      storedAtHome: true,
+      movedUserItemIds: ["sword-a"],
+      inventoryChanges: [],
+    });
+    expect(await storedIds()).toEqual(["sword-a"]);
+    expect(await home.toggleStoreItem({ userItemId: "sword-a" })).toMatchObject({
+      success: true,
+      storedAtHome: false,
+      movedUserItemIds: ["sword-a"],
+    });
+    expect(await storedIds()).toEqual([]);
+  });
+
+  it("does not store a stack equipped after the toggle read it", async () => {
+    const db = await getTestDatabase();
+    const equipFirst = beforeStatements(db, userItem, [
+      () =>
+        db
+          .update(userItem)
+          .set({ equipped: "HAND_2" })
+          .where(eq(userItem.id, "sword-a")),
+    ]);
+    const home = callerForDatabase(homeRouter, userId, equipFirst);
+    expect(await home.toggleStoreItem({ userItemId: "sword-a" })).toMatchObject({
+      success: false,
+      message: "Inventory changed, please refresh and try again",
+    });
+    expect(await storedIds()).toEqual([]);
+  });
 });
 
 describeWithDatabase("home.moveUserItems stacking", () => {

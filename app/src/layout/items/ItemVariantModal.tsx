@@ -3,8 +3,13 @@
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import {
+  getSelectedVariantInventory,
+  getSelectedVariantUserPatch,
+} from "@/deltas/item";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import { useCosmetics } from "@/hooks/useCosmetics";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import Image from "@/layout/Image";
 import Modal from "@/layout/Modal";
 import { isEquippableUserItem } from "@/libs/item";
@@ -20,6 +25,7 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   onClose,
 }) => {
   const utils = api.useUtils();
+  const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
   const { refreshWardrobe } = useCosmetics();
   const {
     data: userData,
@@ -83,13 +89,29 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   });
 
   const select = api.item.selectVariant.useMutation({
-    onSuccess: async (result) => {
+    onMutate: () => ({
+      inventory: prepareInventoryUpdate(),
+      user: prepareUserUpdate(),
+    }),
+    onSuccess: async (result, input, snapshot) => {
       showMutationToast(result);
       if (result.success) {
         // One selection changes inventory labels, the profile preview and the public sector recipe.
+        const variant = result.activeVariant;
         await Promise.all([
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.profile.getUser.invalidate(),
+          updateInventory(
+            variant === undefined
+              ? undefined
+              : (rows) => getSelectedVariantInventory(rows, input.userItemId, variant),
+            snapshot.inventory,
+          ),
+          updateUser(
+            variant === undefined
+              ? undefined
+              : (current) =>
+                  getSelectedVariantUserPatch(current.items, input.userItemId, variant),
+            { revision: snapshot.user },
+          ),
           utils.travel.getSectorData.invalidate(),
         ]);
         onClose();

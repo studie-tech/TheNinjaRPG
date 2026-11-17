@@ -41,6 +41,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserItemWithItem, UserItemWithRelations } from "@/drizzle/schema";
 import { useSleepToggle } from "@/hooks/sleep";
+import { useHomeStorageToggle } from "@/hooks/useHomeStorageMove";
 import BanInfo from "@/layout/BanInfo";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
@@ -183,19 +184,15 @@ function Residence() {
       },
     });
 
-  const { mutate: toggleStoreItem, isPending: isTogglingStoreItem } =
-    api.home.toggleStoreItem.useMutation({
-      onSuccess: (data) => {
-        showMutationToast(data);
-        // Keep item details open after a rejection so the player can read feedback and retry.
-        if (data.success) {
-          void userHomeRefetch();
-          void userItemsRefetch();
-          setIsModalOpen(false);
-          setSelectedItem(undefined);
-        }
-      },
-    });
+  const { toggleStoreItem, isToggling: isTogglingStoreItem } = useHomeStorageToggle({
+    onToggled: (data) => {
+      // Keep item details open after a rejection so the player can read feedback and retry.
+      if (data.success) {
+        setIsModalOpen(false);
+        setSelectedItem(undefined);
+      }
+    },
+  });
 
   const { toggleSleep, isTogglingSleep } = useSleepToggle();
   const saveFurniture = api.home.saveFurnitureLayout.useMutation({
@@ -990,7 +987,7 @@ function Residence() {
                   selectedItem.storedAtHome ? "Take from Storage" : "Store Item"
                 }
                 onAccept={() => {
-                  toggleStoreItem({ userItemId: selectedItem.id });
+                  toggleStoreItem(selectedItem.id);
                 }}
               >
                 {showsItemLevelBadge(selectedItem.item) &&

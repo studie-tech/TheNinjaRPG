@@ -2,7 +2,13 @@ import type { RouterOutputs } from "@/app/_trpc/client";
 import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import { VARIANT_CURRENCY_FIELD, type VariantCurrency } from "@/drizzle/constants";
-import type { Item, UserData, UserItem, UserItemWithRelations } from "@/drizzle/schema";
+import type {
+  Item,
+  ItemVariant,
+  UserData,
+  UserItem,
+  UserItemWithRelations,
+} from "@/drizzle/schema";
 import { effectiveMasteries, type MasteryBuffUser } from "@/libs/mastery";
 import { calcMaxEnergy } from "@/libs/profile";
 import { hasEnergyQueue } from "@/libs/queue";
@@ -191,22 +197,20 @@ export const getUnchangedEquipmentUserUpdate = ({
 
 /**
  * Remove confirmed unequipped rows and recompute derived gear values only when every guarded
- * write succeeded. Partial writes or queued energy work require reconciliation.
+ * write succeeded (`isConfirmed`). Partial writes or queued energy work require reconciliation.
  */
 export const getUnequippedUserUpdate = ({
-  outcomes,
+  isConfirmed,
   user,
   equippedItems,
 }: {
-  outcomes: {
-    rowsAffected: number;
-  }[];
+  isConfirmed: boolean;
   user: NonNullable<Awaited<ReturnType<typeof fetchUserEquipmentSnapshot>>>;
   equippedItems: NonNullable<
     NonNullable<Awaited<ReturnType<typeof fetchUserEquipmentSnapshot>>>["items"]
   >;
 }) => ({
-  userPatch: outcomes.every((outcome) => outcome.rowsAffected === 1)
+  userPatch: isConfirmed
     ? getUserEquipmentPatch({
         ...user,
         items: user.items.filter(
@@ -214,11 +218,40 @@ export const getUnequippedUserUpdate = ({
         ),
       })
     : undefined,
-  userDelta:
-    outcomes.every((outcome) => outcome.rowsAffected === 1) && !hasEnergyQueue(user)
-      ? {}
-      : undefined,
+  userDelta: isConfirmed && !hasEnergyQueue(user) ? {} : undefined,
 });
+
+/** Describe the slots a confirmed unequip-all cleared, using each row's loaded slot as its baseline. */
+export const getUnequippedEquipmentChanges = (
+  equippedItems: Pick<UserItem, "id" | "equipped">[],
+) =>
+  equippedItems.map((row) => ({
+    id: row.id,
+    equipped: "NONE" as const,
+    beforeEquipped: row.equipped,
+  }));
+
+/**
+ * Name the item loadout an unequip-all emptied: null when it had nothing to clear, undefined
+ * when its clearing write did not confirm, so clients read the loadouts again.
+ */
+export const getClearedLoadoutId = (
+  loadout: { id: string } | undefined,
+  cleared: { rowsAffected: number } | undefined,
+) => {
+  if (!loadout) return null;
+  return cleared?.rowsAffected === 1 ? loadout.id : undefined;
+};
+
+/** Describe the slots a confirmed auto-equip filled; its guarded write only fills unequipped rows. */
+export const getAutoEquippedChanges = (
+  assignments: { userItemId: string; slot: UserItem["equipped"] }[],
+) =>
+  assignments.map((assignment) => ({
+    id: assignment.userItemId,
+    equipped: assignment.slot,
+    beforeEquipped: "NONE" as const,
+  }));
 
 /** Combine the confirmed progression and meal projections without additional balance changes. */
 export const getConsumedMealUserUpdate = ({
@@ -517,6 +550,60 @@ export const getHomeStorageMovedInventory = <
   movedIds.every((id) => rows.some((row) => row.id === id))
     ? rows.map((row) => (movedIds.includes(row.id) ? { ...row, storedAtHome } : row))
     : undefined;
+
+/**
+ * Place the stacks a home storage move confirmed on their new side, then apply the stack
+ * merges at their destination; any stack missing from the loaded rows asks for a read.
+ */
+export const getHomeStorageMergedInventory = <
+  T extends Pick<UserItem, "id" | "itemId" | "quantity" | "storedAtHome">,
+>(
+  rows: T[],
+  movedIds: string[],
+  storedAtHome: boolean,
+  inventoryChanges: InventoryQuantityChange[] | undefined,
+): T[] | undefined => {
+  const switched = getHomeStorageMovedInventory(rows, movedIds, storedAtHome);
+  return switched && getInventoryQuantities(switched, inventoryChanges);
+};
+
+/**
+ * Point the stack at its confirmed variant, keeping each view's variant relation in step;
+ * a stack missing from the loaded rows asks for a read.
+ */
+export const getSelectedVariantInventory = <
+  T extends Pick<UserItem, "id" | "activeVariantId">,
+>(
+  rows: T[],
+  userItemId: string,
+  variant: ItemVariant | null,
+): T[] | undefined =>
+  rows.some((row) => row.id === userItemId)
+    ? rows.map((row) =>
+        row.id === userItemId
+          ? {
+              ...row,
+              activeVariantId: variant?.id ?? null,
+              ...("activeVariant" in row ? { activeVariant: variant } : {}),
+            }
+          : row,
+      )
+    : undefined;
+
+/**
+ * Show the confirmed variant on worn gear. The profile lists only equipped stacks, so a
+ * stack it does not list leaves the profile unchanged.
+ */
+export const getSelectedVariantUserPatch = <
+  T extends Pick<UserItem, "id" | "activeVariantId">,
+>(
+  items: T[],
+  userItemId: string,
+  variant: ItemVariant | null,
+) => {
+  const updated = getSelectedVariantInventory(items, userItemId, variant);
+  return updated ? { items: updated } : {};
+};
 
 /** Credit the ryo a confirmed single or bulk sale paid for the stacks it removed. */
 export const getSaleUserUpdate = (ryo: number) => ({ userDelta: { money: ryo } });

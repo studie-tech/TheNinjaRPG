@@ -46,7 +46,6 @@ import { getBiomeFromTileType } from "@/libs/travel";
 import {
   executeResultForMoveUserItems,
   executeResultForSetHomeSharing,
-  executeResultForToggleStoreItem,
   executeResultForUpgradeHome,
   executeRowsForPublishHomeFurnitureLayout,
   fetchHomeFurnitureUser,
@@ -565,7 +564,16 @@ export const homeRouter = createTRPCRouter({
       },
     })
     .input(homeStorageInputSchema)
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        // The stack's new side; omitted on rejection.
+        storedAtHome: z.boolean().optional(),
+        // Omitted when the stack did not finish joining a destination stack, so clients
+        // read the inventory again.
+        movedUserItemIds: z.array(z.string()).optional(),
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       // Read userData before inventory so the updatedAt CAS below
@@ -580,6 +588,7 @@ export const homeRouter = createTRPCRouter({
       const userItemResult = useritems.find((ui) => ui.id === input.userItemId);
       // Guard
       if (!user) return errorResponse("User not found");
+      if (user.isBanned) return errorResponse("You are banned");
       const blocked = homeStorageBlockReason(user);
       if (blocked) return errorResponse(blocked);
       if (!userItemResult) return errorResponse("Item not found or is equipped");
@@ -619,27 +628,31 @@ export const homeRouter = createTRPCRouter({
           return errorResponse(getHomeStorageBucketFullMessage(homeBucket));
         }
       }
-      // Publish the item move and capacity snapshot together. Literal assignments avoid
-      // depending on MySQL's unspecified joined-UPDATE assignment order.
+      // Publish the item move and capacity snapshot together, as a single-stack bulk move.
+      const toHome = !userItemResult.storedAtHome;
       const result = await retryOnDeadlock(() =>
-        executeResultForToggleStoreItem(ctx.drizzle, user, userItemResult, ctx, input),
+        executeResultForMoveUserItems(ctx.drizzle, user, [userItemResult.id], toHome),
       );
       if (result.rowsAffected === 0) {
         return errorResponse("Inventory changed, please refresh and try again");
       }
-      // The home page reads the inventory again after a move, so the merge needs no projection.
-      await mergeMovedStacks(
+      const inventoryChanges = await mergeMovedStacks(
         ctx.drizzle,
         ctx.userId,
         useritems,
         [userItemResult],
-        !userItemResult.storedAtHome,
+        toHome,
       );
       return {
         success: true,
-        message: userItemResult.storedAtHome
-          ? "Item retrieved from your home."
-          : "Item stored in your home.",
+        message: toHome
+          ? "Item stored in your home."
+          : "Item retrieved from your home.",
+        storedAtHome: toHome,
+        // A merge that lost a race leaves stacks the client cannot project; it reads them again.
+        ...(inventoryChanges
+          ? { movedUserItemIds: [userItemResult.id], inventoryChanges }
+          : {}),
       };
     }),
   moveUserItems: protectedProcedure

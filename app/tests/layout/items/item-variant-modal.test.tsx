@@ -4,6 +4,7 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { useState } from "react";
 import * as client from "@/app/_trpc/client";
 import type { UserItemWithVariants } from "@/drizzle/schema";
+import * as inventoryCache from "@/hooks/useInventoryCacheUpdate";
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
 import * as toast from "@/libs/toast";
 import {
@@ -19,6 +20,9 @@ type Options = {
 };
 const captured: Record<string, Options> = {};
 const onClose = vi.fn();
+const updateInventory = vi.fn(async () => undefined);
+const updateUser = vi.fn(async () => undefined);
+const invalidate = { invalidate: vi.fn(async () => undefined) };
 const userItem = {
   id: "row",
   activeVariantId: null,
@@ -46,19 +50,26 @@ beforeEach(() => {
   mockCosmetics();
   installBrowserGlobals({ resizeObserver: true });
   vi.clearAllMocks();
+  for (const fn of [updateInventory, updateUser, invalidate.invalidate]) fn.mockClear();
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   mockUserContextValue({
     data: { userId: "viewer" },
-    prepareUserUpdate: vi.fn(),
-    updateUser: vi.fn(async () => undefined),
+    prepareUserUpdate: vi.fn(() => 3),
+    updateUser,
   } as never);
+  vi.spyOn(inventoryCache, "useInventoryCacheUpdate").mockImplementation(
+    () =>
+      ({
+        prepareInventoryUpdate: () => "inventory-snapshot",
+        updateInventory,
+      }) as never,
+  );
   const capture = (name: string) => ({
     useMutation: (options: Options) => {
       captured[name] = options;
       return { mutate: vi.fn(), isPending: false };
     },
   });
-  const invalidate = { invalidate: vi.fn(async () => undefined) };
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
       item: {
@@ -116,6 +127,44 @@ it.each(["consumeVariantToken", "selectVariant"])(
     expect(screen.getByText("Closed")).toBeDefined();
   },
 );
+
+it("patches the inventory and worn gear with the saved variant instead of reading them again", async () => {
+  mount();
+  const variant = { id: "gold" };
+  await act(() =>
+    captured.selectVariant!.onSuccess(
+      { success: true, message: "Done", activeVariant: variant },
+      { userItemId: "row", variantId: "gold" },
+      { inventory: "inventory-snapshot", user: 3 } as never,
+    ),
+  );
+  expect(updateInventory).toHaveBeenCalledWith(
+    expect.any(Function),
+    "inventory-snapshot",
+  );
+  const [patch, options] = updateUser.mock.calls[0] as unknown as [
+    (current: { items: unknown[] }) => unknown,
+    unknown,
+  ];
+  expect(options).toEqual({ revision: 3 });
+  expect(patch({ items: [{ id: "row", activeVariantId: null }] })).toEqual({
+    items: [{ id: "row", activeVariantId: "gold" }],
+  });
+  expect(invalidate.invalidate).toHaveBeenCalledTimes(1);
+});
+
+it("reads the inventory and profile again when the saved variant is not reported", async () => {
+  mount();
+  await act(() =>
+    captured.selectVariant!.onSuccess(
+      { success: true, message: "Done" },
+      { userItemId: "row", variantId: null },
+      { inventory: "inventory-snapshot", user: 3 } as never,
+    ),
+  );
+  expect(updateInventory).toHaveBeenCalledWith(undefined, "inventory-snapshot");
+  expect(updateUser).toHaveBeenCalledWith(undefined, { revision: 3 });
+});
 
 it("keeps the modal open after a purchase", async () => {
   mount();
