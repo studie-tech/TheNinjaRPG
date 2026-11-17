@@ -1,13 +1,22 @@
 /**
  * Database access for tournament events; authorization and transaction scopes stay in callers.
  */
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
-import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
-import { tournament, userData, userJutsu } from "@/drizzle/schema";
+import { and, eq, gte, inArray, isNull, notExists, sql } from "drizzle-orm";
+import { IMG_MANUAL_TOURNAMENTS, JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
+import {
+  battle,
+  rankedLoadout,
+  tournament,
+  tournamentMatch,
+  tournamentRewardClaim,
+  userData,
+  userJutsu,
+} from "@/drizzle/schema";
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
+import { ObjectiveReward } from "@/validators/rewards";
 import type { EventTournamentState } from "@/validators/tournament";
 
 /** Load an event and its combat tokens together for synchronization and versioned edits. */
@@ -89,16 +98,6 @@ export const fetchEventNoticeState = async (client: DrizzleClient, userId: strin
   });
   return { notices, isEventParticipant: participations.length > 0 };
 };
-
-import { isNull, notExists } from "drizzle-orm";
-import { IMG_MANUAL_TOURNAMENTS } from "@/drizzle/constants";
-import {
-  battle,
-  rankedLoadout,
-  tournamentMatch,
-  tournamentRewardClaim,
-} from "@/drizzle/schema";
-import { ObjectiveReward } from "@/validators/rewards";
 
 /**
  * Build the `tournament` listing for `listEvents`, using predicates on `type`. Only the
