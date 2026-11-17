@@ -94,12 +94,15 @@ export const useServiceRequests = () => {
   useEffect(() => {
     if (!terminal || observed.current === terminal) return;
     observed.current = terminal;
-    void Promise.all([
-      invalidateInventory(),
-      refreshUser(),
-      utils.profile.getSidebarTimers.invalidate(),
-      utils.comments.getUserConversations.invalidate(),
-    ]);
+    void (async () => {
+      // Profile settlement can start queued crafts and create inventory.
+      await refreshUser();
+      await Promise.all([
+        invalidateInventory(),
+        utils.profile.getSidebarTimers.invalidate(),
+        utils.comments.getUserConversations.invalidate(),
+      ]);
+    })();
   }, [terminal, invalidateInventory, refreshUser, utils]);
   return query;
 };

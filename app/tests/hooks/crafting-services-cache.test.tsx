@@ -13,6 +13,7 @@ import {
 } from "@/deltas/craftingServices";
 import type { UserCache } from "@/deltas/profile";
 import type { CraftingServiceRequest, UserItem } from "@/drizzle/schema";
+import { useCraftingServiceEvents } from "@/hooks/useCraftingServiceEvents";
 import {
   useCraftingServiceCache,
   useServiceRequests,
@@ -396,3 +397,64 @@ it("reconciles a terminal delivery on a cold query's first response", async () =
   });
   await waitFor(() => expect(refreshUser).toHaveBeenCalledTimes(1));
 });
+
+it.each(["event", "polling"])(
+  "settles the profile before dependent receipt recovery through %s",
+  async (kind) => {
+    const profile = deferred();
+    let settled = false;
+    const output = { ...material, id: "queued-output", itemId: "sword", quantity: 1 };
+    const { client, wrapper, calls } = harness(
+      async (path) => {
+        if (path === "profile.getUser") {
+          await profile.promise;
+          // Profile settlement can start an overdue queued craft and create its output.
+          settled = true;
+          return { userData: { ...requester, items: [] }, notifications: [] };
+        }
+        if (path === "item.getUserItemsWithVariants") return settled ? [output] : [];
+        if (path === "occupation.getServiceRequests") return [];
+        if (path === "profile.getSidebarTimers") return { crafting: null };
+        throw new Error(`Unexpected query ${path}`);
+      },
+      { userProvider: true },
+    );
+    seedSubmissionViews(client);
+    client.setQueryData(profileKey, {
+      userData: { ...requester, items: [] },
+      notifications: [],
+    });
+    let refresh!: () => Promise<unknown>;
+    const Views = () => {
+      const { refreshUser } = userContext.useUserData();
+      refresh = useCraftingServiceEvents(refreshUser).refreshServiceViews;
+      useServiceRequests();
+      testApi.item.getUserItemsWithVariants.useQuery();
+      testApi.profile.getSidebarTimers.useQuery();
+      return null;
+    };
+    render(<Views />, { wrapper });
+    let pending: Promise<unknown> | undefined;
+    await act(async () => {
+      if (kind === "event") pending = refresh();
+      else client.setQueryData(requestsKey, [{ ...receipt, status: "REFUNDED" }]);
+    });
+    await waitFor(() => expect(calls).toContain("profile.getUser"));
+    expect(calls).toEqual(["profile.getUser"]);
+    await act(async () => {
+      profile.resolve();
+      await pending;
+    });
+    await waitFor(() =>
+      expect(client.getQueryData(inventoryKeys[1]!)).toEqual([output]),
+    );
+    expect(settled).toBe(true);
+    expect(
+      calls.filter((path) => path === "item.getUserItemsWithVariants"),
+    ).toHaveLength(1);
+    for (const key of [inventoryKeys[1]!, timersKey]) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+      expect(client.getQueryState(key)?.fetchStatus).toBe("idle");
+    }
+  },
+);
