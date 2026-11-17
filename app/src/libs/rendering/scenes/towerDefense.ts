@@ -1806,7 +1806,8 @@ export const eventSound = (event: TdEvent): [TdSfx, number, number] | null => {
     case "heroHit":
       return ["hurt", 0.3, 900];
     case "substitution":
-      return event.perfect ? ["clash", 0.8, 0] : ["smoke", 0.5, 0];
+      // A timed substitution leaves the log to take the blow; a missed one only smokes.
+      return event.perfect ? ["log", 0.8, 0] : ["smoke", 0.5, 0];
     case "blink":
       return ["pulse", 0.5, 0];
     case "bossMove":

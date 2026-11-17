@@ -1156,6 +1156,13 @@
       "when": 1794930398580,
       "tag": "0165_military_oracle",
       "breakpoints": false
+    },
+    {
+      "idx": 166,
+      "version": "5",
+      "when": 1794931350278,
+      "tag": "0166_futuristic_bug",
+      "breakpoints": false
     }
   ]
 }
