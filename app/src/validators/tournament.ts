@@ -137,6 +137,8 @@ export type EventTournamentState = {
   scheduledRoundAt: number | null;
   finishedAt: number | null;
   payRewards: boolean;
+  /** Set once every rewarded entrant holds a receipt; later synchronization skips payout. */
+  rewardsPaidAt?: number;
   standings: (string | null)[];
   audit: { userId: string; action: string; at: number }[];
 };

@@ -63,7 +63,12 @@ export const EventTournaments = ({
   });
   const details = api.tournament.getEvent.useQuery(
     { tournamentId: tournamentId ?? "" },
-    { enabled: !!tournamentId && isSignedIn, refetchInterval: 5000 },
+    {
+      enabled: !!tournamentId && isSignedIn,
+      // A finished event changes only through a staff action, which refreshes its own view.
+      refetchInterval: (query) =>
+        isTerminalEvent(query.state.data?.eventData?.status) ? false : 5000,
+    },
   );
   const utils = api.useUtils();
   const refresh = async () => {
@@ -828,6 +833,10 @@ const StaffTournamentControls = ({
 
 /** Display event timestamps in the player's browser locale and time zone. */
 const date = (value: number) => new Date(value).toLocaleString();
+
+/** Completed and cancelled events no longer advance on their own. */
+const isTerminalEvent = (status: EventTournamentState["status"] | undefined) =>
+  status === "COMPLETED" || status === "CANCELLED";
 
 /** Reconcile synchronized launches, rewards and participation through the profile query. */
 const useEventActionCache = () => {
