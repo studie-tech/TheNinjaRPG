@@ -311,7 +311,7 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
   if (offers.data?.crafter.occupation !== "CRAFTING")
     return <p>This player does not offer crafting services.</p>;
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <p>
         {offers.data.crafter.username} · {offers.data.crafter.rank.toLowerCase()}
       </p>
