@@ -3290,6 +3290,7 @@ export const userData = mysqlTable(
     senseiId: varchar("senseiId", { length: 191 }),
     medicalExperience: int("medicalExperience").default(0).notNull(),
     craftingExperience: int("craftingExperience").default(0).notNull(),
+    serviceCraftUntil: datetime("serviceCraftUntil", { mode: "date", fsp: 3 }),
     huntingExperience: int("huntingExperience").default(0).notNull(),
     gatheringExperience: int("gatheringExperience").default(0).notNull(),
     farmingExperience: int("farmingExperience").default(0).notNull(),
@@ -3620,6 +3621,10 @@ export const userPetRelations = relations(userPet, ({ one }) => ({
 }));
 
 export const userDataRelations = relations(userData, ({ one, many }) => ({
+  serviceRequests: many(craftingServiceRequest, { relationName: "serviceCrafter" }),
+  outgoingServiceRequests: many(craftingServiceRequest, {
+    relationName: "serviceRequester",
+  }),
   attributes: many(userAttribute),
   spriteAnimationBindings: many(aiSpriteAnimation),
   home: one(userHome, { fields: [userData.userId], references: [userHome.userId] }),
@@ -8049,3 +8054,79 @@ export const forumRestrictionRelations = relations(forumRestriction, ({ one }) =
 export const forumReactionRelations = relations(forumReaction, ({ one }) => ({
   post: one(forumPost, { fields: [forumReaction.postId], references: [forumPost.id] }),
 }));
+
+/** Public service offers; an absent or disabled price means the service is unavailable. */
+export const craftingServicePrice = mysqlTable(
+  "CraftingServicePrice",
+  {
+    revision: int("revision", { unsigned: true }).default(0).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    service: mysqlEnum("service", consts.CRAFTING_SERVICES).notNull(),
+    rarity: mysqlEnum("rarity", consts.ItemRarities).notNull(),
+    fee: int("fee", { unsigned: true }).notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+  },
+  (table) => ({
+    key: primaryKey({ columns: [table.userId, table.service, table.rarity] }),
+  }),
+);
+
+/** A durable escrow receipt. Equipment is owned by the receipt ID until delivery/refund. */
+export const craftingServiceRequest = mysqlTable(
+  "CraftingServiceRequest",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    requesterId: varchar("requesterId", { length: 191 }).notNull(),
+    crafterId: varchar("crafterId", { length: 191 }).notNull(),
+    service: mysqlEnum("service", consts.CRAFTING_SERVICES).notNull(),
+    status: mysqlEnum("status", ["PENDING", "ACTIVE", "COMPLETED", "REFUNDED"])
+      .default("PENDING")
+      .notNull(),
+    fee: int("fee", { unsigned: true }).notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+    itemName: varchar("itemName", { length: 191 }).notNull(),
+    targetUserItemId: varchar("targetUserItemId", { length: 191 }),
+    crystalItemId: varchar("crystalItemId", { length: 191 }),
+    imbuementId: varchar("imbuementId", { length: 191 }),
+    materials: json("materials").$type<CraftingQueueMaterial[]>().notNull(),
+    repairDurability: int("repairDurability", { unsigned: true }),
+    outputQuantity: int("outputQuantity", { unsigned: true }).default(1).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    startedAt: datetime("startedAt", { mode: "date", fsp: 3 }),
+    finishesAt: datetime("finishesAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => ({
+    crafterStatus: index("CraftingServiceRequest_crafter_status_idx").on(
+      table.crafterId,
+      table.status,
+    ),
+    requesterStatus: index("CraftingServiceRequest_requester_status_idx").on(
+      table.requesterId,
+      table.status,
+    ),
+  }),
+);
+export type CraftingServiceRequest = InferSelectModel<typeof craftingServiceRequest>;
+export const craftingServiceRequestRelations = relations(
+  craftingServiceRequest,
+  ({ one }) => ({
+    crafter: one(userData, {
+      fields: [craftingServiceRequest.crafterId],
+      references: [userData.userId],
+      relationName: "serviceCrafter",
+    }),
+    requester: one(userData, {
+      fields: [craftingServiceRequest.requesterId],
+      references: [userData.userId],
+      relationName: "serviceRequester",
+    }),
+    crystal: one(item, {
+      fields: [craftingServiceRequest.crystalItemId],
+      references: [item.id],
+      relationName: "serviceCrystal",
+    }),
+    item: one(item, { fields: [craftingServiceRequest.itemId], references: [item.id] }),
+  }),
+);

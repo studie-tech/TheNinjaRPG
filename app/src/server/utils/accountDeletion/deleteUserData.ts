@@ -97,6 +97,7 @@ import {
 } from "@/queries/staff";
 import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { retireCraftingServices } from "@/server/utils/craftingServices";
 import { removeDiscordLink } from "@/server/utils/discord/linking";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { retireStoreUserId } from "@/server/utils/purchases/storeIdentity";
@@ -160,6 +161,8 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     reason: "ACCOUNT_DELETED",
     actorUserId: userId,
   });
+
+  await retireCraftingServices(client, userId);
 
   // Keep paid snapshots for support and retire recipients before inventory cleanup.
   // Delivery claims the same rows, so any in-flight grant finishes before cleanup.

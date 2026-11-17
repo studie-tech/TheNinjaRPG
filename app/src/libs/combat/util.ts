@@ -22,6 +22,7 @@ import { areBattleAllies, getBattleSpawnLocations } from "@/libs/combat/particip
 import { getEffectPower } from "@/libs/combat/power";
 import { getTargetTiles } from "@/libs/combat/targeting";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
+import { getServiceRepairDurability } from "@/libs/craftingServices";
 import type { PathCalculator, TerrainHex } from "@/libs/hexgrid";
 import { createHexGrid, nameArenaTile, oddQHexDistance } from "@/libs/hexgrid";
 import { randomInt, secureRandomInt } from "@/utils/math";
@@ -84,7 +85,10 @@ export const wearBattleItem = (
   amount: number,
 ) => {
   if (NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) return;
-  const currentDurability = Math.min(userItem.durability, item.maxDurability);
+  const currentDurability = Math.min(
+    userItem.durability,
+    getServiceRepairDurability(item.maxDurability, "FORGEMASTER"),
+  );
   userItem.durability = Math.max(0, currentDurability - amount);
   if (userItem.durability <= DURABILITY_USABILITY_THR) {
     userItem.equipped = "NONE";

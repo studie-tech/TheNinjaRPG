@@ -1,8 +1,9 @@
 "use client";
 
 import { Settings } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import type React from "react";
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { OccupationType } from "@/drizzle/constants";
 import {
   IMG_OCCUPATION_CRAFTING,
@@ -22,6 +24,7 @@ import {
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { CraftingServices } from "@/layout/CraftingServices";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import OccupationCrafting from "@/layout/OccupationCrafting";
@@ -61,6 +64,36 @@ const OCCUPATION_DATA = [
 
 /** Shows occupation selection, job-change availability and the active job's tools. */
 export default function Occupations() {
+  return (
+    <Suspense fallback={<Loader />}>
+      <OccupationTabs />
+    </Suspense>
+  );
+}
+
+function OccupationTabs() {
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState("occupation");
+  useEffect(() => {
+    if (searchParams?.get("tab") === "services") setTab("services");
+  }, [searchParams]);
+  return (
+    <Tabs value={tab} onValueChange={setTab}>
+      <TabsList className="mb-3">
+        <TabsTrigger value="occupation">Occupation</TabsTrigger>
+        <TabsTrigger value="services">Service Requests</TabsTrigger>
+      </TabsList>
+      <TabsContent value="occupation">
+        <OccupationTools />
+      </TabsContent>
+      <TabsContent value="services">
+        <CraftingServices />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+function OccupationTools() {
   // Utils
 
   // State
@@ -156,14 +189,14 @@ export default function Occupations() {
         <div>
           {occupationInfo && (
             <div className="flex flex-col gap-0.5 sm:gap-1">
-              <p className="mt-0.5 text-muted-foreground text-sm leading-relaxed sm:text-base">
+              <p className="text-muted-foreground mt-0.5 text-sm leading-relaxed sm:text-base">
                 {occupationInfo.description}
               </p>
             </div>
           )}
           <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
             {userData.occupationSignupAt && (
-              <div className="flex items-center gap-1.5 text-muted-foreground text-xs sm:text-sm">
+              <div className="text-muted-foreground flex items-center gap-1.5 text-xs sm:text-sm">
                 <span className="font-medium">Started:</span>
                 <span className="font-mono">
                   {userData.occupationSignupAt.toLocaleDateString()}
@@ -171,10 +204,10 @@ export default function Occupations() {
               </div>
             )}
             {!canChange && (
-              <div className="flex items-center gap-1.5 font-medium text-orange-600 text-xs sm:text-sm">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-orange-600 sm:text-sm">
                 <span>You can change occupations in</span>
                 {userData.occupationSignupAt && (
-                  <span className="rounded bg-popover px-2 py-0.5 font-mono">
+                  <span className="bg-popover rounded px-2 py-0.5 font-mono">
                     <Countdown
                       targetDate={getOccupationChangeAvailableAt(
                         userData.occupationSignupAt,
@@ -232,14 +265,14 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
   return (
     <div className="space-y-6">
       {isChanging && (
-        <p className="text-center text-muted-foreground">
+        <p className="text-muted-foreground text-center">
           Choose your new occupation. You can change again in{" "}
           {OCCUPATION_CHANGE_COOLDOWN_DAYS} days.
         </p>
       )}
 
       {!isChanging && (
-        <p className="text-center text-muted-foreground">
+        <p className="text-muted-foreground text-center">
           Choose an occupation to begin your journey. You can change your occupation
           every {OCCUPATION_CHANGE_COOLDOWN_DAYS} days.
         </p>
@@ -273,13 +306,13 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
                     className="rounded-lg"
                   />
                 </div>
-                <h3 className="mb-2 font-semibold text-xl">{occupation.name}</h3>
-                <p className="mb-4 text-muted-foreground text-sm">
+                <h3 className="mb-2 text-xl font-semibold">{occupation.name}</h3>
+                <p className="text-muted-foreground mb-4 text-sm">
                   {occupation.description}
                 </p>
               </button>
               {isCurrentOccupation && isChanging ? (
-                <span className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm">
+                <span className="bg-primary text-primary-foreground inline-flex w-full items-center justify-center rounded-md px-4 py-2 text-sm font-medium">
                   Current Occupation
                 </span>
               ) : isSelected ? (

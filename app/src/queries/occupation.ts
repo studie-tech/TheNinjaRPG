@@ -1,3 +1,4 @@
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 /**
  * Database access for occupation; authorization and transaction scopes stay in callers.
@@ -115,13 +116,15 @@ export const updateUserItemForImbueItem = (
 ) =>
   client
     .update(userItem)
-    .set({ updatedAt: new Date() })
+    .set({ updatedAt: nextSnapshotSql(userItem.updatedAt) })
     .where(
       and(
         eq(userItem.id, input.userItemId),
         eq(userItem.userId, ctx.userId),
         gt(userItem.quantity, 0),
         eq(userItem.isInAuction, false),
+        eq(userItem.equipped, "NONE"),
+        eq(userItem.storedAtHome, false),
       ),
     );
 

@@ -79,6 +79,8 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "auction.placeBid",
   "auction.createAuctionOffer",
   "auction.acceptAuctionOffer",
+  "occupation.submitServiceRequest",
+  "occupation.respondToServiceRequest",
   // Merch cart
   "merch.addToCart",
   "merch.updateCart",

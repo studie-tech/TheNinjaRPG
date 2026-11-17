@@ -1594,20 +1594,20 @@ export const SCALED_AI_STAT_BUDGET_SHARE = 0.5;
 export const MAX_DAILY_AI_CALLS = 100;
 
 export const ROLL_CHANCE_PERCENTAGE = {
-  ["H"]: 0,
-  ["S"]: 0.005,
-  ["A"]: 0.01,
-  ["B"]: 0.05,
-  ["C"]: 0.25,
+  H: 0,
+  S: 0.005,
+  A: 0.01,
+  B: 0.05,
+  C: 0.25,
 } as const;
 
 // Calculate cumulative probabilities from individual percentages
 export const ROLL_CHANCE = {
-  ["H"]: 0,
-  ["S"]: ROLL_CHANCE_PERCENTAGE.S,
-  ["A"]: ROLL_CHANCE_PERCENTAGE.S + ROLL_CHANCE_PERCENTAGE.A,
-  ["B"]: ROLL_CHANCE_PERCENTAGE.S + ROLL_CHANCE_PERCENTAGE.A + ROLL_CHANCE_PERCENTAGE.B,
-  ["C"]:
+  H: 0,
+  S: ROLL_CHANCE_PERCENTAGE.S,
+  A: ROLL_CHANCE_PERCENTAGE.S + ROLL_CHANCE_PERCENTAGE.A,
+  B: ROLL_CHANCE_PERCENTAGE.S + ROLL_CHANCE_PERCENTAGE.A + ROLL_CHANCE_PERCENTAGE.B,
+  C:
     ROLL_CHANCE_PERCENTAGE.S +
     ROLL_CHANCE_PERCENTAGE.A +
     ROLL_CHANCE_PERCENTAGE.B +
@@ -1616,12 +1616,12 @@ export const ROLL_CHANCE = {
 
 // Bloodline Pricing
 export const BLOODLINE_COST = {
-  ["H"]: 999999,
-  ["S"]: 999999,
-  ["A"]: 200,
-  ["B"]: 190,
-  ["C"]: 180,
-  ["D"]: 170,
+  H: 999999,
+  S: 999999,
+  A: 200,
+  B: 190,
+  C: 180,
+  D: 170,
 } as const;
 
 export const REMOVAL_COST = 5;
@@ -2238,6 +2238,15 @@ export const MAX_COOKING_OUTPUT = 100;
 export const MAX_MEAL_DURATION_SECONDS = 604800;
 
 // Crafting config
+export const CRAFTING_SERVICES = ["CRAFT", "IMBUE", "DISIMBUE", "REPAIR"] as const;
+export const CRAFTING_SERVICE_MAX_FEE = 1_000_000_000;
+export const CRAFTING_REPAIR_BONUS = {
+  NOVICE: 0.05,
+  APPRENTICE: 0.1,
+  MASTER: 0.15,
+  FORGEMASTER: 0.2,
+} as const;
+
 export const CRAFTING_RANKS = [
   "NOVICE",
   "APPRENTICE",

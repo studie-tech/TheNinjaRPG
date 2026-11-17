@@ -593,7 +593,14 @@ describeWithDatabase("crafting queue", () => {
         ? new Proxy(database, {
             get(target, property, receiver) {
               if (property === "select") {
-                return () => ({ from: () => ({ where: async () => [] }) });
+                return () => {
+                  const selection = {
+                    from: () => selection,
+                    where: () => selection,
+                    unionAll: async () => [],
+                  };
+                  return selection;
+                };
               }
               return Reflect.get(target, property, receiver);
             },

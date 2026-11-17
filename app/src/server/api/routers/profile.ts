@@ -300,6 +300,7 @@ import {
   claimUserSnapshot,
 } from "@/server/utils/concurrency";
 import { settleCookingExperience } from "@/server/utils/cooking";
+import { settleCraftingServices } from "@/server/utils/craftingServices";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { expireDungeonRun } from "@/server/utils/dungeon";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
@@ -918,6 +919,16 @@ export const profileRouter = createTRPCRouter({
       if (user && dungeonClaim?.rowsAffected === 1) user.status = "QUEUED";
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
+      const pendingServices =
+        user?.serviceRequests.filter((request) => request.status === "PENDING")
+          .length ?? 0;
+      if (pendingServices)
+        notifications.push({
+          name: "Service Requests",
+          href: "/occupation?tab=services",
+          color: "green",
+          notificationCount: pendingServices,
+        });
       if (activeDungeon && !["ENDED"].includes(activeDungeon.status)) {
         notifications.push(activeDungeonNotification);
       }
@@ -2725,6 +2736,19 @@ const fetchUpdatedUserOnce = async (
         requiresProgressionRefresh?: boolean;
       })
     | undefined = fetchedUser;
+
+  if (
+    user &&
+    (await settleCraftingServices(
+      client,
+      [...user.serviceRequests, ...user.outgoingServiceRequests],
+      now,
+    ))
+  ) {
+    user = await queryUpdatedUser();
+    settlement.craftingItemsChanged = true;
+    requiresUserRefresh = true;
+  }
 
   // Queued learning can create ownership after the opening snapshot was read.
   const hasDueJutsuQueue = hasDueTimedJob(

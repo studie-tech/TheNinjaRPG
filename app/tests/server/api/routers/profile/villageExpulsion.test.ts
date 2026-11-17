@@ -31,6 +31,8 @@ const profileSnapshot = (isOutlaw: boolean, anbuId: string | null = null) => ({
   sageMode: null,
   activeReskin: null,
   queue: [],
+  serviceRequests: [],
+  outgoingServiceRequests: [],
   cookingJobs: [],
   raidBuffs: [],
   userSkills: [],
