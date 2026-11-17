@@ -228,6 +228,7 @@ export function CraftingServices() {
 }
 
 function ServiceRequestForm({ crafterId }: { crafterId: string }) {
+  useServiceRequests();
   const [service, setService] = useState<(typeof CRAFTING_SERVICES)[number]>("CRAFT");
   const [itemId, setItemId] = useState("");
   const [crystalId, setCrystalId] = useState("");

@@ -178,6 +178,7 @@ export const publishServiceNotification = (
       notification.recipientIds.map((userId) =>
         pusher.trigger(userId, "event", {
           type: "newInbox",
+          craftingService: true,
           conversationId: notification.conversationId,
           countedAt: notification.countedAt,
         }),

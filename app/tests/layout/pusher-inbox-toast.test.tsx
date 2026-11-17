@@ -557,3 +557,58 @@ it.each([
     }
   },
 );
+
+it("refreshes cached inventory and service views when an inbox event delivers completed work", async () => {
+  let receiveEvent!: (data: UserEvent) => Promise<void>;
+  vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({
+      bind: (_event: string, handler: typeof receiveEvent) => {
+        receiveEvent = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+  })) as never);
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/inbox");
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  queryClients.push(queryClient);
+  const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+  queryClient.setQueryData(profileKey, {
+    userData: {
+      userId: "player",
+      level: MESSAGING_MIN_LEVEL,
+      chatMuted: false,
+      mutedConversationIds: [],
+      unmutedTavernIds: [],
+    },
+    notifications: [],
+  });
+  const keys = [
+    getQueryKey(testApi.item.getUserItems, undefined, "query"),
+    getQueryKey(testApi.item.getUserItemsWithVariants, undefined, "query"),
+    getQueryKey(testApi.occupation.getServiceRequests, undefined, "query"),
+    getQueryKey(testApi.profile.getSidebarTimers, undefined, "query"),
+  ];
+  for (const key of keys) queryClient.setQueryData(key, []);
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      {children}
+    </TrpcTestProviders>
+  );
+  const refreshProfile = vi.fn(async () => true);
+  renderHook(() => usePusherHandler("player", undefined, refreshProfile), { wrapper });
+  await connectPusher();
+  await act(async () =>
+    receiveEvent({
+      type: "newInbox",
+      craftingService: true,
+      conversationId: "delivered-service",
+    }),
+  );
+  for (const key of keys)
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  expect(refreshProfile).toHaveBeenCalledTimes(1);
+});

@@ -18,6 +18,7 @@ import {
 import { BATTLE_ALERT_SFX_URL, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { useCraftingServiceEvents } from "@/hooks/useCraftingServiceEvents";
 import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
 import Link from "@/layout/Link";
 import { getAudioPreference } from "@/libs/audioPreferences";
@@ -67,6 +68,8 @@ export type UserEvent = {
   isPublic?: boolean;
   /** Server time just before a delivered private message starts counting in inbox news. */
   countedAt?: number;
+  /** The message accompanies a committed crafting escrow, delivery or refund. */
+  craftingService?: boolean;
 };
 
 /**
@@ -76,6 +79,7 @@ export type UserEvent = {
 export const usePusherHandler = (
   userId?: string | null,
   userData?: Pick<NonNullable<UserWithRelations>, "clanId" | "villageId">,
+  refreshUser?: () => Promise<unknown>,
 ) => {
   // Extra parameter
   const clanId = userData?.clanId;
@@ -91,6 +95,7 @@ export const usePusherHandler = (
   const utils = api.useUtils();
   const queryClient = useQueryClient();
   const { refreshEventTournamentNotices } = useEventTournamentNoticeCache();
+  const { refreshServiceViews } = useCraftingServiceEvents(refreshUser);
   const store = useStore();
 
   // Pusher connection
@@ -384,6 +389,8 @@ export const usePusherHandler = (
             void utils.comments.getTavernIds.invalidate();
             void utils.comments.getConversationComments.reset();
           } else if (data.type === "newInbox") {
+            if (data.craftingService && notificationSession.current === session)
+              await refreshServiceViews();
             const shouldNotify =
               (await resolveNotificationProfile(data.conversationId)) &&
               canNotifyConversation(data.conversationId);
