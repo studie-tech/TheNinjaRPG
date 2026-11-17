@@ -10,12 +10,7 @@ export const spriteActionAnimation = (action: {
   if (["move", "flee", "replacementTechnique"].includes(action.id)) return "walk";
   if (["wait", "meditate", "defensiveStance", "offensiveStance"].includes(action.id))
     return "idle";
-  const weapon =
-    action.data &&
-    "weaponType" in action.data &&
-    typeof action.data.weaponType === "string"
-      ? action.data.weaponType
-      : undefined;
+  const weapon = action.data?.weaponType;
   if (weapon === "BOW" || weapon === "SHURIKEN") return "shoot";
   if (["DAGGER", "POLEARM", "STAFF"].includes(weapon ?? "")) return "thrust";
   if (weapon && weapon !== "NONE") return "slash";

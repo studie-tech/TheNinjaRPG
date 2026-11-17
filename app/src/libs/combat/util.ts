@@ -29,7 +29,6 @@ import type { EffectType, ZodAllTags } from "@/validators/combat";
 import type { GenName } from "./constants";
 import {
   BARRIER_DAMAGE_TAG_TYPES,
-  damageDerivedTagTypes,
   damageModifierTypes,
   GenNames,
   INITIATIVE_LEVEL_BONUS,

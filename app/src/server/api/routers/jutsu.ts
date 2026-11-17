@@ -27,6 +27,7 @@ import {
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   COST_RESKIN_JUTSU,
+  GeneralTypes,
   JUTSU_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
   JUTSU_TRANSFER_MAX_LEVEL,
@@ -2711,8 +2712,7 @@ export const jutsuDatabaseFilter = (
       ? [
           and(
             ...input.stat.map((s) =>
-              s === "Highest" ||
-              ["Strength", "Speed", "Intelligence", "Willpower"].includes(s)
+              GeneralTypes.some((general) => general === s)
                 ? sql`JSON_SEARCH(${jutsu.effects}, 'one', ${s}, NULL, '$[*].generalTypes[*]') IS NOT NULL`
                 : sql`${jutsu.statClassification} = ${s}`,
             ),
@@ -2788,8 +2788,7 @@ export const jutsuDatabaseFilter = (
       : []),
     ...(input?.excludedStats?.length
       ? input.excludedStats.map((excludedSt) =>
-          excludedSt === "Highest" ||
-          ["Strength", "Speed", "Intelligence", "Willpower"].includes(excludedSt)
+          GeneralTypes.some((general) => general === excludedSt)
             ? sql`JSON_SEARCH(${jutsu.effects}, 'one', ${excludedSt}, NULL, '$[*].generalTypes[*]') IS NULL`
             : sql`(${jutsu.statClassification} IS NULL OR ${jutsu.statClassification} <> ${excludedSt})`,
         )
@@ -2816,18 +2815,18 @@ export const filterByEffectConstraints = <
   rows: T[],
   input: JutsuFilteringSchema,
 ) => {
+  const statMatches = input.stat?.filter((stat) =>
+    GeneralTypes.some((general) => general === stat),
+  );
   return rows.filter((row) => {
     const classification =
       row.elementClassification && row.elementClassification !== "None"
         ? row.elementClassification
         : undefined;
-    const statMatches = input.stat?.filter(
-      (stat) => !["Ninjutsu", "Genjutsu", "Taijutsu", "Bukijutsu"].includes(stat),
-    );
     if (
       input.stat?.some(
         (stat) =>
-          ["Ninjutsu", "Genjutsu", "Taijutsu", "Bukijutsu"].includes(stat) &&
+          !GeneralTypes.some((general) => general === stat) &&
           stat !== row.statClassification,
       )
     )
