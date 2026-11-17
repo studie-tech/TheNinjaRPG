@@ -400,10 +400,9 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
                 </p>
               )}
               <p className="text-muted-foreground text-sm">
-                These rules belong to your active jutsu loadout. Kage seat, patrol and
-                auto combat use whichever loadout is active. Changing loadout here also
-                equips its jutsu. Only jutsu this loadout equips and your equipped items
-                can be chosen.
+                {userData?.aiProfileId
+                  ? "These rules belong to your active jutsu loadout. Kage seat, patrol and auto combat use whichever loadout is active. Changing loadout here also equips its jutsu. Only jutsu this loadout equips and your equipped items can be chosen."
+                  : "Your active jutsu loadout fights with the Default rules. Choose Custom to write its own rules. Kage seat, patrol and auto combat use whichever loadout is active. Changing loadout here also equips its jutsu."}
               </p>
             </div>
             <AiProfileEdit

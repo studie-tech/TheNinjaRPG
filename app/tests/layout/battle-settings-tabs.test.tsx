@@ -28,18 +28,7 @@ beforeEach(() => {
     ai: { updateAiProfile: mutation },
     jutsu: { getLoadouts: { useQuery: () => ({ data: [] }) } },
   });
-  mockUserContextValue(
-    () =>
-      ({
-        data: {
-          userId: "actor",
-          showBattleDescription: false,
-          showPvpRecord: false,
-          primaryElement: "Fire",
-        },
-        updateUser: vi.fn(),
-      }) as never,
-  );
+  playerWithRules(null);
   vi.spyOn(combat, "useAutoCombatSetting").mockImplementation(() => [false, vi.fn()]);
   vi.spyOn(AiProfileEdit, "default").mockImplementation((({
     onDirtyChange,
@@ -62,12 +51,28 @@ beforeEach(() => {
   )) as never);
 });
 
+const playerWithRules = (aiProfileId: string | null) =>
+  mockUserContextValue(
+    () =>
+      ({
+        data: {
+          userId: "actor",
+          aiProfileId,
+          showBattleDescription: false,
+          showPvpRecord: false,
+          primaryElement: "Fire",
+        },
+        updateUser: vi.fn(),
+      }) as never,
+  );
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
 
 it("opens on preferences and switches between the battle settings tabs", () => {
+  playerWithRules("ai");
   const view = render(<BattleSettingsEdit userId="actor" />);
   expect(view.getByRole("tab", { name: "Preferences", selected: true })).toBeTruthy();
   expect(view.getByText("Primary damage element")).toBeTruthy();
@@ -96,4 +101,15 @@ it("keeps the AI Profile tab open while its rules have unsaved edits", () => {
     success: false,
     message: "Save or discard your rule changes first",
   });
+});
+
+it("tells a player on the Default rules how to give the loadout its own", () => {
+  const view = render(<BattleSettingsEdit userId="actor" />);
+  fireEvent.mouseDown(view.getByRole("tab", { name: "AI Profile" }));
+  expect(
+    view.getByText(/Your active jutsu loadout fights with the Default rules/),
+  ).toBeTruthy();
+  expect(
+    view.queryByText(/These rules belong to your active jutsu loadout/),
+  ).toBeNull();
 });

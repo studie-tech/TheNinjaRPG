@@ -375,6 +375,19 @@ describe("a player's rules for a jutsu loadout", () => {
     restoreBrowserGlobals();
   });
 
+  it("says so when the copied rules are the rules already saved", async () => {
+    mocks.fetchProfile.mockResolvedValue({ ...mocks.profile, id: "pvp" });
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    await waitFor(() =>
+      expect(toast.showMutationToast).toHaveBeenCalledWith({
+        success: true,
+        message: "Your rules already match the rules of PvP.",
+      }),
+    );
+    expect(copiedToasts()).toHaveLength(0);
+  });
+
   it("copies another loadout's rules into the draft for saving", async () => {
     mocks.fetchProfile.mockResolvedValue({
       id: "pvp",

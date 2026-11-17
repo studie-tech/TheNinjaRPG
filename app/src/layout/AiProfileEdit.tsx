@@ -234,11 +234,14 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
     if (rules !== pendingCopy.draft || profile !== pendingCopy.profile) return;
     setRules(pendingCopy.rules);
     setActiveElement("");
+    const unchanged = draftKey(pendingCopy.rules, includeDefault) === savedDraft;
     showMutationToast({
       success: true,
-      message: `Copied the rules of ${pendingCopy.name}. Save to keep them.`,
+      message: unchanged
+        ? `Your rules already match the rules of ${pendingCopy.name}.`
+        : `Copied the rules of ${pendingCopy.name}. Save to keep them.`,
     });
-  }, [pendingCopy, rules, profile]);
+  }, [pendingCopy, rules, profile, includeDefault, savedDraft]);
 
   const isDirty = savedDraft !== "" && draftKey(rules, includeDefault) !== savedDraft;
   const { onDirtyChange } = props;
