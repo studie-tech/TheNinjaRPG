@@ -20,7 +20,7 @@ import { downloadBlob } from "@/utils/dom";
 import { groupBy } from "@/utils/grouping";
 import { getBalancePeriodEnd } from "@/utils/time";
 
-/** Present comparable content and player-outcome samples for the active reporting period. */
+/** Present content usage and head-to-head outcome samples for the active reporting period. */
 export const BalanceOverview = () => {
   const state = useBalanceFiltering();
   const filter = getBalanceFilter(state);
@@ -279,8 +279,7 @@ export const BalanceOverview = () => {
                 <option key={archive.periodStart} value={archive.periodStart}>
                   {archive.periodStart === 0
                     ? "Legacy data (undated)"
-                    : `${dateLabel(archive.periodStart)} – ${dateLabel(getBalancePeriodEnd(archive.periodStart))}`}{" "}
-                  · {archive.rows} rows
+                    : `${dateLabel(archive.periodStart)} – ${dateLabel(getBalancePeriodEnd(archive.periodStart))}`}
                 </option>
               ))}
             </select>
@@ -331,7 +330,7 @@ const downloadArchive = async (
             periodStart,
             periodEnd: periodStart ? getBalancePeriodEnd(periodStart) : null,
             description:
-              "Aggregated balance counters. battleWon: 0 loss, 1 win, 2 flee. turnOrder: 0 unknown or outside head-to-head PvP, 1 first, 2 second. Level 0/rank NONE indicate unavailable demographics. Counts are player-content battle samples; participant rows count player outcomes.",
+              "Aggregated balance counters. battleWon: 0 loss, 1 win, 2 flee. turnOrder: 0 unknown or outside head-to-head PvP, 1 first, 2 second. Level 0/rank NONE indicate unavailable demographics. Counts are player-content battle samples; participant rows count eligible head-to-head player outcomes with starting order 1 or 2.",
             rows,
           },
           null,

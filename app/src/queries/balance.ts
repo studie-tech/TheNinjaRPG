@@ -31,7 +31,7 @@ export const balanceConditions = (
     : []),
 ];
 
-/** Aggregate content usage without counting the player's outcome sample as a content use. */
+/** Aggregate content usage without counting head-to-head outcome samples as content uses. */
 export const selectBalanceContent = (
   client: Pick<DrizzleClient, "select">,
   input: BalanceFilters,
@@ -76,7 +76,7 @@ export const selectBalanceContent = (
       dataBattleAction.battleWon,
     );
 
-/** Count player outcomes once per settlement, split by starting order, account level and rank. */
+/** Count head-to-head outcomes once per settlement, split by starting order, level and rank. */
 export const selectBalanceParticipants = (
   client: Pick<DrizzleClient, "select">,
   input: BalanceFilters,
@@ -95,6 +95,7 @@ export const selectBalanceParticipants = (
       and(
         ...balanceConditions(input, periodStart),
         eq(dataBattleAction.type, "participant"),
+        inArray(dataBattleAction.turnOrder, [1, 2]),
       ),
     )
     .groupBy(
@@ -105,15 +106,13 @@ export const selectBalanceParticipants = (
     );
 
 /** List retained completed periods; the zero period contains undated legacy aggregates. */
-export const selectBalanceArchives = (client: Pick<DrizzleClient, "select">) =>
+export const selectBalanceArchives = (client: Pick<DrizzleClient, "selectDistinct">) =>
   client
-    .select({
+    .selectDistinct({
       periodStart: dataBattleAction.periodStart,
-      rows: sql<number>`COUNT(*)`.mapWith(Number),
     })
     .from(dataBattleAction)
     .where(lt(dataBattleAction.periodStart, getBalancePeriodStart()))
-    .groupBy(dataBattleAction.periodStart)
     .orderBy(desc(dataBattleAction.periodStart));
 
 /** Read an archive in bounded primary-key pages, retaining identifiers even for deleted content. */

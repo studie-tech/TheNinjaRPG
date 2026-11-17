@@ -4937,7 +4937,6 @@ export const dataBattleAction = mysqlTable(
       contentIdIdx: index("DataBattleActions_contentId_idx").on(table.contentId),
       countIdx: index("DataBattleActions_count_idx").on(table.count),
       createdAt: index("DataBattleActions_createdAt").on(table.createdAt),
-      updatedAtIdx: index("DataBattleActions_updatedAt_idx").on(table.updatedAt),
     };
   },
 );

@@ -100,6 +100,7 @@ describeWithDatabase("fortnightly balance reports", () => {
           userLevel,
           userRank: "CHUNIN" as const,
           battleWon: 1,
+          turnOrder: 1,
           count: userLevel === 20 ? 3 : 100,
         })),
       ),
@@ -161,6 +162,13 @@ describeWithDatabase("fortnightly balance reports", () => {
           battleWon: 0,
           count: 3,
         },
+        {
+          type: "participant",
+          contentId: "player",
+          turnOrder: 0,
+          battleWon: 1,
+          count: 100,
+        },
         { type: "jutsu", contentId: "fire", turnOrder: 1, battleWon: 1, count: 100 },
       ].map((r) => ({
         ...r,
@@ -196,6 +204,7 @@ describeWithDatabase("fortnightly balance reports", () => {
       })),
     );
     const caller = await callerFor(dataRouter, "viewer");
+    expect(await caller.getBalanceArchives()).toEqual([{ periodStart }]);
     const first = await caller.getBalanceArchivePage({ periodStart });
     expect(first.rows).toHaveLength(1000);
     const second = await caller.getBalanceArchivePage({
