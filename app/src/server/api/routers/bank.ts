@@ -52,6 +52,10 @@ export const bankRouter = createTRPCRouter({
     .input(z.object({ amount: z.number().min(0), targetId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
+      // Guard
+      if (input.targetId === ctx.userId) {
+        return errorResponse("Cannot transfer to yourself");
+      }
       // Query
       const [target, user] = await Promise.all([
         fetchBankAccount(ctx.drizzle, input.targetId),

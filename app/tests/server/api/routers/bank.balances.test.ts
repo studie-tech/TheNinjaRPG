@@ -159,6 +159,20 @@ describeWithDatabase("bank toBank/toPocket/transfer return committed deltas", ()
     });
   }
 
+  it("rejects a transfer to yourself before moving ryo or writing the ledger", async () => {
+    await seedUsers();
+    const result = await (await caller("bank-user")).transfer({
+      amount: 400,
+      targetId: "bank-user",
+    });
+    expect(result.success).toBe(false);
+    expect(result.message).toBe("Cannot transfer to yourself");
+    expect(result.userDelta).toBeUndefined();
+    expect(await readBalances()).toEqual({ money: 1000, bank: 2000 });
+    const database = await getTestDatabase();
+    expect(await database.select().from(bankTransfers)).toEqual([]);
+  });
+
   it("transfer credits nobody when the sender's bank was spent after the read", async () => {
     await seedUsers();
     const database = await getTestDatabase();
