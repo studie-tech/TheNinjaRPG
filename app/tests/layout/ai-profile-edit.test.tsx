@@ -10,6 +10,7 @@ import {
   ActionEndTurn,
   ActionMoveTowardsOpponent,
   ActionSpecificCombo,
+  ActionUseSpecificItem,
   ActionUseSpecificJutsu,
   AiRule,
   type AiRuleType,
@@ -424,6 +425,28 @@ describe("a player's rules for a jutsu loadout", () => {
     readOnly(player({ copySources: [{ id: "pvp", name: "PvP" }], locked: true }));
   });
 
+  it("says how many rules name jutsu or items that are not equipped", () => {
+    mocks.profile.rules = [
+      AiRule.parse({
+        conditions: [],
+        action: ActionUseSpecificJutsu.parse({ jutsuId: "fire" }),
+      }),
+      ...getBackupRules(),
+    ];
+    const view = player();
+    expect(
+      view.getByText(
+        "1 rule names jutsu or items that aren't equipped. Battles skip those actions until you equip them again.",
+      ),
+    ).toBeDefined();
+    cleanup();
+    // The read-only Default rules are not the player's to fix.
+    const onDefault = player({
+      userData: { aiProfileId: null, userId: "editor", jutsus: [], items: [] },
+    });
+    expect(onDefault.queryByText(/aren't equipped/)).toBeNull();
+  });
+
   it("tells the caller while the Default or Custom choice switches", () => {
     mocks.toggling = true;
     const onTogglingChange = vi.fn();
@@ -651,7 +674,7 @@ describe("AI action pickers", () => {
     { jutsuId: "water", jutsu: { name: "Water Wall" } },
   ];
   /** Open the first rule with the supplied selectable jutsu definitions. */
-  const picker = (options = jutsus) => {
+  const picker = (options = jutsus, comboActionNames?: Record<string, string>) => {
     const view = render(
       <AiProfileEdit
         userData={{
@@ -660,6 +683,7 @@ describe("AI action pickers", () => {
           jutsus: options,
           items: [],
         }}
+        comboActionNames={comboActionNames}
       />,
     );
     fireEvent.click(headers(view)[0]!);
@@ -709,6 +733,19 @@ describe("AI action pickers", () => {
     expect(view.queryByRole("option", { name: "Fire Ball" })).toBeNull();
     expect(save(view).rules[0]?.action).toMatchObject({ jutsuId: "fire" });
   });
+  it("names a saved jutsu the loadout does not equip", () => {
+    const view = picker([jutsus[1]!], { fire: "Fire Ball" });
+    expect(
+      view.getByRole("combobox", { name: "Specific jutsu" }).textContent,
+    ).toContain("Fire Ball (not equipped)");
+  });
+  it("names a saved item that is not equipped", () => {
+    mocks.profile.rules[0]!.action = ActionUseSpecificItem.parse({ itemId: "pill" });
+    const view = picker(jutsus, { pill: "Chakra Pill" });
+    expect(view.getByRole("combobox", { name: "Specific item" }).textContent).toContain(
+      "Chakra Pill (not equipped)",
+    );
+  });
   it("deduplicates owned copies and handles an empty loadout", () => {
     const view = picker([jutsus[0]!, jutsus[0]!]);
     fireEvent.click(view.getByRole("combobox", { name: "Specific jutsu" }));
@@ -744,10 +781,10 @@ describe("AI action pickers", () => {
   it("names unavailable combo selections without offering them or discarding saved IDs", () => {
     const view = comboPicker();
     expect(
-      view.getByRole("button", { name: "Remove Fire Ball (unavailable)" }),
+      view.getByRole("button", { name: "Remove Fire Ball (not equipped)" }),
     ).toBeTruthy();
     expect(
-      view.getByRole("button", { name: "Remove Chakra Pill (unavailable)" }),
+      view.getByRole("button", { name: "Remove Chakra Pill (not equipped)" }),
     ).toBeTruthy();
     expect(
       view.getByRole("button", { name: "Remove Unavailable action" }),
@@ -768,7 +805,7 @@ describe("AI action pickers", () => {
   it("removes unavailable combo actions only when requested", () => {
     const view = comboPicker();
     fireEvent.click(
-      view.getByRole("button", { name: "Remove Fire Ball (unavailable)" }),
+      view.getByRole("button", { name: "Remove Fire Ball (not equipped)" }),
     );
     expect(save(view).rules[0]?.action).toMatchObject({
       comboIds: ["pill", "missing", "water"],

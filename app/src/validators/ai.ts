@@ -384,6 +384,20 @@ export const endsWithBackupRules = (
 export const countCustomRules = (rules: AiRuleType[]) =>
   endsWithBackupRules(rules) ? rules.length - getBackupRules().length : rules.length;
 
+/** Rules naming a jutsu or item the fighter has not equipped; battles skip those actions. */
+export const countRulesWithUnequippedActions = (
+  rules: AiRuleType[],
+  equippedIds: string[],
+) => {
+  const equipped = new Set(equippedIds);
+  return rules.filter(({ action }) => {
+    if ("jutsuId" in action) return !!action.jutsuId && !equipped.has(action.jutsuId);
+    if ("itemId" in action) return !!action.itemId && !equipped.has(action.itemId);
+    if ("comboIds" in action) return action.comboIds.some((id) => !equipped.has(id));
+    return false;
+  }).length;
+};
+
 /**
  * Enforces the backup rules by comparing the provided rules with the backup rules.
  * If the backup rules are not present in the provided rules, they are added.

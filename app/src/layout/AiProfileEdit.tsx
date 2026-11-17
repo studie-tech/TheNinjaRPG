@@ -38,6 +38,7 @@ import {
   AvailableTargets,
   aiCoordinatesSchema,
   countCustomRules,
+  countRulesWithUnequippedActions,
   enforceExtraRules,
   getActionSchema,
   getBackupRules,
@@ -54,7 +55,7 @@ interface AiProfileEditProps {
     items: { itemId: string; item: { name: string } }[];
   };
   hideTitle?: boolean;
-  /** Owned names for saved combo references outside the selectable loadout. */
+  /** Owned names for saved jutsu, item and combo references outside the selectable loadout. */
   comboActionNames?: Record<string, string>;
   /** Controlled mode skips profile loading and delegates persistence/pending state to the owner. */
   configuration?: {
@@ -198,6 +199,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   const customRuleCount = countCustomRules(rules);
   // A player's counter and copying apply to their own rules, not the read-only Default ones.
   const showsRuleLimit = props.maxCustomRules !== undefined && !isDefault;
+  const unequippedRuleCount = countRulesWithUnequippedActions(rules, [
+    ...jutsus.map((entry) => entry.jutsuId),
+    ...items.map((entry) => entry.itemId),
+  ]);
   const isAtRuleLimit =
     showsRuleLimit &&
     customRuleCount >= (props.maxCustomRules ?? Number.POSITIVE_INFINITY);
@@ -623,6 +628,15 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
           Rule limit reached. Delete a rule to add another.
         </p>
       )}
+      {showsRuleLimit && unequippedRuleCount > 0 && (
+        <p className="px-3 pb-2 text-muted-foreground text-sm">
+          {unequippedRuleCount === 1
+            ? "1 rule names"
+            : `${unequippedRuleCount} rules name`}{" "}
+          jutsu or items that aren't equipped. Battles skip those actions until you
+          equip them again.
+        </p>
+      )}
       {canEdit && showsRuleLimit && !!props.copySources?.length && (
         <div className="flex flex-row flex-wrap items-center gap-2 px-3 pb-3">
           <span className="text-muted-foreground text-sm">Copy rules from</span>
@@ -665,6 +679,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
  * Rules and the backup-rule switch as they would be saved, ignoring the editor's rule
  * identities, so a value typed back to its saved number is no edit.
  */
+/** A saved jutsu or item the fighter owns but has not equipped, or the fallback when unknown. */
+const unequippedLabel = (name: string | undefined, fallback: string) =>
+  name ? `${name} (not equipped)` : fallback;
+
 const draftKey = (rules: AiRuleType[], includeDefault: boolean | undefined) =>
   JSON.stringify({
     rules: rules.map(({ id: _id, ...rule }) => {
@@ -975,7 +993,12 @@ const RuleActionEditor: React.FC<{
             emptyText="No jutsu found."
             // A saved ID stays selected until the player picks a replacement.
             placeholder={
-              rule.action.jutsuId ? "Selected jutsu unavailable" : "Select jutsu"
+              rule.action.jutsuId
+                ? unequippedLabel(
+                    props.comboActionNames?.[rule.action.jutsuId],
+                    "Selected jutsu unavailable",
+                  )
+                : "Select jutsu"
             }
             disabled={!canEdit}
             value={rule.action.jutsuId}
@@ -1005,7 +1028,12 @@ const RuleActionEditor: React.FC<{
             <SelectTrigger aria-label="Specific item">
               <SelectValue placeholder="Select item">
                 {items.find((entry) => entry.itemId === itemId)?.item.name ||
-                  (rule.action.itemId ? "Selected item unavailable" : "Select item")}
+                  (rule.action.itemId
+                    ? unequippedLabel(
+                        props.comboActionNames?.[rule.action.itemId],
+                        "Selected item unavailable",
+                      )
+                    : "Select item")}
               </SelectValue>
             </SelectTrigger>
             <SelectContent id="available_action">
@@ -1022,8 +1050,10 @@ const RuleActionEditor: React.FC<{
             disabled={!canEdit}
             selected={rule.action.comboIds}
             getSelectedLabel={(id) => {
-              const name = props.comboActionNames?.[id];
-              return name ? `${name} (unavailable)` : "Unavailable action";
+              return unequippedLabel(
+                props.comboActionNames?.[id],
+                "Unavailable action",
+              );
             }}
             options={[
               ...items.map((ui) => ({
