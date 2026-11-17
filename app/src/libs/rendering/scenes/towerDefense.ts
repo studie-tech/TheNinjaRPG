@@ -4,6 +4,7 @@ import {
   Graphics,
   GraphicsContext,
   Matrix,
+  RenderLayer,
   Sprite,
   Texture,
 } from "pixi.js";
@@ -166,7 +167,8 @@ export const createTowerDefenseScene = async (options: {
     signal: options.signal,
     onError: options.onError,
     background: 0x101018,
-    height: (width) => Math.max(320, Math.min(width * 0.8, window.innerHeight * 0.7)),
+    // The arena's container sets its size, in the page or filling the screen.
+    height: () => Math.max(1, options.mount.clientHeight),
   });
   try {
     const scope = createRenderScope(game);
@@ -188,8 +190,12 @@ export const createTowerDefenseScene = async (options: {
     const sentryGround = new Graphics();
     let sentryKey = "";
     const groundFx = new Graphics();
-    const actorLayer = new Container();
-    actorLayer.sortableChildren = true;
+    // Actors keep their transforms in `actorLayer` but draw from `depthLayer`, sorted with
+    // upright scenery by ground line, so raiders walk behind the trees in front of them.
+    const actorLayer = new Container({ label: "tower-defense-actors" });
+    const sceneryGround = new RenderLayer();
+    const depthLayer = new RenderLayer({ sortableChildren: true });
+    const unlitLayer = new RenderLayer();
     const earthDome = new Graphics()
       .ellipse(0, 0.5, 1.5, 1.7)
       .fill({ color: 0xc8945a, alpha: 0.18 })
@@ -216,6 +222,8 @@ export const createTowerDefenseScene = async (options: {
       sentryPosts,
       dynamic,
       actorLayer,
+      depthLayer,
+      unlitLayer,
       projectileLayer,
       fx.container,
     );
@@ -235,11 +243,15 @@ export const createTowerDefenseScene = async (options: {
     if (game.isDisposed())
       throw new DOMException("Tower defense cancelled", "AbortError");
     const { unitPx, center } = terrain;
-    lighting.container.addChild(hexes.container, scenery.container);
+    lighting.container.addChild(hexes.container, scenery.container, sceneryGround);
     game.own(lighting.registerTerrain(hexes.container, terrain.terrain));
     terrainLayer.addChild(lighting.container);
     terrainLayer.scale.set(1 / unitPx);
     terrainLayer.position.set(-center.x / unitPx, -center.y / unitPx);
+    // Ground cover stays on the terrain; upright scenery sorts with the actors.
+    scenery.attachLayers({ ground: sceneryGround, world: depthLayer, ui: unlitLayer });
+    /** Draw order for an arena Y, in the scenery's terrain-pixel ground lines. */
+    const depthOf = (y: number) => -(y * unitPx + center.y);
     /** The visible arena in terrain pixels, for the lighting pass. */
     const terrainView = {
       minX: center.x - (VIEW_HALF_WIDTH + 2) * unitPx,
@@ -289,6 +301,7 @@ export const createTowerDefenseScene = async (options: {
     // The hero, and a darkened twin sheared away from the sun like the enemies' silhouettes.
     const heroRoot = new Container();
     actorLayer.addChild(heroRoot);
+    depthLayer.attach(heroRoot);
     const heroCastRoot = new Container();
     const clones: LpcCharacter[] = [];
     const appearance = options.appearance;
@@ -349,6 +362,7 @@ export const createTowerDefenseScene = async (options: {
           clone.sprite.alpha = 0.75;
           clone.sprite.visible = false;
           actorLayer.addChild(clone.sprite);
+          depthLayer.attach(clone.sprite);
           clones.push(clone);
         }
       })();
@@ -544,6 +558,7 @@ export const createTowerDefenseScene = async (options: {
       record.fallback.context = enemyShapes.fallback(enemy.kind);
       record.root.scale.set(enemy.size * (enemy.boss ? 1.25 : 1));
       actorLayer.addChild(record.root);
+      depthLayer.attach(record.root);
       enemies.set(enemy.id, record);
       return record;
     };
@@ -649,15 +664,16 @@ export const createTowerDefenseScene = async (options: {
       heroX += (state.hero.x - heroX) * smoothing;
       heroY += (state.hero.y - heroY) * smoothing;
       heroRoot.position.set(heroX, heroY);
-      heroRoot.zIndex = -heroY;
-      // Face the enemy being thrown at; between volleys, the nearest one.
+      heroRoot.zIndex = depthOf(heroY);
+      // Face the enemy being thrown at; between volleys, the nearest one. The arena, like
+      // `lpcFacing`, is Y-up.
       const aimed =
         now - aimedAt < AIM_FACING_MS ? enemies.get(aimTargetId) : undefined;
       const facingTarget = aimed ?? nearestEnemy(state, heroX, heroY);
       if (facingTarget)
         heroDirection = lpcFacing(
           facingTarget.x - heroX,
-          -(facingTarget.y - heroY),
+          facingTarget.y - heroY,
           heroDirection,
         );
       if (now > heroAnimationUntil && heroAnimation !== "combat")
@@ -679,11 +695,12 @@ export const createTowerDefenseScene = async (options: {
           heroX + Math.cos(angle) * 1.4,
           heroY + Math.sin(angle) * 1.1 + 0.5,
         );
-        clone.sprite.zIndex = -clone.sprite.y;
+        clone.sprite.zIndex = depthOf(clone.sprite.y);
+        // Clones walk along their orbit, which runs counter-clockwise.
         clone.render(
           heroFrame,
           "walk",
-          lpcFacing(Math.cos(angle + Math.PI / 2), -Math.sin(angle + Math.PI / 2)),
+          lpcFacing(Math.cos(angle + Math.PI / 2), Math.sin(angle + Math.PI / 2)),
         );
       });
 
@@ -696,7 +713,7 @@ export const createTowerDefenseScene = async (options: {
         record.x = jump ? enemy.x : record.x + (enemy.x - record.x) * smoothing;
         record.y = jump ? enemy.y : record.y + (enemy.y - record.y) * smoothing;
         record.root.position.set(record.x, record.y);
-        record.root.zIndex = -record.y;
+        record.root.zIndex = depthOf(record.y);
         drawEnemyBody(record, enemy, state, now, reduced);
       }
       for (const [id, record] of enemies)
@@ -806,7 +823,7 @@ export const createTowerDefenseScene = async (options: {
             if (target)
               heroDirection = lpcFacing(
                 target.x - event.x,
-                -(target.y - event.y),
+                target.y - event.y,
                 heroDirection,
               );
           }

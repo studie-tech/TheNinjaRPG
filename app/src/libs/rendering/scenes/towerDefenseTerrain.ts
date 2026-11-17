@@ -10,6 +10,12 @@ import { buildHexTerrainData, terrainFrost } from "@/libs/rendering/terrainData"
 
 /** World pixels per hex; the arena maps one simulation unit to one hex width. */
 const TD_HEX_SIZE = 100;
+/**
+ * Share of rolled ground details (grass, flowers, pebbles) the arena keeps. Procedural
+ * ground rolls one on about half its tiles; published sector maps hold about one per
+ * five tiles, and this keeps the arena to the same density.
+ */
+const TD_GROUND_DETAIL_SHARE = 0.4;
 
 /** A seeded biome arena whose centre, the hero's zone, holds only small ground detail. */
 export const prepareTowerDefenseTerrain = (seed: string, size: number) => {
@@ -36,7 +42,8 @@ export const prepareTowerDefenseTerrain = (seed: string, size: number) => {
     const open =
       Math.max(Math.abs(tile.col - center.col), Math.abs(tile.row - center.row)) <= 9;
     const { description } = proceduralDecoration(prng, look.spec.key, tile, open);
-    if (description) scenery.push(description);
+    if (description && (!description.small || prng() < TD_GROUND_DETAIL_SHARE))
+      scenery.push(description);
   }
   const terrain = buildHexTerrainData(
     grid,

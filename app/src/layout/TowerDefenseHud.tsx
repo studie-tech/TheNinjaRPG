@@ -6,6 +6,8 @@ import {
   FastForward,
   Flag,
   Info,
+  Maximize,
+  Minimize,
   ScrollText,
   Skull,
   Volume2,
@@ -98,8 +100,10 @@ export const TowerDefenseOverlay = (props: {
   speed: number;
   soundOn: boolean;
   mode: TowerDefenseInputMode;
+  isFullscreen: boolean;
   onSpeed: (speed: number) => void;
   onSound: (enabled: boolean) => void;
+  onFullscreen: () => void;
   act: (command: TdCommand) => void;
 }) => {
   const { state } = props;
@@ -195,6 +199,16 @@ export const TowerDefenseOverlay = (props: {
             Retreating ends this run at wave {state.wave} and banks the scrolls it
             earned.
           </Confirm>
+          <OverlayButton
+            label={props.isFullscreen ? "Exit full screen" : "Full screen"}
+            onClick={props.onFullscreen}
+          >
+            {props.isFullscreen ? (
+              <Minimize className="h-4 w-4" />
+            ) : (
+              <Maximize className="h-4 w-4" />
+            )}
+          </OverlayButton>
         </div>
       </div>
       {sealCount > 0 && props.mode === "aim" && (

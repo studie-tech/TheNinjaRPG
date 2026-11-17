@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import type * as React from "react";
 
 import { ignoreToastInteractions } from "@/components/ui/outside-interaction";
+import { usePortalContainer } from "@/components/ui/portal-container";
 import { cn } from "@/libs/shadui";
 
 const Sheet = SheetPrimitive.Root;
@@ -65,31 +66,34 @@ const SheetContent = ({
   onInteractOutside,
   showCloseButton = true,
   ...props
-}: SheetContentProps) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <SheetPrimitive.Content
-      ref={ref}
-      className={cn(
-        sheetVariants({ side }),
-        className,
-        "overflow-y-auto overscroll-contain contain-strict",
-      )}
-      {...props}
-      onInteractOutside={ignoreToastInteractions(onInteractOutside)}
-    >
-      <div>
-        {showCloseButton && (
-          <SheetPrimitive.Close className="relative z-10 ml-auto flex size-[48px] items-center justify-center rounded-sm opacity-75 ring-offset-background hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none sm:absolute sm:top-4 sm:right-4 sm:size-auto">
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </SheetPrimitive.Close>
+}: SheetContentProps) => {
+  const container = usePortalContainer();
+  return (
+    <SheetPortal container={container}>
+      <SheetOverlay />
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(
+          sheetVariants({ side }),
+          className,
+          "overflow-y-auto overscroll-contain contain-strict",
         )}
-        {children}
-      </div>
-    </SheetPrimitive.Content>
-  </SheetPortal>
-);
+        {...props}
+        onInteractOutside={ignoreToastInteractions(onInteractOutside)}
+      >
+        <div>
+          {showCloseButton && (
+            <SheetPrimitive.Close className="relative z-10 ml-auto flex size-[48px] items-center justify-center rounded-sm opacity-75 ring-offset-background hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none sm:absolute sm:top-4 sm:right-4 sm:size-auto">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </SheetPrimitive.Close>
+          )}
+          {children}
+        </div>
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+};
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
