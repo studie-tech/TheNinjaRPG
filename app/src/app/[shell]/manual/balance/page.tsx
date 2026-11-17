@@ -103,7 +103,17 @@ export default function ManualBalance() {
 
 /** Render the shared report-link control used throughout the balance summary table. */
 const linkCell = (href: string) => (
-  <Link href={href}>
+  <Link
+    href={href}
+    prefetch={href.includes("#") ? false : undefined}
+    onNavigate={(event) => {
+      if (href.includes("#")) {
+        // Load the destination fragment before its report tab initializes.
+        event.preventDefault();
+        window.location.assign(href);
+      }
+    }}
+  >
     <SquareArrowOutUpRight className="h-4 w-4" />
   </Link>
 );

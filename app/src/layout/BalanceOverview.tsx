@@ -114,10 +114,17 @@ export const BalanceOverview = () => {
               {(["jutsu", "bloodline", "item"] as const).map((type) => {
                 const rows = contentGroups.get(type) ?? [];
                 const stats = summarizeBattleOutcomes(rows);
+                const href = getBalanceUsageHref(type, filter);
                 return (
                   <Link
                     key={type}
-                    href={getBalanceUsageHref(type, filter)}
+                    href={href}
+                    prefetch={false}
+                    onNavigate={(event) => {
+                      // Load the destination fragment before its report tab initializes.
+                      event.preventDefault();
+                      window.location.assign(href);
+                    }}
                     className="rounded-lg border p-4 hover:bg-accent"
                   >
                     <h3 className="font-semibold capitalize">
