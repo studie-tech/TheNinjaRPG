@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it } from "bun:test";
 import { readMigration } from "../setup/migrations";
 import { describeWithDatabase, queryRawSql, runRawSql } from "../setup/testDatabase";
 
@@ -56,6 +56,15 @@ const rewrite = (sql: string) =>
   );
 
 describeWithDatabase("combat tag stat-selector migration", () => {
+  beforeEach(async () => {
+    for (const [table, fields] of Object.entries(columns)) {
+      const key = table === "UserData" ? "userId" : "id";
+      await runRawSql(
+        `CREATE TABLE \`${fixture(table)}\` (\`${key}\` varchar(50) PRIMARY KEY, ${fields.map((field) => `\`${field}\` JSON NOT NULL`).join(",")})`,
+      );
+    }
+  });
+
   afterEach(async () => {
     await runRawSql(
       `DROP TABLE IF EXISTS ${Object.keys(columns)
@@ -66,10 +75,6 @@ describeWithDatabase("combat tag stat-selector migration", () => {
 
   it("preserves effect order, nested battle templates, metadata, empty arrays and general-only intent during cleanup", async () => {
     for (const [table, fields] of Object.entries(columns)) {
-      const key = table === "UserData" ? "userId" : "id";
-      await runRawSql(
-        `CREATE TABLE \`${fixture(table)}\` (\`${key}\` varchar(50) PRIMARY KEY, ${fields.map((field) => `\`${field}\` JSON NOT NULL`).join(",")})`,
-      );
       const document = (field: string, tags: object[]) =>
         field === "extraState"
           ? {
@@ -124,4 +129,49 @@ describeWithDatabase("combat tag stat-selector migration", () => {
       }
     }
   });
+  it("migrates more than 1,000 legacy tags in content and nested battles without changing the session recursion limit", async () => {
+    const tags = Array.from({ length: 1001 }, (_, power) => ({
+      type: "damage",
+      statTypes: ["Ninjutsu"],
+      power,
+      description: "Retain every tag and its position",
+    }));
+    const cleaned = tags.map(({ statTypes: _statTypes, ...tag }) => tag);
+    const nested = (effects: object[]) => ({
+      jutsus: { "quoted.id": { effects } },
+      metadata: { type: "battle", round: 7 },
+    });
+    await runRawSql(
+      `INSERT INTO \`${fixture("Jutsu")}\` VALUES ('large', '${JSON.stringify(tags)}'), ('unaffected', '${JSON.stringify(cleaned)}')`,
+    );
+    await runRawSql(
+      `INSERT INTO \`${fixture("Battle")}\` VALUES ('large', '[]', '[]', '${JSON.stringify(nested(tags))}', '[]'), ('unaffected', '[]', '[]', '${JSON.stringify(nested(cleaned))}', '[]')`,
+    );
+    for (const table of ["Jutsu", "Battle"]) {
+      await runRawSql(
+        `CREATE TRIGGER \`${fixture(table)}_skip\` BEFORE UPDATE ON \`${fixture(table)}\` FOR EACH ROW BEGIN IF OLD.id = 'unaffected' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Clean documents must not be updated'; END IF; END`,
+      );
+    }
+    const [before] = await queryRawSql<{ depth: number }>(
+      "SELECT @@cte_max_recursion_depth AS depth",
+    );
+    expect(before?.depth).toBe(1000);
+    await runRawSql(rewrite(migration));
+    const content = await queryRawSql<{ effects: unknown }>(
+      `SELECT effects FROM \`${fixture("Jutsu")}\``,
+    );
+    const battles = await queryRawSql<{ extraState: unknown }>(
+      `SELECT extraState FROM \`${fixture("Battle")}\``,
+    );
+    const parse = (value: unknown) =>
+      typeof value === "string" ? JSON.parse(value) : value;
+    expect(content).toHaveLength(2);
+    expect(battles).toHaveLength(2);
+    for (const row of content) expect(parse(row.effects)).toEqual(cleaned);
+    for (const row of battles) expect(parse(row.extraState)).toEqual(nested(cleaned));
+    const [after] = await queryRawSql<{ depth: number }>(
+      "SELECT @@cte_max_recursion_depth AS depth",
+    );
+    expect(after?.depth).toBe(before?.depth);
+  }, 30_000);
 });
