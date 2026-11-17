@@ -230,7 +230,17 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     ).toBe(115);
     expect((await requireUser("crafter")).money).toBe(150);
     const messages = await db.query.conversationComment.findMany();
-    expect(messages.length).toBeGreaterThan(0);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.content).toContain("completed");
+    expect(messages[0]!.content).not.toContain("accept or decline");
+    expect(await db.query.conversation.findMany()).toHaveLength(1);
+    const recipients = await db.query.user2conversation.findMany();
+    expect(recipients.map((row) => row.userId).sort()).toEqual([
+      "crafter",
+      "requester",
+    ]);
+    expect((await requireUser("crafter")).inboxNews).toBe(1);
+    expect((await requireUser("requester")).inboxNews).toBe(1);
     // The normal comment reader must find a real author instead of dropping the notification.
     const read = await callerFor(commentsRouter, "requester");
     const message = messages.find((row) => row.content.includes("completed"))!;
@@ -240,6 +250,30 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     });
     expect(page.data.some((row) => row.content.includes("completed"))).toBe(true);
   });
+  it.each(["CRAFT", "IMBUE", "DISIMBUE"] as const)(
+    "notifies the crafter to review %s and both participants on completion",
+    async (service) => {
+      const db = await getTestDatabase();
+      if (service === "DISIMBUE")
+        await db.insert(userItemImbuement).values({
+          id: "imb",
+          userItemId: "sword",
+          imbuementItemId: "crystal",
+          craftingFinishedAt: new Date(0),
+        });
+      expect(await submit(service)).toMatchObject({ success: true });
+      const messages = await db.query.conversationComment.findMany();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]!.content).toContain("Review the request to accept or decline");
+      expect((await requireUser("crafter")).inboxNews).toBe(1);
+      expect((await requireUser("requester")).inboxNews).toBe(0);
+      expect(await accept()).toMatchObject({ success: true });
+      await completeCraftingService(db, await due());
+      expect(await db.query.conversationComment.findMany()).toHaveLength(2);
+      expect((await requireUser("crafter")).inboxNews).toBe(2);
+      expect((await requireUser("requester")).inboxNews).toBe(1);
+    },
+  );
   it("escrows equipment/crystal and returns the exact copy and crystal on decline", async () => {
     expect(await submit("IMBUE")).toMatchObject({ success: true });
     const request = await receipt(),

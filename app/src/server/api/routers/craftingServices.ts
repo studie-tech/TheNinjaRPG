@@ -320,10 +320,11 @@ export const craftingServiceProcedures = {
             )
               throw new CraftingServiceConflict("Equipment changed. Please try again");
             await insertServiceRequest(tx, request);
-            return notifyServiceRequest(tx, request, "requested");
+            if (input.service !== "REPAIR")
+              return notifyServiceRequest(tx, request, "requested");
           }),
         );
-        publishServiceNotification(ctx.drizzle, notification);
+        if (notification) publishServiceNotification(ctx.drizzle, notification);
         if (input.service === "REPAIR")
           await completeCraftingService(ctx.drizzle, request);
         return actionReadinessResponse(

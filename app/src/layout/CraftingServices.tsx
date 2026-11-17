@@ -518,6 +518,7 @@ function ServicePrices({ crafterId }: { crafterId: string }) {
         placeholder="Select service"
         disabled={save.isPending}
         onChange={(value) => {
+          if (value === service) return;
           setService(value as typeof service);
           setDraft(undefined);
           setMessage("");
@@ -530,6 +531,7 @@ function ServicePrices({ crafterId }: { crafterId: string }) {
         placeholder="Select rarity"
         disabled={save.isPending}
         onChange={(value) => {
+          if (value === rarity) return;
           setRarity(value as typeof rarity);
           setDraft(undefined);
           setMessage("");

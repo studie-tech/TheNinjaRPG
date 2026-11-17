@@ -5,8 +5,8 @@ import * as client from "@/app/_trpc/client";
 import * as serviceCache from "@/hooks/useCraftingServices";
 import * as contentBox from "@/layout/ContentBox";
 import { CraftingServices } from "@/layout/CraftingServices";
-import * as selectors from "@/layout/SearchSelect";
 import * as userContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const save = vi.fn();
 const retry = vi.fn();
@@ -20,6 +20,7 @@ let query: {
   refetch: typeof retry;
 };
 beforeEach(() => {
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   save.mockClear();
   retry.mockClear();
   query = {
@@ -59,31 +60,10 @@ beforeEach(() => {
       <section>{children}</section>
     ),
   );
-  vi.spyOn(selectors, "SearchSelect").mockImplementation(
-    ({
-      label,
-      value,
-      options,
-      disabled,
-      onChange,
-    }: ComponentProps<typeof selectors.SearchSelect>) => (
-      <select
-        aria-label={label}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    ),
-  );
 });
 afterEach(() => {
   cleanup();
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
 const renderPrices = () => {
@@ -124,14 +104,12 @@ it("resets drafts between unset price pairs while preserving edits to the select
   query = { ...query, data: { prices: [] } };
   view.rerender(<CraftingServices />);
   expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("125");
-  fireEvent.change(screen.getByRole("combobox", { name: "Rarity" }), {
-    target: { value: "RARE" },
-  });
+  fireEvent.click(screen.getByRole("combobox", { name: "Rarity" }));
+  fireEvent.click(screen.getByRole("option", { name: /^RARE$/ }));
   expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("0");
   fireEvent.input(screen.getByRole("spinbutton"), { target: { value: "250" } });
-  fireEvent.change(screen.getByRole("combobox", { name: "Service" }), {
-    target: { value: "REPAIR" },
-  });
+  fireEvent.click(screen.getByRole("combobox", { name: "Service" }));
+  fireEvent.click(screen.getByRole("option", { name: "Repair my Items" }));
   expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("0");
   fireEvent.click(screen.getByRole("button", { name: "Save price" }));
   expect(save).toHaveBeenCalledWith({
@@ -141,3 +119,34 @@ it("resets drafts between unset price pairs while preserving edits to the select
     enabled: true,
   });
 });
+
+it.each([undefined, 80])(
+  "preserves the fee and availability draft when reselecting the current pair with saved fee %s",
+  (savedFee) => {
+    if (savedFee !== undefined)
+      query.data = {
+        prices: [{ service: "CRAFT", rarity: "COMMON", fee: savedFee, enabled: true }],
+      };
+    renderPrices();
+    fireEvent.input(screen.getByRole("spinbutton", { name: "Fee in ryo" }), {
+      target: { value: "125" },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Offer this service" }));
+    for (const [label, option] of [
+      ["Service", "Craft an Item"],
+      ["Rarity", "COMMON"],
+    ]) {
+      fireEvent.click(screen.getByRole("combobox", { name: label }));
+      fireEvent.click(screen.getByRole("option", { name: option }));
+      expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("125");
+      expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Save price" }));
+    expect(save).toHaveBeenCalledWith({
+      service: "CRAFT",
+      rarity: "COMMON",
+      fee: 125,
+      enabled: false,
+    });
+  },
+);
