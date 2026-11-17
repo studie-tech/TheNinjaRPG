@@ -57,6 +57,13 @@
                   "next/link"
                 ],
                 "message": "Import Link from @/layout/Link, which keeps viewport prefetch off, warms routes on intent and reports navigation pending state."
+              },
+              {
+                "group": [
+                  "next/navigation"
+                ],
+                "importNamePattern": "useRouter",
+                "message": "Navigate through useNavigationRouter from @/hooks/navigation, whose push and replace show the shell's navigation progress while the destination loads."
               }
             ],
             "paths": {
@@ -97,8 +104,54 @@
   "overrides": [
     {
       "includes": [
+        "src/layout/Sector.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@capacitor/**"
+                    ],
+                    "message": "Capacitor packages are installed in mobile/, where cap sync needs them. Call the shell through @/libs/native instead."
+                  },
+                  {
+                    "group": [
+                      "**/libs/native/bridge"
+                    ],
+                    "message": "The raw bridge is internal to @/libs/native. Import the feature module (haptics, push, ...) instead."
+                  },
+                  {
+                    "group": [
+                      "next/link"
+                    ],
+                    "message": "Import Link from @/layout/Link, which keeps viewport prefetch off, warms routes on intent and reports navigation pending state."
+                  }
+                ],
+                "paths": {
+                  "next/navigation": {
+                    "importNames": [
+                      "usePathname"
+                    ],
+                    "message": "Read the path through usePublicPathname from @/utils/routing: a prerendered page renders under its shell variant's internal path, and usePathname would give the server and the client different values."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
         "src/libs/native/**",
+        "src/hooks/navigation.ts",
         "src/layout/Link.tsx",
+        "src/layout/NavigationProvider.tsx",
         "src/utils/routing.ts",
         "tests/libs/native/**",
         "tests/layout/navigation.test.tsx"

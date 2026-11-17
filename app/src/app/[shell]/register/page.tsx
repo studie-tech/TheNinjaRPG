@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import AutoHeight from "embla-carousel-auto-height";
 import { ArrowRight, MonitorPlay } from "lucide-react";
-import { useRouter } from "next/navigation";
 import React, { startTransition, useEffect, useState } from "react";
 import { type UseFormReturn, useForm, useFormState, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -41,6 +40,7 @@ import {
   IMG_REGISTRATIN_STEP8,
   IMG_REGISTRATIN_STEP9,
 } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CharacterPreview } from "@/layout/CharacterPreview";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -80,7 +80,7 @@ import {
  * This separation ensures consistent hook counts in the form component.
  */
 const Register: React.FC = () => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const {
     data: userData,

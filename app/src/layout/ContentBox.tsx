@@ -1,9 +1,9 @@
 "use client";
 
 import { ChevronsLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { useRef } from "react";
+import { useNavigationRouter } from "@/hooks/navigation";
 import {
   ContentBoxHeaderActions,
   ContentBoxPriorityActions,
@@ -34,7 +34,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   const headerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLDivElement>(null);
 
-  const router = useRouter();
+  const router = useNavigationRouter();
 
   /** Preserve in-app history and list state; direct entries use the configured parent route. */
   const handleBack = () => {

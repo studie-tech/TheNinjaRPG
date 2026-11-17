@@ -5,7 +5,6 @@ import * as Sentry from "@sentry/nextjs";
 import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { atom } from "jotai";
-import { useRouter } from "next/navigation";
 import type Pusher from "pusher-js";
 import type React from "react";
 import {
@@ -20,6 +19,7 @@ import {
 import { api } from "@/app/_trpc/client";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import type { StructureRoute } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useActionPreferenceCacheUpdate } from "@/hooks/useActionPreferenceCacheUpdate";
 import { useMasteryQueueRefresh } from "@/hooks/useMasteryQueueRefresh";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
@@ -441,7 +441,7 @@ export const useUserDataRef = (
 export const useRequiredUserDataSelector = <T,>(
   select: (user: NonNullable<UserWithRelations>) => T,
 ) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const info = useUserDataSelector(select);
   const { data, status, isClerkLoaded, isSignedIn } = info;
   useEffect(() => {
@@ -485,7 +485,7 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
   const { sectorVillage, isLoading: isLoadingSector } = useSectorVillage(userData);
   const isSectorKnown = !isLoadingSector;
   const ownVillage = userData?.village?.sector === sectorVillage?.sector;
-  const router = useRouter();
+  const router = useNavigationRouter();
   useEffect(() => {
     if (userData && isSectorKnown) {
       if (!userData.isOutlaw) {

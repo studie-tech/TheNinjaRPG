@@ -1,7 +1,6 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { use } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useWatch } from "react-hook-form";
@@ -12,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuideArticle } from "@/drizzle/schema";
 import { useGuideEditForm } from "@/hooks/guide";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import Confirm from "@/layout/Confirm";
@@ -58,7 +58,7 @@ const SingleEditGuide: React.FC<{
   article: GuideArticle;
   refetch: () => void;
 }> = ({ article, refetch }) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { form, formData, handleGuideSubmit } = useGuideEditForm(article, refetch);
   const content = useWatch({ control: form.control, name: "content" }) ?? "";
   const faq = useWatch({ control: form.control, name: "faq" }) ?? [];

@@ -1,10 +1,10 @@
 "use client";
 
 import { FilePlus, Pencil, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { usePendingIds } from "@/hooks/usePendingIds";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Confirm from "@/layout/Confirm";
@@ -22,7 +22,7 @@ import { useUserDataSelector } from "@/utils/UserContext";
  * map decorations that reference its key until the key exists again.
  */
 export default function MapTilesets() {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const canEdit = Boolean(userData && canChangeContent(userData.role));
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -173,7 +173,7 @@ export default function MapTilesets() {
  * back to grassland.
  */
 const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const createFlight = useSingleFlight();
   const terrainDeletions = usePendingIds();
   const { data: terrains, refetch, isPending } = api.mapTerrain.getAll.useQuery();

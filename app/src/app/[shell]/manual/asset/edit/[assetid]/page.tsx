@@ -1,7 +1,7 @@
 "use client";
 
 import { FolderOpen, Pause, Play } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, use, useState } from "react";
 import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import { useAssetEditForm } from "@/hooks/asset";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
@@ -77,7 +78,7 @@ function SingleEditAsset({
   refetch: () => Promise<unknown>;
   canSave: boolean;
 }) {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const params = useSearchParams();
   const returnTo = getAssetLibraryReturnTo(params.get("returnTo"));
   const returnToLibrary = () => {

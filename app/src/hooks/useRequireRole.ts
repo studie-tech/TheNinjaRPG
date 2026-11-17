@@ -1,6 +1,6 @@
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import type { UserRole } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /**
@@ -12,7 +12,7 @@ export const useRequireRole = (
   check: (role: UserRole) => boolean,
   redirectTo = "/profile",
 ) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { data: userData } = useRequiredUserData();
   const hasAccess = !!userData && check(userData.role);
   const isDenied = !!userData && !hasAccess;

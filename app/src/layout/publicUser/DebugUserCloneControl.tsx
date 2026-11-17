@@ -1,7 +1,6 @@
 "use client";
 
 import { CopyCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import {
@@ -10,6 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { ConfirmedCloneControl } from "@/layout/ConfirmedCloneControl";
 
 type DebugCloneSource = {
@@ -22,7 +22,7 @@ export const DebugUserCloneControl: React.FC<{
   source: DebugCloneSource;
   cloneUserId: string;
 }> = ({ source, cloneUserId }) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const { mutateAsync: cloneUser, isPending } =
     api.staff.cloneUserForDebug.useMutation();

@@ -1,7 +1,6 @@
 "use client";
 
 import { IdCard } from "lucide-react";
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -15,6 +14,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Confirm from "@/layout/Confirm";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
@@ -32,7 +32,7 @@ export const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
   username,
   updateUserIdMutation,
 }) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const utils = api.useUtils();
   const userIdFlight = useSingleFlight<{
     userId: string;

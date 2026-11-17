@@ -1,10 +1,11 @@
 "use client";
 
 import { BellRing, MessagesSquare, SquarePen, Trash2, Users } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, startTransition, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useInboxConversations } from "@/hooks/useConversationCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
@@ -28,7 +29,7 @@ export default function Inbox() {
 
 function InboxContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
+  const router = useNavigationRouter();
   const linkedConversationId = searchParams.get("conversationId");
   const { data: userData } = useRequiredUserDataSelector((u) => ({
     userId: u.userId,

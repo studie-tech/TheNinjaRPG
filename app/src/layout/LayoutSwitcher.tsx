@@ -1,13 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import type React from "react";
 import { useDeferredValue, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import type { GameFrameProps } from "@/components/layout/GameLayout";
 import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
 import { Button } from "@/components/ui/button";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { applyGameLayout } from "@/hooks/useGameLayout";
 import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
@@ -100,7 +100,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   // When the stored choice differs from what the server rendered, pages the router has
   // already fetched or prefetched carry the wrong shell too, and navigating to them would
   // flip between layouts; a single refresh re-renders under the repaired cookie.
-  const router = useRouter();
+  const router = useNavigationRouter();
   useEffect(() => {
     // The server rendered from this cookie, so it is authoritative; rewriting it only
     // renews its expiry. A localStorage copy that failed to update must not replace it.

@@ -1,7 +1,6 @@
 "use client";
 
 import { FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +18,7 @@ import {
   PetRarities,
   PetRoles,
 } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
@@ -30,7 +30,7 @@ import { CreateSpeciesModal } from "./SpeciesEditor";
 /** Public species catalogue with the same role-gated controls as other Manual pages. */
 export default function ManualCompanions() {
   const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
-  const router = useRouter();
+  const router = useNavigationRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [rarity, setRarity] = useState("ALL");

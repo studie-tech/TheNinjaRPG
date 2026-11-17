@@ -10,7 +10,6 @@ import {
   Trash2,
   TrendingUp,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
@@ -49,6 +48,7 @@ import {
   ANBU_STEALTH_UPGRADE_COST,
 } from "@/drizzle/constants";
 import type { UserNindo } from "@/drizzle/schema";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { usePendingIds } from "@/hooks/usePendingIds";
 import { AutoAttackToggle } from "@/layout/AutoAttackModal";
 import AvatarImage from "@/layout/Avatar";
@@ -219,7 +219,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   } = props;
 
   // Get router
-  const router = useRouter();
+  const router = useNavigationRouter();
 
   // Get react query utility
   const utils = api.useUtils();

@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { useNavigationRouter } from "@/hooks/navigation";
 import {
   GAME_LAYOUT_ATTRIBUTE,
   GAME_LAYOUT_FRAME_ATTRIBUTE,
@@ -39,7 +39,7 @@ export const applyGameLayout = (id: GameLayoutId) => {
  */
 export const useSelectGameLayout = () => {
   const changeLayout = useChangeLayout();
-  const router = useRouter();
+  const router = useNavigationRouter();
   return useCallback(
     (layout: GameLayoutId) => {
       safeLocalStorageSetItem(LAYOUT_PREFERENCE_COOKIE, JSON.stringify(layout));

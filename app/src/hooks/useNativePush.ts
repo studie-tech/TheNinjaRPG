@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { useNavigationRouter } from "@/hooks/navigation";
 import {
   appEvents,
   isNative,
@@ -69,7 +69,7 @@ interface UseNativePushOptions {
  * who taps "Don't Allow" can never be reached again without a trip to Settings.
  */
 export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const registeredToken = useRef<string | null>(null);
 
   const registerDevice = api.push.registerDevice.useMutation();

@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
@@ -11,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { type BattleType, BattleTypeLabels, BattleTypes } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
@@ -19,7 +19,7 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
 
 export default function ColosseumPage() {
-  const router = useRouter();
+  const router = useNavigationRouter();
   const [selectedType, setSelectedType] = useState<BattleType>("RANKED_PVP");
   const { data: battles, isLoading } = api.combat.listOngoingBattles.useQuery(
     { battleType: selectedType },

@@ -1,7 +1,6 @@
 "use client";
 
 import { FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useNavigationRouter } from "@/hooks/navigation";
 import BloodFiltering, { getFilter, useFiltering } from "@/layout/BloodlineFiltering";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -25,7 +25,7 @@ import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualBloodlineReskins() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const router = useRouter();
+  const router = useNavigationRouter();
   const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const canEdit = Boolean(userData && canChangeContent(userData.role));
   const [selectedBloodlineId, setSelectedBloodlineId] = useState<string>("");
