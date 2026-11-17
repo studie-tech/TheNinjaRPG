@@ -356,7 +356,7 @@ export const usePusherHandler = (
               message: data.message ?? "You were invited to a dungeon party.",
               title: "Dungeon Party",
               action: (
-                <ToastAction altText="Open Dungeons">
+                <ToastAction altText="Open Dungeons" asChild>
                   <Link href={data.route ?? "/dungeon"}>
                     {data.routeText ?? "Open Dungeons"}
                   </Link>
