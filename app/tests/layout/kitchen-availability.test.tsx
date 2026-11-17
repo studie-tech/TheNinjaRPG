@@ -99,56 +99,67 @@ describe("Kitchen recipe availability", () => {
     },
   );
 
-  it("reads the queue when a waiting job starts, then the inventory it changed", async () => {
-    const order: string[] = [];
-    const invalidate = (name: string) => ({
-      invalidate: vi.fn(async () => {
-        order.push(name);
-      }),
-    });
-    const startsAt = new Date(Date.now() + 20);
-    const queue = {
-      data: {
-        capacity: 2,
-        waiting: [
-          {
-            id: "job",
-            quantity: 1,
-            name: "Rice Bowl",
-            startsAt,
-            finishesAt: new Date(startsAt.getTime() + 60000),
+  it.each([
+    { case: "starts while open", startsIn: 20, readAgo: 0 },
+    {
+      case: "started while a cached queue was closed",
+      startsIn: -60000,
+      readAgo: 120000,
+    },
+  ])(
+    "reads the queue when a waiting job $case, then the inventory it changed",
+    async ({ startsIn, readAgo }) => {
+      const order: string[] = [];
+      const invalidate = (name: string) => ({
+        invalidate: vi.fn(async () => {
+          order.push(name);
+        }),
+      });
+      const startsAt = new Date(Date.now() + startsIn);
+      const queue = {
+        data: {
+          capacity: 2,
+          waiting: [
+            {
+              id: "job",
+              quantity: 1,
+              name: "Rice Bowl",
+              startsAt,
+              finishesAt: new Date(startsAt.getTime() + 60000),
+            },
+          ],
+        },
+        dataUpdatedAt: Date.now() - readAgo,
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(async () => {
+          order.push("queue");
+        }),
+      };
+      stubCraftingCache();
+      Object.assign(vi.spyOn(client, "api" as never), {
+        useUtils: () => ({
+          item: {
+            getUserItems: invalidate("items"),
+            getUserItemsWithVariants: invalidate("variants"),
           },
-        ],
-      },
-      isPending: false,
-      isError: false,
-      refetch: vi.fn(async () => {
-        order.push("queue");
-      }),
-    };
-    stubCraftingCache();
-    Object.assign(vi.spyOn(client, "api" as never), {
-      useUtils: () => ({
-        item: {
-          getUserItems: invalidate("items"),
-          getUserItemsWithVariants: invalidate("variants"),
+          profile: { getSidebarTimers: invalidate("timers") },
+        }),
+        occupation: {
+          getCookingRecipes: { useQuery: () => ({ data: [], isPending: false }) },
+          getCraftingQueue: { useQuery: () => queue },
+          craftItem: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+          cancelQueuedCraft: {
+            useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+          },
         },
-        profile: { getSidebarTimers: invalidate("timers") },
-      }),
-      occupation: {
-        getCookingRecipes: { useQuery: () => ({ data: [], isPending: false }) },
-        getCraftingQueue: { useQuery: () => queue },
-        craftItem: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-        cancelQueuedCraft: {
-          useMutation: () => ({ mutate: vi.fn(), isPending: false }),
-        },
-      },
-      item: { getUserItems: { useQuery: () => ({ data: [], isPending: false }) } },
-    });
-    render(<Kitchen />);
-    expect(queue.refetch).not.toHaveBeenCalled();
-    await waitFor(() => expect(order).toHaveLength(4), { timeout: 3000 });
-    expect(queue.refetch).toHaveBeenCalledWith({ cancelRefetch: false });
-    expect(order[0]).toBe("queue");
-  });
+        item: { getUserItems: { useQuery: () => ({ data: [], isPending: false }) } },
+      });
+      render(<Kitchen />);
+      expect(queue.refetch).not.toHaveBeenCalled();
+      await waitFor(() => expect(order).toHaveLength(4), { timeout: 3000 });
+      expect(queue.refetch).toHaveBeenCalledWith({ cancelRefetch: false });
+      expect(order[0]).toBe("queue");
+    },
+  );
 });

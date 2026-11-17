@@ -74,10 +74,13 @@ export default function Kitchen({ image }: { image?: string }) {
     ]);
   };
   // Waiting jobs change only at their own start and finish times, or through this player's actions.
+  // The read's time also catches a boundary crossed while a cached queue sat unmounted.
   useRefreshAt(
     queue.data?.waiting.flatMap((job) => [job.startsAt, job.finishesAt]) ?? [],
     () => void refreshAtBoundary(),
     timeDiff,
+    true,
+    new Date(queue.dataUpdatedAt - timeDiff),
   );
   const { prepareCraftUpdate, updateCraft } = useCraftingCacheUpdate();
   const cook = api.occupation.craftItem.useMutation({
