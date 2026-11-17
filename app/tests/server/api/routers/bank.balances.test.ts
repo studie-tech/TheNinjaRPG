@@ -49,6 +49,28 @@ describe("fetchBankAccount", () => {
   });
 });
 
+describe("bank amount validation", () => {
+  for (const endpoint of ["toBank", "toPocket", "transfer"] as const) {
+    it.each([0.5, 1.5, 1.6])(
+      `${endpoint} rejects fractional ryo (%s) before accessing balances`,
+      async (amount) => {
+        const database = {
+          query: { userData: { findFirst: vi.fn() } },
+          update: vi.fn(),
+          insert: vi.fn(),
+        };
+        const caller = callerForDatabase(bankRouter, "bank-user", database as never);
+        await expect(
+          caller[endpoint]({ amount, targetId: "bank-target" }),
+        ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        expect(database.query.userData.findFirst).not.toHaveBeenCalled();
+        expect(database.update).not.toHaveBeenCalled();
+        expect(database.insert).not.toHaveBeenCalled();
+      },
+    );
+  }
+});
+
 const caller = (userId: string) => callerFor(bankRouter, userId);
 
 const seedUsers = async (patch: Record<string, unknown> = {}) => {

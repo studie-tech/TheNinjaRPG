@@ -31,14 +31,14 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 export const bankRouter = createTRPCRouter({
   toBank: protectedProcedure
     .meta({ mcp: { description: "Deposit ryo from pocket to bank" } })
-    .input(z.object({ amount: z.number().min(0) }))
+    .input(z.object({ amount: z.number().int().min(0) }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       return transferRyo(ctx.drizzle, ctx.userId, input.amount, "toBank");
     }),
   toPocket: protectedProcedure
     .meta({ mcp: { description: "Withdraw ryo from bank to pocket" } })
-    .input(z.object({ amount: z.number().min(0) }))
+    .input(z.object({ amount: z.number().int().min(0) }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       return transferRyo(ctx.drizzle, ctx.userId, input.amount, "toPocket");
@@ -49,7 +49,7 @@ export const bankRouter = createTRPCRouter({
         description: "Transfer ryo from your bank to another user",
       },
     })
-    .input(z.object({ amount: z.number().min(0), targetId: z.string() }))
+    .input(z.object({ amount: z.number().int().min(0), targetId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Guard
