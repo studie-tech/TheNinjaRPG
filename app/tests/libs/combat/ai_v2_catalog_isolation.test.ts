@@ -269,6 +269,7 @@ const scenario = (action: ZodAllAiAction): CompleteBattle => {
         profile: {
           id: "profile",
           userId: "actor",
+          jutsuLoadoutId: null,
           includeDefaultRules: false,
           rules: [{ conditions: [], action }],
         },

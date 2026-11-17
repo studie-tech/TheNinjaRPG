@@ -219,6 +219,7 @@ import {
   deleteBattleById,
   deleteBattleHistoryByBattleId,
   executeResultsForListOngoingBattles,
+  fetchAiProfileForUpdateCombatLoadout,
   fetchBattle,
   fetchBattleEssentials,
   findBattleHistoryForGetBattleHistoryEntry,
@@ -1160,6 +1161,7 @@ export const combatRouter = createTRPCRouter({
         useritems,
         userjutsus,
         userSkills,
+        loadoutAiProfile,
       ] = await Promise.all([
         fetchBattleEssentials(ctx.drizzle),
         fetchBattle(ctx.drizzle, input.battleId),
@@ -1168,6 +1170,7 @@ export const combatRouter = createTRPCRouter({
         fetchUserItemsWithVariants(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId, undefined, { applyReskins: false }),
         fetchUserSkills(ctx.drizzle, ctx.userId),
+        fetchAiProfileForUpdateCombatLoadout(ctx.drizzle, ctx.userId, jId),
       ]);
 
       // Derived
@@ -1251,8 +1254,13 @@ export const combatRouter = createTRPCRouter({
         ? (userBattle.extraState.villages?.[user.villageId] as CombatQueryVillage)
         : null;
       const questData = userBattle.extraState.questData?.[user.controllerId];
-      const aiProfile =
-        user.aiProfileId && user.aiProfileId !== "Default"
+      // A new jutsu loadout brings its own AI rules, or the Default ones.
+      const aiProfile = jutsuChanged
+        ? jutsuLoadouts.find((loadout) => loadout.id === jId)?.customAi &&
+          loadoutAiProfile
+          ? loadoutAiProfile
+          : userBattle.extraState.aiProfiles?.Default
+        : user.aiProfileId && user.aiProfileId !== "Default"
           ? userBattle.extraState.aiProfiles?.[user.aiProfileId]
           : userBattle.extraState.aiProfiles?.Default;
       // Relations battle state keeps apart, rebuilt from extraState and fresh skills.

@@ -357,13 +357,14 @@ export const getBackupRules = () => {
 };
 
 /**
- * Enforces the backup rules by comparing the provided rules with the backup rules.
- * If the backup rules are not present in the provided rules, they are added.
- *
- * @param rules - The array of AI rules to be validated and potentially updated.
+ * Whether `rules` end with the `enforced` rules, compared by behavior: labels and editor
+ * identities do not change what a backup rule does.
  */
-export const enforceExtraRules = (rules: AiRuleType[], enforced: AiRuleType[]) => {
-  // Labels and editor identities do not change the behavior of a fallback rule.
+export const endsWithBackupRules = (
+  rules: AiRuleType[],
+  enforced: AiRuleType[] = getBackupRules(),
+) => {
+  if (rules.length < enforced.length) return false;
   const behavior = (rule: AiRuleType) => ({
     conditions: rule.conditions,
     action: rule.action,
@@ -372,11 +373,25 @@ export const enforceExtraRules = (rules: AiRuleType[], enforced: AiRuleType[]) =
     enforced.map(behavior),
     rules.slice(-enforced.length).map(behavior),
   );
-  const hasEnforcedRules =
+  return (
     Object.keys(diff.added).length === 0 &&
     Object.keys(diff.deleted).length === 0 &&
-    Object.keys(diff.updated).length === 0;
-  if (!hasEnforcedRules) {
+    Object.keys(diff.updated).length === 0
+  );
+};
+
+/** The rules a player wrote: trailing backup rules do not count toward the rule limit. */
+export const countCustomRules = (rules: AiRuleType[]) =>
+  endsWithBackupRules(rules) ? rules.length - getBackupRules().length : rules.length;
+
+/**
+ * Enforces the backup rules by comparing the provided rules with the backup rules.
+ * If the backup rules are not present in the provided rules, they are added.
+ *
+ * @param rules - The array of AI rules to be validated and potentially updated.
+ */
+export const enforceExtraRules = (rules: AiRuleType[], enforced: AiRuleType[]) => {
+  if (!endsWithBackupRules(rules, enforced)) {
     rules.push(...enforced);
   }
 };

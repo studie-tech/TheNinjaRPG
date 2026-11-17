@@ -1,9 +1,9 @@
 /**
  * Database access for ai; authorization and transaction scopes stay in callers.
  */
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import type { z } from "zod";
-import { aiProfile, aiTransformation } from "@/drizzle/schema";
+import { aiProfile, aiTransformation, jutsuLoadout } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { AiTransformationInput, updateAiProfileSchema } from "@/validators/ai";
 
@@ -60,13 +60,69 @@ export const fetchAiProfileById = async (client: DrizzleClient, id: string) => {
   return profile;
 };
 
-/** Fetches the AI profile with the given `userId`, or undefined when none exists. */
-export const fetchAiProfileByUserId = async (client: DrizzleClient, userId: string) => {
-  const profile = await client.query.aiProfile.findFirst({
-    where: eq(aiProfile.userId, userId),
+/** The AI profile of a staff AI, which belongs to no jutsu loadout, or undefined when none exists. */
+export const fetchUnlinkedAiProfileByUserId = (client: DrizzleClient, userId: string) =>
+  client.query.aiProfile.findFirst({
+    where: and(eq(aiProfile.userId, userId), isNull(aiProfile.jutsuLoadoutId)),
   });
-  return profile;
-};
+
+/** A player's active jutsu loadout, whether it fights with its own rules, and the rules pointer. */
+export const fetchAiLoadoutStateForToggleAiProfile = (
+  client: DrizzleClient,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: { jutsuLoadout: true, aiProfileId: true },
+    with: { loadout: { columns: { customAi: true } } },
+  });
+
+/**
+ * Build the no-op upsert giving one of the player's own jutsu loadouts its AI profile row, once.
+ */
+export const upsertAiProfileForToggleAiProfile = (
+  client: Pick<DrizzleClient, "execute">,
+  id: string,
+  userId: string,
+  loadoutId: string,
+) =>
+  client.execute(sql`
+    INSERT INTO ${aiProfile} (id, userId, jutsuLoadoutId, rules, includeDefaultRules)
+    SELECT ${id}, ${jutsuLoadout.userId}, ${jutsuLoadout.id}, JSON_ARRAY(), true
+    FROM ${jutsuLoadout}
+    WHERE ${jutsuLoadout.id} = ${loadoutId} AND ${jutsuLoadout.userId} = ${userId}
+    ON DUPLICATE KEY UPDATE \`AiProfile\`.\`id\` = \`AiProfile\`.\`id\`
+  `);
+
+/**
+ * Build the update switching the player's active jutsu loadout between its own AI rules and the
+ * Default ones, and pointing the profile at them, in one statement guarded on that loadout.
+ */
+export const executeRowsForToggleAiProfile = (
+  client: Pick<DrizzleClient, "execute">,
+  userId: string,
+  loadoutId: string,
+  custom: boolean,
+) =>
+  client.execute(
+    custom
+      ? sql`
+    UPDATE ${userData}
+    JOIN ${jutsuLoadout} ON ${jutsuLoadout.id} = ${userData.jutsuLoadout}
+      AND ${jutsuLoadout.userId} = ${userData.userId}
+    JOIN ${aiProfile} ON ${aiProfile.jutsuLoadoutId} = ${jutsuLoadout.id}
+      AND ${aiProfile.userId} = ${userData.userId}
+    SET ${jutsuLoadout.customAi} = true, ${userData.aiProfileId} = ${aiProfile.id}
+    WHERE ${userData.userId} = ${userId} AND ${userData.jutsuLoadout} = ${loadoutId}
+  `
+      : sql`
+    UPDATE ${userData}
+    JOIN ${jutsuLoadout} ON ${jutsuLoadout.id} = ${userData.jutsuLoadout}
+      AND ${jutsuLoadout.userId} = ${userData.userId}
+    SET ${jutsuLoadout.customAi} = false, ${userData.aiProfileId} = NULL
+    WHERE ${userData.userId} = ${userId} AND ${userData.jutsuLoadout} = ${loadoutId}
+  `,
+  );
 
 import { inArray, sql } from "drizzle-orm";
 import { item, jutsu, quest, userData } from "@/drizzle/schema";

@@ -221,6 +221,7 @@ const makeFight = (auto = false) => {
         "player-ai": {
           id: "player-ai",
           userId: "player",
+          jutsuLoadoutId: null,
           includeDefaultRules: false,
           rules: [],
         },

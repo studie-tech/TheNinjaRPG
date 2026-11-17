@@ -384,7 +384,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
     sourceUrl: "https://the-ninja-rpg.fandom.com/wiki/AI_Rule_Set",
     content: [
       p(
-        `Every character has an AI profile that can fight automatically. Rules are condition → action pairs evaluated in order. The default set already moves you into range; custom rules are for potions, pierce, heals and combo order.`,
+        `Every character has AI rules that can fight automatically. Each jutsu loadout has its own rules, so switching loadout switches them too; a loadout uses the default rules until you write custom ones. Rules are condition → action pairs evaluated in order. The default set already moves you into range; custom rules (up to 20, plus the fallback rules) are for potions, pierce, heals and combo order.`,
       ),
       h2("Write rules the way you play"),
       ul([

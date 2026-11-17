@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Accordion from "@/layout/Accordion";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
@@ -35,6 +36,7 @@ import {
   AvailableEffectTypes,
   AvailableTargets,
   aiCoordinatesSchema,
+  countCustomRules,
   enforceExtraRules,
   getActionSchema,
   getBackupRules,
@@ -64,12 +66,25 @@ interface AiProfileEditProps {
   availableActionTypes?: readonly ZodAllAiAction["type"][];
   /** Restrict highest-power action filters without changing the shared rule executor. */
   availableActionEffects?: readonly string[];
+  /** Show a rule counter and stop adding rules at this many custom rules (backup rules aside). */
+  maxCustomRules?: number;
+  /** Hear whether the draft holds edits that are not saved yet. */
+  onDirtyChange?: (isDirty: boolean) => void;
+  /** Other saved profiles whose rules can be copied into the draft. */
+  copySources?: { id: string; name: string }[];
+  /** Hear which rules a player's jutsu loadout fights with after their own toggle. */
+  onToggled?: (toggled: { jutsuLoadout: string; aiProfileId: string | null }) => void;
 }
 
 /** Edit an ordinary AI profile or a caller-controlled companion configuration with the same rule UI. */
 const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   // User information
-  const { data: userData } = useRequiredUserDataSelector((u) => ({ role: u.role }));
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+    refreshUser,
+  } = useRequiredUserDataSelector((u) => ({ role: u.role, userId: u.userId }));
 
   // State
   const availableTabs = ["Default", "Custom"] as const;
@@ -77,6 +92,17 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   const [rules, setRules] = useState<AiRuleType[]>([]);
   const [activeElement, setActiveElement] = useState<string>("");
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+  // The hydrated draft, to tell saved rules from unsaved edits; bumping `hydration` discards edits.
+  const [savedDraft, setSavedDraft] = useState("");
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+  // Copied rules wait here until they can replace the draft they were copied for.
+  const [pendingCopy, setPendingCopy] = useState<{
+    draft: AiRuleType[];
+    profile: typeof profile;
+    rules: AiRuleType[];
+    name: string;
+  } | null>(null);
+  const [hydration, setHydration] = useState(0);
   const aiProfileId = props.userData.aiProfileId || "Default";
   const utils = api.useUtils();
   const isControlled = !!props.configuration;
@@ -97,14 +123,28 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   // Mutations
   const { mutate: toggleAiProfile, isPending: isToggling } =
     api.ai.toggleAiProfile.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            utils.profile.getAi.invalidate(),
-            utils.profile.getPublicUser.invalidate(),
-          ]);
+        if (!data.success) {
+          // The active loadout changed elsewhere; read the profile again to show it.
+          if (props.userData.userId === userData?.userId) await refreshUser();
+          return;
         }
+        const toggled = data.userPatch;
+        await Promise.all([
+          // A player's own toggle patches their profile; staff pages read the edited user again.
+          toggled
+            ? updateUser(data, { revision })
+            : utils.profile.getPublicUser.invalidate(),
+          toggled?.jutsuLoadout
+            ? props.onToggled?.({
+                jutsuLoadout: toggled.jutsuLoadout,
+                aiProfileId: toggled.aiProfileId ?? null,
+              })
+            : undefined,
+          utils.profile.getAi.invalidate(),
+        ]);
       },
     });
 
@@ -130,19 +170,65 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
 
   // Get backup rules
   const backupRules = getBackupRules();
+  const customRuleCount = countCustomRules(rules);
+  // A player's counter and copying apply to their own rules, not the read-only Default ones.
+  const showsRuleLimit = props.maxCustomRules !== undefined && !isDefault;
+  const isAtRuleLimit =
+    showsRuleLimit &&
+    customRuleCount >= (props.maxCustomRules ?? Number.POSITIVE_INFINITY);
+  const copyRulesFrom = async (id: string, name: string) => {
+    const draft = rules;
+    const from = profile;
+    setCopyingId(id);
+    // The shared query error handler reports a failure; the draft stays as it was.
+    const source = await utils.ai.getAiProfile.fetch({ id }).catch(() => null);
+    setCopyingId(null);
+    if (!source) return;
+    const copied = structuredClone(source.rules);
+    if (includeDefault || (!isStaff && !isControlled)) {
+      enforceExtraRules(copied, getBackupRules());
+    }
+    setPendingCopy({
+      draft,
+      profile: from,
+      rules: copied.map((rule) => ({ ...rule, id: nanoid() })),
+      name,
+    });
+  };
 
-  // Hydrate when switching profiles or receiving a saved profile.
+  // Hydrate when switching profiles, receiving a saved profile or discarding edits.
   useEffect(() => {
     if (!profile) return;
+    void hydration;
     const copyRules = structuredClone(profile.rules);
     if (profile.includeDefaultRules || (!isStaff && !isControlled)) {
       enforceExtraRules(copyRules, getBackupRules());
     }
     setRules(copyRules.map((rule) => ({ ...rule, id: nanoid() })));
     setIncludeDefault(profile.includeDefaultRules);
+    setSavedDraft(draftKey(copyRules, profile.includeDefaultRules));
     setActiveElement("");
     setCollapsedGroups([]);
-  }, [profile, isStaff, isControlled]);
+  }, [profile, isStaff, isControlled, hydration]);
+
+  // Edits, a switch to other rules or a reload while copying made a new draft; that one stays.
+  useEffect(() => {
+    if (!pendingCopy) return;
+    setPendingCopy(null);
+    if (rules !== pendingCopy.draft || profile !== pendingCopy.profile) return;
+    setRules(pendingCopy.rules);
+    setActiveElement("");
+    showMutationToast({
+      success: true,
+      message: `Copied the rules of ${pendingCopy.name}. Save to keep them.`,
+    });
+  }, [pendingCopy, rules, profile]);
+
+  const isDirty = savedDraft !== "" && draftKey(rules, includeDefault) !== savedDraft;
+  const { onDirtyChange } = props;
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const groups = getUnique(
     rules.flatMap((rule) => (rule.group ? [rule.group] : [])),
@@ -250,8 +336,19 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
             id="profileSelection"
             current={isDefault ? "Default" : "Custom"}
             options={availableTabs}
-            onChange={() => {
-              toggleAiProfile({ aiId: props.userData.userId });
+            onChange={(value) => {
+              if ((value === "Custom") === !isDefault) return;
+              if (isDirty) {
+                showMutationToast({
+                  success: false,
+                  message: "Save or discard your rule changes first",
+                });
+                return;
+              }
+              toggleAiProfile({
+                aiId: props.userData.userId,
+                custom: value === "Custom",
+              });
             }}
           />
         )
@@ -282,7 +379,11 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                 selectionKey={ruleKey}
                 collapsible
                 className={includeDefault && isBackupRule ? "opacity-50" : ""}
-                title={`Rule ${ruleIndex + 1}`}
+                title={
+                  includeDefault && isBackupRule
+                    ? `Fallback rule ${ruleIndex - (rules.length - backupRules.length) + 1}`
+                    : `Rule ${ruleIndex + 1}`
+                }
                 titlePostfix={`: ${rule.conditions.map((c) => c.type).join(", ")} -> ${rule.action.type}`}
                 selectedTitle={activeElement}
                 onClick={setActiveElement}
@@ -423,14 +524,28 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
             labelInactive="No CatchAll"
           />
         )}
+        {showsRuleLimit && (
+          <span className="text-muted-foreground text-sm">
+            {customRuleCount} / {props.maxCustomRules} rules
+          </span>
+        )}
         {canEdit && (
-          <Button onClick={() => addRule()}>
+          <Button onClick={() => addRule()} disabled={isAtRuleLimit}>
             <FilePlus className="mr-2 h-6 w-6" /> Add Rule
           </Button>
         )}
         {canEdit && (
-          <Button variant="outline" onClick={() => addRule(true)}>
+          <Button
+            variant="outline"
+            onClick={() => addRule(true)}
+            disabled={isAtRuleLimit}
+          >
             Add Group
+          </Button>
+        )}
+        {canEdit && isDirty && !props.configuration && (
+          <Button variant="ghost" onClick={() => setHydration((value) => value + 1)}>
+            Discard changes
           </Button>
         )}
         {canEdit && (props.configuration || rules.length > 0) && (
@@ -463,9 +578,55 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
         )}
         {isSaving && <Loader />}
       </div>
+      {canEdit && isAtRuleLimit && (
+        <p className="px-3 pb-2 text-muted-foreground text-sm">
+          Rule limit reached. Delete a rule to add another.
+        </p>
+      )}
+      {canEdit && showsRuleLimit && !!props.copySources?.length && (
+        <div className="flex flex-row flex-wrap items-center gap-2 px-3 pb-3">
+          <span className="text-muted-foreground text-sm">Copy rules from</span>
+          {props.copySources.map((source) => {
+            const trigger = (
+              <Button
+                key={source.id}
+                variant="outline"
+                size="sm"
+                aria-label={`Copy rules from ${source.name}`}
+                disabled={copyingId !== null}
+                onClick={
+                  isDirty ? undefined : () => void copyRulesFrom(source.id, source.name)
+                }
+              >
+                {copyingId === source.id ? <Loader size={5} /> : source.name}
+              </Button>
+            );
+            return isDirty ? (
+              <Confirm
+                key={source.id}
+                title="Replace unsaved rules"
+                button={trigger}
+                onAccept={() => void copyRulesFrom(source.id, source.name)}
+              >
+                Replace your unsaved rules with the rules of {source.name}? You can
+                still discard the copy before saving.
+              </Confirm>
+            ) : (
+              <span key={source.id}>{trigger}</span>
+            );
+          })}
+        </div>
+      )}
     </ContentBox>
   );
 };
+
+/** Rules and the backup-rule switch as saved, ignoring the editor's rule identities. */
+const draftKey = (rules: AiRuleType[], includeDefault: boolean | undefined) =>
+  JSON.stringify({
+    rules: rules.map(({ id: _id, ...rule }) => rule),
+    includeDefault: !!includeDefault,
+  });
 
 export default AiProfileEdit;
 

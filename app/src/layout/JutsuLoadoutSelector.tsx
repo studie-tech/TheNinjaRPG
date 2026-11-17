@@ -12,7 +12,12 @@ import { showMutationToast } from "@/libs/toast";
 import { fedJutsuLoadouts } from "@/utils/paypal";
 import { useUserDataSelector } from "@/utils/UserContext";
 
-const JutsuLoadoutSelector: React.FC<LoadoutSelectorDisplayProps> = (props) => {
+const JutsuLoadoutSelector: React.FC<
+  LoadoutSelectorDisplayProps & {
+    /** Runs once a selection is saved, for views that show what the loadout equips. */
+    onSelected?: () => void;
+  }
+> = ({ onSelected, ...props }) => {
   // State
   const {
     data: availableSlots,
@@ -45,6 +50,7 @@ const JutsuLoadoutSelector: React.FC<LoadoutSelectorDisplayProps> = (props) => {
           updateUser(data, { revision }),
           utils.jutsu.getUserJutsus.invalidate(),
         ]);
+        onSelected?.();
       }
     },
   });

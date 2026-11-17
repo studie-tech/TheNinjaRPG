@@ -119,9 +119,12 @@ const LoadoutSelector = <T extends LoadoutData>(
             <Select
               value={selectedId ?? undefined}
               onValueChange={handleSelect}
-              disabled={isPending}
+              disabled={isPending || props.disabled}
             >
-              <SelectTrigger className="h-8 w-full min-w-[8rem]">
+              <SelectTrigger
+                className="h-8 w-full min-w-[8rem]"
+                aria-describedby={props.describedBy}
+              >
                 <SelectValue placeholder="Select loadout" />
               </SelectTrigger>
               <SelectContent>
@@ -181,8 +184,9 @@ const LoadoutSelector = <T extends LoadoutData>(
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={`flex min-w-0 items-center justify-between rounded-md border border-input bg-background text-left ${chipClass} ${isPending ? "opacity-50" : ""}`}
-            disabled={isPending}
+            className={`flex min-w-0 items-center justify-between rounded-md border border-input bg-background text-left disabled:cursor-not-allowed ${chipClass} ${isPending || props.disabled ? "opacity-50" : ""}`}
+            disabled={isPending || props.disabled}
+            aria-describedby={props.describedBy}
             aria-label={props.compact ? `Change loadout (${chipText})` : undefined}
             title={props.compact ? "Change loadout" : undefined}
           >
@@ -315,4 +319,8 @@ export interface LoadoutSelectorDisplayProps {
   renamable?: boolean;
   onSelectOverride?: (loadoutId: string, displayName: string) => void;
   selectedOverrideId?: string | null;
+  /** Keep the current loadout, e.g. while the page holds unsaved changes tied to it. */
+  disabled?: boolean;
+  /** Id of the text that explains the selector, such as why it is disabled. */
+  describedBy?: string;
 }

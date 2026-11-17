@@ -16,6 +16,7 @@ import { Pusher } from "@/libs/pusher";
 import { fetchBattleEssentials } from "@/queries/combat";
 import { combatRouter } from "@/server/api/routers/combat";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
+import { ActionEndTurn, AiRule } from "@/validators/ai";
 import {
   insertSnapshotLobby,
   loadCombatant,
@@ -158,6 +159,36 @@ describeWithDatabase("combat lobby jutsu gates", () => {
     });
     expect(page.success).toBe(true);
     expect(await equippedIds()).toEqual(lobbyEquipped);
+  });
+
+  it("fights with the AI rules of the jutsu loadout chosen in the lobby", async () => {
+    const db = await getTestDatabase();
+    await db
+      .insert(jutsuLoadout)
+      .values({ id: "rules", userId: USER, jutsuIds: VALID, customAi: true });
+    await db.insert(aiProfile).values({
+      id: "rules-own",
+      userId: USER,
+      jutsuLoadoutId: "rules",
+      rules: [AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) })],
+    });
+    await seedLobby();
+    const api = await callerFor(combatRouter, USER);
+    const stored = async () =>
+      (await db.query.battle.findFirst({ where: eq(battle.id, BATTLE) }))!;
+
+    const own = await api.updateCombatLoadout({
+      battleId: BATTLE,
+      jutsuLoadoutId: "rules",
+    });
+    expect(own.success).toBe(true);
+    const withRules = await stored();
+    expect(withRules.usersState[0]!.aiProfileId).toBe("rules-own");
+    expect(withRules.extraState.aiProfiles["rules-own"]?.rules).toHaveLength(1);
+
+    // A loadout on the Default rules fights with them.
+    await api.updateCombatLoadout({ battleId: BATTLE, jutsuLoadoutId: "gates" });
+    expect((await stored()).usersState[0]!.aiProfileId).toBe("Default");
   });
 
   it.each(["COMBAT", "SPARRING", "RANKED_PVP"] as const)(

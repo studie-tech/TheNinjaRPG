@@ -56,6 +56,7 @@ import {
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
 import {
+  aiProfile,
   anbuSquad,
   type BattleAction,
   battle,
@@ -2784,3 +2785,21 @@ const hospitalPlacement = (
     ? fighter.sector
     : getVillage(battle, fighter.villageId)?.sector,
 });
+
+/**
+ * The AI rules owned by one of the player's jutsu loadouts, which the lobby loads into the
+ * battle when the player switches to that loadout.
+ */
+export const fetchAiProfileForUpdateCombatLoadout = (
+  client: DrizzleClient,
+  userId: string,
+  jutsuLoadoutId: string | undefined,
+) =>
+  jutsuLoadoutId
+    ? client.query.aiProfile.findFirst({
+        where: and(
+          eq(aiProfile.userId, userId),
+          eq(aiProfile.jutsuLoadoutId, jutsuLoadoutId),
+        ),
+      })
+    : undefined;

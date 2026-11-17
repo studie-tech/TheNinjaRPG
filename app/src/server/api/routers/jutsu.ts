@@ -556,10 +556,15 @@ export const jutsuRouter = createTRPCRouter({
         "jutsu",
         loadouts.length,
         maxLoadouts,
-        { jutsuIds: [] as JutsuLoadout["jutsuIds"], hotkeys },
+        {
+          jutsuIds: [] as JutsuLoadout["jutsuIds"],
+          hotkeys,
+          customAi: false,
+          aiProfile: null,
+        },
         new Date(),
       );
-      return backfillLoadouts<JutsuLoadout>({
+      return backfillLoadouts<JutsuLoadout & { aiProfile: { id: string } | null }>({
         loadouts,
         missing,
         maxLoadouts,
@@ -611,6 +616,7 @@ export const jutsuRouter = createTRPCRouter({
             ...getSelectJutsuLoadoutUserUpdate({
               id,
               loadoutJutsuIds: loadout.jutsuIds,
+              aiProfileId: loadout.customAi ? (loadout.aiProfile?.id ?? null) : null,
             }),
           }
         : result;

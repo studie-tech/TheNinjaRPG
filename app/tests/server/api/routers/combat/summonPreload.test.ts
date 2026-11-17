@@ -66,6 +66,7 @@ const prepare = (client: DrizzleClient, ids: string[], cache?: TemplateCache) =>
     defaultProfile: {
       id: "Default",
       userId: "default",
+      jutsuLoadoutId: null,
       rules: [],
       includeDefaultRules: false,
     },

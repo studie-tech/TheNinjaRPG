@@ -4,12 +4,14 @@ import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import * as ContentBox from "@/layout/ContentBox";
+import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
 import {
   ActionEndTurn,
   ActionMoveTowardsOpponent,
   ActionSpecificCombo,
   ActionUseSpecificJutsu,
+  AiRule,
   type AiRuleType,
   ConditionDistanceHigherThan,
   ConditionPlayerWithinRange,
@@ -25,6 +27,10 @@ import { mockUserContextValue } from "../setup/userContext";
 
 const mocks = {
   profile: { id: "custom", includeDefaultRules: true, rules: [] as AiRuleType[] },
+  fetchProfile: vi.fn(),
+  /** A profile id whose rules are still loading. */
+  loadingId: "",
+  toggle: vi.fn(),
   save: vi.fn(),
   invalidate: vi.fn(async () => undefined),
   query: vi.fn(),
@@ -32,7 +38,7 @@ const mocks = {
 };
 const api = {
   useUtils: () => ({
-    ai: { getAiProfile: { invalidate: mocks.invalidate } },
+    ai: { getAiProfile: { invalidate: mocks.invalidate, fetch: mocks.fetchProfile } },
     profile: {
       getAi: { invalidate: mocks.invalidate },
       getPublicUser: { invalidate: mocks.invalidate },
@@ -40,12 +46,16 @@ const api = {
   }),
   ai: {
     getAiProfile: {
-      useQuery: (input: unknown, options: unknown) => {
+      useQuery: (input: { id: string }, options: unknown) => {
         mocks.query(input, options);
-        return { data: mocks.profile, isPending: false };
+        return input.id === mocks.loadingId
+          ? { data: undefined, isPending: true }
+          : { data: mocks.profile, isPending: false };
       },
     },
-    toggleAiProfile: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    toggleAiProfile: {
+      useMutation: () => ({ mutate: mocks.toggle, isPending: false }),
+    },
     updateAiProfile: { useMutation: () => ({ mutate: mocks.save, isPending: false }) },
   },
 };
@@ -57,15 +67,23 @@ beforeEach(() => {
   spyOnToasts();
   vi.spyOn(ContentBox, "default").mockImplementation((({
     children,
+    topRightContent,
   }: {
     children: ReactNode;
-  }) => <div>{children}</div>) as never);
+    topRightContent?: ReactNode;
+  }) => (
+    <div>
+      {topRightContent}
+      {children}
+    </div>
+  )) as never);
   mocks.profile = {
     id: "custom",
     includeDefaultRules: true,
     rules: [{ conditions: [], action: ActionEndTurn.parse({}) }, ...getBackupRules()],
   };
   mocks.role = "CONTENT-ADMIN";
+  mocks.loadingId = "";
 });
 
 describe("controlled companion AI configuration", () => {
@@ -140,11 +158,213 @@ const mount = () =>
 const headers = (view: ReturnType<typeof mount>) =>
   view
     .getAllByRole("button")
-    .filter((button) => /^Rule \d+:/.test(button.textContent ?? ""));
+    .filter((button) => /^(Rule|Fallback rule) \d+:/.test(button.textContent ?? ""));
 const save = (view: ReturnType<typeof mount>) => {
   fireEvent.click(view.getByRole("button", { name: "Save Profile" }));
   return mocks.save.mock.calls[0]?.[0] as { rules: AiRuleType[] };
 };
+
+/** Toasts announcing copied rules. */
+const copiedToasts = () =>
+  (
+    toast.showMutationToast as unknown as { mock: { calls: [{ message: string }][] } }
+  ).mock.calls.filter(([result]) => /^Copied the rules of/.test(result.message));
+
+const custom = (count: number): AiRuleType[] =>
+  Array.from({ length: count }, () =>
+    AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) }),
+  );
+
+describe("a player's rules for a jutsu loadout", () => {
+  const player = (props: Partial<React.ComponentProps<typeof AiProfileEdit>> = {}) => {
+    mocks.role = "USER";
+    return render(
+      <AiProfileEdit
+        userData={{ aiProfileId: "custom", userId: "editor", jutsus: [], items: [] }}
+        maxCustomRules={2}
+        {...props}
+      />,
+    );
+  };
+
+  it("counts custom rules without the fallback rules and stops adding at the limit", () => {
+    const view = player();
+    expect(view.getByText("1 / 2 rules")).toBeDefined();
+    expect(view.getAllByText(/^Fallback rule [1-5]:/)).toHaveLength(5);
+    fireEvent.click(view.getByRole("button", { name: "Add Rule" }));
+    expect(view.getByText("2 / 2 rules")).toBeDefined();
+    expect(
+      (view.getByRole("button", { name: "Add Rule" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (view.getByRole("button", { name: "Add Group" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      view.getByText("Rule limit reached. Delete a rule to add another."),
+    ).toBeDefined();
+  });
+
+  it("reports unsaved edits and discards them on request", () => {
+    const onDirtyChange = vi.fn();
+    const view = player({ onDirtyChange });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    fireEvent.click(view.getByRole("button", { name: "Add Rule" }));
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    fireEvent.click(view.getByRole("button", { name: "Discard changes" }));
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(view.getByText("1 / 2 rules")).toBeDefined();
+  });
+
+  it("does not switch rules when the tab already shown is chosen again", () => {
+    const view = player();
+    fireEvent.click(view.getByRole("button", { name: "Custom" }));
+    expect(mocks.toggle).not.toHaveBeenCalled();
+    fireEvent.click(view.getByRole("button", { name: "Default" }));
+    expect(mocks.toggle).toHaveBeenCalledWith({ aiId: "editor", custom: false });
+  });
+
+  it("shows no counter or copying on the read-only Default rules", () => {
+    const view = player({
+      userData: { aiProfileId: null, userId: "editor", jutsus: [], items: [] },
+      copySources: [{ id: "pvp", name: "PvP" }],
+    });
+    expect(view.queryByText(/ \/ 2 rules/)).toBeNull();
+    expect(view.queryByRole("button", { name: "Copy rules from PvP" })).toBeNull();
+  });
+
+  it("asks before copying over unsaved edits, and keeps the draft when copying fails", async () => {
+    installBrowserGlobals();
+    mocks.fetchProfile.mockRejectedValue(new Error("offline"));
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    await waitFor(() => expect(mocks.fetchProfile).toHaveBeenCalledTimes(1));
+    expect(view.getByText("1 / 2 rules")).toBeDefined();
+    fireEvent.click(view.getByRole("button", { name: "Add Rule" }));
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    expect(mocks.fetchProfile).toHaveBeenCalledTimes(1);
+    expect(
+      view.getByText(/Replace your unsaved rules with the rules of PvP/),
+    ).toBeDefined();
+    cleanup();
+    await flushRadixFocus();
+    restoreBrowserGlobals();
+  });
+
+  it("keeps edits made while copied rules are still loading", async () => {
+    let resolve: (profile: unknown) => void = () => undefined;
+    mocks.fetchProfile.mockReturnValue(new Promise((done) => (resolve = done)));
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    fireEvent.click(view.getByRole("button", { name: "Add Rule" }));
+    await act(async () =>
+      resolve({
+        id: "pvp",
+        includeDefaultRules: true,
+        rules: [...getBackupRules()],
+      }),
+    );
+    expect(view.getByText("2 / 2 rules")).toBeDefined();
+    expect(copiedToasts()).toHaveLength(0);
+  });
+
+  it("drops copied rules that arrive after the player switched to other rules", async () => {
+    let resolve: (profile: unknown) => void = () => undefined;
+    mocks.fetchProfile.mockReturnValue(new Promise((done) => (resolve = done)));
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    // The other loadout's rules load as their own profile.
+    mocks.profile = { ...mocks.profile, id: "elsewhere" };
+    view.rerender(
+      <AiProfileEdit
+        userData={{ aiProfileId: "elsewhere", userId: "editor", jutsus: [], items: [] }}
+        maxCustomRules={2}
+        copySources={[{ id: "pvp", name: "PvP" }]}
+      />,
+    );
+    await act(async () =>
+      resolve({
+        id: "pvp",
+        includeDefaultRules: true,
+        rules: [...custom(2), ...getBackupRules()],
+      }),
+    );
+    expect(view.getByText("1 / 2 rules")).toBeDefined();
+    expect(copiedToasts()).toHaveLength(0);
+  });
+
+  it("drops copied rules when the player switches to rules that are still loading", async () => {
+    let resolve: (profile: unknown) => void = () => undefined;
+    mocks.fetchProfile.mockReturnValue(new Promise((done) => (resolve = done)));
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    mocks.loadingId = "elsewhere";
+    const switched = () => (
+      <AiProfileEdit
+        userData={{ aiProfileId: "elsewhere", userId: "editor", jutsus: [], items: [] }}
+        maxCustomRules={2}
+        copySources={[{ id: "pvp", name: "PvP" }]}
+      />
+    );
+    view.rerender(switched());
+    await act(async () =>
+      resolve({
+        id: "pvp",
+        includeDefaultRules: true,
+        rules: [...custom(2), ...getBackupRules()],
+      }),
+    );
+    expect(copiedToasts()).toHaveLength(0);
+    // The other loadout's own rules show once they load.
+    mocks.loadingId = "";
+    mocks.profile = { ...mocks.profile, id: "elsewhere" };
+    view.rerender(switched());
+    expect(view.getByText("1 / 2 rules")).toBeDefined();
+  });
+
+  it("replaces unsaved edits with copied rules once the player confirms", async () => {
+    installBrowserGlobals();
+    mocks.fetchProfile.mockResolvedValue({
+      id: "pvp",
+      includeDefaultRules: true,
+      rules: [...custom(2), ...getBackupRules()],
+    });
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    fireEvent.click(view.getByRole("button", { name: "Add Rule" }));
+    fireEvent.click(view.getAllByRole("button", { name: "Delete rule" })[0]!);
+    fireEvent.click(view.getAllByRole("button", { name: "Delete rule" })[0]!);
+    expect(view.getByText("0 / 2 rules")).toBeDefined();
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    fireEvent.click(view.getByRole("button", { name: "Proceed" }));
+    await waitFor(() => expect(copiedToasts()).toHaveLength(1));
+    expect(view.getByText("2 / 2 rules")).toBeDefined();
+    cleanup();
+    await flushRadixFocus();
+    restoreBrowserGlobals();
+  });
+
+  it("copies another loadout's rules into the draft for saving", async () => {
+    mocks.fetchProfile.mockResolvedValue({
+      id: "pvp",
+      includeDefaultRules: true,
+      rules: [
+        AiRule.parse({ conditions: [], action: ActionMoveTowardsOpponent.parse({}) }),
+        AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) }),
+        ...getBackupRules(),
+      ],
+    });
+    const view = player({ copySources: [{ id: "pvp", name: "PvP" }] });
+    fireEvent.click(view.getByRole("button", { name: "Copy rules from PvP" }));
+    await waitFor(() => expect(view.getByText("2 / 2 rules")).toBeDefined());
+    expect(mocks.fetchProfile).toHaveBeenCalledWith({ id: "pvp" });
+    expect(copiedToasts()).toHaveLength(1);
+    const rules = save(view).rules;
+    expect(rules.slice(0, 2).map((rule) => rule.action.type)).toEqual([
+      "move_towards_opponent",
+      "end_turn",
+    ]);
+    expect(rules).toHaveLength(2 + getBackupRules().length);
+  });
+});
 
 describe("AI profile rule organization", () => {
   it("inserts above the open custom rule and keeps its priority", () => {
