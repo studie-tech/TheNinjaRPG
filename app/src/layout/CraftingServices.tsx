@@ -122,7 +122,12 @@ export function CraftingServices({ navigation }: { navigation?: React.ReactNode 
                           isHistory,
                     ) ?? [];
                   if (!rows.length)
-                    return !isHistory ? (
+                    return !isHistory &&
+                      requests.data?.some((row) =>
+                        direction === "incoming"
+                          ? row.crafterId === user.userId
+                          : row.requesterId === user.userId,
+                      ) ? (
                       <p key="empty" className="text-muted-foreground py-3 text-sm">
                         No open {direction} requests.
                       </p>

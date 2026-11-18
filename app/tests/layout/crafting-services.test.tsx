@@ -271,3 +271,43 @@ it("keeps pending actions visible and terminal receipts in expandable history", 
   fireEvent.click(screen.getByText("Request history (1)"));
   expect(history?.open).toBe(true);
 });
+
+it("shows one explanatory empty state when there are no service requests", () => {
+  render(<CraftingServices />);
+  expect(screen.getByText("No incoming service requests")).toBeTruthy();
+  expect(screen.queryByText("No open incoming requests.")).toBeNull();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Outgoing" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  expect(screen.getByText("No outgoing service requests")).toBeTruthy();
+  expect(screen.queryByText("No open outgoing requests.")).toBeNull();
+});
+
+it("shows the no-open message only for the direction with historical receipts", () => {
+  vi.spyOn(serviceCache, "useServiceRequests").mockReturnValue({
+    data: [
+      {
+        id: "completed",
+        status: "COMPLETED",
+        service: "CRAFT",
+        itemName: "Sword",
+        fee: 80,
+        crafterId: "crafter",
+        requesterId: "requester",
+        materials: [],
+      },
+    ],
+    isLoading: false,
+    isError: false,
+  } as never);
+  render(<CraftingServices />);
+  expect(screen.getByText("No open incoming requests.")).toBeTruthy();
+  expect(screen.queryByText("No incoming service requests")).toBeNull();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Outgoing" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  expect(screen.getByText("No outgoing service requests")).toBeTruthy();
+  expect(screen.queryByText("No open outgoing requests.")).toBeNull();
+});
