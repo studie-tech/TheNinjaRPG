@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   GUIDE_CATEGORY_LABELS,
   GUIDE_HUB_CATEGORY_ORDER,
@@ -26,6 +27,12 @@ interface GuideHubProps {
 }
 
 const ALL_TAB = "All";
+const GUIDE_TABS = [
+  ALL_TAB,
+  ...GUIDE_HUB_CATEGORY_ORDER.map((key) => GUIDE_CATEGORY_LABELS[key]),
+];
+const HUB_TITLE = "TheNinja-RPG Guide";
+const HUB_SUBTITLE = "How to play the ninja browser game in Seichi";
 
 export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
   const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
@@ -49,11 +56,6 @@ export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
   );
   const catalog = staffArticles ?? articles;
   const featured = catalog.find((article) => article.slug === "getting-started");
-  const tabs = [
-    ALL_TAB,
-    ...GUIDE_HUB_CATEGORY_ORDER.map((key) => GUIDE_CATEGORY_LABELS[key]),
-  ];
-
   const selectedCategory = GUIDE_HUB_CATEGORY_ORDER.find(
     (key) => GUIDE_CATEGORY_LABELS[key] === category,
   );
@@ -83,8 +85,8 @@ export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
   return (
     <>
       <ContentBox
-        title="TheNinja-RPG Guide"
-        subtitle="How to play the ninja browser game in Seichi"
+        title={HUB_TITLE}
+        subtitle={HUB_SUBTITLE}
         topRightContent={
           isStaff ? (
             <Button id="create-guide" disabled={isPending} onClick={() => create()}>
@@ -94,18 +96,7 @@ export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
           ) : undefined
         }
       >
-        <p>
-          Official first-party guides for TheNinja-RPG: getting started, combat,
-          farming, bloodlines, villages and ranks. Look up jutsu, items and bloodline
-          stats in the{" "}
-          <Link
-            href="/manual"
-            className="font-bold text-orange-500 hover:text-orange-700"
-          >
-            game data encyclopedia
-          </Link>
-          .
-        </p>
+        <GuideHubIntro />
         {featured && (
           <Link
             href={`/guide/${featured.slug}`}
@@ -147,7 +138,7 @@ export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
             id="guide-category"
             listClassName="flex-wrap justify-center"
             current={category}
-            options={tabs}
+            options={GUIDE_TABS}
             onChange={setCategory}
           />
         </div>
@@ -178,6 +169,85 @@ export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
     </>
   );
 };
+
+/**
+ * Route loading state for the guide hub. The header, introduction, search and category
+ * tabs are static and render exactly as loaded; the featured guide and the first two
+ * category sections are placeholders reserving more than a viewport, so the loaded hub
+ * replaces them without moving anything already on screen.
+ */
+export const GuideHubSkeleton: React.FC = () => (
+  <>
+    <ContentBox title={HUB_TITLE} subtitle={HUB_SUBTITLE}>
+      <GuideHubIntro />
+      <div className="mt-4 flex items-center gap-3 rounded-lg border p-3">
+        <Skeleton className="h-[88px] w-36 shrink-0" />
+        <div className="flex min-w-0 grow flex-col gap-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-4 w-full" />
+        </div>
+      </div>
+      <div className="mt-4 flex flex-col gap-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-2.5 left-2 h-4 w-4 text-muted-foreground" />
+          <Input
+            readOnly
+            placeholder="Search the guide"
+            className="pl-8"
+            aria-label="Search the guide"
+          />
+        </div>
+        <NavTabs
+          listClassName="flex-wrap justify-center"
+          current={ALL_TAB}
+          options={GUIDE_TABS}
+        />
+      </div>
+    </ContentBox>
+    {GUIDE_HUB_CATEGORY_ORDER.slice(0, 2).map((key) => (
+      <ContentBox
+        key={key}
+        title={GUIDE_CATEGORY_LABELS[key]}
+        subtitle={<Skeleton className="w-16">&nbsp;</Skeleton>}
+        initialBreak={true}
+        alreadyHasH1={true}
+      >
+        <div
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          role="status"
+          aria-label="Loading guides"
+        >
+          {GUIDE_CARD_SKELETONS.map((card) => (
+            <div
+              key={card}
+              className="flex gap-3 rounded-lg border p-3"
+              aria-hidden="true"
+            >
+              <Skeleton className="h-20 w-32 shrink-0" />
+              <div className="flex min-w-0 grow flex-col gap-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-5/6" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </ContentBox>
+    ))}
+  </>
+);
+
+const GuideHubIntro: React.FC = () => (
+  <p>
+    Official first-party guides for TheNinja-RPG: getting started, combat, farming,
+    bloodlines, villages and ranks. Look up jutsu, items and bloodline stats in the{" "}
+    <Link href="/manual" className="font-bold text-orange-500 hover:text-orange-700">
+      game data encyclopedia
+    </Link>
+    .
+  </p>
+);
 
 const GuideCard: React.FC<{ article: GuideArticle; isStaff: boolean }> = ({
   article,
@@ -215,3 +285,5 @@ const GuideCard: React.FC<{ article: GuideArticle; isStaff: boolean }> = ({
     </div>
   );
 };
+
+const GUIDE_CARD_SKELETONS = Array.from({ length: 4 }, (_, i) => `guide-skeleton-${i}`);
