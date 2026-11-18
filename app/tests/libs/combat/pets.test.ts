@@ -286,7 +286,6 @@ describe("owned pets in combat", () => {
     expect(actor.maxHealth).toBe(calcHP(actor.level));
     pet.potentialValue = 1;
     expect(actor.offence).toBe(2_250_000);
-
   });
 
   it("spawns both selected solo dungeon pets with independent actors and distinct cells", () => {

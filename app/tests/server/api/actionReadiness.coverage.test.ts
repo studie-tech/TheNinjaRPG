@@ -63,7 +63,9 @@ const isParticipantGuard = (path: string, guard: Guard) =>
   (guard.owner.endsWith(`#${path}`) && guard.status === targetOnlyChecks.get(path)) ||
   // The support override passes its target through the shared owner SQL snapshot helper.
   // This exact guard is target-only; any new actor prerequisite still requires recovery.
-  (path === "pets.setPotentialForStaff" && guard.owner === "server/api/routers/pets.ts#ownerSnapshotWhere" && guard.status === "userData.status");
+  (path === "pets.setPotentialForStaff" &&
+    guard.owner === "server/api/routers/pets.ts#ownerSnapshotWhere" &&
+    guard.status === "userData.status");
 
 /** Expected awake-only actions, audited against actor guards in every registered mutation. */
 const AWAKE_ACTIONS = new Set([
@@ -586,8 +588,13 @@ describe("mutation awake prerequisites", () => {
 
   it("does not exempt an actor prerequisite introduced into a companion support override", () => {
     const file = join(sourceRoot, "server/api/routers/pets.ts");
-    const source = readFileSync(file, "utf8").replace('if (target.status !== "AWAKE"', 'if (actor.status !== "AWAKE"');
-    expect(policyDrift(inspectMutations(new Map([[file, source]]))).missing).toEqual(["pets.setPotentialForStaff"]);
+    const source = readFileSync(file, "utf8").replace(
+      'if (target.status !== "AWAKE"',
+      'if (actor.status !== "AWAKE"',
+    );
+    expect(policyDrift(inspectMutations(new Map([[file, source]]))).missing).toEqual([
+      "pets.setPotentialForStaff",
+    ]);
   });
 
   it("does not exempt a new actor guard merely because the endpoint checks another player", () => {
