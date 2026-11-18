@@ -1,10 +1,13 @@
 import * as Sentry from "@sentry/nextjs";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
+import type { RenderQuality } from "@/libs/visualEffects";
 
 /** Page-load sampling: frame and device metrics stay bounded, failures are never sampled. */
 export const RENDERER_METRICS_SAMPLE_RATE = 0.25;
 /** Excludes shader compilation and first-texture stalls from frame percentiles. */
 const FRAME_WARMUP_MS = 3_000;
+/** Excludes the target reallocation that follows a quality change. */
+const QUALITY_SETTLE_MS = 1_000;
 const FRAME_WINDOW_MS = 20_000;
 /** Shorter visits are dropped; a later visit to the same surface can still report. */
 const FRAME_MIN_WINDOW_MS = 5_000;
@@ -70,6 +73,7 @@ export const createRendererDiagnostics = ({
     let observed = 0;
     let lostAt: number | null = null;
     let restoreTimer: ReturnType<typeof setTimeout> | null = null;
+    let quality: (RendererQuality & { resolution: number }) | null = null;
 
     const finishFrames = () => {
       isCollecting = false;
@@ -79,6 +83,7 @@ export const createRendererDiagnostics = ({
         const attributes = {
           ...gpu,
           ...clientAttributes(),
+          ...quality,
           surface,
           resolution: renderer.resolution,
           megapixels:
@@ -120,6 +125,47 @@ export const createRendererDiagnostics = ({
     };
 
     return {
+      /** Software rasterizers draw every pixel on the CPU; quality defaults start lower there. */
+      isSoftware: gpu.software,
+      /**
+       * Labels frame percentiles with the quality they were drawn at. A change restarts the
+       * window, so one report never mixes levels or densities, and sampled sessions count each step.
+       */
+      quality: (next: RendererQuality) => {
+        const previous = quality;
+        quality = { ...next, resolution: renderer.resolution };
+        if (
+          !previous ||
+          (previous.quality === next.quality &&
+            previous.quality_level === next.quality_level &&
+            previous.quality_effects === next.quality_effects &&
+            previous.resolution === renderer.resolution)
+        )
+          return;
+        if (isCollecting) {
+          intervals.fill(0);
+          workloads.fill(0);
+          observed = 0;
+          warmup = QUALITY_SETTLE_MS;
+        }
+        if (!isSampled) return;
+        guard(() =>
+          metrics.count("renderer.quality.change", 1 / RENDERER_METRICS_SAMPLE_RATE, {
+            attributes: {
+              ...gpu,
+              ...next,
+              surface,
+              resolution: renderer.resolution,
+              direction:
+                next.quality_level > previous.quality_level ||
+                renderer.resolution < previous.resolution
+                  ? "lower"
+                  : "higher",
+              sample_rate: RENDERER_METRICS_SAMPLE_RATE,
+            },
+          }),
+        );
+      },
       /** Runs inside the frame callback: must stay allocation-free and must not throw. */
       frame: (interval: number, work: number) => {
         if (!isCollecting) return;
@@ -246,6 +292,13 @@ type RendererFailure = {
 };
 
 type GpuIdentity = { gpu: string; gpu_backend: string; software: boolean };
+
+/** Quality preference, adaptive level and the effects it has switched off (comma-separated). */
+type RendererQuality = {
+  quality: RenderQuality;
+  quality_level: number;
+  quality_effects: string;
+};
 
 type ObservedRenderer = {
   gl: WebGLRenderingContext;

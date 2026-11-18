@@ -263,10 +263,10 @@ describe("physical world lighting", () => {
     const f = fixture();
     try {
       f.shadows.update(worldSunlight(), viewport);
-      change("localLights", false);
+      change("localLights", false, true);
       await new Promise((r) => setTimeout(r, 10));
       expect(fields[0]!.revision).toBe(0);
-      change("localLights", true);
+      change("localLights", true, true);
       for (let i = 0; i < 100 && !fields[0]!.revision; i++)
         await new Promise((r) => setTimeout(r, 1));
       expect(fields[0]!.revision).toBeGreaterThan(0);
@@ -286,8 +286,9 @@ describe("physical world lighting", () => {
         f.shadows.registerTerrain(f.parent, f.terrain);
         f.shadows.update(worldSunlight(), viewport);
       }
-      expect(standard.shadows.container.filters![0]!.resolution).toBe(1);
-      expect(dense.shadows.container.filters![0]!.resolution).toBe(2);
+      // The lighting pass follows the renderer as automatic quality changes its density.
+      expect(standard.shadows.container.filters![0]!.resolution).toBe("inherit");
+      expect(dense.shadows.container.filters![0]!.resolution).toBe("inherit");
       const targets = (f: ReturnType<typeof fixture>) =>
         f.render.mock.calls.map(([draw]) => [draw.target.width, draw.target.height]);
       expect(targets(dense)).toEqual(targets(standard));

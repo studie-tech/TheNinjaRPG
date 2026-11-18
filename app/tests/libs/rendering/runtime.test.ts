@@ -3,9 +3,16 @@ import { WebGLRenderer } from "pixi.js";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import { destroyParkedRenderer } from "@/libs/rendering/rendererPool";
+import { sessionRenderQuality } from "@/libs/rendering/renderQuality";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { farmPlotAt, farmPlotPosition } from "@/libs/rendering/scenes/farmLayout";
 import type { RendererSurface } from "@/libs/rendering/telemetry";
+import {
+  readVisualSettingsKey,
+  setRenderQuality,
+  setVisualEffect,
+} from "@/libs/visualEffects";
+import { deferred } from "../../setup/deferred";
 
 describe("renderer initialization failure", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -21,14 +28,23 @@ describe("renderer initialization failure", () => {
     vi.spyOn(WebGLRenderer.prototype, "destroy").mockImplementation(() => {
       throw new TypeError("Cannot read properties of undefined (reading 'destroy')");
     });
-    const start = createGameRenderer({
-      surface: "travel",
-      mount: document.createElement("div"),
-      signal: new AbortController().signal,
-      height: () => 100,
-      onError: () => {},
-    });
-    await expect(start).rejects.toBe(cause);
+    const { matchMedia } = globalThis;
+    // The initial density depends on the pointer type.
+    globalThis.matchMedia = (() => ({
+      matches: false,
+    })) as unknown as typeof matchMedia;
+    try {
+      const start = createGameRenderer({
+        surface: "travel",
+        mount: document.createElement("div"),
+        signal: new AbortController().signal,
+        height: () => 100,
+        onError: () => {},
+      });
+      await expect(start).rejects.toBe(cause);
+    } finally {
+      globalThis.matchMedia = matchMedia;
+    }
   });
 });
 
@@ -52,8 +68,38 @@ describe("renderer context loss", () => {
     Object.assign(globalThis, originals);
     frame = null;
     lost = false;
+    // Quality state persists per session and device; each test starts from a new device.
+    sessionRenderQuality.clear();
+    localStorage.clear();
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 1 });
   });
-  const start = async (onError: (error: unknown) => void, backgroundAlpha = 0) => {
+  /** Renderer size and density follow resize calls, as Pixi's do. */
+  const resizeRenderer = () =>
+    vi.spyOn(WebGLRenderer.prototype, "resize").mockImplementation(function (
+      this: WebGLRenderer,
+      width: number,
+      height: number,
+      resolution?: number,
+    ) {
+      for (const [key, value] of Object.entries({
+        width,
+        height,
+        resolution: resolution ?? this.resolution,
+      }))
+        Object.defineProperty(this, key, { configurable: true, value });
+    });
+  const start = async (
+    onError: (error: unknown) => void,
+    {
+      resolution = 1,
+      backgroundAlpha = 0,
+      beforeInit,
+    }: {
+      resolution?: number;
+      backgroundAlpha?: number;
+      beforeInit?: () => Promise<void>;
+    } = {},
+  ) => {
     class NoopObserver {
       observe() {}
       disconnect() {}
@@ -76,6 +122,7 @@ describe("renderer context loss", () => {
     const init = vi
       .spyOn(WebGLRenderer.prototype, "init")
       .mockImplementation(async function (this: WebGLRenderer) {
+        await beforeInit?.();
         canvas = document.createElement("canvas");
         // Only what the runtime reads after initialization; a real GL context is unavailable here.
         const gl = { isContextLost: () => lost };
@@ -89,7 +136,7 @@ describe("renderer context loss", () => {
           },
           width: 100,
           height: 100,
-          resolution: 1,
+          resolution,
           background: { color: 0, alpha: 0 },
         })) {
           Object.defineProperty(this, key, { configurable: true, value });
@@ -98,9 +145,7 @@ describe("renderer context loss", () => {
     const destroy = vi
       .spyOn(WebGLRenderer.prototype, "destroy")
       .mockImplementation(() => {});
-    const resize = vi
-      .spyOn(WebGLRenderer.prototype, "resize")
-      .mockImplementation(() => {});
+    const resize = resizeRenderer();
     const render = vi.spyOn(WebGLRenderer.prototype, "render");
     const create = async (surface: RendererSurface = "travel") => {
       const mount = document.createElement("div");
@@ -271,7 +316,7 @@ describe("renderer context loss", () => {
   });
 
   it("ignores a disposed scene's background update after its renderer is reused", async () => {
-    const { game, create } = await start(vi.fn(), 1);
+    const { game, create } = await start(vi.fn(), { backgroundAlpha: 1 });
     game.dispose();
     const next = await create();
     expect(next.game.renderer).toBe(game.renderer);
@@ -366,6 +411,243 @@ describe("renderer context loss", () => {
     changed = true;
     runFrame(5400);
     expect(render).toHaveBeenCalledTimes(3);
+  });
+
+  it("gives a reused renderer the density its surface settled on", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    const { game, render, init, create } = await start(vi.fn(), { resolution: 2 });
+    render.mockImplementation(() => {});
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 400 && game.renderer.resolution === 2; i++) {
+      now += 33;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(1.5);
+    const renderer = game.renderer;
+    game.dispose();
+    // The parked renderer is first sized at the base density, then at the remembered level.
+    const next = await create();
+    expect(next.game.renderer).toBe(renderer);
+    expect(init).toHaveBeenCalledTimes(1);
+    expect(next.game.renderer.resolution).toBe(1.5);
+    expect(next.game.visualEffects.shadows).toBe(true);
+  });
+
+  it("lowers resolution under sustained slow frames unless the player chose high quality", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    const { game, render } = await start(vi.fn(), { resolution: 2 });
+    render.mockImplementation(() => {});
+    const resize = resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    // Thirty frames a second against a sixty-frame request.
+    for (let i = 0; i < 400 && game.renderer.resolution === 2; i++) {
+      now += 33;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(1.5);
+    expect(resize).toHaveBeenLastCalledWith(100, 100, 1.5);
+    // The next visit to the same surface in this session starts where this one settled.
+    const next = await start(vi.fn(), { resolution: 2 });
+    expect(next.game.renderer.resolution).toBe(1.5);
+    next.game.dispose();
+    setRenderQuality("high");
+    expect(game.renderer.resolution).toBe(2);
+    for (let i = 0; i < 400; i++) {
+      now += 33;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(2);
+  });
+
+  it.each(["high", "low"] as const)(
+    "honors %s selected in another tab during renderer initialization",
+    async (quality) => {
+      Object.defineProperty(window, "devicePixelRatio", {
+        configurable: true,
+        value: 2,
+      });
+      const initialized = deferred();
+      const pending = start(vi.fn(), {
+        resolution: 2,
+        beforeInit: () => initialized.promise,
+      });
+      const value = JSON.stringify(quality);
+      localStorage.setItem("worldRenderQuality", value);
+      window.dispatchEvent(
+        new window.StorageEvent("storage", {
+          key: "worldRenderQuality",
+          newValue: value,
+        }),
+      );
+      initialized.resolve();
+      const { game, render } = await pending;
+      render.mockImplementation(() => {});
+      // Explicit settings keep their density even under sustained slow frames.
+      for (let i = 0; i < 400; i++) runFrame(1000 + i * 33);
+      expect(game.renderer.resolution).toBe(quality === "high" ? 2 : 1);
+      expect(game.visualEffects).toMatchObject({
+        shadows: true,
+        localLights: true,
+        weather: true,
+      });
+    },
+  );
+
+  it("switches off effects the player has not chosen and keeps only steps that help", async () => {
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    // Shadows are this scene's cost; local lights cost nothing measurable.
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.shadows ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects).toMatchObject({
+      shadows: false,
+      localLights: true,
+      weather: true,
+    });
+    // Choosing shadows in settings wins and takes no other effect away instead.
+    setVisualEffect("shadows", true);
+    expect(game.visualEffects).toMatchObject({ shadows: true, localLights: true });
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.localLights ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects).toMatchObject({ shadows: true, localLights: false });
+  });
+
+  it("honors an effect choice through later updates when storage writes fail", async () => {
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.shadows ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects.shadows).toBe(false);
+    vi.spyOn(window.Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    setVisualEffect("shadows", true);
+    expect(game.visualEffects.shadows).toBe(true);
+    setVisualEffect("weather", false);
+    setRenderQuality("low");
+    setRenderQuality("auto");
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.localLights ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects).toMatchObject({
+      shadows: true,
+      localLights: false,
+      weather: false,
+    });
+  });
+
+  it("keeps display density when lowering it does not help and tries effects instead", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    const { game, render } = await start(vi.fn(), { resolution: 2 });
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 800; i++) {
+      now += game.visualEffects.shadows ? 40 : 15;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(2);
+    expect(game.visualEffects.shadows).toBe(false);
+  });
+
+  it("learns once per session that a display capped at 30 Hz gains nothing from lower quality", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    const first = await start(vi.fn(), { resolution: 2 });
+    first.render.mockImplementation(() => {});
+    resizeRenderer();
+    first.game.setAnimating(true);
+    let now = 1000;
+    // Every step is tried, undone and kept out of the ladder: the frames never get faster.
+    for (let i = 0; i < 1500; i++) {
+      now += 1000 / 30;
+      runFrame(now);
+    }
+    expect(first.game.renderer.resolution).toBe(2);
+    expect(first.game.visualEffects).toMatchObject({
+      shadows: true,
+      localLights: true,
+      weather: true,
+    });
+    first.game.dispose();
+    const next = await start(vi.fn(), { resolution: 2 });
+    next.render.mockImplementation(() => {});
+    const resize = resizeRenderer();
+    resize.mockClear();
+    next.game.setAnimating(true);
+    for (let i = 0; i < 1500; i++) {
+      now += 1000 / 30;
+      runFrame(now);
+      expect(next.game.visualEffects.shadows).toBe(true);
+    }
+    expect(resize).not.toHaveBeenCalled();
+  });
+
+  it("applies an effect chosen in another tab while Auto has it off", async () => {
+    setVisualEffect("shadows", true);
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 400 && game.visualEffects.localLights; i++) {
+      now += game.visualEffects.localLights ? 40 : 25;
+      runFrame(now);
+    }
+    expect(game.visualEffects.localLights).toBe(false);
+    // The switch was already stored on, so only its choice marker changes in storage.
+    const value = "true";
+    localStorage.setItem("worldEffectChoice:localLights", value);
+    window.dispatchEvent(
+      new window.StorageEvent("storage", {
+        key: "worldEffectChoice:localLights",
+        newValue: value,
+      }),
+    );
+    expect(game.visualEffects.localLights).toBe(true);
+    expect(sessionRenderQuality.get("travel")?.settings).toBe(readVisualSettingsKey());
+  });
+
+  it("measures again when another tab changed settings while no scene was mounted", async () => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+    sessionRenderQuality.set("travel", {
+      level: { resolution: 2, disabled: [] },
+      patience: 5,
+      resolutionFloor: 2,
+      ineffectiveEffects: ["shadows", "localLights", "weather"],
+      settings: readVisualSettingsKey(),
+    });
+    // Another tab turns wind off; this tab only receives the storage event.
+    localStorage.setItem("showWorldWind", "false");
+    window.dispatchEvent(
+      new window.StorageEvent("storage", { key: "showWorldWind", newValue: "false" }),
+    );
+    const { game, render } = await start(vi.fn(), { resolution: 2 });
+    render.mockImplementation(() => {});
+    resizeRenderer();
+    game.setAnimating(true);
+    let now = 1000;
+    for (let i = 0; i < 400 && game.renderer.resolution === 2; i++) {
+      now += 1000 / 30;
+      runFrame(now);
+    }
+    expect(game.renderer.resolution).toBe(1.5);
   });
 
   it("sleeps between the frames of a slow scene and wakes on a timer", async () => {

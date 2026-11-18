@@ -61,7 +61,7 @@ export const createProjectedWorldLighting = (
   let warmMappingDirty = true;
   const filter = new Filter({
     glProgram: GlProgram.from({ vertex, fragment }),
-    resolution: game.renderer.resolution ?? 1,
+    resolution: "inherit",
     resources: { night, warmMapping, uWarmMap: Texture.EMPTY.source },
   });
   filter.enabled = false;

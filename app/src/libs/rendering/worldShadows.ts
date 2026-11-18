@@ -155,8 +155,8 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
   );
   const filter = new Filter({
     glProgram: GlProgram.from({ vertex: lightingVertex, fragment: lightingFragment }),
-    // Keep albedo at display density; retained lighting targets have independent budgets.
-    resolution: game.renderer.resolution ?? 1,
+    // Albedo follows the renderer's current density; retained lighting targets have independent budgets.
+    resolution: "inherit",
     antialias: false,
     resources: {
       uReceiver: receiver.source,

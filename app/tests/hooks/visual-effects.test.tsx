@@ -96,8 +96,8 @@ describe("useVisualEffects", () => {
           wildlife: enabled,
         });
         expect(changes).toEqual([
-          ["dayNight", !enabled],
-          ["spriteAnimations", !enabled],
+          ["dayNight", !enabled, true],
+          ["spriteAnimations", !enabled, true],
         ]);
       } finally {
         unsubscribe();
@@ -162,7 +162,7 @@ describe("useVisualEffects", () => {
     try {
       expect(Object.values(readVisualEffects()).every(Boolean)).toBe(true);
       setVisualEffect("wind", false);
-      expect(changes).toEqual([["wind", false]]);
+      expect(changes).toEqual([["wind", false, true]]);
     } finally {
       unsubscribe();
       read.mockRestore();

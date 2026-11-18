@@ -16,7 +16,9 @@ import {
 import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import { hasTutorialReminder, TutorialSettings } from "@/layout/TutorialSettings";
 import * as audioPreferences from "@/libs/audioPreferences";
+import { publishRenderQualityStatus } from "@/libs/rendering/renderQuality";
 import * as toast from "@/libs/toast";
+import { readChosenVisualEffects } from "@/libs/visualEffects";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as userContext from "@/utils/UserContext";
@@ -149,6 +151,7 @@ describe("game settings sections", () => {
       </section>,
     );
     expect(screen.getAllByText("Visual effects")).toHaveLength(1);
+    expect(screen.getByRole("combobox", { name: "Graphics quality" })).toBeTruthy();
     expect(screen.queryByText("Adjust graphics for your device.")).toBeNull();
     expect(
       screen.getByText("Shared across the game; saved on this device."),
@@ -170,6 +173,27 @@ describe("game settings sections", () => {
     );
     expect(screen.queryByLabelText(MUSIC)).toBeNull();
     expect(screen.queryByLabelText(SIDEBARS)).toBeNull();
+  });
+
+  it("shows an effect Auto quality lowered as off and turns it back on in one click", () => {
+    const scene = {};
+    publishRenderQualityStatus(scene, {
+      isResolutionReduced: true,
+      disabled: ["shadows"],
+    });
+    try {
+      renderInAudio(<GameSettingsPanel section="effects" />);
+      const shadows = screen.getByLabelText("Shadows");
+      expect(shadows.getAttribute("aria-checked")).toBe("false");
+      expect(screen.getByText(/Off for now: Auto quality lowered it/)).toBeTruthy();
+      expect(screen.getByText(/Lowered now: resolution, shadows/)).toBeTruthy();
+      expect(screen.getByRole("combobox", { name: "Graphics quality" })).toBeTruthy();
+      fireEvent.click(shadows);
+      expect(window.localStorage.getItem("showWorldShadows")).toBe("true");
+      expect(readChosenVisualEffects().has("shadows")).toBe(true);
+    } finally {
+      act(() => publishRenderQualityStatus(scene, null));
+    }
   });
 
   it("keeps all three categories in the full panel for signed-out visitors", () => {
