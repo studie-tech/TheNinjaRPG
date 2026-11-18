@@ -19,6 +19,7 @@ import { CookieConsentManager } from "@/layout/CookieConsentManager";
 import { EventTournamentNotice } from "@/layout/EventTournamentNotice";
 import { ExperimentSpeedInsights } from "@/layout/ExperimentSpeedInsights";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
+import { MetaPixel } from "@/layout/MetaPixel";
 import { PyramidRunBoundary } from "@/layout/PyramidRunBoundary";
 import { RewardChoiceModal } from "@/layout/RewardChoice";
 import StructuredData from "@/layout/StructuredData";
@@ -195,6 +196,11 @@ export default async function RootLayout({
                     env.NEXT_PUBLIC_MEASUREMENT_ID &&
                     process.env.NODE_ENV === "production" && (
                       <WebAnalytics gtmId={env.NEXT_PUBLIC_MEASUREMENT_ID} />
+                    )}
+                  {!isNativeShell &&
+                    env.NEXT_PUBLIC_META_PIXEL_ID &&
+                    process.env.NODE_ENV === "production" && (
+                      <MetaPixel pixelId={env.NEXT_PUBLIC_META_PIXEL_ID} />
                     )}
                   <ReadingPreferencesProvider>
                     <LayoutSwitcher
