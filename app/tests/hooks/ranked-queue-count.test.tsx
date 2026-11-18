@@ -197,8 +197,13 @@ it("recovers missed events on subscription confirmation and skips signed-out or 
   t.setCount(0);
   await act(async () => t.emit("updated"));
   expect(t.reads()).toBe(reads);
+  // Showing the page again resubscribes; its confirmation reads changes missed meanwhile.
   view.rerender({ enabled: true });
+  expect(t.socket.subscribe).toHaveBeenCalledTimes(2);
+  expect(t.reads()).toBe(reads);
+  await act(async () => t.emit("pusher:subscription_succeeded"));
   await waitFor(() => expect(view.result.current.data).toBe(0));
+  expect(t.reads()).toBe(reads + 1);
 });
 
 it("uses a five-minute foreground recovery interval without a working socket", async () => {
@@ -261,18 +266,26 @@ it.each([false, true])(
   },
 );
 
-it("recovers missed changes on browser focus and network reconnect", async () => {
+it("recovers missed changes on browser focus after the throttle window and on network reconnect", async () => {
+  let now = Date.now();
+  vi.spyOn(Date, "now").mockImplementation(() => now);
   const t = setup();
   const view = renderHook(() => useRankedQueueCount(true, undefined), {
     wrapper: t.wrapper,
   });
   await waitFor(() => expect(view.result.current.data).toBe(0));
   t.setCount(1);
-  await act(async () => {
-    focusManager.setFocused(false);
-    focusManager.setFocused(true);
-  });
+  const refocus = () =>
+    act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+  await refocus();
+  expect(t.reads()).toBe(1);
+  now += 30_001;
+  await refocus();
   await waitFor(() => expect(view.result.current.data).toBe(1));
+  expect(t.reads()).toBe(2);
   t.setCount(0);
   await act(async () => {
     onlineManager.setOnline(false);

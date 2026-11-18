@@ -45,8 +45,10 @@ export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
   } = api.comments.getConversationComments.useInfiniteQuery(queryKey, {
     enabled: !!conversationId,
     // Recheck permissions after missed cross-tab events, even while cached history is fresh.
+    // A refocus rereads every loaded page, so it waits for 30 seconds without live events.
+    staleTime: 30_000,
     refetchOnMount: "always",
-    refetchOnWindowFocus: "always",
+    refetchOnWindowFocus: true,
     refetchOnReconnect: "always",
     getNextPageParam: (lastPage) => lastPage.nextCursor,
   });

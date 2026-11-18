@@ -138,17 +138,15 @@ export const questPartyRouter = createTRPCRouter({
         throw error;
       }
       // Notifications are best effort once personal progress and membership have saved.
-      await Promise.allSettled(
-        memberIds.map((userId) =>
-          getServerPusher().trigger(userId, "event", {
-            type: "questTeam",
-            message:
-              "Your quest team disbanded. Your progress and unclaimed rewards are in your Logbook.",
-            route: "/profile?tab=dashboard#progress-heading",
-            routeText: "Open Logbook",
-          }),
-        ),
-      );
+      await Promise.allSettled([
+        getServerPusher().trigger(memberIds, "event", {
+          type: "questTeam",
+          message:
+            "Your quest team disbanded. Your progress and unclaimed rewards are in your Logbook.",
+          route: "/profile?tab=dashboard#progress-heading",
+          routeText: "Open Logbook",
+        }),
+      ]);
       return {
         success: true,
         message: "Quest team disbanded. Members can continue their own quests",

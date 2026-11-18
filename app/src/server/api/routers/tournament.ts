@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import type { TournamentMatchState } from "@/drizzle/constants";
 import { TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
@@ -549,19 +550,19 @@ const finalizeTournamentAndPayWinner = async (
 
   await cleanupCompletedTournament(client, tournamentId);
 
-  const users = [
-    ...new Set(currentData.matches.flatMap((match) => [match.userId1, match.userId2])),
-  ];
-  users.forEach((uid) => {
-    if (uid) {
-      void getServerPusher().trigger(uid, "event", {
+  const users = currentData.matches
+    .flatMap((match) => [match.userId1, match.userId2])
+    .filter((uid): uid is string => !!uid);
+  if (users.length > 0) {
+    after(() =>
+      getServerPusher().trigger(users, "event", {
         type: "userMessage",
         message: `The tournament has ended, ${winner.username} has won!`,
         route: "/profile",
         routeText: "To profile",
-      });
-    }
-  });
+      }),
+    );
+  }
 
   return TOURNAMENT_SYNCHRONIZED;
 };

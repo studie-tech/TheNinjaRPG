@@ -208,15 +208,15 @@ export const territoryWarRouter = createTRPCRouter({
         );
         if (!result.success) return result;
         const pusher = getServerPusher();
-        await Promise.all(
-          roster.map((member) =>
-            pusher.trigger(member.userId, "event", {
-              type: "userMessage",
-              message: "Territory War battle started!",
-              route: "/combat",
-              routeText: "To combat",
-            }),
-          ),
+        await pusher.trigger(
+          roster.map((member) => member.userId),
+          "event",
+          {
+            type: "userMessage",
+            message: "Territory War battle started!",
+            route: "/combat",
+            routeText: "To combat",
+          },
         );
         return result;
       } finally {

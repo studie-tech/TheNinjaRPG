@@ -3,6 +3,7 @@ import * as pusher from "@/libs/pusher";
 import { createConvo } from "@/server/api/routers/comments";
 import type { DrizzleClient } from "@/server/db";
 import * as social from "@/server/utils/push/social";
+import { withAfterTasks } from "../../../setup/after";
 import { deferred } from "../../../setup/deferred";
 
 afterEach(() => vi.restoreAllMocks());
@@ -31,7 +32,7 @@ it.each([false, true])(
     const notify = vi
       .spyOn(social, "notifyPrivateConversation")
       .mockImplementation(() => {});
-    const pending = createConvo({
+    const pending = withAfterTasks({ createConvo }).createConvo({
       client,
       senderUserId: "sender",
       authorUserId: "sender",
@@ -50,7 +51,7 @@ it.each([false, true])(
       expect(notify).not.toHaveBeenCalled();
     } else {
       expect(await pending).toBe("chat");
-      expect(trigger).toHaveBeenCalledWith("recipient", "event", {
+      expect(trigger).toHaveBeenCalledWith(["recipient"], "event", {
         type: "newInbox",
         conversationId: "chat",
         countedAt: 1_000,

@@ -140,8 +140,11 @@ export const useConversation = (props: ConversationLogicProps) => {
     // unchanged comments when new messages are prepended.
     structuralSharing: false,
     // Recheck permissions after missed cross-tab events, even while cached history is fresh.
+    // A refocus rereads every loaded page, so it waits until live events have been
+    // quiet for 30 seconds; hidden-tab pauses and reconnects resume with their own reads.
+    staleTime: 30_000,
     refetchOnMount: "always",
-    refetchOnWindowFocus: "always",
+    refetchOnWindowFocus: true,
     refetchOnReconnect: "always",
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     placeholderData: (previousData) => previousData,
@@ -203,19 +206,21 @@ export const useConversation = (props: ConversationLogicProps) => {
     defaultValues: { searchTerm: "" },
   });
 
+  // A changed term selects a new query key, which loads its own results; `refetch`
+  // belongs to the current key, so it only repeats an unchanged search.
   const onSearchSubmit = useCallback(
     (values: SearchFormSchema) => {
-      setSearchQuery(values.searchTerm);
-      void refetch();
+      if (values.searchTerm === searchQuery) void refetch();
+      else setSearchQuery(values.searchTerm);
     },
-    [refetch],
+    [refetch, searchQuery],
   );
 
   const clearSearch = useCallback(() => {
-    setSearchQuery("");
     searchForm.reset({ searchTerm: "" });
-    void refetch();
-  }, [searchForm, refetch]);
+    if (searchQuery === "") void refetch();
+    else setSearchQuery("");
+  }, [searchForm, refetch, searchQuery]);
 
   // Create search button element
   const searchButtonElement = useMemo(

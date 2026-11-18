@@ -82,7 +82,7 @@ describeWithDatabase("inbox news for a private message", () => {
       senderId: null,
     });
     expect(result.success).toBe(true);
-    expect(events).toHaveBeenCalledWith("friend", "event", {
+    expect(events).toHaveBeenCalledWith(["friend"], "event", {
       type: "newInbox",
       conversationId: "private-convo",
       countedAt: 1_000,
@@ -120,7 +120,7 @@ describeWithDatabase("inbox news for a private message", () => {
     });
     const inboxEventsFor = events.mock.calls
       .filter(([, , data]) => (data as { type?: string })?.type === "newInbox")
-      .map(([channel]) => channel)
+      .flatMap(([channels]) => channels)
       .sort();
     expect(inboxEventsFor).toEqual(["friend", "sender"]);
   });

@@ -59,6 +59,7 @@ let createInputs: unknown[];
 let finishCreate: (value: object) => void;
 let fetched: ReturnType<typeof row> | undefined;
 let reads = 0;
+let searchReads: string[] = [];
 const pusher = {
   subscribe: () => ({
     bind: (_event: string, handler: typeof receive) => {
@@ -74,6 +75,7 @@ beforeEach(() => {
   installBrowserGlobals();
   typingSent = [];
   createInputs = [];
+  searchReads = [];
   fetched = undefined;
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: testApi.comments,
@@ -106,6 +108,7 @@ const mount = (
   const trpcClient = fakeTrpcClient((path, input) => {
     if (path === "comments.getConversationComments") {
       reads++;
+      searchReads.push((input as { searchQuery: string }).searchQuery);
       return {
         data: [...rows],
         convo: { id: "chat", isPublic },
@@ -372,6 +375,33 @@ it("retries a failed sanitizer load when a quote is toggled and fills its previe
   const quoted =
     hook.result.current.allComments?.find((c) => c.id === "b")?.content ?? "";
   expect(hook.result.current.sanitizer?.stripBlockquotes(quoted)).toBe("<p>Bravo</p>");
+});
+
+it("reads only the selected search, repeating it when the same term is submitted again", async () => {
+  const hook = mount();
+  await loaded(hook);
+  expect(searchReads).toEqual([""]);
+  fireEvent.click(screen.getByRole("button", { name: "Search messages" }));
+  const input = await screen.findByPlaceholderText("Search for messages...");
+  const submit = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  };
+  fireEvent.change(input, { target: { value: "find" } });
+  await submit();
+  await waitFor(() => expect(hook.result.current.searchQuery).toBe("find"));
+  expect(searchReads).toEqual(["", "find"]);
+  await submit();
+  expect(searchReads).toEqual(["", "find", "find"]);
+  // The unsearched history is still fresh in the cache, so clearing reads nothing.
+  act(() => hook.result.current.clearSearch());
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  expect(hook.result.current.searchQuery).toBe("");
+  expect(searchReads).toEqual(["", "find", "find"]);
 });
 
 it("keeps non-matching new messages out of search results and shows matching ones", async () => {

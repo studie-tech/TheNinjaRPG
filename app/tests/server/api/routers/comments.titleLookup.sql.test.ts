@@ -8,6 +8,7 @@ import {
 import * as pusher from "@/libs/pusher";
 import { createConvo, fetchConversation } from "@/server/api/routers/comments";
 import * as social from "@/server/utils/push/social";
+import { withAfterTasks } from "../../../setup/after";
 import { insertUsers } from "../../../setup/factories";
 import {
   describeWithDatabase,
@@ -83,7 +84,7 @@ describeWithDatabase("conversation creation", () => {
 
   it("adds each distinct participant once", async () => {
     const database = await getTestDatabase();
-    await createConvo({
+    await withAfterTasks({ createConvo }).createConvo({
       client: database,
       senderUserId: "sender",
       authorUserId: "author",

@@ -24,14 +24,16 @@ export const useRankedQueueCount = (enabled: boolean, pusher: Pusher | undefined
   const { refreshRankedQueueCount } = useRankedQueueCountCache();
   const count = api.pvpRank.getRankedQueueCount.useQuery(undefined, {
     enabled,
-    staleTime: 0,
+    // Returning from a hidden page resubscribes, and the subscription confirmation
+    // reads the count; a read within the socket throttle window is not repeated.
+    staleTime: 30_000,
     // Changes are signalled without counter deltas: concurrent joins, leaves and
     // matches always reconcile against the database. Polling also covers crashes
     // between a committed write and its notification, including cleanup failures.
     refetchInterval: 5 * 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
+    refetchOnReconnect: "always",
   });
   useEffect(() => {
     if (!enabled || !pusher) return;
