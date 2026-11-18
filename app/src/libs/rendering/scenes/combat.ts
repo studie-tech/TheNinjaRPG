@@ -1,15 +1,17 @@
 import alea from "alea";
 import {
+  BitmapText,
   Container,
   Graphics,
   getMaxFragmentPrecision,
   RenderLayer,
-  Text,
+  TextStyle,
 } from "pixi.js";
 import { ID_SFX_MOVE, WORLD_DAY_BRIGHTNESS } from "@/drizzle/constants";
 import type { GameAsset, UserData } from "@/drizzle/schema";
 import { actionPointsAfterAction, calcActiveUser } from "@/libs/combat/actions";
 import type { AggroDisplay } from "@/libs/combat/aggroDisplay";
+import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { type CombatHit, combatHits, type HitSeverity } from "@/libs/combat/playback";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
@@ -140,7 +142,7 @@ export const createCombatScene = async (options: {
     let art = emptyArt;
     if (game.isDisposed()) throw new DOMException("Combat cancelled", "AbortError");
     if (shadows) game.own(shadows.registerTerrain(terrain.container, data.terrain));
-    const labels = new Container();
+    const labels = new Container({ label: "combat-grid-labels" });
     const outlineLayers = new Map(
       // Highlight strokes sit on recessed water faces (-0.5) or on level arena ground (0).
       [-0.5, 0].map((layer) => {
@@ -194,19 +196,28 @@ export const createCombatScene = async (options: {
     // and (via the lit ground layer) beneath fighters and upright scenery.
     effects.ground.zIndex = COMBAT_GROUND_EFFECT_Z_INDEX;
     terrain.container.addChild(effects.ground);
-    for (const tile of data.grid) {
-      if (!tile.name) continue;
-      const text = new Text({
-        text: tile.name,
-        style: { fontFamily: "Arial Narrow, Arial", fontSize: 18, fill: "white" },
+    let hasLabels = false;
+    /** Grid numbers are opt-in; their glyphs share one bitmap font once first shown. */
+    const showLabels = (visible: boolean) => {
+      labels.visible = visible;
+      if (!visible || hasLabels) return;
+      hasLabels = true;
+      const style = new TextStyle({
+        fontFamily: "Arial Narrow, Arial",
+        fontSize: 18,
+        fill: "white",
       });
-      text.anchor.set(0.5);
-      text.alpha = 0.3;
-      const factor = (Math.max(tile.height, tile.width) * 0.2) / 18;
-      text.scale.set(factor, -factor);
-      text.position.set(tile.x, tile.y - 28 / 3);
-      labels.addChild(text);
-    }
+      for (const tile of data.grid) {
+        if (!tile.name) continue;
+        const text = new BitmapText({ text: tile.name, style });
+        text.anchor.set(0.5);
+        text.alpha = 0.3;
+        const factor = (Math.max(tile.height, tile.width) * 0.2) / 18;
+        text.scale.set(factor, -factor);
+        text.position.set(tile.x, tile.y - 28 / 3);
+        labels.addChild(text);
+      }
+    };
     // Physical fighters and scenery share painter ordering; meters and controls remain unlit.
     // Ambient terrain draws from its earlier owner so fallback contacts remain above its opaque faces.
     // Terrain's face z-indices are local to its stack; ground props sort only against other ground art.
@@ -248,6 +259,12 @@ export const createCombatScene = async (options: {
     let previous: CombatSceneSnapshot | null = null,
       highlightKey = "",
       hoverKey = "";
+    /** References the last highlight pass read; unchanged frames skip its turn check. */
+    let highlightInputs: unknown[] = [];
+    const invalidateHighlights = () => {
+      highlightKey = "";
+      highlightInputs = [];
+    };
     let desiredCursor: CombatHoverCursor = "default";
     let zoomTimer: ReturnType<typeof setTimeout> | null = null;
     const scale = () => (game.renderer.width / width) * zoom;
@@ -311,14 +328,14 @@ export const createCombatScene = async (options: {
         zoom = Math.max(1, Math.min(3, zoom * factor));
         if (zoom === 1) hasManualCamera = false;
         transform();
-        highlightKey = "";
+        invalidateHighlights();
         if (zoomTimer !== null) clearTimeout(zoomTimer);
         zoomTimer = setTimeout(() => options.onZoom(zoom), 300);
       },
     });
     game.setResize(() => {
       transform();
-      highlightKey = "";
+      invalidateHighlights();
     });
     const playback = createCombatPlayback(initial.battle);
     let lastFrameAt = 0;
@@ -365,7 +382,7 @@ export const createCombatScene = async (options: {
       }
       dirty = false;
       previous = snapshot;
-      highlightKey = "";
+      invalidateHighlights();
       preloadEffectArt();
     };
     sync(initial);
@@ -403,6 +420,29 @@ export const createCombatScene = async (options: {
       snapshot: CombatSceneSnapshot,
       hovered: TerrainHex | null,
     ) => {
+      // The active actor only changes with the battle or once its round deadline passes.
+      const expired =
+        Date.now() -
+          snapshot.timeDiff -
+          new Date(snapshot.battle.roundStartAt).getTime() >=
+        COMBAT_SECONDS * 1000;
+      const inputs = [
+        snapshot.battle,
+        snapshot.userId,
+        snapshot.action?.id,
+        snapshot.actions,
+        snapshot.timeDiff,
+        snapshot.revision,
+        expired,
+        hovered?.name,
+        scale(),
+      ];
+      if (
+        inputs.length === highlightInputs.length &&
+        inputs.every((input, index) => input === highlightInputs[index])
+      )
+        return;
+      highlightInputs = inputs;
       const user = snapshot.battle.usersState.find(
         (user) => user.userId === snapshot.userId,
       );
@@ -543,7 +583,7 @@ export const createCombatScene = async (options: {
       // One reaction per fighter, however many logged lines struck it.
       for (const [userId, { severity, ...direction }] of struck)
         actors.react(userId, direction, severity);
-      labels.visible = snapshot.showGridNumbers;
+      showLabels(snapshot.showGridNumbers);
       const pointer = controls.dragging() ? null : controls.pointer();
       const tile = pointer ? tileAt(pointer.x, pointer.y) : null;
       const actor = pointer ? actors.hit(pointer.x, pointer.y) : null;

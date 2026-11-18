@@ -23,6 +23,7 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useBattleCacheUpdate } from "@/hooks/useBattleCacheUpdate";
 import { useBattleHotkeys } from "@/hooks/useBattleHotkeys";
 import ActionTimer from "@/layout/ActionTimer";
 import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
@@ -54,11 +55,12 @@ import { isBetweenPyramidBattles } from "@/libs/questRun";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { isTutorialActive } from "@/libs/tutorial";
+import type { UserWithRelations } from "@/routers/profile";
 import {
   combatActionIdAtom,
   combatHeldResultAtom,
   combatThemeHeldAtom,
-  useRequiredUserData,
+  useRequiredUserDataSelector,
   userBattleAtom,
 } from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
@@ -120,7 +122,7 @@ export default function CombatPage() {
     pusher,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector(selectCombatPageUser);
   // Another tab can release the profile before this tab receives its completed battle.
   const [lastBattleId, setLastBattleId] = useState(userData?.battleId);
   useEffect(() => {
@@ -138,6 +140,10 @@ export default function CombatPage() {
       { battleId: requestedBattleId },
       { enabled: !!requestedBattleId },
     );
+  const { acceptBattle } = useBattleCacheUpdate(
+    requestedBattleId ?? undefined,
+    userData?.userId,
+  );
 
   // Mutation for handing turns to / taking them back from the user's AI profile
   const { mutate: toggleAutoCombat, isPending: isTogglingAutoCombat } =
@@ -151,7 +157,11 @@ export default function CombatPage() {
         setAutoCombatError(result.success ? undefined : result.message);
         if (result.message) showMutationToast(result);
         await Promise.all([
-          utils.combat.getBattle.invalidate(),
+          // Taking control back leaves no AI turn to run, so the returned battle is
+          // complete; a handover is read again because that read advances the AI turn.
+          !input.enabled && "battle" in result
+            ? acceptBattle(input.battleId, { battle: result.battle, result: null })
+            : utils.combat.getBattle.invalidate(),
           ...(result.success ? [updateUser(result, { revision })] : []),
         ]);
       },
@@ -201,8 +211,8 @@ export default function CombatPage() {
     (results.curHealth < userData.maxHealth ||
       results.curStamina < userData.maxStamina ||
       results.curChakra < userData.maxChakra);
-  const canAffordArenaHealing = (userData?.money ?? 0) >= BATTLE_ARENA_HEAL_COST;
-  const canHealFromCurrentStatus = canAttemptAwakeAction(userData);
+  const canAffordArenaHealing = !!userData?.canAffordArenaHealing;
+  const canHealFromCurrentStatus = !!userData?.canHealFromCurrentStatus;
   const showNextMatch =
     results?.outcome === "Won" &&
     (battle?.battleType === "ARENA" || battle?.battleType === "TRAINING");
@@ -223,7 +233,7 @@ export default function CombatPage() {
     sessionBattleUser.curHealth > 0 &&
     !sessionBattleUser.fledBattle &&
     !sessionBattleUser.leftBattle;
-  const isTutorialRunning = isTutorialActive(userData);
+  const isTutorialRunning = !!userData?.isTutorialRunning;
   // Keep a finished battle's actions and settings dimmed and inert until the player leaves.
   const isInBattle = userData?.status === "BATTLE" || !!results;
   // After "Go Again" the finished battle is held in state until the next one's data is
@@ -874,7 +884,7 @@ export default function CombatPage() {
   ]);
 
   if (!userData) return <Loader explanation="Loading userdata" />;
-  if (isBetweenPyramidBattles(userData) && !results) return <PyramidRun />;
+  if (userData.isBetweenPyramidBattles && !results) return <PyramidRun />;
   if (!results && (!requestedBattleId || isBattleMissing)) {
     return (
       <ContentBox title="Combat">
@@ -994,3 +1004,24 @@ export default function CombatPage() {
     </div>
   );
 }
+
+/** Profile fields the page reads, so unrelated profile writes leave the battle layout alone. */
+const selectCombatPageUser = (user: NonNullable<UserWithRelations>) => ({
+  userId: user.userId,
+  battleId: user.battleId,
+  status: user.status,
+  canAffordArenaHealing: user.money >= BATTLE_ARENA_HEAL_COST,
+  maxHealth: user.maxHealth,
+  maxStamina: user.maxStamina,
+  maxChakra: user.maxChakra,
+  tutorialOn: user.tutorialOn,
+  musicOn: user.musicOn,
+  buttonSfxOn: user.buttonSfxOn,
+  sfxOn: user.sfxOn,
+  village: user.village,
+  isOutlaw: user.isOutlaw,
+  bloodlineId: user.bloodlineId,
+  canHealFromCurrentStatus: canAttemptAwakeAction(user),
+  isBetweenPyramidBattles: isBetweenPyramidBattles(user),
+  isTutorialRunning: isTutorialActive(user),
+});

@@ -66,6 +66,8 @@ const targets = [
   ["layout/ChatConversation.tsx", ["ChatConversation"]],
   ["layout/RichInput.tsx", ["RichInput"]],
   ["layout/CombatActions.tsx", ["ActionSelector", "ActionOption"]],
+  ["layout/Combat.tsx", ["Combat"]],
+  ["app/[shell]/combat/page.tsx", ["CombatPage"]],
   ["app/[shell]/forum/[boardid]/[threadid]/thread.tsx", ["Thread", "ForumPost"]],
 ] as const;
 
@@ -110,7 +112,6 @@ const compilerExceptions = [
   "hooks/useSingleFlight.ts#useSingleFlight",
   "layout/BloodlineStatistics.tsx#BloodlineRollChart",
   "layout/CharacterPreview.tsx#CharacterPreview",
-  "layout/Combat.tsx#Combat",
   "layout/CombatResultScreen.tsx#CombatResultScreen",
   "layout/CombatTargetPreview.tsx#TargetingBattlefield",
   "layout/ConceptImage.tsx#ConceptImage",

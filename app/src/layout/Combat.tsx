@@ -62,6 +62,7 @@ import {
 } from "@/libs/rendering/scenes/combat";
 import { showMutationToast } from "@/libs/toast";
 import { isTutorialActive } from "@/libs/tutorial";
+import type { UserWithRelations } from "@/routers/profile";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { secondsFromNow } from "@/utils/time";
 import {
@@ -70,7 +71,7 @@ import {
   combatPendingActionAtom,
   combatPresentedBattleAtom,
   combatPresentedLogVersionAtom,
-  useRequiredUserData,
+  useRequiredUserDataSelector,
   userBattleAtom,
 } from "@/utils/UserContext";
 
@@ -139,7 +140,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     endTurnKeyRef.current = props.endTurnKey ?? "";
   }, [props.endTurnKey]);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
-  const battleId = battleRef.current?.id;
+  const battleId = battleState.battle?.id;
 
   // getUser / travel / raid invalidation after a result must run once per
   // ended battle, not on every later props identity change while result is set.
@@ -163,10 +164,9 @@ const Combat: React.FC<CombatProps> = (props) => {
   const setPresentedLogVersion = useSetAtom(combatPresentedLogVersionAtom);
   // Fighter meters follow the field while it replays actions the server already resolved.
   const [presentedBattle, setPresentedBattle] = useAtom(combatPresentedBattleAtom);
+  const isPresentingBattle = presentedBattle?.id === battleId;
   const { inspectTapped } = useCombatInspection(
-    presentedBattle?.id === battleState.battle?.id
-      ? presentedBattle
-      : battleState.battle,
+    isPresentingBattle ? presentedBattle : battleState.battle,
     props.userId,
   );
   // A replay ends with its scene; a new one reports nothing until the battle changes.
@@ -182,7 +182,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     timeDiff,
     updateUser,
     prepareUserUpdate,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector(selectCombatViewer);
   const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
   const [isInLobby, setIsInLobby] = useState(
@@ -210,13 +210,13 @@ const Combat: React.FC<CombatProps> = (props) => {
   // battle object and handed down, so there is one derivation, not two.
   const controlledActorId = props.userId;
   // Precompute available actions for the actor the human currently controls;
-  // recompute on version change or when control hands off to/from the summon.
+  // recompute when the battle changes or control hands off to/from the summon.
   const precomputedActions = useMemo(() => {
     if (battleState.battle && controlledActorId) {
       return availableUserActions(battleState.battle, controlledActorId);
     }
     return [] as CombatAction[];
-  }, [battleState.battle?.version, controlledActorId]);
+  }, [battleState.battle, controlledActorId]);
 
   // Mirror precomputedActions into a ref so the long-lived interval, click, and
   // highlight handlers (which run outside React render and don't re-register on
@@ -298,8 +298,8 @@ const Combat: React.FC<CombatProps> = (props) => {
   const suppressClickUntilRef = useRef(0);
 
   // Asset IDs to fetch
-  const textureAssets = battleRef.current?.extraState.textureAssets || [];
-  const sfxAssets = battleRef.current?.extraState.sfxAssets || [];
+  const textureAssets = battleState.battle?.extraState.textureAssets || [];
+  const sfxAssets = battleState.battle?.extraState.sfxAssets || [];
   const allAssets = [...textureAssets, ...sfxAssets];
 
   // Query data
@@ -311,7 +311,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     refetch: refetchGameAssets,
   } = api.misc.getAllGameAssetNames.useQuery(
     { ids: allAssets },
-    { enabled: !!battleRef.current, placeholderData: (previous) => previous },
+    { enabled: !!battleState.battle, placeholderData: (previous) => previous },
   );
   const hasGameAssets = gameAssets !== undefined;
   // Effects wait for their asset names; the field itself draws without them.
@@ -335,7 +335,55 @@ const Combat: React.FC<CombatProps> = (props) => {
       .map((a) => a.url)
       .filter(Boolean);
     void preloadAudioBuffers(urls);
-  }, [battleRef.current?.id, battleRef.current?.version, gameAssets]);
+  }, [battleState.battle?.id, battleState.battle?.version, gameAssets]);
+
+  // Scene callbacks and its snapshot follow each committed render through these refs.
+  const sceneSnapshot = useRef<CombatSceneSnapshot | null>(null);
+  const combatCallbacks = useRef({
+    onTap: (_tile: TerrainHex, _character?: CombatHover) => {},
+    onPresent: (_presented: CombatPresented) => {},
+  });
+  const combat = useGameScene(
+    "combat",
+    mountRef,
+    async (mount, signal, onError) =>
+      createCombatScene({
+        // Keep one artwork snapshot for this scene; later scene loads pick up saved edits.
+        lpcCatalog: await props.loadLpcCatalog(),
+        mount,
+        signal,
+        onError,
+        lightLayout,
+        initialZoom: storedZoom,
+        onZoom: setStoredZoom,
+        getSnapshot: () => {
+          const snapshot = sceneSnapshot.current;
+          if (!snapshot) throw new Error("Battlefield snapshot unavailable");
+          return {
+            ...snapshot,
+            weatherTime: Date.now() - snapshot.timeDiff,
+            assets: gameAssetsRef.current.assets,
+            requestedIds: gameAssetsRef.current.requestedIds,
+            inspect: !isTouchInputRef.current || touchDetailsOpenRef.current,
+          };
+        },
+        onTap: (tile, character) => combatCallbacks.current.onTap(tile, character),
+        onPresent: (presented) => combatCallbacks.current.onPresent(presented),
+        play: (url, volume) => {
+          void playPreloadedAudio(url, volume);
+        },
+        onHover: (hover) => {
+          const key = hover ? `${hover.tileKey}-${hover.userId ?? ""}` : null;
+          if (key !== lastHoverKeyRef.current) {
+            lastHoverKeyRef.current = key;
+            setHoveredEffect(hover);
+          }
+        },
+      }),
+    `${battleId}:${lightLayout}`,
+    !!battleState.battle && !result,
+  );
+  const webglError = combat.error;
 
   // Convenience method for helping people to not move too fast
   const canPerformAction = () => {
@@ -798,13 +846,9 @@ const Combat: React.FC<CombatProps> = (props) => {
       }, 500);
       return () => clearInterval(interval);
     }
-  }, [battleRef.current?.version, timeDiff, isInLobby]);
+  }, [battleState.battle?.version, timeDiff, isInLobby]);
 
-  const combatCallbacks = useRef({
-    onTap: (_tile: TerrainHex, _character?: CombatHover) => {},
-    onPresent: (_presented: CombatPresented) => {},
-  });
-  combatCallbacks.current.onPresent = ({ battle, logVersion }) => {
+  const onPresent = ({ battle, logVersion }: CombatPresented) => {
     const caughtUp = logVersion === undefined;
     setPresentedBattle(caughtUp ? null : battle);
     setPresentedLogVersion(logVersion);
@@ -816,7 +860,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     )
       setHeldResultVersion(undefined);
   };
-  combatCallbacks.current.onTap = (target, character) => {
+  const onTap = (target: TerrainHex, character?: CombatHover) => {
     if (
       touchDetailsOpenRef.current ||
       Date.now() < suppressClickUntilRef.current ||
@@ -868,68 +912,30 @@ const Combat: React.FC<CombatProps> = (props) => {
       latitude: target.row,
     });
   };
-  const sceneSnapshot = useRef<CombatSceneSnapshot | null>(null);
-  sceneSnapshot.current = battleState.battle
-    ? {
-        battle: battleState.battle,
-        action: props.action,
-        actions: precomputedActions,
-        userId: props.userId,
-        viewer: userData,
-        aggro: config.showAggro ? aggro : undefined,
-        timeDiff,
-        cycleEnabled: true,
-        assets: gameAssetsRef.current.assets,
-        requestedIds: gameAssetsRef.current.requestedIds,
-        active: isPageActive && !result,
-        sound: getAudioPreference("sfxOn", userData?.sfxOn),
-        volume: savedSfxVolume(),
-        showGridNumbers: config.showGridNumbers,
-        inspect: !isTouchInputRef.current || touchDetailsOpenRef.current,
-      }
-    : null;
-  const combat = useGameScene(
-    "combat",
-    mountRef,
-    async (mount, signal, onError) =>
-      createCombatScene({
-        // Keep one artwork snapshot for this scene; later scene loads pick up saved edits.
-        lpcCatalog: await props.loadLpcCatalog(),
-        mount,
-        signal,
-        onError,
-        lightLayout,
-        initialZoom: storedZoom,
-        onZoom: setStoredZoom,
-        getSnapshot: () => {
-          const snapshot = sceneSnapshot.current;
-          if (!snapshot) throw new Error("Battlefield snapshot unavailable");
-          return {
-            ...snapshot,
-            weatherTime: Date.now() - snapshot.timeDiff,
-            assets: gameAssetsRef.current.assets,
-            requestedIds: gameAssetsRef.current.requestedIds,
-            inspect: !isTouchInputRef.current || touchDetailsOpenRef.current,
-          };
-        },
-        onTap: (tile, character) => combatCallbacks.current.onTap(tile, character),
-        onPresent: (presented) => combatCallbacks.current.onPresent(presented),
-        play: (url, volume) => {
-          void playPreloadedAudio(url, volume);
-        },
-        onHover: (hover) => {
-          const key = hover ? `${hover.tileKey}-${hover.userId ?? ""}` : null;
-          if (key !== lastHoverKeyRef.current) {
-            lastHoverKeyRef.current = key;
-            setHoveredEffect(hover);
-          }
-        },
-      }),
-    `${battleId}:${lightLayout}`,
-    !!battleState.battle && !result,
-  );
-  const webglError = combat.error;
-  fieldFailedRef.current = webglError || hasGameAssetsError;
+  // Layout effects run before the scene's factory and frame callbacks read this render's values.
+  useLayoutEffect(() => {
+    combatCallbacks.current = { onTap, onPresent };
+    fieldFailedRef.current = webglError || hasGameAssetsError;
+    sceneSnapshot.current = battleState.battle
+      ? {
+          battle: battleState.battle,
+          action: props.action,
+          actions: precomputedActions,
+          userId: props.userId,
+          viewer: userData,
+          aggro: config.showAggro ? aggro : undefined,
+          timeDiff,
+          cycleEnabled: true,
+          assets: gameAssetsRef.current.assets,
+          requestedIds: gameAssetsRef.current.requestedIds,
+          active: isPageActive && !result,
+          sound: getAudioPreference("sfxOn", userData?.sfxOn),
+          volume: savedSfxVolume(),
+          showGridNumbers: config.showGridNumbers,
+          inspect: !isTouchInputRef.current || touchDetailsOpenRef.current,
+        }
+      : null;
+  });
   useEffect(() => {
     gridRef.current = combat.scene.current?.grid ?? null;
     const mount = mountRef.current;
@@ -1065,3 +1071,16 @@ const Combat: React.FC<CombatProps> = (props) => {
 };
 
 export default Combat;
+
+/** Profile fields the battle reads, so unrelated profile writes leave the field and its controls alone. */
+const selectCombatViewer = (user: NonNullable<UserWithRelations>) => ({
+  userId: user.userId,
+  username: user.username,
+  avatar: user.avatar,
+  avatarLight: user.avatarLight,
+  sector: user.sector,
+  sfxOn: user.sfxOn,
+  tutorialOn: user.tutorialOn,
+  tutorialStep: user.tutorialStep,
+  userQuests: user.userQuests,
+});

@@ -124,7 +124,15 @@ const mount = (
   };
   const refetchProfile = vi.fn(async () => undefined);
   const push = vi.fn();
-  const toggleAutoCombat = vi.fn();
+  const toggleAutoCombat = vi.fn(
+    async (_input: {
+      battleId: string;
+      enabled: boolean;
+    }): Promise<{ success: boolean; message: string; battle?: unknown }> => ({
+      success: false,
+      message: "",
+    }),
+  );
   const heal = vi.fn(
     arena.heal ?? (async () => ({ success: false, message: "Unused heal" })),
   );
@@ -155,6 +163,14 @@ const mount = (
             queryKey: input?.battleId ? ["combat", input.battleId] : ["combat"],
           }),
         ),
+        cancel: ({ battleId }: { battleId: string }) =>
+          queryClient.cancelQueries({ queryKey: ["combat", battleId] }),
+        getData: ({ battleId }: { battleId: string }) =>
+          queryClient.getQueryData(["combat", battleId]),
+        setData: (
+          { battleId }: { battleId: string },
+          update: (current: Response | undefined) => Response | undefined,
+        ) => queryClient.setQueryData(["combat", battleId], update),
       },
     },
     misc: { getAllGameAssetNames: { prefetch: prefetchAssets } },
@@ -196,6 +212,7 @@ const mount = (
       getBattleEntries: { useQuery: () => ({ data: [], isFetching: false }) },
       getBattleHistoryEntry: { useQuery: () => ({ data: undefined }) },
       getBattle: {
+        _def: () => ({ path: ["combat", "getBattle"] }),
         useQuery: (input: { battleId?: string | null }, options: object) =>
           useQuery({
             ...options,
@@ -211,7 +228,8 @@ const mount = (
           useMutation({ ...options, mutationFn: start }),
       },
       toggleAutoCombat: {
-        useMutation: () => ({ mutate: toggleAutoCombat, isPending: false }),
+        useMutation: (options: object) =>
+          useMutation({ ...options, mutationFn: toggleAutoCombat }),
       },
     },
   });
@@ -825,32 +843,51 @@ it("offers a compact battlefield badge that disables auto combat", async () => {
     battleType: "ARENA",
     usersState: [makeUser({ userId: "player", isAutoCombat: true })],
   });
-  const { view, toggleAutoCombat, queryClient } = mount(
-    battle.id,
-    async () => ({ battle, result: null }) as unknown as Response,
-  );
+  const read = vi.fn(async () => ({ battle, result: null }) as unknown as Response);
+  const { view, toggleAutoCombat } = mount(battle.id, read);
   const badge = await view.findByRole("button", { name: "Disable auto combat" });
   expect(badge.parentElement?.className).toContain("top-2 left-2");
   expect(view.queryByText("Auto combat active")).toBeNull();
   expect(view.queryByText(/Your AI profile is fighting/)).toBeNull();
   expect(view.queryByText(/Hotkey/)).toBeNull();
-  fireEvent.click(badge);
-  expect(toggleAutoCombat).toHaveBeenCalledWith({
-    battleId: battle.id,
-    enabled: false,
+  // Taking control back returns the complete battle, so no second read is needed.
+  toggleAutoCombat.mockResolvedValueOnce({
+    success: true,
+    message: "You have taken back control of the battle",
+    battle: {
+      ...battle,
+      version: battle.version + 1,
+      usersState: [makeUser({ userId: "player", isAutoCombat: false })],
+    },
   });
-  await act(async () =>
-    queryClient.setQueryData(["combat", battle.id], {
-      battle: {
-        ...battle,
-        usersState: [makeUser({ userId: "player", isAutoCombat: false })],
-      },
-      result: null,
+  fireEvent.click(badge);
+  await waitFor(() =>
+    expect(toggleAutoCombat.mock.calls[0]?.[0]).toEqual({
+      battleId: battle.id,
+      enabled: false,
     }),
   );
   await waitFor(() =>
     expect(!!view.queryByRole("button", { name: "Disable auto combat" })).toBe(false),
   );
+  expect(read).toHaveBeenCalledTimes(1);
+});
+
+it("reads the battle again when taking back auto combat fails", async () => {
+  const battle = makeCompleteBattle({
+    id: "auto-conflict",
+    battleType: "ARENA",
+    usersState: [makeUser({ userId: "player", isAutoCombat: true })],
+  });
+  const read = vi.fn(async () => ({ battle, result: null }) as unknown as Response);
+  const { view, toggleAutoCombat } = mount(battle.id, read);
+  toggleAutoCombat.mockResolvedValueOnce({
+    success: false,
+    message: "Battle state could not be updated",
+  });
+  fireEvent.click(await view.findByRole("button", { name: "Disable auto combat" }));
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  expect(view.getByRole("button", { name: "Disable auto combat" })).toBeTruthy();
 });
 
 it("keeps required AI matches read-only and removes the badge from finished battles", async () => {
