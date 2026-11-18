@@ -19,7 +19,6 @@ import * as CombatActions from "@/layout/CombatActions";
 import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
 import * as pagination from "@/libs/pagination";
-import * as UserContext from "@/utils/UserContext";
 import { stubCraftingCache } from "../layout/helpers/craftingCatalog";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { mockUserContextValue } from "../setup/userContext";
@@ -293,7 +292,7 @@ it("refreshes the inventory when an imbuement finishes with Imbue closed", async
   await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1), { timeout: 2000 });
 });
 
-it("offers a confirmed bulk repair in the occupation header during the change-job cooldown", () => {
+it("keeps confirmed bulk repair accessible below the occupation navigation during the change-job cooldown", () => {
   const mutate = vi.fn();
   stubApi(
     {},
@@ -308,7 +307,12 @@ it("offers a confirmed bulk repair in the occupation header during the change-jo
   renderCrafting();
   expect(screen.queryByRole("button", { name: "Change Job" })).toBeNull();
   const repair = screen.getByRole("button", { name: "Repair All" });
-  expect(repair.closest("[data-content-box-header]")).toBeTruthy();
+  expect(repair.closest("[data-content-box-inner]")).toBeTruthy();
+  expect(
+    screen
+      .getByRole("button", { name: "Service Requests" })
+      .closest("[data-content-box-header]"),
+  ).toBeTruthy();
   fireEvent.click(repair);
   expect(mutate).not.toHaveBeenCalled();
   const dialog = within(screen.getByRole("region", { name: "Repair All Items" }));

@@ -199,7 +199,7 @@ it.each(["IMBUE", "DISIMBUE"] as const)(
     fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
     fireEvent.click(
       screen.getByRole("button", {
-        name: service === "IMBUE" ? "Imbue an Item" : "Disimbue an Item",
+        name: service === "IMBUE" ? "Imbue" : "Disimbue",
       }),
     );
     fireEvent.click(screen.getByRole("combobox", { name: "Your item" }));
@@ -225,3 +225,49 @@ it.each(["IMBUE", "DISIMBUE"] as const)(
     expect(screen.queryByText(/has not enabled a price/)).toBeNull();
   },
 );
+
+it("opens saved price pairs for editing and keeps a draft when selecting the same row", () => {
+  query.data = {
+    prices: [{ service: "REPAIR", rarity: "RARE", fee: 175, enabled: false }],
+  };
+  renderPrices();
+  const edit = screen.getByRole("button", { name: "Edit Repair my Items RARE price" });
+  fireEvent.click(edit);
+  expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("175");
+  expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(false);
+  fireEvent.input(screen.getByRole("spinbutton"), { target: { value: "200" } });
+  fireEvent.click(edit);
+  expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("200");
+  fireEvent.click(screen.getByRole("button", { name: "Save price" }));
+  expect(save).toHaveBeenCalledWith({
+    service: "REPAIR",
+    rarity: "RARE",
+    fee: 200,
+    enabled: false,
+  });
+});
+
+it("keeps pending actions visible and terminal receipts in expandable history", () => {
+  vi.spyOn(serviceCache, "useServiceRequests").mockReturnValue({
+    data: ["PENDING", "COMPLETED"].map((status) => ({
+      id: status,
+      status,
+      service: "CRAFT",
+      itemName: `${status} Sword`,
+      fee: 80,
+      crafterId: "crafter",
+      requesterId: "requester",
+      requester: { username: "Requester" },
+      materials: [],
+    })),
+    isLoading: false,
+    isError: false,
+  } as never);
+  render(<CraftingServices />);
+  const pending = screen.getByRole("button", { name: "Accept" });
+  expect(pending.closest("details")?.open).toBe(true);
+  const history = screen.getByText("COMPLETED Sword").closest("details");
+  expect(history?.open).toBe(false);
+  fireEvent.click(screen.getByText("Request history (1)"));
+  expect(history?.open).toBe(true);
+});

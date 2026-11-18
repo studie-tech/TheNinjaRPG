@@ -13,7 +13,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { OccupationType } from "@/drizzle/constants";
 import {
   IMG_OCCUPATION_CRAFTING,
@@ -27,6 +26,7 @@ import Countdown from "@/layout/Countdown";
 import { CraftingServices } from "@/layout/CraftingServices";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import NavTabs from "@/layout/NavTabs";
 import OccupationCrafting from "@/layout/OccupationCrafting";
 import OccupationGathering from "@/layout/OccupationGathering";
 import OccupationHunter from "@/layout/OccupationHunter";
@@ -77,23 +77,21 @@ function OccupationTabs() {
   useEffect(() => {
     if (searchParams?.get("tab") === "services") setTab("services");
   }, [searchParams]);
-  return (
-    <Tabs value={tab} onValueChange={setTab}>
-      <TabsList className="mb-3">
-        <TabsTrigger value="occupation">Occupation</TabsTrigger>
-        <TabsTrigger value="services">Service Requests</TabsTrigger>
-      </TabsList>
-      <TabsContent value="occupation">
-        <OccupationTools />
-      </TabsContent>
-      <TabsContent value="services">
-        <CraftingServices />
-      </TabsContent>
-    </Tabs>
+  const navigation = (
+    <NavTabs
+      current={tab === "services" ? "Service Requests" : "Occupation"}
+      options={["Occupation", "Service Requests"]}
+      onChange={(value) => setTab(value === "Occupation" ? "occupation" : "services")}
+    />
+  );
+  return tab === "services" ? (
+    <CraftingServices navigation={navigation} />
+  ) : (
+    <OccupationTools navigation={navigation} />
   );
 }
 
-function OccupationTools() {
+function OccupationTools({ navigation }: { navigation: React.ReactNode }) {
   // Utils
 
   // State
@@ -176,15 +174,14 @@ function OccupationTools() {
       title="Occupation"
       subtitle="Work for your village"
       defaultBackHref="/profile"
-      topRightContent={
-        (repairAllAction || changeJobAction) && (
-          <div className="flex items-center gap-2">
-            {repairAllAction}
-            {changeJobAction}
-          </div>
-        )
-      }
+      topRightContent={navigation}
     >
+      {(repairAllAction || changeJobAction) && (
+        <div className="mb-3 flex flex-wrap justify-end gap-2">
+          {repairAllAction}
+          {changeJobAction}
+        </div>
+      )}
       {userData.occupation ? (
         <div>
           {occupationInfo && (

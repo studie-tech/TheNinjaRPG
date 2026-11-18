@@ -1,11 +1,14 @@
 "use client";
 
+import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -45,9 +48,12 @@ export function CraftForMe({ crafterId }: { crafterId: string }) {
       <DialogTrigger asChild>
         <Button variant="outline">Craft for Me</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="p-4 sm:p-6 md:max-w-xl">
         <DialogHeader>
           <DialogTitle>Craft for Me</DialogTitle>
+          <DialogDescription>
+            Choose a service and supply your items or materials.
+          </DialogDescription>
         </DialogHeader>
         {open && <ServiceRequestForm key={crafterId} crafterId={crafterId} />}
       </DialogContent>
@@ -56,7 +62,7 @@ export function CraftForMe({ crafterId }: { crafterId: string }) {
 }
 
 /** Incoming/outgoing service receipts remain accessible regardless of occupation. */
-export function CraftingServices() {
+export function CraftingServices({ navigation }: { navigation?: React.ReactNode }) {
   const { data: user } = useRequiredUserData();
   const requests = useServiceRequests();
   const { prepareServiceUpdate, updateService } = useCraftingServiceCache();
@@ -72,19 +78,18 @@ export function CraftingServices() {
   });
   if (!user) return <Loader />;
   return (
-    <ContentBox title="Service Requests" subtitle="Crafting services">
-      <p className="text-muted-foreground mb-4 text-sm">
-        Fees and items are held in escrow until completion. Pending requests can be
-        cancelled or declined for an immediate full refund. Completed items arrive in
-        inventory even when it is full.
-      </p>
+    <ContentBox
+      title="Service Requests"
+      subtitle="Crafting services"
+      topRightContent={navigation}
+    >
       {message && (
         <p role="status" className="mb-3">
           {message}
         </p>
       )}
       <Tabs defaultValue="incoming">
-        <TabsList>
+        <TabsList className="mb-2">
           <TabsTrigger value="incoming">Incoming</TabsTrigger>
           <TabsTrigger value="outgoing">Outgoing</TabsTrigger>
           {user.occupation === "CRAFTING" && (
@@ -93,6 +98,10 @@ export function CraftingServices() {
         </TabsList>
         {["incoming", "outgoing"].map((direction) => (
           <TabsContent key={direction} value={direction}>
+            <p className="text-muted-foreground mb-4 text-sm leading-relaxed">
+              Pending requests can be cancelled or declined for a full refund. Completed
+              items arrive automatically, even when your inventory is full.
+            </p>
             {requests.isLoading ? (
               <Loader />
             ) : requests.isError ? (
@@ -102,130 +111,193 @@ export function CraftingServices() {
               </p>
             ) : (
               <div className="space-y-3">
-                {requests.data
-                  ?.filter((row) =>
-                    direction === "incoming"
-                      ? row.crafterId === user.userId
-                      : row.requesterId === user.userId,
-                  )
-                  .map((row) => (
-                    <div key={row.id} className="rounded-lg border p-3">
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <strong>
-                          {SERVICE_LABELS[row.service]}: {row.itemName}
-                        </strong>
-                        <span>{row.fee.toLocaleString()} ryo</span>
-                      </div>
-                      <p className="text-muted-foreground text-sm">
-                        {direction === "incoming" ? (
-                          <>
-                            From{" "}
-                            <Link href={`/userid/${row.requesterId}`}>
-                              {row.requester?.username ?? "Player"}
-                            </Link>
-                          </>
-                        ) : (
-                          <>
-                            Crafter:{" "}
-                            <Link href={`/userid/${row.crafterId}`}>
-                              {row.crafter?.username ?? "Player"}
-                            </Link>
-                          </>
-                        )}{" "}
-                        · {row.status.toLowerCase()}
+                {[false, true].map((isHistory) => {
+                  const rows =
+                    requests.data?.filter(
+                      (row) =>
+                        (direction === "incoming"
+                          ? row.crafterId === user.userId
+                          : row.requesterId === user.userId) &&
+                        (row.status !== "PENDING" && row.status !== "ACTIVE") ===
+                          isHistory,
+                    ) ?? [];
+                  if (!rows.length)
+                    return !isHistory ? (
+                      <p key="empty" className="text-muted-foreground py-3 text-sm">
+                        No open {direction} requests.
                       </p>
-                      {row.crystal && (
-                        <p className="text-sm">
-                          Crystal: {row.crystal.name}
-                          {row.service === "DISIMBUE" ? " (returned to requester)" : ""}
-                        </p>
-                      )}
-                      {row.materials.length > 0 && (
-                        <details className="mt-2 text-sm">
-                          <summary>Reserved materials</summary>
-                          <ul className="list-inside list-disc">
-                            {row.materials.map((material) => (
-                              <li key={material.userItemId}>
-                                {material.quantity} × {material.name}
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      )}
-                      {row.settlementError && (
-                        <div role="alert" className="mt-2">
-                          <p>{row.settlementError}</p>
-                          <Button
-                            variant="outline"
-                            disabled={requests.isFetching}
-                            onClick={() => void requests.refetch()}
+                    ) : null;
+                  return (
+                    <details
+                      key={String(isHistory)}
+                      open={isHistory ? undefined : true}
+                      className="group"
+                    >
+                      <summary className="mb-3 cursor-pointer py-2 text-sm font-medium">
+                        {isHistory ? "Request history" : "Open requests"} ({rows.length}
+                        )
+                      </summary>
+                      <div className="space-y-3">
+                        {rows.map((row) => (
+                          <div
+                            key={row.id}
+                            className="min-w-0 space-y-3 rounded-lg border p-4"
                           >
-                            Retry delivery
-                          </Button>
-                        </div>
-                      )}
-                      {row.status === "ACTIVE" &&
-                        row.finishesAt &&
-                        !row.settlementError && (
-                          <p>
-                            Ready in{" "}
-                            <Countdown
-                              targetDate={row.finishesAt}
-                              onFinish={() => void requests.refetch()}
-                            />
-                          </p>
-                        )}
-                      {row.status === "PENDING" && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {direction === "incoming" ? (
-                            <>
-                              <Button
-                                disabled={respond.isPending}
-                                onClick={() =>
-                                  respond.mutate({
-                                    requestId: row.id,
-                                    action: "ACCEPT",
-                                  })
-                                }
-                              >
-                                Accept
-                              </Button>
-                              <Button
-                                variant="outline"
-                                disabled={respond.isPending}
-                                onClick={() =>
-                                  respond.mutate({
-                                    requestId: row.id,
-                                    action: "DECLINE",
-                                  })
-                                }
-                              >
-                                Decline &amp; refund
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              disabled={respond.isPending}
-                              onClick={() =>
-                                respond.mutate({ requestId: row.id, action: "CANCEL" })
-                              }
-                            >
-                              Cancel &amp; refund
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                            <div className="flex flex-wrap justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-muted-foreground text-xs">
+                                  {SERVICE_LABELS[row.service]}
+                                </p>
+                                <p className="font-semibold break-words">
+                                  {row.itemName}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 flex-col items-end gap-1">
+                                <span className="font-medium tabular-nums">
+                                  {row.fee.toLocaleString()} ryo
+                                </span>
+                                <Badge
+                                  variant={
+                                    row.status === "PENDING" || row.status === "ACTIVE"
+                                      ? "secondary"
+                                      : "outline"
+                                  }
+                                >
+                                  {row.status === "PENDING"
+                                    ? "Awaiting acceptance"
+                                    : row.status === "ACTIVE"
+                                      ? "In progress"
+                                      : row.status === "COMPLETED"
+                                        ? "Completed"
+                                        : "Refunded"}
+                                </Badge>
+                              </div>
+                            </div>
+                            <p className="text-muted-foreground text-sm">
+                              {direction === "incoming" ? (
+                                <>
+                                  From{" "}
+                                  <Link href={`/userid/${row.requesterId}`}>
+                                    {row.requester?.username ?? "Player"}
+                                  </Link>
+                                </>
+                              ) : (
+                                <>
+                                  Crafter:{" "}
+                                  <Link href={`/userid/${row.crafterId}`}>
+                                    {row.crafter?.username ?? "Player"}
+                                  </Link>
+                                </>
+                              )}
+                            </p>
+                            {row.crystal && (
+                              <p className="text-sm">
+                                Crystal: {row.crystal.name}
+                                {row.service === "DISIMBUE"
+                                  ? " (returned to requester)"
+                                  : ""}
+                              </p>
+                            )}
+                            {row.materials.length > 0 && (
+                              <details className="mt-2 text-sm">
+                                <summary className="cursor-pointer py-1">
+                                  Reserved materials
+                                </summary>
+                                <ul className="list-inside list-disc">
+                                  {row.materials.map((material) => (
+                                    <li key={material.userItemId}>
+                                      {material.quantity} × {material.name}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                            {row.settlementError && (
+                              <div role="alert" className="mt-2">
+                                <p>{row.settlementError}</p>
+                                <Button
+                                  variant="outline"
+                                  disabled={requests.isFetching}
+                                  onClick={() => void requests.refetch()}
+                                >
+                                  Retry delivery
+                                </Button>
+                              </div>
+                            )}
+                            {row.status === "ACTIVE" &&
+                              row.finishesAt &&
+                              !row.settlementError && (
+                                <p>
+                                  Ready in{" "}
+                                  <Countdown
+                                    targetDate={row.finishesAt}
+                                    onFinish={() => void requests.refetch()}
+                                  />
+                                </p>
+                              )}
+                            {row.status === "PENDING" && (
+                              <div className="flex flex-wrap gap-2 border-t pt-3">
+                                {direction === "incoming" ? (
+                                  <>
+                                    <Button
+                                      disabled={respond.isPending}
+                                      onClick={() =>
+                                        respond.mutate({
+                                          requestId: row.id,
+                                          action: "ACCEPT",
+                                        })
+                                      }
+                                    >
+                                      Accept
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      disabled={respond.isPending}
+                                      onClick={() =>
+                                        respond.mutate({
+                                          requestId: row.id,
+                                          action: "DECLINE",
+                                        })
+                                      }
+                                    >
+                                      Decline &amp; refund
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    disabled={respond.isPending}
+                                    onClick={() =>
+                                      respond.mutate({
+                                        requestId: row.id,
+                                        action: "CANCEL",
+                                      })
+                                    }
+                                  >
+                                    Cancel &amp; refund
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })}
                 {!requests.data?.some((row) =>
                   direction === "incoming"
                     ? row.crafterId === user.userId
                     : row.requesterId === user.userId,
                 ) && (
-                  <p className="text-muted-foreground py-4">
-                    No {direction} service requests.
-                  </p>
+                  <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+                    <p className="font-medium">No {direction} service requests</p>
+                    <p className="text-muted-foreground mt-1 text-sm">
+                      {direction === "incoming"
+                        ? "Requests from other players will appear here."
+                        : "Visit a crafter’s profile and choose Craft for Me to get started."}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -312,16 +384,24 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
     return <p>This player does not offer crafting services.</p>;
   return (
     <div className="min-w-0 space-y-4">
-      <p>
-        {offers.data.crafter.username} · {offers.data.crafter.rank.toLowerCase()}
-      </p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+        <span className="font-medium">{offers.data.crafter.username}</span>
+        <Badge variant="outline" className="capitalize">
+          {offers.data.crafter.rank.toLowerCase()} crafter
+        </Badge>
+      </div>
+      <fieldset
+        className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+        aria-label="Crafting service"
+      >
         {CRAFTING_SERVICES.map((value) => (
           <Button
             key={value}
             variant={service === value ? "default" : "outline"}
+            aria-pressed={service === value}
             disabled={submit.isPending}
             onClick={() => {
+              if (value === service) return;
               setService(value);
               setItemId("");
               setCrystalId("");
@@ -330,65 +410,84 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
               setSubmitted(false);
             }}
           >
-            {SERVICE_LABELS[value]}
+            {SERVICE_SHORT_LABELS[value]}
           </Button>
         ))}
-      </div>
-      <SearchSelect
-        label={service === "CRAFT" ? "Recipe" : "Your item"}
-        value={itemId}
-        options={options}
-        placeholder={
-          service === "CRAFT" ? "Search the recipe book" : "Select your item"
-        }
-        disabled={submit.isPending || submitted}
-        onChange={(value) => {
-          setItemId(value);
-          setImbuementId("");
-        }}
-      />
-      {service === "IMBUE" && (
+      </fieldset>
+      <div className="space-y-2">
+        <Label htmlFor="service-item">
+          {service === "CRAFT" ? "Recipe" : "Your item"}
+        </Label>
         <SearchSelect
-          label="Crystal"
-          value={crystalId}
-          options={(inventory.data ?? [])
-            .filter(
-              (row) =>
-                row.item.itemType === "CRYSTAL" &&
-                row.quantity > 0 &&
-                !row.isInAuction &&
-                !row.storedAtHome &&
-                (!row.craftingFinishedAt || row.craftingFinishedAt <= new Date()),
-            )
-            .map((row) => ({
-              value: row.id,
-              label: `${row.item.name} (${row.item.rarity})`,
-            }))}
-          placeholder="Select your crystal"
+          id="service-item"
+          label={service === "CRAFT" ? "Recipe" : "Your item"}
+          value={itemId}
+          options={options}
+          emptyText={
+            service === "CRAFT"
+              ? "No eligible recipes found."
+              : "No available items for this service."
+          }
+          placeholder={
+            service === "CRAFT" ? "Search the recipe book" : "Select your item"
+          }
           disabled={submit.isPending || submitted}
-          onChange={setCrystalId}
+          onChange={(value) => {
+            setItemId(value);
+            setImbuementId("");
+          }}
         />
+      </div>
+      {service === "IMBUE" && (
+        <div className="space-y-2">
+          <Label htmlFor="service-crystal">Crystal</Label>
+          <SearchSelect
+            id="service-crystal"
+            label="Crystal"
+            value={crystalId}
+            options={(inventory.data ?? [])
+              .filter(
+                (row) =>
+                  row.item.itemType === "CRYSTAL" &&
+                  row.quantity > 0 &&
+                  !row.isInAuction &&
+                  !row.storedAtHome &&
+                  (!row.craftingFinishedAt || row.craftingFinishedAt <= new Date()),
+              )
+              .map((row) => ({
+                value: row.id,
+                label: `${row.item.name} (${row.item.rarity})`,
+              }))}
+            placeholder="Select your crystal"
+            disabled={submit.isPending || submitted}
+            onChange={setCrystalId}
+          />
+        </div>
       )}
       {service === "DISIMBUE" && (
-        <SearchSelect
-          label="Imbuement"
-          value={imbuementId}
-          options={(target?.imbuements ?? []).map((row) => ({
-            value: row.id,
-            label: row.item.name,
-          }))}
-          placeholder="Select the crystal to return"
-          disabled={submit.isPending || submitted}
-          onChange={setImbuementId}
-        />
+        <div className="space-y-2">
+          <Label htmlFor="service-imbuement">Imbuement to remove</Label>
+          <SearchSelect
+            id="service-imbuement"
+            label="Imbuement"
+            value={imbuementId}
+            options={(target?.imbuements ?? []).map((row) => ({
+              value: row.id,
+              label: row.item.name,
+            }))}
+            placeholder="Select the crystal to return"
+            disabled={submit.isPending || submitted}
+            onChange={setImbuementId}
+          />
+        </div>
       )}
       {service === "CRAFT" && selectedRecipe && (
-        <div className="rounded border p-3">
+        <div className="rounded-lg border p-3 break-words">
           <strong>
             Materials for {selectedRecipe.craftingOutputQuantity} ×{" "}
             {selectedRecipe.name}
           </strong>
-          <ul className="mt-2 list-inside list-disc text-sm">
+          <ul className="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
             {selectedRecipe.craftingRequirements.map((req) => (
               <li key={req.id}>
                 {req.quantity} × {req.requirementItem.name}
@@ -407,20 +506,22 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           durability ({target.item.maxDurability} normal maximum).
         </p>
       )}
-      {info && rarity && (
-        <p className="font-medium">
-          {price
-            ? `Service fee: ${price.fee.toLocaleString()} ryo`
-            : "The crafter has not enabled a price for this service and rarity."}
+      <div className="bg-muted/40 space-y-3 rounded-lg p-3">
+        {info && rarity && (
+          <p className="font-semibold">
+            {price
+              ? `Service fee: ${price.fee.toLocaleString()} ryo`
+              : "The crafter has not enabled a price for this service and rarity."}
+          </p>
+        )}
+        <p className="text-muted-foreground text-sm">
+          {service === "REPAIR"
+            ? "Repair completes instantly. The crafter receives your fee and a notification."
+            : "Your fee and submitted items are reserved immediately. The crafter must accept before work starts. Delivery is automatic, with inventory overflow when full."}
         </p>
-      )}
-      <p className="text-muted-foreground text-sm">
-        {service === "REPAIR"
-          ? "Repair completes instantly. The crafter receives your fee and a notification."
-          : "Your fee and submitted items are reserved immediately. The crafter must accept before work starts. Delivery is automatic, with inventory overflow when full."}
-      </p>
+      </div>
       {message && (
-        <div>
+        <div className="space-y-2 rounded-lg border p-3">
           <p role="status">{message}</p>
           {!submitted && (
             <Button
@@ -435,38 +536,44 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           )}
         </div>
       )}
-      <Button
-        disabled={
-          !price ||
-          !info ||
-          submit.isPending ||
-          submitted ||
-          (service === "DISIMBUE" && !imbuementId)
-        }
-        onClick={() =>
-          submit.mutate({
-            crafterId,
-            service,
-            expectedFee: price?.fee ?? 0,
-            ...(service === "CRAFT" ? { itemId } : { userItemId: itemId }),
-            ...(service === "IMBUE" ? { userCrystalItemId: crystalId } : {}),
-            ...(service === "DISIMBUE" ? { imbuementId } : {}),
-          })
-        }
-      >
-        {submit.isPending
-          ? "Submitting…"
-          : submitted
-            ? "Submitted"
-            : service === "REPAIR"
-              ? "Repair now"
-              : "Submit request"}
-      </Button>
-      {submitted && (
-        <Link className="ml-3 underline" href="/occupation?tab=services">
-          View Service Requests
-        </Link>
-      )}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Button
+          className="sm:ml-auto"
+          disabled={
+            !price ||
+            !info ||
+            submit.isPending ||
+            submitted ||
+            (service === "DISIMBUE" && !imbuementId)
+          }
+          onClick={() =>
+            submit.mutate({
+              crafterId,
+              service,
+              expectedFee: price?.fee ?? 0,
+              ...(service === "CRAFT" ? { itemId } : { userItemId: itemId }),
+              ...(service === "IMBUE" ? { userCrystalItemId: crystalId } : {}),
+              ...(service === "DISIMBUE" ? { imbuementId } : {}),
+            })
+          }
+        >
+          {submit.isPending
+            ? "Submitting…"
+            : submitted
+              ? "Submitted"
+              : service === "REPAIR"
+                ? "Repair now"
+                : "Submit request"}
+        </Button>
+        {submitted && (
+          <Link
+            className="text-center text-sm underline"
+            href="/occupation?tab=services"
+          >
+            View Service Requests
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
@@ -503,86 +610,136 @@ function ServicePrices({ crafterId }: { crafterId: string }) {
       </div>
     );
   return (
-    <div data-service-prices className="space-y-4 pt-3">
+    <div data-service-prices className="space-y-5 pt-2">
       <p className="text-muted-foreground text-sm">
         Set a fixed fee per service and rarity. A disabled or unset price is
         unavailable. Craft fees cover one recipe batch; repair fees cover one item.
       </p>
-      <SearchSelect
-        label="Service"
-        value={service}
-        options={CRAFTING_SERVICES.map((value) => ({
-          value,
-          label: SERVICE_LABELS[value],
-        }))}
-        placeholder="Select service"
-        disabled={save.isPending}
-        onChange={(value) => {
-          if (value === service) return;
-          setService(value as typeof service);
-          setDraft(undefined);
-          setMessage("");
-        }}
-      />
-      <SearchSelect
-        label="Rarity"
-        value={rarity}
-        options={ItemRarities.map((value) => ({ value, label: value }))}
-        placeholder="Select rarity"
-        disabled={save.isPending}
-        onChange={(value) => {
-          if (value === rarity) return;
-          setRarity(value as typeof rarity);
-          setDraft(undefined);
-          setMessage("");
-        }}
-      />
-      <div>
-        <Label htmlFor="service-fee">Fee in ryo</Label>
-        <NumberInput
-          id="service-fee"
-          min={0}
-          max={CRAFTING_SERVICE_MAX_FEE}
-          step={1}
-          value={fee}
-          disabled={save.isPending}
-          onTextChange={(fee) => setDraft({ fee, enabled })}
-        />
-      </div>
-      <Label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={enabled}
-          disabled={save.isPending}
-          onChange={(event) => setDraft({ fee, enabled: event.target.checked })}
-        />
-        Offer this service
-      </Label>
-      <Button
-        disabled={
-          save.isPending ||
-          !fee ||
-          !Number.isSafeInteger(Number(fee)) ||
-          Number(fee) < 0 ||
-          Number(fee) > CRAFTING_SERVICE_MAX_FEE
-        }
-        onClick={(event) => {
-          if (
-            validateNumberInputs(event.currentTarget.closest("[data-service-prices]"))
-          )
-            save.mutate({ service, rarity, fee: Number(fee), enabled });
-        }}
-      >
-        Save price
-      </Button>
-      {message && <p role="status">{message}</p>}
-      <div className="space-y-1 text-sm">
-        {prices.data?.prices.map((row) => (
-          <p key={`${row.service}-${row.rarity}`}>
-            {SERVICE_LABELS[row.service]} · {row.rarity}: {row.fee.toLocaleString()} ryo
-            · {row.enabled ? "enabled" : "disabled"}
-          </p>
-        ))}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="space-y-4 rounded-lg border p-4">
+          <h3 className="font-semibold">Set a service price</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0 space-y-2">
+              <Label htmlFor="price-service">Service</Label>
+              <SearchSelect
+                id="price-service"
+                label="Service"
+                value={service}
+                options={CRAFTING_SERVICES.map((value) => ({
+                  value,
+                  label: SERVICE_LABELS[value],
+                }))}
+                placeholder="Select service"
+                disabled={save.isPending}
+                onChange={(value) => {
+                  if (value === service) return;
+                  setService(value as typeof service);
+                  setDraft(undefined);
+                  setMessage("");
+                }}
+              />
+            </div>
+            <div className="min-w-0 space-y-2">
+              <Label htmlFor="price-rarity">Rarity</Label>
+              <SearchSelect
+                id="price-rarity"
+                label="Rarity"
+                value={rarity}
+                options={ItemRarities.map((value) => ({ value, label: value }))}
+                placeholder="Select rarity"
+                disabled={save.isPending}
+                onChange={(value) => {
+                  if (value === rarity) return;
+                  setRarity(value as typeof rarity);
+                  setDraft(undefined);
+                  setMessage("");
+                }}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="service-fee">Fee in ryo</Label>
+            <NumberInput
+              id="service-fee"
+              min={0}
+              max={CRAFTING_SERVICE_MAX_FEE}
+              step={1}
+              value={fee}
+              disabled={save.isPending}
+              onTextChange={(fee) => setDraft({ fee, enabled })}
+            />
+          </div>
+          <Label className="bg-muted/40 flex min-h-11 cursor-pointer items-center gap-3 rounded-md p-3">
+            <input
+              type="checkbox"
+              checked={enabled}
+              disabled={save.isPending}
+              onChange={(event) => setDraft({ fee, enabled: event.target.checked })}
+            />
+            Offer this service
+          </Label>
+          <Button
+            disabled={
+              save.isPending ||
+              !fee ||
+              !Number.isSafeInteger(Number(fee)) ||
+              Number(fee) < 0 ||
+              Number(fee) > CRAFTING_SERVICE_MAX_FEE
+            }
+            onClick={(event) => {
+              if (
+                validateNumberInputs(
+                  event.currentTarget.closest("[data-service-prices]"),
+                )
+              )
+                save.mutate({ service, rarity, fee: Number(fee), enabled });
+            }}
+          >
+            Save price
+          </Button>
+          {message && <p role="status">{message}</p>}
+        </div>
+        <div className="min-w-0">
+          <h3 className="mb-3 font-semibold">Your price list</h3>
+          {prices.data?.prices.length ? (
+            <ul className="divide-y rounded-lg border">
+              {prices.data.prices.map((row) => (
+                <li key={`${row.service}-${row.rarity}`}>
+                  <button
+                    type="button"
+                    className="hover:bg-muted/40 flex min-h-11 w-full items-center justify-between gap-3 p-3 text-left text-sm disabled:opacity-50"
+                    disabled={save.isPending}
+                    aria-label={`Edit ${SERVICE_LABELS[row.service]} ${row.rarity} price`}
+                    onClick={() => {
+                      if (row.service === service && row.rarity === rarity) return;
+                      setService(row.service);
+                      setRarity(row.rarity);
+                      setDraft(undefined);
+                      setMessage("");
+                    }}
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-medium">
+                        {SERVICE_SHORT_LABELS[row.service]} · {row.rarity}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {row.enabled ? "Available" : "Disabled"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      {row.fee.toLocaleString()} ryo{" "}
+                      <span className="text-muted-foreground ml-2">Edit</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
+              No prices set. Save a price to offer your first service.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -593,4 +750,11 @@ const SERVICE_LABELS = {
   IMBUE: "Imbue an Item",
   DISIMBUE: "Disimbue an Item",
   REPAIR: "Repair my Items",
+} as const;
+
+const SERVICE_SHORT_LABELS = {
+  CRAFT: "Craft",
+  IMBUE: "Imbue",
+  DISIMBUE: "Disimbue",
+  REPAIR: "Repair",
 } as const;
