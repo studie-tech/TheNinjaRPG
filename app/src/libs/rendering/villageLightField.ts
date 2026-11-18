@@ -2,10 +2,8 @@ import { BufferImageSource, Texture } from "pixi.js";
 import { createSceneAssets, readTexturePixels } from "@/libs/rendering/assets";
 import published from "@/libs/rendering/bakedVillageLightFields.json";
 import type { VillageLight } from "@/libs/rendering/bakedVillageLighting";
-import bakedSources from "@/libs/rendering/bakedWorldSources.json";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import type { WorldBounds } from "@/libs/rendering/visibility";
-import worldSources from "@/libs/rendering/worldAssetSources.json";
 
 const fields = new Map<string, Texture>();
 const fallbackLayouts = new Map<string, string>();
@@ -39,19 +37,17 @@ const cache = createLeaseCache<Texture>({
   idleBudget: 4 * 1024 * 1024,
 });
 
-/** Browser-side SHA-256 must match the serialized layout/catalog fingerprints in the published manifest. */
+/**
+ * Browser-side SHA-256 must match the serialized layout fingerprints in the published manifest.
+ * The test suite checks the manifest's source catalog fingerprint, so the shipped pools always
+ * belong to the shipped source catalogs.
+ */
 const digest = async (key: string) => {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
   return Array.from(new Uint8Array(bytes), (n) => n.toString(16).padStart(2, "0")).join(
     "",
   );
 };
-let matchingCatalog: Promise<boolean> | null = null;
-/** Source URLs and geometry both affect this fingerprint; a mismatch uses the runtime rasterizer. */
-const hasPublishedCatalog = () =>
-  (matchingCatalog ??= digest(JSON.stringify([bakedSources, worldSources])).then(
-    (key) => key === published.catalog,
-  ));
 
 /** Published layouts use the same leases as their fully resolved runtime representation. */
 const leaseField = (key: Promise<string | null>, bounds: WorldBounds) => {
@@ -79,26 +75,22 @@ export const acquirePrebakedVillageLightField = (
 ) => {
   let lease: ReturnType<typeof leaseField> | null = null;
   let released = false;
-  const resource = Promise.all([digest(sceneKey), hasPublishedCatalog()]).then(
-    async ([key, matches]) => {
-      const scene = matches
-        ? (
-            published.scenes as Readonly<
-              Record<string, { field: string; bounds: WorldBounds }>
-            >
-          )[key]
-        : undefined;
-      if (!scene || released) return null;
-      const b = scene.bounds;
-      lease = leaseField(Promise.resolve(`baked:${scene.field}`), {
-        minX: b.minX + origin.x,
-        maxX: b.maxX + origin.x,
-        minY: b.minY + origin.y,
-        maxY: b.maxY + origin.y,
-      });
-      return lease.resource;
-    },
-  );
+  const resource = digest(sceneKey).then(async (key) => {
+    const scene = (
+      published.scenes as Readonly<
+        Record<string, { field: string; bounds: WorldBounds }>
+      >
+    )[key];
+    if (!scene || released) return null;
+    const b = scene.bounds;
+    lease = leaseField(Promise.resolve(`baked:${scene.field}`), {
+      minX: b.minX + origin.x,
+      maxX: b.maxX + origin.x,
+      minY: b.minY + origin.y,
+      maxY: b.maxY + origin.y,
+    });
+    return lease.resource;
+  });
   return {
     resource,
     release: () => {
@@ -232,8 +224,8 @@ export const acquireVillageLightField = (
   };
   const key = JSON.stringify(layout);
   const lease = leaseField(
-    Promise.all([digest(key), hasPublishedCatalog()]).then(([fingerprint, matches]) => {
-      if (!matches || !Object.hasOwn(published.fields, fingerprint)) return key;
+    digest(key).then((fingerprint) => {
+      if (!Object.hasOwn(published.fields, fingerprint)) return key;
       const bakedKey = `baked:${fingerprint}`;
       fallbackLayouts.set(bakedKey, key);
       return bakedKey;
