@@ -459,6 +459,26 @@ export const tdDojoCost = (id: TdDojoUpgrade, level: number) => {
   return geometricCost(info.base, info.growth, level);
 };
 
+/**
+ * The next Guard Hall level of an upgrade and its cost, or why it cannot be bought: at
+ * its maximum, still locked behind a wave, or, when `points` is given, unaffordable.
+ */
+export const tdDojoPurchase = (input: {
+  upgradeId: TdDojoUpgrade;
+  level: number;
+  bestWave: number;
+  points?: number;
+}): { level: number; cost: number } | { message: string } => {
+  const info = TD_DOJO_INFO[input.upgradeId];
+  if (input.level >= info.max) return { message: "Already at max level." };
+  if (input.bestWave < info.unlockWave)
+    return { message: `Reach wave ${info.unlockWave} to unlock this.` };
+  const cost = tdDojoCost(input.upgradeId, input.level);
+  if (input.points !== undefined && input.points < cost)
+    return { message: "Not enough scrolls." };
+  return { level: input.level + 1, cost };
+};
+
 const SQRT3_2 = Math.sqrt(3) / 2;
 
 /** Sentry posts on a hexagon around the arena centre, shared by every run. */
