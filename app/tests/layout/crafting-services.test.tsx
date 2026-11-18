@@ -63,6 +63,7 @@ beforeEach(() => {
           data: [
             {
               id: "sword",
+              itemId: "sword-item",
               quantity: 1,
               equipped: "NONE",
               isInAuction: false,
@@ -77,6 +78,7 @@ beforeEach(() => {
               imbuements: [
                 {
                   id: "imb",
+                  imbuementItemId: "bound-crystal",
                   craftingFinishedAt: new Date(0),
                   item: { name: "Bound Crystal", rarity: "COMMON" },
                 },
@@ -84,6 +86,7 @@ beforeEach(() => {
             },
             {
               id: "gem",
+              itemId: "crystal-item",
               quantity: 1,
               item: { name: "Service Crystal", rarity: "COMMON", itemType: "CRYSTAL" },
             },
@@ -310,4 +313,111 @@ it("shows the no-open message only for the direction with historical receipts", 
   });
   expect(screen.getByText("No outgoing service requests")).toBeTruthy();
   expect(screen.queryByText("No open outgoing requests.")).toBeNull();
+});
+
+it("uses the server clock offset for active service countdowns", () => {
+  const now = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(now);
+  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+    data: { userId: "crafter", occupation: "CRAFTING" },
+    timeDiff: 3_600_000,
+  } as never);
+  vi.spyOn(serviceCache, "useServiceRequests").mockReturnValue({
+    data: [
+      {
+        id: "active",
+        status: "ACTIVE",
+        service: "CRAFT",
+        itemName: "Sword",
+        fee: 80,
+        crafterId: "crafter",
+        requesterId: "requester",
+        materials: [],
+        finishesAt: new Date(now - 3_000_000),
+      },
+    ],
+    isLoading: false,
+    isError: false,
+    refetch: retry,
+  } as never);
+  render(<CraftingServices />);
+  expect(screen.getByText(/10 mins/)).toBeTruthy();
+  expect(retry).not.toHaveBeenCalled();
+});
+
+it("excludes installed crystals and clears only a newly incompatible selection on target changes", () => {
+  query.data = {
+    prices: [{ service: "IMBUE", rarity: "COMMON", fee: 50, enabled: true }],
+    crafter: { rank: "MASTER", occupation: "CRAFTING", username: "Crafter" },
+  };
+  const equipment = (id: string, name: string, imbuements: object[] = []) => ({
+    id,
+    itemId: id,
+    quantity: 1,
+    equipped: "NONE",
+    durability: 50,
+    item: { name, rarity: "COMMON", maxDurability: 100, canBeImbued: true },
+    imbuements,
+  });
+  const rows = [
+    equipment("clean", "Clean Sword"),
+    equipment("other", "Other Sword"),
+    equipment("bound", "Bound Sword", [
+      {
+        id: "installed",
+        imbuementItemId: "crystal-a",
+        craftingFinishedAt: new Date(0),
+        item: { name: "Crystal A" },
+      },
+    ]),
+    ...["a", "b"].map((id) => ({
+      id: `crystal-${id}`,
+      itemId: `crystal-${id}`,
+      quantity: 1,
+      item: {
+        name: `Crystal ${id.toUpperCase()}`,
+        rarity: "COMMON",
+        itemType: "CRYSTAL",
+      },
+    })),
+  ];
+  Object.assign(client.api.item.getUserItems, { useQuery: () => ({ data: rows }) });
+  render(<CraftForMe crafterId="crafter" />);
+  fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
+  fireEvent.click(screen.getByRole("button", { name: "Imbue" }));
+  const chooseTarget = (name: string) => {
+    fireEvent.click(screen.getByRole("combobox", { name: "Your item" }));
+    fireEvent.click(screen.getByRole("option", { name: new RegExp(name) }));
+  };
+  chooseTarget("Clean Sword");
+  fireEvent.click(screen.getByRole("combobox", { name: "Crystal" }));
+  fireEvent.click(screen.getByRole("option", { name: "Crystal A (COMMON)" }));
+  chooseTarget("Other Sword");
+  expect(screen.getByRole("combobox", { name: "Crystal" }).textContent).toContain(
+    "Crystal A",
+  );
+  chooseTarget("Bound Sword");
+  expect(screen.getByRole("combobox", { name: "Crystal" }).textContent).toContain(
+    "Select your crystal",
+  );
+  expect(
+    (screen.getByRole("button", { name: "Submit request" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(screen.queryByText(/Service fee:/)).toBeNull();
+  fireEvent.click(screen.getByRole("combobox", { name: "Crystal" }));
+  expect(screen.queryByRole("option", { name: "Crystal A (COMMON)" })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: "Crystal B (COMMON)" }));
+  expect(
+    (screen.getByRole("button", { name: "Submit request" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Submit request" }));
+  expect(save).toHaveBeenCalledWith({
+    crafterId: "crafter",
+    service: "IMBUE",
+    expectedFee: 50,
+    userItemId: "bound",
+    userCrystalItemId: "crystal-b",
+  });
 });

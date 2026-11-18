@@ -10,6 +10,7 @@ export const useCraftingServiceEvents = (refreshUser?: () => Promise<unknown>) =
       utils.item.getUserItems.invalidate(),
       utils.item.getUserItemsWithVariants.invalidate(),
       utils.occupation.getServiceRequests.invalidate(),
+      utils.occupation.getCraftingQueue.invalidate(),
       utils.profile.getSidebarTimers.invalidate(),
     ]);
   };

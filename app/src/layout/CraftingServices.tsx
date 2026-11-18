@@ -63,7 +63,7 @@ export function CraftForMe({ crafterId }: { crafterId: string }) {
 
 /** Incoming/outgoing service receipts remain accessible regardless of occupation. */
 export function CraftingServices({ navigation }: { navigation?: React.ReactNode }) {
-  const { data: user } = useRequiredUserData();
+  const { data: user, timeDiff } = useRequiredUserData();
   const requests = useServiceRequests();
   const { prepareServiceUpdate, updateService } = useCraftingServiceCache();
   const [message, setMessage] = useState("");
@@ -236,6 +236,7 @@ export function CraftingServices({ navigation }: { navigation?: React.ReactNode 
                                   Ready in{" "}
                                   <Countdown
                                     targetDate={row.finishesAt}
+                                    timeDiff={timeDiff}
                                     onFinish={() => void requests.refetch()}
                                   />
                                 </p>
@@ -342,7 +343,11 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
   });
   const selectedRecipe = recipes.data?.find((row) => row.id === itemId);
   const target = inventory.data?.find((row) => row.id === itemId);
-  const crystal = inventory.data?.find((row) => row.id === crystalId);
+  const crystal = inventory.data?.find(
+    (row) =>
+      row.id === crystalId &&
+      !target?.imbuements.some((installed) => installed.imbuementItemId === row.itemId),
+  );
   const imbuement = target?.imbuements.find((row) => row.id === imbuementId);
   const info = service === "CRAFT" ? selectedRecipe : target?.item;
   const rarity =
@@ -440,6 +445,13 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           onChange={(value) => {
             setItemId(value);
             setImbuementId("");
+            const nextTarget = inventory.data?.find((row) => row.id === value);
+            if (
+              nextTarget?.imbuements.some(
+                (installed) => installed.imbuementItemId === crystal?.itemId,
+              )
+            )
+              setCrystalId("");
           }}
         />
       </div>
@@ -454,6 +466,9 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
               .filter(
                 (row) =>
                   row.item.itemType === "CRYSTAL" &&
+                  !target?.imbuements.some(
+                    (installed) => installed.imbuementItemId === row.itemId,
+                  ) &&
                   row.quantity > 0 &&
                   !row.isInAuction &&
                   !row.storedAtHome &&

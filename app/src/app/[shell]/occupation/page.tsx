@@ -3,7 +3,7 @@
 import { Settings } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import type React from "react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,15 +73,17 @@ export default function Occupations() {
 
 function OccupationTabs() {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState("occupation");
-  useEffect(() => {
-    if (searchParams?.get("tab") === "services") setTab("services");
-  }, [searchParams]);
+  const tab = searchParams?.get("tab") === "services" ? "services" : "occupation";
   const navigation = (
     <NavTabs
       current={tab === "services" ? "Service Requests" : "Occupation"}
       options={["Occupation", "Service Requests"]}
-      onChange={(value) => setTab(value === "Occupation" ? "occupation" : "services")}
+      onChange={(value) => {
+        const url = new URL(window.location.href);
+        if (value === "Service Requests") url.searchParams.set("tab", "services");
+        else url.searchParams.delete("tab");
+        window.history.replaceState(null, "", url);
+      }}
     />
   );
   return tab === "services" ? (

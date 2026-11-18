@@ -1,3 +1,4 @@
+import type { InvalidateOptions } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import type { UserItem } from "@/drizzle/schema";
@@ -50,11 +51,11 @@ export const useInventoryCacheUpdate = () => {
       variants.updateCache(updates.variants, snapshot.variants),
     ]);
   };
-  /** Recover both views when a request may have failed after the server committed. */
-  const invalidateInventory = async () => {
+  /** Recover both views, optionally exposing active refetch failures to retrying controllers. */
+  const invalidateInventory = async (options?: InvalidateOptions) => {
     await Promise.all([
-      utils.item.getUserItems.invalidate(),
-      utils.item.getUserItemsWithVariants.invalidate(),
+      utils.item.getUserItems.invalidate(undefined, undefined, options),
+      utils.item.getUserItemsWithVariants.invalidate(undefined, undefined, options),
     ]);
   };
   return {

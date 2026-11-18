@@ -95,18 +95,29 @@ export const useServiceRequests = () => {
     .join("|");
   const attempted = useRef<{
     client: QueryClient;
-    terminal: string;
+    signature: string;
     revision: number;
   }>(undefined);
-  const { dataUpdatedAt, isFetching } = query;
+  const { data, dataUpdatedAt, isFetching } = query;
   useEffect(() => {
-    if (!terminal || isFetching) return;
+    if (!data || isFetching) return;
     let reconciliation = serviceReconciliations.get(client);
     if (!reconciliation) {
-      reconciliation = { inFlight: new Set() };
+      reconciliation = { open: new Set(), generation: 0, inFlight: new Set() };
       serviceReconciliations.set(client, reconciliation);
     }
-    if (reconciliation.succeeded === terminal) return;
+    // An old open receipt can settle outside the bounded display history.
+    const visible = new Set(data.map((row) => row.id));
+    if ([...reconciliation.open].some((id) => !visible.has(id)))
+      reconciliation.generation++;
+    reconciliation.open = new Set(
+      data
+        .filter((row) => row.status === "PENDING" || row.status === "ACTIVE")
+        .map((row) => row.id),
+    );
+    if (!terminal && !reconciliation.generation) return;
+    const signature = `${terminal}|${reconciliation.generation}`;
+    if (reconciliation.succeeded === signature) return;
     const revision =
       client.getQueryState(
         getQueryKey(api.occupation.getServiceRequests, undefined, "query"),
@@ -114,27 +125,72 @@ export const useServiceRequests = () => {
     // A failed attempt retries on the next receipt update or mount, never a callback rerender.
     if (
       attempted.current?.client === client &&
-      attempted.current.terminal === terminal &&
+      attempted.current.signature === signature &&
       attempted.current.revision === revision
     )
       return;
-    attempted.current = { client, terminal, revision };
-    if (reconciliation.inFlight.has(terminal)) return;
-    reconciliation.inFlight.add(terminal);
+    attempted.current = { client, signature, revision };
+    if (reconciliation.inFlight.has(signature)) return;
+    reconciliation.inFlight.add(signature);
+    const work =
+      reconciliation.work?.signature === signature
+        ? reconciliation.work
+        : {
+            signature,
+            profile: false,
+            completed: new Set<string>(),
+          };
+    reconciliation.work = work;
     void (async () => {
-      // Profile settlement can start queued crafts and create inventory.
-      const refreshed = await refreshUser();
-      await Promise.all([
-        invalidateInventory(),
-        utils.profile.getSidebarTimers.invalidate(),
-        utils.comments.getUserConversations.invalidate(),
-      ]);
-      if (refreshed) reconciliation.succeeded = terminal;
-    })().finally(() => {
-      reconciliation.inFlight.delete(terminal);
-    });
+      // Profile settlement can start queued crafts and create inventory. Successful
+      // phases survive a dependent failure, so a later poll retries only unfinished work.
+      if (!work.profile) {
+        if (!(await refreshUser())) return;
+        work.profile = true;
+      }
+      const reads = [
+        ["inventory", () => invalidateInventory({ throwOnError: true })],
+        [
+          "queue",
+          () =>
+            utils.occupation.getCraftingQueue.invalidate(undefined, undefined, {
+              throwOnError: true,
+            }),
+        ],
+        [
+          "timers",
+          () =>
+            utils.profile.getSidebarTimers.invalidate(undefined, undefined, {
+              throwOnError: true,
+            }),
+        ],
+        [
+          "conversations",
+          () =>
+            utils.comments.getUserConversations.invalidate(undefined, undefined, {
+              throwOnError: true,
+            }),
+        ],
+      ] as const;
+      await Promise.allSettled(
+        reads.map(async ([name, read]) => {
+          if (work.completed.has(name)) return;
+          await read();
+          work.completed.add(name);
+        }),
+      );
+      if (work.completed.size === reads.length && reconciliation.work === work)
+        reconciliation.succeeded = signature;
+    })()
+      .catch(() => {
+        // Query error/loading UI owns failed reads; the next receipt poll retries them.
+      })
+      .finally(() => {
+        reconciliation.inFlight.delete(signature);
+      });
   }, [
     client,
+    data,
     terminal,
     dataUpdatedAt,
     isFetching,
@@ -149,5 +205,11 @@ export const useServiceRequests = () => {
 // that watermark across observers, scoped to the authenticated client's lifetime.
 const serviceReconciliations = new WeakMap<
   QueryClient,
-  { succeeded?: string; inFlight: Set<string> }
+  {
+    open: Set<string>;
+    generation: number;
+    succeeded?: string;
+    inFlight: Set<string>;
+    work?: { signature: string; profile: boolean; completed: Set<string> };
+  }
 >();

@@ -214,6 +214,7 @@ it.each(["unknown", "rejected profile projection"])(
         if (path === "occupation.getServiceRequests") return [submission().receipt];
         if (path === "occupation.getCraftingQueue") return { waiting: [] };
         if (path === "profile.getSidebarTimers") return { crafting: null };
+        if (path === "occupation.getCraftingQueue") return { waiting: [] };
         throw new Error(`Unexpected query ${path}`);
       },
       { userProvider: true },
@@ -540,6 +541,7 @@ it.each(["event", "polling"])(
         if (path === "item.getUserItemsWithVariants") return settled ? [output] : [];
         if (path === "occupation.getServiceRequests") return [];
         if (path === "profile.getSidebarTimers") return { crafting: null };
+        if (path === "occupation.getCraftingQueue") return { waiting: [] };
         throw new Error(`Unexpected query ${path}`);
       },
       { userProvider: true },
@@ -549,6 +551,7 @@ it.each(["event", "polling"])(
       userData: { ...requester, items: [] },
       notifications: [],
     });
+    client.setQueryData(queueKey, { waiting: [{ id: "queued-job" }] });
     let refresh!: () => Promise<unknown>;
     const Views = () => {
       const { refreshUser } = userContext.useUserData();
@@ -556,6 +559,7 @@ it.each(["event", "polling"])(
       useServiceRequests();
       testApi.item.getUserItemsWithVariants.useQuery();
       testApi.profile.getSidebarTimers.useQuery();
+      testApi.occupation.getCraftingQueue.useQuery();
       return null;
     };
     render(<Views />, { wrapper });
@@ -577,9 +581,102 @@ it.each(["event", "polling"])(
     expect(
       calls.filter((path) => path === "item.getUserItemsWithVariants"),
     ).toHaveLength(1);
-    for (const key of [inventoryKeys[1]!, timersKey]) {
+    expect(client.getQueryData(queueKey)).toEqual({ waiting: [] });
+    for (const key of [inventoryKeys[1]!, timersKey, queueKey]) {
       expect(client.getQueryState(key)?.isInvalidated).toBe(false);
       expect(client.getQueryState(key)?.fetchStatus).toBe("idle");
     }
   },
 );
+
+it("recovers a settled open receipt omitted by the 100-row history without repeating unchanged polls", async () => {
+  const { client, wrapper, refreshUser } = harness();
+  seedSubmissionViews(client);
+  const history = Array.from({ length: 100 }, (_, index) => ({
+    ...receipt,
+    id: `service:history-${index}`,
+    status: "COMPLETED",
+  }));
+  client.setQueryData(requestsKey, [
+    { ...receipt, id: "service:old-open", status: "ACTIVE" },
+    ...history,
+  ]);
+  renderHook(useServiceRequests, { wrapper });
+  await waitFor(() =>
+    expect(client.getQueryState(inventoryKeys[0]!)?.isInvalidated).toBe(true),
+  );
+  expect(refreshUser).toHaveBeenCalledTimes(1);
+  client.setQueryData(inventoryKeys[0]!, []);
+  await act(async () => {
+    client.setQueryData(requestsKey, history);
+  });
+  await waitFor(() => expect(refreshUser).toHaveBeenCalledTimes(2));
+  await waitFor(() =>
+    expect(client.getQueryState(inventoryKeys[0]!)?.isInvalidated).toBe(true),
+  );
+  await act(async () => {
+    client.setQueryData(requestsKey, [...history]);
+  });
+  expect(refreshUser).toHaveBeenCalledTimes(2);
+});
+
+it("does not reconcile profile or inventory for new or unchanged open-only requests", async () => {
+  const { client, wrapper, refreshUser } = harness();
+  seedSubmissionViews(client);
+  client.setQueryData(requestsKey, [receipt]);
+  renderHook(useServiceRequests, { wrapper });
+  await act(async () => {
+    client.setQueryData(requestsKey, [
+      { ...receipt, status: "ACTIVE" },
+      { ...receipt, id: "another-open" },
+    ]);
+  });
+  expect(refreshUser).not.toHaveBeenCalled();
+  expect(client.getQueryState(inventoryKeys[0]!)?.isInvalidated).toBe(false);
+});
+
+it("retries failed active inventory reads on later receipt polls while retaining successful profile and queue phases", async () => {
+  let inventoryReads = 0;
+  const terminal = [{ ...receipt, status: "COMPLETED" }];
+  const output = [{ ...equipment, id: "delivered" }];
+  const { client, wrapper, refreshUser, calls } = harness(async (path) => {
+    if (path === "item.getUserItems") {
+      inventoryReads++;
+      if (inventoryReads < 3) throw new Error("Transient inventory outage");
+      return output;
+    }
+    if (path === "occupation.getServiceRequests") return terminal;
+    if (path === "occupation.getCraftingQueue") return { waiting: [] };
+    return [];
+  });
+  seedSubmissionViews(client);
+  client.setQueryData(requestsKey, terminal);
+  const Views = () => {
+    useServiceRequests();
+    testApi.item.getUserItems.useQuery();
+    testApi.occupation.getCraftingQueue.useQuery();
+    return null;
+  };
+  const view = render(<Views />, { wrapper });
+  await waitFor(() =>
+    expect(client.getQueryState(inventoryKeys[0]!)?.status).toBe("error"),
+  );
+  expect(refreshUser).toHaveBeenCalledTimes(1);
+  expect(inventoryReads).toBe(1);
+  await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+  await waitFor(() => expect(inventoryReads).toBe(2));
+  await waitFor(() =>
+    expect(client.getQueryState(inventoryKeys[0]!)?.fetchStatus).toBe("idle"),
+  );
+  view.rerender(<div />);
+  view.rerender(<Views />);
+  await waitFor(() => expect(client.getQueryData(inventoryKeys[0]!)).toEqual(output));
+  expect(refreshUser).toHaveBeenCalledTimes(1);
+  expect(inventoryReads).toBe(3);
+  expect(calls.filter((path) => path === "occupation.getCraftingQueue")).toHaveLength(
+    1,
+  );
+  await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+  expect(inventoryReads).toBe(3);
+  expect(refreshUser).toHaveBeenCalledTimes(1);
+});
