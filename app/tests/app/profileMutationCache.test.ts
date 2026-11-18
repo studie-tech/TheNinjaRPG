@@ -19,6 +19,7 @@ const flows = [
     file: "layout/profileEdit/SwapBloodline.tsx",
     procedure: "bloodline.swapBloodline",
     patch: { bloodlineId: "new", bloodline: { id: "new" }, reputationPoints: 10 },
+    invalidations: 2,
   },
   {
     file: "layout/profileEdit/ManagementCommands.tsx",
@@ -133,6 +134,7 @@ const setup = (file: string, procedure: string) => {
   const leaf = { invalidate };
   const utils = {
     bloodline: { getItemRolls: leaf, getSwapInfo: leaf },
+    bloodright: { get: leaf },
     item: { getUserItems: leaf },
     jutsu: { getUserJutsus: leaf },
     skillTree: { getUserSkills: leaf, getResetInfo: leaf },
