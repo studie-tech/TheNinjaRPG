@@ -543,6 +543,8 @@ export const huntingRouter = createTRPCRouter({
           userIds: [ctx.userId],
           targetIds: [contract.aiId],
           sector: user.sector,
+          // Hunts are PvE, so honour the hunter's saved auto combat preference.
+          autoCombatFromDefaults: true,
           hunting: {
             // initiateBattle captures the eligible passive bonus from its preloaded hunter.
             huntingBonusQuantity: 0,
