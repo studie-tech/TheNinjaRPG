@@ -27,7 +27,7 @@ export const BloodrightTree = ({ tiers, purchasedIds, silver, onSelect }: Props)
   const stats = new Map(
     tiers.map((tier) => [tier.id, getBloodrightStats(tier.effects)]),
   );
-  const maxStats = Math.max(0, ...[...stats.values()].map((rows) => rows.length));
+  const maxStats = Math.max(0, ...tiers.map((tier) => stats.get(tier.id)?.length ?? 0));
   const cardHeight =
     CARD_HEIGHT + (maxStats ? STATS_DIVIDER_HEIGHT + maxStats * STAT_ROW_HEIGHT : 0);
   const rowHeight = cardHeight + TIER_LABEL_HEIGHT + 2 * CARD_INSET;
