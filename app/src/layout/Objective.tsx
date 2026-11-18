@@ -148,10 +148,10 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
           <div
             role="img"
             aria-label="In progress"
-            className="flex flex-col items-center gap-0.5 text-amber-700 dark:text-amber-400"
+            className="flex items-center gap-1 text-sm text-amber-700 dark:text-amber-400"
           >
-            <Hourglass className="h-8 w-8" aria-hidden="true" />
-            <span className="whitespace-nowrap font-semibold text-sm">In progress</span>
+            <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="whitespace-nowrap font-medium">In progress</span>
           </div>
           {isTimeEventCountdown && <Loader2 className="h-10 w-10 animate-spin" />}
         </>
@@ -205,7 +205,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         <hr className="my-0" />
         <div className="pl-2">
           {goalTarget !== undefined && (
-            <div className="flex flex-row items-center pr-3">
+            <div className="flex flex-row items-center gap-2 pr-3">
               <div className="grow">
                 {goalTarget > 0 && (
                   <StatusBar
@@ -223,7 +223,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
             </div>
           )}
           {"sector" in parsed && (
-            <div className="flex flex-row items-center pr-3">
+            <div className="flex flex-row items-center gap-2 pr-3">
               <div className="grow">
                 {!("hideLocation" in parsed && parsed.hideLocation) && (
                   <>
