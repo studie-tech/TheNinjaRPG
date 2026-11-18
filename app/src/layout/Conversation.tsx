@@ -571,12 +571,15 @@ export const useConversation = (props: ConversationLogicProps) => {
   /**
    * Websockets event listener
    */
+  // Keyed on the id: a refetch replaces the cached conversation object, and
+  // resubscribing would drop events published during the switch.
+  const conversationId = conversation?.id;
   useEffect(() => {
-    if (conversation && pusher && !isPaused) {
+    if (conversationId && pusher && !isPaused) {
       const ownUserId = userData?.userId;
       return subscribeConversation(
         pusher,
-        conversation.id,
+        conversationId,
         JSON.stringify(queryKey),
         (data, ownsCacheUpdate) => {
           switch (data.message) {
@@ -584,7 +587,7 @@ export const useConversation = (props: ConversationLogicProps) => {
               if (ownsCacheUpdate && data.fromId !== ownUserId && data.commentId) {
                 fetchComment({
                   commentId: data.commentId,
-                  conversationId: conversation.id,
+                  conversationId,
                   markRead: isPageActiveRef.current,
                 });
               }
@@ -616,7 +619,7 @@ export const useConversation = (props: ConversationLogicProps) => {
         },
       );
     }
-  }, [isPaused, conversation, pusher, queryKey]);
+  }, [isPaused, conversationId, pusher, queryKey]);
 
   // Resuming after the subscription above is restored fetches what arrived meanwhile.
   useEffect(() => {

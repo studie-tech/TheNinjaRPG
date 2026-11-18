@@ -420,6 +420,23 @@ it("keeps the live channel across a hide and show and marks messages read only w
   }
 });
 
+it("keeps the live channel when a refetch replaces the cached conversation", async () => {
+  const subscribe = vi.spyOn(pusher, "subscribe");
+  const hook = mount();
+  await loaded(hook);
+  const subscribes = subscribe.mock.calls.length;
+  const unsubscribes = pusher.unsubscribe.mock.calls.length;
+  const before = reads;
+  const conversation = hook.result.current.conversation;
+  await act(async () => {
+    await hook.result.current.invalidateComments();
+  });
+  await waitFor(() => expect(reads).toBe(before + 1));
+  await waitFor(() => expect(hook.result.current.conversation).not.toBe(conversation));
+  expect(subscribe.mock.calls.length).toBe(subscribes);
+  expect(pusher.unsubscribe.mock.calls.length).toBe(unsubscribes);
+});
+
 it("reads only the selected search, repeating it when the same term is submitted again", async () => {
   const hook = mount();
   await loaded(hook);
