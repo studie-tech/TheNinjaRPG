@@ -12,6 +12,7 @@ import {
 import {
   TD_BLAST_ANIMATION,
   TD_SENTRY_ATLAS,
+  TD_SENTRY_EFFECTS,
   TD_SHURIKEN_IMAGE_URL,
   type TdSfx,
 } from "@/drizzle/constants";
@@ -278,80 +279,180 @@ export const createTowerDefenseScene = async (options: {
     };
 
     // Shared art
-    const [shuriken, hitFrames, smokeFrames, blastFrames, sentryAtlas] =
-      await Promise.all([
-        game.assets.texture(TD_SHURIKEN_IMAGE_URL, 64).catch((error: unknown) => {
-          if (
-            game.signal.aborted ||
-            game.isDisposed() ||
-            (error instanceof Error && error.name === "AbortError")
-          )
-            throw error;
-          // A plain projectile keeps targeting and hit feedback when its art is missing.
-          console.warn("Tower defense projectile artwork unavailable", error);
-          return Texture.WHITE;
-        }),
-        options.hitAsset
-          ? createClipTextures(game, assetAnimationClip(options.hitAsset), {
-              size: 96,
-            }).catch(() => null)
-          : Promise.resolve(null),
-        options.smokeAsset
-          ? createClipTextures(game, assetAnimationClip(options.smokeAsset), {
-              size: 128,
-            }).catch(() => null)
-          : Promise.resolve(null),
-        // Packed art loads from its exact source; without it the effects and posts fall back.
-        createClipTextures(game, assetAnimationClip(TD_BLAST_ANIMATION), {
-          size: 128,
-          rendition: 0,
-        }).catch(() => null),
-        game.assets.texture(TD_SENTRY_ATLAS.url, 0).catch(() => null),
-      ]);
+    const effectClip = (effect: Pick<GameAsset, "image" | "frames" | "speed">) =>
+      createClipTextures(game, assetAnimationClip(effect), {
+        size: 96,
+        rendition: 0,
+      }).catch(() => null);
+    const [
+      shuriken,
+      hitFrames,
+      smokeFrames,
+      blastFrames,
+      sentryAtlas,
+      sparkFrames,
+      rodTipFrames,
+      frostFrames,
+    ] = await Promise.all([
+      game.assets.texture(TD_SHURIKEN_IMAGE_URL, 64).catch((error: unknown) => {
+        if (
+          game.signal.aborted ||
+          game.isDisposed() ||
+          (error instanceof Error && error.name === "AbortError")
+        )
+          throw error;
+        // A plain projectile keeps targeting and hit feedback when its art is missing.
+        console.warn("Tower defense projectile artwork unavailable", error);
+        return Texture.WHITE;
+      }),
+      options.hitAsset
+        ? createClipTextures(game, assetAnimationClip(options.hitAsset), {
+            size: 96,
+          }).catch(() => null)
+        : Promise.resolve(null),
+      options.smokeAsset
+        ? createClipTextures(game, assetAnimationClip(options.smokeAsset), {
+            size: 128,
+          }).catch(() => null)
+        : Promise.resolve(null),
+      // Packed art loads from its exact source; without it the effects and posts fall back.
+      createClipTextures(game, assetAnimationClip(TD_BLAST_ANIMATION), {
+        size: 128,
+        rendition: 0,
+      }).catch(() => null),
+      game.assets.texture(TD_SENTRY_ATLAS.url, 0).catch(() => null),
+      effectClip(TD_SENTRY_EFFECTS.spark),
+      effectClip(TD_SENTRY_EFFECTS.rodTip),
+      effectClip(TD_SENTRY_EFFECTS.frost),
+    ]);
     if (game.isDisposed())
       throw new DOMException("Tower defense cancelled", "AbortError");
 
     // Sentries stand on their posts as sprites sorted with the actors, each with a contact
-    // shadow and a cast silhouette like the characters'.
-    const sentryTextures = sentryAtlas
-      ? (Object.fromEntries(
-          Object.entries(TD_SENTRY_ATLAS.frames).map(
-            ([type, [x, y, width, height]]) => [
+    // shadow and a cast silhouette like the characters'. Kunai turrets and tag mortars turn
+    // an aiming top on a fixed base toward whatever they last fired at.
+    const atlasFrame = (rect: readonly [number, number, number, number]) =>
+      sentryAtlas
+        ? new Texture({ source: sentryAtlas.source, frame: new Rectangle(...rect) })
+        : Texture.EMPTY;
+    const sentryArt = sentryAtlas
+      ? {
+          bodies: Object.fromEntries(
+            Object.entries(TD_SENTRY_ATLAS.bodies).map(([type, rect]) => [
               type,
-              new Texture({
-                source: sentryAtlas.source,
-                frame: new Rectangle(x, y, width, height),
-              }),
-            ],
-          ),
-        ) as Record<TdSentry, Texture>)
+              atlasFrame(rect),
+            ]),
+          ) as Record<TdSentry, Texture>,
+          tops: {
+            kunai: TD_SENTRY_ATLAS.tops.kunai.frames.map(atlasFrame),
+            mortar: TD_SENTRY_ATLAS.tops.mortar.frames.map(atlasFrame),
+          },
+          kunai: atlasFrame(TD_SENTRY_ATLAS.projectiles.kunai),
+          bomb: atlasFrame(TD_SENTRY_ATLAS.projectiles.bomb),
+        }
       : null;
-    if (sentryTextures)
+    if (sentryArt)
       game.own(() => {
-        for (const texture of Object.values(sentryTextures)) texture.destroy(false);
+        for (const texture of [
+          ...Object.values(sentryArt.bodies),
+          ...sentryArt.tops.kunai,
+          ...sentryArt.tops.mortar,
+          sentryArt.kunai,
+          sentryArt.bomb,
+        ])
+          texture.destroy(false);
       });
-    const sentryViews: { root: Container; body: Sprite; cast: Container }[] = [];
+    const sentryLook = (tint?: number) => {
+      const art = new Container();
+      const body = new Sprite(Texture.EMPTY);
+      const top = new Sprite(Texture.EMPTY);
+      top.anchor.set(0.5, 1);
+      top.visible = false;
+      if (tint !== undefined) body.tint = top.tint = tint;
+      art.addChild(body, top);
+      return { art, body, top };
+    };
+    type SentryView = {
+      root: Container;
+      look: ReturnType<typeof sentryLook>;
+      cast: Container;
+      castLook: ReturnType<typeof sentryLook>;
+      type: TdSentry | null;
+      heading: number;
+      pingAt: number;
+    };
+    const sentryViews: SentryView[] = [];
     const sentryView = (slot: number) => {
       const existing = sentryViews[slot];
       if (existing) return existing;
       const root = new Container();
-      const body = new Sprite(Texture.EMPTY);
-      body.anchor.set(0.5, SENTRY_GROUND_ANCHOR);
-      const castSprite = new Sprite(Texture.EMPTY);
-      castSprite.anchor.set(0.5, SENTRY_GROUND_ANCHOR);
-      castSprite.tint = CAST_SHADOW_TINT;
+      const look = sentryLook();
+      const castLook = sentryLook(CAST_SHADOW_TINT);
       const cast = new Container();
       cast.alpha = CAST_SHADOW_ALPHA;
-      cast.addChild(castSprite);
+      cast.addChild(castLook.art);
       cast.setFromMatrix(
         new Matrix(1.6, 0, SUN_SLOPE_X * 1.6, SUN_SLOPE_Y * 1.6, 0, 0),
       );
-      root.addChild(cast, contact(1.1), body);
+      root.addChild(cast, contact(1.1), look.art);
       actorLayer.addChild(root);
       depthLayer.attach(root);
-      const view = { root, body, cast };
+      const view: SentryView = {
+        root,
+        look,
+        cast,
+        castLook,
+        type: null,
+        heading: 6,
+        pingAt: 0,
+      };
       sentryViews[slot] = view;
       return view;
+    };
+    /** Turn an aiming top to one of the eight headings, counterclockwise from east. */
+    const aimSentryView = (view: SentryView, heading: number) => {
+      view.heading = heading;
+      if (!sentryArt || (view.type !== "kunai" && view.type !== "mortar")) return;
+      const [frame, mirrored] = TD_SENTRY_ATLAS.tops[view.type].headings[heading] ?? [
+        0,
+        false,
+      ];
+      for (const look of [view.look, view.castLook]) {
+        look.top.texture = sentryArt.tops[view.type][frame] ?? Texture.EMPTY;
+        look.top.scale.x = mirrored ? -1 : 1;
+      }
+    };
+    /** Dress a post's sentry: its body, its aiming top and its size for its level. */
+    const dressSentryView = (view: SentryView, type: TdSentry, level: number) => {
+      if (!sentryArt) return;
+      const body = sentryArt.bodies[type];
+      const top =
+        type === "kunai" || type === "mortar" ? TD_SENTRY_ATLAS.tops[type] : null;
+      const anchorY = 1 - SENTRY_GROUND_INSET / Math.max(1, body.height);
+      for (const look of [view.look, view.castLook]) {
+        look.body.texture = body;
+        look.body.anchor.set(0.5, anchorY);
+        look.top.visible = !!top;
+        if (top)
+          look.top.position.set(
+            top.mount[0] - body.width / 2,
+            top.mount[1] - anchorY * body.height,
+          );
+        // Higher levels stand a little taller.
+        const scale = SENTRY_UNITS_PER_PIXEL * (1 + Math.min(0.2, level * 0.01));
+        look.art.scale.set(scale, -scale);
+      }
+      view.type = type;
+      aimSentryView(view, view.heading);
+    };
+    /** The sentry view standing on the post at a position, if any. */
+    const sentryViewAt = (x: number, y: number) => {
+      for (const [slot, view] of sentryViews.entries()) {
+        if (!view) continue;
+        const at = tdSentryPosition(slot);
+        if (Math.abs(at.x - x) < 0.01 && Math.abs(at.y - y) < 0.01) return view;
+      }
+      return undefined;
     };
 
     // The hero, and a darkened twin sheared away from the sun like the enemies' silhouettes.
@@ -622,6 +723,27 @@ export const createTowerDefenseScene = async (options: {
     // Projectiles in flight, from throw events
     const flights: Flight[] = [];
     const flightPool: Sprite[] = [];
+    /** A pooled projectile sprite dressed as a spinning star, a kunai or a tag shell. */
+    const launchSprite = (art: FlightArt, size: number, tint: number) => {
+      const sprite = flightPool.pop() ?? new Sprite({ texture: shuriken, anchor: 0.5 });
+      sprite.rotation = 0;
+      if (art === "shuriken" || !sentryArt) {
+        sprite.texture = shuriken;
+        sprite.width = sprite.height = size;
+        sprite.tint = tint;
+      } else {
+        const texture = art === "kunai" ? sentryArt.kunai : sentryArt.bomb;
+        sprite.texture = texture;
+        sprite.width = FLIGHT_ART_WIDTH[art];
+        sprite.height =
+          (FLIGHT_ART_WIDTH[art] * texture.height) / Math.max(1, texture.width);
+        // Art keeps its painted side up in the arena's Y-up space.
+        sprite.scale.y *= -1;
+        sprite.tint = 0xffffff;
+      }
+      projectileLayer.addChild(sprite);
+      return sprite;
+    };
     const hitClips: {
       sprite: Sprite;
       startedAt: number;
@@ -803,11 +925,28 @@ export const createTowerDefenseScene = async (options: {
           (renderTick - flight.start) / Math.max(0.5, flight.due - flight.start),
         );
         const arc = flight.element === "fire" ? Math.sin(t * Math.PI) * 1.2 : 0;
-        flight.sprite.position.set(
-          flight.fx + (flight.tx - flight.fx) * t,
-          flight.fy + (flight.ty - flight.fy) * t + arc,
-        );
-        if (!reduced) flight.sprite.rotation += frame.delta * 14;
+        const x = flight.fx + (flight.tx - flight.fx) * t;
+        const y = flight.fy + (flight.ty - flight.fy) * t + arc;
+        flight.sprite.position.set(x, y);
+        if (flight.art === "kunai") {
+          if (x !== flight.px || y !== flight.py)
+            flight.sprite.rotation = Math.atan2(y - flight.py, x - flight.px);
+        } else if (flight.art === "bomb") {
+          if (!reduced) flight.sprite.rotation += frame.delta * 5;
+          if (!reduced && now >= flight.sparkAt) {
+            flight.sparkAt = now + 60;
+            fx.burst(x, y + 0.15, {
+              color: 0xffb347,
+              count: 2,
+              speed: 0.8,
+              size: 0.1,
+              life: 0.3,
+              gravity: -0.6,
+            });
+          }
+        } else if (!reduced) flight.sprite.rotation += frame.delta * 14;
+        flight.px = x;
+        flight.py = y;
         if (t >= 1) {
           projectileLayer.removeChild(flight.sprite);
           flightPool.push(flight.sprite);
@@ -885,22 +1024,38 @@ export const createTowerDefenseScene = async (options: {
                 heroDirection,
               );
           }
+          if (event.from === "sentry") {
+            // The turret or mortar that fired turns toward its target.
+            const view = sentryViewAt(event.x, event.y);
+            const target = enemies.get(event.targetId);
+            if (view && target)
+              aimSentryView(view, headingOf(target.x - event.x, target.y - event.y));
+          }
           if (flights.length > 160) return;
-          const sprite =
-            flightPool.pop() ?? new Sprite({ texture: shuriken, anchor: 0.5 });
-          projectileLayer.addChild(sprite);
-          const size = event.from === "sentry" ? 0.28 : event.crit ? 0.42 : 0.34;
-          sprite.width = sprite.height = size;
-          sprite.tint =
-            event.element === "fire" ? 0xffa060 : event.crit ? 0xfff07a : 0xffffff;
+          const art: FlightArt =
+            event.from !== "sentry" || !sentryArt
+              ? "shuriken"
+              : event.element === "fire"
+                ? "bomb"
+                : "kunai";
+          const sprite = launchSprite(
+            art,
+            event.from === "sentry" ? 0.28 : event.crit ? 0.42 : 0.34,
+            event.element === "fire" ? 0xffa060 : event.crit ? 0xfff07a : 0xffffff,
+          );
           const fromHero = event.from === "hero";
           if (fromHero && now > heroAnimationUntil - 120) cueHero("slash", now);
+          const fy = event.y + FLIGHT_LAUNCH_HEIGHT[art];
           flights.push({
             sprite,
+            art,
             fx: event.x,
-            fy: event.y + 0.6,
+            fy,
             tx: event.x,
             ty: event.y,
+            px: event.x,
+            py: fy,
+            sparkAt: 0,
             targetId: event.targetId,
             start: state.tick,
             due: event.due,
@@ -912,13 +1067,13 @@ export const createTowerDefenseScene = async (options: {
           if (flights.length > 160) return;
           // An enemy's dart: a dark red star flying at the hero, landing when the hit does.
           const source = enemies.get(event.sourceId);
-          const sprite =
-            flightPool.pop() ?? new Sprite({ texture: shuriken, anchor: 0.5 });
-          projectileLayer.addChild(sprite);
-          sprite.width = sprite.height = 0.3;
-          sprite.tint = ENEMY_SHOT_TINT;
+          const sprite = launchSprite("shuriken", 0.3, ENEMY_SHOT_TINT);
           flights.push({
             sprite,
+            art: "shuriken",
+            px: source?.x ?? event.x,
+            py: (source?.y ?? event.y) + 0.6,
+            sparkAt: 0,
             fx: source?.x ?? event.x,
             fy: (source?.y ?? event.y) + 0.6,
             tx: heroX,
@@ -1028,14 +1183,21 @@ export const createTowerDefenseScene = async (options: {
               }
               if (event.evolved) fx.shake(0.15, 0.25);
               return;
-            case "lightning":
+            case "lightning": {
+              const fromRod = event.from === "sentry";
               fx.bolt(
                 event.points.map((point, index) => ({
                   x: point.x,
-                  y: point.y + (index === 0 ? 0.9 : 0.6),
+                  y: point.y + (index === 0 ? (fromRod ? ROD_TIP_HEIGHT : 0.9) : 0.6),
                 })),
                 { color, life: 0.32, width: 0.09, jitter: 0.45 },
               );
+              if (fromRod) {
+                // The rod's tip crackles and each raider it chains through takes a spark.
+                playClip(rodTipFrames, event.x, event.y + ROD_TIP_HEIGHT, 0.9, now);
+                for (const point of event.points.slice(1, 7))
+                  playClip(sparkFrames, point.x, point.y + 0.6, 1, now);
+              }
               for (const point of event.points.slice(1))
                 fx.burst(point.x, point.y + 0.6, {
                   color,
@@ -1056,6 +1218,7 @@ export const createTowerDefenseScene = async (options: {
                   );
               }
               return;
+            }
             case "water":
               fx.ring(event.x, event.y + 0.2, {
                 from: 0.5,
@@ -1383,11 +1546,28 @@ export const createTowerDefenseScene = async (options: {
               });
           }
           return;
+        case "frostPulse": {
+          // A cold wave rolls out of the totem and frost bursts on each raider it chills.
+          fx.ring(event.x, event.y + 0.1, {
+            from: 0.3,
+            to: event.radius,
+            color: SENTRY_COLORS.frost,
+            life: 0.7,
+            width: 0.08,
+            fill: 0.06,
+            alpha: 0.6,
+          });
+          for (const id of event.ids.slice(0, 8)) {
+            const record = enemies.get(id);
+            if (record) playClip(frostFrames, record.x, record.y + 0.5, 0.9, now);
+          }
+          return;
+        }
         case "explosion":
           if (event.cause) {
-            // Tags and bombers go off on the ground: a blast and smoke, and a short jolt.
+            // Ground blasts burst with smoke; tags and bombers also jolt the screen.
             playClip(blastFrames, event.x, event.y, event.radius * 2.4, now, 0.92);
-            fx.shake(0.12, 0.25);
+            if (event.cause !== "mortar") fx.shake(0.12, 0.25);
           }
           // A ground blast's art fills the area itself, so its ring only marks the edge.
           fx.ring(event.x, event.y + 0.2, {
@@ -1646,19 +1826,11 @@ export const createTowerDefenseScene = async (options: {
             sentryGround
               .circle(at.x, at.y, tdSentryRange(sentry))
               .fill({ color, alpha: 0.05 });
-          if (sentryTextures) {
-            // Higher levels stand a little taller.
+          if (sentryArt) {
             const view = sentryView(slot);
-            const scale =
-              SENTRY_UNITS_PER_PIXEL * (1 + Math.min(0.2, sentry.level * 0.01));
-            const texture = sentryTextures[sentry.type];
-            view.body.texture = texture;
-            view.body.scale.set(scale, -scale);
-            const castSprite = view.cast.children[0];
-            if (castSprite instanceof Sprite) {
-              castSprite.texture = texture;
-              castSprite.scale.set(scale, -scale);
-            }
+            // A new sentry faces away from the hero until it first fires.
+            if (view.type !== sentry.type) view.heading = headingOf(at.x, at.y);
+            dressSentryView(view, sentry.type, sentry.level);
             view.root.position.set(at.x, at.y);
             view.root.zIndex = depthOf(at.y);
             view.root.visible = true;
@@ -1679,10 +1851,27 @@ export const createTowerDefenseScene = async (options: {
             .stroke({ color, width: 0.05 });
         }
       }
-      for (const view of sentryViews) if (view) view.cast.visible = showCasts();
+      for (const [slot, view] of sentryViews.entries()) {
+        if (!view) continue;
+        view.cast.visible = showCasts();
+        // A sensor sweeps its area with a slow ping.
+        const sentry = state.sentries[slot];
+        if (sentry?.type === "sensor" && view.root.visible && now >= view.pingAt) {
+          view.pingAt = now + SENSOR_PING_MS;
+          const at = tdSentryPosition(slot);
+          fx.ring(at.x, at.y + 0.05, {
+            from: 0.3,
+            to: tdSentryRange(sentry),
+            color: SENTRY_COLORS.sensor,
+            life: 1.4,
+            width: 0.05,
+            alpha: 0.35,
+          });
+        }
+      }
       for (let slot = 0; slot < state.stats.sentrySlots; slot++) {
         const sentry = state.sentries[slot];
-        if (!sentry || sentryTextures) continue;
+        if (!sentry || sentryArt) continue;
         const at = tdSentryPosition(slot);
         const color = SENTRY_COLORS[sentry.type];
         const glowSize =
@@ -1891,9 +2080,9 @@ export const eventSound = (event: TdEvent): [TdSfx, number, number] | null => {
     case "explosion":
       // A tag or bomber booms softer than a big blast; a cluster going off at once is one boom.
       if (event.radius >= 3.5) return ["explosion", 0.9, 0];
-      return event.cause
-        ? ["explosion", event.cause === "tag" ? 0.55 : 0.45, 120]
-        : null;
+      // Mortar shells land often enough to stay part of the silent stream.
+      if (event.cause === "tag") return ["explosion", 0.55, 120];
+      return event.cause === "bomber" ? ["explosion", 0.45, 120] : null;
     case "heroHit":
       return ["hurt", 0.3, 900];
     case "substitution":
@@ -1958,7 +2147,24 @@ const SUN_SLOPE_Y = Math.min(-0.12, SUN.y / (2 * Math.max(0.3, SUN.z)));
 const CAST_SHADOW_TINT = 0x202932;
 /** Sentry art: arena units per atlas pixel, and where its mossy base meets the ground. */
 const SENTRY_UNITS_PER_PIXEL = 1.45 / 150;
-const SENTRY_GROUND_ANCHOR = 0.9;
+/** The nearest of eight headings, counterclockwise from east, for an arena offset. */
+const headingOf = (dx: number, dy: number) =>
+  ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
+/** Atlas pixels between a sentry frame's bottom and where its base meets the ground. */
+const SENTRY_GROUND_INSET = 15;
+/** Arena height of a lightning rod's tip, where its chains start. */
+const ROD_TIP_HEIGHT = 1.5;
+const SENSOR_PING_MS = 2400;
+/** Where each projectile leaves its thrower, and how long sentry art flies, in arena units. */
+const FLIGHT_LAUNCH_HEIGHT: Record<FlightArt, number> = {
+  shuriken: 0.6,
+  kunai: 1,
+  bomb: 1.3,
+};
+const FLIGHT_ART_WIDTH: Record<Exclude<FlightArt, "shuriken">, number> = {
+  kunai: 0.55,
+  bomb: 0.4,
+};
 const CAST_SHADOW_ALPHA = 0.22;
 /** LPC feet sit near row 60 of the 64px frame, in the unit-square actor's space. */
 const LPC_FOOT = 60 / 64 - 0.5;
@@ -2139,8 +2345,16 @@ interface EnemyRecord {
   seenFrame: number;
 }
 
+type FlightArt = "shuriken" | "kunai" | "bomb";
+
 interface Flight {
   sprite: Sprite;
+  art: FlightArt;
+  /** Last drawn position, which points a kunai along its path. */
+  px: number;
+  py: number;
+  /** When a tag shell next sheds a fuse spark. */
+  sparkAt: number;
   fx: number;
   fy: number;
   tx: number;

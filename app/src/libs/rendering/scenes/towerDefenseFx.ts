@@ -99,6 +99,7 @@ export const createTowerDefenseFx = () => {
     color: number;
     width: number;
     fill: number;
+    alpha: number;
   }[] = [];
   const bolts: {
     points: { x: number; y: number }[];
@@ -128,6 +129,8 @@ export const createTowerDefenseFx = () => {
       color: number;
       width?: number;
       fill?: number;
+      /** Peak opacity of the outline, for quiet rings such as a sensor's ping. */
+      alpha?: number;
     },
   ) => {
     if (rings.length > 160) rings.shift();
@@ -141,6 +144,7 @@ export const createTowerDefenseFx = () => {
       color: options.color,
       width: options.width ?? 0.12,
       fill: options.fill ?? 0,
+      alpha: options.alpha ?? 1,
     });
   };
   const bolt = (
@@ -361,7 +365,7 @@ export const createTowerDefenseFx = () => {
           .fill({ color: entry.color, alpha: entry.fill * (1 - t) });
       shapes.circle(entry.x, entry.y, Math.max(0.01, radius)).stroke({
         color: entry.color,
-        alpha: 1 - t,
+        alpha: entry.alpha * (1 - t),
         width: entry.width * (1 - t * 0.5),
       });
     }

@@ -96,4 +96,29 @@ describe("tower defense simulation", () => {
       expect.objectContaining({ cause: "tag", element: "fire" }),
     );
   });
+
+  it("lands mortar shells as ground blasts and lists what a frost pulse chills", () => {
+    const state = createRun(
+      { seed: "sentries", startWave: 1, bestWave: 0, level: 1, dojo: { st_slots: 2 } },
+      true,
+    );
+    state.ryo = 10_000;
+    expect(applyAction(state, [state.tick, "build", 0, "mortar"])).toBe(true);
+    expect(applyAction(state, [state.tick, "build", 1, "frost"])).toBe(true);
+    applyAction(state, [state.tick, "call"]);
+    const events: TdEvent[] = [];
+    for (let i = 0; i < 3000 && !state.over; i++) {
+      stepRun(state);
+      events.push(...state.events);
+      state.events.length = 0;
+      const landed = events.some((e) => e.type === "explosion" && e.cause === "mortar");
+      const pulsed = events.some((e) => e.type === "frostPulse");
+      if (landed && pulsed) break;
+    }
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "explosion", cause: "mortar", element: "fire" }),
+    );
+    const pulse = events.find((event) => event.type === "frostPulse");
+    expect(pulse?.type === "frostPulse" && pulse.ids.length).toBeGreaterThan(0);
+  });
 });
