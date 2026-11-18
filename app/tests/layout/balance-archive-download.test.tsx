@@ -156,7 +156,7 @@ const mountArchive = async (fetchPage: (cursor: number) => ArchivePage) => {
   });
   const view = render(
     <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
-      <BalanceOverview />
+      <BalanceOverview tab="Archives" />
     </TrpcTestProviders>,
   );
   await flush();

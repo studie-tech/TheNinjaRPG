@@ -9,10 +9,16 @@ import * as BalanceFiltering from "@/layout/BalanceFiltering";
 import * as BalanceOverview from "@/layout/BalanceOverview";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Link from "@/layout/Link";
-import * as UserContext from "@/utils/UserContext";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 import { mockUserContextValue } from "../../setup/userContext";
 
 beforeEach(() => {
+  installBrowserGlobals({ events: ["CustomEvent"] });
+  window.localStorage.clear();
+  window.history.replaceState({}, "", "/manual/balance");
   vi.spyOn(ContentBox, "default").mockImplementation(
     ({ children, topRightContent }) => (
       <div>
@@ -26,11 +32,12 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  restoreBrowserGlobals();
 });
 
 it("links each balance data source from its content row and column", () => {
+  window.history.replaceState({}, "", "/manual/balance#Reports");
   const links = captureLinks();
-  vi.spyOn(BalanceOverview, "BalanceOverview").mockImplementation(() => <></>);
   const view = render(
     <AppRouterContext.Provider value={{} as never}>
       <ManualBalance />
@@ -196,30 +203,55 @@ it("creates a backup of the content type named on each button", () => {
   ]);
 });
 
-it("offers section shortcuts before the overview and report tables", () => {
-  vi.spyOn(BalanceOverview, "BalanceOverview").mockImplementation(() => (
-    <section id="balance-overview">Overview data</section>
-  ));
+it("uses header tabs to show only the selected balance section", () => {
+  vi.spyOn(BalanceOverview, "BalanceOverview").mockImplementation(
+    ({ tab, navTabs }) => (
+      <section>
+        {navTabs}
+        <p>{tab} data</p>
+      </section>
+    ),
+  );
   const view = render(
     <AppRouterContext.Provider value={{} as never}>
       <ManualBalance />
     </AppRouterContext.Provider>,
   );
-  const nav = view.getByRole("navigation", { name: "Balance sections" });
-  expect(
-    within(nav)
-      .getAllByRole("link")
-      .map((link) => link.getAttribute("href")),
-  ).toEqual([
-    "#balance-overview",
-    "#balance-starting-turn",
-    "#balance-archives",
-    "#balance-reports",
-  ]);
-  expect(
-    nav.compareDocumentPosition(view.getByText("Overview data")) &
-      Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy();
+  expect(view.getByText("Overview data")).toBeTruthy();
+  expect(view.queryByRole("navigation", { name: "Balance sections" })).toBeNull();
+  expect(view.queryByRole("table")).toBeNull();
+  for (const tab of ["Starting turns", "Archives", "Overview"]) {
+    fireEvent.click(view.getByRole("button", { name: tab }));
+    expect(view.getByText(`${tab} data`)).toBeTruthy();
+    expect(view.getByRole("button", { name: tab }).getAttribute("aria-current")).toBe(
+      "true",
+    );
+    expect(view.queryByRole("table")).toBeNull();
+  }
+  fireEvent.click(view.getByRole("button", { name: "Reports" }));
+  expect(view.getByRole("table")).toBeTruthy();
+  expect(view.queryByText("Overview data")).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "Overview" }));
+  expect(view.getByText("Overview data")).toBeTruthy();
+  expect(view.queryByRole("table")).toBeNull();
+});
+
+it("opens a named tab from its fragment and falls back for unknown values", () => {
+  vi.spyOn(BalanceOverview, "BalanceOverview").mockImplementation(
+    ({ tab, navTabs }) => (
+      <section>
+        {navTabs}
+        <p>{tab} data</p>
+      </section>
+    ),
+  );
+  window.history.replaceState({}, "", "/manual/balance#Archives");
+  const first = render(<ManualBalance />);
+  expect(first.getByText("Archives data")).toBeTruthy();
+  first.unmount();
+  window.history.replaceState({}, "", "/manual/balance#unknown");
+  const second = render(<ManualBalance />);
+  expect(second.getByText("Overview data")).toBeTruthy();
 });
 
 /** Inspect the owner's Link contract without exercising Next's router implementation. */

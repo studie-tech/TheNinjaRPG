@@ -1,14 +1,25 @@
 "use client";
 
 import { SquareArrowOutUpRight } from "lucide-react";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { BalanceOverview } from "@/layout/BalanceOverview";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
+import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
 
 /** Link staff to usage, power and completeness reports for each content type. */
 export default function ManualBalance() {
+  const availableTabs = ["Overview", "Starting turns", "Archives", "Reports"] as const;
+  type Tab = (typeof availableTabs)[number];
+  const [storedTab, setTab] = useLocalStorage<Tab>(
+    "manualBalanceTab",
+    "Overview",
+    true,
+  );
+  const tab = availableTabs.includes(storedTab) ? storedTab : "Overview";
+  const navTabs = <NavTabs current={tab} options={availableTabs} setValue={setTab} />;
   const data = [
     {
       content: "Bloodlines",
@@ -67,36 +78,27 @@ export default function ManualBalance() {
 
   return (
     <>
-      <nav aria-label="Balance sections" className="flex gap-4 overflow-x-auto text-sm">
-        {[
-          ["balance-overview", "Overview"],
-          ["balance-starting-turn", "Starting turns"],
-          ["balance-archives", "Archives"],
-          ["balance-reports", "Reports"],
-        ].map(([id, label]) => (
-          <a key={id} href={`#${id}`} className="min-h-11 shrink-0 py-3 underline">
-            {label}
-          </a>
-        ))}
-      </nav>
-      <BalanceOverview />
-      <ContentBox
-        id="balance-reports"
-        title="Detailed balance reports"
-        subtitle="Usage, power and completeness"
-        defaultBackHref="/manual"
-        padding={false}
-      >
-        <p className="p-3">
-          We believe the path to getting the best balanced game is to be as data driven
-          as possible. This page is a collection of links to the various data sources
-          that we use to balance the game. Feel free to browse the data and see if you
-          can find any interesting patterns, which may help us improve the game. Also,
-          if you believe certain data visualizations would help us further in balancing
-          efforts, please write us a suggestion, e.g. in a ticket or on github.
-        </p>
-        <Table data={data} columns={columns} />
-      </ContentBox>
+      {tab !== "Reports" && <BalanceOverview tab={tab} navTabs={navTabs} />}
+      {tab === "Reports" && (
+        <ContentBox
+          title="Detailed balance reports"
+          subtitle="Usage, power and completeness"
+          defaultBackHref="/manual"
+          padding={false}
+          topRightContent={navTabs}
+        >
+          <p className="p-3">
+            We believe the path to getting the best balanced game is to be as data
+            driven as possible. This page is a collection of links to the various data
+            sources that we use to balance the game. Feel free to browse the data and
+            see if you can find any interesting patterns, which may help us improve the
+            game. Also, if you believe certain data visualizations would help us further
+            in balancing efforts, please write us a suggestion, e.g. in a ticket or on
+            github.
+          </p>
+          <Table data={data} columns={columns} />
+        </ContentBox>
+      )}
     </>
   );
 }
