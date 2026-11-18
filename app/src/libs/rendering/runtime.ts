@@ -132,6 +132,8 @@ export const createGameRenderer = async (options: {
     release(true);
     throw new DOMException("Scene initialization cancelled", "AbortError");
   }
+  // Initialization can await GPU setup while another tab changes the preference.
+  quality = readRenderQuality();
   const telemetry = observeRenderer(options.surface, renderer);
   const stage = new Container();
   // This group is shared by every animated terrain batch; publish it once per frame.

@@ -12,6 +12,7 @@ import {
   setRenderQuality,
   setVisualEffect,
 } from "@/libs/visualEffects";
+import { deferred } from "../../setup/deferred";
 
 describe("renderer initialization failure", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -89,7 +90,15 @@ describe("renderer context loss", () => {
     });
   const start = async (
     onError: (error: unknown) => void,
-    { resolution = 1, backgroundAlpha = 0 } = {},
+    {
+      resolution = 1,
+      backgroundAlpha = 0,
+      beforeInit,
+    }: {
+      resolution?: number;
+      backgroundAlpha?: number;
+      beforeInit?: () => Promise<void>;
+    } = {},
   ) => {
     class NoopObserver {
       observe() {}
@@ -113,6 +122,7 @@ describe("renderer context loss", () => {
     const init = vi
       .spyOn(WebGLRenderer.prototype, "init")
       .mockImplementation(async function (this: WebGLRenderer) {
+        await beforeInit?.();
         canvas = document.createElement("canvas");
         // Only what the runtime reads after initialization; a real GL context is unavailable here.
         const gl = { isContextLost: () => lost };
@@ -451,6 +461,40 @@ describe("renderer context loss", () => {
     expect(game.renderer.resolution).toBe(2);
   });
 
+  it.each(["high", "low"] as const)(
+    "honors %s selected in another tab during renderer initialization",
+    async (quality) => {
+      Object.defineProperty(window, "devicePixelRatio", {
+        configurable: true,
+        value: 2,
+      });
+      const initialized = deferred();
+      const pending = start(vi.fn(), {
+        resolution: 2,
+        beforeInit: () => initialized.promise,
+      });
+      const value = JSON.stringify(quality);
+      localStorage.setItem("worldRenderQuality", value);
+      window.dispatchEvent(
+        new window.StorageEvent("storage", {
+          key: "worldRenderQuality",
+          newValue: value,
+        }),
+      );
+      initialized.resolve();
+      const { game, render } = await pending;
+      render.mockImplementation(() => {});
+      // Explicit settings keep their density even under sustained slow frames.
+      for (let i = 0; i < 400; i++) runFrame(1000 + i * 33);
+      expect(game.renderer.resolution).toBe(quality === "high" ? 2 : 1);
+      expect(game.visualEffects).toMatchObject({
+        shadows: true,
+        localLights: true,
+        weather: true,
+      });
+    },
+  );
+
   it("switches off effects the player has not chosen and keeps only steps that help", async () => {
     const { game, render } = await start(vi.fn());
     render.mockImplementation(() => {});
@@ -567,12 +611,12 @@ describe("renderer context loss", () => {
       runFrame(now);
     }
     expect(game.visualEffects.localLights).toBe(false);
-    // The switch was already stored on, so only the list of choices changes in storage.
-    const value = JSON.stringify(["shadows", "localLights"]);
-    localStorage.setItem("worldEffectChoices", value);
+    // The switch was already stored on, so only its choice marker changes in storage.
+    const value = "true";
+    localStorage.setItem("worldEffectChoice:localLights", value);
     window.dispatchEvent(
       new window.StorageEvent("storage", {
-        key: "worldEffectChoices",
+        key: "worldEffectChoice:localLights",
         newValue: value,
       }),
     );

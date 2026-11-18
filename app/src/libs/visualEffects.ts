@@ -64,11 +64,8 @@ export const readVisualEffects = (): VisualEffects => {
 export const setVisualEffect = (effect: VisualEffect, enabled: boolean) => {
   // Save sibling choices before changing a key also used by a grouped preference.
   readVisualEffects();
-  const chosen = readChosenVisualEffects();
-  if (!chosen.has(effect)) {
-    chosen.add(effect);
-    safeLocalStorageSetItem(CHOSEN_VISUAL_EFFECTS_KEY, JSON.stringify([...chosen]));
-  }
+  // Independent markers let tabs choose different effects without overwriting each other.
+  safeLocalStorageSetItem(`${CHOSEN_VISUAL_EFFECT_PREFIX}${effect}`, "true");
   publish(VISUAL_EFFECT_KEYS[effect], JSON.stringify(enabled));
 };
 
@@ -77,16 +74,12 @@ export const setVisualEffect = (effect: VisualEffect, enabled: boolean) => {
  * or grouped preferences are not choices, so automatic quality may still lower them.
  */
 export const readChosenVisualEffects = (): Set<VisualEffect> => {
-  const chosen = new Set<VisualEffect>();
-  try {
-    const stored: unknown = JSON.parse(
-      safeLocalStorageGetItem(CHOSEN_VISUAL_EFFECTS_KEY) ?? "[]",
-    );
-    if (Array.isArray(stored))
-      for (const effect of stored)
-        if (Object.hasOwn(VISUAL_EFFECT_KEYS, effect)) chosen.add(effect);
-  } catch {}
-  return chosen;
+  return new Set(
+    (Object.keys(VISUAL_EFFECT_KEYS) as VisualEffect[]).filter(
+      (effect) =>
+        safeLocalStorageGetItem(`${CHOSEN_VISUAL_EFFECT_PREFIX}${effect}`) === "true",
+    ),
+  );
 };
 
 /**
@@ -126,7 +119,7 @@ export const readVisualSettingsKey = () =>
 /** Follows the player's effect choices from other tabs, which change no effect switch on their own. */
 export const subscribeChosenVisualEffects = (onChange: () => void) =>
   subscribeStorage((key) => {
-    if (key === null || key === CHOSEN_VISUAL_EFFECTS_KEY) onChange();
+    if (key === null || key.startsWith(CHOSEN_VISUAL_EFFECT_PREFIX)) onChange();
   });
 
 /** Follows quality changes from this and other tabs. */
@@ -147,7 +140,7 @@ export const subscribeVisualEffects = (
   });
 
 const RENDER_QUALITY_KEY = "worldRenderQuality";
-const CHOSEN_VISUAL_EFFECTS_KEY = "worldEffectChoices";
+const CHOSEN_VISUAL_EFFECT_PREFIX = "worldEffectChoice:";
 
 const parseRenderQuality = (value: string | null): RenderQuality => {
   try {
