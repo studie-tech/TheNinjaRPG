@@ -1,5 +1,6 @@
 "use client";
 
+import { Hammer } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -17,6 +18,12 @@ import { Label } from "@/components/ui/label";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   CRAFTING_SERVICE_MAX_FEE,
   CRAFTING_SERVICES,
   ItemRarities,
@@ -30,6 +37,7 @@ import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { TOOLBAR_BUTTON_CLASS } from "@/layout/publicUser/toolbarButtonClass";
 import { SearchSelect } from "@/layout/SearchSelect";
 import { getMissingCraftingRank } from "@/libs/crafting";
 import {
@@ -45,9 +53,22 @@ export function CraftForMe({ crafterId }: { crafterId: string }) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">Craft for Me</Button>
-      </DialogTrigger>
+      <TooltipProvider delayDuration={50}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DialogTrigger asChild>
+              <button
+                type="button"
+                className={TOOLBAR_BUTTON_CLASS}
+                aria-label="Craft for Me"
+              >
+                <Hammer className="h-6 w-6" aria-hidden="true" />
+              </button>
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Craft for Me</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DialogContent className="p-4 sm:p-6 md:max-w-xl">
         <DialogHeader>
           <DialogTitle>Craft for Me</DialogTitle>
