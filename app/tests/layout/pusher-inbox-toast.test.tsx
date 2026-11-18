@@ -34,6 +34,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: testApi.profile,
     item: testApi.item,
+    occupation: testApi.occupation,
     comments: testApi.comments,
     tournament: testApi.tournament,
     useUtils: testApi.useUtils,

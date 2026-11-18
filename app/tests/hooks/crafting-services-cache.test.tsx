@@ -573,7 +573,11 @@ it.each(["event", "polling"])(
       else client.setQueryData(requestsKey, [{ ...receipt, status: "REFUNDED" }]);
     });
     await waitFor(() => expect(calls).toContain("profile.getUser"));
-    expect(calls).toEqual(["profile.getUser"]);
+    expect(calls).toEqual(
+      kind === "event"
+        ? ["occupation.getServiceRequests", "profile.getUser"]
+        : ["profile.getUser"],
+    );
     await act(async () => {
       profile.resolve();
       await pending;
@@ -884,3 +888,184 @@ it("retries a failed queue before inventory while retaining successful profile a
   expect(refreshUser).toHaveBeenCalledTimes(1);
   expect(calls.filter((path) => path === "profile.getSidebarTimers")).toHaveLength(1);
 });
+
+it.each(["event", "overlapping poll", "unmounted desk"])(
+  "shares event settlement after the receipt read crosses its due time: %s",
+  async (kind) => {
+    const receiptRead = deferred();
+    let settled = false;
+    let committed = kind !== "overlapping poll";
+    const receiptReads = kind === "overlapping poll" ? 2 : 1;
+    const terminal = [{ ...receipt, status: "COMPLETED" }];
+    const output = { ...equipment, id: "delivered-output" };
+    const h = harness(
+      async (path) => {
+        if (path === "occupation.getServiceRequests") {
+          // A poll can capture pending data before the event's committed delivery.
+          const captured = committed ? terminal : [receipt];
+          await receiptRead.promise;
+          // The receipt query itself can cross the due time and settle delivery.
+          if (captured === terminal) settled = true;
+          return captured;
+        }
+        if (path === "profile.getUser") {
+          expect(settled).toBe(true);
+          return {
+            userData: { ...requester, money: 1050, items: [] },
+            notifications: [],
+          };
+        }
+        if (path === "occupation.getCraftingQueue") return { waiting: [] };
+        if (path.startsWith("item.")) return [output];
+        return [];
+      },
+      { userProvider: true },
+    );
+    seedSubmissionViews(h.client);
+    h.client.setQueryData(requestsKey, [receipt]);
+    h.client.setQueryData(
+      getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
+      [],
+    );
+    let refresh!: () => Promise<boolean>;
+    const Desk = () => {
+      useServiceRequests();
+      return null;
+    };
+    const Views = ({ desk = true }: { desk?: boolean }) => {
+      const utils = testApi.useUtils();
+      const { refreshServiceViews } = useCraftingServiceEvents(
+        userContext.useUserData().refreshUser,
+      );
+      refresh = async () => {
+        const confirmed = await refreshServiceViews();
+        // The visible inbox's service event handler owns the acknowledgement read.
+        await utils.comments.getUserConversations.invalidate();
+        return confirmed;
+      };
+      testApi.item.getUserItems.useQuery();
+      testApi.item.getUserItemsWithVariants.useQuery();
+      testApi.occupation.getCraftingQueue.useQuery();
+      testApi.profile.getSidebarTimers.useQuery();
+      testApi.comments.getUserConversations.useQuery();
+      return desk ? <Desk /> : null;
+    };
+    const view = render(<Views />, { wrapper: h.wrapper });
+    let poll: Promise<void> | undefined;
+    let event!: Promise<boolean>;
+    await act(async () => {
+      if (kind === "overlapping poll")
+        poll = h.client.refetchQueries({ queryKey: requestsKey });
+      committed = true;
+      event = refresh();
+    });
+    expect(h.calls).toEqual(
+      Array.from({ length: receiptReads }, () => "occupation.getServiceRequests"),
+    );
+    if (kind === "unmounted desk") view.rerender(<Views desk={false} />);
+    await act(async () => {
+      receiptRead.resolve();
+      await poll;
+      expect(await event).toBe(true);
+    });
+    for (const key of inventoryKeys)
+      await waitFor(() => expect(h.client.getQueryData(key)).toEqual([output]));
+    expect(h.client.getQueryData<UserCache>(profileKey)?.userData?.money).toBe(1050);
+    expect(h.client.getQueryData(requestsKey)).toEqual(terminal);
+    expect(h.calls.slice(0, receiptReads + 1)).toEqual([
+      ...Array.from({ length: receiptReads }, () => "occupation.getServiceRequests"),
+      "profile.getUser",
+    ]);
+    for (const path of [
+      "profile.getUser",
+      "occupation.getCraftingQueue",
+      "profile.getSidebarTimers",
+      "item.getUserItems",
+      "item.getUserItemsWithVariants",
+      "comments.getUserConversations",
+    ])
+      expect(h.calls.filter((call) => call === path)).toHaveLength(1);
+    const queueIndex = h.calls.indexOf("occupation.getCraftingQueue");
+    expect(h.calls.indexOf("item.getUserItems")).toBeGreaterThan(queueIndex);
+    expect(h.calls.indexOf("item.getUserItemsWithVariants")).toBeGreaterThan(
+      queueIndex,
+    );
+    await act(async () => view.rerender(<Views desk={false} />));
+    await act(async () => view.rerender(<Views />));
+    await act(async () => h.client.refetchQueries({ queryKey: requestsKey }));
+    expect(h.calls.filter((path) => path === "profile.getUser")).toHaveLength(1);
+  },
+);
+
+it.each(["profile", "queue"])(
+  "retries failed event %s settlement on a receipt poll without repeating successful phases",
+  async (failure) => {
+    let profiles = 0;
+    let queues = 0;
+    const terminal = [{ ...receipt, status: "REFUNDED" }];
+    const h = harness(
+      async (path) => {
+        if (path === "occupation.getServiceRequests") return terminal;
+        if (path === "profile.getUser") {
+          if (++profiles === 1 && failure === "profile")
+            throw new Error("Profile unavailable");
+          return {
+            userData: { ...requester, money: 1050, items: [] },
+            notifications: [],
+          };
+        }
+        if (path === "occupation.getCraftingQueue") {
+          if (++queues === 1 && failure === "queue")
+            throw new Error("Queue unavailable");
+          return { waiting: [] };
+        }
+        return [];
+      },
+      { userProvider: true },
+    );
+    seedSubmissionViews(h.client);
+    h.client.setQueryData(requestsKey, [receipt]);
+    let refresh!: () => Promise<boolean>;
+    const Observer = () => {
+      useServiceRequests();
+      return null;
+    };
+    const Views = () => {
+      refresh = useCraftingServiceEvents(
+        userContext.useUserData().refreshUser,
+      ).refreshServiceViews;
+      testApi.item.getUserItems.useQuery();
+      testApi.item.getUserItemsWithVariants.useQuery();
+      testApi.occupation.getCraftingQueue.useQuery();
+      testApi.profile.getSidebarTimers.useQuery();
+      return (
+        <>
+          <Observer />
+          <Observer />
+        </>
+      );
+    };
+    const view = render(<Views />, { wrapper: h.wrapper });
+    await act(async () => expect(await refresh()).toBe(failure !== "profile"));
+    await act(async () => {
+      view.rerender(<Views />);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    expect(profiles).toBe(1);
+    expect(h.calls.some((path) => path.startsWith("item."))).toBe(false);
+    expect(queues).toBe(failure === "queue" ? 1 : 0);
+    await act(async () => h.client.refetchQueries({ queryKey: requestsKey }));
+    for (const key of inventoryKeys)
+      await waitFor(() => expect(h.client.getQueryData(key)).toEqual([]));
+    expect(profiles).toBe(failure === "profile" ? 2 : 1);
+    expect(queues).toBe(failure === "queue" ? 2 : 1);
+    for (const path of [
+      "profile.getSidebarTimers",
+      "item.getUserItems",
+      "item.getUserItemsWithVariants",
+    ])
+      expect(h.calls.filter((call) => call === path)).toHaveLength(1);
+    await act(async () => h.client.refetchQueries({ queryKey: requestsKey }));
+    expect(profiles).toBe(failure === "profile" ? 2 : 1);
+  },
+);
