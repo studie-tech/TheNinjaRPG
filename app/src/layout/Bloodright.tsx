@@ -11,6 +11,7 @@ import {
 } from "@/drizzle/constants";
 import { BloodrightTree } from "@/layout/BloodrightTree";
 import Confirm from "@/layout/Confirm";
+import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -19,6 +20,7 @@ import { freeResetNote } from "@/libs/skillReset";
 import { showMutationToast } from "@/libs/toast";
 import { isStaffMember } from "@/utils/permissions";
 import { useRequiredUserDataSelector, useUserDataSelector } from "@/utils/UserContext";
+import type { ZodAllTags } from "@/validators/combat";
 import type { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const Bloodright = () => {
@@ -27,7 +29,10 @@ export const Bloodright = () => {
     data: user,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserDataSelector((u) => ({ seichiSilver: u.seichiSilver }));
+  } = useRequiredUserDataSelector((u) => ({
+    seichiSilver: u.seichiSilver,
+    bloodline: u.bloodline,
+  }));
   const { data, isPending, isError, refetch } = api.bloodright.get.useQuery();
   const onSuccess = async (
     result: z.infer<typeof userDeltaResponseSchema>,
@@ -63,6 +68,8 @@ export const Bloodright = () => {
   if (!data?.tiers.length && !data?.purchased.length)
     return <p>No Bloodright Path for this Bloodline</p>;
   const purchasedIds = data?.purchased.map((entry) => entry.skillId) ?? [];
+  const summary = describeBloodright(data?.tiers ?? []);
+  const bloodline = user?.bloodline;
   const isTierModalOpen = isOpen && data?.tiers.some((tier) => tier.id === selectedId);
   const mutationErrors = (
     <>
@@ -80,6 +87,29 @@ export const Bloodright = () => {
   );
   return (
     <div className="space-y-4">
+      {bloodline && (
+        <div className="bg-card flex items-center gap-4 rounded-lg border p-3">
+          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full">
+            <Image
+              src={bloodline.image}
+              alt={bloodline.name}
+              fill
+              className="object-cover"
+              sizes="64px"
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-muted-foreground text-xs tracking-wide uppercase">
+              Bloodright
+            </p>
+            <h3 className="truncate text-lg font-bold">{bloodline.name}</h3>
+          </div>
+          <div className="shrink-0 text-right text-sm">
+            <p className="font-semibold">Rank {bloodline.rank}</p>
+            {summary.jutsu && <p className="text-muted-foreground">{summary.jutsu}</p>}
+          </div>
+        </div>
+      )}
       <p>
         {purchasedIds.length} / {MAX_BLOODRIGHT_TIERS} active tiers ·{" "}
         {data?.spent.toLocaleString()} Seichi Silver invested ·{" "}
@@ -100,6 +130,9 @@ export const Bloodright = () => {
           setIsOpen(true);
         }}
       />
+      {summary.note && (
+        <p className="text-muted-foreground text-center text-sm">{summary.note}</p>
+      )}
       {data?.tiers
         .filter((tier) => tier.id === selectedId)
         .map((tier) => {
@@ -187,6 +220,35 @@ export const Bloodright = () => {
       {!isTierModalOpen && mutationErrors}
     </div>
   );
+};
+
+/** Name the jutsu a path's stats apply to and summarise what its nodes cost. */
+export const describeBloodright = (
+  tiers: { effects: ZodAllTags[]; seichiSilverCost: number }[],
+) => {
+  const elements = [
+    ...new Set(
+      tiers.flatMap((tier) =>
+        tier.effects.flatMap((effect) =>
+          effect.type === "increasepotency" || effect.type === "decreasepotency"
+            ? effect.affectedElements
+            : [],
+        ),
+      ),
+    ),
+  ].map((element) => (element === "None" ? "Non-elemental" : element));
+  const jutsu = elements.length ? `${elements.join(", ")} jutsu` : null;
+  if (!tiers.length) return { jutsu, note: null };
+  const costs = tiers.map((tier) => tier.seichiSilverCost);
+  const [low, high] = [Math.min(...costs), Math.max(...costs)];
+  const cost =
+    low === high
+      ? `Each node costs ${low.toLocaleString()} Seichi Silver`
+      : `Nodes cost ${low.toLocaleString()} to ${high.toLocaleString()} Seichi Silver`;
+  return {
+    jutsu,
+    note: `Stats are added to matching tags on ${jutsu ?? "all jutsu"}. ${cost}; up to ${MAX_BLOODRIGHT_TIERS} active.`,
+  };
 };
 
 export const ResetBloodright = () => {
