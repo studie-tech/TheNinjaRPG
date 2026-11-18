@@ -546,6 +546,24 @@ describeWithDatabase("Hunting lifecycle", () => {
       (await db.query.battle.findFirst())?.extraState.hunting?.huntingBonusQuantity,
     ).toBe(2);
   });
+  it.each([true, false])(
+    "starts the hunt in auto combat only when the saved preference is on (%p)",
+    async (defaultAutoCombat) => {
+      const { hunter, session } = await accept();
+      const db = await getTestDatabase();
+      vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+      await insertDefaultAiProfile();
+      await db
+        .update(userData)
+        .set({ rank: "JONIN", level: 50, isOutlaw: true, defaultAutoCombat })
+        .where(eq(userData.userId, "hunter"));
+      await db.update(huntingSession).set({ readyAt: new Date(0) });
+      expect((await hunter.start({ id: session.id })).success).toBe(true);
+      const started = await db.query.battle.findFirst();
+      const player = started?.usersState.find((u) => u.userId === "hunter");
+      expect(!!player?.isAutoCombat).toBe(defaultAutoCombat);
+    },
+  );
   it("rejects an exhausted stale preload and permits a fresh allowance after cooldown", async () => {
     const { hunter, session } = await accept();
     const db = await getTestDatabase();
