@@ -620,6 +620,16 @@ export const updateUserDataForReviveDungeonMembers = (
       ),
     );
 
+/** Read the expiry recovery snapshot without transferring or decoding unrelated catalogs. */
+export const findBattleForExpireDungeonRun = (
+  client: Pick<DrizzleClient, "query">,
+  run: { battleId: string },
+) =>
+  client.query.battle.findFirst({
+    where: eq(battle.id, run.battleId),
+    columns: { catalogs: false },
+  });
+
 /** Build the `dungeonRun` update for `expireDungeonRun`, using predicates on `id` and `version`. */
 export const updateDungeonRunForExpireDungeonRun = (
   client: Pick<DrizzleClient, "update">,

@@ -256,6 +256,7 @@ describeWithDatabase("shrine lobby objective war eligibility", () => {
     expect(result.success, result.message).toBe(true);
     expect(result).not.toHaveProperty("userPatch");
     expect(result).not.toHaveProperty("userDelta");
+    expect(result.battleId).toBeTruthy();
     const saved = (await storedBattle(db, result.battleId!))!;
     expect(saved.battleType).toBe("SHRINE_WAR");
     expect(saved.extraState.wars[warId]?.objectiveState?.attackerEspionage).toBe(

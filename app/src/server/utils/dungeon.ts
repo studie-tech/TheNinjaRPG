@@ -4,16 +4,13 @@ import { type DungeonRun, userData } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { dungeonBattleOutcome, dungeonNextState } from "@/libs/dungeon";
-import {
-  deleteBattleById,
-  deleteBattleIfVersionMatches,
-  fetchBattle,
-} from "@/queries/combat";
+import { deleteBattleById, deleteBattleIfVersionMatches } from "@/queries/combat";
 import {
   claimDungeonQueue,
   claimDungeonStartRecovery,
   clearDungeonActiveUsers,
   expireDungeonRunWithoutBattle,
+  findBattleForExpireDungeonRun,
   releaseDungeonQueue,
   updateDungeonRunForExpireDungeonRun,
   updateDungeonRunForRollbackDungeonStart,
@@ -142,7 +139,9 @@ export const expireDungeonRun = async (client: DrizzleClient, run: DungeonRun) =
     return true;
   }
   const settledAt = new Date();
-  const snapshot = (await fetchBattle(client, run.battleId)) ?? undefined;
+  const snapshot = await findBattleForExpireDungeonRun(client, {
+    battleId: run.battleId,
+  });
   // Removing the playable battle needs DELETE while terminal status and revival need UPDATE.
   // MySQL cannot combine those in one statement; commit them together so failures stay retryable.
   await retryOnDeadlock(() =>
