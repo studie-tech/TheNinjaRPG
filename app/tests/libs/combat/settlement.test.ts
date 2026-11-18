@@ -8,6 +8,7 @@ import {
   battle,
   battleAction,
   battleHistory,
+  dataBattleAction,
   item,
   logBattleLengths,
   userData,
@@ -19,6 +20,7 @@ import type { UserEvent } from "@/layout/PusherHandler";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import {
   combatEnergyRecoverySql,
+  saveUsage,
   updateBattle,
   updateUser,
 } from "@/libs/combat/database";
@@ -147,6 +149,7 @@ describeWithDatabase("CAS combat settlement", () => {
       battle,
       battleAction,
       battleHistory,
+      dataBattleAction,
       aiProfile,
       logBattleLengths,
       userItemImbuement,
@@ -1057,6 +1060,10 @@ describeWithDatabase("CAS combat settlement", () => {
 
   it("getBattle settles a non-final result without an actor or round change exactly once", async () => {
     const snapshot = scenario(false);
+    snapshot.extraState.balanceParticipants = {
+      winner: { level: 50, rank: "JONIN", turnOrder: 1 },
+      loser: { level: 25, rank: "CHUNIN", turnOrder: 2 },
+    };
     const aligned = alignBattle(structuredClone(snapshot), [], "winner");
     expect(aligned.changedActor).toBe(false);
     expect(aligned.progressRound).toBe(false);
@@ -1072,6 +1079,68 @@ describeWithDatabase("CAS combat settlement", () => {
     expect(await balance()).toBe(100000 + expected.money);
     expect((await persisted())?.usersState[0]?.leftBattle).toBe(true);
     expect((await api.getBattle({ battleId: snapshot.id })).result).toBeNull();
+    const opponentApi = await callerFor(combatRouter, "loser");
+    expect(
+      (await opponentApi.getBattle({ battleId: snapshot.id })).result?.outcome,
+    ).toBe("Lost");
+    await opponentApi.getBattle({ battleId: snapshot.id });
+    const samples = (
+      await (await getTestDatabase()).query.dataBattleAction.findMany()
+    ).filter((row) => row.type === "participant");
+    expect(samples).toHaveLength(2);
+    expect(samples.sort((a, b) => a.turnOrder - b.turnOrder)).toMatchObject([
+      { turnOrder: 1, userLevel: 50, userRank: "JONIN", battleWon: 1, count: 1 },
+      { turnOrder: 2, userLevel: 25, userRank: "CHUNIN", battleWon: 0, count: 1 },
+    ]);
+  });
+
+  it.each([
+    "pve",
+    "team",
+    "npc ally",
+    "missing snapshot",
+    "unknown order",
+    "invalid order",
+  ])("%s retains content usage without head-to-head outcome samples", async (kind) => {
+    const snapshot = scenario(false);
+    const player = snapshot.usersState[0]!;
+    player.bloodlineId = "bloodline";
+    player.usedActions = [
+      { type: "jutsu", id: "fire" },
+      { type: "jutsu", id: "fire" },
+    ];
+    snapshot.extraState.balanceParticipants = {
+      winner: { level: 50, rank: "JONIN", turnOrder: 1 },
+    };
+    if (kind === "pve") snapshot.usersState[1]!.isAi = true;
+    if (kind === "team" || kind === "npc ally")
+      snapshot.usersState.push(
+        makeBattleUser("teammate", {
+          isAi: kind === "npc ally",
+          direction: "left",
+        }),
+      );
+    if (kind === "missing snapshot") delete snapshot.extraState.balanceParticipants;
+    if (kind === "unknown order")
+      snapshot.extraState.balanceParticipants!.winner!.turnOrder = 0;
+    if (kind === "invalid order")
+      snapshot.extraState.balanceParticipants!.winner!.turnOrder = 3;
+    const result = calcBattleResult(snapshot, "winner", []);
+    expect(result?.outcome).toBe("Won");
+    const database = await getTestDatabase();
+    await saveUsage(database, snapshot, result, "winner");
+    const rows = await database.query.dataBattleAction.findMany();
+    expect(rows.filter((row) => row.type === "participant")).toEqual([]);
+    expect(rows.filter((row) => row.type === "jutsu")).toMatchObject([
+      { contentId: "fire", count: 1, battleWon: 1 },
+    ]);
+    expect(rows.filter((row) => row.type === "bloodline")).toMatchObject([
+      { contentId: "bloodline", count: 1, battleWon: 1 },
+    ]);
+    if (kind === "pve" || kind === "npc ally")
+      expect(rows.filter((row) => row.type === "ai")).toMatchObject([
+        { count: 1, battleWon: kind === "pve" ? 0 : 1 },
+      ]);
   });
 
   it("performAction settles an already-decided arena match once", async () => {

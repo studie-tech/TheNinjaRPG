@@ -90,7 +90,7 @@ function MultiSelect({
           aria-disabled={disabled}
           tabIndex={disabled ? -1 : 0}
           className={cn(
-            "flex h-max w-full cursor-pointer items-center justify-between rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+            "flex h-max min-w-0 w-full cursor-pointer items-center justify-between gap-1 rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             isDirty ? "border-orange-300" : "border-input",
             disabled && "cursor-not-allowed opacity-50",
           )}
@@ -102,7 +102,7 @@ function MultiSelect({
             }
           }}
         >
-          <div className="flex flex-wrap gap-1">
+          <div className="flex min-w-0 flex-1 flex-wrap gap-1">
             {sortedSelected.length > 0 ? (
               sortedSelected.map((item, i) => {
                 const label = getLabel(item) ?? item;
@@ -110,16 +110,18 @@ function MultiSelect({
                   <Badge
                     variant="secondary"
                     key={`${item}-${i}`}
-                    className="mr-1 mb-1"
+                    className="mb-1 min-w-0 max-w-full"
                     onClick={() => {
                       if (!disabled) handleUnselect(item);
                     }}
                   >
-                    {label}
+                    <span className="truncate" title={label}>
+                      {label}
+                    </span>
                     <button
                       type="button"
                       disabled={disabled}
-                      className="ml-1 rounded-full outline-hidden ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      className="ml-1 shrink-0 rounded-full outline-hidden ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -133,7 +135,7 @@ function MultiSelect({
                 );
               })
             ) : (
-              <span className="text-muted-foreground">
+              <span className="text-muted-foreground truncate">
                 {placeholder || "Select options..."}
               </span>
             )}

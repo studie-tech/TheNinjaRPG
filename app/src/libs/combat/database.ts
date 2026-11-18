@@ -427,7 +427,7 @@ export const updateBattle = async (
 };
 
 /**
- * Insert battle actions and NPC template usage for analytics.
+ * Insert battle actions, NPC template usage and head-to-head outcome samples for analytics.
  * NPC allies inherit their team's outcome; opposing NPCs reverse Won/Lost while
  * preserving Fled. Deduplicate by content and outcome so a template on both teams
  * retains both win/loss records.
@@ -452,8 +452,31 @@ export const saveUsage = async (
       outcome === "Won" ? "Lost" : outcome === "Lost" ? "Won" : "Fled";
     const oppositeBattleWon =
       oppositeOutcome === "Won" ? 1 : oppositeOutcome === "Fled" ? 2 : 0;
-    // Basic actions from this user
-    const data: DataBattleAction[] = [];
+    const snapshot = curBattle.extraState.balanceParticipants?.[userId];
+    const players = curBattle.usersState.filter((u) => !u.isSummon);
+    // Ongoing battles without an initiation snapshot retain unknown demographics/order.
+    const demographics = {
+      userLevel: snapshot?.level ?? 0,
+      userRank: snapshot?.rank ?? ("NONE" as const),
+      turnOrder:
+        players.length === 2 && players.every((u) => !u.isAi)
+          ? (snapshot?.turnOrder ?? 0)
+          : 0,
+    };
+    // Only eligible head-to-head players contribute starting-order outcome samples.
+    const data: DataBattleAction[] =
+      !user.isAi &&
+      !user.isSummon &&
+      (demographics.turnOrder === 1 || demographics.turnOrder === 2)
+        ? [
+            {
+              type: "participant",
+              contentId: "player",
+              battleType,
+              battleWon,
+            },
+          ]
+        : [];
     user.usedActions?.forEach((action) => {
       data.push({
         type: action.type,
@@ -500,7 +523,10 @@ export const saveUsage = async (
     }, [] as DataBattleAction[]);
     // Upsert dataBattleActions
     if (uniqueData.length > 0) {
-      await insertDataBattleActionForSaveUsage(client, uniqueData);
+      await insertDataBattleActionForSaveUsage(
+        client,
+        uniqueData.map((entry) => ({ ...entry, ...demographics })),
+      );
     }
   }
 };

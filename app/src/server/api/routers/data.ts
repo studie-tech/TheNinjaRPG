@@ -35,6 +35,13 @@ import { getRankedRank } from "@/libs/ranked_pvp";
 import { collapseRewards } from "@/libs/rewards";
 import { isSkillVisible } from "@/libs/skillRequirements";
 import { summarizeBattleOutcomes } from "@/libs/statistics";
+import {
+  balanceConditions,
+  selectBalanceArchivePage,
+  selectBalanceArchives,
+  selectBalanceContent,
+  selectBalanceParticipants,
+} from "@/queries/balance";
 import { fetchBloodline } from "@/queries/bloodline";
 import {
   dateRangeConditions,
@@ -104,7 +111,6 @@ import {
   fetchContentViewerRole,
   fetchUser,
 } from "@/queries/profile";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -122,7 +128,9 @@ import {
   canViewRecruitmentAnalytics,
   canViewRevenueAnalytics,
 } from "@/utils/permissions";
+import { getBalancePeriodStart } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
+import { balanceUsageFilterSchema } from "@/validators/balance";
 import { bloodlineFilteringSchema } from "@/validators/bloodline";
 import { itemFilteringSchema } from "@/validators/item";
 import { jutsuFilteringSchema } from "@/validators/jutsu";
@@ -724,10 +732,55 @@ export const dataRouter = createTRPCRouter({
       ]);
       return { success: true, message: "Data battle action deleted" };
     }),
+  getBalanceOverview: publicProcedure
+    .input(
+      z
+        .object({
+          ...balanceUsageFilterSchema.shape,
+        })
+        .refine(
+          (input) =>
+            input.minLevel === undefined ||
+            input.maxLevel === undefined ||
+            input.minLevel <= input.maxLevel,
+          { message: "Minimum level must not exceed maximum level" },
+        ),
+    )
+    .query(async ({ ctx, input }) => {
+      const periodStart = getBalancePeriodStart();
+      const [content, participants] = await Promise.all([
+        selectBalanceContent(ctx.drizzle, input, periodStart),
+        selectBalanceParticipants(ctx.drizzle, input, periodStart),
+      ]);
+      return { periodStart, content, participants };
+    }),
+  getBalanceArchives: publicProcedure.query(({ ctx }) =>
+    selectBalanceArchives(ctx.drizzle),
+  ),
+  getBalanceArchivePage: publicProcedure
+    .input(
+      z.object({
+        periodStart: z.number().int().min(0),
+        cursor: z.number().int().min(0).default(0),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (input.periodStart >= getBalancePeriodStart())
+        throw serverError(
+          "BAD_REQUEST",
+          "Only completed balance periods can be downloaded",
+        );
+      const rows = await selectBalanceArchivePage(
+        ctx.drizzle,
+        input.periodStart,
+        input.cursor,
+      );
+      return { rows, nextCursor: rows.length === 1000 ? rows.at(-1)?.id : undefined };
+    }),
   getBloodlineBalanceStatistics: publicProcedure
     .input(
       z.object({
-        battleTypes: z.array(z.enum(BattleTypes)).optional(),
+        ...balanceUsageFilterSchema.shape,
         minCount: z.number().min(1).default(1),
         bloodlineRanks: z.array(z.enum(LetterRanks)).optional(),
         statClassifications: z.array(z.enum(StatTypes)).optional(),
@@ -737,12 +790,8 @@ export const dataRouter = createTRPCRouter({
       // Build where conditions for battle data
       const whereConditions: QueryCondition[] = [
         eq(dataBattleAction.type, "bloodline"),
+        ...balanceConditions(input),
       ];
-
-      // Add battle type filter
-      if (input.battleTypes && input.battleTypes.length > 0) {
-        whereConditions.push(inArray(dataBattleAction.battleType, input.battleTypes));
-      }
 
       // Build bloodline rank filter if needed
       const bloodlineWhereConditions: QueryCondition[] = [];
@@ -812,7 +861,7 @@ export const dataRouter = createTRPCRouter({
   getJutsuBalanceStatistics: publicProcedure
     .input(
       z.object({
-        battleTypes: z.array(z.enum(BattleTypes)).optional(),
+        ...balanceUsageFilterSchema.shape,
         minCount: z.number().min(1).default(1),
         jutsuEffects: z.array(z.string()).optional(),
         bloodlineIds: z.array(z.string()).optional(),
@@ -1057,7 +1106,7 @@ export const dataRouter = createTRPCRouter({
   getItemBalanceStatistics: publicProcedure
     .input(
       z.object({
-        battleTypes: z.array(z.enum(BattleTypes)).optional(),
+        ...balanceUsageFilterSchema.shape,
         minCount: z.number().min(1).default(1),
         itemTypes: z.array(z.enum(ItemTypes)).optional(),
         bloodlineIds: z.array(z.string()).optional(),
@@ -1444,12 +1493,16 @@ export const dataRouter = createTRPCRouter({
 /** Battle-action filters shared by the jutsu and item balance tables. */
 const contentBalanceConditions = (
   type: "jutsu" | "item",
-  input: { battleTypes?: BattleType[]; bloodlineIds?: string[] },
+  input: {
+    battleTypes?: BattleType[];
+    bloodlineIds?: string[];
+    userRanks?: (typeof UserRanks)[number][];
+    minLevel?: number;
+    maxLevel?: number;
+  },
 ): QueryCondition[] => [
   eq(dataBattleAction.type, type),
-  ...(input.battleTypes?.length
-    ? [inArray(dataBattleAction.battleType, input.battleTypes)]
-    : []),
+  ...balanceConditions(input),
   ...(input.bloodlineIds?.length
     ? [inArray(dataBattleAction.relatedBloodlineId, input.bloodlineIds)]
     : []),

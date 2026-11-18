@@ -16,7 +16,6 @@ import {
   deleteConversationForGET,
   deleteDailyBankInterestForGET,
   deleteDailyBankInterestForGET2,
-  deleteDataBattleActionForGET,
   deleteHistoricalAvatarForGET,
   deleteHistoricalIpForGET,
   deleteModerationScanForGET,
@@ -266,9 +265,6 @@ export async function GET(request: Request) {
 
     // Clear war kills older than 30 days
     await deleteWarKillForGET(drizzleDB, rangeCleanupBatchSize);
-
-    // Clear dataBattleAction entries older than 30 days
-    await deleteDataBattleActionForGET(drizzleDB, rangeCleanupBatchSize);
 
     // Handle expired exclusive raids - return sectors to neutral if raid timed out without boss defeat
     await cleanupExpiredExclusiveRaids(drizzleDB);

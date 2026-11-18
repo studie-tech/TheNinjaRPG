@@ -2,8 +2,10 @@
 
 import type React from "react";
 import { api } from "@/app/_trpc/client";
+import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import { ClearContentBattleDataButton } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import StatisticsFiltering, {
   getFilter as getStatisticsFilter,
@@ -25,7 +27,7 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
   const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const { data, isPending } = api.data.getStatistics.useQuery(
     { id, type, ...filterParams },
-    { enabled: !!id },
+    { ...balanceReportQueryOptions, enabled: !!id },
   );
   const info = data?.info;
   const filteredUsage = data?.usage;
@@ -58,12 +60,23 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
   ) : (
     filtering
   );
-  const usage =
-    total > 0 ? (
-      filteredUsage && <UsageStats usage={filteredUsage} />
-    ) : (
-      <NoStatistics text="No battles recorded for this filter." />
-    );
+  const usage = (
+    <>
+      <p className="text-muted-foreground mb-3 text-sm">
+        Battle usage covers the current 14-day UTC reporting period within the selected
+        dates. Completed periods can be downloaded from the{" "}
+        <Link href="/manual/balance" className="underline">
+          balance overview
+        </Link>
+        .
+      </p>
+      {total > 0 ? (
+        filteredUsage && <UsageStats usage={filteredUsage} />
+      ) : (
+        <NoStatistics text="No battles recorded for this filter." />
+      )}
+    </>
+  );
   const hasLevelData = levelDistribution?.some((entry) => entry.count > 0) ?? false;
 
   return (

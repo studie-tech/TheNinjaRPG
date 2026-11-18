@@ -1,5 +1,9 @@
 import { LetterRanks, StatTypes } from "@/drizzle/constants";
 import {
+  balanceDemographicFields,
+  readBalanceUsageFilter,
+} from "@/layout/BalanceFiltering";
+import {
   battleTypesField,
   buildFilter,
   ContentFiltering,
@@ -17,6 +21,7 @@ const BLOODLINE_BALANCE_FILTERING_SCHEMA = defineFilteringSchema({
   fields: [
     battleTypesField(["COMBAT", "SPARRING"]),
     minCountField,
+    ...balanceDemographicFields,
     {
       id: "bloodlineRanks",
       label: "Bloodline Ranks",
@@ -50,7 +55,9 @@ export const getFilter = (state: BloodlineBalanceFilteringState) =>
   buildFilter(state.cf, BLOODLINE_BALANCE_FILTERING_SCHEMA);
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(BLOODLINE_BALANCE_FILTERING_SCHEMA);
+  const cf = useContentFiltering(BLOODLINE_BALANCE_FILTERING_SCHEMA, {
+    initialValues: readBalanceUsageFilter,
+  });
   return {
     ...cf.values,
     cf,

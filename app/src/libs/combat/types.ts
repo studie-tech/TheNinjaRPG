@@ -473,6 +473,12 @@ export type PreBattleGearModifiers = {
  * Static data is stored once at battle initiation and looked up by ID.
  */
 export type ExtraState = {
+  /** Account progression and starting order, frozen before combat scaling and transformations. */
+  balanceParticipants?: Record<
+    string,
+    { level: number; rank: BattleUserState["rank"]; turnOrder: number }
+  >;
+
   /** Hourly patrol reservation frozen at admission; settlement needs no village read. */
   villageDuty?: {
     villageId: string;

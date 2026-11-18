@@ -4,6 +4,7 @@ import { Trash2 } from "lucide-react";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useBalanceStatisticsCache } from "@/hooks/useBalanceStatistics";
 import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
@@ -32,12 +33,13 @@ export const ClearDataConfirm: React.FC<ClearDataConfirmProps> = (props) => {
 
 /** Clear every battle statistic of one content type. */
 export const ClearBattleDataButton: React.FC<ClearBattleDataButtonProps> = (props) => {
-  const { type, label, onCleared } = props;
+  const { type, label } = props;
+  const { refresh } = useBalanceStatisticsCache();
   const { mutate: deleteAllData, isPending: isDeleting } =
     api.data.deleteAllDataBattleAction.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
-        if (result.success) await onCleared();
+        if (result.success) await refresh();
       },
     });
 
@@ -50,9 +52,10 @@ export const ClearBattleDataButton: React.FC<ClearBattleDataButtonProps> = (prop
         <Loader explanation="Deleting data" />
       ) : (
         <>
-          Are you sure you want to clear all {label} battle action data? This action
-          cannot be undone and will reset all {label} usage statistics. This action will
-          be logged for future audit and review.
+          Are you sure you want to clear all {label} battle action data? This resets the
+          current reporting period only; completed archives are retained. This action
+          cannot be undone and will reset current {label} usage statistics. This action
+          will be logged for future audit and review.
         </>
       )}
     </ClearDataConfirm>
@@ -64,12 +67,12 @@ export const ClearContentBattleDataButton: React.FC<
   ClearContentBattleDataButtonProps
 > = (props) => {
   const { id, type, label, name } = props;
-  const utils = api.useUtils();
+  const { refresh } = useBalanceStatisticsCache();
   const { mutate: deleteSingleData, isPending: isDeleting } =
     api.data.deleteSingleDataBattleAction.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
-        if (result.success) await utils.data.getStatistics.invalidate();
+        if (result.success) await refresh();
       },
     });
 
@@ -83,9 +86,9 @@ export const ClearContentBattleDataButton: React.FC<
       ) : (
         <>
           Are you sure you want to clear all battle action data for{" "}
-          <strong>{name}</strong>? This action cannot be undone and will reset all usage
-          statistics for this {label}. This action will be logged for future audit and
-          review.
+          <strong>{name}</strong>? Completed archives are retained. This action cannot
+          be undone and will reset current usage statistics for this {label}. This
+          action will be logged for future audit and review.
         </>
       )}
     </ClearDataConfirm>
@@ -102,8 +105,6 @@ interface ClearBattleDataButtonProps {
   type: "jutsu" | "item" | "bloodline" | "ai";
   /** Content name in the dialog copy, e.g. "jutsu". */
   label: string;
-  /** Refresh the statistics shown behind the dialog. */
-  onCleared: () => Promise<unknown>;
 }
 
 interface ClearContentBattleDataButtonProps {

@@ -35,7 +35,6 @@ import {
   conversation,
   conversationComment,
   dailyBankInterest,
-  dataBattleAction,
   forumPost,
   historicalAvatar,
   historicalIp,
@@ -567,17 +566,6 @@ export const deleteWarKillForGET = (
       ),
     )
     .orderBy(warKill.killedAt)
-    .limit(rangeCleanupBatchSize);
-
-/** Build the `dataBattleAction` deletion for `GET`, using predicates on `updatedAt`. */
-export const deleteDataBattleActionForGET = (
-  client: Pick<DrizzleClient, "delete">,
-  rangeCleanupBatchSize: 10000,
-) =>
-  client
-    .delete(dataBattleAction)
-    .where(lt(dataBattleAction.updatedAt, sql`CURRENT_TIMESTAMP(3) - INTERVAL 30 DAY`))
-    .orderBy(dataBattleAction.updatedAt)
     .limit(rangeCleanupBatchSize);
 
 /** Build the `userNindo` listing for `GET`, using predicates on `content`. */

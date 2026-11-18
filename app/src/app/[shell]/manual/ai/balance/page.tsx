@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import AiBalanceFiltering, {
   getFilter,
   useFiltering,
@@ -11,6 +12,7 @@ import AiBalanceFiltering, {
 import { ClearBattleDataButton } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
 import { ContentLinksCell } from "@/layout/ContentLinksCell";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
@@ -52,9 +54,10 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
   const filter = getFilter(filterState);
 
   // Queries
-  const { data, isPending } = api.data.getAiBalanceStatistics.useQuery(filter);
-
-  const utils = api.useUtils();
+  const { data, isPending } = api.data.getAiBalanceStatistics.useQuery(
+    filter,
+    balanceReportQueryOptions,
+  );
 
   // Process data for table
   const tableData =
@@ -100,26 +103,26 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
   return (
     <ContentBox
       title="AI Balance"
-      subtitle="Data since last reset"
+      subtitle="Current two-week reporting period"
       defaultBackHref="/manual/ai"
       padding={false}
       topRightContent={
         <div className="flex items-center gap-2">
           {navTabs}
           <AiBalanceFiltering state={filterState} />
-          {canDelete && (
-            <ClearBattleDataButton
-              type="ai"
-              label="AI"
-              onCleared={() => utils.data.getAiBalanceStatistics.invalidate()}
-            />
-          )}
+          {canDelete && <ClearBattleDataButton type="ai" label="AI" />}
         </div>
       }
     >
       <p className="p-3">
         Here we aim to give an overview of AI usage & win-statistics, so as to make it
         transparent if any AI is over/under-powered and in need of balance adjustment.
+        Usage covers the current 14-day UTC reporting period. Completed periods can be
+        downloaded from the{" "}
+        <Link href="/manual/balance" className="underline">
+          balance overview
+        </Link>
+        .
       </p>
       {isPending && <Loader explanation="Loading data" />}
       {!isPending && tableData && <Table data={tableData} columns={columns} />}

@@ -1,4 +1,8 @@
 import {
+  balanceDemographicFields,
+  readBalanceUsageFilter,
+} from "@/layout/BalanceFiltering";
+import {
   battleTypesField,
   buildFilter,
   ContentFiltering,
@@ -18,6 +22,7 @@ const JUTSU_BALANCE_FILTERING_SCHEMA = defineFilteringSchema({
   fields: [
     battleTypesField(["RANKED_PVP", "COMBAT", "RANKED_SPARRING", "SPARRING"]),
     minCountField,
+    ...balanceDemographicFields,
     {
       id: "jutsuEffects",
       label: "Jutsu Effects",
@@ -51,7 +56,10 @@ export const getFilter = (state: JutsuBalanceFilteringState) =>
   buildFilter(state.cf, JUTSU_BALANCE_FILTERING_SCHEMA);
 
 export const useFiltering = (options?: ContentFilteringOptions) => {
-  const cf = useContentFiltering(JUTSU_BALANCE_FILTERING_SCHEMA, options);
+  const cf = useContentFiltering(JUTSU_BALANCE_FILTERING_SCHEMA, {
+    ...options,
+    initialValues: readBalanceUsageFilter,
+  });
   return {
     ...cf.values,
     cf,
