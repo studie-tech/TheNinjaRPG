@@ -139,14 +139,16 @@ describeWithDatabase("batched UserData cron updates", () => {
   });
 
   it("keeps each default batch on a primary-key range plan", async () => {
+    // Keep each batch selective so scanning the full table is not a cheaper valid plan.
     await insertUsers(
-      Array.from({ length: 450 }, (_, index) => ({
+      Array.from({ length: 4500 }, (_, index) => ({
         userId: `plan-${String(index).padStart(4, "0")}`,
         username: `plan-${index}`,
-        dailyCountersResetAt: yesterday,
+        dailyCountersResetAt: index < 450 ? yesterday : dayStart,
       })),
     );
     const db = await getTestDatabase();
+    await db.execute(sql`ANALYZE TABLE ${userData}`);
     const { statements } = await recordQueries(() =>
       updateUserDataCandidates(db, dailyCountersPendingWhere(dayStart), (batch) =>
         updateUserDataForDailyCounters(db, dayStart, batch),
