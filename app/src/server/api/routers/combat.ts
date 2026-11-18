@@ -1682,7 +1682,9 @@ export const combatRouter = createTRPCRouter({
 
         if (result.rowsAffected > 0) {
           const userPatch = await rememberPreference(userBattle.battleType);
-          announceLobbyChange(userBattle);
+          // Taking control back applies the returned battle, which reaches the requester
+          // before the announcement does; a handover reads the battle again.
+          after(() => announceLobbyChange(userBattle, !input.enabled));
           return {
             success: true,
             userPatch,
@@ -4854,10 +4856,17 @@ export const processUsersForBattle = async (
 
 /**
  * Tell a battle's clients a lobby change landed. The announced version is one past the
- * saved one so every client, the requester included, refetches getBattle.
+ * saved one so every client, the requester included, refetches getBattle. A requester
+ * that applies the returned battle is announced the saved version, so only clients
+ * still holding an older one refetch.
  */
-const announceLobbyChange = (userBattle: { id: string; version: number }) => {
-  void pusher.trigger(userBattle.id, "event", { version: userBattle.version + 1 });
+const announceLobbyChange = (
+  userBattle: { id: string; version: number },
+  requesterHasBattle = false,
+) => {
+  void pusher.trigger(userBattle.id, "event", {
+    version: requesterHasBattle ? userBattle.version : userBattle.version + 1,
+  });
 };
 
 /** Reserve one shared copy and compensate rejected admission without claiming its owner or using a transaction. */

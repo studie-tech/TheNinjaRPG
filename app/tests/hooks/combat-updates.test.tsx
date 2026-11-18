@@ -227,6 +227,21 @@ it("does not refresh when the mutation response precedes its broadcast", async (
   expect(reads).toHaveLength(2);
 });
 
+it("skips a broadcast whose version the cache already holds before the page renders it", async () => {
+  mount();
+  await waitFor(() => expect(reads).toHaveLength(1));
+  const key = getQueryKey(testApi.combat.getBattle, { battleId: "battle" }, "query");
+  await act(async () => {
+    // A returned battle applied to the cache, with its broadcast arriving before the render.
+    queryClient.setQueryData(key, stateAt(2));
+    await onEvent({ version: 2 });
+  });
+  expect(reads).toHaveLength(1);
+  await waitFor(() => expect(latestState.battle?.version).toBe(2));
+  await act(async () => onEvent({ version: 3 }));
+  expect(reads).toHaveLength(2);
+});
+
 it("cancels an older poll and recovers without regressing the committed action", async () => {
   mount();
   await beginAction();
