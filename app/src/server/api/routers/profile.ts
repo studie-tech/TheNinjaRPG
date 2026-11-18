@@ -188,7 +188,6 @@ import {
   findUserDataForGetPublicUser2,
   findUserDataForGetSeichiSilverForStaff,
   findUserDataForGetUsername,
-  findUserDataForQueryUpdatedUser,
   findUserDataForUpdateAi,
   findUserDataForUpdateUser,
   findUserDataForUpdateUsername,
@@ -325,6 +324,7 @@ import {
   hydrateQuestCollections,
 } from "@/server/utils/questCollections";
 import { handleQuestConsequences } from "@/server/utils/questConsequences";
+import { fetchProfileUser } from "@/server/utils/questDefinitions";
 import {
   applyQuestParty,
   type LoadedQuestParty,
@@ -2688,7 +2688,7 @@ const fetchUpdatedUserOnce = async (
   // when the cron tick actually runs.
   const shrineLobbyStaleBefore = shrineLobbyFreshAfter(now);
 
-  const queryUpdatedUser = () => findUserDataForQueryUpdatedUser(client, userId);
+  const queryUpdatedUser = () => fetchProfileUser(client, userId);
 
   // Ensure we can fetch the user
   const achievementsRead = fetchAchievementCatalogue(client);

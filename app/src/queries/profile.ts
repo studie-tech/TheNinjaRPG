@@ -1982,6 +1982,8 @@ export const findUserDataForQueryUpdatedUser = (
       },
       userQuests: {
         ...userQuestHistoryRelation,
+        // Definitions come from the revision-keyed cache; see `fetchProfileUser`.
+        with: { quest: { columns: questRevisionColumns } },
         orderBy: sql`FIELD(${questHistory.questType}, 'daily', 'tier') ASC`,
       },
       completedQuests: completedQuestHistoryRelation,
@@ -2000,6 +2002,26 @@ export const findUserDataForQueryUpdatedUser = (
       queue: { orderBy: asc(userQueue.position) },
     },
   });
+
+/**
+ * The quest columns read with each profile: the content revision, and the raid state
+ * combat writes without changing that revision.
+ */
+export const questRevisionColumns = {
+  id: true,
+  updatedAt: true,
+  raidBossCurrentHealth: true,
+  raidStartedAt: true,
+  raidEndsAt: true,
+  raidCaptureDeadline: true,
+  raidGracePeriodEnd: true,
+} as const;
+
+/** Build the `quest` selection of complete definitions for `fetchProfileUser`. */
+export const selectQuestDefinitions = (
+  client: Pick<DrizzleClient, "select">,
+  questIds: string[],
+) => client.select().from(quest).where(inArray(quest.id, questIds));
 
 /** Build the `userVote` insert for `fetchUpdatedUserOnce`. */
 export const insertUserVoteForFetchUpdatedUserOnce = (

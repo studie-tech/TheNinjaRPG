@@ -202,47 +202,81 @@ export const createRuntimeCache = <Client, T>({
  * entry must carry the revision it was read at (for example an immutable row's id and
  * version), and callers serve it only when that matches a revision they have just read,
  * so a write needs no invalidation. Reads and writes that fail behave as misses.
+ * With `memoryLimit`, each instance also keeps up to that many recently used entries
+ * in memory and reads the Runtime Cache only for the others.
  */
 export const createRuntimeEntryCache = <T>({
   name,
   ttlSeconds,
+  memoryLimit = 0,
   store,
 }: {
   /** Key prefix and Runtime Cache tag: letters, digits and dashes. */
   name: string;
   /** Entries expire this long after they were written; reads do not extend them. */
   ttlSeconds: number;
+  /** Entries this instance keeps in memory, least recently used evicted first. */
+  memoryLimit?: number;
   /** Replaces the Runtime Cache, for tests; such caches stay out of `invalidateRuntimeCaches`. */
   store?: RuntimeCache;
 }) => {
   const cache = store ?? runtimeCache;
   const tag = `${name}:entries`;
   const entryKey = (key: string) => `${name}:${key}`;
-  const clear = () => cache.expireTag(tag).catch(() => undefined);
+  const memory = new Map<string, { value: T; expiresAt: number }>();
+  const remember = (
+    key: string,
+    value: T,
+    expiresAt = Date.now() + ttlSeconds * 1000,
+  ) => {
+    if (memoryLimit <= 0) return;
+    memory.delete(key);
+    memory.set(key, { value, expiresAt });
+    while (memory.size > memoryLimit) {
+      const oldest = memory.keys().next().value;
+      if (oldest !== undefined) memory.delete(oldest);
+    }
+  };
+  const clear = () => {
+    memory.clear();
+    return cache.expireTag(tag).catch(() => undefined);
+  };
   if (!store) invalidators.add(clear);
 
   return {
     /** The stored entries among `keys`. */
     read: async (keys: string[]): Promise<Map<string, T>> => {
+      const found = new Map<string, T>();
+      const now = Date.now();
+      const remote = keys.filter((key) => {
+        const held = memory.get(key);
+        if (!held || held.expiresAt <= now) return true;
+        remember(key, held.value, held.expiresAt);
+        found.set(key, held.value);
+        return false;
+      });
       const values = await Promise.all(
-        keys.map((key) =>
+        remote.map((key) =>
           cache.get(entryKey(key)).then(
             (value) => value as T | null,
             () => null,
           ),
         ),
       );
-      const found = new Map<string, T>();
-      keys.forEach((key, index) => {
+      remote.forEach((key, index) => {
         const value = values[index];
-        if (value) found.set(key, value);
+        if (!value) return;
+        found.set(key, value);
+        remember(key, value);
       });
       return found;
     },
-    write: (key: string, value: T): Promise<void> =>
-      cache
+    write: (key: string, value: T): Promise<void> => {
+      remember(key, value);
+      return cache
         .set(entryKey(key), value, { ttl: ttlSeconds, tags: [tag] })
-        .catch(() => undefined),
+        .catch(() => undefined);
+    },
     /** Drop every entry; freshness never depends on it. */
     clear,
   };

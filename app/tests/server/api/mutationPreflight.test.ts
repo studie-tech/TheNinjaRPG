@@ -30,7 +30,7 @@ const procedureSource = (router: string, name: string) => {
   const start = file.indexOf(`\n  ${name}: protectedProcedure`);
   expect(start).toBeGreaterThan(-1);
   const body = file.slice(start + 1);
-  const end = body.search(/\n  \w+: protectedProcedure/);
+  const end = body.search(/\n {2}\w+: protectedProcedure/);
   return end === -1 ? body : body.slice(0, end);
 };
 let identity = 0;
@@ -118,7 +118,7 @@ describe("self-guarded Pyramid mutations", () => {
         throw new Error("Unexpected profile write");
       });
       // All catalogue/settings/war queries are reads; the profile snapshot contains an
-      // isolated run with a hidden definition and no client tracker to reveal it.
+      // isolated run whose definition is unreadable and no client tracker to reveal it.
       const emptyRows = () => {
         const rows = Promise.resolve([]);
         return Object.assign(rows, {
@@ -131,7 +131,12 @@ describe("self-guarded Pyramid mutations", () => {
       };
       const snapshot = {
         userQuests: [
-          { isolated: true, completed: 0, endAt: null, quest: { hidden: true } },
+          {
+            isolated: true,
+            completed: 0,
+            endAt: null,
+            quest: { id: "hidden-run", updatedAt: new Date(0) },
+          },
         ],
         queue: [{ kind: "TRAINING", position: 0 }],
         questData: [],

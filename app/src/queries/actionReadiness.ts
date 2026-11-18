@@ -1,12 +1,12 @@
 import { and, eq, getTableColumns, is, SQL, sql } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import { nextSnapshotSql } from "@/queries/concurrency";
-import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
 import type {
   ActionReadiness,
   ActionReadinessWrite,
 } from "@/server/utils/actionReadiness";
+import { fetchProfileUser } from "@/server/utils/questDefinitions";
 
 /** Build recovery for actions with no account write; callers await it in their existing mutation phase. */
 export const updateUserForActionReadiness = (
@@ -45,7 +45,7 @@ export const actionReadinessSqlSet = (
 
 /** Load an action actor with the existing profile snapshot query, without running hydration or settlement reads. */
 export const fetchActionUser = async (client: DrizzleClient, userId: string) => {
-  const user = await findUserDataForQueryUpdatedUser(client, userId);
+  const user = await fetchProfileUser(client, userId);
   if (!user) throw new Error("User not found");
   return user;
 };

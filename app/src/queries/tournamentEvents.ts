@@ -13,9 +13,9 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
-import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
+import { fetchProfileUser } from "@/server/utils/questDefinitions";
 import { ObjectiveReward } from "@/validators/rewards";
 import type { EventTournamentState } from "@/validators/tournament";
 
@@ -29,7 +29,7 @@ export const fetchEvent = (client: DrizzleClient, id: string) =>
 /** Fetch the account and distinct mastered jutsu needed for event eligibility in parallel. */
 export const fetchEventUser = async (client: DrizzleClient, id: string) => {
   const [user, mastered] = await Promise.all([
-    findUserDataForQueryUpdatedUser(client, id),
+    fetchProfileUser(client, id),
     client.query.userJutsu.findMany({
       where: and(eq(userJutsu.userId, id), gte(userJutsu.level, JUTSU_TRAIN_LEVEL_CAP)),
       columns: { jutsuId: true },

@@ -283,4 +283,50 @@ describe("createRuntimeEntryCache", () => {
     store.expireTag.mockRejectedValue(new Error("cache unavailable"));
     await expect(cache.clear()).resolves.toBeUndefined();
   });
+
+  it("serves recently used entries from memory up to its limit until the TTL", async () => {
+    setSystemTime(start);
+    try {
+      const { store } = memoryStore();
+      const shared = createRuntimeEntryCache<{ rev: number }>({
+        name: "memory-entries",
+        ttlSeconds: TTL_SECONDS,
+        store,
+      });
+      const cache = createRuntimeEntryCache<{ rev: number }>({
+        name: "memory-entries",
+        ttlSeconds: TTL_SECONDS,
+        memoryLimit: 2,
+        store,
+      });
+      await Promise.all(["a", "b", "c"].map((key, rev) => shared.write(key, { rev })));
+      expect([...(await cache.read(["a", "b"]))]).toEqual([
+        ["a", { rev: 0 }],
+        ["b", { rev: 1 }],
+      ]);
+      store.get.mockClear();
+      // Held entries skip the Runtime Cache; reading `c` evicts the least recent, `b`.
+      expect((await cache.read(["a"])).get("a")).toEqual({ rev: 0 });
+      expect((await cache.read(["c"])).get("c")).toEqual({ rev: 2 });
+      expect(store.get.mock.calls.map(([key]) => key)).toEqual(["memory-entries:c"]);
+      await cache.read(["a", "b"]);
+      expect(store.get.mock.calls.map(([key]) => key)).toEqual([
+        "memory-entries:c",
+        "memory-entries:b",
+      ]);
+      // Written entries are held too, and expire with the TTL.
+      await cache.write("d", { rev: 3 });
+      store.get.mockClear();
+      expect((await cache.read(["d"])).get("d")).toEqual({ rev: 3 });
+      expect(store.get).not.toHaveBeenCalled();
+      setSystemTime(new Date(start.getTime() + TTL_SECONDS * 1000));
+      await cache.read(["d"]);
+      expect(store.get).toHaveBeenCalledWith("memory-entries:d");
+      // Clearing drops held entries along with the shared ones.
+      await cache.clear();
+      expect((await cache.read(["a", "b", "c", "d"])).size).toBe(0);
+    } finally {
+      setSystemTime();
+    }
+  });
 });

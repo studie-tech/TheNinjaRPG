@@ -41,10 +41,10 @@ import {
   RAID_CHAT_CONVERSATION_LIKE_PATTERN,
 } from "@/libs/raids";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
-import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import { activeWarAllyWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
+import { fetchProfileUser } from "@/server/utils/questDefinitions";
 
 /** Queue rows with no live battle: open, or held by a start claim. */
 const battleOpenOrClaimed = or(
@@ -992,4 +992,4 @@ export const fetchRaidListUser = async (client: DrizzleClient, userId: string) =
 
 /** Load the actor's profile relations for local recovery without running profile hydration or settlement reads. */
 export const fetchRaidJoinUser = (client: DrizzleClient, userId: string) =>
-  findUserDataForQueryUpdatedUser(client, userId);
+  fetchProfileUser(client, userId);
