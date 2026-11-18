@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronLeft, ExternalLink, Lock, X } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { SkillTree, SkillTreeFolder, UserSkill } from "@/drizzle/schema";
@@ -247,11 +247,14 @@ export const SkillCard: React.FC<SkillCardProps> = ({
   const isLocked = !effectivelyOwned && !status.hasPrereqs;
   const isUnaffordable = !effectivelyOwned && status.hasPrereqs && !status.hasPoints;
   const isAvailable = !effectivelyOwned && status.hasPrereqs && status.hasPoints;
+  const statsId = useId();
+  const hasStats = !!stats && stats.length > 0;
 
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-describedby={hasStats ? statsId : undefined}
       aria-label={`${skill.name}, Tier ${skill.tier}, ${effectivelyOwned ? "Active" : isLocked ? "Prerequisites required" : isUnaffordable ? "Unavailable" : "Available"}`}
       className={`relative w-full cursor-pointer rounded-lg border-2 p-3 text-left transition-all duration-200 hover:shadow-md ${
         effectivelyOwned
@@ -305,8 +308,8 @@ export const SkillCard: React.FC<SkillCardProps> = ({
         </Badge>
       </div>
 
-      {stats && stats.length > 0 && (
-        <dl className="mt-2 space-y-0.5 border-t pt-1 text-[11px]">
+      {hasStats && (
+        <dl id={statsId} className="mt-2 space-y-0.5 border-t pt-1 text-[11px]">
           {stats.map(({ label, value }) => (
             <div key={`${label}:${value}`} className="flex justify-between gap-2">
               <dt className="truncate text-muted-foreground">{label}</dt>
