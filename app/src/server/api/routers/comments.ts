@@ -64,7 +64,6 @@ import { fetchUser } from "@/queries/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
-  deferredRatelimitMiddleware,
   errorResponse,
   protectedProcedure,
   publicProcedure,
@@ -478,11 +477,11 @@ export const commentsRouter = createTRPCRouter({
     }),
   createConversationComment: protectedProcedure
     .meta({ mcp: { description: "Send a message in a conversation" } })
-    .use(deferredRatelimitMiddleware)
+    .use(ratelimitMiddleware)
     .input(mutateCommentSchema)
     .output(baseServerResponse.extend({ commentId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      // Fetch data; the rate limit clears alongside the reads, before any write
+      // Fetch data
       const [convo, user, quotes, sender, moderationResult] = await Promise.all([
         fetchConversation({
           client: ctx.drizzle,
@@ -494,7 +493,6 @@ export const commentsRouter = createTRPCRouter({
         fetchComments(ctx.drizzle, input.quoteIds || []),
         input.senderId ? fetchUser(ctx.drizzle, input.senderId) : null,
         checkForBadWords(input.comment),
-        ctx.waitForRateLimit(),
       ]);
 
       // Resolve effective poster (allow staff to post as AI)
