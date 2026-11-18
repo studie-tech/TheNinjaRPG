@@ -816,7 +816,7 @@ export const ContentFiltering = <
 
       <PopoverContent
         className={cn(
-          popoverClassName ?? "min-w-96",
+          popoverClassName ?? "w-96 max-w-[calc(100vw-2rem)]",
           "max-h-[var(--radix-popover-content-available-height)] overflow-y-auto",
         )}
       >
