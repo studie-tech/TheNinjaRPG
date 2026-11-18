@@ -24,6 +24,7 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
   PET_ABILITY_SLOTS_BY_RARITY,
   PET_BATTLE_CONFIG,
+  PET_EXPERIENCE_TRANSFER_COST,
   PET_FEED_COOLDOWN_HOURS,
   PET_FEED_EXPERIENCE_BY_RARITY,
   PET_RANKS,
@@ -68,6 +69,7 @@ let owner: {
   rank: string;
   reputationPoints: number;
   seichiSilver: number;
+  money: number;
   sector: number;
   battleId: string | null;
   isOutlaw: boolean;
@@ -99,6 +101,7 @@ let unlockSlot: ReturnType<typeof vi.fn>;
 let generate: ReturnType<typeof vi.fn>;
 let assign: ReturnType<typeof vi.fn>;
 let evolve: ReturnType<typeof vi.fn>;
+let transfer: ReturnType<typeof vi.fn>;
 let timeDiff: number;
 let previousBattleEnabled: boolean;
 const prepareUserUpdate = vi.fn<() => number | undefined>(() => 17);
@@ -125,6 +128,7 @@ beforeEach(() => {
     rank: "JONIN",
     reputationPoints: 1000,
     seichiSilver: 100,
+    money: PET_EXPERIENCE_TRANSFER_COST * 2,
     sector: 1,
     battleId: null,
     isOutlaw: false,
@@ -151,6 +155,9 @@ beforeEach(() => {
     experience: 0,
     storedExperience: 0,
     revision: 0,
+    potentialValue: 1,
+    potentialRevealed: true,
+    potentialChances: [],
     speciesId: "pet-species-0",
     species: petSpeciesFixture({ rarity: "UNCOMMON" }),
     paletteIndex: 0,
@@ -235,6 +242,7 @@ beforeEach(() => {
     userPatch: { petExperience: 99 },
   }));
   evolve = vi.fn(() => ({ success: true, message: "Evolved" }));
+  transfer = vi.fn(() => ({ success: true, message: "Experience transferred" }));
   Object.assign(vi.spyOn(client, "api" as never), {
     pets: testApi.pets,
     ai: testApi.ai,
@@ -334,6 +342,18 @@ const mount = (strictMode = false) => {
     if (path === "pets.updateAiConfig") return saveAi(input);
     if (path === "pets.generateAppearance") return generate(input);
     if (path === "pets.assignExperience") return assign(input);
+    if (path === "pets.revealPotential") {
+      data = {
+        ...data,
+        pet: { ...data.pet!, potentialValue: 5, potentialRevealed: true },
+      };
+      return {
+        success: true,
+        message: "Companion potential revealed.",
+        userPatch: { updatedAt: new Date(owner.updatedAt.getTime() + 1000) },
+      };
+    }
+    if (path === "pets.transferExperience") return transfer(input);
     if (path === "pets.rankUp") return evolve(input);
     throw new Error(`Unexpected procedure ${path}`);
   });
@@ -2117,7 +2137,11 @@ it.each([true, false])(
       message: "Assigned",
       ...getAssignExperienceUserUpdate({
         user: owner as never,
-        pet: { ...data.pet!, generationToken: null },
+        pet: {
+          ...data.pet!,
+          potentialValue: data.pet!.potentialValue ?? 1,
+          generationToken: null,
+        },
         stats: {
           offence: 11,
           defence: 10,
@@ -2191,4 +2215,134 @@ it("reconciles saved settings and the owner timestamp without reloading pet, col
     queryClient.getQueryData<RouterOutputs["pets"]["getCollection"]>(collectionKey)
       ?.pets[0],
   ).toMatchObject({ name: "Kumo", revision: 1 });
+});
+
+it("reveals a bounded cap bonus with no stat allocation controls", async () => {
+  const cachedOwner = observeProfileCache();
+  data.pet = {
+    ...data.pet!,
+    potentialValue: null,
+    potentialRevealed: false,
+    potentialChances: [0, 0, 0, 0, 1],
+  };
+  const view = mount(true);
+  await view.findByRole("tab", { name: "Training" });
+  selectTab(view, "Training");
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  getPet.mockClear();
+  expect(view.getByText(/Potential unrevealed/)).toBeTruthy();
+  const button = view
+    .getAllByRole("button", { name: "Reveal potential" })
+    .find((entry) => entry.tagName === "BUTTON")!;
+  fireEvent.click(button);
+  const dialog = await view.findByRole("dialog", {
+    name: "Reveal companion potential",
+  });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+  expect(await view.findByText("Perfect · 150% of rank stat caps")).toBeTruthy();
+  expect(view.queryByText(/points to allocate/)).toBeNull();
+  expect(view.getByText(/HP and abilities are unchanged/)).toBeTruthy();
+  await waitFor(() =>
+    expect(cachedOwner()?.updatedAt).toEqual(
+      new Date(owner.updatedAt.getTime() + 1000),
+    ),
+  );
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  expect(getPet).toHaveBeenCalledTimes(1);
+  expect(getUser).not.toHaveBeenCalled();
+});
+
+it("reads companions once after a transfer and reconciles the owner without a profile read", async () => {
+  owner.activePetId = "second-pet";
+  const cachedOwner = observeProfileCache();
+  data.pet = { ...data.pet!, experience: 1000 };
+  data.pets = [data.pet, { ...data.pet, id: "second-pet", name: "Tama" }];
+  transfer.mockImplementation(() => {
+    data = { ...data, pet: { ...data.pet!, experience: 900 } };
+    return {
+      success: true,
+      message: "Experience transferred",
+      userPatch: { updatedAt: new Date(owner.updatedAt.getTime() + 1000) },
+      userDelta: { money: -PET_EXPERIENCE_TRANSFER_COST, petExperience: 100 },
+    };
+  });
+  const view = mount();
+  await view.findByRole("tab", { name: "Training" });
+  selectTab(view, "Training");
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  getPet.mockClear();
+  fireEvent.click(view.getByText("Transfer assigned experience"));
+  fireEvent.change(view.getByLabelText("Destination companion"), {
+    target: { value: "second-pet" },
+  });
+  fireEvent.input(
+    view.getByRole("spinbutton", { name: "Assigned XP to move (maximum 700)" }),
+    { target: { value: "100" } },
+  );
+  fireEvent.click(
+    view
+      .getAllByRole("button", { name: "Transfer experience" })
+      .find((entry) => entry.tagName === "BUTTON")!,
+  );
+  const dialog = await view.findByRole("dialog", {
+    name: "Transfer from Miso to Tama",
+  });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+  await waitFor(() => expect(transfer).toHaveBeenCalledTimes(1));
+  expect(transfer).toHaveBeenCalledWith({
+    petId: "companion",
+    destinationPetId: "second-pet",
+    amount: 100,
+  });
+  await waitFor(() =>
+    expect(cachedOwner()).toMatchObject({
+      updatedAt: new Date(owner.updatedAt.getTime() + 1000),
+      money: owner.money - PET_EXPERIENCE_TRANSFER_COST,
+      petExperience: owner.petExperience + 100,
+    }),
+  );
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  expect(getPet).toHaveBeenCalledTimes(1);
+  expect(getUser).not.toHaveBeenCalled();
+});
+
+it("keeps assigned-XP transfer controls collapsed until requested", async () => {
+  data.pet = { ...data.pet!, experience: 0 };
+  data.pets.push({ ...data.pets[0]!, id: "second-pet", name: "Tama" });
+  const view = mount();
+  await view.findByRole("tab", { name: "Training" });
+  selectTab(view, "Training");
+  const summary = view.getByText("Transfer assigned experience");
+  expect(summary.closest("details")?.open).toBe(false);
+  fireEvent.click(summary);
+  expect(
+    view.getByText("Assign experience to this companion before transferring it."),
+  ).toBeTruthy();
+  expect(view.queryByLabelText("Destination companion")).toBeNull();
+});
+
+it("explains an over-limit transfer amount and offers confirmation only for a valid preview", async () => {
+  data.pet = { ...data.pet!, experience: 1000 };
+  data.pets.push({ ...data.pets[0]!, id: "second-pet", name: "Tama" });
+  const view = mount();
+  await view.findByRole("tab", { name: "Training" });
+  selectTab(view, "Training");
+  fireEvent.click(view.getByText("Transfer assigned experience"));
+  fireEvent.change(view.getByLabelText("Destination companion"), {
+    target: { value: "second-pet" },
+  });
+  const amount = view.getByRole("spinbutton", {
+    name: "Assigned XP to move (maximum 700)",
+  });
+  fireEvent.input(amount, { target: { value: "701" } });
+  expect(view.getByText("Enter a whole number from 1 to 700.")).toBeTruthy();
+  expect(view.queryByRole("button", { name: "Transfer experience" })).toBeNull();
+  fireEvent.input(amount, { target: { value: "700" } });
+  expect(view.queryByText("Enter a whole number from 1 to 700.")).toBeNull();
+  expect(
+    view.getAllByRole("button", { name: "Transfer experience" }).length,
+  ).toBeGreaterThan(0);
+  expect(view.getByText(/XP lost: 0/)).toBeTruthy();
 });

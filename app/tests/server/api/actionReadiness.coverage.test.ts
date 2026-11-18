@@ -52,6 +52,7 @@ const participantGuards = new Set([
 ]);
 const targetOnlyChecks = new Map([
   ["profile.updateUser", "target.status"],
+  ["pets.setPotentialForStaff", "target.status"],
   ["travel.robPlayer", "target.status"],
   ["kage.startDefense", "hall.village.kage.status"],
 ]);
@@ -59,7 +60,12 @@ const targetOnlyChecks = new Map([
 /** Classify the precise non-actor checks, without exempting a whole mutation body. */
 const isParticipantGuard = (path: string, guard: Guard) =>
   (participantLaunchers.includes(path) && participantGuards.has(guard.owner)) ||
-  (guard.owner.endsWith(`#${path}`) && guard.status === targetOnlyChecks.get(path));
+  (guard.owner.endsWith(`#${path}`) && guard.status === targetOnlyChecks.get(path)) ||
+  // The support override passes its target through the shared owner SQL snapshot helper.
+  // This exact guard is target-only; any new actor prerequisite still requires recovery.
+  (path === "pets.setPotentialForStaff" &&
+    guard.owner === "server/api/routers/pets.ts#ownerSnapshotWhere" &&
+    guard.status === "userData.status");
 
 /** Expected awake-only actions, audited against actor guards in every registered mutation. */
 const AWAKE_ACTIONS = new Set([
@@ -115,6 +121,8 @@ const AWAKE_ACTIONS = new Set([
   "pets.updateAiConfig",
   "pets.assignExperience",
   "pets.rankUp",
+  "pets.revealPotential",
+  "pets.transferExperience",
   "coop.quest.create",
   "coop.quest.join",
   "coop.quest.startEncounter",
@@ -575,6 +583,17 @@ describe("mutation awake prerequisites", () => {
     );
     expect(policyDrift(inspectMutations(new Map([[file, source]]))).missing).toEqual([
       "bank.policyDriftProbe",
+    ]);
+  });
+
+  it("does not exempt an actor prerequisite introduced into a companion support override", () => {
+    const file = join(sourceRoot, "server/api/routers/pets.ts");
+    const source = readFileSync(file, "utf8").replace(
+      'if (target.status !== "AWAKE"',
+      'if (actor.status !== "AWAKE"',
+    );
+    expect(policyDrift(inspectMutations(new Map([[file, source]]))).missing).toEqual([
+      "pets.setPotentialForStaff",
     ]);
   });
 

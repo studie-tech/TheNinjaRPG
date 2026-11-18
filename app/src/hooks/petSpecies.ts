@@ -2,7 +2,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { BasicElementName, PetRarities, PetRoles } from "@/drizzle/constants";
+import {
+  BasicElementName,
+  PET_POTENTIAL_TIERS,
+  PetPotentialModes,
+  PetRarities,
+  PetRoles,
+} from "@/drizzle/constants";
 import type { PetSpecies } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
@@ -15,7 +21,18 @@ import {
   type ZodPetSpeciesType,
 } from "@/validators/petSpecies";
 
+/** Name each tier while the shared validator preserves its numeric storage value. */
+const potentialOptions = PET_POTENTIAL_TIERS.map((tier) => ({
+  id: String(tier.value),
+  name: `${tier.title} · ${Number((tier.capMultiplier * 100).toFixed(2))}% stat caps`,
+}));
+
 const emptySpecies: ZodPetSpeciesType = {
+  potentialMode: "FIXED",
+  potentialValue: 1,
+  potentialMin: 1,
+  potentialMax: 5,
+  potentialWeights: PET_POTENTIAL_TIERS.map((tier) => tier.weight),
   name: "",
   description: "",
   artDirection: null,
@@ -45,18 +62,26 @@ export const usePetSpeciesEditForm = (
     resetOptions: { keepDirtyValues: true },
     resolver: zodResolver(PetSpeciesValidator),
   });
-  const [isActive, effects, aiRules, includeDefaultRules, defaultJutsuIds, rarity] =
-    useWatch({
-      control: form.control,
-      name: [
-        "isActive",
-        "effects",
-        "aiRules",
-        "includeDefaultRules",
-        "defaultJutsuIds",
-        "rarity",
-      ],
-    });
+  const [
+    isActive,
+    effects,
+    aiRules,
+    includeDefaultRules,
+    defaultJutsuIds,
+    rarity,
+    potentialMode,
+  ] = useWatch({
+    control: form.control,
+    name: [
+      "isActive",
+      "effects",
+      "aiRules",
+      "includeDefaultRules",
+      "defaultJutsuIds",
+      "rarity",
+      "potentialMode",
+    ],
+  });
   const aiProfile = useMemo(
     // Database rows and the controlled AI editor supply normalized rules, including defaults.
     () => ({
@@ -103,6 +128,47 @@ export const usePetSpeciesEditForm = (
   }, showFormErrorsToast);
   const formData: FormEntry<keyof ZodPetSpeciesType>[] = [
     { id: "name", label: "Species name", type: "text" },
+    {
+      id: "potentialMode",
+      label: "Potential mode",
+      type: "str_array",
+      values: PetPotentialModes,
+    },
+    // Invalid inactive drafts stay visible so validation never blocks a hidden field.
+    ...(potentialMode === "FIXED" || form.formState.errors.potentialValue
+      ? ([
+          {
+            id: "potentialValue",
+            label: "Fixed potential",
+            type: "db_values",
+            values: potentialOptions,
+          },
+        ] as FormEntry<keyof ZodPetSpeciesType>[])
+      : []),
+    ...(potentialMode === "RANDOM" ||
+    form.formState.errors.potentialMin ||
+    form.formState.errors.potentialMax ||
+    form.formState.errors.potentialWeights
+      ? ([
+          {
+            id: "potentialMin",
+            label: "Random minimum",
+            type: "db_values",
+            values: potentialOptions,
+          },
+          {
+            id: "potentialMax",
+            label: "Random maximum",
+            type: "db_values",
+            values: potentialOptions,
+          },
+          ...PET_POTENTIAL_TIERS.map((tier, index) => ({
+            id: `potentialWeights.${index}` as keyof ZodPetSpeciesType,
+            label: `${tier.title} roll weight (normalized within range)`,
+            type: "number" as const,
+          })),
+        ] as FormEntry<keyof ZodPetSpeciesType>[])
+      : []),
     { id: "rarity", label: "Rarity", type: "str_array", values: PetRarities },
     { id: "role", label: "Role", type: "str_array", values: PetRoles },
     {
