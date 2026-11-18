@@ -4225,6 +4225,10 @@ export const TD_STAGE_IMAGE_URLS = {
     "https://uploadthing.b-cdn.net/f/td-stage-infinite-dream-3f0f4ae37c289f9f.webp",
 } as const;
 
+/** Title logo of Shuriken Siege, the standalone tower defense build for game portals. */
+export const SHURIKEN_SIEGE_LOGO_URL =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDUtFWrzEwoh0WXMnscL279N8ayVQUCbRzS3p";
+
 /** Shuriken sprite thrown by the hero, shadow clones and kunai turrets. */
 export const TD_SHURIKEN_IMAGE_URL =
   "https://uploadthing.b-cdn.net/f/4a3100e5-97c6-4e5a-96e2-1c3520838179-gwm3dh.svg";

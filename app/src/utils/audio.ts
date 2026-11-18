@@ -132,6 +132,14 @@ export const unlockAudioPlayback = () => {
   if (context) void resumeAudioContext(context);
 };
 
+/** Silence effect playback while something else owns the sound, such as a portal's ad. */
+export const holdAudioPlayback = (held: boolean) => {
+  const context = getSharedAudioContext();
+  if (!context) return;
+  if (held) void context.suspend().catch(() => undefined);
+  else void resumeAudioContext(context);
+};
+
 // Get audio buffer cache (stored on window to survive HMR)
 const getAudioBufferCache = (): Map<string, AudioBuffer> => {
   if (typeof window === "undefined") return new Map();

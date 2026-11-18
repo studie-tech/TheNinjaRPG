@@ -86,8 +86,8 @@ const CATEGORY_LABELS: Record<TdDojoCategory, string> = {
 /** Start or resume a run, spend scrolls in the Guard Hall and learn how the game works. */
 export const TowerDefenseLobby = (props: {
   isGuest: boolean;
-  /** The character's level, which raises damage in every run it starts. */
-  level: number;
+  /** The character's level, which raises damage in every run it starts; absent without one. */
+  level?: number;
   /** Whether today's Guard Hall duty is done; absent for guests. */
   dailyDutyDone?: boolean;
   /** The village the player defends, when they belong to one. */
@@ -151,7 +151,7 @@ export const TowerDefenseLobby = (props: {
       {props.dailyDutyDone !== undefined && (
         <DailyDuty
           done={props.dailyDutyDone}
-          level={props.level}
+          level={props.level ?? 1}
           villageName={props.villageName}
         />
       )}
@@ -201,7 +201,12 @@ export const TowerDefenseLobby = (props: {
               </div>
             )}
             {!props.isGuest && (
-              <div className="grid grid-cols-3 gap-2">
+              <div
+                className={cn(
+                  "grid gap-2",
+                  props.level === undefined ? "grid-cols-2" : "grid-cols-3",
+                )}
+              >
                 <Stat
                   icon={<ScrollText className="h-5 w-5 text-purple-500" />}
                   label="Scrolls"
@@ -212,11 +217,13 @@ export const TowerDefenseLobby = (props: {
                   label="Best wave"
                   value={`${bestWave}`}
                 />
-                <Stat
-                  icon={<Swords className="h-5 w-5 text-red-500" />}
-                  label={`Level ${props.level}`}
-                  value={`+${Math.round(tdLevelDamageBonus(props.level) * 100)}% dmg`}
-                />
+                {props.level !== undefined && (
+                  <Stat
+                    icon={<Swords className="h-5 w-5 text-red-500" />}
+                    label={`Level ${props.level}`}
+                    value={`+${Math.round(tdLevelDamageBonus(props.level) * 100)}% dmg`}
+                  />
+                )}
               </div>
             )}
             {!props.isGuest && checkpoints.length > 1 && (
@@ -289,7 +296,7 @@ export const TowerDefenseLobby = (props: {
         </Card>
         <Journey bestWave={bestWave} />
       </div>
-      <HowToPlay bestWave={bestWave} />
+      <HowToPlay bestWave={bestWave} hasLevel={props.level !== undefined} />
       {!props.isGuest && props.progress && (
         <Dojo
           progress={props.progress}
@@ -472,7 +479,7 @@ const StageNews = ({ from, until }: { from: number; until?: number }) => {
 };
 
 /** Illustrated rules, hand-seal recipes and controls. */
-const HowToPlay = ({ bestWave }: { bestWave: number }) => (
+const HowToPlay = ({ bestWave, hasLevel }: { bestWave: number; hasLevel: boolean }) => (
   <Card>
     <CardHeader className="pb-2">
       <CardTitle className="flex items-center gap-2 text-lg">
@@ -487,8 +494,9 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
           title="Your ninja fights on its own"
         >
           Shuriken fly at the nearest enemy. Jutsu, sentries and ultimates join in as
-          you unlock them. Your character level adds damage, up to +
-          {TD_LEVEL_BONUS_MAX * 100}% at level {TD_LEVEL_BONUS_MAX_LEVEL}.
+          you unlock them.
+          {hasLevel &&
+            ` Your character level adds damage, up to +${TD_LEVEL_BONUS_MAX * 100}% at level ${TD_LEVEL_BONUS_MAX_LEVEL}.`}
         </Rule>
         <Rule
           icon={<Coins className="h-5 w-5" />}

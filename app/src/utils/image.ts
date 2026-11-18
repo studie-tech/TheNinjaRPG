@@ -10,18 +10,42 @@ export const isBunnyCdnUrl = (url: string) => {
   }
 };
 
+/**
+ * Media a standalone build ships beside its page, keyed by CDN URL without query or
+ * fragment. Set once at startup; the web app never sets it.
+ */
+let bundledMedia: ReadonlyMap<string, string> | null = null;
+let onUnbundledMedia: ((url: string) => void) | null = null;
+
+/** Serve media from a standalone build's own files instead of the CDN; null stops it. */
+export const serveBundledMedia = (
+  media: ReadonlyMap<string, string> | null,
+  onMissing?: (url: string) => void,
+) => {
+  bundledMedia = media;
+  onUnbundledMedia = onMissing ?? null;
+};
+
+/** The CDN URL a media key is stored under: no query or fragment, canonical host. */
+export const bundledMediaKey = (src: string) => src.split("#")[0]?.split("?")[0] ?? src;
+
 /** Routes legacy UploadThing hostnames through the Bunny pull zone. */
 export const transformImageUrl = (src: string) => {
+  let routed = src;
   try {
     const url = new URL(src);
     if (LEGACY_UPLOADTHING_HOSTS.includes(url.hostname)) {
       url.hostname = "uploadthing.b-cdn.net";
-      return url.toString();
+      routed = url.toString();
     }
   } catch {
     // Relative and otherwise non-URL sources are left unchanged.
   }
-  return src;
+  if (!bundledMedia || !/^https?:/.test(routed)) return routed;
+  const local = bundledMedia.get(bundledMediaKey(routed));
+  if (local) return local;
+  onUnbundledMedia?.(routed);
+  return routed;
 };
 
 /** Requests a Bunny rendition width, forcing detection for extensionless uploads. */

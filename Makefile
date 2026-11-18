@@ -124,6 +124,13 @@ build: ensure-env # Build Next.js app
 	@echo "${GREEN}build${RESET}"
 	cd app && node ../scripts/dev-bun.mjs run build
 
+.PHONY: shuriken-siege
+shuriken-siege: # Build Shuriken Siege portal zips into dist/ (TARGETS, SOURCE, VERSION optional)
+	@echo "${GREEN}shuriken-siege${RESET}"
+	cd app && node ../scripts/dev-bun.mjs run scripts/build-shuriken-siege.ts \
+		$(if $(TARGETS),--targets $(TARGETS)) $(if $(SOURCE),--source $(SOURCE)) \
+		$(if $(VERSION),--version $(VERSION))
+
 .PHONY: bundleanalysis
 bundleanalysis: ensure-env # Build Next.js app with bundle analysis
 	@echo "${GREEN}bundleanalysis${RESET}"
