@@ -2161,12 +2161,7 @@ export const createStatSchema = (
         "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
       >
     >,
-  statCaps?: Partial<
-    Record<
-      "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower",
-      number
-    >
-  >,
+  statCaps?: Partial<Record<CombatStatName, number>>,
 ) => {
   const caps = getUserCaps(user?.rank);
   const roomFor = (stat: CombatStatName) => {

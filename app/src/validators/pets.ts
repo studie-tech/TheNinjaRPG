@@ -1,9 +1,9 @@
 /** Shared pet request contracts and structured image-review output; routers enforce live ownership. */
 import { z } from "zod";
+import type { CombatStatName } from "@/drizzle/constants";
 import {
   AI_PROFILE_MAX_RULES,
   AvatarFacings,
-  type CombatStatName,
   CombatStatNames,
   getCombatStatCap,
   getUserCaps,
