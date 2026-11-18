@@ -123,7 +123,8 @@ describeWithDatabase("battle AI control preference scope", () => {
       enabled: false,
     });
     const announced = trigger.mock.calls.map(
-      ([channel, , data]) => [channel, (data as { version: number }).version] as const,
+      ([channel, , data]: unknown[]) =>
+        [channel, (data as { version: number }).version] as const,
     );
     const enabledVersion = "battle" in enabled ? enabled.battle.version : NaN;
     const disabledVersion = "battle" in disabled ? disabled.battle.version : NaN;
