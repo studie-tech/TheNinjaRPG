@@ -8,6 +8,8 @@ import {
   Info,
   Maximize,
   Minimize,
+  Pause,
+  Play,
   ScrollText,
   Skull,
   Volume2,
@@ -100,9 +102,14 @@ export const TowerDefenseOverlay = (props: {
   soundOn: boolean;
   mode: TowerDefenseInputMode;
   isFullscreen: boolean;
+  /** Whether the player's own pause holds the run. */
+  pausedByPlayer: boolean;
   onSpeed: (speed: number) => void;
   onSound: (enabled: boolean) => void;
   onFullscreen: () => void;
+  onPause: (paused: boolean) => void;
+  /** The boosts panel covers the arena, so the run waits while it is open. */
+  onPanel: (open: boolean) => void;
   act: (command: TdCommand) => void;
 }) => {
   const { state } = props;
@@ -160,7 +167,17 @@ export const TowerDefenseOverlay = (props: {
           />
         </div>
         <div className="pointer-events-auto flex shrink-0 gap-1">
-          <BoostsButton state={state} />
+          <BoostsButton state={state} onOpenChange={props.onPanel} />
+          <OverlayButton
+            label={props.pausedByPlayer ? "Resume (P)" : "Pause (P)"}
+            onClick={() => props.onPause(!props.pausedByPlayer)}
+          >
+            {props.pausedByPlayer ? (
+              <Play className="h-4 w-4" />
+            ) : (
+              <Pause className="h-4 w-4" />
+            )}
+          </OverlayButton>
           <OverlayButton
             label={`Game speed ${props.speed}x`}
             onClick={() => props.onSpeed(nextSpeed)}
@@ -224,6 +241,17 @@ export const TowerDefenseOverlay = (props: {
               </span>
             ))}
           </span>
+        </div>
+      )}
+      {props.pausedByPlayer && (
+        <div className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center bg-black/30">
+          <button
+            type="button"
+            onClick={() => props.onPause(false)}
+            className="pointer-events-auto flex items-center gap-2 rounded-lg bg-black/75 px-4 py-2 text-lg font-semibold text-white shadow-lg"
+          >
+            <Play className="h-5 w-5" /> Paused, tap to resume
+          </button>
         </div>
       )}
       {props.mode !== "aim" && (
@@ -687,7 +715,13 @@ const Meter = (props: { label: string; value: number; max: number; color: string
 );
 
 /** Everything currently shaping the run: timed effects, effective stats, perks and eras. */
-const BoostsButton = ({ state }: { state: TdState }) => {
+const BoostsButton = ({
+  state,
+  onOpenChange,
+}: {
+  state: TdState;
+  onOpenChange: (open: boolean) => void;
+}) => {
   const { stats, hero, tick } = state;
   const secondsUntil = (until: number) => Math.ceil((until - tick) * TD_TICK_SECONDS);
   const berserk =
@@ -796,7 +830,7 @@ const BoostsButton = ({ state }: { state: TdState }) => {
   );
   const eras = state.eras.filter((era) => era !== "calm");
   return (
-    <Popover>
+    <Popover onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -811,6 +845,9 @@ const BoostsButton = ({ state }: { state: TdState }) => {
         align="end"
         className="max-h-[70vh] w-80 space-y-3 overflow-y-auto p-3 text-sm"
       >
+        <p className="flex items-center gap-1 text-muted-foreground text-xs">
+          <Pause className="h-3 w-3" /> The run is paused while this is open.
+        </p>
         <BoostSection title="Right now">
           {timed.length === 0 ? (
             <p className="text-muted-foreground">No timed effects.</p>

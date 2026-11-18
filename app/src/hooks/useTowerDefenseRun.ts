@@ -30,6 +30,7 @@ import {
   stepRun,
   TD_SIM_VERSION,
   type TdAction,
+  type TdActionKind,
   type TdCommand,
   type TdReplay,
   type TdRunConfig,
@@ -67,6 +68,9 @@ interface TowerDefenseSession {
 
 type TowerDefensePhase = "lobby" | "playing" | "claiming" | "over";
 
+/** What holds a run paused: the player's pause button, or a panel covering the arena. */
+export type TowerDefensePause = "player" | "panel";
+
 export interface TowerDefenseOutcome {
   wave: number;
   kills: number;
@@ -91,6 +95,20 @@ const RESUME_STEP_TICKS = 250;
 /** Room kept in the log for the retreat that ends a run at its length limit. */
 const LOG_RESERVE_CHARS = 64;
 const GUEST_STORAGE_KEY = "towerDefenseRun:guest";
+/**
+ * Actions that act on the battle itself wait for the run to resume, so a pause is a
+ * breather for shopping and planning rather than a way to time a dodge or a cast.
+ */
+const PAUSED_REFUSED: ReadonlySet<TdActionKind> = new Set([
+  "ult",
+  "focus",
+  "blink",
+  "sub",
+  "seal",
+  "trap",
+  "loot",
+  "call",
+]);
 const RETRY_SAVED_MESSAGE =
   "Could not reach the server. Your run is saved; try claiming again.";
 const RETRY_UNSAVED_MESSAGE =
@@ -114,6 +132,8 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const starting = useRef<object | null>(null);
   const [phase, setPhase] = useState<TowerDefensePhase>("lobby");
   const [speed, setSpeedState] = useState(1);
+  const [pauses, setPauses] = useState<readonly TowerDefensePause[]>([]);
+  const paused = pauses.length > 0;
   const [outcome, setOutcome] = useState<TowerDefenseOutcome | null>(null);
   const [saved, setSaved] = useState<ReturnType<typeof readSavedRunHead>>(null);
   const [isResuming, setIsResuming] = useState(false);
@@ -361,6 +381,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       setUnsaved(false);
       setOutcome(null);
       setSpeedState(1);
+      setPauses([]);
       setPhase("playing");
       setRunId(id);
       publish(session.current);
@@ -487,6 +508,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     (command: TdCommand) => {
       const current = session.current;
       if (!current || current.state.over) return false;
+      if (paused && PAUSED_REFUSED.has(command[0])) return false;
       if (
         current.log.count >= TD_MAX_ACTIONS - 1 ||
         current.log.chars >= TD_MAX_LOG_CHARS - LOG_RESERVE_CHARS
@@ -508,7 +530,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       else persist();
       return true;
     },
-    [claim, persist, publish, retreat],
+    [claim, paused, persist, publish, retreat],
   );
 
   /** Advance by real elapsed seconds at the chosen speed; called every frame. */
@@ -516,6 +538,11 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     (seconds: number) => {
       const current = session.current;
       if (!current || current.state.over || phase !== "playing") return;
+      // Time spent paused is not owed to the run when it resumes.
+      if (paused) {
+        current.pending = 0;
+        return;
+      }
       current.pending = Math.min(
         current.pending + seconds * speed,
         MAX_TICKS_PER_FRAME * TD_TICK_SECONDS,
@@ -546,8 +573,19 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       }
       persist();
     },
-    [claim, persist, phase, retreat, speed],
+    [claim, paused, persist, phase, retreat, speed],
   );
+
+  /** Hold or release the run for one reason; it runs again once no reason holds it. */
+  const setPaused = useCallback((reason: TowerDefensePause, on: boolean) => {
+    setPauses((current) =>
+      on
+        ? current.includes(reason)
+          ? current
+          : [...current, reason]
+        : current.filter((held) => held !== reason),
+    );
+  }, []);
 
   const setSpeed = useCallback((value: number) => {
     const current = session.current;
@@ -657,6 +695,8 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     hud,
     phase,
     speed,
+    pauses,
+    paused,
     outcome,
     saved,
     unsaved,
@@ -668,6 +708,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     act,
     advance,
     setSpeed,
+    setPaused,
     retryClaim,
     leave,
     discardSaved,

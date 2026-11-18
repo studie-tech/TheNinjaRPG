@@ -125,7 +125,8 @@ export default function TowerDefensePage() {
   const reticle = useRef<{ x: number; y: number } | null>(null);
 
   // Handlers depend on the run's stable members, never on the object returned per render.
-  const { act, getSession } = run;
+  const { act, getSession, setPaused } = run;
+  const pausedByPlayer = run.pauses.includes("player");
   const aim = useCallback((): [number, number] => {
     const state = getSession()?.state;
     const point = reticle.current ?? (state && tdCrowdTarget(state)) ?? { x: 0, y: 3 };
@@ -198,6 +199,7 @@ export default function TowerDefensePage() {
       else if (key === "b") setMode((value) => (value === "blink" ? "aim" : "blink"));
       else if (key === "t") setMode((value) => (value === "trap" ? "aim" : "trap"));
       else if (key === "n") act(["call"]);
+      else if (key === "p") setPaused("player", !pausedByPlayer);
       else if (key === "escape") setMode("aim");
       else if (/^\d$/.test(key)) {
         const ultimate = TD_ULTIMATES[Number(key) - 1];
@@ -206,7 +208,7 @@ export default function TowerDefensePage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [act, aim, run.phase]);
+  }, [act, aim, pausedByPlayer, run.phase, setPaused]);
 
   // A run this device holds no save of is lost with the tab until its claim succeeds.
   const isOnlyInTab =
@@ -349,9 +351,12 @@ export default function TowerDefensePage() {
                   soundOn={!!sfxOn}
                   mode={mode}
                   isFullscreen={isFullscreen}
+                  pausedByPlayer={pausedByPlayer}
                   onSpeed={run.setSpeed}
                   onSound={setSfxEnabled}
                   onFullscreen={toggleFullscreen}
+                  onPause={(paused) => setPaused("player", paused)}
+                  onPanel={(open) => setPaused("panel", open)}
                   act={act}
                 />
               )}
