@@ -3,7 +3,7 @@ import type { ExtraState } from "@/libs/combat/types";
 
 /*
  * Every action and poll reads the whole battle row, and most of its bytes are catalogs
- * frozen at initiation. The row keeps them gzipped in `Battle.catalogs`, which shrinks each
+ * frozen at initiation. A row can keep them gzipped in `Battle.catalogs`, which shrinks each
  * read several times over while combat still loads its complete state in one query.
  * Turn updates rewrite only `revealedActions`, `dungeon` and `encounter` with JSON_SET, so
  * those, and every key not listed below, stay in the `extraState` JSON column. Rows without
@@ -11,6 +11,14 @@ import type { ExtraState } from "@/libs/combat/types";
  * columns: a data migration that reshapes content inside live battles' catalogs has to
  * decode `Battle.catalogs` in code.
  */
+
+/**
+ * Whether writes move the catalogs out of the JSON column. A build that predates
+ * `Battle.catalogs` reads only the JSON column and settles a moved battle without its
+ * settings, quests or villages rather than failing, so writes start once no deployment that
+ * can still serve, or be rolled back to, lacks `unpackBattleExtraState`.
+ */
+export const WRITE_COMPRESSED_CATALOGS = false;
 
 /** The stored catalog keys; only a full extraState write may change them. */
 const STORED_CATALOG_KEYS = [
@@ -42,7 +50,11 @@ type StoredExtraState = Omit<ExtraState, StoredCatalogKey> &
   Partial<Pick<ExtraState, StoredCatalogKey>>;
 
 /** Split a battle's extraState into its JSON column and the compressed catalogs column. */
-export const packBattleExtraState = (state: ExtraState) => {
+export const packBattleExtraState = (
+  state: ExtraState,
+  compress = WRITE_COMPRESSED_CATALOGS,
+): { extraState: ExtraState; catalogs: Buffer | null } => {
+  if (!compress) return { extraState: state, catalogs: null };
   const extraState: StoredExtraState = { ...state };
   const catalogs: Partial<ExtraState> = {};
   for (const key of STORED_CATALOG_KEYS) {
