@@ -70,6 +70,8 @@ describe("tower defense sounds", () => {
 
   it("keeps the automatic stream of combat silent", () => {
     const silent: TdEvent[] = [
+      { type: "explosion", x: 0, y: 0, radius: 1.2, element: "fire", cause: "mortar" },
+      { type: "frostPulse", x: 0, y: 0, radius: 3.5, ids: [1, 2] },
       {
         type: "hit",
         targetId: 1,

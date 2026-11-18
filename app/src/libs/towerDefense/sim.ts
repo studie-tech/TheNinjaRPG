@@ -200,6 +200,8 @@ interface PendingHit {
   stun: number;
   chill: number;
   knockback: number;
+  /** Set for a mortar shell, whose landing draws as a ground blast. */
+  cause?: "mortar";
 }
 
 interface EnemyShot {
@@ -305,9 +307,10 @@ export type TdEvent =
       y: number;
       radius: number;
       element: TdElement;
-      /** A blast on the ground, from an explosive tag or a bomber, rather than a hit's splash. */
-      cause?: "tag" | "bomber";
+      /** A blast on the ground from an explosive tag, a bomber or a mortar shell. */
+      cause?: "tag" | "bomber" | "mortar";
     }
+  | { type: "frostPulse"; x: number; y: number; radius: number; ids: number[] }
   | { type: "wave"; boss: boolean; titan: boolean; eras: TdEra[] }
   | { type: "loot"; kind: TdLoot["kind"]; collected: boolean }
   | {
@@ -2015,7 +2018,10 @@ const sentriesAttack = (state: TdState) => {
           const dist = distance(at.x, at.y, target.x, target.y);
           const due = arrivalTick(state, dist, 6, 2);
           state.hits.push(
-            areaHit(state, target.x, target.y, 1.2, damage, "fire", { due }),
+            areaHit(state, target.x, target.y, 1.2, damage, "fire", {
+              due,
+              cause: "mortar",
+            }),
           );
           if (state.recordEvents)
             emit(state, {
@@ -2064,6 +2070,14 @@ const sentriesAttack = (state: TdState) => {
             damageEnemy(state, enemy, damage, "water");
             chill(enemy, state.tick, 15, 0.3);
           }
+          if (state.recordEvents)
+            emit(state, {
+              type: "frostPulse",
+              x: at.x,
+              y: at.y,
+              radius: range,
+              ids: targets.map((enemy) => enemy.id),
+            });
         }
         break;
       }
@@ -2356,6 +2370,7 @@ const resolveHits = (state: TdState) => {
           y: hit.y,
           radius: hit.radius,
           element: hit.element,
+          ...(hit.cause ? { cause: hit.cause } : {}),
         });
       continue;
     }

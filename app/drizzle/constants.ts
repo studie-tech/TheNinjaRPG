@@ -4174,13 +4174,89 @@ export const TD_SHURIKEN_IMAGE_URL =
 
 /** Sentry artwork packed in one strip: a frame per sentry type as [x, y, width, height]. */
 export const TD_SENTRY_ATLAS = {
-  url: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCIucdy26OYrIJuNP1pvSyz29edFtKbngjRcA",
-  frames: {
-    kunai: [2, 2, 115, 150],
-    mortar: [119, 2, 144, 148],
-    rod: [265, 2, 75, 158],
-    frost: [342, 2, 103, 156],
-    sensor: [447, 2, 107, 154],
+  url: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpoOgZxqbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75",
+  /** What stands on each post; kunai turrets and tag mortars keep only their fixed base. */
+  bodies: {
+    kunai: [2, 2, 116, 80],
+    mortar: [120, 2, 144, 70],
+    rod: [266, 2, 75, 158],
+    frost: [343, 2, 103, 156],
+    sensor: [448, 2, 107, 154],
+  },
+  /**
+   * The aiming tops of kunai turrets and tag mortars. `frames` are the painted headings;
+   * `headings` picks a frame, and whether to mirror it, for each of eight directions
+   * counterclockwise from east; `mount` is where a top's bottom centre sits on its base,
+   * in base-frame pixels.
+   */
+  tops: {
+    kunai: {
+      mount: [57.4, 6],
+      frames: [
+        [2, 162, 99, 81],
+        [103, 162, 99, 89],
+        [204, 162, 80, 89],
+        [286, 162, 103, 91],
+        [391, 162, 104, 83],
+      ],
+      headings: [
+        [2, false],
+        [3, false],
+        [4, false],
+        [3, true],
+        [2, true],
+        [1, false],
+        [0, false],
+        [1, true],
+      ],
+    },
+    mortar: {
+      mount: [72.7, 29.2],
+      frames: [
+        [2, 255, 132, 148],
+        [136, 255, 124, 148],
+        [262, 255, 124, 148],
+        [388, 255, 129, 152],
+        [2, 409, 126, 153],
+      ],
+      headings: [
+        [2, false],
+        [3, false],
+        [4, false],
+        [3, true],
+        [2, true],
+        [1, true],
+        [0, false],
+        [1, false],
+      ],
+    },
+  },
+  /** Kunai turret darts (pointing right) and tag mortar shells. */
+  projectiles: {
+    kunai: [130, 409, 40, 13],
+    bomb: [172, 409, 34, 28],
+  },
+} as const;
+
+/** Sentry effects, one column of square frames each: rod hits, the rod's tip, frost chills. */
+export const TD_SENTRY_EFFECTS = {
+  spark: {
+    image:
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhaeXtrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
+    frames: 15,
+    speed: 40,
+  },
+  rodTip: {
+    image:
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmeW7bJHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    frames: 10,
+    speed: 45,
+  },
+  frost: {
+    image:
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJjBzFKI4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    frames: 16,
+    speed: 40,
   },
 } as const;
 
