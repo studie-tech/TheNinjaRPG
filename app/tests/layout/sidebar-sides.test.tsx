@@ -112,7 +112,7 @@ const renderProps = (
   variant,
   userData: undefined,
   isSignedInLayout: true,
-  pathname: "/profile",
+  isCombatPage: false,
   navbarMenuItems: [],
   shownNotifications: [],
   location: undefined,
@@ -135,7 +135,6 @@ const renderProps = (
     wallpaper: "/wall.webp",
   },
   variantClasses: layoutVariantClasses[variant],
-  showMobileNotifications: false,
 });
 
 const setSwapped = (swapped: boolean) =>

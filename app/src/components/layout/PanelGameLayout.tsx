@@ -29,7 +29,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
   const {
     children,
     userData,
-    pathname,
+    isCombatPage,
     navbarMenuItems,
     signedInIcons,
     leftSideBar,
@@ -42,7 +42,6 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
     onRightSideBarOpenChange,
     handleRightSidebarClick,
     shownNotifications,
-    showMobileNotifications,
     mobileNavConfig,
     location,
     variantClasses,
@@ -95,13 +94,13 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
                   <SheetTitle>Player menu</SheetTitle>
                 </SheetHeader>
                 <MobileSidebarStack
-                  isCombat={pathname === "/combat"}
+                  isCombat={isCombatPage}
                   leftSideBar={leftSideBar}
                   mainMenu={leftSideBarMainMenu}
                 />
               </SheetContent>
             </Sheet>
-            {showMobileNotifications && (
+            {!isCombatPage && (
               <MobileNotificationsPopover
                 notifications={shownNotifications}
                 variant={props.variant}

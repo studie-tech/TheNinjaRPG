@@ -23,7 +23,7 @@ import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 
 /** A collapsible home for lessons and active quests, opposite the chat launcher. */
@@ -35,7 +35,7 @@ export function ActivityDock({
   /** Rendered in place of `children` while the lesson is out of view. */
   hiddenLesson?: ReactNode;
 }) {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector(selectActivityUser);
   const [chat, setChat] = useAtom(chatPanelAtom);
   const { swapSides, setSwapSides } = useActivityDock();
   const [storedOpen, setOpen] = useLocalStorage(
@@ -166,7 +166,7 @@ export function ActivityDock({
   );
 }
 
-function ActivityQuests({ user }: { user: NonNullable<UserWithRelations> }) {
+function ActivityQuests({ user }: { user: ActivityUser }) {
   const [storedPins, setPins] = useLocalStorage<string[]>(
     `activityPinnedQuests:${user.userId}`,
     [],
@@ -280,3 +280,14 @@ function ActivityQuest({
     </article>
   );
 }
+
+/** The dock follows lessons and quests, not money, pools or movement. */
+const selectActivityUser = (user: NonNullable<UserWithRelations>) => ({
+  userId: user.userId,
+  tutorialOn: user.tutorialOn,
+  tutorialStep: user.tutorialStep,
+  userQuests: user.userQuests,
+  questData: user.questData,
+});
+
+type ActivityUser = ReturnType<typeof selectActivityUser>;
