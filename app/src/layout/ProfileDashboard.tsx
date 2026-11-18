@@ -40,7 +40,6 @@ import {
   COST_STREAK_CATCHUP_DAY,
   MASTERY_QUEUE_KIND_LABELS,
   MasteryQueueKinds,
-  TD_DAILY_WAVES,
 } from "@/drizzle/constants";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
 import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
@@ -484,7 +483,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
               <StatusRow
                 label="Guard Hall"
                 title="Daily village defense"
-                detail={`Clear ${TD_DAILY_WAVES} waves in one tower defense run for ${dailyDuty.ryo.toLocaleString()} ryo${userData.villageId ? `, ${dailyDuty.prestige} prestige and ${dailyDuty.villageTokens} village tokens` : ` and ${dailyDuty.prestige} prestige`}`}
+                detail={`${dailyDuty.ryo.toLocaleString()} ryo, ${dailyDuty.prestige} prestige${userData.villageId ? `, ${dailyDuty.villageTokens} village tokens` : ""}`}
                 action={
                   <RowAction href="/towerDefense" icon={ShieldCheck}>
                     Defend
