@@ -16,12 +16,15 @@ import { dirname, join, relative } from "node:path";
  * status-setting call below it can no longer set the response status: notFound() answers
  * 200 with a not-found body (a soft 404 for crawlers), and redirect() or an auth interrupt
  * becomes a client-side redirect on a 200. Boundaries therefore sit only in route folders
- * whose subtree, and the app modules it imports directly, never make such a call, and
- * never at the shell level.
+ * whose subtree, and every app module it reaches through imports, never uses one of those
+ * functions, and never at the shell level. A module counts when it imports from
+ * next/navigation and names one of them, so aliased imports and generic calls are caught
+ * at the cost of the occasional false positive.
  */
 const SHELL_ROOT = join(import.meta.dirname, "../../src/app/[shell]");
-const STATUS_CALL =
-  /\b(?:notFound|redirect|permanentRedirect|forbidden|unauthorized)\(/;
+const NAVIGATION_IMPORT = /from\s*["']next\/navigation["']/;
+const STATUS_NAME =
+  /\b(?:notFound|redirect|permanentRedirect|forbidden|unauthorized)\b/;
 const CODE_FILE = /\.[cm]?[jt]sx?$/;
 
 // Typed locally: importing "bun" would load its global types into the whole program.
@@ -33,7 +36,7 @@ const walk = (dir: string): string[] =>
     entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
   );
 
-/** App modules (`@/` or relative) a route file imports, resolved to their files. */
+/** App modules (`@/` or relative) a file imports, resolved to their files. */
 const appImports = (file: string) =>
   transpiler
     .scanImports(readFileSync(file, "utf8"), /\.[cm]?ts$/.test(file) ? "ts" : "tsx")
@@ -46,9 +49,29 @@ const appImports = (file: string) =>
         return [];
       }
     })
-    .filter((resolved) => CODE_FILE.test(resolved));
+    .filter(
+      (resolved) => CODE_FILE.test(resolved) && !resolved.includes("/node_modules/"),
+    );
 
-const makesStatusCall = (file: string) => STATUS_CALL.test(readFileSync(file, "utf8"));
+/** Every app module a route file reaches through imports, the file itself excluded. */
+const reachableAppModules = (file: string) => {
+  const visited = new Set([file]);
+  const queue = [file];
+  for (let at = queue.shift(); at; at = queue.shift()) {
+    for (const imported of appImports(at)) {
+      if (visited.has(imported)) continue;
+      visited.add(imported);
+      queue.push(imported);
+    }
+  }
+  visited.delete(file);
+  return [...visited];
+};
+
+const usesStatusFunction = (file: string) => {
+  const code = readFileSync(file, "utf8");
+  return NAVIGATION_IMPORT.test(code) && STATUS_NAME.test(code);
+};
 
 /** Each route file under a loading boundary that can set a status, with the module making the call. */
 const findBoundaryOffenders = (root: string) => {
@@ -62,9 +85,9 @@ const findBoundaryOffenders = (root: string) => {
         .flatMap((file) => {
           const route = relative(root, file);
           if (file.endsWith("/not-found.tsx")) return [route];
-          if (makesStatusCall(file)) return [route];
-          return appImports(file)
-            .filter(makesStatusCall)
+          if (usesStatusFunction(file)) return [route];
+          return reachableAppModules(file)
+            .filter(usesStatusFunction)
             .map((imported) => `${route} -> ${relative(root, imported)}`);
         }),
     );
@@ -103,10 +126,14 @@ describe("route loading boundaries", () => {
     );
   });
 
-  it("catches status calls in nested routes and in directly imported modules", () => {
+  it("catches status functions in nested routes, aliased imports and imported modules", () => {
     const root = writeFixture({
       "board/loading.tsx": LOADING,
-      "board/page.tsx": "export default function Page() { return null; }\n",
+      "board/page.tsx": `import { useRouter } from "next/navigation";\nexport default function Page() { useRouter(); return null; }\n`,
+      "board/alias/page.tsx": `import { notFound as nf } from "next/navigation";\nexport default function Page() { nf(); }\n`,
+      "board/deep/page.tsx": `import { check } from "../../lib/index";\nexport default function Page() { check(); return null; }\n`,
+      "lib/index.ts": `export { check } from "./inner";\n`,
+      "lib/inner.ts": `import { redirect } from "next/navigation";\nexport const check = () => redirect<string>("/x");\n`,
       "board/[id]/page.tsx": `import { redirect } from "next/navigation";\nexport default function Page() { redirect("/x"); }\n`,
       "board/old/page.tsx": `import { guard } from "./guard";\nexport default function Page() { guard(); return null; }\n`,
       "board/old/guard.ts": `import { forbidden } from "next/navigation";\nexport const guard = () => forbidden();\n`,
@@ -116,6 +143,8 @@ describe("route loading boundaries", () => {
     });
     expect(findBoundaryOffenders(root).sort()).toEqual([
       "board/[id]/page.tsx",
+      "board/alias/page.tsx",
+      "board/deep/page.tsx -> lib/inner.ts",
       "board/gone/not-found.tsx",
       "board/old/guard.ts",
       "board/old/page.tsx -> board/old/guard.ts",
