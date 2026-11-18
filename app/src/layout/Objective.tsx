@@ -1,6 +1,14 @@
 "use client";
 
-import { Check, CircleHelp, Gift, Hourglass, Loader2, RotateCcw } from "lucide-react";
+import {
+  Check,
+  CircleHelp,
+  Gift,
+  Hourglass,
+  Loader2,
+  RotateCcw,
+  Sprout,
+} from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -15,6 +23,7 @@ import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
 import {
   canRetryQuestBattle,
+  getObjectiveActionGuide,
   getObjectiveImage,
   isObjectiveComplete,
 } from "@/libs/objectives";
@@ -56,6 +65,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
   }));
   const { objective, tier, tracker, titlePrefix, checkRewards } = props;
   const { image, title } = getObjectiveImage(objective);
+  const actionGuide = getObjectiveActionGuide(objective);
 
   // Parse objective - fall back to raw objective if validation fails (allows admin to see invalid data)
   const objectiveSchema = getObjectiveSchema(objective.task as string);
@@ -138,10 +148,10 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
           <div
             role="img"
             aria-label="In progress"
-            className="flex flex-col items-center gap-0.5 text-amber-700 dark:text-amber-400"
+            className="flex items-center gap-1 text-sm text-amber-700 dark:text-amber-400"
           >
-            <Hourglass className="h-8 w-8" aria-hidden="true" />
-            <span className="whitespace-nowrap font-semibold text-sm">In progress</span>
+            <Hourglass className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="whitespace-nowrap font-medium">In progress</span>
           </div>
           {isTimeEventCountdown && <Loader2 className="h-10 w-10 animate-spin" />}
         </>
@@ -195,7 +205,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         <hr className="my-0" />
         <div className="pl-2">
           {goalTarget !== undefined && (
-            <div className="flex flex-row items-center pr-3">
+            <div className="flex flex-row items-center gap-2 pr-3">
               <div className="grow">
                 {goalTarget > 0 && (
                   <StatusBar
@@ -213,7 +223,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
             </div>
           )}
           {"sector" in parsed && (
-            <div className="flex flex-row items-center pr-3">
+            <div className="flex flex-row items-center gap-2 pr-3">
               <div className="grow">
                 {!("hideLocation" in parsed && parsed.hideLocation) && (
                   <>
@@ -250,6 +260,20 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                 )}
               </div>
               <div>{indicatorIcons}</div>
+            </div>
+          )}
+          {/* Point to the page that progresses the objective, e.g. Home > Farm for seeds */}
+          {actionGuide && !done && !props.grayedOut && (
+            <div className="@container mt-2 pr-3">
+              <div className="flex flex-col gap-2 @md:flex-row @md:items-center">
+                <p className="grow text-sm">{actionGuide.hint}</p>
+                <Button asChild size="sm" className="shrink-0">
+                  <Link href={actionGuide.href}>
+                    <Sprout className="mr-2 h-4 w-4" aria-hidden="true" />
+                    {actionGuide.label}
+                  </Link>
+                </Button>
+              </div>
             </div>
           )}
           {/* Retry button for lost start_battle objectives that are still open */}

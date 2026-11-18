@@ -31,6 +31,43 @@ export const getObjectiveImage = (objective: AllObjectivesType) => {
   return objectiveImageMap[objective.task] ?? { image: "", title: "???" };
 };
 
+/** Where to go, and what to do there, for an objective the quest dialog cannot finish. */
+export type ObjectiveActionGuide = { href: string; label: string; hint: string };
+
+const FARM_HINT = "Farming is open to every ninja, whatever your profession.";
+
+/**
+ * Farm objectives only count work done on the player's own farm (Home, then Farm), which the
+ * quest scene never shows. Starter lessons such as "Introduction to Farming" depend on this.
+ */
+const objectiveActionGuides: Partial<Record<string, ObjectiveActionGuide>> = {
+  seeds_planted: {
+    href: "/farm",
+    label: "Open your farm",
+    hint: `Go to Home and press Farm, tap an empty plot and plant a seed. Buy more seeds in the farm Market. ${FARM_HINT}`,
+  },
+  plants_watered: {
+    href: "/farm",
+    label: "Open your farm",
+    hint: `Go to Home and press Farm, then press Water all or tap a growing plot. ${FARM_HINT}`,
+  },
+  plants_fertilized: {
+    href: "/farm",
+    label: "Open your farm",
+    hint: `Go to Home and press Farm, then fertilize your crops or tap a growing plot. ${FARM_HINT}`,
+  },
+  plants_harvested: {
+    href: "/farm",
+    label: "Open your farm",
+    hint: `Go to Home and press Farm, then press Harvest all once crops are ready. ${FARM_HINT}`,
+  },
+};
+
+/** The page an objective is progressed on, or null when the objective card needs no pointer. */
+export const getObjectiveActionGuide = (
+  objective: Pick<AllObjectivesType, "task">,
+): ObjectiveActionGuide | null => objectiveActionGuides[objective.task] ?? null;
+
 /**
  * Checks if an objective is complete based on the provided tracker and objective.
  * @param tracker - The quest tracker object.
