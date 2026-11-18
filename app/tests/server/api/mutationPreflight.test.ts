@@ -7,6 +7,7 @@ import {
   SELF_GUARDED_PYRAMID_PROCEDURES,
 } from "@/libs/questRun";
 import { combatRouter } from "@/server/api/routers/combat";
+import { commentsRouter } from "@/server/api/routers/comments";
 import { homeRouter } from "@/server/api/routers/home";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { miscRouter } from "@/server/api/routers/misc";
@@ -216,7 +217,7 @@ describe("self-guarded Pyramid mutations", () => {
   );
 });
 
-describe("combat deferred rate limit", () => {
+describe("deferred rate limit", () => {
   const unexpectedDatabaseAccess = () =>
     vi.fn(() => {
       throw new Error("Unexpected rate-limit database access");
@@ -319,6 +320,53 @@ describe("combat deferred rate limit", () => {
     });
     expect(read).not.toHaveBeenCalled();
     expect(unexpected).not.toHaveBeenCalled();
+  });
+
+  it("reads a chat message's conversation while Redis is pending and writes nothing when limited", async () => {
+    const limiter = deferred<number[]>();
+    const limiterStarted = deferred<void>();
+    const conversationStarted = deferred<void>();
+    mockLimiter(() => {
+      limiterStarted.resolve();
+      return limiter.promise;
+    });
+    const conversationRead = vi.fn(async () => {
+      conversationStarted.resolve();
+      return undefined;
+    });
+    const unexpected = unexpectedDatabaseAccess();
+    const api = caller(commentsRouter, {
+      query: {
+        conversation: { findFirst: conversationRead },
+        parentalControl: { findMany: async () => [] },
+        userData: { findFirst: async () => ({ userId: "sender", role: "USER" }) },
+      },
+      update: unexpected,
+      insert: unexpected,
+      delete: unexpected,
+      transaction: unexpected,
+    });
+    const result = api.createConversationComment({
+      object_id: "conversation",
+      comment: "Meet at the gate",
+      quoteIds: null,
+      senderId: null,
+    });
+    await Promise.all([limiterStarted.promise, conversationStarted.promise]);
+    limiter.resolve([-1, 60]);
+    await expect(result).rejects.toMatchObject({
+      code: "TOO_MANY_REQUESTS",
+      message: MUTATION_RATE_LIMIT_MESSAGE,
+    });
+    expect(conversationRead).toHaveBeenCalledTimes(1);
+    expect(unexpected).not.toHaveBeenCalled();
+    const comment = procedureSource("comments", "createConversationComment");
+    expect(comment).toContain(".use(deferredRatelimitMiddleware)");
+    const openingBatch = comment.slice(
+      comment.indexOf("await Promise.all(["),
+      comment.indexOf("]);", comment.indexOf("await Promise.all([")),
+    );
+    expect(openingBatch).toContain("ctx.waitForRateLimit()");
   });
 
   it("limits a query without a money penalty", async () => {

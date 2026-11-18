@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { DEADLOCK_MARKERS, someErrorInChain } from "@/server/utils/mysqlErrors";
 import { type RetryOptions, withRetry } from "@/utils/retry";
 
@@ -136,6 +137,39 @@ const parseDriverRequest = (
 };
 
 /**
+ * How a failed statement appears in a response body. Inside a JSON string every quote is
+ * escaped, so this byte sequence can only be the member's key.
+ */
+const ERROR_MEMBER = '"error":';
+
+/** A buffered PlanetScale response, kept as bytes so it is decoded only by the driver. */
+interface ResponseSnapshot {
+  body: ArrayBuffer;
+  status: number;
+  headers: Headers;
+}
+
+/**
+ * Whether a buffered response is worth re-issuing. On a 200 the driver raises only for
+ * an `error` member, so a result without one is answered as it is, without decoding it
+ * or scanning its rows for markers.
+ */
+const isRetryableSnapshot = (snapshot: ResponseSnapshot, readOnly: boolean) => {
+  const body = Buffer.from(snapshot.body);
+  if (snapshot.status === 200 && !body.includes(ERROR_MEMBER)) return false;
+  return isRetryableResponse(snapshot.status, body.toString("utf8"), readOnly);
+};
+
+/** Hand a buffered response back to the driver with its body unread. */
+const rebuildResponse = (snapshot: ResponseSnapshot): Response => {
+  const hasBody = snapshot.status !== 204 && snapshot.status !== 304;
+  return new Response(hasBody ? snapshot.body : null, {
+    status: snapshot.status,
+    headers: snapshot.headers,
+  });
+};
+
+/**
  * Wrap `fetch` so that PlanetScale queries survive a dropped connection or a lost
  * deadlock instead of surfacing as a user-visible tRPC error.
  *
@@ -168,34 +202,22 @@ export const createRetryingFetch = (
     }
     const readOnly = isReadOnlyQuery(request.query);
 
-    let lastResponse: { body: string; status: number; headers: Headers } | null = null;
-
-    const rebuild = (response: {
-      body: string;
-      status: number;
-      headers: Headers;
-    }): Response => {
-      const hasBody = response.status !== 204 && response.status !== 304;
-      return new Response(hasBody ? response.body : null, {
-        status: response.status,
-        headers: response.headers,
-      });
-    };
+    let lastResponse: ResponseSnapshot | null = null;
 
     try {
       return await withRetry(
         async () => {
           const response = await baseFetch(input, init);
-          const snapshot = {
-            body: await response.text(),
+          const snapshot: ResponseSnapshot = {
+            body: await response.arrayBuffer(),
             status: response.status,
             headers: response.headers,
           };
           lastResponse = snapshot;
-          if (isRetryableResponse(snapshot.status, snapshot.body, readOnly)) {
+          if (isRetryableSnapshot(snapshot, readOnly)) {
             throw new TransientDatabaseError("Transient PlanetScale error");
           }
-          return rebuild(snapshot);
+          return rebuildResponse(snapshot);
         },
         {
           maxRetries: 2,
@@ -213,7 +235,7 @@ export const createRetryingFetch = (
       );
     } catch (error) {
       if (error instanceof TransientDatabaseError && lastResponse) {
-        return rebuild(lastResponse);
+        return rebuildResponse(lastResponse);
       }
       throw error;
     }

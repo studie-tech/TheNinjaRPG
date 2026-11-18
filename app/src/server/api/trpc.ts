@@ -112,7 +112,6 @@ const ratelimitRedis = Redis.fromEnv();
 const ratelimit = new Ratelimit({
   redis: ratelimitRedis,
   limiter: Ratelimit.slidingWindow(60, "60 s"),
-  analytics: true,
   prefix: "trpc-ratelimit",
 });
 

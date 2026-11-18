@@ -26,7 +26,6 @@ const OAUTH_USERINFO_TIMEOUT_MS = 10000;
 const ratelimit = new Ratelimit({
   redis: Redis.fromEnv(),
   limiter: Ratelimit.slidingWindow(30, "60 s"),
-  analytics: true,
   prefix: "mcp-ratelimit",
 });
 
@@ -34,7 +33,6 @@ const ratelimit = new Ratelimit({
 const userRatelimit = new Ratelimit({
   redis: Redis.fromEnv(),
   limiter: Ratelimit.slidingWindow(30, "60 s"),
-  analytics: true,
   prefix: "mcp-user-ratelimit",
 });
 

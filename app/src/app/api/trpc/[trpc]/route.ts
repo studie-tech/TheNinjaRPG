@@ -1,6 +1,6 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { cookies, headers } from "next/headers";
-import type { NextRequest } from "next/server";
+import { after, type NextRequest } from "next/server";
 import { appRouter } from "@/api/root";
 import { BOTID_CHALLENGE_HEADER } from "@/libs/botid";
 import { BUILD_ID, BUILD_ID_HEADER } from "@/libs/buildVersion";
@@ -86,7 +86,9 @@ const handler = async (req: NextRequest) => {
   );
   if (shouldFlush || botIdGuard?.needsFlush) {
     console.error("Error Detected. Flushing Sentry");
-    await flushSafe();
+    // The function stays alive until the flush settles, without holding back the
+    // batch's other results.
+    after(() => flushSafe());
   }
 
   return response;
