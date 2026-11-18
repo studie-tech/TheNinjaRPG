@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { RefreshCw, Search, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -106,6 +106,12 @@ export const useConversation = (props: ConversationLogicProps) => {
   // A conversation left in a hidden tab or backgrounded app stops following live
   // events once the pause delay passes; showing the page again resumes and catches up.
   const isPageActive = usePageActive();
+  // Live events read visibility when they arrive, so showing or hiding the page keeps
+  // the channel subscription and cannot drop messages published in between.
+  const isPageActiveRef = useRef(isPageActive);
+  useEffect(() => {
+    isPageActiveRef.current = isPageActive;
+  }, [isPageActive]);
   const [isPaused, setIsPaused] = useState(false);
   useEffect(() => {
     if (isPageActive) return;
@@ -579,7 +585,7 @@ export const useConversation = (props: ConversationLogicProps) => {
                 fetchComment({
                   commentId: data.commentId,
                   conversationId: conversation.id,
-                  markRead: isPageActive,
+                  markRead: isPageActiveRef.current,
                 });
               }
               break;
@@ -610,7 +616,7 @@ export const useConversation = (props: ConversationLogicProps) => {
         },
       );
     }
-  }, [isPaused, isPageActive, conversation, pusher, queryKey]);
+  }, [isPaused, conversation, pusher, queryKey]);
 
   // Resuming after the subscription above is restored fetches what arrived meanwhile.
   useEffect(() => {

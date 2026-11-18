@@ -60,6 +60,7 @@ let finishCreate: (value: object) => void;
 let fetched: ReturnType<typeof row> | undefined;
 let reads = 0;
 let searchReads: string[] = [];
+let fetchInputs: unknown[] = [];
 const pusher = {
   subscribe: () => ({
     bind: (_event: string, handler: typeof receive) => {
@@ -76,6 +77,7 @@ beforeEach(() => {
   typingSent = [];
   createInputs = [];
   searchReads = [];
+  fetchInputs = [];
   fetched = undefined;
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: testApi.comments,
@@ -125,7 +127,10 @@ const mount = (
         finishCreate = resolve;
       });
     }
-    if (path === "comments.fetchConversationComment") return fetched;
+    if (path === "comments.fetchConversationComment") {
+      fetchInputs.push(input);
+      return fetched;
+    }
     if (path === "comments.reactConversationComment") return { success: true };
     throw new Error(`Unexpected request: ${path}`);
   });
@@ -375,6 +380,44 @@ it("retries a failed sanitizer load when a quote is toggled and fills its previe
   const quoted =
     hook.result.current.allComments?.find((c) => c.id === "b")?.content ?? "";
   expect(hook.result.current.sanitizer?.stripBlockquotes(quoted)).toBe("<p>Bravo</p>");
+});
+
+it("keeps the live channel across a hide and show and marks messages read only while visible", async () => {
+  let hidden = false;
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+  const setHidden = (value: boolean) =>
+    act(async () => {
+      hidden = value;
+      document.dispatchEvent(new window.Event("visibilitychange", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  const subscribe = vi.spyOn(pusher, "subscribe");
+  try {
+    const hook = mount();
+    await loaded(hook);
+    const subscribes = subscribe.mock.calls.length;
+    const unsubscribes = pusher.unsubscribe.mock.calls.length;
+    await setHidden(true);
+    fetched = row("hidden", "Sent while hidden", "Peer");
+    await act(async () =>
+      receive({ message: "new", fromId: "peer", commentId: "hidden" }),
+    );
+    await waitFor(() => expect(fetchInputs).toHaveLength(1));
+    await setHidden(false);
+    fetched = row("shown", "Sent while shown", "Peer");
+    await act(async () =>
+      receive({ message: "new", fromId: "peer", commentId: "shown" }),
+    );
+    await waitFor(() => expect(fetchInputs).toHaveLength(2));
+    expect(subscribe.mock.calls.length).toBe(subscribes);
+    expect(pusher.unsubscribe.mock.calls.length).toBe(unsubscribes);
+    expect(fetchInputs).toEqual([
+      expect.objectContaining({ commentId: "hidden", markRead: false }),
+      expect.objectContaining({ commentId: "shown", markRead: true }),
+    ]);
+  } finally {
+    Reflect.deleteProperty(document, "hidden");
+  }
 });
 
 it("reads only the selected search, repeating it when the same term is submitted again", async () => {
