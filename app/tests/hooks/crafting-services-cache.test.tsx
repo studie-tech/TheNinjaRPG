@@ -140,6 +140,7 @@ const harness = (
   } else
     vi.spyOn(userContext, "useUserData").mockReturnValue({
       refreshUser,
+      data: requester,
       prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
       updateUser: (
         ...[update, mutation]: Parameters<
@@ -150,7 +151,10 @@ const harness = (
   return { client, wrapper, refreshUser, calls };
 };
 const seedSubmissionViews = (client: QueryClient) => {
-  client.setQueryData(profileKey, { userData: { ...requester, items: [] } });
+  client.setQueryData(profileKey, {
+    userData: { ...requester, items: [] },
+    notifications: [],
+  });
   for (const key of inventoryKeys)
     client.setQueryData(key, [material, { ...equipment, variants: ["preserved"] }]);
   client.setQueryData(requestsKey, []);
@@ -651,11 +655,14 @@ it("retries failed active inventory reads on later receipt polls while retaining
   });
   seedSubmissionViews(client);
   client.setQueryData(requestsKey, terminal);
-  const Views = () => {
+  const Observer = () => {
     useServiceRequests();
+    return null;
+  };
+  const Views = ({ observe = true }: { observe?: boolean }) => {
     testApi.item.getUserItems.useQuery();
     testApi.occupation.getCraftingQueue.useQuery();
-    return null;
+    return observe ? <Observer /> : null;
   };
   const view = render(<Views />, { wrapper });
   await waitFor(() =>
@@ -668,7 +675,7 @@ it("retries failed active inventory reads on later receipt polls while retaining
   await waitFor(() =>
     expect(client.getQueryState(inventoryKeys[0]!)?.fetchStatus).toBe("idle"),
   );
-  view.rerender(<div />);
+  view.rerender(<Views observe={false} />);
   view.rerender(<Views />);
   await waitFor(() => expect(client.getQueryData(inventoryKeys[0]!)).toEqual(output));
   expect(refreshUser).toHaveBeenCalledTimes(1);
@@ -679,4 +686,201 @@ it("retries failed active inventory reads on later receipt polls while retaining
   await act(async () => client.refetchQueries({ queryKey: requestsKey }));
   expect(inventoryReads).toBe(3);
   expect(refreshUser).toHaveBeenCalledTimes(1);
+});
+
+it("reconciles crafter progression on other-tab acceptance once", async () => {
+  const active = { ...receipt, crafterId: requester.userId, status: "ACTIVE" };
+  const { client, wrapper, calls } = harness(
+    async (path) => {
+      if (path === "profile.getUser")
+        return {
+          userData: { ...requester, craftingExperience: 120, items: [] },
+          notifications: [],
+        };
+      if (path === "occupation.getServiceRequests") return [active];
+      return [];
+    },
+    { userProvider: true },
+  );
+  seedSubmissionViews(client);
+  client.setQueryData(profileKey, {
+    userData: { ...requester, craftingExperience: 100, items: [] },
+    notifications: [],
+  });
+  client.setQueryData(requestsKey, [{ ...active, status: "PENDING" }]);
+  const view = renderHook(useServiceRequests, { wrapper });
+  expect(calls).toEqual([]);
+  await act(async () => client.setQueryData(requestsKey, [active]));
+  await waitFor(() =>
+    expect(
+      client.getQueryData<UserCache>(profileKey)?.userData?.craftingExperience,
+    ).toBe(120),
+  );
+  await waitFor(() =>
+    expect(client.getQueryState(inventoryKeys[0]!)?.isInvalidated).toBe(true),
+  );
+  await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+  view.unmount();
+  renderHook(useServiceRequests, { wrapper });
+  expect(calls.filter((path) => path === "profile.getUser")).toHaveLength(1);
+});
+
+it.each(["event", "polling"])(
+  "reads both inventories after a queue crosses its due time through %s",
+  async (kind) => {
+    let serverTime = 9;
+    const dueAt = 10;
+    let started = false;
+    let profileRead = false;
+    const releaseQueue = deferred();
+    const output = { ...equipment, id: "started-output" };
+    const h = harness(
+      async (path) => {
+        if (path === "profile.getUser") {
+          const capturedNow = serverTime;
+          profileRead = true;
+          expect(capturedNow < dueAt).toBe(true);
+          serverTime = 10;
+          return {
+            serverTime: capturedNow,
+            userData: { ...requester, items: [] },
+            notifications: [],
+          };
+        }
+        if (path === "occupation.getCraftingQueue") {
+          expect(profileRead).toBe(true);
+          await releaseQueue.promise;
+          if (serverTime >= dueAt) started = true;
+          return { waiting: started ? [] : [{ id: "queued" }] };
+        }
+        if (path === "item.getUserItems" || path === "item.getUserItemsWithVariants")
+          return started ? [output] : [];
+        if (path === "occupation.getServiceRequests") return [];
+        return [];
+      },
+      { userProvider: true },
+    );
+    seedSubmissionViews(h.client);
+    h.client.setQueryData(queueKey, { waiting: [{ id: "queued" }] });
+    let refresh!: () => Promise<unknown>;
+    const Views = () => {
+      refresh = useCraftingServiceEvents(
+        userContext.useUserData().refreshUser,
+      ).refreshServiceViews;
+      useServiceRequests();
+      testApi.item.getUserItems.useQuery();
+      testApi.item.getUserItemsWithVariants.useQuery();
+      testApi.occupation.getCraftingQueue.useQuery();
+      return null;
+    };
+    render(<Views />, { wrapper: h.wrapper });
+    let event: Promise<unknown> | undefined;
+    await act(async () => {
+      if (kind === "event") event = refresh();
+      else h.client.setQueryData(requestsKey, [{ ...receipt, status: "REFUNDED" }]);
+    });
+    await waitFor(() => expect(h.calls).toContain("occupation.getCraftingQueue"));
+    expect(h.calls.some((path) => path.startsWith("item."))).toBe(false);
+    await act(async () => {
+      releaseQueue.resolve();
+      await event;
+    });
+    await waitFor(() =>
+      expect(h.client.getQueryData(queueKey)).toEqual({ waiting: [] }),
+    );
+    expect(started).toBe(true);
+    for (const key of inventoryKeys)
+      await waitFor(() => expect(h.client.getQueryData(key)).toEqual([output]));
+  },
+);
+
+it("retries receipt recovery after a cancelled provider refresh and failed replacement", async () => {
+  const replacement = deferred();
+  let profiles = 0;
+  const h = harness(
+    async (path) => {
+      if (path === "profile.getUser") {
+        profiles++;
+        if (profiles === 1) return new Promise(() => {});
+        if (profiles === 2) {
+          await replacement.promise;
+          throw new Error("replacement failed");
+        }
+        return {
+          userData: { ...requester, money: 1050, items: [] },
+          notifications: [],
+        };
+      }
+      if (path === "occupation.getServiceRequests")
+        return [{ ...receipt, status: "COMPLETED" }];
+      return [];
+    },
+    { userProvider: true },
+  );
+  seedSubmissionViews(h.client);
+  h.client.setQueryData(requestsKey, [{ ...receipt, status: "COMPLETED" }]);
+  let refresh!: () => Promise<boolean>;
+  const Views = () => {
+    refresh = userContext.useUserData().refreshUser;
+    useServiceRequests();
+    return null;
+  };
+  render(<Views />, { wrapper: h.wrapper });
+  await waitFor(() => expect(profiles).toBe(1));
+  let next!: Promise<boolean>;
+  await act(async () => {
+    next = refresh();
+  });
+  await waitFor(() => expect(profiles).toBe(2));
+  await act(async () => {
+    replacement.resolve();
+    await next;
+  });
+  expect(await next).toBe(false);
+  expect(h.client.getQueryState(inventoryKeys[0]!)?.isInvalidated).toBe(false);
+  await act(async () => {
+    await h.client.refetchQueries({ queryKey: requestsKey });
+  });
+  await waitFor(() => expect(profiles).toBe(3));
+  await waitFor(() =>
+    expect(h.client.getQueryState(inventoryKeys[0]!)?.isInvalidated).toBe(true),
+  );
+  expect(h.client.getQueryData<UserCache>(profileKey)?.userData?.money).toBe(1050);
+  await act(async () => h.client.refetchQueries({ queryKey: requestsKey }));
+  expect(profiles).toBe(3);
+});
+
+it("retries a failed queue before inventory while retaining successful profile and independent reads", async () => {
+  let queueReads = 0;
+  const terminal = [{ ...receipt, status: "COMPLETED" }];
+  const { client, wrapper, refreshUser, calls } = harness(async (path) => {
+    if (path === "occupation.getCraftingQueue") {
+      if (++queueReads === 1) throw new Error("Queue unavailable");
+      return { waiting: [] };
+    }
+    if (path === "occupation.getServiceRequests") return terminal;
+    return [];
+  });
+  seedSubmissionViews(client);
+  client.setQueryData(requestsKey, terminal);
+  const Views = () => {
+    useServiceRequests();
+    testApi.item.getUserItems.useQuery();
+    testApi.item.getUserItemsWithVariants.useQuery();
+    testApi.occupation.getCraftingQueue.useQuery();
+    testApi.profile.getSidebarTimers.useQuery();
+    return null;
+  };
+  render(<Views />, { wrapper });
+  await waitFor(() => expect(client.getQueryState(queueKey)?.status).toBe("error"));
+  expect(calls.some((path) => path.startsWith("item."))).toBe(false);
+  await waitFor(() =>
+    expect(calls.filter((path) => path === "profile.getSidebarTimers")).toHaveLength(1),
+  );
+  await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+  for (const key of inventoryKeys)
+    await waitFor(() => expect(client.getQueryData(key)).toEqual([]));
+  expect(queueReads).toBe(2);
+  expect(refreshUser).toHaveBeenCalledTimes(1);
+  expect(calls.filter((path) => path === "profile.getSidebarTimers")).toHaveLength(1);
 });

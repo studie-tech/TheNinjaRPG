@@ -3,7 +3,7 @@
 import { Settings } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import type React from "react";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,7 @@ import {
 } from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
 import Countdown from "@/layout/Countdown";
 import { CraftingServices } from "@/layout/CraftingServices";
 import Image from "@/layout/Image";
@@ -74,17 +75,40 @@ export default function Occupations() {
 function OccupationTabs() {
   const searchParams = useSearchParams();
   const tab = searchParams?.get("tab") === "services" ? "services" : "occupation";
+  const navigationRef = useRef<HTMLDivElement>(null);
+  const focusTabRef = useRef<string | null>(null);
+  // Each pane mounts its own header; only a focused navigation action restores focus.
+  useEffect(() => {
+    if (focusTabRef.current !== tab) return;
+    focusTabRef.current = null;
+    navigationRef.current?.dispatchEvent(
+      new Event(REVEAL_CONTENT_BOX_CONTROLS, { bubbles: true }),
+    );
+    const frame = requestAnimationFrame(() => {
+      navigationRef.current
+        ?.querySelector<HTMLButtonElement>('button[aria-current="true"]')
+        ?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [tab]);
   const navigation = (
-    <NavTabs
-      current={tab === "services" ? "Service Requests" : "Occupation"}
-      options={["Occupation", "Service Requests"]}
-      onChange={(value) => {
-        const url = new URL(window.location.href);
-        if (value === "Service Requests") url.searchParams.set("tab", "services");
-        else url.searchParams.delete("tab");
-        window.history.replaceState(null, "", url);
-      }}
-    />
+    <div ref={navigationRef}>
+      <NavTabs
+        current={tab === "services" ? "Service Requests" : "Occupation"}
+        options={["Occupation", "Service Requests"]}
+        onChange={(value) => {
+          const nextTab = value === "Service Requests" ? "services" : "occupation";
+          if (nextTab === tab) return;
+          focusTabRef.current = navigationRef.current?.contains(document.activeElement)
+            ? nextTab
+            : null;
+          const url = new URL(window.location.href);
+          if (value === "Service Requests") url.searchParams.set("tab", "services");
+          else url.searchParams.delete("tab");
+          window.history.replaceState(null, "", url);
+        }}
+      />
+    </div>
   );
   return tab === "services" ? (
     <CraftingServices navigation={navigation} />

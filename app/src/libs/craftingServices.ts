@@ -38,19 +38,16 @@ export const serviceRecipeError = (
   if (!hasRequiredSkill(recipe, user)) return "The crafter needs the required skill";
   return null;
 };
-/** Validate crystal compatibility and the crafter's rank against the submitted copy. */
-export const serviceImbueError = (
+/** Validate crystal compatibility and rank using the equipment and public offer. */
+export const serviceImbueCompatibilityError = (
   target: UserItemWithRelations,
   crystal: Item,
   rank: CRAFTING_RANK,
-  user: SkillRequirementUser,
 ) => {
   if (!target.item.canBeImbued || crystal.itemType !== "CRYSTAL")
     return "Select an imbuable item and a crystal";
   if (!CRAFTING_TIMES_MINS[rank][crystal.rarity])
     return "The crafter's rank cannot imbue this crystal rarity";
-  if (!hasRequiredSkill(crystal, user))
-    return "The crafter needs the crystal's required skill";
   if (crystal.crystalTargetTypes && crystal.crystalTargetTypes !== target.item.itemType)
     return "This crystal is incompatible with the item type";
   if (crystal.battleUsageType === "PVE" && target.item.battleUsageType !== "PVE")
@@ -62,5 +59,19 @@ export const serviceImbueError = (
     return "This item is at the crafter's imbuement limit";
   if (target.imbuements.some((imb) => imb.imbuementItemId === crystal.id))
     return "This item already has that crystal";
+  return null;
+};
+
+/** Validate a submitted imbuement against compatibility and the crafter's private skills. */
+export const serviceImbueError = (
+  target: UserItemWithRelations,
+  crystal: Item,
+  rank: CRAFTING_RANK,
+  user: SkillRequirementUser,
+) => {
+  const compatibilityError = serviceImbueCompatibilityError(target, crystal, rank);
+  if (compatibilityError) return compatibilityError;
+  if (!hasRequiredSkill(crystal, user))
+    return "The crafter needs the crystal's required skill";
   return null;
 };

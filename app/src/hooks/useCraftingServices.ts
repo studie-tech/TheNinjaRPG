@@ -86,11 +86,16 @@ export const useServiceRequests = () => {
     refetchInterval: 15_000,
   });
   const utils = api.useUtils();
-  const { refreshUser } = useUserData();
+  const { refreshUser, data: userData } = useUserData();
   const { invalidateInventory } = useInventoryCacheUpdate();
   const terminal = (query.data ?? [])
     .filter((row) => row.status === "COMPLETED" || row.status === "REFUNDED")
     .map((row) => `${row.id}:${row.status}`)
+    .sort()
+    .join("|");
+  const active = (query.data ?? [])
+    .filter((row) => row.status === "ACTIVE" && row.crafterId === userData?.userId)
+    .map((row) => row.id)
     .sort()
     .join("|");
   const attempted = useRef<{
@@ -115,8 +120,8 @@ export const useServiceRequests = () => {
         .filter((row) => row.status === "PENDING" || row.status === "ACTIVE")
         .map((row) => row.id),
     );
-    if (!terminal && !reconciliation.generation) return;
-    const signature = `${terminal}|${reconciliation.generation}`;
+    if (!terminal && !active && !reconciliation.generation) return;
+    const signature = `${terminal}|${active}|${reconciliation.generation}`;
     if (reconciliation.succeeded === signature) return;
     const revision =
       client.getQueryState(
@@ -148,15 +153,23 @@ export const useServiceRequests = () => {
         if (!(await refreshUser())) return;
         work.profile = true;
       }
+      const queue = work.completed.has("queue")
+        ? Promise.resolve()
+        : utils.occupation.getCraftingQueue
+            .invalidate(undefined, undefined, { throwOnError: true })
+            .then(() => {
+              work.completed.add("queue");
+            });
       const reads = [
-        ["inventory", () => invalidateInventory({ throwOnError: true })],
         [
-          "queue",
-          () =>
-            utils.occupation.getCraftingQueue.invalidate(undefined, undefined, {
-              throwOnError: true,
-            }),
+          "inventory",
+          async () => {
+            // Queue settlement may create output after the profile's captured time.
+            await queue;
+            await invalidateInventory({ throwOnError: true });
+          },
         ],
+        ["queue", () => queue],
         [
           "timers",
           () =>
@@ -192,6 +205,7 @@ export const useServiceRequests = () => {
     client,
     data,
     terminal,
+    active,
     dataUpdatedAt,
     isFetching,
     invalidateInventory,

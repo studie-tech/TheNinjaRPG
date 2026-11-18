@@ -33,6 +33,7 @@ beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: testApi.profile,
+    item: testApi.item,
     comments: testApi.comments,
     tournament: testApi.tournament,
     useUtils: testApi.useUtils,
@@ -612,3 +613,119 @@ it("refreshes cached inventory and service views when an inbox event delivers co
     expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   expect(refreshProfile).toHaveBeenCalledTimes(1);
 });
+
+it.each(["confirmed", "confirmed-late", "failed", "acknowledged", "list-in-flight"])(
+  "uses the confirmed service profile unless inbox ordering requires another read: %s",
+  async (outcome) => {
+    let receiveEvent!: (data: UserEvent) => Promise<void>;
+    vi.spyOn(Pusher, "default").mockImplementation((() => ({
+      subscribe: () => ({
+        bind: (event: string, handler: typeof receiveEvent) => {
+          if (event === "event") receiveEvent = handler;
+        },
+      }),
+      unsubscribe: vi.fn(),
+      disconnect: vi.fn(),
+    })) as never);
+    vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+    vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    queryClients.push(queryClient);
+    const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+    const inboxKey = getQueryKey(
+      testApi.comments.getUserConversations,
+      undefined,
+      "query",
+    );
+    const profile = {
+      serverTime: 1000,
+      userData: {
+        userId: "player",
+        level: MESSAGING_MIN_LEVEL,
+        chatMuted: false,
+        mutedConversationIds: [],
+        unmutedTavernIds: [],
+      },
+      notifications: [
+        { href: "/inbox", name: "1 message", color: "blue", notificationCount: 1 },
+      ],
+    };
+    let acknowledged = false;
+    let reads = 0;
+    queryClient.setQueryDefaults(profileKey, {
+      queryFn: async () => {
+        reads++;
+        if (outcome === "failed" && reads === 1) throw new Error("Profile unavailable");
+        return { ...profile, notifications: acknowledged ? [] : profile.notifications };
+      },
+    });
+    queryClient.setQueryData(profileKey, { ...profile, notifications: [] });
+    queryClient.setQueryData(inboxKey, []);
+    const readFinished = deferred();
+    const continueEvent = deferred();
+    const listResponse = deferred<never[]>();
+    const trpcClient = testApi.createClient({ links: [] });
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+        {children}
+      </TrpcTestProviders>
+    );
+    const refreshUser = async () => {
+      const confirmed = await queryClient
+        .fetchQuery({ queryKey: profileKey, staleTime: 0 })
+        .then(
+          () => true,
+          () => false,
+        );
+      readFinished.resolve();
+      await continueEvent.promise;
+      return confirmed;
+    };
+    renderHook(() => usePusherHandler("player", undefined, refreshUser), { wrapper });
+    await connectPusher();
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = receiveEvent({
+        type: "newInbox",
+        craftingService: true,
+        conversationId: "service",
+        countedAt: outcome === "confirmed" ? 500 : 2000,
+      });
+      await readFinished.promise;
+    });
+    let list: Promise<never[]> | undefined;
+    if (outcome === "acknowledged" || outcome === "list-in-flight") {
+      await act(async () => {
+        list = queryClient.fetchQuery({
+          queryKey: inboxKey,
+          staleTime: 0,
+          queryFn: () => {
+            acknowledged = true;
+            return outcome === "acknowledged"
+              ? Promise.resolve([])
+              : listResponse.promise;
+          },
+        });
+        if (outcome === "acknowledged") await list;
+      });
+    }
+    await act(async () => {
+      continueEvent.resolve();
+      await pending;
+    });
+    expect(reads).toBe(outcome.startsWith("confirmed") ? 1 : 2);
+    expect(
+      queryClient
+        .getQueryData<UserCache>(profileKey)
+        ?.notifications?.find((entry) => entry.href === "/inbox")?.notificationCount,
+    ).toBe(acknowledged ? undefined : 1);
+    expect(queryClient.getQueryState(inboxKey)?.isInvalidated).toBe(true);
+    if (list)
+      await act(async () => {
+        listResponse.resolve([]);
+        await list;
+      });
+  },
+);

@@ -1,9 +1,25 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  useQuery,
+} from "@tanstack/react-query";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import * as nextNavigation from "next/navigation";
 import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
+import Occupations from "@/app/[shell]/occupation/page";
 import * as serviceCache from "@/hooks/useCraftingServices";
 import * as contentBox from "@/layout/ContentBox";
+import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
 import { CraftForMe, CraftingServices } from "@/layout/CraftingServices";
 import * as userContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
@@ -21,7 +37,11 @@ let query: {
   refetch: typeof retry;
 };
 beforeEach(() => {
-  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
+  installBrowserGlobals({
+    resizeObserver: true,
+    scrollIntoView: true,
+    animationFrame: true,
+  });
   save.mockClear();
   retry.mockClear();
   query = {
@@ -74,6 +94,7 @@ beforeEach(() => {
                 rarity: "COMMON",
                 maxDurability: 100,
                 canBeImbued: true,
+                maxImbueNumber: 3,
               },
               imbuements: [
                 {
@@ -356,7 +377,13 @@ it("excludes installed crystals and clears only a newly incompatible selection o
     quantity: 1,
     equipped: "NONE",
     durability: 50,
-    item: { name, rarity: "COMMON", maxDurability: 100, canBeImbued: true },
+    item: {
+      name,
+      rarity: "COMMON",
+      maxDurability: 100,
+      maxImbueNumber: 3,
+      canBeImbued: true,
+    },
     imbuements,
   });
   const rows = [
@@ -375,6 +402,7 @@ it("excludes installed crystals and clears only a newly incompatible selection o
       itemId: `crystal-${id}`,
       quantity: 1,
       item: {
+        id: `crystal-${id}`,
         name: `Crystal ${id.toUpperCase()}`,
         rarity: "COMMON",
         itemType: "CRYSTAL",
@@ -420,4 +448,339 @@ it("excludes installed crystals and clears only a newly incompatible selection o
     userItemId: "bound",
     userCrystalItemId: "crystal-b",
   });
+});
+
+it("refreshes a cached disabled offer when the requester reopens the dialog", async () => {
+  const cached = {
+    prices: [{ service: "REPAIR", rarity: "COMMON", fee: 50, enabled: false }],
+    crafter: { rank: "MASTER", occupation: "CRAFTING", username: "Crafter" },
+  };
+  const cache = new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+  });
+  const key = ["service-prices", "crafter"];
+  cache.setQueryData(key, cached);
+  const remote = vi.fn(async () => cached);
+  Object.assign(client.api.occupation.getServicePrices, {
+    useQuery: (_input: unknown, options: object) =>
+      useQuery({ queryKey: key, queryFn: remote, ...options }),
+  });
+  const view = render(
+    <QueryClientProvider client={cache}>
+      <CraftForMe crafterId="crafter" />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
+  await waitFor(() => expect(remote).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    await cache.cancelQueries();
+  });
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  remote.mockImplementation(async () => ({
+    ...cached,
+    prices: [{ ...cached.prices[0]!, enabled: true }],
+  }));
+  fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
+  fireEvent.click(screen.getByRole("button", { name: "Repair" }));
+  fireEvent.click(screen.getByRole("combobox", { name: "Your item" }));
+  fireEvent.click(screen.getByRole("option", { name: /Service Sword/ }));
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "Repair now" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  expect(remote).toHaveBeenCalledTimes(2);
+  view.unmount();
+  cache.clear();
+});
+
+it.each(["respondToServiceRequest", "submitServiceRequest"] as const)(
+  "keeps the default mutation error handler and inline feedback for %s",
+  async (endpoint) => {
+    const defaultError = vi.fn();
+    const cache = new QueryClient({
+      defaultOptions: { mutations: { retry: false, onError: defaultError } },
+    });
+    Object.assign(client.api.occupation[endpoint], {
+      useMutation: (options: object) =>
+        useMutation({
+          ...options,
+          mutationFn: async () => {
+            throw new Error("Reload required");
+          },
+        }),
+    });
+    query.data = {
+      prices: [{ service: "REPAIR", rarity: "COMMON", fee: 50, enabled: true }],
+      crafter: { rank: "MASTER", occupation: "CRAFTING", username: "Crafter" },
+    };
+    vi.spyOn(serviceCache, "useServiceRequests").mockReturnValue({
+      data: [
+        {
+          id: "pending",
+          status: "PENDING",
+          service: "CRAFT",
+          itemName: "Sword",
+          fee: 50,
+          crafterId: "crafter",
+          requesterId: "requester",
+          materials: [],
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    } as never);
+    const view = render(
+      <QueryClientProvider client={cache}>
+        {endpoint === "respondToServiceRequest" ? (
+          <CraftingServices />
+        ) : (
+          <CraftForMe crafterId="crafter" />
+        )}
+      </QueryClientProvider>,
+    );
+    if (endpoint === "respondToServiceRequest")
+      fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    else {
+      fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
+      fireEvent.click(screen.getByRole("button", { name: "Repair" }));
+      fireEvent.click(screen.getByRole("combobox", { name: "Your item" }));
+      fireEvent.click(screen.getByRole("option", { name: /Service Sword/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Repair now" }));
+    }
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe("Reload required"),
+    );
+    expect(defaultError).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: endpoint === "respondToServiceRequest" ? "Accept" : "Repair now",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+    view.unmount();
+    cache.clear();
+  },
+);
+
+it("hides incompatible crystals and invalidates a selection when its target changes", () => {
+  query.data = {
+    prices: [{ service: "IMBUE", rarity: "COMMON", fee: 50, enabled: true }],
+    crafter: { rank: "MASTER", occupation: "CRAFTING", username: "Crafter" },
+  };
+  const equipment = (id: string, itemType: string) => ({
+    id,
+    itemId: id,
+    quantity: 1,
+    equipped: "NONE",
+    durability: 40,
+    item: {
+      name: id,
+      rarity: "COMMON",
+      maxDurability: 100,
+      maxImbueNumber: 2,
+      canBeImbued: true,
+      itemType,
+      battleUsageType: "ALL",
+    },
+    imbuements: [],
+  });
+  const gem = (id: string, extra: object = {}) => ({
+    id,
+    itemId: id,
+    quantity: 1,
+    item: { name: id, rarity: "COMMON", itemType: "CRYSTAL", ...extra },
+  });
+  const rows = [
+    equipment("Armor", "ARMOR"),
+    equipment("Weapon", "WEAPON"),
+    gem("Armor Gem", { crystalTargetTypes: "ARMOR" }),
+    gem("PvE Gem", { battleUsageType: "PVE" }),
+    gem("Legendary Gem", { rarity: "LEGENDARY" }),
+  ];
+  Object.assign(client.api.item.getUserItems, { useQuery: () => ({ data: rows }) });
+  const view = render(<CraftForMe crafterId="crafter" />);
+  fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
+  fireEvent.click(screen.getByRole("button", { name: "Imbue" }));
+  const choose = (name: string) => {
+    fireEvent.click(screen.getByRole("combobox", { name: "Your item" }));
+    fireEvent.click(screen.getByRole("option", { name: new RegExp(`^${name} `) }));
+  };
+  choose("Armor");
+  fireEvent.click(screen.getByRole("combobox", { name: "Crystal" }));
+  expect(screen.queryByRole("option", { name: /PvE Gem/ })).toBeNull();
+  expect(screen.queryByRole("option", { name: /Legendary Gem/ })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: /Armor Gem/ }));
+  rows[2]!.quantity = 0;
+  view.rerender(<CraftForMe crafterId="crafter" />);
+  expect(
+    (screen.getByRole("button", { name: "Submit request" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(screen.queryByText(/Service fee:/)).toBeNull();
+  rows[2]!.quantity = 1;
+  view.rerender(<CraftForMe crafterId="crafter" />);
+  expect(
+    (screen.getByRole("button", { name: "Submit request" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+  choose("Weapon");
+  expect(screen.getByRole("combobox", { name: "Crystal" }).textContent).toContain(
+    "Select your crystal",
+  );
+  expect(
+    (screen.getByRole("button", { name: "Submit request" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("combobox", { name: "Crystal" }));
+  expect(screen.queryByRole("option", { name: /Armor Gem/ })).toBeNull();
+  view.unmount();
+});
+
+it.each(["repaired", "equipped", "stored", "auctioned", "crafting"])(
+  "invalidates selected equipment when it becomes %s",
+  (change) => {
+    query.data = {
+      prices: [{ service: "REPAIR", rarity: "COMMON", fee: 50, enabled: true }],
+      crafter: { rank: "MASTER", occupation: "CRAFTING", username: "Crafter" },
+    };
+    let row = {
+      id: "weapon",
+      itemId: "weapon-item",
+      quantity: 1,
+      equipped: "NONE",
+      storedAtHome: false,
+      isInAuction: false,
+      craftingFinishedAt: null as Date | null,
+      durability: 40,
+      item: { name: "Weapon", rarity: "COMMON", maxDurability: 100 },
+      imbuements: [],
+    };
+    Object.assign(client.api.item.getUserItems, { useQuery: () => ({ data: [row] }) });
+    const view = render(<CraftForMe crafterId="crafter" />);
+    fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
+    fireEvent.click(screen.getByRole("button", { name: "Repair" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Your item" }));
+    fireEvent.click(screen.getByRole("option", { name: /Weapon/ }));
+    row = {
+      ...row,
+      ...(change === "repaired"
+        ? { durability: 100 }
+        : change === "equipped"
+          ? { equipped: "WEAPON" }
+          : change === "stored"
+            ? { storedAtHome: true }
+            : change === "auctioned"
+              ? { isInAuction: true }
+              : { craftingFinishedAt: new Date(Date.now() + 60_000) }),
+    };
+    view.rerender(<CraftForMe crafterId="crafter" />);
+    expect(screen.getByRole("combobox", { name: "Your item" }).textContent).toContain(
+      "Select your item",
+    );
+    expect(
+      (screen.getByRole("button", { name: "Repair now" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(screen.queryByText(/Service fee:/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Repair now" }));
+    expect(save).not.toHaveBeenCalled();
+  },
+);
+
+it("restores focus after a user switches occupation panes and reveals overflow controls", async () => {
+  let params = new URLSearchParams();
+  vi.spyOn(nextNavigation, "useSearchParams").mockImplementation(() => params as never);
+  vi.spyOn(userContext, "useRequiredUserDataSelector").mockReturnValue({
+    data: { occupation: null, role: "USER" },
+    prepareUserUpdate: vi.fn(),
+    updateUser: vi.fn(),
+  } as never);
+  Object.assign(client.api.occupation, {
+    selectOccupation: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+  });
+  const reveal = vi.fn();
+  vi.spyOn(contentBox, "default").mockImplementation(
+    ({ children, topRightContent }: ComponentProps<typeof contentBox.default>) => (
+      <section
+        ref={(node) => {
+          node?.addEventListener(REVEAL_CONTENT_BOX_CONTROLS, reveal);
+        }}
+      >
+        {topRightContent}
+        {children}
+      </section>
+    ),
+  );
+  const view = render(<Occupations />);
+  const old = screen.getByRole("button", { name: "Service Requests" });
+  old.focus();
+  fireEvent.click(old);
+  params = new URLSearchParams("tab=services");
+  view.rerender(<Occupations />);
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Service Requests" }),
+    ),
+  );
+  expect(document.activeElement).not.toBe(old);
+  expect(reveal).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Service Requests" }));
+  view.rerender(<Occupations />);
+  expect(reveal).toHaveBeenCalledTimes(1);
+  const unrelated = document.createElement("button");
+  document.body.append(unrelated);
+  unrelated.focus();
+  params = new URLSearchParams();
+  view.rerender(<Occupations />);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  });
+  expect(document.activeElement).toBe(unrelated);
+  expect(reveal).toHaveBeenCalledTimes(1);
+  unrelated.remove();
+});
+
+it("invalidates a selected recipe when the crafter's rank no longer qualifies", () => {
+  query.data = {
+    prices: [{ service: "CRAFT", rarity: "RARE", fee: 50, enabled: true }],
+    crafter: { rank: "APPRENTICE", occupation: "CRAFTING", username: "Crafter" },
+  };
+  Object.assign(client.api.occupation.getCraftableItems, {
+    useQuery: () => ({
+      data: [
+        {
+          id: "rare-sword",
+          name: "Rare Sword",
+          rarity: "RARE",
+          itemType: "WEAPON",
+          craftingOutputQuantity: 1,
+          craftingRequirements: [
+            { id: "iron", quantity: 1, requirementItem: { name: "Iron" } },
+          ],
+        },
+      ],
+    }),
+  });
+  const view = render(<CraftForMe crafterId="crafter" />);
+  fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
+  fireEvent.click(screen.getByRole("combobox", { name: "Recipe" }));
+  fireEvent.click(screen.getByRole("option", { name: /Rare Sword/ }));
+  expect(
+    (screen.getByRole("button", { name: "Submit request" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+  query.data.crafter!.rank = "NOVICE";
+  view.rerender(<CraftForMe crafterId="crafter" />);
+  expect(
+    (screen.getByRole("button", { name: "Submit request" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(screen.queryByText(/Service fee:/)).toBeNull();
+  expect(screen.getByRole("combobox", { name: "Recipe" }).textContent).toContain(
+    "Search the recipe book",
+  );
 });

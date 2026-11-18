@@ -265,7 +265,11 @@ export function UserContextProvider(props: {
   );
   const refreshUser = useCallback(async () => {
     try {
-      await queryClient.cancelQueries({ queryKey: userQueryKey, exact: true });
+      // A cancelled read must not confirm the restored cached profile as a fresh response.
+      await queryClient.cancelQueries(
+        { queryKey: userQueryKey, exact: true },
+        { silent: true },
+      );
       const result = await refetch({ throwOnError: true });
       return result.isSuccess && result.data?.userData?.userId === userId;
     } catch {

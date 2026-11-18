@@ -389,8 +389,11 @@ export const usePusherHandler = (
             void utils.comments.getTavernIds.invalidate();
             void utils.comments.getConversationComments.reset();
           } else if (data.type === "newInbox") {
-            if (data.craftingService && notificationSession.current === session)
-              await refreshServiceViews();
+            const serviceInboxRevision = inboxReadRevision;
+            const serviceProfileConfirmed =
+              data.craftingService && notificationSession.current === session
+                ? await refreshServiceViews()
+                : false;
             const shouldNotify =
               (await resolveNotificationProfile(data.conversationId)) &&
               canNotifyConversation(data.conversationId);
@@ -398,6 +401,17 @@ export const usePusherHandler = (
               // A shown list's reread also resets the server's inbox news, so no count appears.
               void utils.comments.getUserConversations.invalidate();
             } else if (
+              serviceProfileConfirmed &&
+              serviceInboxRevision === inboxReadRevision &&
+              !inboxAcknowledged &&
+              inboxQuery()?.state.fetchStatus !== "fetching"
+            ) {
+              // The committed service delivery is included in this confirmed profile.
+              void utils.comments.getUserConversations.invalidate(undefined, {
+                refetchType: "none",
+              });
+            } else if (
+              data.craftingService ||
               inboxAcknowledged ||
               inboxQuery()?.state.fetchStatus === "fetching" ||
               !isInboxDeliveryAfterProfile(

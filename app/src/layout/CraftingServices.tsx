@@ -43,6 +43,7 @@ import { getMissingCraftingRank } from "@/libs/crafting";
 import {
   getServiceRepairDurability,
   isServiceEquipmentAvailable,
+  serviceImbueCompatibilityError,
 } from "@/libs/craftingServices";
 import { needsInventoryRepair } from "@/libs/repair";
 import { showMutationToast } from "@/libs/toast";
@@ -95,7 +96,9 @@ export function CraftingServices({ navigation }: { navigation?: React.ReactNode 
       showMutationToast(result);
       await updateService(result, snapshot);
     },
-    onError: (error) => setMessage(error.message),
+    onSettled: (_result, error) => {
+      if (error) setMessage(error.message);
+    },
   });
   if (!user) return <Loader />;
   return (
@@ -348,7 +351,10 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
   const [imbuementId, setImbuementId] = useState("");
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const offers = api.occupation.getServicePrices.useQuery({ crafterId });
+  const offers = api.occupation.getServicePrices.useQuery(
+    { crafterId },
+    { staleTime: 0 },
+  );
   const recipes = api.occupation.getCraftableItems.useQuery();
   const inventory = api.item.getUserItems.useQuery();
   const { prepareServiceUpdate, updateService } = useCraftingServiceCache();
@@ -360,15 +366,38 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
       showMutationToast(result);
       await updateService(result, snapshot);
     },
-    onError: (error) => setMessage(error.message),
+    onSettled: (_result, error) => {
+      if (error) setMessage(error.message);
+    },
   });
-  const selectedRecipe = recipes.data?.find((row) => row.id === itemId);
-  const target = inventory.data?.find((row) => row.id === itemId);
-  const crystal = inventory.data?.find(
+  const rank = offers.data?.crafter.rank ?? "NOVICE";
+  const eligibleRecipes = (recipes.data ?? []).filter(
     (row) =>
-      row.id === crystalId &&
-      !target?.imbuements.some((installed) => installed.imbuementItemId === row.itemId),
+      !row.parentItemId &&
+      row.craftingRequirements.length &&
+      !getMissingCraftingRank(row, rank),
   );
+  const eligibleEquipment = (inventory.data ?? []).filter(
+    (row) =>
+      isServiceEquipmentAvailable(row) &&
+      (service === "REPAIR"
+        ? needsInventoryRepair(row)
+        : service === "DISIMBUE"
+          ? row.imbuements.length > 0
+          : row.item.canBeImbued),
+  );
+  const selectedRecipe = eligibleRecipes.find((row) => row.id === itemId);
+  const target = eligibleEquipment.find((row) => row.id === itemId);
+  const eligibleCrystals = (inventory.data ?? []).filter(
+    (row) =>
+      target &&
+      !serviceImbueCompatibilityError(target, row.item, rank) &&
+      row.quantity > 0 &&
+      !row.isInAuction &&
+      !row.storedAtHome &&
+      (!row.craftingFinishedAt || row.craftingFinishedAt <= new Date()),
+  );
+  const crystal = eligibleCrystals.find((row) => row.id === crystalId);
   const imbuement = target?.imbuements.find((row) => row.id === imbuementId);
   const info = service === "CRAFT" ? selectedRecipe : target?.item;
   const rarity =
@@ -382,28 +411,14 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
   );
   const options =
     service === "CRAFT"
-      ? (recipes.data ?? [])
-          .filter(
-            (row) =>
-              !row.parentItemId &&
-              row.craftingRequirements.length &&
-              !getMissingCraftingRank(row, offers.data?.crafter.rank ?? "NOVICE"),
-          )
-          .map((row) => ({ value: row.id, label: `${row.name} (${row.rarity})` }))
-      : (inventory.data ?? [])
-          .filter(
-            (row) =>
-              isServiceEquipmentAvailable(row) &&
-              (service === "REPAIR"
-                ? needsInventoryRepair(row)
-                : service === "DISIMBUE"
-                  ? row.imbuements.length > 0
-                  : row.item.canBeImbued),
-          )
-          .map((row) => ({
-            value: row.id,
-            label: `${row.item.name} (${row.item.rarity}, ${row.durability}/${row.item.maxDurability} durability)`,
-          }));
+      ? eligibleRecipes.map((row) => ({
+          value: row.id,
+          label: `${row.name} (${row.rarity})`,
+        }))
+      : eligibleEquipment.map((row) => ({
+          value: row.id,
+          label: `${row.item.name} (${row.item.rarity}, ${row.durability}/${row.item.maxDurability} durability)`,
+        }));
   if (offers.isLoading || inventory.isLoading || recipes.isLoading) return <Loader />;
   if (offers.isError || inventory.isError || recipes.isError)
     return (
@@ -466,11 +481,11 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           onChange={(value) => {
             setItemId(value);
             setImbuementId("");
-            const nextTarget = inventory.data?.find((row) => row.id === value);
+            const nextTarget = eligibleEquipment.find((row) => row.id === value);
             if (
-              nextTarget?.imbuements.some(
-                (installed) => installed.imbuementItemId === crystal?.itemId,
-              )
+              crystal &&
+              nextTarget &&
+              serviceImbueCompatibilityError(nextTarget, crystal.item, rank)
             )
               setCrystalId("");
           }}
@@ -483,22 +498,10 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
             id="service-crystal"
             label="Crystal"
             value={crystalId}
-            options={(inventory.data ?? [])
-              .filter(
-                (row) =>
-                  row.item.itemType === "CRYSTAL" &&
-                  !target?.imbuements.some(
-                    (installed) => installed.imbuementItemId === row.itemId,
-                  ) &&
-                  row.quantity > 0 &&
-                  !row.isInAuction &&
-                  !row.storedAtHome &&
-                  (!row.craftingFinishedAt || row.craftingFinishedAt <= new Date()),
-              )
-              .map((row) => ({
-                value: row.id,
-                label: `${row.item.name} (${row.item.rarity})`,
-              }))}
+            options={eligibleCrystals.map((row) => ({
+              value: row.id,
+              label: `${row.item.name} (${row.item.rarity})`,
+            }))}
             placeholder="Select your crystal"
             disabled={submit.isPending || submitted}
             onChange={setCrystalId}
@@ -585,7 +588,7 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
             !info ||
             submit.isPending ||
             submitted ||
-            (service === "DISIMBUE" && !imbuementId)
+            (service === "DISIMBUE" && !imbuement)
           }
           onClick={() =>
             submit.mutate({
@@ -633,7 +636,9 @@ function ServicePrices({ crafterId }: { crafterId: string }) {
       showMutationToast(result);
       if (result.success) await cache.updateCache(undefined, snapshot);
     },
-    onError: (error) => setMessage(error.message),
+    onSettled: (_result, error) => {
+      if (error) setMessage(error.message);
+    },
   });
   const currentPrice = prices.data?.prices.find(
     (row) => row.service === service && row.rarity === rarity,

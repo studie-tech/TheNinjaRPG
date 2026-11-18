@@ -48,6 +48,7 @@ beforeEach(() => {
   vi.spyOn(refresh, "useRefreshAt").mockImplementation(() => {});
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: testApi.profile,
+    item: testApi.item,
     comments: testApi.comments,
     tournament: testApi.tournament,
     useUtils: testApi.useUtils,
