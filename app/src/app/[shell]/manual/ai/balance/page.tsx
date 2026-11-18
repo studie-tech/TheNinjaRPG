@@ -12,6 +12,7 @@ import AiBalanceFiltering, {
 import { ClearBattleDataButton } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
 import { ContentLinksCell } from "@/layout/ContentLinksCell";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
@@ -102,7 +103,7 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
   return (
     <ContentBox
       title="AI Balance"
-      subtitle="Data since last reset"
+      subtitle="Current two-week reporting period"
       defaultBackHref="/manual/ai"
       padding={false}
       topRightContent={
@@ -116,6 +117,12 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
       <p className="p-3">
         Here we aim to give an overview of AI usage & win-statistics, so as to make it
         transparent if any AI is over/under-powered and in need of balance adjustment.
+        Usage covers the current 14-day UTC reporting period. Completed periods can be
+        downloaded from the{" "}
+        <Link href="/manual/balance" className="underline">
+          balance overview
+        </Link>
+        .
       </p>
       {isPending && <Loader explanation="Loading data" />}
       {!isPending && tableData && <Table data={tableData} columns={columns} />}
