@@ -31,6 +31,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState({}, "", "/");
+  window.localStorage.clear();
   vi.restoreAllMocks();
   restoreBrowserGlobals();
 });
