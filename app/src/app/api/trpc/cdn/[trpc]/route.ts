@@ -26,9 +26,10 @@ const cdnCachedQueries = new Set(CDN_CACHED_QUERY_PATHS);
  * The cacheable half of the tRPC API: the client sends the queries built with
  * cdnCachedProcedure here as their own GET batch, the context carries no identity, and
  * the batch is answered with `s-maxage` and `stale-while-revalidate`, so an HTTP cache
- * in front of the app serves the next visitor asking for the same URL. It answers for those queries alone, so what the
- * endpoint can do is exactly what may be cached. It sits outside the Clerk matcher in
- * proxy.ts, so no session is attached here even when the caller has one.
+ * in front of the app serves the next visitor asking for the same URL. It answers for
+ * those queries alone, so what the endpoint can do is exactly what may be cached. It
+ * sits outside the Clerk matcher in proxy.ts, so no session is attached here even when
+ * the caller has one.
  */
 const handler = async (req: NextRequest) => {
   const readHeaders = await headers();
