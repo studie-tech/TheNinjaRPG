@@ -10,7 +10,7 @@ import { createRuntimeEntryCache } from "@/server/utils/runtimeCache";
 /**
  * Load the profile snapshot with complete definitions for its quest history.
  *
- * The snapshot query reads only each quest's revision and raid state; the definitions
+ * The snapshot query reads only each quest's content hash and raid state; the definitions
  * come from `hydrateQuestDefinitions`, so the result keeps the shape of a full join.
  */
 export const fetchProfileUser = async (
@@ -29,9 +29,9 @@ export const fetchProfileUser = async (
 /**
  * Replace each history entry's quest revision with its complete definition.
  *
- * Content edits move `Quest.updatedAt`, so an entry stored under a quest's id and
- * revision never changes and needs no invalidation. Raid state changes without a new
- * revision and is taken from the revision columns. Definitions this instance and the
+ * The revision hashes every column but the raid state, so any write to a definition
+ * gives it a new key: a stored entry never changes and needs no invalidation. Raid state
+ * changes during fights and is taken from the snapshot. Definitions this instance and the
  * Runtime Cache lack are read in one statement and stored for other requests. A quest
  * deleted since the snapshot leaves its entry without a definition, as a join would.
  */
@@ -53,10 +53,13 @@ const hydrateQuestDefinitions = async <Entry extends { quest: QuestRevision | nu
     if (missingIds.length > 0) {
       const rows = await selectQuestDefinitions(client, missingIds);
       await Promise.all(
-        rows.map((row) => {
-          const value = superjson.serialize(row);
-          definitions.set(row.id, value);
-          return sharedDefinitions.write(definitionKey(row), value);
+        rows.map(({ definition, revision }) => {
+          const value = superjson.serialize(definition);
+          definitions.set(definition.id, value);
+          return sharedDefinitions.write(
+            definitionKey({ id: definition.id, revision }),
+            value,
+          );
         }),
       );
     }
@@ -65,7 +68,7 @@ const hydrateQuestDefinitions = async <Entry extends { quest: QuestRevision | nu
     const stored = entry.quest && definitions.get(entry.quest.id);
     if (!entry.quest || !stored)
       return { ...entry, quest: null } as unknown as WithDefinition<Entry>;
-    const { id: _id, updatedAt: _updatedAt, ...raidState } = entry.quest;
+    const { id: _id, revision: _revision, ...raidState } = entry.quest;
     // Each entry decodes its own copy, so per-user rewrites stay private.
     return {
       ...entry,
@@ -83,21 +86,20 @@ const sharedDefinitions = createRuntimeEntryCache<SuperJSONResult>({
 });
 
 /** The shared entry key of one quest revision. */
-const definitionKey = (quest: Pick<Quest, "id" | "updatedAt">) =>
-  `${deploymentKey}:${quest.id}:${quest.updatedAt.getTime()}`;
+const definitionKey = (quest: Pick<QuestRevision, "id" | "revision">) =>
+  `${deploymentKey}:${quest.id}:${quest.revision}`;
 const deploymentKey = process.env.VERCEL_DEPLOYMENT_ID ?? "local";
 
 /** The quest columns `findUserDataForQueryUpdatedUser` reads with each history entry. */
 type QuestRevision = Pick<
   Quest,
   | "id"
-  | "updatedAt"
   | "raidBossCurrentHealth"
   | "raidStartedAt"
   | "raidEndsAt"
   | "raidCaptureDeadline"
   | "raidGracePeriodEnd"
->;
+> & { revision: string };
 
 /** A history entry carrying its complete quest definition. */
 type WithDefinition<Entry extends { quest: QuestRevision | null }> = Omit<

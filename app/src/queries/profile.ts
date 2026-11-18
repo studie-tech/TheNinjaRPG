@@ -9,6 +9,7 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   gt,
   gte,
   inArray,
@@ -25,7 +26,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
+import { type AnyMySqlColumn, alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { UploadedFileData } from "uploadthing/types";
 import {
@@ -1983,7 +1984,12 @@ export const findUserDataForQueryUpdatedUser = (
       userQuests: {
         ...userQuestHistoryRelation,
         // Definitions come from the revision-keyed cache; see `fetchProfileUser`.
-        with: { quest: { columns: questRevisionColumns } },
+        with: {
+          quest: {
+            columns: questLiveColumns,
+            extras: (table) => ({ revision: questRevisionSql(table).as("revision") }),
+          },
+        },
         orderBy: sql`FIELD(${questHistory.questType}, 'daily', 'tier') ASC`,
       },
       completedQuests: completedQuestHistoryRelation,
@@ -2003,13 +2009,9 @@ export const findUserDataForQueryUpdatedUser = (
     },
   });
 
-/**
- * The quest columns read with each profile: the content revision, and the raid state
- * combat writes without changing that revision.
- */
-export const questRevisionColumns = {
+/** Quest columns combat writes during a raid; profile reads take them live. */
+export const questLiveColumns = {
   id: true,
-  updatedAt: true,
   raidBossCurrentHealth: true,
   raidStartedAt: true,
   raidEndsAt: true,
@@ -2017,11 +2019,28 @@ export const questRevisionColumns = {
   raidGracePeriodEnd: true,
 } as const;
 
-/** Build the `quest` selection of complete definitions for `fetchProfileUser`. */
+/**
+ * A hash of every other quest column. Any write to the definition changes it, whichever
+ * path makes the write (editor, migration or console), so it identifies the content a
+ * cached definition holds.
+ */
+export const questRevisionSql = (table: (typeof quest)["_"]["columns"]) =>
+  sql<string>`SHA2(JSON_ARRAY(${sql.join(
+    Object.entries(getTableColumns(quest))
+      .filter(([key]) => !(key in questLiveColumns))
+      .map(([key]) => table[key as keyof typeof table] as AnyMySqlColumn),
+    sql`, `,
+  )}), 256)`;
+
+/** Build the `quest` selection of complete definitions and their revisions for `fetchProfileUser`. */
 export const selectQuestDefinitions = (
   client: Pick<DrizzleClient, "select">,
   questIds: string[],
-) => client.select().from(quest).where(inArray(quest.id, questIds));
+) =>
+  client
+    .select({ definition: quest, revision: questRevisionSql(quest) })
+    .from(quest)
+    .where(inArray(quest.id, questIds));
 
 /** Build the `userVote` insert for `fetchUpdatedUserOnce`. */
 export const insertUserVoteForFetchUpdatedUserOnce = (

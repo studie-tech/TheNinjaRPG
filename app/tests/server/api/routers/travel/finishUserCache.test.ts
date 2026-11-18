@@ -417,7 +417,6 @@ describeWithDatabase("confirmed arrival profile updates", () => {
         latitude: 5,
         hideLocation: true,
       });
-      // Content edits publish a new revision, as the quest editor does.
       await db
         .update(quest)
         .set({
@@ -427,7 +426,6 @@ describeWithDatabase("confirmed arrival profile updates", () => {
             sceneBackground: "",
             sceneCharacters: [],
           },
-          updatedAt: nextRevision(),
         })
         .where(eq(quest.id, "hidden-2"));
       await db
@@ -678,7 +676,7 @@ describeWithDatabase("confirmed arrival profile updates", () => {
       ).toBe(teamEnabled);
       await db
         .update(quest)
-        .set({ teamEnabled: !teamEnabled, updatedAt: nextRevision() })
+        .set({ teamEnabled: !teamEnabled })
         .where(eq(quest.id, definition.id));
       await db
         .update(userData)
@@ -776,7 +774,7 @@ describeWithDatabase("confirmed arrival profile updates", () => {
     );
     await db
       .update(quest)
-      .set({ content: definition.content, updatedAt: nextRevision() })
+      .set({ content: definition.content })
       .where(eq(quest.id, definition.id));
     await db
       .update(userData)
@@ -1291,6 +1289,3 @@ const finishAndReconcile = async (
     client.clear();
   }
 };
-
-/** A quest revision later than any written earlier in the test. */
-const nextRevision = () => new Date(Date.now() + 1000);

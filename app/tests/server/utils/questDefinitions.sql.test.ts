@@ -1,6 +1,6 @@
 /** Pin the profile read's quest definitions: revision-keyed, cached, live raid state. */
 import { afterEach, beforeEach, expect, it } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { fetchProfileUser } from "@/server/utils/questDefinitions";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
@@ -53,10 +53,11 @@ describeWithDatabase("profile quest definitions", () => {
     const byQuest = (entries: { questId: string; quest: unknown }[] = []) =>
       Object.fromEntries(entries.map((entry) => [entry.questId, entry.quest]));
     expect(byQuest(cold.result?.userQuests)).toEqual(byQuest(joined));
-    // The profile statement carries revisions only; one statement reads the definitions.
+    // The profile statement carries raid state and a content hash; one statement reads
+    // the definitions.
     expect(cold.statements).toHaveLength(2);
     expect(cold.statements[0]).toContain(
-      "(select json_array(`id`, `updatedAt`, `raidBossCurrentHealth`, `raidStartedAt`, `raidEndsAt`, `raidCaptureDeadline`, `raidGracePeriodEnd`) from (select * from `Quest` `userData_userQuests_quest`",
+      "(select json_array(`id`, `raidBossCurrentHealth`, `raidStartedAt`, `raidEndsAt`, `raidCaptureDeadline`, `raidGracePeriodEnd`, SHA2(JSON_ARRAY(",
     );
     expect(cold.statements[1]).toMatch(/from `Quest` where `Quest`.`id` in/i);
 
@@ -65,17 +66,17 @@ describeWithDatabase("profile quest definitions", () => {
     expect(byQuest(warm.result?.userQuests)).toEqual(byQuest(joined));
   });
 
-  it("reads raid state live and a content edit's new revision", async () => {
+  it("reads raid state live and any content write's new revision", async () => {
     const db = await getTestDatabase();
     await fetchProfileUser(db, USER_ID);
     await db
       .update(quest)
       .set({ raidBossCurrentHealth: 250 })
       .where(eq(quest.id, "raid"));
-    await db
-      .update(quest)
-      .set({ name: "Edited story", updatedAt: new Date(REVISION.getTime() + 1) })
-      .where(eq(quest.id, "story"));
+    // Migrations and console fixes rewrite content without moving `updatedAt`.
+    await db.execute(
+      sql`UPDATE \`Quest\` SET \`name\` = 'Edited story' WHERE \`id\` = 'story'`,
+    );
 
     const { result, statements } = await recordQueries(() =>
       fetchProfileUser(db, USER_ID),
@@ -87,9 +88,8 @@ describeWithDatabase("profile quest definitions", () => {
       name: "Raid quest",
       raidBossCurrentHealth: 250,
     });
-    expect(quests.story?.name).toBe("Edited story");
-    expect(quests.story?.updatedAt).toEqual(new Date(REVISION.getTime() + 1));
-    // Only the edited quest is read again.
+    expect(quests.story).toMatchObject({ name: "Edited story", updatedAt: REVISION });
+    // Only the edited quest is read again; raid state alone keeps its revision.
     expect(statements).toHaveLength(2);
     expect(statements[1]).toContain("in ('story')");
   });

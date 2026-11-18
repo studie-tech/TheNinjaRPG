@@ -118,7 +118,7 @@ describe("self-guarded Pyramid mutations", () => {
         throw new Error("Unexpected profile write");
       });
       // All catalogue/settings/war queries are reads; the profile snapshot contains an
-      // isolated run whose definition is unreadable and no client tracker to reveal it.
+      // isolated run with a hidden definition and no client tracker to reveal it.
       const emptyRows = () => {
         const rows = Promise.resolve([]);
         return Object.assign(rows, {
@@ -131,12 +131,7 @@ describe("self-guarded Pyramid mutations", () => {
       };
       const snapshot = {
         userQuests: [
-          {
-            isolated: true,
-            completed: 0,
-            endAt: null,
-            quest: { id: "hidden-run", updatedAt: new Date(0) },
-          },
+          { isolated: true, completed: 0, endAt: null, quest: { hidden: true } },
         ],
         queue: [{ kind: "TRAINING", position: 0 }],
         questData: [],
