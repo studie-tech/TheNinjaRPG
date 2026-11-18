@@ -4168,6 +4168,26 @@ export const TD_STAGE_IMAGE_URLS = {
 export const TD_SHURIKEN_IMAGE_URL =
   "https://uploadthing.b-cdn.net/f/4a3100e5-97c6-4e5a-96e2-1c3520838179-gwm3dh.svg";
 
+/** Sentry artwork packed in one strip: a frame per sentry type as [x, y, width, height]. */
+export const TD_SENTRY_ATLAS = {
+  url: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCIucdy26OYrIJuNP1pvSyz29edFtKbngjRcA",
+  frames: {
+    kunai: [2, 2, 115, 150],
+    mortar: [119, 2, 144, 148],
+    rod: [265, 2, 75, 158],
+    frost: [342, 2, 103, 156],
+    sensor: [447, 2, 107, 154],
+  },
+} as const;
+
+/** Ground blast where an explosive tag or a bomber goes off: one column of square frames. */
+export const TD_BLAST_ANIMATION = {
+  image:
+    "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1YnVZt6bo95WClq4K0wxZUmJcvThgdVenO3P",
+  frames: 13,
+  speed: 50,
+} as const;
+
 // ============================================
 // Stealth & Sensory System Constants
 // ============================================

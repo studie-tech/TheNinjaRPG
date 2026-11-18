@@ -1,5 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import { applyAction, createRun, stepRun, type TdState } from "@/libs/towerDefense/sim";
+import { TD_COORD_SCALE } from "@/libs/towerDefense/balance";
+import {
+  applyAction,
+  createRun,
+  stepRun,
+  type TdEvent,
+  type TdState,
+} from "@/libs/towerDefense/sim";
 
 /** A fresh run stepped until its first enemy is on the field. */
 const runWithEnemy = (recordEvents = false): TdState => {
@@ -65,6 +72,28 @@ describe("tower defense simulation", () => {
     expect(shot).toMatchObject({ sourceId: archer.id });
     expect(state.shots.map((pending) => pending.due)).toContain(
       shot?.type === "enemyShot" ? shot.due : -1,
+    );
+  });
+
+  it("sets off a tag a raider walks onto as a ground blast", () => {
+    const state = runWithEnemy(true);
+    const raider = state.enemies[0];
+    if (!raider) throw new Error("No raider on the field");
+    // Lay the tag a step ahead of the raider, on its way to the hero.
+    const ahead = 0.6 / Math.max(0.01, Math.hypot(raider.x, raider.y));
+    const at = [raider.x * (1 - ahead), raider.y * (1 - ahead)].map((value) =>
+      Math.round(value * TD_COORD_SCALE),
+    );
+    expect(applyAction(state, [state.tick, "trap", at[0] ?? 0, at[1] ?? 0])).toBe(true);
+    const blasts: TdEvent[] = [];
+    for (let i = 0; i < 400 && state.traps.length > 0; i++) {
+      stepRun(state);
+      blasts.push(...state.events.filter((event) => event.type === "explosion"));
+      state.events.length = 0;
+    }
+    expect(state.traps).toHaveLength(0);
+    expect(blasts).toContainEqual(
+      expect.objectContaining({ cause: "tag", element: "fire" }),
     );
   });
 });
