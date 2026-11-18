@@ -91,6 +91,7 @@ export const BalanceOverview = ({
 
   return (
     <ContentBox
+      initialBreak={tab !== "Overview"}
       title={
         tab === "Overview"
           ? "Balance overview"

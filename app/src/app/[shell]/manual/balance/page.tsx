@@ -86,6 +86,7 @@ export default function ManualBalance() {
       <BalanceOverview tab={tab} navTabs={navTabs} />
       {tab === "Reports" && (
         <ContentBox
+          initialBreak
           title="Detailed balance reports"
           subtitle="Usage, power and completeness"
           defaultBackHref="/manual"
