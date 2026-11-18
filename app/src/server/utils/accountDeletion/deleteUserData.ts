@@ -4,6 +4,8 @@ import {
   huntingProgress,
   huntingReceipt,
   huntingSession,
+  metaConsent,
+  metaTracking,
   userCosmetic,
   userCosmeticSlot,
 } from "@/drizzle/schema";
@@ -209,6 +211,8 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
       huntingProgress,
       huntingReceipt,
       adClick,
+      metaConsent,
+      metaTracking,
       userCosmetic,
       userCosmeticSlot,
     ].map((table) => deleteRowsForUser(client, table, userId)),

@@ -6,6 +6,7 @@ import {
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { questsRouter } from "@/server/api/routers/quests";
+import * as metaTracking from "@/server/utils/metaTracking";
 import { DialogObjective, InstantWinLoseObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
@@ -22,6 +23,7 @@ import {
 
 describeWithDatabase("tutorial conversion receipts", () => {
   beforeEach(async () => {
+    vi.spyOn(metaTracking, "saveMetaTutorialCompletion").mockResolvedValue(undefined);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(questHistory, quest, userData);
     await insertUsers([
@@ -85,11 +87,13 @@ describeWithDatabase("tutorial conversion receipts", () => {
     });
     expect(completed.tutorialCompletionId).toBe(history?.id);
     expect(completed.tutorialCompletionId).toBeDefined();
+    expect(metaTracking.saveMetaTutorialCompletion).toHaveBeenCalledTimes(1);
     const repeated = await api.checkRewards({
       questId: TUTORIAL_GENIN_EXAM_QUEST_ID,
       nextObjectiveId: "win",
     });
     expect(repeated.tutorialCompletionId).toBeUndefined();
+    expect(metaTracking.saveMetaTutorialCompletion).toHaveBeenCalledTimes(1);
   });
 
   it("does not count the Academy Trials or an invalid claim as graduation", async () => {

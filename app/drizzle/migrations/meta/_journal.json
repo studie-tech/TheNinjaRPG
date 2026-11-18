@@ -1212,6 +1212,13 @@
       "when": 1795079842420,
       "tag": "0173_deep_silhouette",
       "breakpoints": false
+    },
+    {
+      "idx": 174,
+      "version": "5",
+      "when": 1795088354548,
+      "tag": "0174_sudden_ricochet",
+      "breakpoints": false
     }
   ]
 }

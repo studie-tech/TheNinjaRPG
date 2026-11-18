@@ -197,6 +197,7 @@ import {
   notifyMapLocationsChanged,
   validateQuestStructures,
 } from "@/server/utils/mapLocations";
+import { saveMetaTutorialCompletion } from "@/server/utils/metaTracking";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
 import { consumeUserAnnouncements } from "@/server/utils/profile";
@@ -1612,6 +1613,15 @@ export const questsRouter = createTRPCRouter({
           ...errorResponse(REWARD_CHOICE_PENDING_MESSAGE),
           rewardChoicePending: true,
         };
+      }
+
+      if (resolved && userQuest?.questId === TUTORIAL_GENIN_EXAM_QUEST_ID) {
+        await saveMetaTutorialCompletion(ctx.drizzle, ctx.userId, ctx.userAgent).catch(
+          () => {
+            // Rewards are already committed; optional reporting cannot undo them.
+            console.warn("Meta tutorial attribution could not be saved");
+          },
+        );
       }
 
       const finalNotifications = [...toastMessages, ...claim.postNotifications];

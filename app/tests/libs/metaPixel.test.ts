@@ -50,7 +50,7 @@ describe("Meta acquisition tracking", () => {
     const pixel = createMetaPixelTracker("12345");
     pixel.enable();
     pixel.pageView("/");
-    pixel.confirmedConversion("register", "private-account-id");
+    pixel.confirmedConversion("register", "11f90b37-6015-4361-8c51-fbfcccb92b43");
     expect(window.fbq).toBeUndefined();
     expect(document.querySelector("script[data-tnr-meta-pixel]")).toBeNull();
     delete window.Cookiebot;
@@ -58,7 +58,7 @@ describe("Meta acquisition tracking", () => {
     expect(window.fbq).toBeUndefined();
   });
 
-  it("deduplicates navigation and confirmed receipts without sharing receipt IDs", () => {
+  it("deduplicates navigation and confirmed receipts with the exact opaque IDs used by CAPI", () => {
     grant();
     const pixel = createMetaPixelTracker("12345");
     pixel.enable();
@@ -66,13 +66,19 @@ describe("Meta acquisition tracking", () => {
     expect(window.fbq?.queue).toContainEqual(["set", "autoConfig", false, "12345"]);
     pixel.pageView("/");
     pixel.pageView("/");
-    pixel.confirmedConversion("register", "private-account-id");
-    pixel.confirmedConversion("register", "private-account-id");
+    pixel.confirmedConversion("register", "11f90b37-6015-4361-8c51-fbfcccb92b43");
+    pixel.confirmedConversion("register", "11f90b37-6015-4361-8c51-fbfcccb92b43");
     pixel.confirmedConversion("register", undefined);
     const send = load();
     pixel.pageView("/register");
-    pixel.confirmedConversion("tutorial_complete", "private-receipt");
-    pixel.confirmedConversion("tutorial_complete", "private-receipt");
+    pixel.confirmedConversion(
+      "tutorial_complete",
+      "d9b092ee-bf9d-42ad-882b-84ced16aed04",
+    );
+    pixel.confirmedConversion(
+      "tutorial_complete",
+      "d9b092ee-bf9d-42ad-882b-84ced16aed04",
+    );
     pixel.existingPlayer();
     pixel.existingPlayer();
     expect(send.mock.calls.map((c) => c.slice(0, 4))).toEqual([
@@ -82,7 +88,12 @@ describe("Meta acquisition tracking", () => {
       ["trackSingleCustom", "12345", "TutorialComplete", {}],
       ["trackSingleCustom", "12345", "ExistingPlayer", {}],
     ]);
-    expect(JSON.stringify(send.mock.calls)).not.toContain("private-");
+    expect(send.mock.calls[1]?.[4]).toEqual({
+      eventID: "11f90b37-6015-4361-8c51-fbfcccb92b43",
+    });
+    expect(send.mock.calls[3]?.[4]).toEqual({
+      eventID: "d9b092ee-bf9d-42ad-882b-84ced16aed04",
+    });
     expect(send.mock.calls.every((c) => typeof c[4]?.eventID === "string")).toBe(true);
   });
 

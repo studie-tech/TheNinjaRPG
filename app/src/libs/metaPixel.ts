@@ -1,4 +1,5 @@
 import { hasCookieConsent } from "@/libs/cookieConsent";
+import { META_CONVERSION_EVENT, META_READY_EVENT } from "@/libs/metaTracking";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 
 type PixelCommand = unknown[];
@@ -64,9 +65,10 @@ export const createMetaPixelTracker = (pixelId: string) => {
     }
   };
 
-  const send = (key: string, name: string, custom = false) => {
+  const send = (key: string, name: string, custom = false, eventId?: string) => {
     if (!enabled || !canTrack() || delivered.has(key)) return;
-    if (!pending.has(key)) pending.set(key, { name, custom, id: crypto.randomUUID() });
+    if (!pending.has(key))
+      pending.set(key, { name, custom, id: eventId ?? crypto.randomUUID() });
     flush();
   };
 
@@ -107,6 +109,7 @@ export const createMetaPixelTracker = (pixelId: string) => {
         script.onload = () => {
           ready = true;
           flush();
+          window.dispatchEvent(new window.Event(META_READY_EVENT));
         };
         script.onerror = () => {
           script?.remove();
@@ -134,11 +137,18 @@ export const createMetaPixelTracker = (pixelId: string) => {
       event: "register" | "tutorial_complete",
       receipt: string | undefined,
     ) => {
-      if (!receipt) return;
+      if (
+        !receipt ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          receipt,
+        )
+      )
+        return;
       send(
         `${event}:${receipt}`,
         event === "register" ? "CompleteRegistration" : "TutorialComplete",
         event === "tutorial_complete",
+        receipt,
       );
     },
     existingPlayer: () => send("existing-player", "ExistingPlayer", true),
@@ -160,11 +170,12 @@ export const getMetaPixelTracker = (pixelId: string) => {
 
 /** Forward only confirmed receipts; the tracker checks current consent on every event. */
 export const trackMetaConversion = (
-  event: "register" | "tutorial_complete",
+  _event: "register" | "tutorial_complete",
   receipt: string | undefined,
 ) => {
   try {
-    activePixel?.confirmedConversion(event, receipt);
+    if (receipt && canTrack())
+      window.dispatchEvent(new window.Event(META_CONVERSION_EVENT));
   } catch {
     // Advertising is optional and must never change a successful game action.
   }

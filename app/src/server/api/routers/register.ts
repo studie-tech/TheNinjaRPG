@@ -42,6 +42,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { adClickConsentFor } from "@/server/utils/adConversions";
+import { saveMetaTracking } from "@/server/utils/metaTracking";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { settleRecordedLedger } from "@/server/utils/purchases/grant";
 import { isDeletedStoreUserId } from "@/server/utils/purchases/storeIdentity";
@@ -56,6 +57,7 @@ import {
 import { settleStripePayments } from "@/server/utils/stripe/fulfillment";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromNow } from "@/utils/time";
+import { metaTrackingSchema } from "@/validators/metaTracking";
 import { registrationSchema, utmSourceSchema } from "@/validators/register";
 
 export const registerRouter = createTRPCRouter({
@@ -102,6 +104,7 @@ export const registerRouter = createTRPCRouter({
         marketingConsent: z.enum([...AdClickConsents, "declined"]).optional(),
         // The click remembered on the device since the visitor landed from an ad.
         adClickId: z.string().max(512).optional(),
+        metaTracking: metaTrackingSchema.optional().catch(undefined),
       }),
     )
     .output(
@@ -316,6 +319,18 @@ export const registerRouter = createTRPCRouter({
               id: adClick.id,
               userId: ctx.userId,
               consent: adClickConsent,
+            })
+          : null,
+        input.metaTracking && input.marketingConsent === "granted"
+          ? saveMetaTracking(
+              ctx.drizzle,
+              ctx.userId,
+              input.metaTracking,
+              ctx.userAgent,
+              new Date(),
+            ).catch(() => {
+              // Character creation already succeeded; optional reporting cannot undo it.
+              console.warn("Meta registration attribution could not be saved");
             })
           : null,
         insertStarterHomeItems(ctx.drizzle, ctx.userId),
