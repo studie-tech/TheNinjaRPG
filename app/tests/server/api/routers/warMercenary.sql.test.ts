@@ -1138,6 +1138,7 @@ describeWithDatabase("mercenary strategic participation", () => {
       .where(eq(mpvpBattleQueue.id, queue.id));
     const started = await shrineMerc.initiateShrineBattle({ shrineBattleId: queue.id });
     expect(started.success, started.message).toBe(true);
+    expect(started.battleId).toBeTruthy();
     const snapshot = (await storedBattle(db, started.battleId!))!;
     expect((await kage.leaveMercenary({ contractId: offer.id })).success).toBe(true);
     const merc = snapshot.usersState.find((u) => u.userId === "merc")!;

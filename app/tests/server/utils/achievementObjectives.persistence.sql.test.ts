@@ -393,6 +393,7 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
             "ARENA",
           );
           expect(result.success).toBe(true);
+          expect(result.battleId).toBeTruthy();
           const state = await storedBattle(db, result.battleId!);
           expect(
             state?.extraState.questData[userId]?.find(
