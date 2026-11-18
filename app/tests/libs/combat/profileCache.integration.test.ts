@@ -22,6 +22,7 @@ import { initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter, type UserWithRelations } from "@/server/api/routers/profile";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { storedBattle } from "../../setup/battles";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import {
   insertDefaultAiProfile,
@@ -985,7 +986,7 @@ describeWithDatabase("combat profile cache inventory confirmation", () => {
         )
       ).success,
     ).toBe(true);
-    const saved = await database.query.battle.findFirst();
+    const saved = await storedBattle(database);
     if (!saved) throw new Error("Missing combat state");
     expect(saved.extraState.userQuests["cache-player"] ?? []).toEqual([]);
     expect(saved.extraState.questData["cache-player"]).toEqual([secret]);

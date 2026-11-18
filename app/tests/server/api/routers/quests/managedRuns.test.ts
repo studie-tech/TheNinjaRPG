@@ -29,6 +29,7 @@ import {
   QuestTracker,
 } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { storedBattle } from "../../../../setup/battles";
 import { deferred } from "../../../../setup/deferred";
 import {
   insertDefaultAiProfile,
@@ -232,7 +233,7 @@ describeWithDatabase("managed quest battle and abandonment", () => {
       positionVersion: 0,
     });
     expect(result.success).toBe(true);
-    const saved = await client.query.battle.findFirst();
+    const saved = await storedBattle(client);
     expect(saved?.extraState.questBattleSource).toEqual({
       questId: "pyramid",
       objectiveId: "floor",
@@ -306,7 +307,7 @@ describeWithDatabase("managed quest battle and abandonment", () => {
         expect((await startFloor(withoutTransactions(client), current)).success).toBe(
           true,
         );
-        const saved = await client.query.battle.findFirst();
+        const saved = await storedBattle(client);
         expect(saved?.extraState.userQuests.hero?.[0]?.entryPaid).toBe(paid);
         expect(saved?.extraState.questBattleSource).toEqual({
           questId: "pyramid",
@@ -489,7 +490,7 @@ describeWithDatabase("managed quest battle and abandonment", () => {
     expect(
       (await client.query.userItem.findMany()).map((row) => [row.id, row.quantity]),
     ).toEqual([["b", 2]]);
-    const saved = await client.query.battle.findFirst();
+    const saved = await storedBattle(client);
     expect(saved?.extraState.userQuests.hero?.[0]?.entryPaid).toBe(true);
     expect(
       saved?.usersState

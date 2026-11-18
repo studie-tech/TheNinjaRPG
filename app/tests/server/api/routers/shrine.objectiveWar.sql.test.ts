@@ -25,6 +25,7 @@ import { Pusher } from "@/libs/pusher";
 import * as combatRouter from "@/server/api/routers/combat";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { startDeclaredWar } from "@/server/utils/war";
+import { storedBattle } from "../../../setup/battles";
 import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
@@ -255,9 +256,7 @@ describeWithDatabase("shrine lobby objective war eligibility", () => {
     expect(result.success, result.message).toBe(true);
     expect(result).not.toHaveProperty("userPatch");
     expect(result).not.toHaveProperty("userDelta");
-    const saved = (await db.query.battle.findFirst({
-      where: eq(battle.id, result.battleId!),
-    }))!;
+    const saved = (await storedBattle(db, result.battleId!))!;
     expect(saved.battleType).toBe("SHRINE_WAR");
     expect(saved.extraState.wars[warId]?.objectiveState?.attackerEspionage).toBe(
       WAR_ESPIONAGE_TARGET,

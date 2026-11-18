@@ -31,6 +31,7 @@ import {
   QuestTracker,
   QuestValidatorRawSchema,
 } from "@/validators/objectives";
+import { storedBattle } from "../../setup/battles";
 import {
   insertDefaultAiProfile,
   insertItems,
@@ -392,9 +393,7 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
             "ARENA",
           );
           expect(result.success).toBe(true);
-          const state = await db.query.battle.findFirst({
-            where: eq(battle.id, result.battleId!),
-          });
+          const state = await storedBattle(db, result.battleId!);
           expect(
             state?.extraState.questData[userId]?.find(
               (tracker) => tracker.id === achievementId,

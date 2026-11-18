@@ -35,6 +35,7 @@ import {
   RepairTag,
   UnlockItemVariantTag,
 } from "@/validators/combat";
+import { storedBattle } from "../../setup/battles";
 import { deferred } from "../../setup/deferred";
 import {
   insertDefaultAiProfile,
@@ -159,7 +160,7 @@ describeWithDatabase("Hunting inventory admission", () => {
   afterEach(() => vi.restoreAllMocks());
 
   const settle = async (db: DrizzleClient) => {
-    const current = (await db.query.battle.findFirst()) as CompleteBattle;
+    const current = (await storedBattle(db)) as CompleteBattle;
     for (const enemy of current.usersState.filter((u) => u.isAi)) enemy.curHealth = 0;
     const result = calcBattleResult(current, "hunter");
     if (!result) throw Error("No terminal result");
@@ -606,7 +607,7 @@ describeWithDatabase("Hunting inventory admission", () => {
           .filter((row) => row.equipped === "ITEM_1")
           .map((row) => row.id),
       ).toEqual([expected]);
-      const current = (await db.query.battle.findFirst())!;
+      const current = (await storedBattle(db))!;
       expect(
         current.usersState
           .find((user) => user.userId === "hunter")!
@@ -1192,7 +1193,7 @@ describeWithDatabase("Hunting inventory admission", () => {
         };
         expect(await pollUntil(kitConsumed, { intervalMs: 10 })).toBe(true);
         expect((await hunter.start({ id })).success).toBe(true);
-        const current = (await db.query.battle.findFirst()) as CompleteBattle;
+        const current = (await storedBattle(db)) as CompleteBattle;
         expect(
           current.usersState
             .find((u) => u.userId === "hunter")!

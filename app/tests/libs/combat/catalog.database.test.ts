@@ -9,6 +9,7 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { fetchBattle } from "@/queries/combat";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { ActionEndTurn } from "@/validators/ai";
 import { insertUsers } from "../../setup/factories";
@@ -84,7 +85,13 @@ describeWithDatabase("stored battle catalogs", () => {
         )
       ).success,
     ).toBe(true);
-    const stored = (await db.query.battle.findFirst())!;
+    const row = (await db.query.battle.findFirst())!;
+    // The JSON column keeps turn-written state; the catalogs are stored compressed.
+    expect(row.extraState).not.toHaveProperty("jutsus");
+    expect(row.extraState).toHaveProperty("energyRegeneration");
+    expect(row.catalogs?.byteLength).toBeGreaterThan(0);
+    const stored = (await fetchBattle(db, row.id))!;
+    expect(stored).not.toHaveProperty("catalogs");
     const { jutsus } = stored.extraState;
     expect(Object.keys(jutsus)).toEqual(
       expect.arrayContaining(["owned", "injectable", SAGE_MODE_ACTIVATION_JUTSU_ID]),

@@ -37,6 +37,7 @@ import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { updateUserCache } from "@/utils/userCache";
 import type { UserRecovery } from "@/validators/base";
 import { getTagSchema } from "@/validators/combat";
+import { storedBattle } from "../../setup/battles";
 import {
   makeBattleUser,
   makeBattleUserItem,
@@ -138,10 +139,7 @@ const balance = async (userId = "winner") =>
       await getTestDatabase()
     ).query.userData.findFirst({ where: eq(userData.userId, userId) })
   )?.money;
-const persisted = async () =>
-  (await getTestDatabase()).query.battle.findFirst({
-    where: eq(battle.id, "settlement"),
-  });
+const persisted = async () => storedBattle(await getTestDatabase(), "settlement");
 
 describeWithDatabase("CAS combat settlement", () => {
   beforeEach(async () => {
@@ -296,9 +294,7 @@ describeWithDatabase("CAS combat settlement", () => {
     await (await getTestDatabase()).insert(battle).values(snapshot);
     await settle(structuredClone(snapshot));
     expect(await settle(structuredClone(snapshot))).toBeNull();
-    const stored = await (await getTestDatabase()).query.battle.findFirst({
-      where: eq(battle.id, snapshot.id),
-    });
+    const stored = await storedBattle(await getTestDatabase(), snapshot.id);
     await settle(stored as CompleteBattle, "loser");
     const users = await (await getTestDatabase()).query.userData.findMany();
     expect(users.find((user) => user.userId === "winner")?.pvpWins).toBe(1);
@@ -545,9 +541,10 @@ describeWithDatabase("CAS combat settlement", () => {
               data.type === "battle",
           )?.[2],
         ).not.toHaveProperty("userRecovery");
-        const snapshot = (await database.query.battle.findFirst({
-          where: eq(battle.id, started.battleId!),
-        }))! as CompleteBattle;
+        const snapshot = (await storedBattle(
+          database,
+          started.battleId!,
+        ))! as CompleteBattle;
         const baseline = snapshot.extraState.profileCacheSnapshots?.["counter-player"];
         expect(baseline?.pveFights).toBe(10);
         const inBattle = (await database.query.userData.findFirst({
@@ -1053,7 +1050,7 @@ describeWithDatabase("CAS combat settlement", () => {
         "COMBAT",
       );
       expect(result.success, result.message).toBe(true);
-      const saved = await database.query.battle.findFirst();
+      const saved = await storedBattle(database);
       expect(saved?.extraState.energyRewardEligible).toBe(false);
     },
   );

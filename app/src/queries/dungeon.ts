@@ -620,12 +620,6 @@ export const updateUserDataForReviveDungeonMembers = (
       ),
     );
 
-/** Build the `battle` lookup for `expireDungeonRun`, using predicates on `id`. */
-export const findBattleForExpireDungeonRun = (
-  client: Pick<DrizzleClient, "query">,
-  run: { battleId: string },
-) => client.query.battle.findFirst({ where: eq(battle.id, run.battleId) });
-
 /** Build the `dungeonRun` update for `expireDungeonRun`, using predicates on `id` and `version`. */
 export const updateDungeonRunForExpireDungeonRun = (
   client: Pick<DrizzleClient, "update">,

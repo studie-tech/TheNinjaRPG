@@ -50,6 +50,7 @@ import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
 import { defaultWarRules } from "@/validators/war";
 import { insertLobbyBattle, preloadLobby } from "../../../libs/combat/helpers/preload";
+import { storedBattle } from "../../../setup/battles";
 import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
@@ -1014,9 +1015,7 @@ describeWithDatabase("mercenary strategic participation", () => {
         leftSideUserIds: ["merc"],
       });
       await insertLobbyBattle(db, "lobby", "COMBAT", processed);
-      const before = (await db.query.battle.findFirst({
-        where: eq(battle.id, "lobby"),
-      }))!;
+      const before = (await storedBattle(db, "lobby"))!;
       expect(getWarSide(before.extraState.wars.w!, "c", "merc")).toBe("a");
       expect((await kage.leaveMercenary({ contractId: offer.id })).success).toBe(true);
       expect((await fetchBattleEssentials(db)).activeWars[0]?.warMercenaries).toEqual(
@@ -1033,9 +1032,7 @@ describeWithDatabase("mercenary strategic participation", () => {
         ).updateCombatLoadout({ battleId: "lobby", jutsuLoadoutId: "new-loadout" });
         expect(switched.success, switched.message).toBe(true);
       }
-      const snapshot = (await db.query.battle.findFirst({
-        where: eq(battle.id, "lobby"),
-      }))!;
+      const snapshot = (await storedBattle(db, "lobby"))!;
       if (switchingUserId !== "none") {
         expect(
           snapshot.usersState.find((user) => user.userId === switchingUserId)
@@ -1141,9 +1138,7 @@ describeWithDatabase("mercenary strategic participation", () => {
       .where(eq(mpvpBattleQueue.id, queue.id));
     const started = await shrineMerc.initiateShrineBattle({ shrineBattleId: queue.id });
     expect(started.success, started.message).toBe(true);
-    const snapshot = (await db.query.battle.findFirst({
-      where: eq(battle.id, started.battleId!),
-    }))!;
+    const snapshot = (await storedBattle(db, started.battleId!))!;
     expect((await kage.leaveMercenary({ contractId: offer.id })).success).toBe(true);
     const merc = snapshot.usersState.find((u) => u.userId === "merc")!;
     const native = snapshot.usersState.find((u) => u.userId === "merc2")!;

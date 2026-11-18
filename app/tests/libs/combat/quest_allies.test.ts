@@ -23,6 +23,7 @@ import { initiateBattle } from "@/server/api/routers/combat";
 import { dataRouter } from "@/server/api/routers/data";
 import { DefeatOpponents, ObjectiveTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { storedBattle } from "../../setup/battles";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import {
   insertDefaultAiProfile,
@@ -218,7 +219,7 @@ describeWithDatabase("NPC ally battle initiation", () => {
       "QUEST",
     );
     expect(result.success).toBe(true);
-    const saved = await client.query.battle.findFirst();
+    const saved = await storedBattle(client);
     if (!saved) throw new Error("Expected battle");
     const allies = saved.usersState.filter((u) => u.isAi && u.direction === "left");
     const enemies = saved.usersState.filter((u) => u.direction === "right");
@@ -329,7 +330,7 @@ describeWithDatabase("NPC ally battle initiation", () => {
       { client, userIds: ["hero"], allyAiIds: ["friendly"], targetIds: ["template"] },
       "QUEST",
     );
-    const snapshot = await client.query.battle.findFirst();
+    const snapshot = await storedBattle(client);
     if (!snapshot) throw new Error("Expected battle");
     for (const npc of snapshot.usersState)
       npc.curHealth = npc.direction === "left" ? 100 : 0;
