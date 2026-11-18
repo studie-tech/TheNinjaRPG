@@ -13,18 +13,21 @@ import { usePetPotential } from "@/hooks/usePetPotential";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { getPetPotentialTier } from "@/libs/pets/potential";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Reveal permanent potential and preview same-species progression transfers. */
 export const PetPotential = ({
   pet,
   pets,
   disabled,
+  onOwnerUpdate,
 }: {
   pet: NonNullable<RouterOutputs["pets"]["getPet"]["pet"]>;
   pets: RouterOutputs["pets"]["getPet"]["pets"];
   disabled: boolean;
+  onOwnerUpdate: (result: UserDeltaResponse) => void;
 }) => {
-  const { reveal, transfer, message, isPending } = usePetPotential();
+  const { reveal, transfer, message, isPending } = usePetPotential(onOwnerUpdate);
   const [destinationId, setDestinationId] = useState("");
   const [amountText, setAmountText] = useState("");
   const destinations = pets.filter(

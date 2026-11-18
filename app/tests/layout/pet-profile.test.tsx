@@ -24,6 +24,7 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
   PET_ABILITY_SLOTS_BY_RARITY,
   PET_BATTLE_CONFIG,
+  PET_EXPERIENCE_TRANSFER_COST,
   PET_FEED_COOLDOWN_HOURS,
   PET_FEED_EXPERIENCE_BY_RARITY,
   PET_RANKS,
@@ -68,6 +69,7 @@ let owner: {
   rank: string;
   reputationPoints: number;
   seichiSilver: number;
+  money: number;
   sector: number;
   battleId: string | null;
   isOutlaw: boolean;
@@ -99,6 +101,7 @@ let unlockSlot: ReturnType<typeof vi.fn>;
 let generate: ReturnType<typeof vi.fn>;
 let assign: ReturnType<typeof vi.fn>;
 let evolve: ReturnType<typeof vi.fn>;
+let transfer: ReturnType<typeof vi.fn>;
 let timeDiff: number;
 let previousBattleEnabled: boolean;
 const prepareUserUpdate = vi.fn<() => number | undefined>(() => 17);
@@ -125,6 +128,7 @@ beforeEach(() => {
     rank: "JONIN",
     reputationPoints: 1000,
     seichiSilver: 100,
+    money: PET_EXPERIENCE_TRANSFER_COST * 2,
     sector: 1,
     battleId: null,
     isOutlaw: false,
@@ -238,6 +242,7 @@ beforeEach(() => {
     userPatch: { petExperience: 99 },
   }));
   evolve = vi.fn(() => ({ success: true, message: "Evolved" }));
+  transfer = vi.fn(() => ({ success: true, message: "Experience transferred" }));
   Object.assign(vi.spyOn(client, "api" as never), {
     pets: testApi.pets,
     ai: testApi.ai,
@@ -342,8 +347,13 @@ const mount = (strictMode = false) => {
         ...data,
         pet: { ...data.pet!, potentialValue: 5, potentialRevealed: true },
       };
-      return { success: true, message: "Companion potential revealed.", userPatch: {} };
+      return {
+        success: true,
+        message: "Companion potential revealed.",
+        userPatch: { updatedAt: new Date(owner.updatedAt.getTime() + 1000) },
+      };
     }
+    if (path === "pets.transferExperience") return transfer(input);
     if (path === "pets.rankUp") return evolve(input);
     throw new Error(`Unexpected procedure ${path}`);
   });
@@ -2208,6 +2218,7 @@ it("reconciles saved settings and the owner timestamp without reloading pet, col
 });
 
 it("reveals a bounded cap bonus with no stat allocation controls", async () => {
+  const cachedOwner = observeProfileCache();
   data.pet = {
     ...data.pet!,
     potentialValue: null,
@@ -2217,6 +2228,8 @@ it("reveals a bounded cap bonus with no stat allocation controls", async () => {
   const view = mount(true);
   await view.findByRole("tab", { name: "Training" });
   selectTab(view, "Training");
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  getPet.mockClear();
   expect(view.getByText(/Potential unrevealed/)).toBeTruthy();
   const button = view
     .getAllByRole("button", { name: "Reveal potential" })
@@ -2229,6 +2242,70 @@ it("reveals a bounded cap bonus with no stat allocation controls", async () => {
   expect(await view.findByText("Perfect · 150% of rank stat caps")).toBeTruthy();
   expect(view.queryByText(/points to allocate/)).toBeNull();
   expect(view.getByText(/HP and abilities are unchanged/)).toBeTruthy();
+  await waitFor(() =>
+    expect(cachedOwner()?.updatedAt).toEqual(
+      new Date(owner.updatedAt.getTime() + 1000),
+    ),
+  );
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  expect(getPet).toHaveBeenCalledTimes(1);
+  expect(getUser).not.toHaveBeenCalled();
+});
+
+it("reads companions once after a transfer and reconciles the owner without a profile read", async () => {
+  owner.activePetId = "second-pet";
+  const cachedOwner = observeProfileCache();
+  data.pet = { ...data.pet!, experience: 1000 };
+  data.pets = [data.pet, { ...data.pet, id: "second-pet", name: "Tama" }];
+  transfer.mockImplementation(() => {
+    data = { ...data, pet: { ...data.pet!, experience: 900 } };
+    return {
+      success: true,
+      message: "Experience transferred",
+      userPatch: { updatedAt: new Date(owner.updatedAt.getTime() + 1000) },
+      userDelta: { money: -PET_EXPERIENCE_TRANSFER_COST, petExperience: 100 },
+    };
+  });
+  const view = mount();
+  await view.findByRole("tab", { name: "Training" });
+  selectTab(view, "Training");
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  getPet.mockClear();
+  fireEvent.click(view.getByText("Transfer assigned experience"));
+  fireEvent.change(view.getByLabelText("Destination companion"), {
+    target: { value: "second-pet" },
+  });
+  fireEvent.input(
+    view.getByRole("spinbutton", { name: "Assigned XP to move (maximum 700)" }),
+    { target: { value: "100" } },
+  );
+  fireEvent.click(
+    view
+      .getAllByRole("button", { name: "Transfer experience" })
+      .find((entry) => entry.tagName === "BUTTON")!,
+  );
+  const dialog = await view.findByRole("dialog", {
+    name: "Transfer from Miso to Tama",
+  });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+  await waitFor(() => expect(transfer).toHaveBeenCalledTimes(1));
+  expect(transfer).toHaveBeenCalledWith({
+    petId: "companion",
+    destinationPetId: "second-pet",
+    amount: 100,
+  });
+  await waitFor(() =>
+    expect(cachedOwner()).toMatchObject({
+      updatedAt: new Date(owner.updatedAt.getTime() + 1000),
+      money: owner.money - PET_EXPERIENCE_TRANSFER_COST,
+      petExperience: owner.petExperience + 100,
+    }),
+  );
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  expect(getPet).toHaveBeenCalledTimes(1);
+  expect(getUser).not.toHaveBeenCalled();
 });
 
 it("keeps assigned-XP transfer controls collapsed until requested", async () => {

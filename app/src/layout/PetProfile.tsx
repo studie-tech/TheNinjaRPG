@@ -1218,7 +1218,12 @@ export function PetProfile() {
           </ContentBox>
         </TabsContent>
         <TabsContent value="training" forceMount hidden={activity !== "training"}>
-          <PetPotential pet={pet} pets={data.pets} disabled={settingsDisabled} />
+          <PetPotential
+            pet={pet}
+            pets={data.pets}
+            disabled={settingsDisabled}
+            onOwnerUpdate={acknowledgeOwnerUpdate}
+          />
           <div>
             <DistributeStatsForm
               key={`${pet.id}:${pet.rank}`}
