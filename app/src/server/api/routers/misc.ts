@@ -1,6 +1,7 @@
 import path from "node:path";
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type TextToSVG from "text-to-svg";
 import { z } from "zod";
 import {
   getAwardReputationUserUpdate,
@@ -664,8 +665,7 @@ export const generateCaptcha = async (client: DrizzleClient, userId: string) => 
  * high-contrast on the dark game UI.
  */
 const renderCaptchaSvg = async (value: string) => {
-  const { default: TextToSVG } = await import("text-to-svg");
-  const textToSVG = TextToSVG.loadSync(path.resolve("./fonts/OpenSans.ttf"));
+  const textToSVG = await loadCaptchaFont();
   const [fontSize, slot, padding, height] = [48, 44, 16, 72];
   const width = 2 * padding + slot * value.length;
   const glyphs = [...value].map((char, i) =>
@@ -679,6 +679,22 @@ const renderCaptchaSvg = async (value: string) => {
   );
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" rx="8" fill="#ffffff"/>${glyphs.join("")}</svg>`;
 };
+
+/**
+ * Load and parse the captcha font once per server process. The library is imported on
+ * first use so routes that never render a captcha do not pay for it; a failed load is
+ * dropped so the next render retries.
+ */
+let captchaFont: Promise<TextToSVG> | undefined;
+const loadCaptchaFont = () =>
+  (captchaFont ??= import("text-to-svg")
+    .then(({ default: TextToSVG }) =>
+      TextToSVG.loadSync(path.resolve("./fonts/OpenSans.ttf")),
+    )
+    .catch((error: unknown) => {
+      captchaFont = undefined;
+      throw error;
+    }));
 
 /**
  * Replace the user's pending captcha with a new one, consuming the old one as failed.
