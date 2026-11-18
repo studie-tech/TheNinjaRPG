@@ -74,6 +74,9 @@ export default function OccupationCrafting({
     });
   const { data: craftableItems } = api.occupation.getCraftableItems.useQuery();
   const { data: craftingQueue } = api.occupation.getCraftingQueue.useQuery();
+  const { data: serviceWork } = api.occupation.getServiceRequests.useQuery(undefined, {
+    enabled: !!userData?.serviceCraftUntil && userData.serviceCraftUntil > new Date(),
+  });
   const { mutate: cancelQueuedCraft, isPending: isCancellingQueuedCraft } =
     api.occupation.cancelQueuedCraft.useMutation({
       onMutate: prepareUserUpdate,
@@ -427,6 +430,14 @@ export default function OccupationCrafting({
     </Confirm>
   );
 
+  const activeService = serviceWork?.find(
+    (request) =>
+      request.crafterId === userData?.userId &&
+      request.status === "ACTIVE" &&
+      request.finishesAt &&
+      request.finishesAt > new Date(),
+  );
+
   const craftingPanel = (
     <ContentBox title="Crafting" initialBreak>
       <div className="space-y-6">
@@ -485,11 +496,12 @@ export default function OccupationCrafting({
                     !!craftingQueue?.waiting.length
                   }
                   isQueueFull={
-                    (!!craftingStatus?.isCurrentlyCrafting ||
+                    !!activeService ||
+                    ((!!craftingStatus?.isCurrentlyCrafting ||
                       !!craftingQueue?.waiting.length) &&
-                    (craftingStatus?.isCurrentlyCrafting ? 1 : 0) +
-                      (craftingQueue?.waiting.length ?? 0) >=
-                      (craftingQueue?.capacity ?? 1)
+                      (craftingStatus?.isCurrentlyCrafting ? 1 : 0) +
+                        (craftingQueue?.waiting.length ?? 0) >=
+                        (craftingQueue?.capacity ?? 1))
                   }
                 />
               </CardContent>
@@ -1089,6 +1101,15 @@ export default function OccupationCrafting({
   return (
     <>
       {renderHeader(repairAllAction)}
+      {activeService?.finishesAt && (
+        <div className="mb-4 rounded border p-3">
+          <strong>Service work: {activeService.itemName}</strong>
+          <p>
+            Your crafting slot is occupied. Ready in{" "}
+            <Countdown targetDate={activeService.finishesAt} />.
+          </p>
+        </div>
+      )}
       {craftingPanel}
     </>
   );

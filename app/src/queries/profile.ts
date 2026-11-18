@@ -51,6 +51,7 @@ import {
   actionLog,
   battleHistory,
   contentProposal,
+  craftingServiceRequest,
   farmPlot,
   historicalIp,
   item,
@@ -551,7 +552,24 @@ export const selectUserItemForGetSidebarTimers = (
     .from(userItem)
     .innerJoin(item, eq(userItem.itemId, item.id))
     .where(and(eq(userItem.userId, ctx.userId), gt(userItem.craftingFinishedAt, now)))
-    .orderBy(asc(userItem.craftingFinishedAt))
+    .unionAll(
+      client
+        .select({
+          itemName: craftingServiceRequest.itemName,
+          craftingStartedAt: sql<Date>`COALESCE(${craftingServiceRequest.startedAt}, ${craftingServiceRequest.createdAt})`,
+          craftingFinishedAt: craftingServiceRequest.finishesAt,
+        })
+        .from(craftingServiceRequest)
+        .where(
+          and(
+            eq(craftingServiceRequest.crafterId, ctx.userId),
+            eq(craftingServiceRequest.status, "ACTIVE"),
+            gt(craftingServiceRequest.finishesAt, now),
+            ne(craftingServiceRequest.service, "REPAIR"),
+          ),
+        ),
+    )
+    .orderBy(sql`craftingFinishedAt`)
     .limit(1);
 
 /** Build the `userItemImbuement` selection for `getSidebarTimers`, using predicates on `userId` and `craftingFinishedAt`. */
@@ -1388,6 +1406,7 @@ export const findUserDataForGetPublicUser2 = (
       displayTitle: displayTitleSql(table).as("displayTitle"),
     }),
     columns: {
+      occupation: true,
       aiProfileId: true,
       avatar: true,
       avatarLight: true,
@@ -1972,6 +1991,12 @@ export const findUserDataForQueryUpdatedUser = (
       cookingJobs: true,
       raidBuffs: true,
       // Every queue entry, in the same query: users without queues pay nothing extra.
+      serviceRequests: {
+        where: inArray(craftingServiceRequest.status, ["PENDING", "ACTIVE"]),
+      },
+      outgoingServiceRequests: {
+        where: inArray(craftingServiceRequest.status, ["PENDING", "ACTIVE"]),
+      },
       queue: { orderBy: asc(userQueue.position) },
     },
   });

@@ -74,6 +74,7 @@ import {
 } from "@/queries/occupation";
 import { fetchUser } from "@/queries/profile";
 import { fetchUpdatedUser } from "@/routers/profile";
+import { craftingServiceProcedures } from "@/server/api/routers/craftingServices";
 import { fetchUserItems } from "@/server/api/routers/item";
 import {
   baseServerResponse,
@@ -91,7 +92,8 @@ import {
   claimUserSnapshot,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { CraftingServiceConflict } from "@/server/utils/craftingServices";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
   appendQueueEntries,
   cancelQueuedCraft,
@@ -138,6 +140,7 @@ const cookItemInputSchema = z.object({
 });
 
 export const occupationRouter = createTRPCRouter({
+  ...craftingServiceProcedures,
   /** Visible crafting recipes; public for the crafting manual page. */
   getCraftableItems: publicProcedure
     .meta({ mcp: { description: "Get all craftable items" } })
@@ -243,6 +246,8 @@ export const occupationRouter = createTRPCRouter({
         (item) => item.craftingFinishedAt && item.craftingFinishedAt > new Date(),
       );
       // Guards
+      if (user.serviceCraftUntil && user.serviceCraftUntil > new Date())
+        return errorResponse("Your crafting slot is occupied by a service request");
       const craftingBlock = craftingStartBlockMessage(user);
       if (craftingBlock) return errorResponse(craftingBlock);
       if (itemWithRequirements?.itemType !== "MEAL" && user.occupation !== "CRAFTING") {
@@ -716,6 +721,8 @@ export const occupationRouter = createTRPCRouter({
       const crystalUserItem = userItems.find((ui) => ui.id === input.userCrystalItemId);
 
       // Derived
+      if (user.serviceCraftUntil && user.serviceCraftUntil > new Date())
+        return errorResponse("Your crafting slot is occupied by a service request");
       const userCraftingRank = getCraftingRank(user.craftingExperience);
       const maxImbuedItems = getEffectiveMaxImbuements(
         userCraftingRank,
@@ -810,63 +817,6 @@ export const occupationRouter = createTRPCRouter({
         );
       }
 
-      // CAS + atomic crystal consume serialize parallel imbues on the same account.
-      const imbueClaimResult = await claimUserSnapshot({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
-        readiness,
-        where: [
-          or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
-        ],
-      });
-      if (!imbueClaimResult.success) {
-        return errorResponse(
-          "Could not start imbuing — state changed, please try again",
-        );
-      }
-
-      // Write-time guard: only proceed if item is still not in auction (atomic). The quantity
-      // guard also refuses rows held by a stack-merge claim or left as a merge tombstone, so an
-      // imbuement is never attached to a row the merge protocol is about to fold away or delete.
-      const notInAuctionGuard = await updateUserItemForImbueItem(
-        ctx.drizzle,
-        input,
-        ctx,
-      );
-      if (notInAuctionGuard.rowsAffected === 0) {
-        return actionReadinessResponse(
-          errorResponse(
-            "You cannot imbue an item that is listed for auction or direct sale",
-          ),
-          readiness,
-          ctx.drizzle,
-        );
-      }
-
-      const consumeCrystal = await updateUserItemQuantityAtomically({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        userItemId: crystalUserItem.id,
-        expectedQuantity: crystalUserItem.quantity,
-        nextQuantity: crystalUserItem.quantity - 1,
-        where: [eq(userItem.isInAuction, false)],
-      });
-      if (!consumeCrystal) {
-        return actionReadinessResponse(
-          errorResponse("Crystal no longer available"),
-          readiness,
-          ctx.drizzle,
-        );
-      }
-
-      const createImbuement = insertUserItemImbuementForImbueItem(
-        ctx.drizzle,
-        input,
-        crystalItem,
-        finishTime,
-      );
-
       // Award small amount of crafting experience (half of crystal's crafting experience, or 0 if not set)
       const baseExpGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
       const expGain = getCraftingExperienceGain(
@@ -880,22 +830,60 @@ export const occupationRouter = createTRPCRouter({
         { task: "crafting_experience_gained", increment: expGain },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
-      const expUpdate = updateUserDataForImbueItem(
-        ctx.drizzle,
-        expGain,
-        questDataForDb,
-        ctx,
-      );
-
-      const [, expResult] = await Promise.all([createImbuement, expUpdate]);
-      if (expResult?.rowsAffected !== 1) {
-        return actionReadinessResponse(
-          errorResponse(
-            "Could not start imbuing — you must be awake and not on Wake Island",
-          ),
-          readiness,
-          ctx.drizzle,
+      // Equipment ownership, crystal consumption and the imbuement INSERT must commit
+      // together: escrow can otherwise claim a copy between these separate writes.
+      let imbueClaimResult: Awaited<ReturnType<typeof claimUserSnapshot>>;
+      try {
+        imbueClaimResult = await retryOnDeadlock(() =>
+          ctx.drizzle.transaction(async (tx) => {
+            const claim = await claimUserSnapshot({
+              client: tx,
+              userId: ctx.userId,
+              updatedAt: user.updatedAt,
+              readiness,
+              where: [
+                or(
+                  isNull(userData.sector),
+                  ne(userData.sector, MAP_WAKE_ISLAND_SECTOR),
+                ),
+              ],
+            });
+            if (!claim.success)
+              throw new CraftingServiceConflict(
+                "Could not start imbuing — state changed, please try again",
+              );
+            if ((await updateUserItemForImbueItem(tx, input, ctx)).rowsAffected !== 1)
+              throw new CraftingServiceConflict("This item is no longer available");
+            const consumed = await updateUserItemQuantityAtomically({
+              client: tx,
+              userId: ctx.userId,
+              userItemId: crystalUserItem.id,
+              expectedQuantity: crystalUserItem.quantity,
+              nextQuantity: crystalUserItem.quantity - 1,
+              where: [eq(userItem.isInAuction, false)],
+            });
+            if (!consumed)
+              throw new CraftingServiceConflict("Crystal no longer available");
+            await insertUserItemImbuementForImbueItem(
+              tx,
+              input,
+              crystalItem,
+              finishTime,
+            );
+            if (
+              (await updateUserDataForImbueItem(tx, expGain, questDataForDb, ctx))
+                .rowsAffected !== 1
+            )
+              throw new CraftingServiceConflict(
+                "Could not start imbuing — you must be awake and not on Wake Island",
+              );
+            return claim;
+          }),
         );
+      } catch (error) {
+        if (error instanceof CraftingServiceConflict)
+          return errorResponse(error.message);
+        throw error;
       }
 
       return actionReadinessResponse(
@@ -1051,20 +1039,44 @@ export const occupationRouter = createTRPCRouter({
       // When imbuing is disabled on the item, refund the crystal to inventory
       const returnsCrystal = !ownedUserItem.item.canBeImbued;
 
-      const deleteResult = await deleteUserItemImbuementForRemoveImbuement(
-        ctx.drizzle,
-        input,
-        ownedUserItem,
-        ctx,
-      );
-      if (deleteResult.rowsAffected === 0) {
-        return errorResponse(
-          "Item availability changed or imbuement already removed; please refresh",
+      try {
+        // Serialize child deletion and optional returned-crystal INSERT with escrow's
+        // parent ownership claim; a stale request cannot leave an unfulfillable receipt.
+        await retryOnDeadlock(() =>
+          ctx.drizzle.transaction(async (tx) => {
+            if (
+              (
+                await updateUserItemForImbueItem(
+                  tx,
+                  { userItemId: ownedUserItem.id },
+                  ctx,
+                )
+              ).rowsAffected !== 1
+            )
+              throw new CraftingServiceConflict(
+                "Item availability changed; please refresh",
+              );
+            if (
+              (
+                await deleteUserItemImbuementForRemoveImbuement(
+                  tx,
+                  input,
+                  ownedUserItem,
+                  ctx,
+                )
+              ).rowsAffected !== 1
+            )
+              throw new CraftingServiceConflict(
+                "Imbuement already removed; please refresh",
+              );
+            if (returnsCrystal)
+              await insertUserItemForRemoveImbuement(tx, ctx, imbuement);
+          }),
         );
-      }
-
-      if (returnsCrystal) {
-        await insertUserItemForRemoveImbuement(ctx.drizzle, ctx, imbuement);
+      } catch (error) {
+        if (error instanceof CraftingServiceConflict)
+          return errorResponse(error.message);
+        throw error;
       }
 
       return {

@@ -132,7 +132,13 @@ export const selectUserItemForSettleCrafts = (
   client
     .select({ craftingFinishedAt: userItem.craftingFinishedAt })
     .from(userItem)
-    .where(and(eq(userItem.userId, userId), isNotNull(userItem.craftingFinishedAt)));
+    .where(and(eq(userItem.userId, userId), isNotNull(userItem.craftingFinishedAt)))
+    .unionAll(
+      client
+        .select({ craftingFinishedAt: userData.serviceCraftUntil })
+        .from(userData)
+        .where(and(eq(userData.userId, userId), isNotNull(userData.serviceCraftUntil))),
+    );
 
 /** Build the `userQueue` update for `rescheduleWaiting`, setting `startsAt` and `finishesAt`, using predicates on `id`. */
 export const updateUserQueueForRescheduleWaiting = (
@@ -359,7 +365,13 @@ export const selectUserItemForSettleWaitingJobs = (
   client
     .select({ finish: userItem.craftingFinishedAt })
     .from(userItem)
-    .where(and(eq(userItem.userId, userId), isNotNull(userItem.craftingFinishedAt)));
+    .where(and(eq(userItem.userId, userId), isNotNull(userItem.craftingFinishedAt)))
+    .unionAll(
+      client
+        .select({ finish: userData.serviceCraftUntil })
+        .from(userData)
+        .where(and(eq(userData.userId, userId), isNotNull(userData.serviceCraftUntil))),
+    );
 
 /** Build a timed stat or mastery training log insert using the supplied completion time. */
 export const insertTrainingLog = (

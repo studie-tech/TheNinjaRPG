@@ -209,6 +209,7 @@ export function UserContextProvider(props: {
         village: user.village,
         raidBuffs: user.raidBuffs,
         cookingJobs: user.cookingJobs,
+        serviceCraftUntil: user.serviceCraftUntil,
       },
     }),
   });
@@ -224,7 +225,7 @@ export function UserContextProvider(props: {
     !!userId && !!isSignedIn && isLoaded,
   );
 
-  // Timed bonuses and Cooking completions refresh on every page, including inventory.
+  // Timed bonuses and occupation completions refresh on every page, including inventory.
   const territoryWarBoostUntil = data?.userData
     ? getTerritoryWarBoostUntil(data.userData)?.getTime()
     : undefined;
@@ -232,6 +233,7 @@ export function UserContextProvider(props: {
     [
       territoryWarBoostUntil,
       ...(data?.userData?.raidBuffs?.map((buff) => buff.expiresAt) ?? []),
+      data?.userData?.serviceCraftUntil,
       ...(data?.userData?.cookingJobs?.map((job) => job.finishesAt) ?? []),
     ],
     () => {
@@ -241,9 +243,6 @@ export function UserContextProvider(props: {
     !!userId && !!isSignedIn && isLoaded,
     data?.snapshotAt,
   );
-
-  // Listen on user channel for live updates on things
-  const pusher = usePusherHandler(userId, data?.userData);
 
   const queryClient = useQueryClient();
   const userQueryKey = useMemo(
@@ -266,13 +265,20 @@ export function UserContextProvider(props: {
   );
   const refreshUser = useCallback(async () => {
     try {
-      await queryClient.cancelQueries({ queryKey: userQueryKey, exact: true });
+      // A cancelled read must not confirm the restored cached profile as a fresh response.
+      await queryClient.cancelQueries(
+        { queryKey: userQueryKey, exact: true },
+        { silent: true },
+      );
       const result = await refetch({ throwOnError: true });
       return result.isSuccess && result.data?.userData?.userId === userId;
     } catch {
       return false;
     }
   }, [queryClient, userQueryKey, refetch, userId]);
+
+  // Profile reconciliation stays owned by this provider, including websocket deliveries.
+  const pusher = usePusherHandler(userId, data?.userData, refreshUser);
 
   /** Apply notification changes together with other writers, preserving unrelated profile reconciliation. */
   const updateNotifications = useCallback(

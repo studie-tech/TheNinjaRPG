@@ -180,10 +180,10 @@ describe("human opponents", () => {
 describe("wearBattleItem", () => {
   const armor = () => ({ durability: 200, equipped: "CHEST" as const });
 
-  it("clamps to the item's maximum before wearing", () => {
+  it("preserves bonus repair durability up to the service maximum", () => {
     const worn = armor();
     wearBattleItem(makeCompleteBattle(), worn, { maxDurability: 100 }, 3);
-    expect(worn.durability).toBe(97);
+    expect(worn.durability).toBe(117);
     expect(worn.equipped).toBe("CHEST");
   });
 

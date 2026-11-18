@@ -6,6 +6,7 @@ import * as schema from "@/drizzle/schema";
 import {
   bankTransfers,
   conversation,
+  craftingServiceRequest,
   dailyBankInterest,
   historicalAvatar,
   user2conversation,
@@ -31,6 +32,7 @@ describeWithDatabase("cleaner consistent-read candidate batches", () => {
       user2conversation,
       conversation,
       userItem,
+      craftingServiceRequest,
       userData,
     );
     await insertUsers([{ userId: "live", username: "live" }]);
@@ -159,6 +161,39 @@ describeWithDatabase("cleaner consistent-read candidate batches", () => {
         })
         .from(bankTransfers),
     ).toEqual([{ senderId: "live", receiverId: "live" }]);
+  });
+
+  it("preserves only equipment matched to an open escrow receipt", async () => {
+    const db = await getTestDatabase();
+    await db.insert(craftingServiceRequest).values(
+      (["PENDING", "ACTIVE", "COMPLETED", "REFUNDED"] as const).map((status) => ({
+        id: `service:${status}`,
+        requesterId: "live",
+        crafterId: "live",
+        service: "IMBUE" as const,
+        status,
+        fee: 0,
+        itemId: "item",
+        itemName: "Equipment",
+        targetUserItemId: status,
+        materials: [],
+      })),
+    );
+    await db.insert(userItem).values([
+      ...["PENDING", "ACTIVE", "COMPLETED", "REFUNDED"].map((status) => ({
+        id: status,
+        userId: `service:${status}`,
+        itemId: "item",
+      })),
+      { id: "wrong-target", userId: "service:PENDING", itemId: "item" },
+      { id: "missing-receipt", userId: "service:missing", itemId: "item" },
+      { id: "orphan", userId: "missing", itemId: "item" },
+      { id: "owned", userId: "live", itemId: "item" },
+    ]);
+    await cleanupOrphanRows(db);
+    expect(
+      (await db.select({ id: userItem.id }).from(userItem)).map(({ id }) => id).sort(),
+    ).toEqual(["ACTIVE", "PENDING", "owned"]);
   });
 
   it("does not wait on live inventory rows that block the original orphan delete", async () => {

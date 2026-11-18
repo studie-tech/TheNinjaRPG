@@ -65,6 +65,7 @@ import ActionLogFiltering, {
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { CraftForMe } from "@/layout/CraftingServices";
 import DeleteUserButton from "@/layout/DeleteUserButton";
 import GlowingBorder from "@/layout/GlowingBorder";
 import GraphCombatLog from "@/layout/GraphCombatLog";
@@ -761,7 +762,11 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         subtitle={subtitle ?? `Profile: ${profileName}`}
         initialBreak={initialBreak}
         topRightContent={
-          <div className="flex flex-row items-center gap-1 [&_svg]:block">
+          <div className="flex flex-row flex-wrap items-center gap-1 [&_svg]:block">
+            {userData &&
+              !isOwnProfile &&
+              profile.occupation === "CRAFTING" &&
+              !profile.isAi && <CraftForMe crafterId={profile.userId} />}
             {userData && canCloneUser(userData.role) && (
               <>
                 <DebugUserCloneControl
@@ -793,7 +798,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     <Link
                       href={`/home/visit/${encodeURIComponent(profile.userId)}`}
                       aria-label="View home"
-                      className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="focus-visible:ring-ring rounded-sm hover:text-orange-500 focus-visible:ring-2 focus-visible:outline-none"
                     >
                       <House className="h-6 w-6" aria-hidden="true" />
                     </Link>
@@ -920,7 +925,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       Reason: {watchedAwardReason?.trim() || "No reason entered"}
                     </p>
                     {awardNeedsRetry && (
-                      <p className="rounded-md border border-amber-500/60 bg-amber-950/30 p-2 text-amber-100 text-sm">
+                      <p className="rounded-md border border-amber-500/60 bg-amber-950/30 p-2 text-sm text-amber-100">
                         The previous response was not confirmed. Refresh the profile and
                         verify the action log before attempting another award.
                       </p>
@@ -1032,7 +1037,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     <TooltipTrigger asChild>
                       <button
                         type="button"
-                        className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
+                        className="focus-visible:ring-ring rounded-sm hover:text-orange-500 focus-visible:ring-2 focus-visible:outline-none disabled:cursor-wait disabled:opacity-50"
                         aria-label={`Award experience to ${profile.username}`}
                         disabled={experienceAwardPending}
                         onClick={openExperienceAward}
@@ -1070,7 +1075,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       their stats later; this does not directly change their level,
                       rank, or allocated stats.
                     </p>
-                    <p className="break-all text-muted-foreground text-sm">
+                    <p className="text-muted-foreground text-sm break-all">
                       Target ID: <code>{experienceAwardSource.userId}</code>
                     </p>
                     {experienceAwardNeedsRetry && experienceAwardTarget && (
@@ -1162,7 +1167,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
+                          className="focus-visible:ring-ring rounded-sm hover:text-orange-500 focus-visible:ring-2 focus-visible:outline-none disabled:cursor-wait disabled:opacity-50"
                           aria-label={`Force ${profile.username} awake`}
                           disabled={forceAwakePending}
                           onClick={() => {
@@ -1487,7 +1492,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     {parseHtml(profile.nindo.content)}
                   </div>
                 ) : (
-                  <p className="text-center text-muted-foreground">
+                  <p className="text-muted-foreground text-center">
                     {profile.username} hasn&apos;t written a Ninja Way yet.
                   </p>
                 )}

@@ -102,6 +102,7 @@ const AWAKE_ACTIONS = new Set([
   "kage.startDefense",
   "occupation.craftItem",
   "occupation.imbueItem",
+  "occupation.submitServiceRequest",
   "overworldAi.interactWithOverworldAi",
   "pets.unlockSlot",
   "pets.activatePet",
@@ -155,6 +156,7 @@ const AWAKE_ACTIONS = new Set([
 // These endpoints have awake-only branches, rather than an unconditional contract.
 // Specific quest starts use the saved quest; endpoint SQL tests cover that case.
 const conditionalActions = new Set([
+  "occupation.respondToServiceRequest",
   "train.updateEnergyTrainingQueue",
   "train.updateMasteryTrainingQueue",
   "coop.dungeon.act",

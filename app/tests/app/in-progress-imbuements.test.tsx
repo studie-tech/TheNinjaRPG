@@ -8,6 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/ListingDetailsDialog";
@@ -16,10 +17,10 @@ import Occupations from "@/app/[shell]/occupation/page";
 import { CRAFTING_REQUIRED_EXP, CRAFTING_TIMES_MINS } from "@/drizzle/constants";
 import * as AuctionBidCache from "@/hooks/useAuctionBidCacheUpdate";
 import * as CombatActions from "@/layout/CombatActions";
+import * as serviceLayout from "@/layout/CraftingServices";
 import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
 import * as pagination from "@/libs/pagination";
-import * as UserContext from "@/utils/UserContext";
 import { stubCraftingCache } from "../layout/helpers/craftingCatalog";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { mockUserContextValue } from "../setup/userContext";
@@ -103,6 +104,13 @@ const stubCraftingUser = (data: object = {}) =>
   } as never);
 
 beforeEach(() => {
+  // Keep relative fixture timestamps fresh after shared SQL setup.
+  const now = Date.now();
+  for (const imbuement of imbuedRow.imbuements) {
+    imbuement.craftingFinishedAt = new Date(
+      now + (imbuement.id === "done" ? -60_000 : 60_000),
+    );
+  }
   installBrowserGlobals({ resizeObserver: true });
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   stubCraftingCache();
@@ -293,7 +301,7 @@ it("refreshes the inventory when an imbuement finishes with Imbue closed", async
   await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1), { timeout: 2000 });
 });
 
-it("offers a confirmed bulk repair in the occupation header during the change-job cooldown", () => {
+it("keeps confirmed bulk repair accessible below the occupation navigation during the change-job cooldown", () => {
   const mutate = vi.fn();
   stubApi(
     {},
@@ -308,7 +316,12 @@ it("offers a confirmed bulk repair in the occupation header during the change-jo
   renderCrafting();
   expect(screen.queryByRole("button", { name: "Change Job" })).toBeNull();
   const repair = screen.getByRole("button", { name: "Repair All" });
-  expect(repair.closest("[data-content-box-header]")).toBeTruthy();
+  expect(repair.closest("[data-content-box-inner]")).toBeTruthy();
+  expect(
+    screen
+      .getByRole("button", { name: "Service Requests" })
+      .closest("[data-content-box-header]"),
+  ).toBeTruthy();
   fireEvent.click(repair);
   expect(mutate).not.toHaveBeenCalled();
   const dialog = within(screen.getByRole("region", { name: "Repair All Items" }));
@@ -447,5 +460,70 @@ it("lists each crafting rank's experience range and craftable rarity times", () 
   }
   for (const list of card.querySelectorAll(".md\\:grid-cols-2 ul")) {
     expect(list.className).toBe("space-y-1 text-muted-foreground");
+  }
+});
+
+it.each(["viewer", "another-crafter"])(
+  "only displays active service work owned by %s",
+  (crafterId) => {
+    stubApi({}, [], {
+      getServiceRequests: {
+        useQuery: () => ({
+          data: [
+            {
+              id: "service-slot",
+              crafterId,
+              status: "ACTIVE",
+              finishesAt: new Date(Date.now() + 60000),
+              itemName: "Commissioned Blade",
+            },
+          ],
+        }),
+      },
+    });
+    renderCrafting();
+    expect(screen.queryByText("Service work: Commissioned Blade") !== null).toBe(
+      crafterId === "viewer",
+    );
+  },
+);
+
+it("keeps occupation navigation in the URL while preserving unrelated parameters and fragments", () => {
+  stubApi();
+  vi.spyOn(serviceLayout, "CraftingServices").mockImplementation(({ navigation }) => (
+    <section aria-label="Service Requests">{navigation}</section>
+  ));
+  const previousUrl = window.location.href;
+  const page = () => (
+    <AppRouterContext.Provider value={{} as never}>
+      <SearchParamsContext.Provider value={new URLSearchParams(window.location.search)}>
+        <Occupations />
+      </SearchParamsContext.Provider>
+    </AppRouterContext.Provider>
+  );
+  try {
+    window.history.replaceState(
+      null,
+      "",
+      "/occupation?tab=services&filter=kept#requests",
+    );
+    const view = render(page());
+    expect(screen.getByRole("region", { name: "Service Requests" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Occupation" }));
+    expect(window.location.search).toBe("?filter=kept");
+    expect(window.location.hash).toBe("#requests");
+    view.rerender(page());
+    expect(screen.queryByRole("region", { name: "Service Requests" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Service Requests" }));
+    expect(new URLSearchParams(window.location.search).get("tab")).toBe("services");
+    expect(new URLSearchParams(window.location.search).get("filter")).toBe("kept");
+    expect(window.location.hash).toBe("#requests");
+    view.rerender(page());
+    expect(screen.getByRole("region", { name: "Service Requests" })).toBeTruthy();
+    window.history.replaceState(null, "", "/occupation?filter=kept#requests");
+    view.rerender(page());
+    expect(screen.queryByRole("region", { name: "Service Requests" })).toBeNull();
+  } finally {
+    window.history.replaceState(null, "", previousUrl);
   }
 });

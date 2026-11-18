@@ -28,6 +28,7 @@ import { deferred } from "../../../../setup/deferred";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import {
   beforeStatements,
+  beforeTransaction,
   failStatements,
   inTransactions,
 } from "../../../../setup/statements";
@@ -1060,18 +1061,18 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
     it(`does not consume a ${quantity}-crystal stack reserved after the imbue snapshot`, async () => {
       await prepareImbuing(quantity);
       const db = await getTestDatabase();
-      // Reserve after the target guard but before the crystal's delete or decrement executes.
-      const imbueDb = beforeStatements(db, userItem, [
-        async () => {},
-        () => postCrystalTrade(quantity),
-      ]);
+      // Reserve after the inventory snapshot but before the imbue transaction claims it.
+      const imbueDb = beforeTransaction(db, () => postCrystalTrade(quantity));
       const crafter = callerForDatabase(occupationRouter, "owner", imbueDb);
       expect(
         await crafter.imbueItem({
           userItemId: "owner-sword",
           userCrystalItemId: "owner-crystal",
         }),
-      ).toMatchObject({ success: false, message: "Crystal no longer available" });
+      ).toMatchObject({
+        success: false,
+        message: "Could not start imbuing — state changed, please try again",
+      });
       expect(
         (await db.select().from(userItem).where(eq(userItem.id, "owner-crystal")))[0],
       ).toMatchObject({ quantity, isInAuction: true });
