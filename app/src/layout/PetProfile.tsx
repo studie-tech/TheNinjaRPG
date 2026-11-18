@@ -1240,6 +1240,7 @@ export function PetProfile() {
                 data.unusedExperience < 1
               }
               title="Assign Pet Experience"
+              initialBreak
               subtitle={`${formatStat(data.unusedExperience)} points available for your companion${isAway ? " · Collect its return in Tasks before training" : !rankAllowed ? " · Your shinobi rank must support this pet" : !appearanceReady ? " · Finish its appearance to allocate points" : !canAttemptAwakeAction(userData) ? " · You must be awake to allocate points" : data.unusedExperience < 1 ? " · Earn player experience with an eligible active companion to allocate points" : ""}`}
               isPending={assign.isPending}
             />

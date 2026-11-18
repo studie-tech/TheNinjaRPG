@@ -66,6 +66,8 @@ interface StatDistributionProps {
   forceUseAll?: boolean;
   isRedistribution?: boolean;
   showWrapper?: boolean;
+  /** Separate the wrapped allocation box from preceding content. */
+  initialBreak?: boolean;
   title?: string;
   subtitle?: string;
   defaultBackHref?: string;
@@ -90,6 +92,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
     statCaps,
     onAccept,
     showWrapper = true,
+    initialBreak,
     title = "Distribute Stats",
     subtitle,
     defaultBackHref,
@@ -194,6 +197,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
     return (
       <ContentBox
         id={id}
+        initialBreak={initialBreak}
         title={title}
         subtitle={subtitle}
         defaultBackHref={defaultBackHref}
