@@ -448,11 +448,9 @@ describe("ANBU router request permissions and concurrency", () => {
     ["staff editor", { villageId: "village-2", role: "CONTENT" }],
   ] as const) {
     it(`allows a ${label} through the accept authorization guard`, async () => {
-      const squad = makeSquad({ memberCount: 4 });
-      const { client, updates } = makeDrizzleMock(squad, [
-        [userRequest, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
-        [anbuSquad, [{ rowsAffected: 0 }]],
-      ]);
+      const squad = makeSquad({ memberCount: 2 });
+      const { client } = makeDrizzleMock(squad, []);
+      const execute = vi.fn().mockResolvedValue({ rowsAffected: 3 });
       fetchRequestMock.mockResolvedValue({
         id: "request-1",
         senderId: "requester",
@@ -469,115 +467,18 @@ describe("ANBU router request permissions and concurrency", () => {
 
       await expect(
         acceptAnbuRequest({
-          ctx: { drizzle: client, userId: "actor" },
+          ctx: { drizzle: { ...client, execute }, userId: "actor" },
           input: { id: "request-1" },
         } as never),
-      ).resolves.toEqual({ success: false, message: "Squad is full" });
-      expect(updates.some((entry) => entry.table === userRequest)).toBe(true);
+      ).resolves.toEqual({ success: true, message: "Request accepted" });
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(queuePush).toHaveBeenCalledWith(
+        expect.anything(),
+        ["requester"],
+        membershipUpdate("anbu"),
+      );
     });
   }
-
-  it("rolls back the request claim when the atomic capacity claim loses", async () => {
-    const squad = makeSquad({ leaderId: "actor", memberCount: 3 });
-    const { client, updates } = makeDrizzleMock(squad, [
-      [userRequest, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
-      [anbuSquad, [{ rowsAffected: 0 }]],
-    ]);
-    fetchRequestMock.mockResolvedValue({
-      id: "request-1",
-      senderId: "requester",
-      receiverId: "actor",
-      relatedId: "squad-1",
-      status: "PENDING",
-    } as never);
-    fetchActorMock.mockResolvedValue({
-      user: makeUser({ anbuId: "squad-1" }),
-    } as never);
-    fetchUserMock.mockResolvedValue(
-      makeUser({ userId: "requester", villageId: "village-1" }) as never,
-    );
-
-    await expect(
-      acceptAnbuRequest({
-        ctx: { drizzle: client, userId: "actor" },
-        input: { id: "request-1" },
-      } as never),
-    ).resolves.toEqual({ success: false, message: "Squad is full" });
-    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(2);
-    expect(updates.some((entry) => entry.table === userData)).toBe(false);
-  });
-
-  it("rolls back capacity and request claims when the membership CAS loses", async () => {
-    const squad = makeSquad({ leaderId: "actor", memberCount: 2 });
-    const { client, updates } = makeDrizzleMock(squad, [
-      [userRequest, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
-      [anbuSquad, [{ rowsAffected: 1 }, { rowsAffected: 1 }]],
-      [userData, [{ rowsAffected: 0 }]],
-    ]);
-    fetchRequestMock.mockResolvedValue({
-      id: "request-1",
-      senderId: "requester",
-      receiverId: "actor",
-      relatedId: "squad-1",
-      status: "PENDING",
-    } as never);
-    fetchActorMock.mockResolvedValue({
-      user: makeUser({ anbuId: "squad-1" }),
-    } as never);
-    fetchUserMock.mockResolvedValue(
-      makeUser({ userId: "requester", villageId: "village-1" }) as never,
-    );
-
-    await expect(
-      acceptAnbuRequest({
-        ctx: { drizzle: client, userId: "actor" },
-        input: { id: "request-1" },
-      } as never),
-    ).resolves.toEqual({
-      success: false,
-      message: "Requester already in a squad",
-    });
-    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(2);
-    expect(updates.filter((entry) => entry.table === anbuSquad)).toHaveLength(2);
-    expect(updates.filter((entry) => entry.table === userData)).toHaveLength(1);
-    expect(notifyMock).not.toHaveBeenCalled();
-    expect(queuePush).not.toHaveBeenCalled();
-  });
-
-  it("does not reassign leaderless requests when another leader claim wins", async () => {
-    const squad = makeSquad({ leaderId: null, memberCount: 0 });
-    const { client, updates } = makeDrizzleMock(squad, [
-      [userRequest, [{ rowsAffected: 1 }]],
-      [anbuSquad, [{ rowsAffected: 1 }, { rowsAffected: 0 }]],
-      [userData, [{ rowsAffected: 1 }]],
-    ]);
-    fetchRequestMock.mockResolvedValue({
-      id: "request-1",
-      senderId: "requester",
-      receiverId: "actor",
-      relatedId: "squad-1",
-      status: "PENDING",
-    } as never);
-    fetchActorMock.mockResolvedValue({
-      user: makeUser({ village: { id: "village-1", kageId: "actor" } }),
-    } as never);
-    fetchUserMock.mockResolvedValue(
-      makeUser({ userId: "requester", rank: "JONIN" }) as never,
-    );
-
-    await expect(
-      acceptAnbuRequest({
-        ctx: { drizzle: client, userId: "actor" },
-        input: { id: "request-1" },
-      } as never),
-    ).resolves.toEqual({ success: true, message: "Request accepted" });
-    expect(updates.filter((entry) => entry.table === userRequest)).toHaveLength(1);
-    expect(queuePush).toHaveBeenCalledWith(
-      client,
-      ["requester"],
-      membershipUpdate("anbu"),
-    );
-  });
 });
 
 describe("ANBU membership invariants", () => {

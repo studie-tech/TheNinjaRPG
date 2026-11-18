@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
@@ -24,6 +24,9 @@ import {
 const userId = "ramen-cache-player";
 const key = [["profile", "getUser"], { type: "query" }];
 describeWithDatabase("confirmed ramen cache updates", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   beforeEach(async () => {
     await resetTables(userCookingJob, userQueue, villageStructure, village, userData);
     await insertUsers([
@@ -146,6 +149,45 @@ describeWithDatabase("confirmed ramen cache updates", () => {
       ramen: "small",
     });
     expect(response.success).toBe(true);
+    const saved = (await db.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+    }))!;
+    expect(saved.money).toBe(before.money - menuPrice);
+  });
+
+  it("discounts by the own village's ramen shop without reading the sector again", async () => {
+    const db = await getTestDatabase();
+    await db.insert(village).values({
+      id: "home-village",
+      name: "Home",
+      sector: 88,
+      type: "VILLAGE",
+      kageId: "",
+    });
+    await db.insert(villageStructure).values({
+      id: "home-ramen",
+      name: "Ramen Shop",
+      image: "",
+      villageId: "home-village",
+      level: 5,
+      ramenDiscountPerLvl: 10,
+    });
+    await db
+      .update(userData)
+      .set({ isOutlaw: false, sector: 88, villageId: "home-village", maxHealth: 1000 })
+      .where(eq(userData.userId, userId));
+    const before = (await db.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+    }))!;
+    const structures = await db.query.villageStructure.findMany();
+    const menuPrice = calcRamenPrice("small", before, structures);
+    expect(menuPrice).toBeLessThan(calcRamenPrice("small", before));
+    const villageReads = vi.spyOn(db.query.village, "findFirst");
+    const response = await (await callerFor(villageRouter, userId)).buyFood({
+      ramen: "small",
+    });
+    expect(response.success, response.message).toBe(true);
+    expect(villageReads).not.toHaveBeenCalled();
     const saved = (await db.query.userData.findFirst({
       where: eq(userData.userId, userId),
     }))!;

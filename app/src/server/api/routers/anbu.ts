@@ -2,6 +2,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getEspionageSquadDelta, getSquadUpgradeDelta } from "@/deltas/anbu";
 import {
   ANBU_DELAY_SECS,
   ANBU_ESPIONAGE_POINTS_COST,
@@ -9,6 +10,7 @@ import {
   ANBU_ESPIONAGE_UPGRADE_COST,
   ANBU_LEADER_RANK_REQUIREMENT,
   ANBU_MAX_ESPIONAGE_LEVEL,
+  ANBU_MAX_MEMBERS,
   ANBU_MAX_STEALTH_LEVEL,
   ANBU_MEMBER_RANK_REQUIREMENT,
   ANBU_REQUEST_EXPIRY_SECS,
@@ -26,13 +28,16 @@ import {
   countAnbuSquads,
   countVillageClans,
   deleteAnbuSquadForDisbandSquad,
+  executeAcceptAnbuRequest,
   executeChargeForPerformEspionage,
   fetchAnbuActor,
   fetchAnbuMember,
+  fetchAnbuRequester,
   fetchAnbuRequestNotificationTarget,
   fetchEspionageSquad,
   fetchRecentPendingAnbuRequest,
   fetchSquad,
+  fetchSquadForAnbuRequestId,
   fetchSquadSummary,
   fetchSquads,
   findAnbuSquadForEditSquad,
@@ -41,10 +46,8 @@ import {
   listAnbuSquadForGetAllNames,
   listUserDataForElectAnbuLeader,
   reassignPendingAnbuRequestsOnPromotion,
-  releaseAnbuCapacity,
+  reassignPendingAnbuRequestsToLeader,
   selectUserDataForPromoteAnbuLeader,
-  updateAnbuSquadForAcceptAnbuRequest,
-  updateAnbuSquadForAcceptAnbuRequest2,
   updateAnbuSquadForEditSquad,
   updateAnbuSquadForPromoteAnbuLeader,
   updateAnbuSquadForPurchaseUpgrade,
@@ -78,6 +81,7 @@ import { getEffectiveStructureLevel } from "@/utils/village";
 import {
   anbuCreateSchema,
   anbuRenameSchema,
+  anbuSquadDeltaSchema,
   strictAnbuNameField,
 } from "@/validators/anbu";
 import { idSchema } from "@/validators/misc";
@@ -85,6 +89,11 @@ import { idSchema } from "@/validators/misc";
 const anbuEditSchema = anbuRenameSchema.extend({ squadId: z.string() });
 
 const pusher = getServerPusher();
+
+/** Squad mutations whose committed point and level changes the page applies in place. */
+const squadDeltaResponse = baseServerResponse.extend({
+  squadDelta: anbuSquadDeltaSchema.optional(),
+});
 
 export const anbuRouter = createTRPCRouter({
   get: protectedProcedure
@@ -481,7 +490,7 @@ export const anbuRouter = createTRPCRouter({
   purchaseEspionageUpgrade: protectedProcedure
     .meta({ mcp: { description: "Upgrade squad espionage level" } })
     .input(z.object({ squadId: z.string() }))
-    .output(baseServerResponse)
+    .output(squadDeltaResponse)
     .mutation(({ ctx, input }) =>
       purchaseSquadUpgrade(ctx, input.squadId, {
         levelColumn: "espionageLevel",
@@ -493,7 +502,7 @@ export const anbuRouter = createTRPCRouter({
   purchaseStealthUpgrade: protectedProcedure
     .meta({ mcp: { description: "Upgrade squad stealth level" } })
     .input(z.object({ squadId: z.string() }))
-    .output(baseServerResponse)
+    .output(squadDeltaResponse)
     .mutation(({ ctx, input }) =>
       purchaseSquadUpgrade(ctx, input.squadId, {
         levelColumn: "stealthLevel",
@@ -505,17 +514,20 @@ export const anbuRouter = createTRPCRouter({
   performEspionage: protectedProcedure
     .meta({ mcp: { description: "Perform espionage on enemy village" } })
     .input(z.object({ villageId: z.string(), anbuId: z.string() }))
-    .output(baseServerResponse)
+    .output(squadDeltaResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, targetVillage, userSquad] = await Promise.all([
-        fetchAnbuActor({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchVillage(ctx.drizzle, input.villageId),
-        fetchEspionageSquad(ctx.drizzle, input.anbuId),
-      ]);
+      // Fetch; the report's counts depend only on the target and cost two cheap COUNTs
+      const [user, targetVillage, userSquad, anbuSquadCount, clanCount] =
+        await Promise.all([
+          fetchAnbuActor({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+          }),
+          fetchVillage(ctx.drizzle, input.villageId),
+          fetchEspionageSquad(ctx.drizzle, input.anbuId),
+          countAnbuSquads(ctx.drizzle, input.villageId),
+          countVillageClans(ctx.drizzle, input.villageId),
+        ]);
 
       // Derived
       // Guards
@@ -551,15 +563,10 @@ export const anbuRouter = createTRPCRouter({
         return errorResponse("Not enough village prestige or squad points");
       }
 
+      const squadDelta = getEspionageSquadDelta(userSquad.id);
       if (!success) {
-        return errorResponse("Espionage mission failed");
+        return { ...errorResponse("Espionage mission failed"), squadDelta };
       }
-
-      // Gather intelligence on target village
-      const [anbuSquadCount, clanCount] = await Promise.all([
-        countAnbuSquads(ctx.drizzle, targetVillage.id),
-        countVillageClans(ctx.drizzle, targetVillage.id),
-      ]);
 
       // Create intelligence report
       const structureReportHtml = targetVillage.structures
@@ -617,6 +624,7 @@ export const anbuRouter = createTRPCRouter({
       return {
         success: true,
         message: "Espionage mission successful - intelligence report sent to squad",
+        squadDelta,
       };
     }),
 });
@@ -728,10 +736,10 @@ export async function createAnbuRequest(args: {
 }
 
 /**
- * Accepts a pending ANBU join request with compare-and-swap guards for the
- * request state, squad capacity, and requester membership. Failed claims are
- * compensated so concurrent accepts cannot overfill a squad or strand state.
- * Eligible members may atomically claim leadership of a leaderless squad.
+ * Accepts a pending ANBU join request. The request transition, squad capacity and
+ * requester membership commit together in one guarded statement, so concurrent accepts
+ * cannot overfill a squad or strand a half-applied acceptance. Eligible members of a
+ * leaderless squad claim leadership in the same statement.
  *
  * @param args - Authenticated request context and request ID to accept.
  * @returns A success response or the reason the request could not be accepted.
@@ -741,13 +749,11 @@ export async function acceptAnbuRequest(args: {
   input: { id: string };
 }) {
   const { ctx, input } = args;
-  const [request, user] = await Promise.all([
+  const [request, user, squad, requester] = await Promise.all([
     fetchRequest(ctx.drizzle, input.id, "ANBU"),
     fetchAnbuActor({ client: ctx.drizzle, userId: ctx.userId }),
-  ]);
-  const [squad, requester] = await Promise.all([
-    fetchSquadForAnbuRequest(ctx.drizzle, request),
-    fetchAnbuMember(ctx.drizzle, request.senderId),
+    fetchSquadForAnbuRequestId(ctx.drizzle, input.id),
+    fetchAnbuRequester(ctx.drizzle, input.id),
   ]);
   const { isLeader, isKageOfSquadVillage, isElderOfSquadVillage } =
     getConvenienceStatus(user, squad);
@@ -766,44 +772,21 @@ export async function acceptAnbuRequest(args: {
   if (!hasRequiredRank(requester.rank, ANBU_MEMBER_RANK_REQUIREMENT)) {
     return errorResponse(`Rank must be at least ${ANBU_MEMBER_RANK_REQUIREMENT}`);
   }
-  const claimRequest = await transitionAnbuRequestState(
-    ctx.drizzle,
-    input.id,
-    "PENDING",
-    "ACCEPTED",
-  );
-  if (!claimRequest) {
-    return errorResponse("You can only accept pending requests");
+  if (squad.memberCount >= ANBU_MAX_MEMBERS) return errorResponse("Squad is full");
+  const claimLeadership =
+    !squad.leaderId && hasRequiredRank(requester.rank, ANBU_LEADER_RANK_REQUIREMENT);
+  const accepted = await executeAcceptAnbuRequest(ctx.drizzle, {
+    requestId: input.id,
+    squadId: squad.id,
+    requesterId: requester.userId,
+    claimLeadership,
+  });
+  if (accepted.rowsAffected === 0) {
+    return errorResponse(await describeLostAnbuAccept(ctx.drizzle, input.id));
   }
-  const capacityClaim = await updateAnbuSquadForAcceptAnbuRequest(ctx.drizzle, squad);
-  if (capacityClaim.rowsAffected === 0) {
-    await transitionAnbuRequestState(ctx.drizzle, input.id, "ACCEPTED", "PENDING");
-    return errorResponse("Squad is full");
-  }
-  const joinResult = await assignUserToAnbu(ctx.drizzle, squad.id, requester.userId);
-  if (joinResult.rowsAffected === 0) {
-    await Promise.all([
-      releaseAnbuCapacity(ctx.drizzle, squad.id),
-      transitionAnbuRequestState(ctx.drizzle, input.id, "ACCEPTED", "PENDING"),
-    ]);
-    return errorResponse("Requester already in a squad");
-  }
-  if (
-    !squad.leaderId &&
-    hasRequiredRank(requester.rank, ANBU_LEADER_RANK_REQUIREMENT)
-  ) {
-    const leaderClaim = await updateAnbuSquadForAcceptAnbuRequest2(
-      ctx.drizzle,
-      requester,
-      squad,
-    );
-    if (leaderClaim.rowsAffected === 1) {
-      await reassignPendingAnbuRequestsOnPromotion(
-        ctx.drizzle,
-        squad.id,
-        requester.userId,
-      );
-    }
+  if (claimLeadership) {
+    // The claim keeps a leader installed concurrently; only a won claim redirects requests.
+    await reassignPendingAnbuRequestsToLeader(ctx.drizzle, squad.id, requester.userId);
   }
   void pusher.trigger(request.senderId, "event", { type: "anbu" });
   deferPushToUsers(ctx.drizzle, [request.senderId], membershipUpdate("anbu"));
@@ -1014,7 +997,11 @@ const purchaseSquadUpgrade = async (
   // Mutate
   const result = await updateAnbuSquadForPurchaseUpgrade(ctx.drizzle, squad, upgrade);
   if (result.rowsAffected === 0) return errorResponse("Not enough squad points");
-  return { success: true, message: `${upgrade.label} level upgraded` };
+  return {
+    success: true,
+    message: `${upgrade.label} level upgraded`,
+    squadDelta: getSquadUpgradeDelta(squad.id, upgrade),
+  };
 };
 
 const getConvenienceStatus = (
@@ -1040,6 +1027,19 @@ const getConvenienceStatus = (
     isKageOfSquadVillage,
     isElderOfSquadVillage,
   };
+};
+
+/** Explain which guard a concurrent change broke after an acceptance claimed no rows. */
+const describeLostAnbuAccept = async (client: DrizzleClient, requestId: string) => {
+  const [request, squad, requester] = await Promise.all([
+    fetchRequest(client, requestId, "ANBU", { allowMissing: true }),
+    fetchSquadForAnbuRequestId(client, requestId),
+    fetchAnbuRequester(client, requestId),
+  ]);
+  if (request?.status !== "PENDING") return "You can only accept pending requests";
+  if (requester?.anbuId) return "Requester already in a squad";
+  if (!squad || (squad.memberCount ?? 0) >= ANBU_MAX_MEMBERS) return "Squad is full";
+  return "Request could not be accepted, please try again";
 };
 
 /**

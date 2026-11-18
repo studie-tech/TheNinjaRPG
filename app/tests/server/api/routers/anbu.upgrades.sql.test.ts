@@ -72,7 +72,11 @@ describeWithDatabase("ANBU squad upgrades", () => {
       await seedSquad({ points: upgrade.cost + 1 });
       const caller = await callerFor(anbuRouter, "leader");
       const result = await caller[upgrade.procedure](input);
-      expect(result).toEqual({ success: true, message: upgrade.message });
+      expect(result).toEqual({
+        success: true,
+        message: upgrade.message,
+        squadDelta: { id: "squad", points: -upgrade.cost, [upgrade.column]: 1 },
+      });
       const squad = await storedSquad();
       expect(squad?.points).toBe(1);
       expect(squad?.[upgrade.column]).toBe(1);

@@ -64,6 +64,7 @@ import {
 import {
   deleteMpvpBattleQueueForGetShrineBattles,
   deleteMpvpBattleUserForLeaveShrineBattle,
+  executeUpgradeShrine,
   findMpvpBattleQueueForJoinShrineBattle,
   findMpvpBattleQueueForLeaveShrineBattle,
   findMpvpBattleUserForJoinShrineBattle,
@@ -72,6 +73,7 @@ import {
   findSectorWithVillage,
   findUserDataForGetSectorShrine,
   findUserDataForJoinShrineBattle,
+  findUserDataForUpgradeShrine,
   findVillageForGetBoostTemplate,
   findVillageForInitiateShrineBattle,
   findVillageIdForGetSectorShrine,
@@ -85,15 +87,12 @@ import {
   selectMpvpBattleUserForLeaveShrineBattle,
   selectSectorForHasLevel3Shrine,
   updateSectorForPayWeeklyMaintenance,
-  updateSectorForUpgradeShrine,
   updateVillageForActivateBoost,
   updateVillageForPayWeeklyMaintenance,
   updateVillageForPayWeeklyMaintenance2,
   updateVillageForSetBoostTemplate,
   updateVillageForToggleVillageAiDefender,
   updateVillageForUnlockAiDefender,
-  updateVillageForUpgradeShrine,
-  updateVillageForUpgradeShrine2,
 } from "@/queries/shrine";
 import { findVillageBoostUserCache } from "@/queries/socialUserCache";
 import { listWarForGetSectorData } from "@/queries/travel";
@@ -199,11 +198,8 @@ export const shrineRouter = createTRPCRouter({
     .input(z.object({ sectorNumber: z.number() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user, requiresUserRefresh }, targetSector] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [user, targetSector] = await Promise.all([
+        findUserDataForUpgradeShrine(ctx.drizzle, ctx.userId),
         findSectorByNumber(ctx.drizzle, input.sectorNumber),
       ]);
 
@@ -219,7 +215,7 @@ export const shrineRouter = createTRPCRouter({
       if (targetSector.shrineLevel >= SHRINE_MAX_LEVEL) {
         return errorResponse(`Shrine level cannot exceed ${SHRINE_MAX_LEVEL}`);
       }
-      if (!user.village || !isKage(user)) {
+      if (!user.village || user.village.kageId !== user.userId) {
         return errorResponse("Only the Kage can upgrade shrines");
       }
       if (user.village.tokens < SHRINE_UPGRADE_COST) {
@@ -228,41 +224,23 @@ export const shrineRouter = createTRPCRouter({
         );
       }
 
-      // IMPORTANT: do token update with DB-guard + atomic decrement
-      // We do tokens first; if it fails, we do nothing else.
-      const tokenRes = await updateVillageForUpgradeShrine(ctx.drizzle, {
+      // Mutate: the token debit and the level rise commit together or not at all
+      const upgraded = await executeUpgradeShrine(ctx.drizzle, {
         villageId: user.villageId,
+        kageId: user.userId,
+        sectorNumber: input.sectorNumber,
+        shrineLevel: targetSector.shrineLevel,
       });
-
-      if (tokenRes.rowsAffected === 0) {
-        return errorResponse("Not enough village tokens to upgrade shrine");
-      }
-
-      // Match ownership and level so a concurrent capture or upgrade triggers a refund.
-      const shrineUpdateRes = await updateSectorForUpgradeShrine(
-        ctx.drizzle,
-        targetSector,
-        input,
-        { villageId: user.villageId },
-      );
-
-      if (shrineUpdateRes.rowsAffected === 0) {
-        // Refund tokens since the guarded update failed
-        await updateVillageForUpgradeShrine2(ctx.drizzle, {
-          villageId: user.villageId,
-        });
+      if (upgraded.rowsAffected === 0) {
         return errorResponse(
-          "Shrine upgrade failed - shrine may have been upgraded by another request",
+          "Shrine upgrade failed - tokens, leadership or the shrine changed in another request",
         );
       }
 
       return {
         success: true,
         message: `Successfully upgraded shrine to level ${targetSector.shrineLevel + 1}!`,
-        ...getUpgradeShrineUserUpdate({
-          requiresUserRefresh,
-          userVillageId: user.villageId,
-        }),
+        ...getUpgradeShrineUserUpdate({ userVillageId: user.villageId }),
       };
     }),
 

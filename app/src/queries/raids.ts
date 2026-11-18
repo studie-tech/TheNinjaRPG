@@ -87,13 +87,26 @@ export const listQuestForGetCompletedRaids = (
 
 /**
  * Build the `quest` listing for `getAvailableRaids`, including predicates on
- * `questType`, `hidden`, `raidBossCurrentHealth`.
+ * `questType`, `hidden`, `raidBossCurrentHealth`, selecting only the listed summary fields.
  */
 export const listQuestForGetAvailableRaids = (
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
 ) =>
   client.query.quest.findMany({
+    columns: {
+      id: true,
+      name: true,
+      description: true,
+      image: true,
+      content: true,
+      raidMaxPlayers: true,
+      raidBossMaxHealth: true,
+      raidBossCurrentHealth: true,
+      raidEndsAt: true,
+      raidCaptureDeadline: true,
+      raidGracePeriodEnd: true,
+    },
     where: and(
       eq(quest.questType, "raid"),
       eq(quest.hidden, false),

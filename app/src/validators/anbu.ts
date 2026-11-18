@@ -24,3 +24,16 @@ export const anbuRenameSchema = z.object({
 });
 
 export type AnbuRenameSchema = z.infer<typeof anbuRenameSchema>;
+
+/**
+ * Numeric changes a guarded squad write committed, applied on top of the cached `anbu.get`
+ * result. The id asserts that the cached squad is the one that changed.
+ */
+export const anbuSquadDeltaSchema = z.object({
+  id: z.string(),
+  points: z.number().optional(),
+  espionageLevel: z.number().optional(),
+  stealthLevel: z.number().optional(),
+});
+
+export type AnbuSquadDelta = z.infer<typeof anbuSquadDeltaSchema>;

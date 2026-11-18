@@ -3,7 +3,7 @@
  */
 
 import type { SQL } from "drizzle-orm";
-import { and, count, eq, exists, gt, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, count, eq, exists, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   ANBU_ESPIONAGE_POINTS_COST,
@@ -95,6 +95,56 @@ export const fetchAnbuMember = async (client: DrizzleClient, userId: string) =>
       isAi: true,
     },
     where: eq(userData.userId, userId),
+  });
+
+/** The squad and applicant columns of one ANBU request, resolved inside each statement. */
+const anbuRequestColumn = (
+  client: Pick<DrizzleClient, "select">,
+  requestId: string,
+  column: typeof userRequest.relatedId | typeof userRequest.senderId,
+) =>
+  client
+    .select({ value: column })
+    .from(userRequest)
+    .where(and(eq(userRequest.id, requestId), eq(userRequest.type, "ANBU")));
+
+/**
+ * Loads the squad an ANBU request targets without first reading the request, so callers
+ * can fetch it beside the request itself.
+ *
+ * @param client - The Drizzle client used for the squad lookup.
+ * @param requestId - The ANBU request whose `relatedId` names the squad.
+ * @returns The squad's scalar fields, or undefined when the request or squad is missing.
+ */
+export const fetchSquadForAnbuRequestId = (client: DrizzleClient, requestId: string) =>
+  client.query.anbuSquad.findFirst({
+    where: inArray(
+      anbuSquad.id,
+      anbuRequestColumn(client, requestId, userRequest.relatedId),
+    ),
+  });
+
+/**
+ * Loads the applicant of an ANBU request with the fields `fetchAnbuMember` returns, without
+ * first reading the request.
+ *
+ * @param client - The Drizzle client used for the applicant lookup.
+ * @param requestId - The ANBU request whose sender is loaded.
+ * @returns The applicant's eligibility fields, or undefined when missing.
+ */
+export const fetchAnbuRequester = (client: DrizzleClient, requestId: string) =>
+  client.query.userData.findFirst({
+    columns: {
+      userId: true,
+      villageId: true,
+      anbuId: true,
+      rank: true,
+      isAi: true,
+    },
+    where: inArray(
+      userData.userId,
+      anbuRequestColumn(client, requestId, userRequest.senderId),
+    ),
   });
 
 /**
@@ -381,30 +431,37 @@ export const updateUserRequestForCreateAnbuRequest = (
     );
 
 /**
- * Build the `anbuSquad` update for `acceptAnbuRequest`, setting `memberCount`, using
- * predicates on `id` and `memberCount`.
+ * Execute an ANBU request acceptance as one statement: the request leaves PENDING, the
+ * squad takes a member below `ANBU_MAX_MEMBERS` and the applicant joins while squadless
+ * and in the squad's village. Either every row changes (3 rows affected) or none does.
+ * A leaderless squad also takes the applicant as leader when `claimLeadership` is set.
  */
-export const updateAnbuSquadForAcceptAnbuRequest = (
-  client: Pick<DrizzleClient, "update">,
-  squad: { id: string },
+export const executeAcceptAnbuRequest = (
+  client: Pick<DrizzleClient, "execute">,
+  accept: {
+    requestId: string;
+    squadId: string;
+    requesterId: string;
+    claimLeadership: boolean;
+  },
 ) =>
-  client
-    .update(anbuSquad)
-    .set({ memberCount: sql`${anbuSquad.memberCount} + 1` })
-    .where(
-      and(eq(anbuSquad.id, squad.id), lt(anbuSquad.memberCount, ANBU_MAX_MEMBERS)),
-    );
-
-/** Build the `anbuSquad` update for `acceptAnbuRequest`, setting `leaderId`, using predicates on `id` and `leaderId`. */
-export const updateAnbuSquadForAcceptAnbuRequest2 = (
-  client: Pick<DrizzleClient, "update">,
-  requester: { userId: string },
-  squad: { id: string },
-) =>
-  client
-    .update(anbuSquad)
-    .set({ leaderId: requester.userId })
-    .where(and(eq(anbuSquad.id, squad.id), isNull(anbuSquad.leaderId)));
+  client.execute(sql`
+      UPDATE ${userRequest}
+      INNER JOIN ${anbuSquad} ON ${anbuSquad.id} = ${userRequest.relatedId}
+      INNER JOIN ${userData} ON ${userData.userId} = ${userRequest.senderId}
+      SET ${userRequest.status} = 'ACCEPTED',
+          ${anbuSquad.memberCount} = ${anbuSquad.memberCount} + 1,
+          ${accept.claimLeadership ? sql`${anbuSquad.leaderId} = COALESCE(${anbuSquad.leaderId}, ${accept.requesterId}),` : sql``}
+          ${userData.anbuId} = ${accept.squadId}
+      WHERE ${userRequest.id} = ${accept.requestId}
+        AND ${userRequest.type} = 'ANBU'
+        AND ${userRequest.status} = 'PENDING'
+        AND ${anbuSquad.id} = ${accept.squadId}
+        AND ${anbuSquad.memberCount} < ${ANBU_MAX_MEMBERS}
+        AND ${userData.userId} = ${accept.requesterId}
+        AND ${userData.anbuId} IS NULL
+        AND ${userData.villageId} = ${anbuSquad.villageId}
+    `);
 
 /** Build the `anbuSquad` update for `removeFromSquad`, setting `memberCount`, using predicates on `id` and `memberCount`. */
 export const updateAnbuSquadForRemoveFromSquad = (
@@ -493,20 +550,6 @@ export const updateUserRequestForTransitionAnbuRequestState = (
     );
 
 /**
- * Compensates a previously reserved squad slot without allowing the persisted
- * member count to become negative.
- *
- * @param client - The Drizzle client used for the counter update.
- * @param squadId - The squad whose reserved slot should be released.
- * @returns The result of the member-count update.
- */
-export const releaseAnbuCapacity = async (client: DrizzleClient, squadId: string) =>
-  client
-    .update(anbuSquad)
-    .set({ memberCount: sql`GREATEST(${anbuSquad.memberCount} - 1, 0)` })
-    .where(eq(anbuSquad.id, squadId));
-
-/**
  * Redirects a squad's pending join requests to its new leader. Leaderless
  * squads keep the old receiver as a notification fallback.
  *
@@ -531,6 +574,32 @@ export const reassignPendingAnbuRequestsOnPromotion = async (
       ),
     );
 };
+
+/**
+ * Build the redirect of a squad's pending join requests to `leaderId`, applied only while
+ * that user leads the squad, for callers that cannot tell whether their claim won.
+ */
+export const reassignPendingAnbuRequestsToLeader = (
+  client: Pick<DrizzleClient, "update" | "select">,
+  squadId: string,
+  leaderId: string,
+) =>
+  client
+    .update(userRequest)
+    .set({ receiverId: leaderId })
+    .where(
+      and(
+        eq(userRequest.type, "ANBU"),
+        eq(userRequest.status, "PENDING"),
+        eq(userRequest.relatedId, squadId),
+        exists(
+          client
+            .select({ id: anbuSquad.id })
+            .from(anbuSquad)
+            .where(and(eq(anbuSquad.id, squadId), eq(anbuSquad.leaderId, leaderId))),
+        ),
+      ),
+    );
 
 /** Build the `anbuSquad` update for `decayClansAndAnbu`, setting `pvpActivity`. */
 export const updateAnbuSquadForDecayClansAndAnbu = (

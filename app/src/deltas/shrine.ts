@@ -7,17 +7,13 @@ import {
 import type { fetchUpdatedUser, UserWithRelations } from "@/routers/profile";
 import type { BoostTemplateEntry } from "@/validators/shrine";
 
-/** Debit the matching village's shrine upgrade tokens unless the profile requires a refresh. */
+/** Debit the matching village's shrine upgrade tokens. */
 export const getUpgradeShrineUserUpdate = ({
-  requiresUserRefresh,
   userVillageId,
 }: {
-  requiresUserRefresh: boolean;
   userVillageId: string;
 }) => ({
-  userDelta: requiresUserRefresh
-    ? undefined
-    : { village: { id: userVillageId, tokens: -SHRINE_UPGRADE_COST } },
+  userDelta: { village: { id: userVillageId, tokens: -SHRINE_UPGRADE_COST } },
 });
 
 /**

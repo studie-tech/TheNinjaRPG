@@ -49,6 +49,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserNindo } from "@/drizzle/schema";
 import { useNavigationRouter } from "@/hooks/navigation";
+import { useAnbuSquadCacheUpdate } from "@/hooks/useAnbuSquadCacheUpdate";
 import { usePendingIds } from "@/hooks/usePendingIds";
 import { AutoAttackToggle } from "@/layout/AutoAttackModal";
 import AvatarImage from "@/layout/Avatar";
@@ -73,7 +74,7 @@ import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { readUploadResult, showUploadError } from "@/utils/uploadResult";
 import { UploadButton } from "@/utils/uploadthing";
-import type { AnbuRenameSchema } from "@/validators/anbu";
+import type { AnbuRenameSchema, AnbuSquadDelta } from "@/validators/anbu";
 import { anbuRenameSchema } from "@/validators/anbu";
 
 export default function ANBUDetails(props: { params: Promise<{ anbuid: string }> }) {
@@ -223,6 +224,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
 
   // Get react query utility
   const utils = api.useUtils();
+  const { prepareSquadUpdate, updateSquad } = useAnbuSquadCacheUpdate(squadId);
 
   // Get villages for espionage
   const { data: villages } = api.village.getAll.useQuery();
@@ -265,12 +267,24 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
     onSuccess,
     onSettled: (_data, _error, variables) => promotions.end(variables.memberId),
   });
+  // Upgrades and espionage change only squad points and levels, applied from the response.
+  const squadUpdate = {
+    onMutate: prepareSquadUpdate,
+    onSuccess: async (
+      data: BaseServerResponse & { squadDelta?: AnbuSquadDelta },
+      _variables: unknown,
+      snapshot: ReturnType<typeof prepareSquadUpdate>,
+    ) => {
+      showMutationToast(data);
+      if (data.success || data.squadDelta) await updateSquad(data, snapshot);
+    },
+  };
   const { mutate: upgradeEspionage, isPending: isUpgradingEspionage } =
-    api.anbu.purchaseEspionageUpgrade.useMutation({ onSuccess });
+    api.anbu.purchaseEspionageUpgrade.useMutation(squadUpdate);
   const { mutate: upgradeStealth, isPending: isUpgradingStealth } =
-    api.anbu.purchaseStealthUpgrade.useMutation({ onSuccess });
+    api.anbu.purchaseStealthUpgrade.useMutation(squadUpdate);
   const { mutate: performEspionage, isPending: isPerformingEspionage } =
-    api.anbu.performEspionage.useMutation({ onSuccess });
+    api.anbu.performEspionage.useMutation(squadUpdate);
   const { mutate: leave, isPending: isLeaving } = api.anbu.leaveSquad.useMutation({
     onSuccess: async (data) => {
       await onSuccess(data);

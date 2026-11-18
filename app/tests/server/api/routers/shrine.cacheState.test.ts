@@ -204,7 +204,8 @@ describeWithDatabase("committed shrine cache state", () => {
       expect(
         (await db.query.village.findFirst({ where: eq(village.id, villageId) }))
           ?.tokens,
-      ).toBe(initialTokens + concurrentTokens);
+        // Only the maintenance payment reads the stubbed profile and its concurrent credit.
+      ).toBe(initialTokens + (endpoint === "upgradeShrine" ? 0 : concurrentTokens));
       expect(
         await db.query.sector.findFirst({ where: eq(sector.id, sectorId) }),
       ).toEqual(
@@ -217,10 +218,12 @@ describeWithDatabase("committed shrine cache state", () => {
   }
 
   for (const mustRefresh of [false, true]) {
-    for (const [endpoint, shrine] of Object.entries(endpoints) as [
-      ShrineEndpointName,
-      ShrineEndpoint,
-    ][]) {
+    for (const [endpoint, shrine] of (
+      Object.entries(endpoints) as [ShrineEndpointName, ShrineEndpoint][]
+    ).filter(
+      // The upgrade reads a focused Kage snapshot; shrine.upgrade.sql.test.ts covers it.
+      ([name]) => name !== "upgradeShrine",
+    )) {
       it(`${endpoint} returns the confirmed village update and refresh flag ${mustRefresh}`, async () => {
         const db = await getTestDatabase();
         requiresUserRefresh = mustRefresh;
