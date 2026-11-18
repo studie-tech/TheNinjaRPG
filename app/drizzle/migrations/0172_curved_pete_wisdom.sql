@@ -1,0 +1,1 @@
+CREATE INDEX `Sector_villageId_idx` ON `Sector` (`villageId`);
