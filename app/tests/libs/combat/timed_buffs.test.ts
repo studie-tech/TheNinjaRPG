@@ -14,7 +14,6 @@ const statBuff = (id: string, power: number, expires: number, patch = {}) =>
   makeEffect(
     "increasestat",
     {
-      statTypes: ["Ninjutsu"],
       direction: "offence",
       power,
       powerPerLevel: 0,
@@ -40,7 +39,7 @@ describe("timed meal and raid effects", () => {
     const raid = statBuff("raid", 20, live, { direction: "both" });
     const ordinary = makeEffect(
       "increasestat",
-      { statTypes: ["Ninjutsu"], direction: "offence", power: 5 },
+      { direction: "offence", power: 5 },
       {
         creatorId: "user",
         targetId: "user",
@@ -57,6 +56,32 @@ describe("timed meal and raid effects", () => {
     expect(user.offence).toBe(1250);
     expect(user.defence).toBe(1200);
   });
+  it.each([false, true])(
+    "retains a general-only winner without reapplying losing combat stats (reverse: %s)",
+    (reverse) => {
+      const user = makeUser({
+        userId: "user",
+        offence: 1000,
+        defence: 1000,
+        strength: 1000,
+      });
+      const live = Date.now() + 60000;
+      const buffs = [
+        statBuff("meal", 10, live, { direction: "both", generalTypes: ["Strength"] }),
+        statBuff("raid", 20, live, { direction: "both" }),
+      ];
+      applyEffects(
+        makeCompleteBattle({
+          usersState: [user],
+          usersEffects: reverse ? buffs.reverse() : buffs,
+        }),
+        "user",
+      );
+      expect(user.offence).toBe(1200);
+      expect(user.defence).toBe(1200);
+      expect(user.strength).toBe(1100);
+    },
+  );
   it("does not apply an expired stronger effect on the first action after expiry", () => {
     const user = makeUser({ userId: "user", offence: 1000 });
     const battle = makeCompleteBattle({

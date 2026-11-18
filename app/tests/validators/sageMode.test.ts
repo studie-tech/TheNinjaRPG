@@ -46,7 +46,6 @@ describe("SageModeValidator battleDescription", () => {
             power: 1,
             powerPerLevel: 0,
             rounds: 1,
-            statTypes: ["Ninjutsu"],
             generalTypes: [],
             staticAssetPath: "",
             staticAnimation: "",

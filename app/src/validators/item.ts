@@ -3,6 +3,7 @@ import {
   AttackMethods,
   AttackTargets,
   BattleUsageTypes,
+  GeneralTypes,
   ItemRarities,
   ItemSlots,
   ItemSlotTypes,
@@ -14,7 +15,6 @@ import {
 } from "@/drizzle/constants";
 import { furnitureVariantDataSchema } from "@/validators/itemFurniture";
 import { lpcItemFields } from "@/validators/lpc";
-import { statFilters } from "@/validators/statFilters";
 
 export const itemCreateSchema = z.object({ type: z.enum(ItemTypes) });
 
@@ -30,7 +30,7 @@ export const itemFilteringSchema = z.object({
   itemType: z.enum(ItemTypes).optional(),
   itemRarity: z.enum(ItemRarities).optional(),
   effect: z.array(z.string()).optional(),
-  stat: z.enum(statFilters).optional(),
+  stat: z.enum(GeneralTypes).optional(),
   minCost: z.number().prefault(0),
   minRepsCost: z.number().prefault(0),
   minSeichiSilverCost: z.number().prefault(0),

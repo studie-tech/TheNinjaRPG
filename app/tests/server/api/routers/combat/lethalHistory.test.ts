@@ -106,7 +106,6 @@ describeWithDatabase("lethal combat history", () => {
                   power: 8,
                   calculation: "static",
                   rounds: 3,
-                  statTypes: [],
                   generalTypes: [],
                   elements: [],
                 },

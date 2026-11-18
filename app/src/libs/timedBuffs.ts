@@ -87,10 +87,10 @@ type StatField = (typeof statFields)[number];
 const affectedFields = (effect: UserEffect, target: BattleUserState): StatField[] => {
   if (effect.type !== "increasestat") return [];
   const fields: StatField[] = [];
-  if (effect.statTypes?.length) {
-    if (effect.direction !== "defence") fields.push("offence");
-    if (effect.direction !== "offence") fields.push("defence");
-  }
+  if (effect.direction === "offence" || effect.direction === "both")
+    fields.push("offence");
+  if (effect.direction === "defence" || effect.direction === "both")
+    fields.push("defence");
   for (const general of effect.generalTypes ?? []) {
     if (general === "Highest") fields.push(...target.highestGenerals);
     else fields.push(general.toLowerCase() as StatField);
@@ -132,14 +132,13 @@ export const nonStackingTimedStatEffect = (
   if (!remaining.length) return null;
   return {
     ...effect,
-    statTypes: remaining.some((field) => field === "offence" || field === "defence")
-      ? effect.statTypes
-      : [],
     direction: remaining.includes("offence")
       ? remaining.includes("defence")
         ? "both"
         : "offence"
-      : "defence",
+      : remaining.includes("defence")
+        ? "defence"
+        : "none",
     generalTypes: remaining
       .filter((field) => field !== "offence" && field !== "defence")
       .map(

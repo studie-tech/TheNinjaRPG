@@ -16,7 +16,7 @@ const meal = {
   ...MEAL_ITEM_DEFAULTS,
   itemType: "MEAL",
   canBeCrafted: true,
-  effects: [IncreaseStatTag.parse({ statTypes: ["Ninjutsu"], power: 10 })],
+  effects: [IncreaseStatTag.parse({ power: 10 })],
   craftingRequirements: [{ ids: ["rice"], number: 2 }],
 };
 describe("meal configuration", () => {

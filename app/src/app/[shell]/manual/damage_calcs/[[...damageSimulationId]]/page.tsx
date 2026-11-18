@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/form";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { NumberInput } from "@/components/ui/number-input";
-import { GeneralTypes, StatTypes } from "@/drizzle/constants";
+import { GeneralTypes } from "@/drizzle/constants";
 import type { DamageSimulation } from "@/drizzle/schema";
 import { Confirm } from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -215,7 +215,6 @@ export default function Simulator(props: {
       rounds: 0,
       castThisRound: true,
       calculation: "formula",
-      statTypes: actValues.statTypes,
       generalTypes: actValues.generalTypes,
       fromGround: false,
       barrierAbsorb: 0,
@@ -423,21 +422,6 @@ export default function Simulator(props: {
                         onValueChange={field.onChange}
                       />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={actForm.control}
-                name="statTypes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Stat Types (any adds Offence vs Defence)</FormLabel>
-                    <MultiSelect
-                      selected={field.value ? field.value : []}
-                      options={StatTypes.map((o) => ({ label: o, value: o }))}
-                      onChange={field.onChange}
-                    />
                     <FormMessage />
                   </FormItem>
                 )}

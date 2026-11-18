@@ -114,7 +114,7 @@ describeWithDatabase("Cooking production and consumption", () => {
         cookingOutputQuantity: 3,
         cookingExperience: 10,
         mealDurationSeconds: 120,
-        effects: [IncreaseStatTag.parse({ power: 10, statTypes: ["Ninjutsu"] })],
+        effects: [IncreaseStatTag.parse({ power: 10 })],
       },
       {
         id: "meal2",

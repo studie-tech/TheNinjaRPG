@@ -27,6 +27,7 @@ import {
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   COST_RESKIN_JUTSU,
+  GeneralTypes,
   JUTSU_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
   JUTSU_TRANSFER_MAX_LEVEL,
@@ -2710,9 +2711,10 @@ export const jutsuDatabaseFilter = (
     ...(input?.stat?.length
       ? [
           and(
-            ...input.stat.map(
-              (s) =>
-                sql`JSON_SEARCH(${jutsu.effects}, 'one', ${s}, NULL, '$[*].statTypes[*]') IS NOT NULL`,
+            ...input.stat.map((s) =>
+              GeneralTypes.some((general) => general === s)
+                ? sql`JSON_SEARCH(${jutsu.effects}, 'one', ${s}, NULL, '$[*].generalTypes[*]') IS NOT NULL`
+                : sql`${jutsu.statClassification} = ${s}`,
             ),
           ),
         ]
@@ -2785,9 +2787,10 @@ export const jutsuDatabaseFilter = (
         )
       : []),
     ...(input?.excludedStats?.length
-      ? input.excludedStats.map(
-          (excludedSt) =>
-            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${excludedSt}, NULL, '$[*].statTypes[*]') IS NULL`,
+      ? input.excludedStats.map((excludedSt) =>
+          GeneralTypes.some((general) => general === excludedSt)
+            ? sql`JSON_SEARCH(${jutsu.effects}, 'one', ${excludedSt}, NULL, '$[*].generalTypes[*]') IS NULL`
+            : sql`(${jutsu.statClassification} IS NULL OR ${jutsu.statClassification} <> ${excludedSt})`,
         )
       : []),
   ];
@@ -2806,19 +2809,31 @@ const JUTSU_ANIMATION_FILTERS = [
  * Utility: Post-filter jutsu-like rows to ensure includes are satisfied within the same effect
  */
 export const filterByEffectConstraints = <
-  T extends Pick<Jutsu, "effects" | "elementClassification">,
+  T extends Pick<Jutsu, "effects" | "elementClassification"> &
+    Partial<Pick<Jutsu, "statClassification">>,
 >(
   rows: T[],
   input: JutsuFilteringSchema,
 ) => {
+  const statMatches = input.stat?.filter((stat) =>
+    GeneralTypes.some((general) => general === stat),
+  );
   return rows.filter((row) => {
     const classification =
       row.elementClassification && row.elementClassification !== "None"
         ? row.elementClassification
         : undefined;
+    if (
+      input.stat?.some(
+        (stat) =>
+          !GeneralTypes.some((general) => general === stat) &&
+          stat !== row.statClassification,
+      )
+    )
+      return false;
     // Classification-only matches also include jutsu without effect tags.
     if (
-      !input.stat?.length &&
+      !statMatches?.length &&
       !input.effect?.length &&
       !input.appear &&
       !input.static &&
@@ -2829,7 +2844,7 @@ export const filterByEffectConstraints = <
       return true;
     }
     if (
-      input.stat ||
+      statMatches?.length ||
       input.effect ||
       input.element ||
       input.appear ||
@@ -2839,8 +2854,7 @@ export const filterByEffectConstraints = <
       return row.effects.some((e) => {
         const asString = JSON.stringify(e);
 
-        const effectStats = [
-          ...("statTypes" in e && e.statTypes ? e.statTypes : []),
+        const effectStats: string[] = [
           ...("generalTypes" in e && e.generalTypes ? e.generalTypes : []),
         ];
         const effectElements = [
@@ -2849,7 +2863,7 @@ export const filterByEffectConstraints = <
         ] as string[];
 
         return (
-          (!input.stat || input.stat.every((x) => effectStats.includes(x))) &&
+          (!statMatches?.length || statMatches.every((x) => effectStats.includes(x))) &&
           (!input.effect || input.effect.some((x) => x === e.type)) &&
           (!input.element || input.element.every((x) => effectElements.includes(x))) &&
           (!input.appear || asString.includes(input.appear)) &&

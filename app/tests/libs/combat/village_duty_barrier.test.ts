@@ -90,7 +90,6 @@ describe("village duty barrier damage", () => {
                   power: buff,
                   powerPerLevel: 0,
                   rounds: 5,
-                  statTypes: ["Ninjutsu"],
                   direction: "offence",
                   calculation: "percentage",
                 },
@@ -113,7 +112,6 @@ describe("village duty barrier damage", () => {
             level: 1,
             effects: [
               DamageTag.parse({
-                statTypes: ["Ninjutsu"],
                 generalTypes: ["Strength"],
                 power: 100,
                 powerPerLevel: 0,

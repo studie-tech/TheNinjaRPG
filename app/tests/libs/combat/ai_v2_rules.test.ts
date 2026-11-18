@@ -45,7 +45,6 @@ const damageJutsu = makeJutsu({
       power: 20,
       powerPerLevel: 0,
       calculation: "formula",
-      statTypes: ["Ninjutsu"],
       generalTypes: [],
       elements: [],
       rounds: 0,

@@ -415,7 +415,6 @@ const startBattle = async ({
           power: 1,
           powerPerLevel: 0,
           calculation: "static",
-          statTypes: [],
           generalTypes: [],
           elements: [],
           rounds: 0,

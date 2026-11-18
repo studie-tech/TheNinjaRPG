@@ -51,7 +51,6 @@ const heavyJutsu = makeJutsu({
       power: 40,
       powerPerLevel: 0,
       calculation: "formula",
-      statTypes: ["None"],
       generalTypes: [],
       elements: [],
       rounds: 0,

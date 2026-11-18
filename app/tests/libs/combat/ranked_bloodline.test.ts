@@ -29,7 +29,6 @@ describe("ranked bloodline damage boost", () => {
       boost.targetId = attacker.userId;
       boost.fromType = "bloodline";
       const damageEffect = makeDamageEffect({
-        statTypes: ["Genjutsu"],
         elements: [element],
       });
       expect(getEfficiencyRatio(damageEffect, boost)).toBe(1);

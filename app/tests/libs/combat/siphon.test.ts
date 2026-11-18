@@ -34,7 +34,6 @@ const hit = (creatorId = "attacker", targetId = "defender", power = 100) =>
       power,
       calculation: "static",
       rounds: 0,
-      statTypes: ["None"],
     },
     {
       ...runtime(creatorId, targetId),

@@ -28,12 +28,11 @@ describeWithDatabase("owned jutsu filters and equipped loadouts", () => {
       [...pve, ...pvp, "ai-only"].map((id) => ({
         id,
         requiredRank: "GENIN" as const,
+        statClassification: id.endsWith("nin")
+          ? ("Ninjutsu" as const)
+          : ("Taijutsu" as const),
         jutsuType: id === "ai-only" ? ("AI" as const) : ("NORMAL" as const),
-        effects: [
-          DamageTag.parse({
-            statTypes: [id.endsWith("nin") ? "Ninjutsu" : "Taijutsu"],
-          }),
-        ],
+        effects: [DamageTag.parse({})],
       })),
     );
     await db.insert(userJutsu).values([

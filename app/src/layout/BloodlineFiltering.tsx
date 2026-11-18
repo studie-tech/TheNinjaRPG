@@ -1,5 +1,10 @@
 import type { LetterRank } from "@/drizzle/constants";
-import { ElementNames, LetterRanks, StatTypes } from "@/drizzle/constants";
+import {
+  ElementNames,
+  GeneralTypes,
+  LetterRanks,
+  StatTypes,
+} from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -10,7 +15,6 @@ import {
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import { tagTypes } from "@/validators/combat";
-import { statFilters } from "@/validators/statFilters";
 
 // Inline schema
 const makeBloodlineFilteringSchema = (
@@ -63,11 +67,12 @@ const makeBloodlineFilteringSchema = (
         options: tagTypes.map((e) => ({ value: e, label: e })),
       },
       {
-        id: "stat",
-        label: "Stat",
+        id: "generals",
+        label: "Generals",
+        filterKey: "stat",
         type: "multi-select",
         defaultValue: [],
-        options: statFilters.map((s) => ({ value: s, label: s })),
+        options: GeneralTypes.map((s) => ({ value: s, label: s })),
       },
       hiddenVisibilityField(),
     ] as const,
