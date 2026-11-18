@@ -232,6 +232,8 @@ interface SkillCardProps {
   status: Omit<SkillStatus, "canPurchase">;
   onClick: () => void;
   costLabel?: string;
+  /** Short stat rows shown under the badges, e.g. "Afterburn" / "+2". */
+  stats?: { label: string; value: string }[];
 }
 
 export const SkillCard: React.FC<SkillCardProps> = ({
@@ -239,6 +241,7 @@ export const SkillCard: React.FC<SkillCardProps> = ({
   status,
   onClick,
   costLabel,
+  stats,
 }) => {
   const effectivelyOwned = status.isOwned && status.isActivated;
   const isLocked = !effectivelyOwned && !status.hasPrereqs;
@@ -301,6 +304,17 @@ export const SkillCard: React.FC<SkillCardProps> = ({
           {costLabel ?? `${skill.costSkillPoints} SP`}
         </Badge>
       </div>
+
+      {stats && stats.length > 0 && (
+        <dl className="mt-2 space-y-0.5 border-t pt-1 text-[11px]">
+          {stats.map(({ label, value }) => (
+            <div key={`${label}:${value}`} className="flex justify-between gap-2">
+              <dt className="truncate text-muted-foreground">{label}</dt>
+              <dd className="font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </button>
   );
 };
