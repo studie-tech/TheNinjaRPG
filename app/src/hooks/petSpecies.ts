@@ -21,6 +21,12 @@ import {
   type ZodPetSpeciesType,
 } from "@/validators/petSpecies";
 
+/** Name each tier while the shared validator preserves its numeric storage value. */
+const potentialOptions = PET_POTENTIAL_TIERS.map((tier) => ({
+  id: String(tier.value),
+  name: `${tier.title} · ${Number((tier.capMultiplier * 100).toFixed(2))}% stat caps`,
+}));
+
 const emptySpecies: ZodPetSpeciesType = {
   potentialMode: "FIXED",
   potentialValue: 1,
@@ -131,7 +137,12 @@ export const usePetSpeciesEditForm = (
     // Invalid inactive drafts stay visible so validation never blocks a hidden field.
     ...(potentialMode === "FIXED" || form.formState.errors.potentialValue
       ? ([
-          { id: "potentialValue", label: "Fixed potential (1–5)", type: "number" },
+          {
+            id: "potentialValue",
+            label: "Fixed potential",
+            type: "db_values",
+            values: potentialOptions,
+          },
         ] as FormEntry<keyof ZodPetSpeciesType>[])
       : []),
     ...(potentialMode === "RANDOM" ||
@@ -139,8 +150,18 @@ export const usePetSpeciesEditForm = (
     form.formState.errors.potentialMax ||
     form.formState.errors.potentialWeights
       ? ([
-          { id: "potentialMin", label: "Random minimum (1–5)", type: "number" },
-          { id: "potentialMax", label: "Random maximum (1–5)", type: "number" },
+          {
+            id: "potentialMin",
+            label: "Random minimum",
+            type: "db_values",
+            values: potentialOptions,
+          },
+          {
+            id: "potentialMax",
+            label: "Random maximum",
+            type: "db_values",
+            values: potentialOptions,
+          },
           ...PET_POTENTIAL_TIERS.map((tier, index) => ({
             id: `potentialWeights.${index}` as keyof ZodPetSpeciesType,
             label: `${tier.title} roll weight (normalized within range)`,

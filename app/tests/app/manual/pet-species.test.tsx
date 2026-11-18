@@ -20,6 +20,7 @@ import { ActionEndTurn } from "@/validators/ai";
 import { IncreaseStatTag } from "@/validators/combat";
 import { PetSpeciesValidator } from "@/validators/petSpecies";
 import {
+  flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
@@ -56,7 +57,7 @@ let requested: string[];
 let push: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  installBrowserGlobals({ resizeObserver: true });
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -149,8 +150,9 @@ beforeEach(() => {
   vi.spyOn(toast, "showFormErrorsToast").mockImplementation(() => undefined);
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await flushRadixFocus();
   queryClient.clear();
   vi.restoreAllMocks();
   restoreBrowserGlobals();
@@ -495,21 +497,38 @@ it("offers a working retry when the catalogue cannot load", async () => {
   expect(view.queryByRole("alert")).toBeNull();
 });
 
-it("shows only the selected potential settings and retains drafts across mode switches", async () => {
+/** Select a named tier through the shared editor and dismiss its options. */
+const selectPotential = async (
+  view: ReturnType<typeof render>,
+  label: string,
+  name: string,
+) => {
+  fireEvent.click(view.getByRole("combobox", { name: label }));
+  const option = await view.findByRole("option", { name });
+  fireEvent.click(option);
+  await waitFor(() =>
+    expect(view.getByRole("combobox", { name: label }).textContent).toBe(name),
+  );
+  fireEvent.keyDown(option, { key: "Escape" });
+  await flushRadixFocus();
+};
+
+it("shows named potential tiers and retains numeric drafts across mode switches", async () => {
+  species[0]!.potentialValue = 2;
   const view = await mount(true);
-  const fixed = await view.findByRole("spinbutton", { name: "Fixed potential (1–5)" });
-  expect(view.queryByRole("spinbutton", { name: "Random minimum (1–5)" })).toBeNull();
-  fireEvent.input(fixed, { target: { value: "4" } });
+  const fixed = await view.findByRole("combobox", { name: "Fixed potential" });
+  expect(fixed.textContent).toBe("Promising · 112.5% stat caps");
+  expect(view.queryByRole("combobox", { name: "Random minimum" })).toBeNull();
+  await selectPotential(view, "Fixed potential", "Exceptional · 137.5% stat caps");
   act(() =>
     editor.form.setValue("potentialMode", "RANDOM", {
       shouldDirty: true,
       shouldValidate: true,
     }),
   );
-  expect(view.queryByRole("spinbutton", { name: "Fixed potential (1–5)" })).toBeNull();
-  fireEvent.input(view.getByRole("spinbutton", { name: "Random minimum (1–5)" }), {
-    target: { value: "2" },
-  });
+  expect(view.queryByRole("combobox", { name: "Fixed potential" })).toBeNull();
+  await selectPotential(view, "Random minimum", "Promising · 112.5% stat caps");
+  await selectPotential(view, "Random maximum", "Gifted · 125% stat caps");
   fireEvent.input(
     view.getByRole("spinbutton", {
       name: "Gifted roll weight (normalized within range)",
@@ -522,18 +541,20 @@ it("shows only the selected potential settings and retains drafts across mode sw
       shouldValidate: true,
     }),
   );
-  expect(
-    view.getByRole("spinbutton", { name: "Fixed potential (1–5)" }),
-  ).toHaveProperty("value", "4");
+  expect(view.getByRole("combobox", { name: "Fixed potential" }).textContent).toBe(
+    "Exceptional · 137.5% stat caps",
+  );
   act(() =>
     editor.form.setValue("potentialMode", "RANDOM", {
       shouldDirty: true,
       shouldValidate: true,
     }),
   );
-  expect(view.getByRole("spinbutton", { name: "Random minimum (1–5)" })).toHaveProperty(
-    "value",
-    "2",
+  expect(view.getByRole("combobox", { name: "Random minimum" }).textContent).toBe(
+    "Promising · 112.5% stat caps",
+  );
+  expect(view.getByRole("combobox", { name: "Random maximum" }).textContent).toBe(
+    "Gifted · 125% stat caps",
   );
   expect(
     view.getByRole("spinbutton", {
@@ -546,14 +567,20 @@ it("shows only the selected potential settings and retains drafts across mode sw
     potentialMode: "RANDOM",
     potentialValue: 4,
     potentialMin: 2,
+    potentialMax: 3,
     potentialWeights: [70, 50, 35, 10, 2],
   });
 });
 
 it("exposes invalid inactive potential drafts so staff can correct them and save", async () => {
   const view = await mount(true);
-  const fixed = await view.findByRole("spinbutton", { name: "Fixed potential (1–5)" });
-  fireEvent.input(fixed, { target: { value: "9" } });
+  await view.findByRole("combobox", { name: "Fixed potential" });
+  act(() =>
+    editor.form.setValue("potentialValue", 9, {
+      shouldDirty: true,
+      shouldValidate: true,
+    }),
+  );
   act(() =>
     editor.form.setValue("potentialMode", "RANDOM", {
       shouldDirty: true,
@@ -561,20 +588,14 @@ it("exposes invalid inactive potential drafts so staff can correct them and save
     }),
   );
   await waitFor(() => expect(editor.form.formState.errors.potentialValue).toBeTruthy());
-  expect(
-    view.getByRole("spinbutton", { name: "Fixed potential (1–5)" }),
-  ).toHaveProperty("value", "9");
-  fireEvent.input(view.getByRole("spinbutton", { name: "Fixed potential (1–5)" }), {
-    target: { value: "3" },
-  });
-  await waitFor(() =>
-    expect(
-      view.queryByRole("spinbutton", { name: "Fixed potential (1–5)" }),
-    ).toBeNull(),
+  expect(view.getByRole("combobox", { name: "Fixed potential" })).toBeTruthy();
+  await selectPotential(view, "Fixed potential", "Gifted · 125% stat caps");
+  act(() =>
+    editor.form.setValue("potentialMin", 8, {
+      shouldDirty: true,
+      shouldValidate: true,
+    }),
   );
-  fireEvent.input(view.getByRole("spinbutton", { name: "Random minimum (1–5)" }), {
-    target: { value: "8" },
-  });
   act(() =>
     editor.form.setValue("potentialMode", "FIXED", {
       shouldDirty: true,
@@ -582,16 +603,8 @@ it("exposes invalid inactive potential drafts so staff can correct them and save
     }),
   );
   await waitFor(() => expect(editor.form.formState.errors.potentialMin).toBeTruthy());
-  expect(view.getByRole("spinbutton", { name: "Random minimum (1–5)" })).toHaveProperty(
-    "value",
-    "8",
-  );
-  fireEvent.input(view.getByRole("spinbutton", { name: "Random minimum (1–5)" }), {
-    target: { value: "2" },
-  });
-  await waitFor(() =>
-    expect(view.queryByRole("spinbutton", { name: "Random minimum (1–5)" })).toBeNull(),
-  );
+  expect(view.getByRole("combobox", { name: "Random minimum" })).toBeTruthy();
+  await selectPotential(view, "Random minimum", "Promising · 112.5% stat caps");
   fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
   await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
   expect(update.mock.calls[0]?.[0].data).toMatchObject({
