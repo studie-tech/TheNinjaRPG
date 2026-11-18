@@ -55,6 +55,19 @@ describe("tower defense sounds", () => {
     expect(bounty?.[2]).toBeGreaterThan(0);
   });
 
+  it("booms for tags and bombers going off, softer than a big blast", () => {
+    const blast = { x: 0, y: 0, element: "fire" } as const;
+    const big = eventSound({ type: "explosion", radius: 4, ...blast });
+    const tag = cueOf({ type: "explosion", radius: 1.6, cause: "tag", ...blast });
+    const bomber = cueOf({ type: "explosion", radius: 1.2, cause: "bomber", ...blast });
+    for (const sound of [tag, bomber]) {
+      expect(sound?.[0]).toBe("explosion");
+      expect(sound?.[1]).toBeLessThan(big?.[1] ?? 0);
+      // Several tags caught by one crowd boom once.
+      expect(sound?.[2]).toBeGreaterThan(0);
+    }
+  });
+
   it("keeps the automatic stream of combat silent", () => {
     const silent: TdEvent[] = [
       {

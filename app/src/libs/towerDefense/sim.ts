@@ -299,7 +299,15 @@ export type TdEvent =
   | { type: "substitution"; perfect: boolean; counterId: number }
   | { type: "blink"; fromX: number; fromY: number; x: number; y: number }
   | { type: "bossMove"; id: number; move: TdBossMove }
-  | { type: "explosion"; x: number; y: number; radius: number; element: TdElement }
+  | {
+      type: "explosion";
+      x: number;
+      y: number;
+      radius: number;
+      element: TdElement;
+      /** A blast on the ground, from an explosive tag or a bomber, rather than a hit's splash. */
+      cause?: "tag" | "bomber";
+    }
   | { type: "wave"; boss: boolean; titan: boolean; eras: TdEra[] }
   | { type: "loot"; kind: TdLoot["kind"]; collected: boolean }
   | {
@@ -2234,6 +2242,7 @@ const updateEnemies = (state: TdState) => {
         y: enemy.y,
         radius: 1.2,
         element: "fire",
+        cause: "bomber",
       });
       enemy.hp = 0;
       enemy.bounty *= 0.5;
@@ -2471,6 +2480,7 @@ const resolveTraps = (state: TdState) => {
       y: trap.y,
       radius: 1.6,
       element: "fire",
+      cause: "tag",
     });
     return false;
   });

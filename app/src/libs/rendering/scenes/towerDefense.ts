@@ -4,11 +4,17 @@ import {
   Graphics,
   GraphicsContext,
   Matrix,
+  Rectangle,
   RenderLayer,
   Sprite,
   Texture,
 } from "pixi.js";
-import { TD_SHURIKEN_IMAGE_URL, type TdSfx } from "@/drizzle/constants";
+import {
+  TD_BLAST_ANIMATION,
+  TD_SENTRY_ATLAS,
+  TD_SHURIKEN_IMAGE_URL,
+  type TdSfx,
+} from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { lpcFacing } from "@/libs/lpc/catalog";
@@ -272,31 +278,81 @@ export const createTowerDefenseScene = async (options: {
     };
 
     // Shared art
-    const [shuriken, hitFrames, smokeFrames] = await Promise.all([
-      game.assets.texture(TD_SHURIKEN_IMAGE_URL, 64).catch((error: unknown) => {
-        if (
-          game.signal.aborted ||
-          game.isDisposed() ||
-          (error instanceof Error && error.name === "AbortError")
-        )
-          throw error;
-        // A plain projectile keeps targeting and hit feedback when its art is missing.
-        console.warn("Tower defense projectile artwork unavailable", error);
-        return Texture.WHITE;
-      }),
-      options.hitAsset
-        ? createClipTextures(game, assetAnimationClip(options.hitAsset), {
-            size: 96,
-          }).catch(() => null)
-        : Promise.resolve(null),
-      options.smokeAsset
-        ? createClipTextures(game, assetAnimationClip(options.smokeAsset), {
-            size: 128,
-          }).catch(() => null)
-        : Promise.resolve(null),
-    ]);
+    const [shuriken, hitFrames, smokeFrames, blastFrames, sentryAtlas] =
+      await Promise.all([
+        game.assets.texture(TD_SHURIKEN_IMAGE_URL, 64).catch((error: unknown) => {
+          if (
+            game.signal.aborted ||
+            game.isDisposed() ||
+            (error instanceof Error && error.name === "AbortError")
+          )
+            throw error;
+          // A plain projectile keeps targeting and hit feedback when its art is missing.
+          console.warn("Tower defense projectile artwork unavailable", error);
+          return Texture.WHITE;
+        }),
+        options.hitAsset
+          ? createClipTextures(game, assetAnimationClip(options.hitAsset), {
+              size: 96,
+            }).catch(() => null)
+          : Promise.resolve(null),
+        options.smokeAsset
+          ? createClipTextures(game, assetAnimationClip(options.smokeAsset), {
+              size: 128,
+            }).catch(() => null)
+          : Promise.resolve(null),
+        // Packed art loads from its exact source; without it the effects and posts fall back.
+        createClipTextures(game, assetAnimationClip(TD_BLAST_ANIMATION), {
+          size: 128,
+          rendition: 0,
+        }).catch(() => null),
+        game.assets.texture(TD_SENTRY_ATLAS.url, 0).catch(() => null),
+      ]);
     if (game.isDisposed())
       throw new DOMException("Tower defense cancelled", "AbortError");
+
+    // Sentries stand on their posts as sprites sorted with the actors, each with a contact
+    // shadow and a cast silhouette like the characters'.
+    const sentryTextures = sentryAtlas
+      ? (Object.fromEntries(
+          Object.entries(TD_SENTRY_ATLAS.frames).map(
+            ([type, [x, y, width, height]]) => [
+              type,
+              new Texture({
+                source: sentryAtlas.source,
+                frame: new Rectangle(x, y, width, height),
+              }),
+            ],
+          ),
+        ) as Record<TdSentry, Texture>)
+      : null;
+    if (sentryTextures)
+      game.own(() => {
+        for (const texture of Object.values(sentryTextures)) texture.destroy(false);
+      });
+    const sentryViews: { root: Container; body: Sprite; cast: Container }[] = [];
+    const sentryView = (slot: number) => {
+      const existing = sentryViews[slot];
+      if (existing) return existing;
+      const root = new Container();
+      const body = new Sprite(Texture.EMPTY);
+      body.anchor.set(0.5, SENTRY_GROUND_ANCHOR);
+      const castSprite = new Sprite(Texture.EMPTY);
+      castSprite.anchor.set(0.5, SENTRY_GROUND_ANCHOR);
+      castSprite.tint = CAST_SHADOW_TINT;
+      const cast = new Container();
+      cast.alpha = CAST_SHADOW_ALPHA;
+      cast.addChild(castSprite);
+      cast.setFromMatrix(
+        new Matrix(1.6, 0, SUN_SLOPE_X * 1.6, SUN_SLOPE_Y * 1.6, 0, 0),
+      );
+      root.addChild(cast, contact(1.1), body);
+      actorLayer.addChild(root);
+      depthLayer.attach(root);
+      const view = { root, body, cast };
+      sentryViews[slot] = view;
+      return view;
+    };
 
     // The hero, and a darkened twin sheared away from the sun like the enemies' silhouettes.
     const heroRoot = new Container();
@@ -577,10 +633,12 @@ export const createTowerDefenseScene = async (options: {
       y: number,
       size: number,
       now: number,
+      /** Where the frame meets `y`: its centre, or 1 for art that stands on the ground. */
+      anchorY = 0.5,
     ) => {
       if (!frames || hitClips.length > 30) return;
       const sprite = new Sprite(frames.views[0] ?? Texture.EMPTY);
-      sprite.anchor.set(0.5);
+      sprite.anchor.set(0.5, anchorY);
       sprite.position.set(x, y);
       sprite.width = sprite.height = size;
       sprite.scale.y *= -1;
@@ -1326,12 +1384,18 @@ export const createTowerDefenseScene = async (options: {
           }
           return;
         case "explosion":
+          if (event.cause) {
+            // Tags and bombers go off on the ground: a blast and smoke, and a short jolt.
+            playClip(blastFrames, event.x, event.y, event.radius * 2.4, now, 0.92);
+            fx.shake(0.12, 0.25);
+          }
+          // A ground blast's art fills the area itself, so its ring only marks the edge.
           fx.ring(event.x, event.y + 0.2, {
             to: event.radius,
             color: ELEMENT_COLORS[event.element],
             life: 0.45,
             width: 0.15,
-            fill: 0.3,
+            fill: event.cause && blastFrames ? 0 : 0.3,
           });
           fx.burst(event.x, event.y + 0.2, {
             color: ELEMENT_COLORS[event.element],
@@ -1564,6 +1628,10 @@ export const createTowerDefenseScene = async (options: {
         sentryKey = layoutKey;
         sentryGround.clear();
         sentryPosts.clear();
+        for (const [slot, view] of sentryViews.entries())
+          if (view)
+            view.root.visible =
+              !!state.sentries[slot] && slot < state.stats.sentrySlots;
         for (let slot = 0; slot < state.stats.sentrySlots; slot++) {
           const at = tdSentryPosition(slot);
           const sentry = state.sentries[slot];
@@ -1578,6 +1646,24 @@ export const createTowerDefenseScene = async (options: {
             sentryGround
               .circle(at.x, at.y, tdSentryRange(sentry))
               .fill({ color, alpha: 0.05 });
+          if (sentryTextures) {
+            // Higher levels stand a little taller.
+            const view = sentryView(slot);
+            const scale =
+              SENTRY_UNITS_PER_PIXEL * (1 + Math.min(0.2, sentry.level * 0.01));
+            const texture = sentryTextures[sentry.type];
+            view.body.texture = texture;
+            view.body.scale.set(scale, -scale);
+            const castSprite = view.cast.children[0];
+            if (castSprite instanceof Sprite) {
+              castSprite.texture = texture;
+              castSprite.scale.set(scale, -scale);
+            }
+            view.root.position.set(at.x, at.y);
+            view.root.zIndex = depthOf(at.y);
+            view.root.visible = true;
+            continue;
+          }
           sentryGround
             .ellipse(at.x, at.y, 0.4, 0.17)
             .fill({ color: 0x000000, alpha: 0.35 });
@@ -1593,9 +1679,10 @@ export const createTowerDefenseScene = async (options: {
             .stroke({ color, width: 0.05 });
         }
       }
+      for (const view of sentryViews) if (view) view.cast.visible = showCasts();
       for (let slot = 0; slot < state.stats.sentrySlots; slot++) {
         const sentry = state.sentries[slot];
-        if (!sentry) continue;
+        if (!sentry || sentryTextures) continue;
         const at = tdSentryPosition(slot);
         const color = SENTRY_COLORS[sentry.type];
         const glowSize =
@@ -1802,7 +1889,11 @@ export const eventSound = (event: TdEvent): [TdSfx, number, number] | null => {
     case "ultimate":
       return [ULTIMATE_SOUNDS[event.ultimate], 0.85, 0];
     case "explosion":
-      return event.radius >= 3.5 ? ["explosion", 0.9, 0] : null;
+      // A tag or bomber booms softer than a big blast; a cluster going off at once is one boom.
+      if (event.radius >= 3.5) return ["explosion", 0.9, 0];
+      return event.cause
+        ? ["explosion", event.cause === "tag" ? 0.55 : 0.45, 120]
+        : null;
     case "heroHit":
       return ["hurt", 0.3, 900];
     case "substitution":
@@ -1865,6 +1956,9 @@ const SUN_SLOPE_X = Math.max(-1.4, Math.min(1.4, SUN.x / Math.max(0.3, SUN.z)));
 const SUN_SLOPE_Y = Math.min(-0.12, SUN.y / (2 * Math.max(0.3, SUN.z)));
 /** Matches the sector map's NPC silhouettes. */
 const CAST_SHADOW_TINT = 0x202932;
+/** Sentry art: arena units per atlas pixel, and where its mossy base meets the ground. */
+const SENTRY_UNITS_PER_PIXEL = 1.45 / 150;
+const SENTRY_GROUND_ANCHOR = 0.9;
 const CAST_SHADOW_ALPHA = 0.22;
 /** LPC feet sit near row 60 of the 64px frame, in the unit-square actor's space. */
 const LPC_FOOT = 60 / 64 - 0.5;
