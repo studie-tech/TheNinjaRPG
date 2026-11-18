@@ -104,6 +104,13 @@ const stubCraftingUser = (data: object = {}) =>
   } as never);
 
 beforeEach(() => {
+  // Keep relative fixture timestamps fresh after shared SQL setup.
+  const now = Date.now();
+  for (const imbuement of imbuedRow.imbuements) {
+    imbuement.craftingFinishedAt = new Date(
+      now + (imbuement.id === "done" ? -60_000 : 60_000),
+    );
+  }
   installBrowserGlobals({ resizeObserver: true });
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   stubCraftingCache();
