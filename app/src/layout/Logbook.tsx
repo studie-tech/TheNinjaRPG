@@ -812,7 +812,11 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
           <div
             className={cn(
               "grid grid-cols-1 gap-4",
-              props.compact || tierOrDaily || quest.content.objectives.length === 1
+              // Consecutive quests show only their active objective, so it gets the full width.
+              props.compact ||
+                tierOrDaily ||
+                quest.consecutiveObjectives ||
+                quest.content.objectives.length === 1
                 ? "sm:grid-cols-1"
                 : "sm:grid-cols-2",
               showScene ? "px-3 pb-3" : "",
