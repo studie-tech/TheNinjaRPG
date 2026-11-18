@@ -196,7 +196,7 @@ const Splash = (props: { onSkip: () => void }) => (
 /** The lobby's page: centred, scrolling, with room for the logo above the Guard Hall. */
 const Screen = (props: { children: ReactNode }) => (
   <div className="bg-background h-dvh overflow-y-auto">
-    <main className="mx-auto max-w-3xl space-y-4 p-3 sm:p-5">{props.children}</main>
+    <main className="mx-auto max-w-5xl space-y-4 p-3 sm:p-5">{props.children}</main>
   </div>
 );
 
