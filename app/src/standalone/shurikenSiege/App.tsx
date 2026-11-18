@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import {
   ID_ANIMATION_HIT,
   ID_ANIMATION_SMOKE,
-  IMG_LOGO_FULL,
+  IMG_LOGO_SHORT,
   SHURIKEN_SIEGE_LOGO_URL,
   TD_SFX,
   TD_STAGE_IMAGE_URLS,
@@ -47,15 +47,38 @@ export const ShurikenSiegeApp = () => {
   const build = useMemo(() => readBuild(), []);
   const portal = useMemo(() => createPortal(build), [build]);
   const data = buildData();
-  const run = useShurikenSiegeRun();
-  const [splash, setSplash] = useState(true);
+  const run = useShurikenSiegeRun(portal.store, portal.sendScore);
+  const [splashShown, setSplashShown] = useState(false);
   const [sfxOn, setSfxOn] = useState(() => safeLocalStorageGetItem(SFX_KEY) !== "off");
+  const [hostAudio, setHostAudio] = useState(() => portal.hostAudio());
+  const [hostPaused, setHostPaused] = useState(false);
+  // The Guard Hall opens once the title has shown and the player's progress has loaded.
+  const splash = !splashShown || !run.isLoaded;
 
   useEffect(() => {
-    void portal.init().then(() => portal.loadingFinished());
-    const timer = setTimeout(() => setSplash(false), SPLASH_MS);
+    void portal.init();
+    const timer = setTimeout(() => setSplashShown(true), SPLASH_MS);
     return () => clearTimeout(timer);
   }, [portal]);
+  useEffect(() => {
+    if (splash) return;
+    portal.loadingFinished();
+    // A host showing the best score starts from the saved one.
+    portal.sendScore(run.progress.bestWave);
+  }, [portal, run.progress.bestWave, splash]);
+
+  // A host pausing the game holds the run and takes its arena down until it resumes.
+  const { setPaused } = run;
+  useEffect(
+    () =>
+      portal.onHostPause((paused) => {
+        setHostPaused(paused);
+        setPaused("host", paused);
+      }),
+    [portal, setPaused],
+  );
+  useEffect(() => portal.onHostAudio(setHostAudio), [portal]);
+  const soundOn = hostAudio ?? sfxOn;
 
   // Portals count play time between these events: a pause, the perk draft, the results
   // and the Guard Hall all stop it.
@@ -75,11 +98,11 @@ export const ShurikenSiegeApp = () => {
     return urls;
   }, [data]);
   useEffect(() => {
-    if (sfxOn && sounds.size > 0) void preloadAudioBuffers([...sounds.values()]);
-  }, [sfxOn, sounds]);
+    if (soundOn && sounds.size > 0) void preloadAudioBuffers([...sounds.values()]);
+  }, [soundOn, sounds]);
   const playSound = (cue: TdSfx, volume: number) => {
     const url = sounds.get(cue);
-    if (sfxOn && url) void playPreloadedAudio(url, savedSfxVolume() * volume);
+    if (soundOn && url) void playPreloadedAudio(url, savedSfxVolume() * volume);
   };
   const setSound = (enabled: boolean) => {
     if (enabled) unlockAudioPlayback();
@@ -91,7 +114,7 @@ export const ShurikenSiegeApp = () => {
     ? `${SITE_URL}?utm_source=${encodeURIComponent(build.source)}&utm_medium=game&utm_campaign=shuriken-siege`
     : null;
 
-  if (splash) return <Splash onSkip={() => setSplash(false)} />;
+  if (splash) return <Splash onSkip={() => setSplashShown(true)} />;
 
   if (run.phase === "lobby")
     return (
@@ -123,7 +146,7 @@ export const ShurikenSiegeApp = () => {
             run.resume();
           }}
           onDiscard={run.discardSaved}
-          onBuy={run.buyDojo}
+          onBuy={(upgradeId) => void run.buyDojo(upgradeId)}
         />
         {siteLink && <FullGameInvite link={siteLink} />}
         <Toaster />
@@ -146,8 +169,10 @@ export const ShurikenSiegeApp = () => {
           roster={data.roster}
           hitAsset={data.assets.find((asset) => asset.id === ID_ANIMATION_HIT)}
           smokeAsset={data.assets.find((asset) => asset.id === ID_ANIMATION_SMOKE)}
-          sfxOn={sfxOn}
-          onSound={setSound}
+          sfxOn={soundOn}
+          onSound={portal.hostControls ? undefined : setSound}
+          hostControlsFrame={portal.hostControls}
+          suspended={hostPaused}
           playSound={playSound}
           isGuest={false}
           standalone
@@ -159,37 +184,41 @@ export const ShurikenSiegeApp = () => {
   );
 };
 
-/** The title over the dawn arena, with TheNinja-RPG credited as its maker. */
+/** The title over the dawn arena, with TheNinja-RPG credited as its maker beneath. */
 const Splash = (props: { onSkip: () => void }) => (
   <button
     type="button"
     onClick={props.onSkip}
-    className="relative flex h-dvh w-full cursor-pointer flex-col items-center justify-center gap-6 overflow-hidden bg-slate-900 p-6"
+    className="relative flex h-dvh w-full cursor-pointer flex-col items-center justify-center overflow-hidden bg-slate-900 p-6"
   >
     <img
       src={transformImageUrl(TD_STAGE_IMAGE_URLS.Dawn)}
       alt=""
       className="absolute inset-0 h-full w-full object-cover opacity-70"
     />
-    <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/70" />
-    <img
-      src={transformImageUrl(SHURIKEN_SIEGE_LOGO_URL)}
-      alt="Shuriken Siege"
-      className="animate-in fade-in zoom-in-95 relative w-[min(88vw,46rem)] drop-shadow-2xl duration-700"
-    />
-    <div className="animate-in fade-in relative flex flex-col items-center gap-2 delay-300 duration-700">
-      <span className="text-sm font-semibold tracking-widest text-white/90 uppercase">
+    <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/75" />
+    <div className="relative flex flex-1 flex-col items-center justify-center gap-5">
+      <img
+        src={transformImageUrl(SHURIKEN_SIEGE_LOGO_URL)}
+        alt="Shuriken Siege"
+        className="animate-in fade-in zoom-in-95 w-[min(88vw,46rem)] drop-shadow-2xl duration-700"
+      />
+      <span className="animate-pulse text-base tracking-wide text-white/90 drop-shadow lg:text-xl">
+        Tap to enter the Guard Hall
+      </span>
+    </div>
+    <div className="animate-in fade-in slide-in-from-bottom-2 relative flex flex-col items-center gap-3 delay-300 duration-700">
+      <span className="flex items-center gap-4 text-xs font-semibold tracking-[0.4em] text-white/80 uppercase drop-shadow lg:text-sm">
+        <span className="h-px w-10 bg-gradient-to-l from-white/60 to-transparent lg:w-16" />
         A game by
+        <span className="h-px w-10 bg-gradient-to-r from-white/60 to-transparent lg:w-16" />
       </span>
       <img
-        src={transformImageUrl(IMG_LOGO_FULL)}
+        src={transformImageUrl(IMG_LOGO_SHORT)}
         alt="TheNinja-RPG"
-        className="h-14 w-auto drop-shadow-lg sm:h-16"
+        className="h-16 w-auto drop-shadow-lg sm:h-20 lg:h-24"
       />
     </div>
-    <span className="relative mt-4 animate-pulse text-sm text-white/80">
-      <Loader explanation="Tap to enter the Guard Hall" noPadding />
-    </span>
   </button>
 );
 
@@ -206,9 +235,9 @@ const Credit = (props: { link: string | null }) => {
     <span className="flex items-center gap-2 text-sm">
       <span className="text-muted-foreground">by</span>
       <img
-        src={transformImageUrl(IMG_LOGO_FULL)}
+        src={transformImageUrl(IMG_LOGO_SHORT)}
         alt="TheNinja-RPG"
-        className="h-8 w-auto"
+        className="h-7 w-auto"
       />
     </span>
   );
@@ -234,9 +263,9 @@ const FullGameInvite = (props: { link: string; compact?: boolean }) => (
   >
     {!props.compact && (
       <img
-        src={transformImageUrl(IMG_LOGO_FULL)}
+        src={transformImageUrl(IMG_LOGO_SHORT)}
         alt=""
-        className="h-10 w-auto shrink-0"
+        className="h-8 w-auto shrink-0"
       />
     )}
     <span className="min-w-0 flex-1">

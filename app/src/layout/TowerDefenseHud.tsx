@@ -105,8 +105,10 @@ export const TowerDefenseOverlay = (props: {
   /** Whether the player's own pause holds the run. */
   pausedByPlayer: boolean;
   onSpeed: (speed: number) => void;
-  onSound: (enabled: boolean) => void;
-  onFullscreen: () => void;
+  /** Absent where the host owns sound, as YouTube does with its own mute. */
+  onSound?: (enabled: boolean) => void;
+  /** Absent where the host owns the frame, as YouTube does. */
+  onFullscreen?: () => void;
   onPause: (paused: boolean) => void;
   /** The boosts panel covers the arena, so the run waits while it is open. */
   onPanel: (open: boolean) => void;
@@ -186,16 +188,18 @@ export const TowerDefenseOverlay = (props: {
             <FastForward className="h-4 w-4" />
             <span className="text-xs">{props.speed}x</span>
           </OverlayButton>
-          <OverlayButton
-            label={props.soundOn ? "Mute combat sounds" : "Unmute combat sounds"}
-            onClick={() => props.onSound(!props.soundOn)}
-          >
-            {props.soundOn ? (
-              <Volume2 className="h-4 w-4" />
-            ) : (
-              <VolumeX className="h-4 w-4" />
-            )}
-          </OverlayButton>
+          {props.onSound && (
+            <OverlayButton
+              label={props.soundOn ? "Mute combat sounds" : "Unmute combat sounds"}
+              onClick={() => props.onSound?.(!props.soundOn)}
+            >
+              {props.soundOn ? (
+                <Volume2 className="h-4 w-4" />
+              ) : (
+                <VolumeX className="h-4 w-4" />
+              )}
+            </OverlayButton>
+          )}
           <Confirm
             title="Retreat?"
             button={
@@ -215,16 +219,18 @@ export const TowerDefenseOverlay = (props: {
             Retreating ends this run at wave {state.wave} and banks the scrolls it
             earned.
           </Confirm>
-          <OverlayButton
-            label={props.isFullscreen ? "Exit full screen" : "Full screen"}
-            onClick={props.onFullscreen}
-          >
-            {props.isFullscreen ? (
-              <Minimize className="h-4 w-4" />
-            ) : (
-              <Maximize className="h-4 w-4" />
-            )}
-          </OverlayButton>
+          {props.onFullscreen && (
+            <OverlayButton
+              label={props.isFullscreen ? "Exit full screen" : "Full screen"}
+              onClick={props.onFullscreen}
+            >
+              {props.isFullscreen ? (
+                <Minimize className="h-4 w-4" />
+              ) : (
+                <Maximize className="h-4 w-4" />
+              )}
+            </OverlayButton>
+          )}
         </div>
       </div>
       {sealCount > 0 && props.mode === "aim" && (

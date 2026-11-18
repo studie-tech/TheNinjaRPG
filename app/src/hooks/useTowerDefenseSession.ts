@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { showMutationToast } from "@/libs/toast";
 import { decodeTdActions, isTdActionEncodable } from "@/libs/towerDefense/actionLog";
 import { TD_TICK_SECONDS, tdMaxSpeed } from "@/libs/towerDefense/balance";
@@ -15,6 +15,7 @@ import {
   saveRun,
   TD_SAVED_LOG_MAX_CHARS,
   type TdLogWriter,
+  type TdSavedRunHead,
 } from "@/libs/towerDefense/savedRun";
 import {
   advanceReplay,
@@ -59,8 +60,11 @@ interface TowerDefenseSession {
 
 type TowerDefensePhase = "lobby" | "playing" | "claiming" | "over";
 
-/** What holds a run paused: the player's pause button, or a panel covering the arena. */
-export type TowerDefensePause = "player" | "panel";
+/**
+ * What holds a run paused: the player's pause button, a panel covering the arena, or the
+ * page hosting the game (a portal pausing it, an ad).
+ */
+export type TowerDefensePause = "player" | "panel" | "host";
 
 export interface TowerDefenseOutcome {
   wave: number;
@@ -95,6 +99,11 @@ export interface TowerDefenseClaimResult {
 export interface TowerDefenseBackend {
   /** Local storage key of the saved run. */
   storageKey: string;
+  /**
+   * Whether runs are kept in local storage to resume after a reload; a host that allows
+   * only its own saves (YouTube Playables) keeps runs in memory for the session.
+   */
+  saveRuns?: boolean;
   isStarting: boolean;
   /** A run's config and token, or null once the backend has told the player why not. */
   startRun: (
@@ -147,6 +156,8 @@ export const RETRY_UNSAVED_MESSAGE =
  */
 export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
   const { storageKey, startRun, claimRun } = backend;
+  const saveRuns = backend.saveRuns !== false;
+  const runs = useMemo(() => savedRuns(storageKey, saveRuns), [saveRuns, storageKey]);
   const session = useRef<TowerDefenseSession | null>(null);
   const lastSave = useRef(0);
   /** What the latest published snapshot was taken at. */
@@ -191,7 +202,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
     (force = false) => {
       const current = session.current;
       // A guest run could never be claimed, so it is not kept either.
-      if (!current?.token || current.released) return;
+      if (!saveRuns || !current?.token || current.released) return;
       const now = Date.now();
       if (!force && now - lastSave.current < SAVE_INTERVAL_MS) return;
       lastSave.current = now;
@@ -200,12 +211,11 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
         markUnsaved(current, true);
         return;
       }
-      if (current.hasSaved && readSavedRunHead(storageKey)?.id !== current.id) {
+      if (current.hasSaved && runs.head()?.id !== current.id) {
         loseSave(current);
         return;
       }
-      const isSaved = saveRun(
-        storageKey,
+      const isSaved = runs.save(
         {
           id: current.id,
           config: current.config,
@@ -221,18 +231,18 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       if (isSaved) current.hasSaved = true;
       markUnsaved(current, !isSaved);
     },
-    [loseSave, markUnsaved, storageKey],
+    [loseSave, markUnsaved, runs, saveRuns],
   );
 
   /** The save as storage now holds it, for the lobby. */
   const refreshSaved = useCallback(() => {
-    setSaved(readSavedRunHead(storageKey));
-  }, [storageKey]);
+    setSaved(runs.head());
+  }, [runs]);
 
   const forget = useCallback(() => {
-    clearRun(storageKey);
+    runs.clear();
     setSaved(null);
-  }, [storageKey]);
+  }, [runs]);
 
   useEffect(() => {
     refreshSaved();
@@ -274,7 +284,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
      */
     const settle = () => {
       current.released = true;
-      clearSettledRun(storageKey, token);
+      runs.clearSettled(token);
       refreshSaved();
     };
     setPhase("claiming");
@@ -296,7 +306,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       message: result.message,
     });
     setPhase("over");
-  }, [claimRun, forget, persist, refreshSaved, storageKey]);
+  }, [claimRun, forget, persist, refreshSaved, runs]);
 
   /** End the run with a retreat, as the player could; used at the run's length limits. */
   const retreat = useCallback(
@@ -358,7 +368,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       const chosen = replaceSaved ? saved : null;
       /** Whether storage still holds the save the player decided about. */
       const isUnchanged = () => {
-        if (isSameSavedRun(readSavedRunHead(storageKey), chosen)) return true;
+        if (isSameSavedRun(runs.head(), chosen)) return true;
         refreshSaved();
         showMutationToast({
           success: false,
@@ -379,12 +389,12 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       if (!isUnchanged()) return;
       begin(result.config, result.token);
     },
-    [begin, refreshSaved, saved, startRun, storageKey],
+    [begin, refreshSaved, runs, saved, startRun],
   );
 
   /** Discard the save the lobby shows, unless another tab wrote or removed it since. */
   const discardSaved = useCallback(() => {
-    if (isSameSavedRun(readSavedRunHead(storageKey), saved)) {
+    if (isSameSavedRun(runs.head(), saved)) {
       forget();
       return;
     }
@@ -393,11 +403,11 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       success: false,
       message: "Your saved run changed in another tab, so it was kept. Check it again.",
     });
-  }, [forget, refreshSaved, saved, storageKey]);
+  }, [forget, refreshSaved, runs, saved]);
 
   /** Resume the saved run by replaying its log to the saved tick, a slice at a time. */
   const resume = useCallback(() => {
-    const stored = loadRun(storageKey);
+    const stored = runs.load();
     const actions = stored && decodeTdActions(stored.text);
     if (!stored || !actions) {
       showMutationToast({
@@ -424,7 +434,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       setIsResuming(false);
       // Another tab may have started, resumed or discarded a run while this one replayed;
       // its save is left alone.
-      if (!isSameSavedRun(readSavedRunHead(storageKey), head)) {
+      if (!isSameSavedRun(runs.head(), head)) {
         refreshSaved();
         showMutationToast({
           success: false,
@@ -438,7 +448,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       const log = createLogWriter();
       for (const action of actions.slice(0, replay.index)) appendToLog(log, action);
       if (replay.index !== actions.length || result.state.tick !== head.tick) {
-        clearRun(storageKey);
+        runs.clear();
         showMutationToast({
           success: false,
           message: `The game was updated since this run was saved, so it resumed at wave ${result.state.wave}.`,
@@ -447,7 +457,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       begin(head.config, head.token, { state: result.state, log });
     };
     step();
-  }, [begin, forget, refreshSaved, storageKey]);
+  }, [begin, forget, refreshSaved, runs]);
 
   /** Apply a player action at the current tick and record it if the run accepted it. */
   const act = useCallback(
@@ -581,14 +591,16 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       if (event.key !== storageKey && event.key !== null) return;
       const current = session.current;
       if (!current?.hasSaved || current.released) return;
-      if (readSavedRunHead(storageKey)?.id !== current.id) loseSave(current);
+      if (runs.head()?.id !== current.id) loseSave(current);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, [loseSave, storageKey]);
+  }, [loseSave, runs, storageKey]);
 
   // Save on tab hide so a closed tab resumes where it was.
   useEffect(() => {
+    // A host that forbids watching page visibility keeps no run to save either.
+    if (!saveRuns) return;
     const onHide = () => {
       if (document.visibilityState === "hidden") persist(true);
     };
@@ -599,7 +611,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       window.removeEventListener("pagehide", onHide);
       persist(true);
     };
-  }, [persist]);
+  }, [persist, saveRuns]);
 
   // A resume still replaying or a start still pending when the page goes away has
   // nothing left to begin.
@@ -671,3 +683,24 @@ const advanceReplayFor = (replay: TdReplay, endTick: number, budgetMs: number) =
     if (result || performance.now() - started >= budgetMs) return result;
   }
 };
+
+/**
+ * The device storage a session keeps its run in. Where runs are not kept it holds none,
+ * so nothing left on the device by another build is offered, replaced or removed.
+ */
+const savedRuns = (key: string, kept: boolean) =>
+  kept
+    ? {
+        head: () => readSavedRunHead(key),
+        load: () => loadRun(key),
+        save: (head: TdSavedRunHead, log: TdLogWriter) => saveRun(key, head, log),
+        clear: () => clearRun(key),
+        clearSettled: (token: string) => clearSettledRun(key, token),
+      }
+    : {
+        head: () => null,
+        load: () => null,
+        save: () => false,
+        clear: () => undefined,
+        clearSettled: () => undefined,
+      };

@@ -83,4 +83,29 @@ describe("useTowerDefenseSession", () => {
       expect.objectContaining({ claimed: false, retryable: false }),
     );
   });
+
+  it("claims runs but neither keeps nor offers device saves when saveRuns is off", async () => {
+    // A run left on the device by a build that keeps them.
+    const keeper = renderHook(() => useTowerDefenseSession(fakeBackend("token-old")));
+    await act(async () => {
+      await keeper.result.current.start(1);
+    });
+    keeper.unmount();
+    expect(readSavedRunHead(STORAGE_KEY)?.token).toBe("token-old");
+
+    const backend = { ...fakeBackend("token-2"), saveRuns: false };
+    const { result } = renderHook(() => useTowerDefenseSession(backend));
+    expect(result.current.saved).toBeNull();
+    await act(async () => {
+      await result.current.start(1);
+    });
+    expect(readSavedRunHead(STORAGE_KEY)?.token).toBe("token-old");
+    await act(async () => {
+      result.current.act(["quit"]);
+      await Promise.resolve();
+    });
+    expect(backend.claimRun).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "token-2" }),
+    );
+  });
 });

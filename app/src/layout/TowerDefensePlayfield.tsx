@@ -51,7 +51,10 @@ export const TowerDefensePlayfield = (props: {
   hitAsset?: ArenaProps["hitAsset"];
   smokeAsset?: ArenaProps["smokeAsset"];
   sfxOn: boolean;
-  onSound: (enabled: boolean) => void;
+  /** Absent where the host owns sound, as YouTube does with its own mute. */
+  onSound?: (enabled: boolean) => void;
+  /** The host owns the frame, so the run offers no full-screen button of its own. */
+  hostControlsFrame?: boolean;
   playSound: ArenaProps["playSound"];
   /** A guest's runs are never claimed, so results show no scrolls or retries. */
   isGuest: boolean;
@@ -65,6 +68,8 @@ export const TowerDefensePlayfield = (props: {
   guestNote?: ReactNode;
   /** Extra content at the bottom of the results, such as a link to the full game. */
   resultsFooter?: ReactNode;
+  /** The host paused the game: the arena is taken down so nothing renders until it resumes. */
+  suspended?: boolean;
 }) => {
   const { run } = props;
   const [mode, setMode] = useState<TowerDefenseInputMode>("aim");
@@ -207,7 +212,11 @@ export const TowerDefensePlayfield = (props: {
               stage && playing && "portrait:min-h-[min(80vw,62dvh)]",
             )}
           >
-            {!props.roster ? (
+            {props.suspended ? (
+              <div className="flex h-full min-h-[320px] items-center justify-center bg-black/80 text-white">
+                Paused
+              </div>
+            ) : !props.roster ? (
               <div className="flex h-[400px] items-center justify-center">
                 <Loader explanation="Gathering enemies..." />
               </div>
@@ -237,7 +246,7 @@ export const TowerDefensePlayfield = (props: {
                 pausedByPlayer={pausedByPlayer}
                 onSpeed={run.setSpeed}
                 onSound={props.onSound}
-                onFullscreen={toggleFullscreen}
+                onFullscreen={props.hostControlsFrame ? undefined : toggleFullscreen}
                 onPause={(paused) => setPaused("player", paused)}
                 onPanel={(open) => setPaused("panel", open)}
                 act={act}

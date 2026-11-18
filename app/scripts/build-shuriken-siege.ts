@@ -31,6 +31,7 @@ import {
   ID_ANIMATION_SMOKE,
   IMG_LOADER,
   IMG_LOGO_FULL,
+  IMG_LOGO_SHORT,
   SHURIKEN_SIEGE_LOGO_URL,
   TD_BLAST_ANIMATION,
   TD_SENTRY_ATLAS,
@@ -70,14 +71,32 @@ const TARGETS: Record<ShurikenSiegeTarget, { links: boolean; sdk?: string }> = {
   plain: { links: false },
   crazygames: { links: false, sdk: "https://sdk.crazygames.com/crazygames-sdk-v3.js" },
   poki: { links: false, sdk: "https://game-cdn.poki.com/scripts/v2/poki-sdk.js" },
+  gamedistribution: {
+    links: false,
+    sdk: "https://html5.api.gamedistribution.com/main.min.js",
+  },
+  // Playables must load their SDK before any game code.
+  youtube: { links: false, sdk: "https://www.youtube.com/game_api/v1" },
 };
 
 const args = parseArgs(process.argv.slice(2));
-const targets = (args.targets?.split(",") ?? [...SHURIKEN_SIEGE_TARGETS]).map((target) => {
+/** GameDistribution's id for the game, from its developer portal; required for its build. */
+const gdGameId = args["gd-game-id"] ?? "";
+if (gdGameId && !/^[0-9a-z]{16,64}$/i.test(gdGameId))
+  throw new Error("--gd-game-id must be the game ID from GameDistribution's developer portal");
+const targets = (
+  args.targets?.split(",") ??
+  // Without its game ID the GameDistribution build is left out of a full build.
+  SHURIKEN_SIEGE_TARGETS.filter((target) => target !== "gamedistribution" || gdGameId)
+).map((target) => {
   if (!(SHURIKEN_SIEGE_TARGETS as readonly string[]).includes(target))
     throw new Error(`Unknown target "${target}"`);
+  if (target === "gamedistribution" && !gdGameId)
+    throw new Error("The gamedistribution target needs --gd-game-id (GD_GAME_ID with make)");
   return target as ShurikenSiegeTarget;
 });
+if (!gdGameId && !args.targets)
+  console.log("Skipping gamedistribution: pass GD_GAME_ID to build it");
 const api = (args.api ?? "https://www.theninja-rpg.com").replace(/\/$/, "");
 const out = resolve(args.out ?? join(APP, "../dist/shuriken-siege"));
 const cache = resolve(args.cache ?? join(homedir(), ".cache/shuriken-siege"));
@@ -107,6 +126,7 @@ for (const url of [
   TD_BLAST_ANIMATION.image,
   SHURIKEN_SIEGE_LOGO_URL,
   IMG_LOGO_FULL,
+  IMG_LOGO_SHORT,
   IMG_LOADER,
   ...Object.values(TD_SENTRY_EFFECTS).map((effect) => effect.image),
   ...Object.values(TD_STAGE_IMAGE_URLS),
@@ -232,6 +252,7 @@ for (const target of targets) {
     version,
   };
   writeFileSync(join(dir, "index.html"), page(build, TARGETS[target].sdk));
+  checkPlayablesNames(target, dir);
   const zip = join(out, `shuriken-siege-${target}-${version}.zip`);
   execFileSync("zip", ["-qr", zip, "."], { cwd: dir });
   const count = execFileSync("find", [".", "-type", "f"], { cwd: dir, encoding: "utf8" })
@@ -258,22 +279,47 @@ interface BunBundler {
 
 /** The page: viewport, title, build config, the portal SDK if any, styles and code. */
 function page(build: ShurikenSiegeBuild, sdk?: string) {
+  // GameDistribution reads its options before its script loads and reports events through
+  // them; the page relays each to the game as a window event.
+  const gameDistribution =
+    build.target === "gamedistribution"
+      ? `<script>window.GD_OPTIONS={gameId:${JSON.stringify(gdGameId)},onEvent:function(event){window.dispatchEvent(new CustomEvent("shuriken-siege:gd",{detail:event.name}));}};</script>
+<script id="gamedistribution-jssdk" src="${sdk}"></script>
+`
+      : "";
+  const youtube = build.target === "youtube" ? `<script src="${sdk}"></script>\n` : "";
+  const other = sdk && !gameDistribution && !youtube ? `<script src="${sdk}"></script>\n` : "";
   return `<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
+${youtube}<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Shuriken Siege</title>
 <meta name="description" content="Defend the ninja village against endless raiders with shuriken, hand seals and sentries. A game by TheNinja-RPG.">
 <link rel="stylesheet" href="app.css">
 <script>window.__SHURIKEN_SIEGE__=${JSON.stringify(build)};</script>
-${sdk ? `<script src="${sdk}"></script>\n` : ""}</head>
+${gameDistribution}${other}</head>
 <body>
 <div id="root"></div>
 <script type="module" src="main.js"></script>
 </body>
 </html>
 `;
+}
+
+/** Playables accept only letters, digits, `_`, `-` and `.` in file names. */
+function checkPlayablesNames(target: ShurikenSiegeTarget, dir: string) {
+  if (target !== "youtube") return;
+  const files = execFileSync("find", [".", "-type", "f"], { cwd: dir, encoding: "utf8" })
+    .trim()
+    .split("\n");
+  const invalid = files.filter((file) =>
+    file
+      .replace(/^\.\//, "")
+      .split("/")
+      .some((part) => !/^[A-Za-z0-9_.-]+$/.test(part)),
+  );
+  if (invalid.length) throw new Error(`Playables file names: ${invalid.join(", ")}`);
 }
 
 /** Query a public tRPC procedure of the live game. */
@@ -334,6 +380,6 @@ function parseArgs(argv: string[]) {
     if (key) parsed[key] = argv[++i] ?? "";
   }
   return parsed as Partial<
-    Record<"targets" | "source" | "version" | "api" | "out" | "cache", string>
+    Record<"targets" | "source" | "version" | "api" | "out" | "cache" | "gd-game-id", string>
   >;
 }

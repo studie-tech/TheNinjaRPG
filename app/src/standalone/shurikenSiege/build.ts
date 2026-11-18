@@ -3,7 +3,14 @@ import type { GameAsset } from "@/drizzle/schema";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 
 /** The portals a build is made for; each decides on links and on the SDK it talks to. */
-export const SHURIKEN_SIEGE_TARGETS = ["web", "plain", "crazygames", "poki"] as const;
+export const SHURIKEN_SIEGE_TARGETS = [
+  "web",
+  "plain",
+  "crazygames",
+  "poki",
+  "gamedistribution",
+  "youtube",
+] as const;
 export type ShurikenSiegeTarget = (typeof SHURIKEN_SIEGE_TARGETS)[number];
 
 /** What a build is made for, written into its page by the build script. */
