@@ -33,6 +33,15 @@ describe("Bloodright summary", () => {
       note: `Stats are added to matching tags on all jutsu. Nodes cost 10 to 30 Seichi Silver; up to ${MAX_BLOODRIGHT_TIERS} active.`,
     });
   });
+  it("covers all jutsu when any effect is unrestricted", () => {
+    const any = IncreasePotencyTag.parse({ affectedTag: "damage", power: 1 });
+    expect(
+      describeBloodright([
+        { effects: [light], seichiSilverCost: 20 },
+        { effects: [any], seichiSilverCost: 20 },
+      ]).jutsu,
+    ).toBeNull();
+  });
   it("has no note without tiers", () => {
     expect(describeBloodright([])).toEqual({ jutsu: null, note: null });
   });

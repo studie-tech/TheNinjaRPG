@@ -226,17 +226,20 @@ export const Bloodright = () => {
 export const describeBloodright = (
   tiers: { effects: ZodAllTags[]; seichiSilverCost: number }[],
 ) => {
-  const elements = [
-    ...new Set(
-      tiers.flatMap((tier) =>
-        tier.effects.flatMap((effect) =>
-          effect.type === "increasepotency" || effect.type === "decreasepotency"
-            ? effect.affectedElements
-            : [],
-        ),
-      ),
+  const scopes = tiers.flatMap((tier) =>
+    tier.effects.flatMap((effect) =>
+      effect.type === "increasepotency" || effect.type === "decreasepotency"
+        ? [effect.affectedElements]
+        : [],
     ),
-  ].map((element) => (element === "None" ? "Non-elemental" : element));
+  );
+  // An effect without elements applies to every jutsu, so the path is not element-bound.
+  const unrestricted = scopes.some((scope) => !scope.length);
+  const elements = unrestricted
+    ? []
+    : [...new Set(scopes.flat())].map((element) =>
+        element === "None" ? "Non-elemental" : element,
+      );
   const jutsu = elements.length ? `${elements.join(", ")} jutsu` : null;
   if (!tiers.length) return { jutsu, note: null };
   const costs = tiers.map((tier) => tier.seichiSilverCost);
