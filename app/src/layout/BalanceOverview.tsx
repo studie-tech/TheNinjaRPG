@@ -32,7 +32,10 @@ export const BalanceOverview = ({
   const invalidRange = hasInvalidBalanceLevelRange(filter);
   const overview = api.data.getBalanceOverview.useQuery(filter, {
     ...balanceReportQueryOptions,
-    enabled: tab !== "Archives" && state.isReady && !invalidRange,
+    enabled:
+      (tab === "Overview" || tab === "Starting turns") &&
+      state.isReady &&
+      !invalidRange,
   });
   const archives = api.data.getBalanceArchives.useQuery(undefined, {
     ...balanceReportQueryOptions,
@@ -83,6 +86,8 @@ export const BalanceOverview = ({
     }
     setIsDownloading(false);
   };
+
+  if (tab === "Reports") return null;
 
   return (
     <ContentBox
@@ -375,6 +380,6 @@ const downloadArchive = async (
 };
 
 interface BalanceOverviewProps {
-  tab?: "Overview" | "Starting turns" | "Archives";
+  tab?: "Overview" | "Starting turns" | "Archives" | "Reports";
   navTabs?: ReactNode;
 }

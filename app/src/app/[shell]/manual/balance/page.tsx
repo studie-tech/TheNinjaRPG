@@ -1,6 +1,7 @@
 "use client";
 
 import { SquareArrowOutUpRight } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { BalanceOverview } from "@/layout/BalanceOverview";
 import ContentBox from "@/layout/ContentBox";
@@ -18,7 +19,11 @@ export default function ManualBalance() {
     "Overview",
     true,
   );
-  const tab = availableTabs.includes(storedTab) ? storedTab : "Overview";
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+  const tab = isMounted && availableTabs.includes(storedTab) ? storedTab : "Overview";
   const navTabs = <NavTabs current={tab} options={availableTabs} setValue={setTab} />;
   const data = [
     {
@@ -78,7 +83,7 @@ export default function ManualBalance() {
 
   return (
     <>
-      {tab !== "Reports" && <BalanceOverview tab={tab} navTabs={navTabs} />}
+      <BalanceOverview tab={tab} navTabs={navTabs} />
       {tab === "Reports" && (
         <ContentBox
           title="Detailed balance reports"

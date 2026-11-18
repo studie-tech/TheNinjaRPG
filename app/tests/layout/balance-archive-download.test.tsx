@@ -2,12 +2,14 @@ import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
+import ManualBalance from "@/app/[shell]/manual/balance/page";
 import * as filtering from "@/layout/BalanceFiltering";
-import { BalanceOverview } from "@/layout/BalanceOverview";
 import * as ContentBox from "@/layout/ContentBox";
 import * as dom from "@/utils/dom";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 type ArchivePage = RouterOutputs["data"]["getBalanceArchivePage"];
@@ -17,6 +19,9 @@ const onQueryError = vi.fn();
 const downloadBlob = vi.fn();
 
 beforeEach(() => {
+  installBrowserGlobals({ events: ["CustomEvent"] });
+  window.localStorage.clear();
+  window.history.replaceState({}, "", "/manual/balance#Archives");
   vi.useFakeTimers();
   setSystemTime(new Date("2026-11-17T12:00:00Z"));
   onQueryError.mockClear();
@@ -34,9 +39,14 @@ beforeEach(() => {
   } as never);
   vi.spyOn(filtering, "getBalanceFilter").mockReturnValue({});
   vi.spyOn(filtering, "BalanceFiltering").mockImplementation(() => <></>);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
-    <div>{children}</div>
-  ));
+  vi.spyOn(ContentBox, "default").mockImplementation(
+    ({ children, topRightContent }) => (
+      <div>
+        {topRightContent}
+        {children}
+      </div>
+    ),
+  );
   vi.spyOn(dom, "downloadBlob").mockImplementation(downloadBlob);
 });
 
@@ -44,7 +54,10 @@ afterEach(() => {
   cleanup();
   queryClient.clear();
   vi.useRealTimers();
+  window.history.replaceState({}, "", "/");
+  window.localStorage.clear();
   vi.restoreAllMocks();
+  restoreBrowserGlobals();
 });
 
 it("finishes an archive exceeding 60 pages after retrying the same cursor for a full minute", async () => {
@@ -71,6 +84,15 @@ it("finishes an archive exceeding 60 pages after retrying the same cursor for a 
   ).toContain("pause briefly");
   expect(downloadBlob).not.toHaveBeenCalled();
   expect(onQueryError).not.toHaveBeenCalled();
+  fireEvent.click(view.getByRole("button", { name: "Reports" }));
+  expect(view.getByRole("table")).toBeTruthy();
+  fireEvent.click(view.getByRole("button", { name: "Archives" }));
+  expect((view.getByRole("combobox") as HTMLSelectElement).disabled).toBe(true);
+  const pendingDownload = view.getByRole("button", { name: "Downloading…" });
+  expect((pendingDownload as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(pendingDownload);
+  expect(cursors).toHaveLength(61);
+  fireEvent.click(view.getByRole("button", { name: "Reports" }));
 
   await advance(59_000);
   expect(cursors).toHaveLength(61);
@@ -85,6 +107,7 @@ it("finishes an archive exceeding 60 pages after retrying the same cursor for a 
   expect(new Set(file.rows.map((row: { id: number }) => row.id)).size).toBe(61_000);
   expect(file.rows[0].id).toBe(1);
   expect(file.rows.at(-1).id).toBe(61_000);
+  fireEvent.click(view.getByRole("button", { name: "Archives" }));
   expect(
     view.queryByText("Large archives may pause briefly for request limits."),
   ).toBeNull();
@@ -129,11 +152,18 @@ it("stops after two rate-limit retries and restores the download controls", asyn
   fireEvent.click(view.getByRole("button", { name: "Download JSON" }));
   await flush();
   expect(fetchPage).toHaveBeenCalledTimes(1);
+  fireEvent.click(view.getByRole("button", { name: "Reports" }));
+  fireEvent.click(view.getByRole("button", { name: "Archives" }));
+  expect(
+    (view.getByRole("button", { name: "Downloading…" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  fireEvent.click(view.getByRole("button", { name: "Reports" }));
   await advance(60_000);
   expect(fetchPage).toHaveBeenCalledTimes(2);
   expect(onQueryError).not.toHaveBeenCalled();
   await advance(60_000);
   expect(fetchPage).toHaveBeenCalledTimes(3);
+  fireEvent.click(view.getByRole("button", { name: "Archives" }));
   expect(view.getByRole("alert").textContent).toContain("Please try again");
   expect(
     (view.getByRole("button", { name: "Download JSON" }) as HTMLButtonElement).disabled,
@@ -141,6 +171,9 @@ it("stops after two rate-limit retries and restores the download controls", asyn
   expect((view.getByRole("combobox") as HTMLSelectElement).disabled).toBe(false);
   expect(downloadBlob).not.toHaveBeenCalled();
   expect(onQueryError).toHaveBeenCalledTimes(1);
+  fireEvent.click(view.getByRole("button", { name: "Reports" }));
+  fireEvent.click(view.getByRole("button", { name: "Archives" }));
+  expect(view.getByRole("alert").textContent).toContain("Please try again");
   await advance(60_000);
   expect(fetchPage).toHaveBeenCalledTimes(3);
 });
@@ -156,7 +189,9 @@ const mountArchive = async (fetchPage: (cursor: number) => ArchivePage) => {
   });
   const view = render(
     <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
-      <BalanceOverview tab="Archives" />
+      <AppRouterContext.Provider value={{} as never}>
+        <ManualBalance />
+      </AppRouterContext.Provider>
     </TrpcTestProviders>,
   );
   await flush();
