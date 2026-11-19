@@ -101,28 +101,28 @@ describe("classic welcome page", () => {
     vi.spyOn(navigation, "useSearchParams").mockReturnValue(
       new URLSearchParams("gclid=Cj0KCQiA-landing-click") as never,
     );
-    const answer = (marketing: boolean | undefined, event: string) => {
-      window.Cookiebot = {
+    const answer = (marketing: boolean | undefined) => {
+      window.tnrConsent = {
         consent: { marketing: marketing === true },
         hasResponse: marketing !== undefined,
       };
       act(() => {
-        window.dispatchEvent(new window.Event(event));
+        window.dispatchEvent(new window.Event("tnr:consent-change"));
       });
     };
     try {
-      answer(undefined, "CookiebotOnConsentReady");
+      answer(undefined);
       render(<Welcome />);
-      answer(true, "CookiebotOnAccept");
-      answer(false, "CookiebotOnDecline");
-      answer(true, "CookiebotOnAccept");
+      answer(true);
+      answer(false);
+      answer(true);
       expect(reports.map((report) => report.adClick?.marketingConsent)).toEqual([
         "unanswered",
         "granted",
         "granted",
       ]);
     } finally {
-      delete window.Cookiebot;
+      delete window.tnrConsent;
       localStorage.removeItem("ad_click");
     }
   });

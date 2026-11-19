@@ -124,7 +124,7 @@ export default async function RootLayout({
     >
       <head>
         {!isNativeShell && (
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: static consent defaults and GTM policy, without visitor input.
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: static consent defaults, without visitor input.
           <script dangerouslySetInnerHTML={{ __html: CONSENT_BOOTSTRAP }} />
         )}
         <script

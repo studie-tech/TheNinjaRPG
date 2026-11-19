@@ -13,11 +13,11 @@ import {
 } from "@/libs/campaignSource";
 
 const setConsent = (statistics: boolean, hasResponse = true) => {
-  window.Cookiebot = { consent: { statistics }, hasResponse };
+  window.tnrConsent = { consent: { statistics }, hasResponse };
 };
 
 afterEach(() => {
-  delete window.Cookiebot;
+  delete window.tnrConsent;
   window.localStorage.clear();
 });
 
@@ -41,29 +41,29 @@ describe("campaign source storage", () => {
     expect(window.localStorage.getItem("utm_source")).toBeNull();
   });
 
-  it("is kept, but not read, while Cookiebot has no answer yet", () => {
+  it("is kept, but not read, while the consent manager has no answer yet", () => {
     setConsent(true);
     storeCampaignSource("reddit");
-    delete window.Cookiebot;
+    delete window.tnrConsent;
     expect(readCampaignSource()).toBeUndefined();
     expect(window.localStorage.getItem("utm_source")).toBe("reddit");
   });
 });
 
 describe("marketing consent for ad clicks", () => {
-  it("is declined until Cookiebot has loaded the stored choice", () => {
+  it("is declined until the consent manager has loaded the stored choice", () => {
     expect(readMarketingConsent()).toBe("declined");
   });
 
   it("is unanswered while the loaded dialog has no answer", () => {
-    window.Cookiebot = { consent: { marketing: false }, hasResponse: false };
+    window.tnrConsent = { consent: { marketing: false }, hasResponse: false };
     expect(readMarketingConsent()).toBe("unanswered");
   });
 
   it("follows the visitor's answer", () => {
-    window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
+    window.tnrConsent = { consent: { marketing: true }, hasResponse: true };
     expect(readMarketingConsent()).toBe("granted");
-    window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+    window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
     expect(readMarketingConsent()).toBe("declined");
   });
 });

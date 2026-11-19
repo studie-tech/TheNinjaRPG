@@ -11,7 +11,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  delete window.Cookiebot;
+  delete window.tnrConsent;
 });
 
 describe("first-party cookie settings", () => {
@@ -20,7 +20,7 @@ describe("first-party cookie settings", () => {
     const screen = within(document.body);
     expect(screen.getByText("Always enabled")).toBeTruthy();
     expect(screen.getAllByText("Off")).toHaveLength(3);
-    expect(document.querySelector('script[src*="cookiebot"]')).toBeNull();
+    expect(document.querySelector("script[src]")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Change or withdraw consent" }));
     expect(screen.getByRole("status").textContent).toContain(
       "Optional tracking is off",
@@ -28,7 +28,7 @@ describe("first-party cookie settings", () => {
   });
   it("reopens preferences and reports the stored choices", () => {
     const renew = vi.fn();
-    window.Cookiebot = {
+    window.tnrConsent = {
       consent: { preferences: false, statistics: true, marketing: false },
       hasResponse: true,
       renew,
@@ -50,12 +50,12 @@ describe("first-party cookie settings", () => {
 
     const renew = vi.fn();
     act(() => {
-      window.Cookiebot = {
+      window.tnrConsent = {
         consent: { preferences: false, statistics: true, marketing: true },
         hasResponse: true,
         renew,
       };
-      window.dispatchEvent(new window.Event("CookiebotOnConsentReady"));
+      window.dispatchEvent(new window.Event("tnr:consent-change"));
     });
     expect(screen.getAllByText("Enabled")).toHaveLength(2);
     expect(screen.getByRole("status").textContent).toBe(

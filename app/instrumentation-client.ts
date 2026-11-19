@@ -18,7 +18,6 @@ import {
   isProxyError as isProxyErrorPattern,
   isSafariJsonError as isSafariJsonErrorPattern,
   type StackFrame,
-  isCookiebotStack,
   isExtensionExecutorEvent,
   isGoogleTagStack,
   isInjectedContentPath,
@@ -64,11 +63,7 @@ Sentry.init({
     "GME Provider is disconnected or locked", // timeout error
     "Connection closed", // timeout error
     "The play method is not allowed by the user agent or the platform in the current context, possibly because the user denied permission.", // audio permission denied
-    "TypeError: undefined is not an object (evaluating 'this.updateVisibleFocusableElements.bind')", // Cookiebot error: https://github.com/getsentry/sentry-javascript/issues/16850
     "Failed to read a named property 'Element' from 'Window': Blocked a frame with origin \"https://www.theninja-rpg.com\"", // Sentry iframe error?
-    "Cannot read properties of undefined (reading 'bind')", // Cookiebot error on resize
-    "Cannot read properties of null (reading 'parentNode')", // Cookiebot error in calcFadeState when clicking "More Details"
-    "null is not an object (evaluating 'element.parentNode')", // Cookiebot error in calcFadeState (Safari format)
     "UnrecognizedActionError", // New deployment
     "undefined is not an object (evaluating 'e[a].call')", // Somethign internal never seen by user.
     "Hydration Error", // Based on sentry inspection not seen by user
@@ -88,8 +83,6 @@ Sentry.init({
     "postrobot_method", // PayPal SDK cross-window communication error - occurs when popup is closed
     "Can not send postrobot", // PayPal SDK postrobot error - alternate format
     "Bootstrap Error for", // PayPal SDK zoid bootstrap errors - occur when PayPal's internal component initialization encounters duplicate listener registration
-    "Cannot set properties of undefined (setting 'iframeReady')", // Usercentrics (uc.js) consent management error - third-party script timing issue
-    "Cannot set properties of undefined (setting 'windowOnloadTriggered')", // Usercentrics (uc.js) consent management error - race condition in signalWindowLoad on older Chrome Mobile WebView
     /^Load failed/, // iOS Safari network error - occurs when device goes to sleep, network changes, or CDN requests fail (may include domain suffix)
     "Clerk: Failed to load Clerk", // Clerk script load failure - typically on very old browsers (Android 5.x, Chrome 95) that don't support modern JS
     "failed to load script", // Clerk's underlying script loading error (cause of the above) - network issues on mobile devices
@@ -131,8 +124,8 @@ Sentry.init({
     if (isClerkStorageError(event)) {
       return null; // Drop Clerk storage access errors
     }
-    if (isThirdPartyInjectedError(event, hint)) {
-      return null; // Drop errors from injected scripts (e.g. Facebook/Cookiebot)
+    if (isThirdPartyInjectedError(event)) {
+      return null; // Drop errors from injected scripts
     }
     if (isExtensionExecutorError(event)) {
       // Drop errors whose whole stack is a browser extension's executors/<n>.js bundle.
@@ -468,43 +461,19 @@ const isExtensionExecutorError = (event: Sentry.ErrorEvent): boolean =>
   );
 
 /**
- * Check if an error is from an injected third-party script like Facebook or Cookiebot.
- * These often cause "Illegal invocation" errors in document.createEvent or similar.
- *
- * UX: no game screen or loading state waits on these scripts. A failed inject_content.js
- * stays inside its own callback, and without a Cookiebot answer the consent readers in
- * `libs/cookieConsent.ts` treat optional categories as declined, so tracking stays off and
- * embeds show their click-to-load placeholder.
+ * Ignore Illegal invocation failures from browser-injected content scripts.
+ * UX: these fail inside their own callback; no game screen or loading state waits on them.
  */
-const isThirdPartyInjectedError = (
-  event: Sentry.ErrorEvent,
-  hint: Sentry.EventHint,
-): boolean => {
+const isThirdPartyInjectedError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
-
-  const isCookiebotScript = isCookiebotStack(
-    (hint.originalException as Error | null | undefined)?.stack,
-  );
-  const isInjectedScript =
-    isCookiebotScript ||
+  return (
+    message.includes("Illegal invocation") &&
     stackFrames.some(
       (frame) =>
         isInjectedContentPath(frame.filename) || isInjectedContentPath(frame.abs_path),
-    );
-
-  // Filter Illegal invocation errors from any injected script
-  if (isInjectedScript && message.includes("Illegal invocation")) {
-    return true;
-  }
-
-  // Filter Cookiebot-specific errors when manipulating DOM elements
-  // sortBannerButtons tries to set innerHTML on null element
-  if (isCookiebotScript && message.includes("Cannot set properties of null")) {
-    return true;
-  }
-
-  return false;
+    )
+  );
 };
 
 /**

@@ -3,7 +3,7 @@ import { runInNewContext } from "node:vm";
 import { CONSENT_BOOTSTRAP, consentConfig } from "@/libs/consentConfig";
 
 describe("consent bootstrap", () => {
-  it("denies optional storage before tags and blocks only the hosted CMP", () => {
+  it("denies optional storage before tags", () => {
     const browser: { dataLayer: Array<ArrayLike<unknown>>; gtag?: unknown } = {
       dataLayer: [],
     };
@@ -20,26 +20,7 @@ describe("consent bootstrap", () => {
       ad_user_data: "denied",
       security_storage: "granted",
     });
-    const policy = commands[1]?.[2] as (
-      container: string,
-      permission: string,
-      data: { url: string },
-    ) => boolean;
-    expect(
-      policy("GTM-TEST", "inject_script", {
-        url: "https://consent.cookiebot.com/uc.js",
-      }),
-    ).toBe(false);
-    expect(
-      policy("GTM-TEST", "inject_script", {
-        url: "https://www.redditstatic.com/ads/pixel.js",
-      }),
-    ).toBe(true);
-    expect(
-      policy("GTM-TEST", "inject_script", {
-        url: "https://notcookiebot.com/script.js",
-      }),
-    ).toBe(true);
+    expect(commands).toHaveLength(1);
   });
   it("uses opt-in categories, a revision and equally weighted accept/reject controls", () => {
     expect(consentConfig.mode).toBe("opt-in");

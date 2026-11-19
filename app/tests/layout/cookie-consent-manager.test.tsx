@@ -13,7 +13,7 @@ const broadcastDescriptor = Object.getOwnPropertyDescriptor(
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  delete window.Cookiebot;
+  delete window.tnrConsent;
   localStorage.clear();
   if (broadcastDescriptor)
     Object.defineProperty(globalThis, "BroadcastChannel", broadcastDescriptor);
@@ -77,7 +77,7 @@ it("synchronizes saved consent once and signals changes when receipt storage exc
     finishInitialization();
   });
   expect(
-    signal.mock.calls.filter(([event]) => event.type === "CookiebotOnConsentReady"),
+    signal.mock.calls.filter(([event]) => event.type === "tnr:consent-change"),
   ).toHaveLength(1);
   initialize.mock.calls[0]?.[0]?.onFirstConsent?.({ cookie });
 

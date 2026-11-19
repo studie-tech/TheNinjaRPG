@@ -5,6 +5,7 @@ import type * as CookieConsentLibrary from "vanilla-cookieconsent";
 import { Button } from "@/components/ui/button";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { CONSENT_REVISION, consentConfig } from "@/libs/consentConfig";
+import { CONSENT_CHANGE_EVENT } from "@/libs/cookieConsent";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 import {
   safeLocalStorageGetItem,
@@ -93,8 +94,7 @@ const synchronizeConsent = () => {
     statistics: CookieConsent.acceptedCategory("statistics"),
     marketing: CookieConsent.acceptedCategory("marketing"),
   };
-  // GTM's existing TikTok tag reads this API and events. No Cookiebot code is loaded.
-  window.Cookiebot = {
+  window.tnrConsent = {
     consent,
     hasResponse: CookieConsent.validConsent(),
     renew: CookieConsent.showPreferences,
@@ -109,10 +109,7 @@ const synchronizeConsent = () => {
     personalization_storage: consent.preferences ? "granted" : "denied",
     security_storage: "granted",
   });
-  window.dispatchEvent(new Event("CookiebotOnConsentReady"));
-  window.dispatchEvent(
-    new Event(consent.marketing ? "CookiebotOnAccept" : "CookiebotOnDecline"),
-  );
+  window.dispatchEvent(new Event(CONSENT_CHANGE_EVENT));
 };
 
 /** Queue a minimal anonymous receipt and notify other tabs independently of delivery. */

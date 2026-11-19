@@ -7,17 +7,15 @@ const EMBED =
   '<iframe src="https://www.youtube.com/embed/KgXxLOb-lEk?si=abc" width="560" height="315"></iframe>';
 
 const setMarketingConsent = (marketing: boolean) => {
-  window.Cookiebot = { consent: { marketing } };
+  window.tnrConsent = { consent: { marketing } };
   act(() => {
-    window.dispatchEvent(
-      new window.Event(marketing ? "CookiebotOnAccept" : "CookiebotOnDecline"),
-    );
+    window.dispatchEvent(new window.Event("tnr:consent-change"));
   });
 };
 
 afterEach(() => {
   cleanup();
-  delete window.Cookiebot;
+  delete window.tnrConsent;
 });
 
 describe("user-embedded iframes", () => {
@@ -27,7 +25,7 @@ describe("user-embedded iframes", () => {
     expect(markup).toContain("hosted by YouTube");
   });
 
-  it("stays a placeholder without Cookiebot, until the visitor loads it", () => {
+  it("stays a placeholder without the consent manager, until the visitor loads it", () => {
     const { container, getByRole } = render(<>{parseHtml(EMBED)}</>);
     expect(container.querySelector("iframe")).toBeNull();
 
