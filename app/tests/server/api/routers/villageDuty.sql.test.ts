@@ -32,6 +32,7 @@ import {
   countVillageDuty,
   enrollVillageDuty,
   fetchVillageDutyHome,
+  fetchVillageDutyUser,
   findVillageDutyShift,
   listVillageDutyCandidates,
   listVillageDutyPatrols,
@@ -519,6 +520,10 @@ describeWithDatabase("village duty hourly patrol", () => {
       status: "AWAKE",
       isAi: false,
       isBanned: false,
+      rank: "CHUNIN" as const,
+      experience: owners[0]!.experience,
+      bracketImmunityLiftedUntil: new Date(0),
+      warParticipantUntil: new Date(0),
       stealthActive: false,
       stealthActivatedAt: null,
       stealth: 1000,
@@ -575,6 +580,65 @@ describeWithDatabase("village duty hourly patrol", () => {
         expired.getTime(),
       ),
     );
+  });
+  it("does not pursue visitors more than one PvP bracket below the copy's owner", async () => {
+    const db = await getTestDatabase();
+    await enrollCurrent();
+    // Bracket 7 owner against a bracket 2 visitor, as reported by players.
+    await db
+      .update(userData)
+      .set({ experience: 3_500_000 })
+      .where(eq(userData.userId, "protector"));
+    const now = new Date();
+    const active = await shift(now);
+    await db
+      .insert(village)
+      .values({ id: "foreign", name: "Foreign", sector: 456, kageId: "enemy" });
+    await db.insert(villageAlliance).values({
+      id: "hostile",
+      villageIdA: "home",
+      villageIdB: "foreign",
+      status: "ENEMY",
+    });
+    await insertUsers([
+      {
+        userId: "enemy",
+        username: "Enemy",
+        villageId: "foreign",
+        sector: 123,
+        location: "Village",
+        status: "AWAKE",
+        rank: "CHUNIN",
+        experience: 750_000,
+        bracketImmunityLiftedUntil: new Date(0),
+        warParticipantUntil: new Date(0),
+      },
+    ]);
+    const home = (await fetchVillageDutyHome(db, "home"))!;
+    const owners = await listVillageDutyRoster(db, "home", now);
+    const visitor = (await fetchVillageDutyUser(db, "enemy"))!;
+    const at = { ...visitor, longitude: 9, latitude: 9 };
+    const protectedVisitor = await advanceVillageDutyPursuits(
+      db,
+      { ...home, dutyShift: active },
+      owners,
+      [],
+      villageMap(),
+      at,
+      now,
+    );
+    expect(protectedVisitor?.patrols[0]?.pursuit ?? null).toBeNull();
+    // A visitor whose bracket immunity is lifted is fair game again.
+    const lifted = await advanceVillageDutyPursuits(
+      db,
+      { ...home, dutyShift: protectedVisitor! },
+      owners,
+      [],
+      villageMap(),
+      { ...at, bracketImmunityLiftedUntil: secondsFromDate(600, now) },
+      now,
+    );
+    expect(lifted?.patrols[0]?.pursuit?.targetUserId).toBe("enemy");
   });
   it("pursues an active enemy without a roll and globally spends the copy after combat", async () => {
     const db = await getTestDatabase();
