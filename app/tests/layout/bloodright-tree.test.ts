@@ -36,6 +36,35 @@ describe("Bloodright tree ordering", () => {
 });
 
 describe("Bloodright tree stats", () => {
+  it("preserves element restrictions and describes element-only potency", () => {
+    const effects = [
+      IncreasePotencyTag.parse({
+        affectedTag: "damage",
+        affectedElements: ["Fire"],
+        power: 2,
+      }),
+      IncreasePotencyTag.parse({
+        affectedTag: "damage",
+        affectedElements: ["Water"],
+        power: 2,
+      }),
+      IncreasePotencyTag.parse({
+        affectedTag: "none",
+        affectedElements: ["Fire", "Water"],
+        power: 3,
+      }),
+      DecreasePotencyTag.parse({ affectedElements: ["None"], power: 1 }),
+      IncreasePotencyTag.parse({ affectedTag: "none", power: 2 }),
+    ];
+    expect(getBloodrightStats(effects)).toEqual([
+      { label: "Damage (Fire)", value: "+2" },
+      { label: "Damage (Water)", value: "+2" },
+      { label: "All supported tags (Fire, Water)", value: "+3" },
+      { label: "All supported tags (Non-elemental)", value: "-1" },
+      { label: "None", value: "+2" },
+    ]);
+  });
+
   it("lists each potency effect as a signed stat row", () => {
     const effects = [
       IncreasePotencyTag.parse({ affectedTag: "afterburn", power: 2 }),

@@ -163,9 +163,17 @@ export const getBloodrightStats = (effects: ZodAllTags[]) =>
       return [];
     const sign = effect.type === "increasepotency" ? "+" : "-";
     const unit = effect.calculation === "percentage" ? "%" : "";
+    // Element-only potency applies to every supported tag of those elements.
+    const tag =
+      effect.affectedTag === "none" && effect.affectedElements.length
+        ? "all"
+        : effect.affectedTag;
+    const elements = effect.affectedElements
+      .map((element) => (element === "None" ? "Non-elemental" : element))
+      .join(", ");
     return [
       {
-        label: POTENCY_TAG_LABELS[effect.affectedTag],
+        label: `${POTENCY_TAG_LABELS[tag]}${elements ? ` (${elements})` : ""}`,
         value: `${sign}${Number(effect.power.toFixed(2))}${unit}`,
       },
     ];

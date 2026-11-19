@@ -310,9 +310,14 @@ export const SkillCard: React.FC<SkillCardProps> = ({
 
       {hasStats && (
         <dl id={statsId} className="mt-2 space-y-0.5 border-t pt-1 text-[11px]">
-          {stats.map(({ label, value }) => (
-            <div key={`${label}:${value}`} className="flex justify-between gap-2">
-              <dt className="truncate text-muted-foreground">{label}</dt>
+          {stats.map(({ label, value }, index) => (
+            <div
+              key={`${label}:${value}:${index}`}
+              className="flex justify-between gap-2"
+            >
+              <dt className="truncate text-muted-foreground" title={label}>
+                {label}
+              </dt>
               <dd className="font-medium">{value}</dd>
             </div>
           ))}
