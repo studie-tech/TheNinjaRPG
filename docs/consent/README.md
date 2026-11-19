@@ -36,3 +36,9 @@ persistence, and withdrawal behavior on a preview before production rollout.
 The recovery message preserves the displayed choices and offers another attempt.
 
 ![Consent settings recovery](screenshots/consent-recovery-desktop.webp)
+
+The signed-in mobile bar includes Cookie settings alongside the configured shortcuts. It opens preferences in place, with the consent page as a loading fallback.
+
+![Mobile cookie settings](screenshots/mobile-cookie-nav.webp)
+
+![Mobile cookie preferences](screenshots/mobile-cookie-preferences.webp)

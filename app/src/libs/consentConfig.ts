@@ -12,7 +12,7 @@ export const consentConfig: CookieConsentConfig = {
   guiOptions: {
     consentModal: {
       layout: "box inline",
-      position: "bottom center",
+      position: "bottom right",
       equalWeightButtons: true,
     },
     preferencesModal: { layout: "box", equalWeightButtons: true },
