@@ -49,6 +49,7 @@ export const SwapBloodline: React.FC = () => {
         await Promise.all([
           updateUser(data, { revision }),
           utils.bloodline.getSwapInfo.invalidate(),
+          utils.bloodright.get.invalidate(),
         ]);
       },
       onSettled: () => {

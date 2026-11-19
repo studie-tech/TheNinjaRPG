@@ -32,6 +32,7 @@ interface PurchaseBloodlineProps {
  * Let user purchase a new bloodline
  */
 export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
+  const utils = api.useUtils();
   // State
   const {
     data: userData,
@@ -62,7 +63,11 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success) await updateUser(data, { revision });
+        if (data.success)
+          await Promise.all([
+            updateUser(data, { revision }),
+            utils.bloodright.get.invalidate(),
+          ]);
       },
       // A rejection can mean the bloodline or battle status changed since the profile loaded.
       onSettled: (data, error) => {
@@ -162,6 +167,7 @@ interface CurrentBloodlineProps {
 }
 
 export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
+  const utils = api.useUtils();
   // Get current bloodline
   const {
     data: userData,
@@ -185,7 +191,10 @@ export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUser(data, { revision });
+          await Promise.all([
+            updateUser(data, { revision }),
+            utils.bloodright.get.invalidate(),
+          ]);
         }
       },
     });
@@ -242,6 +251,7 @@ interface RollBloodlineProps {
   initialBreak?: boolean;
 }
 export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
+  const utils = api.useUtils();
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   // State
   const { mutate: roll, isPending: isRolling } = api.bloodline.roll.useMutation({
@@ -253,7 +263,10 @@ export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
       props.refetch();
       showMutationToast({ ...data, title: "Bloodline Roll" });
       if (data.success || data.actionNotice) {
-        await updateUser(data, { revision });
+        await Promise.all([
+          updateUser(data, { revision }),
+          data.success ? utils.bloodright.get.invalidate() : undefined,
+        ]);
       }
     },
   });

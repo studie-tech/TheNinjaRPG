@@ -142,7 +142,9 @@ const profileRecoveryCallbacks = ({
   });
   profileObservers.push(observer.subscribe(() => {}));
   const invalidate = vi.fn(async () => undefined);
+  const invalidateBloodright = vi.fn(async () => undefined);
   const utils = {
+    bloodright: { get: { invalidate: invalidateBloodright } },
     profile: {
       getUser: {
         invalidate: () => queryClient.invalidateQueries({ queryKey: key, exact: true }),
@@ -185,6 +187,7 @@ const profileRecoveryCallbacks = ({
   );
   const options = new Function(
     "util",
+    "utils",
     "prepareUserUpdate",
     "updateUser",
     "showMutationToast",
@@ -195,6 +198,7 @@ const profileRecoveryCallbacks = ({
     `${factory}\nreturn getOptions();`,
   )(
     utils,
+    utils,
     () => prepareUserUpdate(queryClient, key),
     updateUser,
     toast.showMutationToast,
@@ -203,7 +207,15 @@ const profileRecoveryCallbacks = ({
     vi.fn(),
     { refetch: vi.fn() },
   ) as MutationOptions<unknown, Error, void, number | undefined>;
-  return { key, initial, authoritative, read, options, closeModal };
+  return {
+    key,
+    initial,
+    authoritative,
+    read,
+    options,
+    closeModal,
+    invalidateBloodright,
+  };
 };
 
 for (const flow of recoveryFlows) {
@@ -249,6 +261,7 @@ for (const flow of recoveryFlows) {
       expect(mutation.state.status).toBe("error");
       expect(queryClient.isMutating()).toBe(0);
       expect(queryClient.getQueryData(test.key)).toEqual(test.authoritative);
+      expect(test.invalidateBloodright).not.toHaveBeenCalled();
       if (flow.procedure === "bloodline.purchaseBloodline") {
         expect(test.closeModal).toHaveBeenCalledWith(false);
       }
@@ -275,6 +288,9 @@ for (const flow of recoveryFlows) {
     );
     expect(test.read).not.toHaveBeenCalled();
     expect(mutation.state.status).toBe("success");
+    expect(test.invalidateBloodright).toHaveBeenCalledTimes(
+      flow.procedure.startsWith("bloodline.") ? 1 : 0,
+    );
     expect(toastMessages()).toEqual(["Updated"]);
   });
 }

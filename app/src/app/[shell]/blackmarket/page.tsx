@@ -192,6 +192,7 @@ const PityBloodlineRoll: React.FC<{
         await Promise.all([
           updateUser(data, { revision }),
           utils.bloodline.getItemRolls.invalidate(),
+          utils.bloodright.get.invalidate(),
         ]);
       }
     },
