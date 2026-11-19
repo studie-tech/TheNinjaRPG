@@ -11,7 +11,7 @@ import {
   anonymousSpriteAppearance,
   resolveSpriteAppearance,
 } from "@/libs/lpc/appearance";
-import { getWarRelationship } from "@/libs/objectiveWar";
+import { getWarRelationship, isWarMercenary } from "@/libs/objectiveWar";
 import {
   isOpenWanderTile,
   WANDER_STEP_MS,
@@ -279,8 +279,8 @@ export const canVillageDutyCopyPursue = (
     return false;
   if (visitor.bracketImmunityLiftedUntil > now) return true;
   return (
-    owner.warParticipantUntil > now &&
-    visitor.warParticipantUntil > now &&
+    (owner.warParticipantUntil > now || isWarMercenary(wars, owner.userId)) &&
+    (visitor.warParticipantUntil > now || isWarMercenary(wars, visitor.userId)) &&
     getWarRelationship(wars, owner, visitor) === "ENEMY"
   );
 };

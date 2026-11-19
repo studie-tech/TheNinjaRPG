@@ -469,6 +469,30 @@ describe("bracket limits for village duty copies", () => {
     ).toBe(false);
   });
 
+  it("lets opposing war participants or mercenaries through the bracket limit", () => {
+    const wars = [
+      {
+        id: "war",
+        attackerVillageId: "home",
+        defenderVillageId: "foreign",
+        warAllies: [],
+        warMercenaries: [{ userId: "v", sideVillageId: "foreign" }],
+      },
+    ] as unknown as Parameters<typeof canVillageDutyCopyPursue>[2];
+    const soon = new Date(now.getTime() + 60_000);
+    const owner = user("guard", 3_500_000, { warParticipantUntil: soon });
+    expect(canVillageDutyCopyPursue(owner, user("v", 750_000), wars, now)).toBe(true);
+    expect(canVillageDutyCopyPursue(owner, user("w", 750_000), wars, now)).toBe(false);
+    expect(
+      canVillageDutyCopyPursue(
+        owner,
+        user("w", 750_000, { warParticipantUntil: soon }),
+        wars,
+        now,
+      ),
+    ).toBe(true);
+  });
+
   it("skips protected visitors and pursues the nearest eligible one instead", () => {
     const map = sectorMap(10, 10, () => ({ zone: "village" }), { anchors: [] });
     const result = planVillageDutyPursuits(
