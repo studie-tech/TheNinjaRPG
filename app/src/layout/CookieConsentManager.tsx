@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { CONSENT_REVISION, consentConfig } from "@/libs/consentConfig";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
+import {
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/utils/storage";
 
 /** The manager is bundled with the game; optional integrations fail closed. */
 export const CookieConsentManager = () => {
@@ -69,6 +74,7 @@ const initializeConsent = () => {
   return initialization;
 };
 
+/** Publish current category choices to Google consent mode and the shared consent bridge. */
 const synchronizeConsent = () => {
   const consent = {
     preferences: CookieConsent.acceptedCategory("preferences"),
@@ -97,6 +103,7 @@ const synchronizeConsent = () => {
   );
 };
 
+/** Queue a minimal anonymous receipt and notify other tabs independently of delivery. */
 const recordConsent = () => {
   const cookie = CookieConsent.getCookie();
   if (!cookie.consentId) return;
@@ -107,29 +114,19 @@ const recordConsent = () => {
     consentTimestamp: cookie.lastConsentTimestamp ?? cookie.consentTimestamp,
     language: "en",
   });
-  try {
-    localStorage.setItem("tnr-consent-receipt", body);
-  } catch {
-    /* A choice still applies when browser storage is restricted. */
-  }
-  try {
-    // A receipt quota failure must not prevent other tabs from applying withdrawal.
-    localStorage.setItem(changeStorageKey, String(Date.now()));
-  } catch {
-    /* Receipt delivery remains available when the change signal cannot be stored. */
-  }
+  safeLocalStorageSetItem("tnr-consent-receipt", body);
+  // A receipt quota failure must not prevent other tabs from applying withdrawal.
+  safeLocalStorageSetItem(changeStorageKey, String(Date.now()));
   deliverReceipt(body);
 };
 
+/** Retry the latest bounded receipt after initialization or a restored connection. */
 const deliverPendingReceipt = () => {
-  try {
-    const body = localStorage.getItem("tnr-consent-receipt");
-    if (body && body.length <= 2048) deliverReceipt(body);
-  } catch {
-    /* Optional tracking remains independent of receipt availability. */
-  }
+  const body = safeLocalStorageGetItem("tnr-consent-receipt");
+  if (body && body.length <= 2048) deliverReceipt(body);
 };
 
+/** Clear a delivered receipt only when a newer choice has not replaced it. */
 const deliverReceipt = (body: string) => {
   void fetch(receiptEndpoint, {
     method: "POST",
@@ -142,12 +139,8 @@ const deliverReceipt = (body: string) => {
   })
     .then((response) => {
       if (!response.ok) return;
-      try {
-        if (localStorage.getItem("tnr-consent-receipt") === body)
-          localStorage.removeItem("tnr-consent-receipt");
-      } catch {
-        /* Delivery succeeded even if storage became unavailable. */
-      }
+      if (safeLocalStorageGetItem("tnr-consent-receipt") === body)
+        safeLocalStorageRemoveItem("tnr-consent-receipt");
     })
     .catch(() => {});
 };
