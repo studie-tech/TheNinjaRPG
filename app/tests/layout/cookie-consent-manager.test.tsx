@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "bun:test";
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import * as CookieConsent from "vanilla-cookieconsent";
 import * as NativeShell from "@/hooks/useNativeShell";
 import { CookieConsentManager } from "@/layout/CookieConsentManager";
@@ -11,12 +11,18 @@ afterEach(() => {
   localStorage.clear();
 });
 
-it("signals other tabs and delivers consent when receipt storage exceeds quota", () => {
+it("synchronizes saved consent once and signals changes when receipt storage exceeds quota", async () => {
   vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(false);
-  // Keep initialization pending so this test exercises only the registered choice callback.
-  const initialize = vi
-    .spyOn(CookieConsent, "run")
-    .mockImplementation(() => new Promise(() => {}));
+  let finishInitialization: () => void = () => {};
+  const initialize = vi.spyOn(CookieConsent, "run").mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finishInitialization = resolve;
+      }),
+  );
+  vi.spyOn(CookieConsent, "validConsent").mockReturnValue(true);
+  vi.spyOn(CookieConsent, "acceptedCategory").mockReturnValue(false);
+  const signal = vi.spyOn(window, "dispatchEvent").mockReturnValue(true);
   const cookie = {
     categories: ["necessary"],
     revision: 2,
@@ -42,6 +48,14 @@ it("signals other tabs and delivers consent when receipt storage exceeds quota",
 
   render(<CookieConsentManager />);
   expect(initialize).toHaveBeenCalledTimes(1);
+  // Saved choices invoke onConsent before the manager's initialization resolves.
+  await act(async () => {
+    initialize.mock.calls[0]?.[0]?.onConsent?.({ cookie });
+    finishInitialization();
+  });
+  expect(
+    signal.mock.calls.filter(([event]) => event.type === "CookiebotOnConsentReady"),
+  ).toHaveLength(1);
   initialize.mock.calls[0]?.[0]?.onFirstConsent?.({ cookie });
 
   expect(write).toHaveBeenCalledWith("tnr-consent-receipt", expect.any(String));

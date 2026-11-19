@@ -58,7 +58,8 @@ const initializeConsent = () => {
       }
     },
   }).then(() => {
-    synchronizeConsent();
+    // Saved choices already synchronize through onConsent.
+    if (!CookieConsent.validConsent()) synchronizeConsent();
     deliverPendingReceipt();
     window.addEventListener("online", deliverPendingReceipt);
     window.addEventListener("storage", (event) => {
