@@ -507,7 +507,7 @@ export const useRequireInVillage = (
     // Relocation must reconcile the profile before choosing its destination or checking access.
     if (!enabled) return;
     if (userData && redirectTo) {
-      void router.push(redirectTo);
+      void router.replace(redirectTo);
       return;
     }
     if (userData && isSectorKnown) {

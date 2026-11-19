@@ -13,7 +13,11 @@ import * as client from "@/app/_trpc/client";
 import * as sector from "@/hooks/useSectorVillage";
 import * as pusher from "@/layout/PusherHandler";
 import * as userContext from "@/utils/UserContext";
-import { UserContextProvider, useRequiredUserDataSelector, useRequireInVillage } from "@/utils/UserContext";
+import {
+  UserContextProvider,
+  useRequiredUserDataSelector,
+  useRequireInVillage,
+} from "@/utils/UserContext";
 import { actualUserContext } from "../setup/preload";
 
 type Snapshot = {
@@ -33,9 +37,15 @@ beforeEach(() => {
   replace.mockClear();
   window.history.replaceState(null, "", "/travel?sector=4");
   // Bun retains partial module mocks from UI suites; access checks need real profile observers.
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(actualUserContext.useRequiredUserData);
-  vi.spyOn(userContext, "useRequiredUserDataSelector").mockImplementation(actualUserContext.useRequiredUserDataSelector);
-  vi.spyOn(userContext, "useUserDataSelector").mockImplementation(actualUserContext.useUserDataSelector);
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+    actualUserContext.useRequiredUserData,
+  );
+  vi.spyOn(userContext, "useRequiredUserDataSelector").mockImplementation(
+    actualUserContext.useRequiredUserDataSelector,
+  );
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation(
+    actualUserContext.useUserDataSelector,
+  );
   vi.spyOn(trpc, "getQueryKey").mockReturnValue(key);
   vi.spyOn(pusher, "usePusherHandler").mockReturnValue(undefined);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ replace } as never);
@@ -134,31 +144,80 @@ describe("useRequiredUserDataSelector", () => {
 });
 
 describe("useRequireInVillage", () => {
-  const VillageConsumer = ({ enabled = true, redirectTo }: { enabled?: boolean; redirectTo?: string }) => {
+  const VillageConsumer = ({
+    enabled = true,
+    redirectTo,
+  }: {
+    enabled?: boolean;
+    redirectTo?: string;
+  }) => {
     const { access } = useRequireInVillage("/hospital", { enabled, redirectTo });
     return <span>{access ? "Allowed" : "Waiting"}</span>;
   };
 
-  it.each([false, true])("preserves ordinary hospital access for outlaw=%s", async isOutlaw => {
-    vi.spyOn(sector, "useSectorVillage").mockReturnValue({ sectorVillage: undefined, isLoading: false } as never);
-    const view = await mount({ isLoaded: true, isSignedIn: true }, { serverTime: 0, notifications: [], userData: { userId: "required-test", isOutlaw } }, undefined, true, <VillageConsumer />);
-    if (isOutlaw) {
-      await waitFor(() => expect(view.getByText("Allowed")).toBeDefined());
-      expect(replace).not.toHaveBeenCalled();
-    } else {
-      expect(replace).toHaveBeenCalledWith("/");
-    }
-  });
+  it.each([false, true])(
+    "preserves ordinary hospital access for outlaw=%s",
+    async (isOutlaw) => {
+      vi.spyOn(sector, "useSectorVillage").mockReturnValue({
+        sectorVillage: undefined,
+        isLoading: false,
+      } as never);
+      const view = await mount(
+        { isLoaded: true, isSignedIn: true },
+        {
+          serverTime: 0,
+          notifications: [],
+          userData: { userId: "required-test", isOutlaw },
+        },
+        undefined,
+        true,
+        <VillageConsumer />,
+      );
+      if (isOutlaw) {
+        await waitFor(() => expect(view.getByText("Allowed")).toBeDefined());
+        expect(replace).not.toHaveBeenCalled();
+      } else {
+        expect(replace).toHaveBeenCalledWith("/");
+      }
+    },
+  );
 
-  it.each([false, true])("waits for recovery then prioritizes confirmed relocation for outlaw=%s", async isOutlaw => {
-    vi.spyOn(sector, "useSectorVillage").mockReturnValue({ sectorVillage: undefined, isLoading: false } as never);
-    let enabled = false;
-    const Relocation = () => <VillageConsumer enabled={enabled} redirectTo={enabled ? "/shrine" : undefined} />;
-    const view = await mount({ isLoaded: true, isSignedIn: true }, { serverTime: 0, notifications: [], userData: { userId: "required-test", isOutlaw } }, undefined, true, <Relocation />);
-    expect(replace).not.toHaveBeenCalled();
-    enabled = true;
-    view.rerender(<QueryClientProvider client={clients[clients.length - 1]!}><UserContextProvider initialIsSignedIn><Relocation /></UserContextProvider></QueryClientProvider>);
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/shrine"));
-    expect(replace).not.toHaveBeenCalledWith("/");
-  });
+  it.each([false, true])(
+    "waits for recovery then prioritizes confirmed relocation for outlaw=%s",
+    async (isOutlaw) => {
+      vi.spyOn(sector, "useSectorVillage").mockReturnValue({
+        sectorVillage: undefined,
+        isLoading: false,
+      } as never);
+      let enabled = false;
+      const Relocation = () => (
+        <VillageConsumer
+          enabled={enabled}
+          redirectTo={enabled ? "/shrine" : undefined}
+        />
+      );
+      const view = await mount(
+        { isLoaded: true, isSignedIn: true },
+        {
+          serverTime: 0,
+          notifications: [],
+          userData: { userId: "required-test", isOutlaw },
+        },
+        undefined,
+        true,
+        <Relocation />,
+      );
+      expect(replace).not.toHaveBeenCalled();
+      enabled = true;
+      view.rerender(
+        <QueryClientProvider client={clients[clients.length - 1]!}>
+          <UserContextProvider initialIsSignedIn>
+            <Relocation />
+          </UserContextProvider>
+        </QueryClientProvider>,
+      );
+      await waitFor(() => expect(replace).toHaveBeenCalledWith("/shrine"));
+      expect(replace).not.toHaveBeenCalledWith("/");
+    },
+  );
 });

@@ -7,8 +7,8 @@ import Shrine from "@/app/[shell]/shrine/page";
 import { MAP_RESERVED_SECTORS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import * as contentBox from "@/layout/ContentBox";
 import * as countdown from "@/layout/Countdown";
-import * as silo from "@/layout/ResourceSilo";
 import * as ramen from "@/layout/RamenShop";
+import * as silo from "@/layout/ResourceSilo";
 import * as warField from "@/layout/WarFieldActions";
 import { defaultWarRules } from "@/validators/war";
 import { mockUserContextValue } from "../../setup/userContext";
@@ -285,14 +285,19 @@ describe("shrine page war affiliation", () => {
   );
 });
 
-
 describe("War-Torn shrine resource silo", () => {
   it("shows the silo on the ordinary shrine path only in sector 335", () => {
     sectorNumber = 335;
     sectorData.warData = [];
+    mockUserContextValue({
+      data: { userId: "viewer", villageId, sector: sectorNumber, status: "AWAKE" },
+    });
     const view = render(<Shrine />);
     expect(view.getByText("Resource Silo panel")).toBeDefined();
     sectorNumber = 334;
+    mockUserContextValue({
+      data: { userId: "viewer", villageId, sector: sectorNumber, status: "AWAKE" },
+    });
     view.rerender(<Shrine />);
     expect(view.queryByText("Resource Silo panel")).toBeNull();
   });

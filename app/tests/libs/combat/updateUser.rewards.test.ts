@@ -8,8 +8,8 @@ import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
 import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import type { PusherClient } from "@/libs/pusher";
-import * as time from "@/utils/time";
 import * as quest from "@/libs/quest";
+import * as time from "@/utils/time";
 import {
   makeBattleUser,
   makeBattleUserItem,
@@ -489,26 +489,47 @@ describeWithDatabase("combat player settlement rewards", () => {
   });
 });
 
-
 describeWithDatabase("resource silo combat settlement", () => {
   beforeEach(async () => {
     await resetTables(battle, userJutsu, jutsu, userItem, item, userData);
-    await insertUsers([{ userId: "player", username: "player", status: "BATTLE", battleId: "rewards", regeneration: 0 }]);
+    await insertUsers([
+      {
+        userId: "player",
+        username: "player",
+        status: "BATTLE",
+        battleId: "rewards",
+        regeneration: 0,
+      },
+    ]);
   });
   afterEach(() => vi.restoreAllMocks());
 
   it("credits the battle's window once within the existing write phase", async () => {
-    const active = { active: true, id: "2026-11-13T12:00:00.000Z", start: new Date(), end: new Date(), next: new Date() };
+    const active = {
+      active: true,
+      id: "2026-11-13T12:00:00.000Z",
+      start: new Date(),
+      end: new Date(),
+      next: new Date(),
+    };
     vi.spyOn(time, "getResourceSiloWindow").mockReturnValue(active);
     const state = scenario("COMBAT", { sector: 335 });
     state.usersState[1]!.isAi = false;
     state.extraState.resourceSiloWindowId = active.id;
     const first = await settle(state);
-    expect(first.statements.filter((statement) => /^select\b/i.test(statement))).toHaveLength(0);
+    expect(
+      first.statements.filter((statement) => /^select\b/i.test(statement)),
+    ).toHaveLength(0);
     const db = await getTestDatabase();
-    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "player") }))?.resourceSiloProgress).toEqual({ windowId: active.id, points: 10, claimed: false });
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, "player") }))
+        ?.resourceSiloProgress,
+    ).toEqual({ windowId: active.id, points: 10, claimed: false });
     await settle(state);
-    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "player") }))?.resourceSiloProgress?.points).toBe(10);
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, "player") }))
+        ?.resourceSiloProgress?.points,
+    ).toBe(10);
   });
 
   it("preserves the War-Torn death choice at the village hospital", async () => {
@@ -518,7 +539,9 @@ describeWithDatabase("resource silo combat settlement", () => {
     state.extraState.villages = { red: { id: "red", sector: 77 } } as never;
     await settle(state, { didWin: 0, outcome: "Lost" });
     const db = await getTestDatabase();
-    const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "player") });
+    const saved = await db.query.userData.findFirst({
+      where: eq(userData.userId, "player"),
+    });
     expect(saved?.warTornRespawn).toBe(true);
     expect(saved?.status).toBe("HOSPITALIZED");
     expect(saved?.sector).toBe(77);
