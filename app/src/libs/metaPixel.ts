@@ -20,6 +20,8 @@ declare global {
   }
 }
 
+const MAX_SCRIPT_LOAD_ATTEMPTS = 2;
+
 const canTrack = () =>
   typeof window !== "undefined" &&
   hasCookieConsent("marketing") &&
@@ -30,6 +32,7 @@ export const createMetaPixelTracker = (pixelId: string) => {
   let enabled = false;
   let ready = false;
   let initialized = false;
+  let scriptLoadAttempts = 0;
   let script: HTMLScriptElement | undefined;
   let lastPath: string | undefined;
   const delivered = new Set<string>();
@@ -65,10 +68,44 @@ export const createMetaPixelTracker = (pixelId: string) => {
     }
   };
 
+  const loadScript = () => {
+    if (
+      !enabled ||
+      !canTrack() ||
+      ready ||
+      script ||
+      scriptLoadAttempts >= MAX_SCRIPT_LOAD_ATTEMPTS
+    )
+      return;
+    scriptLoadAttempts += 1;
+    const loadingScript = document.createElement("script");
+    script = loadingScript;
+    loadingScript.async = true;
+    loadingScript.src = "https://connect.facebook.net/en_US/fbevents.js";
+    loadingScript.dataset.tnrMetaPixel = pixelId;
+    loadingScript.onload = () => {
+      if (script !== loadingScript) return;
+      ready = true;
+      flush();
+      window.dispatchEvent(new window.Event(META_READY_EVENT));
+    };
+    loadingScript.onerror = () => {
+      if (script !== loadingScript) return;
+      loadingScript.remove();
+      script = undefined;
+      // A later eligible event can retry once; failed loads never retain stale events.
+      pending.clear();
+      lastPath = undefined;
+    };
+    document.head.append(loadingScript);
+  };
+
   const send = (key: string, name: string, custom = false, eventId?: string) => {
     if (!enabled || !canTrack() || delivered.has(key)) return;
+    if (!ready && !script && scriptLoadAttempts >= MAX_SCRIPT_LOAD_ATTEMPTS) return;
     if (!pending.has(key))
       pending.set(key, { name, custom, id: eventId ?? crypto.randomUUID() });
+    loadScript();
     flush();
   };
 
@@ -101,24 +138,7 @@ export const createMetaPixelTracker = (pixelId: string) => {
       }
       if (!command("consent", "grant")) return;
       if (window.fbq.callMethod) ready = true;
-      if (!ready && !script) {
-        script = document.createElement("script");
-        script.async = true;
-        script.src = "https://connect.facebook.net/en_US/fbevents.js";
-        script.dataset.tnrMetaPixel = pixelId;
-        script.onload = () => {
-          ready = true;
-          flush();
-          window.dispatchEvent(new window.Event(META_READY_EVENT));
-        };
-        script.onerror = () => {
-          script?.remove();
-          script = undefined;
-          pending.clear();
-          lastPath = undefined;
-        };
-        document.head.append(script);
-      }
+      loadScript();
       flush();
     },
     disable: () => {
@@ -128,7 +148,9 @@ export const createMetaPixelTracker = (pixelId: string) => {
       if (initialized) command("consent", "revoke");
     },
     pageView: (pathname: string) => {
-      if (!enabled || !canTrack() || pathname === lastPath) return;
+      if (!enabled || !canTrack()) return;
+      loadScript();
+      if (pathname === lastPath) return;
       lastPath = pathname;
       // Query strings, route parameters and document content are not custom parameters.
       send(`page:${crypto.randomUUID()}`, "PageView");

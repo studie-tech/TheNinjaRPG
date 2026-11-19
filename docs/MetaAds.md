@@ -29,6 +29,9 @@ Automatic CAPI enrollment with Meta, automatic configuration, history tracking,
 automatic advanced matching and inferred events must remain disabled. Do not install
 this dataset again in GTM or an event setup tool.
 
+The browser SDK makes at most two load attempts per document. A later eligible event
+can trigger one retry after a failed load; every attempt checks current consent.
+
 ## Events and delivery
 
 | Event | Source | Purpose |

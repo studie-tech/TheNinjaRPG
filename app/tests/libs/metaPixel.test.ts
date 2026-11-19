@@ -140,6 +140,52 @@ describe("Meta acquisition tracking", () => {
     expect(document.querySelectorAll("script[data-tnr-meta-pixel]")).toHaveLength(1);
   });
 
+  it("retries a failed load on the next eligible event without changing conversion IDs", () => {
+    grant();
+    const pixel = createMetaPixelTracker("12345");
+    const receipt = "11f90b37-6015-4361-8c51-fbfcccb92b43";
+    pixel.enable();
+    pixel.pageView("/");
+    pixel.confirmedConversion("register", receipt);
+    const failed = document.querySelector("script[data-tnr-meta-pixel]");
+    failed?.dispatchEvent(new window.Event("error"));
+    expect(document.querySelector("script[data-tnr-meta-pixel]")).toBeNull();
+    pixel.pageView("/");
+    expect(document.querySelector("script[data-tnr-meta-pixel]")).not.toBeNull();
+    expect(document.querySelector("script[data-tnr-meta-pixel]")).not.toBe(failed);
+    const send = load();
+    pixel.confirmedConversion("register", receipt);
+    pixel.confirmedConversion("register", receipt);
+    expect(send.mock.calls.map((call) => call[2])).toEqual([
+      "PageView",
+      "CompleteRegistration",
+    ]);
+    expect(send.mock.calls[1]?.[4]).toEqual({ eventID: receipt });
+  });
+
+  it("stops after two script attempts and does not retry after withdrawal", () => {
+    grant();
+    const pixel = createMetaPixelTracker("12345");
+    pixel.enable();
+    document
+      .querySelector("script[data-tnr-meta-pixel]")
+      ?.dispatchEvent(new window.Event("error"));
+    window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+    pixel.pageView("/profile");
+    pixel.existingPlayer();
+    expect(document.querySelector("script[data-tnr-meta-pixel]")).toBeNull();
+    pixel.disable();
+    grant();
+    pixel.enable();
+    document
+      .querySelector("script[data-tnr-meta-pixel]")
+      ?.dispatchEvent(new window.Event("error"));
+    pixel.pageView("/profile");
+    pixel.existingPlayer();
+    pixel.enable();
+    expect(document.querySelector("script[data-tnr-meta-pixel]")).toBeNull();
+  });
+
   it("does not initialize in native webviews or with invalid configuration", () => {
     grant();
     Object.defineProperty(navigator, "userAgent", {
