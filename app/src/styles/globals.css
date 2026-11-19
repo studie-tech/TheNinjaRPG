@@ -241,42 +241,6 @@
     @apply bg-slate-900 text-foreground;
   }
 
-  /* Force cookiebot to be bottom also on mobile for landing page optimization */
-  @media (max-width: 1279px) {
-    #CybotCookiebotDialog.CybotEdge #CybotCookiebotDialogHeader {
-      display: none !important;
-    }
-    #CybotCookiebotDialog[data-template="bottom"] {
-      top: 100% !important;
-      transform: translate(-50%, -100%) !important;
-      max-width: 100% !important;
-      width: 100% !important;
-    }
-    #CybotCookiebotDialog *,
-    #CybotCookiebotDialogBodyUnderlay * {
-      font-size: 10px !important;
-    }
-    #CybotCookiebotDialog {
-      border-radius: 0px !important;
-    }
-    #CybotCookiebotDialog.CybotEdge #CybotCookiebotDialogBodyEdgeMoreDetails {
-      margin: 0em 2em 0em 0em !important;
-    }
-    #CybotCookiebotDialog .CybotCookiebotDialogBodyBottomWrapper {
-      position: absolute !important;
-      top: 1em !important;
-    }
-    #CybotCookiebotDialog.CybotEdge
-      #CybotCookiebotDialogFooter
-      .CybotCookiebotDialogBodyButton,
-    #CybotCookiebotDialogBodyButtons
-      .CybotCookiebotDialogBodyButton:not(:last-of-type) {
-      font-size: 15px !important;
-    }
-    #CybotCookiebotDialogFooter .CybotCookiebotDialogBodyButton {
-      padding: 0.5em !important;
-    }
-  }
   em-emoji-picker {
     width: 100%;
     min-width: 300px;

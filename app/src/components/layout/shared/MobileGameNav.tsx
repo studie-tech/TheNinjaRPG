@@ -1,11 +1,14 @@
 "use client";
 
-import { Compass, House } from "lucide-react";
+import { Compass, Cookie, House } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
+import { useNativeShell } from "@/hooks/useNativeShell";
 import Link from "@/layout/Link";
+import { openCookieConsentDialog } from "@/libs/cookieConsent";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { MobileNavConfig } from "@/libs/mobileNavConfig";
 import { getNavOptionById } from "@/libs/mobileNavConfig";
+import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { cn } from "@/libs/shadui";
 
 interface MobileGameNavProps {
@@ -32,13 +35,14 @@ const MobileGameNavButton: React.FC<{
     <Link
       href={option.href}
       aria-label={option.name}
-      className="relative -top-2 flex justify-center"
+      className="relative -top-2 flex min-h-[44px] min-w-0 justify-center"
     >
-      <Icon className={mobileNavbarButtonClassName} />
+      <Icon className={cn(mobileNavbarButtonClassName, "max-w-full")} />
     </Link>
   );
 };
 
+/** Shared mobile shortcuts, a fixed web consent control and the raised location action. */
 export const MobileGameNav: React.FC<MobileGameNavProps> = ({
   mobileNavConfig,
   location,
@@ -46,20 +50,38 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
   mobileNavbarButtonClassName,
   className,
 }) => {
+  const isNativeShell = useNativeShell();
+  const showCookieSettings =
+    isNativeShell === false && !isNativeUserAgent(navigator.userAgent);
   const navRef = useRef<HTMLDivElement>(null);
   useBottomNavInset(navRef);
   return (
     <div
       ref={navRef}
       className={cn(
-        // Two left shortcuts share the width of the three on the right, keeping the raised
-        // centre button in the middle without an empty slot. The insets clear a landscape notch.
-        "grid grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr] items-center justify-center pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
+        // The fixed web consent control balances the configured shortcuts around the centre.
+        // Native clients keep two wider left slots; the insets clear a landscape notch.
+        "grid items-center justify-center pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
+        showCookieSettings ? "grid-cols-7" : "grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr]",
         className,
       )}
     >
+      {showCookieSettings && (
+        <Link
+          href="/consent"
+          aria-label="Cookie settings"
+          aria-haspopup="dialog"
+          title="Cookie settings"
+          className="relative -top-2 flex min-h-[44px] min-w-0 justify-center"
+          onClick={(event) => {
+            if (openCookieConsentDialog()) event.preventDefault();
+          }}
+        >
+          <Cookie className={cn(mobileNavbarButtonClassName, "max-w-full")} />
+        </Link>
+      )}
       {mobileNavConfig.left.map((optionId) => (
-        <div key={optionId}>
+        <div key={optionId} className="min-w-0">
           <MobileGameNavButton
             optionId={optionId}
             location={location}
@@ -89,7 +111,7 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
         </Link>
       )}
       {mobileNavConfig.right.map((optionId) => (
-        <div key={optionId}>
+        <div key={optionId} className="min-w-0">
           <MobileGameNavButton
             optionId={optionId}
             location={location}

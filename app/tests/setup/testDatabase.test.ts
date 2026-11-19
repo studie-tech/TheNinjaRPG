@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { expect, it, vi } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Pool, RowDataPacket } from "mysql2/promise";
 import { deferred } from "./deferred";
@@ -12,6 +12,123 @@ import {
 } from "./testDatabase";
 
 describeWithDatabase("SQL query recorder", () => {
+  it.each(["query", "execute"] as const)(
+    "retries an autocommit deadlock beneath one recorded %s submission",
+    async (method) => {
+      const driver = ((await getTestDatabase()) as unknown as { $client: Pool })
+        .$client;
+      const fail = () => {
+        throw new Error("Deadlock found when trying to get lock");
+      };
+      const transport = vi
+        .spyOn(driver.pool, method)
+        .mockImplementationOnce(fail)
+        .mockImplementationOnce(fail);
+      try {
+        const trace = await recordQueries(() =>
+          method === "query"
+            ? driver.query<RowDataPacket[]>("SELECT 1 AS recovered")
+            : driver.execute<RowDataPacket[]>("SELECT 1 AS recovered"),
+        );
+        expect(trace.result[0][0]?.recovered).toBe(1);
+        expect(transport).toHaveBeenCalledTimes(3);
+        expect(trace.statements).toEqual(["SELECT 1 AS recovered"]);
+        expect(trace.roundTrips).toBe(1);
+      } finally {
+        transport.mockRestore();
+      }
+    },
+  );
+
+  it("propagates an autocommit deadlock after three attempts", async () => {
+    const driver = ((await getTestDatabase()) as unknown as { $client: Pool }).$client;
+    const failure = new Error("Deadlock found when trying to get lock");
+    const transport = vi.spyOn(driver.pool, "query").mockImplementation(() => {
+      throw failure;
+    });
+    try {
+      await expect(driver.query("SELECT 1")).rejects.toBe(failure);
+      expect(transport).toHaveBeenCalledTimes(3);
+    } finally {
+      transport.mockRestore();
+    }
+  });
+
+  it.each([
+    ["query", false],
+    ["query", true],
+    ["execute", false],
+    ["execute", true],
+  ] as const)(
+    "does not replay a deadlocked %s batch (options: %s)",
+    async (method, asOptions) => {
+      const driver = ((await getTestDatabase()) as unknown as { $client: Pool })
+        .$client;
+      const failure = new Error("Deadlock found when trying to get lock");
+      const transport = vi.spyOn(driver.pool, method).mockImplementation(() => {
+        throw failure;
+      });
+      const statement =
+        "UPDATE fixture SET counter = counter + 1; UPDATE fixture SET counter = counter + 1";
+      try {
+        await expect(
+          method === "query"
+            ? asOptions
+              ? driver.query({ sql: statement })
+              : driver.query(statement)
+            : asOptions
+              ? driver.execute({ sql: statement })
+              : driver.execute(statement),
+        ).rejects.toBe(failure);
+        expect(transport).toHaveBeenCalledTimes(1);
+      } finally {
+        transport.mockRestore();
+      }
+    },
+  );
+
+  it("does not retry an ambiguous autocommit transport failure", async () => {
+    const driver = ((await getTestDatabase()) as unknown as { $client: Pool }).$client;
+    const failure = new Error("Connection lost");
+    const transport = vi.spyOn(driver.pool, "query").mockImplementation(() => {
+      throw failure;
+    });
+    try {
+      await expect(driver.query("SELECT 1")).rejects.toBe(failure);
+      expect(transport).toHaveBeenCalledTimes(1);
+    } finally {
+      transport.mockRestore();
+    }
+  });
+
+  it.each(["query", "execute"] as const)(
+    "does not replay a transaction's deadlocked %s statement",
+    async (method) => {
+      const driver = ((await getTestDatabase()) as unknown as { $client: Pool })
+        .$client;
+      const connection = await driver.getConnection();
+      const failure = new Error("Deadlock found when trying to get lock");
+      await connection.beginTransaction();
+      const transport = vi
+        .spyOn(connection.connection, method)
+        .mockImplementationOnce(() => {
+          throw failure;
+        });
+      try {
+        await expect(
+          method === "query"
+            ? connection.query("SELECT 1")
+            : connection.execute("SELECT 1"),
+        ).rejects.toBe(failure);
+        expect(transport).toHaveBeenCalledTimes(1);
+      } finally {
+        transport.mockRestore();
+        await connection.rollback();
+        connection.release();
+      }
+    },
+  );
+
   it("counts parallel requests once even when the local pool queues them", async () => {
     const database = await getTestDatabase();
     const acquired = deferred<void>();

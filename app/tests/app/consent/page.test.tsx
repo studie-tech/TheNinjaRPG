@@ -4,64 +4,66 @@ import CookieConsent from "@/app/[shell]/consent/page";
 import * as contentBox from "@/layout/ContentBox";
 
 beforeEach(() => {
-  vi.useFakeTimers();
   vi.spyOn(contentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));
 });
-
 afterEach(() => {
   cleanup();
-  vi.useRealTimers();
   vi.restoreAllMocks();
+  delete window.Cookiebot;
 });
 
-describe("cookie declaration loading", () => {
-  it("replaces loading with recovery when the script fails", () => {
+describe("first-party cookie settings", () => {
+  it("shows essential-only settings without contacting a hosted declaration", () => {
     render(<CookieConsent />);
-    fireEvent.error(document.getElementById("CookieDeclaration") as HTMLScriptElement);
     const screen = within(document.body);
-    expect(screen.queryByText("Loading consent data")).toBeNull();
-    expect(screen.getByRole("alert").textContent).toContain(
-      "Cookie settings unavailable",
+    expect(screen.getByText("Always enabled")).toBeTruthy();
+    expect(screen.getAllByText("Off")).toHaveLength(3);
+    expect(document.querySelector('script[src*="cookiebot"]')).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Change or withdraw consent" }));
+    expect(screen.getByRole("status").textContent).toContain(
+      "Optional tracking is off",
     );
-    expect(screen.getByRole("button", { name: "Reload page" })).toBeTruthy();
   });
-
-  it("stops waiting when the declaration never finishes", () => {
+  it("reopens preferences and reports the stored choices", () => {
+    const renew = vi.fn();
+    window.Cookiebot = {
+      consent: { preferences: false, statistics: true, marketing: false },
+      hasResponse: true,
+      renew,
+    };
     render(<CookieConsent />);
-    act(() => vi.advanceTimersByTime(30_000));
-    expect(within(document.body).getByRole("alert").textContent).toContain(
-      "Cookie settings unavailable",
+    const screen = within(document.body);
+    expect(screen.getAllByText("Enabled")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Change or withdraw consent" }));
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+  it("updates loading feedback when saved consent arrives after an early click", () => {
+    render(<CookieConsent />);
+    const screen = within(document.body);
+    fireEvent.click(screen.getByRole("button", { name: "Change or withdraw consent" }));
+    expect(screen.getByRole("status").textContent).toContain(
+      "Optional tracking is off",
     );
-    expect(within(document.body).queryByText("Loading consent data")).toBeNull();
-  });
 
-  it("reveals completed content and cancels the failure deadline", async () => {
-    render(<CookieConsent />);
-    const container = document.getElementById("CookiebotDeclaration") as HTMLDivElement;
-    vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
-      height: 200,
-    } as DOMRect);
-    await act(async () => {
-      const panel = document.createElement("div");
-      panel.id = "CookieDeclarationUserStatusPanel";
-      container.appendChild(panel);
+    const renew = vi.fn();
+    act(() => {
+      window.Cookiebot = {
+        consent: { preferences: false, statistics: true, marketing: true },
+        hasResponse: true,
+        renew,
+      };
+      window.dispatchEvent(new window.Event("CookiebotOnConsentReady"));
     });
-    act(() => vi.advanceTimersByTime(30_000));
-    expect(within(document.body).queryByRole("alert")).toBeNull();
-    expect(within(document.body).queryByText("Loading consent data")).toBeNull();
-    expect(
-      (document.getElementById("cookie-consent-mount") as HTMLDivElement).className,
-    ).not.toContain("opacity-0");
-  });
+    expect(screen.getAllByText("Enabled")).toHaveLength(2);
+    expect(screen.getByRole("status").textContent).toBe(
+      "Cookie settings could not open. Try again, or reload the page.",
+    );
 
-  it("removes pending content and timers when leaving the page", () => {
-    const view = render(<CookieConsent />);
-    const script = document.getElementById("CookieDeclaration") as HTMLScriptElement;
-    view.unmount();
-    expect(script.isConnected).toBe(false);
-    expect(script.onerror).toBeNull();
-    expect(vi.getTimerCount()).toBe(0);
+    fireEvent.click(screen.getByRole("button", { name: "Change or withdraw consent" }));
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });

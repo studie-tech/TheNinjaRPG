@@ -85,7 +85,7 @@ export const MobileNavSettings: React.FC = () => {
   return (
     <div className="space-y-4 p-3">
       <p className="text-muted-foreground text-sm">
-        Customize the 5 buttons shown in your mobile navigation bar. The center button
+        Customize the 5 shortcuts in your mobile navigation bar. The center button
         automatically shows Village or Travel based on your location. Note: If you
         configure Travel in a slot, it will be hidden when outside the village (since
         the center button already shows Travel in that case).

@@ -6,6 +6,8 @@ import { z } from "zod";
  * This way you can ensure the app isn't built with invalid env vars.
  */
 export const serverSchema = z.object({
+  // Server-side destination for the same-origin anonymous consent integration.
+  CONSENT_RECEIPTS_URL: z.url({ protocol: /^https$/ }).optional(),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PRICE_NORMAL: z.string().optional(),
@@ -149,6 +151,7 @@ export const serverSchema = z.object({
  * @type {{ [k in keyof z.infer<typeof serverSchema>]: z.infer<typeof serverSchema>[k] | undefined }}
  */
 export const serverEnv = {
+  CONSENT_RECEIPTS_URL: process.env.CONSENT_RECEIPTS_URL,
   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   STRIPE_PRICE_NORMAL: process.env.STRIPE_PRICE_NORMAL,
