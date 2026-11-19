@@ -15,12 +15,12 @@ const lightOnly =
 const themedFiles: Record<string, string[]> = {
   "components/ui/button.tsx": [],
   "layout/ClanSearchSelect.tsx": [],
-  // Battle logs use a fixed white reading surface with dark text and effect colors.
+  // Battle logs select a white or dark reading palette independently of the layout.
   "layout/CombatHistory.tsx": [
-    '?? "text-black"',
-    "border bg-white pt-2 text-black",
-    'isOpen && "bg-slate-100"',
-    "py-1 hover:bg-slate-100",
+    '"text-black group-data-[theme=dark]/combat-log:text-slate-100"',
+    ': "bg-white text-black"',
+    'isOpen && "bg-slate-100 group-data-[theme=dark]/combat-log:bg-slate-800"',
+    "py-1 hover:bg-slate-100 group-data-[theme=dark]/combat-log:hover:bg-slate-800",
   ],
   "layout/CombatTimeline.tsx": ['gray: "bg-gray-100"'],
   "layout/Pagination.tsx": [],
