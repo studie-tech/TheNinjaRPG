@@ -108,9 +108,14 @@ const recordConsent = () => {
   });
   try {
     localStorage.setItem("tnr-consent-receipt", body);
-    localStorage.setItem(changeStorageKey, String(Date.now()));
   } catch {
     /* A choice still applies when browser storage is restricted. */
+  }
+  try {
+    // A receipt quota failure must not prevent other tabs from applying withdrawal.
+    localStorage.setItem(changeStorageKey, String(Date.now()));
+  } catch {
+    /* Receipt delivery remains available when the change signal cannot be stored. */
   }
   deliverReceipt(body);
 };
