@@ -23,6 +23,7 @@ import {
   loadCombatant,
   preloadLobby,
 } from "../../../../libs/combat/helpers/preload";
+import { storedBattle } from "../../../../setup/battles";
 import {
   insertDefaultAiProfile,
   insertJutsus,
@@ -156,7 +157,7 @@ describeWithDatabase("combat lobby jutsu gates", () => {
     const lobbyEquipped = await equippedIds();
     expect(lobbyEquipped).toEqual([...VALID].sort());
     // Battle initiation keeps every jutsu the lobby equipped.
-    const stored = (await db.query.battle.findFirst({ where: eq(battle.id, BATTLE) }))!;
+    const stored = (await storedBattle(db, BATTLE))!;
     expect(stored.usersState[0]!.jutsus.map((owned) => owned.jutsuId).sort()).toEqual(
       lobbyEquipped,
     );
@@ -185,8 +186,7 @@ describeWithDatabase("combat lobby jutsu gates", () => {
     });
     await seedLobby();
     const api = await callerFor(combatRouter, USER);
-    const stored = async () =>
-      (await db.query.battle.findFirst({ where: eq(battle.id, BATTLE) }))!;
+    const stored = async () => (await storedBattle(db, BATTLE))!;
 
     const own = await api.updateCombatLoadout({
       battleId: BATTLE,
@@ -242,9 +242,7 @@ describeWithDatabase("combat lobby jutsu gates", () => {
         jutsuLoadout: "rules",
         aiProfileId: customAi ? "rules-own" : null,
       });
-      const savedBattle = (await db.query.battle.findFirst({
-        where: eq(battle.id, BATTLE),
-      }))!;
+      const savedBattle = (await storedBattle(db, BATTLE))!;
       expect(savedBattle.usersState[0]!.aiProfileId).toBe(
         customAi ? "rules-own" : "Default",
       );
@@ -300,9 +298,7 @@ describeWithDatabase("combat lobby jutsu gates", () => {
         jutsuLoadout: "rules",
         aiProfileId: customAi ? "rules-own" : null,
       });
-      const savedBattle = (await db.query.battle.findFirst({
-        where: eq(battle.id, BATTLE),
-      }))!;
+      const savedBattle = (await storedBattle(db, BATTLE))!;
       expect(savedBattle.usersState[0]!.aiProfileId).toBe(
         customAi ? "rules-own" : "Default",
       );

@@ -37,6 +37,7 @@ import { statSchema } from "@/validators/combat";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { withAfterTasks } from "../../../../setup/after";
+import { storedBattle } from "../../../../setup/battles";
 import { deferred } from "../../../../setup/deferred";
 import {
   insertDefaultAiProfile,
@@ -351,7 +352,7 @@ describeWithDatabase("arena readiness reads", () => {
           statement.includes("`Quest`.`hidden`"),
       ),
     ).toHaveLength(1);
-    const saved = (await client.query.battle.findFirst())!;
+    const saved = (await storedBattle(client))!;
     expect(saved.battleType).toBe("ARENA");
     expect(
       saved.usersState.find((user) => user.controllerId === userId)?.isAutoCombat,
@@ -415,7 +416,7 @@ describeWithDatabase("arena readiness reads", () => {
       if (status === "HOSPITALIZED") {
         expect(owner.curHealth).toBe(owner.maxHealth);
         expect(
-          (await client.query.battle.findFirst())?.usersState.find(
+          (await storedBattle(client))?.usersState.find(
             (user) => user.controllerId === userId,
           )?.curHealth,
         ).toBe(1000);
@@ -499,9 +500,8 @@ describeWithDatabase("arena readiness reads", () => {
       ).toEqual([expect.objectContaining({ userId, stat: "offence" })]);
       if (direct)
         expect(
-          (await client.query.battle.findFirst())?.extraState.profileCacheSnapshots?.[
-            userId
-          ]?.hadTrainingQueue,
+          (await storedBattle(client))?.extraState.profileCacheSnapshots?.[userId]
+            ?.hadTrainingQueue,
         ).toBe(true);
       expect(liveActivity.pushActivityUpdate).not.toHaveBeenCalled();
     });
@@ -625,7 +625,7 @@ describeWithDatabase("arena readiness reads", () => {
       finishesAt: past,
     });
     expect((await launch(client, { aiId, autoCombat: false })).success).toBe(true);
-    const saved = (await client.query.battle.findFirst())!;
+    const saved = (await storedBattle(client))!;
     const actor = saved.usersState.find((user) => user.controllerId === userId)!;
     expect(actor.curHealth).toBeGreaterThan(1);
     expect(!!actor.isAutoCombat).toBe(false);
@@ -938,7 +938,7 @@ describeWithDatabase("arena readiness reads", () => {
     expect((await launch(client, { aiId, stats: statSchema.parse({}) })).success).toBe(
       true,
     );
-    expect(await client.query.battle.findFirst()).toMatchObject({
+    expect(await storedBattle(client)).toMatchObject({
       battleType: "TRAINING",
     });
   });

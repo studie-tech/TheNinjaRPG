@@ -1,0 +1,1 @@
+ALTER TABLE `Battle` ADD `catalogs` MEDIUMBLOB;

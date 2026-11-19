@@ -134,6 +134,10 @@ import type {
   ActionReadiness,
   ActionReadinessWrite,
 } from "@/server/utils/actionReadiness";
+import {
+  packBattleExtraState,
+  unpackBattleExtraState,
+} from "@/server/utils/battleStorage";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import {
   elementalSnapshotConditions,
@@ -162,7 +166,13 @@ export const fetchBattle = async (client: DrizzleClient, battleId: string) => {
   if (!result) {
     return null;
   }
-  return result as CompleteBattle;
+  const { catalogs } = result;
+  // The freshly read row is reshaped in place rather than copied.
+  const row: Partial<Pick<typeof result, "catalogs">> &
+    Omit<typeof result, "catalogs"> = result;
+  delete row.catalogs;
+  row.extraState = unpackBattleExtraState(row.extraState, catalogs);
+  return row as CompleteBattle;
 };
 
 /**
@@ -452,7 +462,7 @@ export const updateBattleForUpdateCombatLoadout = (
     .set({
       usersState: userBattle.usersState,
       usersEffects: userBattle.usersEffects,
-      extraState: userBattle.extraState,
+      ...packBattleExtraState(userBattle.extraState),
       version: userBattle.version,
       createdAt: userBattle.createdAt,
       updatedAt: userBattle.updatedAt,
@@ -998,40 +1008,42 @@ export const insertBattleForCreateBattle = (
     groundEffects: groundEffects,
     width: gridSize.width,
     height: gridSize.height,
-    extraState: compactBattleCatalogs({
-      ...extraState,
-      profileCacheSnapshots,
-      pvpExperienceScaling,
-      energyRewardEligible: (previousBattleResults?.[0]?.count ?? 0) === 0,
-      energyRegeneration,
-      energyRegenerationPeriods,
-      energyCapacity,
-      jutsus: {
-        ...extraState.jutsus,
-        ...Object.fromEntries(injectableJutsus.map((j) => [j.id, j])),
-        [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU,
-      },
-      dmgConfig: dmgConfig,
-      sharedCooldowns,
-      settings: settings,
-      initialDurability: initialDurability,
-      hunting: info.hunting,
-      questBattleSource: info.questBattleSource,
-      warCamp: info.warCamp,
-      territoryWar: territoryWarEvent
-        ? {
-            id: territoryWarEvent.id,
-            competitors: territoryCompetitors,
-          }
-        : undefined,
-      raidQuestId: info.raidQuestId,
-      raidInitialBossHp: raidInitialBossHp,
-      raidStartBattleCount: Object.fromEntries(
-        raidParticipations.map((p) => [p.userId, p.battleCount]),
-      ),
-      sectorExclusiveRaids: sectorExclusiveRaids,
-      topPlayersLP: rankedTopPlayersLP,
-    }),
+    ...packBattleExtraState(
+      compactBattleCatalogs({
+        ...extraState,
+        profileCacheSnapshots,
+        pvpExperienceScaling,
+        energyRewardEligible: (previousBattleResults?.[0]?.count ?? 0) === 0,
+        energyRegeneration,
+        energyRegenerationPeriods,
+        energyCapacity,
+        jutsus: {
+          ...extraState.jutsus,
+          ...Object.fromEntries(injectableJutsus.map((j) => [j.id, j])),
+          [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU,
+        },
+        dmgConfig: dmgConfig,
+        sharedCooldowns,
+        settings: settings,
+        initialDurability: initialDurability,
+        hunting: info.hunting,
+        questBattleSource: info.questBattleSource,
+        warCamp: info.warCamp,
+        territoryWar: territoryWarEvent
+          ? {
+              id: territoryWarEvent.id,
+              competitors: territoryCompetitors,
+            }
+          : undefined,
+        raidQuestId: info.raidQuestId,
+        raidInitialBossHp: raidInitialBossHp,
+        raidStartBattleCount: Object.fromEntries(
+          raidParticipations.map((p) => [p.userId, p.battleCount]),
+        ),
+        sectorExclusiveRaids: sectorExclusiveRaids,
+        topPlayersLP: rankedTopPlayersLP,
+      }),
+    ),
     rewardScaling: rewardScaling,
     createdAt: startTime,
     updatedAt: startTime,

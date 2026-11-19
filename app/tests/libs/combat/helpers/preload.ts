@@ -22,6 +22,7 @@ import { processUsersForBattle } from "@/server/api/routers/combat";
 import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
 import { fetchUserJutsus } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
+import { unpackBattleExtraState } from "@/server/utils/battleStorage";
 import { makeBattleUser, makeUser, tableDefaults } from "../../../setup/combat";
 import { equipLimitFixture } from "../../../setup/jutsuEquipLimits";
 
@@ -253,7 +254,16 @@ export const fakeInitiationClient = (
     insert: (table: object) => ({
       values: async (value: unknown) => {
         onWrite?.();
-        if (table === battle) saved = value as CompleteBattle;
+        if (table === battle) {
+          // Combat reads the row back with its compressed catalogs folded in.
+          const { catalogs, ...row } = value as CompleteBattle & {
+            catalogs: Uint8Array;
+          };
+          saved = {
+            ...row,
+            extraState: unpackBattleExtraState(row.extraState, catalogs),
+          };
+        }
         return { rowsAffected: 1 };
       },
     }),

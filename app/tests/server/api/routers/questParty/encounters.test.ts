@@ -27,6 +27,7 @@ import { travelRouter } from "@/routers/travel";
 import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import { getTagSchema } from "@/validators/combat";
 import { AllObjectives } from "@/validators/objectives";
+import { storedBattle } from "../../../../setup/battles";
 import {
   insertDefaultAiProfile,
   insertJutsus,
@@ -164,7 +165,7 @@ describeWithDatabase("quest team encounter location claims", () => {
       ]),
     });
     expect((await leader.startEncounter({ partyId: party.id })).success).toBe(true);
-    const fight = (await client.query.battle.findFirst())!;
+    const fight = (await storedBattle(client))!;
     expect(fight.extraState.questBattleSource).toEqual({
       questId: "team-quest",
       objectiveId: "encounter",
@@ -347,7 +348,7 @@ describeWithDatabase("quest team encounter location claims", () => {
       ).rejects.toThrow("Publication unavailable");
       const [saved, fight, members] = await Promise.all([
         client.query.questParty.findFirst(),
-        client.query.battle.findFirst(),
+        storedBattle(client),
         client.query.userData.findMany(),
       ]);
       expect(fight).toBeDefined();

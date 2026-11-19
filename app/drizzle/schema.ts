@@ -211,6 +211,16 @@ export const vector = customType<{
   },
 });
 
+/** Binary bytes up to 16 MB; mysql2 decodes them to a Buffer, PlanetScale to a Uint8Array. */
+export const mediumBlob = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType() {
+    return "MEDIUMBLOB";
+  },
+  toDriver(value) {
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  },
+});
+
 export const gameAsset = mysqlTable(
   "GameAsset",
   {
@@ -619,6 +629,8 @@ export const battle = mysqlTable(
     usersEffects: json("usersEffects").$type<UserEffect[]>().notNull(),
     groundEffects: json("groundEffects").$type<GroundEffect[]>().notNull(),
     extraState: json("extraState").$type<ExtraState>().notNull(),
+    /** Gzipped JSON of the read-only extraState catalogs; null when extraState holds them. */
+    catalogs: mediumBlob("catalogs"),
     rewardScaling: double("rewardScaling").default(1).notNull(),
     version: int("version").default(1).notNull(),
     round: int("round").default(1).notNull(),
@@ -636,7 +648,8 @@ export const battle = mysqlTable(
     };
   },
 );
-export type Battle = InferSelectModel<typeof battle>;
+/** A loaded battle; `fetchBattle` folds the stored catalogs back into extraState. */
+export type Battle = Omit<InferSelectModel<typeof battle>, "catalogs">;
 
 export const battleAction = mysqlTable(
   "BattleAction",

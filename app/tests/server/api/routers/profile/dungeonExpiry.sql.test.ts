@@ -96,6 +96,21 @@ describeWithDatabase("profile dungeon expiry reconciliation", () => {
     ).toBe(false);
   });
 
+  it("expires a fighting run even when its battle catalogs cannot be decoded", async () => {
+    const db = await getTestDatabase();
+    await seedRun("FIGHTING", new Date(Date.now() - 1000));
+    await db
+      .update(battle)
+      .set({ catalogs: Buffer.from("invalid gzip") })
+      .where(eq(battle.id, "fight"));
+    const response = await (await callerFor(profileRouter, USER_ID)).getUser();
+    expect(response.userData).toMatchObject({ status: "AWAKE", battleId: null });
+    expect(await db.query.battle.findFirst()).toBeUndefined();
+    expect(await db.query.dungeonMember.findFirst()).toMatchObject({
+      activeUserId: null,
+    });
+  });
+
   it("returns the published battle and squad when a floor start wins the expiry claim", async () => {
     const db = await getTestDatabase();
     const run = await seedRun("LOBBY", new Date(Date.now() - 1000));

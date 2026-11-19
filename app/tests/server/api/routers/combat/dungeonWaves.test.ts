@@ -21,6 +21,7 @@ import { getBattleGrid } from "@/libs/combat/util";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { ActionUseSpecificJutsu } from "@/validators/ai";
+import { storedBattle } from "../../../../setup/battles";
 import { makeTag } from "../../../../setup/combat";
 import { insertFightingDungeonRun } from "../../../../setup/dungeon";
 import {
@@ -137,7 +138,7 @@ describeWithDatabase("dungeon wave preparation", () => {
         expect(await client.query.userItem.findMany()).toHaveLength(0);
       }
       vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-      const initial = (await client.query.battle.findFirst())!;
+      const initial = (await storedBattle(client))!;
       expect(
         (
           await client.query.userData.findFirst({
@@ -155,7 +156,7 @@ describeWithDatabase("dungeon wave preparation", () => {
       );
       let outcome: Awaited<ReturnType<typeof caller.getBattle>> | undefined;
       for (let turn = 0; turn < 16; turn++) {
-        const saved = await client.query.battle.findFirst();
+        const saved = await storedBattle(client);
         if (!saved) break;
         if (saved.activeUserId && MEMBERS.includes(saved.activeUserId))
           missed[saved.activeUserId] = (missed[saved.activeUserId] ?? 0) + 1;
@@ -244,7 +245,7 @@ describeWithDatabase("dungeon wave preparation", () => {
         ).success,
       ).toBe(true);
 
-      const saved = (await client.query.battle.findFirst())!;
+      const saved = (await storedBattle(client))!;
       const opening = saved.usersState.find(
         (user) => user.controllerId === OPENER && !user.isSummon,
       )!;
@@ -415,7 +416,7 @@ describeWithDatabase("dungeon wave preparation", () => {
       ).toBe(true);
 
       // Read the persisted preload, rather than constructing a template in the test.
-      const saved = (await client.query.battle.findFirst())!;
+      const saved = (await storedBattle(client))!;
       saved.round = 1;
       if (wave === "later") {
         saved.usersState.find((u) => u.isAi && !u.isSummon)!.curHealth = 0;

@@ -16,6 +16,7 @@ import { petsRouter } from "@/server/api/routers/pets";
 import type { DrizzleClient } from "@/server/db";
 import { petJutsuFixture } from "../../../../libs/pets/helpers/abilities";
 import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
+import { storedBattle } from "../../../../setup/battles";
 import { deferred } from "../../../../setup/deferred";
 import {
   insertDefaultAiProfile,
@@ -105,7 +106,7 @@ describeWithDatabase("companion battle preload consistency", () => {
     expect(
       jutsuReads.mock.calls.some(([options]) => typeof options?.where === "function"),
     ).toBe(false);
-    const saved = (await database.query.battle.findFirst())!;
+    const saved = (await storedBattle(database))!;
     expect(saved.usersState.filter((actor) => actor.petId)).toHaveLength(0);
     expect(saved.extraState.petIdsByOwner).toEqual({});
     expect(
@@ -129,7 +130,7 @@ describeWithDatabase("companion battle preload consistency", () => {
       ).toBe(true);
     });
     expect((await startBattle(client)).success).toBe(true);
-    const saved = (await database.query.battle.findFirst())!;
+    const saved = (await storedBattle(database))!;
     const pets = saved.usersState.filter((actor) => actor.petId);
     expect(pets).toHaveLength(1);
     expect(pets[0]).toMatchObject({ petId: "second", controllerId: ownerId });
@@ -156,7 +157,7 @@ describeWithDatabase("companion battle preload consistency", () => {
           )
           .where(eq(userPet.id, "first"));
       expect((await startBattle(database)).success).toBe(true);
-      const saved = (await database.query.battle.findFirst())!;
+      const saved = (await storedBattle(database))!;
       expect(saved.usersState.filter((actor) => actor.petId)).toHaveLength(0);
       expect(saved.extraState.petIdsByOwner).toEqual({});
     },
@@ -201,7 +202,7 @@ describeWithDatabase("companion battle preload consistency", () => {
         expect(result.success).toBe(true);
       });
       expect((await startBattle(client)).success).toBe(true);
-      const saved = (await database.query.battle.findFirst())!;
+      const saved = (await storedBattle(database))!;
       expect(
         saved.usersState.filter((actor) => actor.petId).map((actor) => actor.petId),
       ).toEqual(operation === "release active" ? [] : ["first"]);
@@ -244,7 +245,7 @@ describeWithDatabase("companion battle preload consistency", () => {
       })
       .where(eq(userData.userId, ownerId));
     expect((await startBattle(database)).success).toBe(true);
-    const saved = (await database.query.battle.findFirst())!;
+    const saved = (await storedBattle(database))!;
     expect(saved.usersState.some((actor) => actor.petId)).toBe(false);
     expect(saved.extraState.petIdsByOwner).toEqual({});
   });

@@ -41,6 +41,7 @@ import {
   loadCombatant,
   preloadLobby,
 } from "../../../../libs/combat/helpers/preload";
+import { storedBattle } from "../../../../setup/battles";
 import { makeCompleteBattle } from "../../../../setup/combat";
 import {
   insertDefaultAiProfile,
@@ -196,9 +197,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
         .update(item)
         .set({ requiredNinjutsuMastery: 500 })
         .where(eq(item.id, "armor"));
-      const initial = (await db.query.battle.findFirst({
-        where: eq(battle.id, BATTLE),
-      }))!;
+      const initial = (await storedBattle(db, BATTLE))!;
       expect(initial.usersState[0]!.ninjutsuMastery).toBe(500);
       expect(initial.usersState[0]).not.toHaveProperty("titles");
       // Battle JSON retains the pre-combat status and serializes dates as strings.
@@ -237,9 +236,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
         expect(result.success).toBe(true);
         expect(result.message).toBe("");
         expect(await equippedIds()).toEqual(["gated", "usable"]);
-        const updated = (await db.query.battle.findFirst({
-          where: eq(battle.id, BATTLE),
-        }))!;
+        const updated = (await storedBattle(db, BATTLE))!;
         expect(updated.usersState[0]).toMatchObject({
           curHealth: 50,
           curChakra: 40,
@@ -293,9 +290,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
       },
     ]);
     const db = await getTestDatabase();
-    const initial = (await db.query.battle.findFirst({
-      where: eq(battle.id, BATTLE),
-    }))!;
+    const initial = (await storedBattle(db, BATTLE))!;
     expect(initial.usersState[0]).not.toHaveProperty("raidBuffs");
     expect(
       initial.usersEffects.filter((effect) => effect.timedBuffExpiresAt),
@@ -314,9 +309,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
       expect(
         (await caller.updateCombatLoadout({ battleId: BATTLE, itemLoadoutId })).success,
       ).toBe(true);
-      const updated = (await db.query.battle.findFirst({
-        where: eq(battle.id, BATTLE),
-      }))!;
+      const updated = (await storedBattle(db, BATTLE))!;
       expect(
         updated.usersEffects.filter((effect) => effect.timedBuffExpiresAt),
       ).toEqual(
@@ -400,7 +393,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
       .set({ usersState: processed.usersState, extraState: processed.extraState })
       .where(eq(battle.id, BATTLE));
     const assertCosmetics = async () => {
-      const stored = await db.query.battle.findFirst({ where: eq(battle.id, BATTLE) });
+      const stored = await storedBattle(db, BATTLE);
       if (!stored) throw new Error("Missing battle");
       const ref = stored.usersState[0]?.jutsus.find((row) => row.jutsuId === "usable");
       if (!ref) throw new Error("Missing learned jutsu");
@@ -424,9 +417,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
   it("preserves the initiating team and its faction credit when the initiator changes loadout", async () => {
     await seedLobby();
     const db = await getTestDatabase();
-    const initial = (await db.query.battle.findFirst({
-      where: eq(battle.id, BATTLE),
-    }))!;
+    const initial = (await storedBattle(db, BATTLE))!;
     initial.usersState[0]!.isAggressor = true;
     initial.usersState[0]!.direction = "left";
     await db
@@ -438,9 +429,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
       jutsuLoadoutId: "new-jutsus",
     });
     expect(result.success).toBe(true);
-    const updated = (await db.query.battle.findFirst({
-      where: eq(battle.id, BATTLE),
-    }))!;
+    const updated = (await storedBattle(db, BATTLE))!;
     expect(
       updated.usersState.find((member) => member.userId === USER)?.isAggressor,
     ).toBe(true);
@@ -534,9 +523,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
           await callerFor(combatRouter, change.userId)
         ).updateCombatLoadout({ battleId: BATTLE, jutsuLoadoutId: change.loadout });
         expect(result.success).toBe(true);
-        const stored = await db.query.battle.findFirst({
-          where: eq(battle.id, BATTLE),
-        });
+        const stored = await storedBattle(db, BATTLE);
         if (!stored) throw new Error("Missing battle");
         expect(stored.extraState.jutsus.usable?.name).toBe("Usable");
         for (const actor of stored.usersState) {
@@ -717,7 +704,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
         ).success,
       ).toBe(true);
       expect(await equippedIds()).toEqual(["gated", "usable"]);
-      const stored = await db.query.battle.findFirst({ where: eq(battle.id, BATTLE) });
+      const stored = await storedBattle(db, BATTLE);
       expect(
         stored?.usersState[0]?.jutsus.map((entry) => entry.jutsuId).sort(),
       ).toEqual(["gated", "usable"]);

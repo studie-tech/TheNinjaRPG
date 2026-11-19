@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import {
   aiProfile,
@@ -9,7 +10,9 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { fetchBattle } from "@/queries/combat";
 import { initiateBattle } from "@/server/api/routers/combat";
+import { packBattleExtraState } from "@/server/utils/battleStorage";
 import { ActionEndTurn } from "@/validators/ai";
 import { insertUsers } from "../../setup/factories";
 import {
@@ -84,7 +87,12 @@ describeWithDatabase("stored battle catalogs", () => {
         )
       ).success,
     ).toBe(true);
-    const stored = (await db.query.battle.findFirst())!;
+    const row = (await db.query.battle.findFirst())!;
+    // Builds that read only the JSON column must find the complete state there.
+    expect(row.catalogs).toBeNull();
+    const stored = (await fetchBattle(db, row.id))!;
+    expect(stored).not.toHaveProperty("catalogs");
+    expect(stored.extraState).toEqual(row.extraState);
     const { jutsus } = stored.extraState;
     expect(Object.keys(jutsus)).toEqual(
       expect.arrayContaining(["owned", "injectable", SAGE_MODE_ACTIVATION_JUTSU_ID]),
@@ -95,5 +103,48 @@ describeWithDatabase("stored battle catalogs", () => {
       expect(row).not.toHaveProperty("requiredSkillId");
     }
     expect(jutsus.gated?.requiredNinjutsuMastery).toBe(10);
+  });
+
+  it("loads a row with compressed catalogs exactly as its all-JSON form", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([
+      { userId: "player", username: "Player", rank: "JONIN", level: 50 },
+      {
+        userId: "ai",
+        username: "AI",
+        isAi: true,
+        inArena: true,
+        rank: "JONIN",
+        level: 50,
+      },
+    ]);
+    await db.insert(aiProfile).values({
+      id: "Default",
+      userId: "ai",
+      includeDefaultRules: false,
+      rules: [{ conditions: [], action: ActionEndTurn.parse({}) }],
+    });
+    await db
+      .insert(jutsu)
+      .values([jutsuRow("injectable", { injectableInBattle: true })]);
+    expect(
+      (
+        await initiateBattle(
+          { client: db, userIds: ["player"], targetIds: ["ai"] },
+          "ARENA",
+        )
+      ).success,
+    ).toBe(true);
+    const { id } = (await db.query.battle.findFirst())!;
+    const complete = (await fetchBattle(db, id))!;
+    await db
+      .update(battle)
+      .set(packBattleExtraState(complete.extraState, true))
+      .where(eq(battle.id, id));
+    const packed = (await db.query.battle.findFirst())!;
+    expect(packed.extraState).not.toHaveProperty("jutsus");
+    expect(packed.extraState).toHaveProperty("energyRegeneration");
+    expect(packed.catalogs?.byteLength).toBeGreaterThan(0);
+    expect(await fetchBattle(db, id)).toEqual(complete);
   });
 });

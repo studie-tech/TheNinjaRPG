@@ -39,6 +39,7 @@ import {
 } from "@/server/utils/questParty";
 import { AllObjectives, QuestTracker, QuestValidator } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { storedBattle } from "../../../../setup/battles";
 import { deferred } from "../../../../setup/deferred";
 import {
   insertDefaultAiProfile,
@@ -685,7 +686,7 @@ describeWithDatabase(
       const synchronized = await synchronizeQuestParty(client, concurrentSnapshot);
       expect(synchronized.memberIds).toEqual(["leader"]);
       expect(synchronized.battleId).toBeNull();
-      expect(await client.query.battle.findFirst()).toBeUndefined();
+      expect(await storedBattle(client)).toBeUndefined();
       expect((await leader.disband({ partyId: party.id })).success).toBe(true);
       expect(await client.query.questParty.findFirst()).toBeUndefined();
       expect(
@@ -2243,7 +2244,7 @@ describeWithDatabase(
         fresh.user?.questData?.find((entry) => entry.id === "team-quest")?.party?.id,
       ).toBe(party.id);
       expect((await leader.startEncounter({ partyId: party.id })).success).toBe(true);
-      const savedBattle = await client.query.battle.findFirst();
+      const savedBattle = await storedBattle(client);
       if (!savedBattle) throw new Error("Missing battle fixture");
       expect(
         savedBattle.extraState.userQuests.helper?.find(
@@ -2487,7 +2488,7 @@ describeWithDatabase(
                 positionVersion: 0,
               });
         expect(result.success).toBe(true);
-        const savedBattle = await client.query.battle.findFirst();
+        const savedBattle = await storedBattle(client);
         expect(
           savedBattle?.usersState.some(
             (entry) => entry.controllerId === "enemy-selected",

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { eq } from "drizzle-orm";
 import {
   aiProfile,
   battle,
@@ -22,6 +21,7 @@ import {
   loadCombatant,
   preloadLobby,
 } from "../../../../libs/combat/helpers/preload";
+import { storedBattle } from "../../../../setup/battles";
 import {
   insertDefaultAiProfile,
   insertItems,
@@ -136,7 +136,7 @@ const seedBattle = async () => {
 
 const loadBattle = async () => {
   const db = await getTestDatabase();
-  const stored = await db.query.battle.findFirst({ where: eq(battle.id, BATTLE) });
+  const stored = await storedBattle(db, BATTLE);
   if (!stored) throw new Error("Missing battle");
   return stored;
 };
