@@ -222,18 +222,19 @@ export const Bloodright = () => {
   );
 };
 
-/** Name the jutsu a path's stats apply to and summarise what its nodes cost. */
+/** Describe effective potency scopes and node costs without assuming how effects scale. */
 export const describeBloodright = (
   tiers: { effects: ZodAllTags[]; seichiSilverCost: number }[],
 ) => {
   const scopes = tiers.flatMap((tier) =>
     tier.effects.flatMap((effect) =>
-      effect.type === "increasepotency" || effect.type === "decreasepotency"
+      (effect.type === "increasepotency" || effect.type === "decreasepotency") &&
+      (effect.affectedTag !== "none" || effect.affectedElements.length > 0)
         ? [effect.affectedElements]
         : [],
     ),
   );
-  // An effect without elements applies to every jutsu, so the path is not element-bound.
+  // Effective potency without an element restriction can modify matching tags on any jutsu.
   const unrestricted = scopes.some((scope) => !scope.length);
   const elements = unrestricted
     ? []
@@ -248,9 +249,12 @@ export const describeBloodright = (
     low === high
       ? `Each node costs ${low.toLocaleString()} Seichi Silver`
       : `Nodes cost ${low.toLocaleString()} to ${high.toLocaleString()} Seichi Silver`;
+  const potency = scopes.length
+    ? `Effects modify the power of matching tags on ${jutsu ?? "all jutsu"}. `
+    : "";
   return {
     jutsu,
-    note: `Stats are added to matching tags on ${jutsu ?? "all jutsu"}. ${cost}; up to ${MAX_BLOODRIGHT_TIERS} active.`,
+    note: `${potency}${cost}; up to ${MAX_BLOODRIGHT_TIERS} active.`,
   };
 };
 
