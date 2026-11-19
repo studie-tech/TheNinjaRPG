@@ -30,7 +30,7 @@ const procedureSource = (router: string, name: string) => {
   const start = file.indexOf(`\n  ${name}: protectedProcedure`);
   expect(start).toBeGreaterThan(-1);
   const body = file.slice(start + 1);
-  const end = body.search(/\n  \w+: protectedProcedure/);
+  const end = body.search(/\n {2}\w+: protectedProcedure/);
   return end === -1 ? body : body.slice(0, end);
 };
 let identity = 0;

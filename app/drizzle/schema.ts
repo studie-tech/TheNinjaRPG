@@ -4443,6 +4443,8 @@ export const sector = mysqlTable(
   (table) => {
     return {
       sectorKey: uniqueIndex("Sector_sector_key").on(table.sector),
+      // Village territory lookups, including every profile read.
+      villageIdIdx: index("Sector_villageId_idx").on(table.villageId),
     };
   },
 );

@@ -521,7 +521,10 @@ export const getUseUnusedExperiencePointsUserUpdate = ({
 }: {
   data: AssignedExperiencePatch;
   resultClaimedAt: Date;
-  user: NonNullable<Awaited<ReturnType<typeof findUserDataForQueryUpdatedUser>>>;
+  user: Omit<
+    NonNullable<Awaited<ReturnType<typeof findUserDataForQueryUpdatedUser>>>,
+    "userQuests"
+  >;
 }) => {
   if (hasEnergyQueue(user)) return {};
   return {
