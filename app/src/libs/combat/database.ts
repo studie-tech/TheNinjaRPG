@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { buildCombatProfileUpdate, canCacheCombatCompletion } from "@/deltas/combat";
 import type { BattleType } from "@/drizzle/constants";
 import {
+  BALANCE_EXCLUSION_IDS,
   ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL,
   ELITE_JONIN_JUTSU_LEVEL_CAP,
   ELITE_JONIN_JUTSU_XP_TO_LEVEL,
@@ -20,6 +21,7 @@ import {
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
 import { type Battle, userData, userJutsu, war } from "@/drizzle/schema";
+import { getBalanceExclusion } from "@/libs/combat/balance";
 import {
   ITEM_BROKEN_NOTICE,
   ITEM_DURABILITY_CRITICAL_NOTICE,
@@ -430,7 +432,8 @@ export const updateBattle = async (
  * Insert battle actions, NPC template usage and head-to-head outcome samples for analytics.
  * NPC allies inherit their team's outcome; opposing NPCs reverse Won/Lost while
  * preserving Fled. Deduplicate by content and outcome so a template on both teams
- * retains both win/loss records.
+ * retains both win/loss records. Short battles and battles against an idle side only
+ * add one exclusion counter for the player (see getBalanceExclusion).
  */
 export const saveUsage = async (
   client: DrizzleClient,
@@ -463,6 +466,23 @@ export const saveUsage = async (
           ? (snapshot?.turnOrder ?? 0)
           : 0,
     };
+    // Short or idle battles only count as excluded, so staff can see the filter's effect.
+    const exclusion = getBalanceExclusion(curBattle, userId);
+    if (exclusion) {
+      if (!user.isAi && !user.isSummon) {
+        await insertDataBattleActionForSaveUsage(client, [
+          {
+            type: "participant",
+            contentId: BALANCE_EXCLUSION_IDS[exclusion],
+            battleType,
+            battleWon,
+            ...demographics,
+            turnOrder: 0,
+          },
+        ]);
+      }
+      return;
+    }
     // Only eligible head-to-head players contribute starting-order outcome samples.
     const data: DataBattleAction[] =
       !user.isAi &&

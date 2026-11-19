@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm"
 import { z } from "zod";
 import type { BattleType, RankedRank } from "@/drizzle/constants";
 import {
+  BALANCE_EXCLUSION_IDS,
   BattleDataEntryType,
   BattleTypes,
   ItemTypes,
@@ -40,6 +41,7 @@ import {
   selectBalanceArchivePage,
   selectBalanceArchives,
   selectBalanceContent,
+  selectBalanceExclusions,
   selectBalanceParticipants,
 } from "@/queries/balance";
 import { fetchBloodline } from "@/queries/bloodline";
@@ -748,11 +750,18 @@ export const dataRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const periodStart = getBalancePeriodStart();
-      const [content, participants] = await Promise.all([
+      const [content, participants, exclusionRows] = await Promise.all([
         selectBalanceContent(ctx.drizzle, input, periodStart),
         selectBalanceParticipants(ctx.drizzle, input, periodStart),
+        selectBalanceExclusions(ctx.drizzle, input, periodStart),
       ]);
-      return { periodStart, content, participants };
+      const excluded = (id: string) =>
+        exclusionRows.find((row) => row.contentId === id)?.count ?? 0;
+      const exclusions = {
+        short: excluded(BALANCE_EXCLUSION_IDS.short),
+        idle: excluded(BALANCE_EXCLUSION_IDS.idle),
+      };
+      return { periodStart, content, participants, exclusions };
     }),
   getBalanceArchives: publicProcedure.query(({ ctx }) =>
     selectBalanceArchives(ctx.drizzle),

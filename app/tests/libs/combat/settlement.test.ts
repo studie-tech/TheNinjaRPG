@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import * as nextServer from "next/server";
 import superjson from "superjson";
 import { captureCombatCacheSnapshot } from "@/deltas/combat";
+import { BALANCE_MIN_ROUNDS } from "@/drizzle/constants";
 import {
   aiProfile,
   battle,
@@ -63,6 +64,15 @@ import {
   resetTables,
 } from "../../setup/testDatabase";
 import { observeProfile, soloPveResult } from "./helpers/profileCache";
+
+/** Let the battle pass the balance activity filter: long enough, and every human acted. */
+const activate = (snapshot: CompleteBattle) => {
+  snapshot.round = BALANCE_MIN_ROUNDS;
+  for (const user of snapshot.usersState) {
+    if (!user.isAi && user.usedActions.length === 0)
+      user.usedActions.push({ id: "basicAttack", type: "basic" });
+  }
+};
 
 const trigger = vi.fn(async () => {});
 const pusher = { trigger } as unknown as PusherClient;
@@ -1061,6 +1071,7 @@ describeWithDatabase("CAS combat settlement", () => {
       winner: { level: 50, rank: "JONIN", turnOrder: 1 },
       loser: { level: 25, rank: "CHUNIN", turnOrder: 2 },
     };
+    activate(snapshot);
     const aligned = alignBattle(structuredClone(snapshot), [], "winner");
     expect(aligned.changedActor).toBe(false);
     expect(aligned.progressRound).toBe(false);
@@ -1122,6 +1133,7 @@ describeWithDatabase("CAS combat settlement", () => {
       snapshot.extraState.balanceParticipants!.winner!.turnOrder = 0;
     if (kind === "invalid order")
       snapshot.extraState.balanceParticipants!.winner!.turnOrder = 3;
+    activate(snapshot);
     const result = calcBattleResult(snapshot, "winner", []);
     expect(result?.outcome).toBe("Won");
     const database = await getTestDatabase();

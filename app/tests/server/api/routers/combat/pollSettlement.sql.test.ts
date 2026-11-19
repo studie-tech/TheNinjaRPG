@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import { BALANCE_MIN_ROUNDS } from "@/drizzle/constants";
 import {
   aiProfile,
   battle,
@@ -78,12 +79,16 @@ describeWithDatabase("getBattle settlement of a clan challenge", () => {
     const usersState = current.usersState.map((user: BattleUserState) => ({
       ...user,
       curHealth: user.userId === LEADER ? 0 : user.curHealth,
+      // Both fighters acted, so the duel passes the balance activity filter.
       usedActions:
         user.userId === CHALLENGER
           ? [{ id: "strike", type: "basic" as const }]
-          : user.usedActions,
+          : [{ id: "guard", type: "basic" as const }],
     }));
-    await db.update(battle).set({ usersState }).where(eq(battle.id, current.id));
+    await db
+      .update(battle)
+      .set({ usersState, round: BALANCE_MIN_ROUNDS })
+      .where(eq(battle.id, current.id));
     return { db, battleId: current.id };
   };
 

@@ -1249,6 +1249,30 @@ export const AutoCombatBattleTypes: BattleType[] = BattleTypes.filter(
 /** Length of a UTC balance reporting window. */
 export const BALANCE_PERIOD_DAYS = 14;
 
+/**
+ * Balance samples need the battle to reach this round when a player settles. Shorter
+ * fights (instant flees, one-turn knockouts of idle players) say little about content.
+ */
+export const BALANCE_MIN_ROUNDS = 3;
+
+/**
+ * Basic actions that do not show a player was playing. A participant whose only actions
+ * are these (or who let every turn time out) is idle, and a side where every human is
+ * idle keeps the whole battle out of the balance data.
+ */
+export const BALANCE_IDLE_ACTION_IDS: readonly string[] = ["wait", "flee"];
+
+/**
+ * `participant` rows with these content ids count settlements left out of the balance
+ * data, so staff can see the filter's effect. They carry turn order 0, so they are never
+ * read as head-to-head samples.
+ */
+export const BALANCE_EXCLUSION_IDS = {
+  short: "excluded-short",
+  idle: "excluded-idle",
+} as const;
+export type BalanceExclusion = keyof typeof BALANCE_EXCLUSION_IDS;
+
 export const BattleDataEntryType = [
   "jutsu",
   "item",
