@@ -1,4 +1,4 @@
-import { ChevronsDown } from "lucide-react";
+import { ChevronsDown, Moon } from "lucide-react";
 import type React from "react";
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { api } from "@/app/_trpc/client";
@@ -223,14 +223,18 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
     <div
       data-theme={isDarkLog ? "dark" : "light"}
       className={cn(
-        "group/combat-log relative flex flex-col overflow-auto rounded-lg border pt-2",
+        "group/combat-log relative flex min-h-12 flex-col overflow-auto rounded-lg border pt-2",
         isDarkLog
           ? "border-slate-700 bg-slate-950 text-slate-100"
           : "bg-white text-black",
       )}
     >
-      <div className="flex min-h-12 items-center gap-2 px-3 pb-2">
-        <label htmlFor={themeToggleId} className="cursor-pointer text-sm">
+      <div
+        className="absolute right-1 bottom-1 z-10 flex items-center rounded-md bg-inherit pl-2 shadow-sm"
+        title="Dark battle log"
+      >
+        <Moon aria-hidden="true" className="h-4 w-4" />
+        <label htmlFor={themeToggleId} className="sr-only">
           Dark battle log
         </label>
         <Switch
