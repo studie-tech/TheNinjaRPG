@@ -27,27 +27,24 @@ const image = z.union([
     }, "Use an uploaded game image from the game CDN"),
 ]);
 
-/** Staff-editable announcement board shared by the editor and content review desk. */
+/** One announcement, shared by staff editing and reviewed proposals. */
 export const splashSchema = z
   .object({
-    name: z.string().trim().min(1).max(100),
-    description: z.string().trim().max(300),
-    image,
-    enabled: z.boolean(),
-    startsAt: z.iso.datetime().nullable(),
-    endsAt: z.iso.datetime().nullable(),
-    cards: z
-      .array(
-        z.object({
-          title: z.string().trim().min(1).max(80),
-          body: z.string().trim().min(1).max(600),
-          image,
-          href: destination,
-          linkLabel: z.string().trim().min(1).max(60),
-        }),
-      )
+    topicKey: z
+      .string()
+      .trim()
       .min(1)
-      .max(6),
+      .max(100)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase words separated by hyphens"),
+    name: z.string().trim().min(1).max(100),
+    description: z.string().trim().min(1).max(600),
+    image,
+    href: destination,
+    linkLabel: z.string().trim().min(1).max(60),
+    priority: z.number().int().min(-1000).max(1000),
+    enabled: z.boolean(),
+    startsAt: z.iso.datetime().nullable().default(null),
+    endsAt: z.iso.datetime().nullable().default(null),
   })
   .refine(
     (data) =>
@@ -59,4 +56,5 @@ export const splashSchema = z
       path: ["endsAt"],
     },
   );
-export type SplashContent = z.infer<typeof splashSchema>;
+export type SplashFormInput = z.input<typeof splashSchema>;
+export type SplashInput = z.infer<typeof splashSchema>;

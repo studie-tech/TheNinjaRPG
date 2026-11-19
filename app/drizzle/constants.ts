@@ -378,6 +378,8 @@ export const ContentAuditFocuses = [
 export type ContentAuditFocus = (typeof ContentAuditFocuses)[number];
 /** Hours between scheduled audit runs; the cron in .github/workflows/content-audit.yml. */
 export const CONTENT_AUDIT_INTERVAL_HOURS = 3;
+/** Maximum number of live entries in the combined announcement and daily-reward dialog. */
+export const SPLASH_MAX_VISIBLE = 10;
 /** Rejected and outdated suggestions are removed this long after they were decided. */
 export const CONTENT_PROPOSAL_RETENTION_DAYS = 90;
 /** Suggestions resting on usage statistics go out of date after this many days. */

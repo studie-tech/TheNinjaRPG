@@ -1026,7 +1026,13 @@ const InTheGame: React.FC<{
         <div className="space-y-3 rounded-sm border-2 border-[#b9954d] bg-[#f8edce] p-3 text-[#2d2236]">
           <h3 className="font-serif text-2xl font-bold">{splash.data.name}</h3>
           <p>{splash.data.description}</p>
-          <WelcomeBoard content={splash.data} />
+          <p className="text-sm">
+            {splash.data.enabled ? "Enabled" : "Disabled"} · Priority{" "}
+            {splash.data.priority}
+          </p>
+          <WelcomeBoard
+            announcements={[{ ...splash.data, id: change.entityId ?? "proposed" }]}
+          />
         </div>
       )}
       {hasCard && fields && (

@@ -19,21 +19,39 @@ export const useSplash = (enabled: boolean, timeDiff = 0) => {
   return query;
 };
 
-/** Reconcile both staff and player copies after the server confirms publication. */
-export const useSaveSplash = (feedback: {
-  onSuccess: (result: { success: boolean; message: string }) => void;
+/** Reconcile the archive, review counts and live board after confirmed editorial mutations. */
+export const useSplashMutations = (feedback: {
+  onSuccess: (
+    result: { success: boolean; message: string },
+    createdId?: string,
+  ) => void;
   onError: (error: { message: string }) => void;
 }) => {
   const utils = api.useUtils();
-  return api.splash.update.useMutation({
-    onSuccess: async (result) => {
-      feedback.onSuccess(result);
-      if (result.success)
-        await Promise.all([
-          utils.splash.get.invalidate(),
-          utils.splash.getForEdit.invalidate(),
-        ]);
-    },
+  const reconcile = async (
+    result: { success: boolean; message: string },
+    created = false,
+  ) => {
+    feedback.onSuccess(result, created && result.success ? result.message : undefined);
+    if (result.success)
+      await Promise.all([
+        utils.splash.get.invalidate(),
+        utils.splash.getForEdit.invalidate(),
+        utils.contentReview.getQueue.invalidate(),
+        utils.contentReview.getCounts.invalidate(),
+      ]);
+  };
+  const create = api.splash.create.useMutation({
+    onSuccess: (result) => reconcile(result, true),
     onError: feedback.onError,
   });
+  const update = api.splash.update.useMutation({
+    onSuccess: (result) => reconcile(result),
+    onError: feedback.onError,
+  });
+  const setEnabled = api.splash.setEnabled.useMutation({
+    onSuccess: (result) => reconcile(result),
+    onError: feedback.onError,
+  });
+  return { create, update, setEnabled };
 };

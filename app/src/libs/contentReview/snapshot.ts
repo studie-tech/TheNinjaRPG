@@ -98,7 +98,22 @@ export const buildAuditSnapshot = async (
   );
   const snapshot = {
     generatedAt: now.toISOString(),
-    ...(focus === "splash" ? { announcements } : {}),
+    ...(focus === "splash"
+      ? {
+          announcements,
+          splashCatalog: visible
+            .filter((entry) => entry.type === "SPLASH")
+            .map((entry) => ({
+              id: entry.id,
+              name: entry.name,
+              topicKey: entry.editable.topicKey,
+              enabled: entry.editable.enabled,
+              href: entry.editable.href,
+              startsAt: entry.editable.startsAt,
+              endsAt: entry.editable.endsAt,
+            })),
+        }
+      : {}),
     focus,
     capabilities: {
       epidemicSoundSearch: isEpidemicConfigured(),
@@ -348,7 +363,7 @@ const TEXT_FIELDS: Record<ContentProposalEntityType, string[]> = {
   QUEST: ["name", "description", "successDescription", "questType", "content"],
   BADGE: ["name", "description"],
   TITLE: ["name", "description"],
-  SPLASH: ["name", "description", "cards"],
+  SPLASH: ["name", "description", "topicKey", "enabled"],
   GAME_ASSET: ["name"],
   AI: ["username", "npcTitle", "level"],
 };

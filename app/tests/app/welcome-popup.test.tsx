@@ -3,16 +3,16 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as localstorage from "@/hooks/localstorage";
 import * as streaks from "@/hooks/useActivityStreaks";
 import * as splash from "@/hooks/useSplash";
-import * as panel from "@/layout/ActivityStreakPanel";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
-import { DEFAULT_SPLASH } from "@/libs/splash";
 import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
+import { activityPanel } from "../setup/activityStreakPanel";
 import {
   flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { splashEntry } from "../setup/splash";
 
 let pathname = "/profile";
 let tutorialOn = false;
@@ -45,11 +45,11 @@ beforeEach(() => {
   vi.spyOn(splash, "useSplash").mockImplementation(
     () =>
       ({
-        data: { content: announcement ? DEFAULT_SPLASH : null },
+        data: { announcements: announcement ? [splashEntry()] : [] },
         isLoading: false,
       }) as never,
   );
-  vi.spyOn(panel, "ActivityStreakPanel").mockImplementation(() => (
+  activityPanel.mockImplementation(() => (
     <button type="button">Claim daily reward</button>
   ));
 });
@@ -64,6 +64,7 @@ it("puts announcements and daily rewards in one profile dialog and dismisses the
   const view = render(<ActivityStreakPopup />);
   const dialog = await view.findByRole("dialog", { name: "Village dispatch" });
   expect(view.getAllByRole("dialog")).toHaveLength(1);
+  expect(await view.findByRole("button", { name: "Claim daily reward" })).toBeTruthy();
   expect(dialog.textContent).toContain("Daily activity rewards");
   expect(dialog.textContent).toContain("Defend the village");
   fireEvent.click(view.getByRole("button", { name: "Dismiss for today" }));
@@ -81,6 +82,7 @@ it("keeps the daily claim when announcements are disabled", async () => {
   expect(
     await view.findByRole("dialog", { name: "Daily Activity Rewards" }),
   ).toBeTruthy();
+  expect(await view.findByRole("button", { name: "Claim daily reward" })).toBeTruthy();
 });
 it.each(["tutorial", "auth", "merch"])(
   "suppresses the welcome flow for %s",

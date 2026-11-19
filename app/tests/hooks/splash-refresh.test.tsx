@@ -5,8 +5,8 @@ import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import * as refreshAt from "@/hooks/useRefreshAt";
 import { useSplash } from "@/hooks/useSplash";
-import { DEFAULT_SPLASH } from "@/libs/splash";
 import { deferred } from "../setup/deferred";
+import { splashEntry } from "../setup/splash";
 
 type Edition = client.RouterOutputs["splash"]["get"];
 afterEach(() => {
@@ -22,13 +22,13 @@ it.each([false, true])(
     });
     const key = ["splash-refresh-test"];
     const oldEdition: Edition = {
-      content: DEFAULT_SPLASH,
+      announcements: [splashEntry()],
       fetchedAt: new Date(0),
       nextChangeAt: null,
     };
     const newEdition: Edition = {
       ...oldEdition,
-      content: { ...DEFAULT_SPLASH, name: "New edition" },
+      announcements: [splashEntry({ name: "New edition" })],
       fetchedAt: new Date(),
     };
     if (hasCache) queryClient.setQueryData(key, oldEdition);
@@ -68,12 +68,12 @@ it.each([false, true])(
       newRequest.resolve(newEdition);
     });
     await waitFor(() =>
-      expect(hook.result.current.data?.content?.name).toBe("New edition"),
+      expect(hook.result.current.data?.announcements[0]?.name).toBe("New edition"),
     );
     await act(async () => {
       oldRequest.resolve(oldEdition);
     });
-    expect(hook.result.current.data?.content?.name).toBe("New edition");
+    expect(hook.result.current.data?.announcements[0]?.name).toBe("New edition");
     queryClient.clear();
   },
 );

@@ -6,19 +6,32 @@ describeWithDatabase("welcome board migration", () => {
   it("adds board storage, review entity types and the recipient capacity index", async () => {
     await withMigrationSandbox(
       {
-        snapshot: "0173",
+        snapshot: "0174",
         baseline: ["ContentProposalBasis", "ContentProposalChange", "WebStoreOrder"],
         created: ["SplashAnnouncement"],
       },
       async ({ query }) => {
-        await query(await readMigration("0174_confused_venus.sql"));
-        await query(
-          "INSERT INTO SplashAnnouncement (id, content) VALUES ('welcome', JSON_OBJECT('name','Dispatch'))",
-        );
+        await query(await readMigration("0175_greedy_morph.sql"));
         const [board] = await query(
-          "SELECT JSON_UNQUOTE(JSON_EXTRACT(content, '$.name')) AS name FROM SplashAnnouncement",
+          "SELECT topicKey, enabled FROM SplashAnnouncement ORDER BY priority DESC",
         );
-        expect(board).toEqual([expect.objectContaining({ name: "Dispatch" })]);
+        expect(board).toEqual([
+          expect.objectContaining({ topicKey: "tower-defense", enabled: 1 }),
+          expect.objectContaining({ topicKey: "market-bundle-gifts", enabled: 1 }),
+        ]);
+        const [content] = await query(
+          "SHOW COLUMNS FROM SplashAnnouncement LIKE 'content'",
+        );
+        expect(content).toHaveLength(0);
+        await query(
+          "UPDATE SplashAnnouncement SET enabled = false WHERE topicKey = 'tower-defense'",
+        );
+        const [archived] = await query(
+          "SELECT topicKey FROM SplashAnnouncement WHERE enabled = false",
+        );
+        expect(archived).toEqual([
+          expect.objectContaining({ topicKey: "tower-defense" }),
+        ]);
         for (const table of ["ContentProposalBasis", "ContentProposalChange"]) {
           const [columns] = await query(`SHOW COLUMNS FROM ${table} LIKE 'entityType'`);
           expect(JSON.stringify(columns)).toContain("SPLASH");

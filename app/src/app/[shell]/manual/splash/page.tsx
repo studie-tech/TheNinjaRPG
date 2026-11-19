@@ -1,103 +1,347 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
-import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
+import type { RefObject } from "react";
+import { useRef, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
-import { useSaveSplash } from "@/hooks/useSplash";
+import { SPLASH_MAX_VISIBLE } from "@/drizzle/constants";
+import type { SplashAnnouncement } from "@/drizzle/schema";
+import { useSplashMutations } from "@/hooks/useSplash";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import Modal from "@/layout/Modal";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { WelcomeBoard } from "@/layout/WelcomeBoard";
-import { SPLASH_ID } from "@/libs/splash";
+import {
+  isSplashActive,
+  splashEditable,
+  visibleSplashAnnouncements,
+} from "@/libs/splash";
 import { canChangeContent } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { type SplashContent, splashSchema } from "@/validators/splash";
+import {
+  type SplashFormInput,
+  type SplashInput,
+  splashSchema,
+} from "@/validators/splash";
 
 export default function SplashEditorPage() {
   const { data: user } = useRequiredUserData();
   const allowed = canChangeContent(user?.role ?? "USER");
   const query = api.splash.getForEdit.useQuery(undefined, { enabled: allowed });
-  if (!allowed) return <p>Only content staff can edit the welcome board.</p>;
-  if (query.isPending) return <Loader explanation="Loading welcome board" />;
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "enabled" | "disabled">("all");
+  const [editing, setEditing] = useState<{ entry?: SplashAnnouncement }>();
+  const [message, setMessage] = useState<string>();
+  const returnFocusRef = useRef<HTMLElement>(null);
+  const mutations = useSplashMutations({
+    onSuccess: (result, createdId) => {
+      setMessage(result.success && createdId ? "Announcement created" : result.message);
+      if (result.success) setEditing(undefined);
+    },
+    onError: (error) => setMessage(error.message),
+  });
+  const pending =
+    mutations.create.isPending ||
+    mutations.update.isPending ||
+    mutations.setEnabled.isPending;
+  const entries = query.data ?? [];
+  const term = search.trim().toLowerCase();
+  const filtered = entries.filter(
+    (entry) =>
+      (filter === "all" || entry.enabled === (filter === "enabled")) &&
+      (!term ||
+        [entry.name, entry.description, entry.topicKey, entry.href].some((value) =>
+          value.toLowerCase().includes(term),
+        )),
+  );
+  const preview = visibleSplashAnnouncements(entries);
+  if (!allowed) return <p>Only content staff can manage announcements.</p>;
+  if (query.isPending) return <Loader explanation="Loading announcements" />;
   if (query.isError)
     return (
       <p role="alert">
-        Could not load the welcome board.{" "}
+        Could not load announcements.{" "}
         <Button onClick={() => void query.refetch()}>Retry</Button>
       </p>
     );
   return (
     <ContentBox
       title="Welcome board"
-      subtitle="Announcements and daily rewards in one login dialog"
+      subtitle="Manage individual announcements alongside daily rewards"
     >
-      <SplashEditor initial={query.data} />
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-prose text-sm">
+            The {SPLASH_MAX_VISIBLE} highest-priority live entries appear in the welcome
+            dialog. Disable old updates to retain their topic history for the reviewer.{" "}
+            <Link className="underline" href="/manual/review">
+              Review suggestions
+            </Link>
+            .
+          </p>
+          <Button
+            onClick={(event) => {
+              returnFocusRef.current = event.currentTarget;
+              setMessage(undefined);
+              setEditing({});
+            }}
+          >
+            Create announcement
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-0 flex-1">
+            <Label htmlFor="announcement-search">Search announcements</Label>
+            <Input
+              id="announcement-search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search title, topic or destination"
+            />
+          </div>
+          <div>
+            <Label htmlFor="announcement-filter">Status</Label>
+            <select
+              id="announcement-filter"
+              className="bg-background h-9 rounded border px-2 text-sm"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value as typeof filter)}
+            >
+              <option value="all">All entries</option>
+              <option value="enabled">Enabled</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </div>
+        </div>
+        {message && !editing && <p role="status">{message}</p>}
+        <div className="space-y-3">
+          {filtered.map((entry) => (
+            <article
+              key={entry.id}
+              className="flex flex-col justify-between gap-3 rounded border p-3 sm:flex-row"
+            >
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="max-w-full font-bold break-words">{entry.name}</h2>
+                  <Badge variant={entry.enabled ? "default" : "secondary"}>
+                    {entry.enabled
+                      ? isSplashActive(entry)
+                        ? "Live"
+                        : entry.endsAt && entry.endsAt <= new Date()
+                          ? "Expired"
+                          : "Scheduled"
+                      : "Disabled"}
+                  </Badge>
+                  <span className="text-muted-foreground text-xs">
+                    Priority {entry.priority}
+                  </span>
+                </div>
+                <p className="text-muted-foreground text-xs break-all">
+                  {entry.topicKey} · {entry.href}
+                </p>
+                <p className="line-clamp-2 text-sm break-words">{entry.description}</p>
+              </div>
+              <div className="flex shrink-0 items-start gap-2">
+                <Button
+                  variant="outline"
+                  disabled={pending}
+                  onClick={(event) => {
+                    returnFocusRef.current = event.currentTarget;
+                    setMessage(undefined);
+                    setEditing({ entry });
+                  }}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() =>
+                    mutations.setEnabled.mutate({
+                      id: entry.id,
+                      enabled: !entry.enabled,
+                    })
+                  }
+                >
+                  {entry.enabled ? "Disable" : "Enable"}
+                </Button>
+              </div>
+            </article>
+          ))}
+          {!filtered.length && (
+            <p className="rounded border border-dashed p-5 text-sm">
+              {entries.length
+                ? "No announcements match these filters."
+                : "Create an announcement to add news to the welcome dialog. Daily rewards remain available."}
+            </p>
+          )}
+        </div>
+        <h2 className="text-xl font-bold">
+          Live preview ({preview.length}/{SPLASH_MAX_VISIBLE})
+        </h2>
+        {preview.length ? (
+          <WelcomeBoard announcements={preview} />
+        ) : (
+          <p className="text-sm">
+            No announcements are live. The dialog shows daily rewards when available.
+          </p>
+        )}
+        {editing && (
+          <AnnouncementEditor
+            key={editing.entry?.id ?? "new"}
+            entry={editing.entry}
+            pending={pending}
+            message={message}
+            returnFocusRef={returnFocusRef}
+            onClose={() => setEditing(undefined)}
+            onSave={(data) => {
+              setMessage(undefined);
+              if (editing.entry)
+                mutations.update.mutate({ id: editing.entry.id, data });
+              else mutations.create.mutate({ data });
+            }}
+          />
+        )}
+      </div>
     </ContentBox>
   );
 }
 
-function SplashEditor({ initial }: { initial: SplashContent }) {
-  const [message, setMessage] = useState<string>();
-  const form = useForm<SplashContent>({
-    defaultValues: initial,
+function AnnouncementEditor({
+  entry,
+  pending,
+  message,
+  returnFocusRef,
+  onClose,
+  onSave,
+}: {
+  entry?: SplashAnnouncement;
+  pending: boolean;
+  message?: string;
+  returnFocusRef: RefObject<HTMLElement | null>;
+  onClose: () => void;
+  onSave: (data: SplashInput) => void;
+}) {
+  const form = useForm<SplashFormInput, unknown, SplashInput>({
     resolver: zodResolver(splashSchema),
+    defaultValues: entry
+      ? splashEditable(entry)
+      : {
+          topicKey: "",
+          name: "",
+          description: "",
+          image: "",
+          href: "/profile",
+          linkLabel: "Learn more",
+          priority: 0,
+          enabled: false,
+          startsAt: null,
+          endsAt: null,
+        },
   });
-  const cards = useFieldArray({ control: form.control, name: "cards" });
   const values = useWatch({ control: form.control });
   const preview = splashSchema.safeParse(values);
-  const save = useSaveSplash({
-    onSuccess: (result) => setMessage(result.message),
-    onError: (error) => setMessage(error.message),
-  });
   const errors = form.formState.errors;
   return (
-    <div className="space-y-5">
-      <p className="text-sm">
-        Edit the illustrated cards, artwork and publication window. Players see this
-        board with their daily claim.{" "}
-        <Link className="underline" href="/manual/review">
-          Review proposed updates
-        </Link>
-        .
-      </p>
+    <Modal
+      title={entry ? `Edit ${entry.name}` : "Create announcement"}
+      isOpen
+      setIsOpen={(open) => {
+        if (!open) onClose();
+      }}
+      isLoading={pending}
+      returnFocusRef={returnFocusRef}
+      className="max-w-3xl"
+      bodyClassName="space-y-4 py-2"
+      footerExtra={
+        <Button type="submit" form="announcement-editor" disabled={pending}>
+          {pending ? "Saving…" : "Save announcement"}
+        </Button>
+      }
+    >
       <form
-        className="space-y-4"
-        onSubmit={form.handleSubmit((data) => {
-          setMessage(undefined);
-          save.mutate({ id: SPLASH_ID, data });
-        })}
+        id="announcement-editor"
+        onSubmit={form.handleSubmit(onSave)}
+        className="space-y-3"
       >
-        <fieldset disabled={save.isPending} className="space-y-4">
+        <fieldset disabled={pending} className="space-y-3">
+          {(
+            ["name", "topicKey", "description", "image", "href", "linkLabel"] as const
+          ).map((field) => (
+            <div key={field}>
+              <Label htmlFor={`announcement-${field}`}>
+                {
+                  {
+                    name: "Title",
+                    topicKey: "Topic key",
+                    description: "Text",
+                    image: "Image URL (optional, game CDN)",
+                    href: "Game destination",
+                    linkLabel: "Link text",
+                  }[field]
+                }
+              </Label>
+              {field === "description" ? (
+                <Textarea
+                  id={`announcement-${field}`}
+                  {...form.register(field)}
+                  maxLength={600}
+                />
+              ) : (
+                <Input
+                  id={`announcement-${field}`}
+                  {...form.register(field)}
+                  readOnly={field === "topicKey" && !!entry}
+                />
+              )}
+              {field === "topicKey" && (
+                <p className="text-muted-foreground text-xs">
+                  A stable topic such as tower-defense-release. Disabled topics remain
+                  archived.
+                </p>
+              )}
+              {errors[field]?.message && (
+                <p role="alert" className="text-destructive text-sm">
+                  {errors[field]?.message}
+                </p>
+              )}
+            </div>
+          ))}
           <div>
-            <Label htmlFor="splash-name">Heading</Label>
-            <Input id="splash-name" {...form.register("name")} maxLength={100} />
-          </div>
-          <div>
-            <Label htmlFor="splash-description">Introduction</Label>
-            <Textarea
-              id="splash-description"
-              {...form.register("description")}
-              maxLength={300}
+            <Label htmlFor="announcement-priority">
+              Priority (higher appears first)
+            </Label>
+            <Controller
+              control={form.control}
+              name="priority"
+              render={({ field }) => (
+                <NumberInput
+                  id="announcement-priority"
+                  {...field}
+                  min={-1000}
+                  max={1000}
+                  step={1}
+                  onValueChange={field.onChange}
+                />
+              )}
             />
           </div>
-          <div>
-            <Label htmlFor="splash-image">Banner image URL (optional, HTTPS)</Label>
-            <Input id="splash-image" {...form.register("image")} />
-          </div>
           <label className="flex items-center gap-2">
-            <input type="checkbox" {...form.register("enabled")} /> Show announcements
-            in the daily welcome dialog
+            <input type="checkbox" {...form.register("enabled")} /> Enabled
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             {(["startsAt", "endsAt"] as const).map((field) => (
               <div key={field}>
-                <Label htmlFor={`splash-${field}`}>
+                <Label htmlFor={`announcement-${field}`}>
                   {field === "startsAt" ? "Start" : "End"} (UTC, optional)
                 </Label>
                 <Controller
@@ -105,7 +349,7 @@ function SplashEditor({ initial }: { initial: SplashContent }) {
                   name={field}
                   render={({ field: input }) => (
                     <Input
-                      id={`splash-${field}`}
+                      id={`announcement-${field}`}
                       type="datetime-local"
                       ref={input.ref}
                       name={input.name}
@@ -119,101 +363,32 @@ function SplashEditor({ initial }: { initial: SplashContent }) {
                     />
                   )}
                 />
+                {errors[field]?.message && (
+                  <p role="alert" className="text-destructive text-sm">
+                    {errors[field]?.message}
+                  </p>
+                )}
               </div>
             ))}
           </div>
-          {cards.fields.map((card, index) => (
-            <fieldset key={card.id} className="space-y-3 rounded border p-3">
-              <legend className="px-1 font-semibold">Announcement {index + 1}</legend>
-              {(["title", "body", "image", "href", "linkLabel"] as const).map(
-                (field) => (
-                  <div key={field}>
-                    <Label htmlFor={`card-${index}-${field}`}>
-                      {
-                        {
-                          title: "Title",
-                          body: "Text",
-                          image: "Image URL (optional, HTTPS)",
-                          href: "Game path (e.g. /points)",
-                          linkLabel: "Link text",
-                        }[field]
-                      }
-                    </Label>
-                    {field === "body" ? (
-                      <Textarea
-                        id={`card-${index}-${field}`}
-                        {...form.register(`cards.${index}.${field}`)}
-                      />
-                    ) : (
-                      <Input
-                        id={`card-${index}-${field}`}
-                        {...form.register(`cards.${index}.${field}`)}
-                      />
-                    )}
-                    {errors.cards?.[index]?.[field]?.message && (
-                      <p className="text-destructive text-sm" role="alert">
-                        {errors.cards[index]?.[field]?.message}
-                      </p>
-                    )}
-                  </div>
-                ),
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                disabled={cards.fields.length <= 1}
-                onClick={() => cards.remove(index)}
-              >
-                Remove announcement
-              </Button>
-            </fieldset>
-          ))}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={cards.fields.length >= 6}
-              onClick={() =>
-                cards.append({
-                  title: "",
-                  body: "",
-                  image: "",
-                  href: "/profile",
-                  linkLabel: "Learn more",
-                })
-              }
-            >
-              Add announcement
-            </Button>
-            <Button type="submit">
-              {save.isPending ? "Saving…" : "Save welcome board"}
-            </Button>
+          {entry && (
             <SuggestChange
               entityType="SPLASH"
-              entityId={SPLASH_ID}
+              entityId={entry.id}
               getData={() => {
-                const parsed = splashSchema.safeParse(form.getValues());
-                return parsed.success ? parsed.data : null;
+                const result = splashSchema.safeParse(form.getValues());
+                return result.success ? result.data : null;
               }}
             />
-          </div>
+          )}
         </fieldset>
-        {Object.keys(errors).length > 0 && (
-          <p role="alert" className="text-destructive">
-            {errors.endsAt?.message ??
-              errors.name?.message ??
-              errors.image?.message ??
-              "Check the highlighted announcement fields."}
-          </p>
-        )}
-        {message && <p role="status">{message}</p>}
       </form>
-      <h2 className="text-xl font-bold">Preview</h2>
-      {preview.success ? (
-        <WelcomeBoard content={preview.data} />
-      ) : (
-        <p>Complete the fields to preview this edition.</p>
+      {message && <p role="status">{message}</p>}
+      {preview.success && (
+        <WelcomeBoard
+          announcements={[{ ...preview.data, id: entry?.id ?? "preview" }]}
+        />
       )}
-    </div>
+    </Modal>
   );
 }

@@ -115,7 +115,7 @@ const ActivityStreakPopup: React.FC = () => {
   const hasRecurringToEnroll = !!userStreaks?.activeRecurringConfig;
   const shouldShowPopup =
     !isSuppressedRoute &&
-    (!!splash.data?.content ||
+    (!!splash.data?.announcements.length ||
       hasUnclaimedRewards ||
       needsCatchUp ||
       hasRecurringToEnroll);
@@ -181,50 +181,65 @@ const ActivityStreakPopup: React.FC = () => {
 
   return (
     <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="border-2 border-[#b9954d] bg-[#f8edce] text-[#2d2236] md:max-w-4xl">
-        <DialogHeader>
+      <DialogContent
+        className={`flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] flex-col overflow-hidden border-2 border-[#b9954d] bg-[#f8edce] p-4 text-[#2d2236] sm:p-6 ${
+          (splash.data?.announcements.length ?? 0) > 4
+            ? "md:h-[94dvh] md:w-[96vw] md:max-w-[96vw]"
+            : "md:h-auto md:max-w-5xl"
+        }`}
+      >
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 pr-6 font-serif text-3xl">
             <Gift className="h-5 w-5 text-primary" />
-            {splash.data?.content?.name ?? "Daily Activity Rewards"}
+            {splash.data?.announcements.length
+              ? "Village dispatch"
+              : "Daily Activity Rewards"}
           </DialogTitle>
           <DialogDescription className="text-[#594661]">
-            {splash.data?.content?.description ||
-              "View and claim your daily activity rewards"}
+            {splash.data?.announcements.length
+              ? "News, adventures and offers from across Seichi, alongside your daily rewards."
+              : "View and claim your daily activity rewards"}
           </DialogDescription>
         </DialogHeader>
 
-        {splash.data?.content && (
-          <WelcomeBoard
-            content={splash.data.content}
-            onNavigate={handleDismissForToday}
-          />
-        )}
-        <section className="bg-background text-foreground rounded-sm border-2 border-[#b9954d] p-3 sm:p-4">
-          <h3 className="mb-3 flex items-center gap-2 font-serif text-xl font-bold">
-            <Gift className="h-5 w-5" /> Daily activity rewards
-          </h3>
-          <ChunkErrorBoundary
-            fallback={() => (
-              <div
-                role="alert"
-                className="flex items-center justify-between gap-2 text-sm"
-              >
-                <span>Rewards could not be loaded.</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.location.reload()}
-                >
-                  Reload
-                </Button>
-              </div>
-            )}
+        <div
+          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${(splash.data?.announcements.length ?? 0) > 4 ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]" : "space-y-4"}`}
+        >
+          {!!splash.data?.announcements.length && (
+            <WelcomeBoard
+              announcements={splash.data.announcements}
+              onNavigate={handleDismissForToday}
+            />
+          )}
+          <section
+            className={`bg-background text-foreground min-w-0 rounded-sm border-2 border-[#b9954d] p-3 sm:p-4 ${(splash.data?.announcements.length ?? 0) > 4 ? "order-first lg:sticky lg:top-0 lg:order-none" : ""}`}
           >
-            <ActivityStreakPanel />
-          </ChunkErrorBoundary>
-        </section>
+            <h3 className="mb-3 flex items-center gap-2 font-serif text-xl font-bold">
+              <Gift className="h-5 w-5" /> Daily activity rewards
+            </h3>
+            <ChunkErrorBoundary
+              fallback={() => (
+                <div
+                  role="alert"
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
+                  <span>Rewards could not be loaded.</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.location.reload()}
+                  >
+                    Reload
+                  </Button>
+                </div>
+              )}
+            >
+              <ActivityStreakPanel />
+            </ChunkErrorBoundary>
+          </section>
+        </div>
 
-        <div className="flex justify-between gap-2 pt-2">
+        <div className="flex shrink-0 justify-between gap-2 pt-2">
           <Button variant="ghost" size="sm" onClick={handleDismissForToday}>
             <BellOff className="mr-2 h-4 w-4" />
             Dismiss for today

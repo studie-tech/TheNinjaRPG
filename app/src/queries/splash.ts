@@ -1,44 +1,109 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { actionLog, notification, splashAnnouncement } from "@/drizzle/schema";
-import { SPLASH_ID } from "@/libs/splash";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
-import type { SplashContent } from "@/validators/splash";
+import type { SplashInput } from "@/validators/splash";
 
-/** Load the single welcome board; callers supply the evergreen edition when absent. */
-export const findSplash = (client: DrizzleClient) =>
+/** Read live candidates or the complete editorial archive in one round trip. */
+export const listSplashEntries = (
+  client: DrizzleClient,
+  enabledOnly = false,
+  ids?: string[],
+) =>
+  client
+    .select()
+    .from(splashAnnouncement)
+    .where(
+      ids
+        ? inArray(splashAnnouncement.id, ids)
+        : enabledOnly
+          ? eq(splashAnnouncement.enabled, true)
+          : undefined,
+    )
+    .orderBy(
+      desc(splashAnnouncement.priority),
+      desc(splashAnnouncement.createdAt),
+      splashAnnouncement.id,
+    );
+
+/** Load an individual announcement for authorization and content-review version checks. */
+export const findSplashEntry = (client: DrizzleClient, id: string) =>
+  client.query.splashAnnouncement.findFirst({ where: eq(splashAnnouncement.id, id) });
+
+/** Find a reserved editorial topic, including topics staff have disabled. */
+export const findSplashTopic = (client: DrizzleClient, topicKey: string) =>
   client.query.splashAnnouncement.findFirst({
-    where: eq(splashAnnouncement.id, SPLASH_ID),
+    where: eq(splashAnnouncement.topicKey, topicKey),
   });
 
-/** Publish a validated board through the same write for staff edits and approved proposals. */
-export const saveSplash = (client: DrizzleClient, content: SplashContent) =>
-  client
-    .insert(splashAnnouncement)
-    .values({ id: SPLASH_ID, content })
-    .onDuplicateKeyUpdate({ set: { content } });
+/** Create a complete, validated announcement with an immutable topic identity. */
+export const insertSplashEntry = (
+  client: DrizzleClient,
+  id: string,
+  data: SplashInput,
+) => client.insert(splashAnnouncement).values({ id, ...columnValues(data) });
 
-/** Preserve the content diff alongside other manual content changes. */
+/** Remove a newly inserted announcement when its creation or approval fails. */
+export const deleteSplashEntryForRollback = (client: DrizzleClient, id: string) =>
+  client.delete(splashAnnouncement).where(eq(splashAnnouncement.id, id));
+
+/** Save one entry without replacing neighboring announcements or their enabled states. */
+export const updateSplashEntry = (
+  client: DrizzleClient,
+  id: string,
+  data: SplashInput,
+) =>
+  client
+    .update(splashAnnouncement)
+    .set({ ...columnValues(data), updatedAt: new Date() })
+    .where(eq(splashAnnouncement.id, id));
+
+/** Enable/disable atomically without overwriting a concurrent content edit. */
+export const setSplashEntryEnabled = (
+  client: DrizzleClient,
+  id: string,
+  enabled: boolean,
+) =>
+  client
+    .update(splashAnnouncement)
+    .set({ enabled, updatedAt: new Date() })
+    .where(eq(splashAnnouncement.id, id));
+
+/** Preserve the authored content diff and actor in the manual content audit log. */
 export const logSplashUpdate = (
   client: DrizzleClient,
   userId: string,
-  before: SplashContent,
-  after: SplashContent,
+  id: string,
+  before: Partial<SplashInput>,
+  after: Partial<SplashInput>,
 ) =>
   client.insert(actionLog).values({
     id: nanoid(),
     userId,
     tableName: "splashAnnouncement",
-    relatedId: SPLASH_ID,
-    relatedMsg: `Update: ${after.name}`,
+    relatedId: id,
+    relatedMsg: `Update: ${after.name ?? id}`,
     changes: calculateContentDiff(before, after),
   });
 
-/** Bounded recent announcements supply verified release/event context for the daily reviewer. */
+/** Recent announcements give the daily reviewer verified release/event context. */
 export const listSplashAnnouncements = (client: DrizzleClient) =>
   client
     .select({ content: notification.content, createdAt: notification.createdAt })
     .from(notification)
     .orderBy(desc(notification.createdAt))
     .limit(12);
+
+/** Match authored names across enabled and disabled entries for proposal duplicate checks. */
+export const findSplashNames = (client: DrizzleClient, names: string[]) =>
+  client
+    .select({ name: splashAnnouncement.name })
+    .from(splashAnnouncement)
+    .where(inArray(splashAnnouncement.name, names));
+
+const columnValues = (data: SplashInput) => ({
+  ...data,
+  startsAt: data.startsAt ? new Date(data.startsAt) : null,
+  endsAt: data.endsAt ? new Date(data.endsAt) : null,
+});

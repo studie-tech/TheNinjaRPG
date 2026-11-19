@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { ContentProposalEntityType, ContentType } from "@/drizzle/constants";
-import { DEFAULT_SPLASH, SPLASH_ID } from "@/libs/splash";
+import { splashEditable } from "@/libs/splash";
 import {
   listItemForLoad,
   listTitleForLoad,
@@ -13,7 +13,7 @@ import {
   selectQuestForLoad,
   selectTitleForFindNames,
 } from "@/queries/contentReview";
-import { findSplash } from "@/queries/splash";
+import { findSplashNames, listSplashEntries } from "@/queries/splash";
 import type { DrizzleClient } from "@/server/db";
 import { insertAiSchema } from "@/validators/aiInput";
 import { gameAssetValidator } from "@/validators/asset";
@@ -193,20 +193,17 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     editableKeys: Object.keys(splashSchema.shape),
     validator: splashSchema,
     detailHref: () => "/manual/splash",
-    load: async (client, ids) => {
-      if (ids && !ids.includes(SPLASH_ID)) return [];
-      const content = (await findSplash(client))?.content ?? DEFAULT_SPLASH;
-      return [
-        {
-          id: SPLASH_ID,
-          name: content.name,
-          image: content.image || null,
-          isHidden: false,
-          payload: content,
-        },
-      ];
-    },
-    findNames: async () => [],
+    load: async (client, ids) =>
+      (await listSplashEntries(client, false, ids ?? undefined)).map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        image: entry.image || null,
+        // Disabled topics remain evidence: the reviewer must never recreate archived updates.
+        isHidden: false,
+        payload: splashEditable(entry),
+      })),
+    findNames: async (client, names) =>
+      (await findSplashNames(client, names)).map((entry) => entry.name),
   },
   JUTSU: {
     contentType: "jutsu",

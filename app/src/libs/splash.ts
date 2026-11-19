@@ -1,36 +1,52 @@
-import { IMG_MANUAL_REWARDS, IMG_MANUAL_TOWER_UPGRADES } from "@/drizzle/constants";
-import type { SplashContent } from "@/validators/splash";
+import { SPLASH_MAX_VISIBLE } from "@/drizzle/constants";
+import type { SplashAnnouncement } from "@/drizzle/schema";
+import type { SplashInput } from "@/validators/splash";
 
-export const SPLASH_ID = "welcome";
+/** An enabled entry is visible only within its inclusive-start, exclusive-end window. */
+export const isSplashActive = (
+  entry: Pick<SplashAnnouncement, "enabled" | "startsAt" | "endsAt">,
+  now = new Date(),
+) =>
+  entry.enabled &&
+  (!entry.startsAt || entry.startsAt <= now) &&
+  (!entry.endsAt || entry.endsAt > now);
 
-/** The board has useful evergreen content before staff publish their first edition. */
-export const DEFAULT_SPLASH: SplashContent = {
-  name: "Village dispatch",
-  description: "Your daily rewards, new adventures and offers from across Seichi.",
-  image: "",
-  enabled: true,
-  startsAt: null,
-  endsAt: null,
-  cards: [
-    {
-      title: "Defend the village",
-      body: "Face waves of raiders in Tower Defense. Build your defenses and train in the Guard Hall between runs.",
-      image: IMG_MANUAL_TOWER_UPGRADES,
-      href: "/towerDefense",
-      linkLabel: "Play Tower Defense",
-    },
-    {
-      title: "Visit the Market",
-      body: "Browse reputation packs and bundles. Send a bundle to another player with Gift bundle; account limits apply to the recipient.",
-      image: IMG_MANUAL_REWARDS,
-      href: "/points",
-      linkLabel: "Explore the Market",
-    },
-  ],
+/** Choose the most important live entries, keeping ties stable across refreshes. */
+export const visibleSplashAnnouncements = (
+  entries: SplashAnnouncement[],
+  now = new Date(),
+) =>
+  entries
+    .filter((entry) => isSplashActive(entry, now))
+    .sort(
+      (a, b) =>
+        b.priority - a.priority ||
+        b.createdAt.getTime() - a.createdAt.getTime() ||
+        a.id.localeCompare(b.id),
+    )
+    .slice(0, SPLASH_MAX_VISIBLE);
+
+/** Read the next publication boundary even when the scheduled entry is outside the visible ten. */
+export const nextSplashChangeAt = (entries: SplashAnnouncement[], now = new Date()) => {
+  const times = entries
+    .filter((entry) => entry.enabled)
+    .flatMap((entry) => [entry.startsAt, entry.endsAt])
+    .filter((date): date is Date => !!date && date > now);
+  return times.length
+    ? new Date(Math.min(...times.map((date) => date.getTime())))
+    : null;
 };
 
-/** Scheduled editions stay out of the login dialog until their publication window. */
-export const isSplashActive = (content: SplashContent, now = new Date()) =>
-  content.enabled &&
-  (!content.startsAt || new Date(content.startsAt) <= now) &&
-  (!content.endsAt || new Date(content.endsAt) > now);
+/** Project SQL columns to the shared staff form and versioned review payload. */
+export const splashEditable = (entry: SplashAnnouncement): SplashInput => ({
+  topicKey: entry.topicKey,
+  name: entry.name,
+  description: entry.description,
+  image: entry.image,
+  href: entry.href,
+  linkLabel: entry.linkLabel,
+  priority: entry.priority,
+  enabled: entry.enabled,
+  startsAt: entry.startsAt?.toISOString() ?? null,
+  endsAt: entry.endsAt?.toISOString() ?? null,
+});

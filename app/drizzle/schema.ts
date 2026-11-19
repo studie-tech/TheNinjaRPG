@@ -62,7 +62,6 @@ import type {
 } from "@/validators/pvpRank";
 import type { AdditionalContext } from "@/validators/reports";
 import type { ObjectiveRewardType, PendingRewardChoice } from "@/validators/rewards";
-import type { SplashContent } from "@/validators/splash";
 import type { TitleEffect } from "@/validators/title";
 import type { EventTournamentState } from "@/validators/tournament";
 import type { CraftingQueueMaterial } from "@/validators/train";
@@ -8211,8 +8210,31 @@ export const craftingServiceRequestRelations = relations(
   }),
 );
 
-/** One editable welcome edition shared by announcements and daily rewards. */
-export const splashAnnouncement = mysqlTable("SplashAnnouncement", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  content: json("content").$type<SplashContent>().notNull(),
-});
+/** Independently scheduled announcements retain disabled topics as editorial history. */
+export const splashAnnouncement = mysqlTable(
+  "SplashAnnouncement",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    topicKey: varchar("topicKey", { length: 100 }).notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: text("description").notNull(),
+    image: varchar("image", { length: 1000 }).default("").notNull(),
+    href: varchar("href", { length: 300 }).notNull(),
+    linkLabel: varchar("linkLabel", { length: 60 }).notNull(),
+    priority: int("priority").default(0).notNull(),
+    enabled: boolean("enabled").default(false).notNull(),
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }),
+    endsAt: datetime("endsAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("SplashAnnouncement_topicKey_key").on(table.topicKey),
+    index("SplashAnnouncement_enabled_priority_idx").on(table.enabled, table.priority),
+  ],
+);
+export type SplashAnnouncement = InferSelectModel<typeof splashAnnouncement>;
