@@ -60,10 +60,11 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
       />
     );
 
+  // Empty summaries still reserve the loading shell's subtitle row.
   return (
     <ContentBox
       title={board.name}
-      subtitle={board.summary}
+      subtitle={board.summary || "\u00a0"}
       defaultBackHref={props.defaultBackHref}
       padding={false}
       topRightContent={
@@ -134,9 +135,8 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
 };
 
 /**
- * Route loading state for a board page. The title, back link and banner are known before
- * the board loads and render as loaded; thread-shaped placeholders hold the space below
- * the banner, so the loaded board does not move what is already on screen.
+ * Keep the known board title, back link and banner visible while thread-shaped
+ * placeholders reserve space for the fetched content.
  */
 export const FancyForumThreadsSkeleton: React.FC<
   Pick<FancyForumThreadsProps, "board_name" | "defaultBackHref" | "image">

@@ -21,7 +21,8 @@ import { dirname, join, relative } from "node:path";
  * next/navigation and names one of them, so aliased imports and generic calls are caught
  * at the cost of the occasional false positive.
  */
-const SHELL_ROOT = join(import.meta.dirname, "../../src/app/[shell]");
+const APP_ROOT = join(import.meta.dirname, "../../src/app");
+const SHELL_ROOT = join(APP_ROOT, "[shell]");
 const NAVIGATION_IMPORT = /from\s*["']next\/navigation["']/;
 const STATUS_NAME =
   /\b(?:notFound|redirect|permanentRedirect|forbidden|unauthorized)\b/;
@@ -79,8 +80,11 @@ const findBoundaryOffenders = (root: string) => {
   return files
     .filter((file) => file.endsWith("/loading.tsx"))
     .map((file) => dirname(file))
-    .flatMap((dir) =>
-      files
+    .flatMap((dir) => {
+      if (dir === root || dir === join(root, "[shell]")) {
+        return [relative(root, join(dir, "loading.tsx"))];
+      }
+      return files
         .filter((file) => file.startsWith(`${dir}/`) && CODE_FILE.test(file))
         .flatMap((file) => {
           const route = relative(root, file);
@@ -89,8 +93,8 @@ const findBoundaryOffenders = (root: string) => {
           return reachableAppModules(file)
             .filter(usesStatusFunction)
             .map((imported) => `${route} -> ${relative(root, imported)}`);
-        }),
-    );
+        });
+    });
 };
 
 const fixtureRoot = realpathSync(mkdtempSync(join(tmpdir(), "route-loading-")));
@@ -109,7 +113,18 @@ const LOADING = "export default function Loading() { return null; }\n";
 
 describe("route loading boundaries", () => {
   it("never wrap a route that can set a 404 or redirect status", () => {
-    expect(findBoundaryOffenders(SHELL_ROOT)).toEqual([]);
+    expect(findBoundaryOffenders(APP_ROOT)).toEqual([]);
+  });
+
+  it("rejects loading boundaries at the app and shell roots", () => {
+    const root = writeFixture({
+      "loading.tsx": LOADING,
+      "[shell]/loading.tsx": LOADING,
+    });
+    expect(findBoundaryOffenders(root).sort()).toEqual([
+      "[shell]/loading.tsx",
+      "loading.tsx",
+    ]);
   });
 
   it("give the server-rendered board and guide pages an instant shell", () => {

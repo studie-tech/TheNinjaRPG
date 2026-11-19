@@ -97,6 +97,25 @@ export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
         }
       >
         <GuideHubIntro />
+        <div className="mt-4 flex flex-col gap-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-2.5 left-2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search the guide"
+              className="pl-8"
+              aria-label="Search the guide"
+            />
+          </div>
+          <NavTabs
+            id="guide-category"
+            listClassName="flex-wrap justify-center"
+            current={category}
+            options={GUIDE_TABS}
+            onChange={setCategory}
+          />
+        </div>
         {featured && (
           <Link
             href={`/guide/${featured.slug}`}
@@ -123,25 +142,6 @@ export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
             </div>
           </Link>
         )}
-        <div className="mt-4 flex flex-col gap-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-2.5 left-2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search the guide"
-              className="pl-8"
-              aria-label="Search the guide"
-            />
-          </div>
-          <NavTabs
-            id="guide-category"
-            listClassName="flex-wrap justify-center"
-            current={category}
-            options={GUIDE_TABS}
-            onChange={setCategory}
-          />
-        </div>
       </ContentBox>
 
       {grouped.map((group) => (
@@ -171,28 +171,17 @@ export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
 };
 
 /**
- * Route loading state for the guide hub. The header, introduction, search and category
- * tabs are static and render exactly as loaded; the featured guide and the first two
- * category sections are placeholders reserving more than a viewport, so the loaded hub
- * replaces them without moving anything already on screen.
+ * Keep the guide header and filters in place while the catalog loads. Filters stay
+ * disabled until their results are available; article placeholders reserve space below.
  */
 export const GuideHubSkeleton: React.FC = () => (
   <>
     <ContentBox title={HUB_TITLE} subtitle={HUB_SUBTITLE}>
       <GuideHubIntro />
-      <div className="mt-4 flex items-center gap-3 rounded-lg border p-3">
-        <Skeleton className="h-[88px] w-36 shrink-0" />
-        <div className="flex min-w-0 grow flex-col gap-2">
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="h-4 w-1/2" />
-          <Skeleton className="h-4 w-full" />
-        </div>
-      </div>
-      <div className="mt-4 flex flex-col gap-3">
+      <fieldset disabled className="mt-4 flex min-w-0 flex-col gap-3 opacity-50">
         <div className="relative">
           <Search className="pointer-events-none absolute top-2.5 left-2 h-4 w-4 text-muted-foreground" />
           <Input
-            readOnly
             placeholder="Search the guide"
             className="pl-8"
             aria-label="Search the guide"
@@ -203,6 +192,14 @@ export const GuideHubSkeleton: React.FC = () => (
           current={ALL_TAB}
           options={GUIDE_TABS}
         />
+      </fieldset>
+      <div className="mt-4 flex items-center gap-3 rounded-lg border p-3">
+        <Skeleton className="h-[88px] w-36 shrink-0" />
+        <div className="flex min-w-0 grow flex-col gap-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-4 w-full" />
+        </div>
       </div>
     </ContentBox>
     {GUIDE_HUB_CATEGORY_ORDER.slice(0, 2).map((key) => (
