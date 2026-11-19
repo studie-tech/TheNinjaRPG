@@ -42,7 +42,7 @@ import {
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
-import { updateRewards } from "@/server/utils/questRewards";
+import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canAwardReputation, canManageRewards, isStaffRole } from "@/utils/permissions";
@@ -224,6 +224,8 @@ export const resourceSilosRouter = createTRPCRouter({
           : [],
       ]);
       const payout = structuredClone(rewards);
+      // An equipped mode skips acquisition, so UPDATE-only payouts cannot grant these choices.
+      payout.reward_sage_modes = [];
       boostPvpRewards(
         payout,
         getPvpBoost(user, pvpAverage ? [pvpAverage] : []).totalPercent,
@@ -285,6 +287,7 @@ export const resourceSilosRouter = createTRPCRouter({
             inTransaction: true,
             persistQuestData: false,
           });
+          nameGrantedRewards(payout, granted);
           return resourceSiloClaimResponse(
             rawRewards,
             payout,
@@ -381,7 +384,7 @@ const resourceSiloNeedsTransaction = (user: UserData, rewards: GetRewardResult) 
   (rewards.reward_hunter_items && user.occupation === "HUNTER") ||
   (rewards.reward_gathering_items && user.occupation === "GATHERING");
 
-/** Describe only the payout amounts and item names confirmed by the committed claim. */
+/** Summarize confirmed payout amounts and acquisitions, naming awarded items. */
 const resourceSiloClaimResponse = (
   rawRewards: ObjectiveRewardType,
   payout: GetRewardResult,

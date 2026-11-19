@@ -4,8 +4,12 @@ import { MASTERY_RANK_CAPS, MasteryNames } from "@/drizzle/constants";
 import {
   anbuSquad,
   clan,
+  jutsu,
   resourceSilo,
+  sageMode,
+  sageModeRolls,
   userData,
+  userJutsu,
   userPet,
   userQueue,
   userVote,
@@ -30,6 +34,7 @@ import {
 } from "@/validators/rewards";
 import {
   insertClans,
+  insertJutsus,
   insertUserPets,
   insertUsers,
   insertUserVotes,
@@ -74,12 +79,16 @@ const configure = async (rewards: Partial<ObjectiveRewardType>) => {
   });
 };
 
-/** UPDATE-only claims must keep their receipt, queued recovery and related balances indivisible. */
-describeWithDatabase("resource silo single-statement payouts", () => {
+/** Claims confirm delivered rewards and keep their receipt, recovery and balances indivisible. */
+describeWithDatabase("resource silo reward payouts", () => {
   beforeEach(async () => {
     await resetTables(
       userData,
       resourceSilo,
+      jutsu,
+      userJutsu,
+      sageMode,
+      sageModeRolls,
       userVote,
       userQueue,
       userPet,
@@ -111,6 +120,54 @@ describeWithDatabase("resource silo single-statement payouts", () => {
     await insertUserVotes([{ userId }]);
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each([false, true])(
+    "confirms only the sage mode actually acquired, equipped=%s",
+    async (equipped) => {
+      const db = await getTestDatabase();
+      await db.insert(sageMode).values(
+        ["first-mode", "second-mode"].map((id) => ({
+          id,
+          name: id,
+          image: "mode.png",
+          description: "Silo reward mode",
+        })),
+      );
+      if (equipped)
+        await db
+          .update(userData)
+          .set({ sageModeId: "first-mode" })
+          .where(eq(userData.userId, userId));
+      await configure({ reward_sage_modes: ["first-mode", "second-mode"] });
+
+      const result = await (await callerFor(resourceSilosRouter, userId)).claim();
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe(
+        equipped
+          ? "Resource Silo unlocked. No rewards dropped this time."
+          : "Resource Silo: 1 sage modes",
+      );
+      expect(await db.query.sageModeRolls.findMany()).toHaveLength(equipped ? 0 : 1);
+    },
+  );
+
+  it("excludes already-owned jutsus from the claim confirmation", async () => {
+    const db = await getTestDatabase();
+    await insertJutsus([{ id: "owned-jutsu" }, { id: "new-jutsu" }]);
+    await db.insert(userJutsu).values({
+      id: "owned-jutsu-receipt",
+      userId,
+      jutsuId: "owned-jutsu",
+    });
+    await configure({ reward_jutsus: ["owned-jutsu", "new-jutsu"] });
+
+    const result = await (await callerFor(resourceSilosRouter, userId)).claim();
+
+    expect(result.success).toBe(true);
+    expect(result.message).toBe("Resource Silo: 1 jutsus");
+    expect(await db.query.userJutsu.findMany()).toHaveLength(2);
+  });
 
   it("boosts scalar rewards exactly once without starting a transaction", async () => {
     const db = await getTestDatabase();
