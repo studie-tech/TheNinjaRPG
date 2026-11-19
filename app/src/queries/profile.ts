@@ -1932,10 +1932,23 @@ export const insertUserItemForApplyUserContentChanges = (
     })),
   );
 
-/** Build the `userData` lookup for `queryUpdatedUser`, including predicates on `userId`, `equipped`, `quantity`. */
+/** Build the profile snapshot with revision-keyed quest definitions; see `fetchProfileUser`. */
 export const findUserDataForQueryUpdatedUser = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
+) => findProfileUser(client, userId, questRevisionRelation);
+
+/** Read one joined snapshot when a concurrent definition edit prevents cache hydration. */
+export const findProfileUserWithQuestDefinitions = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) => findProfileUser(client, userId, true);
+
+/** Build the `userData` lookup for `queryUpdatedUser`, including predicates on `userId`, `equipped`, `quantity`. */
+const findProfileUser = <QuestRelation extends true | typeof questRevisionRelation>(
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+  questRelation: QuestRelation,
 ) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
@@ -1983,13 +1996,7 @@ export const findUserDataForQueryUpdatedUser = (
       },
       userQuests: {
         ...userQuestHistoryRelation,
-        // Definitions come from the revision-keyed cache; see `fetchProfileUser`.
-        with: {
-          quest: {
-            columns: questLiveColumns,
-            extras: (table) => ({ revision: questRevisionSql(table).as("revision") }),
-          },
-        },
+        with: { quest: questRelation },
         orderBy: sql`FIELD(${questHistory.questType}, 'daily', 'tier') ASC`,
       },
       completedQuests: completedQuestHistoryRelation,
@@ -2031,6 +2038,13 @@ export const questRevisionSql = (table: (typeof quest)["_"]["columns"]) =>
       .map(([key]) => table[key as keyof typeof table] as AnyMySqlColumn),
     sql`, `,
   )}), 256)`;
+
+const questRevisionRelation = {
+  columns: questLiveColumns,
+  extras: (table: (typeof quest)["_"]["columns"]) => ({
+    revision: questRevisionSql(table).as("revision"),
+  }),
+};
 
 /** Build the `quest` selection of complete definitions and their revisions for `fetchProfileUser`. */
 export const selectQuestDefinitions = (

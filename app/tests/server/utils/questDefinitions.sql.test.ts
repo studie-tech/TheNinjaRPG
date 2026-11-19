@@ -2,8 +2,12 @@
 import { afterEach, beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { quest, questHistory, userData } from "@/drizzle/schema";
+import { hasQuestContentChanged } from "@/libs/questRun";
+import { executeDefinitionWriteForUpdate } from "@/queries/quests";
 import { fetchProfileUser } from "@/server/utils/questDefinitions";
+import { QuestTracker, QuestValidator } from "@/validators/objectives";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
+import { aroundStatements, beforeStatements } from "../../setup/statements";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -92,6 +96,83 @@ describeWithDatabase("profile quest definitions", () => {
     // Only the edited quest is read again; raid state alone keeps its revision.
     expect(statements).toHaveLength(2);
     expect(statements[1]).toContain("in ('story')");
+  });
+
+  it("keeps preserved history and checkpoints on the fetched definition revision", async () => {
+    const db = await getTestDatabase();
+    const checkpoint = QuestTracker.parse({
+      id: "story",
+      goals: [{ id: "floor", value: 77 }],
+    });
+    await Promise.all([
+      db.update(quest).set({ questType: "battlepyramid" }).where(eq(quest.id, "story")),
+      db
+        .update(questHistory)
+        .set({ questType: "battlepyramid", questVersion: REVISION })
+        .where(eq(questHistory.questId, "story")),
+      db
+        .update(userData)
+        .set({ questData: [checkpoint] })
+        .where(eq(userData.userId, USER_ID)),
+    ]);
+    const original = (await db.query.quest.findFirst({
+      where: eq(quest.id, "story"),
+    }))!;
+    const editedAt = new Date(REVISION.getTime() + 1000);
+    const client = beforeStatements(
+      db,
+      quest,
+      [
+        () =>
+          executeDefinitionWriteForUpdate(
+            db,
+            original,
+            {
+              data: QuestValidator.parse({ ...original, hidden: true }),
+            },
+            editedAt,
+          ),
+      ],
+      { operations: ["select"] },
+    );
+
+    const user = await fetchProfileUser(client, USER_ID);
+    const attempt = user!.userQuests.find((entry) => entry.questId === "story")!;
+    expect(attempt.questVersion).toEqual(editedAt);
+    expect(attempt.quest.updatedAt).toEqual(editedAt);
+    expect(hasQuestContentChanged(attempt)).toBe(false);
+    expect(user!.questData).toEqual([checkpoint]);
+  });
+
+  it("bounds concurrent edits to one joined retry and keeps raid state consistent", async () => {
+    const db = await getTestDatabase();
+    let definitionReads = 0;
+    const client = aroundStatements(
+      db,
+      quest,
+      async (read) => {
+        // Every separate definition read races another edit; a joined retry cannot split it.
+        definitionReads++;
+        if (definitionReads > 2) throw new Error("Unbounded definition retries");
+        const health = 1000 / 2 ** definitionReads;
+        await db
+          .update(quest)
+          .set({ raidBossMaxHealth: health, raidBossCurrentHealth: health })
+          .where(eq(quest.id, "raid"));
+        return read();
+      },
+      { operations: ["select"] },
+    );
+    const { result, statements } = await recordQueries(() =>
+      fetchProfileUser(client, USER_ID),
+    );
+    const raid = result!.userQuests.find((entry) => entry.questId === "raid")!.quest;
+    expect(raid).toMatchObject({ raidBossMaxHealth: 500, raidBossCurrentHealth: 500 });
+    expect(definitionReads).toBe(1);
+    const reads = statements.filter((statement) => /^select /i.test(statement));
+    expect(reads).toHaveLength(3);
+    expect(reads[0]).toContain("SHA2(JSON_ARRAY(");
+    expect(reads[2]).not.toContain("SHA2(JSON_ARRAY(");
   });
 
   it("hands every read its own copy and leaves deleted quests without a definition", async () => {

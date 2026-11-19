@@ -1,6 +1,7 @@
 import superjson, { type SuperJSONResult } from "superjson";
 import type { Quest } from "@/drizzle/schema";
 import {
+  findProfileUserWithQuestDefinitions,
   findUserDataForQueryUpdatedUser,
   selectQuestDefinitions,
 } from "@/queries/profile";
@@ -20,10 +21,11 @@ export const fetchProfileUser = async (
   const user = await findUserDataForQueryUpdatedUser(client, userId);
   // A snapshot read without its history has nothing to hydrate.
   if (!user?.userQuests) return user as ProfileUser | undefined;
-  return {
-    ...user,
-    userQuests: await hydrateQuestDefinitions(client, user.userQuests),
-  };
+  const userQuests = await hydrateQuestDefinitions(client, user.userQuests);
+  // One joined retry keeps quest versions, history and raid state in the same snapshot,
+  // even if staff keep editing while this request reads a cold definition.
+  if (!userQuests) return findProfileUserWithQuestDefinitions(client, userId);
+  return { ...user, userQuests };
 };
 
 /**
@@ -34,11 +36,12 @@ export const fetchProfileUser = async (
  * changes during fights and is taken from the snapshot. Definitions this instance and the
  * Runtime Cache lack are read in one statement and stored for other requests. A quest
  * deleted since the snapshot leaves its entry without a definition, as a join would.
+ * A changed definition returns undefined so the caller can retry the complete snapshot.
  */
 const hydrateQuestDefinitions = async <Entry extends { quest: QuestRevision | null }>(
   client: DrizzleClient,
   entries: Entry[],
-): Promise<WithDefinition<Entry>[]> => {
+): Promise<WithDefinition<Entry>[] | undefined> => {
   const revisions = new Map<string, QuestRevision>();
   for (const { quest } of entries)
     if (quest) revisions.set(definitionKey(quest), quest);
@@ -52,6 +55,13 @@ const hydrateQuestDefinitions = async <Entry extends { quest: QuestRevision | nu
       .filter((id) => !definitions.has(id));
     if (missingIds.length > 0) {
       const rows = await selectQuestDefinitions(client, missingIds);
+      if (
+        rows.some(
+          ({ definition, revision }) =>
+            !revisions.has(definitionKey({ id: definition.id, revision })),
+        )
+      )
+        return undefined;
       await Promise.all(
         rows.map(({ definition, revision }) => {
           const value = superjson.serialize(definition);
