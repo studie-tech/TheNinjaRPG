@@ -30,7 +30,6 @@ import { getMainNavbarLinks, type NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
 import { createModuleLoader } from "@/utils/async";
-import { usePublicPathname } from "@/utils/routing";
 import { useUserData, useUserDataSelector } from "@/utils/UserContext";
 import { CollapsibleNotifications } from "./LayoutNotifications";
 import { layoutVariantClasses } from "./layoutVariants";
@@ -214,6 +213,7 @@ interface LayoutRightSidebarContentProps {
   systems: NavBarDropdownLink[];
   notifications?: NavBarDropdownLink[];
   location?: NavBarDropdownLink;
+  isCombatPage: boolean;
 }
 
 export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps> = ({
@@ -224,6 +224,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
   systems,
   notifications,
   location,
+  isCombatPage,
 }) => {
   const showPublicContent = shouldShowPublicContent({
     variant,
@@ -241,6 +242,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
           systems={systems}
           userData={userData}
           location={location}
+          isCombatPage={isCombatPage}
         />
       )}
       {showPublicContent && (
@@ -436,6 +438,7 @@ interface RightSideBarProps {
   userData: Pick<NonNullable<UserWithRelations>, "status">;
   notifications?: NavBarDropdownLink[];
   location?: NavBarDropdownLink;
+  isCombatPage: boolean;
 }
 
 const RightSideBar: React.FC<RightSideBarProps> = ({
@@ -444,9 +447,9 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
   systems,
   userData,
   location,
+  isCombatPage,
 }) => {
   const inBattle = userData.status === "BATTLE";
-  const pathname = usePublicPathname();
   const variantClasses = layoutVariantClasses[variant];
 
   const renderDefaultSidebar = () => (
@@ -506,7 +509,7 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
     </>
   );
 
-  if (inBattle && pathname === "/combat") {
+  if (inBattle && isCombatPage) {
     return (
       <Tabs defaultValue="battle" className="w-full">
         <TabsContent value="menu">{renderDefaultSidebar()}</TabsContent>

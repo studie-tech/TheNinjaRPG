@@ -25,7 +25,9 @@ beforeEach(() => {
     userQuests: [],
     questData: [],
   };
-  vi.spyOn(context, "useUserData").mockImplementation(() => ({ data: user }) as never);
+  vi.spyOn(context, "useUserDataSelector").mockImplementation(
+    (select) => ({ data: select(user as never) }) as never,
+  );
   vi.spyOn(logbook, "LogbookEntry").mockImplementation(({ userQuest }) => (
     <p>Progress for {userQuest.quest.name}</p>
   ));

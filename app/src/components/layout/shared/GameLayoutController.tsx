@@ -196,13 +196,19 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     () => getMainNavbarLinks(notifications),
     [notifications],
   );
+  // Navigation changes the list only when it enters or leaves a notification's own page.
+  const currentNotificationHref = notifications?.some(
+    (n) => !n.alwaysShow && n.href === pathname,
+  )
+    ? pathname
+    : undefined;
   const shownNotifications = useMemo(() => {
     const base =
       notifications?.filter(
         (n) =>
           n.color !== "toast" &&
           n.color !== "hidden" &&
-          (n.alwaysShow || n.href !== pathname),
+          (n.alwaysShow || n.href !== currentNotificationHref),
       ) ?? [];
     if (activeTerritoryWar) {
       base.push({
@@ -225,7 +231,13 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
         alwaysShow: true,
       },
     ];
-  }, [notifications, pathname, rankedQueueCount, userId, activeTerritoryWar]);
+  }, [
+    notifications,
+    currentNotificationHref,
+    rankedQueueCount,
+    userId,
+    activeTerritoryWar,
+  ]);
   const isSignedInLayout = isClerkLoaded ? isSignedIn : initialIsSignedIn;
   useEffect(() => {
     if (isSignedInLayout) preloadSignedInSidebar();
@@ -236,7 +248,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     else if (userStatus === "error") accountState = "error";
     else if (userId && userStatus === "success") accountState = "create-character";
   }
-  const showMobileNotifications = pathname !== "/combat";
+  const isCombatPage = pathname === "/combat";
   const season = getCurrentSeason();
   const wallpaperOverwrite = userData?.wallpaperOverwrite;
   const imageset = useMemo(
@@ -295,6 +307,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       systems={systems}
       notifications={shownNotifications}
       location={location}
+      isCombatPage={isCombatPage}
     />
   );
 
@@ -318,7 +331,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     variant,
     userData: layoutUser,
     isSignedInLayout,
-    pathname,
+    isCombatPage,
     navbarMenuItems,
     shownNotifications,
     location,
@@ -337,7 +350,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     toggleLightLayout,
     imageset,
     variantClasses,
-    showMobileNotifications,
   };
 
   return (

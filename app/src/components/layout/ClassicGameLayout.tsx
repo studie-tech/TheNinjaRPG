@@ -48,7 +48,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
   children,
   userData,
   isSignedInLayout,
-  pathname,
+  isCombatPage,
   navbarMenuItems,
   shownNotifications,
   location,
@@ -67,7 +67,6 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
   toggleLightLayout,
   imageset,
   variantClasses,
-  showMobileNotifications,
 }) => {
   const { swapSides } = useActivityDock();
   const areSidebarColumnsHidden = useMediaQuery(SIDEBAR_COLUMNS_HIDDEN_QUERY);
@@ -348,14 +347,14 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                   <SheetTitle>Main Menu</SheetTitle>
                 </VisuallyHidden.Root>
                 <MobileSidebarStack
-                  isCombat={pathname === "/combat"}
+                  isCombat={isCombatPage}
                   leftSideBar={leftSideBar}
                   mainMenu={leftSideBarMainMenu}
                 />
               </SheetHeader>
             </SheetContent>
           </Sheet>
-          {isSignedInLayout && showMobileNotifications && (
+          {isSignedInLayout && !isCombatPage && (
             <MobileNotificationsPopover
               notifications={shownNotifications}
               variant="default"

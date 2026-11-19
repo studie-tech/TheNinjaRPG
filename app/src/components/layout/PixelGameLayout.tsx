@@ -45,7 +45,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   children,
   userData,
   isSignedInLayout,
-  pathname,
+  isCombatPage,
   navbarMenuItems,
   shownNotifications,
   location,
@@ -61,7 +61,6 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   leftSideBarMainMenu,
   handleRightSidebarClick,
   variantClasses,
-  showMobileNotifications,
 }) => {
   const { swapSides } = useActivityDock();
   const areSidebarColumnsHidden = useMediaQuery(SIDEBAR_COLUMNS_HIDDEN_QUERY);
@@ -167,14 +166,14 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                           <SheetTitle>Player menu</SheetTitle>
                         </VisuallyHidden.Root>
                         <MobileSidebarStack
-                          isCombat={pathname === "/combat"}
+                          isCombat={isCombatPage}
                           leftSideBar={leftSideBar}
                           mainMenu={leftSideBarMainMenu}
                         />
                       </SheetHeader>
                     </SheetContent>
                   </Sheet>
-                  {showMobileNotifications && (
+                  {!isCombatPage && (
                     <MobileNotificationsPopover
                       notifications={shownNotifications}
                       variant="pixel"
@@ -240,7 +239,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
             "relative z-10 flex h-full flex-row",
             isSignedInLayout
               ? "tnr-pixel-mobile-signed-content-row top-[70px] mx-auto mt-6 w-[calc(100%-16px)] max-w-[1440px] items-start gap-0 md:top-0 md:gap-2"
-              : shownNotifications.length > 0 && pathname !== "/combat"
+              : shownNotifications.length > 0 && !isCombatPage
                 ? "top-[100px]"
                 : "top-[70px]",
           )}

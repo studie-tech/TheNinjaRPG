@@ -21,7 +21,8 @@ export interface GameLayoutRenderProps {
   variant: GameLayoutId;
   userData?: LayoutUserData | null;
   isSignedInLayout: boolean;
-  pathname: string;
+  /** The battle page swaps the sidebars and hides the mobile notifications. */
+  isCombatPage: boolean;
   navbarMenuItems: NavBarDropdownLink[];
   shownNotifications: NavBarDropdownLink[];
   location?: NavBarDropdownLink;
@@ -40,7 +41,6 @@ export interface GameLayoutRenderProps {
   toggleLightLayout: () => void;
   imageset: LayoutImageSet;
   variantClasses: GameLayoutVariantClasses;
-  showMobileNotifications: boolean;
 }
 
 export type GameLayoutRenderer = React.FC<GameLayoutRenderProps>;

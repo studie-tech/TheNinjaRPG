@@ -33,6 +33,13 @@ const targets = [
   ["components/layout/shared/LayoutNotifications.tsx", ["MobileNotificationsPopover"]],
   ["hooks/tutorial.tsx", ["useTutorialStep"]],
   ["layout/TutorialAssistant.tsx", ["PlayerTutorialAssistant"]],
+  ["layout/ActivityDock.tsx", ["ActivityDock", "ActivityQuests"]],
+  ["components/layout/shared/GameLayoutController.tsx", ["GameLayoutController"]],
+  [
+    "components/layout/shared/LayoutSidebars.tsx",
+    ["LayoutRightSidebarContent", "RightSideBar"],
+  ],
+  ["utils/UserContext.tsx", ["UserContextProvider"]],
   ["app/[shell]/items/page.tsx", ["MyItems"]],
   ["layout/items/ItemsWorkspace.tsx", ["ItemsWorkspace"]],
   ["layout/items/EquipmentFigure.tsx", ["EquipmentFigure"]],
@@ -148,7 +155,6 @@ const compilerExceptions = [
   "layout/profileEdit/AttributeChange.tsx#AttributeChange",
   "layout/profileEdit/Marriage.tsx#Marriage",
   "layout/publicUser/BadgesTab.tsx#BadgesTab",
-  "utils/UserContext.tsx#UserContextProvider",
   "utils/UserContext.tsx#useUserDataRef",
 ];
 

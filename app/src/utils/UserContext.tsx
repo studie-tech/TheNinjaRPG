@@ -16,7 +16,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import type { StructureRoute } from "@/drizzle/constants";
 import { useNavigationRouter } from "@/hooks/navigation";
@@ -189,29 +189,7 @@ export function UserContextProvider(props: {
     retry: false,
     refetchInterval: 300000,
     notifyOnChangeProps: ["data", "status"],
-    // Session services observe their inputs, while profile consumers select their own cache data.
-    select: ({ userData: user, ...metadata }) => ({
-      ...metadata,
-      userData: user && {
-        userId: user.userId,
-        username: user.username,
-        status: user.status,
-        clanId: user.clanId,
-        villageId: user.villageId,
-        currentlyTrainingMastery: user.currentlyTrainingMastery,
-        masteryTrainingStartedAt: user.masteryTrainingStartedAt,
-        trainingSpeed: user.trainingSpeed,
-        currentlyTrainingElement: user.currentlyTrainingElement,
-        elementalTrainingStartedAt: user.elementalTrainingStartedAt,
-        elementalTrainingSpeed: user.elementalTrainingSpeed,
-        isOutlaw: user.isOutlaw,
-        clan: user.clan,
-        village: user.village,
-        raidBuffs: user.raidBuffs,
-        cookingJobs: user.cookingJobs,
-        serviceCraftUntil: user.serviceCraftUntil,
-      },
-    }),
+    select: selectSessionServices,
   });
 
   // Profile reads collect completed sessions and start their queued successors.
@@ -264,17 +242,18 @@ export function UserContextProvider(props: {
     [queryClient, userQueryKey],
   );
   const refreshUser = useCallback(async () => {
+    let result: Awaited<ReturnType<typeof refetch>>;
     try {
       // A cancelled read must not confirm the restored cached profile as a fresh response.
       await queryClient.cancelQueries(
         { queryKey: userQueryKey, exact: true },
         { silent: true },
       );
-      const result = await refetch({ throwOnError: true });
-      return result.isSuccess && result.data?.userData?.userId === userId;
+      result = await refetch({ throwOnError: true });
     } catch {
       return false;
     }
+    return result.isSuccess && result.data?.userData?.userId === userId;
   }, [queryClient, userQueryKey, refetch, userId]);
 
   // Profile reconciliation stays owned by this provider, including websocket deliveries.
@@ -379,6 +358,33 @@ export function UserContextProvider(props: {
 
   return <UserInfoContext value={info}>{props.children}</UserInfoContext>;
 }
+
+/** Session services observe their inputs, while profile consumers select their own cache data. */
+const selectSessionServices = ({
+  userData: user,
+  ...metadata
+}: RouterOutputs["profile"]["getUser"]) => ({
+  ...metadata,
+  userData: user && {
+    userId: user.userId,
+    username: user.username,
+    status: user.status,
+    clanId: user.clanId,
+    villageId: user.villageId,
+    currentlyTrainingMastery: user.currentlyTrainingMastery,
+    masteryTrainingStartedAt: user.masteryTrainingStartedAt,
+    trainingSpeed: user.trainingSpeed,
+    currentlyTrainingElement: user.currentlyTrainingElement,
+    elementalTrainingStartedAt: user.elementalTrainingStartedAt,
+    elementalTrainingSpeed: user.elementalTrainingSpeed,
+    isOutlaw: user.isOutlaw,
+    clan: user.clan,
+    village: user.village,
+    raidBuffs: user.raidBuffs,
+    cookingJobs: user.cookingJobs,
+    serviceCraftUntil: user.serviceCraftUntil,
+  },
+});
 
 /** Observe the complete cached profile when a feature needs all its fields. */
 export const useUserData = () => useUserDataSelector((user) => user);

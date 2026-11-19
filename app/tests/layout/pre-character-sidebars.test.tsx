@@ -62,6 +62,7 @@ describe("sidebars before character creation", () => {
           isSignedInLayout
           accountState="create-character"
           systems={[]}
+          isCombatPage={false}
         />,
       );
       const navigation = within(
@@ -91,6 +92,7 @@ describe("sidebars before character creation", () => {
             isSignedInLayout
             accountState="loading"
             systems={[]}
+            isCombatPage={false}
           />
         </>,
       );
@@ -115,6 +117,7 @@ describe("sidebars before character creation", () => {
             isSignedInLayout
             accountState="error"
             systems={[]}
+            isCombatPage={false}
           />
         </>,
       );
@@ -136,6 +139,7 @@ describe("sidebars before character creation", () => {
         isSignedInLayout={false}
         accountState={null}
         systems={[]}
+        isCombatPage={false}
       />,
     );
     expect(view.getByRole("link", { name: /^Sign in/ }).getAttribute("href")).toBe(
