@@ -61,7 +61,7 @@ import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/allia
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSwapVillage } from "@/utils/permissions";
 import { calcRamenPrice, getRamenHealPercentage, ramenOptions } from "@/utils/ramen";
-import { canAccessStructure } from "@/utils/village";
+import { canAccessStructure, getOwnSectorVillage } from "@/utils/village";
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -148,12 +148,11 @@ export const villageRouter = createTRPCRouter({
       });
       let user = updatedUser.user;
       if (!user) return errorResponse("User does not exist");
-      // The visiting village's structures discount the price, as on the menu
-      const sectorVillage = await fetchSectorVillage(
-        ctx.drizzle,
-        user.sector,
-        user.isOutlaw,
-      );
+      // The visiting village's structures discount the price, as on the menu. In the
+      // player's own village the hydrated user already carries them.
+      const sectorVillage =
+        getOwnSectorVillage(user) ??
+        (await fetchSectorVillage(ctx.drizzle, user.sector, user.isOutlaw));
       const healPercentage = getRamenHealPercentage(input.ramen);
       const cost = calcRamenPrice(input.ramen, user, sectorVillage?.structures);
       // Guard

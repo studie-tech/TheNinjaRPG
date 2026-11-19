@@ -78,10 +78,43 @@ describeWithDatabase("ANBU espionage charges", () => {
         prestige: 0,
         points: 0,
         messages: [
-          "Not enough village prestige or squad points",
+          "Village prestige or squad changed, please try again",
           "Espionage mission failed",
         ],
       },
     );
+  });
+
+  it("returns the confirmed squad baseline even when the mission fails", async () => {
+    const result = await (await callerFor(anbuRouter, "spy")).performEspionage(input);
+    expect(result).toEqual({
+      success: false,
+      message: "Espionage mission failed",
+      squadDelta: { id: "squad", points: -ANBU_ESPIONAGE_POINTS_COST },
+      squadExpected: { id: "squad", points: ANBU_ESPIONAGE_POINTS_COST },
+    });
+  });
+
+  it("rejects a changed squad baseline without charging personal prestige", async () => {
+    const db = await getTestDatabase();
+    await db.update(anbuSquad).set({ points: ANBU_ESPIONAGE_POINTS_COST * 3 });
+    const raced = beforeStatements(db, anbuSquad, [
+      () =>
+        db
+          .update(anbuSquad)
+          .set({ points: ANBU_ESPIONAGE_POINTS_COST * 2 })
+          .where(eq(anbuSquad.id, "squad")),
+    ]);
+    const result = await callerForDatabase(anbuRouter, "spy", raced).performEspionage(
+      input,
+    );
+    expect(result).toEqual({
+      success: false,
+      message: "Village prestige or squad changed, please try again",
+    });
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, "spy") }))
+        ?.villagePrestige,
+    ).toBe(ANBU_ESPIONAGE_PRESTIGE_COST);
   });
 });

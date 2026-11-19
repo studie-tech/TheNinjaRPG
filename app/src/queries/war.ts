@@ -1554,11 +1554,34 @@ export const findWarForCompleteWarMission = (
 ) =>
   client.query.war.findFirst({
     where: eq(war.id, attempt.warId),
-    with: {
-      warMercenaries: { where: activeWarMercenaryWhere() },
-      warAllies: { where: activeWarAllyWhere() },
-    },
+    with: warMissionWarRelations(),
   });
+
+/**
+ * Build the lookup of the war named by a user's stored war mission, resolving the war ID
+ * inside the statement so it can run beside the user's own read. Callers compare the
+ * returned ID with the attempt they validated.
+ */
+export const findWarForUserWarMission = (client: DrizzleClient, userId: string) =>
+  client.query.war.findFirst({
+    where: inArray(
+      war.id,
+      client
+        .select({
+          warId: sql<string>`JSON_UNQUOTE(JSON_EXTRACT(${userData.warMission}, '$.warId'))`,
+        })
+        .from(userData)
+        .where(eq(userData.userId, userId)),
+    ),
+    with: warMissionWarRelations(),
+  });
+
+/** The active mercenaries and allies that decide a war mission's side. */
+const warMissionWarRelations = () =>
+  ({
+    warMercenaries: { where: activeWarMercenaryWhere() },
+    warAllies: { where: activeWarAllyWhere() },
+  }) as const;
 
 /**
  * Build the `userData` update for `claim`, setting `warMission`, including predicates

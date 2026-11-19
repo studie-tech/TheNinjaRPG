@@ -92,6 +92,7 @@ import {
   findWarForGetObjectiveWarInfo,
   findWarForInviteMercenary,
   findWarForStartWarMission,
+  findWarForUserWarMission,
   insertActionLogForAdminEndWar,
   insertGameSettingForSetRules,
   insertNotificationForCancelWarDeclaration,
@@ -544,9 +545,11 @@ export const warRouter = createTRPCRouter({
     .input(completeWarMissionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      let [user, settings] = await Promise.all([
+      let [user, settings, missionWar, mercenaryWarId] = await Promise.all([
         fetchActionUser(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
+        findWarForUserWarMission(ctx.drizzle, ctx.userId),
+        fetchMercenaryWarId(ctx.drizzle, ctx.userId),
       ]);
       const readiness = prepareActionReadiness(user, settings);
       if (readiness.error) return errorResponse(readiness.error);
@@ -558,10 +561,12 @@ export const warRouter = createTRPCRouter({
         return errorResponse(
           `War missions require ${capitalizeFirstLetter(WAR_MISSION_REQUIRED_RANK)} rank or higher`,
         );
-      const [activeWar, mercenaryWarId] = await Promise.all([
-        findWarForCompleteWarMission(ctx.drizzle, attempt),
-        fetchMercenaryWarId(ctx.drizzle, ctx.userId),
-      ]);
+      // The war read resolves the mission separately from the user read; a mission that
+      // changed between the two statements reads its own war again.
+      const activeWar =
+        missionWar?.id === attempt.warId
+          ? missionWar
+          : await findWarForCompleteWarMission(ctx.drizzle, attempt);
       if (activeWar && !isObjectiveWarActive(activeWar))
         return errorResponse("War missions are only available during active combat");
       if (

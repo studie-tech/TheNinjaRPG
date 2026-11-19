@@ -293,48 +293,47 @@ export const findSectorByNumber = (
     where: eq(sector.sector, sectorNumber),
   });
 
-/** Build the `village` update for `upgradeShrine`, setting `tokens`, using predicates on `id` and `tokens`. */
-export const updateVillageForUpgradeShrine = (
-  client: Pick<DrizzleClient, "update">,
-  user: { villageId: string },
+/** Load the user and village fields the Kage shrine upgrade checks. */
+export const findUserDataForUpgradeShrine = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
 ) =>
-  client
-    .update(village)
-    .set({ tokens: sql`${village.tokens} - ${SHRINE_UPGRADE_COST}` })
-    .where(
-      and(eq(village.id, user.villageId), gte(village.tokens, SHRINE_UPGRADE_COST)),
-    );
+  client.query.userData.findFirst({
+    columns: { userId: true, villageId: true },
+    with: { village: { columns: { id: true, kageId: true, tokens: true } } },
+    where: eq(userData.userId, userId),
+  });
 
 /**
- * Build the `sector` update for `upgradeShrine`, setting `shrineLevel`, using
- * predicates on `sector`, `villageId`, `shrineLevel`.
+ * Execute a shrine upgrade as one statement: the village pays `SHRINE_UPGRADE_COST` and
+ * its shrine rises one level only while the caller is still Kage, the village can afford
+ * it and still owns the sector at the expected level. The live user must still belong to
+ * the village and remain eligible under the profile's negative-prestige expulsion rule.
+ * Both rows change (2 rows affected) or neither does.
  */
-export const updateSectorForUpgradeShrine = (
-  client: Pick<DrizzleClient, "update">,
-  targetSector: { shrineLevel: number },
-  input: { sectorNumber: number },
-  user: { villageId: string },
+export const executeUpgradeShrine = (
+  client: Pick<DrizzleClient, "execute">,
+  upgrade: {
+    villageId: string;
+    kageId: string;
+    sectorNumber: number;
+    shrineLevel: number;
+  },
 ) =>
-  client
-    .update(sector)
-    .set({ shrineLevel: targetSector.shrineLevel + 1 })
-    .where(
-      and(
-        eq(sector.sector, input.sectorNumber),
-        eq(sector.villageId, user.villageId),
-        eq(sector.shrineLevel, targetSector.shrineLevel),
-      ),
-    );
-
-/** Build the `village` update for `upgradeShrine`, setting `tokens`, using predicates on `id`. */
-export const updateVillageForUpgradeShrine2 = (
-  client: Pick<DrizzleClient, "update">,
-  user: { villageId: string },
-) =>
-  client
-    .update(village)
-    .set({ tokens: sql`${village.tokens} + ${SHRINE_UPGRADE_COST}` })
-    .where(eq(village.id, user.villageId));
+  client.execute(sql`
+      UPDATE ${village}
+      INNER JOIN ${sector} ON ${sector.villageId} = ${village.id}
+      INNER JOIN ${userData} ON ${userData.userId} = ${village.kageId}
+        AND ${userData.villageId} = ${village.id}
+      SET ${village.tokens} = ${village.tokens} - ${SHRINE_UPGRADE_COST},
+          ${sector.shrineLevel} = ${upgrade.shrineLevel + 1}
+      WHERE ${village.id} = ${upgrade.villageId}
+        AND ${village.kageId} = ${upgrade.kageId}
+        AND (${userData.isOutlaw} = TRUE OR ${userData.villagePrestige} >= 0 OR ${village.type} != 'VILLAGE')
+        AND ${village.tokens} >= ${SHRINE_UPGRADE_COST}
+        AND ${sector.sector} = ${upgrade.sectorNumber}
+        AND ${sector.shrineLevel} = ${upgrade.shrineLevel}
+    `);
 
 /**
  * Build the `village` update for `activateBoost`, setting `tokens` and

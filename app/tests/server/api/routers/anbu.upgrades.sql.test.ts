@@ -72,7 +72,12 @@ describeWithDatabase("ANBU squad upgrades", () => {
       await seedSquad({ points: upgrade.cost + 1 });
       const caller = await callerFor(anbuRouter, "leader");
       const result = await caller[upgrade.procedure](input);
-      expect(result).toEqual({ success: true, message: upgrade.message });
+      expect(result).toEqual({
+        success: true,
+        message: upgrade.message,
+        squadDelta: { id: "squad", points: -upgrade.cost, [upgrade.column]: 1 },
+        squadExpected: { id: "squad", points: upgrade.cost + 1, [upgrade.column]: 0 },
+      });
       const squad = await storedSquad();
       expect(squad?.points).toBe(1);
       expect(squad?.[upgrade.column]).toBe(1);
@@ -109,10 +114,35 @@ describeWithDatabase("ANBU squad upgrades", () => {
       const result = await callerForDatabase(anbuRouter, "leader", raced)[
         upgrade.procedure
       ](input);
-      expect(result).toEqual({ success: false, message: "Not enough squad points" });
+      expect(result).toEqual({
+        success: false,
+        message: "Squad changed, please try again",
+      });
       const squad = await storedSquad();
       expect(squad?.points).toBe(upgrade.cost);
       expect(squad?.[upgrade.column]).toBe(upgrade.maxLevel);
+    });
+
+    it(`does not project a ${upgrade.name} purchase from an unconfirmed balance`, async () => {
+      await seedSquad({ points: upgrade.cost * 3 });
+      const db = await getTestDatabase();
+      const raced = beforeStatements(db, anbuSquad, [
+        () =>
+          db
+            .update(anbuSquad)
+            .set({ points: upgrade.cost * 2 })
+            .where(eq(anbuSquad.id, "squad")),
+      ]);
+      const result = await callerForDatabase(anbuRouter, "leader", raced)[
+        upgrade.procedure
+      ](input);
+      expect(result).toEqual({
+        success: false,
+        message: "Squad changed, please try again",
+      });
+      const squad = await storedSquad();
+      expect(squad?.points).toBe(upgrade.cost * 2);
+      expect(squad?.[upgrade.column]).toBe(0);
     });
   }
 });
