@@ -332,6 +332,7 @@ export const createTravelScene = async (options: {
     let isStill = false;
     let lastFrameInputs: ReturnType<typeof travelFrameInputs> | null = null;
     let zoomTimer: ReturnType<typeof setTimeout> | null = null;
+    let actorSyncTimer: ReturnType<typeof setTimeout> | null = null;
     const scale = () => (game.renderer.width / logicalWidth) * zoom;
     const transform = (constrain = false) => {
       const s = scale();
@@ -810,6 +811,7 @@ export const createTravelScene = async (options: {
       generation++;
       clearInterval(snapshotTimer);
       if (zoomTimer !== null) clearTimeout(zoomTimer);
+      if (actorSyncTimer !== null) clearTimeout(actorSyncTimer);
     });
     game.setUpdate((sourceFrame) => {
       const frame = game.visualEffects.spriteAnimations
@@ -1035,6 +1037,19 @@ export const createTravelScene = async (options: {
         lastActorSnapshot = snapshot;
         lastShowAmbient = game.visualEffects.wildlife;
         actors.sync(actorSnapshot);
+      } else if (
+        snapshot.actorRevision !== lastActorSnapshot.actorRevision &&
+        actorSyncTimer === null
+      ) {
+        // A still scene presents only when invalidated, so a revision held back by the
+        // throttle asks for the frame that reconciles it.
+        actorSyncTimer = setTimeout(
+          () => {
+            actorSyncTimer = null;
+            game.invalidate();
+          },
+          ACTOR_SYNC_MS - (sourceFrame.now - lastActorSyncAt),
+        );
       }
       const breeze = sampleWorldWind(sourceFrame, scale(), game.visualEffects.wind);
       const viewport = camera

@@ -630,9 +630,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   const questLocationsRef = useRef(questLocations);
   questLocationsRef.current = questLocations;
-  const structureObjectiveIdsRef = useRef(new Set<string | undefined>());
-  structureObjectiveIdsRef.current = new Set(
-    questLocations.filter((l) => l.active).map((l) => l.objectiveId),
+  // The travel scene reconciles its actors when this set's identity changes.
+  const structureObjectiveIds = useMemo(
+    () => new Set(questLocations.filter((l) => l.active).map((l) => l.objectiveId)),
+    [questLocations],
   );
   const [hoveredLocationId, setHoveredLocationId] = useState<string | null>(null);
   const hoveredLocationIdRef = useRef<string | null>(null);
@@ -2416,6 +2417,24 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       continueMovement();
     },
   };
+  // The scene caches village navigation per structure list and redraws a still map when the
+  // window's identity changes, so the projection keeps its identity until its inputs change.
+  const dungeonSector = sectorRef.current;
+  const travelWindow = useMemo(
+    () =>
+      sectorWindow.sectors.map((entry) => ({
+        ...entry,
+        structures: withSectorShrine(
+          [
+            ...entry.structures,
+            ...(entry.sector === dungeonSector ? dungeonStructures : []),
+          ],
+          entry.map,
+          entry.globalTileType,
+        ),
+      })),
+    [sectorWindow.sectors, dungeonStructures, dungeonSector],
+  );
   const travelSnapshot = useRef<TravelSnapshot | null>(null);
   travelSnapshot.current = {
     actorRevision: actorRevisionRef.current,
@@ -2424,22 +2443,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     users: usersRef.current,
     col: animatedPositionRef.current?.x ?? userData?.longitude ?? 0,
     row: animatedPositionRef.current?.y ?? userData?.latitude ?? 0,
-    window: sectorWindow.sectors.map((entry) => ({
-      ...entry,
-      structures: withSectorShrine(
-        [
-          ...entry.structures,
-          ...(entry.sector === sectorRef.current ? dungeonStructures : []),
-        ],
-        entry.map,
-        entry.globalTileType,
-      ),
-    })),
+    window: travelWindow,
     showUsers: showActive,
     bracketFilter: storedBrackets,
     friendlyAttack: allyAttack,
     wars: warData,
-    structureObjectiveIds: structureObjectiveIdsRef.current,
+    structureObjectiveIds,
     nav: windowNavRef.current,
     enabled: !props.showSorrounding && canAttemptAwakeAction(userData),
     brightness: 1,

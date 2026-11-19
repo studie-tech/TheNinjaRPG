@@ -413,6 +413,26 @@ describe("renderer context loss", () => {
     expect(render).toHaveBeenCalledTimes(3);
   });
 
+  it("redraws an on-demand scene after input unless its listener invalidates itself", async () => {
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    game.setAnimating(false);
+    const redrawing = vi.fn(),
+      selfInvalidating = vi.fn();
+    game.listen("pointerdown", redrawing);
+    game.listen("pointermove", selfInvalidating, { invalidate: false });
+    runFrame(5000);
+    render.mockClear();
+    game.canvas.dispatchEvent(new window.Event("pointermove"));
+    runFrame(5100);
+    expect(selfInvalidating).toHaveBeenCalledTimes(1);
+    expect(render).not.toHaveBeenCalled();
+    game.canvas.dispatchEvent(new window.Event("pointerdown"));
+    runFrame(5200);
+    expect(redrawing).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
   it("gives a reused renderer the density its surface settled on", async () => {
     Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
     const { game, render, init, create } = await start(vi.fn(), { resolution: 2 });

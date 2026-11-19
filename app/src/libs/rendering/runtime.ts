@@ -409,15 +409,21 @@ export const createGameRenderer = async (options: {
     updateQuality(true, width, height);
   });
   resizeObserver.observe(mount);
+  /**
+   * Input redraws the scene after its listener runs. A listener that invalidates only when
+   * its own state changes passes `invalidate: false`, so input over an on-demand scene
+   * leaves an unchanged picture on screen.
+   */
   const listen = <K extends keyof HTMLElementEventMap>(
     type: K,
     listener: (event: HTMLElementEventMap[K]) => void,
+    { invalidate: redraws = true }: { invalidate?: boolean } = {},
   ) =>
     canvas.addEventListener(
       type,
       (event) => {
         listener(event);
-        invalidate();
+        if (redraws) invalidate();
       },
       { signal: listeners.signal },
     );

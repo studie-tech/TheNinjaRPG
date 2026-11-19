@@ -20,6 +20,7 @@ import {
   type TravelSnapshot,
   type TravelWindowEntry,
 } from "@/libs/rendering/scenes/travel";
+import * as travelActors from "@/libs/rendering/scenes/travelActors";
 import { createTravelActors } from "@/libs/rendering/scenes/travelActors";
 import * as terrainElevation from "@/libs/rendering/terrainElevation";
 import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
@@ -360,6 +361,58 @@ describe("still travel rendering", () => {
     state.actorRevision++;
     poll();
     expect(invalidate).not.toHaveBeenCalled();
+  });
+  it("redraws a still scene once a throttled actor revision may reconcile", async () => {
+    vi.spyOn(globalThis, "setInterval").mockImplementation(
+      (() => 1) as unknown as typeof setInterval,
+    );
+    vi.spyOn(globalThis, "clearInterval").mockImplementation(() => {});
+    const timeout = globalThis.setTimeout;
+    const delayed: { callback: () => void; delay: number }[] = [];
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      callback: () => void,
+      delay = 0,
+    ) => {
+      if (delay > 0) {
+        delayed.push({ callback, delay });
+        return delayed.length;
+      }
+      return timeout(callback, 0);
+    }) as unknown as typeof setTimeout);
+    const synced: number[] = [];
+    const createActors = travelActors.createTravelActors;
+    vi.spyOn(travelActors, "createTravelActors").mockImplementation((...args) => {
+      const actors = createActors(...args);
+      const original = actors.sync;
+      actors.sync = (snapshot) => {
+        synced.push(Number(Reflect.get(snapshot, "actorRevision")));
+        original(snapshot);
+      };
+      return actors;
+    });
+    const { game, state, advance } = await sceneFixture();
+    const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
+    Object.assign(
+      game.visualEffects,
+      Object.fromEntries(
+        Object.keys(DEFAULT_VISUAL_EFFECTS).map((key) => [key, false]),
+      ),
+    );
+    advance(frame(6000));
+    await settle();
+    synced.length = 0;
+    state.actorRevision++;
+    advance(frame(6040));
+    await settle();
+    expect(synced).toEqual([]);
+    const wake = delayed.find(({ delay }) => delay === 60);
+    expect(wake).toBeDefined();
+    invalidate.mockClear();
+    wake!.callback();
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    advance(frame(6100));
+    await settle();
+    expect(synced).toEqual([state.actorRevision]);
   });
 });
 

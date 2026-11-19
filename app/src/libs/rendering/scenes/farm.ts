@@ -276,8 +276,11 @@ export const createFarmScene = async (options: {
         state.totalPlots,
       );
     };
-    game.listen("pointermove", (event) => setHovered(pointerSlot(event)));
-    game.listen("pointerleave", () => setHovered(null));
+    // A changed hover refreshes the plots, which invalidates the scene itself.
+    game.listen("pointermove", (event) => setHovered(pointerSlot(event)), {
+      invalidate: false,
+    });
+    game.listen("pointerleave", () => setHovered(null), { invalidate: false });
     game.listen("pointerdown", (event) => {
       if (event.button !== 0) return;
       const slot = pointerSlot(event);
