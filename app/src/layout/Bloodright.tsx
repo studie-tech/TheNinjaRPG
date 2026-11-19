@@ -102,11 +102,13 @@ export const Bloodright = () => {
             <p className="text-muted-foreground text-xs tracking-wide uppercase">
               Bloodright
             </p>
-            <h3 className="truncate text-lg font-bold">{bloodline.name}</h3>
-          </div>
-          <div className="shrink-0 text-right text-sm">
-            <p className="font-semibold">Rank {bloodline.rank}</p>
-            {summary.jutsu && <p className="text-muted-foreground">{summary.jutsu}</p>}
+            <h3 className="text-lg font-bold wrap-break-word">{bloodline.name}</h3>
+            <p className="text-sm">
+              <span className="font-semibold">Rank {bloodline.rank}</span>
+              {summary.jutsu && (
+                <span className="text-muted-foreground"> · {summary.jutsu}</span>
+              )}
+            </p>
           </div>
         </div>
       )}
