@@ -1,4 +1,4 @@
-import { expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { buildVillageDutyPatrolUpdate } from "@/deltas/villageDuty";
 import { VILLAGE_DUTY_PRESENCE_SECONDS } from "@/drizzle/constants";
 import { type VillageStructure, villageStructure } from "@/drizzle/schema";
@@ -12,6 +12,7 @@ import {
 } from "@/libs/overworldWander";
 import { planVillageWalls } from "@/libs/sector-map/village-walls";
 import {
+  canVillageDutyCopyPursue,
   planVillageDutyPursuits,
   type VillageDutyPatrol,
   villageDutyCapacity,
@@ -419,4 +420,85 @@ it("masks ANBU owner IDs consistently in snapshots, seeds and deltas", () => {
   );
   expect(update.patrols[0]?.userId).toBe(foreign.userId);
   expect(JSON.stringify(update)).not.toContain(owner.userId);
+});
+
+describe("bracket limits for village duty copies", () => {
+  const now = new Date("2026-11-19T12:00:00Z");
+  const user = (
+    userId: string,
+    experience: number,
+    patch: Partial<Parameters<typeof canVillageDutyCopyPursue>[1]> = {},
+  ) => ({
+    userId,
+    villageId: userId === "guard" ? "home" : "foreign",
+    experience,
+    rank: "JONIN" as const,
+    warParticipantUntil: new Date(0),
+    bracketImmunityLiftedUntil: new Date(0),
+    ...patch,
+  });
+
+  it.each([
+    ["same bracket", 3_500_000, 3_200_000, true],
+    ["one bracket below", 3_500_000, 2_800_000, true],
+    ["a higher bracket", 750_000, 3_500_000, true],
+    ["five brackets below", 3_500_000, 750_000, false],
+  ])("lets a copy pursue a visitor in %s: %#", (_, owner, visitor, allowed) => {
+    expect(
+      canVillageDutyCopyPursue(user("guard", owner), user("v", visitor), [], now),
+    ).toBe(allowed);
+  });
+
+  it("applies the lifted-immunity exemption but keeps Elite Jonin limits absolute", () => {
+    const lifted = { bracketImmunityLiftedUntil: new Date(now.getTime() + 60_000) };
+    expect(
+      canVillageDutyCopyPursue(
+        user("guard", 3_500_000),
+        user("v", 750_000, lifted),
+        [],
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      canVillageDutyCopyPursue(
+        user("guard", 0, { rank: "ELITE JONIN" }),
+        user("v", 2_800_000, lifted),
+        [],
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("skips protected visitors and pursues the nearest eligible one instead", () => {
+    const map = sectorMap(10, 10, () => ({ zone: "village" }), { anchors: [] });
+    const result = planVillageDutyPursuits(
+      [patrol()],
+      [{ userId: "guard", actorId: "duty:opaque-guard" }],
+      map,
+      [
+        { userId: "low", longitude: 2, latitude: 1, experience: 750_000 },
+        { userId: "peer", longitude: 8, latitude: 8, experience: 3_200_000 },
+      ],
+      1000,
+      undefined,
+      (_, intruder) =>
+        canVillageDutyCopyPursue(
+          user("guard", 3_500_000),
+          user(intruder.userId, intruder.experience),
+          [],
+          now,
+        ),
+    );
+    expect(result[0]?.pursuit?.targetUserId).toBe("peer");
+    const none = planVillageDutyPursuits(
+      [patrol()],
+      [{ userId: "guard", actorId: "duty:opaque-guard" }],
+      map,
+      [{ userId: "low", longitude: 2, latitude: 1 }],
+      1000,
+      undefined,
+      () => false,
+    );
+    expect(none[0]?.pursuit).toBeNull();
+  });
 });

@@ -6,6 +6,7 @@ import { WANDER_STEP_MS } from "@/libs/overworldWander";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import {
+  canVillageDutyCopyPursue,
   planVillageDutyPursuits,
   villageDutyCapacity,
   villageDutyPursuitPosition,
@@ -117,7 +118,8 @@ export const advanceVillageDutyPursuits = async (
   presence: Awaited<ReturnType<typeof listVillageDutyVisitors>>,
   map: NormalizedSectorMap,
   visitor: Parameters<typeof isVillageDutyIntruder>[1] &
-    Parameters<typeof isUserCurrentlyStealthed>[0] & {
+    Parameters<typeof isUserCurrentlyStealthed>[0] &
+    Parameters<typeof canVillageDutyCopyPursue>[1] & {
       longitude: number;
       latitude: number;
     },
@@ -145,6 +147,7 @@ export const advanceVillageDutyPursuits = async (
       expiresAt: secondsFromDate(VILLAGE_DUTY_PRESENCE_SECONDS, now).getTime(),
     },
   ];
+  const ownersById = new Map(owners.map((owner) => [owner.userId, owner]));
   const patrols = planVillageDutyPursuits(
     shift.patrols,
     owners.map((owner) => ({ ...owner, actorId: villageDutyActorId(owner.userId) })),
@@ -152,6 +155,11 @@ export const advanceVillageDutyPursuits = async (
     intruders,
     now.getTime(),
     home.structures,
+    // Copies never pursue visitors their owner could not attack under the PvP bracket rules.
+    (ownerUserId, intruder) => {
+      const owner = ownersById.get(ownerUserId);
+      return !!owner && canVillageDutyCopyPursue(owner, intruder, wars, now);
+    },
   );
   const changed = patrols.some((patrol, index) => patrol !== shift.patrols[index]);
   const [saved] = await Promise.all([

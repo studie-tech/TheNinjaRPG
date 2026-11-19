@@ -1,4 +1,5 @@
 import {
+  ELITE_JONIN_BRACKET,
   VILLAGE_DUTY_MAX_PATROLS,
   VILLAGE_DUTY_MIN_RANK,
   VILLAGE_DUTY_PRESENCE_SECONDS,
@@ -10,6 +11,7 @@ import {
   anonymousSpriteAppearance,
   resolveSpriteAppearance,
 } from "@/libs/lpc/appearance";
+import { getWarRelationship } from "@/libs/objectiveWar";
 import {
   isOpenWanderTile,
   WANDER_STEP_MS,
@@ -17,6 +19,7 @@ import {
   wanderPoseTile,
   wanderSpots,
 } from "@/libs/overworldWander";
+import { canAttackBracket, getExpBracket } from "@/libs/profile";
 import { hasRequiredRank } from "@/libs/rank";
 import type { NormalizedSectorMap, SectorCoordinate } from "@/libs/sector-map/types";
 import {
@@ -253,6 +256,35 @@ export const villageDutyPosition = (
     : { x: actor.longitude, y: actor.latitude };
 };
 
+type VillageDutyBracketUser = Pick<
+  UserData,
+  "userId" | "villageId" | "experience" | "rank" | "warParticipantUntil"
+>;
+
+/**
+ * A copy may only start a fight its owner could start: the ordinary PvP bracket rules
+ * apply, with the same lifted-immunity and opposing-war-participant exemptions.
+ */
+export const canVillageDutyCopyPursue = (
+  owner: VillageDutyBracketUser,
+  visitor: VillageDutyBracketUser & Pick<UserData, "bracketImmunityLiftedUntil">,
+  wars: Parameters<typeof getWarRelationship>[0] = [],
+  now = new Date(),
+) => {
+  const ownerBracket = getExpBracket(owner.experience, owner.rank);
+  const visitorBracket = getExpBracket(visitor.experience, visitor.rank);
+  if (canAttackBracket(ownerBracket, visitorBracket)) return true;
+  // Elite Jonin bracket limits stay absolute, as they are for player attacks.
+  if (ownerBracket === ELITE_JONIN_BRACKET || visitorBracket === ELITE_JONIN_BRACKET)
+    return false;
+  if (visitor.bracketImmunityLiftedUntil > now) return true;
+  return (
+    owner.warParticipantUntil > now &&
+    visitor.warParticipantUntil > now &&
+    getWarRelationship(wars, owner, visitor) === "ENEMY"
+  );
+};
+
 /** Deterministic distance ties keep nearby guards from switching targets between equivalent visitors. */
 export const nearestVillageDutyIntruder = <
   T extends { userId: string; longitude: number; latitude: number },
@@ -302,18 +334,22 @@ const villageDutyAnchors = (
 };
 
 /** Plan shared pursuit paths using existing hex routing; no database, timers or owner mutations occur here. */
-export const planVillageDutyPursuits = (
-  patrols: readonly VillageDutyPatrol[],
-  owners: readonly { userId: string; actorId: string }[],
-  map: NormalizedSectorMap,
-  intruders: readonly {
+export const planVillageDutyPursuits = <
+  I extends {
     userId: string;
     longitude: number;
     latitude: number;
     expiresAt?: number;
-  }[],
+  },
+>(
+  patrols: readonly VillageDutyPatrol[],
+  owners: readonly { userId: string; actorId: string }[],
+  map: NormalizedSectorMap,
+  intruders: readonly I[],
   now: number,
   structures?: readonly VillageDutyStructure[],
+  /** Which visitors each copy's owner may fight; defaults to every hostile visitor. */
+  canPursue?: (ownerUserId: string, intruder: I) => boolean,
 ): VillageDutyPatrol[] => {
   map = villageDutyNavigationMap(map, structures);
   const tiles = map.tiles.filter(
@@ -345,7 +381,12 @@ export const planVillageDutyPursuits = (
     const actor = actors.find((entry) => entry.villageDutyUserId === patrol.userId);
     if (!actor) return patrol;
     const from = villageDutyPosition(patrol, actor, map, now);
-    const target = nearestVillageDutyIntruder(from, intruders);
+    const target = nearestVillageDutyIntruder(
+      from,
+      canPursue
+        ? intruders.filter((intruder) => canPursue(patrol.userId, intruder))
+        : intruders,
+    );
     if (!target) return patrol.pursuit ? { ...patrol, pursuit: null } : patrol;
     const expiresAt = target.expiresAt ?? now + VILLAGE_DUTY_PRESENCE_SECONDS * 1000;
     const last = patrol.pursuit?.path.at(-1);
