@@ -63,6 +63,7 @@ describe("gameasset.dev client", () => {
       action: "move",
       facing: "left",
       frames: 33,
+      quality: "high",
     });
   });
 
