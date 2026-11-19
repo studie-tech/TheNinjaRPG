@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import * as CookieConsent from "vanilla-cookieconsent";
+import type * as CookieConsentLibrary from "vanilla-cookieconsent";
 import { Button } from "@/components/ui/button";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { CONSENT_REVISION, consentConfig } from "@/libs/consentConfig";
@@ -38,31 +38,34 @@ export const CookieConsentManager = () => {
   );
 };
 
+let CookieConsent: typeof CookieConsentLibrary;
 let initialization: Promise<void> | undefined;
 const changeStorageKey = "tnr-consent-change";
 const receiptEndpoint = "/api/consent-receipts";
 
-/** One initialization per document, including StrictMode and shell remounts. */
+/** Load and initialize once per confirmed web document, including shell remounts. */
 const initializeConsent = () => {
-  initialization ??= CookieConsent.run({
-    ...consentConfig,
-    onConsent: synchronizeConsent,
-    onFirstConsent: recordConsent,
-    onChange: ({ changedCategories }) => {
-      synchronizeConsent();
-      recordConsent();
-      // Reload terminates third-party scripts that cannot be unloaded after withdrawal.
-      if (
-        changedCategories.some(
-          (category) =>
-            (category === "statistics" || category === "marketing") &&
-            !CookieConsent.acceptedCategory(category),
-        )
-      ) {
-        window.setTimeout(() => window.location.reload(), 300);
-      }
-    },
-  }).then(() => {
+  initialization ??= import("vanilla-cookieconsent").then(async (library) => {
+    CookieConsent = library;
+    await CookieConsent.run({
+      ...consentConfig,
+      onConsent: synchronizeConsent,
+      onFirstConsent: recordConsent,
+      onChange: ({ changedCategories }) => {
+        synchronizeConsent();
+        recordConsent();
+        // Reload terminates third-party scripts that cannot be unloaded after withdrawal.
+        if (
+          changedCategories.some(
+            (category) =>
+              (category === "statistics" || category === "marketing") &&
+              !CookieConsent.acceptedCategory(category),
+          )
+        ) {
+          window.setTimeout(() => window.location.reload(), 300);
+        }
+      },
+    });
     // Saved choices already synchronize through onConsent.
     if (!CookieConsent.validConsent()) synchronizeConsent();
     deliverPendingReceipt();

@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "bun:test";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import * as CookieConsent from "vanilla-cookieconsent";
 import * as NativeShell from "@/hooks/useNativeShell";
 import { CookieConsentManager } from "@/layout/CookieConsentManager";
@@ -46,8 +47,12 @@ it("synchronizes saved consent once and signals changes when receipt storage exc
     .spyOn(globalThis, "fetch")
     .mockResolvedValue(new Response(null, { status: 503 }));
 
-  render(<CookieConsentManager />);
-  expect(initialize).toHaveBeenCalledTimes(1);
+  render(
+    <StrictMode>
+      <CookieConsentManager />
+    </StrictMode>,
+  );
+  await waitFor(() => expect(initialize).toHaveBeenCalledTimes(1));
   // Saved choices invoke onConsent before the manager's initialization resolves.
   await act(async () => {
     initialize.mock.calls[0]?.[0]?.onConsent?.({ cookie });
