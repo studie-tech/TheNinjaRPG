@@ -54,6 +54,33 @@ describeWithDatabase("SQL query recorder", () => {
     }
   });
 
+  it.each([
+    ["query", false],
+    ["query", true],
+    ["execute", false],
+    ["execute", true],
+  ] as const)(
+    "does not replay a deadlocked %s batch (options: %s)",
+    async (method, asOptions) => {
+      const driver = ((await getTestDatabase()) as unknown as { $client: Pool })
+        .$client;
+      const failure = new Error("Deadlock found when trying to get lock");
+      const transport = vi.spyOn(driver.pool, method).mockImplementation(() => {
+        throw failure;
+      });
+      const statement =
+        "UPDATE fixture SET counter = counter + 1; UPDATE fixture SET counter = counter + 1";
+      try {
+        await expect(
+          driver[method](asOptions ? { sql: statement } : statement),
+        ).rejects.toBe(failure);
+        expect(transport).toHaveBeenCalledTimes(1);
+      } finally {
+        transport.mockRestore();
+      }
+    },
+  );
+
   it("does not retry an ambiguous autocommit transport failure", async () => {
     const driver = ((await getTestDatabase()) as unknown as { $client: Pool }).$client;
     const failure = new Error("Connection lost");

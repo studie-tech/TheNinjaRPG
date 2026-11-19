@@ -305,8 +305,9 @@ let recorder: QueryRecorder | undefined;
 /**
  * Count promise API submissions before pool acquisition, or directly on a transaction's
  * checked-out connection. Each statement is recorded once, including transaction boundaries.
- * Pool submissions mirror production's autocommit deadlock recovery; checked-out connections
- * must propagate failures because replaying one statement would lose the transaction's work.
+ * Single-statement pool submissions mirror production's autocommit deadlock recovery.
+ * Checked-out connections must propagate failures because replaying one statement would
+ * lose the transaction's work.
  */
 const instrumentQueries = (
   connection: {
@@ -317,9 +318,15 @@ const instrumentQueries = (
 ) => {
   for (const method of ["query", "execute"] as const) {
     const original = connection[method].bind(connection);
-    const submit = isAutocommit
-      ? (...args: unknown[]) => retryOnDeadlock(async () => original(...args), 3)
-      : original;
+    const submit = (...args: unknown[]) => {
+      const first = args[0];
+      const statement =
+        typeof first === "string" ? first : (first as { sql?: string })?.sql;
+      // Batches may already have committed work. Quoted/trailing semicolons conservatively skip retry too.
+      return isAutocommit && typeof statement === "string" && !statement.includes(";")
+        ? retryOnDeadlock(async () => original(...args), 3)
+        : original(...args);
+    };
     connection[method] = async (...args: unknown[]) => {
       const active = recorder;
       if (!active) return submit(...args);

@@ -40,6 +40,7 @@ export const CookieConsentManager = () => {
 
 let CookieConsent: typeof CookieConsentLibrary;
 let initialization: Promise<void> | undefined;
+let consentChannel: BroadcastChannel | undefined;
 const changeStorageKey = "tnr-consent-change";
 const receiptEndpoint = "/api/consent-receipts";
 
@@ -47,6 +48,14 @@ const receiptEndpoint = "/api/consent-receipts";
 const initializeConsent = () => {
   initialization ??= import("vanilla-cookieconsent").then(async (library) => {
     CookieConsent = library;
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        consentChannel = new BroadcastChannel(changeStorageKey);
+        consentChannel.onmessage = () => window.location.reload();
+      }
+    } catch {
+      // Browser policies may block channels; the storage notification remains available.
+    }
     await CookieConsent.run({
       ...consentConfig,
       onConsent: synchronizeConsent,
@@ -118,8 +127,14 @@ const recordConsent = () => {
     language: "en",
   });
   safeLocalStorageSetItem("tnr-consent-receipt", body);
-  // A receipt quota failure must not prevent other tabs from applying withdrawal.
-  safeLocalStorageSetItem(changeStorageKey, String(Date.now()));
+  // Cookies can persist withdrawal even when storage is full or blocked.
+  if (!safeLocalStorageSetItem(changeStorageKey, String(Date.now()))) {
+    try {
+      consentChannel?.postMessage(null);
+    } catch {
+      // Unavailable cross-tab messaging must not interrupt consent or receipt delivery.
+    }
+  }
   deliverReceipt(body);
 };
 

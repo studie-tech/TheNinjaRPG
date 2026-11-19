@@ -14,6 +14,14 @@ afterEach(() => {
 
 it("synchronizes saved consent once and signals changes when receipt storage exceeds quota", async () => {
   vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(false);
+  const channel = {
+    onmessage: null as ((event: MessageEvent) => void) | null,
+    postMessage: vi.fn(),
+  };
+  const broadcast = vi
+    .spyOn(globalThis, "BroadcastChannel")
+    .mockImplementation(() => channel as unknown as BroadcastChannel);
+  const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
   let finishInitialization: () => void = () => {};
   const initialize = vi.spyOn(CookieConsent, "run").mockImplementation(
     () =>
@@ -72,4 +80,28 @@ it("synchronizes saved consent once and signals changes when receipt storage exc
       body: expect.stringContaining(cookie.consentId),
     }),
   );
+  expect(broadcast).toHaveBeenCalledTimes(1);
+  expect(channel.postMessage).not.toHaveBeenCalled();
+
+  write.mockImplementation(() => {
+    throw new DOMException("Storage quota exceeded", "QuotaExceededError");
+  });
+  // The local withdrawal reload is delayed; peers must also receive it without storage.
+  vi.spyOn(window, "setTimeout").mockReturnValue(0);
+  initialize.mock.calls[0]?.[0]?.onChange?.({
+    cookie,
+    changedCategories: ["statistics"],
+    changedServices: {},
+  });
+  expect(channel.postMessage).toHaveBeenCalledTimes(1);
+  channel.onmessage?.(new MessageEvent("message", { data: null }));
+  expect(reload).toHaveBeenCalledTimes(1);
+
+  channel.postMessage.mockImplementation(() => {
+    throw new DOMException("Channel unavailable", "SecurityError");
+  });
+  expect(() =>
+    initialize.mock.calls[0]?.[0]?.onFirstConsent?.({ cookie }),
+  ).not.toThrow();
+  expect(deliver).toHaveBeenCalledTimes(3);
 });
