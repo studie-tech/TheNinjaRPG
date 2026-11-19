@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { nextUtcDayAt } from "@/utils/time";
@@ -5,12 +6,21 @@ import { nextUtcDayAt } from "@/utils/time";
 /** Keep the shared welcome edition fresh at publication windows and UTC rollover. */
 export const useSplash = (enabled: boolean, timeDiff = 0) => {
   const utils = api.useUtils();
+  const [mountedAt] = useState(() => new Date(Date.now() - timeDiff));
+  const [utcRefreshedAt, setUtcRefreshedAt] = useState<Date>();
   const query = api.splash.get.useQuery(undefined, { enabled, staleTime: 300_000 });
+  // A pending midnight stays fixed through rerenders in the scheduler's grace window.
+  const snapshotAt = query.data?.fetchedAt ?? mountedAt;
+  const utcReferenceAt =
+    utcRefreshedAt && utcRefreshedAt > snapshotAt ? utcRefreshedAt : snapshotAt;
   useRefreshAt(
-    [query.data?.nextChangeAt, nextUtcDayAt(new Date(Date.now() - timeDiff))],
+    [query.data?.nextChangeAt, nextUtcDayAt(utcReferenceAt)],
     () => {
       // Cancel even an initial fetch: it may have read the board before this boundary.
-      void utils.splash.get.cancel().then(() => query.refetch({ cancelRefetch: true }));
+      void utils.splash.get
+        .cancel()
+        .then(() => query.refetch({ cancelRefetch: true }))
+        .finally(() => setUtcRefreshedAt(new Date(Date.now() - timeDiff)));
     },
     timeDiff,
     enabled,

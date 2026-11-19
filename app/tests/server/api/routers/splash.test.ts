@@ -318,13 +318,23 @@ describeWithDatabase("structured welcome announcements", () => {
     });
     await expect(reviewer.revert({ id })).rejects.toThrow("Second archive failed");
     expect(
-      (await db.query.splashAnnouncement.findMany()).every((row) => row.enabled),
-    ).toBe(true);
+      (await db.query.splashAnnouncement.findMany())
+        .map(({ topicKey, enabled }) => ({ topicKey, enabled }))
+        .sort((a, b) => a.topicKey.localeCompare(b.topicKey)),
+    ).toEqual([
+      { topicKey: "first-topic", enabled: true },
+      { topicKey: "second-topic", enabled: true },
+    ]);
     expect((await db.query.contentProposal.findFirst())?.status).toBe("APPLIED");
     vi.restoreAllMocks();
     expect(await reviewer.revert({ id })).toMatchObject({ success: true });
     expect(
-      (await db.query.splashAnnouncement.findMany()).every((row) => !row.enabled),
-    ).toBe(true);
+      (await db.query.splashAnnouncement.findMany())
+        .map(({ topicKey, enabled }) => ({ topicKey, enabled }))
+        .sort((a, b) => a.topicKey.localeCompare(b.topicKey)),
+    ).toEqual([
+      { topicKey: "first-topic", enabled: false },
+      { topicKey: "second-topic", enabled: false },
+    ]);
   });
 });

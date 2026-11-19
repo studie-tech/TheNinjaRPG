@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from "bun:test";
+import { afterEach, expect, it, setSystemTime, vi } from "bun:test";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -12,6 +12,8 @@ type Edition = client.RouterOutputs["splash"]["get"];
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
+  setSystemTime();
 });
 
 it.each([false, true])(
@@ -75,5 +77,44 @@ it.each([false, true])(
     });
     expect(hook.result.current.data?.announcements[0]?.name).toBe("New edition");
     queryClient.clear();
+  },
+);
+
+it.each([false, true])(
+  "preserves midnight across grace-window renders and schedules the next day (cached: %s)",
+  async (hasCache) => {
+    vi.useFakeTimers();
+    setSystemTime(new Date("2026-11-19T23:59:59.500Z"));
+    const cancel = vi.fn(async () => {});
+    const refetch = vi.fn(async () => ({}));
+    const edition: Edition = {
+      announcements: [splashEntry()],
+      fetchedAt: new Date(),
+      nextChangeAt: null,
+    };
+    Object.assign(vi.spyOn(client, "api" as never), {
+      useUtils: () => ({ splash: { get: { cancel } } }),
+      splash: {
+        get: { useQuery: () => ({ data: hasCache ? edition : undefined, refetch }) },
+      },
+    });
+    const { rerender } = renderHook(() => useSplash(true));
+    act(() => {
+      vi.advanceTimersByTime(750);
+    });
+    rerender();
+    expect(refetch).not.toHaveBeenCalled();
+    await act(async () => {
+      vi.advanceTimersByTime(750);
+    });
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(refetch).toHaveBeenCalledWith({ cancelRefetch: true });
+    // An unchanged snapshot or failed read must still leave tomorrow's UTC refresh scheduled.
+    await act(async () => {
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    });
+    expect(cancel).toHaveBeenCalledTimes(2);
+    expect(refetch).toHaveBeenCalledTimes(2);
   },
 );
