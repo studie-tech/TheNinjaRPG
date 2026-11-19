@@ -223,26 +223,21 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
     <div
       data-theme={isDarkLog ? "dark" : "light"}
       className={cn(
-        "group/combat-log relative flex min-h-12 flex-col overflow-auto rounded-lg border pt-2",
+        "group/combat-log relative flex min-h-10 flex-col overflow-auto rounded-lg border pt-2",
         isDarkLog
           ? "border-slate-700 bg-slate-950 text-slate-100"
           : "bg-white text-black",
       )}
     >
       <div
-        className="absolute right-1 bottom-1 z-10 flex items-center rounded-md bg-inherit pl-2 shadow-sm"
+        className="absolute right-1 bottom-1 z-10 flex items-center gap-2 rounded-md bg-inherit px-1 py-1 shadow-sm"
         title="Dark battle log"
       >
-        <Moon aria-hidden="true" className="h-4 w-4" />
+        <Moon aria-hidden="true" className="h-3 w-3" />
         <label htmlFor={themeToggleId} className="sr-only">
           Dark battle log
         </label>
-        <Switch
-          id={themeToggleId}
-          checked={isDarkLog}
-          onCheckedChange={setIsDarkLog}
-          touchTarget
-        />
+        <Switch id={themeToggleId} checked={isDarkLog} onCheckedChange={setIsDarkLog} />
       </div>
       {isFetching && (
         <div className="absolute top-2 right-2">
