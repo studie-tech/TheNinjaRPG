@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { BALANCE_MIN_ROUNDS } from "@/drizzle/constants";
 import { balanceReportQueryOptions } from "@/hooks/useBalanceStatistics";
 import {
   BalanceFiltering,
@@ -137,6 +138,27 @@ export const BalanceOverview = ({
               {dateLabel(getBalancePeriodEnd(data.periodStart))} (UTC, end exclusive).
               Live counters restart every 14 days; completed periods stay available in
               Archives. Player level and rank are captured before combat scaling.
+            </p>
+          )}
+          {!invalidRange && data && (
+            <p className="mb-4 text-sm text-muted-foreground">
+              Only battles that reach round {BALANCE_MIN_ROUNDS} and where every side
+              took a real action are counted; End Turn, Flee and timed-out turns alone
+              make a player idle.
+              {/* A server from before the filter has no counters; the rule still applies. */}
+              {data.exclusions && (
+                <>
+                  {" "}
+                  Excluded so far:{" "}
+                  <span className="font-medium text-foreground">
+                    {(data.exclusions.short + data.exclusions.idle).toLocaleString()}{" "}
+                    player results
+                  </span>{" "}
+                  ({data.exclusions.short.toLocaleString()} shorter than{" "}
+                  {BALANCE_MIN_ROUNDS} rounds, {data.exclusions.idle.toLocaleString()}{" "}
+                  with an idle player or side).
+                </>
+              )}
             </p>
           )}
         </>
@@ -366,8 +388,7 @@ const downloadArchive = async (
             version: 1,
             periodStart,
             periodEnd: periodStart ? getBalancePeriodEnd(periodStart) : null,
-            description:
-              "Aggregated balance counters. battleWon: 0 loss, 1 win, 2 flee. turnOrder: 0 unknown or outside head-to-head PvP, 1 first, 2 second. Level 0/rank NONE indicate unavailable demographics. Counts are player-content battle samples; participant rows count eligible head-to-head player outcomes with starting order 1 or 2.",
+            description: `Aggregated balance counters. battleWon: 0 loss, 1 win, 2 flee. turnOrder: 0 unknown or outside head-to-head PvP, 1 first, 2 second. Level 0/rank NONE indicate unavailable demographics. Counts are player-content battle samples; participant rows count eligible head-to-head player outcomes with starting order 1 or 2; participant rows with contentId excluded-short or excluded-idle count player results left out because the battle ended before round ${BALANCE_MIN_ROUNDS} or a player or side never took a real action.`,
             rows,
           },
           null,

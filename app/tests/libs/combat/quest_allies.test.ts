@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { Grid, rectangle } from "honeycomb-grid";
-import { BattleTypes } from "@/drizzle/constants";
+import { BALANCE_MIN_ROUNDS, BattleTypes } from "@/drizzle/constants";
 import {
   aiProfile,
   battle,
@@ -272,6 +272,9 @@ describeWithDatabase("NPC ally battle initiation", () => {
     const snapshot = scenario("QUEST", 0);
     for (const npc of snapshot.usersState.filter((u) => u.isAi))
       npc.controllerId = "template";
+    // Pass the balance activity filter: a long enough battle where the hero acted.
+    snapshot.round = BALANCE_MIN_ROUNDS;
+    snapshot.usersState[0]!.usedActions = [{ id: "basicAttack", type: "basic" }];
     const result = calcBattleResult(snapshot, "hero", []);
     await saveUsage(client, snapshot, result, "hero");
     const rows = await client.query.dataBattleAction.findMany();

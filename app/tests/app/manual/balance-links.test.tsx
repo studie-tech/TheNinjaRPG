@@ -139,6 +139,7 @@ it("loads usage summaries with their cohort and fragment while individual statis
           data: {
             periodStart: Date.UTC(2026, 10, 16),
             participants: [],
+            exclusions: { short: 1200, idle: 34 },
             content: [
               {
                 type: "jutsu",
@@ -154,10 +155,13 @@ it("loads usage summaries with their cohort and fragment while individual statis
       getBalanceArchives: { useQuery: () => ({ data: [] }) },
     },
   });
-  render(
+  const view = render(
     <AppRouterContext.Provider value={{} as never}>
       <BalanceOverview.BalanceOverview />
     </AppRouterContext.Provider>,
+  );
+  expect(view.container.textContent).toContain(
+    "Excluded so far: 1,234 player results (1,200 shorter than 3 rounds, 34 with an idle player or side).",
   );
   for (const type of ["jutsu", "bloodline", "item"] as const) {
     const href = BalanceFiltering.getBalanceUsageHref(type, filter);

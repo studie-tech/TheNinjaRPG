@@ -1,5 +1,9 @@
 import { and, asc, desc, eq, gt, gte, inArray, lt, lte, sql, sum } from "drizzle-orm";
-import type { BattleType, UserRank } from "@/drizzle/constants";
+import {
+  BALANCE_EXCLUSION_IDS,
+  type BattleType,
+  type UserRank,
+} from "@/drizzle/constants";
 import { bloodline, dataBattleAction, item, jutsu } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { getBalancePeriodStart } from "@/utils/time";
@@ -104,6 +108,27 @@ export const selectBalanceParticipants = (
       dataBattleAction.turnOrder,
       dataBattleAction.battleWon,
     );
+
+/** Count settlements the activity filter kept out of the balance data, per reason. */
+export const selectBalanceExclusions = (
+  client: Pick<DrizzleClient, "select">,
+  input: BalanceFilters,
+  periodStart = getBalancePeriodStart(),
+) =>
+  client
+    .select({
+      contentId: dataBattleAction.contentId,
+      count: sum(dataBattleAction.count).mapWith(Number),
+    })
+    .from(dataBattleAction)
+    .where(
+      and(
+        ...balanceConditions(input, periodStart),
+        eq(dataBattleAction.type, "participant"),
+        inArray(dataBattleAction.contentId, Object.values(BALANCE_EXCLUSION_IDS)),
+      ),
+    )
+    .groupBy(dataBattleAction.contentId);
 
 /** List retained completed periods; the zero period contains undated legacy aggregates. */
 export const selectBalanceArchives = (client: Pick<DrizzleClient, "selectDistinct">) =>
