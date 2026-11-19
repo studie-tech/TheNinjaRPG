@@ -7,20 +7,27 @@ import { nextUtcDayAt } from "@/utils/time";
 export const useSplash = (enabled: boolean, timeDiff = 0) => {
   const utils = api.useUtils();
   const [mountedAt] = useState(() => new Date(Date.now() - timeDiff));
-  const [utcRefreshedAt, setUtcRefreshedAt] = useState<Date>();
+  const [utcRefreshStartedAt, setUtcRefreshStartedAt] = useState<Date>();
   const query = api.splash.get.useQuery(undefined, { enabled, staleTime: 300_000 });
   // A pending midnight stays fixed through rerenders in the scheduler's grace window.
   const snapshotAt = query.data?.fetchedAt ?? mountedAt;
   const utcReferenceAt =
-    utcRefreshedAt && utcRefreshedAt > snapshotAt ? utcRefreshedAt : snapshotAt;
+    utcRefreshStartedAt && utcRefreshStartedAt > snapshotAt
+      ? utcRefreshStartedAt
+      : snapshotAt;
   useRefreshAt(
     [query.data?.nextChangeAt, nextUtcDayAt(utcReferenceAt)],
     () => {
+      const startedAt = new Date(Date.now() - timeDiff);
       // Cancel even an initial fetch: it may have read the board before this boundary.
       void utils.splash.get
         .cancel()
         .then(() => query.refetch({ cancelRefetch: true }))
-        .finally(() => setUtcRefreshedAt(new Date(Date.now() - timeDiff)));
+        .finally(() =>
+          setUtcRefreshStartedAt((current) =>
+            current && current > startedAt ? current : startedAt,
+          ),
+        );
     },
     timeDiff,
     enabled,

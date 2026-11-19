@@ -118,3 +118,46 @@ it.each([false, true])(
     expect(refetch).toHaveBeenCalledTimes(2);
   },
 );
+
+it.each([false, true])(
+  "keeps midnight pending for a publication read crossing UTC days (finishes after midnight refresh: %s)",
+  async (finishesLast) => {
+    vi.useFakeTimers();
+    setSystemTime(new Date("2026-11-19T23:59:57.500Z"));
+    const cancel = vi.fn(async () => {});
+    const publicationRead = deferred<object>();
+    const refetch = vi
+      .fn()
+      .mockImplementationOnce(() => publicationRead.promise)
+      .mockResolvedValue({});
+    const edition: Edition = {
+      announcements: [splashEntry()],
+      fetchedAt: new Date(),
+      nextChangeAt: new Date("2026-11-19T23:59:58.000Z"),
+    };
+    Object.assign(vi.spyOn(client, "api" as never), {
+      useUtils: () => ({ splash: { get: { cancel } } }),
+      splash: { get: { useQuery: () => ({ data: edition, refetch }) } },
+    });
+    renderHook(() => useSplash(true));
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(refetch).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(finishesLast ? 2250 : 1250);
+      publicationRead.resolve({});
+    });
+    if (!finishesLast)
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+    expect(cancel).toHaveBeenCalledTimes(2);
+    expect(refetch).toHaveBeenCalledTimes(2);
+    // A delayed publication result cannot replace the newer UTC refresh's deadline.
+    await act(async () => {
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    });
+    expect(refetch).toHaveBeenCalledTimes(3);
+  },
+);
