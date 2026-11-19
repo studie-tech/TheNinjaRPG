@@ -40,7 +40,7 @@ export const consentConfig: CookieConsentConfig = {
         consentModal: {
           title: "Your privacy, your choice",
           description:
-            "We use essential storage to keep your ninja signed in and the game working. With your permission, we also remember optional preferences, measure visits and run marketing tools. You can change your choice at any time.",
+            "Essential storage runs the game. Choose whether to enable preferences, statistics and marketing. Change anytime.",
           acceptAllBtn: "Accept all",
           acceptNecessaryBtn: "Essential only",
           showPreferencesBtn: "Choose cookies",

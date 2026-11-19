@@ -27,6 +27,11 @@
 #cc-main .cm { border: 1px solid hsl(var(--border)); }
 #cc-main .cm__btn, #cc-main .pm__btn { min-height: 44px; }
 #cc-main .cm__title { font-weight: 700; }
+@media (max-width: 640px) {
+  /* Keep accept and reject equally accessible without stacking every action. */
+  #cc-main .cm .cm__btn-group { flex-direction: row !important; gap: 0.375rem; }
+  #cc-main .cm .cm__btn { flex: 1 !important; margin: 0 !important; }
+}
 @media (prefers-reduced-motion: reduce) {
   #cc-main * { transition: none !important; }
 }
