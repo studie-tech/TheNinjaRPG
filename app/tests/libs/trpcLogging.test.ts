@@ -46,6 +46,8 @@ const request = async (
 
 describe("credential-safe client logging", () => {
   for (const path of [
+    "meta.synchronizeConsent",
+    "register.createCharacter",
     "nativeAuth.start",
     "nativeAuth.approve",
     "nativeAuth.exchange",

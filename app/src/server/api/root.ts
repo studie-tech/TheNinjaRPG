@@ -38,6 +38,7 @@ import { mapAssetRouter } from "./routers/mapAsset";
 import { mapTerrainRouter } from "./routers/mapTerrain";
 import { marriageRouter } from "./routers/marriage";
 import { merchRouter } from "./routers/merch";
+import { metaRouter } from "./routers/meta";
 import { miscRouter } from "./routers/misc";
 import { nativeAuthRouter } from "./routers/nativeAuth";
 import { occupationRouter } from "./routers/occupation";
@@ -87,6 +88,7 @@ import { createTRPCRouter } from "./trpc";
  * All routers added in /api/routers should be manually added here
  */
 export const appRouter = createTRPCRouter({
+  meta: metaRouter,
   cosmetic: cosmeticRouter,
   accountDeletion: accountDeletionRouter,
   activityStreak: activityStreakRouter,

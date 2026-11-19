@@ -6763,6 +6763,51 @@ export const adClick = mysqlTable(
 );
 export type AdClick = InferSelectModel<typeof adClick>;
 
+// Consent decisions survive withdrawal so an older in-flight grant cannot restore it.
+export const metaConsent = mysqlTable(
+  "MetaConsent",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }),
+    granted: boolean("granted").notNull(),
+    revision: int("revision").notNull(),
+    decidedAt: datetime("decidedAt", { mode: "date", fsp: 3 }).notNull(),
+    withdrawnAt: datetime("withdrawnAt", { mode: "date", fsp: 3 }),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => ({
+    userIdx: index("MetaConsent_userId_idx").on(table.userId),
+    expiryIdx: index("MetaConsent_expiresAt_idx").on(table.expiresAt),
+  }),
+);
+
+// One opaque event ID per confirmed conversion, shared by browser and server delivery.
+export const metaTracking = mysqlTable(
+  "MetaTracking",
+  {
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    consentId: varchar("consentId", { length: 36 }).notNull(),
+    decidedAt: datetime("decidedAt", { mode: "date", fsp: 3 }).notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+    fbc: varchar("fbc", { length: 512 }),
+    fbp: varchar("fbp", { length: 128 }),
+    userAgent: varchar("userAgent", { length: 1024 }).notNull(),
+    registrationAt: datetime("registrationAt", { mode: "date", fsp: 3 }),
+    registrationEventId: varchar("registrationEventId", { length: 36 }).notNull(),
+    tutorialEventId: varchar("tutorialEventId", { length: 36 }).notNull(),
+    registrationReportedAt: datetime("registrationReportedAt", {
+      mode: "date",
+      fsp: 3,
+    }),
+    tutorialReportedAt: datetime("tutorialReportedAt", { mode: "date", fsp: 3 }),
+    tutorialUserAgent: varchar("tutorialUserAgent", { length: 1024 }),
+  },
+  (table) => ({
+    consentIdx: index("MetaTracking_consentId_idx").on(table.consentId),
+    expiryIdx: index("MetaTracking_expiresAt_idx").on(table.expiresAt),
+  }),
+);
+
 // Conversions sent to the Data Manager API whose processing Google has not reported yet.
 // The next upload run reads each request's status by `requestId`, where Google names
 // failed events by their position in the request.

@@ -58,6 +58,8 @@ export const serverSchema = z.object({
   // Key for the stored OAuth tokens: 32 bytes as base64 or 64 hex characters
   DISCORD_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   FACEBOOK_PAGE_ID: z.string().optional(),
+  META_CAPI_ENABLED: z.enum(["true", "false"]).optional(),
+  META_CAPI_ACCESS_TOKEN: z.string().optional(),
   FACEBOOK_PAGE_ACCESS_TOKEN: z.string().optional(),
   INSTAGRAM_BUSINESS_ACCOUNT_ID: z.string().optional(),
   REDDIT_CLIENT_ID: z.string().optional(),
@@ -184,6 +186,8 @@ export const serverEnv = {
   DISCORD_VILLAGE_ROLE_IDS: process.env.DISCORD_VILLAGE_ROLE_IDS,
   DISCORD_TOKEN_ENCRYPTION_KEY: process.env.DISCORD_TOKEN_ENCRYPTION_KEY,
   FACEBOOK_PAGE_ID: process.env.FACEBOOK_PAGE_ID,
+  META_CAPI_ENABLED: /** @type {"true" | "false" | undefined} */ (process.env.META_CAPI_ENABLED),
+  META_CAPI_ACCESS_TOKEN: process.env.META_CAPI_ACCESS_TOKEN,
   FACEBOOK_PAGE_ACCESS_TOKEN: process.env.FACEBOOK_PAGE_ACCESS_TOKEN,
   INSTAGRAM_BUSINESS_ACCOUNT_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,
   REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID,

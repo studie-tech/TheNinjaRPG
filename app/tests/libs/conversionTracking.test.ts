@@ -1,10 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as google from "@next/third-parties/google";
 import { trackConversion } from "@/libs/conversionTracking";
+import * as meta from "@/libs/metaPixel";
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("confirmed conversion delivery", () => {
+  it("delivers to Meta independently of a failing Google data layer", () => {
+    vi.spyOn(google, "sendGTMEvent").mockImplementation(() => {
+      throw new Error("Unavailable");
+    });
+    const send = vi
+      .spyOn(meta, "trackMetaConversion")
+      .mockImplementation(() => undefined);
+    trackConversion("register", "independent-meta-receipt");
+    expect(send).toHaveBeenCalledWith("register", "independent-meta-receipt");
+  });
+
   it("deduplicates a replayed receipt while keeping distinct conversions separate", () => {
     const send = vi.spyOn(google, "sendGTMEvent").mockImplementation(() => undefined);
     trackConversion("register", "signup-replayed");

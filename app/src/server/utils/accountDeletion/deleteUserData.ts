@@ -4,6 +4,8 @@ import {
   huntingProgress,
   huntingReceipt,
   huntingSession,
+  metaConsent,
+  metaTracking,
   userCosmetic,
   userCosmeticSlot,
 } from "@/drizzle/schema";
@@ -11,6 +13,7 @@ import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
 import { deleteAiTransformationsFor } from "@/queries/ai";
 import { deleteBattleQueueMembersForUser } from "@/queries/clan";
+import { waitForMetaSavesBeforeDeletion } from "@/queries/metaTracking";
 import { deleteUserAttributes, deleteUserNindo } from "@/queries/profile";
 import { deleteRankedQueueForUser } from "@/queries/pvprank";
 import { deleteUserSkills } from "@/queries/skillTree";
@@ -146,6 +149,14 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
   // batch and the final UserData delete, so a concurrent staff rename cannot move the
   // identity midway through cleanup and overwrite its tombstone.
   await retireStoreUserId(client, userId, async (lockedClient) => {
+    // Retirement is visible before waiting for earlier Meta saves to commit. Later
+    // saves see the marker; cleanup removes every row from the earlier transactions.
+    await waitForMetaSavesBeforeDeletion(lockedClient, userId);
+    await Promise.all(
+      [metaConsent, metaTracking].map((table) =>
+        deleteRowsForUser(lockedClient, table, userId),
+      ),
+    );
     // The marker makes moderation require this source before cleanup can remove reports.
     await recordSanctionTombstone(lockedClient, userId);
     // Push writes check for the tombstone before they write; this removes what landed first.

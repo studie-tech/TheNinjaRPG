@@ -1,4 +1,5 @@
 import { sendGTMEvent } from "@next/third-parties/google";
+import { trackMetaConversion } from "@/libs/metaPixel";
 
 const deliveredConversions = new Set<string>();
 
@@ -8,6 +9,7 @@ export const trackConversion = (
   conversionId: string | undefined,
 ) => {
   if (!conversionId) return;
+  trackMetaConversion(event, conversionId);
   const transactionId = `${event}:${conversionId}`;
   if (deliveredConversions.has(transactionId)) return;
   try {

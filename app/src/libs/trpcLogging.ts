@@ -3,7 +3,9 @@ import { isPlainObject } from "@/utils/typeutils";
 /** Suppress entire operations because both inputs and responses can contain credentials. */
 export const hasSensitiveTrpcInput = (path: string | undefined) =>
   Boolean(
-    path?.startsWith("merch.") ||
+    path?.startsWith("meta.") ||
+      path === "register.createCharacter" ||
+      path?.startsWith("merch.") ||
       path?.startsWith("parentalControls.") ||
       path?.startsWith("nativeAuth."),
   );

@@ -11,6 +11,7 @@ export const clientSchema = z.object({
   NEXT_PUBLIC_PUSHER_APP_CLUSTER: z.string(),
   NEXT_PUBLIC_BASE_URL: z.url(),
   NEXT_PUBLIC_MEASUREMENT_ID: z.string().optional(),
+  NEXT_PUBLIC_META_PIXEL_ID: z.string().regex(/^\d+$/).optional(),
   // Optional public presentation rollout; game layout preferences remain per device.
   NEXT_PUBLIC_WELCOME_LAYOUT: z.string().optional(),
   NEXT_PUBLIC_NODE_ENV: z.enum(["development", "test", "production"]),
@@ -30,6 +31,7 @@ export const clientEnv = {
   NEXT_PUBLIC_PUSHER_APP_CLUSTER: process.env.NEXT_PUBLIC_PUSHER_APP_CLUSTER,
   NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
   NEXT_PUBLIC_MEASUREMENT_ID: process.env.NEXT_PUBLIC_MEASUREMENT_ID,
+  NEXT_PUBLIC_META_PIXEL_ID: process.env.NEXT_PUBLIC_META_PIXEL_ID,
   NEXT_PUBLIC_WELCOME_LAYOUT: process.env.NEXT_PUBLIC_WELCOME_LAYOUT,
   NEXT_PUBLIC_NODE_ENV: process.env.NODE_ENV,
   // RevenueCat

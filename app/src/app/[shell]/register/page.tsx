@@ -54,6 +54,7 @@ import {
   readStoredAdClick,
 } from "@/libs/campaignSource";
 import { trackConversion } from "@/libs/conversionTracking";
+import { readMetaTracking } from "@/libs/metaTracking";
 import {
   firstInvalidRegistrationStep,
   registrationStepReadiness,
@@ -236,6 +237,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
         ...data,
         marketingConsent: readMarketingConsent(),
         adClickId: readStoredAdClick(),
+        metaTracking: readMetaTracking(),
       }),
     (errors) => {
       const invalid = firstInvalidRegistrationStep(Object.keys(errors));
