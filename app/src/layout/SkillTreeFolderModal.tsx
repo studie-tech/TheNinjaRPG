@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronLeft, ExternalLink, Lock, X } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { SkillTree, SkillTreeFolder, UserSkill } from "@/drizzle/schema";
@@ -232,6 +232,8 @@ interface SkillCardProps {
   status: Omit<SkillStatus, "canPurchase">;
   onClick: () => void;
   costLabel?: string;
+  /** Short stat rows shown under the badges, e.g. "Afterburn" / "+2". */
+  stats?: { label: string; value: string }[];
 }
 
 export const SkillCard: React.FC<SkillCardProps> = ({
@@ -239,16 +241,20 @@ export const SkillCard: React.FC<SkillCardProps> = ({
   status,
   onClick,
   costLabel,
+  stats,
 }) => {
   const effectivelyOwned = status.isOwned && status.isActivated;
   const isLocked = !effectivelyOwned && !status.hasPrereqs;
   const isUnaffordable = !effectivelyOwned && status.hasPrereqs && !status.hasPoints;
   const isAvailable = !effectivelyOwned && status.hasPrereqs && status.hasPoints;
+  const statsId = useId();
+  const hasStats = !!stats && stats.length > 0;
 
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-describedby={hasStats ? statsId : undefined}
       aria-label={`${skill.name}, Tier ${skill.tier}, ${effectivelyOwned ? "Active" : isLocked ? "Prerequisites required" : isUnaffordable ? "Unavailable" : "Available"}`}
       className={`relative w-full cursor-pointer rounded-lg border-2 p-3 text-left transition-all duration-200 hover:shadow-md ${
         effectivelyOwned
@@ -301,6 +307,22 @@ export const SkillCard: React.FC<SkillCardProps> = ({
           {costLabel ?? `${skill.costSkillPoints} SP`}
         </Badge>
       </div>
+
+      {hasStats && (
+        <dl id={statsId} className="mt-2 space-y-0.5 border-t pt-1 text-[11px]">
+          {stats.map(({ label, value }, index) => (
+            <div
+              key={`${label}:${value}:${index}`}
+              className="flex justify-between gap-2"
+            >
+              <dt className="truncate text-muted-foreground" title={label}>
+                {label}
+              </dt>
+              <dd className="font-medium">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </button>
   );
 };
