@@ -18,8 +18,8 @@ describe("Bloodright summary", () => {
   it("names the qualifying element and a shared node cost", () => {
     expect(
       describeBloodright([
-        { effects: [light], seichiSilverCost: 20 },
-        { effects: [light, StunTag.parse({})], seichiSilverCost: 20 },
+        { target: "SELF", effects: [light], seichiSilverCost: 20 },
+        { target: "SELF", effects: [light], seichiSilverCost: 20 },
       ]),
     ).toEqual({
       jutsu: "Light jutsu",
@@ -30,8 +30,8 @@ describe("Bloodright summary", () => {
     const any = IncreasePotencyTag.parse({ affectedTag: "damage", power: 1 });
     expect(
       describeBloodright([
-        { effects: [any], seichiSilverCost: 10 },
-        { effects: [any], seichiSilverCost: 30 },
+        { target: "SELF", effects: [any], seichiSilverCost: 10 },
+        { target: "SELF", effects: [any], seichiSilverCost: 30 },
       ]),
     ).toEqual({
       jutsu: null,
@@ -42,8 +42,8 @@ describe("Bloodright summary", () => {
     const any = IncreasePotencyTag.parse({ affectedTag: "damage", power: 1 });
     expect(
       describeBloodright([
-        { effects: [light], seichiSilverCost: 20 },
-        { effects: [any], seichiSilverCost: 20 },
+        { target: "SELF", effects: [light], seichiSilverCost: 20 },
+        { target: "SELF", effects: [any], seichiSilverCost: 20 },
       ]).jutsu,
     ).toBeNull();
   });
@@ -52,35 +52,48 @@ describe("Bloodright summary", () => {
       PoisonTag.parse({}),
       IncreasePotencyTag.parse({ affectedTag: "none" }),
     ]) {
-      expect(describeBloodright([{ effects: [effect], seichiSilverCost: 20 }])).toEqual(
-        {
-          jutsu: null,
-          note: `Each node costs 20 Seichi Silver; up to ${MAX_BLOODRIGHT_TIERS} active.`,
-        },
-      );
+      expect(
+        describeBloodright([
+          { target: "SELF", effects: [effect], seichiSilverCost: 20 },
+        ]),
+      ).toEqual({
+        jutsu: null,
+        note: `Each node costs 20 Seichi Silver; up to ${MAX_BLOODRIGHT_TIERS} active.`,
+      });
     }
   });
   it("ignores potency that affects neither tags nor elements", () => {
     expect(
       describeBloodright([
         {
+          target: "SELF",
           effects: [light, IncreasePotencyTag.parse({ affectedTag: "none" })],
           seichiSilverCost: 20,
         },
       ]).jutsu,
     ).toBe("Light jutsu");
   });
-  it("describes percentage decreases without claiming an additive boost", () => {
+  it("omits jutsu claims for mixed effects, reductions and other targets", () => {
     const decrease = DecreasePotencyTag.parse({
       affectedTag: "damage",
       calculation: "percentage",
       power: 10,
     });
-    expect(
-      describeBloodright([{ effects: [decrease], seichiSilverCost: 20 }]).note,
-    ).toBe(
-      `Effects modify the power of matching tags on all jutsu. Each node costs 20 Seichi Silver; up to ${MAX_BLOODRIGHT_TIERS} active.`,
-    );
+    for (const tier of [
+      { target: "SELF" as const, effects: [light, StunTag.parse({})] },
+      { target: "SELF" as const, effects: [decrease] },
+      { target: "ENEMIES" as const, effects: [light] },
+      { target: "ALLIES" as const, effects: [light] },
+      {
+        target: "SELF" as const,
+        effects: [{ ...light, target: "COORDINATES" as const }],
+      },
+    ]) {
+      expect(describeBloodright([{ ...tier, seichiSilverCost: 20 }])).toEqual({
+        jutsu: null,
+        note: `Each node costs 20 Seichi Silver; up to ${MAX_BLOODRIGHT_TIERS} active.`,
+      });
+    }
   });
   it("has no note without tiers", () => {
     expect(describeBloodright([])).toEqual({ jutsu: null, note: null });

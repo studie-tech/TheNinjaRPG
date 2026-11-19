@@ -9,6 +9,7 @@ import {
   MAX_BLOODRIGHT_TIERS,
   SKILL_TREE_RESET_FREE,
 } from "@/drizzle/constants";
+import type { SkillTree } from "@/drizzle/schema";
 import { BloodrightTree } from "@/layout/BloodrightTree";
 import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
@@ -20,7 +21,6 @@ import { freeResetNote } from "@/libs/skillReset";
 import { showMutationToast } from "@/libs/toast";
 import { isStaffMember } from "@/utils/permissions";
 import { useRequiredUserDataSelector, useUserDataSelector } from "@/utils/UserContext";
-import type { ZodAllTags } from "@/validators/combat";
 import type { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const Bloodright = () => {
@@ -224,18 +224,27 @@ export const Bloodright = () => {
   );
 };
 
-/** Describe effective potency scopes and node costs without assuming how effects scale. */
+/** Summarize self-targeted potency paths; mixed or other-target paths show only costs. */
 export const describeBloodright = (
-  tiers: { effects: ZodAllTags[]; seichiSilverCost: number }[],
+  tiers: Pick<SkillTree, "target" | "effects" | "seichiSilverCost">[],
 ) => {
-  const scopes = tiers.flatMap((tier) =>
-    tier.effects.flatMap((effect) =>
-      (effect.type === "increasepotency" || effect.type === "decreasepotency") &&
-      (effect.affectedTag !== "none" || effect.affectedElements.length > 0)
-        ? [effect.affectedElements]
-        : [],
-    ),
+  const isPotencyPath = tiers.every(
+    (tier) =>
+      tier.target === "SELF" &&
+      tier.effects.every(
+        (effect) => effect.type === "increasepotency" && effect.target === "SELF",
+      ),
   );
+  const scopes = isPotencyPath
+    ? tiers.flatMap((tier) =>
+        tier.effects.flatMap((effect) =>
+          effect.type === "increasepotency" &&
+          (effect.affectedTag !== "none" || effect.affectedElements.length > 0)
+            ? [effect.affectedElements]
+            : [],
+        ),
+      )
+    : [];
   // Effective potency without an element restriction can modify matching tags on any jutsu.
   const unrestricted = scopes.some((scope) => !scope.length);
   const elements = unrestricted

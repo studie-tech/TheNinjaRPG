@@ -14,7 +14,13 @@ const flows = [
     file: "app/[shell]/blackmarket/page.tsx",
     procedure: "bloodline.pityRoll",
     patch: { bloodlineId: "new", bloodline: { id: "new" } },
+    invalidations: 2,
   },
+  ...["purchaseBloodline", "removeBloodline", "roll"].map((procedure) => ({
+    file: "layout/Bloodline.tsx",
+    procedure: `bloodline.${procedure}`,
+    patch: { bloodlineId: "new", bloodline: { id: "new" } },
+  })),
   {
     file: "layout/profileEdit/SwapBloodline.tsx",
     procedure: "bloodline.swapBloodline",
@@ -220,6 +226,7 @@ const setup = (file: string, procedure: string) => {
     "showActionReadinessToast",
     "prepareCombatEntry",
     "loadBattle",
+    "props",
     `${factory}\nreturn callbackOptions();`,
   )(
     utils,
@@ -261,6 +268,7 @@ const setup = (file: string, procedure: string) => {
     vi.fn(),
     vi.fn(),
     vi.fn(),
+    { refetch: vi.fn() },
   ) as {
     onMutate: () => unknown;
     onSuccess: (data: unknown, input: unknown, snapshot: unknown) => Promise<void>;
