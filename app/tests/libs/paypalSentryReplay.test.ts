@@ -26,12 +26,6 @@ describe("third-party script Sentry filters", () => {
   });
 
   it.each([
-    ["Illegal invocation", ILLEGAL, "https://consent.cookiebot.com/uc.js?cbid=abc"],
-    [
-      "a banner on a missing element",
-      NULL_DOM,
-      "https://consentcdn.cookiebot.com/sdk/bc-v4.min.cc.js",
-    ],
     [
       "a Google tag clone failure",
       CLONE,
@@ -82,12 +76,6 @@ describe("third-party script Sentry filters", () => {
     ["own chunk containing mediafilter", CLONE, `${own}/mediafilter-1a2b.js`],
     ["own chunk ending in mediafilter", CLONE, `${own}/socialmediafilter.js`],
     [
-      "Cookiebot look-alike host",
-      ILLEGAL,
-      "https://consent.cookiebot.com.evil.example/uc.js",
-    ],
-    ["Cookiebot look-alike host", NULL_DOM, "https://evilcookiebot.com/cc.js"],
-    [
       "Google tag look-alike host",
       CLONE,
       "https://www.googletagmanager.com.evil.example/gtag/js",
@@ -98,11 +86,6 @@ describe("third-party script Sentry filters", () => {
   });
 
   it.each([
-    [
-      "Illegal invocation",
-      ["TypeError", "Something else"],
-      "https://consent.cookiebot.com/uc.js",
-    ],
     [
       "DataCloneError",
       ["Error", "Something else"],

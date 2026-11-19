@@ -17,7 +17,7 @@ let session: { isLoaded: boolean; isSignedIn: boolean; user?: { id: string } };
 
 beforeEach(() => {
   withdraw.mockClear();
-  window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
   vi.spyOn(clerk, "useUser").mockImplementation(() => session as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     misc: { withdrawAdClickConsent: { useMutation: () => ({ mutate: withdraw }) } },
@@ -27,7 +27,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  delete window.Cookiebot;
+  delete window.tnrConsent;
   window.localStorage.clear();
 });
 
@@ -51,7 +51,7 @@ it("withdraws the device click, then the account's click after signing in", () =
 });
 
 it("leaves the click alone while marketing consent is granted", () => {
-  window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: true }, hasResponse: true };
   storeAdClick("Cj0KCQiA-kept-click");
   session = { isLoaded: true, isSignedIn: true, user: { id: "consenting-player" } };
   render(<AdClickConsentWatcher />);
@@ -65,17 +65,17 @@ it("withdraws again after consent is granted and declined once more", () => {
   const view = render(<AdClickConsentWatcher />);
   expect(withdraw).toHaveBeenCalledTimes(1);
 
-  window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: true }, hasResponse: true };
   act(() => {
-    window.dispatchEvent(new window.Event("CookiebotOnAccept"));
+    window.dispatchEvent(new window.Event("tnr:consent-change"));
   });
   view.rerender(<AdClickConsentWatcher />);
   // The landing page reports the click again under the new consent.
   storeAdClick("Cj0KCQiA-first-click");
 
-  window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
   act(() => {
-    window.dispatchEvent(new window.Event("CookiebotOnDecline"));
+    window.dispatchEvent(new window.Event("tnr:consent-change"));
   });
   view.rerender(<AdClickConsentWatcher />);
   expect(withdraw).toHaveBeenCalledTimes(2);
@@ -88,9 +88,9 @@ it("withdraws a click linked after an earlier withdrawal, even after a signed-ou
   expect(withdraw).toHaveBeenCalledTimes(1);
 
   // Consent is granted again and a registration on this device links a new click.
-  window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: true }, hasResponse: true };
   act(() => {
-    window.dispatchEvent(new window.Event("CookiebotOnAccept"));
+    window.dispatchEvent(new window.Event("tnr:consent-change"));
   });
   view.rerender(<AdClickConsentWatcher />);
   markAdClickLinked();
@@ -98,9 +98,9 @@ it("withdraws a click linked after an earlier withdrawal, even after a signed-ou
   // Signed out, another ad landing stores a click and the visitor declines.
   session = { isLoaded: true, isSignedIn: false };
   storeAdClick("Cj0KCQiA-signed-out-click");
-  window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
   act(() => {
-    window.dispatchEvent(new window.Event("CookiebotOnDecline"));
+    window.dispatchEvent(new window.Event("tnr:consent-change"));
   });
   view.rerender(<AdClickConsentWatcher />);
   expect(withdraw).toHaveBeenCalledTimes(2);

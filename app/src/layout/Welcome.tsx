@@ -718,8 +718,8 @@ const usePixelHeroVideoPlayback = (
 
 // VisitorLog is keyed on a hash of the IP and deduplicated by the server, so the visit is
 // reported once per page load without keeping a marker on the device. A Google Ads click
-// is reported once Cookiebot has read the visitor's choice, and again if the visitor then
-// accepts marketing cookies, since the server may have declined to keep it unanswered.
+// is reported once the consent manager reads the visitor's choice, and again after they
+// accept marketing cookies, since the server may decline to keep it unanswered.
 let isVisitReported = false;
 let reportedClickConsent: "granted" | "unanswered" | null = null;
 

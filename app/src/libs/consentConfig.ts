@@ -95,5 +95,5 @@ export const consentConfig: CookieConsentConfig = {
   },
 };
 
-/** Establish denied defaults and block the container's hosted CMP before GTM executes. */
-export const CONSENT_BOOTSTRAP = `(function(){window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments)};window.gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'denied',personalization_storage:'denied',security_storage:'granted'});window.gtag('policy','inject_script',function(c,p,d){try{return !/(^|\\.)cookiebot\\.com$/i.test(new URL(d.url,location.href).hostname)}catch(e){return false}})})();`;
+/** Establish denied defaults before optional tags execute. */
+export const CONSENT_BOOTSTRAP = `(function(){window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments)};window.gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'denied',personalization_storage:'denied',security_storage:'granted'})})();`;

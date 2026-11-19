@@ -84,7 +84,6 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
 }) => {
   // Error reporting and consent load in every frame, signed in or not.
   ReactDOM.prefetchDNS("https://o4507797256601600.ingest.de.sentry.io");
-  ReactDOM.prefetchDNS("https://consentcdn.cookiebot.com");
   const pathname = usePublicPathname();
   const { isClerkLoaded, isSignedIn } = useUserInfo();
   // Explicit choices replace only the presentation; remounting the root shell would

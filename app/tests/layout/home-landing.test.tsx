@@ -46,7 +46,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   window.localStorage.clear();
   window.history.replaceState(null, "", "/");
-  delete window.Cookiebot;
+  delete window.tnrConsent;
 });
 
 describe("landing page session navigation", () => {
@@ -96,7 +96,7 @@ describe("landing page session navigation", () => {
     "captures the landing referral before registration with statistics consent %j",
     (statistics) => {
       session = { ...session, isSignedIn: true, userId: "player" };
-      window.Cookiebot = { consent: { statistics }, hasResponse: true };
+      window.tnrConsent = { consent: { statistics }, hasResponse: true };
       window.localStorage.setItem("ref", "EarlierRecruiter");
       window.history.replaceState(null, "", "/?ref=Recruiter&utm_source=legacy");
       referral.mockImplementationOnce((input) => {

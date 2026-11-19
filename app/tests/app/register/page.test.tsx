@@ -178,7 +178,7 @@ it("sends the device's ad click and consent, and marks the click linked", async 
     isAdClickLinked: true,
   }));
   const { form } = mount(createCharacter);
-  window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: true }, hasResponse: true };
   storeAdClick("Cj0KCQiA-device-click");
   recordAdClickWithdrawn("player-who-declined-before");
   try {
@@ -191,7 +191,7 @@ it("sends the device's ad click and consent, and marks the click linked", async 
     // A later decline must withdraw the newly linked click again.
     expect(hasWithdrawnAdClickFor("player-who-declined-before")).toBe(false);
   } finally {
-    delete window.Cookiebot;
+    delete window.tnrConsent;
     localStorage.clear();
   }
 });
