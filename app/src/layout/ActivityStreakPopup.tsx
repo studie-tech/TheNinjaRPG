@@ -15,8 +15,11 @@ import {
 } from "@/components/ui/dialog";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityStreaks } from "@/hooks/useActivityStreaks";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
+import { useSplash } from "@/hooks/useSplash";
 import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import Loader from "@/layout/Loader";
+import { WelcomeBoard } from "@/layout/WelcomeBoard";
 import {
   isActivityStreakPopupBlocking,
   resolveActivityStreakDateLatches,
@@ -26,7 +29,7 @@ import {
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import { isTutorialActive } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
-import { getDateKey } from "@/utils/time";
+import { getDateKey, nextUtcDayAt } from "@/utils/time";
 import { blockingPopupOpenAtom, useUserDataSelector } from "@/utils/UserContext";
 
 const loadActivityStreakPanel = () => import("@/layout/ActivityStreakPanel");
@@ -45,9 +48,6 @@ const ActivityStreakPopup: React.FC = () => {
     pathname === "/merch" ||
     pathname.startsWith("/merch/") ||
     isBrowserAuthPath(pathname);
-  // The profile dashboard owns this claim surface. Suppressing the global dialog on
-  // the profile route prevents the same reward appearing twice.
-  const dashboardOwnsStreak = pathname === "/profile";
   const currentDateKey = getDateKey(new Date());
   // Once opened, the popup stays mounted through reward refetches so the user can see the
   // claimed state until they explicitly close it.
@@ -84,15 +84,23 @@ const ActivityStreakPopup: React.FC = () => {
   // for a popup that cannot appear. Re-enables when those latches clear (tutorial
   // finished, date rollover) so an unclaimed reward is not dropped.
   const shouldFetchStreaks = shouldFetchActivityStreaksForPopup({
-    hasUser: !!userData && !dashboardOwnsStreak && !isSuppressedRoute,
+    hasUser: !!userData && !isSuppressedRoute,
     tutorialActive,
     dismissedToday,
     userClosed,
   });
-  const { data: userStreaks, isLoading } = useActivityStreaks(
+  const { data: userStreaks, isLoading: isLoadingStreaks } = useActivityStreaks(
     shouldFetchStreaks,
     timeDiff,
   );
+  const splash = useSplash(shouldFetchStreaks, timeDiff);
+  useRefreshAt(
+    [nextUtcDayAt(new Date(Date.now() - timeDiff))],
+    () => setUserClosedDateKey(null),
+    timeDiff,
+    !!userData,
+  );
+  const isLoading = isLoadingStreaks || splash.isLoading;
   useEffect(() => {
     if (shouldFetchStreaks)
       void loadActivityStreakPanel().catch(() => {
@@ -106,9 +114,11 @@ const ActivityStreakPopup: React.FC = () => {
   const needsCatchUp = userStreaks?.streaks.some((s) => s.needsCatchUp) ?? false;
   const hasRecurringToEnroll = !!userStreaks?.activeRecurringConfig;
   const shouldShowPopup =
-    !dashboardOwnsStreak &&
     !isSuppressedRoute &&
-    (hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll);
+    (!!splash.data?.content ||
+      hasUnclaimedRewards ||
+      needsCatchUp ||
+      hasRecurringToEnroll);
 
   useEffect(() => {
     setIsModalOpen(
@@ -164,43 +174,55 @@ const ActivityStreakPopup: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  // Don't render anything if no user, loading, dismissed today, or no rewards
+  // The unified board owns both announcement and reward content.
   if (isSuppressedRoute || !userData || !isModalOpen) {
     return null;
   }
 
   return (
     <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="border-2 border-[#b9954d] bg-[#f8edce] text-[#2d2236] md:max-w-4xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 pr-6 font-serif text-3xl">
             <Gift className="h-5 w-5 text-primary" />
-            Daily Activity Rewards
+            {splash.data?.content?.name ?? "Daily Activity Rewards"}
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            View and claim your daily activity rewards
+          <DialogDescription className="text-[#594661]">
+            {splash.data?.content?.description ||
+              "View and claim your daily activity rewards"}
           </DialogDescription>
         </DialogHeader>
 
-        <ChunkErrorBoundary
-          fallback={() => (
-            <div
-              role="alert"
-              className="flex items-center justify-between gap-2 text-sm"
-            >
-              <span>Rewards could not be loaded.</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => window.location.reload()}
+        {splash.data?.content && (
+          <WelcomeBoard
+            content={splash.data.content}
+            onNavigate={handleDismissForToday}
+          />
+        )}
+        <section className="bg-background text-foreground rounded-sm border-2 border-[#b9954d] p-3 sm:p-4">
+          <h3 className="mb-3 flex items-center gap-2 font-serif text-xl font-bold">
+            <Gift className="h-5 w-5" /> Daily activity rewards
+          </h3>
+          <ChunkErrorBoundary
+            fallback={() => (
+              <div
+                role="alert"
+                className="flex items-center justify-between gap-2 text-sm"
               >
-                Reload
-              </Button>
-            </div>
-          )}
-        >
-          <ActivityStreakPanel />
-        </ChunkErrorBoundary>
+                <span>Rewards could not be loaded.</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.location.reload()}
+                >
+                  Reload
+                </Button>
+              </div>
+            )}
+          >
+            <ActivityStreakPanel />
+          </ChunkErrorBoundary>
+        </section>
 
         <div className="flex justify-between gap-2 pt-2">
           <Button variant="ghost" size="sm" onClick={handleDismissForToday}>

@@ -78,7 +78,7 @@ export const listItemForGetStoreBundles = (client: Pick<DrizzleClient, "query">)
     columns: { id: true, name: true, image: true, repsCost: true },
   });
 
-/** Build the `webStoreOrder` selection for `getStoreBundles`, using predicates on `buyerId`, `bundleId`, `grantedAt`. */
+/** Build the `webStoreOrder` selection for `getStoreBundles`, using predicates on `recipientId`, `bundleId`, `grantedAt`. */
 export const selectWebStoreOrderForGetStoreBundles = (
   client: Pick<DrizzleClient, "select">,
   ctx: { userId: string },
@@ -88,7 +88,7 @@ export const selectWebStoreOrderForGetStoreBundles = (
     .from(webStoreOrder)
     .where(
       and(
-        eq(webStoreOrder.buyerId, ctx.userId),
+        eq(webStoreOrder.recipientId, ctx.userId),
         isNotNull(webStoreOrder.bundleId),
         isNotNull(webStoreOrder.grantedAt),
       ),
@@ -745,11 +745,11 @@ export const findWebStoreBundleForCheckBundlePurchaseLimit = (
 
 /**
  * Build the `webStoreOrder` selection for `checkBundlePurchaseLimit`, including
- * predicates on `buyerId`, `bundleId`, `id`.
+ * predicates on `recipientId`, `bundleId`, `id`.
  */
 export const selectWebStoreOrderForCheckBundlePurchaseLimit = (
   client: Pick<DrizzleClient, "select">,
-  buyerId: string,
+  recipientId: string,
   bundleId: string,
   excludeOrderId: undefined | string,
 ) =>
@@ -758,7 +758,7 @@ export const selectWebStoreOrderForCheckBundlePurchaseLimit = (
     .from(webStoreOrder)
     .where(
       and(
-        eq(webStoreOrder.buyerId, buyerId),
+        eq(webStoreOrder.recipientId, recipientId),
         eq(webStoreOrder.bundleId, bundleId),
         excludeOrderId ? ne(webStoreOrder.id, excludeOrderId) : undefined,
         // A provider capture can stay pending or need delivery recovery beyond quote expiry.
@@ -771,9 +771,11 @@ export const selectWebStoreOrderForCheckBundlePurchaseLimit = (
       ),
     );
 
-/**
- * Add FOR UPDATE to the supplied lazy buyer lookup. Use the caller-owned transaction
- * only on the limited-purchase branch.
- */
-export const lockStoreBuyer = (query: ReturnType<typeof selectUserDataForReserve>) =>
-  query.for("update");
+/** Lock existing payer/recipient rows in stable order to serialize allowance and recipient capacity. */
+export const lockStoreParticipants = (client: DrizzleClient, ids: string[]) =>
+  client
+    .select()
+    .from(userData)
+    .where(inArray(userData.userId, ids))
+    .orderBy(userData.userId)
+    .for("update");

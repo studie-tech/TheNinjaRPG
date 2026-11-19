@@ -41,23 +41,24 @@ import { SearchSelect } from "@/layout/SearchSelect";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { getStoreBundleMinimumPriceCents } from "@/utils/paypal";
 import { canManageStore } from "@/utils/permissions";
-import { useRecipientPicker } from "@/utils/search";
+import { useUserPicker } from "@/utils/search";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { type StoreBundleInput, storeBundleSchemaForItems } from "@/validators/points";
 import { StoreCheckout } from "./StoreCheckout";
 
-/** Show per-buyer availability and staff editing through the shared validated bundle catalog. */
+/** Show per-recipient availability and staff editing through the shared validated bundle catalog. */
 export function StoreBundles() {
   const { data: user } = useRequiredUserData();
   const canManage = canManageStore(user?.role);
   const query = api.paypal.getStoreBundles.useQuery({ includeInactive: canManage });
   const [selected, setSelected] = useState<string>();
+  const [isGift, setIsGift] = useState(false);
   const [isCheckoutPending, setIsCheckoutPending] = useState(false);
   const [editing, setEditing] = useState<{ id?: string; data: StoreBundleInput }>();
   const [message, setMessage] = useState<string>();
   const returnFocusRef = useRef<HTMLElement>(null);
   const selectedBundleRef = useRef<HTMLDivElement>(null);
-  const { methods, users } = useRecipientPicker(user);
+  const { methods, users } = useUserPicker();
   const save = api.paypal.saveStoreBundle.useMutation({
     onSuccess: async (result) => {
       setMessage(result.message);
@@ -140,7 +141,7 @@ export function StoreBundles() {
             ref={selected === bundle.id ? selectedBundleRef : undefined}
             tabIndex={-1}
             className={
-              selected === bundle.id ? "border-primary ring-1 ring-primary" : ""
+              selected === bundle.id ? "border-primary ring-primary ring-1" : ""
             }
           >
             <CardHeader>
@@ -152,7 +153,7 @@ export function StoreBundles() {
               {bundle.purchaseLimit > 0 && (
                 <p className="text-sm">
                   Limit {bundle.purchaseLimit.toLocaleString()} per account ·{" "}
-                  {bundle.purchaseCount.toLocaleString()} purchased
+                  {bundle.purchaseCount.toLocaleString()} received
                 </p>
               )}
             </CardHeader>
@@ -189,6 +190,7 @@ export function StoreBundles() {
                   variant={selected === bundle.id ? "default" : "outline"}
                   onClick={(event) => {
                     returnFocusRef.current = event.currentTarget;
+                    setIsGift(false);
                     setSelected(bundle.id);
                   }}
                 >
@@ -198,6 +200,19 @@ export function StoreBundles() {
                     : selected === bundle.id
                       ? "Selected"
                       : "Select bundle"}
+                </Button>
+                <Button
+                  disabled={!bundle.isActive}
+                  variant="outline"
+                  onClick={(event) => {
+                    returnFocusRef.current = event.currentTarget;
+                    methods.setValue("users", []);
+                    methods.setValue("username", "");
+                    setIsGift(true);
+                    setSelected(bundle.id);
+                  }}
+                >
+                  Gift bundle
                 </Button>
                 {canManage && (
                   <Button
@@ -227,7 +242,9 @@ export function StoreBundles() {
         ))}
       </div>
       <Modal
-        title={offer ? `Purchase ${offer.name}` : "Purchase bundle"}
+        title={
+          offer ? `${isGift ? "Gift" : "Purchase"} ${offer.name}` : "Purchase bundle"
+        }
         isOpen={!!offer}
         isLoading={isCheckoutPending}
         setIsOpen={(open) => {
@@ -244,25 +261,33 @@ export function StoreBundles() {
         {offer && (
           <>
             <p className="text-muted-foreground text-sm">
-              All listed contents go to the selected player. Reputation counts toward
-              your monthly allowance.
+              {isGift
+                ? "All contents go to the selected player."
+                : "All contents go to your account."}{" "}
+              Bundle limits apply to the recipient. Reputation counts toward your
+              monthly allowance.
             </p>
-            <UserSearchSelect
-              useFormMethods={methods}
-              showYourself
-              showAi={false}
-              inline
-              maxUsers={1}
-            />
+            {isGift && (
+              <UserSearchSelect
+                useFormMethods={methods}
+                showYourself={false}
+                showAi={false}
+                inline
+                maxUsers={1}
+              />
+            )}
             <p className="font-semibold">
               Total: ${(offer.priceCents / 100).toFixed(2)} USD
             </p>
             <StoreCheckout
               selection={{ type: "bundle", bundleId: offer.id }}
-              recipientId={users[0]?.userId}
+              recipientId={isGift ? users[0]?.userId : user?.userId}
               onPendingChange={setIsCheckoutPending}
               disabled={
-                offer.purchaseLimit > 0 && offer.purchaseCount >= offer.purchaseLimit
+                isGift
+                  ? !users[0]?.userId || users[0].userId === user?.userId
+                  : offer.purchaseLimit > 0 &&
+                    offer.purchaseCount >= offer.purchaseLimit
               }
             />
           </>
@@ -378,8 +403,8 @@ function StoreBundleEditor({
                     />
                   </FormControl>
                   <FormDescription>
-                    0 means unlimited. 1 allows one lifetime purchase per buyer account,
-                    including gifts.
+                    0 means unlimited. 1 allows one lifetime bundle per recipient
+                    account, including gifts received.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

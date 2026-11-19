@@ -14,6 +14,7 @@ export const ENTITY_LABELS: Record<ContentProposalEntityType, string> = {
   QUEST: "Quest",
   BADGE: "Badge",
   TITLE: "Title",
+  SPLASH: "Welcome board",
   GAME_ASSET: "Asset",
   AI: "AI",
 };

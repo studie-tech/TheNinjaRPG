@@ -283,6 +283,8 @@ export const createStaffProposal = async (
   userId: string,
   input: StaffCreateProposal,
 ): Promise<{ ok: true; id: string } | { ok: false; reason: string }> => {
+  if (input.entityType === "SPLASH" && !input.entityId)
+    return { ok: false, reason: "Edit the existing welcome board" };
   const config = ENTITY_CONFIG[input.entityType];
   const entities = input.entityId
     ? await loadEntities(client, [
@@ -426,6 +428,8 @@ const planAgentProposal = async (
       targets.add(key);
     } else if (change.entityId) {
       return "A new entity cannot carry an id";
+    } else if (change.entityType === "SPLASH") {
+      return "Edit the existing welcome board";
     } else if (change.entityType === "GAME_ASSET") {
       // A draft has no way to bring a file; new sounds and images arrive as media candidates
       // and become assets when their suggestion is approved.

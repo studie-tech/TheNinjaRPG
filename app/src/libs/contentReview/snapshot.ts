@@ -15,6 +15,7 @@ import {
   selectUserItemForOwnerCounts,
   selectUserJutsuForOwnerCounts,
 } from "@/queries/contentReview";
+import { listSplashAnnouncements } from "@/queries/splash";
 import type { DrizzleClient } from "@/server/db";
 import { DAY_S, HOUR_S, secondsFromNow } from "@/utils/time";
 import { agentAuditOutputSchema, visualCheckSchema } from "@/validators/contentReview";
@@ -46,17 +47,20 @@ export const buildAuditSnapshot = async (
   const focus = resolveFocus(requested, now);
   const view = VIEWS[focus];
   await expireStaleEvidence(client);
-  const [entityLists, stats, owners, assets, recent] = await Promise.all([
-    Promise.all(view.types.map((type) => loadAllEntities(client, type))),
-    view.hasUsage ? usageStats(client) : Promise.resolve(new Map<string, Usage>()),
-    focus === "balance"
-      ? ownerCounts(client)
-      : Promise.resolve(new Map<string, number>()),
-    view.assets.length
-      ? selectGameAssetForBuildAuditSnapshot(client, view)
-      : Promise.resolve([]),
-    recentSuggestions(client),
-  ]);
+  const [entityLists, stats, owners, assets, recent, announcements] = await Promise.all(
+    [
+      Promise.all(view.types.map((type) => loadAllEntities(client, type))),
+      view.hasUsage ? usageStats(client) : Promise.resolve(new Map<string, Usage>()),
+      focus === "balance"
+        ? ownerCounts(client)
+        : Promise.resolve(new Map<string, number>()),
+      view.assets.length
+        ? selectGameAssetForBuildAuditSnapshot(client, view)
+        : Promise.resolve([]),
+      recentSuggestions(client),
+      focus === "splash" ? listSplashAnnouncements(client) : Promise.resolve([]),
+    ],
+  );
   const visible = entityLists.flat().filter((entity) => !entity.isHidden);
   const assetUse = countAssetUse(visible);
   const imageUse = new Map<string, number>();
@@ -88,11 +92,13 @@ export const buildAuditSnapshot = async (
   );
   rows.sort(
     (a, b) =>
+      Number(b.type === "SPLASH") - Number(a.type === "SPLASH") ||
       (b.casts30d ?? 0) - (a.casts30d ?? 0) ||
       (tieBreak.get(a) ?? 0) - (tieBreak.get(b) ?? 0),
   );
   const snapshot = {
     generatedAt: now.toISOString(),
+    ...(focus === "splash" ? { announcements } : {}),
     focus,
     capabilities: {
       epidemicSoundSearch: isEpidemicConfigured(),
@@ -342,12 +348,19 @@ const TEXT_FIELDS: Record<ContentProposalEntityType, string[]> = {
   QUEST: ["name", "description", "successDescription", "questType", "content"],
   BADGE: ["name", "description"],
   TITLE: ["name", "description"],
+  SPLASH: ["name", "description", "cards"],
   GAME_ASSET: ["name"],
   AI: ["username", "npcTitle", "level"],
 };
 
 /** What the audit reads for each focus: only what that focus judges, so the catalog fits. */
 const VIEWS: Record<ContentAuditFocus, View> = {
+  splash: {
+    types: ["SPLASH", "QUEST"],
+    fields: (entity) => entity.editable,
+    hasUsage: false,
+    assets: [],
+  },
   grammar: {
     types: ["JUTSU", "ITEM", "BLOODLINE", "QUEST", "BADGE", "TITLE", "AI"],
     fields: (entity) => {

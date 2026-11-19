@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { ContentProposalEntityType, ContentType } from "@/drizzle/constants";
+import { DEFAULT_SPLASH, SPLASH_ID } from "@/libs/splash";
 import {
   listItemForLoad,
   listTitleForLoad,
@@ -12,6 +13,7 @@ import {
   selectQuestForLoad,
   selectTitleForFindNames,
 } from "@/queries/contentReview";
+import { findSplash } from "@/queries/splash";
 import type { DrizzleClient } from "@/server/db";
 import { insertAiSchema } from "@/validators/aiInput";
 import { gameAssetValidator } from "@/validators/asset";
@@ -24,6 +26,7 @@ import {
   JutsuValidatorRawSchema,
 } from "@/validators/combat";
 import { QuestValidator, QuestValidatorRawSchema } from "@/validators/objectives";
+import { splashSchema } from "@/validators/splash";
 import { TitleValidator } from "@/validators/title";
 import { contentVersion } from "./version";
 
@@ -185,6 +188,26 @@ const findNamesOf =
  * its fields suggestions may change.
  */
 export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
+  SPLASH: {
+    contentType: "guide",
+    editableKeys: Object.keys(splashSchema.shape),
+    validator: splashSchema,
+    detailHref: () => "/manual/splash",
+    load: async (client, ids) => {
+      if (ids && !ids.includes(SPLASH_ID)) return [];
+      const content = (await findSplash(client))?.content ?? DEFAULT_SPLASH;
+      return [
+        {
+          id: SPLASH_ID,
+          name: content.name,
+          image: content.image || null,
+          isHidden: false,
+          payload: content,
+        },
+      ];
+    },
+    findNames: async () => [],
+  },
   JUTSU: {
     contentType: "jutsu",
     editableKeys: keysOf(JutsuValidatorRawSchema),

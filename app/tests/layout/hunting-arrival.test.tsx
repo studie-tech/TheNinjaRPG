@@ -66,6 +66,9 @@ beforeEach(() => {
   refetch.mockReset();
   streakQuery.mockReset();
   Object.assign(vi.spyOn(client, "api" as never), {
+    splash: {
+      get: { useQuery: () => ({ data: { content: null }, isLoading: false }) },
+    },
     hunting: {
       getSession: {
         useQuery: () => ({ data: encounterData, error: encounterError, refetch }),

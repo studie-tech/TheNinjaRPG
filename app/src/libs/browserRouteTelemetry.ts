@@ -49,6 +49,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/layouts",
   "/login/[[...rest]]",
   "/manual",
+  "/manual/splash",
   "/manual/activityStreak",
   "/manual/activityStreak/edit/[configid]",
   "/manual/ai",

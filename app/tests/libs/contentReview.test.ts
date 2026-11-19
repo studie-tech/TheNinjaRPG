@@ -245,7 +245,7 @@ describe("audit snapshot helpers", () => {
       "18:40",
       "21:40",
     ].map((time) => at(`${time}:00`));
-    const first = ContentAuditFocuses.findIndex((focus) => focus === runs[0]);
+    const first = ContentAuditFocuses.indexOf(runs[0] ?? ContentAuditFocuses[0]);
     expect(runs).toEqual<Array<ReturnType<typeof resolveFocus> | undefined>>(
       runs.map(
         (_, index) => ContentAuditFocuses[(first + index) % ContentAuditFocuses.length],
@@ -253,10 +253,11 @@ describe("audit snapshot helpers", () => {
     );
     // A run that GitHub starts late keeps the focus of its window.
     expect(at("02:59:59")).toBe<ReturnType<typeof resolveFocus> | undefined>(runs[0]);
-    // The rotation carries on across days instead of restarting at midnight.
+    // Eight three-hour windows include one welcome-board review per UTC day.
+    expect(runs.filter((focus) => focus === "splash")).toHaveLength(1);
     expect(resolveFocus("rotate", new Date("2026-10-01T00:40:00Z"))).toBe<
       ReturnType<typeof resolveFocus> | undefined
-    >(runs[1]);
+    >(runs[0]);
     expect(resolveFocus("sound")).toBe("sound");
   });
 

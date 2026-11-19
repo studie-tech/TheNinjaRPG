@@ -304,15 +304,18 @@ describeWithDatabase("web store payments", () => {
       fetchMock.mockRestore();
     }
   });
-  it("reserves one lifetime purchase atomically across concurrent gift recipients, including zero-reputation offers", async () => {
+  it("reserves one lifetime bundle per recipient, independently of the payer's own purchase", async () => {
     const db = await getTestDatabase();
     const limited = await seedBundle(
       { purchaseLimit: 1 },
       { ...offer, contents: { ...contents, reputationPoints: 0 } },
     );
+    const own = await reserveStoreOrder(db, "buyer", "buyer", limited);
+    if (!own.success) throw new Error(own.message);
+    await deliverStoreOrder(db, capture(own.order.id));
     const attempts = await Promise.all(
       Array.from({ length: 6 }, (_, index) =>
-        reserveStoreOrder(db, "buyer", index % 2 ? "buyer" : "recipient", limited),
+        reserveStoreOrder(db, index % 2 ? "buyer" : "recipient", "recipient", limited),
       ),
     );
     expect(attempts.filter((result) => result.success)).toHaveLength(1);
@@ -321,14 +324,13 @@ describeWithDatabase("web store payments", () => {
         .filter((result) => !result.success)
         .every((result) => result.message.includes("purchase limit")),
     ).toBe(true);
-    const order = (await db.query.webStoreOrder.findFirst())!;
+    const won = attempts.find((result) => result.success)!;
+    if (!won.success) throw new Error("No reserved gift");
+    const order = won.order;
     expect(order.bundleId).toBe(limited.bundleId);
-    expect(await authorizeStoreCapture(db, order.id, "buyer")).toBeNull();
+    expect(await authorizeStoreCapture(db, order.id, order.buyerId)).toBeNull();
     await deliverStoreOrder(db, capture(order.id));
-    await db
-      .update(webStoreOrder)
-      .set({ expiresAt: new Date(0) })
-      .where(eq(webStoreOrder.id, order.id));
+    await db.update(webStoreOrder).set({ expiresAt: new Date(0) });
     expect((await reserveStoreOrder(db, "buyer", "recipient", limited)).success).toBe(
       false,
     );
@@ -337,10 +339,10 @@ describeWithDatabase("web store payments", () => {
     const recipientCatalog = await (
       await callerFor(paypalRouter, "recipient")
     ).getStoreBundles();
-    expect(recipientCatalog.bundles[0]?.purchaseCount).toBe(0);
+    expect(recipientCatalog.bundles[0]?.purchaseCount).toBe(1);
     expect(
       (await reserveStoreOrder(db, "recipient", "recipient", limited)).success,
-    ).toBe(true);
+    ).toBe(false);
     // Provider recovery always honors a paid snapshot, even after staff hide or edit the offer.
     await db
       .update(webStoreBundle)
@@ -373,7 +375,9 @@ describeWithDatabase("web store payments", () => {
         })
       ).success,
     ).toBe(true);
-    expect((await owner.getStoreBundles()).bundles[0]).toMatchObject({
+    expect(
+      (await (await callerFor(paypalRouter, "recipient")).getStoreBundles()).bundles[0],
+    ).toMatchObject({
       name: "Renamed",
       purchaseCount: 2,
       purchaseLimit: 2,
@@ -383,7 +387,7 @@ describeWithDatabase("web store payments", () => {
     });
     try {
       const result = await owner.createStoreOrder({
-        recipientId: "buyer",
+        recipientId: "recipient",
         selection: { type: "bundle", bundleId: limited.bundleId },
       });
       expect(result).toMatchObject({ success: false });
@@ -691,7 +695,7 @@ describeWithDatabase("web store payments", () => {
     const pending = reportingTransaction(order.id);
     pending.transaction_info.transaction_status = "P";
     let transactions: Parameters<typeof syncTransactions>[1] = [];
-    const fetchMock = mockPayPal(async (url) => {
+    const fetchMock = mockPayPal(async (_url) => {
       return Response.json({ transaction_details: transactions });
     });
     try {
@@ -725,7 +729,7 @@ describeWithDatabase("web store payments", () => {
     const db = await getTestDatabase();
     const order = await reserve();
     await db.delete(userData).where(eq(userData.userId, "recipient"));
-    const fetchMock = mockPayPal(async (url) => {
+    const fetchMock = mockPayPal(async (_url) => {
       return Response.json({ transaction_details: [reportingTransaction(order.id)] });
     });
     try {
@@ -855,7 +859,7 @@ describeWithDatabase("web store payments", () => {
     ];
     const failure = `Transaction ID ${capture(failed.order.id).captureId}: Recipient unavailable. Contact support with your payment receipt.`;
     const caller = await callerFor(paypalRouter, "buyer");
-    const fetchMock = mockPayPal(async (url) => {
+    const fetchMock = mockPayPal(async (_url) => {
       return Response.json({ transaction_details: batch });
     });
     try {
@@ -1445,7 +1449,7 @@ describeWithDatabase("web store payments", () => {
       const reserved = await reserveStoreOrder(db, "buyer", recipientId, offer);
       if (!reserved.success) throw new Error(reserved.message);
       const order = reserved.order;
-      const fetchMock = mockPayPal(async (url) => {
+      const fetchMock = mockPayPal(async (_url) => {
         return Response.json({
           id: "TESTORDER123456789",
           status: "COMPLETED",
@@ -2250,7 +2254,7 @@ describeWithDatabase("web store payments", () => {
       itemId: "store-item",
       quantity: 1,
     });
-    const fetchMock = mockPayPal(async (url) => {
+    const fetchMock = mockPayPal(async (_url) => {
       return Response.json({
         id: "TESTORDER123456789",
         status: "COMPLETED",

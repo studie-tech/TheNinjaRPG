@@ -339,6 +339,7 @@ export const ContentProposalEntityTypes = [
   "TITLE",
   "GAME_ASSET",
   "AI",
+  "SPLASH",
 ] as const;
 export type ContentProposalEntityType = (typeof ContentProposalEntityTypes)[number];
 /** Whether a change edits an existing entity or creates a new one. */
@@ -372,6 +373,7 @@ export const ContentAuditFocuses = [
   "visual",
   "consistency",
   "new_content",
+  "splash",
 ] as const;
 export type ContentAuditFocus = (typeof ContentAuditFocuses)[number];
 /** Hours between scheduled audit runs; the cron in .github/workflows/content-audit.yml. */

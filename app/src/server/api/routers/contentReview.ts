@@ -92,7 +92,9 @@ import {
   staffCreateProposalSchema,
 } from "@/validators/contentReview";
 import type { QuestValidator } from "@/validators/objectives";
+import type { SplashContent } from "@/validators/splash";
 import type { TitleValidator } from "@/validators/title";
+import { splashRouter } from "./splash";
 
 const reviewQueueSchema = z.object({
   status: z.enum(ContentProposalStatuses),
@@ -879,6 +881,10 @@ const updateEntity = (
   data: Record<string, unknown>,
 ): Promise<Outcome> => {
   switch (type) {
+    case "SPLASH":
+      return splashRouter
+        .createCaller(ctx)
+        .update({ id: "welcome", data: data as SplashContent });
     case "JUTSU":
       return jutsuRouter
         .createCaller(ctx)
@@ -926,6 +932,11 @@ const createEntity = async (
 ): Promise<Outcome & { id?: string }> => {
   const created = await (() => {
     switch (type) {
+      case "SPLASH":
+        return Promise.resolve({
+          success: false,
+          message: "Edit the existing welcome board",
+        });
       case "JUTSU":
         return jutsuRouter.createCaller(ctx).create();
       case "ITEM": {
@@ -1002,6 +1013,11 @@ const deleteEntity = (
   id: string,
 ): Promise<Outcome> => {
   switch (type) {
+    case "SPLASH":
+      return Promise.resolve({
+        success: false,
+        message: "Disable the welcome board in its editor",
+      });
     case "JUTSU":
       return jutsuRouter.createCaller(ctx).delete({ id });
     case "ITEM":

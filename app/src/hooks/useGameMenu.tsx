@@ -113,7 +113,7 @@ export const useGameMenu = () => {
       {
         id: "tutorial-points",
         href: "/points",
-        name: "Points",
+        name: "Market",
         icon: <Receipt key="travel" className="h-6 w-6" />,
       },
       {

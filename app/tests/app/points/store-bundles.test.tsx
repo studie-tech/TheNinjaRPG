@@ -80,13 +80,12 @@ it.each(["Escape", "Close"])(
     purchaseCount = 1;
     view.rerender(<StoreBundles />);
     expect(opener.hasAttribute("disabled")).toBe(true);
-    if (dismiss === "Escape")
-      fireEvent.keyDown(within(modal).getByRole("textbox"), { key: "Escape" });
+    if (dismiss === "Escape") fireEvent.keyDown(modal, { key: "Escape" });
     else fireEvent.click(within(modal).getAllByRole("button", { name: "Close" })[0]!);
     await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(card));
     expect(card?.textContent).toContain("Journey supplies");
-    expect(card?.textContent).toContain("1 purchased");
+    expect(card?.textContent).toContain("1 received");
   },
 );
 
@@ -100,8 +99,7 @@ it.each(["Escape", "Close"])(
     const modal = await view.findByRole("dialog", {
       name: "Purchase Journey supplies",
     });
-    if (dismiss === "Escape")
-      fireEvent.keyDown(within(modal).getByRole("textbox"), { key: "Escape" });
+    if (dismiss === "Escape") fireEvent.keyDown(modal, { key: "Escape" });
     else fireEvent.click(within(modal).getAllByRole("button", { name: "Close" })[0]!);
     await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(opener));
@@ -121,9 +119,25 @@ it.each(["Create bundle", "Edit"])(
     });
     const help = document.getElementById(limit.getAttribute("aria-describedby")!);
     expect(help?.textContent).toBe(
-      "0 means unlimited. 1 allows one lifetime purchase per buyer account, including gifts.",
+      "0 means unlimited. 1 allows one lifetime bundle per recipient account, including gifts received.",
     );
     fireEvent.keyDown(limit, { key: "Escape" });
     await waitFor(() => expect(document.activeElement).toBe(opener));
   },
 );
+
+it("keeps gifting available after the account has received its limited bundle", async () => {
+  purchaseCount = 1;
+  const view = render(<StoreBundles />);
+  expect(
+    view
+      .getByRole("button", { name: "Purchase limit reached" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
+  const gift = view.getByRole("button", { name: "Gift bundle" });
+  expect(gift.hasAttribute("disabled")).toBe(false);
+  fireEvent.click(gift);
+  const dialog = await view.findByRole("dialog", { name: "Gift Journey supplies" });
+  expect(within(dialog).getByRole("textbox", { name: "Recipient" })).toBeTruthy();
+  expect(within(dialog).getByText("Checkout")).toBeTruthy();
+});

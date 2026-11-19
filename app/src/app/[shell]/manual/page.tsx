@@ -56,6 +56,12 @@ export default function ManualMain() {
 
   // Player pages; staff tools carry the permission check that shows them.
   const entries: ManualEntry[] = [
+    {
+      name: "splash",
+      label: "Welcome board",
+      img: IMG_MANUAL_REVIEW,
+      visible: canEditContent,
+    },
     { name: "combat", label: "Combat", img: IMG_MANUAL_COMBAT },
     { name: "bloodline", label: "Bloodlines", img: IMG_MANUAL_BLOODLINE },
     { name: "sageMode", label: "Sage Modes", img: IMG_MANUAL_SAGE_MODE },

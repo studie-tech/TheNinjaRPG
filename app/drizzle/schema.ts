@@ -62,6 +62,7 @@ import type {
 } from "@/validators/pvpRank";
 import type { AdditionalContext } from "@/validators/reports";
 import type { ObjectiveRewardType, PendingRewardChoice } from "@/validators/rewards";
+import type { SplashContent } from "@/validators/splash";
 import type { TitleEffect } from "@/validators/title";
 import type { EventTournamentState } from "@/validators/tournament";
 import type { CraftingQueueMaterial } from "@/validators/train";
@@ -8032,7 +8033,7 @@ export const webStoreBundle = mysqlTable("WebStoreBundle", {
   description: text("description").notNull(),
   priceCents: int("priceCents").notNull(),
   isActive: boolean("isActive").default(false).notNull(),
-  /** Maximum lifetime purchases per buyer; zero means unlimited. */
+  /** Maximum lifetime bundles received per account; zero means unlimited. */
   purchaseLimit: int("purchaseLimit").default(0).notNull(),
   contents: json("contents").$type<StoreContents>().notNull(),
   updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
@@ -8064,6 +8065,7 @@ export const webStoreOrder = mysqlTable(
   (table) => [
     index("WebStoreOrder_recipientId_idx").on(table.recipientId),
     index("WebStoreOrder_buyer_bundle_idx").on(table.buyerId, table.bundleId),
+    index("WebStoreOrder_recipient_bundle_idx").on(table.recipientId, table.bundleId),
     uniqueIndex("WebStoreOrder_captureId_key").on(table.captureId),
   ],
 );
@@ -8208,3 +8210,9 @@ export const craftingServiceRequestRelations = relations(
     item: one(item, { fields: [craftingServiceRequest.itemId], references: [item.id] }),
   }),
 );
+
+/** One editable welcome edition shared by announcements and daily rewards. */
+export const splashAnnouncement = mysqlTable("SplashAnnouncement", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  content: json("content").$type<SplashContent>().notNull(),
+});
