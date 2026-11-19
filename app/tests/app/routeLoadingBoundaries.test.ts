@@ -38,8 +38,10 @@ const walk = (dir: string): string[] =>
   );
 
 /** App modules (`@/` or relative) a file imports, resolved to their files. */
-const appImports = (file: string) =>
-  transpiler
+const appImports = (file: string, imports: Map<string, string[]>) => {
+  const cached = imports.get(file);
+  if (cached) return cached;
+  const resolved = transpiler
     .scanImports(readFileSync(file, "utf8"), /\.[cm]?ts$/.test(file) ? "ts" : "tsx")
     .map((entry) => entry.path)
     .filter((specifier) => specifier.startsWith("@/") || specifier.startsWith("."))
@@ -53,13 +55,16 @@ const appImports = (file: string) =>
     .filter(
       (resolved) => CODE_FILE.test(resolved) && !resolved.includes("/node_modules/"),
     );
+  imports.set(file, resolved);
+  return resolved;
+};
 
 /** Every app module a route file reaches through imports, the file itself excluded. */
-const reachableAppModules = (file: string) => {
+const reachableAppModules = (file: string, imports: Map<string, string[]>) => {
   const visited = new Set([file]);
   const queue = [file];
   for (let at = queue.shift(); at; at = queue.shift()) {
-    for (const imported of appImports(at)) {
+    for (const imported of appImports(at, imports)) {
       if (visited.has(imported)) continue;
       visited.add(imported);
       queue.push(imported);
@@ -69,14 +74,21 @@ const reachableAppModules = (file: string) => {
   return [...visited];
 };
 
-const usesStatusFunction = (file: string) => {
+const usesStatusFunction = (file: string, statuses: Map<string, boolean>) => {
+  const cached = statuses.get(file);
+  if (cached !== undefined) return cached;
   const code = readFileSync(file, "utf8");
-  return NAVIGATION_IMPORT.test(code) && STATUS_NAME.test(code);
+  const usesStatus = NAVIGATION_IMPORT.test(code) && STATUS_NAME.test(code);
+  statuses.set(file, usesStatus);
+  return usesStatus;
 };
 
 /** Each route file under a loading boundary that can set a status, with the module making the call. */
 const findBoundaryOffenders = (root: string) => {
   const files = walk(root);
+  // Shared imports are scanned once per check; separate checks always read fresh files.
+  const imports = new Map<string, string[]>();
+  const statuses = new Map<string, boolean>();
   return files
     .filter((file) => file.endsWith("/loading.tsx"))
     .map((file) => dirname(file))
@@ -89,9 +101,9 @@ const findBoundaryOffenders = (root: string) => {
         .flatMap((file) => {
           const route = relative(root, file);
           if (file.endsWith("/not-found.tsx")) return [route];
-          if (usesStatusFunction(file)) return [route];
-          return reachableAppModules(file)
-            .filter(usesStatusFunction)
+          if (usesStatusFunction(file, statuses)) return [route];
+          return reachableAppModules(file, imports)
+            .filter((imported) => usesStatusFunction(imported, statuses))
             .map((imported) => `${route} -> ${relative(root, imported)}`);
         });
     });
