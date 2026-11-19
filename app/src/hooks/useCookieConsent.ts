@@ -10,9 +10,9 @@ import {
 } from "@/libs/cookieConsent";
 
 /**
- * Whether the visitor has opted into a Cookiebot category. The server snapshot is
+ * Whether the visitor has opted into a the consent manager category. The server snapshot is
  * always false, so consent-gated content hydrates in its declined state and switches
- * over once Cookiebot reports consent.
+ * over once the consent manager reports consent.
  */
 export const useCookieConsent = (category: ConsentCategory): boolean =>
   useSyncExternalStore(
@@ -21,13 +21,13 @@ export const useCookieConsent = (category: ConsentCategory): boolean =>
     () => false,
   );
 
-/** Whether Cookiebot has loaded, so a choice not yet read is no longer mistaken for none. */
+/** Whether the consent manager has loaded, so a choice not yet read is no longer mistaken for none. */
 export const useCookieConsentKnown = (): boolean =>
   useSyncExternalStore(subscribeToCookieConsent, isCookieConsentKnown, () => false);
 
 /**
  * The marketing cookie choice as granted, declined or unanswered, so a change between
- * unanswered and declined re-renders too. Declined until Cookiebot has loaded.
+ * unanswered and declined re-renders too. Declined until the consent manager has loaded.
  */
 export const useMarketingConsent = (): MarketingConsent =>
   useSyncExternalStore<MarketingConsent>(

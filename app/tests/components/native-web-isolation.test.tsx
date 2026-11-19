@@ -10,6 +10,7 @@ const serviceWorker = Object.getOwnPropertyDescriptor(navigator, "serviceWorker"
 
 afterEach(() => {
   cleanup();
+  delete window.Cookiebot;
   vi.restoreAllMocks();
   for (const [key, descriptor] of [
     ["userAgent", userAgent],
@@ -28,10 +29,22 @@ describe("native web isolation", () => {
       const loadAnalytics = vi
         .spyOn(Google, "GoogleTagManager")
         .mockReturnValue(<div />);
+      window.Cookiebot = { consent: { statistics: true }, hasResponse: true };
       render(<WebAnalytics gtmId="GTM-TEST" />);
       expect(loadAnalytics).toHaveBeenCalledTimes(isNative === false ? 1 : 0);
     },
   );
+
+  it("does not load the container without optional consent", () => {
+    vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(false);
+    const loadAnalytics = vi.spyOn(Google, "GoogleTagManager").mockReturnValue(<div />);
+    window.Cookiebot = {
+      consent: { statistics: false, marketing: false },
+      hasResponse: true,
+    };
+    render(<WebAnalytics gtmId="GTM-TEST" />);
+    expect(loadAnalytics).not.toHaveBeenCalled();
+  });
 
   it("blocks marketing when the native bridge is unavailable", () => {
     vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(false);

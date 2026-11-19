@@ -1,8 +1,7 @@
 /**
- * Read-only bridge to the Cookiebot consent manager, which Google Tag Manager loads on
- * the production web build. Cookiebot is absent in development, in the native shell and
- * wherever a blocker stops it, and every reader then treats optional categories as
- * declined: tracking stays off and embeds fall back to their click-to-load placeholder.
+ * Consent snapshot published by the bundled manager. The Cookiebot-shaped API and event
+ * names also support the existing GTM TikTok tag; they do not load a hosted CMP.
+ * Missing consent fails closed in SSR, the native shell and when initialization fails.
  */
 
 export type ConsentCategory = "preferences" | "statistics" | "marketing";

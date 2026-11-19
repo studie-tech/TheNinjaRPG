@@ -15,6 +15,7 @@ import AcceptWarning from "@/layout/AcceptWarning";
 import { ActiveSessionBoundary } from "@/layout/ActiveSessionBoundary";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import { AdClickConsentWatcher } from "@/layout/AdClickConsentWatcher";
+import { CookieConsentManager } from "@/layout/CookieConsentManager";
 import { EventTournamentNotice } from "@/layout/EventTournamentNotice";
 import { ExperimentSpeedInsights } from "@/layout/ExperimentSpeedInsights";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
@@ -23,6 +24,7 @@ import { RewardChoiceModal } from "@/layout/RewardChoice";
 import StructuredData from "@/layout/StructuredData";
 import { TavernActivity } from "@/layout/TavernActivity";
 import { WebAnalytics } from "@/layout/WebAnalytics";
+import { CONSENT_BOOTSTRAP } from "@/libs/consentConfig";
 import { getGameLayout, getGameLayoutScript } from "@/libs/gameLayouts";
 import {
   DEFAULT_FONT_SCALE,
@@ -56,6 +58,8 @@ import "../../styles/layout-themes.css";
 import "../../styles/layout-directions.css";
 import "../../styles/layout-welcome.css";
 import "sonner/dist/styles.css";
+import "vanilla-cookieconsent/dist/cookieconsent.css";
+import "../../styles/consent.css";
 import { GITHUB_REPO_URL } from "@/drizzle/constants";
 
 /**
@@ -119,6 +123,10 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {!isNativeShell && (
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: static consent defaults and GTM policy, without visitor input.
+          <script dangerouslySetInnerHTML={{ __html: CONSENT_BOOTSTRAP }} />
+        )}
         <script
           // biome-ignore lint/security/noDangerouslySetInnerHtml: configuration comes from the validated layout registry.
           dangerouslySetInnerHTML={{ __html: getGameLayoutScript(initialLayout) }}
@@ -181,6 +189,7 @@ export default async function RootLayout({
             <TrpcClientProvider cdnCachedQueryPaths={CDN_CACHED_QUERY_PATHS}>
               <UserContextProvider initialIsSignedIn={initialIsSignedIn}>
                 <InstallPromptProvider>
+                  {!isNativeShell && <CookieConsentManager />}
                   {/* The web marketing container includes advertising pixels; never load it in the native shell. */}
                   {!isNativeShell &&
                     env.NEXT_PUBLIC_MEASUREMENT_ID &&

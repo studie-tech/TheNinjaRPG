@@ -47,8 +47,8 @@ export const readCampaignSource = (): string | undefined => {
 };
 
 /**
- * The visitor's marketing cookie choice. Until Cookiebot has loaded the choice is unknown,
- * and it is treated as declined, like everywhere Cookiebot is absent (blockers, the native
+ * The visitor's marketing cookie choice. Until the consent manager has loaded the choice is unknown,
+ * and it is treated as declined, like everywhere the consent manager is absent (blockers, the native
  * shell): a stored "no" must never be read as an unanswered dialog.
  */
 export const readMarketingConsent = (): MarketingConsent => {
@@ -103,5 +103,5 @@ export const hasWithdrawnAdClickFor = (userId: string | undefined) =>
 export const recordAdClickWithdrawn = (userId: string) =>
   safeLocalStorageSetItem(AD_CLICK_WITHDRAWN_KEY, userId);
 
-/** The visitor's marketing cookie choice; "declined" until Cookiebot has loaded. */
+/** The visitor's marketing cookie choice; "declined" until the consent manager has loaded. */
 export type MarketingConsent = "granted" | "declined" | "unanswered";
