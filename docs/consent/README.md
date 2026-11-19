@@ -32,3 +32,7 @@ persistence, and withdrawal behavior on a preview before production rollout.
 ![Cookie preferences](screenshots/preferences-desktop.webp)
 
 ![Consent details](screenshots/consent-details-desktop.webp)
+
+The recovery message preserves the displayed choices and offers another attempt.
+
+![Consent settings recovery](screenshots/consent-recovery-desktop.webp)

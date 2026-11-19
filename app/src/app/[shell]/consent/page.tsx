@@ -39,8 +39,9 @@ export default function CookieConsent() {
         </Button>
         {(!isKnown || hasFailed) && (
           <p role="status">
-            Optional tracking is off while cookie settings load. If settings do not
-            open, reload the page to try again.
+            {!isKnown
+              ? "Optional tracking is off while cookie settings load. If settings do not open, reload the page to try again."
+              : "Cookie settings could not open. Try again, or reload the page."}
           </p>
         )}
         <h3 className="font-bold">What uses browser storage?</h3>
