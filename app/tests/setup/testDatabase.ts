@@ -24,6 +24,7 @@ import mysql from "mysql2/promise";
 import * as schema from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { gateStatements } from "@/server/statementGate";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { withAfterTasks } from "./after";
 import { pollUntil } from "./statements";
 import { readTestDatabaseUrl } from "./testDatabaseConfig";
@@ -163,7 +164,7 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
       multipleStatements: true,
       connectionLimit: 10,
     });
-    instrumentQueries(pool as unknown as Parameters<typeof instrumentQueries>[0]);
+    instrumentQueries(pool as unknown as Parameters<typeof instrumentQueries>[0], true);
     const getConnection = pool.getConnection.bind(pool);
     pool.getConnection = async () => {
       const connection = await getConnection();
@@ -304,16 +305,24 @@ let recorder: QueryRecorder | undefined;
 /**
  * Count promise API submissions before pool acquisition, or directly on a transaction's
  * checked-out connection. Each statement is recorded once, including transaction boundaries.
+ * Pool submissions mirror production's autocommit deadlock recovery; checked-out connections
+ * must propagate failures because replaying one statement would lose the transaction's work.
  */
-const instrumentQueries = (connection: {
-  query: (...args: unknown[]) => unknown;
-  execute: (...args: unknown[]) => unknown;
-}) => {
+const instrumentQueries = (
+  connection: {
+    query: (...args: unknown[]) => unknown;
+    execute: (...args: unknown[]) => unknown;
+  },
+  isAutocommit = false,
+) => {
   for (const method of ["query", "execute"] as const) {
     const original = connection[method].bind(connection);
+    const submit = isAutocommit
+      ? (...args: unknown[]) => retryOnDeadlock(async () => original(...args), 3)
+      : original;
     connection[method] = async (...args: unknown[]) => {
       const active = recorder;
-      if (!active) return original(...args);
+      if (!active) return submit(...args);
       const [first, values] = args;
       const options =
         typeof first === "string"
@@ -333,7 +342,7 @@ const instrumentQueries = (connection: {
       if (active.inFlight === 0) active.roundTrips += 1;
       active.inFlight += 1;
       try {
-        return await original(...args);
+        return await submit(...args);
       } finally {
         active.inFlight -= 1;
       }
