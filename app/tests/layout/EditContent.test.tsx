@@ -1215,7 +1215,7 @@ describe("MassEffectEditor drafts overview", () => {
     fireEvent.click(view.getByRole("button", { name: "Save all" }));
     await waitFor(() => expect(view.getByText("No unsaved changes")).toBeTruthy());
     expect(save.mock.calls.map((call) => call[0].id)).toEqual(["second", "first"]);
-    expect(hasUnloadGuard()).toBe(false);
+    await waitFor(() => expect(hasUnloadGuard()).toBe(false));
   });
 
   it("lists drafts in hidden columns next to the entry", () => {
