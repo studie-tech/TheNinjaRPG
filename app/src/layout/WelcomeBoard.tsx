@@ -13,7 +13,7 @@ export function WelcomeBoard({
   onNavigate?: () => void;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="@container space-y-4">
       {content.image && (
         <Image
           src={content.image}
@@ -23,7 +23,7 @@ export function WelcomeBoard({
           className="max-h-52 w-full rounded-sm object-cover"
         />
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 @min-[36rem]:grid-cols-2">
         {content.cards.map((card, index) => (
           <article
             key={`${index}-${card.href}`}
