@@ -365,11 +365,11 @@ export const updateAnbuSquadForEditSquad = (
 
 /**
  * Build the `anbuSquad` update for a level upgrade, setting the level and `points`,
- * guarding the balance and the level cap in the write.
+ * guarding the balance and level snapshots so the response can confirm their cache baseline.
  */
 export const updateAnbuSquadForPurchaseUpgrade = (
   client: Pick<DrizzleClient, "update">,
-  squad: { id: string },
+  squad: { id: string; points: number; espionageLevel: number; stealthLevel: number },
   upgrade: {
     levelColumn: "espionageLevel" | "stealthLevel";
     cost: number;
@@ -385,6 +385,8 @@ export const updateAnbuSquadForPurchaseUpgrade = (
     .where(
       and(
         eq(anbuSquad.id, squad.id),
+        eq(anbuSquad.points, squad.points),
+        eq(anbuSquad[upgrade.levelColumn], squad[upgrade.levelColumn]),
         gte(anbuSquad.points, upgrade.cost),
         lt(anbuSquad[upgrade.levelColumn], upgrade.maxLevel),
       ),
@@ -393,11 +395,12 @@ export const updateAnbuSquadForPurchaseUpgrade = (
 /**
  * Execute the `performEspionage` charge: the member's village prestige and the squad's points
  * in one statement, only while the user still belongs to the squad and both can afford it.
+ * The squad balance CAS confirms the baseline returned with the charge's cache delta.
  */
 export const executeChargeForPerformEspionage = (
   client: Pick<DrizzleClient, "execute">,
   user: { userId: string },
-  userSquad: { id: string },
+  userSquad: { id: string; points: number },
 ) =>
   client.execute(sql`
       UPDATE ${userData}
@@ -406,6 +409,7 @@ export const executeChargeForPerformEspionage = (
           ${anbuSquad.points} = ${anbuSquad.points} - ${ANBU_ESPIONAGE_POINTS_COST}
       WHERE ${userData.userId} = ${user.userId}
         AND ${anbuSquad.id} = ${userSquad.id}
+        AND ${anbuSquad.points} = ${userSquad.points}
         AND ${userData.villagePrestige} >= ${ANBU_ESPIONAGE_PRESTIGE_COST}
         AND ${anbuSquad.points} >= ${ANBU_ESPIONAGE_POINTS_COST}
     `);

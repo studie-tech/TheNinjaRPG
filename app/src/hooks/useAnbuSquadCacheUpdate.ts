@@ -16,12 +16,14 @@ export const useAnbuSquadCacheUpdate = (squadId: string) => {
   const prepareSquadUpdate = prepareUpdate;
   /** Apply the confirmed squad delta, or refetch the captured squad when it is missing. */
   const updateSquad = (
-    result: { squadDelta?: AnbuSquadDelta } | undefined,
+    result: { squadDelta?: AnbuSquadDelta; squadExpected?: AnbuSquadDelta } | undefined,
     snapshot: ReturnType<typeof prepareUpdate>,
   ) => {
     const delta = result?.squadDelta;
     return updateCache(
-      delta ? (current) => applyAnbuSquadDelta(current, delta) : undefined,
+      delta
+        ? (current) => applyAnbuSquadDelta(current, delta, result?.squadExpected)
+        : undefined,
       snapshot,
     );
   };

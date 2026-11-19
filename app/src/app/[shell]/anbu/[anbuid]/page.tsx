@@ -271,12 +271,15 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   const squadUpdate = {
     onMutate: prepareSquadUpdate,
     onSuccess: async (
-      data: BaseServerResponse & { squadDelta?: AnbuSquadDelta },
+      data: BaseServerResponse & {
+        squadDelta?: AnbuSquadDelta;
+        squadExpected?: AnbuSquadDelta;
+      },
       _variables: unknown,
       snapshot: ReturnType<typeof prepareSquadUpdate>,
     ) => {
       showMutationToast(data);
-      if (data.success || data.squadDelta) await updateSquad(data, snapshot);
+      await updateSquad(data, snapshot);
     },
   };
   const { mutate: upgradeEspionage, isPending: isUpgradingEspionage } =

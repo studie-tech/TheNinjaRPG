@@ -27,7 +27,7 @@ export type AnbuRenameSchema = z.infer<typeof anbuRenameSchema>;
 
 /**
  * Numeric changes a guarded squad write committed, applied on top of the cached `anbu.get`
- * result. The id asserts that the cached squad is the one that changed.
+ * result, or the expected numeric baseline it confirmed. The id asserts squad identity.
  */
 export const anbuSquadDeltaSchema = z.object({
   id: z.string(),

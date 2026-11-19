@@ -307,8 +307,9 @@ export const findUserDataForUpgradeShrine = (
 /**
  * Execute a shrine upgrade as one statement: the village pays `SHRINE_UPGRADE_COST` and
  * its shrine rises one level only while the caller is still Kage, the village can afford
- * it and still owns the sector at the expected level. Both rows change (2 rows affected)
- * or neither does.
+ * it and still owns the sector at the expected level. The live user must still belong to
+ * the village and remain eligible under the profile's negative-prestige expulsion rule.
+ * Both rows change (2 rows affected) or neither does.
  */
 export const executeUpgradeShrine = (
   client: Pick<DrizzleClient, "execute">,
@@ -322,10 +323,13 @@ export const executeUpgradeShrine = (
   client.execute(sql`
       UPDATE ${village}
       INNER JOIN ${sector} ON ${sector.villageId} = ${village.id}
+      INNER JOIN ${userData} ON ${userData.userId} = ${village.kageId}
+        AND ${userData.villageId} = ${village.id}
       SET ${village.tokens} = ${village.tokens} - ${SHRINE_UPGRADE_COST},
           ${sector.shrineLevel} = ${upgrade.shrineLevel + 1}
       WHERE ${village.id} = ${upgrade.villageId}
         AND ${village.kageId} = ${upgrade.kageId}
+        AND (${userData.isOutlaw} = TRUE OR ${userData.villagePrestige} >= 0 OR ${village.type} != 'VILLAGE')
         AND ${village.tokens} >= ${SHRINE_UPGRADE_COST}
         AND ${sector.sector} = ${upgrade.sectorNumber}
         AND ${sector.shrineLevel} = ${upgrade.shrineLevel}

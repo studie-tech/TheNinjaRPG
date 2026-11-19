@@ -94,6 +94,45 @@ describeWithDatabase("shrine upgrades", () => {
     expect(await state()).toEqual({ tokens: SHRINE_UPGRADE_COST * 2, shrineLevel: 1 });
   });
 
+  it("charges nothing for a village Kage with negative prestige", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ villagePrestige: -1 })
+      .where(eq(userData.userId, "kage"));
+    expect((await upgrade(db)).success).toBe(false);
+    expect(await state()).toEqual({ tokens: SHRINE_UPGRADE_COST * 2, shrineLevel: 1 });
+  });
+
+  it("rechecks prestige and village membership at the upgrade write", async () => {
+    const db = await getTestDatabase();
+    for (const change of [{ villagePrestige: -1 }, { villageId: "other-village" }]) {
+      const raced = beforeStatements(db, village, [
+        () => db.update(userData).set(change).where(eq(userData.userId, "kage")),
+      ]);
+      expect((await upgrade(raced)).success).toBe(false);
+      expect(await state()).toEqual({
+        tokens: SHRINE_UPGRADE_COST * 2,
+        shrineLevel: 1,
+      });
+      await db
+        .update(userData)
+        .set({ villagePrestige: 0, villageId })
+        .where(eq(userData.userId, "kage"));
+    }
+  });
+
+  it("preserves negative-prestige eligibility in non-village settlements", async () => {
+    const db = await getTestDatabase();
+    await db.update(village).set({ type: "HIDEOUT" }).where(eq(village.id, villageId));
+    await db
+      .update(userData)
+      .set({ villagePrestige: -1 })
+      .where(eq(userData.userId, "kage"));
+    expect((await upgrade(db)).success).toBe(true);
+    expect(await state()).toEqual({ tokens: SHRINE_UPGRADE_COST, shrineLevel: 2 });
+  });
+
   it("charges nothing when the sector is lost before the upgrade", async () => {
     const db = await getTestDatabase();
     const raced = beforeStatements(db, village, [

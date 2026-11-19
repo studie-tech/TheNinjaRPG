@@ -3,28 +3,40 @@ import type { fetchSquad } from "@/queries/anbu";
 import { mergeQueryChanges } from "@/utils/queryCache";
 import type { AnbuSquadDelta } from "@/validators/anbu";
 
-/** Debit the squad points one committed espionage charge spent, whatever the mission's outcome. */
-export const getEspionageSquadDelta = (squadId: string): AnbuSquadDelta => ({
-  id: squadId,
-  points: -ANBU_ESPIONAGE_POINTS_COST,
+/** Debit a committed espionage charge only against the squad balance its write confirmed. */
+export const getEspionageSquadUpdate = (squad: { id: string; points: number }) => ({
+  squadDelta: { id: squad.id, points: -ANBU_ESPIONAGE_POINTS_COST },
+  squadExpected: { id: squad.id, points: squad.points },
 });
 
-/** Raise the purchased squad level by one and debit the points the guarded upgrade spent. */
-export const getSquadUpgradeDelta = (
-  squadId: string,
+/** Project a purchased level and its cost against the balance and level the write confirmed. */
+export const getSquadUpgradeUpdate = (
+  squad: { id: string; points: number; espionageLevel: number; stealthLevel: number },
   upgrade: { levelColumn: "espionageLevel" | "stealthLevel"; cost: number },
-): AnbuSquadDelta => ({
-  id: squadId,
-  points: -upgrade.cost,
-  [upgrade.levelColumn]: 1,
+) => ({
+  squadDelta: { id: squad.id, points: -upgrade.cost, [upgrade.levelColumn]: 1 },
+  squadExpected: {
+    id: squad.id,
+    points: squad.points,
+    [upgrade.levelColumn]: squad[upgrade.levelColumn],
+  },
 });
 
-/** Apply a confirmed squad delta to the cached squad; a different or missing squad refetches. */
+/** Apply a squad delta only to its confirmed baseline; missing or stale data refetches. */
 export const applyAnbuSquadDelta = (
   current: CachedSquad | null | undefined,
   delta: AnbuSquadDelta,
+  expected: AnbuSquadDelta | undefined,
 ): CachedSquad | undefined => {
-  if (!current) return undefined;
+  if (
+    !current ||
+    !expected ||
+    Object.entries(expected).some(
+      ([field, value]) =>
+        value !== undefined && current[field as keyof CachedSquad] !== value,
+    )
+  )
+    return undefined;
   return mergeQueryChanges(current, {}, delta);
 };
 

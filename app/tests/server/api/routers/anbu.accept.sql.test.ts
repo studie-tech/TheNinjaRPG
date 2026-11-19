@@ -1,11 +1,13 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { ANBU_MAX_MEMBERS } from "@/drizzle/constants";
 import { anbuSquad, userData, userRequest, village } from "@/drizzle/schema";
+import { Pusher } from "@/libs/pusher";
 import { anbuRouter } from "@/server/api/routers/anbu";
 import type { DrizzleClient } from "@/server/db";
+import * as nativePush from "@/server/utils/push/defer";
 import { insertUsers } from "../../../setup/factories";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, overrideQuery } from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -44,6 +46,8 @@ const insertRequest = (db: DrizzleClient, id: string, senderId: string) =>
 
 describeWithDatabase("ANBU request acceptance", () => {
   beforeEach(async () => {
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    vi.spyOn(nativePush, "deferPushToUsers").mockImplementation(() => {});
     await resetTables(anbuSquad, userData, userRequest, village);
     const db = await getTestDatabase();
     await db.insert(village).values([
@@ -91,12 +95,16 @@ describeWithDatabase("ANBU request acceptance", () => {
     ]);
     await insertRequest(db, "request", "applicant");
   });
+  afterEach(() => vi.restoreAllMocks());
 
   it("reads everything in one wave and commits the acceptance in one statement", async () => {
     const db = await getTestDatabase();
     const measured = await recordQueries(() => accept(db));
     expect(measured.result).toEqual({ success: true, message: "Request accepted" });
     expect(measured.roundTrips).toBe(2);
+    expect(
+      measured.statements.filter((statement) => /^\s*update\b/i.test(statement)),
+    ).toHaveLength(1);
     expect(await state()).toEqual({
       memberCount: 2,
       leaderId: "leader",
@@ -136,6 +144,30 @@ describeWithDatabase("ANBU request acceptance", () => {
       leaderId: "leader",
       applicantSquad: null,
       status: "PENDING",
+    });
+  });
+
+  it("accepts a newly freed slot even when the squad read saw it full", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(anbuSquad)
+      .set({ memberCount: ANBU_MAX_MEMBERS })
+      .where(eq(anbuSquad.id, "squad"));
+    const raced = overrideQuery(db, "anbuSquad", {
+      findFirst: async (read, ...args) => {
+        const squad = await read(...args);
+        await db
+          .update(anbuSquad)
+          .set({ memberCount: ANBU_MAX_MEMBERS - 1 })
+          .where(eq(anbuSquad.id, "squad"));
+        return squad;
+      },
+    });
+    expect((await accept(raced)).success).toBe(true);
+    expect(await state()).toMatchObject({
+      memberCount: ANBU_MAX_MEMBERS,
+      applicantSquad: "squad",
+      status: "ACCEPTED",
     });
   });
 

@@ -2,7 +2,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getEspionageSquadDelta, getSquadUpgradeDelta } from "@/deltas/anbu";
+import { getEspionageSquadUpdate, getSquadUpgradeUpdate } from "@/deltas/anbu";
 import {
   ANBU_DELAY_SECS,
   ANBU_ESPIONAGE_POINTS_COST,
@@ -93,6 +93,7 @@ const pusher = getServerPusher();
 /** Squad mutations whose committed point and level changes the page applies in place. */
 const squadDeltaResponse = baseServerResponse.extend({
   squadDelta: anbuSquadDeltaSchema.optional(),
+  squadExpected: anbuSquadDeltaSchema.optional(),
 });
 
 export const anbuRouter = createTRPCRouter({
@@ -560,12 +561,12 @@ export const anbuRouter = createTRPCRouter({
         userSquad,
       );
       if (charge.rowsAffected === 0) {
-        return errorResponse("Not enough village prestige or squad points");
+        return errorResponse("Village prestige or squad changed, please try again");
       }
 
-      const squadDelta = getEspionageSquadDelta(userSquad.id);
+      const squadUpdate = getEspionageSquadUpdate(userSquad);
       if (!success) {
-        return { ...errorResponse("Espionage mission failed"), squadDelta };
+        return { ...errorResponse("Espionage mission failed"), ...squadUpdate };
       }
 
       // Create intelligence report
@@ -624,7 +625,7 @@ export const anbuRouter = createTRPCRouter({
       return {
         success: true,
         message: "Espionage mission successful - intelligence report sent to squad",
-        squadDelta,
+        ...squadUpdate,
       };
     }),
 });
@@ -772,7 +773,6 @@ export async function acceptAnbuRequest(args: {
   if (!hasRequiredRank(requester.rank, ANBU_MEMBER_RANK_REQUIREMENT)) {
     return errorResponse(`Rank must be at least ${ANBU_MEMBER_RANK_REQUIREMENT}`);
   }
-  if (squad.memberCount >= ANBU_MAX_MEMBERS) return errorResponse("Squad is full");
   const claimLeadership =
     !squad.leaderId && hasRequiredRank(requester.rank, ANBU_LEADER_RANK_REQUIREMENT);
   const accepted = await executeAcceptAnbuRequest(ctx.drizzle, {
@@ -996,11 +996,12 @@ const purchaseSquadUpgrade = async (
   }
   // Mutate
   const result = await updateAnbuSquadForPurchaseUpgrade(ctx.drizzle, squad, upgrade);
-  if (result.rowsAffected === 0) return errorResponse("Not enough squad points");
+  if (result.rowsAffected === 0)
+    return errorResponse("Squad changed, please try again");
   return {
     success: true,
     message: `${upgrade.label} level upgraded`,
-    squadDelta: getSquadUpgradeDelta(squad.id, upgrade),
+    ...getSquadUpgradeUpdate(squad, upgrade),
   };
 };
 

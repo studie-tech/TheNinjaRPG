@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
   applyAnbuSquadDelta,
-  getEspionageSquadDelta,
-  getSquadUpgradeDelta,
+  getEspionageSquadUpdate,
+  getSquadUpgradeUpdate,
 } from "@/deltas/anbu";
 import { ANBU_ESPIONAGE_POINTS_COST } from "@/drizzle/constants";
 
@@ -18,12 +18,17 @@ const cachedSquad = {
 
 describe("ANBU squad cache deltas", () => {
   it("debits points and raises only the purchased level", () => {
-    const delta = getSquadUpgradeDelta("squad", {
+    const update = getSquadUpgradeUpdate(cachedSquad, {
       levelColumn: "stealthLevel",
       cost: 200,
     });
-    expect(delta).toEqual({ id: "squad", points: -200, stealthLevel: 1 });
-    expect(applyAnbuSquadDelta(cachedSquad, delta)).toEqual({
+    expect(update).toEqual({
+      squadDelta: { id: "squad", points: -200, stealthLevel: 1 },
+      squadExpected: { id: "squad", points: 500, stealthLevel: 1 },
+    });
+    expect(
+      applyAnbuSquadDelta(cachedSquad, update.squadDelta, update.squadExpected),
+    ).toEqual({
       ...cachedSquad,
       points: 300,
       stealthLevel: 2,
@@ -31,16 +36,45 @@ describe("ANBU squad cache deltas", () => {
   });
 
   it("debits the espionage charge whatever the mission's outcome", () => {
-    expect(applyAnbuSquadDelta(cachedSquad, getEspionageSquadDelta("squad"))).toEqual({
+    const update = getEspionageSquadUpdate(cachedSquad);
+    expect(
+      applyAnbuSquadDelta(cachedSquad, update.squadDelta, update.squadExpected),
+    ).toEqual({
       ...cachedSquad,
       points: 500 - ANBU_ESPIONAGE_POINTS_COST,
     });
   });
 
   it("refetches a different or missing squad instead of patching it", () => {
-    expect(applyAnbuSquadDelta(cachedSquad, getEspionageSquadDelta("other"))).toBe(
+    const update = getEspionageSquadUpdate({ ...cachedSquad, id: "other" });
+    expect(
+      applyAnbuSquadDelta(cachedSquad, update.squadDelta, update.squadExpected),
+    ).toBe(undefined);
+    expect(applyAnbuSquadDelta(null, update.squadDelta, update.squadExpected)).toBe(
       undefined,
     );
-    expect(applyAnbuSquadDelta(null, getEspionageSquadDelta("squad"))).toBe(undefined);
+  });
+
+  it("refetches when another member's spend changed the server baseline", () => {
+    const update = getEspionageSquadUpdate({ ...cachedSquad, points: 300 });
+    expect(
+      applyAnbuSquadDelta(cachedSquad, update.squadDelta, update.squadExpected),
+    ).toBe(undefined);
+    expect(applyAnbuSquadDelta(cachedSquad, update.squadDelta, undefined)).toBe(
+      undefined,
+    );
+  });
+
+  it("refetches when the purchased level changed outside this browser", () => {
+    const update = getSquadUpgradeUpdate(
+      { ...cachedSquad, stealthLevel: 2 },
+      {
+        levelColumn: "stealthLevel",
+        cost: 200,
+      },
+    );
+    expect(
+      applyAnbuSquadDelta(cachedSquad, update.squadDelta, update.squadExpected),
+    ).toBe(undefined);
   });
 });
