@@ -21,6 +21,7 @@ import {
   claimResourceSilo,
   claimResourceSiloWithRewards,
   findResourceSilo,
+  findResourceSiloProgress,
   listResourceSiloCaches,
   resolveWarTornRespawn,
   saveResourceSilo,
@@ -44,6 +45,7 @@ import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
+import { missingUserMessage } from "@/server/utils/sentry";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canAwardReputation, canManageRewards, isStaffRole } from "@/utils/permissions";
 import { getResourceSiloWindow } from "@/utils/time";
@@ -59,9 +61,10 @@ export const resourceSilosRouter = createTRPCRouter({
   /** Report current-window progress without exposing the configured reward payloads. */
   getStatus: protectedProcedure.query(async ({ ctx }) => {
     const [user, config] = await Promise.all([
-      fetchUser(ctx.drizzle, ctx.userId),
+      findResourceSiloProgress(ctx.drizzle, ctx.userId),
       findResourceSilo(ctx.drizzle),
     ]);
+    if (!user) throw serverError("NOT_FOUND", missingUserMessage(ctx.userId));
     const window = getResourceSiloWindow();
     const progress =
       user.resourceSiloProgress?.windowId === window.id

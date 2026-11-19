@@ -105,6 +105,27 @@ describeWithDatabase("resource silo claims and recovery", () => {
     vi.restoreAllMocks();
   });
 
+  it("polls only silo progress and preserves missing-character errors", async () => {
+    const caller = await api();
+    const status = await recordQueries(() => caller.getStatus());
+    expect(status.result).toMatchObject({
+      points: 60,
+      claimed: false,
+      configured: true,
+    });
+    expect(status.statements).toHaveLength(2);
+    expect(
+      status.statements.find((statement) => statement.includes("from `UserData`")),
+    ).toMatch(/^select `resourceSiloProgress` from `UserData` /);
+
+    const db = await getTestDatabase();
+    await db.delete(userData).where(eq(userData.userId, userId));
+    await expect(caller.getStatus()).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: `User not found: ${userId}. Please complete registration.`,
+    });
+  });
+
   it("commits exactly one payout for concurrent claims", async () => {
     const caller = await api();
     const results = await Promise.all([caller.claim(), caller.claim()]);

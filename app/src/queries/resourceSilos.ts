@@ -38,6 +38,12 @@ import { hasMasteryPromotion, MASTERY_EXPERIENCE_FIELDS } from "@/validators/rew
 /** Read the shrine's singleton reward pool. */
 export const findResourceSilo = (client: DrizzleClient) =>
   client.query.resourceSilo.findFirst({ where: eq(resourceSilo.id, "war-torn") });
+/** Read only spawn progress for frequent status polls, without loading unrelated character state. */
+export const findResourceSiloProgress = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    columns: { resourceSiloProgress: true },
+    where: eq(userData.userId, userId),
+  });
 /** Load consumable candidates once; the caller filters their cache effects in memory. */
 export const listResourceSiloCaches = (client: DrizzleClient) =>
   client.query.item.findMany({
