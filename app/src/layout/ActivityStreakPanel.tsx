@@ -111,7 +111,7 @@ export function ActivityStreakPanel() {
               return (
                 <div
                   key={pass.id}
-                  className="relative flex items-center justify-between overflow-hidden rounded-lg border p-4"
+                  className="relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-lg border p-4"
                 >
                   {/* Pass image as background */}
                   {pass.image && (
@@ -126,7 +126,7 @@ export function ActivityStreakPanel() {
                     </div>
                   )}
 
-                  <div className="z-10 flex flex-1 items-center gap-4">
+                  <div className="z-10 flex min-w-0 flex-1 basis-48 items-center gap-4">
                     {/* Thumbnail */}
                     {pass.image && (
                       <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border">
@@ -139,8 +139,8 @@ export function ActivityStreakPanel() {
                         />
                       </div>
                     )}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1 break-words">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold">{pass.name}</h3>
                         <Badge variant="secondary">{pass.totalDays} days</Badge>
                       </div>
@@ -246,7 +246,7 @@ const StreakCard: React.FC<{
           </div>
 
           {/* Catchup progress info */}
-          <div className="flex items-center justify-between rounded bg-background/50 p-2 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded bg-background/50 p-2 text-sm">
             <span>
               Current: Day {streak.currentDay} → Target: Day{" "}
               {streak.theoreticalMaxDay ?? streak.totalDays}
@@ -264,7 +264,7 @@ const StreakCard: React.FC<{
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Confirm
               title="Reset Streak"
               button={

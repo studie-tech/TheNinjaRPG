@@ -182,10 +182,10 @@ const ActivityStreakPopup: React.FC = () => {
   return (
     <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent
-        className={`flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] flex-col overflow-hidden border-2 border-[#b9954d] bg-[#f8edce] p-4 text-[#2d2236] sm:p-6 ${
-          (splash.data?.announcements.length ?? 0) > 4
-            ? "md:h-[94dvh] md:w-[96vw] md:max-w-[96vw]"
-            : "md:h-auto md:max-w-5xl"
+        className={`flex max-h-[calc(100dvh-1rem)] flex-col overflow-hidden border-2 border-[#b9954d] bg-[#f8edce] p-4 text-[#2d2236] sm:p-6 ${
+          (splash.data?.announcements.length ?? 0) > 2
+            ? "md:w-[94vw] md:max-w-[1440px]"
+            : "md:max-w-5xl"
         }`}
       >
         <DialogHeader className="shrink-0">
@@ -202,41 +202,39 @@ const ActivityStreakPopup: React.FC = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <div
-          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${(splash.data?.announcements.length ?? 0) > 4 ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]" : "space-y-4"}`}
-        >
-          {!!splash.data?.announcements.length && (
-            <WelcomeBoard
-              announcements={splash.data.announcements}
-              onNavigate={handleDismissForToday}
-            />
-          )}
-          <section
-            className={`bg-background text-foreground min-w-0 rounded-sm border-2 border-[#b9954d] p-3 sm:p-4 ${(splash.data?.announcements.length ?? 0) > 4 ? "order-first lg:sticky lg:top-0 lg:order-none" : ""}`}
-          >
-            <h3 className="mb-3 flex items-center gap-2 font-serif text-xl font-bold">
-              <Gift className="h-5 w-5" /> Daily activity rewards
-            </h3>
-            <ChunkErrorBoundary
-              fallback={() => (
-                <div
-                  role="alert"
-                  className="flex items-center justify-between gap-2 text-sm"
-                >
-                  <span>Rewards could not be loaded.</span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => window.location.reload()}
+        <div className="min-h-0 overflow-y-auto overscroll-contain">
+          <WelcomeBoard
+            announcements={splash.data?.announcements ?? []}
+            onNavigate={handleDismissForToday}
+            leadingContent={
+              <section className="bg-background text-foreground overflow-hidden rounded-sm border-2 border-[#b9954d]">
+                <h3 className="flex items-center gap-2 border-b-2 border-[#b9954d] bg-[#35203f] px-4 py-2 font-serif text-xl font-bold text-[#fff1c6]">
+                  <Gift className="h-5 w-5" /> Daily activity rewards
+                </h3>
+                <div className="p-4">
+                  <ChunkErrorBoundary
+                    fallback={() => (
+                      <div
+                        role="alert"
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <span>Rewards could not be loaded.</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.location.reload()}
+                        >
+                          Reload
+                        </Button>
+                      </div>
+                    )}
                   >
-                    Reload
-                  </Button>
+                    <ActivityStreakPanel />
+                  </ChunkErrorBoundary>
                 </div>
-              )}
-            >
-              <ActivityStreakPanel />
-            </ChunkErrorBoundary>
-          </section>
+              </section>
+            }
+          />
         </div>
 
         <div className="flex shrink-0 justify-between gap-2 pt-2">
