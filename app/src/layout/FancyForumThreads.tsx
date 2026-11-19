@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import NotFoundPage from "@/components/layout/NotFoundPage";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FANCY_FORUM_THREADS_PER_PAGE } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { EmptyState } from "@/layout/EmptyState";
@@ -59,10 +60,11 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
       />
     );
 
+  // Empty summaries still reserve the loading shell's subtitle row.
   return (
     <ContentBox
       title={board.name}
-      subtitle={board.summary}
+      subtitle={board.summary || "\u00a0"}
       defaultBackHref={props.defaultBackHref}
       padding={false}
       topRightContent={
@@ -131,3 +133,50 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
     </ContentBox>
   );
 };
+
+/**
+ * Keep the known board title, back link and banner visible while thread-shaped
+ * placeholders reserve space for the fetched content.
+ */
+export const FancyForumThreadsSkeleton: React.FC<
+  Pick<FancyForumThreadsProps, "board_name" | "defaultBackHref" | "image">
+> = (props) => (
+  <ContentBox
+    title={props.board_name}
+    subtitle={<Skeleton className="w-64 max-w-full">&nbsp;</Skeleton>}
+    defaultBackHref={props.defaultBackHref}
+    padding={false}
+  >
+    {props.image && (
+      <Image
+        alt="threads-image"
+        src={props.image}
+        width={512}
+        height={195}
+        className="w-full"
+        priority={true}
+      />
+    )}
+    <div className="grid grid-cols-1" role="status" aria-label="Loading threads">
+      {THREAD_SKELETONS.map((key) => (
+        <div
+          key={key}
+          className="m-2 rounded-md border-2 bg-popover p-3"
+          aria-hidden="true"
+        >
+          <Skeleton className="mb-2 h-5 w-1/2" />
+          <Skeleton className="mb-3 h-4 w-1/3" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-4 w-3/5" />
+          </div>
+          <Skeleton className="mt-3 ml-auto h-5 w-28" />
+        </div>
+      ))}
+    </div>
+  </ContentBox>
+);
+
+const THREAD_SKELETONS = Array.from({ length: 3 }, (_, i) => `thread-skeleton-${i}`);

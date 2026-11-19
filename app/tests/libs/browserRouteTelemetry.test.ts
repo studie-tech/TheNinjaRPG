@@ -27,7 +27,9 @@ describe("public browser route labels", () => {
     const files = await readdir(root, { recursive: true });
     const routes = files
       .filter((file) => file === "page.tsx" || file.endsWith("/page.tsx"))
-      .map((file) => "/" + file.replace(/(^|\/)page\.tsx$/, ""));
+      .map((file) => "/" + file.replace(/(^|\/)page\.tsx$/, ""))
+      // Route groups organize files without adding a URL segment.
+      .map((route) => route.replace(/\/\([^)]+\)(?=\/|$)/g, "") || "/");
     expect<string[]>([...PUBLIC_PAGE_ROUTES].sort()).toEqual(routes.sort());
     for (const route of routes) {
       const sample = route
