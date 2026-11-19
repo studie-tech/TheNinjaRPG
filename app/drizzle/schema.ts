@@ -6772,6 +6772,7 @@ export const metaConsent = mysqlTable(
     granted: boolean("granted").notNull(),
     revision: int("revision").notNull(),
     decidedAt: datetime("decidedAt", { mode: "date", fsp: 3 }).notNull(),
+    withdrawnAt: datetime("withdrawnAt", { mode: "date", fsp: 3 }),
     expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
   },
   (table) => ({

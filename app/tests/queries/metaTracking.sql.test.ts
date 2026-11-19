@@ -1,7 +1,14 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { TUTORIAL_GENIN_EXAM_QUEST_ID } from "@/drizzle/constants";
-import { metaConsent, metaTracking, questHistory } from "@/drizzle/schema";
+import {
+  accountDeletion,
+  metaConsent,
+  metaTracking,
+  questHistory,
+  storeUserIdAlias,
+  userData,
+} from "@/drizzle/schema";
 import { CONSENT_REVISION } from "@/libs/consentConfig";
 import {
   captureMetaTracking,
@@ -14,6 +21,7 @@ import {
   withdrawMetaAccountConsent,
 } from "@/queries/metaTracking";
 import type { MetaTrackingInput } from "@/validators/metaTracking";
+import { insertUsers } from "../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -39,7 +47,17 @@ const capture = async (tracking = input(), registrationAt?: Date) => {
 };
 
 describeWithDatabase("Meta consent and durable conversion receipts", () => {
-  beforeEach(async () => resetTables(metaConsent, metaTracking, questHistory));
+  beforeEach(async () => {
+    await resetTables(
+      accountDeletion,
+      storeUserIdAlias,
+      userData,
+      metaConsent,
+      metaTracking,
+      questHistory,
+    );
+    await insertUsers([{ userId: "player" }]);
+  });
 
   it("keeps shared IDs through retries, settles only acknowledged actions, and retains browser receipts", async () => {
     const db = await getTestDatabase();
@@ -167,5 +185,33 @@ describeWithDatabase("Meta consent and durable conversion receipts", () => {
     await clearWithdrawnMetaTracking(db, crypto.randomUUID(), "player");
     expect(await selectMetaConversions(db, "register")).toHaveLength(0);
     expect((await db.query.metaTracking.findFirst())?.fbc).toBeNull();
+  });
+
+  it.each([
+    "policy",
+    "consent-expiry",
+    "tracking-expiry",
+    "decision",
+    "owner",
+    "retirement",
+  ])("does not capture tutorial matching data after %s changes", async (reason) => {
+    const db = await getTestDatabase();
+    await capture();
+    if (reason === "policy")
+      await db.update(metaConsent).set({ revision: CONSENT_REVISION - 1 });
+    if (reason === "consent-expiry")
+      await db.update(metaConsent).set({ expiresAt: new Date(0) });
+    if (reason === "tracking-expiry")
+      await db.update(metaTracking).set({ expiresAt: new Date(0) });
+    if (reason === "decision")
+      await db.update(metaConsent).set({ decidedAt: new Date() });
+    if (reason === "owner")
+      await db.update(metaConsent).set({ userId: "another-player" });
+    if (reason === "retirement")
+      await db
+        .insert(storeUserIdAlias)
+        .values({ oldUserId: "player", newUserId: "deleted:test" });
+    await captureMetaTutorialCompletion(db, "player", "Must not be retained");
+    expect((await db.query.metaTracking.findFirst())?.tutorialUserAgent).toBeNull();
   });
 });

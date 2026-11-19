@@ -1,5 +1,8 @@
-import { hasCookieConsent } from "@/libs/cookieConsent";
-import { META_CONVERSION_EVENT, META_READY_EVENT } from "@/libs/metaTracking";
+import {
+  META_CONVERSION_EVENT,
+  META_READY_EVENT,
+  readMetaConsent,
+} from "@/libs/metaTracking";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 
 type PixelCommand = unknown[];
@@ -24,7 +27,7 @@ const MAX_SCRIPT_LOAD_ATTEMPTS = 2;
 
 const canTrack = () =>
   typeof window !== "undefined" &&
-  hasCookieConsent("marketing") &&
+  readMetaConsent()?.granted === true &&
   !isNativeUserAgent(navigator.userAgent);
 
 /** Own one consent-gated pixel, retaining receipts locally rather than sending account IDs. */

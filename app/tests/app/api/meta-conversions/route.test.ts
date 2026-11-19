@@ -34,6 +34,7 @@ beforeEach(() => {
   vi.spyOn(configuration, "isMetaCapiConfigured").mockReturnValue(true);
   vi.spyOn(queries, "deleteExpiredMetaTracking").mockResolvedValue([] as never);
   vi.spyOn(queries, "selectMetaConversions").mockResolvedValue([row] as never);
+  vi.spyOn(queries, "selectMetaConsentForDispatch").mockResolvedValue([row] as never);
   vi.spyOn(queries, "markMetaConversionReported").mockResolvedValue({} as never);
   vi.spyOn(transport, "sendMetaConversions").mockResolvedValue();
 });
@@ -67,4 +68,12 @@ it("retries unchanged IDs without settling a failed batch, then records accepted
   const calls = (transport.sendMetaConversions as ReturnType<typeof vi.fn>).mock.calls;
   expect(calls[0]?.[2]).toEqual(calls[1]?.[2]);
   expect(queries.markMetaConversionReported).toHaveBeenCalledTimes(2);
+});
+
+it("does not dispatch or settle consent withdrawn after candidate selection", async () => {
+  vi.spyOn(queries, "selectMetaConsentForDispatch").mockResolvedValue([] as never);
+  expect(await (await GET(request())).json()).toEqual({ sent: 0 });
+  const calls = (transport.sendMetaConversions as ReturnType<typeof vi.fn>).mock.calls;
+  expect(calls[0]?.[2]).toEqual([]);
+  expect(queries.markMetaConversionReported).not.toHaveBeenCalled();
 });

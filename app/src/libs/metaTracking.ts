@@ -43,6 +43,9 @@ export const readMetaConsent = () => {
       parsed.data.granted !== stored.categories?.includes("marketing")
     )
       return undefined;
+    const decidedAt = Date.parse(parsed.data.decidedAt);
+    if (decidedAt > Date.now() || decidedAt <= Date.now() - 180 * 86_400_000)
+      return undefined;
     return parsed.data;
   } catch {
     return undefined;

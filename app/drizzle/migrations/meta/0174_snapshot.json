@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "3b0a9189-8645-4813-9128-b52bd6b3fd87",
+  "id": "5a9d8a82-fe56-4b85-a1f2-f92283ed9b25",
   "prevId": "4029fb96-be4e-4bc5-8bd0-48bd61291d76",
   "tables": {
     "AbEvent": {
@@ -10546,6 +10546,13 @@
           "type": "datetime(3)",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "withdrawnAt": {
+          "name": "withdrawnAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "expiresAt": {

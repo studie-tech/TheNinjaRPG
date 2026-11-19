@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
+  accountDeletion,
   actionLog,
   adClick,
   bloodline,
@@ -7,6 +9,7 @@ import {
   metaConsent,
   metaTracking,
   questHistory,
+  storeUserIdAlias,
   userAttribute,
   userData,
   userItem,
@@ -18,7 +21,9 @@ import * as metaQueries from "@/queries/metaTracking";
 import { selectMetaConversions } from "@/queries/metaTracking";
 import { metaRouter } from "@/server/api/routers/meta";
 import { registerRouter } from "@/server/api/routers/register";
+import { saveMetaTracking, withdrawMetaTracking } from "@/server/utils/metaTracking";
 import type { MetaTrackingInput } from "@/validators/metaTracking";
+import { deferred } from "../../../setup/deferred";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { characterInput, insertRegistrationContent } from "../../../setup/registration";
 import {
@@ -51,6 +56,8 @@ describeWithDatabase("consented Meta registration and receipt delivery", () => {
       NODE_ENV: "production",
     });
     await resetTables(
+      accountDeletion,
+      storeUserIdAlias,
       actionLog,
       adClick,
       bloodline,
@@ -143,5 +150,97 @@ describeWithDatabase("consented Meta registration and receipt delivery", () => {
       new Error("Temporary storage failure") as never,
     );
     expect((await register("StorageNinja")).success).toBe(true);
+  });
+
+  it("rejects a delayed grant from a new browser before account withdrawal and accepts a later decision", async () => {
+    const db = await getTestDatabase();
+    const snapshot = tracking();
+    await register("BarrierNinja", snapshot);
+    const withdrawalTime = new Date(Date.now() - 100);
+    await withdrawMetaTracking(
+      db,
+      { consentId: snapshot.consentId, decidedAt: withdrawalTime },
+      "BarrierNinja",
+    );
+    const oldGrant = { ...snapshot, consentId: crypto.randomUUID() };
+    expect(await saveMetaTracking(db, "BarrierNinja", oldGrant, "Browser")).toBe(false);
+    expect(
+      await db.query.metaConsent.findFirst({
+        where: eq(metaConsent.id, oldGrant.consentId),
+      }),
+    ).toBeUndefined();
+    expect((await db.query.metaTracking.findFirst())?.fbc).toBeNull();
+    const newGrant = {
+      ...snapshot,
+      consentId: crypto.randomUUID(),
+      decidedAt: new Date().toISOString(),
+    };
+    expect(await saveMetaTracking(db, "BarrierNinja", newGrant, "Browser")).toBe(true);
+    expect((await db.query.metaTracking.findFirst())?.fbc).toBe(snapshot.fbc ?? null);
+  });
+
+  it("retains the withdrawal barrier after the same browser grants again", async () => {
+    const db = await getTestDatabase();
+    const snapshot = tracking();
+    await register("RegrantNinja", snapshot);
+    const withdrawalTime = new Date(Date.now() - 100);
+    await withdrawMetaTracking(
+      db,
+      { consentId: snapshot.consentId, decidedAt: withdrawalTime },
+      "RegrantNinja",
+    );
+    expect(
+      await saveMetaTracking(
+        db,
+        "RegrantNinja",
+        { ...snapshot, decidedAt: new Date().toISOString() },
+        "Browser",
+      ),
+    ).toBe(true);
+    expect(
+      await saveMetaTracking(
+        db,
+        "RegrantNinja",
+        { ...snapshot, consentId: crypto.randomUUID() },
+        "Browser",
+      ),
+    ).toBe(false);
+    expect((await db.query.metaConsent.findFirst())?.withdrawnAt).toEqual(
+      withdrawalTime,
+    );
+  });
+
+  it("waits for an in-flight save before retirement cleanup and rejects later saves", async () => {
+    const db = await getTestDatabase();
+    const snapshot = tracking();
+    await register("DeleteNinja", snapshot);
+    const entered = deferred();
+    const resume = deferred();
+    const original = metaQueries.recordMetaConsent;
+    vi.spyOn(metaQueries, "recordMetaConsent").mockImplementation((async (
+      ...args: Parameters<typeof original>
+    ) => {
+      entered.resolve();
+      await resume.promise;
+      return original(...args);
+    }) as never);
+    const saving = saveMetaTracking(db, "DeleteNinja", snapshot, "Browser");
+    await entered.promise;
+    await db
+      .insert(storeUserIdAlias)
+      .values({ oldUserId: "DeleteNinja", newUserId: "deleted:test" });
+    const cleanup = (async () => {
+      await metaQueries.waitForMetaSavesBeforeDeletion(db, "DeleteNinja");
+      await Promise.all([
+        db.delete(metaConsent).where(eq(metaConsent.userId, "DeleteNinja")),
+        db.delete(metaTracking).where(eq(metaTracking.userId, "DeleteNinja")),
+      ]);
+      await db.delete(userData).where(eq(userData.userId, "DeleteNinja"));
+    })();
+    resume.resolve();
+    await Promise.all([saving, cleanup]);
+    expect(await saveMetaTracking(db, "DeleteNinja", snapshot, "Browser")).toBe(false);
+    expect(await db.select().from(metaConsent)).toHaveLength(0);
+    expect(await db.select().from(metaTracking)).toHaveLength(0);
   });
 });

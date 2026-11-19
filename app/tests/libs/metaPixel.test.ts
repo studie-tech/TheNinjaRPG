@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { CONSENT_REVISION } from "@/libs/consentConfig";
 import { createMetaPixelTracker } from "@/libs/metaPixel";
 
 const originalUserAgent = Object.getOwnPropertyDescriptor(navigator, "userAgent");
@@ -15,12 +16,14 @@ afterEach(() => {
   delete window.Cookiebot;
   delete window.fbq;
   delete window._fbq;
+  document.cookie = "tnr_consent=; Max-Age=0; path=/";
   if (originalUserAgent)
     Object.defineProperty(navigator, "userAgent", originalUserAgent);
   else Reflect.deleteProperty(navigator, "userAgent");
 });
 
 const grant = () => {
+  document.cookie = `tnr_consent=${encodeURIComponent(JSON.stringify({ revision: CONSENT_REVISION, consentId: crypto.randomUUID(), categories: ["necessary", "marketing"], consentTimestamp: new Date(Date.now() - 1000).toISOString() }))}; path=/`;
   window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
 };
 const load = () => {
@@ -184,6 +187,17 @@ describe("Meta acquisition tracking", () => {
     pixel.existingPlayer();
     pixel.enable();
     expect(document.querySelector("script[data-tnr-meta-pixel]")).toBeNull();
+  });
+
+  it("stops browser events when persisted consent expires while the bridge still grants", () => {
+    grant();
+    const pixel = createMetaPixelTracker("12345");
+    pixel.enable();
+    const send = load();
+    document.cookie = "tnr_consent=; Max-Age=0; path=/";
+    pixel.pageView("/home");
+    pixel.existingPlayer();
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("does not initialize in native webviews or with invalid configuration", () => {

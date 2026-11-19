@@ -1,7 +1,7 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { useCookieConsent, useCookieConsentKnown } from "@/hooks/useCookieConsent";
 import { useNativeShell } from "@/hooks/useNativeShell";
@@ -23,6 +23,13 @@ export const MetaTrackingConsent = ({ pixelId }: { pixelId: string }) => {
   const native = useNativeShell();
   const { isLoaded, isSignedIn, user } = useUser();
   const userId = isSignedIn ? user?.id : undefined;
+  const currentAccount = useRef<{ userId: string | undefined } | undefined>(undefined);
+  useLayoutEffect(() => {
+    currentAccount.current = { userId };
+    return () => {
+      currentAccount.current = undefined;
+    };
+  }, [userId]);
   const { mutate: synchronize } = api.meta.synchronizeConsent.useMutation({
     // No game action depends on tracking. Failed synchronization retries on the next visit.
     meta: { handlesTransportError: true },
@@ -32,7 +39,8 @@ export const MetaTrackingConsent = ({ pixelId }: { pixelId: string }) => {
       if (
         !input.granted ||
         !current?.granted ||
-        context?.userId !== userId ||
+        !currentAccount.current ||
+        context?.userId !== currentAccount.current.userId ||
         current.consentId !== input.consentId ||
         current.decidedAt !== input.decidedAt
       )

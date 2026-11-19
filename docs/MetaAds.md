@@ -87,8 +87,10 @@ timestamps. Account switching cannot use another account's consent row.
 
 Withdrawal immediately clears the local click fallback and pending Pixel events.
 The server invalidates this browser's consent, and all linked account decisions when
-signed in, then clears matching data. Current consent is checked again when selecting
-queued events. A late browser receipt is also rejected after withdrawal or an account
+signed in, then clears matching data. Current consent is checked when selecting queued events and immediately before
+dispatch. Withdrawal and the external HTTP request cannot be atomic: a decision
+committed after the final check can race a request already being dispatched. No
+database lock is held across the HTTP call. A late browser receipt is also rejected after withdrawal or an account
 switch. Failed synchronization retries on the next visit; a request already sent to
 Meta cannot be recalled. Account deletion removes both tables' user-linked rows, and
 staff identity changes preserve their associations and opaque event IDs.

@@ -4,6 +4,7 @@ CREATE TABLE `MetaConsent` (
 	`granted` boolean NOT NULL,
 	`revision` int NOT NULL,
 	`decidedAt` datetime(3) NOT NULL,
+	`withdrawnAt` datetime(3),
 	`expiresAt` datetime(3) NOT NULL,
 	CONSTRAINT `MetaConsent_id` PRIMARY KEY(`id`)
 );

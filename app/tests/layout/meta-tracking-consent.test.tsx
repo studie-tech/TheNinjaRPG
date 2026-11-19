@@ -87,10 +87,26 @@ it("discards a former account's late response after the session changes", () => 
   decide(true);
   const view = render(<MetaTrackingConsent pixelId="12345" />);
   const input = synchronize.mock.calls[0]?.[0] as Input;
-  const context = callbacks.onMutate();
+  const originalCallbacks = callbacks;
+  const context = originalCallbacks.onMutate();
   currentUser = "another-player";
   view.rerender(<MetaTrackingConsent pixelId="12345" />);
-  callbacks.onSuccess(
+  originalCallbacks.onSuccess(
+    [{ event: "register", eventId: crypto.randomUUID() }],
+    input,
+    context,
+  );
+  expect(confirmedConversion).not.toHaveBeenCalled();
+});
+
+it("drops pending receipts when the component unmounts", () => {
+  decide(true);
+  const view = render(<MetaTrackingConsent pixelId="12345" />);
+  const input = synchronize.mock.calls[0]?.[0] as Input;
+  const originalCallbacks = callbacks;
+  const context = originalCallbacks.onMutate();
+  view.unmount();
+  originalCallbacks.onSuccess(
     [{ event: "register", eventId: crypto.randomUUID() }],
     input,
     context,

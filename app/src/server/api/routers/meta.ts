@@ -1,13 +1,11 @@
 import { z } from "zod";
-import {
-  clearWithdrawnMetaTracking,
-  recordMetaConsent,
-  selectMetaConversions,
-  withdrawMetaAccountConsent,
-} from "@/queries/metaTracking";
+import { selectMetaConversions } from "@/queries/metaTracking";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
-import { isMetaCapiConfigured, saveMetaTracking } from "@/server/utils/metaTracking";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import {
+  isMetaCapiConfigured,
+  saveMetaTracking,
+  withdrawMetaTracking,
+} from "@/server/utils/metaTracking";
 import { metaConsentSchema, metaTrackingSchema } from "@/validators/metaTracking";
 
 export const metaRouter = createTRPCRouter({
@@ -27,25 +25,16 @@ export const metaRouter = createTRPCRouter({
         return [];
       // Withdrawal remains available even when the delivery switch is disabled.
       if (!input.granted) {
-        await retryOnDeadlock(async () => {
-          await recordMetaConsent(ctx.drizzle, {
-            consentId: input.consentId,
-            decidedAt,
-            granted: false,
-            userId: ctx.userId ?? undefined,
-          });
-          if (ctx.userId)
-            await withdrawMetaAccountConsent(ctx.drizzle, ctx.userId, decidedAt);
-          await clearWithdrawnMetaTracking(
-            ctx.drizzle,
-            input.consentId,
-            ctx.userId ?? undefined,
-          );
-        });
+        await withdrawMetaTracking(
+          ctx.drizzle,
+          { consentId: input.consentId, decidedAt },
+          ctx.userId ?? undefined,
+        );
         return [];
       }
       if (!ctx.userId || !isMetaCapiConfigured()) return [];
-      await saveMetaTracking(ctx.drizzle, ctx.userId, input, ctx.userAgent);
+      if (!(await saveMetaTracking(ctx.drizzle, ctx.userId, input, ctx.userAgent)))
+        return [];
       const [registrations, tutorials] = await Promise.all([
         selectMetaConversions(ctx.drizzle, "register", {
           userId: ctx.userId,

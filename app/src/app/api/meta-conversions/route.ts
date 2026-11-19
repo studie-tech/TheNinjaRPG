@@ -3,6 +3,7 @@ import { lockWithMinuteTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   deleteExpiredMetaTracking,
   markMetaConversionReported,
+  selectMetaConsentForDispatch,
   selectMetaConversions,
 } from "@/queries/metaTracking";
 import { drizzleDB } from "@/server/db";
@@ -27,14 +28,23 @@ export async function GET(request: Request) {
       ...registrations.map((row) => ({ ...row, event: "register" as const })),
       ...tutorials.map((row) => ({ ...row, event: "tutorial_complete" as const })),
     ];
+    const current = conversions.length
+      ? await selectMetaConsentForDispatch(drizzleDB, conversions)
+      : [];
+    const decisionKey = (row: { userId: string; consentId: string; decidedAt: Date }) =>
+      `${row.userId}:${row.consentId}:${row.decidedAt.getTime()}`;
+    const allowed = new Set(current.map(decisionKey));
+    const dispatch = conversions.filter((row) => allowed.has(decisionKey(row)));
+    // The external request cannot be atomic with withdrawal. Check at the final
+    // dispatch boundary, without keeping database locks across network I/O.
     await sendMetaConversions(
       env.NEXT_PUBLIC_META_PIXEL_ID ?? "",
       env.META_CAPI_ACCESS_TOKEN ?? "",
-      conversions,
+      dispatch,
     );
     await Promise.all(
-      conversions.map((row) => markMetaConversionReported(drizzleDB, row, row.event)),
+      dispatch.map((row) => markMetaConversionReported(drizzleDB, row, row.event)),
     );
-    return Response.json({ sent: conversions.length });
+    return Response.json({ sent: dispatch.length });
   });
 }
