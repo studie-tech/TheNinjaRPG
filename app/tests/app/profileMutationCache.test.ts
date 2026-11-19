@@ -20,6 +20,7 @@ const flows = [
     file: "layout/Bloodline.tsx",
     procedure: `bloodline.${procedure}`,
     patch: { bloodlineId: "new", bloodline: { id: "new" } },
+    invalidations: 1,
   })),
   {
     file: "layout/profileEdit/SwapBloodline.tsx",
