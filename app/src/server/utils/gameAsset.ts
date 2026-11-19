@@ -106,7 +106,10 @@ export const uploadCharacterImage = (png: Buffer, title: string) =>
     headers: { "Content-Type": "image/png" },
   });
 
-/** Queue an animation. Retrying with the same key cannot charge twice. */
+/**
+ * Queue an animation. Retrying with the same key cannot charge twice. High quality
+ * selects gameasset.dev's full-sampling sprite model.
+ */
 export const createSpriteAsset = (
   input: {
     imageId: string;
@@ -129,6 +132,7 @@ export const createSpriteAsset = (
           action: input.motion,
           facing: input.facing,
           frames: input.frames,
+          quality: "high",
         },
       },
       idempotencyKey,
