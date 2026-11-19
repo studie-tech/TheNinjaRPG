@@ -93,9 +93,9 @@ export const Bloodright = () => {
             <Image
               src={bloodline.image}
               alt={bloodline.name}
-              fill
-              className="object-cover"
-              sizes="64px"
+              width={64}
+              height={64}
+              className="h-full w-full object-cover"
             />
           </div>
           <div className="min-w-0 flex-1">
