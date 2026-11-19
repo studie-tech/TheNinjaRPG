@@ -24,6 +24,7 @@ import { registerRouter } from "@/server/api/routers/register";
 import { saveMetaTracking, withdrawMetaTracking } from "@/server/utils/metaTracking";
 import type { MetaTrackingInput } from "@/validators/metaTracking";
 import { deferred } from "../../../setup/deferred";
+import { insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { characterInput, insertRegistrationContent } from "../../../setup/registration";
 import {
@@ -242,5 +243,33 @@ describeWithDatabase("consented Meta registration and receipt delivery", () => {
     expect(await saveMetaTracking(db, "DeleteNinja", snapshot, "Browser")).toBe(false);
     expect(await db.select().from(metaConsent)).toHaveLength(0);
     expect(await db.select().from(metaTracking)).toHaveLength(0);
+  });
+
+  it("keeps account withdrawal after its browser consent moves to another account", async () => {
+    const db = await getTestDatabase();
+    const snapshot = tracking();
+    await register("SwitchNinja", snapshot);
+    await insertUsers([{ userId: "another-account", username: "AnotherNinja" }]);
+    await withdrawMetaTracking(
+      db,
+      { consentId: snapshot.consentId, decidedAt: new Date(Date.now() - 100) },
+      "SwitchNinja",
+    );
+    expect(
+      await saveMetaTracking(
+        db,
+        "another-account",
+        { ...snapshot, decidedAt: new Date().toISOString() },
+        "Browser",
+      ),
+    ).toBe(true);
+    expect(
+      await saveMetaTracking(
+        db,
+        "SwitchNinja",
+        { ...snapshot, consentId: crypto.randomUUID() },
+        "Browser",
+      ),
+    ).toBe(false);
   });
 });

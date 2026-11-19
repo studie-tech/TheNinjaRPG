@@ -7,6 +7,7 @@ import {
   findLatestMetaWithdrawal,
   findLiveMetaTrackingAccount,
   lockMetaTrackingAccount,
+  recordMetaAccountWithdrawal,
   recordMetaConsent,
   withdrawMetaAccountConsent,
 } from "@/queries/metaTracking";
@@ -106,7 +107,10 @@ export const withdrawMetaTracking = async (
       granted: false,
       userId: linkedUserId,
     });
-    if (userId) await withdrawMetaAccountConsent(database, userId, input.decidedAt);
+    if (linkedUserId) {
+      await recordMetaAccountWithdrawal(database, linkedUserId, input.decidedAt);
+      await withdrawMetaAccountConsent(database, linkedUserId, input.decidedAt);
+    }
     await clearWithdrawnMetaTracking(database, input.consentId, userId);
     return true;
   };

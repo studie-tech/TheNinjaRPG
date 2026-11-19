@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   and,
   desc,
@@ -154,6 +155,24 @@ export const recordMetaConsent = (
         decidedAt: sql`GREATEST(${metaConsent.decidedAt}, VALUES(decidedAt))`,
       },
     });
+
+/** Persist account withdrawal under a server-owned key that browser UUID inputs cannot replace. */
+export const recordMetaAccountWithdrawal = (
+  client: MetaTrackingClient,
+  userId: string,
+  decidedAt: Date,
+) =>
+  recordMetaConsent(client, {
+    // The 144-bit digest fits the existing key and is deliberately not a browser UUID.
+    // Its account association survives browser transfers and follows staff ID renames.
+    consentId: createHash("sha256")
+      .update(`meta-account-withdrawal:${userId}`)
+      .digest("hex")
+      .slice(0, 36),
+    userId,
+    decidedAt,
+    granted: false,
+  });
 
 /** Capture matching data only from a still-current granted decision; event IDs never rotate. */
 export const captureMetaTracking = (
