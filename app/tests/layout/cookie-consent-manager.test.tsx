@@ -5,11 +5,19 @@ import * as CookieConsent from "vanilla-cookieconsent";
 import * as NativeShell from "@/hooks/useNativeShell";
 import { CookieConsentManager } from "@/layout/CookieConsentManager";
 
+const broadcastDescriptor = Object.getOwnPropertyDescriptor(
+  globalThis,
+  "BroadcastChannel",
+);
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   delete window.Cookiebot;
   localStorage.clear();
+  if (broadcastDescriptor)
+    Object.defineProperty(globalThis, "BroadcastChannel", broadcastDescriptor);
+  else Reflect.deleteProperty(globalThis, "BroadcastChannel");
 });
 
 it("synchronizes saved consent once and signals changes when receipt storage exceeds quota", async () => {
@@ -18,9 +26,11 @@ it("synchronizes saved consent once and signals changes when receipt storage exc
     onmessage: null as ((event: MessageEvent) => void) | null,
     postMessage: vi.fn(),
   };
-  const broadcast = vi
-    .spyOn(globalThis, "BroadcastChannel")
-    .mockImplementation(() => channel as unknown as BroadcastChannel);
+  const broadcast = vi.fn(() => channel);
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: broadcast,
+  });
   const reload = vi.spyOn(window.location, "reload").mockImplementation(() => {});
   let finishInitialization: () => void = () => {};
   const initialize = vi.spyOn(CookieConsent, "run").mockImplementation(
@@ -87,7 +97,9 @@ it("synchronizes saved consent once and signals changes when receipt storage exc
     throw new DOMException("Storage quota exceeded", "QuotaExceededError");
   });
   // The local withdrawal reload is delayed; peers must also receive it without storage.
-  vi.spyOn(window, "setTimeout").mockReturnValue(0);
+  const timeout = setTimeout(() => {}, 0);
+  clearTimeout(timeout);
+  vi.spyOn(window, "setTimeout").mockReturnValue(timeout);
   initialize.mock.calls[0]?.[0]?.onChange?.({
     cookie,
     changedCategories: ["statistics"],

@@ -72,7 +72,13 @@ describeWithDatabase("SQL query recorder", () => {
         "UPDATE fixture SET counter = counter + 1; UPDATE fixture SET counter = counter + 1";
       try {
         await expect(
-          driver[method](asOptions ? { sql: statement } : statement),
+          method === "query"
+            ? asOptions
+              ? driver.query({ sql: statement })
+              : driver.query(statement)
+            : asOptions
+              ? driver.execute({ sql: statement })
+              : driver.execute(statement),
         ).rejects.toBe(failure);
         expect(transport).toHaveBeenCalledTimes(1);
       } finally {
