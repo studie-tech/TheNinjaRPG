@@ -416,7 +416,7 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
       const call = source.indexOf("api.bloodline.purchaseBloodline.useMutation(");
       const callbacks = source
         .slice(call)
-        .match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+        .match(/useMutation\((\{[\s\S]*?\n {4}\})\);/)?.[1];
       if (!callbacks) throw new Error("Bloodline purchase callbacks were not found");
       const transpiler = new (require("bun").Transpiler)({ loader: "tsx" });
       const factory = transpiler.transformSync(
@@ -424,13 +424,17 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
       );
       const updateUser = (patch: UserPatch | undefined, options: UserUpdateOptions) =>
         updateUserCache(client, key, patch, options);
+      const invalidateBloodright = vi.fn(async () => undefined);
       const options = new Function(
         "prepareUserUpdate",
         "updateUser",
         "showMutationToast",
         "setIsOpen",
+        "utils",
         `${factory}\nreturn callbacks();`,
-      )(() => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn()) as {
+      )(() => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), {
+        bloodright: { get: { invalidate: invalidateBloodright } },
+      }) as {
         onMutate: () => number | undefined;
         onSuccess: (
           data: unknown,
@@ -445,6 +449,7 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
       );
       expect(result.success).toBe(true);
       await options.onSuccess(result, { bloodlineId: lineId }, revision);
+      expect(invalidateBloodright).toHaveBeenCalledTimes(1);
       expect(getUser).not.toHaveBeenCalled();
       expect(result.userPatch?.bloodlineId).toBe(lineId);
       expect(result.userDelta).toEqual({ reputationPoints: -BLOODLINE_COST.A });
