@@ -5,7 +5,7 @@ import { createMetaPixelTracker } from "@/libs/metaPixel";
 const originalUserAgent = Object.getOwnPropertyDescriptor(navigator, "userAgent");
 
 beforeEach(() => {
-  window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
   delete window.fbq;
   delete window._fbq;
 });
@@ -13,7 +13,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   document.querySelectorAll("script[data-tnr-meta-pixel]").forEach((s) => s.remove());
-  delete window.Cookiebot;
+  delete window.tnrConsent;
   delete window.fbq;
   delete window._fbq;
   document.cookie = "tnr_consent=; Max-Age=0; path=/";
@@ -24,7 +24,7 @@ afterEach(() => {
 
 const grant = () => {
   document.cookie = `tnr_consent=${encodeURIComponent(JSON.stringify({ revision: CONSENT_REVISION, consentId: crypto.randomUUID(), categories: ["necessary", "marketing"], consentTimestamp: new Date(Date.now() - 1000).toISOString() }))}; path=/`;
-  window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: true }, hasResponse: true };
 };
 const load = () => {
   const send = vi.fn();
@@ -56,7 +56,7 @@ describe("Meta acquisition tracking", () => {
     pixel.confirmedConversion("register", "11f90b37-6015-4361-8c51-fbfcccb92b43");
     expect(window.fbq).toBeUndefined();
     expect(document.querySelector("script[data-tnr-meta-pixel]")).toBeNull();
-    delete window.Cookiebot;
+    delete window.tnrConsent;
     pixel.enable();
     expect(window.fbq).toBeUndefined();
   });
@@ -105,7 +105,7 @@ describe("Meta acquisition tracking", () => {
     const pixel = createMetaPixelTracker("12345");
     pixel.enable();
     pixel.confirmedConversion("register", "withdrawn-receipt");
-    window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+    window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
     pixel.disable();
     const send = load();
     pixel.pageView("/home");
@@ -121,7 +121,7 @@ describe("Meta acquisition tracking", () => {
     const pixel = createMetaPixelTracker("12345");
     pixel.enable();
     const send = load();
-    window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+    window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
     pixel.confirmedConversion("register", "racing-receipt");
     expect(send).not.toHaveBeenCalled();
   });
@@ -173,7 +173,7 @@ describe("Meta acquisition tracking", () => {
     document
       .querySelector("script[data-tnr-meta-pixel]")
       ?.dispatchEvent(new window.Event("error"));
-    window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+    window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
     pixel.pageView("/profile");
     pixel.existingPlayer();
     expect(document.querySelector("script[data-tnr-meta-pixel]")).toBeNull();

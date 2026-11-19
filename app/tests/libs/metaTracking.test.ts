@@ -3,14 +3,14 @@ import { CONSENT_REVISION } from "@/libs/consentConfig";
 import { clearMetaClick, readMetaConsent, readMetaTracking } from "@/libs/metaTracking";
 
 const decide = (granted: boolean, revision = CONSENT_REVISION) => {
-  window.Cookiebot = { consent: { marketing: granted }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: granted }, hasResponse: true };
   document.cookie = `tnr_consent=${encodeURIComponent(JSON.stringify({ consentId: "11f90b37-6015-4361-8c51-fbfcccb92b43", categories: granted ? ["necessary", "marketing"] : ["necessary"], revision, consentTimestamp: new Date(Date.now() - 1000).toISOString() }))}; path=/`;
 };
 beforeEach(() => {
   localStorage.clear();
 });
 afterEach(() => {
-  delete window.Cookiebot;
+  delete window.tnrConsent;
   for (const name of ["tnr_consent", "_fbp", "_fbc"])
     document.cookie = `${name}=; Max-Age=0; path=/`;
   localStorage.clear();

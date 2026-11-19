@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, render } from "@testing-library/react";
 import * as NativeShell from "@/hooks/useNativeShell";
 import { MetaPixel } from "@/layout/MetaPixel";
+import { CONSENT_CHANGE_EVENT } from "@/libs/cookieConsent";
 import * as pixelTracking from "@/libs/metaPixel";
 import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
@@ -17,7 +18,7 @@ const originalUserAgent = Object.getOwnPropertyDescriptor(navigator, "userAgent"
 
 beforeEach(() => {
   for (const fn of Object.values(tracker)) fn.mockClear();
-  window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
   vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(false);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/");
   vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
@@ -29,7 +30,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  delete window.Cookiebot;
+  delete window.tnrConsent;
   if (originalUserAgent)
     Object.defineProperty(navigator, "userAgent", originalUserAgent);
   else Reflect.deleteProperty(navigator, "userAgent");
@@ -38,8 +39,8 @@ afterEach(() => {
 it("starts after consent, tracks navigation and existing players, then revokes on withdrawal", () => {
   const view = render(<MetaPixel pixelId="12345" />);
   expect(tracker.enable).not.toHaveBeenCalled();
-  window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
-  act(() => window.dispatchEvent(new window.Event("CookiebotOnAccept")));
+  window.tnrConsent = { consent: { marketing: true }, hasResponse: true };
+  act(() => window.dispatchEvent(new window.Event(CONSENT_CHANGE_EVENT)));
   expect(tracker.enable).toHaveBeenCalledTimes(1);
   expect(tracker.pageView).toHaveBeenCalledWith("/");
 
@@ -51,8 +52,8 @@ it("starts after consent, tracks navigation and existing players, then revokes o
   expect(tracker.enable).toHaveBeenCalledTimes(1);
 
   tracker.disable.mockClear();
-  window.Cookiebot = { consent: { marketing: false }, hasResponse: true };
-  act(() => window.dispatchEvent(new window.Event("CookiebotOnDecline")));
+  window.tnrConsent = { consent: { marketing: false }, hasResponse: true };
+  act(() => window.dispatchEvent(new window.Event(CONSENT_CHANGE_EVENT)));
   expect(tracker.disable).toHaveBeenCalled();
   expect(tracker.pageView).toHaveBeenCalledTimes(2);
 });
@@ -60,7 +61,7 @@ it("starts after consent, tracks navigation and existing players, then revokes o
 it.each([undefined, true])(
   "does not initialize before web shell resolution (%s)",
   (native) => {
-    window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
+    window.tnrConsent = { consent: { marketing: true }, hasResponse: true };
     vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(native);
     render(<MetaPixel pixelId="12345" />);
     expect(tracker.enable).not.toHaveBeenCalled();
@@ -69,7 +70,7 @@ it.each([undefined, true])(
 );
 
 it("keeps native user agents blocked even if shell detection reports web", () => {
-  window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: true }, hasResponse: true };
   Object.defineProperty(navigator, "userAgent", {
     configurable: true,
     value: "TNR-Native/1.0.0 (android)",

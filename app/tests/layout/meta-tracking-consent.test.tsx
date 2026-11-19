@@ -5,6 +5,7 @@ import * as client from "@/app/_trpc/client";
 import * as native from "@/hooks/useNativeShell";
 import { MetaTrackingConsent } from "@/layout/MetaTrackingConsent";
 import { CONSENT_REVISION } from "@/libs/consentConfig";
+import { CONSENT_CHANGE_EVENT } from "@/libs/cookieConsent";
 import * as pixel from "@/libs/metaPixel";
 import { META_CONVERSION_EVENT, type readMetaTracking } from "@/libs/metaTracking";
 
@@ -18,7 +19,7 @@ let currentUser = "player";
 const synchronize = vi.fn();
 const confirmedConversion = vi.fn();
 const decide = (granted: boolean) => {
-  window.Cookiebot = { consent: { marketing: granted }, hasResponse: true };
+  window.tnrConsent = { consent: { marketing: granted }, hasResponse: true };
   document.cookie = `tnr_consent=${encodeURIComponent(JSON.stringify({ consentId: "11f90b37-6015-4361-8c51-fbfcccb92b43", revision: CONSENT_REVISION, categories: granted ? ["necessary", "marketing"] : ["necessary"], consentTimestamp: new Date(Date.now() - 1000).toISOString() }))}; path=/`;
 };
 beforeEach(() => {
@@ -46,7 +47,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  delete window.Cookiebot;
+  delete window.tnrConsent;
   document.cookie = "tnr_consent=; Max-Age=0; path=/";
   localStorage.clear();
 });
@@ -58,7 +59,7 @@ it("rechecks withdrawal before forwarding a delayed receipt and clears attributi
   const context = callbacks.onMutate();
   localStorage.setItem("tnr_meta_click", "private");
   decide(false);
-  act(() => window.dispatchEvent(new window.Event("CookiebotOnDecline")));
+  act(() => window.dispatchEvent(new window.Event(CONSENT_CHANGE_EVENT)));
   expect(localStorage.getItem("tnr_meta_click")).toBeNull();
   expect(synchronize.mock.calls.at(-1)?.[0].granted).toBe(false);
   callbacks.onSuccess(
