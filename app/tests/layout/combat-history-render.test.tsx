@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import * as client from "@/app/_trpc/client";
 import { BATTLE_LOG_DEFAULT_LIMIT, BATTLE_LOG_FULL_LIMIT } from "@/drizzle/constants";
 import CombatHistory from "@/layout/CombatHistory";
 import * as elementImage from "@/layout/ElementImage";
 import * as parse from "@/utils/parse";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { mockUserContextValue } from "../setup/userContext";
 
 const spies: { mockRestore: () => void }[] = [];
@@ -29,6 +32,8 @@ const query = vi.fn();
 let historyEntries: ReturnType<typeof entry>[];
 
 beforeEach(() => {
+  installBrowserGlobals({ events: ["CustomEvent"] });
+  window.localStorage.clear();
   historyEntries = [
     entry(2, 5, "Player attacks. It is now Rival's turn", [
       {
@@ -78,6 +83,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
+  restoreBrowserGlobals();
   query.mockClear();
   for (const spy of spies.splice(0)) spy.mockRestore();
   vi.restoreAllMocks();
@@ -125,7 +132,7 @@ it("renders rounds newest first, with placeholders, separators and highlighted s
   const effects = entries.flatMap((node) =>
     Array.from(node.querySelectorAll(":scope > div")),
   );
-  expect(effects.map((node) => node.className)).toEqual([
+  expect(effects.map((node) => node.className.split(" ")[0])).toEqual([
     "text-blue-700",
     "text-black",
     "text-green-700",
@@ -139,7 +146,7 @@ it("renders rounds newest first, with placeholders, separators and highlighted s
   ]);
   const highlighted = effects.flatMap((node) =>
     Array.from(node.querySelectorAll(":scope > span")).map(
-      (span) => `${span.textContent}:${span.className}`,
+      (span) => `${span.textContent}:${span.className.split(" ")[0]}`,
     ),
   );
   expect(highlighted).toEqual([
@@ -245,4 +252,48 @@ it("retains manual opens and closes across advancing rounds and resets them for 
   historyEntries = liveEntries(4);
   view.rerender(tree(4));
   expect(visibleRounds()).toEqual(["Round 4", "Round 3"]);
+});
+
+it("persists the log theme across saved and live views without resetting expanded rounds", () => {
+  const view = render(<CombatHistory battleId="battle" />);
+  const toggle = view.getByRole("switch", { name: "Dark battle log" });
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  expect(view.container.firstElementChild?.getAttribute("data-theme")).toBe("light");
+  fireEvent.click(view.getByText("Round 2").closest("button")!);
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+  expect(view.container.firstElementChild?.getAttribute("data-theme")).toBe("dark");
+  expect(view.getByText("#7: End Turn: Player waits")).toBeTruthy();
+  expect(window.localStorage.getItem("combatLogDarkMode")).toBe("true");
+  view.unmount();
+  const live = render(<CombatHistory battleId="another" battleVersion={9} />);
+  const liveToggle = live.getByRole("switch", { name: "Dark battle log" });
+  expect(liveToggle.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(liveToggle);
+  expect(live.container.firstElementChild?.getAttribute("data-theme")).toBe("light");
+  expect(window.localStorage.getItem("combatLogDarkMode")).toBe("false");
+});
+
+it("hydrates a saved dark preference without leaving the server's light surface in place", async () => {
+  window.localStorage.setItem("combatLogDarkMode", "true");
+  const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  spies.push(errors);
+  const container = document.createElement("div");
+  document.body.append(container);
+  container.innerHTML = renderToString(<CombatHistory battleId="battle" />);
+  expect(container.firstElementChild?.getAttribute("data-theme")).toBe("light");
+  let root: ReturnType<typeof hydrateRoot> | undefined;
+  try {
+    await act(async () => {
+      root = hydrateRoot(container, <CombatHistory battleId="battle" />);
+    });
+    expect(container.firstElementChild?.getAttribute("data-theme")).toBe("dark");
+    expect(container.querySelector("[role=switch]")?.getAttribute("aria-checked")).toBe(
+      "true",
+    );
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => root?.unmount());
+    container.remove();
+  }
 });
