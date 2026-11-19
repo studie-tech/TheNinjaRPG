@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { eq } from "drizzle-orm";
+import { setTimeout } from "node:timers/promises";
+import { eq, getTableName } from "drizzle-orm";
+import mysql from "mysql2/promise";
 import { MASTERY_RANK_CAPS, MasteryNames } from "@/drizzle/constants";
 import {
   anbuSquad,
@@ -44,6 +46,7 @@ import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
+  lockWaitObserved,
   recordQueries,
   resetTables,
   runRawSql,
@@ -120,6 +123,64 @@ describeWithDatabase("resource silo reward payouts", () => {
     await insertUserVotes([{ userId }]);
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each(["receipt", "account", "faction"] as const)(
+    "rejects a blocked %s claim when the silo closes before its write",
+    async (payout) => {
+      const db = await getTestDatabase();
+      await db
+        .insert(village)
+        .values({ id: "home", name: "Home", sector: 1, kageId: userId });
+      await db
+        .update(userData)
+        .set({ villageId: "home" })
+        .where(eq(userData.userId, userId));
+      const ready = prepareActionReadiness(await player(), []);
+      const rewards = PostProcessedRewardSchema.parse({
+        reward_money: 123,
+        reward_tokens: payout === "faction" ? 5 : 0,
+      });
+      const blocker = await mysql.createConnection(process.env.TEST_MYSQL_URL!);
+      let claim: Promise<{ rowsAffected: number }> | undefined;
+      try {
+        // Only the fixture holds a lock, so each production helper must recheck its deadline.
+        await blocker.beginTransaction();
+        await blocker.query("SELECT userId FROM UserData WHERE userId = ? FOR UPDATE", [
+          userId,
+        ]);
+        window.end = new Date(Date.now() + 3000);
+        claim = Promise.resolve(
+          payout === "receipt"
+            ? claimResourceSilo(db, ready.initial, window, ready)
+            : claimResourceSiloWithRewards(db, ready, window, rewards),
+        );
+        expect(
+          await lockWaitObserved({
+            table: getTableName(userData),
+            heldLockData: userId,
+          }),
+        ).toBe(true);
+        const [clock] = await blocker.query<mysql.RowDataPacket[]>(
+          "SELECT TIMESTAMPDIFF(MICROSECOND, SYSDATE(3), ?) / 1000 AS remainingMs",
+          [window.end],
+        );
+        const remainingMs = Number(clock[0]?.remainingMs);
+        expect(remainingMs).toBeGreaterThan(0);
+        await setTimeout(remainingMs + 100);
+        await blocker.commit();
+        expect((await claim).rowsAffected).toBe(0);
+      } finally {
+        await blocker.rollback();
+        await claim?.catch(() => {});
+        await blocker.end();
+      }
+      expect(await player()).toMatchObject({
+        money: 50000,
+        resourceSiloProgress: { claimed: false },
+      });
+      expect((await db.query.village.findFirst())?.tokens).toBe(0);
+    },
+  );
 
   it.each([false, true])(
     "confirms only the sage mode actually acquired, equipped=%s",

@@ -245,7 +245,8 @@ const resourceSiloClaimWhere = (
     sql`JSON_UNQUOTE(JSON_EXTRACT(${userData.resourceSiloProgress}, '$.windowId')) = ${window.id}`,
     sql`JSON_EXTRACT(${userData.resourceSiloProgress}, '$.points') >= ${RESOURCE_SILO_POINTS_REQUIRED}`,
     sql`JSON_EXTRACT(${userData.resourceSiloProgress}, '$.claimed') = CAST('false' AS JSON)`,
-    sql`UTC_TIMESTAMP(3) >= ${window.start} AND UTC_TIMESTAMP(3) < ${window.end}`,
+    // Read wall time after row-lock waits; statement timestamps freeze before the wait.
+    sql`SYSDATE(3) >= ${window.start} AND SYSDATE(3) < ${window.end}`,
   );
 
 /** Server-derived boundaries persisted with the guarded spawn receipt. */
