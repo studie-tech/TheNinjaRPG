@@ -25,8 +25,10 @@ persistence, and withdrawal behavior on a preview before production rollout.
 
 ## Interface
 
-![Desktop consent banner](screenshots/banner-desktop.png)
+![Desktop consent banner](screenshots/banner-desktop.webp)
 
-![Mobile consent banner](screenshots/banner-mobile.png)
+![Mobile consent banner](screenshots/banner-mobile.webp)
 
-![Cookie preferences](screenshots/preferences-desktop.png)
+![Cookie preferences](screenshots/preferences-desktop.webp)
+
+![Consent details](screenshots/consent-details-desktop.webp)
