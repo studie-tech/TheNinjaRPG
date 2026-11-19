@@ -66,6 +66,7 @@ beforeEach(() => {
   refetch.mockReset();
   streakQuery.mockReset();
   Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({ splash: { get: { cancel: async () => {} } } }),
     splash: {
       get: { useQuery: () => ({ data: { content: null }, isLoading: false }) },
     },

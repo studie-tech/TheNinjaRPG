@@ -201,7 +201,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 200
+          # Keep the full commit-message window without historical media blobs.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
       - uses: actions/download-artifact@v7
         with:
           name: audit-input

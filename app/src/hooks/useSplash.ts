@@ -4,11 +4,13 @@ import { nextUtcDayAt } from "@/utils/time";
 
 /** Keep the shared welcome edition fresh at publication windows and UTC rollover. */
 export const useSplash = (enabled: boolean, timeDiff = 0) => {
+  const utils = api.useUtils();
   const query = api.splash.get.useQuery(undefined, { enabled, staleTime: 300_000 });
   useRefreshAt(
     [query.data?.nextChangeAt, nextUtcDayAt(new Date(Date.now() - timeDiff))],
     () => {
-      void query.refetch({ cancelRefetch: false });
+      // Cancel even an initial fetch: it may have read the board before this boundary.
+      void utils.splash.get.cancel().then(() => query.refetch({ cancelRefetch: true }));
     },
     timeDiff,
     enabled,
