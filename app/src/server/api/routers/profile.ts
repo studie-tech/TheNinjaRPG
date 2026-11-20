@@ -316,6 +316,7 @@ import {
   fetchPublicUsers,
   listUserAnnouncements,
 } from "@/server/utils/profile";
+import { fetchProfileUser } from "@/server/utils/profileDefinitions";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { insertNextQuest } from "@/server/utils/questAssignment";
 import {
@@ -324,7 +325,6 @@ import {
   hydrateQuestCollections,
 } from "@/server/utils/questCollections";
 import { handleQuestConsequences } from "@/server/utils/questConsequences";
-import { fetchProfileUser } from "@/server/utils/questDefinitions";
 import {
   applyQuestParty,
   type LoadedQuestParty,

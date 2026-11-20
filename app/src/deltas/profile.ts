@@ -22,7 +22,7 @@ import {
   getUserFactionNotifications,
   NO_JUTSU_EQUIPPED_NOTIFICATION,
 } from "@/libs/userNotifications";
-import type { fetchUser, findUserDataForQueryUpdatedUser } from "@/queries/profile";
+import type { fetchUser, findProfileUserWithDefinitions } from "@/queries/profile";
 import type { fetchQuestBootstrap } from "@/routers/profile";
 import type {
   AchievementProgress,
@@ -522,7 +522,7 @@ export const getUseUnusedExperiencePointsUserUpdate = ({
   data: AssignedExperiencePatch;
   resultClaimedAt: Date;
   user: Omit<
-    NonNullable<Awaited<ReturnType<typeof findUserDataForQueryUpdatedUser>>>,
+    NonNullable<Awaited<ReturnType<typeof findProfileUserWithDefinitions>>>,
     "userQuests"
   >;
 }) => {

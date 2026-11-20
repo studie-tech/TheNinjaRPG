@@ -15,7 +15,7 @@ import {
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
-import { fetchProfileUser } from "@/server/utils/questDefinitions";
+import { fetchProfileUser } from "@/server/utils/profileDefinitions";
 import { ObjectiveReward } from "@/validators/rewards";
 import type { EventTournamentState } from "@/validators/tournament";
 

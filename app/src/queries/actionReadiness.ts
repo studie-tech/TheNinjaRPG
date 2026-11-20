@@ -6,7 +6,7 @@ import type {
   ActionReadiness,
   ActionReadinessWrite,
 } from "@/server/utils/actionReadiness";
-import { fetchProfileUser } from "@/server/utils/questDefinitions";
+import { fetchProfileUser } from "@/server/utils/profileDefinitions";
 
 /** Build recovery for actions with no account write; callers await it in their existing mutation phase. */
 export const updateUserForActionReadiness = (

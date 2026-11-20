@@ -1,12 +1,28 @@
-/** Pin the profile read's quest definitions: revision-keyed, cached, live raid state. */
+/** Pin the profile read's cached definitions: revision-keyed, cached, live state. */
 import { afterEach, beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { quest, questHistory, userData } from "@/drizzle/schema";
+import {
+  item,
+  quest,
+  questHistory,
+  userData,
+  userItem,
+  userItemImbuement,
+  village,
+  villageStructure,
+} from "@/drizzle/schema";
 import { hasQuestContentChanged } from "@/libs/questRun";
+import { findProfileUserWithDefinitions } from "@/queries/profile";
 import { executeDefinitionWriteForUpdate } from "@/queries/quests";
-import { fetchProfileUser } from "@/server/utils/questDefinitions";
+import { fetchProfileUser } from "@/server/utils/profileDefinitions";
 import { QuestTracker, QuestValidator } from "@/validators/objectives";
-import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
+import {
+  insertItems,
+  insertQuestHistory,
+  insertQuests,
+  insertUserItems,
+  insertUsers,
+} from "../../setup/factories";
 import { aroundStatements, beforeStatements } from "../../setup/statements";
 import {
   describeWithDatabase,
@@ -188,5 +204,145 @@ describeWithDatabase("profile quest definitions", () => {
     );
     expect(quests.story?.name).toBe("Story quest");
     expect(quests.raid).toBeNull();
+  });
+});
+
+describeWithDatabase("profile item and village structure definitions", () => {
+  const tables = [
+    userData,
+    item,
+    userItem,
+    userItemImbuement,
+    village,
+    villageStructure,
+  ];
+  afterEach(() => resetTables(...tables));
+  beforeEach(async () => {
+    await resetTables(...tables);
+    const db = await getTestDatabase();
+    await insertUsers([
+      { userId: USER_ID, username: USER_ID, level: 20, villageId: "leaf" },
+    ]);
+    await db
+      .insert(village)
+      .values({ id: "leaf", name: "Leaf", sector: 301, kageId: "leaf-kage" });
+    await db.insert(villageStructure).values([
+      {
+        id: "leaf/hall",
+        name: "Town Hall",
+        route: "/townhall",
+        image: "/hall.png",
+        villageId: "leaf",
+        curSp: 1000,
+        worldArt: {
+          route: "/townhall",
+          sourceImage: "/hall-source.png",
+          filepath: "/hall-atlas.png",
+          material: "/hall-material.png",
+          surfaces: "/hall-surfaces.png",
+          frame: { x: 0, y: 0, width: 256, height: 256 },
+          stair: { x: 128, y: 240 },
+          shadow: 0.4,
+          height: 3,
+          courtSlope: 0,
+        },
+      },
+      {
+        id: "leaf/bank",
+        name: "Bank",
+        route: "/bank",
+        image: "/bank.png",
+        villageId: "leaf",
+      },
+    ]);
+    await insertItems([
+      { id: "blade", name: "Blade", itemType: "WEAPON", slot: "HAND" },
+      { id: "crystal", name: "Crystal", itemType: "CRYSTAL" },
+    ]);
+    await insertUserItems([
+      { id: "held-blade", userId: USER_ID, itemId: "blade", equipped: "HAND_1" },
+    ]);
+    await db.insert(userItemImbuement).values({
+      id: "imbued",
+      userItemId: "held-blade",
+      imbuementItemId: "crystal",
+      craftingFinishedAt: REVISION,
+    });
+  });
+
+  it("matches the joined read, then serves definitions without reading their rows", async () => {
+    const db = await getTestDatabase();
+    const joined = await findProfileUserWithDefinitions(db, USER_ID);
+    const cold = await recordQueries(() => fetchProfileUser(db, USER_ID));
+    expect(cold.result).toEqual(joined);
+    expect(cold.result?.items[0]?.imbuements[0]?.item?.name).toBe("Crystal");
+    expect(cold.result?.village?.structures).toHaveLength(2);
+    // The snapshot carries each row's id and content hash; one statement per table reads
+    // the definitions this instance lacks.
+    expect(cold.statements).toHaveLength(3);
+    expect(cold.statements[0]).not.toContain("`worldArt`, `longitude`");
+    expect(cold.statements[0]).not.toContain("`effects`, `itemType`");
+    const reads = cold.statements.slice(1).join("\n");
+    expect(reads).toMatch(/from `Item` where `Item`.`id` in/i);
+    expect(reads).toMatch(/from `VillageStructure` where `VillageStructure`.`id` in/i);
+
+    const warm = await recordQueries(() => fetchProfileUser(db, USER_ID));
+    expect(warm.statements).toHaveLength(1);
+    expect(warm.result).toEqual(joined);
+  });
+
+  it("reads only the definitions a write changed", async () => {
+    const db = await getTestDatabase();
+    await fetchProfileUser(db, USER_ID);
+    // Raids and upgrades write structure state; staff edits rewrite items.
+    await db
+      .update(villageStructure)
+      .set({ curSp: 400 })
+      .where(eq(villageStructure.id, "leaf/hall"));
+    await db.update(item).set({ name: "Sharp Blade" }).where(eq(item.id, "blade"));
+
+    const { result, statements } = await recordQueries(() =>
+      fetchProfileUser(db, USER_ID),
+    );
+    expect(result).toEqual(await findProfileUserWithDefinitions(db, USER_ID));
+    expect(result?.items[0]?.item?.name).toBe("Sharp Blade");
+    expect(
+      result?.village?.structures.find((structure) => structure.id === "leaf/hall"),
+    ).toMatchObject({ curSp: 400, worldArt: { filepath: "/hall-atlas.png" } });
+    expect(statements).toHaveLength(3);
+    const reads = statements.slice(1).join("\n");
+    expect(reads).toContain("in ('blade')");
+    expect(reads).toContain("in ('leaf/hall')");
+  });
+
+  it("retries the joined read when a definition changes during hydration", async () => {
+    const db = await getTestDatabase();
+    const client = beforeStatements(
+      db,
+      item,
+      [() => db.update(item).set({ name: "Reforged" }).where(eq(item.id, "blade"))],
+      { operations: ["select"] },
+    );
+    const { result, statements } = await recordQueries(() =>
+      fetchProfileUser(client, USER_ID),
+    );
+    expect(result?.items[0]?.item?.name).toBe("Reforged");
+    const reads = statements.filter((statement) => /^select /i.test(statement));
+    expect(reads[0]).toContain("SHA2(JSON_ARRAY(");
+    expect(reads.at(-1)).not.toContain("SHA2(JSON_ARRAY(");
+  });
+
+  it("never lists a structure deleted during hydration", async () => {
+    const db = await getTestDatabase();
+    const client = beforeStatements(
+      db,
+      villageStructure,
+      [() => db.delete(villageStructure).where(eq(villageStructure.id, "leaf/bank"))],
+      { operations: ["select"] },
+    );
+    const user = await fetchProfileUser(client, USER_ID);
+    expect(user?.village?.structures.map((structure) => structure.id)).toEqual([
+      "leaf/hall",
+    ]);
   });
 });
