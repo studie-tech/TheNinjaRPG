@@ -97,7 +97,7 @@ import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { listCachedGameSettings } from "@/queries/gamesettings";
 import { questPartyRelations } from "@/queries/questParty";
 import { userCardColumns } from "@/queries/userColumns";
-import { activeWarAllyWhere } from "@/queries/war";
+import { activeWarAllyWhere, activeWarMercenaryWhere } from "@/queries/war";
 import { serverError } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
@@ -279,7 +279,10 @@ export const fetchHasUnvotedPolls = (
       .limit(1),
   );
 
-/** All active wars, for enemy_village sector type resolution. */
+/**
+ * All active wars, for enemy_village sector type resolution. Accepted contracts and the
+ * open-window columns resolve a player's mercenary appointment without a read of its own.
+ */
 export const fetchAllActiveWars = (client: DrizzleClient) =>
   scopedRead("allActiveWars", () =>
     client.query.war.findMany({
@@ -292,11 +295,20 @@ export const fetchAllActiveWars = (client: DrizzleClient) =>
         attackerVillageId: true,
         defenderVillageId: true,
         sector: true,
+        rules: true,
+        combatStartedAt: true,
+        endedAt: true,
+        attackerWarHealth: true,
+        defenderWarHealth: true,
       },
       with: {
         attackerVillage: { columns: { id: true, name: true, sector: true } },
         defenderVillage: { columns: { id: true, name: true, sector: true } },
         warAllies: { where: activeWarAllyWhere() },
+        warMercenaries: {
+          columns: { userId: true, sideVillageId: true },
+          where: activeWarMercenaryWhere(),
+        },
       },
     }),
   );

@@ -84,6 +84,23 @@ export const isObjectiveWarActive = (
   new Date(activeWar.combatStartedAt) <= now;
 
 /**
+ * The open war holding the user's mercenary appointment, from wars loaded with their
+ * accepted, unended contracts; the in-memory twin of fetchMercenaryWarId.
+ */
+export const findMercenaryWarId = (
+  wars: (Parameters<typeof isObjectiveWarOpen>[0] & {
+    id: string;
+    warMercenaries: { userId: string }[];
+  })[],
+  userId: string,
+  now = new Date(),
+) =>
+  wars.find(
+    (w) =>
+      isObjectiveWarOpen(w, now) && w.warMercenaries.some((m) => m.userId === userId),
+  )?.id ?? null;
+
+/**
  * Attach exclusive mercenary assignments and strip contracts from closed wars.
  * Supply every open war with accepted, unended contracts before filtering by viewer
  * or village, so appointments in other wars still exclude native participation.

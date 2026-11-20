@@ -4,7 +4,10 @@ import {
   createEventState,
   generateEventBracket,
 } from "@/libs/tournament/events";
-import { fetchEventNoticeState } from "@/queries/tournamentEvents";
+import {
+  fetchEventNoticeState,
+  invalidateEventNoticeParticipants,
+} from "@/queries/tournamentEvents";
 
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -16,6 +19,15 @@ import {
 describe("event notices and participation", () => {
   it("does not mark an unregistered player as a participant", async () => {
     expect(await readNotices([])).toEqual({ notices: [], isEventParticipant: false });
+  });
+
+  it("skips the notice query when no open event seats the player", async () => {
+    const event = makeEvent();
+    event.participants = [makeSeat("foe")];
+    expect(await readNotices([event])).toEqual({
+      notices: [],
+      isEventParticipant: false,
+    });
   });
 
   it("retains participation for a registered seat between ready checks", async () => {
@@ -89,14 +101,31 @@ describe("event notices and participation", () => {
   });
 });
 
-/** Read notice state through the existing single-query boundary without a shared SQL database. */
+/**
+ * Read notice state through the participant listing and the single notice query without a
+ * shared SQL database. The listing seats every participant, as the cache does, and is
+ * refreshed for each read because tests edit events in place.
+ */
 const readNotices = async (events: (EventTournamentState | null)[]) => {
   const findMany = mock(async () =>
     events.map((eventData, index) => ({ id: `event-${index}`, eventData })),
   );
-  const client = { query: { tournament: { findMany } } } as unknown as DrizzleClient;
+  const where = mock(async () =>
+    events.map((eventData) => ({
+      userIds: eventData?.participants.map((seat) => seat.userId) ?? null,
+    })),
+  );
+  const client = {
+    select: () => ({ from: () => ({ where }) }),
+    query: { tournament: { findMany } },
+  } as unknown as DrizzleClient;
+  await invalidateEventNoticeParticipants();
   const result = await fetchEventNoticeState(client, "hero");
-  expect(findMany).toHaveBeenCalledTimes(1);
+  const isSeated = events.some((event) =>
+    event?.participants.some((seat) => seat.userId === "hero"),
+  );
+  expect(where).toHaveBeenCalledTimes(1);
+  expect(findMany).toHaveBeenCalledTimes(isSeated ? 1 : 0);
   return result;
 };
 

@@ -92,7 +92,7 @@ import type { NavBarDropdownLink } from "@/libs/menus";
 import { deferModeration } from "@/libs/moderation/defer";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { isQuestComplete } from "@/libs/objectives";
-import { getWarSide } from "@/libs/objectiveWar";
+import { findMercenaryWarId, getWarSide } from "@/libs/objectiveWar";
 import { isNewOnlineRecord } from "@/libs/onlineRecord";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { hasActiveGeneration } from "@/libs/pets/progression";
@@ -346,7 +346,6 @@ import {
   settleDueTimedQueues,
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
-import { fetchMercenaryWarId } from "@/server/utils/warMercenary";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -2698,7 +2697,6 @@ const fetchUpdatedUserOnce = async (
     fetchedUser,
     hasUnvotedPolls,
     allActiveWars,
-    mercenaryWarId,
     activeShrineBattles,
     activeRaids,
     questBootstrap,
@@ -2711,7 +2709,6 @@ const fetchUpdatedUserOnce = async (
     queryUpdatedUser(),
     includeNotifications ? fetchHasUnvotedPolls(client, userId, now) : [],
     fetchAllActiveWars(client),
-    fetchMercenaryWarId(client, userId),
     includeNotifications
       ? fetchActiveShrineLobbies(client, shrineLobbyStaleBefore)
       : [],
@@ -2956,9 +2953,23 @@ const fetchUpdatedUserOnce = async (
   // Filter and attach active wars (for enemy_village sector type resolution) and shrine battles
   if (user?.villageId) {
     const { villageId } = user;
-    (user as NonNullable<UserWithRelations>).activeWars = allActiveWars.filter(
-      (w) => (!mercenaryWarId || w.id === mercenaryWarId) && !!getWarSide(w, villageId),
-    );
+    const mercenaryWarId = findMercenaryWarId(allActiveWars, userId, now);
+    (user as NonNullable<UserWithRelations>).activeWars = allActiveWars
+      .filter(
+        (w) =>
+          (!mercenaryWarId || w.id === mercenaryWarId) && !!getWarSide(w, villageId),
+      )
+      .map(
+        ({
+          rules: _rules,
+          combatStartedAt: _combatStartedAt,
+          endedAt: _endedAt,
+          attackerWarHealth: _attackerWarHealth,
+          defenderWarHealth: _defenderWarHealth,
+          warMercenaries: _warMercenaries,
+          ...profileWar
+        }) => profileWar,
+      );
     if (includeNotifications)
       (user as NonNullable<UserWithRelations>).shrineBattles =
         activeShrineBattles.filter(

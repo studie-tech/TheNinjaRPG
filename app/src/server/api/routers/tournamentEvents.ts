@@ -45,6 +45,7 @@ import {
   insertTournamentMatchForLaunchEventGame,
   insertTournamentMatchForSyncEventTournament,
   insertTournamentRewardClaimForPayEventRewards,
+  invalidateEventNoticeParticipants,
   listRankedLoadoutForLaunchEventGame,
   listTournamentForListEvents,
   listTournamentForMaintainEventTournaments,
@@ -498,7 +499,12 @@ const saveEventState = async (
   readiness?: ActionReadiness,
 ) => {
   const saved = await updateTournamentForSaveEventState(client, event, row, readiness);
-  return saved.rowsAffected > 0;
+  if (saved.rowsAffected === 0) return false;
+  const seated = new Set(noticeParticipantIds(row.eventData));
+  // The cache TTL bounds a failed invalidation; the save itself has succeeded.
+  if (noticeParticipantIds(event).some((userId) => !seated.has(userId)))
+    await invalidateEventNoticeParticipants().catch(() => undefined);
+  return true;
 };
 
 /** Retry a roster or bracket edit against the latest event when another writer wins its CAS. */
@@ -965,6 +971,12 @@ const isReadyAtWakeIsland = (user: Pick<UserData, "status" | "battleId" | "secto
 const hasUnsettledRewards = (
   event: Pick<EventTournamentState, "payRewards"> & { rewardsPaidAt?: number | null },
 ) => event.payRewards && !event.rewardsPaidAt;
+
+/** Players an open event seats, as the notice participant cache lists them. */
+const noticeParticipantIds = (event: EventTournamentState | null) =>
+  !event || ["COMPLETED", "CANCELLED"].includes(event.status)
+    ? []
+    : event.participants.map((participant) => participant.userId);
 
 /** Resolve stored seat IDs against the event's current withdrawal flags. */
 const isSeatWithdrawn = (event: EventTournamentState, seatId: string | null) =>

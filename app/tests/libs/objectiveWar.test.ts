@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { MAP_RESERVED_SECTORS, WAR_OBJECTIVES_PER_SIDE } from "@/drizzle/constants";
 import type { War } from "@/drizzle/schema";
 import {
+  findMercenaryWarId,
   findObjectiveWarForSector,
   findShrineAttackWar,
   getVillageWarShrineAction,
@@ -141,6 +142,39 @@ it("removes expired contract identity and exclusivity before combat state is bui
   const [war] = withMercenaryParticipation([closed]);
   expect(war?.warMercenaries).toEqual([]);
   expect(war?.mercenaryWarIds).toEqual({});
+});
+
+describe("mercenary appointment lookup", () => {
+  const now = new Date("2026-11-20T12:00:00Z");
+  const openWar = (id: string, mercenaries: string[]) => ({
+    id,
+    status: "ACTIVE" as const,
+    endedAt: null,
+    attackerWarHealth: 100,
+    defenderWarHealth: 100,
+    rules: { ...defaultWarRules, durationDays: 3 },
+    combatStartedAt: new Date("2026-11-19T12:00:00Z"),
+    warMercenaries: mercenaries.map((userId) => ({ userId })),
+  });
+
+  it("names the open war holding the contract", () => {
+    const wars = [openWar("other", ["foe"]), openWar("hired", ["hero"])];
+    expect(findMercenaryWarId(wars, "hero", now)).toBe("hired");
+    expect(findMercenaryWarId(wars, "nobody", now)).toBeNull();
+  });
+
+  it("ignores contracts of expired, defeated, closed and rule-less wars", () => {
+    const hired = openWar("hired", ["hero"]);
+    for (const war of [
+      { ...hired, combatStartedAt: new Date("2026-11-17T11:59:59Z") },
+      { ...hired, defenderWarHealth: 0 },
+      { ...hired, status: "DRAW" as const },
+      { ...hired, endedAt: now },
+      { ...hired, rules: null },
+      { ...hired, combatStartedAt: null },
+    ])
+      expect(findMercenaryWarId([war], "hero", now)).toBeNull();
+  });
 });
 
 describe("shrine war lookup", () => {

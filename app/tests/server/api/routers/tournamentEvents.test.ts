@@ -212,6 +212,8 @@ describeWithDatabase("event tournament persistence", () => {
     if (!("tournamentId" in created)) throw new Error(created.message);
     const { tournamentId } = created;
     await staff.manageEvent({ tournamentId, action: "PUBLISH" });
+    // Cache the open events' seats before the invitations, which must refresh them.
+    expect(await first.getEventNotices()).toEqual([]);
     for (const userId of ["first", "second"])
       await staff.manageEvent({
         tournamentId,
