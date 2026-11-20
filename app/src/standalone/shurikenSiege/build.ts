@@ -6,7 +6,6 @@ import type { LpcCatalog } from "@/libs/lpc/catalog";
 export const SHURIKEN_SIEGE_TARGETS = [
   "web",
   "plain",
-  "crazygames",
   "poki",
   "gamedistribution",
   "youtube",

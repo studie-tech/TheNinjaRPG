@@ -35,21 +35,6 @@ export interface ShurikenSiegePortal {
   store: ShurikenSiegeStore;
 }
 
-interface CrazyGamesSdk {
-  init: () => Promise<void>;
-  game: {
-    loadingStop: () => void;
-    gameplayStart: () => void;
-    gameplayStop: () => void;
-  };
-  ad: {
-    requestAd: (
-      type: "midgame",
-      callbacks: { adStarted: () => void; adFinished: () => void; adError: () => void },
-    ) => void;
-  };
-}
-
 interface PokiSdk {
   init: () => Promise<void>;
   gameLoadingFinished: () => void;
@@ -82,7 +67,6 @@ interface YouTubePlayables {
 
 declare global {
   interface Window {
-    CrazyGames?: { SDK: CrazyGamesSdk };
     PokiSDK?: PokiSdk;
     gdsdk?: GameDistributionSdk;
     ytgame?: YouTubePlayables;
@@ -154,7 +138,6 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
   const pauseHost = (paused: boolean) => {
     for (const listener of pauseListeners) listener(paused);
   };
-  let crazy: CrazyGamesSdk | null = null;
   let poki: PokiSdk | null = null;
   let gd: GameDistributionSdk | null = null;
   // The Playables SDK is loaded before the game; it is a no-op outside YouTube.
@@ -164,10 +147,7 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
   let playing = false;
 
   const init = async () => {
-    if (target === "crazygames") {
-      const sdk = await waitFor(() => window.CrazyGames?.SDK);
-      if (sdk && (await succeeds(sdk.init()))) crazy = sdk;
-    } else if (target === "poki") {
+    if (target === "poki") {
       const sdk = await waitFor(() => window.PokiSDK);
       if (sdk && (await succeeds(sdk.init()))) poki = sdk;
     } else if (target === "gamedistribution") {
@@ -201,20 +181,7 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
   };
 
   const commercialBreak = async () => {
-    if (crazy) {
-      const sdk = crazy;
-      await new Promise<void>((resolve) => {
-        const done = () => {
-          holdAudioPlayback(false);
-          resolve();
-        };
-        sdk.ad.requestAd("midgame", {
-          adStarted: () => holdAudioPlayback(true),
-          adFinished: done,
-          adError: done,
-        });
-      });
-    } else if (poki) {
+    if (poki) {
       await poki
         .commercialBreak(() => holdAudioPlayback(true))
         .catch(() => undefined)
@@ -233,20 +200,17 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
   return {
     init,
     loadingFinished: () => {
-      crazy?.game.loadingStop();
       poki?.gameLoadingFinished();
       yt?.game.gameReady();
     },
     gameplayStart: () => {
-      if (playing || (!crazy && !poki)) return;
+      if (playing || !poki) return;
       playing = true;
-      crazy?.game.gameplayStart();
       poki?.gameplayStart();
     },
     gameplayStop: () => {
       if (!playing) return;
       playing = false;
-      crazy?.game.gameplayStop();
       poki?.gameplayStop();
     },
     commercialBreak,

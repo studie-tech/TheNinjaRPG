@@ -2,7 +2,7 @@
  * Build Shuriken Siege, the standalone tower defense game, as one zip per portal target.
  *
  * Usage (from app/, or `make shuriken-siege` from the repository root):
- *   bun run scripts/build-shuriken-siege.ts [--targets web,plain,crazygames,poki]
+ *   bun run scripts/build-shuriken-siege.ts [--targets web,plain,poki]
  *     [--source itch] [--version 1.0.0] [--api https://www.theninja-rpg.com]
  *     [--out ../dist/shuriken-siege] [--cache ~/.cache/shuriken-siege]
  *
@@ -65,11 +65,10 @@ const TERRAIN_SIZE = 29;
 
 /** Each target's links, and the portal SDK its page loads. */
 const TARGETS: Record<ShurikenSiegeTarget, { links: boolean; sdk?: string }> = {
-  // itch.io, Newgrounds, Armor Games: links back to TheNinja-RPG are welcome.
+  // itch.io, Newgrounds: links back to TheNinja-RPG are welcome.
   web: { links: true },
   // Portals that forbid outgoing links but need no SDK (Game Jolt, Y8, ...).
   plain: { links: false },
-  crazygames: { links: false, sdk: "https://sdk.crazygames.com/crazygames-sdk-v3.js" },
   poki: { links: false, sdk: "https://game-cdn.poki.com/scripts/v2/poki-sdk.js" },
   gamedistribution: {
     links: false,

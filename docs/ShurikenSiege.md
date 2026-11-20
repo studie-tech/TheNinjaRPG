@@ -57,22 +57,20 @@ The build:
 3. Bundles the game with Bun, builds its CSS with Tailwind, and writes `index.html`,
    `data.json`, `main.js`, `app.css` and `assets/`.
 
-A zip is about 27 MB and 270 files, inside every portal's limits. CrazyGames allows 250 MB,
-1,500 files and a 50 MB first download, or 20 MB to feature on mobile; Shuriken Siege
-loads its lobby before any enemy art.
+A zip is about 27 MB and 270 files, inside every portal's limits, and Shuriken Siege loads
+its lobby before any enemy art.
 
 ## Targets
 
 | Target | Links back | SDK | Use for |
 | --- | --- | --- | --- |
-| `web` | yes | none | itch.io, Newgrounds, Armor Games, our own site |
+| `web` | yes | none | itch.io, Newgrounds, our own site |
 | `plain` | no | none | Game Jolt, Y8 and other portals that forbid outgoing links |
-| `crazygames` | no | CrazyGames SDK v3 | CrazyGames |
 | `poki` | no | Poki SDK v2 | Poki |
 | `gamedistribution` | no | GameDistribution HTML5 SDK | GameDistribution and the sites it syndicates to |
 | `youtube` | no | YouTube Playables SDK v1 | YouTube Playables |
 
-The CrazyGames and Poki builds load their portal's SDK and report:
+The Poki build loads Poki's SDK and reports:
 
 - loading finished
 - gameplay start and stop: a pause, the perk draft, the results and the Guard Hall all
@@ -137,8 +135,6 @@ Every portal also has its own preview or QA tool, which runs the zip as players 
 | --- | --- | --- | --- |
 | itch.io | Dashboard, new project, "HTML" kind | `web` zip, "This file will be played in the browser", embed in a 16:9 frame with full-screen allowed | If itch.io asks about generative AI, declare the AI-generated artwork. |
 | Newgrounds | Portal, submit game, HTML5 | `web` zip | New games go through a community vote. |
-| Armor Games | Email mygame@armorgames.com | Link to the `web` build or zip, with how to play | State that the artwork is AI-generated and which tools made it. |
-| CrazyGames | Developer portal, submit game | `crazygames` zip, landscape, desktop and mobile | Basic Launch first. Full Launch also asks for SDK ads and CrazyGames account progress, which this build does not do yet. |
 | Poki | Apply on Poki for Developers | `poki` zip once invited | Poki prefers web exclusivity. Review their thumbnails and the Inspector before submitting. |
 | Game Jolt | Add game, browser build | `plain` zip | No links to other versions of the game. |
 | GameDistribution | Developer portal, add game | `gamedistribution` zip, built with the game ID from that page | Their QA tool checks the preroll ad and the pause events before the game is distributed. |
@@ -158,7 +154,7 @@ always snapshots the current live roster and media.
    with each linking portal's `SOURCE`.
 3. Test the build as above.
 4. Upload each zip as a new version on its portal. itch.io and Newgrounds replace the file
-   in place. CrazyGames, Poki, GameDistribution and YouTube review a new version before it
+   in place. Poki, GameDistribution and YouTube review a new version before it
    goes live.
 
 Players keep their progress across versions: the storage keys and the progress format
