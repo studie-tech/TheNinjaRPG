@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useGameScene } from "@/hooks/game-scene";
 import { maskBattle } from "@/libs/combat/masking";
 import { isBattleInLobby } from "@/libs/combat/util";
+import { MUTATION_RATE_LIMIT_MESSAGE } from "@/libs/rateLimitMessages";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { userBattleAtom } from "@/utils/UserContext";
 import { makeCompleteBattle } from "../setup/combat";
@@ -316,6 +317,76 @@ it("resolves nothing autonomously until a visible field can show it", () => {
   expect(actions).toBe(2);
 });
 
+it.each(["attack", undefined])(
+  "settles throttled combat requests and shows retry guidance only for manual action %s",
+  (actionId) => {
+    const handlers = sliceCall(
+      source,
+      /const \{\s*mutate: mutateAction,\s*isPending\s*\}\s*=\s*api\.combat\.performAction\.useMutation\(/,
+    );
+    const battle = { id: "throttled-battle", version: 1 };
+    let state = { battle, result: null, isPending: true };
+    const actionInFlightRef = { current: true };
+    let pendingAction: string | undefined = actionId;
+    let tutorialAdvances = 0;
+    const toasts: object[] = [];
+    const settlements: unknown[][] = [];
+    const error = {
+      message: MUTATION_RATE_LIMIT_MESSAGE,
+      data: { code: "TOO_MANY_REQUESTS" },
+    };
+    const input = { battleId: battle.id, actionId };
+    let options!: {
+      onError: (failure: typeof error, variables: typeof input) => void;
+      onSettled: (
+        data: undefined,
+        failure: typeof error,
+        variables: typeof input,
+      ) => void;
+    };
+    runInScope(handlers, {
+      api: {
+        combat: {
+          performAction: {
+            useMutation: (value: typeof options) => {
+              options = value;
+              return {};
+            },
+          },
+        },
+      },
+      battleRef: { current: battle },
+      actionInFlightRef,
+      setPendingAction: (value: string | undefined) => {
+        pendingAction = value;
+      },
+      setBattleState: (update: (current: typeof state) => typeof state) => {
+        state = update(state);
+      },
+      showMutationToast: (toast: object) => toasts.push(toast),
+      settleAction: (...args: unknown[]) => settlements.push(args),
+      currentStep: { onCombatWin: "next-step" },
+      handleNextStepAsync: async () => {
+        tutorialAdvances++;
+      },
+    });
+    document.body.style.cursor = "wait";
+    options.onError(error, input);
+    options.onSettled(undefined, error, input);
+    expect(state).toEqual({ battle, result: null, isPending: false });
+    expect(actionInFlightRef.current).toBe(false);
+    expect(pendingAction).toBeUndefined();
+    expect(document.body.style.cursor).toBe("default");
+    expect(settlements).toEqual([
+      [battle.id, { battle: undefined, result: undefined }, true],
+    ]);
+    expect(toasts).toEqual(
+      actionId ? [{ success: false, message: MUTATION_RATE_LIMIT_MESSAGE }] : [],
+    );
+    expect(tutorialAdvances).toBe(0);
+  },
+);
+
 it.each([false, true])(
   "displays committed rewards before history recovery and retains them if recovery fails=%s",
   async (fails) => {
@@ -332,7 +403,7 @@ it.each([false, true])(
     } = { battle, result: null, isPending: true };
     let options!: {
       onSuccess: (data: object, input: object, context: object) => Promise<void>;
-      onError: () => void;
+      onError: (error: Error, input: { battleId: string }) => void;
     };
     const { promise: held, resolve: finish } = deferred<void>();
     const events: string[] = [];
@@ -391,7 +462,7 @@ it.each([false, true])(
     finish();
     if (fails) {
       await expect(pending).rejects.toThrow("History unavailable");
-      options.onError();
+      options.onError(new Error("History unavailable"), { battleId: battle.id });
       expect(state.result).toBe(result);
     } else {
       await pending;

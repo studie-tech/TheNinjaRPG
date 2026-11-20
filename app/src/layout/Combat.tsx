@@ -377,7 +377,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         !!error || (!!data?.updateClient && !data.battleUpdate),
       );
     },
-    onError: () => {
+    onError: (error, input) => {
       actionInFlightRef.current = false;
       setPendingAction(undefined);
       setBattleState((current) =>
@@ -385,6 +385,10 @@ const Combat: React.FC<CombatProps> = (props) => {
           ? { ...current, isPending: false }
           : { battle: battleRef.current, result: null, isPending: false },
       );
+      // Manual actions need retry guidance; the actionless AI driver retries itself.
+      if (input.actionId && error.data?.code === "TOO_MANY_REQUESTS") {
+        showMutationToast({ success: false, message: error.message });
+      }
     },
     onSuccess: async (data, _variables, context) => {
       actionInFlightRef.current = false;
