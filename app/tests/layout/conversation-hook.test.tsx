@@ -10,10 +10,15 @@ import {
 } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import * as client from "@/app/_trpc/client";
+import {
+  CONVERSATION_MAX_QUOTES,
+  conversationQuoteLimitMessage,
+} from "@/drizzle/constants";
 import * as sanitizerLoader from "@/hooks/useHtmlSanitizer";
 import * as media from "@/hooks/useMediaQuery";
 import { useConversation } from "@/layout/Conversation";
 import * as pagination from "@/libs/pagination";
+import * as toastModule from "@/libs/toast";
 import * as sanitizeModule from "@/utils/sanitize";
 import * as userContext from "@/utils/UserContext";
 import {
@@ -170,6 +175,24 @@ it("toggles quotes in order and drops a deleted comment's quote", async () => {
   expect(hook.result.current.allComments?.map((comment) => comment.id)).toEqual([]);
   act(() => hook.result.current.toggleQuoteId("a"));
   expect(hook.result.current.quoteIds).toEqual(["a"]);
+});
+
+it("keeps quotes within the message limit while removals stay available", async () => {
+  const toast = vi.spyOn(toastModule, "showMutationToast").mockImplementation(() => {});
+  const hook = mount();
+  await loaded(hook);
+  const ids = Array.from({ length: CONVERSATION_MAX_QUOTES + 1 }, (_, i) => `q${i}`);
+  for (const id of ids) act(() => hook.result.current.toggleQuoteId(id));
+  expect(hook.result.current.quoteIds).toEqual(ids.slice(0, CONVERSATION_MAX_QUOTES));
+  expect(toast).toHaveBeenCalledTimes(1);
+  expect(toast.mock.calls[0]?.[0]).toMatchObject({
+    success: false,
+    message: conversationQuoteLimitMessage,
+  });
+  act(() => hook.result.current.toggleQuoteId("q0"));
+  act(() => hook.result.current.toggleQuoteId(ids.at(-1) ?? ""));
+  expect(hook.result.current.quoteIds).toEqual(ids.slice(1));
+  toast.mockRestore();
 });
 
 it("shows other typists, forgets them after a pause, and announces own typing at most every two seconds", async () => {

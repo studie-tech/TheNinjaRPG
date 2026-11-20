@@ -11,19 +11,19 @@ import {
   GUIDE_HUB_CATEGORY_ORDER,
   IMG_MANUAL_COMBAT,
 } from "@/drizzle/constants";
-import type { GuideArticle } from "@/drizzle/schema";
 import { useNavigationRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import NavTabs from "@/layout/NavTabs";
 import { showMutationToast } from "@/libs/toast";
+import type { GuideSummary } from "@/queries/guide";
 import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserDataSelector } from "@/utils/UserContext";
 
 interface GuideHubProps {
-  articles: GuideArticle[];
+  articles: GuideSummary[];
 }
 
 const ALL_TAB = "All";
@@ -246,7 +246,7 @@ const GuideHubIntro: React.FC = () => (
   </p>
 );
 
-const GuideCard: React.FC<{ article: GuideArticle; isStaff: boolean }> = ({
+const GuideCard: React.FC<{ article: GuideSummary; isStaff: boolean }> = ({
   article,
   isStaff,
 }) => {

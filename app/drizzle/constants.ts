@@ -2954,6 +2954,9 @@ export const MAX_MUTED_CONVERSATIONS = 100;
 export const MESSAGING_MIN_LEVEL = 3;
 /** Recipients a player can add when starting a conversation. */
 export const CONVERSATION_MAX_USERS = 5;
+/** Earlier messages a player can quote in one conversation message. */
+export const CONVERSATION_MAX_QUOTES = 5;
+export const conversationQuoteLimitMessage = `You can quote at most ${CONVERSATION_MAX_QUOTES} messages at once`;
 export const FORUM_MIN_LEVEL = 3;
 export const AUCTION_HOUSE_MIN_LEVEL = 15;
 export const REP_TRADE_MIN_LEVEL = 15;

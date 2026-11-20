@@ -9,6 +9,7 @@ import {
   findForumActor,
   findForumPostWithThread,
   findUserDataForFetchForumPageData,
+  forumBoardIdsByName,
   forumPostPosition,
   listForumBoards,
   listForumGrants,
@@ -160,72 +161,56 @@ export const getInfiniteThreads = async (props: {
   view?: string;
 }) => {
   const context = props.context ?? (await getForumContext(props.client));
-  const board = context.boards.find((b) =>
-    props.boardId ? b.id === props.boardId : b.name === props.boardName,
-  );
-  if ((props.boardId || props.boardName) && !board?.permissions.read)
-    return { board: null, threads: [], nextCursor: null };
-  const allowed = context.boards.filter(
-    (b) => b.permissions.read && (!board || b.id === board.id),
-  );
-  if (
-    allowed.length === 0 ||
-    (["mine", "unread", "watched"].includes(props.view ?? "") && !context.actor)
-  )
-    return { board: board ?? null, threads: [], nextCursor: null };
-  const threads = await listForumThreads(props.client, {
-    boards: allowed.map((b) => b.id),
-    offset: (props.cursor ?? 0) * props.limit,
-    limit: props.limit + 1,
-    query: props.query,
-    author: props.author,
-    since: props.since,
-    until: props.until,
-    tag: props.tag,
-    view: props.view,
-    userId: context.actor?.userId,
-    pinned: props.highlightPinned,
-  });
-  return {
-    board: board ?? null,
-    threads: threads.slice(0, props.limit).map(({ readPositions, ...thread }) => {
-      const read = readPositions[0];
-      return {
-        ...thread,
-        boardName: allowed.find((b) => b.id === thread.boardId)?.name ?? "Forum",
-        unread:
-          !!context.actor &&
-          (!read ||
-            read.readAt < thread.updatedAt ||
-            (read.readAt.getTime() === thread.updatedAt.getTime() &&
-              !!thread.lastPostId &&
-              read.postId < thread.lastPostId)),
-        resumePostId: read?.postId ?? null,
-      };
-    }),
-    nextCursor: threads.length > props.limit ? (props.cursor ?? 0) + 1 : null,
-  };
+  const scope = forumThreadScope(context, props);
+  const threads =
+    scope.allowed.length === 0
+      ? []
+      : await listForumThreads(props.client, {
+          boards: scope.allowed.map((b) => b.id),
+          offset: (props.cursor ?? 0) * props.limit,
+          limit: props.limit + 1,
+          query: props.query,
+          author: props.author,
+          since: props.since,
+          until: props.until,
+          tag: props.tag,
+          view: props.view,
+          userId: context.actor?.userId,
+          pinned: props.highlightPinned,
+        });
+  return forumThreadPage(context, scope, threads, props.limit, props.cursor);
 };
 export type InfiniteThreads = ReturnType<typeof getInfiniteThreads>;
-/** Load a named game destination through the same forum access rules as the interactive pages. */
+/**
+ * Load a named game destination through the same forum access rules as the interactive pages.
+ * Access and the board's first topics load in one wave; topics leave only after the read check.
+ */
 export const fetchForumPageData = async (
   client: DrizzleClient,
   boardName: string,
   userId: string | null,
 ) => {
-  const [context, userRow] = await Promise.all([
+  const [context, userRow, threads] = await Promise.all([
     getForumContext(client, userId),
     userId ? findUserDataForFetchForumPageData(client, userId) : null,
+    listForumThreads(client, {
+      boards: forumBoardIdsByName(client, boardName),
+      offset: 0,
+      limit: FANCY_FORUM_THREADS_PER_PAGE + 1,
+      userId: userId ?? undefined,
+      pinned: true,
+    }),
   ]);
-  const initialThreads = await getInfiniteThreads({
-    client,
-    boardName,
-    limit: FANCY_FORUM_THREADS_PER_PAGE,
-    highlightPinned: true,
-    context,
-  });
+  const scope = forumThreadScope(context, { boardName });
+  const readable = threads.filter((t) => scope.allowed.some((b) => b.id === t.boardId));
   return {
-    initialThreads,
+    initialThreads: forumThreadPage(
+      context,
+      scope,
+      readable,
+      FANCY_FORUM_THREADS_PER_PAGE,
+      0,
+    ),
     userData: userRow ?? null,
     canPost: userRow ? canCreateNews(userRow.role) : null,
   };
@@ -366,6 +351,55 @@ const applyPostingRestriction = (
   restriction && restriction.expiresAt > new Date()
     ? { ...permissions, create: false, reply: false, edit: false, vote: false }
     : permissions;
+
+/** The requested board and the readable boards a listing may draw from; none when access or identity is missing. */
+const forumThreadScope = (
+  context: ForumContext,
+  props: { boardId?: string; boardName?: string; view?: string },
+) => {
+  const board = context.boards.find((b) =>
+    props.boardId ? b.id === props.boardId : b.name === props.boardName,
+  );
+  if ((props.boardId || props.boardName) && !board?.permissions.read)
+    return { board: null, allowed: [] };
+  const needsActor = ["mine", "unread", "watched"].includes(props.view ?? "");
+  return {
+    board: board ?? null,
+    allowed:
+      needsActor && !context.actor
+        ? []
+        : context.boards.filter(
+            (b) => b.permissions.read && (!board || b.id === board.id),
+          ),
+  };
+};
+
+/** Trim listed topics to one page and attach board names with this account's unread/resume state. */
+const forumThreadPage = (
+  context: ForumContext,
+  scope: ReturnType<typeof forumThreadScope>,
+  threads: Awaited<ReturnType<typeof listForumThreads>>,
+  limit: number,
+  cursor?: number | null,
+) => ({
+  board: scope.board,
+  threads: threads.slice(0, limit).map(({ readPositions, ...thread }) => {
+    const read = context.actor ? readPositions[0] : undefined;
+    return {
+      ...thread,
+      boardName: scope.allowed.find((b) => b.id === thread.boardId)?.name ?? "Forum",
+      unread:
+        !!context.actor &&
+        (!read ||
+          read.readAt < thread.updatedAt ||
+          (read.readAt.getTime() === thread.updatedAt.getTime() &&
+            !!thread.lastPostId &&
+            read.postId < thread.lastPostId)),
+      resumePostId: read?.postId ?? null,
+    };
+  }),
+  nextCursor: threads.length > limit ? (cursor ?? 0) + 1 : null,
+});
 
 type ForumStructure = Awaited<ReturnType<typeof loadForumStructure>>;
 type ForumAccess = Awaited<ReturnType<typeof loadForumAccess>>;

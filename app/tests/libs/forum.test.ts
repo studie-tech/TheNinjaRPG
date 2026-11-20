@@ -98,6 +98,10 @@ describeWithDatabase("forum page snapshots", () => {
       "old",
     ]);
     expect(measured.statements.length).toBeLessThanOrEqual(7);
+    expect(measured.roundTrips).toBe(1);
+    expect(
+      (await recordQueries(() => fetchForumPageData(client, "News", null))).roundTrips,
+    ).toBe(1);
     expect((await fetchForumPageData(client, "News", null)).canPost).toBeNull();
     expect(
       (await fetchForumPageData(client, "News", "unregistered")).userData,
@@ -139,9 +143,11 @@ describeWithDatabase("forum page snapshots", () => {
       const seeded = await fetchForumPageData(client, name, "member");
       expect(seeded.initialThreads.board?.name).toBe(name);
       expect(seeded.initialThreads.threads.length).toBeGreaterThan(0);
-      expect(
-        (await fetchForumPageData(client, name, null)).initialThreads.board,
-      ).toBeNull();
+      expect((await fetchForumPageData(client, name, null)).initialThreads).toEqual({
+        board: null,
+        threads: [],
+        nextCursor: null,
+      });
       expect(
         (await fetchForumPageData(client, name, "unregistered")).initialThreads.board,
       ).toBeNull();
@@ -153,9 +159,9 @@ describeWithDatabase("forum page snapshots", () => {
       .update(forumBoard)
       .set({ policy: { view: "STAFF", read: "STAFF" } })
       .where(eq(forumBoard.id, "news"));
-    expect(
-      (await fetchForumPageData(client, "News", "member")).initialThreads.board,
-    ).toBeNull();
+    expect((await fetchForumPageData(client, "News", "member")).initialThreads).toEqual(
+      { board: null, threads: [], nextCursor: null },
+    );
   });
 
   it("loads only the current reader's listed topic positions in one statement", async () => {
