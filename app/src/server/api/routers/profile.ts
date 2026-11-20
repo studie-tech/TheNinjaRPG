@@ -1545,6 +1545,7 @@ export const profileRouter = createTRPCRouter({
         ),
         insertActionLogForUpdateUser2(ctx.drizzle, ctx, diff, target, input),
       ]);
+      if (target.isAi) await invalidateSectorPlacements();
       if (rankChanged && target.recruiterId) {
         await awardRecruitRankMilestonesSafely({
           client: ctx.drizzle,
