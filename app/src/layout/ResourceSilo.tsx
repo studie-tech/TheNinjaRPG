@@ -26,6 +26,7 @@ export const ResourceSilo = () => {
       title="Resource Silo"
       subtitle="War-Torn Sector · Friday–Sunday UTC"
       defaultBackHref="/travel"
+      initialBreak={false}
     >
       <p className="mb-3 text-sm">
         A silo opens every {RESOURCE_SILO_INTERVAL_HOURS} hours for{" "}

@@ -213,7 +213,7 @@ export default function Shrine() {
           <RaidBrowser
             title="Defeat the Raid Boss!"
             subtitle="Complete to claim sector"
-            initialBreak={false}
+            initialBreak={hasResourceSilo}
             sectorFilter={userData.sector}
           />
         ) : (
@@ -222,6 +222,7 @@ export default function Shrine() {
             title="Sector Ready to Claim!"
             subtitle={`Sector ${userData.sector}`}
             defaultBackHref={hasResourceSilo ? undefined : "/travel"}
+            initialBreak={hasResourceSilo}
           >
             <div className="space-y-4 text-center">
               <Image
@@ -267,13 +268,14 @@ export default function Shrine() {
   );
 
   return (
-    <div className="space-y-8">
+    <div>
       {hasResourceSilo && <ResourceSilo />}
       {hasNoActiveWars && (
         <ContentBox
           title={`Lvl. ${sectorData.sectorData?.shrineLevel || 1} Shrine`}
           subtitle={sectorData.sectorData ? "Sector is Claimed" : "Unclaimed Sector"}
           defaultBackHref={hasResourceSilo ? undefined : "/travel"}
+          initialBreak={hasResourceSilo}
           topRightContent={<WarFieldActions />}
         >
           {canShowMpvpOption || isUserQueuedForThisSector ? (
@@ -340,6 +342,7 @@ export default function Shrine() {
           title="Your Wars"
           subtitle={`Sector ${userData.sector}`}
           defaultBackHref={hasResourceSilo ? undefined : "/travel"}
+          initialBreak={hasResourceSilo}
           topRightContent={<WarFieldActions />}
         >
           <Tabs defaultValue="solo" className="w-full">
@@ -420,6 +423,7 @@ export default function Shrine() {
         <ContentBox
           title="Competing Wars"
           subtitle="Other villages trying to claim sector"
+          initialBreak={hasResourceSilo || userWars.length > 0}
           topRightContent={userWars.length === 0 ? <WarFieldActions /> : undefined}
         >
           <div className="divide-y">
@@ -437,7 +441,7 @@ export default function Shrine() {
         </ContentBox>
       )}
 
-      <RamenShop subtitle={SHRINE_RAMEN_SUBTITLE} />
+      <RamenShop initialBreak={true} subtitle={SHRINE_RAMEN_SUBTITLE} />
     </div>
   );
 }
