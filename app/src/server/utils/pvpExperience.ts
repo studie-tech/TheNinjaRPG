@@ -38,9 +38,9 @@ const pvpExperienceAverage = createRuntimeCache({
 /**
  * Average PvP experience of human players (AI templates excluded), as a game setting.
  *
- * Served from the Runtime Cache; a miss issues one query shared by every concurrent
- * caller, and a failed query is not cached. `scopedRead` still shares the result across
- * the procedures of one tRPC batch.
+ * Served from the Runtime Cache; concurrent misses for the same version on one
+ * instance share a query, and a failed query is not cached. `scopedRead` shares the
+ * result across the procedures of one tRPC batch.
  */
 export const fetchPvpExperienceAverage = (
   client: Pick<DrizzleClient, "select">,

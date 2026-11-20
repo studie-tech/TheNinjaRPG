@@ -29,9 +29,10 @@ const invalidators = new Set<() => Promise<void>>();
  *
  * Each call reads the version key and answers from this instance's memory when it holds
  * that version and the rows are younger than `ttlSeconds`; otherwise it reads the stored
- * payload, or the database and stores the result. Concurrent misses share one read and
- * failed reads are never cached. `invalidate` names a new version after a write, so every
- * instance reads the saved rows on its next version read: the next call, or with
+ * payload, or the database and stores the result. Concurrent misses on one instance
+ * share one read and failed reads are never cached. `invalidate` names a new version
+ * after a write, so every instance reads the saved rows on its next version read:
+ * the next call, or with
  * `memorySeconds` the first call after that window. While the Runtime Cache fails, reads go
  * to the database. Callers receive a structured clone unless `cloneReads` is false, so
  * per-user rewrites of the rows stay private.
