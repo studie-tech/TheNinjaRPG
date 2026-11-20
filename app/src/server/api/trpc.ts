@@ -20,6 +20,10 @@ import {
   ISOLATED_PYRAMID_MESSAGE,
   isPyramidRestrictedProcedure,
 } from "@/libs/questRun";
+import {
+  MUTATION_RATE_LIMIT_MESSAGE,
+  QUERY_RATE_LIMIT_MESSAGE,
+} from "@/libs/rateLimitMessages";
 import { canAttachTrpcInput } from "@/libs/trpcLogging";
 import { trpcSessionUserId } from "@/libs/trpcSession";
 import {
@@ -152,14 +156,6 @@ export const deferredRatelimitMiddleware = t.middleware(
     }
   },
 );
-
-/** Player-facing message for a rate-limited read. */
-export const QUERY_RATE_LIMIT_MESSAGE =
-  "Too many requests for this page. Please wait a moment and try again.";
-
-/** Player-facing message for a rate-limited action. */
-export const MUTATION_RATE_LIMIT_MESSAGE =
-  "You're moving too fast! Please wait a moment and try again.";
 
 /**
  * Sliding-window rate limit keyed per procedure path + identity (userId, or IP

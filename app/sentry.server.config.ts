@@ -4,6 +4,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { stripQueryMetricUserAttributes } from "@/libs/queryTelemetry";
+import { RATE_LIMIT_MESSAGES } from "@/libs/rateLimitMessages";
 import { SENTRY_BASE_OPTIONS } from "@/libs/sentryOptions";
 
 Sentry.init({
@@ -17,6 +18,9 @@ Sentry.init({
   ignoreErrors: [
     "Unauthorized for tRPC endpoint",
     "You are acting too fast",
+    // UX: the tRPC provider and manual combat actions show retry guidance. Combat
+    // keeps the battle visible, clears pending state and lets its automatic driver retry.
+    ...RATE_LIMIT_MESSAGES,
     // Stale client after a deployment: the router state tree's last element used
     // to be a boolean and is now a number, so a browser still running the
     // previous build fails Next's schema check on every RSC request. UX: the

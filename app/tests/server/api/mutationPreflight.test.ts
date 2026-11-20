@@ -6,6 +6,10 @@ import {
   isPyramidRestrictedProcedure,
   SELF_GUARDED_PYRAMID_PROCEDURES,
 } from "@/libs/questRun";
+import {
+  MUTATION_RATE_LIMIT_MESSAGE,
+  QUERY_RATE_LIMIT_MESSAGE,
+} from "@/libs/rateLimitMessages";
 import { combatRouter } from "@/server/api/routers/combat";
 import { homeRouter } from "@/server/api/routers/home";
 import { fetchUserItems } from "@/server/api/routers/item";
@@ -13,10 +17,6 @@ import { miscRouter } from "@/server/api/routers/misc";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { travelRouter } from "@/server/api/routers/travel";
-import {
-  MUTATION_RATE_LIMIT_MESSAGE,
-  QUERY_RATE_LIMIT_MESSAGE,
-} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { deferred } from "../../setup/deferred";
 import { resetServerModuleStubs } from "../../setup/serverModules";
