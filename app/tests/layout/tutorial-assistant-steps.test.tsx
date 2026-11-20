@@ -10,6 +10,7 @@ import type * as TutorialHooks from "@/hooks/tutorial";
 import * as abVariant from "@/hooks/useAbVariant";
 import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
+import Modal from "@/layout/Modal";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { dialogChoiceContentId } from "@/libs/objectives";
 import * as tutorialPlacement from "@/libs/tutorial";
@@ -879,6 +880,17 @@ describe("quest steps", () => {
     const placement = vi.spyOn(tutorialPlacement, "getTutorialPortraitSide");
     spies.push(placement);
     const modalBox = new DOMRect(350, 250, 500, 220);
+    const getBox = HTMLElement.prototype.getBoundingClientRect;
+    spies.push(
+      vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          if (this.id === "tutorial-auto-travel-content") return modalBox;
+          if (this.id === "tutorial-auto-travel-proceed")
+            return new DOMRect(650, 400, 120, 40);
+          return getBox.call(this);
+        }),
+    );
     const index = TUTORIAL_STEPS.findIndex(
       (step) => step.id === "mission-travel-to-pup",
     );
@@ -886,14 +898,16 @@ describe("quest steps", () => {
       index,
       { sector: 301, level: 3 },
       undefined,
-      <div
+      <Modal
         id="tutorial-auto-travel"
-        ref={(element) => {
-          if (element) element.getBoundingClientRect = () => modalBox;
-        }}
+        title="Auto Travel"
+        isOpen
+        setIsOpen={() => {}}
+        proceed_label="Travel"
+        onAccept={() => {}}
       >
-        <Target id="tutorial-auto-travel-proceed" />
-      </div>,
+        Travel to the destination sector?
+      </Modal>,
     );
     await waitFor(() =>
       expect(placement.mock.calls.some(([input]) => input.avoid === modalBox)).toBe(

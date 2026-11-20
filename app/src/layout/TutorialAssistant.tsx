@@ -1834,7 +1834,7 @@ const useHighlightPlacement = ({
         // Keep the destination text clear as well as the confirmation's Travel button.
         portraitAvoidBox:
           highlightInfo.element
-            .closest("#tutorial-auto-travel")
+            .closest("#tutorial-auto-travel-content")
             ?.getBoundingClientRect() ?? rect,
         top: rect.top,
         left: rect.left,
