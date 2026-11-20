@@ -29,7 +29,7 @@ export const deferDiffuseDamage = (
   }
   for (const target of users) {
     const total = incoming.get(target.userId) ?? 0;
-    if (total <= 0 || total >= target.curHealth) continue;
+    if (total <= 0) continue;
     // Overlapping Diffuse effects use the strongest percentage, never an additive 100% deferral.
     const effect = effects
       .filter((e) => e.type === "diffuse" && e.targetId === target.userId)
@@ -37,6 +37,15 @@ export const deferDiffuseDamage = (
         (a, b) => getPower(b).power - getPower(a).power || a.id.localeCompare(b.id),
       )[0];
     if (effect?.type !== "diffuse") continue;
+    if (total >= target.curHealth) {
+      // Tell the holder why an active Diffuse let this hit through in full.
+      messages.push({
+        txt: `${target.username}'s diffuse can't soften a lethal blow`,
+        color: "blue",
+        types: ["diffuse"],
+      });
+      continue;
+    }
     const fraction =
       Math.min(DIFFUSE_MAX_PERCENTAGE, Math.max(0, getPower(effect).power)) / 100;
     if (fraction <= 0) continue;
