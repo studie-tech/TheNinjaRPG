@@ -5,10 +5,7 @@ import { selectBloodlineDefinitions, selectJutsuDefinitions } from "@/queries/ju
 import type { DrizzleClient } from "@/server/db";
 import { createRuntimeEntryCache } from "@/server/utils/runtimeCache";
 
-/**
- * Item definitions of inventory reads. The Runtime Cache name and keys match the profile
- * read's item definitions, so both share stored entries.
- */
+/** Item definitions shared by inventory reads. */
 export const itemDefinitions = createDefinitionCache<Item>({
   name: "item-definition",
   memoryLimit: 2000,
