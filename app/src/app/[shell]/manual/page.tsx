@@ -28,6 +28,7 @@ import {
   IMG_MANUAL_REWARDS,
   IMG_MANUAL_SAGE_MODE,
   IMG_MANUAL_SKILLTREE,
+  IMG_MANUAL_SPLASH,
   IMG_MANUAL_STAFF,
   IMG_MANUAL_TITLE,
   IMG_MANUAL_TOURNAMENTS,
@@ -59,7 +60,7 @@ export default function ManualMain() {
     {
       name: "splash",
       label: "Welcome board",
-      img: IMG_MANUAL_REVIEW,
+      img: IMG_MANUAL_SPLASH,
       visible: canEditContent,
     },
     { name: "combat", label: "Combat", img: IMG_MANUAL_COMBAT },
