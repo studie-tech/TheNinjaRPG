@@ -12,6 +12,7 @@ import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { dialogChoiceContentId } from "@/libs/objectives";
+import * as tutorialPlacement from "@/libs/tutorial";
 import { getTutorialChapterProgress } from "@/libs/tutorial";
 import type * as TutorialSteps from "@/libs/tutorialSteps";
 import { parseHtml } from "@/utils/parse";
@@ -872,6 +873,33 @@ describe("quest steps", () => {
     show(pup, readyQuest(pup));
     act(() => vi.advanceTimersByTime(5000));
     expect(state.autoClaimRewards).not.toHaveBeenCalled();
+  });
+
+  it("keeps the portrait clear of the whole Auto Travel confirmation", async () => {
+    const placement = vi.spyOn(tutorialPlacement, "getTutorialPortraitSide");
+    spies.push(placement);
+    const modalBox = new DOMRect(350, 250, 500, 220);
+    const index = TUTORIAL_STEPS.findIndex(
+      (step) => step.id === "mission-travel-to-pup",
+    );
+    show(
+      index,
+      { sector: 301, level: 3 },
+      undefined,
+      <div
+        id="tutorial-auto-travel"
+        ref={(element) => {
+          if (element) element.getBoundingClientRect = () => modalBox;
+        }}
+      >
+        <Target id="tutorial-auto-travel-proceed" />
+      </div>,
+    );
+    await waitFor(() =>
+      expect(placement.mock.calls.some(([input]) => input.avoid === modalBox)).toBe(
+        true,
+      ),
+    );
   });
 
   it("starts a tutorial trip from the lesson in one tap", () => {

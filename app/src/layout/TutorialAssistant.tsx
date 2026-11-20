@@ -926,7 +926,11 @@ const PlayerTutorialAssistant: React.FC<
           onOpenDisableModal={openDisableModal}
           characterImage={characterImage}
           dodgeHighlight={panelDodgesHighlight}
-          avoidBox={highlight?.stepId === currentTutorialStep.id ? highlight : null}
+          avoidBox={
+            highlight?.stepId === currentTutorialStep.id
+              ? highlight.portraitAvoidBox
+              : null
+          }
           onOpenOrderingDialog={() => setShowOrderingDialog(true)}
           showOrderingButton={showPostTutorialQuest}
           footer={
@@ -1218,7 +1222,7 @@ const AssistantDialog: React.FC<{
   showOrderingButton?: boolean;
   /** Anchor to the top instead, to uncover a highlight it would otherwise sit on. */
   dodgeHighlight?: boolean;
-  /** The highlighted element, which Lemu's portrait must not stand over. */
+  /** The highlighted control or its confirmation, kept clear of Lemu's portrait. */
   avoidBox?: TutorialScreenBox | null;
   isBusy?: boolean;
   errorMessage?: string;
@@ -1698,6 +1702,7 @@ const useHighlightPlacement = ({
   const [highlight, setHighlight] = useState<{
     stepId: string;
     isPrimaryElement: boolean;
+    portraitAvoidBox: TutorialScreenBox;
     top: number;
     left: number;
     width: number;
@@ -1826,6 +1831,11 @@ const useHighlightPlacement = ({
       const next = {
         stepId: currentStepConfig.id,
         isPrimaryElement: highlightInfo.isPrimaryElement,
+        // Keep the destination text clear as well as the confirmation's Travel button.
+        portraitAvoidBox:
+          highlightInfo.element
+            .closest("#tutorial-auto-travel")
+            ?.getBoundingClientRect() ?? rect,
         top: rect.top,
         left: rect.left,
         width: rect.width,
@@ -1835,6 +1845,7 @@ const useHighlightPlacement = ({
         prev &&
         prev.stepId === next.stepId &&
         prev.isPrimaryElement === next.isPrimaryElement &&
+        isSameBox(prev.portraitAvoidBox, next.portraitAvoidBox) &&
         isSameBox(prev, next)
           ? prev
           : next,
