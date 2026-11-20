@@ -187,6 +187,7 @@ describeWithDatabase("quest reward inventory reconciliation", () => {
       };
       const leaf = { invalidate: vi.fn(async () => undefined) };
       const bindings = {
+        options: undefined,
         trackConversion: vi.fn(),
         prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
         prepareQuestRewardUpdate: vi.fn(),
