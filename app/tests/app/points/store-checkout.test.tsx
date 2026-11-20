@@ -13,7 +13,7 @@ type ButtonProps = {
   createOrder: () => Promise<string>;
   onApprove: (data: { orderID: string }) => Promise<void>;
   onCancel: () => void;
-  onError: () => void;
+  onError: (error: { message?: string }) => void;
 };
 
 let buttons: ButtonProps;
@@ -90,7 +90,7 @@ it("keeps the dialog pending while the PayPal window is open and releases a canc
   expect(pending.at(-1)).toBe(false);
   expect(view.getByText(/you can try again right away/)).toBeTruthy();
   // A second cancel or error for the same window does not release again.
-  act(() => buttons.onError());
+  act(() => buttons.onError({}));
   expect(release).toHaveBeenCalledTimes(1);
 });
 
@@ -110,7 +110,7 @@ it("keeps an approved checkout reserved for capture", async () => {
     await buttons.onApprove({ orderID: "PAYPALORDER123456" });
   });
   expect(capture).toHaveBeenCalledWith({ orderId: "PAYPALORDER123456" });
-  act(() => buttons.onError());
+  act(() => buttons.onError({}));
   view.unmount();
   expect(release).not.toHaveBeenCalled();
   expect(pending.at(-1)).toBe(false);
@@ -126,4 +126,102 @@ it("clears the pending state when the server refuses the checkout", async () => 
   expect(view.getByText("Limit reached")).toBeTruthy();
   view.unmount();
   expect(release).not.toHaveBeenCalled();
+});
+
+it.each(["cancel", "error", "unmount"])(
+  "releases a checkout prepared after %s without reopening the payment window",
+  async (action) => {
+    let finish!: (value: object) => void;
+    prepare.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { view, pending } = renderCheckout();
+    let creating!: Promise<string>;
+    act(() => {
+      creating = buttons.createOrder();
+    });
+    if (action === "unmount") view.unmount();
+    else act(() => (action === "cancel" ? buttons.onCancel() : buttons.onError({})));
+    await act(async () => {
+      finish({
+        success: true,
+        message: "Checkout ready",
+        orderId: "LATEORDER",
+        checkoutId: "late-checkout",
+      });
+      await expect(creating).rejects.toThrow("Checkout cancelled");
+    });
+    expect(release).toHaveBeenCalledWith({ checkoutId: "late-checkout" });
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(pending.at(-1)).toBe(false);
+    expect(view.queryByText(/Finish paying in the PayPal window/)).toBeNull();
+    view.unmount();
+    expect(release).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("releases a superseded creation without replacing the current checkout", async () => {
+  let finish!: (value: object) => void;
+  prepare.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { view, pending } = renderCheckout();
+  let first!: Promise<string>;
+  act(() => {
+    first = buttons.createOrder();
+  });
+  await act(async () => {
+    await buttons.createOrder();
+  });
+  await act(async () => {
+    finish({
+      success: true,
+      message: "Checkout ready",
+      orderId: "OLDORDER",
+      checkoutId: "old-checkout",
+    });
+    await expect(first).rejects.toThrow("Checkout cancelled");
+  });
+  expect(release).toHaveBeenCalledWith({ checkoutId: "old-checkout" });
+  act(() => buttons.onError({ message: "Checkout cancelled" }));
+  expect(pending.at(-1)).toBe(true);
+  expect(view.getByText(/Finish paying in the PayPal window/)).toBeTruthy();
+  act(() => buttons.onCancel());
+  expect(release).toHaveBeenLastCalledWith({ checkoutId: "snapshot-1" });
+  expect(release).toHaveBeenCalledTimes(2);
+  expect(pending.at(-1)).toBe(false);
+});
+
+it("does not clear a newer checkout when a superseded creation fails", async () => {
+  let fail!: (error: Error) => void;
+  prepare.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  const { view, pending } = renderCheckout();
+  let first!: Promise<string>;
+  act(() => {
+    first = buttons.createOrder();
+  });
+  await act(async () => {
+    await buttons.createOrder();
+  });
+  await act(async () => {
+    fail(new Error("Preparation failed"));
+    await expect(first).rejects.toThrow("Checkout cancelled");
+  });
+  act(() => buttons.onError({ message: "Checkout cancelled" }));
+  expect(pending.at(-1)).toBe(true);
+  expect(view.getByText(/Finish paying in the PayPal window/)).toBeTruthy();
+  act(() => buttons.onCancel());
+  expect(release).toHaveBeenCalledWith({ checkoutId: "snapshot-1" });
+  expect(release).toHaveBeenCalledTimes(1);
 });

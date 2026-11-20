@@ -35,18 +35,25 @@ export function StoreCheckout({
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const utils = api.useUtils();
   const prepare = api.paypal.createStoreOrder.useMutation();
-  // Snapshot id of the checkout whose PayPal window is open and not yet approved.
-  const openCheckout = useRef<string | undefined>(undefined);
+  // Track the attempt before preparation so cancellation also releases late results.
+  const openCheckout = useRef<CheckoutAttempt | undefined>(undefined);
   const [isWindowOpen, setIsWindowOpen] = useState(false);
-  const release = useCallback(() => {
-    const checkoutId = openCheckout.current;
-    openCheckout.current = undefined;
-    setIsWindowOpen(false);
-    if (checkoutId)
-      void utils.client.paypal.releaseStoreOrder
-        .mutate({ checkoutId })
-        .catch(() => undefined);
-  }, [utils]);
+  const release = useCallback(
+    (attemptToRelease?: CheckoutAttempt) => {
+      const attempt = attemptToRelease ?? openCheckout.current;
+      const checkoutId = attempt?.checkoutId;
+      if (attempt) attempt.checkoutId = undefined;
+      if (openCheckout.current === attempt) {
+        openCheckout.current = undefined;
+        setIsWindowOpen(false);
+      }
+      if (checkoutId)
+        void utils.client.paypal.releaseStoreOrder
+          .mutate({ checkoutId })
+          .catch(() => undefined);
+    },
+    [utils],
+  );
   // Closing the dialog unmounts the buttons (and PayPal's window): free that checkout too.
   const releaseRef = useRef<() => void>(undefined);
   useEffect(() => {
@@ -121,19 +128,29 @@ export function StoreCheckout({
           createOrder={async () => {
             setMessage(undefined);
             if (!recipientId) throw new Error("Choose a recipient");
+            release();
+            const attempt: CheckoutAttempt = {};
+            openCheckout.current = attempt;
             setIsWindowOpen(true);
             const result = await prepare
               .mutateAsync({ selection, recipientId })
               .catch((error: unknown) => {
-                setIsWindowOpen(false);
+                if (openCheckout.current !== attempt)
+                  throw new Error(CHECKOUT_CANCELLED_MESSAGE);
+                release(attempt);
                 throw error;
               });
+            if (result.success && "orderId" in result)
+              attempt.checkoutId = result.checkoutId;
+            if (openCheckout.current !== attempt) {
+              release(attempt);
+              throw new Error(CHECKOUT_CANCELLED_MESSAGE);
+            }
             if (!result.success || !("orderId" in result)) {
-              setIsWindowOpen(false);
+              release(attempt);
               setMessage(result.message);
               throw new Error(result.message);
             }
-            openCheckout.current = result.checkoutId;
             return result.orderId;
           }}
           onApprove={async (data) => {
@@ -149,7 +166,9 @@ export function StoreCheckout({
               "Checkout cancelled. No payment was taken, and you can try again right away.",
             );
           }}
-          onError={() => {
+          onError={(error) => {
+            // PayPal also reports rejected stale creations through this callback.
+            if (error.message === CHECKOUT_CANCELLED_MESSAGE) return;
             release();
             setMessage(
               (current) =>
@@ -163,3 +182,7 @@ export function StoreCheckout({
     </div>
   );
 }
+
+const CHECKOUT_CANCELLED_MESSAGE = "Checkout cancelled";
+
+type CheckoutAttempt = { checkoutId?: string };
