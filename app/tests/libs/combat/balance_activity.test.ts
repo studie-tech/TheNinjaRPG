@@ -222,7 +222,9 @@ describeWithDatabase("balance usage with the activity filter", () => {
   });
 
   it("serves battle-level and staff per-player splits", async () => {
-    await settle(duel());
+    const battle = duel();
+    battle.extraState.balanceParticipants!.loser!.rank = "CHUNIN";
+    await settle(battle);
     const caller = await callerFor(dataRouter, "viewer");
     const report = await caller.getBalanceOverview({});
     expect(summarizeTurnOrderBattles(report.turnOrderBattles)).toMatchObject({
@@ -231,9 +233,14 @@ describeWithDatabase("balance usage with the activity filter", () => {
       secondWins: 0,
     });
     // Both fighters must match a rank filter.
+    for (const rank of ["CHUNIN", "JONIN"] as const)
+      expect(
+        (await caller.getBalanceOverview({ userRanks: [rank] })).turnOrderBattles,
+      ).toEqual([]);
     expect(
-      (await caller.getBalanceOverview({ userRanks: ["CHUNIN"] })).turnOrderBattles,
-    ).toEqual([]);
+      (await caller.getBalanceOverview({ userRanks: ["CHUNIN", "JONIN"] }))
+        .turnOrderBattles,
+    ).toHaveLength(1);
     await expect(caller.getPlayerTurnOrder({ userId: "winner" })).rejects.toThrow();
   });
 });

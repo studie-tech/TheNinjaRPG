@@ -196,6 +196,18 @@ export const upsertBalanceTurnOrder = (
       },
     });
 
+/** Move a participant's battle history; an empty replacement unlinks a deleted character. */
+export const updateBalanceTurnOrderUserId = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  newUserId: string,
+  column: "firstUserId" | "secondUserId",
+) =>
+  client
+    .update(dataBattleTurnOrder)
+    .set({ [column]: newUserId })
+    .where(eq(dataBattleTurnOrder[column], userId));
+
 /**
  * Count head-to-head battles by battle type and winning starting order. A battle counts
  * for rank and level filters only when both fighters match, so neither side's skill

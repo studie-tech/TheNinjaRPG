@@ -489,6 +489,7 @@ export const saveUsage = async (
     const opponentSnapshot = opponent
       ? curBattle.extraState.balanceParticipants?.[opponent.userId]
       : undefined;
+    let turnOrderWrite: ReturnType<typeof upsertBalanceTurnOrder> | undefined;
     if (
       !user.isAi &&
       snapshot &&
@@ -500,7 +501,7 @@ export const saveUsage = async (
       const theirs = { userId: opponent.userId, ...opponentSnapshot };
       const [first, second] =
         demographics.turnOrder === 1 ? [mine, theirs] : [theirs, mine];
-      await upsertBalanceTurnOrder(client, {
+      turnOrderWrite = upsertBalanceTurnOrder(client, {
         battleId: curBattle.id,
         battleType,
         firstUserId: first.userId,
@@ -576,13 +577,15 @@ export const saveUsage = async (
         return a;
       }
     }, [] as DataBattleAction[]);
-    // Upsert dataBattleActions
-    if (uniqueData.length > 0) {
-      await insertDataBattleActionForSaveUsage(
-        client,
-        uniqueData.map((entry) => ({ ...entry, ...demographics })),
-      );
-    }
+    await Promise.all([
+      turnOrderWrite,
+      uniqueData.length > 0
+        ? insertDataBattleActionForSaveUsage(
+            client,
+            uniqueData.map((entry) => ({ ...entry, ...demographics })),
+          )
+        : undefined,
+    ]);
   }
 };
 

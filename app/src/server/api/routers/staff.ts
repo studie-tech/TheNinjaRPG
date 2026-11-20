@@ -32,6 +32,7 @@ import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { isBattleClaimId } from "@/libs/raids";
 import { incrementAnbuMemberCount } from "@/queries/anbu";
 import { fetchBadge } from "@/queries/badge";
+import { updateBalanceTurnOrderUserId } from "@/queries/balance";
 import { deleteBattleQueueMembersForUser } from "@/queries/clan";
 import { deleteBattleById } from "@/queries/combat";
 import { renameCosmetics } from "@/queries/cosmetic";
@@ -794,6 +795,14 @@ export const staffRouter = createTRPCRouter({
           );
       }
       const moves = await Promise.allSettled([
+        ...(["firstUserId", "secondUserId"] as const).map((column) =>
+          updateBalanceTurnOrderUserId(
+            ctx.drizzle,
+            input.userId,
+            input.newUserId,
+            column,
+          ),
+        ),
         renameCraftingServices(ctx.drizzle, input.userId, input.newUserId),
         renameCosmetics(ctx.drizzle, input.userId, input.newUserId),
         renameParentalContact(ctx.drizzle, input.userId, input.newUserId),
