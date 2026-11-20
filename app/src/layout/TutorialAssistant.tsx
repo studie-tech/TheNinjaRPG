@@ -96,6 +96,8 @@ const STUCK_STEP_SECONDS = 60;
  * navigation to a battle that just started can land on /combat first.
  */
 const STRANDED_BATTLE_STEP_MS = 1500;
+/** Long enough to read "Victory!" before the reward is collected for the player. */
+const TUTORIAL_AUTO_CLAIM_MS = 1200;
 
 /** Gap between Lemu and the end of the dock she stands at. */
 const PORTRAIT_INSET_PX = 16;
@@ -608,12 +610,17 @@ const PlayerTutorialAssistant: React.FC<
 
   // Where the related quest wants the player to go next, for a one-tap trip there
   const autoTravelHref = (() => {
+    if (!currentTutorialStep?.autoTravelLabel) return;
+    // A travel step names its sector; finding the spot there is the next lesson.
     if (
-      !currentTutorialStep?.autoTravelLabel ||
-      !activeRelatedObjective ||
-      !relatedQuest
-    )
-      return;
+      currentTutorialStep.advanceOn === "travelArrive" &&
+      typeof currentTutorialStep.relatedValue === "number"
+    ) {
+      // Nothing to start while already on the way.
+      if (userData?.status !== "AWAKE") return;
+      return `/travel?sector=${currentTutorialStep.relatedValue}`;
+    }
+    if (!activeRelatedObjective || !relatedQuest) return;
     // The tracker holds the location instantiated for this player, which the
     // server checks arrival against; the content is the fallback.
     const objective = activeRelatedObjective;
@@ -628,6 +635,25 @@ const PlayerTutorialAssistant: React.FC<
       return;
     return `/travel?sector=${sector}&longitude=${longitude}&latitude=${latitude}`;
   })();
+
+  // Many players who won their first fight never pressed Claim. On steps that
+  // only collect what the player just earned, claim it for them after a beat,
+  // once per step; the Claim button stays for a failed attempt.
+  const autoClaimQuestId =
+    currentTutorialStep?.autoClaim && isAssistantVisible && claimable?.isReady
+      ? claimable.questId
+      : undefined;
+  const autoClaimRef = React.useRef<string>("");
+  useEffect(() => {
+    if (!autoClaimQuestId || isCheckingRewards) return;
+    const key = `${userData?.userId}:${stepNumber}:${autoClaimQuestId}`;
+    if (autoClaimRef.current === key) return;
+    const timer = setTimeout(() => {
+      autoClaimRef.current = key;
+      checkRewards({ questId: autoClaimQuestId });
+    }, TUTORIAL_AUTO_CLAIM_MS);
+    return () => clearTimeout(timer);
+  }, [autoClaimQuestId, isCheckingRewards, stepNumber, userData?.userId, checkRewards]);
 
   // The starter quest can be further along than the step expects (a player
   // who came back after the trials changed, or whose action landed while
@@ -897,18 +923,26 @@ const PlayerTutorialAssistant: React.FC<
           footer={
             <>
               {autoTravelHref && currentTutorialStep.autoTravelLabel && (
-                <Button
-                  size="lg"
-                  className="w-full"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    router.push(autoTravelHref);
-                  }}
+                <ClaimHighlight
+                  // The trip button is the step's action until a page control takes over.
+                  active={
+                    currentTutorialStep.advanceOn === "travelArrive" &&
+                    highlight?.stepId !== currentTutorialStep.id
+                  }
                 >
-                  <MapPin className="mr-2 h-5 w-5" aria-hidden="true" />
-                  {currentTutorialStep.autoTravelLabel}
-                </Button>
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      router.push(autoTravelHref);
+                    }}
+                  >
+                    <MapPin className="mr-2 h-5 w-5" aria-hidden="true" />
+                    {currentTutorialStep.autoTravelLabel}
+                  </Button>
+                </ClaimHighlight>
               )}
               {dialogOptions && (
                 <div>

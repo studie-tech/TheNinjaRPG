@@ -793,6 +793,116 @@ describe("quest steps", () => {
     for (const step of claimSteps) expect(step.elementIds ?? []).toEqual([]);
   });
 
+  it("collects the first fight's and first jutsu's rewards without a tap", () => {
+    const readyQuest = (stepIndex: number, done = true) => {
+      const step = TUTORIAL_STEPS[stepIndex]!;
+      const questId = String(step.relatedValue);
+      const objectiveId = String(step.objectiveId);
+      return {
+        userQuests: [
+          {
+            id: "attempt",
+            questId,
+            endAt: null,
+            quest: {
+              id: questId,
+              name: "Trials",
+              questType: "starter",
+              consecutiveObjectives: true,
+              content: {
+                reward: { reward_rank: "NONE", reward_exp: 0, reward_money: 0 },
+                objectives: [
+                  {
+                    id: objectiveId,
+                    task: "win_combat",
+                    description: "Win",
+                    reward_rank: "NONE",
+                    reward_exp: 1000,
+                    reward_money: 0,
+                  },
+                ],
+              },
+            },
+          },
+        ],
+        questData: [
+          { id: questId, goals: [{ id: objectiveId, done, collected: false }] },
+        ],
+      };
+    };
+    const auto = TUTORIAL_STEPS.filter((step) => step.autoClaim).map((step) => step.id);
+    expect(auto).toEqual(["combat-claim-reward", "tools-claim-jutsu"]);
+    vi.useFakeTimers();
+    for (const stepId of auto) {
+      const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
+      const questId = String(TUTORIAL_STEPS[index]?.relatedValue);
+      state.checkRewards.mockClear();
+      const view = show(index, readyQuest(index));
+      // A beat to read the victory first, then exactly one claim.
+      act(() => vi.advanceTimersByTime(1000));
+      expect(state.checkRewards).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(500));
+      expect(state.checkRewards).toHaveBeenCalledTimes(1);
+      expect(state.checkRewards).toHaveBeenCalledWith({ questId });
+      // Re-renders do not claim again; the button stays for a failed attempt.
+      view.rerender(<>{assistant()}</>);
+      act(() => vi.advanceTimersByTime(5000));
+      expect(state.checkRewards).toHaveBeenCalledTimes(1);
+      expect(view.getByRole("button", { name: "Claim 1,000 XP" })).toBeTruthy();
+      cleanup();
+      // Nothing is claimed before the objective is done.
+      show(index, readyQuest(index, false));
+      act(() => vi.advanceTimersByTime(5000));
+      expect(state.checkRewards).toHaveBeenCalledTimes(1);
+      cleanup();
+    }
+    // The pup's reward closes a story beat, so the player still claims it.
+    const pup = TUTORIAL_STEPS.findIndex((step) => step.id === "mission-claim-pup");
+    state.checkRewards.mockClear();
+    show(pup, readyQuest(pup));
+    act(() => vi.advanceTimersByTime(5000));
+    expect(state.checkRewards).not.toHaveBeenCalled();
+  });
+
+  it("starts a tutorial trip from the lesson in one tap", () => {
+    for (const [stepId, label] of [
+      ["mission-travel-to-pup", "Take me there"],
+      ["bond-travel-wake", "Take me to Wake Island"],
+    ] as const) {
+      const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
+      const sector = TUTORIAL_STEPS[index]?.relatedValue;
+      expect(typeof sector).toBe("number");
+      state.push.mockClear();
+      const view = show(index, { sector: 301, level: 3 });
+      const button = view.getByRole("button", { name: label });
+      // With no trip confirmation on screen, the lesson's button is the marked action.
+      expect(button.closest("[data-tutorial-claim-highlight]")).toBeTruthy();
+      fireEvent.click(button);
+      expect(state.push).toHaveBeenCalledWith(`/travel?sector=${sector}`);
+      cleanup();
+      // Once the confirmation opens, its Travel button takes the highlight.
+      const confirm = show(
+        index,
+        { sector: 301, level: 3 },
+        undefined,
+        <Target id="tutorial-auto-travel-proceed" />,
+      );
+      expect(
+        confirm
+          .getByRole("button", { name: label })
+          .closest("[data-tutorial-claim-highlight]"),
+      ).toBeNull();
+      cleanup();
+      // On the way there is nothing to start.
+      expect(
+        show(index, { sector: 301, status: "TRAVEL" }).queryByRole("button", {
+          name: label,
+        }),
+      ).toBeNull();
+      cleanup();
+    }
+  });
+
   describe("after the tutorial", () => {
     const openLesson = () => {
       localStorage.setItem("activityDockOpen:actor", "true");

@@ -307,7 +307,7 @@ describe("getTutorialPortraitSide", () => {
 });
 
 describe("TUTORIAL_STEPS", () => {
-  it("highlights travel confirmation and arrival before the globe and the Global tab", () => {
+  it("sends travel steps through the lesson's travel button, then its confirmation and arrival", () => {
     // Travel steps share one element list defined above the step array.
     const source = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../../src/libs/tutorialSteps.tsx"),
@@ -315,21 +315,28 @@ describe("TUTORIAL_STEPS", () => {
     );
     const start = source.indexOf("const globalTravelElements = [");
     expect(start).toBeGreaterThan(-1);
-    const block = source.slice(start, source.indexOf("];", start));
-    // Once the travel modal opens its proceed button must win the highlight;
-    // the always-mounted globe would otherwise keep it for the whole step.
-    expect(block.indexOf("tutorial-global-travel-proceed")).toBeLessThan(
-      block.indexOf("tutorial-travel-arrival"),
-    );
-    expect(block.indexOf("tutorial-travel-arrival")).toBeLessThan(
-      block.indexOf("tutorial-global-map"),
-    );
-    expect(block.indexOf("tutorial-global-map")).toBeLessThan(
-      block.indexOf("tutorial-Global"),
-    );
+    const ids = [
+      ...source.slice(start, source.indexOf("];", start)).matchAll(/"([^"]+)"/g),
+    ].map((match) => match[1]);
+    // One tap on the lesson opens the trip's confirmation, whose Travel button
+    // then wins the highlight, and the arrival timer after that. The globe and
+    // its tab stay unmarked so the lesson's button is the one thing to press.
+    expect(ids).toEqual([
+      "tutorial-auto-travel-proceed",
+      "tutorial-global-travel-proceed",
+      "tutorial-travel-arrival",
+    ]);
     expect(
       readTutorialStepsSource().match(/elementIds: globalTravelElements/g),
     ).toHaveLength(2);
+    for (const stepId of [
+      TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
+      TUTORIAL_WAKE_TRAVEL_STEP_ID,
+    ]) {
+      const block = stepBlock(stepId);
+      expect(block).toContain("elementIds: globalTravelElements");
+      expect(block).toMatch(/autoTravelLabel: "[^"]+"/);
+    }
   });
 
   it("uses unique ids so findIndex cannot jump to an earlier step", () => {

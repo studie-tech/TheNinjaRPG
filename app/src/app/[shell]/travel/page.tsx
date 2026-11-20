@@ -1462,6 +1462,7 @@ function Travel() {
       />
       {locationRequest && (
         <Modal
+          id="tutorial-auto-travel"
           title="Auto Travel"
           isOpen={true}
           setIsOpen={() => setLocationRequest(null)}
