@@ -1022,3 +1022,13 @@ html[data-reading-palette] .tnr-pixel-game [data-content-box] :where(h1, h2, h3,
 [data-world-page][data-world-covered="true"] * {
   animation-play-state: paused !important;
 }
+
+/*
+ * PayPal mounts its popup overlay ("Click to Continue", close X) on <body>. An open
+ * Radix dialog sets body pointer-events: none, so the overlay would let clicks fall
+ * through to the payment buttons behind it. StoreCheckout keeps the dialog pending
+ * while the PayPal window is open, so these clicks cannot dismiss the dialog.
+ */
+.paypal-checkout-sandbox {
+  pointer-events: auto;
+}

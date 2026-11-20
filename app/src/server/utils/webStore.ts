@@ -19,6 +19,7 @@ import {
   updateUserDataForDeliverStoreOrder,
   updateWebStoreOrderForAuthorize,
   updateWebStoreOrderForDeliverStoreOrder,
+  updateWebStoreOrderForReserve,
 } from "@/queries/paypal";
 import type { DrizzleClient } from "@/server/db";
 import { queryInTransaction } from "@/server/utils/concurrency";
@@ -82,6 +83,9 @@ export const reserveStoreOrder = async (
         success: false as const,
         message: "This account cannot make purchases",
       };
+    // A retry replaces the buyer's own unstarted quote for this offer instead of being
+    // blocked by it: a closed PayPal window must not hold a one-time bundle for minutes.
+    await updateWebStoreOrderForReserve(db, buyerId, recipientId, offer.bundleId);
     const bundleError = offer.bundleId
       ? await checkBundlePurchaseLimit(db, recipientId, offer.bundleId)
       : null;

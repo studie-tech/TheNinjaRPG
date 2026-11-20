@@ -29,6 +29,7 @@ import {
   updateUserDataForSubscribeWithReps2,
   updateWebStoreBundleForSaveStoreBundle,
   updateWebStoreOrderForCreateStoreOrder,
+  updateWebStoreOrderForReleaseStoreOrder,
 } from "@/queries/paypal";
 import { fetchUser, findUserById } from "@/queries/profile";
 import {
@@ -188,11 +189,24 @@ export const paypalRouter = createTRPCRouter({
           success: true as const,
           message: "Checkout ready",
           orderId: providerOrder.id,
+          checkoutId: order.id,
         };
       } catch (error) {
         await updateWebStoreOrderForCreateStoreOrder(ctx.drizzle, order);
         throw error;
       }
+    }),
+  /** Free the caller's own unstarted checkout after its PayPal window closed without approval. */
+  releaseStoreOrder: protectedProcedure
+    .input(z.strictObject({ checkoutId: z.string().min(1).max(191) }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      await updateWebStoreOrderForReleaseStoreOrder(
+        ctx.drizzle,
+        ctx.userId,
+        input.checkoutId,
+      );
+      return { success: true, message: "Checkout released" };
     }),
   /** Revalidate an unpaid checkout before capture, or safely finish delivery of a paid one. */
   captureStoreOrder: protectedProcedure
