@@ -348,4 +348,108 @@ describe("combat active effects", () => {
     expect(view.getByText("Potency (Reflect, Water) +30 ↻ 2")).toBeTruthy();
     expect(view.queryByText(/\+50/)).toBeNull();
   });
+
+  it("names damage modifiers in plain words instead of signs", () => {
+    const mod = (type: string, id: string, power: number, elements?: string[]) =>
+      makeEffect(
+        type as "increasedamagegiven",
+        { power, rounds: 2, elements } as never,
+        {
+          ...runtime,
+          id,
+        },
+      );
+    const view = render(
+      <VisualizeEffects
+        effects={[
+          mod("increasedamagegiven", "dgb", 20, ["Fire"]),
+          mod("decreasedamagegiven", "dgr", 15, ["Water"]),
+          mod("decreasedamagetaken", "dtr", 25, ["Wind"]),
+          mod("increasedamagetaken", "dti", 30, ["Lightning"]),
+        ]}
+        userId={userId}
+      />,
+    );
+    const sections = [
+      ["Damage Given Buffs", "DGB", "20%", "text-green-500"],
+      ["Damage Given Reduction", "DGR", "15%", "text-red-500"],
+      ["Damage Taken Reduction", "DTR", "25%", "text-green-500"],
+      ["Damage Taken Increase", "DTI", "30%", "text-red-500"],
+    ] as const;
+    for (const [label, abbr, value, color] of sections) {
+      const section = view.getByRole("region", { name: label });
+      expect(section.querySelector(`abbr[title="${label}"]`)?.textContent).toBe(abbr);
+      expect(section.textContent).toContain(value);
+      expect(view.getByText(value).className).toContain(color);
+      expect(section.textContent).not.toMatch(/[+-]\d/);
+    }
+    expect(view.queryByText("Damage Given")).toBeNull();
+    expect(view.queryByText("Damage Taken")).toBeNull();
+  });
+
+  it.each([false, true])(
+    "preserves zero damage modifier directions with seal=%s",
+    (sealed) => {
+      const modifiers = [
+        ["increasedamagegiven", "Damage Given Buffs", "Fire", "text-green-500"],
+        ["decreasedamagegiven", "Damage Given Reduction", "Water", "text-red-500"],
+        ["decreasedamagetaken", "Damage Taken Reduction", "Wind", "text-green-500"],
+        ["increasedamagetaken", "Damage Taken Increase", "Lightning", "text-red-500"],
+      ] as const;
+      const effects = modifiers.map(([type, , element]) =>
+        makeEffect(
+          type,
+          { power: sealed ? 20 : 0, rounds: 2, elements: [element] },
+          { ...runtime, id: type, fromType: "bloodline" },
+        ),
+      );
+      if (sealed) {
+        effects.push(makeEffect("seal", { rounds: 2 }, { ...runtime, isNew: false }));
+      }
+      const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+      for (const [, label, , color] of modifiers) {
+        const section = view.getByRole("region", { name: label });
+        const value = section.querySelector(`.${color}`);
+        expect(value?.textContent).toBe("0%");
+        expect(value?.classList.contains("line-through")).toBe(sealed);
+        expect(section.textContent).toContain("↻ 2");
+      }
+    },
+  );
+
+  it("keeps signed values for compact non-damage effects", () => {
+    const effects = [
+      makeEffect(
+        "decreasestat",
+        { power: 12, rounds: 2, direction: "offence" },
+        runtime,
+      ),
+      makeEffect("increasemastery", { power: 13, rounds: 2 }, runtime),
+      makeEffect("increaseheal", { power: 20, rounds: 2 }, runtime),
+    ];
+    const view = render(<VisualizeEffects effects={effects} userId={userId} />);
+    expect(view.getByText("-12%").className).toContain("text-red-500");
+    expect(view.getByText("+13%").className).toContain("text-green-500");
+    expect(view.getByText("+20%").className).toContain("text-green-500");
+  });
+
+  it("files a net damage modifier under the direction it ends up in", () => {
+    const mod = (type: string, id: string, power: number) =>
+      makeEffect(type as "increasedamagetaken", { power, rounds: 2 } as never, {
+        ...runtime,
+        id,
+      });
+    const view = render(
+      <VisualizeEffects
+        effects={[
+          mod("increasedamagetaken", "up", 10),
+          mod("decreasedamagetaken", "down", 25),
+        ]}
+        userId={userId}
+      />,
+    );
+    const reduction = view.getByRole("region", { name: "Damage Taken Reduction" });
+    expect(reduction.textContent).toContain("15%");
+    expect(view.queryByRole("region", { name: "Damage Taken Increase" })).toBeNull();
+  });
 });

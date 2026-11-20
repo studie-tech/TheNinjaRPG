@@ -38,6 +38,8 @@ type CollapsedEffect = {
   calculation: "static" | "percentage" | "formula";
   category: EffectCategory;
   upDownEffect: boolean;
+  /** Direction of the first collapsed modifier, for rows a seal zeroes out. */
+  direction: 1 | -1;
   rounds: number[];
   sealed: boolean;
   blocks?: string; // For immunity effects
@@ -57,6 +59,34 @@ const UNLISTED_TYPES = new Set([
   "barrier",
   "flee",
 ]);
+
+/** Plain-language damage modifier sections, with the abbreviations players use. */
+const DAMAGE_MODIFIER_SECTIONS = [
+  {
+    type: "damagegiven",
+    increase: true,
+    label: "Damage Given Buffs",
+    abbr: "DGB",
+  },
+  {
+    type: "damagegiven",
+    increase: false,
+    label: "Damage Given Reduction",
+    abbr: "DGR",
+  },
+  {
+    type: "damagetaken",
+    increase: false,
+    label: "Damage Taken Reduction",
+    abbr: "DTR",
+  },
+  {
+    type: "damagetaken",
+    increase: true,
+    label: "Damage Taken Increase",
+    abbr: "DTI",
+  },
+] as const;
 
 const SOURCE_FILTERS = [
   { id: "jutsu", label: "Jutsu" },
@@ -183,7 +213,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
       if (baseType === "maxpools") {
         baseType = "pools";
       }
-      const sign = val.type.includes("decrease") ? -1 : 1;
+      const sign: 1 | -1 = val.type.includes("decrease") ? -1 : 1;
 
       // Clean, targeted handling for wound effects only
       let value: number;
@@ -242,6 +272,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
             category: cat as EffectCategory,
             calculation: val.calculation,
             upDownEffect: dual,
+            direction: sign,
             rounds: val.rounds ? [val.rounds] : [],
             sealed: isSealed,
             blocks: valBlocks,
@@ -263,9 +294,14 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const roundsTxt = (e: CollapsedEffect) =>
     e.rounds.length > 0 ? `↻ ${Math.max(...e.rounds)}` : "";
 
+  const isIncrease = (e: CollapsedEffect) =>
+    e.value !== 0 ? e.value > 0 : e.direction > 0;
+
   const renderCompact = (e: CollapsedEffect, i: number) => {
-    // Less damage taken is good; for everything else, more is good
-    const isPositiveEffect = e.type === "damagetaken" ? e.value < 0 : e.value > 0;
+    const isDamageModifier = e.type === "damagegiven" || e.type === "damagetaken";
+    const isPositiveEffect = isDamageModifier
+      ? isIncrease(e) === (e.type === "damagegiven")
+      : e.value > 0;
 
     return (
       <div
@@ -280,7 +316,10 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
               e.sealed && "line-through",
             )}
           >
-            {valueTxt(e)}
+            {/* Damage section headings carry the direction, so show only magnitude. */}
+            {isDamageModifier
+              ? `${Math.abs(Math.round(e.value))}${e.calculation === "percentage" ? "%" : ""}`
+              : valueTxt(e)}
           </div>
           {roundsTxt(e) && <div className="text-xs">{roundsTxt(e)}</div>}
         </div>
@@ -372,6 +411,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         category: "All" as EffectCategory,
         calculation: "percentage" as const,
         upDownEffect: true,
+        direction: netPercentage < 0 ? -1 : 1,
         rounds: [],
         sealed: false,
       },
@@ -379,8 +419,13 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   }
 
   const statusEffects = collapsedEffects.filter((e) => STATUS_TYPES.has(e.type));
-  const damageGivenEffects = collapsedEffects.filter((e) => e.type === "damagegiven");
-  const damageTakenEffects = collapsedEffects.filter((e) => e.type === "damagetaken");
+  // Net increases and decreases get their own plainly named sections instead of signs.
+  const damageModifierSections = DAMAGE_MODIFIER_SECTIONS.map((section) => ({
+    ...section,
+    effects: collapsedEffects.filter(
+      (e) => e.type === section.type && isIncrease(e) === section.increase,
+    ),
+  })).filter((section) => section.effects.length > 0);
   const statEffects = collapsedEffects.filter((e) => e.type === "stat");
   const masteryEffects = collapsedEffects.filter((e) => e.type === "mastery");
   const damageEffects = collapsedEffects.filter(
@@ -536,7 +581,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   return (
     <div
       className={cn(
-        "relative flex flex-col gap-4 text-base md:text-xs lg:text-base",
+        "@container relative flex flex-col gap-4 text-base md:text-xs lg:text-base",
         // The filter needs space even when all of the battle's effects have expired.
         effects.length > 0 && "min-h-5",
       )}
@@ -625,23 +670,29 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         </div>
       )}
 
-      {damageGivenEffects.length > 0 && (
-        <div>
-          <div className="mb-1 font-semibold">Damage Given</div>
-          <div className="grid grid-cols-2 gap-1">
-            {damageGivenEffects.map(renderCompact)}
+      {damageModifierSections.map((section) => (
+        <section key={section.abbr} aria-label={section.label}>
+          {/* Wide panels name the section in full; narrow ones lead with the
+              abbreviation and spell it out below, since touch has no hover. */}
+          <div className="mb-1">
+            <div className="flex items-baseline gap-x-1.5 font-semibold">
+              <span className="hidden @min-[15rem]:inline">{section.label}</span>
+              <abbr
+                title={section.label}
+                className="no-underline @min-[15rem]:text-xs @min-[15rem]:font-normal @min-[15rem]:opacity-70"
+              >
+                {section.abbr}
+              </abbr>
+            </div>
+            <div aria-hidden className="text-xs opacity-80 @min-[15rem]:hidden">
+              {section.label}
+            </div>
           </div>
-        </div>
-      )}
-
-      {damageTakenEffects.length > 0 && (
-        <div>
-          <div className="mb-1 font-semibold">Damage Taken</div>
           <div className="grid grid-cols-2 gap-1">
-            {damageTakenEffects.map(renderCompact)}
+            {section.effects.map(renderCompact)}
           </div>
-        </div>
-      )}
+        </section>
+      ))}
 
       {healGivenEffects.length > 0 && (
         <div>
