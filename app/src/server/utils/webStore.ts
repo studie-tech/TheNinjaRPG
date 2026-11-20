@@ -19,6 +19,8 @@ import {
   updateUserDataForDeliverStoreOrder,
   updateWebStoreOrderForAuthorize,
   updateWebStoreOrderForDeliverStoreOrder,
+  updateWebStoreOrderForReleaseStoreOrder,
+  updateWebStoreOrderForReserve,
 } from "@/queries/paypal";
 import type { DrizzleClient } from "@/server/db";
 import { queryInTransaction } from "@/server/utils/concurrency";
@@ -82,6 +84,9 @@ export const reserveStoreOrder = async (
         success: false as const,
         message: "This account cannot make purchases",
       };
+    // A retry replaces the buyer's own unstarted quote for this offer instead of being
+    // blocked by it: a closed PayPal window must not hold a one-time bundle for minutes.
+    await updateWebStoreOrderForReserve(db, buyerId, recipientId, offer.bundleId);
     const bundleError = offer.bundleId
       ? await checkBundlePurchaseLimit(db, recipientId, offer.bundleId)
       : null;
@@ -113,6 +118,27 @@ export const reserveStoreOrder = async (
   return retryOnDeadlock(() =>
     needsBuyerLock ? client.transaction(reserve) : reserve(client),
   );
+};
+
+/**
+ * Release the buyer's own checkout that never reached capture, e.g. after the PayPal
+ * window was closed. Safe to repeat; claimed attempts and paid orders are untouched.
+ */
+export const releaseStoreOrder = async (
+  client: DrizzleClient,
+  buyerId: string,
+  checkoutId: string,
+) => {
+  const result = await updateWebStoreOrderForReleaseStoreOrder(
+    client,
+    buyerId,
+    checkoutId,
+  );
+  return {
+    success: true as const,
+    message: "Checkout released",
+    released: result.rowsAffected,
+  };
 };
 
 /**

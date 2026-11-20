@@ -92,6 +92,13 @@ const reportingTransaction = (
   cart_info: { item_details: [] },
 });
 
+/** Orders that still hold capacity before any capture attempt. */
+const liveOrders = async () =>
+  (await (await getTestDatabase()).query.webStoreOrder.findMany()).filter(
+    (order) =>
+      order.expiresAt > new Date() && !order.grantedAt && !order.captureAttemptId,
+  );
+
 /** Reserve the shared offer for the default buyer and recipient. */
 async function reserve() {
   const result = await reserveStoreOrder(
@@ -318,15 +325,19 @@ describeWithDatabase("web store payments", () => {
         reserveStoreOrder(db, index % 2 ? "buyer" : "recipient", "recipient", limited),
       ),
     );
-    expect(attempts.filter((result) => result.success)).toHaveLength(1);
+    // A payer's retry replaces their own unstarted quote; other payers stay blocked.
+    const reserved = attempts.flatMap((result) =>
+      result.success ? [result.order] : [],
+    );
+    expect(new Set(reserved.map((order) => order.buyerId)).size).toBe(1);
     expect(
       attempts
         .filter((result) => !result.success)
         .every((result) => result.message.includes("purchase limit")),
     ).toBe(true);
-    const won = attempts.find((result) => result.success)!;
-    if (!won.success) throw new Error("No reserved gift");
-    const order = won.order;
+    const live = await liveOrders();
+    expect(live).toHaveLength(1);
+    const order = reserved.find((entry) => entry.id === live[0]?.id)!;
     expect(order.bundleId).toBe(limited.bundleId);
     expect(await authorizeStoreCapture(db, order.id, order.buyerId)).toBeNull();
     await deliverStoreOrder(db, capture(order.id));
@@ -427,6 +438,75 @@ describeWithDatabase("web store payments", () => {
       captures.filter((result) => result?.includes("purchase limit")),
     ).toHaveLength(1);
     expect(await db.query.paypalTransaction.findMany()).toHaveLength(0);
+  });
+  it("lets a payer retry a one-time bundle at once after closing the PayPal window", async () => {
+    const db = await getTestDatabase();
+    const limited = await seedBundle({ purchaseLimit: 1 });
+    const owner = await callerFor(paypalRouter, "buyer");
+    const fetchMock = mockPayPal(async () =>
+      Response.json({ id: "NEXTORDER123456789" }),
+    );
+    try {
+      const create = () =>
+        owner.createStoreOrder({
+          recipientId: "recipient",
+          selection: { type: "bundle", bundleId: limited.bundleId },
+        });
+      const first = await create();
+      if (!first.success || !("checkoutId" in first)) throw new Error(first.message);
+      // Retrying without a release (window killed, tab closed) replaces the own quote.
+      const second = await create();
+      if (!second.success || !("checkoutId" in second)) throw new Error(second.message);
+      expect((await liveOrders()).map((order) => order.id)).toEqual([
+        second.checkoutId,
+      ]);
+      // Another payer is still blocked by the live quote.
+      expect(
+        (await reserveStoreOrder(db, "recipient", "recipient", limited)).message,
+      ).toContain("purchase limit");
+      // Closing the window releases it; nobody else can release it, and it is idempotent.
+      const stranger = await callerFor(paypalRouter, "recipient");
+      await stranger.releaseStoreOrder({ checkoutId: second.checkoutId });
+      expect(await liveOrders()).toHaveLength(1);
+      expect(await owner.releaseStoreOrder({ checkoutId: second.checkoutId })).toEqual({
+        success: true,
+        message: "Checkout released",
+      });
+      await owner.releaseStoreOrder({ checkoutId: second.checkoutId });
+      expect(await liveOrders()).toHaveLength(0);
+      expect(
+        (await reserveStoreOrder(db, "recipient", "recipient", limited)).success,
+      ).toBe(true);
+    } finally {
+      fetchMock.mockRestore();
+    }
+    expect(await db.query.paypalTransaction.findMany()).toHaveLength(0);
+  });
+  it("keeps claimed captures and paid orders when a checkout is released or replaced", async () => {
+    const db = await getTestDatabase();
+    const limited = await seedBundle({ purchaseLimit: 2 });
+    const claimed = await reserveStoreOrder(db, "buyer", "recipient", limited);
+    if (!claimed.success) throw new Error(claimed.message);
+    expect(
+      await authorizeStoreCapture(db, claimed.order.id, "buyer", "attempt"),
+    ).toBeNull();
+    const paid = await reserveStoreOrder(db, "buyer", "recipient", limited);
+    if (!paid.success) throw new Error(paid.message);
+    await deliverStoreOrder(db, capture(paid.order.id));
+    const owner = await callerFor(paypalRouter, "buyer");
+    await owner.releaseStoreOrder({ checkoutId: claimed.order.id });
+    await owner.releaseStoreOrder({ checkoutId: paid.order.id });
+    expect(
+      (await reserveStoreOrder(db, "buyer", "recipient", limited)).message,
+    ).toContain("purchase limit");
+    const kept = await db.query.webStoreOrder.findMany();
+    expect(kept.find((order) => order.id === claimed.order.id)).toMatchObject({
+      captureAttemptId: "attempt",
+    });
+    expect(
+      kept.find((order) => order.id === claimed.order.id)!.expiresAt.getTime(),
+    ).toBeGreaterThan(Date.now());
+    expect(kept.find((order) => order.id === paid.order.id)?.grantedAt).not.toBeNull();
   });
   it.each([
     "INSTRUMENT_DECLINED",
@@ -1027,6 +1107,7 @@ describeWithDatabase("web store payments", () => {
     const cap = dynamicMonthlyRepCap(buyer);
     const large = {
       ...offer,
+      priceCents: 100000,
       contents: { ...contents, reputationPoints: Math.floor(cap * 0.6) },
     };
     const results = await Promise.all(
@@ -1034,7 +1115,14 @@ describeWithDatabase("web store payments", () => {
         reserveStoreOrder(db, "buyer", "recipient", large),
       ),
     );
-    expect(results.filter((result) => result.success)).toHaveLength(1);
+    // Retries replace the payer's own quote, so only one reservation stays live ...
+    expect(await liveOrders()).toHaveLength(1);
+    // ... and released quotes still cannot capture past the allowance together.
+    const orders = results.flatMap((result) => (result.success ? [result.order] : []));
+    const captures = await Promise.all(
+      orders.map((order) => authorizeStoreCapture(db, order.id, "buyer")),
+    );
+    expect(captures.filter((result) => result === null)).toHaveLength(1);
   });
   it("reserves and authorizes zero-reputation offers without transactions or buyer locks", async () => {
     const db = await getTestDatabase();

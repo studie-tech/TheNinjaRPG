@@ -731,6 +731,56 @@ export const releaseDeclinedStoreCapture = async (
     );
 
 /**
+ * Release the buyer's own unstarted checkout once its PayPal window is closed or abandoned.
+ * Delivered orders and claimed capture attempts keep their slot; a later capture of a
+ * released quote still rechecks every limit under the participant locks.
+ * @returns The write result; zero affected rows means nothing was still held.
+ */
+export const updateWebStoreOrderForReleaseStoreOrder = (
+  client: Pick<DrizzleClient, "update">,
+  buyerId: string,
+  checkoutId: string,
+) =>
+  client
+    .update(webStoreOrder)
+    .set({ expiresAt: new Date(0) })
+    .where(
+      and(
+        eq(webStoreOrder.id, checkoutId),
+        eq(webStoreOrder.buyerId, buyerId),
+        isNull(webStoreOrder.grantedAt),
+        isNull(webStoreOrder.captureAttemptId),
+        gt(webStoreOrder.expiresAt, new Date()),
+      ),
+    );
+
+/**
+ * Build the `webStoreOrder` update for `reserve`, releasing the buyer's earlier unstarted
+ * quotes for the same recipient and offer, so a retry replaces its own checkout.
+ */
+export const updateWebStoreOrderForReserve = (
+  client: Pick<DrizzleClient, "update">,
+  buyerId: string,
+  recipientId: string,
+  bundleId: string | undefined,
+) =>
+  client
+    .update(webStoreOrder)
+    .set({ expiresAt: new Date(0) })
+    .where(
+      and(
+        eq(webStoreOrder.buyerId, buyerId),
+        eq(webStoreOrder.recipientId, recipientId),
+        bundleId
+          ? eq(webStoreOrder.bundleId, bundleId)
+          : isNull(webStoreOrder.bundleId),
+        isNull(webStoreOrder.grantedAt),
+        isNull(webStoreOrder.captureAttemptId),
+        gt(webStoreOrder.expiresAt, new Date()),
+      ),
+    );
+
+/**
  * Build the `webStoreBundle` lookup for `checkBundlePurchaseLimit`, selecting only
  * `purchaseLimit` and `isActive`, using predicates on `id`.
  */

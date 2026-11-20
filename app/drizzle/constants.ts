@@ -4731,7 +4731,11 @@ export const STORE_BUNDLE_MIN_PRICE_CENTS = 100;
 export const STORE_BUNDLE_MAX_PRICE_CENTS = 100000;
 /** Upper bound for staff-configured lifetime purchase limits; zero is unlimited. */
 export const STORE_BUNDLE_MAX_PURCHASE_LIMIT = 1000000;
-export const STORE_ORDER_RESERVATION_MINUTES = 30;
+/**
+ * How long an unstarted checkout holds a bundle slot or monthly allowance. Closing the
+ * PayPal window releases it at once; a capture after expiry rechecks limits under lock.
+ */
+export const STORE_ORDER_RESERVATION_MINUTES = 10;
 
 /**
  * Discord account linking (see docs/DiscordLinking.md). A Discord account must be at least
