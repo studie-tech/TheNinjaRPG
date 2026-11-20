@@ -15,7 +15,6 @@ import {
   village,
   villageStructure,
 } from "@/drizzle/schema";
-import * as clanLogic from "@/libs/clan";
 import { clanRouter } from "@/server/api/routers/clan";
 import * as profileApi from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
@@ -154,7 +153,6 @@ describeWithDatabase("clan village membership progression", () => {
           route: "/home",
           image: "",
         });
-        vi.spyOn(clanLogic, "checkIfSectorIsAvailable").mockResolvedValue(true);
       }
       await insertQuests([
         {

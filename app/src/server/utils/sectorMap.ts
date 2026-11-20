@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { after } from "next/server";
 import * as globalMapData from "@/data/hexasphere.json";
 import {
+  MAP_RESERVED_SECTORS,
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
   type OverworldHabitat,
@@ -148,6 +149,14 @@ export const getSectorDiagonalIds = (
     southwest: corner(direct.south, direct.west),
   };
 };
+
+/**
+ * Whether a faction may build its hideout on this sector: it must exist on the
+ * committed globe and not be reserved. Reads the bundled topology directly; the
+ * browser's `/api/map/topology` fetch cannot run on the server (relative URL).
+ */
+export const isSectorAvailableForHideout = (sector: number): boolean =>
+  Boolean(globalMap.tiles[sector]) && !MAP_RESERVED_SECTORS.includes(sector);
 
 /** Globe terrain type for a sector (0=ocean, 1=land, 2=desert, 3=ice) */
 export const getSectorTileType = (sector: number): number => {
