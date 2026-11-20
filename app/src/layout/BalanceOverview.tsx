@@ -303,9 +303,7 @@ export const BalanceOverview = ({
                   { key: "battles", header: "Battles", type: "number" },
                   { key: "firstWins", header: "First won", type: "number" },
                   { key: "secondWins", header: "Second won", type: "number" },
-                  { key: "noWinner", header: "No winner", type: "number" },
                   { key: "firstRate", header: "First win %", type: "string" },
-                  { key: "secondRate", header: "Second win %", type: "string" },
                 ]}
               />
               {battleTypeRows.length === 0 && (
