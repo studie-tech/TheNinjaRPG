@@ -65,28 +65,24 @@ const DAMAGE_MODIFIER_SECTIONS = [
   {
     type: "damagegiven",
     increase: true,
-    good: true,
     label: "Damage Given Buffs",
     abbr: "DGB",
   },
   {
     type: "damagegiven",
     increase: false,
-    good: false,
     label: "Damage Given Reduction",
     abbr: "DGR",
   },
   {
     type: "damagetaken",
     increase: false,
-    good: true,
     label: "Damage Taken Reduction",
     abbr: "DTR",
   },
   {
     type: "damagetaken",
     increase: true,
-    good: false,
     label: "Damage Taken Increase",
     abbr: "DTI",
   },
@@ -298,9 +294,14 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const roundsTxt = (e: CollapsedEffect) =>
     e.rounds.length > 0 ? `↻ ${Math.max(...e.rounds)}` : "";
 
+  const isIncrease = (e: CollapsedEffect) =>
+    e.value !== 0 ? e.value > 0 : e.direction > 0;
+
   const renderCompact = (e: CollapsedEffect, i: number) => {
-    // Damage modifiers use renderMagnitude; for everything here, more is good
-    const isPositiveEffect = e.value > 0;
+    const isDamageModifier = e.type === "damagegiven" || e.type === "damagetaken";
+    const isPositiveEffect = isDamageModifier
+      ? isIncrease(e) === (e.type === "damagegiven")
+      : e.value > 0;
 
     return (
       <div
@@ -315,31 +316,10 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
               e.sealed && "line-through",
             )}
           >
-            {valueTxt(e)}
-          </div>
-          {roundsTxt(e) && <div className="text-xs">{roundsTxt(e)}</div>}
-        </div>
-      </div>
-    );
-  };
-
-  /** Section headings carry the direction, so rows show only the size of the change. */
-  const renderMagnitude = (e: CollapsedEffect, i: number, good: boolean) => {
-    const pct = e.calculation === "percentage" ? "%" : "";
-    return (
-      <div
-        key={`${i}-${e.type}-${e.category}-${e.sealed}`}
-        className="flex flex-row items-center gap-2"
-      >
-        <ElementImage element={e.category} className="h-6 w-6 shrink-0" />
-        <div className="flex flex-col leading-none">
-          <div
-            className={cn(
-              good ? "text-green-500" : "text-red-500",
-              e.sealed && "line-through",
-            )}
-          >
-            {`${Math.abs(Math.round(e.value))}${pct}`}
+            {/* Damage section headings carry the direction, so show only magnitude. */}
+            {isDamageModifier
+              ? `${Math.abs(Math.round(e.value))}${e.calculation === "percentage" ? "%" : ""}`
+              : valueTxt(e)}
           </div>
           {roundsTxt(e) && <div className="text-xs">{roundsTxt(e)}</div>}
         </div>
@@ -440,8 +420,6 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
   const statusEffects = collapsedEffects.filter((e) => STATUS_TYPES.has(e.type));
   // Net increases and decreases get their own plainly named sections instead of signs.
-  const isIncrease = (e: CollapsedEffect) =>
-    e.value !== 0 ? e.value > 0 : e.direction > 0;
   const damageModifierSections = DAMAGE_MODIFIER_SECTIONS.map((section) => ({
     ...section,
     effects: collapsedEffects.filter(
@@ -711,7 +689,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
             </div>
           </div>
           <div className="grid grid-cols-2 gap-1">
-            {section.effects.map((e, i) => renderMagnitude(e, i, section.good))}
+            {section.effects.map(renderCompact)}
           </div>
         </section>
       ))}
