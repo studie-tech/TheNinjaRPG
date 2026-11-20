@@ -80,6 +80,7 @@ import {
   findUserById,
   incrementUserMoney,
 } from "@/queries/profile";
+import { questRevisionRelation } from "@/queries/questRevisions";
 import { fetchIsolatedPyramid } from "@/queries/quests";
 import {
   fetchSectorWindowData,
@@ -130,6 +131,7 @@ import {
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { withQuestDefinitions } from "@/server/utils/questRevisions";
 import {
   fetchPublishedSectorMap,
   fetchPublishedSectorMaps,
@@ -381,7 +383,7 @@ export const travelRouter = createTRPCRouter({
         fetchedWarData,
         liveBattles,
         requestedMap,
-        userQuests,
+        userQuestRevisions,
         completedQuests,
       ] = await Promise.all([
         findUserDataForGetSectorData(ctx.drizzle, ctx),
@@ -395,7 +397,7 @@ export const travelRouter = createTRPCRouter({
         fetchPublishedSectorMap(ctx.drizzle, input.sector).catch(() => null),
         // Quest-bound NPC markers. Global wildlife placements put AI templates in nearly
         // every sector, so reading these upfront saves a sequential round-trip per poll.
-        listQuestHistoryForGetSectorData(ctx.drizzle, ctx),
+        listQuestHistoryForGetSectorData(ctx.drizzle, ctx, questRevisionRelation),
         listQuestHistoryForGetSectorData2(ctx.drizzle, ctx),
       ]);
 
@@ -415,11 +417,16 @@ export const travelRouter = createTRPCRouter({
           questPlacements: [],
         };
       }
-      // Crossings can leave a stale query key. Never return another sector's data.
-      const [users, villageData, sectorData, placements, loadedDutyUsers] =
+      const [
+        [users, villageData, sectorData, placements, loadedDutyUsers],
+        userQuests,
+      ] = await Promise.all([
+        // Crossings can leave a stale query key. Never return another sector's data.
         user.sector === input.sector
           ? sectorWindowData
-          : await fetchSectorWindowData(ctx.drizzle, ctx.userId, user.sector);
+          : fetchSectorWindowData(ctx.drizzle, ctx.userId, user.sector),
+        withSectorQuestDefinitions(ctx.drizzle, ctx, userQuestRevisions),
+      ]);
 
       const dutyShift =
         villageData?.type === "VILLAGE"
@@ -1295,6 +1302,20 @@ export const travelRouter = createTRPCRouter({
       }
     }),
 });
+
+/**
+ * Resolve the open attempts' quest revisions to their definitions; a concurrent edit
+ * repeats the read with the definitions joined.
+ */
+const withSectorQuestDefinitions = async (
+  client: DrizzleClient,
+  ctx: { userId: string },
+  revisions: Awaited<
+    ReturnType<typeof listQuestHistoryForGetSectorData<typeof questRevisionRelation>>
+  >,
+) =>
+  (await withQuestDefinitions(client, revisions)) ??
+  listQuestHistoryForGetSectorData(client, ctx, true);
 
 /** Raw sector participant data before viewer-specific masking and sprite projection. */
 type SectorUserRow = Awaited<ReturnType<typeof fetchSectorWindowData>>[0][number];

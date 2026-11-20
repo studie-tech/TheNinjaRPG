@@ -84,6 +84,7 @@ import {
 } from "@/libs/rewardChoice";
 import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
 import { hasNoBattleWhere } from "@/queries/item";
+import { questRevisionColumns } from "@/queries/questRevisions";
 import { grantableTitleWhere } from "@/queries/title";
 import {
   extendWarParticipantSql,
@@ -100,6 +101,7 @@ import {
   masteryGainUpdates,
   masteryRankUpdate,
 } from "@/server/utils/masteryProgression";
+import { resolveQuestRevisions } from "@/server/utils/questRevisions";
 import { userRegenerationGainSql } from "@/server/utils/regeneration";
 import { canPlayHiddenQuests } from "@/utils/permissions";
 import { getNextUserSnapshotAt } from "@/utils/time";
@@ -2219,21 +2221,66 @@ const questAvailabilityColumns = {
  * responsibility because each destination adds its own contextual rules (war state, structure,
  * occupation, or NPC discovery). Keeping this join shared prevents dashboard discovery from
  * loading the full profile independently for every content category.
+ *
+ * Candidates are read as revisions and resolved to cached definitions; a concurrent edit
+ * repeats the read with the definitions joined.
  */
 export const fetchQuestDiscoveryCandidates = async (
   client: DrizzleClient,
+  userId: string,
+  options: QuestDiscoveryOptions,
+) => {
+  const candidates = await selectQuestDiscoveryRevisions(client, userId, options);
+  const resolve = await resolveQuestRevisions(client, candidates);
+  if (!resolve) return selectQuestDiscoveryDefinitions(client, userId, options);
+  return candidates.map(
+    ({
+      previousAttempts,
+      previousCompletes,
+      completed,
+      periodCompletes,
+      periodStartAt,
+      ...revision
+    }) => ({
+      ...resolve(revision),
+      previousAttempts,
+      previousCompletes,
+      completed,
+      periodCompletes,
+      periodStartAt,
+    }),
+  );
+};
+
+/** Build the discovery candidate selection of quest revisions for `fetchQuestDiscoveryCandidates`. */
+const selectQuestDiscoveryRevisions = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  options: QuestDiscoveryOptions,
+) =>
+  client
+    .select({ ...questRevisionColumns, ...questDiscoveryHistoryColumns })
+    .from(quest)
+    .leftJoin(questHistory, questDiscoveryHistoryJoin(userId))
+    .where(buildQuestDiscoveryWhere(options))
+    .orderBy(asc(quest.name));
+
+/** Build the discovery candidate selection of complete quests for `fetchQuestDiscoveryCandidates`. */
+const selectQuestDiscoveryDefinitions = (
+  client: Pick<DrizzleClient, "select">,
   userId: string,
   options: QuestDiscoveryOptions,
 ) =>
   client
     .select(questDiscoveryColumns)
     .from(quest)
-    .leftJoin(
-      questHistory,
-      and(eq(quest.id, questHistory.questId), eq(questHistory.userId, userId)),
-    )
+    .leftJoin(questHistory, questDiscoveryHistoryJoin(userId))
     .where(buildQuestDiscoveryWhere(options))
     .orderBy(asc(quest.name));
+
+/** The player's history row of each discovery candidate. */
+const questDiscoveryHistoryJoin = (userId: string) =>
+  and(eq(quest.id, questHistory.questId), eq(questHistory.userId, userId));
 
 /** Discovery candidates without objective content, for listings that do not render it. */
 export const fetchQuestAvailabilityCandidates = async (
@@ -2254,48 +2301,120 @@ export const fetchQuestAvailabilityCandidates = async (
 /**
  * Discovery inputs without objective JSON. Authorize hidden summaries in the join,
  * because callers resolve display eligibility against the cached client profile.
+ *
+ * Candidates are read as revisions and resolved to cached definitions; a concurrent edit
+ * repeats the read with the summary columns selected.
  */
 export const fetchQuestDiscoverySummaryCandidates = async (
   client: DrizzleClient,
+  userId: string,
+  options: QuestDiscoveryOptions,
+) => {
+  const candidates = await selectQuestDiscoverySummaryRevisions(
+    client,
+    userId,
+    options,
+  );
+  const resolve = await resolveQuestRevisions(client, candidates);
+  if (!resolve) return selectQuestDiscoverySummaries(client, userId, options);
+  return candidates.map(
+    ({
+      previousAttempts,
+      previousCompletes,
+      periodCompletes,
+      periodStartAt,
+      ...revision
+    }) => {
+      const definition = resolve(revision);
+      return {
+        ...pickQuestDiscoveryListing(definition),
+        // JSON_EXTRACT of an absent path reads as null.
+        content: {
+          reward: definition.content.reward ?? null,
+          rewardMode: definition.content.rewardMode ?? null,
+        } as Pick<QuestContentType, "reward" | "rewardMode">,
+        previousAttempts,
+        previousCompletes,
+        periodCompletes,
+        periodStartAt,
+      };
+    },
+  );
+};
+
+// Eligibility needs the fixed promotion and reward mode, but not objective JSON.
+const questDiscoverySummaryContent =
+  sql`JSON_OBJECT('reward', JSON_EXTRACT(${quest.content}, '$.reward'), 'rewardMode', JSON_EXTRACT(${quest.content}, '$.rewardMode'))`.mapWith(
+    (value: string) =>
+      quest.content.mapFromDriverValue(value) as Pick<
+        QuestContentType,
+        "reward" | "rewardMode"
+      >,
+  );
+
+/** The player's attempt counters joined onto every discovery summary. */
+const questDiscoverySummaryHistoryColumns = {
+  previousAttempts: questHistory.previousAttempts,
+  previousCompletes: questHistory.previousCompletes,
+  periodCompletes: questHistory.periodCompletes,
+  periodStartAt: questHistory.periodStartAt,
+};
+
+/** Build the discovery summary selection of quest revisions for `fetchQuestDiscoverySummaryCandidates`. */
+const selectQuestDiscoverySummaryRevisions = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  options: QuestDiscoveryOptions,
+) =>
+  client
+    .select({ ...questRevisionColumns, ...questDiscoverySummaryHistoryColumns })
+    .from(quest)
+    .leftJoin(questHistory, questDiscoveryHistoryJoin(userId))
+    .innerJoin(userData, eq(userData.userId, userId))
+    .where(questDiscoverySummaryWhere(options))
+    .orderBy(asc(quest.name));
+
+/** Build the discovery summary selection for `fetchQuestDiscoverySummaryCandidates`. */
+const selectQuestDiscoverySummaries = (
+  client: Pick<DrizzleClient, "select">,
   userId: string,
   options: QuestDiscoveryOptions,
 ) =>
   client
     .select({
       ...questDiscoveryListingColumns,
-      // Eligibility needs the fixed promotion and reward mode, but not objective JSON.
-      content:
-        sql`JSON_OBJECT('reward', JSON_EXTRACT(${quest.content}, '$.reward'), 'rewardMode', JSON_EXTRACT(${quest.content}, '$.rewardMode'))`.mapWith(
-          (value: string) =>
-            quest.content.mapFromDriverValue(value) as Pick<
-              QuestContentType,
-              "reward" | "rewardMode"
-            >,
-        ),
-      previousAttempts: questHistory.previousAttempts,
-      previousCompletes: questHistory.previousCompletes,
-      periodCompletes: questHistory.periodCompletes,
-      periodStartAt: questHistory.periodStartAt,
+      content: questDiscoverySummaryContent,
+      ...questDiscoverySummaryHistoryColumns,
     })
     .from(quest)
-    .leftJoin(
-      questHistory,
-      and(eq(quest.id, questHistory.questId), eq(questHistory.userId, userId)),
-    )
+    .leftJoin(questHistory, questDiscoveryHistoryJoin(userId))
     .innerJoin(userData, eq(userData.userId, userId))
-    .where(
-      and(
-        buildQuestDiscoveryWhere(options),
-        or(
-          eq(quest.hidden, false),
-          and(
-            inArray(userData.role, UserRoles.filter(canPlayHiddenQuests)),
-            eq(userData.playsAsPlayer, false),
-          ),
-        ),
-      ),
-    )
+    .where(questDiscoverySummaryWhere(options))
     .orderBy(asc(quest.name));
+
+/** Discovery filters, with hidden quests only for staff who play them. */
+const questDiscoverySummaryWhere = (options: QuestDiscoveryOptions) =>
+  and(
+    buildQuestDiscoveryWhere(options),
+    or(
+      eq(quest.hidden, false),
+      and(
+        inArray(userData.role, UserRoles.filter(canPlayHiddenQuests)),
+        eq(userData.playsAsPlayer, false),
+      ),
+    ),
+  );
+
+/** The `questDiscoveryListingColumns` fields of a complete definition, in their order. */
+const pickQuestDiscoveryListing = (definition: Quest) =>
+  Object.fromEntries(
+    Object.keys(questDiscoveryListingColumns).map((key) => [
+      key,
+      definition[key as keyof Quest],
+    ]),
+  ) as {
+    [Key in keyof typeof questDiscoveryListingColumns]: Quest[Key];
+  };
 
 /** Build the `quest` selection for `questAttemptWhere`, using predicates on `id`, `updatedAt`, `hidden`. */
 export const selectQuestForQuestAttemptWhere = (
