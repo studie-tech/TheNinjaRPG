@@ -829,7 +829,7 @@ export const DiffuseTag = z.object({
   ...BaseAttributes,
   type: tagType("diffuse"),
   description: msg(
-    "Defer a percentage of nonlethal incoming damage over subsequent turns. Damage reduction applies before deferral; shields and absorption apply to the immediate portion. Repayment survives expiry, bypasses defenses, and respects Final Stand. Cannot be cleansed, prevented, or copied.",
+    "Defer a percentage of incoming damage over subsequent turns (non-lethal hits only: a hit that would kill before shields and damage reduction is not deferred). Damage reduction applies before deferral; shields and absorption apply to the immediate portion. Repayment survives expiry, bypasses defenses, and respects Final Stand. Cannot be cleansed, prevented, or copied.",
   ),
   calculation: z.enum(["percentage"]).prefault("percentage"),
   power: z.coerce.number().gt(0).max(DIFFUSE_MAX_PERCENTAGE).prefault(25),
