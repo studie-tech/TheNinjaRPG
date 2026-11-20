@@ -51,12 +51,6 @@ export const listBattlefieldAssets = battlefieldAssets.read;
 /** Make every instance list battlefield assets again; await after writes to one. */
 export const invalidateBattlefieldAssets = battlefieldAssets.invalidate;
 
-/** Whether an asset row belongs to the battlefield set. */
-export const isBattlefieldAsset = (asset: {
-  hidden: boolean;
-  onInitialBattleField: boolean;
-}) => !asset.hidden && asset.onInitialBattleField;
-
 /** Load a game asset by ID; no match yields undefined. */
 export const fetchGameAsset = async (client: DrizzleClient, id: string) => {
   return await client.query.gameAsset.findFirst({

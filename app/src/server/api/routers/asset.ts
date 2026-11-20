@@ -18,7 +18,6 @@ import {
   insertActionLogForUpdate,
   insertGameAssetForCreate,
   invalidateBattlefieldAssets,
-  isBattlefieldAsset,
   listGameAssetForGetAllNames,
   listGameAssetForGetNameTags,
   listGameAssetForGetSceneAssets,
@@ -245,22 +244,18 @@ export const gameAssetRouter = createTRPCRouter({
         ...input.data,
       });
       // Update database
-      const onBattlefield =
-        isBattlefieldAsset(entry) ||
-        isBattlefieldAsset({
-          hidden: input.data.hidden ?? entry.hidden,
-          onInitialBattleField: input.data.onInitialBattleField,
-        });
       const writes = await Promise.allSettled([
-        updateGameAssetForUpdate(ctx.drizzle, input, entry).then(() =>
-          // Saved artwork must replace the caches even if the independent log write fails.
-          Promise.all([
+        updateGameAssetForUpdate(ctx.drizzle, input, entry).then(async () => {
+          // Earlier snapshots cannot prove eligibility after overlapping staff writes.
+          const caches = await Promise.allSettled([
             entry.type === "LPC" || input.data.type === "LPC"
               ? invalidateLpcCatalog()
               : null,
-            onBattlefield ? invalidateBattlefieldAssets() : null,
-          ]),
-        ),
+            invalidateBattlefieldAssets(),
+          ]);
+          const failed = caches.find((result) => result.status === "rejected");
+          if (failed) throw failed.reason;
+        }),
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
       ]);
       const failed = writes.find((result) => result.status === "rejected");
@@ -296,7 +291,12 @@ export const gameAssetRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchGameAsset(ctx.drizzle, input.id),
       ]);
-      if (!entry || !canChangeContent(user.role) || user.isBanned) {
+      if (!canChangeContent(user.role) || user.isBanned) {
+        return errorResponse(`Not allowed to delete gameAsset`);
+      }
+      if (!entry) {
+        // A prior delete may have committed before its shared invalidation failed.
+        await invalidateBattlefieldAssets();
         return errorResponse(`Not allowed to delete gameAsset`);
       }
       if (entry.type === "LPC") {
@@ -334,7 +334,7 @@ export const gameAssetRouter = createTRPCRouter({
         // Finish shared invalidation before returning an independent log failure.
         const writes = await Promise.allSettled([
           invalidateLpcCatalog(),
-          isBattlefieldAsset(entry) ? invalidateBattlefieldAssets() : null,
+          invalidateBattlefieldAssets(),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
         const failed = writes.find((result) => result.status === "rejected");
@@ -342,8 +342,8 @@ export const gameAssetRouter = createTRPCRouter({
       } else {
         // Finish shared invalidation before returning an independent log failure.
         const writes = await Promise.allSettled([
-          deleteGameAssetForDelete(ctx.drizzle, input).then(() =>
-            isBattlefieldAsset(entry) ? invalidateBattlefieldAssets() : null,
+          deleteGameAssetForDelete(ctx.drizzle, input).then(
+            invalidateBattlefieldAssets,
           ),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);

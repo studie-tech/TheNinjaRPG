@@ -1,12 +1,17 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { setImmediate } from "node:timers/promises";
+import { eq } from "drizzle-orm";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { actionLog, gameAsset, userData } from "@/drizzle/schema";
+import * as assetQueries from "@/queries/asset";
 import { listBattlefieldAssets } from "@/queries/asset";
 import { gameAssetRouter } from "@/server/api/routers/asset";
 import type { DrizzleClient } from "@/server/db";
+import * as lpcCatalog from "@/server/utils/lpcCatalog";
 import { deferred } from "../../../setup/deferred";
 import { insertUsers } from "../../../setup/factories";
-import { aroundStatements } from "../../../setup/statements";
+import { lpcAssets } from "../../../setup/lpc";
+import { aroundStatements, beforeStatements } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -73,6 +78,8 @@ describeWithDatabase("battlefield assets", () => {
     ]);
   });
 
+  afterEach(() => vi.restoreAllMocks());
+
   const ids = async () => {
     const db = await getTestDatabase();
     return (await listBattlefieldAssets(db)).map((asset) => asset.id).sort();
@@ -102,6 +109,73 @@ describeWithDatabase("battlefield assets", () => {
       data: { ...assetData, name: "Tree", onInitialBattleField: false },
     });
     expect(await ids()).toEqual(["hidden-rock"]);
+  });
+
+  it.each(["update", "delete"] as const)(
+    "invalidates when a concurrent release follows the %s snapshot",
+    async (operation) => {
+      const db = await getTestDatabase();
+      const caller = await callerFor(gameAssetRouter, staffId);
+      const client = beforeStatements(db, gameAsset, [
+        async () => {
+          await caller.update({ id: "tree", data: { ...assetData, name: "Tree" } });
+          expect(await ids()).toEqual(["rock", "tree"]);
+        },
+      ]);
+      const staleCaller = callerForDatabase(gameAssetRouter, staffId, client);
+      const result =
+        operation === "delete"
+          ? await staleCaller.delete({ id: "tree" })
+          : await staleCaller.update({
+              id: "tree",
+              data: { ...assetData, name: "Tree", onInitialBattleField: false },
+            });
+      expect(result.success).toBe(true);
+      expect(await ids()).toEqual(["rock"]);
+    },
+  );
+
+  it("repairs a missing asset's cached row only for an authorized deletion retry", async () => {
+    const db = await getTestDatabase();
+    expect(await ids()).toEqual(["rock"]);
+    // Model a committed deletion whose invalidation never reached the shared store.
+    await db.delete(gameAsset).where(eq(gameAsset.id, "rock"));
+    await insertUsers([{ userId: "battlefield-player", username: "AssetPlayer" }]);
+    const player = await callerFor(gameAssetRouter, "battlefield-player");
+    expect((await player.delete({ id: "rock" })).success).toBe(false);
+    expect(await ids()).toEqual(["rock"]);
+    const staff = await callerFor(gameAssetRouter, staffId);
+    await staff.delete({ id: "rock" });
+    expect(await ids()).toEqual([]);
+  });
+
+  it("waits for battlefield invalidation before reporting an LPC invalidation failure", async () => {
+    const db = await getTestDatabase();
+    const lpcConfig = lpcAssets[0]!.lpcConfig;
+    await db
+      .update(gameAsset)
+      .set({ type: "LPC", lpcConfig })
+      .where(eq(gameAsset.id, "rock"));
+    const battlefield = deferred<void>();
+    const started = deferred<void>();
+    vi.spyOn(assetQueries, "invalidateBattlefieldAssets").mockImplementation(() => {
+      started.resolve();
+      return battlefield.promise;
+    });
+    vi.spyOn(lpcCatalog, "invalidateLpcCatalog").mockRejectedValue(
+      new Error("LPC cache unavailable"),
+    );
+    const caller = await callerFor(gameAssetRouter, staffId);
+    const outcome = caller
+      .update({ id: "rock", data: { ...assetData, type: "LPC", lpcConfig } })
+      .catch((error: unknown) => error);
+    await started.promise;
+    try {
+      expect(await Promise.race([outcome, setImmediate("pending")])).toBe("pending");
+    } finally {
+      battlefield.resolve();
+    }
+    expect(await outcome).toMatchObject({ message: "LPC cache unavailable" });
   });
 
   it.each([false, true])(
