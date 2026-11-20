@@ -1,12 +1,11 @@
-import type { Item, VillageStructure } from "@/drizzle/schema";
+import type { VillageStructure } from "@/drizzle/schema";
 import {
   findProfileUserWithDefinitions,
   findUserDataForQueryUpdatedUser,
-  selectItemDefinitions,
   selectStructureDefinitions,
 } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
-import { createDefinitionCache } from "@/server/utils/definitionCache";
+import { createDefinitionCache, itemDefinitions } from "@/server/utils/definitionCache";
 import { questDefinitionCache } from "@/server/utils/questRevisions";
 
 /**
@@ -25,12 +24,12 @@ export const fetchProfileUser = async (
   // Snapshots read without a relation (partial clients) leave it as read.
   const items = user.items ?? [];
   const structures = user.village?.structures ?? [];
-  const [quests, itemDefinitions, structureDefinitions] = await Promise.all([
+  const [quests, hydratedItems, structureDefinitions] = await Promise.all([
     questDefinitionCache.hydrate(
       client,
       (user.userQuests ?? []).map((entry) => entry.quest),
     ),
-    itemCache.hydrate(
+    itemDefinitions.hydrate(
       client,
       items.flatMap((entry) => [
         entry.item,
@@ -41,7 +40,7 @@ export const fetchProfileUser = async (
   ]);
   // One joined retry keeps definitions and live state in the same snapshot, even if
   // staff keep editing while this request reads a cold definition.
-  if (!quests || !itemDefinitions || !structureDefinitions)
+  if (!quests || !hydratedItems || !structureDefinitions)
     return findProfileUserWithDefinitions(client, userId);
   return {
     ...user,
@@ -54,11 +53,11 @@ export const fetchProfileUser = async (
     ...(user.items && {
       items: user.items.map((entry) => ({
         ...entry,
-        item: itemDefinitions(entry.item),
+        item: hydratedItems(entry.item),
         ...(entry.imbuements && {
           imbuements: entry.imbuements.map((imbuement) => ({
             ...imbuement,
-            item: itemDefinitions(imbuement.item),
+            item: hydratedItems(imbuement.item),
           })),
         }),
       })),
@@ -71,12 +70,6 @@ export const fetchProfileUser = async (
     }),
   } as ProfileUser;
 };
-
-const itemCache = createDefinitionCache<Item>({
-  name: "item-definition",
-  memoryLimit: 2000,
-  select: (client, ids) => selectItemDefinitions(client, ids),
-});
 
 // Structure rows change with upgrades and raids; each change is one read per village.
 const structureCache = createDefinitionCache<VillageStructure>({
