@@ -15,10 +15,11 @@ import type { ExtraState } from "@/libs/combat/types";
 /**
  * Whether writes move the catalogs out of the JSON column. A build that predates
  * `Battle.catalogs` reads only the JSON column and settles a moved battle without its
- * settings, quests or villages rather than failing, so writes start once no deployment that
- * can still serve, or be rolled back to, lacks `unpackBattleExtraState`.
+ * settings, quests or villages rather than failing, so no such build may serve requests
+ * while these rows exist. Turning writes off is always safe: every reader here accepts both
+ * row formats.
  */
-export const WRITE_COMPRESSED_CATALOGS = false;
+export const WRITE_COMPRESSED_CATALOGS = true;
 
 /** The stored catalog keys; only a full extraState write may change them. */
 const STORED_CATALOG_KEYS = [
