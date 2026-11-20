@@ -145,9 +145,9 @@ export const selectDungeonMemberForGetState = (
     .as("visibleDungeonRuns");
 
 /**
- * Build the `candidates` selection for `getState`. Runs of one definition share a captured
- * content snapshot, so `content` is sent only on the first row of each `contentHash`; the
- * window uses the page order, so that row is always on the page when any of its group is.
+ * Build the `candidates` selection for `getState`. The page is ordered on narrow columns
+ * first; runs of one definition then share a captured content snapshot, so `content` is
+ * sent only on the first page row of each `contentHash`.
  */
 export const selectCandidatesForGetState = (
   client: Pick<DrizzleClient, "select">,
@@ -156,22 +156,14 @@ export const selectCandidatesForGetState = (
 ) => {
   // The unique active index matches at most one membership, so the join adds no rows.
   const activeMember = alias(dungeonMember, "activeMember");
-  const contentHash = sql<string>`SHA2(${dungeonRun.content}, 256)`;
+  const isActive = sql<boolean>`${activeMember.runId} IS NOT NULL`;
+  const isLobby = eq(dungeonRun.status, "LOBBY");
   // Keep the player's party, unclaimed rewards and invitations ahead of paid history.
-  const pageOrder = [
-    desc(sql`${activeMember.runId} IS NOT NULL`),
-    desc(eq(dungeonRun.status, "LOBBY")),
-    desc(dungeonRun.createdAt),
-    asc(dungeonRun.id),
-  ];
-  return client
+  const page = client
     .select({
-      ...getTableColumns(dungeonRun),
-      content:
-        sql<DungeonContent | null>`CASE WHEN ROW_NUMBER() OVER (PARTITION BY ${contentHash} ORDER BY ${sql.join(pageOrder, sql`, `)}) = 1 THEN ${dungeonRun.content} END`.mapWith(
-          dungeonRun.content,
-        ),
-      contentHash,
+      id: dungeonRun.id,
+      isActive: isActive.as("isActive"),
+      isLobby: sql<boolean>`${isLobby}`.as("isLobby"),
     })
     .from(candidates)
     .innerJoin(dungeonRun, eq(dungeonRun.id, candidates.id))
@@ -182,8 +174,33 @@ export const selectCandidatesForGetState = (
         eq(activeMember.activeUserId, ctx.userId),
       ),
     )
-    .orderBy(...pageOrder)
-    .limit(20);
+    .orderBy(
+      desc(isActive),
+      desc(isLobby),
+      desc(dungeonRun.createdAt),
+      asc(dungeonRun.id),
+    )
+    .limit(20)
+    .as("dungeonRunPage");
+  const pageOrder = [
+    desc(page.isActive),
+    desc(page.isLobby),
+    desc(dungeonRun.createdAt),
+    asc(dungeonRun.id),
+  ];
+  const contentHash = sql<string>`SHA2(${dungeonRun.content}, 256)`;
+  return client
+    .select({
+      ...getTableColumns(dungeonRun),
+      content:
+        sql<DungeonContent | null>`CASE WHEN ROW_NUMBER() OVER (PARTITION BY ${contentHash} ORDER BY ${sql.join(pageOrder, sql`, `)}) = 1 THEN ${dungeonRun.content} END`.mapWith(
+          dungeonRun.content,
+        ),
+      contentHash,
+    })
+    .from(page)
+    .innerJoin(dungeonRun, eq(dungeonRun.id, page.id))
+    .orderBy(...pageOrder);
 };
 
 /** Build the `userData` listing for `getState`, using predicates on `userId`. */
