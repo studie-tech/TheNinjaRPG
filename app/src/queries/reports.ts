@@ -236,7 +236,7 @@ export const selectUserReportForGetRelatedReports = (
       userReportEmbedding,
       and(
         eq(userReportEmbedding.reportId, userReport.id),
-        eq(userReportEmbedding.sourceText, userReport.aiInterpretation),
+        eq(userReport.embeddedTextHash, embeddedTextHash),
         eq(userReportEmbedding.model, OPENAI_REPORT_EMBEDDING_MODEL),
       ),
     )
@@ -308,29 +308,36 @@ export const deleteUserReportEmbeddingForDeleteOrphanedReportEmbeddings = (
   );
 
 /**
- * Build the `userReport` selection for `indexReportEmbeddings`, including predicates
- * on `reportId`, `sourceText`, `aiInterpretation`.
+ * Build the `userReport` selection for `indexReportEmbeddings`: eligible reports whose
+ * summary changed since it was embedded, or whose vector came from another model.
+ * Both arms start from an index, so a run with nothing to embed reads only the
+ * flagged reports.
  */
 export const selectUserReportForIndexReportEmbeddings = (
   client: Pick<DrizzleClient, "select">,
   eligible: SQL<unknown> | undefined,
-) =>
-  client
-    .select({ id: userReport.id, text: userReport.aiInterpretation })
+) => {
+  const columns = {
+    id: userReport.id,
+    text: userReport.aiInterpretation,
+    createdAt: userReport.createdAt,
+  };
+  return client
+    .select(columns)
     .from(userReport)
-    .leftJoin(userReportEmbedding, eq(userReportEmbedding.reportId, userReport.id))
-    .where(
-      and(
-        eligible,
-        or(
-          isNull(userReportEmbedding.reportId),
-          ne(userReportEmbedding.sourceText, userReport.aiInterpretation),
-          ne(userReportEmbedding.model, OPENAI_REPORT_EMBEDDING_MODEL),
+    .where(and(eq(userReport.needsEmbedding, true), eligible))
+    .union(
+      client
+        .select(columns)
+        .from(userReport)
+        .innerJoin(userReportEmbedding, eq(userReportEmbedding.reportId, userReport.id))
+        .where(
+          and(ne(userReportEmbedding.model, OPENAI_REPORT_EMBEDDING_MODEL), eligible),
         ),
-      ),
     )
-    .orderBy(asc(userReport.createdAt), asc(userReport.id))
+    .orderBy(asc(sql`createdAt`), asc(sql`id`))
     .limit(50);
+};
 
 /**
  * Build the `userReportEmbedding` insert from `userReport` for `indexReportEmbeddings`,
@@ -347,7 +354,6 @@ export const insertUserReportEmbeddingForIndexReportEmbeddings = (
       client
         .select({
           reportId: userReport.id,
-          sourceText: userReport.aiInterpretation,
           model: sql`${OPENAI_REPORT_EMBEDDING_MODEL}`.as("model"),
           embedding: embedding.as("embedding"),
         })
@@ -360,12 +366,26 @@ export const insertUserReportEmbeddingForIndexReportEmbeddings = (
         ),
     )
     .onDuplicateKeyUpdate({
-      set: {
-        sourceText: report.text,
-        model: OPENAI_REPORT_EMBEDDING_MODEL,
-        embedding,
-      },
+      set: { model: OPENAI_REPORT_EMBEDDING_MODEL, embedding },
     });
+
+/**
+ * Build the `userReport` update for `indexReportEmbeddings`, recording the summary the
+ * stored vector encodes; a summary changed since it was read stays flagged.
+ */
+export const updateUserReportForIndexReportEmbeddings = (
+  client: Pick<DrizzleClient, "update">,
+  report: { id: string; text: string },
+) =>
+  client
+    .update(userReport)
+    .set({ embeddedTextHash })
+    .where(
+      and(eq(userReport.id, report.id), eq(userReport.aiInterpretation, report.text)),
+    );
+
+/** SHA-256 of the current summary, matching what `embeddedTextHash` records. */
+const embeddedTextHash = sql<string>`SHA2(${userReport.aiInterpretation}, 256)`;
 
 /** Build report columns, omitting reporterUserId for ordinary viewers and retaining the lazy comment subquery. */
 const reportColumns = (client: Pick<DrizzleClient, "select">) => ({

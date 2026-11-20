@@ -690,7 +690,6 @@ describeWithDatabase("staff user-id rename", () => {
     await database.insert(userReportEmbedding).values(
       ["reported", "reporter", "retained"].map((reportId) => ({
         reportId,
-        sourceText: "Moderation summary",
         model: OPENAI_REPORT_EMBEDDING_MODEL,
         embedding,
       })),

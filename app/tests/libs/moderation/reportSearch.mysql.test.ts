@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, mock } from "bun:test";
-import { and, asc, eq, ne, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
 import {
   OPENAI_REPORT_EMBEDDING_MODEL,
   REPORT_EMBEDDING_DIMENSIONS,
@@ -125,6 +125,111 @@ describeWithDatabase("moderation retrieval against Community MySQL", () => {
     ).toEqual(["needsAiSummary", "createdAt"]);
   });
 
+  it("embeds only precedents whose vector is missing, stale or from another model", async () => {
+    const client = await getTestDatabase();
+    const vector = sql`TO_VECTOR(${JSON.stringify(Array(REPORT_EMBEDDING_DIMENSIONS).fill(0))})`;
+    const hashOf = (text: string) => sql`SHA2(${text}, 256)`;
+    await client
+      .insert(userReport)
+      .values([
+        reportRow("missing", { createdAt: new Date("2026-01-01") }),
+        reportRow("stale", { createdAt: new Date("2026-01-02") }),
+        reportRow("other-model", { createdAt: new Date("2026-01-03") }),
+        reportRow("current", { createdAt: new Date("2026-01-04") }),
+        reportRow("no-decision"),
+        reportRow("unviewed", { status: "UNVIEWED" }),
+        reportRow("profile", { system: "user_profile" }),
+      ]);
+    await client
+      .update(userReport)
+      .set({ embeddedTextHash: hashOf("Earlier summary") })
+      .where(eq(userReport.id, "stale"));
+    await client
+      .update(userReport)
+      .set({ embeddedTextHash: hashOf(reportRow("current").aiInterpretation) })
+      .where(inArray(userReport.id, ["current", "other-model"]));
+    await client.insert(userReportEmbedding).values(
+      ["stale", "other-model", "current"].map((reportId) => ({
+        reportId,
+        model:
+          reportId === "other-model" ? "older-model" : OPENAI_REPORT_EMBEDDING_MODEL,
+        embedding: vector,
+      })),
+    );
+    await client.insert(userReportComment).values(
+      ["missing", "stale", "other-model", "current", "unviewed", "profile"].map(
+        (reportId) => ({
+          id: `${reportId}-comment`,
+          reportId,
+          userId: "staff",
+          content: "Decision",
+          decision: "OFFICIAL_WARNING" as const,
+        }),
+      ),
+    );
+    const flagged = async () =>
+      (
+        await client
+          .select({ id: userReport.id })
+          .from(userReport)
+          .where(eq(userReport.needsEmbedding, true))
+      )
+        .map(({ id }) => id)
+        .sort();
+    // "no-decision" stays flagged: only the decision comment check excludes it.
+    expect(await flagged()).toEqual(["missing", "no-decision", "stale"]);
+
+    // Community MySQL stores vectors but lacks PlanetScale's DISTANCE probe.
+    const realSelect = client.select.bind(client);
+    const vectorClient = new Proxy(client, {
+      get(target, key, receiver) {
+        if (key === "select")
+          return (fields: Record<string, unknown>) =>
+            "distance" in fields
+              ? { from: () => ({ limit: async () => [] }) }
+              : realSelect(fields as never);
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const embed = mock(async (texts: string[]) =>
+      texts.map(() => Array(REPORT_EMBEDDING_DIMENSIONS).fill(1)),
+    );
+    await indexReportEmbeddings(vectorClient, embed);
+    expect(embed).toHaveBeenCalledTimes(1);
+    expect(embed.mock.calls[0]?.[0]).toHaveLength(3);
+    const embedded = await client
+      .select({
+        reportId: userReportEmbedding.reportId,
+        model: userReportEmbedding.model,
+      })
+      .from(userReportEmbedding)
+      .orderBy(asc(userReportEmbedding.reportId));
+    expect(embedded).toEqual(
+      ["current", "missing", "other-model", "stale"].map((reportId) => ({
+        reportId,
+        model: OPENAI_REPORT_EMBEDDING_MODEL,
+      })),
+    );
+    expect(await flagged()).toEqual(["no-decision"]);
+    await indexReportEmbeddings(vectorClient, embed);
+    expect(embed).toHaveBeenCalledTimes(1);
+
+    // Summary and status writes re-evaluate the flag in place.
+    await client
+      .update(userReport)
+      .set({ aiInterpretation: "Rewritten summary" })
+      .where(eq(userReport.id, "current"));
+    await client
+      .update(userReport)
+      .set({ status: "UNVIEWED" })
+      .where(eq(userReport.id, "missing"));
+    expect(await flagged()).toEqual(["current", "no-decision"]);
+    expect(
+      (await indexColumns("UserReport", "UserReport_needsEmbedding_createdAt_idx"))
+        .columns,
+    ).toEqual(["needsEmbedding", "createdAt"]);
+  });
+
   it("deletes only orphans and preserves a parent restored between scan and delete", async () => {
     const client = await getTestDatabase();
     const embedding = sql`TO_VECTOR(${JSON.stringify(Array(REPORT_EMBEDDING_DIMENSIONS).fill(0))})`;
@@ -132,7 +237,6 @@ describeWithDatabase("moderation retrieval against Community MySQL", () => {
     await client.insert(userReportEmbedding).values(
       ["live", "orphan", "restored"].map((reportId) => ({
         reportId,
-        sourceText: "Summary",
         model: OPENAI_REPORT_EMBEDDING_MODEL,
         embedding,
       })),
@@ -272,7 +376,6 @@ describeWithDatabase("moderation retrieval against Community MySQL", () => {
     );
     await client.insert(userReportEmbedding).values({
       reportId: "vector",
-      sourceText: "Threats",
       model: OPENAI_REPORT_EMBEDDING_MODEL,
       embedding: sql`TO_VECTOR(${JSON.stringify(values)})`,
     });

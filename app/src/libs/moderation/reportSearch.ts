@@ -16,6 +16,7 @@ import {
   selectUserReportForGetRelatedReports2,
   selectUserReportForGetRelatedReports3,
   selectUserReportForIndexReportEmbeddings,
+  updateUserReportForIndexReportEmbeddings,
 } from "@/queries/reports";
 import type { DrizzleClient } from "@/server/db";
 import { chunkArray } from "@/utils/array";
@@ -224,13 +225,15 @@ export const indexReportEmbeddings = async (
   if (reports.length === 0) return;
   const embeddings = await embed(reports.map((report) => report.text));
   await Promise.all(
-    reports.map((report, index) => {
+    reports.map(async (report, index) => {
       const embedding = sql`TO_VECTOR(${JSON.stringify(embeddings[index])})`;
-      return insertUserReportEmbeddingForIndexReportEmbeddings(
+      await insertUserReportEmbeddingForIndexReportEmbeddings(
         client,
         embedding,
         report,
       );
+      // Recorded only after the vector is stored; an interrupted run re-embeds the report.
+      await updateUserReportForIndexReportEmbeddings(client, report);
     }),
   );
 };
