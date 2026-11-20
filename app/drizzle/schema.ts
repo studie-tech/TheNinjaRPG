@@ -3460,9 +3460,14 @@ export const userData = mysqlTable(
   },
   (table) => {
     return {
+      // Descending, so the newest-first user list scans it forward, and with the
+      // username and IP that its substring searches filter in the index before
+      // loading any row (MySQL pushes conditions into forward scans only).
       isAiUpdatedAtIdx: index("UserData_isAi_updatedAt_idx").on(
         table.isAi,
-        table.updatedAt,
+        sql`${table.updatedAt} desc`,
+        table.username,
+        table.lastIp,
       ),
       // Composite index for the frequently-used public users leaderboard query
       // Covers: WHERE isAi = ? ORDER BY rankedLp DESC, experience DESC LIMIT ?

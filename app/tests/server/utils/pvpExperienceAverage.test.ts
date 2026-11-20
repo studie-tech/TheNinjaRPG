@@ -3,7 +3,10 @@ import { getTableConfig } from "drizzle-orm/mysql-core";
 import { PVP_EXPERIENCE_AVERAGE_SETTING } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import {
+  fetchPvpExperienceAverage,
+  invalidatePvpExperienceAverage,
+} from "@/server/utils/pvpExperience";
 
 const start = new Date("2026-10-21T12:00:00Z");
 
@@ -20,7 +23,7 @@ const fakeClient = (averages: number[]) => {
   return { client, queries: () => queries };
 };
 
-describe("fetchPvpExperienceAverage instance cache", () => {
+describe("fetchPvpExperienceAverage shared cache", () => {
   beforeEach(() => {
     setSystemTime(start);
   });
@@ -31,11 +34,14 @@ describe("fetchPvpExperienceAverage instance cache", () => {
   it("serves repeat calls within the TTL from one query", async () => {
     const { client, queries } = fakeClient([1000, 2000]);
     const first = await fetchPvpExperienceAverage(client);
-    setSystemTime(new Date(start.getTime() + 4 * 60 * 1000));
+    setSystemTime(new Date(start.getTime() + 30 * 1000));
     const second = await fetchPvpExperienceAverage(client);
+    setSystemTime(new Date(start.getTime() + 10 * 60 * 1000 - 1));
+    const third = await fetchPvpExperienceAverage(client);
     expect(queries()).toBe(1);
     expect(first).toMatchObject({ name: PVP_EXPERIENCE_AVERAGE_SETTING, value: 1000 });
-    expect(second.value).toBe(1000);
+    expect(first.time).toEqual(start);
+    expect([second.value, third.value]).toEqual([1000, 1000]);
   });
 
   it("shares one query between concurrent misses", async () => {
@@ -51,10 +57,19 @@ describe("fetchPvpExperienceAverage instance cache", () => {
   it("re-queries once the TTL has passed", async () => {
     const { client, queries } = fakeClient([1000, 2000]);
     await fetchPvpExperienceAverage(client);
-    setSystemTime(new Date(start.getTime() + 5 * 60 * 1000));
+    setSystemTime(new Date(start.getTime() + 10 * 60 * 1000));
     const refreshed = await fetchPvpExperienceAverage(client);
     expect(queries()).toBe(2);
     expect(refreshed.value).toBe(2000);
+  });
+
+  it("re-queries after the daily decay invalidates it", async () => {
+    const { client, queries } = fakeClient([1000, 900]);
+    await fetchPvpExperienceAverage(client);
+    await invalidatePvpExperienceAverage();
+    const decayed = await fetchPvpExperienceAverage(client);
+    expect(queries()).toBe(2);
+    expect(decayed.value).toBe(900);
   });
 
   it("does not cache a failed query", async () => {

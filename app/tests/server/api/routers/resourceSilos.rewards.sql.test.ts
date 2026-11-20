@@ -26,7 +26,7 @@ import {
 import { resourceSilosRouter } from "@/server/api/routers/resourceSilos";
 import type { DrizzleClient } from "@/server/db";
 import { prepareActionReadiness } from "@/server/utils/actionReadiness";
-import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
+import { invalidatePvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { updateRewards } from "@/server/utils/questRewards";
 import * as time from "@/utils/time";
 import {
@@ -101,7 +101,7 @@ describeWithDatabase("resource silo reward payouts", () => {
       villageStructure,
       war,
     );
-    resetPvpExperienceAverageCache();
+    await invalidatePvpExperienceAverage();
     const now = new Date();
     window = {
       active: true,

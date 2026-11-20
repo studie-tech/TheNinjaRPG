@@ -13,6 +13,7 @@ import { drizzleDB } from "@/server/db";
 import { updateUserDataCandidates } from "@/server/utils/cleaner";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { invalidatePvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { periodStart } from "@/utils/time";
 
 const ENDPOINT_NAME = "daily-pvp";
@@ -71,4 +72,7 @@ const decayPlayerPvpExperience = async (dayStart: Date) => {
   await updateUserDataCandidates(drizzleDB, pending, (batch) =>
     updateUserDataForDecayPlayerPvpExperience(drizzleDB, dayStart, batch, pending),
   );
+  // The cache's TTL bounds the stale average when invalidation fails, so the decay,
+  // which has already committed, still reports success.
+  await invalidatePvpExperienceAverage().catch(() => undefined);
 };

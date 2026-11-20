@@ -22,7 +22,7 @@ import {
 } from "@/queries/resourceSilos";
 import { resourceSilosRouter } from "@/server/api/routers/resourceSilos";
 import type { DrizzleClient } from "@/server/db";
-import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
+import { invalidatePvpExperienceAverage } from "@/server/utils/pvpExperience";
 import * as time from "@/utils/time";
 import { ObjectiveReward } from "@/validators/rewards";
 import { makeBattleUser, makeCompleteBattle } from "../../../setup/combat";
@@ -65,7 +65,7 @@ describeWithDatabase("resource silo claims and recovery", () => {
       userRewards,
       userVote,
     );
-    resetPvpExperienceAverageCache();
+    await invalidatePvpExperienceAverage();
     const now = new Date();
     window = {
       active: true,

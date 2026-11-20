@@ -29,9 +29,11 @@ const invalidators = new Set<() => Promise<void>>();
  *
  * Each call reads the version key and answers from this instance's memory when it holds
  * that version and the rows are younger than `ttlSeconds`; otherwise it reads the stored
- * payload, or the database and stores the result. Concurrent misses share one read and
- * failed reads are never cached. `invalidate` names a new version after a write, so every
- * instance reads the saved rows on its next call. While the Runtime Cache fails, reads go
+ * payload, or the database and stores the result. Concurrent misses on one instance
+ * share one read and failed reads are never cached. `invalidate` names a new version
+ * after a write, so every instance reads the saved rows on its next version read:
+ * the next call, or with
+ * `memorySeconds` the first call after that window. While the Runtime Cache fails, reads go
  * to the database. Callers receive a structured clone unless `cloneReads` is false, so
  * per-user rewrites of the rows stay private.
  */
@@ -40,6 +42,7 @@ export const createRuntimeCache = <Client, T>({
   ttlSeconds,
   load,
   cloneReads = true,
+  memorySeconds = 0,
   store,
 }: {
   /** Key prefix and Runtime Cache tag: letters, digits and dashes. */
@@ -49,6 +52,12 @@ export const createRuntimeCache = <Client, T>({
   load: (client: Client) => Promise<T>;
   /** False when callers never mutate the value and may share one object. */
   cloneReads?: boolean;
+  /**
+   * How long an instance serves its copy without reading the version key. Other
+   * instances' invalidations then reach it up to this late; only for values that
+   * tolerate that lag and are read on most requests.
+   */
+  memorySeconds?: number;
   /** Replaces the Runtime Cache, for tests; such caches stay out of `invalidateRuntimeCaches`. */
   store?: RuntimeCache;
 }) => {
@@ -57,8 +66,10 @@ export const createRuntimeCache = <Client, T>({
   const payloadTag = `${name}:payload`;
   const payloadKey = (version: string) => `${name}:${deploymentKey}:${version}`;
   const ttlMs = ttlSeconds * 1000;
-  let memory: { version: string; value: T; at: number } | undefined;
-  let pendingVersion: Promise<string> | undefined;
+  const memoryMs = memorySeconds * 1000;
+  // `checkedAt` is the start of the version probe that named this copy.
+  let memory: { version: string; value: T; at: number; checkedAt: number } | undefined;
+  let pendingVersion: Promise<{ version: string; checkedAt: number }> | undefined;
   // Reads on the invalidating instance wait for the new version.
   let pendingInvalidation: Promise<void> | undefined;
   const pendingReads = new Map<string, Promise<T>>();
@@ -79,9 +90,13 @@ export const createRuntimeCache = <Client, T>({
   /** Concurrent calls share one version read, so a cold instance creates one version. */
   const currentVersion = () => {
     if (!pendingVersion) {
-      const promise = readVersionKey().finally(() => {
-        if (pendingVersion === promise) pendingVersion = undefined;
-      });
+      // Probe latency must not extend the allowed memory staleness.
+      const checkedAt = Date.now();
+      const promise = readVersionKey()
+        .then((version) => ({ version, checkedAt }))
+        .finally(() => {
+          if (pendingVersion === promise) pendingVersion = undefined;
+        });
       pendingVersion = promise;
     }
     return pendingVersion;
@@ -99,8 +114,12 @@ export const createRuntimeCache = <Client, T>({
   };
 
   /** Read `version` from the Runtime Cache, else the database, and keep it in memory. */
-  const readVersion = async (client: Client, version: string) => {
-    const startedGeneration = generation;
+  const readVersion = async (
+    client: Client,
+    version: string,
+    checkedAt: number,
+    startedGeneration: number,
+  ) => {
     let entry = await storedValue(version);
     if (!entry) {
       // A slow read cannot claim freshness newer than its start.
@@ -114,27 +133,44 @@ export const createRuntimeCache = <Client, T>({
         )
         .catch(() => undefined);
     }
-    if (startedGeneration === generation) memory = { version, ...entry };
+    if (startedGeneration === generation) memory = { version, ...entry, checkedAt };
     return entry.value;
   };
 
   const readShared = async (client: Client): Promise<T> => {
+    const held = memory;
+    const now = Date.now();
+    if (
+      held &&
+      !pendingInvalidation &&
+      now - held.checkedAt < memoryMs &&
+      now - held.at < ttlMs
+    )
+      return held.value;
+    const startedGeneration = generation;
     let version: string;
+    let checkedAt: number;
     try {
       await pendingInvalidation;
-      version = await currentVersion();
+      ({ version, checkedAt } = await currentVersion());
     } catch {
       // Without the shared version no instance can prove its copy current.
       return load(client);
     }
-    if (memory?.version === version && Date.now() - memory.at < ttlMs)
+    // A local write can supersede the version while its probe is in flight.
+    if (startedGeneration !== generation) return readShared(client);
+    if (memory?.version === version && Date.now() - memory.at < ttlMs) {
+      memory.checkedAt = checkedAt;
       return memory.value;
-    const pendingKey = `${generation}:${version}`;
+    }
+    const pendingKey = `${startedGeneration}:${version}`;
     const pending = pendingReads.get(pendingKey);
     if (pending) return pending;
-    const promise = readVersion(client, version).finally(() => {
-      pendingReads.delete(pendingKey);
-    });
+    const promise = readVersion(client, version, checkedAt, startedGeneration).finally(
+      () => {
+        pendingReads.delete(pendingKey);
+      },
+    );
     pendingReads.set(pendingKey, promise);
     return promise;
   };

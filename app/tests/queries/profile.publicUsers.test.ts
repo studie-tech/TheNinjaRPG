@@ -101,3 +101,57 @@ describeWithDatabase("public user staff tab", () => {
     expect(rows.map((row) => row.userId)).toEqual(["owner", "mod", "coder"]);
   });
 });
+
+describeWithDatabase("public user substring search", () => {
+  beforeEach(async () => {
+    await resetTables(userData);
+    const now = Date.now();
+    await insertUsers([
+      {
+        userId: "old-match",
+        username: "OldKakashi",
+        lastIp: "10.0.12.34",
+        updatedAt: new Date(now - 60 * 60_000),
+      },
+      {
+        userId: "new-match",
+        username: "NewKakashi",
+        lastIp: "10.0.12.35",
+        updatedAt: new Date(now - 5 * 60_000),
+      },
+      {
+        userId: "other",
+        username: "Gaara",
+        lastIp: "172.16.0.1",
+        updatedAt: new Date(now - 60_000),
+      },
+      {
+        userId: "ai-match",
+        username: "AiKakashi",
+        isAi: true,
+        lastIp: "10.0.12.36",
+        updatedAt: new Date(now),
+      },
+    ]);
+  });
+
+  it("lists players whose username contains the term, most recently active first", async () => {
+    const input = getPublicUsersSchema.parse({
+      limit: 10,
+      orderBy: "Online",
+      username: "kash",
+    });
+    const rows = await listPublicUserRows(await getTestDatabase(), input, 0);
+    expect(rows.map((row) => row.userId)).toEqual(["new-match", "old-match"]);
+  });
+
+  it("lists players whose last IP contains the term, most recently active first", async () => {
+    const input = getPublicUsersSchema.parse({
+      limit: 10,
+      orderBy: "Online",
+      ip: "0.12.3",
+    });
+    const rows = await listPublicUserRows(await getTestDatabase(), input, 0);
+    expect(rows.map((row) => row.userId)).toEqual(["new-match", "old-match"]);
+  });
+});
