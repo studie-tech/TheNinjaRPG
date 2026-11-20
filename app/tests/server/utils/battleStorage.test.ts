@@ -3,7 +3,6 @@ import type { ExtraState } from "@/libs/combat/types";
 import {
   packBattleExtraState,
   unpackBattleExtraState,
-  WRITE_COMPRESSED_CATALOGS,
 } from "@/server/utils/battleStorage";
 
 const extraState = {
@@ -19,7 +18,7 @@ const extraState = {
 
 describe("battle storage", () => {
   it("compresses the read-only catalogs and keeps turn-written state as JSON", () => {
-    const stored = packBattleExtraState(extraState, true);
+    const stored = packBattleExtraState(extraState);
     expect(Object.keys(stored.extraState).sort()).toEqual([
       "encounter",
       "energyRegeneration",
@@ -36,13 +35,6 @@ describe("battle storage", () => {
     const json = JSON.parse(JSON.stringify(stored.extraState)) as ExtraState;
     expect(unpackBattleExtraState(json, stored.catalogs)).toEqual(
       JSON.parse(JSON.stringify(extraState)),
-    );
-  });
-
-  it("compresses the catalogs on every write by default", () => {
-    expect(WRITE_COMPRESSED_CATALOGS).toBe(true);
-    expect(packBattleExtraState(extraState)).toEqual(
-      packBattleExtraState(extraState, true),
     );
   });
 
