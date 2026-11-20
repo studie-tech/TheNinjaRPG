@@ -1,10 +1,30 @@
-import { and, asc, desc, eq, gt, gte, inArray, lt, lte, sql, sum } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  lt,
+  lte,
+  sql,
+  sum,
+} from "drizzle-orm";
 import {
   BALANCE_EXCLUSION_IDS,
   type BattleType,
   type UserRank,
 } from "@/drizzle/constants";
-import { bloodline, dataBattleAction, item, jutsu } from "@/drizzle/schema";
+import {
+  bloodline,
+  type DataBattleTurnOrder,
+  dataBattleAction,
+  dataBattleTurnOrder,
+  item,
+  jutsu,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { getBalancePeriodStart } from "@/utils/time";
 
@@ -157,3 +177,103 @@ export const selectBalanceArchivePage = (
     )
     .orderBy(asc(dataBattleAction.id))
     .limit(1000);
+
+/**
+ * Record a counted head-to-head battle once; both fighters settle it, so the second
+ * settlement only fills in a winner the first one could not see (it fled or drew).
+ */
+export const upsertBalanceTurnOrder = (
+  client: Pick<DrizzleClient, "insert">,
+  row: Omit<DataBattleTurnOrder, "periodStart" | "createdAt">,
+  periodStart = getBalancePeriodStart(),
+) =>
+  client
+    .insert(dataBattleTurnOrder)
+    .values({ ...row, periodStart })
+    .onDuplicateKeyUpdate({
+      set: {
+        winner: sql`IF(${dataBattleTurnOrder.winner} = 0, ${row.winner ?? 0}, ${dataBattleTurnOrder.winner})`,
+      },
+    });
+
+/** Move a participant's battle history; an empty replacement unlinks a deleted character. */
+export const updateBalanceTurnOrderUserId = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  newUserId: string,
+  column: "firstUserId" | "secondUserId",
+) =>
+  client
+    .update(dataBattleTurnOrder)
+    .set({ [column]: newUserId })
+    .where(eq(dataBattleTurnOrder[column], userId));
+
+/**
+ * Count head-to-head battles by battle type and winning starting order. A battle counts
+ * for rank and level filters only when both fighters match, so neither side's skill
+ * bracket is compared against an unfiltered opponent.
+ */
+export const selectBalanceTurnOrderBattles = (
+  client: Pick<DrizzleClient, "select">,
+  input: BalanceFilters,
+  periodStart = getBalancePeriodStart(),
+) =>
+  client
+    .select({
+      battleType: dataBattleTurnOrder.battleType,
+      winner: dataBattleTurnOrder.winner,
+      count: count().mapWith(Number),
+    })
+    .from(dataBattleTurnOrder)
+    .where(
+      and(
+        eq(dataBattleTurnOrder.periodStart, periodStart),
+        ...(input.battleTypes?.length
+          ? [inArray(dataBattleTurnOrder.battleType, input.battleTypes)]
+          : []),
+        ...(input.userRanks?.length
+          ? [
+              inArray(dataBattleTurnOrder.firstRank, input.userRanks),
+              inArray(dataBattleTurnOrder.secondRank, input.userRanks),
+            ]
+          : []),
+        ...(input.minLevel !== undefined
+          ? [
+              gte(dataBattleTurnOrder.firstLevel, input.minLevel),
+              gte(dataBattleTurnOrder.secondLevel, input.minLevel),
+            ]
+          : []),
+        ...(input.maxLevel !== undefined
+          ? [
+              lte(dataBattleTurnOrder.firstLevel, input.maxLevel),
+              lte(dataBattleTurnOrder.secondLevel, input.maxLevel),
+            ]
+          : []),
+      ),
+    )
+    .groupBy(dataBattleTurnOrder.battleType, dataBattleTurnOrder.winner);
+
+/** Count one player's recorded head-to-head battles by their starting order and the winner. */
+export const selectPlayerTurnOrder = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+) => {
+  const byOrder = (turnOrder: 1 | 2) =>
+    client
+      .select({
+        turnOrder: sql<number>`${turnOrder}`.mapWith(Number).as("turnOrder"),
+        winner: dataBattleTurnOrder.winner,
+        count: count().mapWith(Number),
+      })
+      .from(dataBattleTurnOrder)
+      .where(
+        eq(
+          turnOrder === 1
+            ? dataBattleTurnOrder.firstUserId
+            : dataBattleTurnOrder.secondUserId,
+          userId,
+        ),
+      )
+      .groupBy(dataBattleTurnOrder.winner);
+  return byOrder(1).unionAll(byOrder(2));
+};

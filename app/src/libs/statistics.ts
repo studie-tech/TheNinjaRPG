@@ -202,3 +202,50 @@ export const betaCurve = (a: number, b: number) => {
   const pdf = x.map((xi) => betaPdf(Math.min(1 - 1e-9, Math.max(1e-9, xi)), a, b));
   return { x, pdf };
 };
+
+const percent = (part: number, whole: number) =>
+  whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : "—";
+
+/**
+ * Battle-level split of head-to-head battles: how often the side that started first or
+ * second won. Battles without a winner (draws, flees) stay in the denominator.
+ */
+export const summarizeTurnOrderBattles = (
+  rows: readonly { winner: number; count: number }[],
+) => {
+  const sumWinner = (winner: number) =>
+    rows.filter((row) => row.winner === winner).reduce((a, row) => a + row.count, 0);
+  const firstWins = sumWinner(1);
+  const secondWins = sumWinner(2);
+  const noWinner = sumWinner(0);
+  const battles = firstWins + secondWins + noWinner;
+  return {
+    battles,
+    firstWins,
+    secondWins,
+    noWinner,
+    firstRate: percent(firstWins, battles),
+    secondRate: percent(secondWins, battles),
+  };
+};
+
+/** One player's head-to-head record by starting order: share of battles and win rate. */
+export const summarizePlayerTurnOrder = (
+  rows: readonly { turnOrder: number; winner: number; count: number }[],
+) => {
+  const total = rows.reduce((a, row) => a + row.count, 0);
+  return ([1, 2] as const).map((turnOrder) => {
+    const own = rows.filter((row) => row.turnOrder === turnOrder);
+    const battles = own.reduce((a, row) => a + row.count, 0);
+    const wins = own
+      .filter((row) => row.winner === turnOrder)
+      .reduce((a, row) => a + row.count, 0);
+    return {
+      turnOrder,
+      battles,
+      wins,
+      share: percent(battles, total),
+      winRate: percent(wins, battles),
+    };
+  });
+};

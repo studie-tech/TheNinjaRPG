@@ -75,6 +75,7 @@ import Modal from "@/layout/Modal";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import NavTabs from "@/layout/NavTabs";
 import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
+import { PlayerTurnOrder } from "@/layout/PlayerTurnOrder";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import { EffectsPopover, PvpRecord } from "@/layout/ProfileStats";
 import { AdjustSeichiSilver } from "@/layout/publicUser/AdjustSeichiSilver";
@@ -1288,6 +1289,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 <br />
                 <b>Information</b>
                 <p>Too fast infractions: {profile.movedTooFastCount}</p>
+                {!profile.isAi && <PlayerTurnOrder userId={profile.userId} />}
                 {canSeeIps(userData.role) && (
                   <Link
                     href={`/users/ipsearch/${profile.lastIp}`}

@@ -12,6 +12,7 @@ import {
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
 import { deleteAiTransformationsFor } from "@/queries/ai";
+import { updateBalanceTurnOrderUserId } from "@/queries/balance";
 import { deleteBattleQueueMembersForUser } from "@/queries/clan";
 import { waitForMetaSavesBeforeDeletion } from "@/queries/metaTracking";
 import { deleteUserAttributes, deleteUserNindo } from "@/queries/profile";
@@ -300,6 +301,10 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
 
   // Batch 10: Battle, war & ranked PVP
   await Promise.all([
+    // Keep battle totals and the opponent's history without linking a recreated character.
+    ...(["firstUserId", "secondUserId"] as const).map((column) =>
+      updateBalanceTurnOrderUserId(client, userId, "", column),
+    ),
     deleteBattleQueueMembersForUser(client, userId),
     deleteRankedQueueForUser(client, userId).then(async (result) => {
       await notifyRankedQueueChanged(result.rowsAffected);

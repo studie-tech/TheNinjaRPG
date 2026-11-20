@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   OPENAI_REPORT_EMBEDDING_MODEL,
@@ -10,6 +10,7 @@ import {
   adClick,
   auctionOffer,
   bloodline,
+  dataBattleTurnOrder,
   farmPlot,
   huntingProgress,
   huntingReceipt,
@@ -39,6 +40,7 @@ import {
   warKill,
 } from "@/drizzle/schema";
 import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
+import { selectPlayerTurnOrder } from "@/queries/balance";
 import { petsRouter } from "@/server/api/routers/pets";
 import { pushRouter } from "@/server/api/routers/push";
 import { registerRouter } from "@/server/api/routers/register";
@@ -120,6 +122,7 @@ describeWithDatabase("staff user-id rename", () => {
       adClick,
       auctionOffer,
       bloodline,
+      dataBattleTurnOrder,
       notification,
       userReportEmbedding,
       userReport,
@@ -145,6 +148,44 @@ describeWithDatabase("staff user-id rename", () => {
       { userId: OLD_USER_ID, username: "rename-target", role: "USER" },
     ]);
   });
+
+  it.each(["rename", "delete"] as const)(
+    "preserves battle history while unlinking the old participant ID on %s",
+    async (operation) => {
+      const database = await getTestDatabase();
+      await database.insert(dataBattleTurnOrder).values([
+        {
+          battleId: "started-first",
+          periodStart: 0,
+          battleType: "COMBAT",
+          firstUserId: OLD_USER_ID,
+          secondUserId: "opponent",
+          winner: 1,
+        },
+        {
+          battleId: "started-second",
+          periodStart: 0,
+          battleType: "COMBAT",
+          firstUserId: "opponent",
+          secondUserId: OLD_USER_ID,
+          winner: 2,
+        },
+      ]);
+      if (operation === "rename") {
+        const caller = await callerFor(staffRouter, STAFF);
+        expect(
+          (await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }))
+            .success,
+        ).toBe(true);
+      } else await deleteUser(database, OLD_USER_ID);
+      expect(await selectPlayerTurnOrder(database, OLD_USER_ID)).toEqual([]);
+      expect(await selectPlayerTurnOrder(database, NEW_USER_ID)).toHaveLength(
+        operation === "rename" ? 2 : 0,
+      );
+      expect(await selectPlayerTurnOrder(database, "opponent")).toHaveLength(2);
+      expect(await database.query.dataBattleTurnOrder.findMany()).toHaveLength(2);
+    },
+  );
 
   it.each(["rename", "delete"] as const)(
     "keeps hunting state and ad clicks aligned with character %s",

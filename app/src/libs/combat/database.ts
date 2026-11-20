@@ -80,6 +80,7 @@ import {
 } from "@/libs/raids";
 import { battleItemExp, battleJutsuExp } from "@/libs/train";
 import { incrementAnbuPoints } from "@/queries/anbu";
+import { upsertBalanceTurnOrder } from "@/queries/balance";
 import type { DataBattleAction } from "@/queries/combat";
 import {
   deleteBattleIfVersionMatches,
@@ -483,6 +484,41 @@ export const saveUsage = async (
       }
       return;
     }
+    // One row per counted head-to-head battle, for battle-level and per-player splits.
+    const opponent = players.find((u) => u.userId !== userId);
+    const opponentSnapshot = opponent
+      ? curBattle.extraState.balanceParticipants?.[opponent.userId]
+      : undefined;
+    let turnOrderWrite: ReturnType<typeof upsertBalanceTurnOrder> | undefined;
+    if (
+      !user.isAi &&
+      snapshot &&
+      opponent &&
+      opponentSnapshot &&
+      (demographics.turnOrder === 1 || demographics.turnOrder === 2)
+    ) {
+      const mine = { userId, ...snapshot };
+      const theirs = { userId: opponent.userId, ...opponentSnapshot };
+      const [first, second] =
+        demographics.turnOrder === 1 ? [mine, theirs] : [theirs, mine];
+      turnOrderWrite = upsertBalanceTurnOrder(client, {
+        battleId: curBattle.id,
+        battleType,
+        firstUserId: first.userId,
+        firstLevel: first.level,
+        firstRank: first.rank,
+        secondUserId: second.userId,
+        secondLevel: second.level,
+        secondRank: second.rank,
+        // A win names the player's own order, a loss the opponent's; draws and flees none.
+        winner:
+          outcome === "Won"
+            ? demographics.turnOrder
+            : outcome === "Lost"
+              ? 3 - demographics.turnOrder
+              : 0,
+      });
+    }
     // Only eligible head-to-head players contribute starting-order outcome samples.
     const data: DataBattleAction[] =
       !user.isAi &&
@@ -541,13 +577,15 @@ export const saveUsage = async (
         return a;
       }
     }, [] as DataBattleAction[]);
-    // Upsert dataBattleActions
-    if (uniqueData.length > 0) {
-      await insertDataBattleActionForSaveUsage(
-        client,
-        uniqueData.map((entry) => ({ ...entry, ...demographics })),
-      );
-    }
+    await Promise.all([
+      turnOrderWrite,
+      uniqueData.length > 0
+        ? insertDataBattleActionForSaveUsage(
+            client,
+            uniqueData.map((entry) => ({ ...entry, ...demographics })),
+          )
+        : undefined,
+    ]);
   }
 };
 

@@ -18,7 +18,7 @@ import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
-import { summarizeBattleOutcomes } from "@/libs/statistics";
+import { summarizeBattleOutcomes, summarizeTurnOrderBattles } from "@/libs/statistics";
 import { downloadBlob } from "@/utils/dom";
 import { groupBy } from "@/utils/grouping";
 import { getBalancePeriodEnd } from "@/utils/time";
@@ -69,6 +69,14 @@ export const BalanceOverview = ({
         a.rank.localeCompare(b.rank) ||
         a.order.localeCompare(b.order),
     );
+  const turnBattles = data?.turnOrderBattles ?? [];
+  const battleSummary = summarizeTurnOrderBattles(turnBattles);
+  const battleTypeRows = Array.from(groupBy(turnBattles, "battleType").values())
+    .map((rows) => ({
+      battleType: (rows[0]?.battleType ?? "").replaceAll("_", " ").toLowerCase(),
+      ...summarizeTurnOrderBattles(rows),
+    }))
+    .sort((a, b) => b.battles - a.battles);
   const archiveId = selectedArchive || String(archives.data?.[0]?.periodStart ?? "");
 
   const download = async () => {
@@ -253,6 +261,60 @@ export const BalanceOverview = ({
           </p>
           {data && !invalidRange && !overview.isError && (
             <>
+              <h3 className="mb-1 font-semibold">Per battle: who won</h3>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Each counted battle once, by whether its winner started first or second,
+                so strong players do not weigh more than their opponents. Rank and level
+                filters keep a battle only when both fighters match. Battles from before
+                this split was added have no per-battle record.
+              </p>
+              <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {(
+                  [
+                    ["Battles", battleSummary.battles.toLocaleString(), "counted 1v1"],
+                    [
+                      "First mover won",
+                      battleSummary.firstRate,
+                      `${battleSummary.firstWins.toLocaleString()} battles`,
+                    ],
+                    [
+                      "Second mover won",
+                      battleSummary.secondRate,
+                      `${battleSummary.secondWins.toLocaleString()} battles`,
+                    ],
+                    [
+                      "No winner",
+                      battleSummary.noWinner.toLocaleString(),
+                      "draws and flees",
+                    ],
+                  ] as const
+                ).map(([label, value, detail]) => (
+                  <div key={label} className="rounded-lg border p-4">
+                    <h4 className="font-semibold">{label}</h4>
+                    <p className="text-2xl font-bold">{value}</p>
+                    <p className="text-sm text-muted-foreground">{detail}</p>
+                  </div>
+                ))}
+              </div>
+              <Table
+                data={battleTypeRows}
+                columns={[
+                  { key: "battleType", header: "Battle type", type: "capitalized" },
+                  { key: "battles", header: "Battles", type: "number" },
+                  { key: "firstWins", header: "First won", type: "number" },
+                  { key: "secondWins", header: "Second won", type: "number" },
+                  { key: "firstRate", header: "First win %", type: "string" },
+                ]}
+              />
+              {battleTypeRows.length === 0 && (
+                <p className="py-3 text-sm">
+                  No head-to-head battles match this period and these filters yet.
+                </p>
+              )}
+              <h3 className="mt-6 mb-1 font-semibold">Per player result</h3>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Each fighter&apos;s own result, grouped by their rank and level.
+              </p>
               <div className="mb-4 grid grid-cols-2 gap-3">
                 {[1, 2].map((order) => {
                   const stats = summarizeBattleOutcomes(
