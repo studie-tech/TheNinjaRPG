@@ -2,15 +2,11 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { item, itemVariant, userAttribute, userData, userItem } from "@/drizzle/schema";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import {
-  fetchItemWithCraftingRequirements,
-  listUserItemForFetchUserItems,
-  listUserItemForFetchUserItemsWithVariants,
-} from "@/queries/item";
+import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
 import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import { fetchSectorWindowData } from "@/queries/travel";
-import { itemRouter } from "@/routers/item";
+import { fetchUserItems, fetchUserItemsWithVariants, itemRouter } from "@/routers/item";
 import type { DrizzleClient } from "@/server/db";
 import { ItemValidator } from "@/validators/combat";
 import { ItemVariantValidator } from "@/validators/item";
@@ -183,8 +179,8 @@ describeWithDatabase("sprite appearance database snapshots", () => {
   it("preserves the selected appearance in inventory responses used by equipment cache patches", async () => {
     const client = (await getTestDatabase()) as unknown as DrizzleClient;
     const inventories = await Promise.all([
-      listUserItemForFetchUserItems(client, "sprite-owner"),
-      listUserItemForFetchUserItemsWithVariants(client, "sprite-owner"),
+      fetchUserItems(client, "sprite-owner"),
+      fetchUserItemsWithVariants(client, "sprite-owner"),
     ]);
     for (const items of inventories) {
       const appearance = resolveSpriteAppearance({ items });

@@ -191,6 +191,7 @@ import {
   selectUserJutsuForFetchUserJutsus,
   selectUserJutsuForGetJutsuRelations,
   selectUserJutsuForStartTraining,
+  selectUserJutsuWithDefinitionsForFetchUserJutsus,
   setUserJutsuReskin,
   trainOwnedJutsuLevelAtomically,
   updateJutsuForSaveJutsuFamily,
@@ -243,6 +244,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { bloodlineDefinitions, jutsuDefinitions } from "@/server/utils/definitionCache";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
@@ -2598,11 +2600,18 @@ export const fetchUserJutsus = async (
     input?.includeEquipped && filters.length > 0
       ? or(eq(userJutsu.equipped, true), and(...filters))
       : and(...filters);
-  // Grab all userJutsus with Jutsu data and reskin data
-  const [linkedReskins, userjutsus] = await Promise.all([
+  // Grab all userJutsus with Jutsu revisions and reskin data
+  const [linkedReskins, revisions] = await Promise.all([
     fetchBloodlineJutsuReskins(client, [userId]),
     selectUserJutsuForFetchUserJutsus(client, userId, inventoryFilter),
   ]);
+  const userjutsus =
+    (await hydrateUserJutsus(client, revisions)) ??
+    (await selectUserJutsuWithDefinitionsForFetchUserJutsus(
+      client,
+      userId,
+      inventoryFilter,
+    ));
   // First map to query-format
   const unskinnedUserJutsus = userjutsus.map((result) => ({
     ...result.UserJutsu,
@@ -2627,6 +2636,32 @@ export const fetchUserJutsus = async (
   return options.applyReskins === false
     ? unskinnedUserJutsus
     : unskinnedUserJutsus.map((userjutsu) => getReskinnedUserJutsu(userjutsu));
+};
+
+/**
+ * Attach cached jutsu and bloodline definitions to rows read with their revisions, in the
+ * shape of the joined read. Undefined when a definition changed or was deleted since the
+ * read.
+ */
+const hydrateUserJutsus = async (
+  client: DrizzleClient,
+  rows: Awaited<ReturnType<typeof selectUserJutsuForFetchUserJutsus>>,
+) => {
+  // A jutsu without a bloodline still hashes its left-joined nulls.
+  const bloodlines = rows.map((row) => (row.Bloodline?.id ? row.Bloodline : null));
+  const [jutsus, bloodlineRows] = await Promise.all([
+    jutsuDefinitions.hydrate(
+      client,
+      rows.map((row) => row.Jutsu),
+    ),
+    bloodlineDefinitions.hydrate(client, bloodlines),
+  ]);
+  if (!jutsus || !bloodlineRows) return undefined;
+  return rows.map((row, index) => ({
+    ...row,
+    Jutsu: jutsus(row.Jutsu),
+    Bloodline: bloodlineRows(bloodlines[index] ?? null),
+  }));
 };
 
 /**

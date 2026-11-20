@@ -1535,7 +1535,12 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     expect(
       state.availableSeeds.find((seed) => seed.itemId === "seed-1")?.yieldName,
     ).toBe("Test Crop");
-    expect(recorded.statements).toHaveLength(10);
+    // An instance without cached inventory definitions reads them once.
+    const definitionReads = recorded.statements.filter((statement) =>
+      /SHA2\(JSON_ARRAY\([\s\S]*from `Item` where `Item`.`id` in/i.test(statement),
+    );
+    expect(definitionReads.length).toBeLessThanOrEqual(1);
+    expect(recorded.statements.length - definitionReads.length).toBe(10);
   });
 
   it("completes yields changed after the catalog read before clearing orphaned crops", async () => {

@@ -1,4 +1,4 @@
-import { getTableColumns, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { quest } from "@/drizzle/schema";
 import { revisionSql } from "@/queries/definitionRevisions";
 import type { DrizzleClient } from "@/server/db";
@@ -20,7 +20,7 @@ const raidStateColumns = {
  * changes it, whichever path makes the write (editor, migration or console), so it
  * identifies the content a cached definition holds.
  */
-const questRevisionSql = revisionSql(getTableColumns(quest), raidStateColumns);
+const questRevisionSql = revisionSql(quest, raidStateColumns);
 
 /** The quest relation of a history read that resolves definitions by revision. */
 export const questRevisionRelation = {
@@ -38,7 +38,7 @@ export const questRevisionColumns = {
   raidEndsAt: quest.raidEndsAt,
   raidCaptureDeadline: quest.raidCaptureDeadline,
   raidGracePeriodEnd: quest.raidGracePeriodEnd,
-  revision: questRevisionSql(quest),
+  revision: questRevisionSql(),
 } satisfies Record<keyof typeof raidStateColumns | "revision", unknown>;
 
 /** Build the `quest` selection of complete definitions and their revisions. */
@@ -47,6 +47,6 @@ export const selectQuestRevisionDefinitions = (
   questIds: string[],
 ) =>
   client
-    .select({ definition: quest, revision: questRevisionSql(quest) })
+    .select({ definition: quest, revision: questRevisionSql() })
     .from(quest)
     .where(inArray(quest.id, questIds));

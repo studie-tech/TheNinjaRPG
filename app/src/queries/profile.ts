@@ -9,7 +9,6 @@ import {
   count,
   desc,
   eq,
-  getTableColumns,
   gt,
   gte,
   inArray,
@@ -2045,11 +2044,8 @@ const findProfileUser = <
 /** Item and village structure rows are cached whole, so profile reads take only their id. */
 const definitionIdColumn = { id: true } as const;
 
-const itemRevisionSql = revisionSql(getTableColumns(item), definitionIdColumn);
-const structureRevisionSql = revisionSql(
-  getTableColumns(villageStructure),
-  definitionIdColumn,
-);
+const itemRevisionSql = revisionSql(item);
+const structureRevisionSql = revisionSql(villageStructure);
 
 /** The relations `fetchProfileUser` hydrates from cached definitions. */
 const definitionRevisions = {
@@ -2069,16 +2065,6 @@ const definitionRevisions = {
 };
 const joinedDefinitions = { quest: true, item: true, structure: true } as const;
 
-/** Build the `item` selection of complete definitions and their revisions for `fetchProfileUser`. */
-export const selectItemDefinitions = (
-  client: Pick<DrizzleClient, "select">,
-  itemIds: string[],
-) =>
-  client
-    .select({ definition: item, revision: itemRevisionSql(item) })
-    .from(item)
-    .where(inArray(item.id, itemIds));
-
 /** Build the `villageStructure` selection of complete rows and their revisions for `fetchProfileUser`. */
 export const selectStructureDefinitions = (
   client: Pick<DrizzleClient, "select">,
@@ -2087,7 +2073,7 @@ export const selectStructureDefinitions = (
   client
     .select({
       definition: villageStructure,
-      revision: structureRevisionSql(villageStructure),
+      revision: structureRevisionSql(),
     })
     .from(villageStructure)
     .where(inArray(villageStructure.id, structureIds));

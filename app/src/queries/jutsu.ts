@@ -48,6 +48,7 @@ import type { JutsuCapFlags, JutsuEquipCap } from "@/libs/jutsu";
 import { JUTSU_FREE_TRANSFER_MARKER } from "@/libs/jutsu";
 import type { getJutsuReskinMechanics } from "@/libs/jutsu/reskins";
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import { revisionSql } from "@/queries/definitionRevisions";
 import type { DrizzleClient } from "@/server/db";
 import type {
   ActionReadiness,
@@ -1442,14 +1443,74 @@ export const selectUserDataForFetchUserJutsus = (
     .orderBy(desc(linkedReskinAlias.updatedAt), asc(linkedReskinAlias.id))
     .limit(1);
 
-/** Build the `userJutsu` selection for `fetchUserJutsus`, using predicates on `userId` and `jutsuType`. */
+/**
+ * Build the `userJutsu` selection for `fetchUserJutsus`, using predicates on `userId` and
+ * `jutsuType`. Jutsu and bloodline columns appear as revisions; `fetchUserJutsus` attaches
+ * the cached definitions.
+ */
 export const selectUserJutsuForFetchUserJutsus = (
   client: Pick<DrizzleClient, "select">,
   userId: string,
   inventoryFilter: undefined | SQL<unknown>,
 ) =>
+  selectUserJutsus(client, userId, inventoryFilter, {
+    Jutsu: { id: jutsu.id, revision: jutsuRevisionSql() },
+    Bloodline: { id: bloodline.id, revision: bloodlineRevisionSql() },
+  });
+
+/** Build the `userJutsu` selection with joined definitions, when a concurrent edit prevents hydration. */
+export const selectUserJutsuWithDefinitionsForFetchUserJutsus = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  inventoryFilter: undefined | SQL<unknown>,
+) =>
+  selectUserJutsus(client, userId, inventoryFilter, {
+    Jutsu: jutsu,
+    Bloodline: bloodline,
+  });
+
+/** Build the `jutsu` selection of complete definitions and their revisions for `jutsuDefinitions`. */
+export const selectJutsuDefinitions = (
+  client: Pick<DrizzleClient, "select">,
+  jutsuIds: string[],
+) =>
   client
-    .select()
+    .select({ definition: jutsu, revision: jutsuRevisionSql() })
+    .from(jutsu)
+    .where(inArray(jutsu.id, jutsuIds));
+
+/** Build the `bloodline` selection of complete definitions and their revisions for `bloodlineDefinitions`. */
+export const selectBloodlineDefinitions = (
+  client: Pick<DrizzleClient, "select">,
+  bloodlineIds: string[],
+) =>
+  client
+    .select({ definition: bloodline, revision: bloodlineRevisionSql() })
+    .from(bloodline)
+    .where(inArray(bloodline.id, bloodlineIds));
+
+const jutsuRevisionSql = revisionSql(jutsu);
+const bloodlineRevisionSql = revisionSql(bloodline);
+
+const selectUserJutsus = <
+  Definitions extends {
+    Jutsu: typeof jutsu | { id: typeof jutsu.id; revision: SQL<string> };
+    Bloodline: typeof bloodline | { id: typeof bloodline.id; revision: SQL<string> };
+  },
+>(
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  inventoryFilter: undefined | SQL<unknown>,
+  definitions: Definitions,
+) =>
+  client
+    .select({
+      UserJutsu: userJutsu,
+      ...definitions,
+      JutsuReskin: jutsuReskin,
+      // Only the grandparent id is read from the parent jutsu.
+      parentJutsu: { parentJutsuId: parentJutsuAlias.parentJutsuId },
+    })
     .from(userJutsu)
     .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
     .leftJoin(bloodline, eq(jutsu.bloodlineId, bloodline.id))

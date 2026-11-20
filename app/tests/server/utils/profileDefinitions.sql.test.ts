@@ -1,5 +1,6 @@
 /** Pin the profile read's cached definitions: revision-keyed, cached, live state. */
 import { afterEach, beforeEach, expect, it } from "bun:test";
+import { getCache } from "@vercel/functions";
 import { eq, sql } from "drizzle-orm";
 import {
   item,
@@ -14,6 +15,7 @@ import {
 import { hasQuestContentChanged } from "@/libs/questRun";
 import { findProfileUserWithDefinitions } from "@/queries/profile";
 import { executeDefinitionWriteForUpdate } from "@/queries/quests";
+import { fetchUserItems } from "@/server/api/routers/item";
 import { fetchProfileUser } from "@/server/utils/profileDefinitions";
 import { QuestTracker, QuestValidator } from "@/validators/objectives";
 import {
@@ -290,6 +292,36 @@ describeWithDatabase("profile item and village structure definitions", () => {
     expect(warm.statements).toHaveLength(1);
     expect(warm.result).toEqual(joined);
   });
+
+  it.each(["profile", "inventory"])(
+    "shares local item definitions after a %s read",
+    async (firstReader) => {
+      const db = await getTestDatabase();
+      if (firstReader === "profile") await fetchProfileUser(db, USER_ID);
+      else await fetchUserItems(db, USER_ID);
+      // Remove shared entries without clearing either reader's local memory. A reader
+      // with a separate local cache would have to select Item definitions again.
+      await getCache().expireTag("item-definition:entries");
+
+      const { result, statements } = await recordQueries(async () => {
+        const profile = await fetchProfileUser(db, USER_ID);
+        const inventory = await fetchUserItems(db, USER_ID);
+        return { profile, inventory };
+      });
+      expect(
+        statements.filter((statement) =>
+          /from `Item` where `Item`.`id` in/i.test(statement),
+        ),
+      ).toHaveLength(0);
+      expect(result.profile?.items[0]?.item?.name).toBe("Blade");
+      expect(result.profile?.items[0]?.imbuements[0]?.item?.name).toBe("Crystal");
+      expect(result.inventory[0]?.item.name).toBe("Blade");
+      expect(result.inventory[0]?.imbuements[0]?.item?.name).toBe("Crystal");
+      const inventoryItem = result.inventory[0];
+      if (inventoryItem) inventoryItem.item.name = "Private inventory copy";
+      expect(result.profile?.items[0]?.item?.name).toBe("Blade");
+    },
+  );
 
   it("reads only the definitions a write changed", async () => {
     const db = await getTestDatabase();

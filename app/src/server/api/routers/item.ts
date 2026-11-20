@@ -243,6 +243,8 @@ import {
   listUserItemForMergeAllStacks,
   listUserItemForToggleEquip,
   listUserItemsForSellUserItems,
+  listUserItemWithDefinitionsForFetchUserItems,
+  listUserItemWithDefinitionsForFetchUserItemsWithVariants,
   listUserPetForConsume,
   listVariantNames,
   repairUserItemAtomically,
@@ -345,6 +347,7 @@ import {
 } from "@/server/utils/concurrency";
 import { planConsumeEffects } from "@/server/utils/consumeEffects";
 import { consumeMeal } from "@/server/utils/cooking";
+import { itemDefinitions } from "@/server/utils/definitionCache";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { joinFinishedCrafts } from "@/server/utils/itemStacks";
@@ -4072,7 +4075,12 @@ export const fetchUserItems = async (
   const useritems = await withStaleMergeClaimRecovery(
     client,
     userId,
-    () => listUserItemForFetchUserItems(client, userId),
+    () =>
+      readWithItemDefinitions(
+        client,
+        () => listUserItemForFetchUserItems(client, userId),
+        () => listUserItemWithDefinitionsForFetchUserItems(client, userId),
+      ),
     options?.canRecoverStaleMergeClaims,
     options?.onStaleMergeClaimRecovery,
     options?.waitForActiveMergeClaims,
@@ -4090,12 +4098,49 @@ export const fetchUserItemsWithVariants = async (
   const useritems = await withStaleMergeClaimRecovery(
     client,
     userId,
-    () => listUserItemForFetchUserItemsWithVariants(client, userId),
+    () =>
+      readWithItemDefinitions(
+        client,
+        () => listUserItemForFetchUserItemsWithVariants(client, userId),
+        () => listUserItemWithDefinitionsForFetchUserItemsWithVariants(client, userId),
+      ),
     undefined,
     undefined,
     options?.waitForActiveMergeClaims,
   );
   return useritems.filter((ui) => ui.item && !ui.item.hidden);
+};
+
+/**
+ * Read inventory rows with item revisions and attach the cached definitions, in the shape
+ * of `readJoined`. A definition changed or deleted since the read repeats it with joined
+ * definitions, so every row reflects one point in time.
+ */
+const readWithItemDefinitions = async <
+  Row extends {
+    item: { id: string; revision: string } | null;
+    imbuements: { item: { id: string; revision: string } | null }[];
+  },
+  Joined,
+>(
+  client: DrizzleClient,
+  read: () => Promise<Row[]>,
+  readJoined: () => Promise<Joined[]>,
+): Promise<Joined[]> => {
+  const rows = await read();
+  const definitions = await itemDefinitions.hydrate(
+    client,
+    rows.flatMap((row) => [row.item, ...row.imbuements.map((entry) => entry.item)]),
+  );
+  if (!definitions) return readJoined();
+  return rows.map((row) => ({
+    ...row,
+    item: definitions(row.item),
+    imbuements: row.imbuements.map((entry) => ({
+      ...entry,
+      item: definitions(entry.item),
+    })),
+  })) as unknown as Joined[];
 };
 
 /**
