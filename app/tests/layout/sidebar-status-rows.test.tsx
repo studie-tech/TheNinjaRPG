@@ -93,10 +93,13 @@ beforeEach(() => {
   vi.spyOn(Avatar, "default").mockReturnValue(null as never);
   vi.spyOn(Image, "default").mockReturnValue(null as never);
   vi.spyOn(PoolStatusBars, "PoolStatusBars").mockReturnValue(null as never);
-  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
-    data: user,
-    timeDiff: 0,
-  } as never);
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
+    const value = {
+      data: user,
+      timeDiff: 0,
+    };
+    return { ...value, data: select(value.data as never) } as never;
+  });
 });
 
 afterEach(() => {
@@ -221,16 +224,19 @@ describe("sidebar status rows", () => {
   });
 
   it("hides quota rows once their daily limit is reached", () => {
-    vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
-      data: {
-        ...user,
-        dailyMissions: MISSIONS_PER_DAY,
-        dailyErrands: ERRANDS_PER_DAY,
-        dailyMedicalMissions: MEDICAL_MISSIONS_PER_DAY,
-        dailyPvpMissions: PVP_MISSIONS_PER_DAY,
-      },
-      timeDiff: 0,
-    } as never);
+    vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
+      const value = {
+        data: {
+          ...user,
+          dailyMissions: MISSIONS_PER_DAY,
+          dailyErrands: ERRANDS_PER_DAY,
+          dailyMedicalMissions: MEDICAL_MISSIONS_PER_DAY,
+          dailyPvpMissions: PVP_MISSIONS_PER_DAY,
+        },
+        timeDiff: 0,
+      };
+      return { ...value, data: select(value.data as never) } as never;
+    });
     const view = render(<MenuBoxProfile />);
     expect(rows(view).filter((row) => row.href === "/missionhall")).toEqual([]);
   });

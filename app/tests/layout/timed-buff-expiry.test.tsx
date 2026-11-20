@@ -41,17 +41,20 @@ beforeEach(() => {
       },
     },
   });
-  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
-    data: {
-      userId: "player",
-      username: "Player",
-      status: "AWAKE",
-      level: 10,
-      experience: 0,
-      rank: "GENIN",
-    },
-    timeDiff: 0,
-  } as never);
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
+    const value = {
+      data: {
+        userId: "player",
+        username: "Player",
+        status: "AWAKE",
+        level: 10,
+        experience: 0,
+        rank: "GENIN",
+      },
+      timeDiff: 0,
+    };
+    return { ...value, data: select(value.data as never) } as never;
+  });
   // Each countdown exposes its expiry callback as a button.
   vi.spyOn(Countdown, "default").mockImplementation((({
     onFinish,
