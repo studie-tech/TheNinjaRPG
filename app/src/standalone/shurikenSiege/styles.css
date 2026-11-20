@@ -1,0 +1,23 @@
+/* The app's theme, utilities and base styles, scanned only for what the game renders. */
+@import "../../styles/globals.css";
+
+@source "../../layout/TowerDefense*.tsx";
+@source "../../layout/Loader.tsx";
+@source "../../layout/Confirm.tsx";
+@source "../../layout/Modal.tsx";
+@source "../../components/ui";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* Long presses on touch screens neither select text nor open the magnifier. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}

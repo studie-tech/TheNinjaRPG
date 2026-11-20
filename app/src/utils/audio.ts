@@ -129,7 +129,31 @@ const getSharedAudioContext = (): AudioContext | null => {
 /** Resume effect playback during a user gesture, before background notifications arrive. */
 export const unlockAudioPlayback = () => {
   const context = getSharedAudioContext();
-  if (context) void resumeAudioContext(context);
+  if (context && audioHolds.size === 0) void resumeAudioContext(context);
+};
+
+/** Why effect playback is silenced; it plays again once no reason holds it. */
+export type AudioHold = "host" | "ad" | "muted";
+const audioHolds = new Set<AudioHold>();
+/** Effects playing through audio elements, which a suspended context does not silence. */
+const elementsPlaying = new Set<HTMLAudioElement>();
+
+/**
+ * Silence effect playback for one reason, such as a host pause, a portal's ad or the
+ * host's mute, cutting off sounds already playing. Releasing a reason resumes playback
+ * only once no other reason still holds it.
+ */
+export const holdAudioPlayback = (reason: AudioHold, held: boolean) => {
+  if (held) audioHolds.add(reason);
+  else audioHolds.delete(reason);
+  if (audioHolds.size > 0) {
+    for (const element of elementsPlaying) element.pause();
+    elementsPlaying.clear();
+  }
+  const context = getSharedAudioContext();
+  if (!context) return;
+  if (audioHolds.size > 0) void context.suspend().catch(() => undefined);
+  else void resumeAudioContext(context);
 };
 
 // Get audio buffer cache (stored on window to survive HMR)
@@ -243,9 +267,13 @@ export const playPreloadedAudio = async (
     }
   }
 
+  // A held context stays silent, including for sounds that waited for their buffer.
+  if (audioHolds.size > 0) return;
   if (ctx && buffer) {
     try {
       await resumeAudioContext(ctx);
+      // A hold may have begun while the context resumed.
+      if (audioHolds.size > 0) return;
       const gain = ctx.createGain();
       const vol = clamp(volume, 0, 1);
       gain.gain.value = vol;
@@ -267,7 +295,8 @@ export const playPreloadedAudio = async (
     }
   }
 
-  // Element-based fallback (still allows overlapping via clone)
+  // Element-based fallback (still allows overlapping via clone), never while held
+  if (audioHolds.size > 0) return;
   const audioCache = getAudioCache();
   let audio = audioCache.get(url);
   if (!audio) {
@@ -285,10 +314,13 @@ export const playPreloadedAudio = async (
   try {
     node.crossOrigin = "anonymous";
   } catch {}
+  elementsPlaying.add(node);
+  node.addEventListener("ended", () => elementsPlaying.delete(node), { once: true });
   try {
     await node.play();
   } catch {
     // Ignore play errors (autoplay restrictions etc.)
+    elementsPlaying.delete(node);
   }
 };
 

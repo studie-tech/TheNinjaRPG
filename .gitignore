@@ -33,3 +33,6 @@ mobile/.env
 
 # Layout
 TNR Pixel Web 2/
+
+# Standalone game builds (Shuriken Siege)
+/dist

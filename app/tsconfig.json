@@ -44,7 +44,8 @@
       "@/app/*": ["./src/app/*"],
       "@/data/*": ["./src/data/*"],
       "@/routers/*": ["./src/server/api/routers/*"],
-      "@/components/*": ["./src/components/*"]
+      "@/components/*": ["./src/components/*"],
+      "@/standalone/*": ["./src/standalone/*"]
     }
   },
   "include": [

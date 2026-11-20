@@ -11,7 +11,7 @@ import {
   type TdDojoUpgrade,
   tdCheckpoints,
 } from "@/libs/towerDefense/content";
-import { TD_SIM_VERSION, tdDojoCost } from "@/libs/towerDefense/sim";
+import { TD_SIM_VERSION, tdDojoPurchase } from "@/libs/towerDefense/sim";
 import {
   findTowerDefenseClaimant,
   findTowerDefenseClaimReceipt,
@@ -307,24 +307,23 @@ export const towerDefenseRouter = createTRPCRouter({
         listUserTowerDefenseUpgrades(ctx.drizzle, ctx),
       ]);
       if (!progress) return errorResponse("User not found.");
-      const level = dojoLevels(upgrades)[input.upgradeId] ?? 0;
-      if (level >= TD_DOJO_INFO[input.upgradeId].max)
-        return errorResponse("Already at max level.");
-      if (progress.towerDefenseBestWave < TD_DOJO_INFO[input.upgradeId].unlockWave)
-        return errorResponse(
-          `Reach wave ${TD_DOJO_INFO[input.upgradeId].unlockWave} to unlock this.`,
-        );
-      const cost = tdDojoCost(input.upgradeId, level);
+      const purchase = tdDojoPurchase({
+        upgradeId: input.upgradeId,
+        level: dojoLevels(upgrades)[input.upgradeId] ?? 0,
+        bestWave: progress.towerDefenseBestWave,
+      });
+      if ("message" in purchase) return errorResponse(purchase.message);
+      const { level, cost } = purchase;
       // The level comes from the snapshot above, so two concurrent purchases by the same
       // account can each pay for the same level. The cost stays on that account's own
       // scrolls and support can restore it, so this stays a readable check-then-write.
       const result = await updateUserDataForPurchaseDojoUpgrade(ctx.drizzle, cost, ctx);
       if (result.rowsAffected === 0) return errorResponse("Not enough scrolls.");
-      await upsertUserTowerDefenseUpgrade(ctx.drizzle, ctx, input.upgradeId, level + 1);
+      await upsertUserTowerDefenseUpgrade(ctx.drizzle, ctx, input.upgradeId, level);
       return {
         success: true,
-        message: `${TD_DOJO_INFO[input.upgradeId].name} is now level ${level + 1}.`,
-        level: level + 1,
+        message: `${TD_DOJO_INFO[input.upgradeId].name} is now level ${level}.`,
+        level,
         pointsSpent: cost,
       };
     }),
