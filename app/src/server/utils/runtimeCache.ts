@@ -203,7 +203,8 @@ export const createRuntimeCache = <Client, T>({
  * version), and callers serve it only when that matches a revision they have just read,
  * so a write needs no invalidation. Reads and writes that fail behave as misses.
  * With `memoryLimit`, each instance also keeps up to that many recently used entries
- * in memory and reads the Runtime Cache only for the others.
+ * in memory and reads the Runtime Cache only for the others. Modules that create a
+ * cache under the same name share one instance and its memory.
  */
 export const createRuntimeEntryCache = <T>({
   name,
@@ -219,7 +220,15 @@ export const createRuntimeEntryCache = <T>({
   memoryLimit?: number;
   /** Replaces the Runtime Cache, for tests; such caches stay out of `invalidateRuntimeCaches`. */
   store?: RuntimeCache;
-}) => {
+}): RuntimeEntryCache<T> => {
+  const existing = store ? undefined : entryCaches.get(name);
+  if (existing) {
+    if (existing.ttlSeconds !== ttlSeconds || existing.memoryLimit !== memoryLimit)
+      throw new Error(
+        `Runtime entry cache "${name}" already exists with other options`,
+      );
+    return existing.entries as RuntimeEntryCache<T>;
+  }
   const cache = store ?? runtimeCache;
   const tag = `${name}:entries`;
   const entryKey = (key: string) => `${name}:${key}`;
@@ -243,7 +252,7 @@ export const createRuntimeEntryCache = <T>({
   };
   if (!store) invalidators.add(clear);
 
-  return {
+  const entries: RuntimeEntryCache<T> = {
     /** The stored entries among `keys`. */
     read: async (keys: string[]): Promise<Map<string, T>> => {
       const found = new Map<string, T>();
@@ -280,7 +289,27 @@ export const createRuntimeEntryCache = <T>({
     /** Drop every entry; freshness never depends on it. */
     clear,
   };
+  if (!store)
+    entryCaches.set(name, {
+      ttlSeconds,
+      memoryLimit,
+      entries: entries as RuntimeEntryCache<unknown>,
+    });
+  return entries;
 };
+
+/** Keyed Runtime Cache entries; see `createRuntimeEntryCache`. */
+type RuntimeEntryCache<T> = {
+  read: (keys: string[]) => Promise<Map<string, T>>;
+  write: (key: string, value: T) => Promise<void>;
+  clear: () => Promise<void>;
+};
+
+/** Entry caches backed by the Runtime Cache, by name. */
+const entryCaches = new Map<
+  string,
+  { ttlSeconds: number; memoryLimit: number; entries: RuntimeEntryCache<unknown> }
+>();
 
 /** Invalidate every Runtime Cache. Used by tests that seed their own content. */
 export const invalidateRuntimeCaches = async () => {

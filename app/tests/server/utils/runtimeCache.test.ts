@@ -265,6 +265,15 @@ describe("createRuntimeEntryCache", () => {
     expect((await writer.read(["a"])).size).toBe(0);
   });
 
+  it("shares one instance per name across modules and rejects other options", () => {
+    const options = { name: "shared-entries", ttlSeconds: TTL_SECONDS, memoryLimit: 2 };
+    const first = createRuntimeEntryCache<{ rev: number }>(options);
+    expect(createRuntimeEntryCache<{ rev: number }>(options)).toBe(first);
+    expect(() =>
+      createRuntimeEntryCache<{ rev: number }>({ ...options, memoryLimit: 3 }),
+    ).toThrow("already exists with other options");
+  });
+
   it("treats failed reads and writes as misses", async () => {
     const { store } = memoryStore();
     const cache = createRuntimeEntryCache<{ rev: number }>({

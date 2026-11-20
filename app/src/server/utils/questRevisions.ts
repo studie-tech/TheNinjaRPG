@@ -80,8 +80,9 @@ export const withQuestDefinitions = async <
     : undefined;
 };
 
-// These are the entries `fetchProfileUser` keeps: every quest fits in memory. Keys name
-// the deployment, whose schema shapes the rows, as `createRuntimeCache` payload keys do.
+// The cache `fetchProfileUser` hydrates from, under its name, options and key format:
+// every quest fits in memory. Keys name the deployment, whose schema shapes the rows, as
+// `createRuntimeCache` payload keys do.
 const sharedDefinitions = createRuntimeEntryCache<SuperJSONResult>({
   name: "quest-definition",
   ttlSeconds: 24 * 60 * 60,
