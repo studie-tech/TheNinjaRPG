@@ -59,13 +59,49 @@ export function createDefinitionCache<Definition extends { id: string }>({
   });
   const entryKey = (revision: Revision) =>
     `${deploymentKey}:${revision.id}:${revision.revision}`;
+  const pendingReads = new Map<
+    string,
+    Promise<Map<string, SuperJSONResult> | undefined>
+  >();
+
+  const readDefinitions = async (
+    client: DrizzleClient,
+    wanted: Map<string, Revision>,
+  ) => {
+    const definitions = await entries.read([...wanted.keys()]);
+    const missing = [...wanted].filter(([key]) => !definitions.has(key));
+    if (missing.length > 0) {
+      const rows = await select(
+        client,
+        missing.map(([, revision]) => revision.id),
+      );
+      if (
+        rows.length < missing.length ||
+        rows.some(
+          ({ definition, revision }) =>
+            !wanted.has(entryKey({ id: definition.id, revision })),
+        )
+      )
+        return undefined;
+      await Promise.all(
+        rows.map(({ definition, revision }) => {
+          const key = entryKey({ id: definition.id, revision });
+          const value = superjson.serialize(definition);
+          definitions.set(key, value);
+          return entries.write(key, value);
+        }),
+      );
+    }
+    return definitions;
+  };
 
   return {
     /**
      * Resolve each revision a player read selected to its complete definition.
      *
      * Definitions this instance and the Runtime Cache lack are read in one statement and
-     * stored for other requests. A relation the read found missing resolves to null, as
+     * stored for other requests. Concurrent reads of a revision share the pending lookup.
+     * A relation the read found missing resolves to null, as
      * a join would; every revision it found resolves. A definition changed or deleted
      * since the read returns undefined, so the caller can repeat it with joined
      * definitions.
@@ -79,33 +115,29 @@ export function createDefinitionCache<Definition extends { id: string }>({
         if (revision) wanted.set(entryKey(revision), revision);
       const definitions = new Map<string, SuperJSONResult>();
       if (wanted.size > 0) {
-        const stored = await entries.read([...wanted.keys()]);
-        for (const [key, value] of stored)
-          definitions.set(wanted.get(key)?.id ?? key, value);
-        const missingIds = [...wanted.values()]
-          .map((revision) => revision.id)
-          .filter((id) => !definitions.has(id));
-        if (missingIds.length > 0) {
-          const rows = await select(client, missingIds);
-          if (
-            rows.length < missingIds.length ||
-            rows.some(
-              ({ definition, revision }) =>
-                !wanted.has(entryKey({ id: definition.id, revision })),
-            )
-          )
-            return undefined;
-          await Promise.all(
-            rows.map(({ definition, revision }) => {
-              const value = superjson.serialize(definition);
-              definitions.set(definition.id, value);
-              return entries.write(entryKey({ id: definition.id, revision }), value);
-            }),
-          );
+        const reads = new Set<Promise<Map<string, SuperJSONResult> | undefined>>();
+        const fresh = new Map<string, Revision>();
+        for (const [key, revision] of wanted) {
+          const pending = pendingReads.get(key);
+          if (pending) reads.add(pending);
+          else fresh.set(key, revision);
+        }
+        if (fresh.size > 0) {
+          // Reserve revisions before awaiting the cache, and keep new misses batched.
+          const pending = readDefinitions(client, fresh).finally(() => {
+            for (const key of fresh.keys()) pendingReads.delete(key);
+          });
+          for (const key of fresh.keys()) pendingReads.set(key, pending);
+          reads.add(pending);
+        }
+        const results = await Promise.all(reads);
+        for (const result of results) {
+          if (!result) return undefined;
+          for (const [key, value] of result) definitions.set(key, value);
         }
       }
       return ((revision: Live | null) => {
-        const stored = revision && definitions.get(revision.id);
+        const stored = revision && definitions.get(entryKey(revision));
         if (!revision || !stored) return null;
         const { revision: _revision, ...live } = revision;
         // Each use decodes its own copy, so per-user rewrites stay private.
