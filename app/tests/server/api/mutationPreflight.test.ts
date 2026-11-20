@@ -147,7 +147,9 @@ describe("self-guarded Pyramid mutations", () => {
           mpvpBattleQueue: { findMany: async () => [] },
           quest: { findMany: async () => [] },
           userItem: {
-            findMany: async () => [{ quantity: -1, updatedAt: new Date(0) }],
+            findMany: async () => [
+              { quantity: -1, updatedAt: new Date(0), item: null, imbuements: [] },
+            ],
           },
         },
         insert: write,
@@ -183,8 +185,13 @@ describe("self-guarded Pyramid mutations", () => {
       const staleItem = {
         quantity: -1,
         updatedAt: new Date(0),
-        item: { hidden: false },
+        item: { id: "stale-item", revision: "stale-revision" },
+        imbuements: [],
       };
+      // The inventory read selects item revisions; definitions come from one item read.
+      const definitions = Promise.resolve([
+        { definition: { id: "stale-item", hidden: false }, revision: "stale-revision" },
+      ]);
       const read = vi.fn(async (): Promise<(typeof staleItem)[]> => {
         inventoryStarted.resolve();
         return [
@@ -197,6 +204,7 @@ describe("self-guarded Pyramid mutations", () => {
       });
       const db = {
         query: { userItem: { findMany: read } },
+        select: () => ({ from: () => ({ where: () => definitions }) }),
         update: () => ({ set: () => ({ where: write }) }),
         delete: () => ({ where: write }),
       };

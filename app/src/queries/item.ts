@@ -1,4 +1,5 @@
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import { revisionSql } from "@/queries/definitionRevisions";
 import type {
   ActionReadiness,
   ActionReadinessWrite,
@@ -1952,30 +1953,87 @@ export const listUserItemForToggleEquip = (
     with: { item: true, imbuements: { with: { item: true } } },
   });
 
-/** Load inventory with its selected variant; this lean query omits the full variant catalogue. */
+/**
+ * Load inventory with its selected variant and item revisions; `fetchUserItems` attaches
+ * the cached definitions. This lean query omits the full variant catalogue.
+ */
 export const listUserItemForFetchUserItems = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
-) =>
-  client.query.userItem.findMany({
-    where: eq(userItem.userId, userId),
-    with: {
-      item: true,
-      activeVariant: true,
-      imbuements: { with: { item: true } },
-    },
-  });
+) => findUserItems(client, userId, itemRevisionRelation);
 
-/** Load every variant choice; appearance and portrait resolvers select from this list by activeVariantId. */
+/** Load inventory with joined item definitions when a concurrent edit prevents hydration. */
+export const listUserItemWithDefinitionsForFetchUserItems = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) => findUserItems(client, userId, itemDefinitionRelation);
+
+/**
+ * Load every variant choice with item revisions; appearance and portrait resolvers select
+ * from this list by activeVariantId.
+ */
 export const listUserItemForFetchUserItemsWithVariants = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
+) => findUserItemsWithVariants(client, userId, itemRevisionRelation);
+
+/** Load every variant choice with joined item definitions; see `listUserItemWithDefinitionsForFetchUserItems`. */
+export const listUserItemWithDefinitionsForFetchUserItemsWithVariants = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) => findUserItemsWithVariants(client, userId, itemDefinitionRelation);
+
+/** Build the `item` selection of complete definitions and their revisions for `itemDefinitions`. */
+export const selectItemDefinitions = (
+  client: Pick<DrizzleClient, "select">,
+  itemIds: string[],
+) =>
+  client
+    .select({ definition: item, revision: itemRevisionSql() })
+    .from(item)
+    .where(inArray(item.id, itemIds));
+
+const itemRevisionSql = revisionSql(item);
+/** Item rows are cached whole, so inventory reads take only their id and content hash. */
+const itemRevisionRelation = {
+  columns: { id: true },
+  extras: (table: (typeof item)["_"]["columns"]) => ({
+    revision: itemRevisionSql(table).as("revision"),
+  }),
+} as const;
+const itemDefinitionRelation = {} as const;
+
+const findUserItems = <
+  ItemRelation extends typeof itemRevisionRelation | typeof itemDefinitionRelation,
+>(
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+  itemRelation: ItemRelation,
 ) =>
   client.query.userItem.findMany({
     where: eq(userItem.userId, userId),
     with: {
-      item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } },
-      imbuements: { with: { item: true } },
+      item: itemRelation,
+      activeVariant: true,
+      imbuements: { with: { item: itemRelation } },
+    },
+  });
+
+const findUserItemsWithVariants = <
+  ItemRelation extends typeof itemRevisionRelation | typeof itemDefinitionRelation,
+>(
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+  itemRelation: ItemRelation,
+) =>
+  client.query.userItem.findMany({
+    where: eq(userItem.userId, userId),
+    with: {
+      item: {
+        ...itemRelation,
+        with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } },
+      },
+      imbuements: { with: { item: itemRelation } },
     },
   });
 
