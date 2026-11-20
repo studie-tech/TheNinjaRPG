@@ -16,6 +16,7 @@ import {
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
 } from "@/drizzle/constants";
+import type { DungeonRun } from "@/drizzle/schema";
 import { userData } from "@/drizzle/schema";
 import { transitionCoopParty } from "@/libs/coop";
 import { dungeonFloorAt, dungeonRequirements } from "@/libs/dungeon";
@@ -274,7 +275,9 @@ export const dungeonRouter = createTRPCRouter({
     // A derived UNION materializes indexed candidates once; IN can become a dependent
     // subquery that scans every historical run before probing membership.
     const candidates = selectDungeonMemberForGetState(ctx.drizzle, ctx);
-    const runs = await selectCandidatesForGetState(ctx.drizzle, candidates, ctx);
+    const runs = withSharedDungeonContent(
+      await selectCandidatesForGetState(ctx.drizzle, candidates, ctx),
+    );
     const expiryNeedsRefresh = await Promise.all(
       runs.map((run) => expireDungeonRun(ctx.drizzle, run)),
     );
@@ -910,3 +913,22 @@ export const dungeonRouter = createTRPCRouter({
         : errorResponse("Rewards were already claimed. Refresh to view your receipt.");
     }),
 });
+
+/**
+ * Restore each run's content snapshot from the page row that carried its hash. Copies keep
+ * runs from sharing one object, which would also add reference metadata to the response.
+ */
+const withSharedDungeonContent = (
+  rows: Awaited<ReturnType<typeof selectCandidatesForGetState>>,
+): DungeonRun[] => {
+  const contents = new Map(
+    rows.flatMap(({ content, contentHash }) =>
+      content ? [[contentHash, content] as const] : [],
+    ),
+  );
+  return rows.map(({ contentHash, ...run }) => {
+    const shared = contents.get(contentHash);
+    if (!shared) throw new Error(`Missing content snapshot for dungeon run ${run.id}`);
+    return { ...run, content: run.content ?? structuredClone(shared) };
+  });
+};
