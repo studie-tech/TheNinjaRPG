@@ -11,8 +11,8 @@ import { clampActionLogText } from "@/utils/actionLog";
 import type { PollOptionSchema } from "@/validators/poll";
 
 // Every profile read asks whether the player has an open poll to vote on, while polls open
-// only through this router's create, update and close mutations, which invalidate the
-// listing. A poll's end date is compared with the current time on every read. Instances
+// and close only through the poll router's create, update and close mutations, which
+// invalidate the listing. A poll's end date is compared with the current time on every read. Instances
 // check the shared version once a minute, so a newly opened poll can reach players served
 // by another instance up to a minute late.
 const openPolls = createRuntimeCache({

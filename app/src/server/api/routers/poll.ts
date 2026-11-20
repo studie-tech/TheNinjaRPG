@@ -148,14 +148,16 @@ export const pollRouter = createTRPCRouter({
 
       // Update poll
       await updatePollForUpdatePoll(ctx.drizzle, updateData, input);
-      await invalidateOpenPolls();
-      await insertActionLogForUpdatePoll(
-        ctx.drizzle,
-        user,
-        existingPoll,
-        updateData,
-        input,
-      );
+      await Promise.all([
+        invalidateOpenPolls(),
+        insertActionLogForUpdatePoll(
+          ctx.drizzle,
+          user,
+          existingPoll,
+          updateData,
+          input,
+        ),
+      ]);
 
       return { success: true, message: "Poll updated successfully" };
     }),
@@ -329,8 +331,10 @@ export const pollRouter = createTRPCRouter({
 
       // Update poll status
       await updatePollForClosePoll(ctx.drizzle, input);
-      await invalidateOpenPolls();
-      await insertActionLogForClosePoll(ctx.drizzle, user, input, existingPoll);
+      await Promise.all([
+        invalidateOpenPolls(),
+        insertActionLogForClosePoll(ctx.drizzle, user, input, existingPoll),
+      ]);
 
       return {
         success: true,
