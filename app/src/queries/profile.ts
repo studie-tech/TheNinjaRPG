@@ -97,8 +97,9 @@ import { servedUfsUrl } from "@/libs/uploadthing";
 import { revisionSql } from "@/queries/definitionRevisions";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { listCachedGameSettings } from "@/queries/gamesettings";
+import { hasCachedOpenPoll } from "@/queries/poll";
 import { questPartyRelations } from "@/queries/questParty";
-import { questRevisionRelation } from "@/queries/questRevisions";
+import { questRevisionColumns, questRevisionRelation } from "@/queries/questRevisions";
 import { userCardColumns } from "@/queries/userColumns";
 import { activeWarAllyWhere, activeWarMercenaryWhere } from "@/queries/war";
 import { serverError } from "@/server/api/trpc";
@@ -112,6 +113,7 @@ import {
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { hashIp } from "@/server/utils/ipHash";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { resolveQuestRevisions } from "@/server/utils/questRevisions";
 import { createRuntimeCache } from "@/server/utils/runtimeCache";
 import { missingUserMessage } from "@/server/utils/sentry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
@@ -256,14 +258,19 @@ export const fetchAllGameSettings = async (client: DrizzleClient) => {
  * the first caller's `now`, which is well inside the minute-scale windows they describe.
  */
 
-/** Load a request-scoped active-poll lookup excluding polls already voted on by this user. */
+/**
+ * Load a request-scoped active-poll lookup excluding polls already voted on by this user.
+ * The cached open-poll listing skips the lookup while no poll is open; the lookup itself
+ * decides which polls count.
+ */
 export const fetchHasUnvotedPolls = (
   client: DrizzleClient,
   userId: string,
   now: Date,
 ) =>
-  scopedRead(`unvotedPolls:${userId}`, () =>
-    client
+  scopedRead(`unvotedPolls:${userId}`, async () => {
+    if (!(await hasCachedOpenPoll(client, now))) return [];
+    return client
       .select({ id: poll.id })
       .from(poll)
       .leftJoin(
@@ -279,8 +286,8 @@ export const fetchHasUnvotedPolls = (
           isNull(userPollVote.id),
         ),
       )
-      .limit(1),
-  );
+      .limit(1);
+  });
 
 /**
  * All active wars, for enemy_village sector type resolution. Accepted contracts and the
@@ -316,10 +323,19 @@ export const fetchAllActiveWars = (client: DrizzleClient) =>
     }),
   );
 
-/** Shrine battle lobbies whose battle has not started and that are not yet stale. */
+/**
+ * Shrine battle lobbies whose battle has not started and that are not yet stale, with the
+ * columns the profile's shrine alerts read.
+ */
 export const fetchActiveShrineLobbies = (client: DrizzleClient, staleBefore: Date) =>
   scopedRead("activeShrineLobbies", () =>
     client.query.mpvpBattleQueue.findMany({
+      columns: {
+        id: true,
+        sector: true,
+        attackerEntityId: true,
+        defenderEntityId: true,
+      },
       where: and(
         eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
         isNull(mpvpBattleQueue.battleId),
@@ -328,17 +344,29 @@ export const fetchActiveShrineLobbies = (client: DrizzleClient, staleBefore: Dat
     }),
   );
 
-/** All raids whose boss is still standing and whose window has not closed. */
+/**
+ * All raids whose boss is still standing and whose window has not closed. Raids are read
+ * as revisions and resolved to cached definitions; a concurrent edit repeats the read
+ * with the definitions selected.
+ */
 export const fetchActiveRaids = (client: DrizzleClient, now: Date) =>
-  scopedRead("activeRaids", () =>
-    client.query.quest.findMany({
-      where: and(
-        eq(quest.questType, "raid"),
-        eq(quest.hidden, false),
-        gte(quest.raidBossCurrentHealth, 1),
-        or(isNull(quest.raidEndsAt), gte(quest.raidEndsAt, now)),
-      ),
-    }),
+  scopedRead("activeRaids", async () => {
+    const revisions = await client
+      .select(questRevisionColumns)
+      .from(quest)
+      .where(activeRaidWhere(now));
+    const resolve = await resolveQuestRevisions(client, revisions);
+    if (!resolve) return client.select().from(quest).where(activeRaidWhere(now));
+    return revisions.map(resolve);
+  });
+
+/** Visible raids whose boss is still standing and whose window is open at `now`. */
+const activeRaidWhere = (now: Date) =>
+  and(
+    eq(quest.questType, "raid"),
+    eq(quest.hidden, false),
+    gte(quest.raidBossCurrentHealth, 1),
+    or(isNull(quest.raidEndsAt), gte(quest.raidEndsAt, now)),
   );
 
 /** Build the filtered and ordered public-user row query. The caller must authorize IP searches and redact returned IPs. */
@@ -828,14 +856,23 @@ export const selectFarmPlotCountsForGetUser = (
       ),
     );
 
-/** Build the `questParty` listing for `getUser`, using predicates on `invitedUserIds`. */
-export const listQuestPartyForGetUser = (
+/**
+ * Build the `questParty` listing of the caller's invitations for `getUser`, with the
+ * tracker its invitation filter reads, using predicates on `invitedUserIds`.
+ * `questRevisionRelation` reads each quest's revision for `withQuestDefinitions`; `true`
+ * joins the definitions.
+ */
+export const listQuestPartyForGetUser = <
+  QuestRelation extends true | typeof questRevisionRelation,
+>(
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
+  questRelation: QuestRelation,
 ) =>
   client.query.questParty.findMany({
+    columns: { id: true, tracker: true },
     where: sql`JSON_CONTAINS(${questParty.invitedUserIds}, JSON_QUOTE(${ctx.userId}))`,
-    with: { quest: true },
+    with: { quest: questRelation },
   });
 
 /** Build the `userReport` selection for `getUser`, using predicates on `status`. */

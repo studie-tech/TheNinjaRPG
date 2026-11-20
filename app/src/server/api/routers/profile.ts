@@ -267,6 +267,7 @@ import {
   updateVillageForFetchUpdatedUserOnce,
   upsertHistoricalIp,
 } from "@/queries/profile";
+import { questRevisionRelation } from "@/queries/questRevisions";
 import { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 import {
   copyAiSpriteAnimationBindings,
@@ -332,6 +333,7 @@ import {
   type LoadedQuestParty,
   synchronizeQuestParty,
 } from "@/server/utils/questParty";
+import { withQuestDefinitions } from "@/server/utils/questRevisions";
 import {
   awardRecruitRankMilestonesSafely,
   fetchRecruitMilestoneSummary,
@@ -860,7 +862,7 @@ export const profileRouter = createTRPCRouter({
       ] = await Promise.all([
         fetchUser(),
         selectFarmPlotCountsForGetUser(ctx.drizzle, ctx, now, currentDayCycleStartedAt),
-        listQuestPartyForGetUser(ctx.drizzle, ctx),
+        listQuestInvitations(ctx.drizzle, ctx),
         fetchEventNoticeState(ctx.drizzle, ctx.userId),
         findActiveDungeonRun(ctx.drizzle, ctx.userId),
       ]);
@@ -3452,6 +3454,16 @@ const fetchUpdatedUserOnce = async (
     };
   }
 };
+
+/**
+ * The caller's quest team invitations with their quest definitions, resolved from quest
+ * revisions; a concurrent edit repeats the read with the definitions joined.
+ */
+const listQuestInvitations = async (client: DrizzleClient, ctx: { userId: string }) =>
+  (await withQuestDefinitions(
+    client,
+    await listQuestPartyForGetUser(client, ctx, questRevisionRelation),
+  )) ?? listQuestPartyForGetUser(client, ctx, true);
 
 /** Project the raids listed for the user's village, as attached to the profile. */
 const listVillageRaids = (

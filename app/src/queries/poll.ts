@@ -2,12 +2,45 @@
  * Database access for poll; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { actionLog, poll, pollOption, userPollVote } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { createRuntimeCache } from "@/server/utils/runtimeCache";
 import { clampActionLogText } from "@/utils/actionLog";
 import type { PollOptionSchema } from "@/validators/poll";
+
+// Every profile read asks whether the player has an open poll to vote on, while polls open
+// only through this router's create, update and close mutations, which invalidate the
+// listing. A poll's end date is compared with the current time on every read. Instances
+// check the shared version once a minute, so a newly opened poll can reach players served
+// by another instance up to a minute late.
+const openPolls = createRuntimeCache({
+  name: "open-polls",
+  ttlSeconds: 10 * 60,
+  memorySeconds: 60,
+  cloneReads: false,
+  load: (client: Pick<DrizzleClient, "select">) =>
+    client
+      .select({ id: poll.id, endDate: poll.endDate })
+      .from(poll)
+      .where(
+        and(
+          eq(poll.isActive, true),
+          or(isNull(poll.endDate), gt(poll.endDate, new Date())),
+        ),
+      ),
+});
+
+/** Whether any active poll is still open at `now`, from the Runtime Cache. */
+export const hasCachedOpenPoll = async (
+  client: Pick<DrizzleClient, "select">,
+  now: Date,
+) =>
+  (await openPolls.read(client)).some((entry) => !entry.endDate || entry.endDate > now);
+
+/** Make every instance list open polls again; await after writes that open or close one. */
+export const invalidateOpenPolls = openPolls.invalidate;
 
 /**
  * Fetch a poll by ID

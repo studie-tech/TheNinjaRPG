@@ -20,6 +20,7 @@ import {
   insertPollForCreatePoll,
   insertPollOptions,
   insertUserPollVoteForVote,
+  invalidateOpenPolls,
   listPollForGetPolls,
   toPollOptionRow,
   updatePollForClosePoll,
@@ -111,6 +112,7 @@ export const pollRouter = createTRPCRouter({
         insertPollOptions(ctx.drizzle, optionsToInsert),
         insertActionLogForCreatePoll(ctx.drizzle, user, input, pollId),
       ]);
+      await invalidateOpenPolls();
 
       return { success: true, message: "Poll created successfully" };
     }),
@@ -146,6 +148,7 @@ export const pollRouter = createTRPCRouter({
 
       // Update poll
       await updatePollForUpdatePoll(ctx.drizzle, updateData, input);
+      await invalidateOpenPolls();
       await insertActionLogForUpdatePoll(
         ctx.drizzle,
         user,
@@ -326,6 +329,7 @@ export const pollRouter = createTRPCRouter({
 
       // Update poll status
       await updatePollForClosePoll(ctx.drizzle, input);
+      await invalidateOpenPolls();
       await insertActionLogForClosePoll(ctx.drizzle, user, input, existingPoll);
 
       return {
