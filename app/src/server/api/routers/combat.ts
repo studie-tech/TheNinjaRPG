@@ -4858,13 +4858,14 @@ export const processUsersForBattle = async (
  * Tell a battle's clients a lobby change landed. The announced version is one past the
  * saved one so every client, the requester included, refetches getBattle. A requester
  * that applies the returned battle is announced the saved version, so only clients
- * still holding an older one refetch.
+ * still holding an older one refetch. Returning delivery keeps deferred tasks alive
+ * until the broadcast finishes.
  */
 const announceLobbyChange = (
   userBattle: { id: string; version: number },
   requesterHasBattle = false,
 ) => {
-  void pusher.trigger(userBattle.id, "event", {
+  return pusher.trigger(userBattle.id, "event", {
     version: requesterHasBattle ? userBattle.version : userBattle.version + 1,
   });
 };

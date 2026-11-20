@@ -136,6 +136,29 @@ describeWithDatabase("battle AI control preference scope", () => {
     ]);
   });
 
+  it("keeps the deferred broadcast alive until delivery finishes", async () => {
+    const { db } = await seed("COMBAT", false);
+    let finish!: () => void;
+    const delivery = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    trigger.mockReturnValue(delivery);
+    const tasks: (() => unknown)[] = [];
+    const response = await afterTasks.run(tasks, () =>
+      resolverOf(combatRouter.toggleAutoCombat)({
+        ctx: { drizzle: db, userId: USER },
+        input: { battleId: BATTLE, enabled: true },
+      }),
+    );
+    expect(response.success).toBe(true);
+    expect(trigger).not.toHaveBeenCalled();
+    expect(tasks).toHaveLength(1);
+    const task = tasks[0]!();
+    finish();
+    expect(task).toBe(delivery);
+    await task;
+  });
+
   it("keeps always-AI battles locked without changing the PvE preference", async () => {
     const { db, caller } = await seed("KAGE_AI", false);
     expect(
