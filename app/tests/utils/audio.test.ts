@@ -160,6 +160,59 @@ describe("preloaded sound effects", () => {
     }
   });
 
+  it("plays nothing when a hold begins while the context resumes", async () => {
+    const url = "https://uploadthing.b-cdn.net/f/held-during-resume.mp3";
+    let finishResume = () => {};
+    const createGain = vi.fn(() => {
+      throw new Error("Web Audio failed");
+    });
+    const context = {
+      state: "suspended",
+      resume: () =>
+        new Promise<void>((resolve) => {
+          finishResume = resolve;
+        }),
+      suspend: async () => {},
+      destination: {},
+      createGain,
+    };
+    const fallback = vi.fn();
+    class FakeAudio {
+      crossOrigin = "";
+      cloneNode() {
+        return {
+          addEventListener: () => {},
+          pause: () => {},
+          play: async () => fallback(),
+        };
+      }
+    }
+    const original = globalThis.Audio;
+    Object.assign(globalThis, { Audio: FakeAudio });
+    Object.assign(window, {
+      __sharedAudioContext: context,
+      __audioCache: undefined,
+      __audioBufferCache: new Map([[url, { duration: 1 } as AudioBuffer]]),
+    });
+    try {
+      const playing = playPreloadedAudio(url, 0.5);
+      await Promise.resolve();
+      holdAudioPlayback("muted", true);
+      finishResume();
+      await playing;
+      expect(createGain).not.toHaveBeenCalled();
+      expect(fallback).not.toHaveBeenCalled();
+    } finally {
+      holdAudioPlayback("muted", false);
+      Object.assign(globalThis, { Audio: original });
+      Object.assign(window, {
+        __sharedAudioContext: undefined,
+        __audioCache: undefined,
+        __audioBufferCache: undefined,
+      });
+    }
+  });
+
   it("cuts off element playback when a hold begins and plays nothing while held", async () => {
     const nodes: { paused: boolean }[] = [];
     class FakeAudio {

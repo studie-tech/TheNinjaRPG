@@ -25,6 +25,7 @@ const SETTLED_KEPT = 20;
 const PROGRESS_LOCK = "shurikenSiege:progress";
 const UNSAVED_MESSAGE =
   "Your progress could not be saved, so it lasts only while this page stays open.";
+const UNREADABLE_MESSAGE = "Your saved progress could not be read just now.";
 
 /**
  * Shuriken Siege runs without a server: runs start from the stored Guard Hall levels and
@@ -65,11 +66,14 @@ export const useShurikenSiegeRun = (
       cancelled = true;
     };
   }, [store]);
-  /** Progress as stored now, which another tab may have written since this one read it. */
-  const latest = useCallback(async () => {
+  /**
+   * Progress as stored now, which another tab may have written since this one read it;
+   * null when the store could not be read, so no change is built on progress it missed.
+   */
+  const latest = useCallback(async (): Promise<TdLocalProgress | null> => {
     if (pending.current) return pending.current;
     if (isDetached.current) return TD_EMPTY_LOCAL_PROGRESS;
-    return parseLocalProgress(await store.read().catch(() => null));
+    return store.read().then(parseLocalProgress, () => null);
   }, [store]);
   /** Show and save progress; resolves whether the store kept it. */
   const keep = useCallback(
@@ -87,6 +91,10 @@ export const useShurikenSiegeRun = (
   const startRun = useCallback<TowerDefenseBackend["startRun"]>(
     async (startWave) => {
       const current = await latest();
+      if (!current) {
+        showMutationToast({ success: false, message: UNREADABLE_MESSAGE });
+        return null;
+      }
       if (!tdCheckpoints(current.bestWave).includes(startWave)) {
         showMutationToast({
           success: false,
@@ -123,7 +131,17 @@ export const useShurikenSiegeRun = (
             points: 0,
             message: "This run was already banked in another tab.",
           };
-        const settled = settleLocalRun(await latest(), state);
+        const current = await latest();
+        // Banking onto progress that could not be read would overwrite the real save.
+        if (!current)
+          return {
+            settled: false,
+            claimed: false,
+            retryable: true,
+            reloadRequired: false,
+            message: `${UNREADABLE_MESSAGE} The run is kept; try banking it again.`,
+          };
+        const settled = settleLocalRun(current, state);
         const isSaved = await keep(settled.progress);
         if (store.saveRuns)
           safeLocalStorageSetItem(
@@ -158,7 +176,12 @@ export const useShurikenSiegeRun = (
   const buyDojo = useCallback(
     (upgradeId: TdDojoUpgrade) =>
       exclusive(async () => {
-        const result = buyLocalDojoLevel(await latest(), upgradeId);
+        const current = await latest();
+        if (!current) {
+          showMutationToast({ success: false, message: UNREADABLE_MESSAGE });
+          return;
+        }
+        const result = buyLocalDojoLevel(current, upgradeId);
         if ("message" in result) {
           showMutationToast({ success: false, message: result.message });
           return;

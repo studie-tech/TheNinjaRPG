@@ -120,6 +120,31 @@ describe("useTowerDefenseSession", () => {
     expect(backend.claimRun).toHaveBeenCalled();
   });
 
+  it("keeps the player's own pause through a host pause", async () => {
+    const backend = fakeBackend("token-player");
+    const { result } = renderHook(() => useTowerDefenseSession(backend));
+    await act(async () => {
+      await result.current.start(1);
+    });
+    act(() => {
+      result.current.setPaused("player", true);
+      result.current.setPaused("host", true);
+    });
+    // Resume in the HUD does nothing while the host holds the run.
+    act(() => {
+      result.current.setPaused("player", false);
+    });
+    expect(result.current.pauses).toEqual(["player", "host"]);
+    act(() => {
+      result.current.setPaused("host", false);
+    });
+    expect(result.current.pauses).toEqual(["player"]);
+    act(() => {
+      result.current.setPaused("player", false);
+    });
+    expect(result.current.pauses).toEqual([]);
+  });
+
   it("plays a run without a token locally, never saving or claiming it", async () => {
     const backend = fakeBackend(null);
     const { result } = renderHook(() => useTowerDefenseSession(backend));

@@ -552,12 +552,12 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
 
   /**
    * Hold or release the run for one reason; it runs again once no reason holds it. While
-   * the host holds it, the player's controls cannot add a pause of their own, which would
-   * otherwise outlast the host's.
+   * the host holds it, the player's own pauses stay as they were: one added would outlast
+   * the host's, and one released would let the run go on when the host resumes.
    */
   const setPaused = useCallback((reason: TowerDefensePause, on: boolean) => {
     if (reason === "host") isHostHeld.current = on;
-    else if (on && isHostHeld.current) return;
+    else if (isHostHeld.current) return;
     setPauses((current) =>
       on
         ? current.includes(reason)

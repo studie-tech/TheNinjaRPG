@@ -272,6 +272,8 @@ export const playPreloadedAudio = async (
   if (ctx && buffer) {
     try {
       await resumeAudioContext(ctx);
+      // A hold may have begun while the context resumed.
+      if (audioHolds.size > 0) return;
       const gain = ctx.createGain();
       const vol = clamp(volume, 0, 1);
       gain.gain.value = vol;
@@ -293,7 +295,8 @@ export const playPreloadedAudio = async (
     }
   }
 
-  // Element-based fallback (still allows overlapping via clone)
+  // Element-based fallback (still allows overlapping via clone), never while held
+  if (audioHolds.size > 0) return;
   const audioCache = getAudioCache();
   let audio = audioCache.get(url);
   if (!audio) {

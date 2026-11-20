@@ -240,14 +240,14 @@ mkdirSync(out, { recursive: true });
 for (const target of targets) {
   const source = args.source ?? target;
   const name = `shuriken-siege-${target}${source === target ? "" : `-${source}`}-${version}`;
-  // The target is assembled beside its previous output, which it replaces only once its
-  // folder and zip are complete.
+  // The target is assembled in a staging directory of its own inside `out`, and replaces
+  // its previous output only once its folder and zip are complete.
   const finalDir = join(out, name);
   const zip = join(out, `${name}.zip`);
-  const dir = join(out, `${name}.partial`);
-  const partialZip = join(out, `${name}.partial.zip`);
-  rmSync(dir, { recursive: true, force: true });
-  rmSync(partialZip, { force: true });
+  const staging = mkdtempSync(join(out, ".staging-"));
+  process.on("exit", () => rmSync(staging, { recursive: true, force: true }));
+  const dir = join(staging, name);
+  const partialZip = join(staging, `${name}.zip`);
   mkdirSync(join(dir, "assets"), { recursive: true });
   cpSync(work, dir, { recursive: true });
   const mediaMap: Record<string, string> = {};
@@ -270,6 +270,7 @@ for (const target of targets) {
   rmSync(zip, { force: true });
   renameSync(dir, finalDir);
   renameSync(partialZip, zip);
+  rmSync(staging, { recursive: true, force: true });
   const count = execFileSync("find", [".", "-type", "f"], { cwd: finalDir, encoding: "utf8" })
     .trim()
     .split("\n").length;
