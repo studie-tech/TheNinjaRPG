@@ -68,7 +68,10 @@ describe("raid list and action snapshots", () => {
       expect.objectContaining({
         with: expect.objectContaining({
           village: expect.objectContaining({
-            with: expect.objectContaining({ structures: true }),
+            // Structure rows are hydrated from their content revisions.
+            with: expect.objectContaining({
+              structures: expect.objectContaining({ columns: { id: true } }),
+            }),
           }),
         }),
       }),

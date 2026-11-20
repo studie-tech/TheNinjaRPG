@@ -44,7 +44,7 @@ import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { activeWarAllyWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
-import { fetchProfileUser } from "@/server/utils/questDefinitions";
+import { fetchProfileUser } from "@/server/utils/profileDefinitions";
 
 /** Queue rows with no live battle: open, or held by a start claim. */
 const battleOpenOrClaimed = or(

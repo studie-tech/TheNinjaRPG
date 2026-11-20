@@ -87,6 +87,7 @@ import {
   userUpload,
   userVote,
   village,
+  villageStructure,
   war,
 } from "@/drizzle/schema";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
@@ -1932,23 +1933,34 @@ export const insertUserItemForApplyUserContentChanges = (
     })),
   );
 
-/** Build the profile snapshot with revision-keyed quest definitions; see `fetchProfileUser`. */
+/**
+ * Build the profile snapshot with content revisions in place of quest, item and village
+ * structure definitions; see `fetchProfileUser`.
+ */
 export const findUserDataForQueryUpdatedUser = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
-) => findProfileUser(client, userId, questRevisionRelation);
+) => findProfileUser(client, userId, definitionRevisions);
 
 /** Read one joined snapshot when a concurrent definition edit prevents cache hydration. */
-export const findProfileUserWithQuestDefinitions = (
+export const findProfileUserWithDefinitions = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
-) => findProfileUser(client, userId, true);
+) => findProfileUser(client, userId, joinedDefinitions);
 
 /** Build the `userData` lookup for `queryUpdatedUser`, including predicates on `userId`, `equipped`, `quantity`. */
-const findProfileUser = <QuestRelation extends true | typeof questRevisionRelation>(
+const findProfileUser = <
+  QuestRelation extends true | (typeof definitionRevisions)["quest"],
+  ItemRelation extends true | (typeof definitionRevisions)["item"],
+  StructureRelation extends true | (typeof definitionRevisions)["structure"],
+>(
   client: Pick<DrizzleClient, "query">,
   userId: string,
-  questRelation: QuestRelation,
+  definitions: {
+    quest: QuestRelation;
+    item: ItemRelation;
+    structure: StructureRelation;
+  },
 ) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
@@ -1968,7 +1980,7 @@ const findProfileUser = <QuestRelation extends true | typeof questRevisionRelati
       clan: true,
       village: {
         with: {
-          structures: true,
+          structures: definitions.structure,
           relationshipA: true,
           relationshipB: true,
           sectors: {
@@ -1990,13 +2002,13 @@ const findProfileUser = <QuestRelation extends true | typeof questRevisionRelati
         where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
         with: {
           activeVariant: true,
-          item: true,
-          imbuements: { with: { item: true } },
+          item: definitions.item,
+          imbuements: { with: { item: definitions.item } },
         },
       },
       userQuests: {
         ...userQuestHistoryRelation,
-        with: { quest: questRelation },
+        with: { quest: definitions.quest },
         orderBy: sql`FIELD(${questHistory.questType}, 'daily', 'tier') ASC`,
       },
       completedQuests: completedQuestHistoryRelation,
@@ -2026,25 +2038,56 @@ export const questLiveColumns = {
   raidGracePeriodEnd: true,
 } as const;
 
-/**
- * A hash of every other quest column. Any write to the definition changes it, whichever
- * path makes the write (editor, migration or console), so it identifies the content a
- * cached definition holds.
- */
-export const questRevisionSql = (table: (typeof quest)["_"]["columns"]) =>
-  sql<string>`SHA2(JSON_ARRAY(${sql.join(
-    Object.entries(getTableColumns(quest))
-      .filter(([key]) => !(key in questLiveColumns))
-      .map(([key]) => table[key as keyof typeof table] as AnyMySqlColumn),
-    sql`, `,
-  )}), 256)`;
+/** Item and village structure rows are cached whole, so profile reads take only their id. */
+const definitionIdColumn = { id: true } as const;
 
-const questRevisionRelation = {
-  columns: questLiveColumns,
-  extras: (table: (typeof quest)["_"]["columns"]) => ({
-    revision: questRevisionSql(table).as("revision"),
-  }),
+/**
+ * A hash of every column of a definition table but its `live` ones. Any write to those
+ * columns changes it, whichever path makes the write (editor, gameplay, migration or
+ * console), so it identifies the content a cached definition holds.
+ */
+const revisionSql =
+  <Columns extends Record<string, AnyMySqlColumn>>(
+    columns: Columns,
+    live: Partial<Record<keyof Columns, true>>,
+  ) =>
+  (table: Columns) =>
+    sql<string>`SHA2(JSON_ARRAY(${sql.join(
+      Object.keys(columns)
+        .filter((key) => !(key in live))
+        .map((key) => table[key]),
+      sql`, `,
+    )}), 256)`;
+
+const questRevisionSql = revisionSql(getTableColumns(quest), questLiveColumns);
+const itemRevisionSql = revisionSql(getTableColumns(item), definitionIdColumn);
+const structureRevisionSql = revisionSql(
+  getTableColumns(villageStructure),
+  definitionIdColumn,
+);
+
+/** The relations `fetchProfileUser` hydrates from cached definitions. */
+const definitionRevisions = {
+  quest: {
+    columns: questLiveColumns,
+    extras: (table: (typeof quest)["_"]["columns"]) => ({
+      revision: questRevisionSql(table).as("revision"),
+    }),
+  },
+  item: {
+    columns: definitionIdColumn,
+    extras: (table: (typeof item)["_"]["columns"]) => ({
+      revision: itemRevisionSql(table).as("revision"),
+    }),
+  },
+  structure: {
+    columns: definitionIdColumn,
+    extras: (table: (typeof villageStructure)["_"]["columns"]) => ({
+      revision: structureRevisionSql(table).as("revision"),
+    }),
+  },
 };
+const joinedDefinitions = { quest: true, item: true, structure: true } as const;
 
 /** Build the `quest` selection of complete definitions and their revisions for `fetchProfileUser`. */
 export const selectQuestDefinitions = (
@@ -2055,6 +2098,29 @@ export const selectQuestDefinitions = (
     .select({ definition: quest, revision: questRevisionSql(quest) })
     .from(quest)
     .where(inArray(quest.id, questIds));
+
+/** Build the `item` selection of complete definitions and their revisions for `fetchProfileUser`. */
+export const selectItemDefinitions = (
+  client: Pick<DrizzleClient, "select">,
+  itemIds: string[],
+) =>
+  client
+    .select({ definition: item, revision: itemRevisionSql(item) })
+    .from(item)
+    .where(inArray(item.id, itemIds));
+
+/** Build the `villageStructure` selection of complete rows and their revisions for `fetchProfileUser`. */
+export const selectStructureDefinitions = (
+  client: Pick<DrizzleClient, "select">,
+  structureIds: string[],
+) =>
+  client
+    .select({
+      definition: villageStructure,
+      revision: structureRevisionSql(villageStructure),
+    })
+    .from(villageStructure)
+    .where(inArray(villageStructure.id, structureIds));
 
 /** Build the `userVote` insert for `fetchUpdatedUserOnce`. */
 export const insertUserVoteForFetchUpdatedUserOnce = (
