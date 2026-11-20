@@ -35,7 +35,7 @@ const GuideListFilterSchema = z.object({
 
 export const guideRouter = createTRPCRouter({
   getAll: publicProcedure
-    .meta({ mcp: { description: "List player guide articles" } })
+    .meta({ mcp: { description: "List player guide article summaries" } })
     .input(GuideListFilterSchema.optional())
     .query(async ({ ctx, input }) => {
       const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);

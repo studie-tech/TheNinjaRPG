@@ -21,13 +21,26 @@ export const fetchGuideBySlug = async (client: DrizzleClient, slug: string) => {
   });
 };
 
-/** Load published guides in stable sortOrder/title order. */
+/** Card fields the guide hub renders and searches; article bodies load on the article route. */
+const guideSummaryColumns = {
+  id: true,
+  slug: true,
+  title: true,
+  excerpt: true,
+  image: true,
+  category: true,
+  published: true,
+} as const;
+
+/** Load published guide summaries in stable sortOrder/title order. */
 export const fetchPublishedGuides = async (client: DrizzleClient) => {
   return await client.query.guideArticle.findMany({
+    columns: guideSummaryColumns,
     where: eq(guideArticle.published, true),
     orderBy: [asc(guideArticle.sortOrder), asc(guideArticle.title)],
   });
 };
+export type GuideSummary = Awaited<ReturnType<typeof fetchPublishedGuides>>[number];
 
 /** Load published guides in one category and return adjacent guides plus up to four other related guides. */
 export const fetchNeighborGuides = async (
@@ -146,9 +159,10 @@ export const fetchGuideForBloodline = async (
 import { nanoid } from "nanoid";
 import { actionLog } from "@/drizzle/schema";
 
-/** Build the `guideArticle` listing for `getAll`. */
+/** Build the summary listing of every guide, drafts included, for `getAll`. */
 export const listGuideArticleForGetAll = (client: Pick<DrizzleClient, "query">) =>
   client.query.guideArticle.findMany({
+    columns: guideSummaryColumns,
     orderBy: [asc(guideArticle.sortOrder), asc(guideArticle.title)],
   });
 
