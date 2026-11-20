@@ -38,6 +38,7 @@ import {
   ENTITY_CONFIG,
   editableOf,
   entityKey,
+  loadAllEntities,
   loadEntities,
   normalizeEditable,
 } from "./entities";
@@ -446,6 +447,18 @@ const planAgentProposal = async (
     const applied = applySetOperations(change.entityType, base, operations);
     if (!applied.ok) return applied.reason;
     let next = applied.editable;
+    if (change.entityType === "SPLASH") {
+      if (entity && entity.editable.enabled === false)
+        return "Disabled announcements are archived by staff and cannot be proposed again";
+      if (entity && next.topicKey !== entity.editable.topicKey)
+        return "An announcement's topic key cannot change";
+      if (!entity && typeof next.topicKey === "string") {
+        const topic = splashTopicKey(next.topicKey);
+        if (guards.names.has(topic) || drafted.has(topic))
+          return "This announcement topic already exists or is queued, including disabled entries";
+        drafted.add(topic);
+      }
+    }
     for (const request of change.media) {
       if (
         !config.editableKeys.includes(topLevelField(request.path)) ||
@@ -613,8 +626,16 @@ const loadPlanningContext = async (
       return name ? [{ entityType: change.entityType, name }] : [];
     }),
   );
-  const [entities, open, rejected, names] = await Promise.all([
-    loadEntities(client, refs),
+  const hasSplash =
+    refs.some((ref) => ref.entityType === "SPLASH") ||
+    proposals.some((proposal) =>
+      proposal.changes.some((change) => change.entityType === "SPLASH"),
+    );
+  const [entities, open, rejected, names, splashEntries] = await Promise.all([
+    loadEntities(
+      client,
+      refs.filter((ref) => ref.entityType !== "SPLASH"),
+    ),
     targetIds.length
       ? openTargets(client, targetIds, exclude.proposalId)
       : Promise.resolve(new Set<string>()),
@@ -624,7 +645,14 @@ const loadPlanningContext = async (
     drafts.length
       ? takenNames(client, drafts, exclude.proposalId)
       : Promise.resolve(new Set<string>()),
+    hasSplash ? loadAllEntities(client, "SPLASH") : Promise.resolve([]),
   ]);
+  for (const entry of splashEntries) {
+    entities.set(entityKey("SPLASH", entry.id), entry);
+    names.add(nameKey("SPLASH", entry.name));
+    if (typeof entry.editable.topicKey === "string")
+      names.add(splashTopicKey(entry.editable.topicKey));
+  }
   return { entities, open, rejected, names };
 };
 
@@ -659,25 +687,34 @@ const takenNames = async (
   const types = [...new Set(drafts.map((draft) => draft.entityType))];
   const [live, queued] = await Promise.all([
     Promise.all(
-      types.map(async (type) => {
-        const names = drafts
-          .filter((draft) => draft.entityType === type)
-          .map((draft) => draft.name);
-        const found = await ENTITY_CONFIG[type].findNames(client, names);
-        return found.map((name) => nameKey(type, name));
-      }),
+      types
+        .filter((type) => type !== "SPLASH")
+        .map(async (type) => {
+          const names = drafts
+            .filter((draft) => draft.entityType === type)
+            .map((draft) => draft.name);
+          const found = await ENTITY_CONFIG[type].findNames(client, names);
+          return found.map((name) => nameKey(type, name));
+        }),
     ),
     selectContentProposalChangeForTakenNames(client, excludeId, types),
   ]);
   return new Set([
     ...live.flat(),
-    ...queued.map((row) => nameKey(row.entityType, draftName(row.after))),
+    ...queued.flatMap((row) => [
+      nameKey(row.entityType, draftName(row.after)),
+      ...(row.entityType === "SPLASH" && typeof row.after.topicKey === "string"
+        ? [splashTopicKey(row.after.topicKey)]
+        : []),
+    ]),
   ]);
 };
 
 /** A name within its content type; names compare without case or surrounding spaces. */
 const nameKey = (type: ContentProposalEntityType, name: string) =>
   `${type}:${name.trim().toLowerCase()}`;
+
+const splashTopicKey = (topic: string) => `SPLASH_TOPIC:${topic.trim().toLowerCase()}`;
 
 const parsedJson = (text: string): unknown => {
   try {

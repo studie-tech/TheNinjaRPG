@@ -63,6 +63,7 @@ import {
   updateContentProposalMediaForApplyProposal,
 } from "@/queries/contentReview";
 import { fetchUser } from "@/queries/profile";
+import { deleteSplashEntryForRollback } from "@/queries/splash";
 import { gameAssetRouter } from "@/routers/asset";
 import { badgeRouter } from "@/routers/badge";
 import { bloodlineRouter } from "@/routers/bloodline";
@@ -92,7 +93,9 @@ import {
   staffCreateProposalSchema,
 } from "@/validators/contentReview";
 import type { QuestValidator } from "@/validators/objectives";
+import type { SplashInput } from "@/validators/splash";
 import type { TitleValidator } from "@/validators/title";
+import { splashRouter } from "./splash";
 
 const reviewQueueSchema = z.object({
   status: z.enum(ContentProposalStatuses),
@@ -521,7 +524,11 @@ export const contentReviewRouter = createTRPCRouter({
           const entity = entities.get(
             entityKey(change.entityType, change.entityId as string),
           );
-          if (!entity || change.operation === "CREATE") continue;
+          if (
+            !entity ||
+            (change.operation === "CREATE" && change.entityType !== "SPLASH")
+          )
+            continue;
           const outcome = await settleOutcome(
             updateEntity(ctx, change.entityType, entity.id, entity.payload),
           );
@@ -834,7 +841,12 @@ const rollback = async (
     const outcome = await settleOutcome(
       plan.entity
         ? updateEntity(ctx, type, entityId, plan.entity.payload)
-        : deleteEntity(ctx, type, entityId),
+        : type === "SPLASH"
+          ? deleteSplashEntryForRollback(ctx.drizzle, entityId).then(() => ({
+              success: true,
+              message: "Incomplete announcement removed",
+            }))
+          : deleteEntity(ctx, type, entityId),
     );
     if (!outcome.success) {
       console.error(
@@ -879,6 +891,8 @@ const updateEntity = (
   data: Record<string, unknown>,
 ): Promise<Outcome> => {
   switch (type) {
+    case "SPLASH":
+      return splashRouter.createCaller(ctx).update({ id, data: data as SplashInput });
     case "JUTSU":
       return jutsuRouter
         .createCaller(ctx)
@@ -924,6 +938,13 @@ const createEntity = async (
   type: ContentProposalEntityType,
   editable: Record<string, unknown>,
 ): Promise<Outcome & { id?: string }> => {
+  // Announcement creation needs its final immutable topic; no placeholder identity can represent it.
+  if (type === "SPLASH") {
+    const created = await splashRouter
+      .createCaller(ctx)
+      .create({ data: editable as SplashInput });
+    return created.success ? { ...created, id: created.message } : created;
+  }
   const created = await (() => {
     switch (type) {
       case "JUTSU":
@@ -995,13 +1016,16 @@ const settleOutcome = (outcome: Promise<Outcome>): Promise<Outcome> =>
     message: error instanceof Error ? clientErrorMessage(error) : String(error),
   }));
 
-/** Delete an entity through its own delete procedure. */
+/** Revert a created entity; announcements retain their archived topic identity. */
 const deleteEntity = (
   ctx: CallerContext,
   type: ContentProposalEntityType,
   id: string,
 ): Promise<Outcome> => {
   switch (type) {
+    case "SPLASH":
+      // Reverting a new announcement retires its topic so the audit cannot recreate it.
+      return splashRouter.createCaller(ctx).setEnabled({ id, enabled: false });
     case "JUTSU":
       return jutsuRouter.createCaller(ctx).delete({ id });
     case "ITEM":

@@ -28,6 +28,7 @@ import {
   IMG_MANUAL_REWARDS,
   IMG_MANUAL_SAGE_MODE,
   IMG_MANUAL_SKILLTREE,
+  IMG_MANUAL_SPLASH,
   IMG_MANUAL_STAFF,
   IMG_MANUAL_TITLE,
   IMG_MANUAL_TOURNAMENTS,
@@ -56,6 +57,12 @@ export default function ManualMain() {
 
   // Player pages; staff tools carry the permission check that shows them.
   const entries: ManualEntry[] = [
+    {
+      name: "splash",
+      label: "Welcome board",
+      img: IMG_MANUAL_SPLASH,
+      visible: canEditContent,
+    },
     { name: "combat", label: "Combat", img: IMG_MANUAL_COMBAT },
     { name: "bloodline", label: "Bloodlines", img: IMG_MANUAL_BLOODLINE },
     { name: "sageMode", label: "Sage Modes", img: IMG_MANUAL_SAGE_MODE },

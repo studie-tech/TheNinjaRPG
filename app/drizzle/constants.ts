@@ -339,6 +339,7 @@ export const ContentProposalEntityTypes = [
   "TITLE",
   "GAME_ASSET",
   "AI",
+  "SPLASH",
 ] as const;
 export type ContentProposalEntityType = (typeof ContentProposalEntityTypes)[number];
 /** Whether a change edits an existing entity or creates a new one. */
@@ -372,10 +373,13 @@ export const ContentAuditFocuses = [
   "visual",
   "consistency",
   "new_content",
+  "splash",
 ] as const;
 export type ContentAuditFocus = (typeof ContentAuditFocuses)[number];
 /** Hours between scheduled audit runs; the cron in .github/workflows/content-audit.yml. */
 export const CONTENT_AUDIT_INTERVAL_HOURS = 3;
+/** Maximum number of live entries in the combined announcement and daily-reward dialog. */
+export const SPLASH_MAX_VISIBLE = 10;
 /** Rejected and outdated suggestions are removed this long after they were decided. */
 export const CONTENT_PROPOSAL_RETENTION_DAYS = 90;
 /** Suggestions resting on usage statistics go out of date after this many days. */
@@ -3448,6 +3452,9 @@ export const IMG_MANUAL_PET_SPECIES =
   "https://ui0arpl8sm.ufs.sh/f/manual-pet-species-17326854-5ec7-4037-a2d0-db475452bd99.webp";
 export const IMG_MANUAL_STAFF =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3CT6Io8pYHJX5rdkUTfOKtvu2eGIELmSWqBx.webp";
+/** Village notices and welcome supplies for the announcement editor. */
+export const IMG_MANUAL_SPLASH =
+  "https://uploadthing.b-cdn.net/f/manual-splash-831326f5-0e1e-4802-9f52-1b0d1ee516a3-0.webp";
 export const IMG_MANUAL_REVIEW =
   "https://uploadthing.b-cdn.net/f/content-WaMWC0umwru8ZLBGJYbsR.webp";
 export const IMG_MANUAL_QUEST =

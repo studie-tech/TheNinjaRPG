@@ -78,6 +78,7 @@ const playerCards = [
 ];
 const moderatorCards = ["recruitment", "review", "rewards"];
 const contentCards = [
+  "splash",
   "dungeon",
   "hunting",
   ...moderatorCards,

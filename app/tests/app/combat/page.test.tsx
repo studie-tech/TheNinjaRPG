@@ -1043,6 +1043,8 @@ it("uses stun-adjusted AP for action feedback, deselection and keyboard selectio
     }),
   );
   await waitFor(() => expect(heal.getAttribute("aria-disabled")).toBe("false"));
+  // Flush the passive effect that rebinds hotkeys with the restored AP, after the DOM commit.
+  await act(async () => {});
   fireEvent.keyDown(document, { key: "h" });
   expect(store.get(userContext.combatActionIdAtom)).toBe("basicHeal");
 });

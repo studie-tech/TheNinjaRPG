@@ -63,6 +63,7 @@ import { shrineRouter } from "./routers/shrine";
 import { simulatorRouter } from "./routers/simulator";
 import { skillTreeRouter } from "./routers/skillTree";
 import { sparringRouter } from "./routers/sparring";
+import { splashRouter } from "./routers/splash";
 import { spriteAnimationRouter } from "./routers/spriteAnimation";
 import { spriteStudioRouter } from "./routers/spriteStudio";
 import { staffRouter } from "./routers/staff";
@@ -90,6 +91,7 @@ import { createTRPCRouter } from "./trpc";
 export const appRouter = createTRPCRouter({
   meta: metaRouter,
   cosmetic: cosmeticRouter,
+  splash: splashRouter,
   accountDeletion: accountDeletionRouter,
   activityStreak: activityStreakRouter,
   ai: aiRouter,

@@ -12,7 +12,7 @@ import {
   listCheckoutUserIdAliases,
   listItemForAuthorize,
   listItemForDeliverStoreOrder,
-  lockStoreBuyer,
+  lockStoreParticipants,
   selectUserDataForDeliverStoreOrder,
   selectUserDataForReserve,
   selectWebStoreOrderForCheckBundlePurchaseLimit,
@@ -57,7 +57,7 @@ export const readStoreCustomId = (value?: string) =>
 
 /**
  * Save a server-priced quote and reserve the buyer's allowance and bundle slot.
- * Gifts consume the buyer's lifetime limit, independently of their recipient.
+ * Bundle capacity belongs to the recipient; reputation allowance belongs to the payer.
  */
 export const reserveStoreOrder = async (
   client: DrizzleClient,
@@ -73,14 +73,17 @@ export const reserveStoreOrder = async (
   const needsBuyerLock = offer.contents.reputationPoints > 0 || !!offer.bundleId;
   const reserve = async (db: DrizzleClient) => {
     const buyerQuery = selectUserDataForReserve(db, buyerId);
-    const [buyer] = await (needsBuyerLock ? lockStoreBuyer(buyerQuery) : buyerQuery);
+    const participants = await (needsBuyerLock
+      ? lockStoreParticipants(db, offer.bundleId ? [buyerId, recipientId] : [buyerId])
+      : buyerQuery);
+    const buyer = participants.find((user) => user.userId === buyerId);
     if (!buyer || buyer.isBanned)
       return {
         success: false as const,
         message: "This account cannot make purchases",
       };
     const bundleError = offer.bundleId
-      ? await checkBundlePurchaseLimit(db, buyerId, offer.bundleId)
+      ? await checkBundlePurchaseLimit(db, recipientId, offer.bundleId)
       : null;
     if (bundleError) return { success: false as const, message: bundleError };
     const allowanceError = await checkStoreAllowance(
@@ -103,8 +106,8 @@ export const reserveStoreOrder = async (
     return { success: true as const, message: "Checkout ready", order };
   };
   // Capacity is a SUM/COUNT over other orders, not a remaining-balance row that a
-  // single WHERE/CAS can decrement. Different checkout IDs must share the buyer
-  // lock across that read and INSERT, or both can reserve the same capacity.
+  // single WHERE/CAS can decrement. Different checkout IDs share the payer and recipient
+  // locks in stable ID order across that read and INSERT, or both can reserve the same capacity.
   // Unlimited bundles participate because staff can enable a limit during checkout;
   // zero-reputation custom offers stay outside the transaction.
   return retryOnDeadlock(() =>
@@ -211,12 +214,23 @@ export const authorizeStoreCapture = async (
   const authorize = async (db: DrizzleClient) => {
     const buyerQuery = selectUserDataForReserve(db, buyerId);
     // Acquire the lock before consistent reads so queued captures see prior refreshes.
-    const [buyer] = await (needsBuyerLock ? lockStoreBuyer(buyerQuery) : buyerQuery);
+    const participants = await (needsBuyerLock
+      ? lockStoreParticipants(
+          db,
+          snapshot.bundleId ? [buyerId, snapshot.recipientId] : [buyerId],
+        )
+      : buyerQuery);
+    const buyer = participants.find((user) => user.userId === buyerId);
     if (!buyer || buyer.isBanned || snapshot.buyerId !== buyerId)
       return "This checkout is not available for your account";
     if (snapshot.grantedAt) return null;
     const bundleError = snapshot.bundleId
-      ? await checkBundlePurchaseLimit(db, buyerId, snapshot.bundleId, snapshot.id)
+      ? await checkBundlePurchaseLimit(
+          db,
+          snapshot.recipientId,
+          snapshot.bundleId,
+          snapshot.id,
+        )
       : null;
     if (bundleError) return bundleError;
     if (isDeletedStoreUserId(snapshot.recipientId))
@@ -264,7 +278,7 @@ export const authorizeStoreCapture = async (
     return null;
   };
   // A CAS on this order alone cannot serialize competing expired orders that both
-  // observe a free allowance/bundle slot. Hold the buyer lock through the
+  // observe a free allowance/bundle slot. Hold the payer and recipient locks through the
   // aggregate check and refresh. Its scope matches reservation creation above;
   // recheck live quotes too, since paid history and staff limits can change.
   return retryOnDeadlock(() =>
@@ -273,14 +287,14 @@ export const authorizeStoreCapture = async (
 };
 
 /**
- * Reject unavailable offers or exhausted lifetime usage on the buyer's account.
- * The caller must hold the buyer lock until its reservation INSERT/refresh finishes.
+ * Reject unavailable offers or exhausted lifetime usage on the recipient's account.
+ * The caller must hold the recipient lock until its reservation INSERT/refresh finishes.
  * Exclude the current quote when refreshing its own slot; paid or in-flight captures
  * retain capacity beyond quote expiry, while an unstarted abandoned quote can expire.
  */
 const checkBundlePurchaseLimit = async (
   client: DrizzleClient,
-  buyerId: string,
+  recipientId: string,
   bundleId: string,
   excludeOrderId?: string,
 ) => {
@@ -290,12 +304,12 @@ const checkBundlePurchaseLimit = async (
   if (bundle.purchaseLimit === 0) return null;
   const [usage] = await selectWebStoreOrderForCheckBundlePurchaseLimit(
     client,
-    buyerId,
+    recipientId,
     bundleId,
     excludeOrderId,
   );
   return (usage?.count ?? 0) >= bundle.purchaseLimit
-    ? "This account has reached this bundle's purchase limit, including other open checkouts. No payment was captured."
+    ? "The recipient has reached this bundle's purchase limit, including other open checkouts. No payment was captured."
     : null;
 };
 

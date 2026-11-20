@@ -92,7 +92,7 @@ const PAYPAL_DECLINED_MESSAGE =
   "PayPal declined the payment. No payment was captured. Start a new checkout with another payment method.";
 
 export const paypalRouter = createTRPCRouter({
-  /** List offers with the caller's lifetime buyer counts; managers may include drafts. */
+  /** List offers with the caller's lifetime received counts; managers may include drafts. */
   getStoreBundles: protectedProcedure
     .input(z.object({ includeInactive: z.boolean().optional() }).nullish())
     .query(async ({ ctx, input }) => {

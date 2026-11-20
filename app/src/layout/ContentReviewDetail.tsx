@@ -37,6 +37,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { QuestDialogScene } from "@/layout/Logbook";
+import { WelcomeBoard } from "@/layout/WelcomeBoard";
 import { battlefieldSceneOf } from "@/libs/contentReview/battlefield";
 import {
   CATEGORY_LABELS,
@@ -58,6 +59,7 @@ import { formatSoundLength, formatTimeAgo } from "@/utils/time";
 import { useRequiredUserInfo } from "@/utils/UserContext";
 import { withContentReviewCount } from "@/utils/userNotificationCounts";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
+import { splashSchema } from "@/validators/splash";
 
 interface ContentReviewDetailProps {
   id: string;
@@ -863,7 +865,7 @@ const MediaChoice: React.FC<{
           return (
             <label
               key={media.id}
-              className={`flex cursor-pointer flex-col gap-1 rounded-lg border bg-card p-2 text-card-foreground ${isChosen ? "border-green-600 ring-1 ring-green-600" : ""}`}
+              className={`bg-card text-card-foreground flex cursor-pointer flex-col gap-1 rounded-lg border p-2 ${isChosen ? "border-green-600 ring-1 ring-green-600" : ""}`}
             >
               <span className="flex items-center gap-2 text-xs">
                 <input
@@ -962,7 +964,9 @@ const InTheGame: React.FC<{
         : [],
     ),
   );
-  const hasCard = !!current && change.entityType !== "AI";
+  const splash = change.entityType === "SPLASH" ? splashSchema.safeParse(fields) : null;
+  const hasCard =
+    !!current && change.entityType !== "AI" && change.entityType !== "SPLASH";
   const hasBattlefield = [current, proposed].some(
     (entry) => entry && battlefieldSceneOf(change.entityType, change.entityId, entry),
   );
@@ -998,7 +1002,7 @@ const InTheGame: React.FC<{
           activeQuestScene.objectiveIndex,
         )
       : null;
-  if (!hasCard && !hasBattlefield && questScenes.length === 0) return null;
+  if (!splash && !hasCard && !hasBattlefield && questScenes.length === 0) return null;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -1018,6 +1022,19 @@ const InTheGame: React.FC<{
           ))}
         </div>
       </div>
+      {splash?.success && (
+        <div className="space-y-3 rounded-sm border-2 border-[#b9954d] bg-[#f8edce] p-3 text-[#2d2236]">
+          <h3 className="font-serif text-2xl font-bold">{splash.data.name}</h3>
+          <p>{splash.data.description}</p>
+          <p className="text-sm">
+            {splash.data.enabled ? "Enabled" : "Disabled"} · Priority{" "}
+            {splash.data.priority}
+          </p>
+          <WelcomeBoard
+            announcements={[{ ...splash.data, id: change.entityId ?? "proposed" }]}
+          />
+        </div>
+      )}
       {hasCard && fields && (
         <ItemWithEffects
           item={fields as Parameters<typeof ItemWithEffects>[0]["item"]}

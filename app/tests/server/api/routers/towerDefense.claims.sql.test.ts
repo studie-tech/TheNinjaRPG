@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import * as ids from "nanoid";
 import { TD_DAILY_WAVES } from "@/drizzle/constants";
 import {
   towerDefenseClaimReceipt,
@@ -226,8 +227,12 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
       .where(eq(userData.userId, "td-user"));
     const api = await callerFor(towerDefenseRouter, "td-user");
     const claimRun = async (startWave: number, ticks: number) => {
+      // Fix battlefield difficulty; the run nonce and receipt IDs remain independently generated.
+      const seed = vi.spyOn(ids, "nanoid").mockReturnValueOnce("daily-duty-0");
       const started = await api.startRun({ startWave });
+      seed.mockRestore();
       if (!started.token || !started.config) throw new Error("Run did not start");
+      expect(started.config.seed).toBe("daily-duty-0");
       const run = playBotRun(started.config, {
         seed: 5,
         attention: 0.8,

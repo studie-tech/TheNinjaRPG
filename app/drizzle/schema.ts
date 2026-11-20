@@ -8032,7 +8032,7 @@ export const webStoreBundle = mysqlTable("WebStoreBundle", {
   description: text("description").notNull(),
   priceCents: int("priceCents").notNull(),
   isActive: boolean("isActive").default(false).notNull(),
-  /** Maximum lifetime purchases per buyer; zero means unlimited. */
+  /** Maximum lifetime bundles received per account; zero means unlimited. */
   purchaseLimit: int("purchaseLimit").default(0).notNull(),
   contents: json("contents").$type<StoreContents>().notNull(),
   updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
@@ -8064,6 +8064,7 @@ export const webStoreOrder = mysqlTable(
   (table) => [
     index("WebStoreOrder_recipientId_idx").on(table.recipientId),
     index("WebStoreOrder_buyer_bundle_idx").on(table.buyerId, table.bundleId),
+    index("WebStoreOrder_recipient_bundle_idx").on(table.recipientId, table.bundleId),
     uniqueIndex("WebStoreOrder_captureId_key").on(table.captureId),
   ],
 );
@@ -8208,3 +8209,32 @@ export const craftingServiceRequestRelations = relations(
     item: one(item, { fields: [craftingServiceRequest.itemId], references: [item.id] }),
   }),
 );
+
+/** Independently scheduled announcements retain disabled topics as editorial history. */
+export const splashAnnouncement = mysqlTable(
+  "SplashAnnouncement",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    topicKey: varchar("topicKey", { length: 100 }).notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: text("description").notNull(),
+    image: varchar("image", { length: 1000 }).default("").notNull(),
+    href: varchar("href", { length: 300 }).notNull(),
+    linkLabel: varchar("linkLabel", { length: 60 }).notNull(),
+    priority: int("priority").default(0).notNull(),
+    enabled: boolean("enabled").default(false).notNull(),
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }),
+    endsAt: datetime("endsAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("SplashAnnouncement_topicKey_key").on(table.topicKey),
+    index("SplashAnnouncement_enabled_priority_idx").on(table.enabled, table.priority),
+  ],
+);
+export type SplashAnnouncement = InferSelectModel<typeof splashAnnouncement>;

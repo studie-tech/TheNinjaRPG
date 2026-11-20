@@ -5,13 +5,13 @@ import { createStore, Provider } from "jotai";
 import { useState } from "react";
 import * as client from "@/app/_trpc/client";
 import * as combatEntry from "@/hooks/combatEntry";
-import * as ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import * as HuntingBoard from "@/layout/HuntingBoard";
 import * as Modal from "@/layout/Modal";
 import * as routing from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
+import { activityPanel } from "../setup/activityStreakPanel";
 import {
   flushRadixFocus,
   installBrowserGlobals,
@@ -23,8 +23,7 @@ let store: ReturnType<typeof createStore>;
 let isLoading: boolean;
 let canClaimToday: boolean;
 let panelError: Error | undefined;
-// The lazy panel retains its resolved export across test cases.
-const activityPanel = vi.spyOn(ActivityStreakPanel, "default");
+
 const streakQuery = vi.fn();
 const cachedEncounter = {
   session: { id: "session", sector: 1, battleId: null },
@@ -66,6 +65,10 @@ beforeEach(() => {
   refetch.mockReset();
   streakQuery.mockReset();
   Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({ splash: { get: { cancel: async () => {} } } }),
+    splash: {
+      get: { useQuery: () => ({ data: { announcements: [] }, isLoading: false }) },
+    },
     hunting: {
       getSession: {
         useQuery: () => ({ data: encounterData, error: encounterError, refetch }),
