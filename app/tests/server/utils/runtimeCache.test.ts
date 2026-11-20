@@ -46,10 +46,12 @@ const instance = (
   store: RuntimeCache,
   database: { reads: number; rows: unknown[][] },
   name = "test-catalogue",
+  memorySeconds = 0,
 ) =>
   createRuntimeCache({
     name,
     ttlSeconds: TTL_SECONDS,
+    memorySeconds,
     load: async (_client: object) => [...(database.rows[database.reads++] ?? [])],
     store,
   });
@@ -126,6 +128,68 @@ describe("createRuntimeCache", () => {
     await other.invalidate();
     expect(await other.read({})).toEqual([3]);
   });
+
+  it("discards a version probe superseded by a local invalidation", async () => {
+    const { store } = memoryStore();
+    const database = { reads: 0, rows: [[1], [2]] };
+    const create = () => instance(store, database, "gated-version", 10);
+    await create().read({});
+    const cache = create();
+    const gate = deferred();
+    const probing = deferred();
+    const get = store.get.getMockImplementation()!;
+    store.get.mockImplementationOnce(async (key) => {
+      const value = await get(key);
+      probing.resolve();
+      await gate.promise;
+      return value;
+    });
+    // Versioned payloads must remain safe even when obsolete payload cleanup fails.
+    store.expireTag.mockRejectedValue(new Error("cleanup failed"));
+    const pending = cache.read({});
+    await probing.promise;
+    await cache.invalidate();
+    gate.resolve();
+    await pending;
+    expect(await cache.read({})).toEqual([2]);
+    expect(database.reads).toBe(2);
+  });
+
+  it.each([false, true])(
+    "bounds the memory window from a shared slow probe's start (warm: %s)",
+    async (warm) => {
+      const { store } = memoryStore();
+      const database = { reads: 0, rows: [[1], [2]] };
+      const create = () => instance(store, database, "slow-version", 10);
+      const editor = create();
+      await editor.read({});
+      const reader = warm ? editor : create();
+      const writer = create();
+      const gate = deferred();
+      const probing = deferred();
+      const get = store.get.getMockImplementation()!;
+      store.get.mockImplementationOnce(async (key) => {
+        const value = await get(key);
+        probing.resolve();
+        await gate.promise;
+        return value;
+      });
+      store.expireTag.mockRejectedValue(new Error("cleanup failed"));
+      setSystemTime(new Date(start.getTime() + 10_000));
+      const first = reader.read({});
+      await probing.promise;
+      setSystemTime(new Date(start.getTime() + 11_000));
+      const concurrent = reader.read({});
+      await writer.invalidate();
+      setSystemTime(new Date(start.getTime() + 19_000));
+      gate.resolve();
+      expect(await first).toEqual([1]);
+      expect(await concurrent).toEqual([1]);
+      setSystemTime(new Date(start.getTime() + 20_000));
+      expect(await reader.read({})).toEqual([2]);
+      expect(database.reads).toBe(2);
+    },
+  );
 
   it.each([false, true])(
     "confirms concurrent invalidations without competing with other writers (separate instances: %s)",
