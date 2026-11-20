@@ -197,11 +197,9 @@ it("recovers missed events on subscription confirmation and skips signed-out or 
   t.setCount(0);
   await act(async () => t.emit("updated"));
   expect(t.reads()).toBe(reads);
-  // Showing the page again resubscribes; its confirmation reads changes missed meanwhile.
+  // Showing the page recovers even before the replacement subscription is confirmed.
   view.rerender({ enabled: true });
   expect(t.socket.subscribe).toHaveBeenCalledTimes(2);
-  expect(t.reads()).toBe(reads);
-  await act(async () => t.emit("pusher:subscription_succeeded"));
   await waitFor(() => expect(view.result.current.data).toBe(0));
   expect(t.reads()).toBe(reads + 1);
 });
@@ -266,9 +264,7 @@ it.each([false, true])(
   },
 );
 
-it("recovers missed changes on browser focus after the throttle window and on network reconnect", async () => {
-  let now = Date.now();
-  vi.spyOn(Date, "now").mockImplementation(() => now);
+it("recovers missed changes immediately on browser focus without a socket and on network reconnect", async () => {
   const t = setup();
   const view = renderHook(() => useRankedQueueCount(true, undefined), {
     wrapper: t.wrapper,
@@ -280,9 +276,6 @@ it("recovers missed changes on browser focus after the throttle window and on ne
       focusManager.setFocused(false);
       focusManager.setFocused(true);
     });
-  await refocus();
-  expect(t.reads()).toBe(1);
-  now += 30_001;
   await refocus();
   await waitFor(() => expect(view.result.current.data).toBe(1));
   expect(t.reads()).toBe(2);

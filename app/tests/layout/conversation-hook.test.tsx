@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient } from "@tanstack/react-query";
+import { focusManager, QueryClient } from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -95,6 +95,7 @@ afterEach(async () => {
   cleanup();
   await flushRadixFocus();
   for (const queryClient of clients.splice(0)) queryClient.clear();
+  focusManager.setFocused(undefined);
   vi.restoreAllMocks();
   restoreBrowserGlobals();
 });
@@ -113,7 +114,7 @@ const mount = (
       searchReads.push((input as { searchQuery: string }).searchQuery);
       return {
         data: [...rows],
-        convo: { id: "chat", isPublic },
+        convo: { id: "chat", isPublic, lastReadAt: isPublic ? undefined : new Date() },
         nextCursor: null,
       };
     }
@@ -382,19 +383,22 @@ it("retries a failed sanitizer load when a quote is toggled and fills its previe
   expect(hook.result.current.sanitizer?.stripBlockquotes(quoted)).toBe("<p>Bravo</p>");
 });
 
-it("keeps the live channel across a hide and show and marks messages read only while visible", async () => {
+it("keeps the live channel across visibility changes and acknowledges background messages on refocus", async () => {
   let hidden = false;
   Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
   const setHidden = (value: boolean) =>
     act(async () => {
       hidden = value;
       document.dispatchEvent(new window.Event("visibilitychange", { bubbles: true }));
+      focusManager.setFocused(!value);
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
   const subscribe = vi.spyOn(pusher, "subscribe");
   try {
-    const hook = mount();
+    const rows = [row("a", "Alpha"), row("b", "Bravo", "Peer")];
+    const hook = mount(false, rows);
     await loaded(hook);
+    const lastReadAt = hook.result.current.conversation?.lastReadAt;
     const subscribes = subscribe.mock.calls.length;
     const unsubscribes = pusher.unsubscribe.mock.calls.length;
     await setHidden(true);
@@ -403,7 +407,12 @@ it("keeps the live channel across a hide and show and marks messages read only w
       receive({ message: "new", fromId: "peer", commentId: "hidden" }),
     );
     await waitFor(() => expect(fetchInputs).toHaveLength(1));
+    rows.unshift(fetched);
+    const beforeFocus = reads;
     await setHidden(false);
+    await waitFor(() => expect(reads).toBe(beforeFocus + 1));
+    expect(hook.result.current.conversation?.lastReadAt).not.toEqual(lastReadAt);
+    expect(hook.result.current.allComments?.[0]?.id).toBe("hidden");
     fetched = row("shown", "Sent while shown", "Peer");
     await act(async () =>
       receive({ message: "new", fromId: "peer", commentId: "shown" }),

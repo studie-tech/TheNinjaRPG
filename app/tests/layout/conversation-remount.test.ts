@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -25,7 +25,6 @@ const staleTime = new Function(`return (${staleTimeExpression});`)() as number;
 
 afterEach(() => {
   focusManager.setFocused(undefined);
-  vi.restoreAllMocks();
 });
 
 describe("cached conversation remounts", () => {
@@ -178,15 +177,14 @@ describe("cached conversation remounts", () => {
     });
   }
   for (const file of ["Conversation.tsx", "TeamChatPanel.tsx"]) {
-    it(`${file} rereads its loaded pages on refocus only after 30 quiet seconds`, async () => {
-      let now = Date.now();
-      vi.spyOn(Date, "now").mockImplementation(() => now);
+    it(`${file} removes fresh cached history on refocus after a missed parental restriction`, async () => {
       const client = new QueryClient({
         defaultOptions: { queries: { staleTime, retry: false } },
       });
       // A mounted client follows browser focus, as under QueryClientProvider.
       client.mount();
       const reads: unknown[] = [];
+      let restricted = false;
       const observer = new InfiniteQueryObserver(client, {
         ...conversationQueryOptions<ChatPage>(file),
         queryKey: ["conversation-focus", file],
@@ -194,10 +192,10 @@ describe("cached conversation remounts", () => {
         queryFn: async ({ pageParam }: { pageParam: unknown }): Promise<ChatPage> => {
           reads.push(pageParam);
           return {
-            data: [`page ${pageParam ?? 0}`],
-            convo: { id: "chat" },
-            restrictionMessage: null,
-            nextCursor: pageParam === null ? 1 : null,
+            data: restricted ? [] : [`page ${pageParam ?? 0}`],
+            convo: restricted ? null : { id: "chat" },
+            restrictionMessage: restricted ? "Private messages are disabled." : null,
+            nextCursor: !restricted && pageParam === null ? 1 : null,
           };
         },
       });
@@ -211,11 +209,25 @@ describe("cached conversation remounts", () => {
         await waitFor(() => expect(observer.getCurrentResult().isSuccess).toBe(true));
         await observer.fetchNextPage();
         expect(reads).toEqual([null, 1]);
+        restricted = true;
         await refocus();
-        expect(reads).toEqual([null, 1]);
-        now += 30_001;
+        await waitFor(() =>
+          expect(observer.getCurrentResult().data?.pages).toEqual([
+            {
+              data: [],
+              convo: null,
+              restrictionMessage: "Private messages are disabled.",
+              nextCursor: null,
+            },
+          ]),
+        );
+        expect(reads).toEqual([null, 1, null]);
+        restricted = false;
         await refocus();
-        await waitFor(() => expect(reads).toEqual([null, 1, null, 1]));
+        await waitFor(() =>
+          expect(observer.getCurrentResult().data?.pages[0]?.data).toEqual(["page 0"]),
+        );
+        expect(reads).toEqual([null, 1, null, null]);
       } finally {
         unsubscribe();
         client.unmount();

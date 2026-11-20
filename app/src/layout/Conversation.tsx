@@ -146,11 +146,8 @@ export const useConversation = (props: ConversationLogicProps) => {
     // unchanged comments when new messages are prepended.
     structuralSharing: false,
     // Recheck permissions after missed cross-tab events, even while cached history is fresh.
-    // A refocus rereads every loaded page, so it waits until live events have been
-    // quiet for 30 seconds; hidden-tab pauses and reconnects resume with their own reads.
-    staleTime: 30_000,
     refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     placeholderData: (previousData) => previousData,
