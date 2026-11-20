@@ -104,12 +104,12 @@ describe("Diffuse damage resolution", () => {
     expect(defender(newBattle).curHealth).toBe(0);
     expect(debt(defender(newBattle))).toBe(0);
   });
-  it("logs why an active Diffuse lets a lethal hit through", () => {
+  it("logs why an active Diffuse does not defer a hit", () => {
     const { actionEffects } = run([attack(), diffuse()], 80);
-    const lethal = actionEffects.filter((e) => e.txt.includes("lethal blow"));
+    const lethal = actionEffects.filter((e) => e.txt.includes("can't defer this hit"));
     expect(lethal).toEqual([
       {
-        txt: "defender's diffuse can't soften a lethal blow",
+        txt: "defender's diffuse can't defer this hit (lethal before shields and damage reduction)",
         color: "blue",
         types: ["diffuse"],
       },
@@ -124,7 +124,9 @@ describe("Diffuse damage resolution", () => {
   });
   it("allows a hit strictly below current HP", () => {
     const { newBattle, actionEffects } = run([attack(), diffuse()], 81);
-    expect(actionEffects.some((e) => e.txt.includes("lethal blow"))).toBe(false);
+    expect(actionEffects.some((e) => e.txt.includes("can't defer this hit"))).toBe(
+      false,
+    );
     expect(defender(newBattle).curHealth).toBeCloseTo(41);
     expect(debt(defender(newBattle))).toBeCloseTo(40);
   });
@@ -143,7 +145,9 @@ describe("Diffuse damage resolution", () => {
     const { newBattle, actionEffects } = run([attack(), diffuse(), dr, shield], 80);
     expect(debt(defender(newBattle))).toBe(0);
     expect(defender(newBattle).curHealth).toBe(80);
-    expect(actionEffects.some((e) => e.txt.includes("lethal blow"))).toBe(true);
+    expect(actionEffects.some((e) => e.txt.includes("can't defer this hit"))).toBe(
+      true,
+    );
   });
   it("defers already reduced damage, then consumes shields", () => {
     const dr = makeEffect(

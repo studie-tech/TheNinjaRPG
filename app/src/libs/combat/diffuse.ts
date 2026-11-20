@@ -38,9 +38,9 @@ export const deferDiffuseDamage = (
       )[0];
     if (effect?.type !== "diffuse") continue;
     if (total >= target.curHealth) {
-      // Tell the holder why an active Diffuse let this hit through in full.
+      // Explain the pre-defense lethality check that prevents deferral.
       messages.push({
-        txt: `${target.username}'s diffuse can't soften a lethal blow`,
+        txt: `${target.username}'s diffuse can't defer this hit (lethal before shields and damage reduction)`,
         color: "blue",
         types: ["diffuse"],
       });
