@@ -55,6 +55,9 @@ export const listForumBoards = (db: Client) =>
     with: { section: true },
     orderBy: [asc(forumBoard.position), asc(forumBoard.name)],
   });
+/** Select the ID of the uniquely named board, for listings scoped by name before access resolves. */
+export const forumBoardIdsByName = (db: Client, name: string) =>
+  db.select({ id: forumBoard.id }).from(forumBoard).where(eq(forumBoard.name, name));
 /** Load sections in display order, including archived structure needed by staff recovery. */
 export const listForumSections = (db: Client) =>
   db.query.forumSection.findMany({
@@ -104,7 +107,7 @@ export const listForumWatches = (db: Client, userId: string) =>
 export const listForumThreads = (
   db: Client,
   input: {
-    boards: string[];
+    boards: string[] | ReturnType<typeof forumBoardIdsByName>;
     offset: number;
     limit: number;
     query?: string;
