@@ -18,7 +18,7 @@ const extraState = {
 
 describe("battle storage", () => {
   it("compresses the read-only catalogs and keeps turn-written state as JSON", () => {
-    const stored = packBattleExtraState(extraState, true);
+    const stored = packBattleExtraState(extraState);
     expect(Object.keys(stored.extraState).sort()).toEqual([
       "encounter",
       "energyRegeneration",

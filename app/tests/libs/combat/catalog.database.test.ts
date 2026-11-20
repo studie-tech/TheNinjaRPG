@@ -88,11 +88,13 @@ describeWithDatabase("stored battle catalogs", () => {
       ).success,
     ).toBe(true);
     const row = (await db.query.battle.findFirst())!;
-    // Builds that read only the JSON column must find the complete state there.
-    expect(row.catalogs).toBeNull();
+    // Initiation stores the catalogs compressed and keeps turn-written state as JSON.
+    expect(row.catalogs?.byteLength).toBeGreaterThan(0);
+    expect(row.extraState).not.toHaveProperty("jutsus");
+    expect(row.extraState).toHaveProperty("energyRegeneration");
     const stored = (await fetchBattle(db, row.id))!;
     expect(stored).not.toHaveProperty("catalogs");
-    expect(stored.extraState).toEqual(row.extraState);
+    expect(stored.extraState).toMatchObject(row.extraState);
     const { jutsus } = stored.extraState;
     expect(Object.keys(jutsus)).toEqual(
       expect.arrayContaining(["owned", "injectable", SAGE_MODE_ACTIVATION_JUTSU_ID]),
@@ -105,7 +107,7 @@ describeWithDatabase("stored battle catalogs", () => {
     expect(jutsus.gated?.requiredNinjutsuMastery).toBe(10);
   });
 
-  it("loads a row with compressed catalogs exactly as its all-JSON form", async () => {
+  it("loads a row that keeps every catalog as JSON exactly as its compressed form", async () => {
     const db = await getTestDatabase();
     await insertUsers([
       { userId: "player", username: "Player", rank: "JONIN", level: 50 },
@@ -137,14 +139,14 @@ describeWithDatabase("stored battle catalogs", () => {
     ).toBe(true);
     const { id } = (await db.query.battle.findFirst())!;
     const complete = (await fetchBattle(db, id))!;
+    // Rows written with compressed writes off hold their whole state as JSON.
     await db
       .update(battle)
-      .set(packBattleExtraState(complete.extraState, true))
+      .set(packBattleExtraState(complete.extraState, false))
       .where(eq(battle.id, id));
-    const packed = (await db.query.battle.findFirst())!;
-    expect(packed.extraState).not.toHaveProperty("jutsus");
-    expect(packed.extraState).toHaveProperty("energyRegeneration");
-    expect(packed.catalogs?.byteLength).toBeGreaterThan(0);
+    const legacy = (await db.query.battle.findFirst())!;
+    expect(legacy.catalogs).toBeNull();
+    expect(legacy.extraState).toHaveProperty("jutsus");
     expect(await fetchBattle(db, id)).toEqual(complete);
   });
 });
