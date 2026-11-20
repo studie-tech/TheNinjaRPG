@@ -2,14 +2,20 @@ import { z } from "zod";
 import {
   COMMENT_MAX_LENGTH,
   COMMENT_MIN_LENGTH,
+  CONVERSATION_MAX_QUOTES,
   CONVERSATION_MAX_USERS,
+  conversationQuoteLimitMessage,
 } from "@/drizzle/constants";
 
 export const mutateCommentSchema = z
   .strictObject({
     comment: z.string().min(COMMENT_MIN_LENGTH).max(COMMENT_MAX_LENGTH),
     object_id: z.string(),
-    quoteIds: z.array(z.string()).optional().nullable(),
+    quoteIds: z
+      .array(z.string())
+      .max(CONVERSATION_MAX_QUOTES, conversationQuoteLimitMessage)
+      .optional()
+      .nullable(),
     senderId: z.string().optional().nullable(),
   })
   .required();

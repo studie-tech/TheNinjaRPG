@@ -13,7 +13,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Quote } from "@/components/ui/quote";
 import { Skeleton } from "@/components/ui/skeleton";
 import { matchesConversationSearch } from "@/deltas/chat";
-import { CONVERSATION_PAUSE_HIDDEN_MINS } from "@/drizzle/constants";
+import {
+  CONVERSATION_MAX_QUOTES,
+  CONVERSATION_PAUSE_HIDDEN_MINS,
+  conversationQuoteLimitMessage,
+} from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
 import {
@@ -379,13 +383,22 @@ export const useConversation = (props: ConversationLogicProps) => {
     (quoteId: string) => {
       // A quote needs its preview, so it retries a sanitizer load that failed earlier.
       if (sanitizerFailed) void loadHtmlSanitizer().catch(() => undefined);
-      const currentQuoteIds = getValues("quoteIds");
-      setValue(
-        "quoteIds",
-        currentQuoteIds?.includes(quoteId)
-          ? currentQuoteIds.filter((id) => id !== quoteId)
-          : [...(currentQuoteIds ?? []), quoteId],
-      );
+      const currentQuoteIds = getValues("quoteIds") ?? [];
+      if (currentQuoteIds.includes(quoteId)) {
+        setValue(
+          "quoteIds",
+          currentQuoteIds.filter((id) => id !== quoteId),
+        );
+      } else if (currentQuoteIds.length >= CONVERSATION_MAX_QUOTES) {
+        // Removing a quote stays available, so the player can swap which ones to keep.
+        showMutationToast({
+          success: false,
+          message: conversationQuoteLimitMessage,
+          id: "conversation-quote-limit",
+        });
+      } else {
+        setValue("quoteIds", [...currentQuoteIds, quoteId]);
+      }
     },
     [getValues, setValue, sanitizerFailed],
   );

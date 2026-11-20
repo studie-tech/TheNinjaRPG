@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
+  CONVERSATION_MAX_QUOTES,
+  conversationQuoteLimitMessage,
+} from "@/drizzle/constants";
+import {
   createConversationSchema,
   deleteCommentSchema,
   mutateCommentSchema,
@@ -26,6 +30,30 @@ describe("comment schemas", () => {
     expect(
       mutateCommentSchema.parse({ ...base, quoteIds: ["a"], senderId: "b" }),
     ).toEqual({ ...base, quoteIds: ["a"], senderId: "b" });
+  });
+
+  it("caps the quoted messages at the composer's limit", () => {
+    const base = { comment: "hello", object_id: "x", senderId: null };
+    const quoteIds = (n: number) => Array.from({ length: n }, (_, i) => `q${i}`);
+    expect(
+      mutateCommentSchema.safeParse({
+        ...base,
+        quoteIds: quoteIds(CONVERSATION_MAX_QUOTES),
+      }).success,
+    ).toBe(true);
+    expect(
+      issues(
+        mutateCommentSchema.safeParse({
+          ...base,
+          quoteIds: quoteIds(CONVERSATION_MAX_QUOTES + 1),
+        }),
+      ),
+    ).toEqual([
+      { code: "too_big", message: conversationQuoteLimitMessage, path: ["quoteIds"] },
+    ]);
+    expect(
+      mutateCommentSchema.safeParse({ ...base, quoteIds: quoteIds(50_000) }).success,
+    ).toBe(false);
   });
 
   it("requires a conversation's sender key to be present", () => {
