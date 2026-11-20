@@ -10,6 +10,7 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import { afterTasks } from "../../../../setup/after";
 import { makeCompleteBattle, makeUser } from "../../../../setup/combat";
+import { deferred } from "../../../../setup/deferred";
 import { insertUsers } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
@@ -24,11 +25,12 @@ const USER = "auto-toggle-player";
 const BATTLE = "auto-toggle-battle";
 
 describeWithDatabase("battle AI control preference scope", () => {
+  let trigger: ReturnType<typeof vi.spyOn>;
   beforeEach(async () => {
     // Exercise the procedure middleware without requiring external Redis in SQL tests.
     stubRateLimitTransport();
     await resetTables(battle, userData);
-    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -112,6 +114,47 @@ describeWithDatabase("battle AI control preference scope", () => {
           .defaultAutoCombat,
       ).toBe(enabled);
     }
+  });
+
+  it("returns the saved battle and announces a version that only older clients refetch", async () => {
+    const { caller } = await seed("ARENA", false);
+    const enabled = await caller.toggleAutoCombat({ battleId: BATTLE, enabled: true });
+    const disabled = await caller.toggleAutoCombat({
+      battleId: BATTLE,
+      enabled: false,
+    });
+    const announced = trigger.mock.calls.map(
+      ([channel, , data]: unknown[]) =>
+        [channel, (data as { version: number }).version] as const,
+    );
+    const enabledVersion = "battle" in enabled ? enabled.battle.version : NaN;
+    const disabledVersion = "battle" in disabled ? disabled.battle.version : NaN;
+    expect(disabledVersion).toBe(enabledVersion + 1);
+    // A handover reads the battle again; taking control back applies the returned one.
+    expect(announced).toEqual([
+      [BATTLE, enabledVersion + 1],
+      [BATTLE, disabledVersion],
+    ]);
+  });
+
+  it("keeps the deferred broadcast alive until delivery finishes", async () => {
+    const { db } = await seed("COMBAT", false);
+    const { promise: delivery, resolve: finish } = deferred<void>();
+    trigger.mockReturnValue(delivery);
+    const tasks: (() => unknown)[] = [];
+    const response = await afterTasks.run(tasks, () =>
+      resolverOf(combatRouter.toggleAutoCombat)({
+        ctx: { drizzle: db, userId: USER },
+        input: { battleId: BATTLE, enabled: true },
+      }),
+    );
+    expect(response.success).toBe(true);
+    expect(trigger).not.toHaveBeenCalled();
+    expect(tasks).toHaveLength(1);
+    const task = tasks[0]!();
+    finish();
+    expect(task).toBe(delivery);
+    await task;
   });
 
   it("keeps always-AI battles locked without changing the PvE preference", async () => {

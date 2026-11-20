@@ -301,9 +301,12 @@ export const useCombatUpdates = (state: BattleState, isDriverEnabled = true) => 
         return;
       }
       const response = responseVersionRef.current;
+      // An applied response can reach the cache before this component renders it.
+      const cached = utils.combat.getBattle.getData({ battleId })?.battle;
       const version = Math.max(
         battle.version,
         response?.battle === battle ? response.version : 0,
+        cached?.id === battleId ? cached.version : 0,
       );
       if (data.version <= version) return;
       if (data.stateUpdate && !data.finished) {
@@ -325,6 +328,7 @@ export const useCombatUpdates = (state: BattleState, isDriverEnabled = true) => 
     refreshBattleResults,
     updateLogs,
     updateBattleEvent,
+    utils,
   ]);
   return { updateLogs, startAction, settleAction, canDrive, publishBattle: publish };
 };

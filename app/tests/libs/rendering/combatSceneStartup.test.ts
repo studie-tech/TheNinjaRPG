@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, Container, Texture, UniformGroup } from "pixi.js";
+import { Assets, BitmapText, Container, Texture, UniformGroup } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
+import * as combatActions from "@/libs/combat/actions";
+import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import type { GroundEffect } from "@/libs/combat/types";
 import { hexGridHeightRatio } from "@/libs/hexgrid";
 import * as terrainPrimitive from "@/libs/rendering/primitives/terrain";
@@ -135,6 +137,7 @@ const start = (
     patchSnapshot: (patch: Partial<CombatSceneSnapshot>) => {
       snapshot = { ...snapshot, ...patch };
     },
+    snapshot: () => snapshot,
   };
 };
 
@@ -210,5 +213,44 @@ describe("combat scene startup", () => {
     fixture.patchSnapshot({ revision: 1 });
     fixture.tick();
     expect(phases).toEqual([true, false]);
+  });
+
+  it("builds grid numbers only once a player shows them", async () => {
+    const fixture = start();
+    await settle();
+    fixture.tick();
+    const world = fixture.game.stage.children[0] as Container;
+    const labels = world.getChildByLabel("combat-grid-labels", true) as Container;
+    expect(labels.visible).toBe(false);
+    expect(labels.children).toHaveLength(0);
+    fixture.patchSnapshot({ showGridNumbers: true });
+    fixture.tick();
+    const built = labels.children.length;
+    expect(labels.visible).toBe(true);
+    expect(built).toBe(12 * 10);
+    expect(labels.children.every((label) => label instanceof BitmapText)).toBe(true);
+    fixture.patchSnapshot({ showGridNumbers: false });
+    fixture.tick();
+    fixture.patchSnapshot({ showGridNumbers: true });
+    fixture.tick();
+    expect(labels.children).toHaveLength(built);
+  });
+
+  it("checks the turn for highlights only when the battle or its deadline changes", async () => {
+    const activeUser = vi.spyOn(combatActions, "calcActiveUser");
+    const fixture = start();
+    await settle();
+    for (let frame = 0; frame < 10; frame++) fixture.tick();
+    expect(activeUser).toHaveBeenCalledTimes(1);
+    fixture.patchSnapshot({ revision: 1 });
+    fixture.tick();
+    fixture.tick();
+    expect(activeUser).toHaveBeenCalledTimes(2);
+    const { battle } = fixture.snapshot();
+    // A passed round deadline can hand the turn on without a new battle object.
+    battle.roundStartAt = new Date(Date.now() - (COMBAT_SECONDS + 1) * 1000);
+    fixture.tick();
+    fixture.tick();
+    expect(activeUser).toHaveBeenCalledTimes(3);
   });
 });

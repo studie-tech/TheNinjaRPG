@@ -111,17 +111,26 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
     playsAsPlayer: u.playsAsPlayer,
   }));
   // A ref callback read from `props` would make the compiler treat every prop as a ref.
-  const {
-    items,
-    counts,
-    levels,
-    renderItem,
-    setLastElement,
-    isLoading,
-    emptyText,
-    ...settings
-  } = props;
+  const { items, counts, levels, renderItem, setLastElement, isLoading, emptyText } =
+    props;
   const { combatMode, selectedId, currentRound, userActionPoints, onClick } = props;
+  // Named fields keep the tiles' settings stable while their values are unchanged.
+  const settings: ActionOptionSettings = {
+    aspectRatioClass: props.aspectRatioClass,
+    currentRound,
+    roundFull: props.roundFull,
+    hideBorder: props.hideBorder,
+    eagerImages: props.eagerImages,
+    combatMode,
+    selectedId,
+    labelSingles: props.labelSingles,
+    showInfoIcon: props.showInfoIcon,
+    showLabels: props.showLabels,
+    userActionPoints,
+    battle: props.battle,
+    userId: props.userId,
+    onClick,
+  };
   const filtered = items?.filter(
     (i) => !i.hidden || (userData && canChangeContent(getContentRole(userData))),
   );
@@ -268,7 +277,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
 
 interface ActionOptionProps {
   item: ActionItemProps;
-  settings: ActionSelectorSettingsProps;
+  settings: ActionOptionSettings;
   className?: string;
   count?: number;
   level?: number;
@@ -543,4 +552,23 @@ const lacksActionPoints = (
 type ActionCostSettings = Pick<
   ActionSelectorSettingsProps,
   "combatMode" | "battle" | "userId"
+>;
+
+/** Selector settings that change how each tile renders. */
+type ActionOptionSettings = Pick<
+  ActionSelectorSettingsProps,
+  | "aspectRatioClass"
+  | "currentRound"
+  | "roundFull"
+  | "hideBorder"
+  | "eagerImages"
+  | "combatMode"
+  | "selectedId"
+  | "labelSingles"
+  | "showInfoIcon"
+  | "showLabels"
+  | "userActionPoints"
+  | "battle"
+  | "userId"
+  | "onClick"
 >;

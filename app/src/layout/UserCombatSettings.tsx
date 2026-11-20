@@ -22,11 +22,11 @@ import {
 } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
 import {
+  type GameSettingsUser,
   SettingsToggle,
   useGameSettings,
   VisualEffectsSettings,
 } from "@/layout/GameSettings";
-import type { UserWithRelations } from "@/routers/profile";
 
 /** Battle controls and panel ordering stay separate from the shared graphics preferences. */
 export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
@@ -283,5 +283,5 @@ interface UserCombatSettingsProps {
   supportsBattleFocus?: boolean;
   /** The page owns the mutation and checks whether the battle permits switching control. */
   autoCombatControl?: React.ReactNode;
-  userData?: UserWithRelations | null;
+  userData?: GameSettingsUser | null;
 }
