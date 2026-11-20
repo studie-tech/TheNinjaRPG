@@ -104,14 +104,13 @@ for (const option of ["out", "cache", "source", "version", "api", "targets"] as 
 const out = resolve(args.out ?? join(APP, "../dist/shuriken-siege"));
 const cache = resolve(args.cache ?? join(homedir(), ".cache/shuriken-siege"));
 const version = args.version ?? new Date().toISOString().slice(0, 10);
-// Version and source name the output folder and zip, so they stay plain names that cannot
-// reach another path or turn one build's folder into another build's zip.
-for (const [option, value] of [
-  ["version", version],
-  ["source", args.source],
-] as const)
-  if (value !== undefined && (!/^[0-9A-Za-z][0-9A-Za-z._-]*$/.test(value) || /\.zip$/i.test(value)))
-    throw new Error(`--${option} must be letters, digits, ".", "_" or "-", not ending in .zip`);
+// Version and source name the output folder and zip (`<target>_<source>-<version>`), so
+// they stay plain names that cannot reach another path, and each name parses one way only:
+// the source has neither "_" nor "-", the version no "_", and no version ends in ".zip".
+if (!/^[0-9A-Za-z][0-9A-Za-z.-]*$/.test(version) || /\.zip$/i.test(version))
+  throw new Error('--version must be letters, digits, "." or "-", not ending in .zip');
+if (args.source !== undefined && !/^[0-9A-Za-z]+$/.test(args.source))
+  throw new Error("--source must be letters and digits");
 
 console.log(`Shuriken Siege ${version}: ${targets.join(", ")} from ${api}`);
 mkdirSync(cache, { recursive: true });
@@ -247,7 +246,7 @@ writeFileSync(join(work, "app.css"), css.css);
 mkdirSync(out, { recursive: true });
 for (const target of targets) {
   const source = args.source ?? target;
-  const name = `shuriken-siege-${target}${source === target ? "" : `-${source}`}-${version}`;
+  const name = `shuriken-siege-${target}${source === target ? "" : `_${source}`}-${version}`;
   // The target is assembled in a staging directory of its own inside `out`, and replaces
   // its previous output only once its folder and zip are complete.
   const finalDir = join(out, name);

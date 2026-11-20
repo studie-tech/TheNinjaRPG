@@ -31,7 +31,8 @@ make shuriken-siege
 
 This writes one folder and one zip per target to `dist/shuriken-siege/`, for example
 `dist/shuriken-siege/shuriken-siege-web-2026-11-18.zip`. Upload the zip. A build with
-its own `SOURCE` adds it to the name (`shuriken-siege-web-itch-2026-11-18.zip`), and a
+its own `SOURCE` (letters and digits) adds it to the name
+(`shuriken-siege-web_itch-2026-11-18.zip`), and a
 build replaces only the folders and zips of its own targets, so the other targets and
 source variants already in `dist/shuriken-siege/` stay.
 
