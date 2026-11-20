@@ -4,6 +4,7 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import { RATE_LIMIT_MESSAGES } from "@/libs/rateLimitMessages";
 import { SENTRY_BASE_OPTIONS } from "@/libs/sentryOptions";
 
 Sentry.init({
@@ -16,5 +17,7 @@ Sentry.init({
   ignoreErrors: [
     "Unauthorized for tRPC endpoint",
     "You are acting too fast",
+    // The shared request limiter's rejections (see src/server/api/trpc.ts).
+    ...RATE_LIMIT_MESSAGES,
   ],
 });
