@@ -28,7 +28,34 @@ import {
   itemVariant,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { createRuntimeCache } from "@/server/utils/runtimeCache";
 import type { ZodGameAssetType } from "@/validators/asset";
+
+// Every battle start places obstacles from the released battlefield assets. The filter has
+// no index and the set changes only when staff save or delete one of them, so it is shared
+// through the Runtime Cache; the TTL bounds rows changed outside the asset editor.
+const battlefieldAssets = createRuntimeCache({
+  name: "battlefield-assets",
+  ttlSeconds: 60 * 60,
+  load: (client: Pick<DrizzleClient, "query">) =>
+    client.query.gameAsset.findMany({
+      columns: { id: true, type: true },
+      where: and(eq(gameAsset.hidden, false), eq(gameAsset.onInitialBattleField, true)),
+    }),
+  cloneReads: false,
+});
+
+/** The released assets placed on new battlefields. Callers share the rows and must not mutate them. */
+export const listBattlefieldAssets = battlefieldAssets.read;
+
+/** Make every instance list battlefield assets again; await after writes to one. */
+export const invalidateBattlefieldAssets = battlefieldAssets.invalidate;
+
+/** Whether an asset row belongs to the battlefield set. */
+export const isBattlefieldAsset = (asset: {
+  hidden: boolean;
+  onInitialBattleField: boolean;
+}) => !asset.hidden && asset.onInitialBattleField;
 
 /** Load a game asset by ID; no match yields undefined. */
 export const fetchGameAsset = async (client: DrizzleClient, id: string) => {

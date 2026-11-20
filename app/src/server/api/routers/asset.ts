@@ -17,6 +17,8 @@ import {
   insertActionLogForDelete,
   insertActionLogForUpdate,
   insertGameAssetForCreate,
+  invalidateBattlefieldAssets,
+  isBattlefieldAsset,
   listGameAssetForGetAllNames,
   listGameAssetForGetNameTags,
   listGameAssetForGetSceneAssets,
@@ -243,12 +245,22 @@ export const gameAssetRouter = createTRPCRouter({
         ...input.data,
       });
       // Update database
+      const onBattlefield =
+        isBattlefieldAsset(entry) ||
+        isBattlefieldAsset({
+          hidden: input.data.hidden ?? entry.hidden,
+          onInitialBattleField: input.data.onInitialBattleField,
+        });
       const writes = await Promise.allSettled([
-        updateGameAssetForUpdate(ctx.drizzle, input, entry).then(() => {
-          // Saved artwork must replace the cache even if the independent log write fails.
-          if (entry.type === "LPC" || input.data.type === "LPC")
-            return invalidateLpcCatalog();
-        }),
+        updateGameAssetForUpdate(ctx.drizzle, input, entry).then(() =>
+          // Saved artwork must replace the caches even if the independent log write fails.
+          Promise.all([
+            entry.type === "LPC" || input.data.type === "LPC"
+              ? invalidateLpcCatalog()
+              : null,
+            onBattlefield ? invalidateBattlefieldAssets() : null,
+          ]),
+        ),
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
       ]);
       const failed = writes.find((result) => result.status === "rejected");
@@ -322,13 +334,16 @@ export const gameAssetRouter = createTRPCRouter({
         // Finish shared invalidation before returning an independent log failure.
         const writes = await Promise.allSettled([
           invalidateLpcCatalog(),
+          isBattlefieldAsset(entry) ? invalidateBattlefieldAssets() : null,
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
         const failed = writes.find((result) => result.status === "rejected");
         if (failed) throw failed.reason;
       } else {
         await Promise.all([
-          deleteGameAssetForDelete(ctx.drizzle, input),
+          deleteGameAssetForDelete(ctx.drizzle, input).then(() =>
+            isBattlefieldAsset(entry) ? invalidateBattlefieldAssets() : null,
+          ),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
       }

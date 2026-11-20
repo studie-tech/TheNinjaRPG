@@ -70,7 +70,6 @@ import {
   dataBattleAction,
   dungeonMember,
   dungeonRun,
-  gameAsset,
   gameSetting,
   huntingProgress,
   huntingSession,
@@ -663,12 +662,6 @@ export const listUserDataForQueryBattleUsers = (
       queue: { orderBy: (table, { asc }) => [asc(table.position)] },
     },
     where: inArray(userData.userId, [...userIds, ...allyAiIds, ...targetIds]),
-  });
-
-/** Build the `gameAsset` listing for `initiateBattle`, using predicates on `hidden` and `onInitialBattleField`. */
-export const listGameAssetForInitiateBattle = (client: Pick<DrizzleClient, "query">) =>
-  client.query.gameAsset.findMany({
-    where: and(eq(gameAsset.hidden, false), eq(gameAsset.onInitialBattleField, true)),
   });
 
 /**
