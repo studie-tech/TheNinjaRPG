@@ -18,6 +18,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { DUNGEON_LOBBY_SECONDS } from "@/drizzle/constants";
 import {
@@ -143,25 +144,47 @@ export const selectDungeonMemberForGetState = (
     )
     .as("visibleDungeonRuns");
 
-/** Build the `candidates` selection for `getState`. */
+/**
+ * Build the `candidates` selection for `getState`. Runs of one definition share a captured
+ * content snapshot, so `content` is sent only on the first row of each `contentHash`; the
+ * window uses the page order, so that row is always on the page when any of its group is.
+ */
 export const selectCandidatesForGetState = (
   client: Pick<DrizzleClient, "select">,
   candidates: ReturnType<typeof selectDungeonMemberForGetState>,
   ctx: { userId: string },
-) =>
-  client
-    .select(getTableColumns(dungeonRun))
+) => {
+  // The unique active index matches at most one membership, so the join adds no rows.
+  const activeMember = alias(dungeonMember, "activeMember");
+  const contentHash = sql<string>`SHA2(${dungeonRun.content}, 256)`;
+  // Keep the player's party, unclaimed rewards and invitations ahead of paid history.
+  const pageOrder = [
+    desc(sql`${activeMember.runId} IS NOT NULL`),
+    desc(eq(dungeonRun.status, "LOBBY")),
+    desc(dungeonRun.createdAt),
+    asc(dungeonRun.id),
+  ];
+  return client
+    .select({
+      ...getTableColumns(dungeonRun),
+      content:
+        sql<DungeonContent | null>`CASE WHEN ROW_NUMBER() OVER (PARTITION BY ${contentHash} ORDER BY ${sql.join(pageOrder, sql`, `)}) = 1 THEN ${dungeonRun.content} END`.mapWith(
+          dungeonRun.content,
+        ),
+      contentHash,
+    })
     .from(candidates)
     .innerJoin(dungeonRun, eq(dungeonRun.id, candidates.id))
-    .orderBy(
-      // Keep the player's party, unclaimed rewards and invitations ahead of paid history.
-      desc(
-        sql`EXISTS (SELECT 1 FROM ${dungeonMember} WHERE ${dungeonMember.runId} = ${dungeonRun.id} AND ${dungeonMember.activeUserId} = ${ctx.userId})`,
+    .leftJoin(
+      activeMember,
+      and(
+        eq(activeMember.runId, dungeonRun.id),
+        eq(activeMember.activeUserId, ctx.userId),
       ),
-      desc(eq(dungeonRun.status, "LOBBY")),
-      desc(dungeonRun.createdAt),
     )
+    .orderBy(...pageOrder)
     .limit(20);
+};
 
 /** Build the `userData` listing for `getState`, using predicates on `userId`. */
 export const listUserDataForGetState = (

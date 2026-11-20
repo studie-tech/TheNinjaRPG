@@ -20,6 +20,10 @@ import {
   village,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import {
+  selectCandidatesForGetState,
+  selectDungeonMemberForGetState,
+} from "@/queries/dungeon";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import {
@@ -267,6 +271,51 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     await db.update(dungeonRun).set({ status: "ENDED" }).where(eq(dungeonRun.id, id));
     expect((await (await callerFor(dungeonRouter, "b")).getState()).runs).toHaveLength(
       0,
+    );
+  });
+
+  it("returns every run's own content snapshot while transferring each one once", async () => {
+    const db = await getTestDatabase();
+    const { a, id } = await lobby();
+    const base = dungeonContent();
+    const edited = { ...base, name: "Edited definition" };
+    const history = [
+      { id: "old-1", content: base, minutesAgo: 30 },
+      { id: "old-2", content: edited, minutesAgo: 20 },
+      { id: "old-3", content: base, minutesAgo: 10 },
+    ];
+    for (const run of history) {
+      await db.insert(dungeonRun).values({
+        id: run.id,
+        dungeonId: "definition",
+        leaderId: "a",
+        content: run.content,
+        status: "COMPLETED",
+        createdAt: new Date(Date.now() - run.minutesAgo * 60_000),
+        state: {
+          ...dungeonBattleState().runState,
+          memberIds: ["a"],
+          floor: 5,
+          clearedFloors: [0, 1, 2, 3, 4],
+        },
+      });
+      await db.insert(dungeonMember).values({ runId: run.id, userId: "a" });
+    }
+    const stored = await db.query.dungeonRun.findMany();
+    const state = await a.getState();
+    // Selection keeps the active lobby; the response lists runs newest first.
+    expect(state.runs.map((run) => run.id)).toEqual([id, "old-3", "old-2", "old-1"]);
+    for (const run of state.runs)
+      expect(run.content).toEqual(stored.find((row) => row.id === run.id)?.content);
+    const page = await selectCandidatesForGetState(
+      db,
+      selectDungeonMemberForGetState(db, { userId: "a" }),
+      { userId: "a" },
+    );
+    // Repeated snapshots reuse the content of the earliest page row with the same hash.
+    expect(page.find((row) => row.id === "old-1")?.content).toBeNull();
+    expect(page.filter((row) => row.content)).toHaveLength(
+      new Set(page.map((row) => row.contentHash)).size,
     );
   });
 
