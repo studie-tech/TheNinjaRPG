@@ -51,6 +51,7 @@ import {
   insertOverworldAiPlacementForUpsertPlacement,
   insertOverworldAiPlacementQuestForUpsertPlacement,
   insertUserQuestAttemptForInteractWithOverworldAi,
+  invalidateSectorPlacements,
   listOverworldAiPlacementForGetAllPlacementNames,
   listOverworldAiPlacementForGetPlacementsForAi,
   listQuestForUpsertPlacement,
@@ -359,6 +360,7 @@ export const overworldAiRouter = createTRPCRouter({
           id,
         );
       }
+      await invalidateSectorPlacements();
       // Return
       return { success: true, message: input.id ? "Placement updated" : id };
     }),
@@ -383,6 +385,7 @@ export const overworldAiRouter = createTRPCRouter({
         deleteOverworldAiPlacementQuests(ctx.drizzle, input.id),
         deleteOverworldAiPlacementForDeletePlacement(ctx.drizzle, input),
       ]);
+      await invalidateSectorPlacements();
       // Return
       return { success: true, message: "Placement deleted" };
     }),

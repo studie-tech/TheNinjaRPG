@@ -1,6 +1,13 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { item, itemVariant, userAttribute, userData, userItem } from "@/drizzle/schema";
+import {
+  item,
+  itemVariant,
+  userAttribute,
+  userCosmeticSlot,
+  userData,
+  userItem,
+} from "@/drizzle/schema";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
@@ -22,7 +29,14 @@ import {
 // Exercise production query/mutation contracts against real rows, including selected variants and guards.
 describeWithDatabase("sprite appearance database snapshots", () => {
   beforeEach(async () => {
-    await resetTables(userItem, itemVariant, item, userAttribute, userData);
+    await resetTables(
+      userCosmeticSlot,
+      userItem,
+      itemVariant,
+      item,
+      userAttribute,
+      userData,
+    );
     await insertUsers([
       {
         userId: "sprite-owner",
@@ -175,6 +189,41 @@ describeWithDatabase("sprite appearance database snapshots", () => {
       { slot: "HAND_1", profile: "dagger", color: "gray" },
       { slot: "HAND_2", profile: "dagger", color: "gray", mirror: true },
     ]);
+  });
+  it("draws a saved cosmetic variant over worn equipment in a sector appearance", async () => {
+    const client = (await getTestDatabase()) as unknown as DrizzleClient;
+    await insertItems([
+      {
+        id: "sprite-robe",
+        name: "Festival robe",
+        slot: "CHEST",
+        itemType: "ARMOR",
+        lpcProfile: "robe",
+        lpcColor: "white",
+      },
+    ]);
+    const database = await getTestDatabase();
+    await database.insert(itemVariant).values({
+      id: "sprite-black-robe",
+      itemId: "sprite-robe",
+      name: "Black robe",
+      image: "/robe.png",
+      costType: "MONEY",
+      lpcColor: "black",
+    });
+    await database.insert(userCosmeticSlot).values({
+      userId: "sprite-owner",
+      slot: "CHEST",
+      itemId: "sprite-robe",
+      variantId: "sprite-black-robe",
+    });
+    const [users] = await fetchSectorWindowData(client, "viewer", 724);
+    const user = users.find((entry) => entry.userId === "sprite-owner")!;
+    expect(resolveSpriteAppearance(user).layers).toContainEqual({
+      slot: "CHEST",
+      profile: "robe",
+      color: "black",
+    });
   });
   it("preserves the selected appearance in inventory responses used by equipment cache patches", async () => {
     const client = (await getTestDatabase()) as unknown as DrizzleClient;

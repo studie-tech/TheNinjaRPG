@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "bun:test";
 import { type SQL, sql } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { type UserData, village as villageTable } from "@/drizzle/schema";
+import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { travelRouter } from "@/server/api/routers/travel";
 import { buildSectorWindowLayout } from "@/server/utils/sectorMap";
 import {
@@ -87,9 +88,7 @@ const makeCaller = (
     structures: [],
   }));
   const sector = read((query) => ({ sector: queryParams(query)[0], villageId: null }));
-  const placements = read((query) =>
-    (options.placements ?? []).filter((p) => queryParams(query).includes(p.sector)),
-  );
+  const placements = read(() => options.placements ?? []);
   const wars = read(() => []);
   const battles = read(() => []);
   const history = vi.fn((query: { with?: { quest?: boolean } }) =>
@@ -298,11 +297,11 @@ describe("travel.getSectorData query scheduling", () => {
       test.reads.patrols,
       test.reads.village,
       test.reads.sector,
-      test.reads.placements,
     ]) {
       expect(read).toHaveBeenCalledTimes(2);
     }
-    for (const read of [test.reads.wars, test.reads.battles])
+    // Both windows filter the one cached placement listing.
+    for (const read of [test.reads.wars, test.reads.battles, test.reads.placements])
       expect(read).toHaveBeenCalledTimes(1);
     expect(
       test.reads.sector.mock.calls.map(([query]) => queryParams(query)[0]),
@@ -337,4 +336,57 @@ describe("travel.getSectorData query scheduling", () => {
       expect(test.reads.sector).toHaveBeenCalledTimes(1);
     },
   );
+  it("serves later polls from the cached placements until a placement write invalidates them", async () => {
+    const test = makeCaller({ placements: [placement(SECTOR)] });
+    await test.caller.getSectorData({ sector: SECTOR });
+    await test.caller.getSectorData({ sector: SECTOR });
+    expect(test.reads.placements).toHaveBeenCalledTimes(1);
+    await invalidateSectorPlacements();
+    const result = await test.caller.getSectorData({ sector: SECTOR });
+    expect(test.reads.placements).toHaveBeenCalledTimes(2);
+    expect(result.overworldAis?.map((p) => p.npcPlacementId)).toEqual([
+      `npc-${SECTOR}`,
+    ]);
+  });
+
+  it("keeps quest coordinates of specific placements outside the sector window private", async () => {
+    const window = new Set(buildSectorWindowLayout(SECTOR).map((p) => p.sector));
+    const remote = [...Array(2000).keys()].find((sector) => !window.has(sector))!;
+    const npc = placement(remote);
+    const objective = MoveToObjective.parse({
+      id: "STARTING",
+      task: "move_to_location",
+      overworldPlacementId: npc.id,
+      structureAssetId: "shrine",
+    });
+    const test = makeCaller({
+      placements: [npc],
+      questData: [
+        QuestTracker.parse({
+          id: "bound-quest",
+          goals: [ObjectiveTracker.parse({ id: "STARTING" })],
+        }),
+      ],
+      activeHistory: [
+        {
+          id: "history",
+          questId: "bound-quest",
+          questType: "mission",
+          completed: 0,
+          endAt: null,
+          quest: {
+            id: "bound-quest",
+            questType: "mission",
+            hidden: false,
+            retryDelay: "none",
+            consecutiveObjectives: true,
+            content: { objectives: [objective], reward: {} },
+          },
+        },
+      ],
+    });
+    const result = await test.caller.getSectorData({ sector: SECTOR });
+    expect(result.questPlacements).toEqual([]);
+    expect(result.overworldAis).toEqual([]);
+  });
 });

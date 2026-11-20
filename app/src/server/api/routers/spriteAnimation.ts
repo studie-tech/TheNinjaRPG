@@ -6,6 +6,7 @@ import {
   animationActions,
   summarizeAnimationCoverage,
 } from "@/libs/spriteAnimationActions";
+import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { fetchUser } from "@/queries/profile";
 import {
   countSpriteAnimations,
@@ -189,6 +190,7 @@ export const spriteAnimationRouter = createTRPCRouter({
           ],
         }),
       ]);
+      await invalidateSectorPlacements();
       await outdateProposalsFor(
         ctx.drizzle,
         "AI",

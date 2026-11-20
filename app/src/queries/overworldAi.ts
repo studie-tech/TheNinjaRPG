@@ -1,7 +1,7 @@
 /**
  * Database access for overworld ai; authorization and transaction scopes stay in callers.
  */
-import { and, eq, inArray, lt, ne, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, ne, or, type SQL, sql } from "drizzle-orm";
 import { OVERWORLD_QUEST_ROLLS_PER_DAY } from "@/drizzle/constants";
 import {
   overworldAiPlacement,
@@ -13,6 +13,71 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
+import { createRuntimeCache } from "@/server/utils/runtimeCache";
+
+// Every sector poll draws the active placements around the viewer. They change only when
+// staff edit a placement, its AI template or the template's animations, and when the daily
+// cron repositions them; those writes invalidate the cache, and the TTL bounds any other.
+const sectorPlacements = createRuntimeCache({
+  name: "overworld-sector-placements",
+  ttlSeconds: 5 * 60,
+  load: (client: Pick<DrizzleClient, "query">) =>
+    client.query.overworldAiPlacement.findMany({
+      where: eq(overworldAiPlacement.isActive, true),
+      // Stable order so the arrival-prompt `find`-first NPC can't flip between polls when two
+      // placements share a tile (which would ping-pong the modal open on every sector refresh).
+      orderBy: asc(overworldAiPlacement.id),
+      columns: {
+        id: true,
+        aiTemplateUserId: true,
+        interactionType: true,
+        sectorType: true,
+        locationType: true,
+        sector: true,
+        longitude: true,
+        latitude: true,
+        sectorList: true,
+        positionVersion: true,
+        wanderRadius: true,
+        spawnCount: true,
+        groupMin: true,
+        groupMax: true,
+        habitats: true,
+        wildOnly: true,
+        mapScale: true,
+      },
+      with: {
+        aiTemplate: {
+          columns: {
+            userId: true,
+            username: true,
+            avatar: true,
+            avatarLight: true,
+            curHealth: true,
+            maxHealth: true,
+            level: true,
+            rank: true,
+            isAi: true,
+          },
+          with: {
+            spriteAnimationBindings: {
+              where: (binding) => inArray(binding.actionKey, ["idle", "move"]),
+              with: { animation: true },
+            },
+          },
+        },
+      },
+    }),
+});
+
+/** Every active placement with its AI template and idle/move sheets, ordered by id. */
+export const listCachedSectorPlacements = sectorPlacements.read;
+
+/**
+ * Make every instance read the sector placements again; await after writes to a placement,
+ * an AI template's sector fields or its idle/move animation bindings.
+ */
+export const invalidateSectorPlacements = sectorPlacements.invalidate;
 
 /** Build the `overworldAiPlacement` listing for `GET`, using predicates on `isActive`, `sectorType`, `locationType`. */
 export const listOverworldAiPlacementForGET = (client: Pick<DrizzleClient, "query">) =>

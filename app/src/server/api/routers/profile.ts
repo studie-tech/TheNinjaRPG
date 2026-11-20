@@ -162,6 +162,7 @@ import { claimDungeonQueue, findActiveDungeonRun } from "@/queries/dungeon";
 import { listHuntingHabitats } from "@/queries/hunting";
 import { fetchKageReplacement } from "@/queries/kage";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
+import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import {
   countUsersActiveInLastDay,
   deleteUserAttributeForDeleteAttribute,
@@ -1352,6 +1353,7 @@ export const profileRouter = createTRPCRouter({
       if (ai.isAi) {
         const rejected = await deleteUser(ctx.drizzle, ai.userId);
         if (rejected) return rejected;
+        await invalidateSectorPlacements();
         await outdateProposalsFor(
           ctx.drizzle,
           "AI",
@@ -1648,6 +1650,7 @@ export const profileRouter = createTRPCRouter({
           updateUserItemForUpdateAi(ctx.drizzle, chance, ai, id),
         ),
       ]);
+      await invalidateSectorPlacements();
       await outdateProposalsFor(
         ctx.drizzle,
         "AI",
