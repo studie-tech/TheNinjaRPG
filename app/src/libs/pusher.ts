@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { UserRank, UserStatus } from "@/drizzle/constants";
 import { env } from "@/env/server.mjs";
+import { chunkArray } from "@/utils/array";
 
 /** Pusher and Soketi accept at most this many channels in one event request. */
 export const PUSHER_MAX_CHANNELS_PER_EVENT = 100;
@@ -24,18 +25,14 @@ export class Pusher {
    * request per {@link PUSHER_MAX_CHANNELS_PER_EVENT} channels, the HTTP API's limit.
    * @param channels - channel name, or the channels that all receive this payload
    * @param event - event name
-   * @param data - data to send, nedd to be JSON object or string
+   * @param data - JSON object or string to send
    */
   async trigger(channels: string | string[], event: string, data: object | string) {
     const payload = typeof data === "string" ? data : JSON.stringify(data);
     if (typeof channels === "string") {
       return this._send({ name: event, data: payload, channel: channels });
     }
-    const unique = [...new Set(channels)];
-    const batches: string[][] = [];
-    for (let i = 0; i < unique.length; i += PUSHER_MAX_CHANNELS_PER_EVENT) {
-      batches.push(unique.slice(i, i + PUSHER_MAX_CHANNELS_PER_EVENT));
-    }
+    const batches = chunkArray([...new Set(channels)], PUSHER_MAX_CHANNELS_PER_EVENT);
     await Promise.all(
       batches.map((batch) =>
         this._send({ name: event, data: payload, channels: batch }),
