@@ -3,9 +3,13 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { actionLog, gameAsset, userData } from "@/drizzle/schema";
 import { listBattlefieldAssets } from "@/queries/asset";
 import { gameAssetRouter } from "@/server/api/routers/asset";
+import type { DrizzleClient } from "@/server/db";
+import { deferred } from "../../../setup/deferred";
 import { insertUsers } from "../../../setup/factories";
+import { aroundStatements } from "../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -21,6 +25,24 @@ const assetData = {
   licenseDetails: "Test",
   onInitialBattleField: true,
   hidden: false,
+};
+
+/** Fail logging after the asset deletion commits, preserving its successful write. */
+const failDeletionLog = (db: DrizzleClient) => {
+  const deleted = deferred();
+  return aroundStatements(
+    aroundStatements(db, gameAsset, async (run) => {
+      const result = await run();
+      deleted.resolve();
+      return result;
+    }),
+    actionLog,
+    async () => {
+      await deleted.promise;
+      throw new Error("Logging unavailable");
+    },
+    { operations: ["insert"] },
+  );
 };
 
 /** The battlefield asset set follows every staff save and deletion that changes it. */
@@ -82,10 +104,18 @@ describeWithDatabase("battlefield assets", () => {
     expect(await ids()).toEqual(["hidden-rock"]);
   });
 
-  it("drops a deleted battlefield asset", async () => {
-    const caller = await callerFor(gameAssetRouter, staffId);
-    expect(await ids()).toEqual(["rock"]);
-    expect((await caller.delete({ id: "rock" })).success).toBe(true);
-    expect(await ids()).toEqual([]);
-  });
+  it.each([false, true])(
+    "drops a deleted battlefield asset even if logging fails: %s",
+    async (failsLogging) => {
+      const db = await getTestDatabase();
+      const client = failsLogging ? failDeletionLog(db) : db;
+      expect(await ids()).toEqual(["rock"]);
+      const deletion = callerForDatabase(gameAssetRouter, staffId, client).delete({
+        id: "rock",
+      });
+      if (failsLogging) await expect(deletion).rejects.toThrow("Logging unavailable");
+      else expect((await deletion).success).toBe(true);
+      expect(await ids()).toEqual([]);
+    },
+  );
 });

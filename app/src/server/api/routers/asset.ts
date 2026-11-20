@@ -340,12 +340,15 @@ export const gameAssetRouter = createTRPCRouter({
         const failed = writes.find((result) => result.status === "rejected");
         if (failed) throw failed.reason;
       } else {
-        await Promise.all([
+        // Finish shared invalidation before returning an independent log failure.
+        const writes = await Promise.allSettled([
           deleteGameAssetForDelete(ctx.drizzle, input).then(() =>
             isBattlefieldAsset(entry) ? invalidateBattlefieldAssets() : null,
           ),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
+        const failed = writes.find((result) => result.status === "rejected");
+        if (failed) throw failed.reason;
       }
       await outdateProposalsFor(
         ctx.drizzle,
