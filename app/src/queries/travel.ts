@@ -35,6 +35,7 @@ import {
 } from "@/drizzle/schema";
 import { SECTOR_BATTLE_STALE_SECONDS, SECTOR_PRESENCE_STATUSES } from "@/libs/travel";
 import { spriteUserRelations } from "@/queries/lpc";
+import type { questRevisionRelation } from "@/queries/questRevisions";
 import { fetchSector } from "@/queries/village";
 import { listVillageDutyPatrols } from "@/queries/villageDuty";
 import { activeWarAllyWhere, activeWarMercenaryWhere } from "@/queries/war";
@@ -334,10 +335,17 @@ export const selectBattleForGetSectorData = (client: Pick<DrizzleClient, "select
     .from(battle)
     .where(gte(battle.updatedAt, secondsFromNow(-SECTOR_BATTLE_STALE_SECONDS)));
 
-/** Build the `questHistory` listing for `getSectorData`, using predicates on `userId`, `completed`, `endAt`. */
-export const listQuestHistoryForGetSectorData = (
+/**
+ * Build the `questHistory` listing of open attempts for `getSectorData`, using
+ * predicates on `userId`, `completed`, `endAt`. `questRevisionRelation` reads each
+ * quest's revision for `withQuestDefinitions`; `true` joins the definitions.
+ */
+export const listQuestHistoryForGetSectorData = <
+  QuestRelation extends true | typeof questRevisionRelation,
+>(
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
+  questRelation: QuestRelation,
 ) =>
   client.query.questHistory.findMany({
     where: and(
@@ -345,7 +353,7 @@ export const listQuestHistoryForGetSectorData = (
       eq(questHistory.completed, 0),
       isNull(questHistory.endAt),
     ),
-    with: { quest: true },
+    with: { quest: questRelation },
   });
 
 /** Build the `questHistory` listing for `getSectorData`, using predicates on `userId`, `completed`, `previousCompletes`. */
