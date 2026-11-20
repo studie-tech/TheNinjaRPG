@@ -8,6 +8,7 @@ import {
   fetchQuestDiscoverySummaryCandidates,
 } from "@/queries/quests";
 import { listQuestHistoryForGetSectorData } from "@/queries/travel";
+import { fetchProfileUser } from "@/server/utils/profileDefinitions";
 import { withQuestDefinitions } from "@/server/utils/questRevisions";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
 import { aroundStatements } from "../../setup/statements";
@@ -67,6 +68,32 @@ describeWithDatabase("revision-keyed quest reads", () => {
     const warm = await read();
     expect(warm.result).toEqual(joined);
     expect(warm.statements).toHaveLength(1);
+  });
+
+  it("shares warmed definitions across profile, discovery and sector reads", async () => {
+    const db = await getTestDatabase();
+    const profile = await fetchProfileUser(db, USER_ID);
+    const profileEvent = profile!.userQuests.find(
+      (entry) => entry.questId === "event",
+    )!;
+    profileEvent.quest.name = "Private profile rewrite";
+
+    const discoveryRead = await recordQueries(() =>
+      fetchQuestDiscoveryCandidates(db, USER_ID, discovery),
+    );
+    expect(discoveryRead.statements).toHaveLength(1);
+    expect(discoveryRead.result).toEqual(await joinedDiscovery());
+
+    const sectorRead = await recordQueries(async () =>
+      withQuestDefinitions(
+        db,
+        await listQuestHistoryForGetSectorData(db, ctx, questRevisionRelation),
+      ),
+    );
+    expect(sectorRead.statements).toHaveLength(1);
+    expect(sectorRead.result).toEqual(
+      await listQuestHistoryForGetSectorData(db, ctx, true),
+    );
   });
 
   it("reads raid state live and any content write's new revision", async () => {

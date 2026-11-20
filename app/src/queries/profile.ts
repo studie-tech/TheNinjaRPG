@@ -26,7 +26,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { type AnyMySqlColumn, alias } from "drizzle-orm/mysql-core";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { UploadedFileData } from "uploadthing/types";
 import {
@@ -93,9 +93,11 @@ import {
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
+import { revisionSql } from "@/queries/definitionRevisions";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { listCachedGameSettings } from "@/queries/gamesettings";
 import { questPartyRelations } from "@/queries/questParty";
+import { questRevisionRelation } from "@/queries/questRevisions";
 import { userCardColumns } from "@/queries/userColumns";
 import { activeWarAllyWhere } from "@/queries/war";
 import { serverError } from "@/server/api/trpc";
@@ -2028,38 +2030,9 @@ const findProfileUser = <
     },
   });
 
-/** Quest columns combat writes during a raid; profile reads take them live. */
-export const questLiveColumns = {
-  id: true,
-  raidBossCurrentHealth: true,
-  raidStartedAt: true,
-  raidEndsAt: true,
-  raidCaptureDeadline: true,
-  raidGracePeriodEnd: true,
-} as const;
-
 /** Item and village structure rows are cached whole, so profile reads take only their id. */
 const definitionIdColumn = { id: true } as const;
 
-/**
- * A hash of every column of a definition table but its `live` ones. Any write to those
- * columns changes it, whichever path makes the write (editor, gameplay, migration or
- * console), so it identifies the content a cached definition holds.
- */
-const revisionSql =
-  <Columns extends Record<string, AnyMySqlColumn>>(
-    columns: Columns,
-    live: Partial<Record<keyof Columns, true>>,
-  ) =>
-  (table: Columns) =>
-    sql<string>`SHA2(JSON_ARRAY(${sql.join(
-      Object.keys(columns)
-        .filter((key) => !(key in live))
-        .map((key) => table[key]),
-      sql`, `,
-    )}), 256)`;
-
-const questRevisionSql = revisionSql(getTableColumns(quest), questLiveColumns);
 const itemRevisionSql = revisionSql(getTableColumns(item), definitionIdColumn);
 const structureRevisionSql = revisionSql(
   getTableColumns(villageStructure),
@@ -2068,12 +2041,7 @@ const structureRevisionSql = revisionSql(
 
 /** The relations `fetchProfileUser` hydrates from cached definitions. */
 const definitionRevisions = {
-  quest: {
-    columns: questLiveColumns,
-    extras: (table: (typeof quest)["_"]["columns"]) => ({
-      revision: questRevisionSql(table).as("revision"),
-    }),
-  },
+  quest: questRevisionRelation,
   item: {
     columns: definitionIdColumn,
     extras: (table: (typeof item)["_"]["columns"]) => ({
@@ -2088,16 +2056,6 @@ const definitionRevisions = {
   },
 };
 const joinedDefinitions = { quest: true, item: true, structure: true } as const;
-
-/** Build the `quest` selection of complete definitions and their revisions for `fetchProfileUser`. */
-export const selectQuestDefinitions = (
-  client: Pick<DrizzleClient, "select">,
-  questIds: string[],
-) =>
-  client
-    .select({ definition: quest, revision: questRevisionSql(quest) })
-    .from(quest)
-    .where(inArray(quest.id, questIds));
 
 /** Build the `item` selection of complete definitions and their revisions for `fetchProfileUser`. */
 export const selectItemDefinitions = (
