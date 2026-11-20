@@ -197,7 +197,7 @@ const ProfilePools: React.FC = () => {
 
 /** Experience toward the next level, the level-up action or Elite Jonin milestones. */
 const ProfileLevel: React.FC = () => {
-  const { data: userData, timeDiff } = useUserDataSelector(selectLevel);
+  const { data: userData } = useUserDataSelector(selectLevel);
   if (userData?.rank === "ELITE JONIN")
     return (
       <Link href="/academy" className="block text-center text-sm underline">
@@ -213,12 +213,10 @@ const ProfileLevel: React.FC = () => {
         tooltip="Experience required for next level"
         color="bg-yellow-500"
         showText={true}
-        lastRegenAt={userData?.regenAt}
         regen={0}
         status={userData?.status}
         current={userData?.earnedExperience ?? 0}
         total={userData?.requiredExperience}
-        timeDiff={timeDiff}
       />
       {userData && userData.unassignedExperience > 0 && (
         <Link
@@ -763,7 +761,6 @@ const selectLevel = (user: ProfileUser) => {
     rank: user.rank,
     level: user.level,
     status: user.status,
-    regenAt: user.regenAt,
     earnedExperience: progress.earned,
     requiredExperience: progress.required,
     canLevelUp: !levelUpBlockMessage(user),

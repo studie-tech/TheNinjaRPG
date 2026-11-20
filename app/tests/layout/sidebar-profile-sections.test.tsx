@@ -143,6 +143,12 @@ describe("profile sidebar sections", () => {
     expect(renders).toEqual({ pools: 1, bars: ["EP"], links: [] });
   });
 
+  it("re-renders only the pool bars for a regeneration timestamp write", () => {
+    mount();
+    write({ regenAt: new Date(regenAt.getTime() + 60_000) });
+    expect(renders).toEqual({ pools: 1, bars: ["EP"], links: [] });
+  });
+
   it("re-renders nothing for a position write", () => {
     mount();
     write({ longitude: 2, latitude: 3 });
