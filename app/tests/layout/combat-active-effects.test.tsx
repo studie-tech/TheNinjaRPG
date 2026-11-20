@@ -348,4 +348,61 @@ describe("combat active effects", () => {
     expect(view.getByText("Potency (Reflect, Water) +30 ↻ 2")).toBeTruthy();
     expect(view.queryByText(/\+50/)).toBeNull();
   });
+
+  it("names damage modifiers in plain words instead of signs", () => {
+    const mod = (type: string, id: string, power: number, elements?: string[]) =>
+      makeEffect(
+        type as "increasedamagegiven",
+        { power, rounds: 2, elements } as never,
+        {
+          ...runtime,
+          id,
+        },
+      );
+    const view = render(
+      <VisualizeEffects
+        effects={[
+          mod("increasedamagegiven", "dgb", 20, ["Fire"]),
+          mod("decreasedamagegiven", "dgr", 15, ["Water"]),
+          mod("decreasedamagetaken", "dtr", 25, ["Wind"]),
+          mod("increasedamagetaken", "dti", 30, ["Lightning"]),
+        ]}
+        userId={userId}
+      />,
+    );
+    const sections = [
+      ["Damage Given Buffs", "DGB", "20%"],
+      ["Damage Given Reduction", "DGR", "15%"],
+      ["Damage Taken Reduction", "DTR", "25%"],
+      ["Damage Taken Increase", "DTI", "30%"],
+    ] as const;
+    for (const [label, abbr, value] of sections) {
+      const section = view.getByRole("region", { name: label });
+      expect(section.querySelector(`abbr[title="${label}"]`)?.textContent).toBe(abbr);
+      expect(section.textContent).toContain(value);
+      expect(section.textContent).not.toMatch(/[+-]\d/);
+    }
+    expect(view.queryByText("Damage Given")).toBeNull();
+    expect(view.queryByText("Damage Taken")).toBeNull();
+  });
+
+  it("files a net damage modifier under the direction it ends up in", () => {
+    const mod = (type: string, id: string, power: number) =>
+      makeEffect(type as "increasedamagetaken", { power, rounds: 2 } as never, {
+        ...runtime,
+        id,
+      });
+    const view = render(
+      <VisualizeEffects
+        effects={[
+          mod("increasedamagetaken", "up", 10),
+          mod("decreasedamagetaken", "down", 25),
+        ]}
+        userId={userId}
+      />,
+    );
+    const reduction = view.getByRole("region", { name: "Damage Taken Reduction" });
+    expect(reduction.textContent).toContain("15%");
+    expect(view.queryByRole("region", { name: "Damage Taken Increase" })).toBeNull();
+  });
 });
