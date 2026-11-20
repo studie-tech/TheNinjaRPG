@@ -8,6 +8,7 @@ import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
+  recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
 
@@ -80,7 +81,11 @@ describeWithDatabase("unvoted poll alert", () => {
     expect(await fetchHasUnvotedPolls(database, "genin", new Date())).toEqual([
       { id: "ending-poll" },
     ]);
-    expect(await fetchHasUnvotedPolls(database, "genin", secondsFromNow(120))).toEqual(
+    const later = await recordQueries(() =>
+      fetchHasUnvotedPolls(database, "genin", secondsFromNow(120)),
+    );
+    expect(later.result).toEqual([]);
+    expect(later.statements.filter((statement) => /`Poll`/.test(statement))).toEqual(
       [],
     );
   });
