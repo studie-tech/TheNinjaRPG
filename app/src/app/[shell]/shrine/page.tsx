@@ -111,6 +111,8 @@ export default function Shrine() {
   )
     return <Loader explanation="No village found" />;
 
+  const hasResourceSilo = userData.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
+
   // Check if there's an active war in this sector
   // For SECTOR_WAR: check war.sector
   // For VILLAGE_WAR/WAR_RAID: check if this sector is either village's home sector
@@ -205,7 +207,7 @@ export default function Shrine() {
   if (showExclusiveRaidFlow) {
     return (
       <div>
-        {userData.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && <ResourceSilo />}
+        {hasResourceSilo && <ResourceSilo />}
         {activeExclusiveRaid ? (
           // Raid is active - show raid browser
           <RaidBrowser
@@ -219,7 +221,7 @@ export default function Shrine() {
           <ContentBox
             title="Sector Ready to Claim!"
             subtitle={`Sector ${userData.sector}`}
-            defaultBackHref="/travel"
+            defaultBackHref={hasResourceSilo ? undefined : "/travel"}
           >
             <div className="space-y-4 text-center">
               <Image
@@ -266,12 +268,12 @@ export default function Shrine() {
 
   return (
     <div className="space-y-8">
-      {userData.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && <ResourceSilo />}
+      {hasResourceSilo && <ResourceSilo />}
       {hasNoActiveWars && (
         <ContentBox
           title={`Lvl. ${sectorData.sectorData?.shrineLevel || 1} Shrine`}
           subtitle={sectorData.sectorData ? "Sector is Claimed" : "Unclaimed Sector"}
-          defaultBackHref="/travel"
+          defaultBackHref={hasResourceSilo ? undefined : "/travel"}
           topRightContent={<WarFieldActions />}
         >
           {canShowMpvpOption || isUserQueuedForThisSector ? (
@@ -337,7 +339,7 @@ export default function Shrine() {
         <ContentBox
           title="Your Wars"
           subtitle={`Sector ${userData.sector}`}
-          defaultBackHref="/travel"
+          defaultBackHref={hasResourceSilo ? undefined : "/travel"}
           topRightContent={<WarFieldActions />}
         >
           <Tabs defaultValue="solo" className="w-full">

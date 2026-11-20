@@ -22,7 +22,11 @@ export const ResourceSilo = () => {
   const data = status.data;
   const message = claim.error?.message ?? claim.data?.message;
   return (
-    <ContentBox title="Resource Silo" subtitle="War-Torn Sector · Friday–Sunday UTC">
+    <ContentBox
+      title="Resource Silo"
+      subtitle="War-Torn Sector · Friday–Sunday UTC"
+      defaultBackHref="/travel"
+    >
       <p className="mb-3 text-sm">
         A silo opens every {RESOURCE_SILO_INTERVAL_HOURS} hours for{" "}
         {RESOURCE_SILO_DURATION_HOURS} hour. Earn {RESOURCE_SILO_WIN_POINTS} points for
