@@ -4,6 +4,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import { type ReactNode, useRef, useSyncExternalStore } from "react";
 import * as client from "@/app/_trpc/client";
 import * as tooltip from "@/components/ui/tooltip";
+import { MAX_PVP_BRACKET, XP_BRACKETS } from "@/drizzle/constants";
 import * as gameMenu from "@/hooks/useGameMenu";
 import * as Avatar from "@/layout/Avatar";
 import * as Image from "@/layout/Image";
@@ -148,11 +149,20 @@ describe("profile sidebar sections", () => {
     expect(renders).toEqual({ pools: 0, bars: [], links: [] });
   });
 
-  it("re-renders the level progress and bracket for an experience write", () => {
-    const view = mount();
+  it("re-renders the level progress for an experience write", () => {
+    mount();
     write({ experience: calcLevelRequirements(9) + 1 });
     expect(renders.bars).toEqual(["XP"]);
     expect(renders.pools).toBe(0);
-    expect(view.container.textContent).toContain("Bracket:");
+  });
+
+  it("updates the bracket when experience crosses a bracket boundary", () => {
+    user = { ...user, rank: "CHUNIN", level: 45, experience: XP_BRACKETS[0].max };
+    const view = mount();
+    expect(view.container.textContent).toContain(`Bracket: 1/${MAX_PVP_BRACKET}`);
+
+    write({ experience: XP_BRACKETS[0].max + 1 });
+
+    expect(view.container.textContent).toContain(`Bracket: 2/${MAX_PVP_BRACKET}`);
   });
 });
