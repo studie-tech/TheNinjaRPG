@@ -1,14 +1,19 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ShurikenSiegeApp } from "@/standalone/shurikenSiege/App";
-import { loadBuildData } from "@/standalone/shurikenSiege/build";
+import { loadBuildData, readBuild } from "@/standalone/shurikenSiege/build";
+import { activePlayables } from "@/standalone/shurikenSiege/portal";
 import { serveBundledMedia } from "@/utils/image";
 
 const root = document.getElementById("root");
 
-/** Load the game data, serve its bundled media from the page's folder, then play. */
+/**
+ * Load the game data, serve its bundled media from the page's folder, then play. The page
+ * shows its loading screen meanwhile, which is YouTube's first frame.
+ */
 const start = async () => {
   if (!root) return;
+  activePlayables(readBuild())?.game.firstFrameReady();
   try {
     const data = await loadBuildData();
     const missing = new Set<string>();

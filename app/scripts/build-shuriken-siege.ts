@@ -17,6 +17,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -97,6 +98,8 @@ const targets = (
 if (!gdGameId && !args.targets)
   console.log("Skipping gamedistribution: pass GD_GAME_ID to build it");
 const api = (args.api ?? "https://www.theninja-rpg.com").replace(/\/$/, "");
+for (const option of ["out", "cache", "source", "version", "api", "targets"] as const)
+  if (args[option] === "") throw new Error(`--${option} needs a value`);
 const out = resolve(args.out ?? join(APP, "../dist/shuriken-siege"));
 const cache = resolve(args.cache ?? join(homedir(), ".cache/shuriken-siege"));
 const version = args.version ?? new Date().toISOString().slice(0, 10);
@@ -184,9 +187,9 @@ await pool([...media], 12, async (url) => {
 });
 writeFileSync(indexPath, JSON.stringify(index, null, 1));
 
-// 4. The game's code and styles, shared by every target
-const work = join(cache, "build");
-rmSync(work, { recursive: true, force: true });
+// 4. The game's code and styles, shared by every target, staged apart from other builds
+const work = mkdtempSync(join(cache, "build-"));
+process.on("exit", () => rmSync(work, { recursive: true, force: true }));
 const bundle = await bun.build({
   entrypoints: [ENTRY],
   outdir: work,
@@ -230,11 +233,16 @@ const css = await postcss([tailwind({ base: dirname(STYLES) })]).process(
 );
 writeFileSync(join(work, "app.css"), css.css);
 
-// 5. One folder and zip per target
-rmSync(out, { recursive: true, force: true });
+// 5. One folder and zip per target, named by its source and version; only those of this
+// build are replaced, so other targets and variants already in `out` stay.
 mkdirSync(out, { recursive: true });
 for (const target of targets) {
-  const dir = join(out, target);
+  const source = args.source ?? target;
+  const name = `shuriken-siege-${target}${source === target ? "" : `-${source}`}-${version}`;
+  const dir = join(out, name);
+  const zip = join(out, `${name}.zip`);
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(zip, { force: true });
   mkdirSync(join(dir, "assets"), { recursive: true });
   cpSync(work, dir, { recursive: true });
   const mediaMap: Record<string, string> = {};
@@ -247,12 +255,11 @@ for (const target of targets) {
   const build: ShurikenSiegeBuild = {
     target,
     links: TARGETS[target].links,
-    source: args.source ?? target,
+    source,
     version,
   };
   writeFileSync(join(dir, "index.html"), page(build, TARGETS[target].sdk));
   checkPlayablesNames(target, dir);
-  const zip = join(out, `shuriken-siege-${target}-${version}.zip`);
   execFileSync("zip", ["-qr", zip, "."], { cwd: dir });
   const count = execFileSync("find", [".", "-type", "f"], { cwd: dir, encoding: "utf8" })
     .trim()
@@ -279,15 +286,18 @@ interface BunBundler {
 /** The page: viewport, title, build config, the portal SDK if any, styles and code. */
 function page(build: ShurikenSiegeBuild, sdk?: string) {
   // GameDistribution reads its options before its script loads and reports events through
-  // them; the page relays each to the game as a window event.
+  // them; the page relays each to the game as a window event. Portal SDKs load without
+  // holding up the page, so a stalled SDK request leaves the game playable without it;
+  // only YouTube requires its SDK before any game code.
   const gameDistribution =
     build.target === "gamedistribution"
       ? `<script>window.GD_OPTIONS={gameId:${JSON.stringify(gdGameId)},onEvent:function(event){window.dispatchEvent(new CustomEvent("shuriken-siege:gd",{detail:event.name}));}};</script>
-<script id="gamedistribution-jssdk" src="${sdk}"></script>
+<script id="gamedistribution-jssdk" async src="${sdk}"></script>
 `
       : "";
   const youtube = build.target === "youtube" ? `<script src="${sdk}"></script>\n` : "";
-  const other = sdk && !gameDistribution && !youtube ? `<script src="${sdk}"></script>\n` : "";
+  const other =
+    sdk && !gameDistribution && !youtube ? `<script async src="${sdk}"></script>\n` : "";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -299,7 +309,7 @@ ${youtube}<meta charset="utf-8">
 <script>window.__SHURIKEN_SIEGE__=${JSON.stringify(build)};</script>
 ${gameDistribution}${other}</head>
 <body>
-<div id="root"></div>
+<div id="root"><div style="display:flex;height:100dvh;align-items:center;justify-content:center;background:#0f172a;color:#e2e8f0;font:600 18px system-ui,sans-serif;letter-spacing:.05em">Loading Shuriken Siege…</div></div>
 <script type="module" src="main.js"></script>
 </body>
 </html>

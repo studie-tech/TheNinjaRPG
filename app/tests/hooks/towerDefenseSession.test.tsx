@@ -67,6 +67,34 @@ describe("useTowerDefenseSession", () => {
     expect(readSavedRunHead(STORAGE_KEY)).toBeNull();
   });
 
+  it("keeps a host pause through a new run and refuses commands until it ends", async () => {
+    const backend = fakeBackend("token-host");
+    const { result } = renderHook(() => useTowerDefenseSession(backend));
+    act(() => {
+      result.current.setPaused("host", true);
+      result.current.setPaused("player", true);
+    });
+    await act(async () => {
+      await result.current.start(1);
+    });
+    expect(result.current.pauses).toEqual(["host"]);
+    let accepted = true;
+    act(() => {
+      accepted = result.current.act(["quit"]);
+    });
+    expect(accepted).toBe(false);
+    expect(backend.claimRun).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.setPaused("host", false);
+    });
+    await act(async () => {
+      result.current.act(["quit"]);
+      await Promise.resolve();
+    });
+    expect(backend.claimRun).toHaveBeenCalled();
+  });
+
   it("plays a run without a token locally, never saving or claiming it", async () => {
     const backend = fakeBackend(null);
     const { result } = renderHook(() => useTowerDefenseSession(backend));
@@ -107,5 +135,8 @@ describe("useTowerDefenseSession", () => {
     expect(backend.claimRun).toHaveBeenCalledWith(
       expect.objectContaining({ token: "token-2" }),
     );
+    // Settling the claimed run leaves the other build's save alone.
+    expect(result.current.phase).toBe("over");
+    expect(readSavedRunHead(STORAGE_KEY)?.token).toBe("token-old");
   });
 });

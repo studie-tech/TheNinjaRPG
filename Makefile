@@ -128,8 +128,8 @@ build: ensure-env # Build Next.js app
 shuriken-siege: # Build Shuriken Siege portal zips into dist/ (TARGETS, SOURCE, VERSION, GD_GAME_ID optional)
 	@echo "${GREEN}shuriken-siege${RESET}"
 	cd app && node ../scripts/dev-bun.mjs run scripts/build-shuriken-siege.ts \
-		$(if $(TARGETS),--targets $(TARGETS)) $(if $(SOURCE),--source $(SOURCE)) \
-		$(if $(VERSION),--version $(VERSION)) $(if $(GD_GAME_ID),--gd-game-id $(GD_GAME_ID))
+		$(if $(TARGETS),--targets '$(TARGETS)') $(if $(SOURCE),--source '$(SOURCE)') \
+		$(if $(VERSION),--version '$(VERSION)') $(if $(GD_GAME_ID),--gd-game-id '$(GD_GAME_ID)')
 
 .PHONY: bundleanalysis
 bundleanalysis: ensure-env # Build Next.js app with bundle analysis

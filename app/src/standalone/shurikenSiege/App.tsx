@@ -1,5 +1,14 @@
-import { ExternalLink } from "lucide-react";
-import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
+import { ExternalLink, RotateCw } from "lucide-react";
+import {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import {
   ID_ANIMATION_HIT,
@@ -10,6 +19,7 @@ import {
   TD_STAGE_IMAGE_URLS,
   type TdSfx,
 } from "@/drizzle/constants";
+import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import Loader from "@/layout/Loader";
 import { TowerDefenseLobby } from "@/layout/TowerDefenseLobby";
 import { TowerDefensePlayfield } from "@/layout/TowerDefensePlayfield";
@@ -52,20 +62,34 @@ export const ShurikenSiegeApp = () => {
   const [sfxOn, setSfxOn] = useState(() => safeLocalStorageGetItem(SFX_KEY) !== "off");
   const [hostAudio, setHostAudio] = useState(() => portal.hostAudio());
   const [hostPaused, setHostPaused] = useState(false);
-  // The Guard Hall opens once the title has shown and the player's progress has loaded.
-  const splash = !splashShown || !run.isLoaded;
+  const [isPortalReady, setIsPortalReady] = useState(false);
+  /** A commercial break before a run is showing, so Start waits for it. */
+  const [isBreaking, setIsBreaking] = useState(false);
+  // The Guard Hall opens once the title has shown, the player's progress has loaded and
+  // the portal's SDK is ready or known to be missing.
+  const splash = !splashShown || !run.isLoaded || !isPortalReady;
 
   useEffect(() => {
-    void portal.init();
+    let cancelled = false;
+    void portal.init().then(() => {
+      if (!cancelled) setIsPortalReady(true);
+    });
     const timer = setTimeout(() => setSplashShown(true), SPLASH_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [portal]);
+  // When the Guard Hall first opens, the host learns the game is ready and, if it shows a
+  // score, the saved best wave; each claim reports a new best wave after that.
+  const hasOpened = useRef(false);
+  const { bestWave } = run.progress;
   useEffect(() => {
-    if (splash) return;
+    if (splash || hasOpened.current) return;
+    hasOpened.current = true;
     portal.loadingFinished();
-    // A host showing the best score starts from the saved one.
-    portal.sendScore(run.progress.bestWave);
-  }, [portal, run.progress.bestWave, splash]);
+    portal.sendScore(bestWave);
+  }, [bestWave, portal, splash]);
 
   // A host pausing the game holds the run and takes its arena down until it resumes.
   const { setPaused } = run;
@@ -131,15 +155,18 @@ export const ShurikenSiegeApp = () => {
           isGuest={false}
           progress={run.progress}
           saved={run.saved}
-          isStarting={run.isStarting}
+          isStarting={run.isStarting || isBreaking}
           isResuming={run.isResuming}
           isPurchasing={false}
           onStart={(startWave, replaceSaved) => {
+            if (isBreaking) return;
             unlockAudioPlayback();
+            setIsBreaking(true);
             // The break between runs is where a portal may show an ad.
             void portal
               .commercialBreak()
-              .then(() => run.start(startWave, replaceSaved));
+              .then(() => run.start(startWave, replaceSaved))
+              .finally(() => setIsBreaking(false));
           }}
           onResume={() => {
             unlockAudioPlayback();
@@ -155,30 +182,32 @@ export const ShurikenSiegeApp = () => {
 
   return (
     <div className="h-dvh overflow-hidden">
-      <Suspense
-        fallback={
-          <div className="flex h-full items-center justify-center">
-            <Loader explanation="Loading arena..." />
-          </div>
-        }
-      >
-        <TowerDefensePlayfield
-          run={run}
-          Arena={TowerDefenseArena}
-          appearance={appearance}
-          roster={data.roster}
-          hitAsset={data.assets.find((asset) => asset.id === ID_ANIMATION_HIT)}
-          smokeAsset={data.assets.find((asset) => asset.id === ID_ANIMATION_SMOKE)}
-          sfxOn={soundOn}
-          onSound={portal.hostControls ? undefined : setSound}
-          hostControlsFrame={portal.hostControls}
-          suspended={hostPaused}
-          playSound={playSound}
-          isGuest={false}
-          standalone
-          resultsFooter={siteLink && <FullGameInvite link={siteLink} compact />}
-        />
-      </Suspense>
+      <ChunkErrorBoundary fallback={() => <ArenaLoadFailed />}>
+        <Suspense
+          fallback={
+            <div className="flex h-full items-center justify-center">
+              <Loader explanation="Loading arena..." />
+            </div>
+          }
+        >
+          <TowerDefensePlayfield
+            run={run}
+            Arena={TowerDefenseArena}
+            appearance={appearance}
+            roster={data.roster}
+            hitAsset={data.assets.find((asset) => asset.id === ID_ANIMATION_HIT)}
+            smokeAsset={data.assets.find((asset) => asset.id === ID_ANIMATION_SMOKE)}
+            sfxOn={soundOn}
+            onSound={portal.hostControls ? undefined : setSound}
+            hostControlsFrame={portal.hostControls}
+            suspended={hostPaused}
+            playSound={playSound}
+            isGuest={false}
+            standalone
+            resultsFooter={siteLink && <FullGameInvite link={siteLink} compact />}
+          />
+        </Suspense>
+      </ChunkErrorBoundary>
       <Toaster />
     </div>
   );
@@ -220,6 +249,20 @@ const Splash = (props: { onSkip: () => void }) => (
       />
     </div>
   </button>
+);
+
+/**
+ * The arena's code failed to download. A failed dynamic import stays failed for the
+ * page, so recovering means loading the page again; the saved run resumes after it.
+ */
+const ArenaLoadFailed = () => (
+  <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+    <p>The arena could not load. Check your connection and reload to continue.</p>
+    <Button onClick={() => window.location.reload()}>
+      <RotateCw className="h-5 w-5" />
+      Reload
+    </Button>
+  </div>
 );
 
 /** The lobby's page: centred, scrolling, with room for the logo above the Guard Hall. */

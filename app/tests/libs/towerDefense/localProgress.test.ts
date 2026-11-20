@@ -1,10 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { TD_DOJO_INFO } from "@/libs/towerDefense/content";
+import { TD_DOJO_INFO, tdCheckpoints } from "@/libs/towerDefense/content";
 import {
   buyLocalDojoLevel,
   parseLocalProgress,
   settleLocalRun,
   TD_EMPTY_LOCAL_PROGRESS,
+  TD_LOCAL_MAX_WAVE,
 } from "@/libs/towerDefense/localProgress";
 import { createRun, tdDojoCost } from "@/libs/towerDefense/sim";
 
@@ -21,6 +22,18 @@ describe("tower defense local progress", () => {
         }),
       ),
     ).toEqual({ points: 12, bestWave: 0, dojo: { dmg: 2 } });
+  });
+
+  it("caps an edited best wave so its checkpoints stay finite", () => {
+    const progress = parseLocalProgress(
+      JSON.stringify({ points: 7, bestWave: 1e308, dojo: { dmg: 1 } }),
+    );
+    expect(progress).toEqual({
+      points: 7,
+      bestWave: TD_LOCAL_MAX_WAVE,
+      dojo: { dmg: 1 },
+    });
+    expect(tdCheckpoints(progress.bestWave).at(-1)).toBeLessThan(TD_LOCAL_MAX_WAVE);
   });
 
   it("banks a run's scrolls and keeps the best wave", () => {

@@ -25,6 +25,9 @@ describe("bundled media", () => {
     expect(textureImageUrl("https://uploadthing.b-cdn.net/f/abc", 64)).toBe(
       "https://game.test/assets/abc.webp",
     );
+    expect(
+      transformImageUrl("https://uploadthing.b-cdn.net/f/abc?width=64#preview"),
+    ).toBe("https://game.test/assets/abc.webp");
     expect(missing).not.toHaveBeenCalled();
     expect(transformImageUrl("https://uploadthing.b-cdn.net/f/other")).toBe(
       "https://uploadthing.b-cdn.net/f/other",

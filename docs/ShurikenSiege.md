@@ -30,7 +30,10 @@ make shuriken-siege
 ```
 
 This writes one folder and one zip per target to `dist/shuriken-siege/`, for example
-`dist/shuriken-siege/shuriken-siege-web-2026-11-18.zip`. Upload the zip.
+`dist/shuriken-siege/shuriken-siege-web-2026-11-18.zip`. Upload the zip. A build with
+its own `SOURCE` adds it to the name (`shuriken-siege-web-itch-2026-11-18.zip`), and a
+build replaces only the folders and zips of its own targets, so the other targets and
+source variants already in `dist/shuriken-siege/` stay.
 
 The build takes these options:
 
@@ -90,10 +93,12 @@ If an SDK fails to load, for example because of an ad blocker, the game plays wi
 The `youtube` build loads the Playables SDK as the page's first script, before any game
 code, and follows the Playables rules:
 
-- `firstFrameReady()` once the splash is on screen, and `gameReady()` once the Guard Hall
-  is ready to play, never during the splash.
+- `firstFrameReady()` once the page's loading screen is on screen, and `gameReady()`
+  once the Guard Hall is ready to play, never during loading or the splash.
 - Progress is read with `loadData()` before anything is written, and saved only with
-  `saveData()`, which keeps the same progress format as `localStorage`. Unfinished runs are
+  `saveData()`, which keeps the same progress format as `localStorage`. A failed read is
+  tried again; if it keeps failing, the visit plays with its progress in memory and never
+  overwrites the cloud save it could not read. Unfinished runs are
   not kept, so a reload starts in the Guard Hall; the run's scrolls are banked when it ends.
 - `onPause` and `onResume` hold the run and audio and take the arena down, so nothing
   renders while YouTube has paused the game.
@@ -113,7 +118,7 @@ never listens for visibility changes, but a Playables reviewer may ask about it.
 Serve the folder and open it:
 
 ```bash
-python3 -m http.server 18765 --directory dist/shuriken-siege/web
+python3 -m http.server 18765 --directory dist/shuriken-siege/shuriken-siege-web-2026-11-18
 ```
 
 Then play at `http://127.0.0.1:18765/`. Check:

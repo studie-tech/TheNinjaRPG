@@ -129,14 +129,24 @@ const getSharedAudioContext = (): AudioContext | null => {
 /** Resume effect playback during a user gesture, before background notifications arrive. */
 export const unlockAudioPlayback = () => {
   const context = getSharedAudioContext();
-  if (context) void resumeAudioContext(context);
+  if (context && audioHolds.size === 0) void resumeAudioContext(context);
 };
 
-/** Silence effect playback while something else owns the sound, such as a portal's ad. */
-export const holdAudioPlayback = (held: boolean) => {
+/** Why effect playback is silenced; it plays again once no reason holds it. */
+export type AudioHold = "host" | "ad" | "muted";
+const audioHolds = new Set<AudioHold>();
+
+/**
+ * Silence effect playback for one reason, such as a host pause, a portal's ad or the
+ * host's mute, cutting off sounds already playing. Releasing a reason resumes playback
+ * only once no other reason still holds it.
+ */
+export const holdAudioPlayback = (reason: AudioHold, held: boolean) => {
+  if (held) audioHolds.add(reason);
+  else audioHolds.delete(reason);
   const context = getSharedAudioContext();
   if (!context) return;
-  if (held) void context.suspend().catch(() => undefined);
+  if (audioHolds.size > 0) void context.suspend().catch(() => undefined);
   else void resumeAudioContext(context);
 };
 
@@ -251,6 +261,8 @@ export const playPreloadedAudio = async (
     }
   }
 
+  // A held context stays silent, including for sounds that waited for their buffer.
+  if (audioHolds.size > 0) return;
   if (ctx && buffer) {
     try {
       await resumeAudioContext(ctx);

@@ -15,6 +15,12 @@ export interface TdLocalProgress {
   dojo: TdDojoLevels;
 }
 
+/**
+ * The furthest best wave stored progress may claim. Runs end at `TD_MAX_TICKS`, far short
+ * of it; an edited save above it would otherwise unlock checkpoints without end.
+ */
+export const TD_LOCAL_MAX_WAVE = 100_000;
+
 export const TD_EMPTY_LOCAL_PROGRESS: TdLocalProgress = {
   points: 0,
   bestWave: 0,
@@ -37,7 +43,7 @@ export const parseLocalProgress = (raw: string | null): TdLocalProgress => {
       }
     return {
       points: wholeOrZero(points),
-      bestWave: wholeOrZero(bestWave),
+      bestWave: Math.min(wholeOrZero(bestWave), TD_LOCAL_MAX_WAVE),
       dojo: levels,
     };
   } catch {

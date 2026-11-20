@@ -303,7 +303,11 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       claimed: result.claimed,
       retryable: result.retryable,
       reloadRequired: result.reloadRequired,
-      message: result.message,
+      // Another tab may have taken the save over while the claim was in flight.
+      message:
+        result.message === RETRY_SAVED_MESSAGE && current.unsaved
+          ? RETRY_UNSAVED_MESSAGE
+          : result.message,
     });
     setPhase("over");
   }, [claimRun, forget, persist, refreshSaved, runs]);
@@ -347,7 +351,8 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       setUnsaved(false);
       setOutcome(null);
       setSpeedState(1);
-      setPauses([]);
+      // The player's own pauses end with the old run; a host's pause holds until it resumes.
+      setPauses((current) => current.filter((reason) => reason === "host"));
       setPhase("playing");
       setRunId(id);
       publish(session.current);
@@ -408,6 +413,15 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
   /** Resume the saved run by replaying its log to the saved tick, a slice at a time. */
   const resume = useCallback(() => {
     const stored = runs.load();
+    // Another tab may have replaced the save the lobby shows; the player chooses again.
+    if (stored && !isSameSavedRun(stored.head, saved)) {
+      refreshSaved();
+      showMutationToast({
+        success: false,
+        message: "Your saved run changed in another tab. Check it before resuming.",
+      });
+      return;
+    }
     const actions = stored && decodeTdActions(stored.text);
     if (!stored || !actions) {
       showMutationToast({
@@ -457,13 +471,15 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       begin(head.config, head.token, { state: result.state, log });
     };
     step();
-  }, [begin, forget, refreshSaved, runs]);
+  }, [begin, forget, refreshSaved, runs, saved]);
 
   /** Apply a player action at the current tick and record it if the run accepted it. */
   const act = useCallback(
     (command: TdCommand) => {
       const current = session.current;
       if (!current || current.state.over) return false;
+      // A host holding the run takes every command, retreat included, until it resumes.
+      if (pauses.includes("host")) return false;
       if (paused && PAUSED_REFUSED.has(command[0])) return false;
       if (
         current.log.count >= TD_MAX_ACTIONS - 1 ||
@@ -486,7 +502,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       else persist();
       return true;
     },
-    [claim, paused, persist, publish, retreat],
+    [claim, paused, pauses, persist, publish, retreat],
   );
 
   /** Advance by real elapsed seconds at the chosen speed; called every frame. */

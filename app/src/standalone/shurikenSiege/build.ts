@@ -49,12 +49,34 @@ export const readBuild = (): ShurikenSiegeBuild =>
 
 let data: ShurikenSiegeData | null = null;
 
+/** How long the data file may take before the page asks the player to reload. */
+const DATA_TIMEOUT_MS = 45_000;
+
 /** Load the data file shipped beside the page; done once before the game renders. */
 export const loadBuildData = async () => {
-  const response = await fetch("data.json");
+  const response = await fetch("data.json", {
+    signal: AbortSignal.timeout?.(DATA_TIMEOUT_MS),
+  });
   if (!response.ok) throw new Error(`Game data failed to load: ${response.status}`);
-  data = (await response.json()) as ShurikenSiegeData;
+  const value: unknown = await response.json();
+  if (!isBuildData(value)) throw new Error("Game data is malformed");
+  data = value;
   return data;
+};
+
+/** The data file's shape as far as the game reads it before rendering. */
+const isBuildData = (value: unknown): value is ShurikenSiegeData => {
+  if (!value || typeof value !== "object") return false;
+  const { roster, assets, lpcCatalog, media } = value as Record<string, unknown>;
+  return (
+    Array.isArray(roster) &&
+    Array.isArray(assets) &&
+    !!lpcCatalog &&
+    typeof lpcCatalog === "object" &&
+    !!media &&
+    typeof media === "object" &&
+    Object.values(media).every((file) => typeof file === "string")
+  );
 };
 
 /** The loaded game data; only read after `loadBuildData` resolved. */

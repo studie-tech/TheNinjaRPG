@@ -4,8 +4,10 @@ import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storag
 
 /** Where the player's progress is kept: the device, or the host's own cloud save. */
 export interface ShurikenSiegeStore {
+  /** The saved progress, or null for none; rejects when it could not be read. */
   read: () => Promise<string | null>;
-  write: (value: string) => Promise<void>;
+  /** Save progress; resolves false when it was not kept. */
+  write: (value: string) => Promise<boolean>;
   /** Whether unfinished runs may be kept on the device to resume after a reload. */
   saveRuns: boolean;
 }
@@ -16,8 +18,9 @@ export interface ShurikenSiegeStore {
  * or muting it. Builds without a portal SDK do nothing and keep progress on the device.
  */
 export interface ShurikenSiegePortal {
+  /** Start the portal's SDK; resolves once it is ready or known to be unavailable. */
   init: () => Promise<void>;
-  /** The game is ready to play: the splash has given way to the Guard Hall. */
+  /** The game is ready to play: the splash has given way to the Guard Hall. Sent once. */
   loadingFinished: () => void;
   gameplayStart: () => void;
   gameplayStop: () => void;
@@ -78,6 +81,13 @@ export const GAME_DISTRIBUTION_EVENT = "shuriken-siege:gd";
 const PROGRESS_KEY = "shurikenSiege:progress";
 /** How long the game waits for a portal's SDK, whose loader script fetches it later. */
 const SDK_WAIT_MS = 6000;
+/** Tries at reading YouTube's cloud save before the visit plays without it. */
+const CLOUD_LOAD_ATTEMPTS = 3;
+const CLOUD_RETRY_MS = 800;
+
+/** The Playables SDK when the page runs inside YouTube; outside it the SDK does nothing. */
+export const activePlayables = (build: ShurikenSiegeBuild) =>
+  build.target === "youtube" && window.ytgame?.IN_PLAYABLES_ENV ? window.ytgame : null;
 
 /** The SDK object once its script has defined it, or null if it never arrives. */
 const waitFor = async <T>(read: () => T | undefined): Promise<T | null> => {
@@ -93,35 +103,50 @@ const waitFor = async <T>(read: () => T | undefined): Promise<T | null> => {
 /** Progress in the device's local storage, which also keeps unfinished runs. */
 export const deviceStore: ShurikenSiegeStore = {
   read: async () => safeLocalStorageGetItem(PROGRESS_KEY),
-  write: async (value) => {
-    safeLocalStorageSetItem(PROGRESS_KEY, value);
-  },
+  write: async (value) => safeLocalStorageSetItem(PROGRESS_KEY, value),
   saveRuns: true,
 };
 
 /**
- * YouTube's cloud save: the only place a Playable may keep progress. The first read waits
- * for its data, and no write goes out before that read has finished.
+ * YouTube's cloud save: the only place a Playable may keep progress. A read that fails is
+ * tried again, and no write goes out until a read has succeeded, so a save the game never
+ * saw is not overwritten.
  */
 const playablesStore = (yt: YouTubePlayables): ShurikenSiegeStore => {
   let loaded: Promise<string | null> | null = null;
-  let latest: string | null = null;
+  const load = async () => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const data = await yt.game.loadData();
+        return data || null;
+      } catch (error) {
+        if (attempt >= CLOUD_LOAD_ATTEMPTS) throw error;
+        await new Promise((resolve) => setTimeout(resolve, CLOUD_RETRY_MS * attempt));
+      }
+    }
+  };
   const read = () => {
-    loaded ??= yt.game.loadData().then(
-      (data) => {
-        latest = data || null;
-        return latest;
-      },
-      () => null,
-    );
-    return loaded.then(() => latest);
+    loaded ??= load().catch((error: unknown) => {
+      // A later read tries again rather than treating the failure as an empty save.
+      loaded = null;
+      throw error;
+    });
+    return loaded;
   };
   return {
     read,
     write: async (value) => {
-      await read();
-      latest = value;
-      await yt.game.saveData(value).catch(() => undefined);
+      const isLoaded = await read().then(
+        () => true,
+        () => false,
+      );
+      if (!isLoaded) return false;
+      const isSaved = await yt.game.saveData(value).then(
+        () => true,
+        () => false,
+      );
+      if (isSaved) loaded = Promise.resolve(value);
+      return isSaved;
     },
     saveRuns: false,
   };
@@ -140,13 +165,13 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
   };
   let poki: PokiSdk | null = null;
   let gd: GameDistributionSdk | null = null;
-  // The Playables SDK is loaded before the game; it is a no-op outside YouTube.
-  const yt =
-    target === "youtube" && window.ytgame?.IN_PLAYABLES_ENV ? window.ytgame : null;
+  // The Playables SDK is loaded before the game.
+  const yt = activePlayables(build);
   // Portals reject repeated start or stop events, so only changes are reported.
   let playing = false;
+  let announced = false;
 
-  const init = async () => {
+  const setup = async () => {
     if (target === "poki") {
       const sdk = await waitFor(() => window.PokiSDK);
       if (sdk && (await succeeds(sdk.init()))) poki = sdk;
@@ -155,58 +180,68 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
       window.addEventListener(GAME_DISTRIBUTION_EVENT, (event) => {
         const name = (event as CustomEvent<string>).detail;
         if (name === "SDK_GAME_PAUSE") {
-          holdAudioPlayback(true);
+          holdAudioPlayback("ad", true);
           pauseHost(true);
         } else if (name === "SDK_GAME_START") {
-          holdAudioPlayback(false);
+          holdAudioPlayback("ad", false);
           pauseHost(false);
         }
       });
       gd = await waitFor(() => (window.gdsdk?.showAd ? window.gdsdk : undefined));
     } else if (yt) {
-      // The splash is on screen, telling the player the game is loading.
-      yt.game.firstFrameReady();
       yt.system.onPause(() => {
-        holdAudioPlayback(true);
+        holdAudioPlayback("host", true);
         pauseHost(true);
       });
       yt.system.onResume(() => {
-        holdAudioPlayback(false);
+        holdAudioPlayback("host", false);
         pauseHost(false);
       });
+      // YouTube's mute also silences sounds already playing.
+      holdAudioPlayback("muted", !yt.system.isAudioEnabled());
       yt.system.onAudioEnabledChange((enabled) => {
+        holdAudioPlayback("muted", !enabled);
         for (const listener of audioListeners) listener(enabled);
       });
     }
   };
+  let initialized: Promise<void> | null = null;
+  const init = () => {
+    initialized ??= setup();
+    return initialized;
+  };
 
   const commercialBreak = async () => {
+    // The first run waits for the SDK, so its break is not skipped.
+    await init();
     if (poki) {
       await poki
-        .commercialBreak(() => holdAudioPlayback(true))
+        .commercialBreak(() => holdAudioPlayback("ad", true))
         .catch(() => undefined)
-        .finally(() => holdAudioPlayback(false));
+        .finally(() => holdAudioPlayback("ad", false));
     } else if (gd) {
       await gd.showAd().catch(() => undefined);
     } else if (yt) {
-      holdAudioPlayback(true);
+      holdAudioPlayback("ad", true);
       await yt.ads
         .requestInterstitialAd()
         .catch(() => undefined)
-        .finally(() => holdAudioPlayback(false));
+        .finally(() => holdAudioPlayback("ad", false));
     }
   };
 
   return {
     init,
     loadingFinished: () => {
+      if (announced) return;
+      announced = true;
       poki?.gameLoadingFinished();
       yt?.game.gameReady();
     },
     gameplayStart: () => {
       if (playing || !poki) return;
       playing = true;
-      poki?.gameplayStart();
+      poki.gameplayStart();
     },
     gameplayStop: () => {
       if (!playing) return;
@@ -228,7 +263,7 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
       audioListeners.add(listener);
       return () => audioListeners.delete(listener);
     },
-    hostControls: target === "youtube",
+    hostControls: yt !== null,
     store: yt ? playablesStore(yt) : deviceStore,
   };
 };
