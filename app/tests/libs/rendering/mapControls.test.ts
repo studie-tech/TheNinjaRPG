@@ -2,7 +2,12 @@ import { describe, expect, it } from "bun:test";
 import { createMapControls } from "@/libs/rendering/mapControls";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 
-const setup = (zoom = true, pan = false, pointerType = "touch") => {
+const setup = (
+  zoom = true,
+  pan = false,
+  pointerType = "touch",
+  hoverChanged?: (x: number, y: number) => boolean,
+) => {
   const canvas = document.createElement("canvas");
   canvas.getBoundingClientRect = () => new DOMRect(0, 0, 390, 390);
   const listeners = new window.AbortController();
@@ -10,14 +15,31 @@ const setup = (zoom = true, pan = false, pointerType = "touch") => {
     clients: { x: number; y: number }[] = [],
     zooms: number[] = [],
     pans: number[][] = [];
-  let enabled = true;
+  let enabled = true,
+    redraws = 0;
+  const invalidate = () => {
+    redraws++;
+  };
   const controls = createMapControls(
     {
       canvas,
       renderer: { width: 390, height: 390 },
-      listen: (type: string, callback: EventListener) =>
-        canvas.addEventListener(type, callback, { signal: listeners.signal }),
-    } as GameRenderer,
+      invalidate,
+      // Mirrors the runtime: input redraws after its listener unless it opts out.
+      listen: (
+        type: string,
+        callback: EventListener,
+        { invalidate: redraw = true }: { invalidate?: boolean } = {},
+      ) =>
+        canvas.addEventListener(
+          type,
+          (event) => {
+            callback(event);
+            if (redraw) invalidate();
+          },
+          { signal: listeners.signal },
+        ),
+    } as unknown as GameRenderer,
     {
       enabled: () => enabled,
       tap: (x, y, client) => {
@@ -26,6 +48,7 @@ const setup = (zoom = true, pan = false, pointerType = "touch") => {
       },
       ...(zoom ? { zoom: (factor: number) => zooms.push(factor) } : {}),
       ...(pan ? { pan: (dx: number, dy: number) => pans.push([dx, dy]) } : {}),
+      ...(hoverChanged ? { hoverChanged } : {}),
     },
   );
   const event = (type: string, id: number, x: number, y: number, button = 0) => {
@@ -44,6 +67,7 @@ const setup = (zoom = true, pan = false, pointerType = "touch") => {
     pans,
     controls,
     event,
+    redraws: () => redraws,
     disable: () => {
       enabled = false;
     },
@@ -187,6 +211,45 @@ describe("map gesture ownership", () => {
       scene.event("pointerdown", 1, 100, 100);
       scene.event("pointerup", 1, 100, 100);
       expect(scene.taps).toEqual([]);
+    } finally {
+      scene.dispose();
+    }
+  });
+  it("redraws a hover only when the scene reports a new target, and every drag", () => {
+    const targets: number[][] = [];
+    let target = 0;
+    const scene = setup(true, true, "mouse", (x, y) => {
+      targets.push([x, y]);
+      return Math.floor(x / 50) !== target;
+    });
+    try {
+      scene.event("pointermove", 1, 10, 10);
+      scene.event("pointermove", 1, 20, 10);
+      expect(targets).toEqual([
+        [10, 10],
+        [20, 10],
+      ]);
+      expect(scene.redraws()).toBe(0);
+      scene.event("pointermove", 1, 60, 10);
+      expect(scene.redraws()).toBe(1);
+      target = 1;
+      scene.event("pointerdown", 1, 60, 10);
+      const pressed = scene.redraws();
+      scene.event("pointermove", 1, 62, 10);
+      scene.event("pointermove", 1, 90, 10);
+      expect(scene.redraws()).toBe(pressed + 2);
+      expect(targets).toHaveLength(3);
+      expect(scene.pans).toEqual([[30, 0]]);
+    } finally {
+      scene.dispose();
+    }
+  });
+  it("redraws every pointer move without a hover check", () => {
+    const scene = setup(true, true, "mouse");
+    try {
+      scene.event("pointermove", 1, 10, 10);
+      scene.event("pointermove", 1, 11, 10);
+      expect(scene.redraws()).toBe(2);
     } finally {
       scene.dispose();
     }

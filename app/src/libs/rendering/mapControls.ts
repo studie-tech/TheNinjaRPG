@@ -5,6 +5,8 @@ import type { GameRenderer } from "@/libs/rendering/runtime";
  * client coordinates retained for DOM overlays. Pan receives renderer-pixel deltas;
  * zoom receives a multiplicative factor. Omitting zoom leaves wheel scrolling available.
  * Drags/pinches suppress taps, including the final finger left after a pinch.
+ * With `hoverChanged`, a pointer moving without a pressed contact redraws only when the
+ * scene reports that the target under it differs from the one drawn.
  */
 export const createMapControls = (
   game: GameRenderer,
@@ -13,6 +15,7 @@ export const createMapControls = (
     zoom?: (factor: number) => void;
     pan?: (dx: number, dy: number) => void;
     tap: (x: number, y: number, client: { x: number; y: number }) => void;
+    hoverChanged?: (x: number, y: number) => boolean;
   },
 ) => {
   const contacts = new Map<
@@ -50,24 +53,32 @@ export const createMapControls = (
     if (contacts.size > 1) multi = true;
     if (event.isTrusted) game.canvas.setPointerCapture(event.pointerId);
   });
-  game.listen("pointermove", (event) => {
-    const p = point(event);
-    pointer = p;
-    revision++;
-    const contact = contacts.get(event.pointerId);
-    if (!contact) return;
-    const panX = contact.moved ? contact.x : contact.startX,
-      panY = contact.moved ? contact.y : contact.startY;
-    const before = distance();
-    contact.x = p.x;
-    contact.y = p.y;
-    contact.moved ||= Math.hypot(p.x - contact.startX, p.y - contact.startY) > 10;
-    const after = distance();
-    if (options.enabled() && contacts.size > 1 && before > 1 && after > 1)
-      options.zoom?.(after / before);
-    else if (options.enabled() && !multi && contact.moved)
-      options.pan?.(p.x - panX, p.y - panY);
-  });
+  game.listen(
+    "pointermove",
+    (event) => {
+      const p = point(event);
+      pointer = p;
+      revision++;
+      const contact = contacts.get(event.pointerId);
+      if (!contact) {
+        if (options.hoverChanged?.(p.x, p.y) ?? true) game.invalidate();
+        return;
+      }
+      game.invalidate();
+      const panX = contact.moved ? contact.x : contact.startX,
+        panY = contact.moved ? contact.y : contact.startY;
+      const before = distance();
+      contact.x = p.x;
+      contact.y = p.y;
+      contact.moved ||= Math.hypot(p.x - contact.startX, p.y - contact.startY) > 10;
+      const after = distance();
+      if (options.enabled() && contacts.size > 1 && before > 1 && after > 1)
+        options.zoom?.(after / before);
+      else if (options.enabled() && !multi && contact.moved)
+        options.pan?.(p.x - panX, p.y - panY);
+    },
+    { invalidate: false },
+  );
   game.listen("pointerup", (event) => {
     const contact = contacts.get(event.pointerId),
       p = point(event);

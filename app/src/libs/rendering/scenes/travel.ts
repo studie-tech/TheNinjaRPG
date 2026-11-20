@@ -321,7 +321,8 @@ export const createTravelScene = async (options: {
     let hasManualCamera = false;
     let actorsDirty = true,
       lastPath: string | null = null,
-      hover = "";
+      hover = "",
+      hoverTarget = "";
     let lastActorSnapshot: TravelSnapshot | null = null;
     let lastActorSyncAt = Number.NEGATIVE_INFINITY;
     let lastShowAmbient: boolean | undefined;
@@ -397,6 +398,9 @@ export const createTravelScene = async (options: {
         return snapshot.enabled && sectors.has(snapshot.sector);
       },
       tap: (x, y, client) => options.onTap(pick(x, y), client),
+      // The frame draws the hover highlight, cursor and route preview of this target.
+      hoverChanged: (x, y) =>
+        (options.getSnapshot().enabled ? pickTarget(pick(x, y)) : "") !== hoverTarget,
       pan: (dx, dy) => {
         if (!camera) return;
         hasManualCamera = true;
@@ -1093,6 +1097,7 @@ export const createTravelScene = async (options: {
       const pointer = controls.pointer();
       let hoverTile: TravelPick["tile"] = null;
       if (!pointer || !snapshot.enabled || controls.dragging()) {
+        hoverTarget = "";
         actors.hover(null);
         if (hover !== "") {
           hover = "";
@@ -1102,6 +1107,7 @@ export const createTravelScene = async (options: {
         if (game.canvas.style.cursor !== cursor) game.canvas.style.cursor = cursor;
       } else {
         const hit = pick(pointer.x, pointer.y);
+        hoverTarget = pickTarget(hit);
         hoverTile = hit.tile;
         actors.hover(hit.actor?.key ?? null);
         const hoverKey = `${hit.structureId}:${hit.locationId}`;
@@ -1346,6 +1352,10 @@ const alongWalk = (
   const t = (along - first) / second;
   return { x: via.x + (to.x - via.x) * t, y: via.y + (to.y - via.y) * t };
 };
+
+/** Identify everything a frame draws for the pointer's target: tile, actor and art. */
+const pickTarget = ({ tile, actor, structureId, locationId }: TravelPick) =>
+  `${tile?.sector}:${tile?.hex.col},${tile?.hex.row}:${actor?.key}:${structureId}:${locationId}`;
 
 /** Capture ref-driven changes that need a frame even when decorative animation and lighting are disabled. */
 const travelFrameInputs = (snapshot: TravelSnapshot) =>

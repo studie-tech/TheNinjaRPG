@@ -60,19 +60,320 @@ import { isBetweenPyramidBattles } from "@/libs/questRun";
 import { calcCovertTrainingFinishAt } from "@/libs/stealth";
 import { regenerationBuffs } from "@/libs/titles";
 import { masteryTrainingEndsAt } from "@/libs/train";
+import type { UserWithRelations } from "@/routers/profile";
 import { formatClockTime, getGameTime } from "@/utils/time";
-import {
-  selectUserWithoutPosition,
-  userBattleAtom,
-  useUserDataSelector,
-} from "@/utils/UserContext";
+import { userBattleAtom, useUserDataSelector } from "@/utils/UserContext";
 
+/**
+ * Profile sidebar. Each section selects only the profile fields it displays, so a profile
+ * write re-renders the sections showing a changed value.
+ */
 const MenuBoxProfile: React.FC = () => {
-  // State
-  const { data: userData, timeDiff } = useUserDataSelector(selectUserWithoutPosition);
+  const { data: identity } = useUserDataSelector(selectIdentity);
+  const { location } = useGameMenu();
+  const hasLocation = !!location;
+
+  return (
+    <>
+      <div className="flex-col items-center justify-center">
+        <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
+          <Link href="/profile">
+            <AvatarImage
+              href={identity?.avatar}
+              alt={identity?.username}
+              className="theme-player-avatar"
+              size={100}
+              hover_effect={true}
+              priority
+            />
+          </Link>
+
+          <div className="pt-5">
+            <ProfilePools />
+            <ProfileLevel />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <hr />
+          <ProfileStanding hasLocation={hasLocation} />
+          <p suppressHydrationWarning>
+            <b>Time: </b> <GameClock />
+          </p>
+        </div>
+        <ProfileBattleEffects />
+        <hr className="my-2" />
+        <div className="flex flex-col gap-1">
+          <ProfileMoney hasLocation={hasLocation} />
+          <ProfileTimers />
+          <ProfileDailyActivities />
+          <ProfileReputation />
+        </div>
+      </div>
+      <hr className="my-2" />
+      <div className="flex justify-center px-2 pt-2 align-center">
+        {SOCIAL_LINKS.map((social) => {
+          return (
+            <a
+              target="_blank"
+              href={social.url}
+              key={social.url}
+              className="hover:opacity-80"
+              rel="noopener"
+            >
+              <Image src={social.image} width={64} height={64} alt={social.alt}></Image>
+            </a>
+          );
+        })}
+      </div>
+    </>
+  );
+};
+
+export default MenuBoxProfile;
+
+/** Health, chakra, stamina and energy, with combat values while the player fights. */
+const ProfilePools: React.FC = () => {
+  const { data: userData, timeDiff } = useUserDataSelector(selectPools);
+  const battle = useAtomValue(userBattleAtom);
+  const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
+  // Checkpoints display the carried pools without the generic hidden BATTLE bars.
+  const hasBattlePools = !!battleUser || !!userData?.isBetweenPyramidBattles;
+  const passiveRegeneration =
+    userData?.regenerationWithoutTimedBuffs ?? userData?.regeneration;
+  const poolRegenerationBuffs = regenerationBuffs({
+    raidBuffs: userData?.raidBuffs,
+    titles: userData?.titles,
+  });
+
+  // Calculate effective pool values with fallbacks (effectivePools → battleUser → userData)
+  const pools = useEffectivePools({
+    battleUser,
+    usersEffects: battle?.usersEffects,
+    userData,
+  });
+
+  return (
+    <>
+      <PoolStatusBars
+        pools={pools}
+        remountOnChange
+        lastRegenAt={userData?.regenAt}
+        regen={hasBattlePools ? 0 : passiveRegeneration}
+        timedBuffs={hasBattlePools ? undefined : poolRegenerationBuffs}
+        status={hasBattlePools ? "AWAKE" : userData?.status}
+        timeDiff={timeDiff}
+      />
+      <StatusBar
+        title="EP"
+        tooltip="Energy continues recovering during combat and is credited when you leave."
+        combatRegenerationPeriods={
+          userData?.status === "BATTLE" && battle?.id === userData.battleId
+            ? (battle.extraState.energyRegenerationPeriods?.[userData.userId] ?? [])
+            : undefined
+        }
+        timedBuffs={poolRegenerationBuffs}
+        color="bg-violet-500"
+        showText
+        lastRegenAt={userData?.regenAt}
+        regen={
+          userData?.status === "BATTLE" && battle?.id === userData.battleId
+            ? (battle?.extraState.energyRegeneration?.[userData.userId] ??
+              userData.regeneration)
+            : passiveRegeneration
+        }
+        status={
+          userData && ["BATTLE", "HOSPITALIZED", "TRAVEL"].includes(userData.status)
+            ? "AWAKE"
+            : userData?.status
+        }
+        current={userData?.curEnergy}
+        total={userData?.maxEnergy}
+        timeDiff={timeDiff}
+      />
+    </>
+  );
+};
+
+/** Experience toward the next level, the level-up action or Elite Jonin milestones. */
+const ProfileLevel: React.FC = () => {
+  const { data: userData } = useUserDataSelector(selectLevel);
+  if (userData?.rank === "ELITE JONIN")
+    return (
+      <Link href="/academy" className="block text-center text-sm underline">
+        Milestones: {Math.max(0, userData.level - MAX_EXPERIENCE_LEVEL)}/
+        {MAX_PLAYER_LEVEL - MAX_EXPERIENCE_LEVEL}
+      </Link>
+    );
+  if (userData?.canLevelUp) return <LevelUpBtn />;
+  return (
+    <>
+      <StatusBar
+        title="XP"
+        tooltip="Experience required for next level"
+        color="bg-yellow-500"
+        showText={true}
+        regen={0}
+        status={userData?.status}
+        current={userData?.earnedExperience ?? 0}
+        total={userData?.requiredExperience}
+      />
+      {userData && userData.unassignedExperience > 0 && (
+        <Link
+          href="/profile/experience"
+          className="block text-center text-xs underline"
+        >
+          {userData.unassignedExperience.toLocaleString()} unassigned XP, assign toward
+          your next level
+        </Link>
+      )}
+    </>
+  );
+};
+
+/** Status, village and PvP bracket. */
+const ProfileStanding: React.FC<{ hasLocation: boolean }> = ({ hasLocation }) => {
+  const { data: userData } = useUserDataSelector(selectStanding);
+  return (
+    <>
+      <p className="mt-2 flex flex-row">
+        <b>Status: </b>{" "}
+        <span className="ml-1">
+          <StatusLink
+            status={userData?.status ?? "UNKNOWN"}
+            hasLocation={hasLocation}
+          />
+        </span>
+      </p>
+      {userData?.villageName && (
+        <p className="flex flex-row">
+          <b>Village: </b>{" "}
+          <Link href="/village" className="ml-1 hover:text-orange-500">
+            {userData.villageName}
+          </Link>
+        </p>
+      )}
+      {userData && (
+        <TooltipProvider delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="cursor-default">
+                <b>Bracket: </b>
+                {userData.bracket}/{MAX_PVP_BRACKET}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent>
+              {userData.isEliteJonin ? (
+                <>
+                  Elite Jonin use bracket {ELITE_JONIN_BRACKET}. Your fights are limited
+                  to brackets {ELITE_JONIN_BRACKET - 1} and {ELITE_JONIN_BRACKET},
+                  including during wars or when immunity is lifted.
+                </>
+              ) : (
+                <>
+                  PvP bracket based on experience (Academy & Genin are bracket 0). You
+                  can freely attack players in your bracket, one bracket below, or
+                  higher. Attacking Elite Jonin requires bracket{" "}
+                  {ELITE_JONIN_BRACKET - 1} or {ELITE_JONIN_BRACKET}. Other players more
+                  than one bracket below are protected unless their immunity is lifted
+                  or both sides are active war participants.
+                </>
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </>
+  );
+};
+
+/** Status label linked to the page where the player can act on it. */
+const StatusLink: React.FC<{
+  status: (typeof UserStatuses)[number] | "UNKNOWN";
+  hasLocation: boolean;
+}> = ({ status, hasLocation }) => {
+  switch (status) {
+    case "BATTLE":
+      return (
+        <Link href="/combat" className="flex flex-row hover:text-orange-500">
+          BATTLE <ShieldCheck className="ml-1 h-6 w-6 hover:text-orange-500" />
+        </Link>
+      );
+    case "ASLEEP":
+      return (
+        <Link href="/home" className="flex flex-row hover:text-orange-500">
+          ASLEEP <Moon className="ml-1 h-6 w-6 hover:text-orange-500" />
+        </Link>
+      );
+    case "QUEUED":
+      return (
+        <span className="flex flex-row hover:text-orange-500">
+          QUEUED <Swords className="ml-1 h-6 w-6 hover:text-orange-500" />
+        </span>
+      );
+    case "AWAKE":
+      if (hasLocation) {
+        return (
+          <Link href="/home" className="flex flex-row hover:text-orange-500">
+            AWAKE <Sun className="ml-1 h-6 w-6 hover:text-orange-500" />
+          </Link>
+        );
+      } else {
+        return <span>{status}</span>;
+      }
+    default:
+      return <span>{status}</span>;
+  }
+};
+
+/** Effects active on the player in the current battle. */
+const ProfileBattleEffects: React.FC = () => {
+  const { data: userId } = useUserDataSelector(selectUserId);
+  const battle = useAtomValue(userBattleAtom);
+  if (!battle?.usersEffects || !userId) return null;
+  const battleUser = battle.usersState.find((u) => u.userId === userId);
+  return (
+    <>
+      <hr className="my-2" />
+      <ul className="italic">
+        <VisualizeEffects
+          effects={battle.usersEffects}
+          userId={userId}
+          diffuseDamage={battleUser?.diffuseDamage}
+        />
+      </ul>
+    </>
+  );
+};
+
+/** Money on hand, linked to the bank inside a location. */
+const ProfileMoney: React.FC<{ hasLocation: boolean }> = ({ hasLocation }) => {
+  const { data: money } = useUserDataSelector(selectMoney);
+  return (
+    <TooltipProvider delayDuration={50}>
+      <Tooltip>
+        <TooltipTrigger className="w-full">
+          <Link
+            href={hasLocation ? "/bank" : "/profile"}
+            className="hover:text-orange-500"
+          >
+            <div className="flex flex-row items-center">
+              <p className="mr-3 text-xl">両</p>
+              {money?.toLocaleString() ?? "??"}
+            </div>
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent>Money on hand</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
+/** Meals, immunities and every running training or crafting countdown. */
+const ProfileTimers: React.FC = () => {
+  const { data: userData, timeDiff } = useUserDataSelector(selectTimers);
   const [now, setNow] = useState(Date.now);
   const refreshTime = () => setNow(Date.now());
-  const battle = useAtomValue(userBattleAtom);
   const utils = api.useUtils();
 
   const { data: sidebarTimers } = api.profile.getSidebarTimers.useQuery(undefined, {
@@ -103,9 +404,6 @@ const MenuBoxProfile: React.FC = () => {
     ]);
   };
 
-  // Get location of user
-  const { location } = useGameMenu();
-
   const immunitySecsLeft = useSecondsUntil(userData?.immunityUntil, now, timeDiff);
   const bracketImmunitySecsLeft = useSecondsUntil(
     userData?.bracketImmunityLiftedUntil,
@@ -118,470 +416,235 @@ const MenuBoxProfile: React.FC = () => {
     timeDiff,
   );
 
-  // Battle user state
-  const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
-  // Checkpoints display the carried pools without the generic hidden BATTLE bars.
-  const hasBattlePools = !!battleUser || isBetweenPyramidBattles(userData);
-  const passiveRegeneration =
-    userData?.regenerationWithoutTimedBuffs ?? userData?.regeneration;
-  const poolRegenerationBuffs = regenerationBuffs({
-    raidBuffs: userData?.raidBuffs,
-    titles: userData?.titles,
-  });
-
-  // Calculate effective pool values with fallbacks (effectivePools → battleUser → userData)
-  const pools = useEffectivePools({
-    battleUser,
-    usersEffects: battle?.usersEffects,
-    userData,
-  });
-
-  // Status link
-  const statusLink = (status: (typeof UserStatuses)[number] | "UNKNOWN") => {
-    switch (status) {
-      case "BATTLE":
-        return (
-          <Link href="/combat" className="flex flex-row hover:text-orange-500">
-            BATTLE <ShieldCheck className="ml-1 h-6 w-6 hover:text-orange-500" />
-          </Link>
-        );
-      case "ASLEEP":
-        return (
-          <Link href="/home" className="flex flex-row hover:text-orange-500">
-            ASLEEP <Moon className="ml-1 h-6 w-6 hover:text-orange-500" />
-          </Link>
-        );
-      case "QUEUED":
-        return (
-          <span className="flex flex-row hover:text-orange-500">
-            QUEUED <Swords className="ml-1 h-6 w-6 hover:text-orange-500" />
-          </span>
-        );
-      case "AWAKE":
-        if (location) {
-          return (
-            <Link href="/home" className="flex flex-row hover:text-orange-500">
-              AWAKE <Sun className="ml-1 h-6 w-6 hover:text-orange-500" />
-            </Link>
-          );
-        } else {
-          return <span>{status}</span>;
-        }
-      default:
-        return <span>{status}</span>;
-    }
-  };
-
-  const levelExperience = userData && levelExperienceProgress(userData);
-  const canLevelUp = !!userData && !levelUpBlockMessage(userData);
-  const unassignedExperience = userData ? unassignedExperienceTowardLevel(userData) : 0;
-
   return (
     <>
-      <div className="flex-col items-center justify-center">
-        <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
-          <Link href="/profile">
-            <AvatarImage
-              href={userData?.avatar}
-              alt={userData?.username}
-              className="theme-player-avatar"
-              size={100}
-              hover_effect={true}
-              priority
-            />
-          </Link>
-
-          <div className="pt-5">
-            <PoolStatusBars
-              pools={pools}
-              remountOnChange
-              lastRegenAt={userData?.regenAt}
-              regen={hasBattlePools ? 0 : passiveRegeneration}
-              timedBuffs={hasBattlePools ? undefined : poolRegenerationBuffs}
-              status={hasBattlePools ? "AWAKE" : userData?.status}
-              timeDiff={timeDiff}
-            />
-            <StatusBar
-              title="EP"
-              tooltip="Energy continues recovering during combat and is credited when you leave."
-              combatRegenerationPeriods={
-                userData?.status === "BATTLE" && battle?.id === userData.battleId
-                  ? (battle.extraState.energyRegenerationPeriods?.[userData.userId] ??
-                    [])
-                  : undefined
-              }
-              timedBuffs={poolRegenerationBuffs}
-              color="bg-violet-500"
-              showText
-              lastRegenAt={userData?.regenAt}
-              regen={
-                userData?.status === "BATTLE" && battle?.id === userData.battleId
-                  ? (battle?.extraState.energyRegeneration?.[userData.userId] ??
-                    userData.regeneration)
-                  : passiveRegeneration
-              }
-              status={
-                userData &&
-                ["BATTLE", "HOSPITALIZED", "TRAVEL"].includes(userData.status)
-                  ? "AWAKE"
-                  : userData?.status
-              }
-              current={userData?.curEnergy}
-              total={userData?.maxEnergy}
-              timeDiff={timeDiff}
-            />
-            {userData?.rank === "ELITE JONIN" ? (
-              <Link href="/academy" className="block text-center text-sm underline">
-                Milestones: {Math.max(0, userData.level - MAX_EXPERIENCE_LEVEL)}/
-                {MAX_PLAYER_LEVEL - MAX_EXPERIENCE_LEVEL}
-              </Link>
-            ) : canLevelUp ? (
-              <LevelUpBtn />
-            ) : (
-              <>
-                <StatusBar
-                  title="XP"
-                  tooltip="Experience required for next level"
-                  color="bg-yellow-500"
-                  showText={true}
-                  lastRegenAt={userData?.regenAt}
-                  regen={0}
-                  status={userData?.status}
-                  current={levelExperience?.earned ?? 0}
-                  total={levelExperience?.required}
+      {mealBuffs.map((buff) => (
+        <TooltipProvider key={buff.id} delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger className="w-full">
+              <div className="flex flex-row items-center">
+                <Utensils className="mr-2 h-6 w-6" />
+                <span>
+                  Meal:{" "}
+                  <Countdown
+                    targetDate={buff.expiresAt}
+                    timeDiff={timeDiff}
+                    onEndShow="Expired"
+                    // UserContext refreshes the profile at every buff expiry.
+                    onFinish={async () => {
+                      refreshTime();
+                      await utils.raids.getUserRaidBuffs.invalidate();
+                    }}
+                  />
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>Meal effect: {buff.item?.name ?? "Meal"}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ))}
+      {userData && immunitySecsLeft > 0 && (
+        <TooltipProvider delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger className="w-full">
+              <div className="flex flex-row items-center">
+                <ShieldCheck className="mr-2 h-6 w-6" />
+                <Countdown
+                  targetDate={userData.immunityUntil}
                   timeDiff={timeDiff}
+                  format={formatBracketedClock}
+                  onFinish={refreshTime}
                 />
-                {unassignedExperience > 0 && (
-                  <Link
-                    href="/profile/experience"
-                    className="block text-center text-xs underline"
-                  >
-                    {unassignedExperience.toLocaleString()} unassigned XP, assign toward
-                    your next level
-                  </Link>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <hr />
-          <p className="mt-2 flex flex-row">
-            <b>Status: </b>{" "}
-            <span className="ml-1">{statusLink(userData?.status || "UNKNOWN")}</span>
-          </p>
-          {userData?.village?.name && (
-            <p className="flex flex-row">
-              <b>Village: </b>{" "}
-              <Link href="/village" className="ml-1 hover:text-orange-500">
-                {userData.village.name}
-              </Link>
-            </p>
-          )}
-          {userData && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <p className="cursor-default">
-                    <b>Bracket: </b>
-                    {getExpBracket(userData.experience, userData.rank)}/
-                    {MAX_PVP_BRACKET}
-                  </p>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {userData.rank === "ELITE JONIN" ? (
-                    <>
-                      Elite Jonin use bracket {ELITE_JONIN_BRACKET}. Your fights are
-                      limited to brackets {ELITE_JONIN_BRACKET - 1} and{" "}
-                      {ELITE_JONIN_BRACKET}, including during wars or when immunity is
-                      lifted.
-                    </>
-                  ) : (
-                    <>
-                      PvP bracket based on experience (Academy & Genin are bracket 0).
-                      You can freely attack players in your bracket, one bracket below,
-                      or higher. Attacking Elite Jonin requires bracket{" "}
-                      {ELITE_JONIN_BRACKET - 1} or {ELITE_JONIN_BRACKET}. Other players
-                      more than one bracket below are protected unless their immunity is
-                      lifted or both sides are active war participants.
-                    </>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <p suppressHydrationWarning>
-            <b>Time: </b> <GameClock />
-          </p>
-        </div>
-        {/* ACTIVE EFFECTS */}
-        {battle?.usersEffects && userData && (
-          <>
-            <hr className="my-2" />
-            <ul className="italic">
-              <VisualizeEffects
-                effects={battle.usersEffects}
-                userId={userData.userId}
-                diffuseDamage={battleUser?.diffuseDamage}
-              />
-            </ul>
-          </>
-        )}
-        <hr className="my-2" />
-        <div className="flex flex-col gap-1">
-          <TooltipProvider delayDuration={50}>
-            <Tooltip>
-              <TooltipTrigger className="w-full">
-                <Link
-                  href={location ? "/bank" : "/profile"}
-                  className="hover:text-orange-500"
-                >
-                  <div className="flex flex-row items-center">
-                    <p className="mr-3 text-xl">両</p>
-                    {userData?.money?.toLocaleString() ?? "??"}
-                  </div>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent>Money on hand</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          {mealBuffs.map((buff) => (
-            <TooltipProvider key={buff.id} delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <div className="flex flex-row items-center">
-                    <Utensils className="mr-2 h-6 w-6" />
-                    <span>
-                      Meal:{" "}
-                      <Countdown
-                        targetDate={buff.expiresAt}
-                        timeDiff={timeDiff}
-                        onEndShow="Expired"
-                        // UserContext refreshes the profile at every buff expiry.
-                        onFinish={async () => {
-                          refreshTime();
-                          await utils.raids.getUserRaidBuffs.invalidate();
-                        }}
-                      />
-                    </span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Meal effect: {buff.item?.name ?? "Meal"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ))}
-          {userData && immunitySecsLeft > 0 && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <div className="flex flex-row items-center">
-                    <ShieldCheck className="mr-2 h-6 w-6" />
-                    <Countdown
-                      targetDate={userData.immunityUntil}
-                      timeDiff={timeDiff}
-                      format={formatBracketedClock}
-                      onFinish={refreshTime}
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>Immune from PvP attacks</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {userData && !userData.battleId && bracketImmunitySecsLeft > 0 && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <div className="flex flex-row items-center text-orange-500">
-                    <ShieldAlert className="mr-2 h-6 w-6" />
-                    <Countdown
-                      targetDate={userData.bracketImmunityLiftedUntil}
-                      timeDiff={timeDiff}
-                      format={formatBracketedClock}
-                      onFinish={refreshTime}
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>Bracket Immunity Lifted</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {userData && !userData.battleId && warParticipantSecsLeft > 0 && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <div className="flex flex-row items-center text-red-500">
-                    <Swords className="mr-2 h-6 w-6" />
-                    <Countdown
-                      targetDate={userData.warParticipantUntil}
-                      timeDiff={timeDiff}
-                      format={formatBracketedClock}
-                      onFinish={refreshTime}
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>War Participant</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {userData &&
-            MasteryQueueKinds.map((kind) => {
-              const endsAt = masteryTrainingEndsAt(userData, kind);
-              const Icon = kind === "ELEMENT" ? Flame : Medal;
-              return endsAt ? (
-                <SidebarTimerRow
-                  key={kind}
-                  icon={<Icon className="mr-2 h-6 w-6" />}
-                  href="/traininggrounds"
-                  tooltip={<>{MASTERY_QUEUE_KIND_LABELS[kind]} training</>}
-                >
-                  <Countdown targetDate={endsAt} timeDiff={timeDiff} />
-                </SidebarTimerRow>
-              ) : null;
-            })}
-          {trainingJutsu && (
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>Immune from PvP attacks</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      {userData && !userData.battleId && bracketImmunitySecsLeft > 0 && (
+        <TooltipProvider delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger className="w-full">
+              <div className="flex flex-row items-center text-orange-500">
+                <ShieldAlert className="mr-2 h-6 w-6" />
+                <Countdown
+                  targetDate={userData.bracketImmunityLiftedUntil}
+                  timeDiff={timeDiff}
+                  format={formatBracketedClock}
+                  onFinish={refreshTime}
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>Bracket Immunity Lifted</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      {userData && !userData.battleId && warParticipantSecsLeft > 0 && (
+        <TooltipProvider delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger className="w-full">
+              <div className="flex flex-row items-center text-red-500">
+                <Swords className="mr-2 h-6 w-6" />
+                <Countdown
+                  targetDate={userData.warParticipantUntil}
+                  timeDiff={timeDiff}
+                  format={formatBracketedClock}
+                  onFinish={refreshTime}
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>War Participant</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      {userData &&
+        MasteryQueueKinds.map((kind) => {
+          const endsAt = masteryTrainingEndsAt(userData, kind);
+          const Icon = kind === "ELEMENT" ? Flame : Medal;
+          return endsAt ? (
             <SidebarTimerRow
-              icon={<Atom className="mr-2 h-6 w-6" />}
+              key={kind}
+              icon={<Icon className="mr-2 h-6 w-6" />}
               href="/traininggrounds"
-              tooltip={
-                <>
-                  Training {trainingJutsu.name} to level {trainingJutsu.level}
-                </>
-              }
+              tooltip={<>{MASTERY_QUEUE_KIND_LABELS[kind]} training</>}
             >
-              <Countdown
-                targetDate={trainingJutsu.finishTraining}
-                timeDiff={timeDiff}
-                onFinish={async () => {
-                  await Promise.all([
-                    utils.jutsu.getUserJutsus.invalidate(),
-                    utils.profile.getSidebarTimers.invalidate(),
-                  ]);
-                }}
-              />
+              <Countdown targetDate={endsAt} timeDiff={timeDiff} />
             </SidebarTimerRow>
-          )}
-          {userData?.covertTrainingType && covertTrainingFinishAt && (
-            <SidebarTimerRow
-              icon={
-                userData.covertTrainingType === "stealth" ? (
-                  <EyeOff className="mr-2 h-6 w-6" />
-                ) : (
-                  <ScanSearch className="mr-2 h-6 w-6" />
-                )
-              }
-              href="/traininggrounds"
-              tooltip={
-                userData.covertTrainingType === "stealth"
-                  ? "Stealth training"
-                  : "Sensory training"
-              }
-            >
-              <Countdown
-                targetDate={covertTrainingFinishAt}
-                timeDiff={timeDiff}
-                onFinish={async () => {
-                  await utils.profile.getUser.invalidate();
-                }}
-              />
-            </SidebarTimerRow>
-          )}
-          {activeItemCraftingTimer && (
-            <SidebarTimerRow
-              icon={<Hammer className="mr-2 h-6 w-6" />}
-              href="/occupation"
-              tooltip={<>Crafting {activeItemCraftingTimer.itemName}</>}
-            >
-              <Countdown
-                targetDate={activeItemCraftingTimer.craftingFinishedAt}
-                timeDiff={timeDiff}
-                onFinish={refreshItemTimers}
-              />
-            </SidebarTimerRow>
-          )}
-          {activeImbuementTimer && (
-            <SidebarTimerRow
-              icon={<Gem className="mr-2 h-6 w-6" />}
-              href="/occupation"
-              tooltip={
-                <>
-                  Imbuing {activeImbuementTimer.imbuedName} onto{" "}
-                  {activeImbuementTimer.targetName}
-                </>
-              }
-            >
-              <Countdown
-                targetDate={activeImbuementTimer.craftingFinishedAt}
-                timeDiff={timeDiff}
-                onFinish={refreshItemTimers}
-              />
-            </SidebarTimerRow>
-          )}
-          {userData &&
-            [
-              {
-                icon: LayoutList,
-                done: userData.dailyMissions,
-                limit: MISSIONS_PER_DAY,
-                tooltip: "Daily missions to complete",
-              },
-              {
-                icon: ClipboardList,
-                done: userData.dailyErrands ?? 0,
-                limit: ERRANDS_PER_DAY,
-                tooltip: "Daily errands to complete",
-              },
-              {
-                icon: Stethoscope,
-                done: userData.dailyMedicalMissions ?? 0,
-                limit: MEDICAL_MISSIONS_PER_DAY,
-                tooltip: "Daily medical missions to complete",
-              },
-              {
-                icon: Swords,
-                done: userData.dailyPvpMissions ?? 0,
-                limit: PVP_MISSIONS_PER_DAY,
-                tooltip: "Daily PvP missions to complete",
-              },
-            ].map(({ icon: Icon, done, limit, tooltip }) =>
-              done < limit ? (
-                <SidebarLinkRow key={tooltip} href="/missionhall" tooltip={tooltip}>
-                  <Icon className="mr-2 h-6 w-6" /> {done} / {limit}
-                </SidebarLinkRow>
-              ) : null,
-            )}
-          <SidebarLinkRow
-            href="/points"
-            tooltip="Reputation points for use in black market"
-          >
-            <Star className="mr-2 h-6 w-6" /> {userData?.reputationPoints ?? "??"}
-          </SidebarLinkRow>
-        </div>
-      </div>
-      <hr className="my-2" />
-      <div className="flex justify-center px-2 pt-2 align-center">
-        {SOCIAL_LINKS.map((social) => {
-          return (
-            <a
-              target="_blank"
-              href={social.url}
-              key={social.url}
-              className="hover:opacity-80"
-              rel="noopener"
-            >
-              <Image src={social.image} width={64} height={64} alt={social.alt}></Image>
-            </a>
-          );
+          ) : null;
         })}
-      </div>
+      {trainingJutsu && (
+        <SidebarTimerRow
+          icon={<Atom className="mr-2 h-6 w-6" />}
+          href="/traininggrounds"
+          tooltip={
+            <>
+              Training {trainingJutsu.name} to level {trainingJutsu.level}
+            </>
+          }
+        >
+          <Countdown
+            targetDate={trainingJutsu.finishTraining}
+            timeDiff={timeDiff}
+            onFinish={async () => {
+              await Promise.all([
+                utils.jutsu.getUserJutsus.invalidate(),
+                utils.profile.getSidebarTimers.invalidate(),
+              ]);
+            }}
+          />
+        </SidebarTimerRow>
+      )}
+      {userData?.covertTrainingType && covertTrainingFinishAt && (
+        <SidebarTimerRow
+          icon={
+            userData.covertTrainingType === "stealth" ? (
+              <EyeOff className="mr-2 h-6 w-6" />
+            ) : (
+              <ScanSearch className="mr-2 h-6 w-6" />
+            )
+          }
+          href="/traininggrounds"
+          tooltip={
+            userData.covertTrainingType === "stealth"
+              ? "Stealth training"
+              : "Sensory training"
+          }
+        >
+          <Countdown
+            targetDate={covertTrainingFinishAt}
+            timeDiff={timeDiff}
+            onFinish={async () => {
+              await utils.profile.getUser.invalidate();
+            }}
+          />
+        </SidebarTimerRow>
+      )}
+      {activeItemCraftingTimer && (
+        <SidebarTimerRow
+          icon={<Hammer className="mr-2 h-6 w-6" />}
+          href="/occupation"
+          tooltip={<>Crafting {activeItemCraftingTimer.itemName}</>}
+        >
+          <Countdown
+            targetDate={activeItemCraftingTimer.craftingFinishedAt}
+            timeDiff={timeDiff}
+            onFinish={refreshItemTimers}
+          />
+        </SidebarTimerRow>
+      )}
+      {activeImbuementTimer && (
+        <SidebarTimerRow
+          icon={<Gem className="mr-2 h-6 w-6" />}
+          href="/occupation"
+          tooltip={
+            <>
+              Imbuing {activeImbuementTimer.imbuedName} onto{" "}
+              {activeImbuementTimer.targetName}
+            </>
+          }
+        >
+          <Countdown
+            targetDate={activeImbuementTimer.craftingFinishedAt}
+            timeDiff={timeDiff}
+            onFinish={refreshItemTimers}
+          />
+        </SidebarTimerRow>
+      )}
     </>
   );
 };
 
-export default MenuBoxProfile;
+/** Daily missions, errands, medical and PvP missions still open today. */
+const ProfileDailyActivities: React.FC = () => {
+  const { data: userData } = useUserDataSelector(selectDailyActivities);
+  return (
+    <>
+      {userData &&
+        [
+          {
+            icon: LayoutList,
+            done: userData.dailyMissions,
+            limit: MISSIONS_PER_DAY,
+            tooltip: "Daily missions to complete",
+          },
+          {
+            icon: ClipboardList,
+            done: userData.dailyErrands ?? 0,
+            limit: ERRANDS_PER_DAY,
+            tooltip: "Daily errands to complete",
+          },
+          {
+            icon: Stethoscope,
+            done: userData.dailyMedicalMissions ?? 0,
+            limit: MEDICAL_MISSIONS_PER_DAY,
+            tooltip: "Daily medical missions to complete",
+          },
+          {
+            icon: Swords,
+            done: userData.dailyPvpMissions ?? 0,
+            limit: PVP_MISSIONS_PER_DAY,
+            tooltip: "Daily PvP missions to complete",
+          },
+        ].map(({ icon: Icon, done, limit, tooltip }) =>
+          done < limit ? (
+            <SidebarLinkRow key={tooltip} href="/missionhall" tooltip={tooltip}>
+              <Icon className="mr-2 h-6 w-6" /> {done} / {limit}
+            </SidebarLinkRow>
+          ) : null,
+        )}
+    </>
+  );
+};
+
+/** Reputation points, linked to the black market. */
+const ProfileReputation: React.FC = () => {
+  const { data: reputationPoints } = useUserDataSelector(selectReputationPoints);
+  return (
+    <SidebarLinkRow href="/points" tooltip="Reputation points for use in black market">
+      <Star className="mr-2 h-6 w-6" /> {reputationPoints ?? "??"}
+    </SidebarLinkRow>
+  );
+};
 
 /** Sidebar row whose countdown links to the page running the timer. */
 const SidebarTimerRow: React.FC<{
@@ -661,3 +724,83 @@ const useSecondsUntil = (
 
 /** Wrap a remaining duration in the sidebar's bracketed clock notation. */
 const formatBracketedClock = (msLeft: number) => `[${formatClockTime(msLeft)}]`;
+
+/** Account identity shown by the avatar. */
+const selectIdentity = (user: ProfileUser) => ({
+  avatar: user.avatar,
+  username: user.username,
+});
+
+const selectUserId = (user: ProfileUser) => user.userId;
+
+/** Pools, their regeneration and the battle state that replaces them in combat. */
+const selectPools = (user: ProfileUser) => ({
+  userId: user.userId,
+  status: user.status,
+  battleId: user.battleId,
+  isBetweenPyramidBattles: isBetweenPyramidBattles(user),
+  regenAt: user.regenAt,
+  regeneration: user.regeneration,
+  regenerationWithoutTimedBuffs: user.regenerationWithoutTimedBuffs,
+  raidBuffs: user.raidBuffs,
+  titles: user.titles,
+  curHealth: user.curHealth,
+  maxHealth: user.maxHealth,
+  curChakra: user.curChakra,
+  maxChakra: user.maxChakra,
+  curStamina: user.curStamina,
+  maxStamina: user.maxStamina,
+  curEnergy: user.curEnergy,
+  maxEnergy: user.maxEnergy,
+});
+
+/** Level progress, derived here so experience-neutral writes keep the selection equal. */
+const selectLevel = (user: ProfileUser) => {
+  const progress = levelExperienceProgress(user);
+  return {
+    rank: user.rank,
+    level: user.level,
+    status: user.status,
+    earnedExperience: progress.earned,
+    requiredExperience: progress.required,
+    canLevelUp: !levelUpBlockMessage(user),
+    unassignedExperience: unassignedExperienceTowardLevel(user),
+  };
+};
+
+const selectStanding = (user: ProfileUser) => ({
+  status: user.status,
+  villageName: user.village?.name,
+  bracket: getExpBracket(user.experience, user.rank),
+  isEliteJonin: user.rank === "ELITE JONIN",
+});
+
+const selectMoney = (user: ProfileUser) => user.money;
+
+/** Deadlines and training sessions behind the sidebar countdowns. */
+const selectTimers = (user: ProfileUser) => ({
+  battleId: user.battleId,
+  immunityUntil: user.immunityUntil,
+  bracketImmunityLiftedUntil: user.bracketImmunityLiftedUntil,
+  warParticipantUntil: user.warParticipantUntil,
+  currentlyTrainingMastery: user.currentlyTrainingMastery,
+  masteryTrainingStartedAt: user.masteryTrainingStartedAt,
+  trainingSpeed: user.trainingSpeed,
+  currentlyTrainingElement: user.currentlyTrainingElement,
+  elementalTrainingStartedAt: user.elementalTrainingStartedAt,
+  elementalTrainingSpeed: user.elementalTrainingSpeed,
+  covertTrainingType: user.covertTrainingType,
+  covertTrainingStartedAt: user.covertTrainingStartedAt,
+  covertTrainingMinutes: user.covertTrainingMinutes,
+});
+
+const selectDailyActivities = (user: ProfileUser) => ({
+  dailyMissions: user.dailyMissions,
+  dailyErrands: user.dailyErrands,
+  dailyMedicalMissions: user.dailyMedicalMissions,
+  dailyPvpMissions: user.dailyPvpMissions,
+});
+
+const selectReputationPoints = (user: ProfileUser) => user.reputationPoints;
+
+type ProfileUser = NonNullable<UserWithRelations>;

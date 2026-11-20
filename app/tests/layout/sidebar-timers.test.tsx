@@ -33,10 +33,13 @@ const mount = (timers: Record<string, Date | null>, timeDiff: number) => {
     warParticipantUntil: new Date(0),
     ...timers,
   };
-  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
-    data,
-    timeDiff,
-  } as never);
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
+    const value = {
+      data,
+      timeDiff,
+    };
+    return { ...value, data: select(value.data as never) } as never;
+  });
   return render(<MenuBoxProfile />);
 };
 
