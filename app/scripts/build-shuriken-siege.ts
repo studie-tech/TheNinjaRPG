@@ -104,6 +104,14 @@ for (const option of ["out", "cache", "source", "version", "api", "targets"] as 
 const out = resolve(args.out ?? join(APP, "../dist/shuriken-siege"));
 const cache = resolve(args.cache ?? join(homedir(), ".cache/shuriken-siege"));
 const version = args.version ?? new Date().toISOString().slice(0, 10);
+// Version and source name the output folder and zip, so they stay plain names that cannot
+// reach another path or turn one build's folder into another build's zip.
+for (const [option, value] of [
+  ["version", version],
+  ["source", args.source],
+] as const)
+  if (value !== undefined && (!/^[0-9A-Za-z][0-9A-Za-z._-]*$/.test(value) || /\.zip$/i.test(value)))
+    throw new Error(`--${option} must be letters, digits, ".", "_" or "-", not ending in .zip`);
 
 console.log(`Shuriken Siege ${version}: ${targets.join(", ")} from ${api}`);
 mkdirSync(cache, { recursive: true });
