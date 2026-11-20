@@ -163,6 +163,7 @@ import { listHuntingHabitats } from "@/queries/hunting";
 import { fetchKageReplacement } from "@/queries/kage";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
 import {
+  BOOTSTRAP_QUEST_TYPES,
   countUsersActiveInLastDay,
   deleteUserAttributeForDeleteAttribute,
   deleteUserBlackListForToggleBlacklistEntry,
@@ -265,10 +266,7 @@ import {
   updateVillageForFetchUpdatedUserOnce,
   upsertHistoricalIp,
 } from "@/queries/profile";
-import {
-  fetchBloodlineCollectionRolls,
-  fetchQuestDiscoverySummaryCandidates,
-} from "@/queries/quests";
+import { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 import {
   copyAiSpriteAnimationBindings,
   listAiSpriteAnimationBindings,
@@ -316,7 +314,10 @@ import {
   fetchPublicUsers,
   listUserAnnouncements,
 } from "@/server/utils/profile";
-import { fetchProfileUser } from "@/server/utils/profileDefinitions";
+import {
+  fetchProfileUser,
+  fetchProgressionProfileUser,
+} from "@/server/utils/profileDefinitions";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { insertNextQuest } from "@/server/utils/questAssignment";
 import {
@@ -2694,34 +2695,33 @@ const fetchUpdatedUserOnce = async (
   const [
     achievements,
     settings,
-    fetchedUser,
+    progressionRead,
     hasUnvotedPolls,
     allActiveWars,
     activeShrineBattles,
     activeRaids,
-    questBootstrap,
     bloodlineCollectionCatalogue,
-    bloodlineCollectionRolls,
     achievementObjectiveJutsus,
   ] = await Promise.all([
     achievementsRead,
     fetchAllGameSettings(client),
-    queryUpdatedUser(),
+    // Tier/exam candidates and rolled bloodlines are columns of the opening profile read.
+    fetchProgressionProfileUser(client, userId),
     includeNotifications ? fetchHasUnvotedPolls(client, userId, now) : [],
     fetchAllActiveWars(client),
     includeNotifications
       ? fetchActiveShrineLobbies(client, shrineLobbyStaleBefore)
       : [],
     includeNotifications ? fetchActiveRaids(client, now) : [],
-    fetchQuestBootstrap(client, userId),
     // Collection ownership is independent of profile settlement and needed by active achievements.
     fetchBloodlineCollectionCatalogue(client),
-    fetchBloodlineCollectionRolls(client, userId),
     // Achievement jutsu targets come from the cached catalogue, so ownership needs no later wave.
     achievementsRead.then((catalogue) =>
       fetchAchievementObjectiveJutsus(client, userId, catalogue),
     ),
   ]);
+  const fetchedUser = progressionRead?.user;
+  const questBootstrap = progressionRead?.questBootstrap ?? [];
   const publishedAchievementIds = publishedAchievementsOf(achievements).map(
     (entry) => entry.id,
   );
@@ -3347,7 +3347,7 @@ const fetchUpdatedUserOnce = async (
     user.maxEnergy = calcMaxEnergy(user);
     const trackerUser = await hydrateQuestCollections(client, user, false, {
       catalogue: bloodlineCollectionCatalogue,
-      rolls: bloodlineCollectionRolls,
+      rolledBloodlineIds: progressionRead?.rolledBloodlineIds ?? [],
       objectiveJutsus: hasDueJutsuQueue ? undefined : achievementObjectiveJutsus,
     });
     // Get the latest quest trackers
@@ -3683,9 +3683,6 @@ export const fetchPublishedAchievements = async (client: DrizzleClient) =>
 /** A user's progress on one quest, without the static definition it belongs to. */
 export type AchievementProgress = Omit<UserQuest, "quest">;
 
-/** The quest types fetchUpdatedUser tries to start a user on when they hold none. */
-const BOOTSTRAP_QUEST_TYPES = ["tier", "exam"] as const;
-
 /**
  * What the tier/exam bootstrap needs before it can tell whether starting a quest is even
  * possible: every quest of those types, each carrying whether this user has a history row for it.
@@ -3696,12 +3693,12 @@ const BOOTSTRAP_QUEST_TYPES = ["tier", "exam"] as const;
  * two tables separately also keeps `QuestHistory.questType` out of it, which is denormalised from
  * the quest and can drift.
  *
- * It depends only on `userId`, so it belongs in fetchUpdatedUser's opening batch rather than
- * costing a round-trip of its own.
+ * fetchUpdatedUser reads the same join as a column of its profile statement
+ * (`fetchProgressionProfileUser`); this standalone read serves the other callers.
  */
 export const fetchQuestBootstrap = (client: DrizzleClient, userId: string) =>
   scopedRead(`questBootstrap:${userId}`, () =>
-    selectQuestForFetchQuestBootstrap(client, userId, BOOTSTRAP_QUEST_TYPES),
+    selectQuestForFetchQuestBootstrap(client, userId),
   );
 
 /**

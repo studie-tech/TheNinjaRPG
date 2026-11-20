@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it } from "bun:test";
 import { getCache } from "@vercel/functions";
 import { eq, sql } from "drizzle-orm";
 import {
+  bloodlineRolls,
   item,
   quest,
   questHistory,
@@ -13,10 +14,19 @@ import {
   villageStructure,
 } from "@/drizzle/schema";
 import { hasQuestContentChanged } from "@/libs/questRun";
-import { findProfileUserWithDefinitions } from "@/queries/profile";
-import { executeDefinitionWriteForUpdate } from "@/queries/quests";
+import {
+  findProfileUserWithDefinitions,
+  selectQuestForFetchQuestBootstrap,
+} from "@/queries/profile";
+import {
+  executeDefinitionWriteForUpdate,
+  fetchBloodlineCollectionRolls,
+} from "@/queries/quests";
 import { fetchUserItems } from "@/server/api/routers/item";
-import { fetchProfileUser } from "@/server/utils/profileDefinitions";
+import {
+  fetchProfileUser,
+  fetchProgressionProfileUser,
+} from "@/server/utils/profileDefinitions";
 import { QuestTracker, QuestValidator } from "@/validators/objectives";
 import {
   insertItems,
@@ -35,6 +45,14 @@ import {
 
 const USER_ID = "definition-reader";
 const REVISION = new Date("2026-11-01T00:00:00.000Z");
+
+/** The joined read without the opt-in progression columns `fetchProfileUser` omits. */
+const joinedProfile = async (userId: string) => {
+  const read = await findProfileUserWithDefinitions(await getTestDatabase(), userId);
+  if (!read) return undefined;
+  const { questBootstrap: _bootstrap, rolledBloodlineIds: _rolled, ...user } = read;
+  return user;
+};
 
 describeWithDatabase("profile quest definitions", () => {
   // The open raid would otherwise appear in later suites' profile reads.
@@ -274,7 +292,7 @@ describeWithDatabase("profile item and village structure definitions", () => {
 
   it("matches the joined read, then serves definitions without reading their rows", async () => {
     const db = await getTestDatabase();
-    const joined = await findProfileUserWithDefinitions(db, USER_ID);
+    const joined = await joinedProfile(USER_ID);
     const cold = await recordQueries(() => fetchProfileUser(db, USER_ID));
     expect(cold.result).toEqual(joined);
     expect(cold.result?.items[0]?.imbuements[0]?.item?.name).toBe("Crystal");
@@ -336,7 +354,7 @@ describeWithDatabase("profile item and village structure definitions", () => {
     const { result, statements } = await recordQueries(() =>
       fetchProfileUser(db, USER_ID),
     );
-    expect(result).toEqual(await findProfileUserWithDefinitions(db, USER_ID));
+    expect(result).toEqual(await joinedProfile(USER_ID));
     expect(result?.items[0]?.item?.name).toBe("Sharp Blade");
     expect(
       result?.village?.structures.find((structure) => structure.id === "leaf/hall"),
@@ -376,5 +394,84 @@ describeWithDatabase("profile item and village structure definitions", () => {
     expect(user?.village?.structures.map((structure) => structure.id)).toEqual([
       "leaf/hall",
     ]);
+  });
+});
+
+describeWithDatabase("profile progression reads", () => {
+  const ROLLER_ID = "progression-reader";
+  const NEWCOMER_ID = "progression-newcomer";
+  afterEach(() => resetTables(userData, quest, questHistory, bloodlineRolls));
+  beforeEach(async () => {
+    await resetTables(userData, quest, questHistory, bloodlineRolls);
+    await insertUsers([
+      { userId: ROLLER_ID, username: ROLLER_ID, level: 20 },
+      { userId: NEWCOMER_ID, username: NEWCOMER_ID, level: 5 },
+    ]);
+    await insertQuests([
+      { id: "tier-done", questType: "tier", tierLevel: 1, requiredLevel: 1 },
+      { id: "tier-open", questType: "tier", tierLevel: 2, requiredLevel: 10 },
+      { id: "exam-abandoned", questType: "exam", requiredLevel: 15, maxLevel: 30 },
+      { id: "story", questType: "story" },
+    ]);
+    await insertQuestHistory([
+      { userId: ROLLER_ID, questId: "tier-done", questType: "tier", completed: 1 },
+      // The denormalised type has drifted; the join reads the quest's own type.
+      {
+        userId: ROLLER_ID,
+        questId: "exam-abandoned",
+        questType: "daily",
+        completed: 0,
+      },
+      { userId: ROLLER_ID, questId: "story", questType: "story", completed: 1 },
+      { userId: NEWCOMER_ID, questId: "tier-done", questType: "tier", completed: 2 },
+    ]);
+    const db = await getTestDatabase();
+    await db.insert(bloodlineRolls).values([
+      { id: "roll-a", userId: ROLLER_ID, bloodlineId: "leaf", type: "ITEM" },
+      { id: "roll-b", userId: ROLLER_ID, bloodlineId: "mist", type: "ITEM" },
+      { id: "roll-pity", userId: ROLLER_ID, bloodlineId: null, type: "PITY" },
+      { id: "roll-other", userId: NEWCOMER_ID, bloodlineId: "sand", type: "ITEM" },
+    ]);
+  });
+
+  it.each([ROLLER_ID, NEWCOMER_ID])(
+    "reads the standalone bootstrap and roll results in the profile statement (%s)",
+    async (userId) => {
+      const db = await getTestDatabase();
+      const [bootstrap, rolls, profile] = await Promise.all([
+        selectQuestForFetchQuestBootstrap(db, userId),
+        fetchBloodlineCollectionRolls(db, userId),
+        fetchProfileUser(db, userId),
+      ]);
+      const { result, statements } = await recordQueries(() =>
+        fetchProgressionProfileUser(db, userId),
+      );
+      const byId = <T extends { id: string }>(rows: T[] = []) =>
+        [...rows].sort((a, b) => a.id.localeCompare(b.id));
+      expect(byId(result?.questBootstrap)).toEqual(byId(bootstrap));
+      expect([...(result?.rolledBloodlineIds ?? [])].sort()).toEqual(
+        rolls.flatMap((roll) => (roll.bloodlineId ? [roll.bloodlineId] : [])).sort(),
+      );
+      expect(result?.user).toEqual(profile as NonNullable<typeof profile>);
+      expect(statements).toHaveLength(1);
+    },
+  );
+
+  it("keeps the progression columns out of other profile reads", async () => {
+    const db = await getTestDatabase();
+    const { result, statements } = await recordQueries(() =>
+      fetchProfileUser(db, ROLLER_ID),
+    );
+    expect(result).not.toHaveProperty("questBootstrap");
+    expect(result).not.toHaveProperty("rolledBloodlineIds");
+    expect(statements[0]).not.toContain("BloodlineRolls");
+  });
+
+  it("returns empty lists when no rolls or bootstrap quests exist", async () => {
+    const db = await getTestDatabase();
+    await resetTables(quest, bloodlineRolls);
+    const result = await fetchProgressionProfileUser(db, ROLLER_ID);
+    expect(result?.questBootstrap).toEqual([]);
+    expect(result?.rolledBloodlineIds).toEqual([]);
   });
 });

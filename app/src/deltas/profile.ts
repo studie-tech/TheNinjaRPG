@@ -22,8 +22,11 @@ import {
   getUserFactionNotifications,
   NO_JUTSU_EQUIPPED_NOTIFICATION,
 } from "@/libs/userNotifications";
-import type { fetchUser, findProfileUserWithDefinitions } from "@/queries/profile";
-import type { fetchQuestBootstrap } from "@/routers/profile";
+import type {
+  fetchUser,
+  findProfileUserWithDefinitions,
+  QuestBootstrapCandidate,
+} from "@/queries/profile";
 import type {
   AchievementProgress,
   fetchUpdatedUser,
@@ -523,7 +526,7 @@ export const getUseUnusedExperiencePointsUserUpdate = ({
   resultClaimedAt: Date;
   user: Omit<
     NonNullable<Awaited<ReturnType<typeof findProfileUserWithDefinitions>>>,
-    "userQuests"
+    "userQuests" | "questBootstrap" | "rolledBloodlineIds"
   >;
 }) => {
   if (hasEnergyQueue(user)) return {};
@@ -632,7 +635,7 @@ type AssignedExperiencePatch = Pick<
  * require canonical quest admission.
  */
 export const canBootstrapQuestType = (
-  candidates: Awaited<ReturnType<typeof fetchQuestBootstrap>>,
+  candidates: QuestBootstrapCandidate[],
   questType: "tier" | "exam",
   level: number,
 ) =>

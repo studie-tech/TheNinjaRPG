@@ -9,6 +9,7 @@ import {
   count,
   desc,
   eq,
+  getTableName,
   gt,
   gte,
   inArray,
@@ -25,7 +26,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
+import { type AnyMySqlColumn, alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { UploadedFileData } from "uploadthing/types";
 import {
@@ -46,6 +47,7 @@ import {
   UserRoles,
   VOTE_REWARD_REPUTATION,
 } from "@/drizzle/constants";
+import type { Quest } from "@/drizzle/schema";
 import {
   abEvent,
   actionLog,
@@ -1953,13 +1955,15 @@ export const insertUserItemForApplyUserContentChanges = (
 export const findUserDataForQueryUpdatedUser = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
-) => findProfileUser(client, userId, definitionRevisions);
+  withProgressionReads = false,
+) => findProfileUser(client, userId, definitionRevisions, withProgressionReads);
 
 /** Read one joined snapshot when a concurrent definition edit prevents cache hydration. */
 export const findProfileUserWithDefinitions = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
-) => findProfileUser(client, userId, joinedDefinitions);
+  withProgressionReads = false,
+) => findProfileUser(client, userId, joinedDefinitions, withProgressionReads);
 
 /** Build the `userData` lookup for `queryUpdatedUser`, including predicates on `userId`, `equipped`, `quantity`. */
 const findProfileUser = <
@@ -1974,6 +1978,8 @@ const findProfileUser = <
     item: ItemRelation;
     structure: StructureRelation;
   },
+  /** Also select `questBootstrap` and `rolledBloodlineIds`; otherwise both are null. */
+  withProgressionReads: boolean,
 ) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
@@ -1983,6 +1989,14 @@ const findProfileUser = <
       ),
       ...activityCompletionExtras(table.userId),
       displayTitle: displayTitleSql(table).as("displayTitle"),
+      questBootstrap: (withProgressionReads
+        ? questBootstrapSql(table.userId)
+        : sql<QuestBootstrapCandidate[] | null>`NULL`
+      ).as("questBootstrap"),
+      rolledBloodlineIds: (withProgressionReads
+        ? rolledBloodlineIdsSql(table.userId)
+        : sql<string[] | null>`NULL`
+      ).as("rolledBloodlineIds"),
     }),
     with: {
       attributes: true,
@@ -2064,6 +2078,49 @@ const definitionRevisions = {
   },
 };
 const joinedDefinitions = { quest: true, item: true, structure: true } as const;
+
+/** The quest types fetchUpdatedUser tries to start a user on when they hold none. */
+export const BOOTSTRAP_QUEST_TYPES = ["tier", "exam"] as const;
+
+/** A tier or exam quest, with this user's history `completed` count or null without a row. */
+export type QuestBootstrapCandidate = Pick<
+  Quest,
+  "id" | "questType" | "requiredLevel" | "maxLevel"
+> & { completed: number | null };
+
+/**
+ * `selectQuestForFetchQuestBootstrap` as a profile column: the same left join on questId and
+ * userId, aggregated to one JSON value.
+ */
+const questBootstrapSql = (userIdColumn: AnyMySqlColumn) =>
+  sql<QuestBootstrapCandidate[] | null>`COALESCE((SELECT JSON_ARRAYAGG(JSON_OBJECT(
+    'id', bootstrap_quest.id, 'questType', bootstrap_quest.questType,
+    'requiredLevel', bootstrap_quest.requiredLevel, 'maxLevel', bootstrap_quest.maxLevel,
+    'completed', bootstrap_history.completed))
+    FROM Quest bootstrap_quest
+    LEFT JOIN QuestHistory bootstrap_history ON bootstrap_history.questId = bootstrap_quest.id
+      AND bootstrap_history.userId = ${outerColumn(userIdColumn)}
+    WHERE bootstrap_quest.questType IN (${sql.join(
+      BOOTSTRAP_QUEST_TYPES.map((questType) => sql`${questType}`),
+      sql`, `,
+    )})), JSON_ARRAY())`.mapWith(parseJsonColumn<QuestBootstrapCandidate[]>);
+
+/** `fetchBloodlineCollectionRolls` as a profile column of rolled bloodline ids. */
+const rolledBloodlineIdsSql = (userIdColumn: AnyMySqlColumn) =>
+  sql<string[] | null>`COALESCE((SELECT JSON_ARRAYAGG(collection_roll.bloodlineId)
+    FROM BloodlineRolls collection_roll
+    WHERE collection_roll.userId = ${outerColumn(userIdColumn)}
+      AND collection_roll.bloodlineId IS NOT NULL), JSON_ARRAY())`.mapWith(
+    parseJsonColumn<string[]>,
+  );
+
+/** Relational extras strip column qualifiers; identifiers keep the outer user alias. */
+const outerColumn = (column: AnyMySqlColumn) =>
+  sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+
+/** Drivers return JSON columns as text or parsed values. */
+const parseJsonColumn = <Value>(value: unknown) =>
+  (typeof value === "string" ? JSON.parse(value) : value) as Value;
 
 /** Build the `villageStructure` selection of complete rows and their revisions for `fetchProfileUser`. */
 export const selectStructureDefinitions = (
@@ -2277,7 +2334,6 @@ export const insertTrainingLogForPersistPassiveRegenToDb2 = (
 export const selectQuestForFetchQuestBootstrap = (
   client: Pick<DrizzleClient, "select">,
   userId: string,
-  BOOTSTRAP_QUEST_TYPES: readonly ["tier", "exam"],
 ) =>
   client
     .select({

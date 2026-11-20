@@ -31,7 +31,8 @@ it("starts collection reads before the initial profile read settles", async () =
   // The catalogue read follows its Runtime Cache lookup; the profile read stays pending.
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(findCatalogue).toHaveBeenCalledTimes(1);
-  expect(findRolls).toHaveBeenCalledTimes(1);
+  // Rolled bloodline ids are a column of the profile read itself.
+  expect(findRolls).not.toHaveBeenCalled();
   resolveUser(undefined);
   expect((await result).user).toBeUndefined();
 });

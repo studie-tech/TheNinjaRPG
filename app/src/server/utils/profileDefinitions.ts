@@ -19,7 +19,42 @@ export const fetchProfileUser = async (
   client: DrizzleClient,
   userId: string,
 ): Promise<ProfileUser | undefined> => {
-  const user = await findUserDataForQueryUpdatedUser(client, userId);
+  const read = await readProfileUser(client, userId, false);
+  if (!read) return undefined;
+  const { questBootstrap: _bootstrap, rolledBloodlineIds: _rolled, ...user } = read;
+  return user;
+};
+
+/**
+ * `fetchProfileUser` with the per-user reads of the profile refresh's opening wave in the
+ * same statement: the tier/exam bootstrap candidates and the rolled bloodline ids that
+ * `bloodline_collection` objectives count.
+ */
+export const fetchProgressionProfileUser = async (
+  client: DrizzleClient,
+  userId: string,
+) => {
+  const read = await readProfileUser(client, userId, true);
+  if (!read) return undefined;
+  const { questBootstrap, rolledBloodlineIds, ...user } = read;
+  return {
+    user,
+    questBootstrap: questBootstrap ?? [],
+    rolledBloodlineIds: rolledBloodlineIds ?? [],
+  };
+};
+
+/** The hydrated snapshot; the progression columns are null unless requested. */
+const readProfileUser = async (
+  client: DrizzleClient,
+  userId: string,
+  withProgressionReads: boolean,
+): Promise<ProfileRead | undefined> => {
+  const user = await findUserDataForQueryUpdatedUser(
+    client,
+    userId,
+    withProgressionReads,
+  );
   if (!user) return undefined;
   // Snapshots read without a relation (partial clients) leave it as read.
   const items = user.items ?? [];
@@ -41,7 +76,7 @@ export const fetchProfileUser = async (
   // One joined retry keeps definitions and live state in the same snapshot, even if
   // staff keep editing while this request reads a cold definition.
   if (!quests || !hydratedItems || !structureDefinitions)
-    return findProfileUserWithDefinitions(client, userId);
+    return findProfileUserWithDefinitions(client, userId, withProgressionReads);
   return {
     ...user,
     ...(user.userQuests && {
@@ -68,7 +103,7 @@ export const fetchProfileUser = async (
         structures: user.village.structures.map(structureDefinitions),
       },
     }),
-  } as ProfileUser;
+  } as ProfileRead;
 };
 
 // Structure rows change with upgrades and raids; each change is one read per village.
@@ -79,6 +114,9 @@ const structureCache = createDefinitionCache<VillageStructure>({
 });
 
 /** The profile snapshot with complete definitions, shaped as the joined read. */
-type ProfileUser = NonNullable<
+type ProfileRead = NonNullable<
   Awaited<ReturnType<typeof findProfileUserWithDefinitions>>
 >;
+
+/** The profile snapshot without the opt-in progression reads. */
+type ProfileUser = Omit<ProfileRead, "questBootstrap" | "rolledBloodlineIds">;

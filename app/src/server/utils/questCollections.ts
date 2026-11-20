@@ -49,8 +49,8 @@ export const hydrateQuestCollections = async (
           ? queryBloodlineCollectionCatalogue(client)
           : fetchBloodlineCollectionCatalogue(client)))
       : undefined,
-    hasBloodlines
-      ? (snapshot?.rolls ?? fetchBloodlineCollectionRolls(client, user.userId))
+    hasBloodlines && !snapshot
+      ? fetchBloodlineCollectionRolls(client, user.userId)
       : undefined,
     unloadedJutsuIds.length > 0
       ? fetchOwnedObjectiveJutsus(client, user.userId, unloadedJutsuIds)
@@ -59,6 +59,9 @@ export const hydrateQuestCollections = async (
   const [farmingCollectionCount, catalogue, rolls, loadedJutsus] = inTransaction
     ? await queryInTransaction(queries)
     : await Promise.all(queries);
+  const rolledBloodlineIds =
+    snapshot?.rolledBloodlineIds ??
+    rolls?.flatMap((roll) => (roll.bloodlineId ? [roll.bloodlineId] : []));
   const ownedJutsus =
     objectiveJutsuIds.length > 0
       ? [
@@ -72,9 +75,9 @@ export const hydrateQuestCollections = async (
     ...user,
     farmingCollectionCount,
     bloodlineCollectionProgress:
-      catalogue && rolls
+      catalogue && rolledBloodlineIds
         ? buildBloodlineCollectionProgress(catalogue, [
-            ...rolls.flatMap((roll) => (roll.bloodlineId ? [roll.bloodlineId] : [])),
+            ...rolledBloodlineIds,
             ...(user.bloodlineId ? [user.bloodlineId] : []),
           ])
         : undefined,
@@ -130,6 +133,7 @@ const objectiveJutsuIdsOf = (objectives: AllObjectivesType[]) => [
 
 type QuestCollectionSnapshot = {
   catalogue: Awaited<ReturnType<typeof fetchBloodlineCollectionCatalogue>>;
-  rolls: Awaited<ReturnType<typeof fetchBloodlineCollectionRolls>>;
+  /** Bloodline ids of the user's rolls, as `fetchBloodlineCollectionRolls` reads them. */
+  rolledBloodlineIds: string[];
   objectiveJutsus?: Awaited<ReturnType<typeof fetchAchievementObjectiveJutsus>>;
 };
