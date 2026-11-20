@@ -254,13 +254,14 @@ export const selectBalanceTurnOrderBattles = (
     .groupBy(dataBattleTurnOrder.battleType, dataBattleTurnOrder.winner);
 
 /** Count one player's recorded head-to-head battles by their starting order and the winner. */
-export const selectPlayerTurnOrder = async (
+export const selectPlayerTurnOrder = (
   client: Pick<DrizzleClient, "select">,
   userId: string,
 ) => {
   const byOrder = (turnOrder: 1 | 2) =>
     client
       .select({
+        turnOrder: sql<number>`${turnOrder}`.mapWith(Number).as("turnOrder"),
         winner: dataBattleTurnOrder.winner,
         count: count().mapWith(Number),
       })
@@ -273,7 +274,6 @@ export const selectPlayerTurnOrder = async (
           userId,
         ),
       )
-      .groupBy(dataBattleTurnOrder.winner)
-      .then((rows) => rows.map((row) => ({ ...row, turnOrder })));
-  return (await Promise.all([byOrder(1), byOrder(2)])).flat();
+      .groupBy(dataBattleTurnOrder.winner);
+  return byOrder(1).unionAll(byOrder(2));
 };

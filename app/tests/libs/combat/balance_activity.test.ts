@@ -9,6 +9,7 @@ import { getBalanceExclusion, hasActiveBalanceAction } from "@/libs/combat/balan
 import { saveUsage } from "@/libs/combat/database";
 import type { BattleUserState, CombatResult } from "@/libs/combat/types";
 import { summarizePlayerTurnOrder, summarizeTurnOrderBattles } from "@/libs/statistics";
+import { selectPlayerTurnOrder } from "@/queries/balance";
 import { dataRouter } from "@/server/api/routers/data";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
@@ -242,6 +243,40 @@ describeWithDatabase("balance usage with the activity filter", () => {
         .turnOrderBattles,
     ).toHaveLength(1);
     await expect(caller.getPlayerTurnOrder({ userId: "winner" })).rejects.toThrow();
+  });
+
+  it("groups a player's wins, losses and draws in both starting positions", async () => {
+    const db = await getTestDatabase();
+    await db.insert(dataBattleTurnOrder).values(
+      (
+        [
+          [1, 1],
+          [1, 1],
+          [1, 2],
+          [2, 1],
+          [2, 2],
+          [2, 0],
+        ] as const
+      ).map(([turnOrder, winner], index) => ({
+        battleId: `player-order-${index}`,
+        periodStart: 1,
+        battleType: "COMBAT" as const,
+        firstUserId: turnOrder === 1 ? "player" : "opponent",
+        secondUserId: turnOrder === 2 ? "player" : "opponent",
+        winner,
+      })),
+    );
+    const rows = await selectPlayerTurnOrder(db, "player");
+    expect(
+      rows.sort((a, b) => a.turnOrder - b.turnOrder || a.winner - b.winner),
+    ).toEqual([
+      { turnOrder: 1, winner: 1, count: 2 },
+      { turnOrder: 1, winner: 2, count: 1 },
+      { turnOrder: 2, winner: 0, count: 1 },
+      { turnOrder: 2, winner: 1, count: 1 },
+      { turnOrder: 2, winner: 2, count: 1 },
+    ]);
+    expect(await selectPlayerTurnOrder(db, "missing")).toEqual([]);
   });
 });
 
