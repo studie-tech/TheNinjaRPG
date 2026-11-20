@@ -925,10 +925,11 @@ export const QuestUpdateModal: React.FC<{
 };
 
 /**
- * Hook for checking rewards.
+ * Checks rewards and reconciles their caches. Automatic callers keep transport
+ * failures quiet; their visible Claim button remains available for recovery.
  * @returns The checkRewards mutation.
  */
-export const useCheckRewards = () => {
+export const useCheckRewards = (options?: { automatic?: boolean }) => {
   const { prepareUserUpdate, updateUser } = useUserInfo();
   const openRewardChoice = useOpenRewardChoice();
   const { prepareQuestRewardUpdate, updateQuestRewards } = useQuestRewardCacheUpdate();
@@ -939,6 +940,7 @@ export const useCheckRewards = () => {
   // Mutations
   const { mutate: checkRewards, isPending: isCheckingRewards } =
     api.quests.checkRewards.useMutation({
+      meta: { handlesTransportError: options?.automatic === true },
       onMutate: () => ({
         userRevision: prepareUserUpdate(),
         quests: prepareQuestRewardUpdate(),

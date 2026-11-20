@@ -251,8 +251,11 @@ const PlayerTutorialAssistant: React.FC<
     setIsAssistantVisible,
   } = useTutorialStep();
 
-  // Rewards check hook for dialog options
-  const { checkRewards, isCheckingRewards } = useCheckRewards();
+  // Automatic collection stays quiet on transport failures; manual claims keep feedback.
+  const { checkRewards, isCheckingRewards: isManualClaimPending } = useCheckRewards();
+  const { checkRewards: autoClaimRewards, isCheckingRewards: isAutoClaimPending } =
+    useCheckRewards({ automatic: true });
+  const isCheckingRewards = isManualClaimPending || isAutoClaimPending;
 
   // Initialize tutorial visibility
   useEffect(() => {
@@ -650,10 +653,16 @@ const PlayerTutorialAssistant: React.FC<
     if (autoClaimRef.current === key) return;
     const timer = setTimeout(() => {
       autoClaimRef.current = key;
-      checkRewards({ questId: autoClaimQuestId });
+      autoClaimRewards({ questId: autoClaimQuestId });
     }, TUTORIAL_AUTO_CLAIM_MS);
     return () => clearTimeout(timer);
-  }, [autoClaimQuestId, isCheckingRewards, stepNumber, userData?.userId, checkRewards]);
+  }, [
+    autoClaimQuestId,
+    isCheckingRewards,
+    stepNumber,
+    userData?.userId,
+    autoClaimRewards,
+  ]);
 
   // The starter quest can be further along than the step expects (a player
   // who came back after the trials changed, or whose action landed while

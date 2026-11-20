@@ -62,6 +62,7 @@ const state = {
   disable: vi.fn(async () => ({ success: true, message: "Saved" })),
   sceneAssets: vi.fn(),
   checkRewards: vi.fn(),
+  autoClaimRewards: vi.fn(),
   setRightSideBarOpen: vi.fn(),
 };
 
@@ -100,6 +101,7 @@ beforeEach(() => {
     state.disable,
     state.sceneAssets,
     state.checkRewards,
+    state.autoClaimRewards,
     state.setRightSideBarOpen,
   ])
     fn.mockClear();
@@ -141,11 +143,15 @@ beforeEach(() => {
       )) as never),
   );
   spies.push(
-    vi
-      .spyOn(logbook, "useCheckRewards")
-      .mockImplementation(
-        () => ({ checkRewards: state.checkRewards, isCheckingRewards: false }) as never,
-      ),
+    vi.spyOn(logbook, "useCheckRewards").mockImplementation(
+      (options) =>
+        ({
+          checkRewards: options?.automatic
+            ? state.autoClaimRewards
+            : state.checkRewards,
+          isCheckingRewards: false,
+        }) as never,
+    ),
   );
   spies.push(
     vi.spyOn(sortableList, "SortableList").mockImplementation((({
@@ -836,32 +842,36 @@ describe("quest steps", () => {
     for (const stepId of auto) {
       const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
       const questId = String(TUTORIAL_STEPS[index]?.relatedValue);
-      state.checkRewards.mockClear();
+      state.autoClaimRewards.mockClear();
       const view = show(index, readyQuest(index));
       // A beat to read the victory first, then exactly one claim.
       act(() => vi.advanceTimersByTime(1000));
-      expect(state.checkRewards).not.toHaveBeenCalled();
+      expect(state.autoClaimRewards).not.toHaveBeenCalled();
       act(() => vi.advanceTimersByTime(500));
-      expect(state.checkRewards).toHaveBeenCalledTimes(1);
-      expect(state.checkRewards).toHaveBeenCalledWith({ questId });
+      expect(state.autoClaimRewards).toHaveBeenCalledTimes(1);
+      expect(state.autoClaimRewards).toHaveBeenCalledWith({ questId });
       // Re-renders do not claim again; the button stays for a failed attempt.
       view.rerender(<>{assistant()}</>);
       act(() => vi.advanceTimersByTime(5000));
-      expect(state.checkRewards).toHaveBeenCalledTimes(1);
-      expect(view.getByRole("button", { name: "Claim 1,000 XP" })).toBeTruthy();
+      expect(state.autoClaimRewards).toHaveBeenCalledTimes(1);
+      const claim = view.getByRole("button", { name: "Claim 1,000 XP" });
+      expect(state.checkRewards).not.toHaveBeenCalled();
+      fireEvent.click(claim);
+      expect(state.checkRewards).toHaveBeenLastCalledWith({ questId });
+      state.checkRewards.mockClear();
       cleanup();
       // Nothing is claimed before the objective is done.
       show(index, readyQuest(index, false));
       act(() => vi.advanceTimersByTime(5000));
-      expect(state.checkRewards).toHaveBeenCalledTimes(1);
+      expect(state.autoClaimRewards).toHaveBeenCalledTimes(1);
       cleanup();
     }
     // The pup's reward closes a story beat, so the player still claims it.
     const pup = TUTORIAL_STEPS.findIndex((step) => step.id === "mission-claim-pup");
-    state.checkRewards.mockClear();
+    state.autoClaimRewards.mockClear();
     show(pup, readyQuest(pup));
     act(() => vi.advanceTimersByTime(5000));
-    expect(state.checkRewards).not.toHaveBeenCalled();
+    expect(state.autoClaimRewards).not.toHaveBeenCalled();
   });
 
   it("starts a tutorial trip from the lesson in one tap", () => {
