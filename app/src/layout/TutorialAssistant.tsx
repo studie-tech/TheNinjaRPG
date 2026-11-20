@@ -639,9 +639,8 @@ const PlayerTutorialAssistant: React.FC<
     return `/travel?sector=${sector}&longitude=${longitude}&latitude=${latitude}`;
   })();
 
-  // Many players who won their first fight never pressed Claim. On steps that
-  // only collect what the player just earned, claim it for them after a beat,
-  // once per step; the Claim button stays for a failed attempt.
+  // Collect earned rewards once per user, step and quest after a brief pause.
+  // Keep Claim available so the player can recover from a failed attempt.
   const autoClaimQuestId =
     currentTutorialStep?.autoClaim && isAssistantVisible && claimable?.isReady
       ? claimable.questId

@@ -203,7 +203,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Victory!",
     description:
       "Well fought! Winning completed your first objective. Objective rewards wait in your quest log until you claim them.",
-    // Players who won often never pressed Claim; collect it for them.
+    // Collect the earned reward without requiring another player action.
     action: "Collecting your reward. Tap Claim below if it does not arrive.",
     page: "/profile",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
