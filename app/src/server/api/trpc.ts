@@ -158,8 +158,6 @@ export const deferredRatelimitMiddleware = t.middleware(
   },
 );
 
-export { MUTATION_RATE_LIMIT_MESSAGE, QUERY_RATE_LIMIT_MESSAGE };
-
 /**
  * Sliding-window rate limit keyed per procedure path + identity (userId, or IP
  * for anonymous callers). Every procedure type is limited without changing player
