@@ -10,8 +10,10 @@ import type * as TutorialHooks from "@/hooks/tutorial";
 import * as abVariant from "@/hooks/useAbVariant";
 import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
+import Modal from "@/layout/Modal";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { dialogChoiceContentId } from "@/libs/objectives";
+import * as tutorialPlacement from "@/libs/tutorial";
 import { getTutorialChapterProgress } from "@/libs/tutorial";
 import type * as TutorialSteps from "@/libs/tutorialSteps";
 import { parseHtml } from "@/utils/parse";
@@ -62,6 +64,7 @@ const state = {
   disable: vi.fn(async () => ({ success: true, message: "Saved" })),
   sceneAssets: vi.fn(),
   checkRewards: vi.fn(),
+  autoClaimRewards: vi.fn(),
   setRightSideBarOpen: vi.fn(),
 };
 
@@ -100,6 +103,7 @@ beforeEach(() => {
     state.disable,
     state.sceneAssets,
     state.checkRewards,
+    state.autoClaimRewards,
     state.setRightSideBarOpen,
   ])
     fn.mockClear();
@@ -141,11 +145,15 @@ beforeEach(() => {
       )) as never),
   );
   spies.push(
-    vi
-      .spyOn(logbook, "useCheckRewards")
-      .mockImplementation(
-        () => ({ checkRewards: state.checkRewards, isCheckingRewards: false }) as never,
-      ),
+    vi.spyOn(logbook, "useCheckRewards").mockImplementation(
+      (options) =>
+        ({
+          checkRewards: options?.automatic
+            ? state.autoClaimRewards
+            : state.checkRewards,
+          isCheckingRewards: false,
+        }) as never,
+    ),
   );
   spies.push(
     vi.spyOn(sortableList, "SortableList").mockImplementation((({
@@ -791,6 +799,160 @@ describe("quest steps", () => {
     );
     expect(claimSteps.map((step) => step.id)).toContain("combat-claim-reward");
     for (const step of claimSteps) expect(step.elementIds ?? []).toEqual([]);
+  });
+
+  it("collects the first fight's and first jutsu's rewards without a tap", () => {
+    const readyQuest = (stepIndex: number, done = true) => {
+      const step = TUTORIAL_STEPS[stepIndex]!;
+      const questId = String(step.relatedValue);
+      const objectiveId = String(step.objectiveId);
+      return {
+        userQuests: [
+          {
+            id: "attempt",
+            questId,
+            endAt: null,
+            quest: {
+              id: questId,
+              name: "Trials",
+              questType: "starter",
+              consecutiveObjectives: true,
+              content: {
+                reward: { reward_rank: "NONE", reward_exp: 0, reward_money: 0 },
+                objectives: [
+                  {
+                    id: objectiveId,
+                    task: "win_combat",
+                    description: "Win",
+                    reward_rank: "NONE",
+                    reward_exp: 1000,
+                    reward_money: 0,
+                  },
+                ],
+              },
+            },
+          },
+        ],
+        questData: [
+          { id: questId, goals: [{ id: objectiveId, done, collected: false }] },
+        ],
+      };
+    };
+    const auto = TUTORIAL_STEPS.filter((step) => step.autoClaim).map((step) => step.id);
+    expect(auto).toEqual(["combat-claim-reward", "tools-claim-jutsu"]);
+    vi.useFakeTimers();
+    for (const stepId of auto) {
+      const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
+      const questId = String(TUTORIAL_STEPS[index]?.relatedValue);
+      state.autoClaimRewards.mockClear();
+      const view = show(index, readyQuest(index));
+      // A beat to read the victory first, then exactly one claim.
+      act(() => vi.advanceTimersByTime(1000));
+      expect(state.autoClaimRewards).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(500));
+      expect(state.autoClaimRewards).toHaveBeenCalledTimes(1);
+      expect(state.autoClaimRewards).toHaveBeenCalledWith({ questId });
+      // Re-renders do not claim again; the button stays for a failed attempt.
+      view.rerender(<>{assistant()}</>);
+      act(() => vi.advanceTimersByTime(5000));
+      expect(state.autoClaimRewards).toHaveBeenCalledTimes(1);
+      const claim = view.getByRole("button", { name: "Claim 1,000 XP" });
+      expect(state.checkRewards).not.toHaveBeenCalled();
+      fireEvent.click(claim);
+      expect(state.checkRewards).toHaveBeenLastCalledWith({ questId });
+      state.checkRewards.mockClear();
+      cleanup();
+      // Nothing is claimed before the objective is done.
+      show(index, readyQuest(index, false));
+      act(() => vi.advanceTimersByTime(5000));
+      expect(state.autoClaimRewards).toHaveBeenCalledTimes(1);
+      cleanup();
+    }
+    // The pup's reward closes a story beat, so the player still claims it.
+    const pup = TUTORIAL_STEPS.findIndex((step) => step.id === "mission-claim-pup");
+    state.autoClaimRewards.mockClear();
+    show(pup, readyQuest(pup));
+    act(() => vi.advanceTimersByTime(5000));
+    expect(state.autoClaimRewards).not.toHaveBeenCalled();
+  });
+
+  it("keeps the portrait clear of the whole Auto Travel confirmation", async () => {
+    const placement = vi.spyOn(tutorialPlacement, "getTutorialPortraitSide");
+    spies.push(placement);
+    const modalBox = new DOMRect(350, 250, 500, 220);
+    const getBox = HTMLElement.prototype.getBoundingClientRect;
+    spies.push(
+      vi
+        .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+        .mockImplementation(function (this: HTMLElement) {
+          if (this.id === "tutorial-auto-travel-content") return modalBox;
+          if (this.id === "tutorial-auto-travel-proceed")
+            return new DOMRect(650, 400, 120, 40);
+          return getBox.call(this);
+        }),
+    );
+    const index = TUTORIAL_STEPS.findIndex(
+      (step) => step.id === "mission-travel-to-pup",
+    );
+    show(
+      index,
+      { sector: 301, level: 3 },
+      undefined,
+      <Modal
+        id="tutorial-auto-travel"
+        title="Auto Travel"
+        isOpen
+        setIsOpen={() => {}}
+        proceed_label="Travel"
+        onAccept={() => {}}
+      >
+        Travel to the destination sector?
+      </Modal>,
+    );
+    await waitFor(() =>
+      expect(placement.mock.calls.some(([input]) => input.avoid === modalBox)).toBe(
+        true,
+      ),
+    );
+  });
+
+  it("starts a tutorial trip from the lesson in one tap", () => {
+    for (const [stepId, label] of [
+      ["mission-travel-to-pup", "Take me there"],
+      ["bond-travel-wake", "Take me to Wake Island"],
+    ] as const) {
+      const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
+      const sector = TUTORIAL_STEPS[index]?.relatedValue;
+      expect(typeof sector).toBe("number");
+      state.push.mockClear();
+      const view = show(index, { sector: 301, level: 3 });
+      const button = view.getByRole("button", { name: label });
+      // With no trip confirmation on screen, the lesson's button is the marked action.
+      expect(button.closest("[data-tutorial-claim-highlight]")).toBeTruthy();
+      fireEvent.click(button);
+      expect(state.push).toHaveBeenCalledWith(`/travel?sector=${sector}`);
+      cleanup();
+      // Once the confirmation opens, its Travel button takes the highlight.
+      const confirm = show(
+        index,
+        { sector: 301, level: 3 },
+        undefined,
+        <Target id="tutorial-auto-travel-proceed" />,
+      );
+      expect(
+        confirm
+          .getByRole("button", { name: label })
+          .closest("[data-tutorial-claim-highlight]"),
+      ).toBeNull();
+      cleanup();
+      // On the way there is nothing to start.
+      expect(
+        show(index, { sector: 301, status: "TRAVEL" }).queryByRole("button", {
+          name: label,
+        }),
+      ).toBeNull();
+      cleanup();
+    }
   });
 
   describe("after the tutorial", () => {

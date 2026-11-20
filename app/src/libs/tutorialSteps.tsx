@@ -45,10 +45,15 @@ export interface TutorialStepConfig {
   objectiveStepId?: string;
   /** Shows the related quest's current objective text, for steps whose words come from the quest. */
   quoteObjective?: boolean;
-  /** Label of a button that travels and walks to the related quest's current objective. */
+  /**
+   * Label of a button that travels and walks to the related quest's current objective,
+   * or, on a travel step, travels to the step's sector.
+   */
   autoTravelLabel?: string;
   /** Game action that completes the step. */
   advanceOn?: TutorialTrigger;
+  /** Claims the step's reward on its own once it is ready; the Claim button stays as a fallback. */
+  autoClaim?: boolean;
   /** Skipped while the player has no unassigned experience to spend. */
   needsUnassignedExperience?: boolean;
   showNextButton?: boolean;
@@ -72,11 +77,11 @@ export const TUTORIAL_HOSPITALIZED_STEP: TutorialStepConfig = {
 };
 
 const starterLogbookEntry = `logbook-entry-${TUTORIAL_STARTER_QUEST_ID}`;
+// Before the trip the lesson's own travel button is the target, so the globe stays unmarked.
 const globalTravelElements = [
+  "tutorial-auto-travel-proceed",
   "tutorial-global-travel-proceed",
   "tutorial-travel-arrival",
-  "tutorial-global-map",
-  "tutorial-Global",
 ];
 const assignElements = [
   "tutorial-specialization-confirm-content",
@@ -198,12 +203,13 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Victory!",
     description:
       "Well fought! Winning completed your first objective. Objective rewards wait in your quest log until you claim them.",
-    // The logbook entry only offers a small gift icon; point at the lesson's Claim instead.
-    action: "Tap Claim below to collect your reward.",
+    // Collect the earned reward without requiring another player action.
+    action: "Collecting your reward. Tap Claim below if it does not arrive.",
     page: "/profile",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.arena,
     advanceOn: "questReward",
+    autoClaim: true,
   },
   {
     id: "combat-assign-notice",
@@ -286,12 +292,13 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Objective complete",
     description:
       "Learning a jutsu completed your next trial. You can use Sonic Slash in battle right away, even while it finishes training.",
-    action: "Tap Claim below to collect your reward.",
+    action: "Collecting your reward. Tap Claim below if it does not arrive.",
     page: "/traininggrounds",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.jutsu,
     objectiveStepId: TUTORIAL_JUTSU_PICK_STEP_ID,
     advanceOn: "questReward",
+    autoClaim: true,
   },
   {
     id: "tools-itemshop-building",
@@ -417,11 +424,12 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "The world map",
     description:
-      "This globe is the world of Seichi, and the orange \u2757 badge marks your objective. Journeys between sectors take a little time. Follow your character along the route as the arrival timer counts down. Don't worry, I'm coming with you.",
-    action: "Open Global, tap the orange \u2757 badge, then confirm the trip.",
+      "The pup fled beyond the village walls, to the sector marked on your quest. Journeys between sectors take a little time: follow your character along the route as the arrival timer counts down. Don't worry, I'm coming with you.",
+    action: "Tap Take me there, then Travel.",
     elementIds: globalTravelElements,
     page: "/travel",
     relatedValue: TUTORIAL_CAPTURE_SECTOR,
+    autoTravelLabel: "Take me there",
     objectiveId: STARTER_QUEST_OBJECTIVES.pup,
     advanceOn: "travelArrive",
   },
@@ -484,10 +492,11 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Bring it home",
     description:
       "The pup wears a Bondkeeper tag: it belongs to the sanctuary on <b>Wake Island</b>, a short trip from here. Wake Island is neutral ground, and it is where you will take your Genin exam.",
-    action: "Open Global, tap Wake Island, then confirm the trip.",
+    action: "Tap Take me to Wake Island, then Travel.",
     elementIds: globalTravelElements,
     page: "/travel",
     relatedValue: TUTORIAL_WAKE_SECTOR,
+    autoTravelLabel: "Take me to Wake Island",
     objectiveId: STARTER_QUEST_OBJECTIVES.sanctuary,
     advanceOn: "travelArrive",
   },
