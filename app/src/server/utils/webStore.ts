@@ -19,7 +19,6 @@ import {
   updateUserDataForDeliverStoreOrder,
   updateWebStoreOrderForAuthorize,
   updateWebStoreOrderForDeliverStoreOrder,
-  updateWebStoreOrderForReleaseStoreOrder,
   updateWebStoreOrderForReserve,
 } from "@/queries/paypal";
 import type { DrizzleClient } from "@/server/db";
@@ -118,27 +117,6 @@ export const reserveStoreOrder = async (
   return retryOnDeadlock(() =>
     needsBuyerLock ? client.transaction(reserve) : reserve(client),
   );
-};
-
-/**
- * Release the buyer's own checkout that never reached capture, e.g. after the PayPal
- * window was closed. Safe to repeat; claimed attempts and paid orders are untouched.
- */
-export const releaseStoreOrder = async (
-  client: DrizzleClient,
-  buyerId: string,
-  checkoutId: string,
-) => {
-  const result = await updateWebStoreOrderForReleaseStoreOrder(
-    client,
-    buyerId,
-    checkoutId,
-  );
-  return {
-    success: true as const,
-    message: "Checkout released",
-    released: result.rowsAffected,
-  };
 };
 
 /**
