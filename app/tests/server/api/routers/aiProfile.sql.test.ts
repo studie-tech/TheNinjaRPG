@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { AI_PROFILE_MAX_RULES } from "@/drizzle/constants";
+import { AI_PROFILE_MAX_RULES, NPC_AI_PROFILE_MAX_RULES } from "@/drizzle/constants";
 import { aiProfile, jutsuLoadout, userData } from "@/drizzle/schema";
 import { aiRouter } from "@/server/api/routers/ai";
 import {
@@ -44,6 +44,7 @@ describeWithDatabase("AI rules per jutsu loadout", () => {
       { userId: "other", username: "other", jutsuLoadout: "o1" },
       { userId: "unloaded", username: "unloaded" },
       { userId: "staff", username: "staff", role: "CODER" },
+      { userId: "admin", username: "admin", role: "CONTENT-ADMIN" },
       { userId: "bot", username: "bot", isAi: true },
     ]);
     await (await getTestDatabase()).insert(jutsuLoadout).values([
@@ -165,7 +166,7 @@ describeWithDatabase("AI rules per jutsu loadout", () => {
     });
   });
 
-  it("keeps staff AI profiles to 20 rules in total", async () => {
+  it("allows NPC profiles 50 total rules and preserves them after an oversized save", async () => {
     const staff = await callerFor(aiRouter, "staff");
     await staff.toggleAiProfile({ aiId: "bot", custom: true });
     const bot = await (await getTestDatabase()).query.userData.findFirst({
@@ -176,12 +177,89 @@ describeWithDatabase("AI rules per jutsu loadout", () => {
       where: eq(aiProfile.id, id),
     });
     expect(row?.jutsuLoadoutId).toBeNull();
+    const rules = [
+      ...custom(NPC_AI_PROFILE_MAX_RULES - getBackupRules().length),
+      ...getBackupRules(),
+    ];
+    expect(
+      (await staff.updateAiProfile({ id, rules, includeDefaultRules: true })).success,
+    ).toBe(true);
     const over = await staff.updateAiProfile({
       id,
-      rules: [...custom(AI_PROFILE_MAX_RULES - 2), ...getBackupRules()],
+      rules: [...custom(1), ...rules],
       includeDefaultRules: true,
     });
     expect(over).toMatchObject({
+      success: false,
+      message: `Maximum of ${NPC_AI_PROFILE_MAX_RULES} rules allowed`,
+    });
+    const saved = await staff.getAiProfile({ id });
+    expect(saved.rules).toEqual(rules);
+  });
+
+  it("keeps player loadout limits when staff edits their rules", async () => {
+    const staff = await callerFor(aiRouter, "staff");
+    await staff.toggleAiProfile({ aiId: "player", custom: true });
+    const id = (await player())?.aiProfileId as string;
+    const rules = [...custom(AI_PROFILE_MAX_RULES), ...getBackupRules()];
+    expect(
+      (await staff.updateAiProfile({ id, rules, includeDefaultRules: true })).success,
+    ).toBe(true);
+    expect(
+      await staff.updateAiProfile({
+        id,
+        rules: [...custom(1), ...rules],
+        includeDefaultRules: true,
+      }),
+    ).toMatchObject({
+      success: false,
+      message: `Maximum of ${AI_PROFILE_MAX_RULES} custom rules allowed`,
+    });
+    expect((await staff.getAiProfile({ id })).rules).toEqual(rules);
+  });
+
+  it("keeps the shared Default profile at 20 total rules even with an NPC owner", async () => {
+    const staff = await callerFor(aiRouter, "admin");
+    const database = await getTestDatabase();
+    await database
+      .update(aiProfile)
+      .set({ userId: "bot" })
+      .where(eq(aiProfile.id, "Default"));
+    const rules = custom(AI_PROFILE_MAX_RULES);
+    expect(
+      (
+        await staff.updateAiProfile({
+          id: "Default",
+          rules,
+          includeDefaultRules: false,
+        })
+      ).success,
+    ).toBe(true);
+    expect(
+      await staff.updateAiProfile({
+        id: "Default",
+        rules: [...rules, ...custom(1)],
+        includeDefaultRules: false,
+      }),
+    ).toMatchObject({
+      success: false,
+      message: `Maximum of ${AI_PROFILE_MAX_RULES} rules allowed`,
+    });
+    expect((await staff.getAiProfile({ id: "Default" })).rules).toEqual(rules);
+  });
+
+  it("keeps unlinked player profiles at 20 total rules", async () => {
+    const staff = await callerFor(aiRouter, "staff");
+    await (await getTestDatabase())
+      .insert(aiProfile)
+      .values({ id: "unlinked-player", userId: "player", rules: [] });
+    expect(
+      await staff.updateAiProfile({
+        id: "unlinked-player",
+        rules: custom(AI_PROFILE_MAX_RULES + 1),
+        includeDefaultRules: false,
+      }),
+    ).toMatchObject({
       success: false,
       message: `Maximum of ${AI_PROFILE_MAX_RULES} rules allowed`,
     });

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
+import { NPC_AI_PROFILE_MAX_RULES } from "@/drizzle/constants";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import * as ContentBox from "@/layout/ContentBox";
 import * as toast from "@/libs/toast";
@@ -177,6 +178,48 @@ const custom = (count: number): AiRuleType[] =>
   Array.from({ length: count }, () =>
     AiRule.parse({ conditions: [], action: ActionEndTurn.parse({}) }),
   );
+
+it("counts NPC fallback rules toward the total limit and stops adding at 50", () => {
+  mocks.profile.rules = [
+    ...custom(NPC_AI_PROFILE_MAX_RULES - getBackupRules().length - 1),
+    ...getBackupRules(),
+  ];
+  const view = render(
+    <AiProfileEdit
+      userData={{ aiProfileId: "custom", userId: "bot", jutsus: [], items: [] }}
+      maxTotalRules={NPC_AI_PROFILE_MAX_RULES}
+    />,
+  );
+  expect(view.getByText("49 / 50 rules")).toBeDefined();
+  fireEvent.click(view.getByRole("button", { name: "Add Rule" }));
+  expect(view.getByText("50 / 50 rules")).toBeDefined();
+  expect(
+    (view.getByRole("button", { name: "Add Rule" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(
+    (view.getByRole("button", { name: "Add Group" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(save(view).rules).toHaveLength(50);
+});
+
+it("rejects an NPC draft exceeding the total limit", () => {
+  mocks.profile.rules = [
+    ...custom(NPC_AI_PROFILE_MAX_RULES - getBackupRules().length + 1),
+    ...getBackupRules(),
+  ];
+  const view = render(
+    <AiProfileEdit
+      userData={{ aiProfileId: "custom", userId: "bot", jutsus: [], items: [] }}
+      maxTotalRules={NPC_AI_PROFILE_MAX_RULES}
+    />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Save Profile" }));
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(toast.showMutationToast).toHaveBeenCalledWith({
+    success: false,
+    message: "Maximum of 50 rules allowed",
+  });
+});
 
 it("keeps the staff CatchAll switch off limits while the rules are locked", () => {
   const component = (locked: boolean) => (

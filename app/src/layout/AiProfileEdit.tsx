@@ -70,6 +70,8 @@ interface AiProfileEditProps {
   availableActionEffects?: readonly string[];
   /** Show a rule counter and stop adding rules at this many custom rules (backup rules aside). */
   maxCustomRules?: number;
+  /** Count every saved rule, including fallback rules, toward this limit. */
+  maxTotalRules?: number;
   /** Hear whether the draft holds edits that are not saved yet. */
   onDirtyChange?: (isDirty: boolean) => void;
   /** Hear whether a switch between the Default and Custom rules is running. */
@@ -197,15 +199,16 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   // Get backup rules
   const backupRules = getBackupRules();
   const customRuleCount = countCustomRules(rules);
-  // A player's counter and copying apply to their own rules, not the read-only Default ones.
-  const showsRuleLimit = props.maxCustomRules !== undefined && !isDefault;
+  // Default rules are shared; caller limits describe the actor's custom profile.
+  const ruleLimit = props.maxTotalRules ?? props.maxCustomRules;
+  const ruleCount = props.maxTotalRules !== undefined ? rules.length : customRuleCount;
+  const showsRuleLimit = ruleLimit !== undefined && !isDefault;
   const unequippedRuleCount = countRulesWithUnequippedActions(rules, [
     ...jutsus.map((entry) => entry.jutsuId),
     ...items.map((entry) => entry.itemId),
   ]);
   const isAtRuleLimit =
-    showsRuleLimit &&
-    customRuleCount >= (props.maxCustomRules ?? Number.POSITIVE_INFINITY);
+    showsRuleLimit && ruleCount >= (ruleLimit ?? Number.POSITIVE_INFINITY);
   const copyRulesFrom = async (id: string, name: string) => {
     const draft = rules;
     const from = profile;
@@ -569,7 +572,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
         )}
         {showsRuleLimit && (
           <span className="text-muted-foreground text-sm">
-            {customRuleCount} / {props.maxCustomRules} rules
+            {ruleCount} / {ruleLimit} rules
           </span>
         )}
         {canEdit && (
@@ -596,6 +599,16 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
             // Copied rules that are still loading would land in the draft after it is saved.
             disabled={copyingId !== null}
             onClick={() => {
+              if (
+                showsRuleLimit &&
+                ruleCount > (ruleLimit ?? Number.POSITIVE_INFINITY)
+              ) {
+                showMutationToast({
+                  success: false,
+                  message: `Maximum of ${ruleLimit} rules allowed`,
+                });
+                return;
+              }
               const parsed = updateAiProfileSchema.safeParse({
                 id: aiProfileId,
                 rules,
@@ -628,7 +641,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
           Rule limit reached. Delete a rule to add another.
         </p>
       )}
-      {showsRuleLimit && unequippedRuleCount > 0 && (
+      {props.maxCustomRules !== undefined && !isDefault && unequippedRuleCount > 0 && (
         <p className="px-3 pb-2 text-muted-foreground text-sm">
           {unequippedRuleCount === 1
             ? "1 rule names jutsu or items you don't have equipped. Battles skip that rule"

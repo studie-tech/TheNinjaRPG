@@ -1,7 +1,11 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getToggleAiProfileUserUpdate } from "@/deltas/ai";
-import { AI_PROFILE_MAX_RULES, TRANSFORMATION_ACTION } from "@/drizzle/constants";
+import {
+  AI_PROFILE_MAX_RULES,
+  NPC_AI_PROFILE_MAX_RULES,
+  TRANSFORMATION_ACTION,
+} from "@/drizzle/constants";
 import type { AiTransformation } from "@/drizzle/schema";
 import { bossChainIssue, bossFormsFrom } from "@/libs/combat/bossFight";
 import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate";
@@ -10,6 +14,7 @@ import {
   executeRowsForToggleAiProfile,
   fetchAiLoadoutStateForToggleAiProfile,
   fetchAiProfileById,
+  fetchAiProfileForUpdate,
   fetchUnlinkedAiProfileByUserId,
   insertAiProfileForToggleAiProfile,
   listAiForBossFight,
@@ -79,7 +84,7 @@ export const aiRouter = createTRPCRouter({
       // Fetch
       const [user, profile] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchAiProfileById(ctx.drizzle, input.id),
+        fetchAiProfileForUpdate(ctx.drizzle, input.id),
       ]);
       // Guard
       if (!profile) return errorResponse("Profile not found");
@@ -96,8 +101,14 @@ export const aiRouter = createTRPCRouter({
             `Maximum of ${AI_PROFILE_MAX_RULES} custom rules allowed`,
           );
         }
-      } else if (input.rules.length > AI_PROFILE_MAX_RULES) {
-        return errorResponse(`Maximum of ${AI_PROFILE_MAX_RULES} rules allowed`);
+      } else {
+        const maxRules =
+          profile.id !== "Default" && profile.user?.isAi
+            ? NPC_AI_PROFILE_MAX_RULES
+            : AI_PROFILE_MAX_RULES;
+        if (input.rules.length > maxRules) {
+          return errorResponse(`Maximum of ${maxRules} rules allowed`);
+        }
       }
       if (profile.userId === user.userId) {
         const [jutsus, items] = await Promise.all([
