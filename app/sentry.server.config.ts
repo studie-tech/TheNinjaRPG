@@ -18,7 +18,8 @@ Sentry.init({
   ignoreErrors: [
     "Unauthorized for tRPC endpoint",
     "You are acting too fast",
-    // The shared request limiter's rejections (see src/server/api/trpc.ts).
+    // UX: the tRPC provider shows rate-limit retry guidance. Combat's local handler
+    // keeps the battle visible, clears pending state and lets its automatic driver retry.
     ...RATE_LIMIT_MESSAGES,
     // Stale client after a deployment: the router state tree's last element used
     // to be a boolean and is now a number, so a browser still running the
