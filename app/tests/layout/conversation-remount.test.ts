@@ -1,7 +1,8 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  focusManager,
   type InfiniteData,
   InfiniteQueryObserver,
   QueryClient,
@@ -21,6 +22,10 @@ const provider = readFileSync(join(sourceRoot, "app/_trpc/Provider.tsx"), "utf8"
 const staleTimeExpression = provider.match(/\bstaleTime:\s*([^,\n]+)/)?.[1];
 if (!staleTimeExpression) throw new Error("Provider query staleTime was not found");
 const staleTime = new Function(`return (${staleTimeExpression});`)() as number;
+
+afterEach(() => {
+  focusManager.setFocused(undefined);
+});
 
 describe("cached conversation remounts", () => {
   it("shares immutable conversation writes with other observers and keeps pagination and refetch working", async () => {
@@ -167,6 +172,65 @@ describe("cached conversation remounts", () => {
         ]);
       } finally {
         unsubscribe();
+        client.clear();
+      }
+    });
+  }
+  for (const file of ["Conversation.tsx", "TeamChatPanel.tsx"]) {
+    it(`${file} removes fresh cached history on refocus after a missed parental restriction`, async () => {
+      const client = new QueryClient({
+        defaultOptions: { queries: { staleTime, retry: false } },
+      });
+      // A mounted client follows browser focus, as under QueryClientProvider.
+      client.mount();
+      const reads: unknown[] = [];
+      let restricted = false;
+      const observer = new InfiniteQueryObserver(client, {
+        ...conversationQueryOptions<ChatPage>(file),
+        queryKey: ["conversation-focus", file],
+        initialPageParam: null,
+        queryFn: async ({ pageParam }: { pageParam: unknown }): Promise<ChatPage> => {
+          reads.push(pageParam);
+          return {
+            data: restricted ? [] : [`page ${pageParam ?? 0}`],
+            convo: restricted ? null : { id: "chat" },
+            restrictionMessage: restricted ? "Private messages are disabled." : null,
+            nextCursor: !restricted && pageParam === null ? 1 : null,
+          };
+        },
+      });
+      const unsubscribe = observer.subscribe(() => {});
+      const refocus = async () => {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      };
+      try {
+        await waitFor(() => expect(observer.getCurrentResult().isSuccess).toBe(true));
+        await observer.fetchNextPage();
+        expect(reads).toEqual([null, 1]);
+        restricted = true;
+        await refocus();
+        await waitFor(() =>
+          expect(observer.getCurrentResult().data?.pages).toEqual([
+            {
+              data: [],
+              convo: null,
+              restrictionMessage: "Private messages are disabled.",
+              nextCursor: null,
+            },
+          ]),
+        );
+        expect(reads).toEqual([null, 1, null]);
+        restricted = false;
+        await refocus();
+        await waitFor(() =>
+          expect(observer.getCurrentResult().data?.pages[0]?.data).toEqual(["page 0"]),
+        );
+        expect(reads).toEqual([null, 1, null, null]);
+      } finally {
+        unsubscribe();
+        client.unmount();
         client.clear();
       }
     });

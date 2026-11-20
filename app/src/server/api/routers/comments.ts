@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull, like, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import {
   IMG_AVATAR_DEFAULT,
@@ -637,33 +638,39 @@ export const commentsRouter = createTRPCRouter({
           .filter(({ type }) => type === "mentioned")
           .map(({ userId }) => userId),
       });
-      void Promise.all([
-        // Ping users (both mentioned and quoted, only those not in a blacklist relationship)
-        ...notifiedUserIds.map(({ userId, type }) =>
-          pusher.trigger(userId, "event", {
-            type: "pinged",
-            conversationId: convo.id,
-            isPublic: convo.isPublic,
-            message: `${effectiveUsername} ${type === "mentioned" ? "pinged" : "quoted"} you in ${convo.title}`,
+      // Recipients sharing a payload receive it through one multi-channel request.
+      after(() =>
+        Promise.all([
+          // Ping users (both mentioned and quoted, only those not in a blacklist relationship)
+          ...(["mentioned", "quoted"] as const).map((type) => {
+            const userIds = notifiedUserIds
+              .filter((notified) => notified.type === type)
+              .map(({ userId }) => userId);
+            return userIds.length > 0
+              ? pusher.trigger(userIds, "event", {
+                  type: "pinged",
+                  conversationId: convo.id,
+                  isPublic: convo.isPublic,
+                  message: `${effectiveUsername} ${type === "mentioned" ? "pinged" : "quoted"} you in ${convo.title}`,
+                })
+              : undefined;
           }),
-        ),
-        // Trigger new comment event
-        pusher.trigger(convo.id, "event", {
-          message: "new",
-          fromId: effectiveUserId,
-          commentId: commentId,
-        }),
-        // Inbox news (pusher notifications)
-        ...(inboxRecipientIds.length > 0 && !convo.isPublic && !skipInboxNotifications
-          ? inboxRecipientIds.map((userId) =>
-              pusher.trigger(userId, "event", {
+          // Trigger new comment event
+          pusher.trigger(convo.id, "event", {
+            message: "new",
+            fromId: effectiveUserId,
+            commentId: commentId,
+          }),
+          // Inbox news (pusher notifications)
+          inboxRecipientIds.length > 0 && !convo.isPublic && !skipInboxNotifications
+            ? pusher.trigger(inboxRecipientIds, "event", {
                 type: "newInbox",
                 conversationId: convo.id,
                 countedAt,
-              }),
-            )
-          : []),
-      ]);
+              })
+            : undefined,
+        ]),
+      );
 
       return { success: true, message: "Comment posted", commentId: commentId };
     }),
@@ -994,15 +1001,16 @@ export const createConvo = async (info: {
       insertId,
     ),
   ]);
-  const pusher = getServerPusher();
-  receiverUserIds.forEach(
-    (userId) =>
-      void pusher.trigger(userId, "event", {
+  if (receiverUserIds.length > 0) {
+    const pusher = getServerPusher();
+    after(() =>
+      pusher.trigger(receiverUserIds, "event", {
         type: "newInbox",
         conversationId: insertId,
         countedAt,
       }),
-  );
+    );
+  }
   notifyPrivateConversation(client, {
     conversationId: insertId,
     isPublic,

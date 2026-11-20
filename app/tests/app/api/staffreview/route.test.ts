@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import * as ai from "ai";
-import { GET } from "@/app/api/staffreview/route";
+import { GET as handleGet } from "@/app/api/staffreview/route";
 import {
   conversation,
   conversationComment,
@@ -11,12 +11,15 @@ import {
 } from "@/drizzle/schema";
 import * as pusher from "@/libs/pusher";
 import * as social from "@/server/utils/push/social";
+import { withAfterTasks } from "../../../setup/after";
 import {
   resetServerModuleStubs,
   stubCronAuth,
   stubDatabase,
 } from "../../../setup/serverModules";
 
+// Direct handler calls deliver their deferred inbox events before assertions.
+const { GET } = withAfterTasks({ GET: handleGet });
 const LAST_RUN = new Date(Date.now() - 40 * 24 * 3600 * 1000);
 const request = () => new Request("https://example.com/api/staffreview");
 const timer = {

@@ -1434,17 +1434,21 @@ export const clanRouter = createTRPCRouter({
         );
       }
       // Notify all clan members of both clans
-      [
-        ...challenger.members.map((m) => m.userId),
-        ...defender.members.map((m) => m.userId),
-      ].forEach((userId) => {
-        void pusher.trigger(userId, "event", {
-          type: "userMessage",
-          message: `${challenger.name} ${groupLabel} has challenged ${defender.name} to a ${groupLabel} battle.`,
-          route: "/clanhall",
-          routeText: `To ${groupLabel} Hall`,
-        });
-      });
+      after(() =>
+        pusher.trigger(
+          [
+            ...challenger.members.map((m) => m.userId),
+            ...defender.members.map((m) => m.userId),
+          ],
+          "event",
+          {
+            type: "userMessage",
+            message: `${challenger.name} ${groupLabel} has challenged ${defender.name} to a ${groupLabel} battle.`,
+            route: "/clanhall",
+            routeText: `To ${groupLabel} Hall`,
+          },
+        ),
+      );
       return actionReadinessResponse(
         {
           success: true,

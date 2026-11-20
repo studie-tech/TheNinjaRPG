@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import {
   getActivateBoostUserUpdate,
@@ -1286,14 +1287,14 @@ export const shrineRouter = createTRPCRouter({
         // is cloned into the battle state instead, so it stays untouched.
 
         // Notify participants
-        allUserIds.forEach((userId) => {
-          void pusher.trigger(userId, "event", {
+        after(() =>
+          pusher.trigger(allUserIds, "event", {
             type: "userMessage",
             message: "Shrine battle has started!",
             route: "/combat",
             routeText: "To Combat",
-          });
-        });
+          }),
+        );
 
         return {
           success: true,

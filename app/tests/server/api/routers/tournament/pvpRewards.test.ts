@@ -9,9 +9,13 @@ import {
   village,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
-import { syncTournamentState, tournamentRouter } from "@/server/api/routers/tournament";
+import {
+  syncTournamentState as syncTournamentStateNow,
+  tournamentRouter,
+} from "@/server/api/routers/tournament";
 import { updateRewards } from "@/server/utils/questRewards";
 import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
+import { withAfterTasks } from "../../../../setup/after";
 import { insertClans, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
@@ -19,6 +23,11 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+
+// Direct synchronization delivers its deferred notifications before assertions.
+const { syncTournamentState } = withAfterTasks({
+  syncTournamentState: syncTournamentStateNow,
+});
 
 describeWithDatabase("tournament PvP reward boost", () => {
   beforeEach(async () => {

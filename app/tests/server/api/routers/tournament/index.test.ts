@@ -5,6 +5,7 @@ import {
   archivedTournamentRecordName,
   syncTournamentState,
 } from "@/routers/tournament";
+import { withAfterTasks } from "../../../../setup/after";
 import { resetServerModuleStubs } from "../../../../setup/serverModules";
 
 const FINALIZATION_INCOMPLETE =
@@ -122,7 +123,11 @@ describe("syncTournamentState", () => {
 
   /** Runs synchronization with the isolated reward writer configured by each test. */
   const syncTournament = (client: unknown) =>
-    syncTournamentState(client as never, "tournament-1", updateRewardsMock);
+    withAfterTasks({ syncTournamentState }).syncTournamentState(
+      client as never,
+      "tournament-1",
+      updateRewardsMock,
+    );
 
   beforeEach(() => {
     pusherTrigger.mockClear();
@@ -149,7 +154,12 @@ describe("syncTournamentState", () => {
         winnerId: null,
       }),
     );
-    expect(pusherTrigger).toHaveBeenCalledTimes(2);
+    expect(pusherTrigger).toHaveBeenCalledTimes(1);
+    expect(pusherTrigger).toHaveBeenCalledWith(
+      ["winner-1", "loser-1"],
+      "event",
+      expect.objectContaining({ type: "userMessage" }),
+    );
   });
 
   it("does not mark the tournament completed when the winner user is missing", async () => {

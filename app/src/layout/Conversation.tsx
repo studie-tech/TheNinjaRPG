@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { RefreshCw, Search, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -106,6 +106,12 @@ export const useConversation = (props: ConversationLogicProps) => {
   // A conversation left in a hidden tab or backgrounded app stops following live
   // events once the pause delay passes; showing the page again resumes and catches up.
   const isPageActive = usePageActive();
+  // Live events read visibility when they arrive, so showing or hiding the page keeps
+  // the channel subscription and cannot drop messages published in between.
+  const isPageActiveRef = useRef(isPageActive);
+  useEffect(() => {
+    isPageActiveRef.current = isPageActive;
+  }, [isPageActive]);
   const [isPaused, setIsPaused] = useState(false);
   useEffect(() => {
     if (isPageActive) return;
@@ -203,19 +209,21 @@ export const useConversation = (props: ConversationLogicProps) => {
     defaultValues: { searchTerm: "" },
   });
 
+  // A changed term selects a new query key, which loads its own results; `refetch`
+  // belongs to the current key, so it only repeats an unchanged search.
   const onSearchSubmit = useCallback(
     (values: SearchFormSchema) => {
-      setSearchQuery(values.searchTerm);
-      void refetch();
+      if (values.searchTerm === searchQuery) void refetch();
+      else setSearchQuery(values.searchTerm);
     },
-    [refetch],
+    [refetch, searchQuery],
   );
 
   const clearSearch = useCallback(() => {
-    setSearchQuery("");
     searchForm.reset({ searchTerm: "" });
-    void refetch();
-  }, [searchForm, refetch]);
+    if (searchQuery === "") void refetch();
+    else setSearchQuery("");
+  }, [searchForm, refetch, searchQuery]);
 
   // Create search button element
   const searchButtonElement = useMemo(
@@ -560,12 +568,15 @@ export const useConversation = (props: ConversationLogicProps) => {
   /**
    * Websockets event listener
    */
+  // Keyed on the id: a refetch replaces the cached conversation object, and
+  // resubscribing would drop events published during the switch.
+  const conversationId = conversation?.id;
   useEffect(() => {
-    if (conversation && pusher && !isPaused) {
+    if (conversationId && pusher && !isPaused) {
       const ownUserId = userData?.userId;
       return subscribeConversation(
         pusher,
-        conversation.id,
+        conversationId,
         JSON.stringify(queryKey),
         (data, ownsCacheUpdate) => {
           switch (data.message) {
@@ -573,8 +584,8 @@ export const useConversation = (props: ConversationLogicProps) => {
               if (ownsCacheUpdate && data.fromId !== ownUserId && data.commentId) {
                 fetchComment({
                   commentId: data.commentId,
-                  conversationId: conversation.id,
-                  markRead: isPageActive,
+                  conversationId,
+                  markRead: isPageActiveRef.current,
                 });
               }
               break;
@@ -605,7 +616,7 @@ export const useConversation = (props: ConversationLogicProps) => {
         },
       );
     }
-  }, [isPaused, isPageActive, conversation, pusher, queryKey]);
+  }, [isPaused, conversationId, pusher, queryKey]);
 
   // Resuming after the subscription above is restored fetches what arrived meanwhile.
   useEffect(() => {

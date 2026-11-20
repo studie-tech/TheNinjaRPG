@@ -1,6 +1,10 @@
 import crypto from "node:crypto";
 import type { UserRank, UserStatus } from "@/drizzle/constants";
 import { env } from "@/env/server.mjs";
+import { chunkArray } from "@/utils/array";
+
+/** Pusher and Soketi accept at most this many channels in one event request. */
+export const PUSHER_MAX_CHANNELS_PER_EVENT = 100;
 
 // declare Pusher class with async send method
 // Taken from https://github.com/pusher/pusher-http-node/issues/173
@@ -17,18 +21,33 @@ export class Pusher {
   }
 
   /**
-   * Triggers event on the channel
-   * @param channel - channel name
+   * Triggers the same event on one or more channels. A channel list is sent as one
+   * request per {@link PUSHER_MAX_CHANNELS_PER_EVENT} channels, the HTTP API's limit.
+   * @param channels - channel name, or the channels that all receive this payload
    * @param event - event name
-   * @param data - data to send, nedd to be JSON object or string
+   * @param data - JSON object or string to send
    */
-  async trigger(channel: string, event: string, data: object | string) {
+  async trigger(channels: string | string[], event: string, data: object | string) {
+    const payload = typeof data === "string" ? data : JSON.stringify(data);
+    if (typeof channels === "string") {
+      return this._send({ name: event, data: payload, channel: channels });
+    }
+    const batches = chunkArray([...new Set(channels)], PUSHER_MAX_CHANNELS_PER_EVENT);
+    await Promise.all(
+      batches.map((batch) =>
+        this._send({ name: event, data: payload, channels: batch }),
+      ),
+    );
+  }
+
+  private async _send(event: {
+    name: string;
+    data: string;
+    channel?: string;
+    channels?: string[];
+  }) {
     const timestamp = (Date.now() / 1000) | 0;
-    const body = JSON.stringify({
-      name: event,
-      data: typeof data === "string" ? data : JSON.stringify(data),
-      channel: channel,
-    });
+    const body = JSON.stringify(event);
     const md5 = this._md5(body);
     const signature = await this._createSignature(timestamp, body, md5);
 

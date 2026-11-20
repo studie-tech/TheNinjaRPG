@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient } from "@tanstack/react-query";
+import { focusManager, QueryClient } from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -59,6 +59,8 @@ let createInputs: unknown[];
 let finishCreate: (value: object) => void;
 let fetched: ReturnType<typeof row> | undefined;
 let reads = 0;
+let searchReads: string[] = [];
+let fetchInputs: unknown[] = [];
 const pusher = {
   subscribe: () => ({
     bind: (_event: string, handler: typeof receive) => {
@@ -74,6 +76,8 @@ beforeEach(() => {
   installBrowserGlobals();
   typingSent = [];
   createInputs = [];
+  searchReads = [];
+  fetchInputs = [];
   fetched = undefined;
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: testApi.comments,
@@ -91,6 +95,7 @@ afterEach(async () => {
   cleanup();
   await flushRadixFocus();
   for (const queryClient of clients.splice(0)) queryClient.clear();
+  focusManager.setFocused(undefined);
   vi.restoreAllMocks();
   restoreBrowserGlobals();
 });
@@ -106,9 +111,10 @@ const mount = (
   const trpcClient = fakeTrpcClient((path, input) => {
     if (path === "comments.getConversationComments") {
       reads++;
+      searchReads.push((input as { searchQuery: string }).searchQuery);
       return {
         data: [...rows],
-        convo: { id: "chat", isPublic },
+        convo: { id: "chat", isPublic, lastReadAt: isPublic ? undefined : new Date() },
         nextCursor: null,
       };
     }
@@ -122,7 +128,10 @@ const mount = (
         finishCreate = resolve;
       });
     }
-    if (path === "comments.fetchConversationComment") return fetched;
+    if (path === "comments.fetchConversationComment") {
+      fetchInputs.push(input);
+      return fetched;
+    }
     if (path === "comments.reactConversationComment") return { success: true };
     throw new Error(`Unexpected request: ${path}`);
   });
@@ -372,6 +381,96 @@ it("retries a failed sanitizer load when a quote is toggled and fills its previe
   const quoted =
     hook.result.current.allComments?.find((c) => c.id === "b")?.content ?? "";
   expect(hook.result.current.sanitizer?.stripBlockquotes(quoted)).toBe("<p>Bravo</p>");
+});
+
+it("keeps the live channel across visibility changes and acknowledges background messages on refocus", async () => {
+  let hidden = false;
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+  const setHidden = (value: boolean) =>
+    act(async () => {
+      hidden = value;
+      document.dispatchEvent(new window.Event("visibilitychange", { bubbles: true }));
+      focusManager.setFocused(!value);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  const subscribe = vi.spyOn(pusher, "subscribe");
+  try {
+    const rows = [row("a", "Alpha"), row("b", "Bravo", "Peer")];
+    const hook = mount(false, rows);
+    await loaded(hook);
+    const lastReadAt = hook.result.current.conversation?.lastReadAt;
+    const subscribes = subscribe.mock.calls.length;
+    const unsubscribes = pusher.unsubscribe.mock.calls.length;
+    await setHidden(true);
+    fetched = row("hidden", "Sent while hidden", "Peer");
+    await act(async () =>
+      receive({ message: "new", fromId: "peer", commentId: "hidden" }),
+    );
+    await waitFor(() => expect(fetchInputs).toHaveLength(1));
+    rows.unshift(fetched);
+    const beforeFocus = reads;
+    await setHidden(false);
+    await waitFor(() => expect(reads).toBe(beforeFocus + 1));
+    expect(hook.result.current.conversation?.lastReadAt).not.toEqual(lastReadAt);
+    expect(hook.result.current.allComments?.[0]?.id).toBe("hidden");
+    fetched = row("shown", "Sent while shown", "Peer");
+    await act(async () =>
+      receive({ message: "new", fromId: "peer", commentId: "shown" }),
+    );
+    await waitFor(() => expect(fetchInputs).toHaveLength(2));
+    expect(subscribe.mock.calls.length).toBe(subscribes);
+    expect(pusher.unsubscribe.mock.calls.length).toBe(unsubscribes);
+    expect(fetchInputs).toEqual([
+      expect.objectContaining({ commentId: "hidden", markRead: false }),
+      expect.objectContaining({ commentId: "shown", markRead: true }),
+    ]);
+  } finally {
+    Reflect.deleteProperty(document, "hidden");
+  }
+});
+
+it("keeps the live channel when a refetch replaces the cached conversation", async () => {
+  const subscribe = vi.spyOn(pusher, "subscribe");
+  const hook = mount();
+  await loaded(hook);
+  const subscribes = subscribe.mock.calls.length;
+  const unsubscribes = pusher.unsubscribe.mock.calls.length;
+  const before = reads;
+  const conversation = hook.result.current.conversation;
+  await act(async () => {
+    await hook.result.current.invalidateComments();
+  });
+  await waitFor(() => expect(reads).toBe(before + 1));
+  await waitFor(() => expect(hook.result.current.conversation).not.toBe(conversation));
+  expect(subscribe.mock.calls.length).toBe(subscribes);
+  expect(pusher.unsubscribe.mock.calls.length).toBe(unsubscribes);
+});
+
+it("reads only the selected search, repeating it when the same term is submitted again", async () => {
+  const hook = mount();
+  await loaded(hook);
+  expect(searchReads).toEqual([""]);
+  fireEvent.click(screen.getByRole("button", { name: "Search messages" }));
+  const input = await screen.findByPlaceholderText("Search for messages...");
+  const submit = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  };
+  fireEvent.change(input, { target: { value: "find" } });
+  await submit();
+  await waitFor(() => expect(hook.result.current.searchQuery).toBe("find"));
+  expect(searchReads).toEqual(["", "find"]);
+  await submit();
+  expect(searchReads).toEqual(["", "find", "find"]);
+  // The unsearched history is still fresh in the cache, so clearing reads nothing.
+  act(() => hook.result.current.clearSearch());
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  expect(hook.result.current.searchQuery).toBe("");
+  expect(searchReads).toEqual(["", "find", "find"]);
 });
 
 it("keeps non-matching new messages out of search results and shows matching ones", async () => {

@@ -89,8 +89,10 @@ describe("private-message ordinary push", () => {
     expect(deferred).toHaveLength(0);
     for (const resolve of resolvers) resolve();
     expect(await creating).toBe(info.conversationId);
-    expect(deferred).toHaveLength(1);
-    await deferred[0]?.();
+    // The inbox event and the native push both wait for the response.
+    expect(deferred).toHaveLength(2);
+    for (const task of deferred) await task();
+    expect(send).toHaveBeenCalledTimes(1);
     const payload = send.mock.calls[0]?.[2];
     expect(JSON.stringify(payload)).not.toContain("Private content");
     expect(JSON.stringify(payload)).not.toContain("Private title");
