@@ -914,7 +914,10 @@ export const dungeonRouter = createTRPCRouter({
     }),
 });
 
-/** Restore each run's content snapshot from the page row that carried its shared hash. */
+/**
+ * Restore each run's content snapshot from the page row that carried its hash. Copies keep
+ * runs from sharing one object, which would also add reference metadata to the response.
+ */
 const withSharedDungeonContent = (
   rows: Awaited<ReturnType<typeof selectCandidatesForGetState>>,
 ): DungeonRun[] => {
@@ -923,9 +926,9 @@ const withSharedDungeonContent = (
       content ? [[contentHash, content] as const] : [],
     ),
   );
-  return rows.map(({ content, contentHash, ...run }) => {
-    const shared = content ?? contents.get(contentHash);
+  return rows.map(({ contentHash, ...run }) => {
+    const shared = contents.get(contentHash);
     if (!shared) throw new Error(`Missing content snapshot for dungeon run ${run.id}`);
-    return { ...run, content: shared };
+    return { ...run, content: run.content ?? structuredClone(shared) };
   });
 };

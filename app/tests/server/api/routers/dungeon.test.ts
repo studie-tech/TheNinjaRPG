@@ -306,7 +306,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     // Selection keeps the active lobby; the response lists runs newest first.
     expect(state.runs.map((run) => run.id)).toEqual([id, "old-3", "old-2", "old-1"]);
     for (const run of state.runs)
-      expect(run.content).toEqual(stored.find((row) => row.id === run.id)?.content);
+      expect(stored.find((row) => row.id === run.id)?.content).toEqual(run.content);
     const page = await selectCandidatesForGetState(
       db,
       selectDungeonMemberForGetState(db, { userId: "a" }),
