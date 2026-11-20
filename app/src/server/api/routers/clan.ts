@@ -45,7 +45,6 @@ import {
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { clan, userData, village } from "@/drizzle/schema";
-import { checkIfSectorIsAvailable } from "@/libs/clan";
 import { getClanBoostCost, getClanBoostLevel } from "@/libs/clanBoost";
 import { isElderCandidateWithoutCutoff } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
@@ -143,6 +142,7 @@ import { syncStrongholdMembership } from "@/server/utils/faction";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { membershipUpdate } from "@/server/utils/push/messages";
+import { isSectorAvailableForHideout } from "@/server/utils/sectorMap";
 import { canEditClans } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromDate } from "@/utils/time";
@@ -186,13 +186,13 @@ export const clanRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, fetchedClan, villages, structures, available] = await Promise.all([
+      const [user, fetchedClan, villages, structures] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
         fetchVillages(ctx.drizzle),
         fetchStructures(ctx.drizzle),
-        checkIfSectorIsAvailable(input.sector),
       ]);
+      const available = isSectorAvailableForHideout(input.sector);
       const clanVillage = fetchedClan?.village;
       // Guards
       if (!fetchedClan) return errorResponse("Faction not found");

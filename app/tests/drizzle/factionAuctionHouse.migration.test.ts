@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, spyOn } from "bun:test";
+import { beforeEach, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
@@ -12,7 +12,6 @@ import {
   village,
   villageStructure,
 } from "@/drizzle/schema";
-import * as clanLogic from "@/libs/clan";
 import { fetchStructures } from "@/queries/village";
 import { clanRouter } from "@/server/api/routers/clan";
 import { insertClans, insertUsers } from "../setup/factories";
@@ -178,17 +177,10 @@ describeWithDatabase("faction Auction House migration", () => {
         bank: HIDEOUT_COST,
       },
     ]);
-    const available = spyOn(clanLogic, "checkIfSectorIsAvailable").mockResolvedValue(
-      true,
-    );
-    try {
-      const caller = await callerFor(clanRouter, "buyer");
-      expect(
-        await caller.purchaseHideout({ clanId: "buyer-faction", sector: 100 }),
-      ).toMatchObject({ success: true });
-    } finally {
-      available.mockRestore();
-    }
+    const caller = await callerFor(clanRouter, "buyer");
+    expect(
+      await caller.purchaseHideout({ clanId: "buyer-faction", sector: 100 }),
+    ).toMatchObject({ success: true });
     const faction = await db.query.clan.findFirst({
       where: eq(clan.id, "buyer-faction"),
     });
