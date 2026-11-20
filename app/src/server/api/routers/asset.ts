@@ -17,6 +17,7 @@ import {
   insertActionLogForDelete,
   insertActionLogForUpdate,
   insertGameAssetForCreate,
+  invalidateBattlefieldAssets,
   listGameAssetForGetAllNames,
   listGameAssetForGetNameTags,
   listGameAssetForGetSceneAssets,
@@ -244,10 +245,16 @@ export const gameAssetRouter = createTRPCRouter({
       });
       // Update database
       const writes = await Promise.allSettled([
-        updateGameAssetForUpdate(ctx.drizzle, input, entry).then(() => {
-          // Saved artwork must replace the cache even if the independent log write fails.
-          if (entry.type === "LPC" || input.data.type === "LPC")
-            return invalidateLpcCatalog();
+        updateGameAssetForUpdate(ctx.drizzle, input, entry).then(async () => {
+          // Earlier snapshots cannot prove eligibility after overlapping staff writes.
+          const caches = await Promise.allSettled([
+            entry.type === "LPC" || input.data.type === "LPC"
+              ? invalidateLpcCatalog()
+              : null,
+            invalidateBattlefieldAssets(),
+          ]);
+          const failed = caches.find((result) => result.status === "rejected");
+          if (failed) throw failed.reason;
         }),
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
       ]);
@@ -284,7 +291,12 @@ export const gameAssetRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchGameAsset(ctx.drizzle, input.id),
       ]);
-      if (!entry || !canChangeContent(user.role) || user.isBanned) {
+      if (!canChangeContent(user.role) || user.isBanned) {
+        return errorResponse(`Not allowed to delete gameAsset`);
+      }
+      if (!entry) {
+        // A prior delete may have committed before its shared invalidation failed.
+        await invalidateBattlefieldAssets();
         return errorResponse(`Not allowed to delete gameAsset`);
       }
       if (entry.type === "LPC") {
@@ -322,15 +334,21 @@ export const gameAssetRouter = createTRPCRouter({
         // Finish shared invalidation before returning an independent log failure.
         const writes = await Promise.allSettled([
           invalidateLpcCatalog(),
+          invalidateBattlefieldAssets(),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
         const failed = writes.find((result) => result.status === "rejected");
         if (failed) throw failed.reason;
       } else {
-        await Promise.all([
-          deleteGameAssetForDelete(ctx.drizzle, input),
+        // Finish shared invalidation before returning an independent log failure.
+        const writes = await Promise.allSettled([
+          deleteGameAssetForDelete(ctx.drizzle, input).then(
+            invalidateBattlefieldAssets,
+          ),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
+        const failed = writes.find((result) => result.status === "rejected");
+        if (failed) throw failed.reason;
       }
       await outdateProposalsFor(
         ctx.drizzle,

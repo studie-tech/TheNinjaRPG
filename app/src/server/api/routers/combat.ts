@@ -216,6 +216,7 @@ import { getBiomeFromTileType } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiTransformations } from "@/queries/ai";
+import { listBattlefieldAssets } from "@/queries/asset";
 import {
   buildQueuedTrainingClaim,
   deleteBattleById,
@@ -232,7 +233,6 @@ import {
   insertTrainingLogForInitiateBattle,
   listBattleActionForGetBattleEntries,
   listBattleHistoryForGetBattleHistory,
-  listGameAssetForInitiateBattle,
   listJutsuForInitiateBattle2,
   listJutsuForInitiateBattle3,
   listRaidParticipationForInitiateBattle,
@@ -2195,8 +2195,8 @@ export const initiateBattle = async (
         : null),
     // Essentials
     fetchBattleEssentials(client, info.jutsuEquipLimits),
-    // Fetch game assets (only battlefield ones to avoid row limit)
-    listGameAssetForInitiateBattle(client),
+    // Battlefield obstacle assets
+    listBattlefieldAssets(client),
     // Fetch achievements
     fetchAchievementCatalogue(client),
     // Fetch user data
