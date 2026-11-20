@@ -1233,6 +1233,13 @@
       "when": 1795164494693,
       "tag": "0176_amused_mephistopheles",
       "breakpoints": false
+    },
+    {
+      "idx": 177,
+      "version": "5",
+      "when": 1795190994066,
+      "tag": "0177_noisy_northstar",
+      "breakpoints": false
     }
   ]
 }

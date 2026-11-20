@@ -43,6 +43,8 @@ import {
   selectBalanceContent,
   selectBalanceExclusions,
   selectBalanceParticipants,
+  selectBalanceTurnOrderBattles,
+  selectPlayerTurnOrder,
 } from "@/queries/balance";
 import { fetchBloodline } from "@/queries/bloodline";
 import {
@@ -127,6 +129,7 @@ import { type DeviceType, getDeviceType } from "@/utils/hardware";
 import {
   canAccessHiddenSkillTree,
   canChangeContent,
+  canSeeSecretData,
   canViewRecruitmentAnalytics,
   canViewRevenueAnalytics,
 } from "@/utils/permissions";
@@ -750,18 +753,30 @@ export const dataRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const periodStart = getBalancePeriodStart();
-      const [content, participants, exclusionRows] = await Promise.all([
-        selectBalanceContent(ctx.drizzle, input, periodStart),
-        selectBalanceParticipants(ctx.drizzle, input, periodStart),
-        selectBalanceExclusions(ctx.drizzle, input, periodStart),
-      ]);
+      const [content, participants, exclusionRows, turnOrderBattles] =
+        await Promise.all([
+          selectBalanceContent(ctx.drizzle, input, periodStart),
+          selectBalanceParticipants(ctx.drizzle, input, periodStart),
+          selectBalanceExclusions(ctx.drizzle, input, periodStart),
+          selectBalanceTurnOrderBattles(ctx.drizzle, input, periodStart),
+        ]);
       const excluded = (id: string) =>
         exclusionRows.find((row) => row.contentId === id)?.count ?? 0;
       const exclusions = {
         short: excluded(BALANCE_EXCLUSION_IDS.short),
         idle: excluded(BALANCE_EXCLUSION_IDS.idle),
       };
-      return { periodStart, content, participants, exclusions };
+      return { periodStart, content, participants, exclusions, turnOrderBattles };
+    }),
+  // Staff-only: how often one player starts first or second, and their win rate in each.
+  getPlayerTurnOrder: protectedProcedure
+    .input(z.object({ userId: z.string().max(191) }))
+    .query(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canSeeSecretData(user.role)) {
+        throw serverError("UNAUTHORIZED", "Insufficient permissions");
+      }
+      return selectPlayerTurnOrder(ctx.drizzle, input.userId);
     }),
   getBalanceArchives: publicProcedure.query(({ ctx }) =>
     selectBalanceArchives(ctx.drizzle),

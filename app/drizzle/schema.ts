@@ -4986,6 +4986,40 @@ export const dataBattleAction = mysqlTable(
   },
 );
 
+/**
+ * One row per counted head-to-head PvP battle (two human fighters, the same activity rule
+ * as DataBattleAction), so staff can compare first and second movers per battle and per
+ * player. winner: 0 none (draw or flee), 1 first mover, 2 second mover.
+ */
+export const dataBattleTurnOrder = mysqlTable(
+  "DataBattleTurnOrder",
+  {
+    battleId: varchar("battleId", { length: 191 }).primaryKey().notNull(),
+    periodStart: int("periodStart").notNull(),
+    battleType: mysqlEnum("battleType", consts.BattleTypes).notNull(),
+    firstUserId: varchar("firstUserId", { length: 191 }).notNull(),
+    firstLevel: int("firstLevel").notNull().default(0),
+    firstRank: mysqlEnum("firstRank", consts.UserRanks).notNull().default("NONE"),
+    secondUserId: varchar("secondUserId", { length: 191 }).notNull(),
+    secondLevel: int("secondLevel").notNull().default(0),
+    secondRank: mysqlEnum("secondRank", consts.UserRanks).notNull().default("NONE"),
+    winner: tinyint("winner").notNull().default(0),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      periodIdx: index("DataBattleTurnOrder_period_idx").on(table.periodStart),
+      firstUserIdx: index("DataBattleTurnOrder_firstUserId_idx").on(table.firstUserId),
+      secondUserIdx: index("DataBattleTurnOrder_secondUserId_idx").on(
+        table.secondUserId,
+      ),
+    };
+  },
+);
+export type DataBattleTurnOrder = InferInsertModel<typeof dataBattleTurnOrder>;
+
 /** Reusable catalog source; quests retain copied payloads rather than resolving it at payout. */
 export const rewardPackage = mysqlTable("RewardPackage", {
   id: varchar("id", { length: 191 }).primaryKey().notNull(),

@@ -4,10 +4,11 @@ import {
   BALANCE_MIN_ROUNDS,
   type BattleType,
 } from "@/drizzle/constants";
-import { dataBattleAction } from "@/drizzle/schema";
+import { dataBattleAction, dataBattleTurnOrder } from "@/drizzle/schema";
 import { getBalanceExclusion, hasActiveBalanceAction } from "@/libs/combat/balance";
 import { saveUsage } from "@/libs/combat/database";
 import type { BattleUserState, CombatResult } from "@/libs/combat/types";
+import { summarizePlayerTurnOrder, summarizeTurnOrderBattles } from "@/libs/statistics";
 import { dataRouter } from "@/server/api/routers/data";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
@@ -111,7 +112,7 @@ describeWithDatabase("balance usage with the activity filter", () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
     stubRateLimitTransport();
-    await resetTables(dataBattleAction);
+    await resetTables(dataBattleAction, dataBattleTurnOrder);
   });
 
   const settle = async (battle: ReturnType<typeof duel>) => {
@@ -189,5 +190,83 @@ describeWithDatabase("balance usage with the activity filter", () => {
     expect(
       (await caller.getBalanceOverview({ battleTypes: ["ARENA"] })).exclusions,
     ).toEqual({ short: 0, idle: 0 });
+  });
+
+  it("records each counted 1v1 once, naming the winner's starting order", async () => {
+    await settle(duel());
+    const db = await getTestDatabase();
+    expect(await db.query.dataBattleTurnOrder.findMany()).toMatchObject([
+      {
+        battleType: "COMBAT",
+        firstUserId: "winner",
+        secondUserId: "loser",
+        firstLevel: 50,
+        firstRank: "JONIN",
+        winner: 1,
+      },
+    ]);
+    // A flee settled first is later upgraded by the opponent's win.
+    await resetTables(dataBattleTurnOrder);
+    const battle = duel();
+    await saveUsage(db, battle, { outcome: "Fled" } as CombatResult, "loser");
+    await saveUsage(db, battle, { outcome: "Won" } as CombatResult, "winner");
+    expect((await db.query.dataBattleTurnOrder.findMany())[0]?.winner).toBe(1);
+  });
+
+  it("skips excluded and PvE battles in the per-battle record", async () => {
+    await settle(duel({ round: 1 }));
+    await settle(duel({ loser: [wait] }));
+    await settle(duel({ battleType: "ARENA", loserIsAi: true }));
+    const db = await getTestDatabase();
+    expect(await db.query.dataBattleTurnOrder.findMany()).toHaveLength(0);
+  });
+
+  it("serves battle-level and staff per-player splits", async () => {
+    await settle(duel());
+    const caller = await callerFor(dataRouter, "viewer");
+    const report = await caller.getBalanceOverview({});
+    expect(summarizeTurnOrderBattles(report.turnOrderBattles)).toMatchObject({
+      battles: 1,
+      firstWins: 1,
+      secondWins: 0,
+    });
+    // Both fighters must match a rank filter.
+    expect(
+      (await caller.getBalanceOverview({ userRanks: ["CHUNIN"] })).turnOrderBattles,
+    ).toEqual([]);
+    await expect(caller.getPlayerTurnOrder({ userId: "winner" })).rejects.toThrow();
+  });
+});
+
+describe("starting-turn summaries", () => {
+  it("splits battles by the winner's starting order", () => {
+    expect(
+      summarizeTurnOrderBattles([
+        { winner: 1, count: 6 },
+        { winner: 2, count: 3 },
+        { winner: 0, count: 1 },
+      ]),
+    ).toEqual({
+      battles: 10,
+      firstWins: 6,
+      secondWins: 3,
+      noWinner: 1,
+      firstRate: "60.0%",
+      secondRate: "30.0%",
+    });
+    expect(summarizeTurnOrderBattles([]).firstRate).toBe("—");
+  });
+
+  it("gives a player's share of first and second starts and the win rate in each", () => {
+    expect(
+      summarizePlayerTurnOrder([
+        { turnOrder: 1, winner: 1, count: 3 },
+        { turnOrder: 1, winner: 2, count: 1 },
+        { turnOrder: 2, winner: 1, count: 1 },
+      ]),
+    ).toEqual([
+      { turnOrder: 1, battles: 4, wins: 3, share: "80.0%", winRate: "75.0%" },
+      { turnOrder: 2, battles: 1, wins: 0, share: "20.0%", winRate: "0.0%" },
+    ]);
   });
 });
