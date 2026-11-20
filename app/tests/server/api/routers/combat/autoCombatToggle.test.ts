@@ -10,6 +10,7 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import { afterTasks } from "../../../../setup/after";
 import { makeCompleteBattle, makeUser } from "../../../../setup/combat";
+import { deferred } from "../../../../setup/deferred";
 import { insertUsers } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
@@ -138,10 +139,7 @@ describeWithDatabase("battle AI control preference scope", () => {
 
   it("keeps the deferred broadcast alive until delivery finishes", async () => {
     const { db } = await seed("COMBAT", false);
-    let finish!: () => void;
-    const delivery = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
+    const { promise: delivery, resolve: finish } = deferred<void>();
     trigger.mockReturnValue(delivery);
     const tasks: (() => unknown)[] = [];
     const response = await afterTasks.run(tasks, () =>
