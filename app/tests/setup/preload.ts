@@ -14,7 +14,6 @@ import Link from "@/layout/Link";
 // Bun preserves loaded exports when a suite supplies a partial module mock.
 // Load the toast module before any suite can hide exports needed by another suite.
 import * as toast from "@/libs/toast";
-import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
 import { invalidateRuntimeCaches } from "@/server/utils/runtimeCache";
 import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import * as userContext from "@/utils/UserContext";
@@ -34,7 +33,6 @@ export const actualUseAbVariant = useAbVariant;
 
 // Suites seed their own players and content, so none may read another suite's cache.
 beforeEach(async () => {
-  resetPvpExperienceAverageCache();
   invalidatePublishedMapCache();
   await invalidateRuntimeCaches();
 });

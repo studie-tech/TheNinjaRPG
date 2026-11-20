@@ -96,6 +96,37 @@ describe("createRuntimeCache", () => {
     expect(database.reads).toBe(2);
   });
 
+  it("skips version reads within memorySeconds and sees other instances' saves after it", async () => {
+    const { store } = memoryStore();
+    const database = { reads: 0, rows: [[1], [2]] };
+    const cache = (memorySeconds: number) =>
+      createRuntimeCache({
+        name: "test-memory-window",
+        ttlSeconds: TTL_SECONDS,
+        memorySeconds,
+        load: async (_client: object) => [...(database.rows[database.reads++] ?? [])],
+        store,
+      });
+    const editor = cache(0);
+    const other = cache(10);
+    expect(await other.read({})).toEqual([1]);
+    const versionReads = () =>
+      store.get.mock.calls.filter(([key]) => key === "test-memory-window:version")
+        .length;
+    const before = versionReads();
+    await editor.invalidate();
+    setSystemTime(new Date(start.getTime() + 10 * 1000 - 1));
+    expect(await other.read({})).toEqual([1]);
+    expect(versionReads()).toBe(before + 2);
+    setSystemTime(new Date(start.getTime() + 10 * 1000));
+    expect(await other.read({})).toEqual([2]);
+    expect(database.reads).toBe(2);
+    // A local invalidation is visible at once.
+    database.rows.push([3]);
+    await other.invalidate();
+    expect(await other.read({})).toEqual([3]);
+  });
+
   it.each([false, true])(
     "confirms concurrent invalidations without competing with other writers (separate instances: %s)",
     async (separateInstances) => {
