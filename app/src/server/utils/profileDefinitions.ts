@@ -59,7 +59,7 @@ const readProfileUser = async (
   // Snapshots read without a relation (partial clients) leave it as read.
   const items = user.items ?? [];
   const structures = user.village?.structures ?? [];
-  const [quests, hydratedItems, structureDefinitions] = await Promise.all([
+  const [quests, hydratedItems, hydratedStructures] = await Promise.all([
     questDefinitionCache.hydrate(
       client,
       (user.userQuests ?? []).map((entry) => entry.quest),
@@ -71,11 +71,11 @@ const readProfileUser = async (
         ...(entry.imbuements ?? []).map((imbuement) => imbuement.item),
       ]),
     ),
-    structureCache.hydrate(client, structures),
+    structureDefinitions.hydrate(client, structures),
   ]);
   // One joined retry keeps definitions and live state in the same snapshot, even if
   // staff keep editing while this request reads a cold definition.
-  if (!quests || !hydratedItems || !structureDefinitions)
+  if (!quests || !hydratedItems || !hydratedStructures)
     return findProfileUserWithDefinitions(client, userId, withProgressionReads);
   return {
     ...user,
@@ -100,14 +100,17 @@ const readProfileUser = async (
     ...(user.village?.structures && {
       village: {
         ...user.village,
-        structures: user.village.structures.map(structureDefinitions),
+        structures: user.village.structures.map(hydratedStructures),
       },
     }),
   } as ProfileRead;
 };
 
-// Structure rows change with upgrades and raids; each change is one read per village.
-const structureCache = createDefinitionCache<VillageStructure>({
+/**
+ * Village structure rows shared by profile and sector reads. Rows change with upgrades
+ * and raids; each change is one read per village.
+ */
+export const structureDefinitions = createDefinitionCache<VillageStructure>({
   name: "village-structure",
   memoryLimit: 1000,
   select: (client, ids) => selectStructureDefinitions(client, ids),

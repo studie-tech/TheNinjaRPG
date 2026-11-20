@@ -34,6 +34,7 @@ import {
 import { SECTOR_BATTLE_STALE_SECONDS, SECTOR_PRESENCE_STATUSES } from "@/libs/travel";
 import { spriteUserRelations } from "@/queries/lpc";
 import { listCachedSectorPlacements } from "@/queries/overworldAi";
+import { structureRevisionRelation } from "@/queries/profile";
 import type { questRevisionRelation } from "@/queries/questRevisions";
 import { fetchSector } from "@/queries/village";
 import { listVillageDutyPatrols } from "@/queries/villageDuty";
@@ -106,15 +107,8 @@ export const fetchSectorWindowData = (
       where: and(sectorPresenceWhere(sector), ne(userData.userId, userId)),
       with: sectorUserRelations,
     }),
-    client.query.village.findFirst({
-      where: eq(village.sector, sector),
-      with: {
-        structures: true,
-        dutyShift: true,
-        relationshipA: true,
-        relationshipB: true,
-      },
-    }),
+    // Structures arrive as revisions; the router resolves them from cached definitions.
+    findSectorVillageWith(client, sector, structureRevisionRelation),
     fetchSector(client, sector),
     listCachedSectorPlacements(client).then((placements) => {
       const window = new Set(
@@ -415,19 +409,28 @@ export const updateUserDataForMoveInSector = (
       ),
     );
 
-/** Build the `village` lookup for `moveInSector`, using predicates on `sector`. */
-export const findVillageForMoveInSector = (
+/** Read a sector's village with its structures, duty shift and diplomacy. */
+export const findSectorVillage = (
   client: Pick<DrizzleClient, "query">,
-  targetSector: number,
+  sector: number,
+) => findSectorVillageWith(client, sector, true);
+
+/** Build the sector village read, with whole structure rows or their revisions. */
+const findSectorVillageWith = <
+  StructureRelation extends true | typeof structureRevisionRelation,
+>(
+  client: Pick<DrizzleClient, "query">,
+  sector: number,
+  structures: StructureRelation,
 ) =>
   client.query.village.findFirst({
+    where: eq(village.sector, sector),
     with: {
-      structures: true,
+      structures,
       dutyShift: true,
       relationshipA: true,
       relationshipB: true,
     },
-    where: eq(village.sector, targetSector),
   });
 
 /**
