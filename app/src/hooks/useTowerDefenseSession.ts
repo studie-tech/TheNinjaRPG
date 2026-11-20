@@ -170,6 +170,8 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
   const [speed, setSpeedState] = useState(1);
   const [pauses, setPauses] = useState<readonly TowerDefensePause[]>([]);
   const paused = pauses.length > 0;
+  /** The host holds the run; read by controls that must not act until it resumes. */
+  const isHostHeld = useRef(false);
   const [outcome, setOutcome] = useState<TowerDefenseOutcome | null>(null);
   const [saved, setSaved] = useState<ReturnType<typeof readSavedRunHead>>(null);
   const [isResuming, setIsResuming] = useState(false);
@@ -548,8 +550,14 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
     [claim, paused, persist, phase, retreat, speed],
   );
 
-  /** Hold or release the run for one reason; it runs again once no reason holds it. */
+  /**
+   * Hold or release the run for one reason; it runs again once no reason holds it. While
+   * the host holds it, the player's controls cannot add a pause of their own, which would
+   * otherwise outlast the host's.
+   */
   const setPaused = useCallback((reason: TowerDefensePause, on: boolean) => {
+    if (reason === "host") isHostHeld.current = on;
+    else if (on && isHostHeld.current) return;
     setPauses((current) =>
       on
         ? current.includes(reason)
@@ -559,7 +567,9 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
     );
   }, []);
 
+  /** Change the game speed; the host holding the run keeps it as it was. */
   const setSpeed = useCallback((value: number) => {
+    if (isHostHeld.current) return;
     const current = session.current;
     const max = tdMaxSpeed(current?.config.dojo.speed ?? 0);
     setSpeedState(clamp(value, 1, max));

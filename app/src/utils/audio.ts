@@ -135,6 +135,8 @@ export const unlockAudioPlayback = () => {
 /** Why effect playback is silenced; it plays again once no reason holds it. */
 export type AudioHold = "host" | "ad" | "muted";
 const audioHolds = new Set<AudioHold>();
+/** Effects playing through audio elements, which a suspended context does not silence. */
+const elementsPlaying = new Set<HTMLAudioElement>();
 
 /**
  * Silence effect playback for one reason, such as a host pause, a portal's ad or the
@@ -144,6 +146,10 @@ const audioHolds = new Set<AudioHold>();
 export const holdAudioPlayback = (reason: AudioHold, held: boolean) => {
   if (held) audioHolds.add(reason);
   else audioHolds.delete(reason);
+  if (audioHolds.size > 0) {
+    for (const element of elementsPlaying) element.pause();
+    elementsPlaying.clear();
+  }
   const context = getSharedAudioContext();
   if (!context) return;
   if (audioHolds.size > 0) void context.suspend().catch(() => undefined);
@@ -305,10 +311,13 @@ export const playPreloadedAudio = async (
   try {
     node.crossOrigin = "anonymous";
   } catch {}
+  elementsPlaying.add(node);
+  node.addEventListener("ended", () => elementsPlaying.delete(node), { once: true });
   try {
     await node.play();
   } catch {
     // Ignore play errors (autoplay restrictions etc.)
+    elementsPlaying.delete(node);
   }
 };
 

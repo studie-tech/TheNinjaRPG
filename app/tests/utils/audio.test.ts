@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
 import {
   getIframeProviderName,
+  holdAudioPlayback,
   playPreloadedAudio,
   preloadAudioBuffers,
   toPrivacyEnhancedEmbedUrl,
@@ -132,6 +133,8 @@ describe("preloaded sound effects", () => {
           crossOrigin: "",
           playbackRate: 1,
           preservesPitch: true,
+          addEventListener: () => {},
+          pause: () => {},
           play: async () => {
             played.push(node);
           },
@@ -149,6 +152,62 @@ describe("preloaded sound effects", () => {
       expect(played[0]?.playbackRate).toBeGreaterThanOrEqual(0.9);
       expect(played[0]?.playbackRate).toBeLessThanOrEqual(1.1);
     } finally {
+      Object.assign(globalThis, { Audio: original });
+      Object.assign(window, {
+        __sharedAudioContext: undefined,
+        __audioCache: undefined,
+      });
+    }
+  });
+
+  it("cuts off element playback when a hold begins and plays nothing while held", async () => {
+    const nodes: { paused: boolean }[] = [];
+    class FakeAudio {
+      crossOrigin = "";
+      cloneNode() {
+        const node = {
+          volume: 1,
+          crossOrigin: "",
+          playbackRate: 1,
+          preservesPitch: true,
+          paused: true,
+          addEventListener: () => {},
+          pause: () => {
+            node.paused = true;
+          },
+          play: async () => {
+            node.paused = false;
+            nodes.push(node);
+          },
+        };
+        return node;
+      }
+    }
+    const original = globalThis.Audio;
+    Object.assign(globalThis, { Audio: FakeAudio });
+    Object.assign(window, { __sharedAudioContext: null, __audioCache: undefined });
+    try {
+      await playPreloadedAudio("https://uploadthing.b-cdn.net/f/fallback.mp3", 0.5);
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0]?.paused).toBe(false);
+
+      holdAudioPlayback("muted", true);
+      expect(nodes[0]?.paused).toBe(true);
+      await playPreloadedAudio("https://uploadthing.b-cdn.net/f/fallback.mp3", 0.5);
+      expect(nodes).toHaveLength(1);
+
+      // Releasing one hold keeps the sound off while another still holds it.
+      holdAudioPlayback("host", true);
+      holdAudioPlayback("muted", false);
+      await playPreloadedAudio("https://uploadthing.b-cdn.net/f/fallback.mp3", 0.5);
+      expect(nodes).toHaveLength(1);
+
+      holdAudioPlayback("host", false);
+      await playPreloadedAudio("https://uploadthing.b-cdn.net/f/fallback.mp3", 0.5);
+      expect(nodes).toHaveLength(2);
+    } finally {
+      holdAudioPlayback("muted", false);
+      holdAudioPlayback("host", false);
       Object.assign(globalThis, { Audio: original });
       Object.assign(window, {
         __sharedAudioContext: undefined,

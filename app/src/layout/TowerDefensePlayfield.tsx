@@ -143,8 +143,9 @@ export const TowerDefensePlayfield = (props: {
         return;
       // Space never scrolls the page, even while held.
       if (key === " ") event.preventDefault();
-      // A held key repeats keydown; one press is one seal or one cast.
-      if (event.repeat) return;
+      // A held key repeats keydown; one press is one seal or one cast. While the host has
+      // suspended the run, no key acts on it.
+      if (event.repeat || props.suspended) return;
       const seal = TD_SEALS.find((id) => SEAL_HOTKEYS[id].toLowerCase() === key);
       if (seal) act(["seal", seal, ...aim()]);
       else if (key === " ") act(["sub"]);
@@ -160,7 +161,7 @@ export const TowerDefensePlayfield = (props: {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [act, aim, pausedByPlayer, run.phase, setPaused]);
+  }, [act, aim, pausedByPlayer, props.suspended, run.phase, setPaused]);
 
   const {
     setStageElement,

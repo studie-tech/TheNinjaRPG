@@ -68,7 +68,20 @@ describe("useTowerDefenseSession", () => {
   });
 
   it("keeps a host pause through a new run and refuses commands until it ends", async () => {
-    const backend = fakeBackend("token-host");
+    const backend: TowerDefenseBackend = {
+      ...fakeBackend("token-host"),
+      // A run with the Guard Hall speed upgrade, so a faster speed is allowed.
+      startRun: vi.fn(async (startWave: number) => ({
+        config: {
+          seed: "session",
+          startWave,
+          bestWave: 0,
+          level: 1,
+          dojo: { speed: 2 },
+        },
+        token: "token-host",
+      })),
+    };
     const { result } = renderHook(() => useTowerDefenseSession(backend));
     act(() => {
       result.current.setPaused("host", true);
@@ -84,10 +97,22 @@ describe("useTowerDefenseSession", () => {
     });
     expect(accepted).toBe(false);
     expect(backend.claimRun).not.toHaveBeenCalled();
+    // The player's controls cannot pause or speed up the run the host holds.
+    act(() => {
+      result.current.setPaused("player", true);
+      result.current.setSpeed(2);
+    });
+    expect(result.current.pauses).toEqual(["host"]);
+    expect(result.current.speed).toBe(1);
 
     act(() => {
       result.current.setPaused("host", false);
     });
+    expect(result.current.pauses).toEqual([]);
+    act(() => {
+      result.current.setSpeed(2);
+    });
+    expect(result.current.speed).toBe(2);
     await act(async () => {
       result.current.act(["quit"]);
       await Promise.resolve();

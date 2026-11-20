@@ -90,8 +90,11 @@ export const activePlayables = (build: ShurikenSiegeBuild) =>
   build.target === "youtube" && window.ytgame?.IN_PLAYABLES_ENV ? window.ytgame : null;
 
 /** The SDK object once its script has defined it, or null if it never arrives. */
-const waitFor = async <T>(read: () => T | undefined): Promise<T | null> => {
-  const deadline = Date.now() + SDK_WAIT_MS;
+const waitFor = async <T>(
+  read: () => T | undefined,
+  waitMs: number,
+): Promise<T | null> => {
+  const deadline = Date.now() + waitMs;
   for (;;) {
     const sdk = read();
     if (sdk) return sdk;
@@ -108,16 +111,18 @@ export const deviceStore: ShurikenSiegeStore = {
 };
 
 /**
- * YouTube's cloud save: the only place a Playable may keep progress. A read that fails is
- * tried again, and no write goes out until a read has succeeded, so a save the game never
- * saw is not overwritten.
+ * YouTube's cloud save: the only place a Playable may keep progress. Every read loads it
+ * again, so a change starts from what another tab saved; a read that fails is tried again,
+ * and no write goes out until a read has succeeded, so a save the game never saw is not
+ * overwritten.
  */
 const playablesStore = (yt: YouTubePlayables): ShurikenSiegeStore => {
-  let loaded: Promise<string | null> | null = null;
+  let hasLoaded = false;
   const load = async () => {
     for (let attempt = 1; ; attempt++) {
       try {
         const data = await yt.game.loadData();
+        hasLoaded = true;
         return data || null;
       } catch (error) {
         if (attempt >= CLOUD_LOAD_ATTEMPTS) throw error;
@@ -125,38 +130,34 @@ const playablesStore = (yt: YouTubePlayables): ShurikenSiegeStore => {
       }
     }
   };
-  const read = () => {
-    loaded ??= load().catch((error: unknown) => {
-      // A later read tries again rather than treating the failure as an empty save.
-      loaded = null;
-      throw error;
-    });
-    return loaded;
-  };
   return {
-    read,
+    read: load,
     write: async (value) => {
-      const isLoaded = await read().then(
+      if (!hasLoaded) {
+        const isLoaded = await load().then(
+          () => true,
+          () => false,
+        );
+        if (!isLoaded) return false;
+      }
+      return yt.game.saveData(value).then(
         () => true,
         () => false,
       );
-      if (!isLoaded) return false;
-      const isSaved = await yt.game.saveData(value).then(
-        () => true,
-        () => false,
-      );
-      if (isSaved) loaded = Promise.resolve(value);
-      return isSaved;
     },
     saveRuns: false,
   };
 };
 
 /**
- * The portal adapter for a build. Each SDK is used only once it has loaded and started;
- * a missing or refused SDK (an ad blocker) leaves the game playing without it.
+ * The portal adapter for a build. Each SDK is used only once it has loaded and started
+ * within `sdkWaitMs`; a missing, refused (an ad blocker) or stalled SDK leaves the game
+ * playing without it for the visit, so its events never arrive out of order.
  */
-export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => {
+export const createPortal = (
+  build: ShurikenSiegeBuild,
+  { sdkWaitMs = SDK_WAIT_MS }: { sdkWaitMs?: number } = {},
+): ShurikenSiegePortal => {
   const target = build.target;
   const pauseListeners = new Set<(paused: boolean) => void>();
   const audioListeners = new Set<(enabled: boolean) => void>();
@@ -173,8 +174,10 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
 
   const setup = async () => {
     if (target === "poki") {
-      const sdk = await waitFor(() => window.PokiSDK);
-      if (sdk && (await succeeds(sdk.init()))) poki = sdk;
+      const started = Date.now();
+      const sdk = await waitFor(() => window.PokiSDK, sdkWaitMs);
+      const remaining = Math.max(0, sdkWaitMs - (Date.now() - started));
+      if (sdk && (await succeedsWithin(sdk.init(), remaining))) poki = sdk;
     } else if (target === "gamedistribution") {
       // Its SDK pauses the game around every ad, including the one before a run.
       window.addEventListener(GAME_DISTRIBUTION_EVENT, (event) => {
@@ -187,7 +190,10 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
           pauseHost(false);
         }
       });
-      gd = await waitFor(() => (window.gdsdk?.showAd ? window.gdsdk : undefined));
+      gd = await waitFor(
+        () => (window.gdsdk?.showAd ? window.gdsdk : undefined),
+        sdkWaitMs,
+      );
     } else if (yt) {
       yt.system.onPause(() => {
         holdAudioPlayback("host", true);
@@ -268,8 +274,12 @@ export const createPortal = (build: ShurikenSiegeBuild): ShurikenSiegePortal => 
   };
 };
 
-const succeeds = (promise: Promise<unknown>) =>
-  promise.then(
-    () => true,
-    () => false,
-  );
+/** Whether a promise resolves within `ms`; one that rejects or is still pending fails. */
+const succeedsWithin = (promise: Promise<unknown>, ms: number) =>
+  Promise.race([
+    promise.then(
+      () => true,
+      () => false,
+    ),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms)),
+  ]);

@@ -19,6 +19,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -239,10 +240,14 @@ mkdirSync(out, { recursive: true });
 for (const target of targets) {
   const source = args.source ?? target;
   const name = `shuriken-siege-${target}${source === target ? "" : `-${source}`}-${version}`;
-  const dir = join(out, name);
+  // The target is assembled beside its previous output, which it replaces only once its
+  // folder and zip are complete.
+  const finalDir = join(out, name);
   const zip = join(out, `${name}.zip`);
+  const dir = join(out, `${name}.partial`);
+  const partialZip = join(out, `${name}.partial.zip`);
   rmSync(dir, { recursive: true, force: true });
-  rmSync(zip, { force: true });
+  rmSync(partialZip, { force: true });
   mkdirSync(join(dir, "assets"), { recursive: true });
   cpSync(work, dir, { recursive: true });
   const mediaMap: Record<string, string> = {};
@@ -260,12 +265,16 @@ for (const target of targets) {
   };
   writeFileSync(join(dir, "index.html"), page(build, TARGETS[target].sdk));
   checkPlayablesNames(target, dir);
-  execFileSync("zip", ["-qr", zip, "."], { cwd: dir });
-  const count = execFileSync("find", [".", "-type", "f"], { cwd: dir, encoding: "utf8" })
+  execFileSync("zip", ["-qr", partialZip, "."], { cwd: dir });
+  rmSync(finalDir, { recursive: true, force: true });
+  rmSync(zip, { force: true });
+  renameSync(dir, finalDir);
+  renameSync(partialZip, zip);
+  const count = execFileSync("find", [".", "-type", "f"], { cwd: finalDir, encoding: "utf8" })
     .trim()
     .split("\n").length;
   const kilobytes = Number(
-    execFileSync("du", ["-sk", dir], { encoding: "utf8" }).split("\t")[0],
+    execFileSync("du", ["-sk", finalDir], { encoding: "utf8" }).split("\t")[0],
   );
   console.log(
     `${target}: ${relative(process.cwd(), zip)} · ${count} files · ${(kilobytes / 1000).toFixed(1)} MB`,
@@ -386,7 +395,15 @@ function parseArgs(argv: string[]) {
   const parsed: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i]?.replace(/^--/, "");
-    if (key) parsed[key] = argv[++i] ?? "";
+    if (!key) continue;
+    // An option followed by another option, or by nothing, has no value; the build
+    // rejects it rather than taking the next option's name.
+    const value = argv[i + 1];
+    if (value === undefined || value.startsWith("--")) parsed[key] = "";
+    else {
+      parsed[key] = value;
+      i++;
+    }
   }
   return parsed as Partial<
     Record<"targets" | "source" | "version" | "api" | "out" | "cache" | "gd-game-id", string>
