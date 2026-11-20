@@ -300,6 +300,35 @@ describe("createRetryingFetch", () => {
     expect(await response.json()).toEqual({ result: { rows: [] } });
   });
 
+  it("answers a successful result as sent, whatever text its rows carry", async () => {
+    // Only an `error` member makes the driver raise on a 200, so row data that happens
+    // to read like a marker is not a failure.
+    const body = JSON.stringify({
+      result: { rows: [{ note: "忍者: connection reset by peer, errno 1213" }] },
+    });
+    const baseFetch = vi.fn(async () => new Response(body, { status: 200 }));
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    const response = await retrying("https://db.test", post("select `note`"));
+
+    expect(baseFetch).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe(body);
+  });
+
+  it("returns a failed response's bytes unchanged once retries run out", async () => {
+    const body = JSON.stringify({
+      error: { message: `忍者 ${JSON.parse(DEADLOCK_BODY).error.message}` },
+    });
+    const baseFetch = vi.fn(async () => new Response(body, { status: 200 }));
+    const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
+
+    const response = await retrying("https://db.test", post("select 1"));
+
+    expect(baseFetch).toHaveBeenCalledTimes(3);
+    expect(await response.text()).toBe(body);
+  });
+
   it("passes through non-query requests untouched", async () => {
     const baseFetch = vi.fn(async () => new Response("{}", { status: 200 }));
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);

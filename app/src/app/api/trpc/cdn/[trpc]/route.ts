@@ -1,6 +1,6 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { headers } from "next/headers";
-import type { NextRequest } from "next/server";
+import { after, type NextRequest } from "next/server";
 import { appRouter } from "@/api/root";
 import { CDN_CACHED_QUERY_PATHS } from "@/server/api/cdnCachedQueries";
 import { createCdnTRPCContext } from "@/server/api/trpc";
@@ -14,15 +14,22 @@ export const maxDuration = 90;
 /** How old a copy served by an HTTP cache may be. */
 const CACHE_SECONDS = 60;
 
+/**
+ * How much longer an expired copy may still answer while the cache refreshes it in the
+ * background, so no visitor waits on the function for an expired entry.
+ */
+const STALE_SECONDS = 300;
+
 const cdnCachedQueries = new Set(CDN_CACHED_QUERY_PATHS);
 
 /**
  * The cacheable half of the tRPC API: the client sends the queries built with
  * cdnCachedProcedure here as their own GET batch, the context carries no identity, and
- * the batch is answered with `s-maxage`, so an HTTP cache in front of the app serves the
- * next visitor asking for the same URL. It answers for those queries alone, so what the
- * endpoint can do is exactly what may be cached. It sits outside the Clerk matcher in
- * proxy.ts, so no session is attached here even when the caller has one.
+ * the batch is answered with `s-maxage` and `stale-while-revalidate`, so an HTTP cache
+ * in front of the app serves the next visitor asking for the same URL. It answers for
+ * those queries alone, so what the endpoint can do is exactly what may be cached. It
+ * sits outside the Clerk matcher in proxy.ts, so no session is attached here even when
+ * the caller has one.
  */
 const handler = async (req: NextRequest) => {
   const readHeaders = await headers();
@@ -53,7 +60,7 @@ const handler = async (req: NextRequest) => {
         return {
           headers: {
             "cache-control": isCacheable
-              ? `public, s-maxage=${CACHE_SECONDS}`
+              ? `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=${STALE_SECONDS}`
               : "no-store",
           },
         };
@@ -70,9 +77,7 @@ const handler = async (req: NextRequest) => {
       },
     }),
   );
-  if (shouldFlush) {
-    await flushSafe();
-  }
+  if (shouldFlush) after(() => flushSafe());
 
   return response;
 };
