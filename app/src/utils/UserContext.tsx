@@ -482,9 +482,14 @@ export const useRequiredUserInfo = () => useRequiredUserDataSelector(selectUserI
 /**
  * A hook which requires the user to be in their village,
  * otherwise redirect to the profile page. Can optionally be
- * narrowed further to a specific structure in the village
+ * narrowed further to a specific structure in the village.
+ * `enabled` pauses access redirects while relocation settles; `redirectTo` then
+ * takes precedence over the ordinary structure check for the reconciled profile.
  */
-export const useRequireInVillage = (structureRoute?: StructureRoute) => {
+export const useRequireInVillage = (
+  structureRoute?: StructureRoute,
+  { enabled = true, redirectTo }: { enabled?: boolean; redirectTo?: string } = {},
+) => {
   // Access state
   const [access, setAccess] = useState<boolean>(false);
   // Get user information
@@ -499,6 +504,12 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
   const ownVillage = userData?.village?.sector === sectorVillage?.sector;
   const router = useNavigationRouter();
   useEffect(() => {
+    // Relocation must reconcile the profile before choosing its destination or checking access.
+    if (!enabled) return;
+    if (userData && redirectTo) {
+      void router.replace(redirectTo);
+      return;
+    }
     if (userData && isSectorKnown) {
       if (!userData.isOutlaw) {
         // Check structure access
@@ -523,7 +534,15 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
         setAccess(true);
       }
     }
-  }, [userData, sectorVillage, router, isSectorKnown, structureRoute]);
+  }, [
+    userData,
+    sectorVillage,
+    router,
+    isSectorKnown,
+    structureRoute,
+    enabled,
+    redirectTo,
+  ]);
   return {
     userData,
     prepareUserUpdate,

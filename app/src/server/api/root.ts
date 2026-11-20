@@ -57,6 +57,7 @@ import { questsRouter } from "./routers/quests";
 import { raidsRouter } from "./routers/raids";
 import { registerRouter } from "./routers/register";
 import { reportsRouter } from "./routers/reports";
+import { resourceSilosRouter } from "./routers/resourceSilos";
 import { sageModeRouter } from "./routers/sageMode";
 import { senseiRouter } from "./routers/sensei";
 import { shrineRouter } from "./routers/shrine";
@@ -158,6 +159,7 @@ export const appRouter = createTRPCRouter({
   linkPromotion: linkPromotionRouter,
   war: warRouter,
   shrine: shrineRouter,
+  resourceSilos: resourceSilosRouter,
   pvpRank: pvpRankRouter,
   bounty: bountyRouter,
   skillTree: skillTreeRouter,

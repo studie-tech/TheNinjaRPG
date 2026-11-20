@@ -116,6 +116,7 @@ describeWithDatabase("automatic action recovery", () => {
     async (reason) => {
       const caller = await setup("HOSPITALIZED", {
         autoWakeUp: false,
+        warTornRespawn: true,
         regenAt: new Date(
           Date.now() -
             (reason === "deadline" ? HOSPITAL_BASE_HEAL_SECONDS + 5 : 1) * 1000,
@@ -134,10 +135,15 @@ describeWithDatabase("automatic action recovery", () => {
       expect(await caller.train.startTraining()).toMatchObject({
         success: true,
         actionNotice: AUTO_CHECKOUT_MESSAGE,
+        userRecovery: {
+          activity: { status: "AWAKE" },
+          userPatch: { warTornRespawn: false },
+        },
       });
       expect(invocations).toBe(1);
       expect(await current()).toMatchObject({
         status: "AWAKE",
+        warTornRespawn: false,
         money: 1234,
         curHealth: 100,
       });

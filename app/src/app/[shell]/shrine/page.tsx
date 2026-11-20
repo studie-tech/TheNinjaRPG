@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MAP_RESERVED_SECTORS,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   VILLAGE_SYNDICATE_ID,
   VILLAGE_WAR_TYPES,
   WAR_SHRINE_IMAGE,
@@ -19,6 +20,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import RaidBrowser from "@/layout/RaidBrowser";
 import RamenShop from "@/layout/RamenShop";
+import { ResourceSilo } from "@/layout/ResourceSilo";
 import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
 import StatusBar from "@/layout/StatusBar";
 import { WarFieldActions } from "@/layout/WarFieldActions";
@@ -108,6 +110,8 @@ export default function Shrine() {
     !sectorData.warData?.some((war) => getWarSide(war, null, userData.userId))
   )
     return <Loader explanation="No village found" />;
+
+  const hasResourceSilo = userData.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
 
   // Check if there's an active war in this sector
   // For SECTOR_WAR: check war.sector
@@ -203,12 +207,13 @@ export default function Shrine() {
   if (showExclusiveRaidFlow) {
     return (
       <div>
+        {hasResourceSilo && <ResourceSilo />}
         {activeExclusiveRaid ? (
           // Raid is active - show raid browser
           <RaidBrowser
             title="Defeat the Raid Boss!"
             subtitle="Complete to claim sector"
-            initialBreak={false}
+            initialBreak={hasResourceSilo}
             sectorFilter={userData.sector}
           />
         ) : (
@@ -216,7 +221,8 @@ export default function Shrine() {
           <ContentBox
             title="Sector Ready to Claim!"
             subtitle={`Sector ${userData.sector}`}
-            defaultBackHref="/travel"
+            defaultBackHref={hasResourceSilo ? undefined : "/travel"}
+            initialBreak={hasResourceSilo}
           >
             <div className="space-y-4 text-center">
               <Image
@@ -262,12 +268,14 @@ export default function Shrine() {
   );
 
   return (
-    <div className="space-y-8">
+    <div>
+      {hasResourceSilo && <ResourceSilo />}
       {hasNoActiveWars && (
         <ContentBox
           title={`Lvl. ${sectorData.sectorData?.shrineLevel || 1} Shrine`}
           subtitle={sectorData.sectorData ? "Sector is Claimed" : "Unclaimed Sector"}
-          defaultBackHref="/travel"
+          defaultBackHref={hasResourceSilo ? undefined : "/travel"}
+          initialBreak={hasResourceSilo}
           topRightContent={<WarFieldActions />}
         >
           {canShowMpvpOption || isUserQueuedForThisSector ? (
@@ -333,7 +341,8 @@ export default function Shrine() {
         <ContentBox
           title="Your Wars"
           subtitle={`Sector ${userData.sector}`}
-          defaultBackHref="/travel"
+          defaultBackHref={hasResourceSilo ? undefined : "/travel"}
+          initialBreak={hasResourceSilo}
           topRightContent={<WarFieldActions />}
         >
           <Tabs defaultValue="solo" className="w-full">
@@ -414,6 +423,7 @@ export default function Shrine() {
         <ContentBox
           title="Competing Wars"
           subtitle="Other villages trying to claim sector"
+          initialBreak={hasResourceSilo || userWars.length > 0}
           topRightContent={userWars.length === 0 ? <WarFieldActions /> : undefined}
         >
           <div className="divide-y">
@@ -431,7 +441,7 @@ export default function Shrine() {
         </ContentBox>
       )}
 
-      <RamenShop subtitle={SHRINE_RAMEN_SUBTITLE} />
+      <RamenShop initialBreak={true} subtitle={SHRINE_RAMEN_SUBTITLE} />
     </div>
   );
 }

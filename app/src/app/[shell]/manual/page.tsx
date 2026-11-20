@@ -145,6 +145,12 @@ export default function ManualMain() {
       visible: isStaff,
     },
     { name: "rewards", label: "Rewards", img: IMG_MANUAL_REWARDS, visible: isStaff },
+    {
+      name: "resource_silos",
+      label: "Resource Silos",
+      img: IMG_MANUAL_REWARDS,
+      visible: isStaff,
+    },
   ];
   /** Turn a visible manual section into alphabetized tiles with canonical manual links. */
   const toTiles = (pages: ManualEntry[]) =>

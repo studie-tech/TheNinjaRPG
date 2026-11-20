@@ -1,4 +1,5 @@
 import { cosmeticSlotRelation } from "@/queries/cosmetic";
+import { resourceSiloProgressUpdate } from "@/queries/resourceSilos";
 /**
  * Database access for combat; authorization and transaction scopes stay in callers.
  */
@@ -44,6 +45,7 @@ import {
   KAGE_MIN_DAYS_IN_VILLAGE,
   KAGE_PRESTIGE_REQUIREMENT,
   MAP_WAKE_ISLAND_SECTOR,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MasteryNames,
   PoolTypes,
   PRACTICE_BATTLE_TYPES,
@@ -2628,6 +2630,7 @@ export const updateUserDataForUpdateUser2 = (
   client
     .update(userData)
     .set({
+      ...resourceSiloProgressUpdate(curBattle, userId, result, settledAt),
       // Settlement invalidates delayed passive-regeneration snapshots.
       updatedAt: nextSnapshotSql(userData.updatedAt),
       curEnergy: combatEnergyRecoverySql(
@@ -2791,17 +2794,19 @@ const xpGainOrLevelUpSet = (
   };
 };
 
-/** Userdata columns that put a defeated fighter in their sector's hospital. */
+/** Preserve ordinary hospital placement while offering defeated War-Torn fighters a separate revival. */
 const hospitalPlacement = (
   battle: CompleteBattle,
   fighter: { allyVillage: boolean; sector: number; villageId: null | string },
 ) => ({
   status: "HOSPITALIZED" as const,
+  warTornRespawn: fighter.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   longitude: HOSPITAL_LONG,
   latitude: HOSPITAL_LAT,
-  sector: fighter.allyVillage
-    ? fighter.sector
-    : getVillage(battle, fighter.villageId)?.sector,
+  sector:
+    fighter.allyVillage && fighter.sector !== MAP_WAR_TORN_BATTLEGROUND_SECTOR
+      ? fighter.sector
+      : getVillage(battle, fighter.villageId)?.sector,
 });
 
 /** Preload the player's loadout AI rules so a lobby selection can use its confirmed saved choice. */

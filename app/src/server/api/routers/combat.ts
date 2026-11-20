@@ -39,6 +39,7 @@ import {
   IMG_AVATAR_DEFAULT,
   MAP_RESERVED_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MAX_PLAYER_LEVEL,
   NonActionItemTypes,
   PoolTypes,
@@ -324,7 +325,7 @@ import { findRelationship } from "@/utils/alliance";
 import { getKageEligibility } from "@/utils/kage";
 import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
 import { canChangeContent, getContentRole } from "@/utils/permissions";
-import { regenTicksSince, secondsFromNow } from "@/utils/time";
+import { getResourceSiloWindow, regenTicksSince, secondsFromNow } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
 import type { BaseServerResponse } from "@/validators/base";
 import {
@@ -3421,6 +3422,15 @@ export const initiateBattle = async (
       (entry) => !entry.equipped || accepted.includes(entry.jutsuId),
     );
   }
+  // Settlement uses this admission key in its existing account CAS without another database read.
+  const siloWindow = getResourceSiloWindow(startTime);
+  if (
+    battleType === "COMBAT" &&
+    sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR &&
+    siloWindow.active
+  )
+    extraState.resourceSiloWindowId = siloWindow.id;
+
   /**
    * Persist the preloaded battle and return the participant claim and any settled failure.
    * Dungeon floors, first payments, event launches and hunts await their transaction's writes.

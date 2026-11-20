@@ -435,6 +435,7 @@ export const updateUserDataForCloneUserForDebug = (
     rank: import("@/drizzle/schema").UserRank;
     level: number;
     status: import("@/drizzle/schema").UserStatus;
+    warTornRespawn: boolean;
     villageId: null | string;
     bloodlineId: null | string;
     strength: number;
@@ -484,6 +485,7 @@ export const updateUserDataForCloneUserForDebug = (
       rank: target.rank,
       level: target.level,
       status: target.status,
+      warTornRespawn: target.warTornRespawn,
       villageId: target.villageId,
       bloodlineId: target.bloodlineId,
       strength: target.strength,

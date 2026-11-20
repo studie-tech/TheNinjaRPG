@@ -8,6 +8,7 @@ import { MAP_RESERVED_SECTORS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants"
 import * as contentBox from "@/layout/ContentBox";
 import * as countdown from "@/layout/Countdown";
 import * as ramen from "@/layout/RamenShop";
+import * as silo from "@/layout/ResourceSilo";
 import * as warField from "@/layout/WarFieldActions";
 import { defaultWarRules } from "@/validators/war";
 import { mockUserContextValue } from "../../setup/userContext";
@@ -65,6 +66,7 @@ beforeEach(() => {
     <div>{children}</div>
   ));
   vi.spyOn(ramen, "default").mockReturnValue(null);
+  vi.spyOn(silo, "ResourceSilo").mockReturnValue(<div>Resource Silo panel</div>);
   vi.spyOn(warField, "WarFieldActions").mockReturnValue(null);
   vi.spyOn(countdown, "default").mockReturnValue(null);
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -281,4 +283,22 @@ describe("shrine page war affiliation", () => {
       ).toBe(false);
     },
   );
+});
+
+describe("War-Torn shrine resource silo", () => {
+  it("shows the silo on the ordinary shrine path only in sector 335", () => {
+    sectorNumber = 335;
+    sectorData.warData = [];
+    mockUserContextValue({
+      data: { userId: "viewer", villageId, sector: sectorNumber, status: "AWAKE" },
+    });
+    const view = render(<Shrine />);
+    expect(view.getByText("Resource Silo panel")).toBeDefined();
+    sectorNumber = 334;
+    mockUserContextValue({
+      data: { userId: "viewer", villageId, sector: sectorNumber, status: "AWAKE" },
+    });
+    view.rerender(<Shrine />);
+    expect(view.queryByText("Resource Silo panel")).toBeNull();
+  });
 });
