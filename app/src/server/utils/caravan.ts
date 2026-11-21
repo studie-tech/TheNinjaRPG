@@ -21,6 +21,7 @@ import type {
 } from "@/drizzle/schema";
 import {
   activeGuards,
+  CARGO_MOVES,
   type CaravanNoticeView,
   getAllowedDelay,
   getAttackerRole,
@@ -211,10 +212,7 @@ export const cancelCaravan = async (
       );
       if (claimed.rowsAffected !== 1) return false;
       if (row.status === "PREPARING")
-        await moveCargo(tx, row.originVillageId, returned, {
-          quantity: 0,
-          reserved: -1,
-        });
+        await moveCargo(tx, row.originVillageId, returned, CARGO_MOVES.RELEASE);
       else await creditWarehouseStock(tx, row.originVillageId, returned);
       await releaseParticipants(tx, row.id);
       await wakeReleasedGuards(tx, guardIds);

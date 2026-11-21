@@ -17,6 +17,7 @@ import {
   WAREHOUSE_DEPOSIT_COOLDOWN_HOURS,
   WAREHOUSE_MIN_DEPOSIT,
 } from "@/drizzle/constants";
+import { CARGO_MOVES } from "@/libs/caravan";
 
 type Warehouse = NonNullable<RouterOutputs["warehouse"]["getWarehouse"]>;
 type History = InfiniteData<RouterOutputs["warehouse"]["getHistory"]>;
@@ -122,10 +123,10 @@ describe("warehouse deltas", () => {
     expect(
       applyWarehouseChange(
         view(),
-        getCargoWarehouseChange([{ itemId: "clay", quantity: 5 }], {
-          quantity: -1,
-          reserved: -1,
-        }),
+        getCargoWarehouseChange(
+          [{ itemId: "clay", quantity: 5 }],
+          CARGO_MOVES.DISPATCH,
+        ),
       ),
     ).toBeUndefined();
     expect(applyWarehouseChange(view(), undefined)).toBeUndefined();
@@ -167,12 +168,12 @@ describe("warehouse deltas", () => {
     const cargo = [{ itemId: "wood", quantity: 5 }];
     const reserved = applyWarehouseChange(
       view(),
-      getCargoWarehouseChange(cargo, { quantity: 0, reserved: 1 }),
+      getCargoWarehouseChange(cargo, CARGO_MOVES.RESERVE),
     );
     expect(reserved?.stock[1]).toMatchObject({ quantity: 50, reserved: 10 });
     const departed = applyWarehouseChange(
       view(),
-      getCargoWarehouseChange(cargo, { quantity: -1, reserved: -1 }),
+      getCargoWarehouseChange(cargo, CARGO_MOVES.DISPATCH),
     );
     expect(departed?.stock[1]).toMatchObject({ quantity: 45, reserved: 0 });
   });

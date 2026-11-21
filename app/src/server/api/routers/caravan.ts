@@ -16,6 +16,7 @@ import {
 import type { VillageAlliance } from "@/drizzle/schema";
 import {
   activeGuards,
+  CARGO_MOVES,
   type CargoLine,
   getCaravanCapacity,
   getCaravanSector,
@@ -322,10 +323,7 @@ export const caravanRouter = createTRPCRouter({
         // transaction releases the reservation when a line falls short or capacity is full.
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
-            const reserved = await moveCargo(tx, own.id, cargo, {
-              quantity: 0,
-              reserved: 1,
-            });
+            const reserved = await moveCargo(tx, own.id, cargo, CARGO_MOVES.RESERVE);
             if (reserved.rowsAffected !== cargo.length)
               throw new WarehouseConflict(
                 "Your stock changed meanwhile. Refresh and try again",
@@ -365,7 +363,7 @@ export const caravanRouter = createTRPCRouter({
           })),
           sector: path[0] ?? -1,
         },
-        warehouseChange: getCargoWarehouseChange(cargo, { quantity: 0, reserved: 1 }),
+        warehouseChange: getCargoWarehouseChange(cargo, CARGO_MOVES.RESERVE),
         warehouseLogs: getWarehouseLogEntries(
           logs,
           { items: itemNames, username: user.username },
@@ -401,10 +399,7 @@ export const caravanRouter = createTRPCRouter({
         message: "Caravan cancelled; its cargo is released",
         ...getReleasedEscortUserUpdate(user, released),
         cancelled: { caravanId: row.id, resolvedAt: now },
-        warehouseChange: getCargoWarehouseChange(row.cargo, {
-          quantity: 0,
-          reserved: -1,
-        }),
+        warehouseChange: getCargoWarehouseChange(row.cargo, CARGO_MOVES.RELEASE),
       };
     }),
   dispatch: protectedProcedure
@@ -458,10 +453,12 @@ export const caravanRouter = createTRPCRouter({
               arrivesAt,
             });
             if (claimed.rowsAffected !== 1) throw conflict;
-            const loaded = await moveCargo(tx, row.originVillageId, row.cargo, {
-              quantity: -1,
-              reserved: -1,
-            });
+            const loaded = await moveCargo(
+              tx,
+              row.originVillageId,
+              row.cargo,
+              CARGO_MOVES.DISPATCH,
+            );
             if (loaded.rowsAffected !== row.cargo.length) throw conflict;
             await insertWarehouseLogs(
               tx,
@@ -492,10 +489,7 @@ export const caravanRouter = createTRPCRouter({
           arrivesAt,
           sector: row.path[0] ?? -1,
         },
-        warehouseChange: getCargoWarehouseChange(row.cargo, {
-          quantity: -1,
-          reserved: -1,
-        }),
+        warehouseChange: getCargoWarehouseChange(row.cargo, CARGO_MOVES.DISPATCH),
       };
     }),
   joinEscort: protectedProcedure

@@ -43,6 +43,16 @@ export type CargoLine = { itemId: string; quantity: number };
 export type CargoSign = { quantity: -1 | 0; reserved: -1 | 1 };
 
 /**
+ * The cargo moves: reserving a prepared manifest, releasing it again, and dispatching it,
+ * which takes both the stock and its reservation.
+ */
+export const CARGO_MOVES = {
+  RESERVE: { quantity: 0, reserved: 1 },
+  RELEASE: { quantity: 0, reserved: -1 },
+  DISPATCH: { quantity: -1, reserved: -1 },
+} as const satisfies Record<string, CargoSign>;
+
+/**
  * Shortest sector path between two home sectors over the world grid, both ends included.
  * Neighbors are explored in [north, east, south, west] order, so the path is stable.
  */

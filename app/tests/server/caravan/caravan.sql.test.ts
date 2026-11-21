@@ -29,7 +29,7 @@ import {
   warehouseMember,
   warehouseStock,
 } from "@/drizzle/schema";
-import type { CaravanBattleState } from "@/libs/caravan";
+import { CARGO_MOVES, type CaravanBattleState } from "@/libs/caravan";
 import type { CompleteBattle } from "@/libs/combat/types";
 import {
   claimLoot,
@@ -204,9 +204,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
 
   it("reserves, loads and releases cargo only while stock covers its reservation", async () => {
     const db = await getTestDatabase();
-    const reserve = { quantity: 0, reserved: 1 } as const;
-    const release = { quantity: 0, reserved: -1 } as const;
-    const dispatch = { quantity: -1, reserved: -1 } as const;
+    const { RESERVE: reserve, RELEASE: release, DISPATCH: dispatch } = CARGO_MOVES;
     await db.insert(warehouseStock).values([
       { villageId: "leaf", itemId: "ore", quantity: 100, reserved: 20 },
       { villageId: "leaf", itemId: "silk", quantity: 50, reserved: 40 },
