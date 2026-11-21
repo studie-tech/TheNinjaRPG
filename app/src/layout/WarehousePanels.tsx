@@ -336,6 +336,7 @@ const DepositForm = ({
           <Button
             disabled={
               !stack ||
+              !!stack.availableAt ||
               actions.deposit.isPending ||
               !(quantity >= WAREHOUSE_MIN_DEPOSIT && quantity <= stack.quantity)
             }
@@ -386,7 +387,11 @@ export const WarehouseProduction = ({
               chosen).
             </p>
             {changed && (
-              <Button variant="outline" onClick={() => setDraft(undefined)}>
+              <Button
+                variant="outline"
+                disabled={actions.setProduction.isPending}
+                onClick={() => setDraft(undefined)}
+              >
                 Reset
               </Button>
             )}
@@ -425,7 +430,8 @@ export const WarehouseProduction = ({
                     id={`produce-${item.id}`}
                     checked={isOn}
                     disabled={
-                      !isOn && selected.length >= WAREHOUSE_MAX_PRODUCTION_ITEMS
+                      actions.setProduction.isPending ||
+                      (!isOn && selected.length >= WAREHOUSE_MAX_PRODUCTION_ITEMS)
                     }
                     onCheckedChange={(on) =>
                       setDraft(

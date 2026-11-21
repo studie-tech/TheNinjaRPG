@@ -316,6 +316,7 @@ const CaravanEncounterRate: React.FC = () => {
           max={100}
           value={value}
           onValueChange={setRate}
+          disabled={isPending}
         />
         <Button
           size="sm"

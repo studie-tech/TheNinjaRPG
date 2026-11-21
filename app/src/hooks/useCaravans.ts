@@ -24,7 +24,10 @@ import {
 } from "@/deltas/caravan";
 import { getInventoryQuantities } from "@/deltas/item";
 import { applyWarehouseChange, getWarehouseHistoryWithLogs } from "@/deltas/warehouse";
-import { WAREHOUSE_HISTORY_PAGE_SIZE } from "@/drizzle/constants";
+import {
+  CARAVAN_SABOTAGE_MINUTES,
+  WAREHOUSE_HISTORY_PAGE_SIZE,
+} from "@/drizzle/constants";
 import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
@@ -101,7 +104,15 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       ...(operations.data?.operations.flatMap((op) =>
         op.status === "ACTIVE" ? [op.finishesAt] : [],
       ) ?? []),
-      ...(operations.data?.caravans.map((row) => row.arrivesAt) ?? []),
+      // Sabotage closes ahead of arrival, so the controls also refresh at that cutoff.
+      ...(operations.data?.caravans.flatMap((row) =>
+        row.arrivesAt
+          ? [
+              row.arrivesAt,
+              new Date(row.arrivesAt).getTime() - CARAVAN_SABOTAGE_MINUTES * 60_000,
+            ]
+          : [],
+      ) ?? []),
     ],
     () => void operations.refetch({ cancelRefetch: false }),
     timeDiff,

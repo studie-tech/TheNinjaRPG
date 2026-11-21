@@ -571,8 +571,13 @@ const PrepareCaravan = ({
   const active = routes.routes.filter(
     (route) => route.status === "ACTIVE" && !route.blocked,
   );
-  const [routeId, setRouteId] = useState<string>();
+  const [chosenRouteId, setRouteId] = useState<string>();
+  // A route that was blocked or closed since it was chosen has to be chosen again.
+  const routeId = active.some((route) => route.id === chosenRouteId)
+    ? chosenRouteId
+    : undefined;
   const [cargo, setCargo] = useState<Record<string, number>>({});
+  const isReserving = actions.prepare.isPending;
   const lines = Object.entries(cargo)
     .filter(([, quantity]) => quantity > 0)
     .map(([itemId, quantity]) => ({ itemId, quantity }));
@@ -600,7 +605,7 @@ const PrepareCaravan = ({
     <div className="mb-4 rounded-md border p-3">
       <h3 className="text-base font-semibold">Prepare a caravan</h3>
       <div className="mt-2 grid gap-2 @2xl:grid-cols-[1fr_2fr]">
-        <Select value={routeId} onValueChange={setRouteId}>
+        <Select value={routeId ?? ""} onValueChange={setRouteId} disabled={isReserving}>
           <SelectTrigger aria-label="Trade route">
             <SelectValue placeholder="Route" />
           </SelectTrigger>
@@ -631,7 +636,9 @@ const PrepareCaravan = ({
                   onOptionalValueChange={(value) =>
                     setCargo((prev) => ({ ...prev, [row.itemId]: value ?? 0 }))
                   }
-                  disabled={!chosen && lines.length >= CARAVAN_MAX_CARGO_ITEMS}
+                  disabled={
+                    isReserving || (!chosen && lines.length >= CARAVAN_MAX_CARGO_ITEMS)
+                  }
                 />
               </li>
             );
@@ -648,11 +655,12 @@ const PrepareCaravan = ({
           disabled={
             !routeId ||
             hasInvalidCargo ||
+            lines.length > CARAVAN_MAX_CARGO_ITEMS ||
             units < CARAVAN_MIN_CARGO_UNITS ||
             units > CARAVAN_MAX_CARGO_UNITS ||
-            actions.prepare.isPending
+            isReserving
           }
-          loading={actions.prepare.isPending}
+          loading={isReserving}
           onClick={() =>
             routeId &&
             actions.prepare.mutate(
