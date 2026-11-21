@@ -3,7 +3,9 @@
 import { useCaravans } from "@/hooks/useCaravans";
 import BanInfo from "@/layout/BanInfo";
 import { CaravansPanel, TradeRoutesPanel } from "@/layout/CaravanPanels";
+import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
+import { QueryError } from "@/layout/QueryError";
 import {
   WarehouseAccess,
   WarehouseHistory,
@@ -24,6 +26,18 @@ export default function WarehousePage() {
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Warehouse" />;
   if (userData.isBanned) return <BanInfo />;
+  if (!warehouse && actions.warehouse.isError)
+    return (
+      <ContentBox title="Warehouse" defaultBackHref="/village">
+        <QueryError
+          layout="stacked"
+          message="Could not open the Warehouse."
+          messageClassName="mb-3"
+          onRetry={() => void actions.warehouse.refetch()}
+          isRetrying={actions.warehouse.isFetching}
+        />
+      </ContentBox>
+    );
   if (!warehouse) return <Loader explanation="Opening the Warehouse" />;
   const built = (warehouse.structure?.level ?? 0) > 0;
   return (

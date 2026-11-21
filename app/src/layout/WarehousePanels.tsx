@@ -32,6 +32,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import { QueryError } from "@/layout/QueryError";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { cn } from "@/libs/shadui";
 import { useUserPicker } from "@/utils/search";
@@ -562,17 +563,12 @@ export const WarehouseHistory = () => {
       {rows.length === 0 && history.status === "pending" ? (
         <Loader explanation="Loading history" />
       ) : rows.length === 0 && history.status === "error" ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-muted-foreground text-sm">Could not load the history.</p>
-          <Button
-            size="sm"
-            variant="outline"
-            loading={history.isFetching}
-            onClick={() => void history.refetch()}
-          >
-            Try again
-          </Button>
-        </div>
+        <QueryError
+          className="text-sm"
+          message="Could not load the history."
+          onRetry={() => void history.refetch()}
+          isRetrying={history.isFetching}
+        />
       ) : rows.length === 0 ? (
         <p className="text-muted-foreground text-sm">Nothing has moved yet.</p>
       ) : (

@@ -27,7 +27,9 @@ import {
   TRADE_ROUTE_MARKER_MAX_CONTROL,
 } from "@/drizzle/constants";
 import { useCaravans } from "@/hooks/useCaravans";
+import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
+import { QueryError } from "@/layout/QueryError";
 import { cn } from "@/libs/shadui";
 import { formatDateTime } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -72,7 +74,18 @@ const CaravanControlsPanel = () => {
   const actions = useCaravans({ controls: true });
   const { data: userData, timeDiff } = useRequiredUserData();
   const data = actions.operations.data;
-  if (!data) return <p className="text-sm">Loading caravan intelligence…</p>;
+  if (!data && actions.operations.isError)
+    return (
+      <QueryError
+        layout="stacked"
+        className="text-sm"
+        message="Could not load caravan intelligence."
+        messageClassName="mb-3"
+        onRetry={() => void actions.operations.refetch()}
+        isRetrying={actions.operations.isFetching}
+      />
+    );
+  if (!data) return <Loader explanation="Loading caravan intelligence" />;
   const now = Date.now() - timeDiff;
   const running = data.operations.find((op) => op.status === "ACTIVE");
   const canScout = !data.isOutlaw || data.bandit.enabled;
