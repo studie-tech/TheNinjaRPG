@@ -655,9 +655,10 @@ export const caravanRouter = createTRPCRouter({
         targetIds: [operation.userId],
         cacheUserId: ctx.userId,
       });
-      // Engaging the saboteur stops their work whatever the fight's outcome.
+      // Engaging the saboteur stops their work whatever the fight's outcome, judged at the
+      // moment it was confirmed under way.
       if (result.success)
-        await resolveOperation(ctx.drizzle, operation.id, "INTERRUPTED", new Date());
+        await resolveOperation(ctx.drizzle, operation.id, "INTERRUPTED", now);
       return result;
     }),
 });

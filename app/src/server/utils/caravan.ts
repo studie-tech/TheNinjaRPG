@@ -105,11 +105,13 @@ export const maintainCaravans = async (
 /**
  * Cancel a caravan and return everything it holds: a preparing caravan releases its
  * reservation, a travelling one brings its remaining cargo home. Escorts are freed unpaid.
+ * `unfought` refuses the cancellation while a fight over the caravan is open.
  */
 export const cancelCaravan = async (
   client: DrizzleClient,
   row: Caravan,
   now = new Date(),
+  options: { unfought?: boolean } = {},
 ) => {
   const participants = await listCaravanParticipants(client, [row.id]);
   const remaining =
@@ -118,10 +120,12 @@ export const cancelCaravan = async (
   // the transaction prevents a cancelled caravan whose goods never came back.
   const cancelled = await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
-      const claimed = await transitionCaravan(tx, row, {
-        status: "CANCELLED",
-        resolvedAt: now,
-      });
+      const claimed = await transitionCaravan(
+        tx,
+        row,
+        { status: "CANCELLED", resolvedAt: now },
+        options,
+      );
       if (claimed.rowsAffected !== 1) return false;
       for (const line of remaining) {
         if (line.quantity <= 0) continue;
@@ -520,8 +524,8 @@ const cancelBlockedCaravans = async (
     blocked.map((row) => row.routeId),
   );
   const scoped = caravans.filter((row) => !caravanIds || caravanIds.includes(row.id));
-  // A caravan still being fought over is called off once its fight settles; one that
-  // already arrived is delivered instead.
+  // A caravan still being fought over, even by a fight opened after this read, is called
+  // off once its fight settles; one that already arrived is delivered instead.
   const fighting = new Set(
     (await listOpenEncounters(client, { caravanIds: scoped.map((row) => row.id) })).map(
       (row) => row.caravanId,
@@ -532,6 +536,6 @@ const cancelBlockedCaravans = async (
       .filter(
         (row) => !fighting.has(row.id) && !(row.arrivesAt && row.arrivesAt <= now),
       )
-      .map((row) => cancelCaravan(client, row, now)),
+      .map((row) => cancelCaravan(client, row, now, { unfought: true })),
   );
 };

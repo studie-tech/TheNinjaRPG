@@ -23,6 +23,7 @@ import {
   CARAVAN_DELAY_MINUTES,
   CARAVAN_DISRUPTION_MINUTES,
   CARAVAN_MAX_GROUP,
+  CARAVAN_SABOTAGE_MINUTES,
   TRADE_ROUTE_MARKER_MAX_CONTROL,
 } from "@/drizzle/constants";
 import { useCaravans } from "@/hooks/useCaravans";
@@ -275,6 +276,10 @@ const KnownCaravan = ({
   const myLeaderId = committedHere ? data.commitment?.groupLeaderId : undefined;
   const leading = !!myLeaderId && myLeaderId === data.commitment?.userId;
   const travelling = row.status === "TRAVELLING";
+  const arrivesFirst =
+    !row.arrivesAt ||
+    new Date(row.arrivesAt).getTime() <= now + CARAVAN_SABOTAGE_MINUTES * 60_000;
+  const canSabotage = row.inSector && !arrivesFirst && !running;
   return (
     <li className="rounded-md border p-2">
       <p className="font-semibold">
@@ -318,8 +323,12 @@ const KnownCaravan = ({
               <Button
                 size="sm"
                 variant="outline"
-                title={`Removes an NPC guard from fights for ${CARAVAN_DISRUPTION_MINUTES} minutes`}
-                disabled={!row.inSector || running || actions.startOperation.isPending}
+                title={
+                  arrivesFirst
+                    ? "The caravan arrives before sabotage could finish"
+                    : `Removes an NPC guard from fights for ${CARAVAN_DISRUPTION_MINUTES} minutes`
+                }
+                disabled={!canSabotage || actions.startOperation.isPending}
                 onClick={() =>
                   actions.startOperation.mutate({ type: "DISRUPT", caravanId: row.id })
                 }
@@ -330,8 +339,12 @@ const KnownCaravan = ({
               <Button
                 size="sm"
                 variant="outline"
-                title={`Adds ${CARAVAN_DELAY_MINUTES} minutes of travel`}
-                disabled={!row.inSector || running || actions.startOperation.isPending}
+                title={
+                  arrivesFirst
+                    ? "The caravan arrives before sabotage could finish"
+                    : `Adds ${CARAVAN_DELAY_MINUTES} minutes of travel`
+                }
+                disabled={!canSabotage || actions.startOperation.isPending}
                 onClick={() =>
                   actions.startOperation.mutate({ type: "DELAY", caravanId: row.id })
                 }
