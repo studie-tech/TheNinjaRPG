@@ -7,6 +7,7 @@ import {
   prepareGuideHtml,
   slugifyGuideTitle,
 } from "@/libs/guide/html";
+import { GuideArticleValidator } from "@/validators/guide";
 
 describe("guide hub category order", () => {
   it("lists economy and ranks before bloodlines", () => {
@@ -92,6 +93,35 @@ describe("system guide articles", () => {
     expect(farming).toContain("require at least level 10");
     expect(farming).toContain(
       "Seed extractors unlock at levels 10, 55 and 100 (up to 3).",
+    );
+  });
+});
+
+describe("guide article validator", () => {
+  const base = {
+    slug: "training",
+    title: "Training",
+    category: "getting-started",
+    content: "<p>Body</p>",
+    sortOrder: 3,
+    published: true,
+    excerpt: "Train stats with Energy and unlock jutsu with mastery.",
+    image: "https://ui0arpl8sm.ufs.sh/f/guide-training-v1.webp",
+  };
+  const failingPaths = (input: Record<string, unknown>) => {
+    const result = GuideArticleValidator.safeParse(input);
+    return result.success ? [] : result.error.issues.map((issue) => issue.path[0]);
+  };
+
+  it("requires the hub card's excerpt and cover on published guides", () => {
+    expect(failingPaths(base)).toEqual([]);
+    expect(failingPaths({ ...base, excerpt: "  " })).toEqual(["excerpt"]);
+    expect(failingPaths({ ...base, image: "" })).toEqual(["image"]);
+  });
+
+  it("lets drafts save without an excerpt or cover", () => {
+    expect(failingPaths({ ...base, published: false, excerpt: "", image: "" })).toEqual(
+      [],
     );
   });
 });
