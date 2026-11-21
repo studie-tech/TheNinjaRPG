@@ -248,4 +248,14 @@ describe("backpack room for granted goods", () => {
     const worn = [stack("ore-stack", "ore", 70, { durability: 1 }), ...full.slice(1)];
     expect(getBackpackBlock(user, worn, [{ item: ore, quantity: 1 }])).toBeDefined();
   });
+
+  it("tops up no stack while the player is in a battle", () => {
+    const fighting = { ...user, battleId: "arena" } as UserData;
+    expect(getBackpackBlock(fighting, full, [{ item: ore, quantity: 1 }])).toBe(
+      "Materials inventory is full",
+    );
+    expect(
+      getBackpackBlock(fighting, full.slice(1), [{ item: ore, quantity: 1 }]),
+    ).toBe(undefined);
+  });
 });

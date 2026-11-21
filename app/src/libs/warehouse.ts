@@ -233,7 +233,8 @@ export const getWithdrawalAllowance = (
 
 /**
  * Why the backpack cannot take granted goods, judged from the inventory read for the grant:
- * a full inventory bucket takes an item only when the stacks it may top up hold all of it.
+ * a full inventory bucket takes an item only when, outside a battle, the stacks it may top
+ * up hold all of it.
  */
 export const getBackpackBlock = (
   user: UserData,
@@ -251,7 +252,8 @@ export const getBackpackBlock = (
     const isFull =
       countInventoryBucketSlots(inventory, bucket, now) >=
       getInventoryBucketCapacity(bucket, user);
-    if (isFull && getJoinableStackRoom(inventory, item.id, now) < quantity)
+    const room = user.battleId ? 0 : getJoinableStackRoom(inventory, item.id, now);
+    if (isFull && room < quantity)
       return getInventoryBucketFullMessage(
         bucket,
         countHeldInventorySlots(inventory, bucket, now),

@@ -388,7 +388,8 @@ export const getEffectiveStackSize = (item: Pick<Item, "canStack" | "stackSize">
 /**
  * Units of an item the carried stacks a grant may top up still hold room for: the stacks
  * `listItemForGrantUserItems` lists, unequipped and outside auctions and crafts, without a
- * variant or imbuement, at full durability and at level 1 unless consumable.
+ * variant or imbuement, at full durability and at level 1 unless consumable. The listing
+ * holds none while the player is in a battle; callers check that.
  */
 export const getJoinableStackRoom = (
   rows: readonly (InventorySlotRow & Pick<UserItem, "durability">)[],
