@@ -266,94 +266,6 @@ export const WarehouseStock = ({
   );
 };
 
-/** Deposit a carried stack of at least the minimum size. */
-const DepositForm = ({
-  data,
-  actions,
-}: {
-  data: WarehouseData;
-  actions: CaravanActions;
-}) => {
-  const [stackId, setStackId] = useState<string>();
-  const [quantity, setQuantity] = useState<number>(WAREHOUSE_MIN_DEPOSIT);
-  const stack = data.depositCandidates.find((row) => row.userItemId === stackId);
-  return (
-    <div className="mt-4 border-t pt-3">
-      <h3 className="text-base font-semibold">Deposit</h3>
-      <p className="text-muted-foreground mb-2 text-sm">
-        Donate at least {WAREHOUSE_MIN_DEPOSIT} units; the Warehouse adds{" "}
-        {data.depositBonus}% on top. Each item can be deposited once every{" "}
-        {WAREHOUSE_DEPOSIT_COOLDOWN_HOURS} hours, and units you withdrew earn no bonus.
-      </p>
-      {data.depositCandidates.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          Carry a stack of {WAREHOUSE_MIN_DEPOSIT} or more Warehouse goods to deposit
-          them.
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={stackId}
-            onValueChange={(value) => {
-              setStackId(value);
-              const next = data.depositCandidates.find(
-                (row) => row.userItemId === value,
-              );
-              if (next) setQuantity(next.quantity);
-            }}
-          >
-            <SelectTrigger
-              className="min-w-48 grow basis-48"
-              aria-label="Stack to deposit"
-            >
-              <SelectValue placeholder="Choose a stack" />
-            </SelectTrigger>
-            <SelectContent>
-              {data.depositCandidates.map((row) => (
-                <SelectItem
-                  key={row.userItemId}
-                  value={row.userItemId}
-                  disabled={!!row.availableAt}
-                >
-                  {row.name} ×{row.quantity}
-                  {row.availableAt
-                    ? ` · again at ${new Date(row.availableAt).toLocaleTimeString()}`
-                    : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <NumberInput
-            aria-label="Units to deposit"
-            className="w-24"
-            min={WAREHOUSE_MIN_DEPOSIT}
-            max={stack?.quantity ?? WAREHOUSE_MIN_DEPOSIT}
-            value={quantity}
-            onValueChange={setQuantity}
-            disabled={!stack}
-          />
-          <Button
-            disabled={
-              !stack ||
-              !!stack.availableAt ||
-              actions.deposit.isPending ||
-              !(quantity >= WAREHOUSE_MIN_DEPOSIT && quantity <= stack.quantity)
-            }
-            loading={actions.deposit.isPending}
-            onClick={() =>
-              stack &&
-              actions.deposit.mutate({ userItemId: stack.userItemId, quantity })
-            }
-          >
-            <ArrowDownToLine className="mr-2 size-4" aria-hidden />
-            Deposit
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-};
-
 /** The leader's choice of items the Warehouse produces. */
 export const WarehouseProduction = ({
   data,
@@ -603,6 +515,94 @@ export const WarehouseHistory = () => {
         </Button>
       )}
     </ContentBox>
+  );
+};
+
+/** Deposit a carried stack of at least the minimum size. */
+const DepositForm = ({
+  data,
+  actions,
+}: {
+  data: WarehouseData;
+  actions: CaravanActions;
+}) => {
+  const [stackId, setStackId] = useState<string>();
+  const [quantity, setQuantity] = useState<number>(WAREHOUSE_MIN_DEPOSIT);
+  const stack = data.depositCandidates.find((row) => row.userItemId === stackId);
+  return (
+    <div className="mt-4 border-t pt-3">
+      <h3 className="text-base font-semibold">Deposit</h3>
+      <p className="text-muted-foreground mb-2 text-sm">
+        Donate at least {WAREHOUSE_MIN_DEPOSIT} units; the Warehouse adds{" "}
+        {data.depositBonus}% on top. Each item can be deposited once every{" "}
+        {WAREHOUSE_DEPOSIT_COOLDOWN_HOURS} hours, and units you withdrew earn no bonus.
+      </p>
+      {data.depositCandidates.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          Carry a stack of {WAREHOUSE_MIN_DEPOSIT} or more Warehouse goods to deposit
+          them.
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={stackId}
+            onValueChange={(value) => {
+              setStackId(value);
+              const next = data.depositCandidates.find(
+                (row) => row.userItemId === value,
+              );
+              if (next) setQuantity(next.quantity);
+            }}
+          >
+            <SelectTrigger
+              className="min-w-48 grow basis-48"
+              aria-label="Stack to deposit"
+            >
+              <SelectValue placeholder="Choose a stack" />
+            </SelectTrigger>
+            <SelectContent>
+              {data.depositCandidates.map((row) => (
+                <SelectItem
+                  key={row.userItemId}
+                  value={row.userItemId}
+                  disabled={!!row.availableAt}
+                >
+                  {row.name} ×{row.quantity}
+                  {row.availableAt
+                    ? ` · again at ${new Date(row.availableAt).toLocaleTimeString()}`
+                    : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <NumberInput
+            aria-label="Units to deposit"
+            className="w-24"
+            min={WAREHOUSE_MIN_DEPOSIT}
+            max={stack?.quantity ?? WAREHOUSE_MIN_DEPOSIT}
+            value={quantity}
+            onValueChange={setQuantity}
+            disabled={!stack}
+          />
+          <Button
+            disabled={
+              !stack ||
+              !!stack.availableAt ||
+              actions.deposit.isPending ||
+              !(quantity >= WAREHOUSE_MIN_DEPOSIT && quantity <= stack.quantity)
+            }
+            loading={actions.deposit.isPending}
+            onClick={() =>
+              stack &&
+              actions.deposit.mutate({ userItemId: stack.userItemId, quantity })
+            }
+          >
+            <ArrowDownToLine className="mr-2 size-4" aria-hidden />
+            Deposit
+          </Button>
+        </div>
+      )}
+    </div>
   );
 };
 
