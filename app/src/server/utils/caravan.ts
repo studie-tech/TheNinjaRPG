@@ -410,7 +410,8 @@ const rollCheckpointAmbushes = async (
       row.checkpointsProcessed,
       reached,
     );
-    if (claimed.rowsAffected !== 1) continue;
+    // Checkpoints a late run catches up on after arrival pass without an ambush.
+    if (claimed.rowsAffected !== 1 || (row.arrivesAt && row.arrivesAt <= now)) continue;
     const ambushed = Array.from({ length: reached - row.checkpointsProcessed }, () =>
       rollChance(rate),
     ).some(Boolean);

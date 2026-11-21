@@ -33,6 +33,7 @@ import {
 import type { useCaravans } from "@/hooks/useCaravans";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { cn } from "@/libs/shadui";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 type RouteData = NonNullable<RouterOutputs["tradeRoute"]["getRoutes"]>;
@@ -93,7 +94,9 @@ export const TradeRoutesPanel = ({
             one.
           </p>
         ) : (
-          <ul className="grid gap-2 @2xl:grid-cols-2">
+          <ul
+            className={cn("grid gap-2", data.routes.length > 1 && "@2xl:grid-cols-2")}
+          >
             {data.routes.map((route) => (
               <li key={route.id} className="rounded-md border p-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -245,7 +248,9 @@ export const CaravansPanel = ({
             No caravans are preparing or travelling.
           </p>
         ) : (
-          <ul className="grid gap-2 @3xl:grid-cols-2">
+          <ul
+            className={cn("grid gap-2", data.caravans.length > 1 && "@3xl:grid-cols-2")}
+          >
             {data.caravans.map((row) => {
               const isGuard = !!row.viewer;
               const fighting = row.encounter && row.encounter.status !== "PENDING";

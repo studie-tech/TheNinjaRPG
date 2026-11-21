@@ -241,7 +241,7 @@ export const warehouseRouter = createTRPCRouter({
       const availableAt = getDepositAvailableAt(ledger, now);
       if (availableAt)
         return errorResponse(
-          `You can deposit ${stack.item.name} again at ${availableAt.toLocaleTimeString()}`,
+          `You can deposit ${stack.item.name} again in ${Math.ceil((availableAt.getTime() - now.getTime()) / 60_000)} minutes`,
         );
       const level = getWarehouseLevel(structure, now);
       const credit = getDepositCredit(
