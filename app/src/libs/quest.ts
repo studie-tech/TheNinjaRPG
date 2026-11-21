@@ -321,11 +321,14 @@ export const getArrivalQuestTriggers = (
         },
         objective,
       );
+      // A tower defense challenge completes only from its run's claim, never on arrival.
+      const completesOnArrival = objective.task !== "win_tower_defense";
       if (
         (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
-        (isOnLocation ||
-          // A masked target cannot be matched locally; the server owns its coordinates.
-          ("hideLocation" in objective && objective.hideLocation) ||
+        ((completesOnArrival &&
+          (isOnLocation ||
+            // A masked target cannot be matched locally; the server owns its coordinates.
+            ("hideLocation" in objective && objective.hideLocation))) ||
           ("attackers" in objective &&
             objective.attackers &&
             objective.attackers.length > 0))
