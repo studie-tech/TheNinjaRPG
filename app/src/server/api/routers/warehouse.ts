@@ -1,5 +1,14 @@
 import { eq, isNull, lte, or } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { z } from "zod";
+import {
+  getApprovalWarehouseChange,
+  getDepositInventoryChanges,
+  getDepositWarehouseChange,
+  getProductionWarehouseChange,
+  getWarehouseLogEntries,
+  getWithdrawWarehouseChange,
+} from "@/deltas/warehouse";
 import {
   WAREHOUSE_DEPOSIT_COOLDOWN_HOURS,
   WAREHOUSE_HISTORY_PAGE_SIZE,
@@ -22,6 +31,7 @@ import {
   getCycleQuantity,
   getDepositAvailableAt,
   getDepositBonus,
+  getDepositCandidates,
   getDepositCredit,
   getDueProduction,
   getProductionBonus,
@@ -56,18 +66,14 @@ import {
   updateWarehouseProduction,
 } from "@/queries/warehouse";
 import { fetchUserItems } from "@/server/api/routers/item";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-} from "@/server/api/trpc";
+import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { updateUserItemQuantityAtomically } from "@/server/utils/concurrency";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { isServingElder } from "@/server/utils/kageGovernance";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { settleProduction, WarehouseConflict } from "@/server/utils/warehouse";
 import { calcStructureUpgrade, getRaidStructureMultiplier } from "@/utils/village";
+import { warehouseResponseSchema } from "@/validators/warehouse";
 
 export const warehouseRouter = createTRPCRouter({
   getWarehouse: protectedProcedure
@@ -133,7 +139,6 @@ export const warehouseRouter = createTRPCRouter({
       );
       const activeWarIds = villageWars.map((war) => war.id);
       const allowance = getWithdrawalAllowance(user, member, activeWarIds, now);
-      const ledgerByItem = new Map(ledgers.map((ledger) => [ledger.itemId, ledger]));
       const nextCycleAt = getDueProduction(
         settings.productionSettledAt,
         now,
@@ -179,22 +184,7 @@ export const warehouseRouter = createTRPCRouter({
           .map((row) => ({ id: row.id, name: row.name, image: row.image })),
         stock,
         allowance,
-        depositCandidates: inventory
-          .filter(
-            (row) =>
-              isWarehouseStorable(row.item) &&
-              isCarriedUserItem(row, now) &&
-              row.equipped === "NONE" &&
-              row.quantity >= WAREHOUSE_MIN_DEPOSIT,
-          )
-          .map((row) => ({
-            userItemId: row.id,
-            itemId: row.itemId,
-            name: row.item.name,
-            image: row.item.image,
-            quantity: row.quantity,
-            availableAt: getDepositAvailableAt(ledgerByItem.get(row.itemId), now),
-          })),
+        depositCandidates: getDepositCandidates(inventory, ledgers, now),
         approvals: approvals.map((row) => ({
           userId: row.userId,
           username: row.username,
@@ -244,7 +234,7 @@ export const warehouseRouter = createTRPCRouter({
         quantity: z.number().int().min(WAREHOUSE_MIN_DEPOSIT),
       }),
     )
-    .output(baseServerResponse)
+    .output(warehouseResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const [villageData, inventory, ledgers] = await Promise.all([
@@ -280,6 +270,14 @@ export const warehouseRouter = createTRPCRouter({
       const conflict = new WarehouseConflict(
         "Your stack or deposit cooldown changed. Refresh and try again",
       );
+      const log = {
+        id: nanoid(),
+        villageId: villageData.id,
+        userId: ctx.userId,
+        itemId: stack.itemId,
+        type: "DEPOSIT" as const,
+        quantity: credit.credited,
+      };
       try {
         // Consuming the stack (an update or a delete), claiming the per-item cooldown and
         // crediting shared stock touch three rows that no single guarded statement can
@@ -325,19 +323,7 @@ export const warehouseRouter = createTRPCRouter({
             await creditWarehouseStock(tx, villageData.id, [
               { itemId: stack.itemId, quantity: credit.credited },
             ]);
-            await insertWarehouseLogs(
-              tx,
-              [
-                {
-                  villageId: villageData.id,
-                  userId: ctx.userId,
-                  itemId: stack.itemId,
-                  type: "DEPOSIT",
-                  quantity: credit.credited,
-                },
-              ],
-              now,
-            );
+            await insertWarehouseLogs(tx, [log], now);
           }),
         );
       } catch (error) {
@@ -349,21 +335,42 @@ export const warehouseRouter = createTRPCRouter({
         message: credit.bonus
           ? `Deposited ${input.quantity} ${stack.item.name}; the Warehouse added ${credit.bonus} bonus`
           : `Deposited ${input.quantity} ${stack.item.name}`,
+        warehouseChange: getDepositWarehouseChange({
+          stack,
+          quantity: input.quantity,
+          credited: credit.credited,
+          inventory,
+          ledgers,
+          now,
+        }),
+        warehouseLogs: getWarehouseLogEntries(
+          [log],
+          {
+            items: new Map([[stack.itemId, stack.item.name]]),
+            username: user.username,
+          },
+          now,
+        ),
+        inventoryChanges: getDepositInventoryChanges(stack, input.quantity),
       };
     }),
   withdraw: protectedProcedure
     .meta({ mcp: { description: "Withdraw materials from the Warehouse" } })
     .input(z.object({ itemId: z.string(), quantity: z.number().int().min(1) }))
-    .output(baseServerResponse)
+    .output(warehouseResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const [villageData, member, wars, inventory, [info]] = await Promise.all([
-        user.villageId ? fetchVillage(ctx.drizzle, user.villageId) : undefined,
-        findWarehouseMember(ctx.drizzle, ctx.userId),
-        listOpenWars(ctx.drizzle),
-        fetchUserItems(ctx.drizzle, ctx.userId),
-        listWarehouseItems(ctx.drizzle, [input.itemId]),
-      ]);
+      // Deposit cooldowns describe the stacks a withdrawal opens in the confirmed view.
+      const [villageData, member, wars, inventory, [info], ledgers] = await Promise.all(
+        [
+          user.villageId ? fetchVillage(ctx.drizzle, user.villageId) : undefined,
+          findWarehouseMember(ctx.drizzle, ctx.userId),
+          listOpenWars(ctx.drizzle),
+          fetchUserItems(ctx.drizzle, ctx.userId),
+          listWarehouseItems(ctx.drizzle, [input.itemId]),
+          listDepositLedgers(ctx.drizzle, ctx.userId),
+        ],
+      );
       const now = new Date();
       const structure = findWarehouse(villageData?.structures);
       const accessError = warehouseAccessError(user, villageData, structure);
@@ -396,6 +403,15 @@ export const warehouseRouter = createTRPCRouter({
       const conflict = new WarehouseConflict(
         "Not enough unreserved stock, or your allowance changed. Refresh and try again",
       );
+      const log = {
+        id: nanoid(),
+        villageId: villageData.id,
+        userId: ctx.userId,
+        itemId: input.itemId,
+        type: "WITHDRAW" as const,
+        quantity: input.quantity,
+      };
+      let stacks: Awaited<ReturnType<typeof grantUserItems>>["stacks"] = [];
       try {
         // Taking stock and charging the allowance is one guarded update, but delivering it
         // inserts or tops up backpack stacks; the transaction undoes the claim when the
@@ -412,34 +428,40 @@ export const warehouseRouter = createTRPCRouter({
               allowance: allowance.total,
             });
             if (claimed.rowsAffected === 0) throw conflict;
-            const { unstacked } = await grantUserItems(
+            const granted = await grantUserItems(
               tx,
               ctx.userId,
               [{ itemId: input.itemId, quantity: input.quantity }],
               { topUpOnly },
             );
-            if (topUpOnly && unstacked.length > 0) throw fullBackpack;
+            if (topUpOnly && granted.unstacked.length > 0) throw fullBackpack;
             await addWithdrawnUnits(tx, ctx.userId, input.itemId, input.quantity);
-            await insertWarehouseLogs(
-              tx,
-              [
-                {
-                  villageId: villageData.id,
-                  userId: ctx.userId,
-                  itemId: input.itemId,
-                  type: "WITHDRAW",
-                  quantity: input.quantity,
-                },
-              ],
-              now,
-            );
+            await insertWarehouseLogs(tx, [log], now);
+            stacks = granted.stacks;
           }),
         );
       } catch (error) {
         if (error instanceof WarehouseConflict) return errorResponse(error.message);
         throw error;
       }
-      return { success: true, message: `Withdrew ${input.quantity} ${info.name}` };
+      // Filled stacks change their snapshot time in SQL, so the inventory reloads.
+      return {
+        success: true,
+        message: `Withdrew ${input.quantity} ${info.name}`,
+        warehouseChange: getWithdrawWarehouseChange({
+          item: info,
+          quantity: input.quantity,
+          inventory,
+          stacks,
+          ledgers,
+          now,
+        }),
+        warehouseLogs: getWarehouseLogEntries(
+          [log],
+          { items: new Map([[info.id, info.name]]), username: user.username },
+          now,
+        ),
+      };
     }),
   setProduction: protectedProcedure
     .meta({ mcp: { description: "Choose the items your Warehouse produces, as Kage" } })
@@ -448,7 +470,7 @@ export const warehouseRouter = createTRPCRouter({
         itemIds: z.array(z.string()).max(WAREHOUSE_MAX_PRODUCTION_ITEMS),
       }),
     )
-    .output(baseServerResponse)
+    .output(warehouseResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const villageData = user.villageId
@@ -479,7 +501,16 @@ export const warehouseRouter = createTRPCRouter({
       );
       if (result.rowsAffected !== 1)
         return errorResponse("Production changed meanwhile. Refresh and try again");
-      return { success: true, message: "Production updated" };
+      return {
+        success: true,
+        message: "Production updated",
+        // Production settled in this request credited stock the view has not seen.
+        warehouseChange: settings.settled
+          ? undefined
+          : getProductionWarehouseChange(
+              itemIds.flatMap((id) => items.filter((row) => row.id === id)),
+            ),
+      };
     }),
   setApproval: protectedProcedure
     .meta({
@@ -492,7 +523,7 @@ export const warehouseRouter = createTRPCRouter({
         wartime: z.boolean().default(false),
       }),
     )
-    .output(baseServerResponse)
+    .output(warehouseResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, target, wars] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -507,7 +538,11 @@ export const warehouseRouter = createTRPCRouter({
         return errorResponse("Approve members of your own village");
       if (!input.approve) {
         await revokeWarehouseMember(ctx.drizzle, target.userId, villageData.id);
-        return { success: true, message: `${target.username} lost increased access` };
+        return {
+          success: true,
+          message: `${target.username} lost increased access`,
+          warehouseChange: getSelfApprovalChange(user, target, null),
+        };
       }
       const war = wars.find(
         (row) =>
@@ -530,9 +565,22 @@ export const warehouseRouter = createTRPCRouter({
         message: input.wartime
           ? `${target.username} has increased access until the war ends`
           : `${target.username} has increased access`,
+        warehouseChange: getSelfApprovalChange(user, target, {
+          wartime: input.wartime,
+        }),
       };
     }),
 });
+
+/** An approval change, withheld when the leader changed their own allowance. */
+const getSelfApprovalChange = (
+  user: UserData,
+  target: UserData,
+  approval: Parameters<typeof getApprovalWarehouseChange>[1],
+) =>
+  target.userId === user.userId
+    ? undefined
+    : getApprovalWarehouseChange(target, approval);
 
 /** Why a player cannot use their village's Warehouse right now, if they cannot. */
 const warehouseAccessError = (

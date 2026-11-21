@@ -5116,6 +5116,8 @@ export const CARAVAN_MAX_CARGO_ITEMS = 5;
 export const CARAVAN_MAX_CARGO_UNITS = 2_000;
 /** Escort checkpoints along every journey; each one can roll an NPC bandit ambush. */
 export const CARAVAN_CHECKPOINTS = 4;
+/** Finished caravans a village's caravan list shows. */
+export const CARAVAN_HISTORY_SIZE = 10;
 /** Default chance per checkpoint of an NPC bandit ambush; staff tune it in game settings. */
 export const CARAVAN_DEFAULT_ENCOUNTER_RATE = 25;
 /** Game setting holding the staff-tuned ambush chance, in percent. */
@@ -5185,6 +5187,8 @@ export const CARAVAN_OPERATION_STATUSES = [
   "RESOLVED",
   "INTERRUPTED",
 ] as const;
+/** A player's latest operations the caravan controls list. */
+export const CARAVAN_OPERATION_HISTORY_SIZE = 5;
 export const CARAVAN_DISCOVERY_KINDS = ["ROUTE", "LOCATION"] as const;
 export type CaravanDiscoveryKind = (typeof CARAVAN_DISCOVERY_KINDS)[number];
 

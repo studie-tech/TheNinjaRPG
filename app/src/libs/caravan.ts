@@ -25,10 +25,13 @@ import {
   SECTOR_WIDTH,
   STEALTH_SENSORY_DEFAULT,
   TRADE_ROUTE_BASE_TRAVEL_MINUTES,
+  TRADE_ROUTE_MAX_LEVEL,
   TRADE_ROUTE_MAX_MARKERS,
   TRADE_ROUTE_MIN_MARKERS,
   TRADE_ROUTE_SECTORS_PER_MARKER,
   TRADE_ROUTE_TRAVEL_REDUCTION_PER_LEVEL,
+  TRADE_ROUTE_UPGRADE_COST,
+  type TradeRouteStatus,
 } from "@/drizzle/constants";
 import type { Caravan, UserData, VillageAlliance } from "@/drizzle/schema";
 import { getRankForExperience, getRankProgress } from "@/libs/occupationRank";
@@ -78,6 +81,49 @@ export const getRouteTravelMinutes = (level: number) =>
       (100 - TRADE_ROUTE_TRAVEL_REDUCTION_PER_LEVEL * (Math.max(1, level) - 1))) /
       100,
   );
+
+/**
+ * A trade route as a village's route list shows it, with the travel times of its level. A
+ * marker with a controller blocks the route.
+ */
+export const describeTradeRoute = (route: {
+  id: string;
+  status: TradeRouteStatus;
+  level: number;
+  partner: { id: string; name: string; sector: number | null };
+  proposedByUs: boolean;
+  sectors: number;
+  markers: { id: string; sector: number; control: number; controller: string | null }[];
+}) => ({
+  id: route.id,
+  status: route.status,
+  level: route.level,
+  maxLevel: TRADE_ROUTE_MAX_LEVEL,
+  travelMinutes: getRouteTravelMinutes(route.level),
+  nextTravelMinutes:
+    route.level < TRADE_ROUTE_MAX_LEVEL ? getRouteTravelMinutes(route.level + 1) : null,
+  upgradeCost: TRADE_ROUTE_UPGRADE_COST,
+  partner: route.partner,
+  proposedByUs: route.proposedByUs,
+  sectors: route.sectors,
+  blocked: route.markers.some((marker) => marker.controller !== null),
+  markers: route.markers,
+});
+
+/**
+ * Moments a journey passes each checkpoint; they sit evenly between departure and arrival.
+ */
+export const getCheckpointTimes = (
+  caravan: Pick<Caravan, "departedAt" | "arrivesAt">,
+) => {
+  if (!caravan.departedAt || !caravan.arrivesAt) return [];
+  const start = caravan.departedAt.getTime();
+  const step = (caravan.arrivesAt.getTime() - start) / (CARAVAN_CHECKPOINTS + 1);
+  return Array.from(
+    { length: CARAVAN_CHECKPOINTS },
+    (_, index) => new Date(start + step * (index + 1)),
+  );
+};
 
 /**
  * Random hidden marker positions on the sectors between a route's two villages. Adjacent

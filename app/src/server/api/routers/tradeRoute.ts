@@ -1,11 +1,14 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getPaidWarehouseChange } from "@/deltas/warehouse";
 import {
   CARAVANS_PER_TRADE_ROUTE,
+  TRADE_ROUTE_MARKER_MAX_CONTROL,
   TRADE_ROUTE_MAX_LEVEL,
   TRADE_ROUTE_UPGRADE_COST,
 } from "@/drizzle/constants";
 import {
+  describeTradeRoute,
   findSectorPath,
   getRoutePair,
   getRouteTravelMinutes,
@@ -42,6 +45,26 @@ import {
   notifyPlayers,
 } from "@/server/utils/caravan";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { warehouseResponseSchema } from "@/validators/warehouse";
+
+/** A proposal accepted into an active route with the markers planned along it. */
+const activatedRouteSchema = z.object({
+  routeId: z.string(),
+  markers: z.array(
+    z.object({ id: z.string(), sector: z.number().int(), control: z.number().int() }),
+  ),
+});
+
+/**
+ * A declined or closed route with its partner, which may be offered again, and the
+ * caravans the closure called off.
+ */
+const removedRouteSchema = z.object({
+  routeId: z.string(),
+  partner: z.object({ id: z.string(), name: z.string(), block: z.string().nullable() }),
+  calledOff: z.number().int(),
+  caravansChanged: z.boolean().optional(),
+});
 
 export const tradeRouteRouter = createTRPCRouter({
   getRoutes: protectedProcedure
@@ -79,17 +102,10 @@ export const tradeRouteRouter = createTRPCRouter({
         routes: routes.map((route) => {
           const isA = route.villageIdA === villageId;
           const partner = isA ? route.villageB : route.villageA;
-          return {
+          return describeTradeRoute({
             id: route.id,
             status: route.status,
             level: route.level,
-            maxLevel: TRADE_ROUTE_MAX_LEVEL,
-            travelMinutes: getRouteTravelMinutes(route.level),
-            nextTravelMinutes:
-              route.level < TRADE_ROUTE_MAX_LEVEL
-                ? getRouteTravelMinutes(route.level + 1)
-                : null,
-            upgradeCost: TRADE_ROUTE_UPGRADE_COST,
             partner: {
               id: isA ? route.villageIdB : route.villageIdA,
               name: partner?.name ?? "Former partner",
@@ -97,7 +113,6 @@ export const tradeRouteRouter = createTRPCRouter({
             },
             proposedByUs: route.proposedByVillageId === villageId,
             sectors: route.path.length,
-            blocked: route.markers.some((marker) => marker.controllerVillageId),
             markers: route.markers.map((marker) => ({
               id: marker.id,
               sector: marker.sector,
@@ -106,7 +121,7 @@ export const tradeRouteRouter = createTRPCRouter({
                 ? (names.get(marker.controllerVillageId) ?? "A hostile village")
                 : null,
             })),
-          };
+          });
         }),
         partners: partners
           .filter((row) => row.id !== villageId && !openPartners.has(row.id))
@@ -125,7 +140,21 @@ export const tradeRouteRouter = createTRPCRouter({
   propose: protectedProcedure
     .meta({ mcp: { description: "Propose a trade route to another village" } })
     .input(z.object({ villageId: z.string() }))
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        proposed: z
+          .object({
+            id: z.string(),
+            partner: z.object({
+              id: z.string(),
+              name: z.string(),
+              sector: z.number().int(),
+            }),
+            sectors: z.number().int(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.villageId) return errorResponse("You have no village");
@@ -154,9 +183,10 @@ export const tradeRouteRouter = createTRPCRouter({
       const sectorB = villageIdB === own.id ? own.sector : partner.sector;
       const path = findSectorPath(sectorA, sectorB);
       if (!path) return errorResponse("No path connects the two villages");
+      const routeId = nanoid();
       try {
         await insertTradeRoute(ctx.drizzle, {
-          id: nanoid(),
+          id: routeId,
           villageIdA,
           villageIdB,
           openPair: `${villageIdA}:${villageIdB}`,
@@ -176,12 +206,25 @@ export const tradeRouteRouter = createTRPCRouter({
         body: `${own.name} proposes a trade route to ${partner.name}.`,
         route: "/warehouse",
       });
-      return { success: true, message: `Proposed a trade route to ${partner.name}` };
+      return {
+        success: true,
+        message: `Proposed a trade route to ${partner.name}`,
+        proposed: {
+          id: routeId,
+          partner: { id: partner.id, name: partner.name, sector: partner.sector },
+          sectors: path.length,
+        },
+      };
     }),
   respond: protectedProcedure
     .meta({ mcp: { description: "Accept or decline a proposed trade route" } })
     .input(z.object({ routeId: z.string(), accept: z.boolean() }))
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        activated: activatedRouteSchema.optional(),
+        removed: removedRouteSchema.optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [user, route, relationships, wars] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -202,30 +245,41 @@ export const tradeRouteRouter = createTRPCRouter({
       if (!own || !canManageTrade(user, own))
         return errorResponse("Only the invited village's Kage and Elders can answer");
       const now = new Date();
-      if (!input.accept) {
-        await closeTradeRoute(ctx.drizzle, route.id, now);
-        return { success: true, message: "Proposal declined" };
-      }
       const block = getTradeBlock(
         relationships,
         route.villageIdA,
         route.villageIdB,
         isAtWar(wars, route.villageIdA, route.villageIdB),
       );
+      if (!input.accept) {
+        const closed = await closeTradeRoute(ctx.drizzle, route.id, now);
+        if (closed.rowsAffected !== 1)
+          return errorResponse("This proposal is no longer open");
+        const proposer =
+          route.villageIdA === answeringId ? route.villageB : route.villageA;
+        return {
+          success: true,
+          message: "Proposal declined",
+          removed: {
+            routeId: route.id,
+            partner: { id: route.proposedByVillageId, name: proposer.name, block },
+            calledOff: 0,
+          },
+        };
+      }
       if (block) return errorResponse(block);
       if ((findWarehouse(own.structures)?.level ?? 0) <= 0)
         return errorResponse("Construct your Warehouse first");
       const accepted = await acceptTradeRoute(ctx.drizzle, route.id, now);
       if (accepted.rowsAffected !== 1)
         return errorResponse("This proposal is no longer open");
-      await insertRouteMarkers(
-        ctx.drizzle,
-        planRouteMarkers(route.path).map((marker) => ({
-          id: nanoid(),
-          routeId: route.id,
-          ...marker,
-        })),
-      );
+      const markers = planRouteMarkers(route.path).map((marker) => ({
+        id: nanoid(),
+        routeId: route.id,
+        control: TRADE_ROUTE_MARKER_MAX_CONTROL,
+        ...marker,
+      }));
+      await insertRouteMarkers(ctx.drizzle, markers);
       const proposer =
         route.villageIdA === answeringId ? route.villageB : route.villageA;
       notifyPlayers(ctx.drizzle, [proposer.kageId], {
@@ -233,16 +287,30 @@ export const tradeRouteRouter = createTRPCRouter({
         body: `${own.name} accepted your trade route.`,
         route: "/warehouse",
       });
-      return { success: true, message: "Trade route established" };
+      return {
+        success: true,
+        message: "Trade route established",
+        activated: {
+          routeId: route.id,
+          markers: markers.map((marker) => ({
+            id: marker.id,
+            sector: marker.sector,
+            control: marker.control,
+          })),
+        },
+      };
     }),
   close: protectedProcedure
     .meta({ mcp: { description: "Close one of your village's trade routes" } })
     .input(z.object({ routeId: z.string() }))
-    .output(baseServerResponse)
+    .output(baseServerResponse.extend({ removed: removedRouteSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
-      const [user, route] = await Promise.all([
+      // Relationships and wars decide whether the partner can be offered again.
+      const [user, route, relationships, wars] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         findTradeRoute(ctx.drizzle, input.routeId),
+        listVillageRelationships(ctx.drizzle),
+        listOpenWars(ctx.drizzle),
       ]);
       if (!route || route.status === "CLOSED") return errorResponse("Route not found");
       const own =
@@ -256,17 +324,41 @@ export const tradeRouteRouter = createTRPCRouter({
       if (closed.rowsAffected !== 1) return errorResponse("Route already closed");
       // Travelling caravans continue to their destination; unsent ones are called off.
       const caravans = await listOpenCaravans(ctx.drizzle, [route.id]);
-      await Promise.all(
-        caravans
-          .filter((row) => row.status === "PREPARING")
-          .map((row) => cancelCaravan(ctx.drizzle, row, now)),
+      const preparing = caravans.filter((row) => row.status === "PREPARING");
+      const cancelled = await Promise.all(
+        preparing.map((row) => cancelCaravan(ctx.drizzle, row, now)),
       );
-      return { success: true, message: "Trade route closed" };
+      const partnerIsA = route.villageIdA !== own.id;
+      return {
+        success: true,
+        message: "Trade route closed",
+        removed: {
+          routeId: route.id,
+          partner: {
+            id: partnerIsA ? route.villageIdA : route.villageIdB,
+            name: (partnerIsA ? route.villageA : route.villageB).name,
+            block: getTradeBlock(
+              relationships,
+              route.villageIdA,
+              route.villageIdB,
+              isAtWar(wars, route.villageIdA, route.villageIdB),
+            ),
+          },
+          calledOff: preparing.filter(
+            (row, index) => cancelled[index] && row.originVillageId === own.id,
+          ).length,
+          caravansChanged: caravans.length > 0,
+        },
+      };
     }),
   upgrade: protectedProcedure
     .meta({ mcp: { description: "Upgrade a trade route to shorten caravan travel" } })
     .input(z.object({ routeId: z.string() }))
-    .output(baseServerResponse)
+    .output(
+      warehouseResponseSchema.extend({
+        upgraded: z.object({ routeId: z.string(), level: z.number().int() }).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [user, route] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -300,6 +392,8 @@ export const tradeRouteRouter = createTRPCRouter({
       return {
         success: true,
         message: `Route upgraded; caravans now travel ${getRouteTravelMinutes(route.level + 1)} minutes`,
+        upgraded: { routeId: route.id, level: route.level + 1 },
+        warehouseChange: getPaidWarehouseChange(TRADE_ROUTE_UPGRADE_COST, !!clanId),
       };
     }),
 });

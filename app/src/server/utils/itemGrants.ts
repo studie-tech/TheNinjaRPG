@@ -16,7 +16,8 @@ import type { DrizzleClient } from "@/server/db";
  *   that may not read here; their guarded updates still refuse stacks that changed since
  * @param options.excludeUserItemIds - Stacks the caller removes in the same step
  * @param options.topUpOnly - Leave what does not join a stack out instead of opening stacks
- * @returns The quantities that joined no stack, opened as new stacks unless `topUpOnly`
+ * @returns The quantities that joined no stack, opened as new stacks unless `topUpOnly`, and
+ *   every stack the grant topped up or opened with its quantity as listed plus the grant
  */
 export const grantUserItems = async (
   client: Pick<DrizzleClient, "select" | "update" | "insert">,
@@ -29,7 +30,8 @@ export const grantUserItems = async (
     totals.set(grant.itemId, (totals.get(grant.itemId) ?? 0) + grant.quantity);
   }
   const unstacked: ItemGrant[] = [];
-  if (totals.size === 0) return { unstacked };
+  const stacks: GrantedStack[] = [];
+  if (totals.size === 0) return { unstacked, stacks };
   const now = new Date();
   const listed =
     options.preloaded ??
@@ -64,7 +66,10 @@ export const grantUserItems = async (
         fill,
         now,
       );
-      if (result.rowsAffected === 1) remaining -= fill;
+      if (result.rowsAffected === 1) {
+        remaining -= fill;
+        stacks.push({ id: target.id, itemId, quantity: target.quantity + fill });
+      }
       if (remaining === 0) break;
     }
     unstacked.push(
@@ -75,16 +80,21 @@ export const grantUserItems = async (
     );
   }
   if (unstacked.length > 0 && !options.topUpOnly) {
+    const opened = unstacked.map((grant) => ({ id: nanoid(), ...grant }));
     await insertUserItems(
       client,
-      unstacked.map((grant) => ({ id: nanoid(), userId, ...grant })),
+      opened.map((stack) => ({ ...stack, userId })),
     );
+    stacks.push(...opened);
   }
-  return { unstacked };
+  return { unstacked, stacks };
 };
 
 /** A granted quantity of one item. */
 export type ItemGrant = { itemId: string; quantity: number };
+
+/** A backpack stack a grant wrote, with its resulting quantity. */
+type GrantedStack = ItemGrant & { id: string };
 
 /** Stacks listed by `listItemForGrantUserItems`. */
 export type GrantStackListing = Awaited<ReturnType<typeof listItemForGrantUserItems>>;

@@ -5,10 +5,14 @@ import {
   CARAVAN_DISCOVERY_MINUTES,
   CARAVAN_MAX_GROUP,
   CARAVAN_MAX_LOSS_BP,
+  CARAVAN_OPERATION_HISTORY_SIZE,
+  CARAVAN_OPERATION_STATUSES,
   CARAVAN_OPERATION_TYPES,
+  CARAVAN_ROLES,
   CARAVAN_TRACK_COOLDOWN_SECONDS,
   type CaravanRole,
   TRADE_ROUTE_MARKER_GUARDS,
+  UserStatuses,
 } from "@/drizzle/constants";
 import type { CaravanDiscovery, UserData, VillageAlliance } from "@/drizzle/schema";
 import {
@@ -92,7 +96,7 @@ export const caravanOpsRouter = createTRPCRouter({
           fetchUser(ctx.drizzle, ctx.userId),
           listUserDiscoveries(ctx.drizzle, ctx.userId, now),
           listUserParticipations(ctx.drizzle, ctx.userId),
-          listUserOperations(ctx.drizzle, ctx.userId, 5),
+          listUserOperations(ctx.drizzle, ctx.userId, CARAVAN_OPERATION_HISTORY_SIZE),
           listVillageRelationships(ctx.drizzle),
           listOpenWars(ctx.drizzle),
         ]);
@@ -204,22 +208,11 @@ export const caravanOpsRouter = createTRPCRouter({
             const sighting = discoveries.find(
               (d) => d.caravanId === row.id && d.kind === "LOCATION",
             );
-            // Mirrors formGroup's join guards so the controls offer only joins it accepts.
-            const groups = groupsOf(participants, row.id)
-              .filter((group) => group.role === role)
-              .map((group) => ({
-                ...group,
-                joinable:
-                  !!sighting &&
-                  group.members.length < CARAVAN_MAX_GROUP &&
-                  (role === "BANDIT" || group.villageId === user.villageId) &&
-                  !encounters.some(
-                    (e) =>
-                      e.caravanId === row.id &&
-                      e.type === "INTERCEPTION" &&
-                      e.leaderId === group.leaderId,
-                  ),
-              }));
+            const groups = describeGroups(participants, row.id, role, {
+              sighted: !!sighting,
+              encounters,
+              villageId: user.villageId,
+            });
             return {
               id: row.id,
               status: row.status,
@@ -301,7 +294,20 @@ export const caravanOpsRouter = createTRPCRouter({
         caravanId: z.string().optional(),
       }),
     )
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        operation: z
+          .object({
+            id: z.string(),
+            type: z.enum(CARAVAN_OPERATION_TYPES),
+            status: z.enum(CARAVAN_OPERATION_STATUSES),
+            succeeds: z.boolean().nullable(),
+            sector: z.number().int(),
+            finishesAt: z.date(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
       const isSabotage = input.type === "DISRUPT" || input.type === "DELAY";
@@ -364,9 +370,10 @@ export const caravanOpsRouter = createTRPCRouter({
       const ready = await claimOperatorReadiness(ctx.drizzle, user.userId, readiness);
       if (ready.rowsAffected !== 1)
         return errorResponse("Your state changed. Please try again");
+      const operationId = nanoid();
       try {
         await insertOperation(ctx.drizzle, {
-          id: nanoid(),
+          id: operationId,
           userId: user.userId,
           role,
           type: input.type,
@@ -394,7 +401,18 @@ export const caravanOpsRouter = createTRPCRouter({
           },
         );
       return actionReadinessResponse(
-        { success: true, message: `Operation started; it takes ${minutes} minutes` },
+        {
+          success: true,
+          message: `Operation started; it takes ${minutes} minutes`,
+          operation: {
+            id: operationId,
+            type: input.type,
+            status: "ACTIVE" as const,
+            succeeds: null,
+            sector: user.sector,
+            finishesAt,
+          },
+        },
         readiness,
         ctx.drizzle,
       );
@@ -402,7 +420,13 @@ export const caravanOpsRouter = createTRPCRouter({
   track: protectedProcedure
     .meta({ mcp: { description: "Refresh the last known position of a caravan" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        sighting: z
+          .object({ caravanId: z.string(), sector: z.number().int(), seenAt: z.date() })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
       const [discoveries, [target]] = await Promise.all([
@@ -432,12 +456,44 @@ export const caravanOpsRouter = createTRPCRouter({
       return {
         success: true,
         message: `The caravan was last seen in sector ${sector}`,
+        sighting: { caravanId: target.id, sector, seenAt: now },
       };
     }),
   formGroup: protectedProcedure
     .meta({ mcp: { description: "Form an interception group against a caravan" } })
     .input(z.object({ caravanId: z.string(), leaderId: z.string().optional() }))
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        group: z
+          .object({
+            commitment: z.object({
+              caravanId: z.string(),
+              role: z.enum(CARAVAN_ROLES),
+              userId: z.string(),
+              groupLeaderId: z.string().nullable(),
+            }),
+            groups: z.array(
+              z.object({
+                leaderId: z.string(),
+                leaderName: z.string(),
+                role: z.enum(CARAVAN_ROLES).nullable(),
+                villageId: z.string().nullable(),
+                joinable: z.boolean(),
+                members: z.array(
+                  z.object({
+                    userId: z.string(),
+                    username: z.string(),
+                    status: z.enum(UserStatuses),
+                    sector: z.number().int(),
+                    level: z.number().int(),
+                  }),
+                ),
+              }),
+            ),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
       const [
@@ -524,12 +580,29 @@ export const caravanOpsRouter = createTRPCRouter({
           leaderId === user.userId
             ? "Interception group formed"
             : "You joined the group",
+        group: {
+          commitment: {
+            caravanId: target.id,
+            role,
+            userId: user.userId,
+            groupLeaderId: leaderId,
+          },
+          groups: describeGroups(joinedRows, target.id, role, {
+            sighted: true,
+            encounters,
+            villageId: user.villageId,
+          }),
+        },
       };
     }),
   leaveGroup: protectedProcedure
     .meta({ mcp: { description: "Leave or disband your interception group" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        left: z.object({ caravanId: z.string(), userId: z.string() }).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const participations = await listUserParticipations(ctx.drizzle, ctx.userId);
       const own = participations.find(
@@ -552,7 +625,11 @@ export const caravanOpsRouter = createTRPCRouter({
           ? { groupLeaderId: ctx.userId }
           : { userIds: [ctx.userId] },
       );
-      return { success: true, message: "You left the group" };
+      return {
+        success: true,
+        message: "You left the group",
+        left: { caravanId: own.caravanId, userId: ctx.userId },
+      };
     }),
   attack: protectedProcedure
     .meta({ mcp: { description: "Lead your interception group against a caravan" } })
@@ -759,6 +836,36 @@ export const caravanOpsRouter = createTRPCRouter({
       });
     }),
 });
+
+/**
+ * A caravan's interception groups riding for a side, each marked joinable when formGroup's
+ * join guards would accept the viewer, so the controls offer only joins it accepts.
+ */
+const describeGroups = (
+  participants: Awaited<ReturnType<typeof listCaravanParticipants>>,
+  caravanId: string,
+  role: CaravanRole | null,
+  viewer: {
+    sighted: boolean;
+    encounters: Awaited<ReturnType<typeof listOpenEncounters>>;
+    villageId: string | null;
+  },
+) =>
+  groupsOf(participants, caravanId)
+    .filter((group) => group.role === role)
+    .map((group) => ({
+      ...group,
+      joinable:
+        viewer.sighted &&
+        group.members.length < CARAVAN_MAX_GROUP &&
+        (role === "BANDIT" || group.villageId === viewer.villageId) &&
+        !viewer.encounters.some(
+          (e) =>
+            e.caravanId === caravanId &&
+            e.type === "INTERCEPTION" &&
+            e.leaderId === group.leaderId,
+        ),
+    }));
 
 /** Interception groups of a caravan by leader, with their members' details. */
 const groupsOf = (
