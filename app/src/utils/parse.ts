@@ -294,6 +294,23 @@ export const parseHtml = (html: string) => {
         case "ol":
           node.attribs = { ...node.attribs, class: "my-2 list-decimal pl-6" };
           return undefined;
+        case "table":
+          // Wide tables scroll inside their own box instead of widening the page.
+          node.attribs = { ...node.attribs, class: "w-full border-collapse text-sm" };
+          return React.createElement(
+            "div",
+            { key: index, className: "my-2 max-w-full overflow-x-auto" },
+            convertNode(node, index, transform),
+          );
+        case "th":
+          node.attribs = {
+            ...node.attribs,
+            class: "border bg-popover px-2 py-1 text-left font-bold",
+          };
+          return undefined;
+        case "td":
+          node.attribs = { ...node.attribs, class: "border px-2 py-1" };
+          return undefined;
         case "blockquote":
           // Authored rich-text quotes keep their formatting; attributed reply quotes
           // use the shared Quote presentation and its author/date metadata.
