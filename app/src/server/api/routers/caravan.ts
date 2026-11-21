@@ -1,10 +1,12 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getEscortStatusUserUpdate } from "@/deltas/caravan";
+import { getCargoWarehouseChange, getWarehouseLogEntries } from "@/deltas/warehouse";
 import {
   CARAVAN_DEFAULT_ENCOUNTER_RATE,
   CARAVAN_ENCOUNTER_RATE_SETTING,
   CARAVAN_GUARD_SLOTS,
+  CARAVAN_HISTORY_SIZE,
   CARAVAN_MAX_CARGO_ITEMS,
   CARAVAN_MAX_CARGO_UNITS,
   CARAVAN_MIN_CARGO_UNITS,
@@ -85,6 +87,7 @@ import {
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { canChangeContent } from "@/utils/permissions";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+import { warehouseResponseSchema } from "@/validators/warehouse";
 
 export const caravanRouter = createTRPCRouter({
   getEncounterRate: protectedProcedure
@@ -247,7 +250,25 @@ export const caravanRouter = createTRPCRouter({
           .max(CARAVAN_MAX_CARGO_ITEMS),
       }),
     )
-    .output(baseServerResponse)
+    .output(
+      warehouseResponseSchema.extend({
+        prepared: z
+          .object({
+            id: z.string(),
+            partner: z.string(),
+            cargo: z.array(
+              z.object({
+                itemId: z.string(),
+                name: z.string(),
+                quantity: z.number().int(),
+              }),
+            ),
+            travelMinutes: z.number().int(),
+            sector: z.number().int(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.villageId) return errorResponse("You have no village");
@@ -303,6 +324,17 @@ export const caravanRouter = createTRPCRouter({
         );
       const toVillageA = route.villageIdA !== own.id;
       const id = nanoid();
+      const now = new Date();
+      const path = toVillageA ? [...route.path].reverse() : route.path;
+      const travelMinutes = getRouteTravelMinutes(route.level);
+      const logs = cargo.map((line) => ({
+        id: nanoid(),
+        villageId: own.id,
+        userId: user.userId,
+        itemId: line.itemId,
+        type: "RESERVE" as const,
+        quantity: line.quantity,
+      }));
       const capacity =
         routes.filter((row) => row.status === "ACTIVE").length *
         CARAVANS_PER_TRADE_ROUTE;
@@ -327,37 +359,52 @@ export const caravanRouter = createTRPCRouter({
                 originVillageId: own.id,
                 destinationVillageId: toVillageA ? route.villageIdA : route.villageIdB,
                 cargo,
-                path: toVillageA ? [...route.path].reverse() : route.path,
-                travelMinutes: getRouteTravelMinutes(route.level),
+                path,
+                travelMinutes,
                 createdById: user.userId,
-                now: new Date(),
+                now,
               },
               capacity,
             );
             if (inserted.rowsAffected !== 1) throw full;
-            await insertWarehouseLogs(
-              tx,
-              cargo.map((line) => ({
-                villageId: own.id,
-                userId: user.userId,
-                itemId: line.itemId,
-                type: "RESERVE" as const,
-                quantity: line.quantity,
-              })),
-              new Date(),
-            );
+            await insertWarehouseLogs(tx, logs, now);
           }),
         );
       } catch (error) {
         if (error instanceof CaravanConflict) return errorResponse(error.message);
         throw error;
       }
-      return { success: true, message: "Caravan prepared; escorts can now sign up" };
+      const itemNames = new Map(items.map((row) => [row.id, row.name]));
+      const partner = toVillageA ? route.villageA : route.villageB;
+      return {
+        success: true,
+        message: "Caravan prepared; escorts can now sign up",
+        prepared: {
+          id,
+          partner: partner?.name ?? "Former partner",
+          cargo: cargo.map((line) => ({
+            ...line,
+            name: itemNames.get(line.itemId) ?? "Unknown item",
+          })),
+          travelMinutes,
+          sector: path[0] ?? -1,
+        },
+        warehouseChange: getCargoWarehouseChange(cargo, { quantity: 0, reserved: 1 }),
+        warehouseLogs: getWarehouseLogEntries(
+          logs,
+          { items: itemNames, username: user.username },
+          now,
+        ),
+      };
     }),
   cancel: protectedProcedure
     .meta({ mcp: { description: "Cancel a caravan that has not departed" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(baseServerResponse)
+    .output(
+      warehouseResponseSchema.extend({
+        cancelled: z.object({ caravanId: z.string(), resolvedAt: z.date() }).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [user, row] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -368,14 +415,35 @@ export const caravanRouter = createTRPCRouter({
       const own = await fetchVillage(ctx.drizzle, row.originVillageId);
       if (!own || !canManageTrade(user, own))
         return errorResponse("Only the Kage and Elders manage caravans");
-      if (!(await cancelCaravan(ctx.drizzle, row)))
+      const now = new Date();
+      if (!(await cancelCaravan(ctx.drizzle, row, now)))
         return errorResponse("The caravan changed meanwhile. Refresh and try again");
-      return { success: true, message: "Caravan cancelled; its cargo is released" };
+      return {
+        success: true,
+        message: "Caravan cancelled; its cargo is released",
+        cancelled: { caravanId: row.id, resolvedAt: now },
+        warehouseChange: getCargoWarehouseChange(row.cargo, {
+          quantity: 0,
+          reserved: -1,
+        }),
+      };
     }),
   dispatch: protectedProcedure
     .meta({ mcp: { description: "Send a prepared caravan on its way" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(baseServerResponse)
+    .output(
+      warehouseResponseSchema.extend({
+        departed: z
+          .object({
+            caravanId: z.string(),
+            departedAt: z.date(),
+            arrivesAt: z.date(),
+            travelMinutes: z.number().int(),
+            sector: z.number().int(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [user, row] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -399,6 +467,7 @@ export const caravanRouter = createTRPCRouter({
       if (block) return errorResponse(block);
       const now = new Date();
       const travelMinutes = getRouteTravelMinutes(route.level);
+      const arrivesAt = new Date(now.getTime() + travelMinutes * 60_000);
       const conflict = new CaravanConflict(
         "The caravan or its reserved stock changed. Refresh and try again",
       );
@@ -411,7 +480,7 @@ export const caravanRouter = createTRPCRouter({
               status: "TRAVELLING",
               departedAt: now,
               travelMinutes,
-              arrivesAt: new Date(now.getTime() + travelMinutes * 60_000),
+              arrivesAt,
             });
             if (claimed.rowsAffected !== 1) throw conflict;
             const loaded = await dispatchCargo(tx, row.originVillageId, row.cargo);
@@ -447,12 +516,34 @@ export const caravanRouter = createTRPCRouter({
       return {
         success: true,
         message: `Caravan departed; it arrives in ${travelMinutes} minutes`,
+        departed: {
+          caravanId: row.id,
+          departedAt: now,
+          arrivesAt,
+          travelMinutes,
+          sector: row.path[0] ?? -1,
+        },
+        warehouseChange: getCargoWarehouseChange(row.cargo, {
+          quantity: -1,
+          reserved: -1,
+        }),
       };
     }),
   joinEscort: protectedProcedure
     .meta({ mcp: { description: "Sign up to escort one of your village's caravans" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        guard: z
+          .object({
+            userId: z.string(),
+            username: z.string(),
+            avatar: z.string().nullable(),
+            level: z.number().int(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [updated, row, participations] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
@@ -499,6 +590,12 @@ export const caravanRouter = createTRPCRouter({
           success: true,
           message: "You joined the escort and wait at departure",
           ...getEscortStatusUserUpdate("QUEUED"),
+          guard: {
+            userId: user.userId,
+            username: user.username,
+            avatar: user.avatar,
+            level: user.level,
+          },
         },
         readiness,
         ctx.drizzle,
@@ -508,7 +605,7 @@ export const caravanRouter = createTRPCRouter({
   leaveEscort: protectedProcedure
     .meta({ mcp: { description: "Leave a caravan escort before it departs" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(userDeltaResponseSchema)
+    .output(userDeltaResponseSchema.extend({ guardId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const row = await findCaravan(ctx.drizzle, input.caravanId);
       if (row?.status !== "PREPARING")
@@ -521,12 +618,13 @@ export const caravanRouter = createTRPCRouter({
         success: true,
         message: "You left the escort",
         ...getEscortStatusUserUpdate("AWAKE"),
+        guardId: ctx.userId,
       };
     }),
   rejoinEscort: protectedProcedure
     .meta({ mcp: { description: "Return to your caravan's escort after a fight" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(userDeltaResponseSchema)
+    .output(userDeltaResponseSchema.extend({ guardId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const queued = await queueGuard(ctx.drizzle, input.caravanId, ctx.userId);
       if (queued.rowsAffected !== 1)
@@ -535,12 +633,13 @@ export const caravanRouter = createTRPCRouter({
         success: true,
         message: "You rejoined the escort",
         ...getEscortStatusUserUpdate("QUEUED"),
+        guardId: ctx.userId,
       };
     }),
   checkIn: protectedProcedure
     .meta({ mcp: { description: "Report at the checkpoint your caravan passed" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(baseServerResponse)
+    .output(baseServerResponse.extend({ guardId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const row = await findCaravan(ctx.drizzle, input.caravanId);
       if (row?.status !== "TRAVELLING")
@@ -551,7 +650,11 @@ export const caravanRouter = createTRPCRouter({
       const checked = await checkInGuard(ctx.drizzle, row.id, ctx.userId, reached);
       if (checked.rowsAffected !== 1)
         return errorResponse("You already reported at this checkpoint");
-      return { success: true, message: `Checked in at checkpoint ${reached}` };
+      return {
+        success: true,
+        message: `Checked in at checkpoint ${reached}`,
+        guardId: ctx.userId,
+      };
     }),
   defend: protectedProcedure
     .meta({ mcp: { description: "Fight the bandits ambushing your caravan" } })
@@ -687,7 +790,7 @@ const loadVillageCaravans = async (
 ) => {
   const [current, history] = await Promise.all([
     listOpenVillageCaravans(client, villageId),
-    listFinishedVillageCaravans(client, villageId, 10),
+    listFinishedVillageCaravans(client, villageId, CARAVAN_HISTORY_SIZE),
   ]);
   const ids = current.map((row) => row.id);
   const [participants, encounters, sabotage, dueOperations, items] = await Promise.all([

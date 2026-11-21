@@ -8,6 +8,7 @@ import {
   WAREHOUSE_ITEM_TYPES,
   WAREHOUSE_LOYALTY_BONUS,
   WAREHOUSE_LOYALTY_DAYS,
+  WAREHOUSE_MIN_DEPOSIT,
   WAREHOUSE_PRODUCTION_BASE_QUANTITY,
   WAREHOUSE_PRODUCTION_BONUS_PER_LEVEL,
   WAREHOUSE_PRODUCTION_INTERVAL_HOURS,
@@ -16,11 +17,13 @@ import {
 import type {
   Item,
   UserData,
+  UserItem,
   Village,
   VillageStructure,
   WarehouseDepositLedger,
   WarehouseMember,
 } from "@/drizzle/schema";
+import { isCarriedUserItem } from "@/libs/item";
 import { getVillageLoyaltyDays } from "@/libs/villageLoyalty";
 import { isFactionVillage } from "@/libs/war";
 import { getEffectiveStructureLevel } from "@/utils/village";
@@ -136,6 +139,46 @@ export const getDepositAvailableAt = (
   );
   return at > now ? at : null;
 };
+
+/**
+ * Backpack stacks a player can deposit, in inventory order, with the moment each item's
+ * deposit cooldown ends.
+ */
+export const getDepositCandidates = (
+  inventory: (Pick<
+    UserItem,
+    | "id"
+    | "itemId"
+    | "quantity"
+    | "equipped"
+    | "storedAtHome"
+    | "isInAuction"
+    | "craftingFinishedAt"
+  > & {
+    item: Pick<Item, "name" | "image" | "warehouseItem" | "canStack" | "itemType">;
+  })[],
+  ledgers: Pick<WarehouseDepositLedger, "itemId" | "lastDepositAt">[],
+  now = new Date(),
+) =>
+  inventory
+    .filter(
+      (row) =>
+        isWarehouseStorable(row.item) &&
+        isCarriedUserItem(row, now) &&
+        row.equipped === "NONE" &&
+        row.quantity >= WAREHOUSE_MIN_DEPOSIT,
+    )
+    .map((row) => ({
+      userItemId: row.id,
+      itemId: row.itemId,
+      name: row.item.name,
+      image: row.item.image,
+      quantity: row.quantity,
+      availableAt: getDepositAvailableAt(
+        ledgers.find((ledger) => ledger.itemId === row.itemId),
+        now,
+      ),
+    }));
 
 /** The UTC day a withdrawal counts against. */
 export const getAllowanceDay = (now = new Date()) => now.toISOString().slice(0, 10);

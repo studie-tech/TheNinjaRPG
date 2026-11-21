@@ -125,7 +125,9 @@ export const listWarehouseItems = (
         .select({
           id: item.id,
           name: item.name,
+          image: item.image,
           itemType: item.itemType,
+          rarity: item.rarity,
           canStack: item.canStack,
           stackSize: item.stackSize,
           warehouseItem: item.warehouseItem,
@@ -413,10 +415,11 @@ export const listWarehouseApprovals = (
       ),
     );
 
-/** Append Warehouse history rows. */
+/** Append Warehouse history rows; callers that report a row back give its id. */
 export const insertWarehouseLogs = (
   client: Pick<DrizzleClient, "insert">,
   entries: {
+    id?: string;
     villageId: string;
     userId?: string | null;
     itemId?: string | null;
@@ -429,7 +432,7 @@ export const insertWarehouseLogs = (
     ? Promise.resolve()
     : client.insert(warehouseLog).values(
         entries.map((entry) => ({
-          id: nanoid(),
+          id: entry.id ?? nanoid(),
           villageId: entry.villageId,
           userId: entry.userId ?? null,
           itemId: entry.itemId ?? null,
