@@ -1,7 +1,11 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import {
+  aiProfile,
+  battle,
+  battleHistory,
   huntingSession,
   item,
   quest,
@@ -12,7 +16,8 @@ import {
   userQueue,
   userVote,
 } from "@/drizzle/schema";
-import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import { Pusher } from "@/libs/pusher";
 import {
   listSupplyRequestStacks,
   submitSupplyRequestAtomically,
@@ -20,8 +25,10 @@ import {
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { profileRouter } from "@/server/api/routers/profile";
 import { periodStart } from "@/utils/time";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertQuestHistory,
   insertQuests,
@@ -29,6 +36,7 @@ import {
   insertUsers,
   insertUserVotes,
 } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   barrier,
   beforeStatements,
@@ -68,6 +76,9 @@ const reviewed = async () => {
 describeWithDatabase("daily supply requests", () => {
   beforeEach(async () => {
     await resetTables(
+      aiProfile,
+      battle,
+      battleHistory,
       huntingSession,
       userQueue,
       userItemImbuement,
@@ -109,6 +120,7 @@ describeWithDatabase("daily supply requests", () => {
       { id: "unpriced-stock", userId: owner, itemId: "unpriced", quantity: 200 },
     ]);
   });
+  afterEach(() => vi.restoreAllMocks());
 
   it("lists only matching priced stock and pays bundles with a partial remainder", async () => {
     const { caller, input } = await reviewed();
@@ -548,6 +560,91 @@ describeWithDatabase("daily supply requests", () => {
     ).toHaveLength(0);
     expect((await requireUser(owner)).money).toBe(2320);
   });
+
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)(
+    "reports the committed quest battle after recovering the %s supplier",
+    async (status) => {
+      vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+      stubRateLimitTransport({
+        unexpectedRequestMessage: "Unexpected HTTP request in supply battle tests",
+      });
+      vi.spyOn(Math, "random").mockReturnValue(0.9999);
+      const db = await getTestDatabase();
+      await insertUsers([{ userId: "supply-foe", isAi: true }]);
+      await insertDefaultAiProfile({ userId: "supply-foe" });
+      await insertQuests([
+        {
+          id: "supply-battle",
+          questType: "mission",
+          consecutiveObjectives: true,
+          content: {
+            objectives: [
+              AllObjectives.parse({
+                id: "xp",
+                task: "gathering_experience_gained",
+                value: 2000,
+                nextObjectiveId: "fight",
+              }),
+              AllObjectives.parse({
+                id: "fight",
+                task: "start_battle",
+                opponentAIs: [{ ids: ["supply-foe"], number: 1 }],
+              }),
+            ],
+          },
+        },
+      ]);
+      await insertQuestHistory([
+        { userId: owner, questId: "supply-battle", questType: "mission" },
+      ]);
+      await db
+        .update(userData)
+        .set({
+          status,
+          autoWakeUp: true,
+          curHealth: 1000,
+          maxHealth: 1000,
+          questData: [
+            QuestTracker.parse({
+              id: "supply-battle",
+              goals: [{ id: "xp", value: 0, done: false }],
+            }),
+          ],
+        })
+        .where(eq(userData.userId, owner));
+      const profile = await callerFor(profileRouter, owner);
+      const initial = await profile.getUser();
+      expect(initial.userData?.status).toBe(status);
+      const client = new QueryClient();
+      const key = ["supply-battle-profile"];
+      client.setQueryData(key, initial);
+      try {
+        const revision = prepareUserUpdate(client, key);
+        const { caller, input } = await reviewed();
+        const response = await caller.submitSupplyRequest(input);
+        expect(response).toMatchObject({
+          success: true,
+          actionNotice: status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE,
+        });
+        const saved = await requireUser(owner);
+        expect(saved.status).toBe("BATTLE");
+        expect(saved.battleId).toEqual(expect.any(String));
+        const activity = { status: "BATTLE", battleId: saved.battleId };
+        expect(response.userRecovery?.activity).toMatchObject(activity);
+        expect(response.userPatch).toBeUndefined();
+        expect(response.userDelta).toBeUndefined();
+        await updateUserCache(client, key, response, { revision });
+        expect(client.getQueryData<typeof initial>(key)?.userData).toMatchObject(
+          activity,
+        );
+        expect(saved.money).toBe(2320);
+        expect(saved.gatheringExperience).toBe(4010);
+        expect((await readStack())?.quantity).toBe(50);
+      } finally {
+        client.clear();
+      }
+    },
+  );
 
   it("commits automatic wake only together with an accepted supply payment", async () => {
     const db = await getTestDatabase();

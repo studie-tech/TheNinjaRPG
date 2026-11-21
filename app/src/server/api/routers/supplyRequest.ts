@@ -203,6 +203,7 @@ export const supplyRequestProcedures = {
         },
         readiness,
         ctx.drizzle,
+        result.committedActivity,
       );
     }),
 };
