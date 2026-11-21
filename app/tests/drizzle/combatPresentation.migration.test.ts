@@ -12,7 +12,7 @@ import {
 } from "../setup/testDatabase";
 
 const migration = await readFile(
-  new URL("../../drizzle/migrations/0182_gifted_mercury.sql", import.meta.url),
+  new URL("../../drizzle/migrations/0183_brief_rogue.sql", import.meta.url),
   "utf8",
 );
 const fixtures = [
