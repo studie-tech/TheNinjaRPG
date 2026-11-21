@@ -8,6 +8,39 @@ import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
 
 describe("animation texture ownership", () => {
+  it("fits projectile artwork to its shared occupied bounds without changing size between frames", async () => {
+    const pixels = new Uint8Array(32 * 64 * 4);
+    for (const [left, top] of [
+      [4, 12],
+      [8, 44],
+    ] as const)
+      for (let y = top; y < top + 4; y++)
+        for (let x = left; x < left + 8; x++) pixels[(y * 32 + x) * 4 + 3] = 255;
+    const source = new BufferImageSource({ resource: pixels, width: 32, height: 64 });
+    const texture = new Texture({ source });
+    const cleanups: (() => void)[] = [];
+    const game = {
+      assets: { texture: async () => texture },
+      own: (cleanup: () => void) => cleanups.push(cleanup),
+      isDisposed: () => false,
+      signal: new AbortController().signal,
+    } as unknown as GameRenderer;
+    const clip = await createSpriteClip(
+      game,
+      assetAnimationClip({ image: "padded-flight", frames: 2, speed: 100 }, true),
+      { size: 60, fitContent: true },
+    );
+    expect(clip.sprite.scale.x).toBe(5);
+    expect(clip.sprite.scale.y).toBe(-5);
+    expect(clip.sprite.anchor.x).toBe(10 / 32);
+    expect(clip.sprite.anchor.y).toBe(14 / 32);
+    clip.renderAt(100);
+    expect(clip.sprite.texture.frame.y).toBe(32);
+    expect(clip.sprite.scale.x).toBe(5);
+    expect(texture.frame.height).toBe(64);
+    for (const cleanup of cleanups) cleanup();
+    texture.destroy(true);
+  });
   it("keeps atlas sources immutable while independently sampling two actors", async () => {
     const source = new BufferImageSource({
       resource: new Uint8Array(4 * 4 * 4),
@@ -17,7 +50,7 @@ describe("animation texture ownership", () => {
     const texture = new Texture({ source });
     const cleanups: (() => void)[] = [];
     const game = {
-      assets: { texture: async () => texture },
+      assets: { texture: vi.fn(async () => texture) },
       own: (cleanup: () => void) => cleanups.push(cleanup),
       isDisposed: () => false,
       signal: new AbortController().signal,
@@ -27,9 +60,10 @@ describe("animation texture ownership", () => {
       true,
     );
     const [first, second] = await Promise.all([
-      createSpriteClip(game, descriptor, { size: 50 }),
+      createSpriteClip(game, descriptor, { size: 50, rendition: 64 }),
       createSpriteClip(game, descriptor, { size: 50 }),
     ]);
+    expect(game.assets.texture).toHaveBeenCalledWith("atlas", 0, "linear");
     first.renderAt(200);
     second.renderAt(300);
     expect(first.sprite.texture.frame.y).toBe(2);

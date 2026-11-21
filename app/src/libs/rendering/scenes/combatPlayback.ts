@@ -25,6 +25,7 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
         startedAt: number;
         landedAt: number;
         cueAt?: number;
+        travelAt?: number;
       }
     | undefined;
   /** Log rows above this version belong to actions the field has not reached. */
@@ -41,10 +42,16 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
   };
 
   const start = (frame: CombatPlaybackFrame, now: number) => {
-    current = { frame, landed: !frame.windup, startedAt: now, landedAt: now };
-    presented = frame.windup ?? frame.battle;
-    logVersion = frame.windup ? frame.version - 1 : frame.version;
-    if (!frame.windup) record(frame);
+    current = {
+      frame,
+      landed: !frame.windup && !frame.travel,
+      startedAt: now,
+      landedAt: now,
+      travelAt: !frame.windup && frame.travel ? now : undefined,
+    };
+    presented = frame.windup ?? frame.travel ?? frame.battle;
+    logVersion = current.landed ? frame.version : frame.version - 1;
+    if (current.landed) record(frame);
   };
   const land = (now: number) => {
     if (!current) return;
@@ -108,7 +115,17 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
           if (progress > 0) current.cueAt ??= now;
           const overdue =
             current.cueAt !== undefined && now - current.cueAt >= MAX_WINDUP_MS;
-          if (progress >= frame.impact || overdue) land(now);
+          if (progress >= frame.impact || overdue) {
+            if (frame.travel && current.travelAt === undefined) {
+              current.travelAt = now;
+              presented = frame.travel;
+            }
+            if (
+              !frame.travel ||
+              now - (current.travelAt ?? now) >= (frame.travelMs ?? 0)
+            )
+              land(now);
+          }
         }
         const held = !frame.cueId || now - current.landedAt >= IMPACT_HOLD_MS;
         if (current.landed && !moving && progress >= 1 && held) current = undefined;

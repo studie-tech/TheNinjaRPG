@@ -159,6 +159,10 @@ export const EditContent = <
     control: form.control,
     name: "appearAnimation" as Path<S>,
   });
+  const watchProjectileSel = useWatch({
+    control: form.control,
+    name: "projectileAnimation" as Path<S>,
+  });
   const watchDisappearSel = useWatch({
     control: form.control,
     name: "disappearAnimation" as Path<S>,
@@ -179,6 +183,7 @@ export const EditContent = <
     () =>
       [
         watchAppearSel,
+        watchProjectileSel,
         watchDisappearSel,
         watchStaticSel,
         watchAppearSfx,
@@ -188,6 +193,7 @@ export const EditContent = <
         .filter((x) => x.length > 0),
     [
       watchAppearSel,
+      watchProjectileSel,
       watchDisappearSel,
       watchStaticSel,
       watchAppearSfx,
@@ -874,7 +880,7 @@ export const EditContent = <
                               const t =
                                 id === "staticAssetPath"
                                   ? "STATIC"
-                                  : id === "appearSfx" || id === "disappearSfx"
+                                  : id === "projectileSfx" || id === "appearSfx" || id === "disappearSfx"
                                     ? "SFX"
                                     : "ANIMATION";
                               openAssetPicker(id, t);
@@ -937,7 +943,7 @@ export const EditContent = <
                                         hideBorder={false}
                                       />
                                     ) : null
-                                  ) : id === "appearSfx" || id === "disappearSfx" ? (
+                                  ) : id === "projectileSfx" || id === "appearSfx" || id === "disappearSfx" ? (
                                     (() => {
                                       const sfx = (previewAssets || []).find(
                                         (a) => a.id === (field.value as string),
@@ -1597,11 +1603,13 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     const hasItemDraft = ["noncombatconsumereward", "noncombatquest"].includes(
       watchType,
     );
-    // Scale drafts reach the parent so Save validates the visible size, including invalid input.
-    const hasAnimationScaleDraft = !Object.is(
-      watchAll.animationScale,
-      tag.animationScale ?? 1,
-    );
+    // Presentation drafts reach the parent so Save validates the visible sizing and placement.
+    const hasPresentationDraft =
+      !Object.is(watchAll.animationScale, tag.animationScale ?? 1) ||
+      !Object.is(watchAll.projectileScale, tag.projectileScale) ||
+      !Object.is(watchAll.animationOffsetY, tag.animationOffsetY) ||
+      !Object.is(watchAll.groundOpacity, tag.groundOpacity) ||
+      !Object.is(watchAll.groundFeather, tag.groundFeather);
     const leftCoordinateTarget = tag.target === "COORDINATES" && !hasCoordinateDraft;
     const draft = leftCoordinateTarget
       ? { ...watchAll, coordinateTargeting: null }
@@ -1609,7 +1617,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     const parsedTag = tagSchema.safeParse(draft);
     const shownTag = parsedTag.success
       ? parsedTag.data
-      : hasCoordinateDraft || hasItemDraft || hasAnimationScaleDraft
+      : hasCoordinateDraft || hasItemDraft || hasPresentationDraft
         ? draft
         : tag;
     newEffects[idx] = shownTag;
@@ -1622,12 +1630,12 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         if (
           hasCoordinateDraft ||
           hasItemDraft ||
-          hasAnimationScaleDraft ||
+          hasPresentationDraft ||
           (leftCoordinateTarget && parsedTag.success) ||
           form.formState.isValid
         ) {
           setEffects(newEffects);
-          if (parsedTag.success && !hasAnimationScaleDraft) form.reset(draft);
+          if (parsedTag.success && !hasPresentationDraft) form.reset(draft);
         }
       }
     }
@@ -1786,7 +1794,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         };
       } else if ((value as string) === "description") {
         return { id: value, type: "richinput", doubleWidth: true };
-      } else if (innerType instanceof z.ZodString && value === "appearAnimation") {
+      } else if (
+        innerType instanceof z.ZodString &&
+        (value === "appearAnimation" || value === "projectileAnimation")
+      ) {
         return {
           id: value,
           values: animations,
@@ -1815,9 +1826,13 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           type: "db_values",
           current: staticImage,
         };
-      } else if (innerType instanceof z.ZodString && value === "appearSfx") {
+      } else if (
+        innerType instanceof z.ZodString &&
+        (value === "projectileSfx" || value === "appearSfx")
+      ) {
         return {
           id: value,
+          label: FORM_LABEL_MAP[value],
           values: (assetData || []).filter((a) => a.type === "SFX"),
           multiple: false,
           type: "db_values",
@@ -1882,7 +1897,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         }
         return { id: value, type: "str_array", values: enumValues, multiple: true };
       } else if (innerType instanceof z.ZodBoolean) {
-        return { id: value, type: "boolean" };
+        return { id: value, label: FORM_LABEL_MAP[value], type: "boolean" };
       } else {
         return { id: value, type: "text" };
       }
@@ -2116,6 +2131,8 @@ export const rewardCatalogFormEntry = <K extends string | number | symbol>(
 
 // Form labels for different tag names
 export const FORM_LABEL_MAP: Record<string, string> = {
+  appearSfxPrimary: "Primary appearance sound for this cast",
+  disappearSfxPrimary: "Primary disappearance sound for this cast",
   damageBonusPercent: "Damage bonus (%)",
   durationSeconds: "Duration (seconds)",
   reward_items: "Reward Items [drop chance % and quantity]",
@@ -2182,6 +2199,9 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   singleBattle: "Track best single-battle only (else cumulative)",
   bloodlineRanks: "Bloodline ranks to include",
   animationScale: "Animation scale (1–3×)",
+  projectileScale: "Projectile size (0.25–3×; default 1×)",
+  animationOffsetY: "Animation height (hexes; positive raises)",
+  projectileSfx: "Projectile launch sound",
   shieldRounds: "Shield Rounds",
   delayRounds: "Diffuse Repayment Turns",
 };
@@ -2246,20 +2266,31 @@ const CATEGORY_CLASSES: Record<string, string> = {
 /** Effect fields edited through the game-asset picker instead of a combobox. */
 const ASSET_PICKER_FIELDS: readonly string[] = [
   "appearAnimation",
+  "projectileAnimation",
   "disappearAnimation",
   "staticAnimation",
   "staticAssetPath",
+  "projectileSfx",
   "appearSfx",
   "disappearSfx",
 ];
 
 /** Battle presentation, targeting and timing fields, which out-of-battle tags never use. */
 const BATTLE_ONLY_FIELDS = [
+  "appearSfxPrimary",
+  "disappearSfxPrimary",
   "staticAnimation",
   "animationScale",
+  "projectileScale",
+  "animationOffsetY",
+  "groundStyle",
+  "groundOpacity",
+  "groundFeather",
   "staticAssetPath",
   "appearAnimation",
+  "projectileAnimation",
   "disappearAnimation",
+  "projectileSfx",
   "rounds",
   "target",
   "friendlyFire",

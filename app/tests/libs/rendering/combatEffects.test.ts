@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Container, Sprite, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, type Sprite, Texture } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
 import { applyEffects, expireGroundEffects } from "@/libs/combat/process";
 import type { GroundEffect, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
+import { groundDecalBoundaries } from "@/libs/rendering/primitives/groundDecal";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
 import {
@@ -88,6 +89,324 @@ const setup = (hexWidth = 40) => {
 };
 
 describe("Pixi combat effects", () => {
+  it("raises protective clips without moving their ground artwork or changing their scale", async () => {
+    const scene = setup();
+    Object.assign(scene.effect, {
+      appearAnimation: "animation",
+      animationOffsetY: 0.5,
+    });
+    await scene.effects.sync(scene.snapshot);
+    const tile = scene.grid.getHex({ col: 3, row: 1 })!;
+    scene.effects.animate(0, false, false, null);
+    for (const sprite of scene.effects.container.children[0]!.children as Sprite[]) {
+      expect(sprite.y).toBeCloseTo(tile.height);
+      expect(sprite.height).toBeCloseTo(tile.height);
+    }
+  });
+  it("fades only a field perimeter, including newly exposed edges after expiry", () => {
+    const { grid } = setup();
+    const first = grid.getHex({ col: 3, row: 1 })!;
+    const next = grid.getHex({ col: 4, row: 1 })!;
+    const tiles = [
+      { id: "first", material: "shadow", tile: first },
+      { id: "next", material: "shadow", tile: next },
+    ];
+    const joined = groundDecalBoundaries(tiles);
+    expect(joined.get("first")?.filter(Boolean)).toHaveLength(5);
+    expect(joined.get("next")?.filter(Boolean)).toHaveLength(5);
+    expect(
+      groundDecalBoundaries(tiles.slice(0, 1)).get("first")?.filter(Boolean),
+    ).toHaveLength(6);
+    expect(
+      groundDecalBoundaries([tiles[0]!, { ...tiles[1]!, material: "fire" }])
+        .get("first")
+        ?.filter(Boolean),
+    ).toHaveLength(6);
+    expect(
+      groundDecalBoundaries([tiles[0]!, { ...tiles[0]!, id: "duplicate" }])
+        .get("first")
+        ?.filter(Boolean),
+    ).toHaveLength(6);
+  });
+  it("shares a cast's sound across tiles without silencing later casts or another caster", async () => {
+    const scene = setup();
+    Object.assign(scene.effect, {
+      creatorId: "caster",
+      actionId: "wall",
+      createdRound: 1,
+    });
+    scene.snapshot.battle.groundEffects.push({
+      ...scene.effect,
+      id: "second-tile",
+      longitude: 4,
+    });
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(0, false, false, null);
+    expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+
+    scene.snapshot.battle.groundEffects.push(
+      { ...scene.effect, id: "next-cast", longitude: 5 },
+      { ...scene.effect, id: "other-caster", creatorId: "other", longitude: 6 },
+    );
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(20, false, false, null);
+    expect(scene.play).toHaveBeenCalledTimes(3);
+  });
+  it.each([false, true])(
+    "uses a marked primary cue regardless of tile order (%s)",
+    async (reverse) => {
+      const scene = setup();
+      scene.snapshot.assets.push({ id: "accent", url: "accent.wav" } as GameAsset);
+      Object.assign(scene.effect, {
+        creatorId: "caster",
+        actionId: "composite",
+        createdRound: 1,
+      });
+      const primary = {
+        ...scene.effect,
+        id: "primary",
+        longitude: 4,
+        appearSfxPrimary: true,
+      };
+      scene.effect.appearSfx = "accent";
+      scene.snapshot.battle.groundEffects = reverse
+        ? [primary, scene.effect]
+        : [scene.effect, primary];
+      await scene.effects.sync(scene.snapshot);
+      scene.effects.animate(0, false, false, null);
+      expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+
+      scene.snapshot.battle.groundEffects.push({
+        ...primary,
+        id: "later",
+        createdRound: 2,
+      });
+      await scene.effects.sync(scene.snapshot);
+      scene.effects.animate(20, false, false, null);
+      expect(scene.play).toHaveBeenCalledTimes(2);
+    },
+  );
+  it("retains distinct layered cues on casts without a primary", async () => {
+    const scene = setup();
+    scene.snapshot.assets.push({ id: "accent", url: "accent.wav" } as GameAsset);
+    scene.snapshot.battle.groundEffects.push({
+      ...scene.effect,
+      id: "accent",
+      longitude: 4,
+      appearSfx: "accent",
+    });
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(0, false, false, null);
+    expect(scene.play.mock.calls).toEqual([
+      ["appear.wav", 0.4],
+      ["accent.wav", 0.4],
+    ]);
+  });
+  it("preserves unmarked transient visuals' existing sound deduplication", async () => {
+    const scene = setup();
+    Object.assign(scene.effect, {
+      creatorId: "caster",
+      actionId: "visual",
+      createdRound: 2,
+      soundOrigin: { actionId: "first", createdRound: 1, phase: "disappear" },
+    });
+    scene.snapshot.battle.groundEffects.push({
+      ...scene.effect,
+      id: "second",
+      longitude: 4,
+      soundOrigin: { actionId: "second", createdRound: 1, phase: "disappear" },
+    });
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(0, false, false, null);
+    expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+  });
+  it("keeps primary appearance and disappearance independent during movement", async () => {
+    const scene = setup();
+    scene.snapshot.assets.push({ id: "accent", url: "accent.wav" } as GameAsset);
+    Object.assign(scene.effect, {
+      creatorId: "caster",
+      actionId: "composite",
+      createdRound: 1,
+      appearSfxPrimary: true,
+      disappearSfxPrimary: true,
+    });
+    const accent = {
+      ...scene.effect,
+      id: "accent",
+      longitude: 4,
+      appearSfx: "accent",
+      disappearSfx: "accent",
+      appearSfxPrimary: false,
+      disappearSfxPrimary: false,
+    };
+    scene.snapshot.battle.groundEffects.push(accent);
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(0, false, true, null);
+    scene.effect.power = accent.power = 0;
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(20, false, true, null);
+    expect(scene.play).not.toHaveBeenCalled();
+    scene.effects.animate(30, false, false, null);
+    scene.effects.animate(81, false, false, null);
+    expect(scene.play.mock.calls).toEqual([
+      ["appear.wav", 0.4],
+      ["disappear.wav", 0.4],
+    ]);
+  });
+  it("preserves a composite's selected removal cue through authoritative expiry", async () => {
+    const scene = setup();
+    scene.snapshot.assets.push({ id: "accent", url: "accent.wav" } as GameAsset);
+    const effect = makeEffect(
+      "shield",
+      {
+        power: 1,
+        health: 1,
+        rounds: 1,
+        disappearAnimation: "animation",
+        disappearSfx: "disappear",
+        disappearSfxPrimary: true,
+      },
+      {
+        longitude: 3,
+        latitude: 1,
+        isNew: false,
+        creatorId: "caster",
+        actionId: "composite",
+        createdRound: 1,
+      },
+    );
+    effect.rounds = 0;
+    const battle = makeCompleteBattle({
+      round: 2,
+      groundEffects: [
+        {
+          ...effect,
+          id: "accent",
+          longitude: 4,
+          disappearSfx: "accent",
+          disappearSfxPrimary: false,
+        },
+        effect,
+      ],
+    });
+    expireGroundEffects(battle, []);
+    scene.snapshot.battle = battle as unknown as ReturnedBattle;
+    expect(battle.groundEffects[1]).toMatchObject({
+      appearSfxPrimary: true,
+      soundOrigin: { actionId: "composite", createdRound: 1, phase: "disappear" },
+    });
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(0, false, false, null);
+    expect(scene.play.mock.calls).toEqual([["disappear.wav", 0.4]]);
+  });
+  it("moves a cast from its creator to its target, then replaces travel with impact once", async () => {
+    const scene = setup();
+    scene.snapshot.assets.push({ id: "launch", url: "launch.wav" } as GameAsset);
+    scene.snapshot.battle.usersState = [
+      makeBattleUser("caster", { longitude: 2, latitude: 1 }),
+    ];
+    Object.assign(scene.effect, {
+      creatorId: "caster",
+      projectileAnimation: "animation",
+      projectileSfx: "launch",
+      projectileScale: 2,
+      projectileOnly: true,
+      staticAnimation: "",
+      appearSfx: "",
+    });
+    await scene.effects.sync(scene.snapshot);
+    const root = scene.effects.container.children[0]!;
+    const projectile = root.children[0] as Sprite;
+    scene.effects.animate(0, false, false, null);
+    expect(scene.play.mock.calls).toEqual([["launch.wav", 0.4]]);
+    const tile = scene.grid.getHex({ col: 3, row: 1 })!;
+    expect(projectile.width).toBeCloseTo(tile.height * 0.65 * 2);
+    const start = projectile.x;
+    scene.effects.animate(100, false, false, null);
+    expect(projectile.x).not.toBe(start);
+    scene.effects.animate(650, false, false, null);
+    expect(projectile.visible).toBe(false);
+    Object.assign(scene.effect, {
+      projectileOnly: false,
+      appearAnimation: "animation",
+      appearSfx: "appear",
+    });
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(650, false, false, null);
+    expect(root.destroyed).toBe(true);
+    expect(scene.effects.container.children[0]?.children).toHaveLength(1);
+    const impact = scene.effects.container.children[0]?.children[0] as Sprite;
+    expect(impact.width).toBeCloseTo(tile.height);
+    expect(scene.play.mock.calls).toEqual([
+      ["launch.wav", 0.4],
+      ["appear.wav", 0.4],
+    ]);
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(660, false, false, null);
+    expect(scene.play).toHaveBeenCalledTimes(2);
+  });
+  it("keeps a surface loop flattened through texture-frame changes", async () => {
+    const scene = setup();
+    scene.effect.groundStyle = "SURFACE";
+    await scene.effects.sync(scene.snapshot);
+    const sprite = scene.effects.ground.children[0]!.children[0] as Sprite;
+    const tile = scene.grid.getHex({ col: 3, row: 1 })!;
+    for (const now of [0, 10, 30, 80]) {
+      scene.effects.animate(now, false, false, null);
+      expect(sprite.height).toBeCloseTo(tile.height * 0.55);
+    }
+  });
+  it("does not launch projectiles when hydrating an already-landed effect", async () => {
+    const scene = setup();
+    Object.assign(scene.effect, {
+      projectileAnimation: "animation",
+      staticAnimation: "",
+    });
+    await scene.effects.sync(scene.snapshot, true);
+    scene.effects.animate(0, true, false, null);
+    expect(scene.effects.container.children[0]?.children).toHaveLength(0);
+    expect(scene.play).not.toHaveBeenCalled();
+  });
+  it("keeps an upright eruption above a separately softened ground decal", async () => {
+    const scene = setup();
+    Object.assign(scene.effect, {
+      groundStyle: "DECAL",
+      groundOpacity: 0.7,
+      groundFeather: 0.1,
+      staticAssetPath: "animation",
+      staticAnimation: "",
+      appearAnimation: "animation",
+    });
+    await scene.effects.sync(scene.snapshot);
+    const root = scene.effects.container.children[0]!;
+    const sprite = root.children[0] as Sprite;
+    const tile = scene.grid.getHex({ col: 3, row: 1 })!;
+    scene.effects.animate(0, false, false, null);
+    expect(sprite.height).toBeCloseTo(tile.height);
+    expect(sprite.alpha).toBe(1);
+    expect(
+      scene.effects.ground.children[0]!.getChildByLabel("ground-surface"),
+    ).toBeDefined();
+  });
+  it("owns a feathered ground decal below actors and releases it on expiry", async () => {
+    const scene = setup();
+    Object.assign(scene.effect, {
+      groundStyle: "SURFACE",
+      groundOpacity: 0.6,
+      groundFeather: 0.12,
+      staticAssetPath: "animation",
+      staticAnimation: "",
+    });
+    await scene.effects.sync(scene.snapshot);
+    scene.effects.animate(0, false, false, null);
+    const surface = scene.effects.ground.children[0]!;
+    expect(surface.getChildByLabel("ground-surface")).toBeDefined();
+    const root = scene.effects.container.children[0]!;
+    expect([surface.x, surface.y]).toEqual([root.x, root.y]);
+    scene.snapshot.battle.groundEffects = [];
+    await scene.effects.sync(scene.snapshot);
+    expect(surface.destroyed).toBe(true);
+  });
   it.each([24, 48])(
     "fits ground and character animations to their hex at %s world units",
     async (hexWidth) => {
@@ -346,6 +665,39 @@ describe("Pixi combat effects", () => {
 });
 
 describe("authoritative combat effect transitions", () => {
+  it("carries a projectile-only cast and its real creator through authoritative effect processing", () => {
+    const battle = makeCompleteBattle({
+      usersState: [
+        makeBattleUser("attacker", { longitude: 2, latitude: 1 }),
+        makeBattleUser("defender", { longitude: 4, latitude: 1 }),
+      ],
+      usersEffects: [
+        makeDamageEffect({
+          creatorId: "attacker",
+          targetId: "defender",
+          targetType: "user",
+          rounds: 0,
+          projectileAnimation: "bolt",
+          projectileScale: 2,
+          appearAnimation: "",
+          appearSfx: "",
+          power: 1,
+          calculation: "static",
+        }),
+      ],
+    });
+    const { newBattle } = applyEffects(battle, "attacker");
+    expect(newBattle.groundEffects).toContainEqual(
+      expect.objectContaining({
+        type: "visual",
+        creatorId: "attacker",
+        projectileAnimation: "bolt",
+        projectileScale: 2,
+        longitude: 4,
+        latitude: 1,
+      }),
+    );
+  });
   it("plays one disappearance when actual combat damage depletes a retained shield", async () => {
     const scene = setup();
     const shield = makeEffect(
@@ -415,6 +767,10 @@ describe("authoritative combat effect transitions", () => {
             health: 1,
             rounds: 1,
             animationScale: 2.5,
+            animationOffsetY: 0.5,
+            projectileAnimation: "bolt",
+            projectileSfx: "launch",
+            projectileScale: 2,
             disappearAnimation: "animation",
             disappearSfx: "disappear",
           },
@@ -430,10 +786,15 @@ describe("authoritative combat effect transitions", () => {
     expect(scene.effects.container.children).toHaveLength(1);
     expect(scene.effects.container.children[0]?.visible).toBe(true);
     const end = scene.snapshot.battle.groundEffects[0]!;
+    expect(end.projectileAnimation).toBeUndefined();
+    expect(end.projectileSfx).toBeUndefined();
+    expect(end.projectileScale).toBeUndefined();
+    expect(end.animationOffsetY).toBe(0.5);
     const tile = scene.grid.getHex({ col: end.longitude, row: end.latitude })!;
     const clip = scene.effects.container.children[0]!.children[0] as Sprite;
     expect(clip.width).toBeCloseTo(tile.height * 2.5);
     expect(clip.height).toBeCloseTo(tile.height * 2.5);
+    expect(clip.y).toBeCloseTo(tile.height);
     for (let frame = 1; frame <= 60; frame++)
       scene.effects.animate(frame, false, false, null);
     expect(scene.play.mock.calls).toEqual([["disappear.wav", 0.4]]);

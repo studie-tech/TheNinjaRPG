@@ -92,6 +92,44 @@ const battleWithLoadouts = () =>
 describe("battle response privacy", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("preloads owned and revealed projectiles without exposing uncast enemy assets", () => {
+    const battle = battleWithLoadouts();
+    battle.extraState.jutsus["me-jutsu"]!.effects = [
+      VisualTag.parse({
+        projectileAnimation: "owned-projectile",
+        projectileSfx: "owned-launch",
+      }),
+    ];
+    battle.extraState.items["me-item"]!.effects = [
+      VisualTag.parse({ projectileAnimation: "item-projectile" }),
+    ];
+    battle.extraState.jutsus["foe-jutsu"]!.effects = [
+      VisualTag.parse({
+        projectileAnimation: "uncast-projectile",
+        projectileSfx: "uncast-launch",
+      }),
+    ];
+    battle.usersEffects = [
+      makeEffect(
+        "visual",
+        {
+          projectileAnimation: "revealed-projectile",
+          projectileSfx: "revealed-launch",
+        },
+        { creatorId: "foe", targetId: "me" },
+      ),
+    ];
+
+    const masked = maskBattle(battle, "me");
+    expect(masked.extraState.textureAssets).toContain("owned-projectile");
+    expect(masked.extraState.textureAssets).toContain("item-projectile");
+    expect(masked.extraState.textureAssets).toContain("revealed-projectile");
+    expect(masked.extraState.textureAssets).not.toContain("uncast-projectile");
+    expect(masked.extraState.sfxAssets).toContain("owned-launch");
+    expect(masked.extraState.sfxAssets).toContain("revealed-launch");
+    expect(masked.extraState.sfxAssets).not.toContain("uncast-launch");
+  });
+
   it("hides other participants' world location, loadouts, cooldowns and stats", () => {
     const battle = battleWithLoadouts();
     const before = structuredClone(battle);
@@ -287,6 +325,12 @@ describe("battle response privacy", () => {
           targetId: "me",
           fromType: "armor",
           actionId: "secret-armor",
+          soundOrigin: {
+            actionId: "secret-armor",
+            createdRound: 1,
+            phase: "appear",
+            privateSource: true,
+          },
           highestGenerals: ["speed"],
         },
       ),
@@ -294,9 +338,11 @@ describe("battle response privacy", () => {
     const masked = maskBattle(battle, "me");
     expect(masked.usersEffects[0]).toMatchObject({
       actionId: "hidden",
+      soundOrigin: { actionId: "hidden", createdRound: 1, phase: "appear" },
       appearAnimation: "visible-animation",
     });
     expect(masked.usersEffects[0]).not.toHaveProperty("highestGenerals");
+    expect(masked.usersEffects[0]?.soundOrigin).not.toHaveProperty("privateSource");
     expect(masked.extraState.textureAssets).toContain("visible-animation");
     expect(masked.extraState.textureAssets).not.toContain("uncast-animation");
     expect(masked.extraState.sfxAssets).not.toContain("uncast-sound");

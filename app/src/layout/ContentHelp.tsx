@@ -300,6 +300,19 @@ const RelationSection: React.FC<RelationSectionProps> = (props) => {
  */
 const renderEffectsTips = (effects: ZodAllTags[]) => {
   const tips = [];
+  if (effects.some((effect) => effect.appearSfxPrimary || effect.disappearSfxPrimary)) {
+    tips.push(
+      <div key="primary-sound" className="bg-muted rounded-lg border p-3">
+        <h4 className="mb-2 font-medium">Primary cast sounds</h4>
+        <p className="text-muted-foreground text-sm">
+          A marked appearance or disappearance sound replaces the other sounds for that
+          phase of the same cast. The animation sound assignments stay available when
+          those effects are used independently. Select the same primary cue on every
+          marked effect in a phase.
+        </p>
+      </div>,
+    );
+  }
 
   // Check for injectjutsus effect
   const hasInjectEffect = effects.some((e) => e.type === "injectjutsus");
@@ -346,7 +359,8 @@ const renderEffectsGraphicsWarning = (effects: ZodAllTags[]) => {
         No effect visuals configured. Consider adding
         <code className="mr-1 ml-1 rounded bg-red-100 px-1">appearAnimation</code>,{" "}
         <code className="mr-1 rounded bg-red-100 px-1">disappearAnimation</code>,{" "}
-        <code className="mr-1 rounded bg-red-100 px-1">staticAnimation</code>
+        <code className="mr-1 rounded bg-red-100 px-1">staticAnimation</code>,{" "}
+        <code className="mr-1 rounded bg-red-100 px-1">projectileAnimation</code>
         or <code className="ml-1 rounded bg-red-100 px-1">staticAssetPath</code>
         and optionally <code className="ml-1 rounded bg-red-100 px-1">appearSfx</code>/
         <code className="ml-1 rounded bg-red-100 px-1">disappearSfx</code>

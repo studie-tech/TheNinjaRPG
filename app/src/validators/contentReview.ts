@@ -133,6 +133,7 @@ export const battlefieldSheetsSchema = z.object({
         .max(4),
     }),
   ),
+  captureAllPhases: z.boolean().optional(),
   perSheet: z.number().int().min(1).max(8),
   background: z.enum(COMBAT_BIOMES).prefault("ground"),
 });

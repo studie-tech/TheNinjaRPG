@@ -20,6 +20,97 @@ const placements = (scene: ReturnType<typeof battlefieldSceneOf>) =>
   scene?.effects.map((effect) => effect.placement);
 
 describe("battlefieldSceneOf", () => {
+  it("retains primary cue markers without adding audio assets", () => {
+    const scene = battlefieldSceneOf("JUTSU", "composite", {
+      effects: [
+        {
+          ...tag({ appearAnimation: "arrival", appearSfx: "cue", disappearSfx: "end" }),
+          appearSfxPrimary: true,
+          disappearSfxPrimary: true,
+        },
+      ],
+    });
+    expect(scene?.effects[0]).toMatchObject({
+      appearSfxPrimary: true,
+      disappearSfxPrimary: true,
+    });
+    expect(sceneSoundIds(scene)).toEqual(["cue", "end"]);
+  });
+  it("retains wall and whole-field ground footprints without spreading self tags", () => {
+    const scene = battlefieldSceneOf("JUTSU", "wall", {
+      target: "GROUND",
+      method: "AOE_LARGE_WALL_SHOOT",
+      range: 4,
+      methodSize: { x: 0, y: 2 },
+      effects: [
+        tag({ staticAssetPath: "rock" }),
+        tag({ appearAnimation: "buff" }, "SELF"),
+      ],
+    });
+    expect(scene?.effects[0]?.footprint).toEqual({
+      method: "AOE_LARGE_WALL_SHOOT",
+      range: 4,
+      methodSize: { x: 0, y: 2 },
+    });
+    expect(scene?.effects[1]?.footprint).toBeUndefined();
+    expect(
+      battlefieldSceneOf("JUTSU", "field", {
+        target: "GROUND",
+        method: "ALL",
+        effects: [tag({ staticAssetPath: "field" })],
+      })?.effects[0]?.footprint?.method,
+    ).toBe("ALL");
+  });
+  it("retains authored slice coordinates instead of stacking boss art on one tile", () => {
+    const coordinateTargeting = {
+      origin: "BATTLEFIELD" as const,
+      selection: "ALL" as const,
+      coordinates: [{ longitude: 11, latitude: 9 }],
+      randomCount: 1,
+    };
+    const scene = battlefieldSceneOf("JUTSU", "etching", {
+      target: "GROUND",
+      method: "COORDINATES",
+      coordinateTargeting,
+      effects: [
+        {
+          ...tag({ appearAnimation: "slice" }, "COORDINATES"),
+          coordinateTargeting,
+        },
+        tag({ staticAssetPath: "floor" }, "INHERIT"),
+      ],
+    });
+    expect(scene?.effects.map((effect) => effect.coordinateTargeting)).toEqual([
+      coordinateTargeting,
+      coordinateTargeting,
+    ]);
+    expect(placements(scene)).toEqual(["ground", "ground"]);
+  });
+  it("keeps projectile and surface controls in the battle preview and asset preload", () => {
+    const scene = battlefieldSceneOf("JUTSU", "bolt", {
+      target: "OPPONENT",
+      effects: [
+        {
+          ...tag({ appearAnimation: "impact" }),
+          projectileAnimation: "bolt",
+          projectileScale: 2,
+          groundStyle: "SURFACE",
+          groundOpacity: 0.6,
+          groundFeather: 0.1,
+          animationOffsetY: 0.5,
+        },
+      ],
+    });
+    expect(sceneAssetIds(scene)).toEqual(["impact", "bolt"]);
+    expect(scene?.effects[0]).toMatchObject({
+      projectileAnimation: "bolt",
+      projectileScale: 2,
+      groundStyle: "SURFACE",
+      groundOpacity: 0.6,
+      animationOffsetY: 0.5,
+      groundFeather: 0.1,
+    });
+  });
   it("preserves independent animation scales without inventing visuals", () => {
     const scene = battlefieldSceneOf("JUTSU", "sizing", {
       effects: [

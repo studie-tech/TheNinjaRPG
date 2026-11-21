@@ -2,6 +2,7 @@ import type { Grid } from "honeycomb-grid";
 import { Container } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/inBattle";
+import { projectileTravelMs } from "@/libs/combat/projectiles";
 import type { GroundEffect, ReturnedBattle, UserEffect } from "@/libs/combat/types";
 import type { TerrainHex } from "@/libs/hexgrid";
 import {
@@ -9,6 +10,10 @@ import {
   EFFECT_ANIMATION_HEX_RATIO,
 } from "@/libs/rendering/animation";
 import { createSpriteClip } from "@/libs/rendering/primitives/animation";
+import {
+  createGroundDecal,
+  groundDecalBoundaries,
+} from "@/libs/rendering/primitives/groundDecal";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createStatusMeter } from "@/libs/rendering/primitives/statusMeter";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -51,6 +56,68 @@ export const createCombatEffects = (
   };
   const sync = (next: CombatEffectSnapshot, initial = false) => {
     snapshot = next;
+    // One cast can create many tiles whose artwork finishes loading on different frames.
+    // Share its audio onset across those records without suppressing a later cast this round.
+    const emittedSounds = new Set<string>();
+    const castPhaseKey = (
+      effect: GroundEffect | UserEffect,
+      phase: "projectile" | "appear" | "disappear",
+    ) =>
+      JSON.stringify([
+        effect.creatorId,
+        effect.soundOrigin?.actionId ?? effect.actionId ?? effect.id,
+        effect.soundOrigin?.createdRound ?? effect.createdRound,
+        phase,
+      ]);
+    const primarySounds = new Map<string, string>();
+    const selectPrimary = (
+      effect: GroundEffect | UserEffect,
+      phase: "appear" | "disappear",
+      id: string | undefined,
+      primary: boolean | undefined,
+    ) => {
+      if (!primary || !id) return;
+      const key = castPhaseKey(effect, phase),
+        selected = primarySounds.get(key);
+      // Resolve inconsistent authored primaries before asynchronous texture loading.
+      if (!selected || id < selected) primarySounds.set(key, id);
+    };
+    for (const effect of [...next.battle.groundEffects, ...next.battle.usersEffects]) {
+      selectPrimary(
+        effect,
+        effect.soundOrigin?.phase ?? "appear",
+        effect.appearSfx,
+        effect.appearSfxPrimary,
+      );
+      selectPrimary(
+        effect,
+        "disappear",
+        effect.disappearSfx,
+        effect.disappearSfxPrimary,
+      );
+    }
+    const soundEvent = (
+      effect: GroundEffect | UserEffect,
+      id: string,
+      phase: "projectile" | "appear" | "disappear",
+    ) => {
+      const cast = castPhaseKey(effect, phase),
+        primary = primarySounds.get(cast),
+        selected = primary ?? id;
+      return {
+        id: selected,
+        emitted: emittedSounds,
+        key: primary
+          ? JSON.stringify([cast, selected])
+          : JSON.stringify([
+              effect.creatorId,
+              effect.actionId ?? effect.id,
+              effect.createdRound,
+              phase === "projectile" || !effect.soundOrigin ? phase : "appear",
+              id,
+            ]),
+      };
+    };
     const live = new Set(
       [...next.battle.groundEffects, ...next.battle.usersEffects].map(
         (effect) => effect.id,
@@ -74,6 +141,28 @@ export const createCombatEffects = (
       const tile = grid.getHex({ col: user.longitude, row: user.latitude });
       if (tile) displayed.push({ effect, tile });
     }
+    const boundaries = groundDecalBoundaries(
+      displayed.flatMap(({ effect, tile }) =>
+        effect.staticAssetPath &&
+        (effect.groundStyle === "DECAL" || effect.groundStyle === "SURFACE")
+          ? [
+              {
+                id: effect.id,
+                tile,
+                material: JSON.stringify([
+                  effect.creatorId,
+                  effect.actionId,
+                  effect.createdRound,
+                  effect.staticAssetPath,
+                  effect.groundStyle,
+                  effect.groundOpacity,
+                  effect.groundFeather,
+                ]),
+              },
+            ]
+          : [],
+      ),
+    );
     const visible = new Set(displayed.map((entry) => entry.effect.id));
     for (const [id, record] of records)
       if (!visible.has(id)) {
@@ -87,13 +176,24 @@ export const createCombatEffects = (
         !effect.staticAssetPath &&
         !effect.staticAnimation &&
         !effect.appearAnimation &&
+        !effect.projectileAnimation &&
         !effect.disappearAnimation &&
+        !effect.projectileSfx &&
         !effect.appearSfx &&
         !effect.disappearSfx
       )
         continue;
       let record = records.get(effect.id);
+      // The same cast identity crosses from travel into impact exactly once.
+      if (record && record.isProjectileOnly !== !!effect.projectileOnly) {
+        record.scope.dispose();
+        records.delete(effect.id);
+        record = undefined;
+      }
       if (!record) {
+        const onsetSfx = effect.projectileOnly
+          ? effect.projectileSfx
+          : effect.appearSfx;
         const scope = createRenderScope(game),
           root = new Container();
         root.sortableChildren = true;
@@ -113,12 +213,36 @@ export const createCombatEffects = (
           startedAt: null,
           ready: false,
           displayed: true,
-          events: !initial && next.sound && effect.appearSfx ? [effect.appearSfx] : [],
+          events:
+            !initial && next.sound && onsetSfx
+              ? [
+                  soundEvent(
+                    effect,
+                    onsetSfx,
+                    effect.projectileOnly
+                      ? "projectile"
+                      : (effect.soundOrigin?.phase ?? "appear"),
+                  ),
+                ]
+              : [],
           depleted: false,
           barrier: null,
+          decal: null,
+          projectile: null,
+          isProjectileOnly: !!effect.projectileOnly,
         };
         records.set(effect.id, record);
         const current = record;
+        const hasGroundDecal =
+          effect.groundStyle === "SURFACE" || effect.groundStyle === "DECAL";
+        if (hasGroundDecal && !effect.projectileOnly) {
+          const surface = new Container({ label: effect.id });
+          current.ground = surface;
+          ground.addChild(surface);
+          scope.own(() => {
+            if (!surface.destroyed) surface.destroy({ children: true });
+          });
+        }
         const addClip = async (id: string | undefined, loop: boolean) => {
           const asset = next.assets.find((entry) => entry.id === id);
           if (!asset) return;
@@ -129,19 +253,90 @@ export const createCombatEffects = (
             {
               size:
                 tile.height * EFFECT_ANIMATION_HEX_RATIO * (effect.animationScale ?? 1),
+              height:
+                effect.groundStyle === "SURFACE"
+                  ? tile.height *
+                    EFFECT_ANIMATION_HEX_RATIO *
+                    (effect.animationScale ?? 1) *
+                    0.55
+                  : undefined,
             },
           );
           if (scope.isDisposed()) return;
-          clip.sprite.position.set(tile.width / 2, tile.height / 2);
+          clip.sprite.position.set(
+            tile.width / 2,
+            tile.height * (0.5 + (effect.animationOffsetY ?? 0)),
+          );
           clip.sprite.zIndex = loop ? 2 : 1;
-          root.addChild(clip.sprite);
+          if (effect.groundStyle === "SURFACE") {
+            clip.sprite.alpha = effect.groundOpacity ?? 1;
+          }
+          (effect.groundStyle === "SURFACE" ? (current.ground ?? root) : root).addChild(
+            clip.sprite,
+          );
           current.clips.push({ ...clip, dispose: animationScope.dispose });
         };
         const staticAsset = next.assets.find(
           (entry) => entry.id === effect.staticAssetPath,
         );
         const loads: Promise<unknown>[] = [];
-        if (staticAsset)
+        if (effect.projectileOnly) {
+          const caster = next.battle.usersState.find(
+            (user) => user.userId === effect.creatorId,
+          );
+          const origin =
+            caster && grid.getHex({ col: caster.longitude, row: caster.latitude });
+          const asset = next.assets.find(
+            (entry) => entry.id === effect.projectileAnimation,
+          );
+          if (caster && origin && asset)
+            loads.push(
+              (async () => {
+                const clip = await createSpriteClip(
+                  scope,
+                  assetAnimationClip(asset, true),
+                  {
+                    size: tile.height * 0.65 * (effect.projectileScale ?? 1),
+                    fitContent: true,
+                  },
+                );
+                if (scope.isDisposed()) return;
+                const to = { x: tile.width / 2, y: tile.height / 2 };
+                const from = {
+                  x: to.x + tile.center.x - origin.center.x,
+                  y: to.y + tile.center.y - origin.center.y,
+                };
+                clip.sprite.rotation = Math.atan2(to.y - from.y, to.x - from.x);
+                root.addChild(clip.sprite);
+                current.projectile = {
+                  clip,
+                  from,
+                  to,
+                  duration: projectileTravelMs(caster, {
+                    longitude: tile.col,
+                    latitude: tile.row,
+                  }),
+                };
+              })(),
+            );
+        }
+        if (staticAsset && !effect.projectileOnly && hasGroundDecal)
+          loads.push(
+            createGroundDecal(
+              scope,
+              staticAsset.image,
+              tile,
+              effect.groundOpacity ?? 1,
+              effect.groundFeather ?? 0,
+              boundaries.get(effect.id),
+            ).then((decal) => {
+              if (!scope.isDisposed()) {
+                current.decal = decal;
+                current.ground?.addChild(decal);
+              }
+            }),
+          );
+        else if (staticAsset && !effect.projectileOnly)
           loads.push(
             createWorldSprites(scope, [
               {
@@ -163,8 +358,10 @@ export const createCombatEffects = (
               ground.addChild(art.container);
             }),
           );
-        if (!initial) loads.push(addClip(effect.appearAnimation, false));
-        loads.push(addClip(effect.staticAnimation, true));
+        if (!effect.projectileOnly) {
+          if (!initial) loads.push(addClip(effect.appearAnimation, false));
+          loads.push(addClip(effect.staticAnimation, true));
+        }
         pending.push(
           Promise.allSettled(loads).then((results) => {
             if (scope.isDisposed()) return;
@@ -189,11 +386,13 @@ export const createCombatEffects = (
         }
       }
       record.displayed = true;
+      const outerEdges = boundaries.get(effect.id);
+      if (outerEdges) record.decal?.setOuterEdges(outerEdges);
       record.effect = effect;
       record.tile = tile;
       const depleted = effect.power !== undefined && effect.power <= 0;
       if (depleted && !record.depleted && !initial && next.sound && effect.disappearSfx)
-        record.events.push(effect.disappearSfx);
+        record.events.push(soundEvent(effect, effect.disappearSfx, "disappear"));
       record.depleted = depleted;
       record.root.visible = record.ready && !depleted;
       record.root.position.set(-tile.center.x, -tile.center.y);
@@ -223,7 +422,24 @@ export const createCombatEffects = (
     for (const [id, record] of records) {
       if (!record.ready) continue;
       record.startedAt ??= now;
-      for (const event of record.events) sound(event, moving);
+      if (record.projectile) {
+        const { clip, from, to, duration } = record.projectile;
+        const elapsed = now - record.startedAt;
+        const progress = reducedMotion
+          ? 1
+          : Math.min(1, Math.max(0, elapsed / duration));
+        clip.renderAt(elapsed, reducedMotion);
+        clip.sprite.position.set(
+          from.x + (to.x - from.x) * progress,
+          from.y + (to.y - from.y) * progress,
+        );
+        clip.sprite.visible = progress < 1 && !reducedMotion;
+      }
+      for (const event of record.events) {
+        if (event.emitted.has(event.key)) continue;
+        event.emitted.add(event.key);
+        sound(event.id, moving);
+      }
       record.events.length = 0;
       record.root.visible = record.displayed && !record.depleted;
       if (record.ground) record.ground.visible = record.root.visible;
@@ -282,13 +498,21 @@ type EffectRecord = {
   scope: GameRenderer;
   root: Container;
   ground: Container | null;
+  decal: Awaited<ReturnType<typeof createGroundDecal>> | null;
   effect: GroundEffect | UserEffect;
   tile: TerrainHex;
   clips: Awaited<ReturnType<typeof createSpriteClip>>[];
   startedAt: number | null;
   ready: boolean;
   displayed: boolean;
-  events: string[];
+  events: { id: string; key: string; emitted: Set<string> }[];
   depleted: boolean;
   barrier: ReturnType<typeof createStatusMeter> | null;
+  isProjectileOnly: boolean;
+  projectile: {
+    clip: Awaited<ReturnType<typeof createSpriteClip>>;
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+    duration: number;
+  } | null;
 };

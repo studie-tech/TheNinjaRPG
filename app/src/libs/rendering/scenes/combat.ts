@@ -350,7 +350,9 @@ export const createCombatScene = async (options: {
       void Promise.allSettled(
         snapshot.assets
           .filter((asset) => textureIds.has(asset.id) && asset.image)
-          .map((asset) => preloads.assets.texture(asset.image)),
+          .map((asset) =>
+            preloads.assets.texture(asset.image, asset.frames > 1 ? 0 : 50),
+          ),
       ).then(() => preloads.dispose());
     };
     const sync = (snapshot: CombatSceneSnapshot) => {

@@ -1,5 +1,11 @@
-import type { ContentProposalEntityType } from "@/drizzle/constants";
+import { AttackMethods, type ContentProposalEntityType } from "@/drizzle/constants";
+import type { CombatAction } from "@/libs/combat/types";
 import { VisualTag } from "@/validators/combat";
+import {
+  type CoordinateTargeting,
+  coordinateTargetingSchema,
+} from "@/validators/coordinateTargeting";
+import { methodSizeSchema } from "@/validators/methodSize";
 
 /**
  * What a jutsu, item, bloodline, AI or battlefield asset draws in combat, with every effect
@@ -22,32 +28,92 @@ export const battlefieldSceneOf = (
         staticAssetPath: text(tag.staticAssetPath),
         staticAnimation: text(tag.staticAnimation),
         appearAnimation: text(tag.appearAnimation),
+        projectileAnimation: text(tag.projectileAnimation),
         disappearAnimation: text(tag.disappearAnimation),
+        projectileSfx: text(tag.projectileSfx),
         appearSfx: text(tag.appearSfx),
         disappearSfx: text(tag.disappearSfx),
       };
       if (!Object.values(media).some(Boolean)) return [];
       // Preview drafts remain drawable while the editor reports invalid sizing.
       const scale = VisualTag.shape.animationScale.safeParse(tag.animationScale);
+      const placement = placementOf(text(tag.target) || "INHERIT");
+      const method = AttackMethods.find((method) => method === fields.method);
+      const methodSize = methodSizeSchema.safeParse(fields.methodSize);
+      const footprint =
+        placement === "ground" &&
+        tag.target !== "COORDINATES" &&
+        method &&
+        method !== "SINGLE" &&
+        method !== "COORDINATES"
+          ? {
+              method,
+              range: typeof fields.range === "number" ? fields.range : 0,
+              methodSize: methodSize.success ? methodSize.data : undefined,
+            }
+          : undefined;
+      const coordinates = coordinateTargetingSchema.safeParse(
+        tag.target === "COORDINATES"
+          ? tag.coordinateTargeting
+          : placement === "ground" && fields.method === "COORDINATES"
+            ? fields.coordinateTargeting
+            : undefined,
+      );
       return [
         {
           ...media,
+          appearSfxPrimary: tag.appearSfxPrimary === true,
+          disappearSfxPrimary: tag.disappearSfxPrimary === true,
           animationScale: scale.success ? scale.data : 1,
-          placement: placementOf(text(tag.target) || "INHERIT"),
-        },
+          projectileScale:
+            typeof tag.projectileScale === "number" &&
+            Number.isFinite(tag.projectileScale)
+              ? Math.max(0.25, Math.min(3, tag.projectileScale))
+              : 1,
+          animationOffsetY:
+            typeof tag.animationOffsetY === "number" &&
+            Number.isFinite(tag.animationOffsetY)
+              ? Math.max(-2, Math.min(2, tag.animationOffsetY))
+              : 0,
+          groundStyle:
+            tag.groundStyle === "SURFACE" || tag.groundStyle === "DECAL"
+              ? tag.groundStyle
+              : "UPRIGHT",
+          groundOpacity:
+            typeof tag.groundOpacity === "number"
+              ? Math.min(1, Math.max(0.1, tag.groundOpacity))
+              : 1,
+          groundFeather:
+            typeof tag.groundFeather === "number"
+              ? Math.min(0.3, Math.max(0, tag.groundFeather))
+              : 0,
+          placement,
+          ...(footprint ? { footprint } : {}),
+          ...(coordinates.success ? { coordinateTargeting: coordinates.data } : {}),
+        } satisfies BattlefieldEffect,
       ];
     },
   );
   const targetAvatar = entityType === "AI" ? text(fields.avatar) || null : null;
   if (effects.length === 0 && !targetAvatar) return null;
-  return { effects, targetAvatar, assets: [] };
+  const pattern = coordinateTargetingSchema.safeParse(
+    fields.method === "COORDINATES" ? fields.coordinateTargeting : undefined,
+  );
+  return {
+    effects,
+    targetAvatar,
+    assets: [],
+    ...(pattern.success ? { coordinateTargeting: pattern.data } : {}),
+  };
 };
 
 /** Sound asset ids a scene plays, as its effects appear and end. */
 export const sceneSoundIds = (scene: BattlefieldScene | null) => [
   ...new Set(
     (scene?.effects ?? []).flatMap((effect) =>
-      [effect.appearSfx, effect.disappearSfx].filter(Boolean),
+      [effect.projectileSfx, effect.appearSfx, effect.disappearSfx].filter(
+        (id): id is string => !!id,
+      ),
     ),
   ),
 ];
@@ -60,6 +126,7 @@ export const sceneAssetIds = (scene: BattlefieldScene | null) => [
         effect.staticAssetPath,
         effect.staticAnimation,
         effect.appearAnimation,
+        effect.projectileAnimation ?? "",
         effect.disappearAnimation,
       ].filter(Boolean),
     ),
@@ -146,12 +213,24 @@ export type BattlefieldEffect = {
   staticAssetPath: string;
   staticAnimation: string;
   appearAnimation: string;
+  projectileAnimation?: string;
+  groundStyle?: "UPRIGHT" | "DECAL" | "SURFACE";
+  groundOpacity?: number;
+  groundFeather?: number;
   disappearAnimation: string;
   /** Sounds combat plays as the effect appears and as it ends. */
+  projectileSfx?: string;
   appearSfx: string;
   disappearSfx: string;
+  appearSfxPrimary?: boolean;
+  disappearSfxPrimary?: boolean;
   animationScale?: number;
+  projectileScale?: number;
+  animationOffsetY?: number;
   placement: BattlefieldPlacement;
+  coordinateTargeting?: CoordinateTargeting;
+  /** Authored ground geometry, resolved by combat's targeting helper. */
+  footprint?: Pick<CombatAction, "method" | "range" | "methodSize">;
 };
 
 /** Asset drawn from these values instead of its catalog row, for a suggested asset edit. */
@@ -166,6 +245,7 @@ type BattlefieldAsset = {
 /** Everything the battlefield preview draws for one version of an entity. */
 export type BattlefieldScene = {
   effects: BattlefieldEffect[];
+  coordinateTargeting?: CoordinateTargeting;
   /** Raw artwork of an AI on the target tile; any other target gets a village marker. */
   targetAvatar: string | null;
   assets: BattlefieldAsset[];

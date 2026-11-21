@@ -184,6 +184,8 @@ const getVisualOrSound = (
   sfx: string | undefined,
   round: number,
   animationScale = 1,
+  source?: GroundEffect | UserEffect,
+  phase: "appear" | "disappear" = "appear",
 ): GroundEffect => {
   return {
     ...VisualTag.parse({
@@ -191,14 +193,33 @@ const getVisualOrSound = (
       rounds: 0,
       description: "N/A",
       appearAnimation: animation,
+      projectileAnimation: phase === "appear" ? source?.projectileAnimation : undefined,
+      projectileSfx: phase === "appear" ? source?.projectileSfx : undefined,
+      projectileScale: phase === "appear" ? source?.projectileScale : undefined,
+      animationOffsetY: source?.animationOffsetY,
+      groundStyle: source?.groundStyle,
+      groundOpacity: source?.groundOpacity,
+      groundFeather: source?.groundFeather,
       animationScale,
       appearSfx: sfx ?? "",
+      appearSfxPrimary:
+        phase === "disappear" ? source?.disappearSfxPrimary : source?.appearSfxPrimary,
       createdAt: Date.now(),
     }),
     actionId: "visual",
+    soundOrigin: source
+      ? {
+          actionId: source.soundOrigin?.actionId ?? source.actionId,
+          createdRound: source.soundOrigin?.createdRound ?? source.createdRound,
+          phase,
+          privateSource:
+            source.soundOrigin?.privateSource ||
+            ["armor", "accessory", "skill"].includes(source.fromType ?? ""),
+        }
+      : undefined,
     id: nanoid(),
     createdRound: round,
-    creatorId: nanoid(),
+    creatorId: source?.creatorId ?? nanoid(),
     level: 0,
     barrierAbsorb: 0,
     isNew: true,
@@ -295,6 +316,8 @@ export const expireGroundEffects = (battle: CompleteBattle, actionRounds: number
           effect.disappearSfx,
           battle.round,
           effect.animationScale,
+          effect,
+          "disappear",
         ),
       );
     return false;
@@ -781,7 +804,11 @@ const applyGroundEffects = ({
       }
 
       // Show once appearing visual/audio
-      if ((e.appearAnimation || e.appearSfx) && e.isNew && e.type !== "visual") {
+      if (
+        (e.appearAnimation || e.appearSfx || e.projectileAnimation) &&
+        e.isNew &&
+        e.type !== "visual"
+      ) {
         newGroundEffects.push(
           getVisualOrSound(
             e.longitude,
@@ -790,6 +817,7 @@ const applyGroundEffects = ({
             e.appearSfx,
             round,
             e.animationScale,
+            e,
           ),
         );
       }
@@ -807,6 +835,8 @@ const applyGroundEffects = ({
             e.disappearSfx,
             round,
             e.animationScale,
+            e,
+            "disappear",
           ),
         );
       }
@@ -1660,7 +1690,7 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
 
   // Show once appearing visual/audio
   if (
-    (effect.appearAnimation || effect.appearSfx) &&
+    (effect.appearAnimation || effect.appearSfx || effect.projectileAnimation) &&
     effect.isNew &&
     longitude !== undefined &&
     latitude !== undefined
@@ -1673,6 +1703,7 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
         effect.appearSfx,
         battle.round,
         effect.animationScale,
+        effect,
       ),
     );
   }
@@ -1693,6 +1724,8 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
         effect.disappearSfx,
         round,
         effect.animationScale,
+        effect,
+        "disappear",
       ),
     );
   }

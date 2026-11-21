@@ -204,6 +204,7 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
         ...effects
           .flatMap((e) => [
             e.appearAnimation,
+            e.projectileAnimation,
             e.disappearAnimation,
             e.staticAnimation,
             e.staticAssetPath,
@@ -223,7 +224,7 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
           ? [ID_SFX_TRANSFORMATION_SURGE, ID_SFX_TRANSFORMATION_BURST]
           : []),
         ...effects
-          .flatMap((e) => [e.appearSfx, e.disappearSfx])
+          .flatMap((e) => [e.projectileSfx, e.appearSfx, e.disappearSfx])
           .filter((id): id is string => !!id),
       ]),
     ],
@@ -252,6 +253,16 @@ const maskBattleEffects = <T extends BattleEffect>(
     )
     .map((effect) => {
       const masked = { ...effect };
+      if (effect.soundOrigin) {
+        const { privateSource, ...origin } = effect.soundOrigin;
+        masked.soundOrigin = {
+          ...origin,
+          actionId:
+            privateSource && !controlledIds.has(effect.creatorId)
+              ? "hidden"
+              : origin.actionId,
+        };
+      }
       if (!controlledIds.has(effect.creatorId)) delete masked.highestGenerals;
       // Saved effects can carry unused target stats; omit them from every response.
       Reflect.deleteProperty(masked, "targetHighestGenerals");

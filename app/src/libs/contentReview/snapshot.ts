@@ -314,6 +314,8 @@ const effectsWith = (effects: unknown, keep: (key: string) => boolean) =>
 const isMechanicKey = (key: string) =>
   !MEDIA_KEYS.includes(key) &&
   key !== "animationScale" &&
+  key !== "projectileScale" &&
+  key !== "animationOffsetY" &&
   key !== "description" &&
   key !== "timeTracker";
 
@@ -350,7 +352,9 @@ const MEDIA_KEYS = [
   "staticAssetPath",
   "staticAnimation",
   "appearAnimation",
+  "projectileAnimation",
   "disappearAnimation",
+  "projectileSfx",
   "appearSfx",
   "disappearSfx",
 ];
@@ -407,7 +411,15 @@ const VIEWS: Record<ContentAuditFocus, View> = {
         "itemType",
       ]),
       effects: effectsWith(entity.editable.effects, (key) =>
-        ["type", "appearSfx", "disappearSfx", "elements"].includes(key),
+        [
+          "type",
+          "projectileSfx",
+          "appearSfx",
+          "disappearSfx",
+          "appearSfxPrimary",
+          "disappearSfxPrimary",
+          "elements",
+        ].includes(key),
       ),
     }),
     hasUsage: true,
@@ -431,8 +443,14 @@ const VIEWS: Record<ContentAuditFocus, View> = {
           "type",
           "target",
           "appearAnimation",
+          "projectileAnimation",
           "staticAnimation",
           "animationScale",
+          "projectileScale",
+          "animationOffsetY",
+          "groundStyle",
+          "groundOpacity",
+          "groundFeather",
           "disappearAnimation",
           "staticAssetPath",
           "elements",

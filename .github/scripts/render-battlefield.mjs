@@ -26,6 +26,11 @@ const VISUAL_FIELDS = [
   "staticAssetPath",
   "staticAnimation",
   "appearAnimation",
+  "projectileAnimation",
+  "animationScale",
+  "groundStyle",
+  "groundOpacity",
+  "groundFeather",
   "disappearAnimation",
 ];
 const GALLERY_SIZE = 32;

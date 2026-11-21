@@ -1,3 +1,4 @@
+import { projectileTravelMs } from "@/libs/combat/projectiles";
 import { isSummonTemplate } from "@/libs/combat/summon";
 import type {
   ActionEffect,
@@ -62,6 +63,9 @@ export type CombatPlaybackFrame = {
   cueId?: string;
   impact: number;
   windup?: ReturnedBattle;
+  /** Casts travel while the pre-impact pools and log version remain on screen. */
+  travel?: ReturnedBattle;
+  travelMs?: number;
   battle: ReturnedBattle;
   /** Health lines logged by the actions this frame lands, which its numbers show. */
   hits?: LoggedHealth[];
@@ -257,13 +261,15 @@ export const buildPlaybackFrames = (
     for (const id of step.addedEffectIds) effects.visible.add(id);
     users = nextUsers;
     return {
-      actorId: step.actorId,
-      version: step.version,
-      impact: (cue && CUE_IMPACT[cue.animation]) ?? 0,
-      ...(cue && actor ? { cueId: cue.id, windup: windupOf(before, actor) } : {}),
-      battle: index === steps.length - 1 ? next : viewOf(next, users, effects),
+      ...withProjectileTravel(before, {
+        actorId: step.actorId,
+        version: step.version,
+        impact: (cue && CUE_IMPACT[cue.animation]) ?? 0,
+        ...(cue && actor ? { cueId: cue.id, windup: windupOf(before, actor) } : {}),
+        battle: index === steps.length - 1 ? next : viewOf(next, users, effects),
+        hits: step.hits,
+      }),
       isWalk: !cue && isWalkStep(step),
-      hits: step.hits,
     };
   });
   // Fighters step one hex per action; joined, those steps share one uninterrupted walk.
@@ -306,13 +312,60 @@ const inferredFrames = (
   const cue = strikeCue(actor);
   if (!actor || !cue) return [];
   return [
-    {
+    withProjectileTravel(previous, {
       actorId: actor.userId,
       version: previous.version,
       cueId: cue.id,
       impact: CUE_IMPACT[cue.animation] ?? 0,
       windup: windupOf(previous, actor),
       battle: next,
-    },
+    }),
   ];
+};
+
+/** Add a presentation-only travel stage for newly created cast visuals. */
+const withProjectileTravel = (
+  previous: ReturnedBattle,
+  frame: CombatPlaybackFrame,
+): CombatPlaybackFrame => {
+  const before = frame.windup ?? previous;
+  const actor = before.usersState.find((user) => user.userId === frame.actorId);
+  if (!actor) return frame;
+  const existing = new Set(
+    [...previous.groundEffects, ...previous.usersEffects].map((effect) => effect.id),
+  );
+  const flights = [...frame.battle.groundEffects, ...frame.battle.usersEffects]
+    .filter(
+      (effect) =>
+        effect.type === "visual" &&
+        effect.projectileAnimation &&
+        effect.creatorId === frame.actorId &&
+        !existing.has(effect.id),
+    )
+    .flatMap((effect) => {
+      const target =
+        "targetId" in effect
+          ? (before.usersState.find((user) => user.userId === effect.targetId) ??
+            frame.battle.usersState.find((user) => user.userId === effect.targetId))
+          : effect;
+      if (
+        !target ||
+        (target.longitude === actor.longitude && target.latitude === actor.latitude)
+      )
+        return [];
+      return [
+        {
+          ...effect,
+          longitude: target.longitude,
+          latitude: target.latitude,
+          projectileOnly: true,
+        },
+      ];
+    });
+  if (!flights.length) return frame;
+  return {
+    ...frame,
+    travel: { ...before, groundEffects: [...before.groundEffects, ...flights] },
+    travelMs: Math.max(...flights.map((effect) => projectileTravelMs(actor, effect))),
+  };
 };
