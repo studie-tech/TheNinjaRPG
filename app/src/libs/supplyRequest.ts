@@ -8,6 +8,7 @@ import {
 import type { Item, UserData, UserItem } from "@/drizzle/schema";
 import { periodStart } from "@/utils/time";
 
+/** Select the profession XP field used to credit a supply submission. */
 export const supplyExperienceField = (
   occupation: NonNullable<UserData["occupation"]>,
 ) =>
@@ -17,6 +18,7 @@ export const supplyExperienceField = (
     HUNTER: "huntingExperience",
   })[occupation] as "craftingExperience" | "gatheringExperience" | "huntingExperience";
 
+/** Check the active profession's authored item toggle for supply eligibility. */
 export const matchesSupplyProfession = (
   item: Pick<Item, "canBeCrafted" | "canBeGathered" | "canBeHunted">,
   occupation: UserData["occupation"],
@@ -29,6 +31,7 @@ export const matchesSupplyProfession = (
         ? item.canBeHunted
         : false;
 
+/** Identify carried, finished, unmodified stacks holding at least one supply bundle. */
 export const isSupplyStackAvailable = (
   stack: Pick<
     UserItem,
@@ -55,6 +58,7 @@ export const isSupplyStackAvailable = (
   stack.experience === 0 &&
   stack.durability === DURABILITY_MAX_DEFAULT;
 
+/** Explain character or shared UTC daily-limit failures, or return null when eligible. */
 export const supplyRequestBlockMessage = (
   user: Pick<
     UserData,
@@ -73,6 +77,7 @@ export const supplyRequestBlockMessage = (
   return null;
 };
 
+/** For a validated whole-bundle quantity, round total Ryo and award flat XP per bundle. */
 export const getSupplyRequestReward = (auctionMaxPrice: number, quantity: number) => ({
   ryo: Math.round((auctionMaxPrice * quantity * SUPPLY_REQUEST_PAYOUT_PERCENT) / 100),
   experience: (quantity / SUPPLY_REQUEST_BUNDLE_SIZE) * SUPPLY_REQUEST_EXPERIENCE,
