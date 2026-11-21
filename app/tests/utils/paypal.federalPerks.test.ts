@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import type { FederalStatus } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { getFreeBloodlineSwaps } from "@/libs/bloodline";
@@ -16,6 +16,7 @@ import {
 } from "@/utils/paypal";
 import { calcBankInterest } from "@/utils/village";
 import { stripePurchaseSchema } from "@/validators/stripe";
+import { restoreEnvAfterEach } from "../setup/env";
 
 const TIERS: FederalStatus[] = ["NONE", "NORMAL", "SILVER", "GOLD", "DIAMOND"];
 
@@ -112,13 +113,12 @@ describe("federal tier perks", () => {
 });
 
 describe("plan2FedStatus", () => {
-  const planKeys = [
+  restoreEnvAfterEach(
     "NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL",
     "NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER",
     "NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD",
     "NEXT_PUBLIC_PAYPAL_PLAN_ID_DIAMOND",
-  ] as const;
-  const saved = Object.fromEntries(planKeys.map((key) => [key, process.env[key]]));
+  );
   const setPlans = (diamond: string | undefined) => {
     process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL = "P-NORMAL";
     process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER = "P-SILVER";
@@ -126,12 +126,6 @@ describe("plan2FedStatus", () => {
     if (diamond === undefined) delete process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_DIAMOND;
     else process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_DIAMOND = diamond;
   };
-  afterEach(() => {
-    for (const key of planKeys) {
-      if (saved[key] === undefined) delete process.env[key];
-      else process.env[key] = saved[key];
-    }
-  });
 
   it("maps each configured plan id to its tier", () => {
     setPlans("P-DIAMOND");
