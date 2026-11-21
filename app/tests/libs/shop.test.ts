@@ -10,7 +10,7 @@ import {
   getMaxItemShopPurchaseQuantity,
   getShopDiscounts,
   getShopStackPrice,
-  healItemDiscountPerc,
+  type healItemDiscountPerc,
   isItemAvailableInStore,
   missingForPrices,
   shopItemDiscountFactor,
@@ -120,7 +120,9 @@ describe("getShopStackPrice", () => {
 
 describe("shopItemPrices", () => {
   it("lists each currency the item costs, with ryo after discounts", () => {
-    expect(shopItemPrices({ cost: 100, repsCost: 5, seichiSilverCost: 0 }, 0.9)).toEqual([
+    expect(
+      shopItemPrices({ cost: 100, repsCost: 5, seichiSilverCost: 0 }, 0.9),
+    ).toEqual([
       { currency: "ryo", amount: 90 },
       { currency: "rep", amount: 5 },
     ]);
@@ -130,16 +132,18 @@ describe("shopItemPrices", () => {
   });
 
   it("prices a stack the way the purchase charges it", () => {
-    expect(shopItemPrices({ cost: 45, repsCost: 2, seichiSilverCost: 0 }, 0.9, 3)).toEqual([
+    expect(
+      shopItemPrices({ cost: 45, repsCost: 2, seichiSilverCost: 0 }, 0.9, 3),
+    ).toEqual([
       { currency: "ryo", amount: 122 },
       { currency: "rep", amount: 6 },
     ]);
   });
 
   it("rounds discounted ryo up, as the purchase does", () => {
-    expect(shopItemPrices({ cost: 45, repsCost: 0, seichiSilverCost: 0 }, 0.9)).toEqual([
-      { currency: "ryo", amount: 41 },
-    ]);
+    expect(shopItemPrices({ cost: 45, repsCost: 0, seichiSilverCost: 0 }, 0.9)).toEqual(
+      [{ currency: "ryo", amount: 41 }],
+    );
   });
 });
 
@@ -173,16 +177,37 @@ describe("sortShopItems", () => {
     { name: "Coat", rarity: "RARE", itemType: "ARMOR", price: 200 },
   ] as const;
   const priceOf = (item: (typeof items)[number]) => item.price;
-  const names = (sorted: readonly { name: string }[]) => sorted.map((item) => item.name);
+  const names = (sorted: readonly { name: string }[]) =>
+    sorted.map((item) => item.name);
 
   it("puts the rarest first, then the cheapest", () => {
-    expect(names(sortShopItems([...items], "rarity", priceOf))).toEqual(["Axe", "Coat", "Bow", "Pill"]);
+    expect(names(sortShopItems([...items], "rarity", priceOf))).toEqual([
+      "Axe",
+      "Coat",
+      "Bow",
+      "Pill",
+    ]);
   });
 
   it("sorts by price, name or type", () => {
-    expect(names(sortShopItems([...items], "price", priceOf))).toEqual(["Pill", "Coat", "Bow", "Axe"]);
-    expect(names(sortShopItems([...items], "name", priceOf))).toEqual(["Axe", "Bow", "Coat", "Pill"]);
-    expect(names(sortShopItems([...items], "type", priceOf))).toEqual(["Axe", "Bow", "Pill", "Coat"]);
+    expect(names(sortShopItems([...items], "price", priceOf))).toEqual([
+      "Pill",
+      "Coat",
+      "Bow",
+      "Axe",
+    ]);
+    expect(names(sortShopItems([...items], "name", priceOf))).toEqual([
+      "Axe",
+      "Bow",
+      "Coat",
+      "Pill",
+    ]);
+    expect(names(sortShopItems([...items], "type", priceOf))).toEqual([
+      "Axe",
+      "Bow",
+      "Pill",
+      "Coat",
+    ]);
   });
 
   it("leaves the input order alone", () => {

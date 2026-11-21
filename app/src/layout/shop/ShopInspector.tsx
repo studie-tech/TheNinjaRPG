@@ -22,12 +22,12 @@ import {
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 /**
  * Everything about one item for sale, laid out like the backpack's inspector: art and rarity,
  * a short description, a box with price, quantity, limits, discounts and Buy, then the full
- * stats folded away. Buying asks for confirmation; a rejected purchase keeps the dialog open
+ * stats below. Buying asks for confirmation; a rejected purchase keeps the dialog open
  * with the server's message.
  */
 export function ShopInspector({
@@ -39,7 +39,7 @@ export function ShopInspector({
   onClose,
   onPurchased,
 }: ShopInspectorProps) {
-  const { prepareUserUpdate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser } = useUserInfo();
   const utils = api.useUtils();
   const [requestedQuantity, setQuantity] = useState(1);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -137,9 +137,11 @@ export function ShopInspector({
   const totalDiscount = Math.round((1 - ryoFactor) * 100);
   const buyLabel = isPurchasing
     ? "Buying…"
-    : missing.length > 0
-      ? `Need ${amounts(missing)} more`
-      : `Buy for ${costText}`;
+    : maxQuantity === 0
+      ? "Limit reached"
+      : missing.length > 0
+        ? `Need ${amounts(missing)} more`
+        : `Buy for ${costText}`;
 
   return (
     <section aria-label={item.name} className="flex flex-col gap-3">
