@@ -51,6 +51,7 @@ import {
   WeaponTypes,
 } from "@/drizzle/constants";
 import type { Item, UserData } from "@/drizzle/schema";
+import { isWarehouseStorable } from "@/libs/warehouse";
 import {
   CACHE_RESTRICTED_REWARD_MESSAGE,
   isRestrictedCacheReward,
@@ -1544,10 +1545,7 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
     }
   }
   if (data.warehouseItem) {
-    if (
-      !data.canStack ||
-      !(WAREHOUSE_ITEM_TYPES as readonly string[]).includes(data.itemType)
-    )
+    if (!isWarehouseStorable(data))
       ctx.addIssue({
         code: "custom",
         path: ["warehouseItem"],

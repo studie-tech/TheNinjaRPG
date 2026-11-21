@@ -1125,7 +1125,7 @@ export const resolveSabotage = (
       AND ${caravan.delayMinutes} = ${input.expectedDelayMinutes}
   `);
 
-/** Travelling caravans currently passing a sector, by their frozen path and schedule. */
+/** Every travelling caravan. */
 export const listTravellingCaravans = (client: Pick<DrizzleClient, "select">) =>
   client.select().from(caravan).where(eq(caravan.status, "TRAVELLING"));
 

@@ -33,6 +33,7 @@ import type { Caravan, UserData, VillageAlliance } from "@/drizzle/schema";
 import { getRankForExperience, getRankProgress } from "@/libs/occupationRank";
 import { sectorGridNeighbors } from "@/libs/sector-map/world-grid";
 import { findRelationship, isVillagePair } from "@/utils/alliance";
+import { shuffle } from "@/utils/array";
 import { clamp, secureRandomInt } from "@/utils/math";
 
 /** A shipment's manifest line. */
@@ -87,17 +88,11 @@ export const describeTradeRoute = (route: {
   sectors: number;
   markers: { id: string; sector: number; control: number; controller: string | null }[];
 }) => ({
-  id: route.id,
-  status: route.status,
-  level: route.level,
+  ...route,
   travelMinutes: getRouteTravelMinutes(route.level),
   nextTravelMinutes:
     route.level < TRADE_ROUTE_MAX_LEVEL ? getRouteTravelMinutes(route.level + 1) : null,
-  partner: route.partner,
-  proposedByUs: route.proposedByUs,
-  sectors: route.sectors,
   blocked: route.markers.some((marker) => marker.controller !== null),
-  markers: route.markers,
 });
 
 /**
@@ -160,14 +155,9 @@ export const planRouteMarkers = (
       TRADE_ROUTE_MAX_MARKERS,
     ),
   );
-  const pool = [...interior];
-  const picked: { sector: number }[] = [];
-  while (picked.length < count && pool.length > 0) {
-    const [sector] = pool.splice(pick(pool.length), 1);
-    if (sector === undefined) break;
-    picked.push({ sector });
-  }
-  return picked;
+  return shuffle(interior, pick)
+    .slice(0, count)
+    .map((sector) => ({ sector }));
 };
 
 /** Whether two villages fight each other in an open war. */

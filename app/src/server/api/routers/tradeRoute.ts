@@ -210,6 +210,8 @@ export const tradeRouteRouter = createTRPCRouter({
         route.proposedByVillageId === route.villageIdA
           ? route.villageIdB
           : route.villageIdA;
+      const proposer =
+        route.villageIdA === answeringId ? route.villageB : route.villageA;
       const own =
         user.villageId === answeringId
           ? await fetchVillage(ctx.drizzle, answeringId)
@@ -227,8 +229,6 @@ export const tradeRouteRouter = createTRPCRouter({
         const closed = await closeTradeRoutes(ctx.drizzle, { routeId: route.id }, now);
         if (closed.rowsAffected !== 1)
           return errorResponse("This proposal is no longer open");
-        const proposer =
-          route.villageIdA === answeringId ? route.villageB : route.villageA;
         return {
           success: true,
           message: "Proposal declined",
@@ -251,8 +251,6 @@ export const tradeRouteRouter = createTRPCRouter({
         ...marker,
       }));
       await insertRouteMarkers(ctx.drizzle, markers);
-      const proposer =
-        route.villageIdA === answeringId ? route.villageB : route.villageA;
       notifyPlayers(ctx.drizzle, [proposer.kageId], {
         title: "Trade route agreed",
         body: `${own.name} accepted your trade route.`,
