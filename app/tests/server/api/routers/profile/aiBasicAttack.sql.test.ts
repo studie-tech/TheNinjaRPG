@@ -48,7 +48,7 @@ describeWithDatabase("AI Basic Attack Replacement persistence", () => {
     const db = await getTestDatabase();
     const entities = await loadEntities(db, [{ entityType: "AI", entityId: AI }]);
     expect(entities.get(`AI:${AI}`)?.editable.basicAttackJutsuId).toBe("strike");
-    expect((await db.query.actionLog.findFirst())?.changes.join(" ")).toContain(
+    expect(JSON.stringify((await db.query.actionLog.findFirst())?.changes)).toContain(
       "basicAttackJutsuId",
     );
     const cloned = await (await callerFor(profileRouter, EDITOR)).cloneAi({ id: AI });
