@@ -173,20 +173,6 @@ export const planRouteMarkers = (
     .map((sector) => ({ sector }));
 };
 
-/** Whether two villages fight each other in an open war. */
-const isAtWar = (
-  wars: OpenWar[],
-  villageIdA?: string | null,
-  villageIdB?: string | null,
-) =>
-  wars.some((war) =>
-    isVillagePair(
-      { villageIdA: war.attackerVillageId, villageIdB: war.defenderVillageId },
-      villageIdA,
-      villageIdB,
-    ),
-  );
-
 /** Whether two villages may agree a trade route: enemies and warring villages cannot. */
 export const getTradeBlock = (
   relationships: VillageAlliance[],
@@ -351,6 +337,20 @@ export const getAttackerRole = (
 
 /** Roll a percent chance. */
 export const rollChance = (percent: number) => secureRandomInt(10_000) < percent * 100;
+
+/** Whether two villages fight each other in an open war. */
+const isAtWar = (
+  wars: OpenWar[],
+  villageIdA?: string | null,
+  villageIdB?: string | null,
+) =>
+  wars.some((war) =>
+    isVillagePair(
+      { villageIdA: war.attackerVillageId, villageIdB: war.defenderVillageId },
+      villageIdA,
+      villageIdB,
+    ),
+  );
 
 /**
  * Everything settlement needs about a caravan or marker fight, frozen when it starts so the

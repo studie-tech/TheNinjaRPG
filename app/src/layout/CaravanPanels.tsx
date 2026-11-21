@@ -42,11 +42,6 @@ import { cn } from "@/libs/shadui";
 import { formatDateTime } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-type RouteData = NonNullable<RouterOutputs["tradeRoute"]["getRoutes"]>;
-type CaravanData = NonNullable<RouterOutputs["caravan"]["getCaravans"]>;
-type WarehouseData = NonNullable<RouterOutputs["warehouse"]["getWarehouse"]>;
-type CaravanActions = ReturnType<typeof useCaravans>;
-
 /**
  * Agreements with other villages, their markers and upgrades. The caravans, once loaded,
  * show how many of the routes' caravan slots are in use.
@@ -698,3 +693,8 @@ const PrepareCaravan = ({
 /** Whether a cargo entry is part of the shipment, including one still being corrected. */
 const isChosen = (quantity: number | undefined) =>
   quantity !== undefined && quantity !== 0;
+
+type RouteData = NonNullable<RouterOutputs["tradeRoute"]["getRoutes"]>;
+type CaravanData = NonNullable<RouterOutputs["caravan"]["getCaravans"]>;
+type WarehouseData = NonNullable<RouterOutputs["warehouse"]["getWarehouse"]>;
+type CaravanActions = ReturnType<typeof useCaravans>;

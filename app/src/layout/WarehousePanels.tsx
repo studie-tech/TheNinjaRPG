@@ -38,9 +38,6 @@ import { cn } from "@/libs/shadui";
 import { useUserPicker } from "@/utils/search";
 import { formatDateTime } from "@/utils/time";
 
-type WarehouseData = NonNullable<RouterOutputs["warehouse"]["getWarehouse"]>;
-type CaravanActions = ReturnType<typeof useCaravans>;
-
 /** Level, bonuses and the leader's construction and upgrade control. */
 export const WarehouseOverview = ({
   data,
@@ -626,3 +623,6 @@ const HISTORY_LABELS: Record<WarehouseLogType, string> = {
   DISPATCH: "Dispatched",
   DELIVERY: "Delivered",
 };
+
+type WarehouseData = NonNullable<RouterOutputs["warehouse"]["getWarehouse"]>;
+type CaravanActions = ReturnType<typeof useCaravans>;

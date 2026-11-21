@@ -260,11 +260,9 @@ export const listUserParticipations = (
     );
 
 /**
- * Move cargo lines naming distinct items through Warehouse stock in one statement, per unit
- * of each line: reservation adds to reserved stock, release removes it, and departure removes
- * both the stock and its reservation. A row changes only while the reservation stays covered
- * by its stock, so a line short of stock changes nothing and callers compare changed rows
- * with lines.
+ * Apply one of the `CARGO_MOVES` to cargo lines naming distinct items in one statement. A
+ * row changes only while the reservation stays covered by its stock, so a line short of
+ * stock changes nothing and callers compare changed rows with lines.
  */
 export const moveCargo = (
   client: Pick<DrizzleClient, "update">,
@@ -520,7 +518,10 @@ export const creditGuardObjectives = (
           ),
         );
 
-/** Give each robber their share of stolen goods and end the group's reservation. */
+/**
+ * Give each robber their share of stolen goods, keeping loot from an earlier robbery that
+ * is still unclaimed.
+ */
 export const awardLoot = (
   client: Pick<DrizzleClient, "update">,
   caravanId: string,
@@ -531,7 +532,6 @@ export const awardLoot = (
     : client
         .update(caravanParticipant)
         .set({
-          // Unclaimed loot from an earlier robbery of the same caravan is kept.
           loot: sql`CASE ${sql.join(
             [...loot].map(
               ([userId, lines]) =>

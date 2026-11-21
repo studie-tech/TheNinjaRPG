@@ -7,11 +7,14 @@ import {
   userData,
 } from "@/drizzle/schema";
 
-/** A live dungeon party holds this player. */
+/** No live dungeon party holds this player. */
 export const withoutDungeonReservation = (userId: SQLWrapper = userData.userId) =>
   sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`;
 
-/** A caravan escort holds this player until its journey is delivered or cancelled. */
+/**
+ * No caravan escort holds this player; an escort holds them until its journey is delivered
+ * or cancelled.
+ */
 export const withoutCaravanEscort = (userId: SQLWrapper = userData.userId) =>
   sql`NOT EXISTS (SELECT 1 FROM ${caravanParticipant} WHERE ${caravanParticipant.activeUserId} = ${userId} AND ${caravanParticipant.role} = 'GUARD')`;
 
@@ -22,7 +25,10 @@ export const withoutCaravanEscort = (userId: SQLWrapper = userData.userId) =>
 export const withoutActivityReservation = (userId: SQLWrapper = userData.userId) =>
   sql`(${withoutDungeonReservation(userId)} AND ${withoutCaravanEscort(userId)})`;
 
-/** Escorts waiting in their caravan's queue; one who left it to heal fights like anyone else. */
+/**
+ * The player is not an escort waiting in their caravan's queue; one who left it to heal
+ * fights like anyone else.
+ */
 export const withoutQueuedEscort = () =>
   sql`(${userData.status} <> 'QUEUED' OR ${withoutCaravanEscort()})`;
 

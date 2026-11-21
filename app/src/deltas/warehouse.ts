@@ -115,10 +115,7 @@ export const getWithdrawWarehouseChange = ({
   };
 };
 
-/**
- * Stock moved by a caravan's cargo, per unit of the manifest: reservation adds to reserved
- * stock, release removes it, and departure removes both the stock and its reservation.
- */
+/** Stock moved by one of the `CARGO_MOVES` applied to a caravan's manifest. */
 export const getCargoWarehouseChange = (
   cargo: CargoLine[],
   sign: CargoSign,

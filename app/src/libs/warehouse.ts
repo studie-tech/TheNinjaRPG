@@ -51,13 +51,13 @@ export const getWarehouseLevel = (
   structure && structure.level > 0 ? getEffectiveStructureLevel(structure, now) : 0;
 
 /**
- * Production bonus in percent: 1% at level 1 up to 10% at level 10, multiplied while a
- * won faction raid boosts the Warehouse.
+ * Production bonus in percent, growing with the Warehouse level and multiplied while a won
+ * faction raid boosts the Warehouse.
  */
 export const getProductionBonus = (level: number, raidMultiplier = 1) =>
   getLevelBonus(WAREHOUSE_PRODUCTION_BONUS_PER_LEVEL, level, raidMultiplier);
 
-/** Deposit bonus in percent: 2% at level 1 up to 20% at level 10, with the raid boost. */
+/** Deposit bonus in percent, growing with the Warehouse level, with the raid boost. */
 export const getDepositBonus = (level: number, raidMultiplier = 1) =>
   getLevelBonus(WAREHOUSE_DEPOSIT_BONUS_PER_LEVEL, level, raidMultiplier);
 

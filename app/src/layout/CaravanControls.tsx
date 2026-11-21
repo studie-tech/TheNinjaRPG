@@ -34,9 +34,6 @@ import { cn } from "@/libs/shadui";
 import { formatDateTime } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-type Controls = NonNullable<RouterOutputs["caravanOps"]["getControls"]>;
-type Actions = ReturnType<typeof useCaravans>;
-
 /** Travel-map trigger opening the caravan scouting, sabotage and bandit controls. */
 export const CaravanControls = ({ className }: { className: string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -484,3 +481,6 @@ const SABOTAGE = [
     Icon: Hourglass,
   },
 ] as const;
+
+type Controls = NonNullable<RouterOutputs["caravanOps"]["getControls"]>;
+type Actions = ReturnType<typeof useCaravans>;
