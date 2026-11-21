@@ -65,6 +65,7 @@ import type { DrizzleClient } from "@/server/db";
 import { isServingElder } from "@/server/utils/kageGovernance";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { sendPushToUsers } from "@/server/utils/push";
+import { secureRandomInt } from "@/utils/math";
 
 const MINUTE_MS = 60_000;
 
@@ -350,7 +351,9 @@ const applyScouting = async (
   );
   const expiresAt = new Date(now.getTime() + CARAVAN_DISCOVERY_MINUTES * MINUTE_MS);
   if (operation.type === "INVESTIGATE") {
-    const found = eligible[Math.floor(Math.random() * eligible.length)];
+    const found = eligible.length
+      ? eligible[secureRandomInt(eligible.length)]
+      : undefined;
     if (found)
       await upsertDiscoveries(client, [
         {

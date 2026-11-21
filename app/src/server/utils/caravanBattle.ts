@@ -12,6 +12,7 @@ import { initiateBattle } from "@/routers/combat";
 import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { secureRandomInt } from "@/utils/math";
 
 /**
  * Start a caravan or marker fight. The encounter is reserved for the new battle first, so
@@ -99,7 +100,7 @@ export const pickCaravanAi = async (
   const nearest = pool.slice(0, Math.max(3, count));
   return Array.from(
     { length: count },
-    () => nearest[Math.floor(Math.random() * nearest.length)]?.userId,
+    () => nearest[secureRandomInt(Math.max(1, nearest.length))]?.userId,
   ).filter((id): id is string => !!id);
 };
 
