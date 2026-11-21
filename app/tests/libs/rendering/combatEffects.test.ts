@@ -22,6 +22,7 @@ import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
 import { createCombatPlayback } from "@/libs/rendering/scenes/combatPlayback";
 import {
+  CloneTag,
   DamageTag,
   PoisonTag,
   SkillTreeValidator,
@@ -1058,6 +1059,47 @@ describe("Pixi combat effects", () => {
 });
 
 describe("authoritative combat effect transitions", () => {
+  it("groups marked clone arrivals from one cast under the caster's primary cue", async () => {
+    const scene = setup();
+    const battle = makeCompleteBattle({
+      width: 12,
+      height: 10,
+      round: 1,
+      createdAt: new Date(0),
+      usersState: [makeBattleUser("caster", { longitude: 0, latitude: 0 })],
+    });
+    const action = makeCombatAction({
+      target: "EMPTY_GROUND",
+      range: 3,
+      level: 1,
+      effects: [0, 1].map(() =>
+        CloneTag.parse({
+          rounds: 3,
+          power: 50,
+          appearSfx: "appear",
+          appearSfxPrimary: true,
+        }),
+      ),
+    });
+    expect(
+      insertAction({
+        battle,
+        grid: getBattleGrid(20, battle),
+        action,
+        actorId: "caster",
+        longitude: 2,
+        latitude: 0,
+      }),
+    ).toBe(true);
+    const resolved = applyEffects(battle, "caster", action).newBattle;
+    expect(resolved.usersState.filter((user) => user.isSummon)).toHaveLength(2);
+    await scene.effects.sync({
+      ...scene.snapshot,
+      battle: maskBattle(resolved, "caster"),
+    });
+    scene.effects.animate(0, false, false, null);
+    expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+  });
   it.each(
     (["OTHER_USER", "SELF"] as const).flatMap((target) =>
       (["surviving", "damage first", "visual first"] as const).map((outcome) => ({

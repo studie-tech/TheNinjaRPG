@@ -753,6 +753,9 @@ const applyGroundEffects = ({
     }
     // Process special effects
     let info: ActionEffect | undefined;
+    // Spawn handlers consume newness and bind gameplay effects to their creatures.
+    const wasNew = e.isNew;
+    const creatorId = e.creatorId;
     if (e.type === "move") {
       move(e, usersEffects, newUsersState, newGroundEffects);
     } else {
@@ -811,8 +814,10 @@ const applyGroundEffects = ({
       // Show once appearing visual/audio
       if (
         (e.appearAnimation || e.appearSfx || e.projectileAnimation) &&
-        e.isNew &&
-        e.type !== "visual"
+        wasNew &&
+        e.type !== "visual" &&
+        (e.type !== "summon" || e.summonedUserId) &&
+        (e.type !== "clone" || e.creatorId !== creatorId)
       ) {
         newGroundEffects.push(
           getVisualOrSound(
@@ -822,9 +827,14 @@ const applyGroundEffects = ({
             e.appearSfx,
             round,
             e.animationScale,
-            e,
+            { ...e, creatorId },
           ),
         );
+        if (e.type === "clone" || e.type === "summon") {
+          e.appearAnimation = "";
+          e.appearSfx = "";
+          delete e.projectileAnimation;
+        }
       }
 
       // Process round reduction & tag removal
