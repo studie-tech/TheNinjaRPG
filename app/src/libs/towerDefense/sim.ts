@@ -2177,7 +2177,9 @@ export const stepRun = (state: TdState) => {
   if (state.eras.includes("meteor_shower") && tick % 15 === 0) dropMeteor(state);
   cleanupDead(state);
   expireLoot(state);
+  // A hit landing this tick can fell the hero after the last enemy died; that run is lost.
   if (
+    !state.over &&
     isFinalChallengeWave(state) &&
     state.waveTick >= 0 &&
     state.spawnQueue.length === 0 &&

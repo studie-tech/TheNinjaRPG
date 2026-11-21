@@ -483,7 +483,11 @@ const settleChallengeRun = async (
     // Read before the update, which can change the loaded trackers in place.
     const wasDone = isDone(user.questData);
     const { trackers, consequences, notifications } = getNewTrackers(user, [
-      { task: "win_tower_defense", contentId: challenge.objectiveId },
+      {
+        task: "win_tower_defense",
+        contentId: challenge.objectiveId,
+        text: challenge.questId,
+      },
     ]);
     completed = isDone(trackers);
     // A retry after the objective was recorded only retires the run.

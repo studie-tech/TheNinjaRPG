@@ -196,6 +196,7 @@ export default function TowerDefensePage() {
                 isStarting={run.isStarting}
                 isResuming={run.isResuming}
                 onStart={(replaceSaved) => void run.start(1, replaceSaved, request)}
+                onResume={run.resume}
               />
             </ContentBox>
           )}

@@ -851,11 +851,13 @@ export const getNewTrackers = (
           }
 
           // A tower defense challenge completes only from its own verified win, which the
-          // run's claim reports with this objective's id; arriving or `any` never does.
+          // run's claim reports with this objective's id and its quest's id as `text`
+          // (cloned quests share objective ids); arriving or `any` never does.
           if (
             task === "win_tower_defense" &&
             taskUpdate.task === "win_tower_defense" &&
-            taskUpdate.contentId === objective.id
+            taskUpdate.contentId === objective.id &&
+            taskUpdate.text === quest.id
           ) {
             status.done = true;
           }

@@ -72,18 +72,34 @@ describe("win_tower_defense objectives", () => {
     ).toBeFalsy();
     expect(
       goal(
-        getNewTrackers(user, [{ task: "win_tower_defense", contentId: "other" }]),
+        getNewTrackers(user, [
+          { task: "win_tower_defense", contentId: "other", text: "q1" },
+        ]),
         "q1",
         "td",
       )?.done,
     ).toBeFalsy();
     expect(
       goal(
-        getNewTrackers(user, [{ task: "win_tower_defense", contentId: "td" }]),
+        getNewTrackers(user, [
+          { task: "win_tower_defense", contentId: "td", text: "q1" },
+        ]),
         "q1",
         "td",
       )?.done,
     ).toBe(true);
+  });
+
+  it("completes only the challenge of the quest that won it", () => {
+    // A cloned quest keeps its objective ids, so both quests hold an objective "td".
+    const won = trackerQuest("q1", [challengeObjective("td")], "mission");
+    const clone = trackerQuest("q2", [challengeObjective("td")], "mission");
+    const user = makeUser([won, clone], [], at(5, 3, 4));
+    const trackers = getNewTrackers(user, [
+      { task: "win_tower_defense", contentId: "td", text: "q1" },
+    ]);
+    expect(goal(trackers, "q1", "td")?.done).toBe(true);
+    expect(goal(trackers, "q2", "td")?.done).toBeFalsy();
   });
 
   it("finds the challenge with the location rolled for the player", () => {

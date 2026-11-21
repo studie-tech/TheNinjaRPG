@@ -84,6 +84,23 @@ describe("tower defense challenges", () => {
     expect(state.won).toBe(false);
   });
 
+  it("is lost when a hit fells the hero on the tick the last wave clears", () => {
+    const state = createRun(config({ ...easy, waves: 1 }));
+    while (state.enemies.length === 0) stepRun(state);
+    // The last enemy is gone, but a shot it fired lands on the next tick.
+    state.enemies = [];
+    state.spawnQueue = [];
+    state.hero.subUntil = -1;
+    const lethal = state.stats.maxHp * 100;
+    state.shots = [
+      { due: state.tick + 1, damage: lethal, sourceId: 0, telegraphed: false },
+    ];
+    stepRun(state);
+    expect(state.over).toBe(true);
+    expect(state.hero.hp).toBe(0);
+    expect(state.won).toBe(false);
+  });
+
   it("replays a won challenge to the same win", () => {
     const { state, log } = playBotRun(config(easy), { seed: 4, ticks: 20_000 });
     expect(state.won).toBe(true);
