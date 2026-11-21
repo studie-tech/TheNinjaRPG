@@ -36,6 +36,7 @@ import type { useCaravans } from "@/hooks/useCaravans";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { cn } from "@/libs/shadui";
+import { formatDateTime } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 type RouteData = NonNullable<RouterOutputs["tradeRoute"]["getRoutes"]>;
@@ -338,6 +339,7 @@ export const CaravansPanel = ({
                           disabled={
                             actions.defend.isPending || row.viewer?.status !== "QUEUED"
                           }
+                          loading={actions.defend.isPending}
                           onClick={() =>
                             row.encounter &&
                             actions.defend.mutate({
@@ -369,6 +371,10 @@ export const CaravansPanel = ({
                             actions.intervene.isPending ||
                             row.viewer?.status !== "QUEUED"
                           }
+                          loading={
+                            actions.intervene.isPending &&
+                            actions.intervene.variables?.operationId === op.id
+                          }
                           onClick={() =>
                             actions.intervene.mutate({
                               caravanId: row.id,
@@ -388,6 +394,11 @@ export const CaravansPanel = ({
                       row.openSlots > 0 && (
                         <Button
                           size="sm"
+                          title={
+                            user?.status !== "AWAKE"
+                              ? "Only awake shinobi can join an escort"
+                              : undefined
+                          }
                           disabled={
                             actions.joinEscort.isPending || user?.status !== "AWAKE"
                           }
@@ -405,6 +416,7 @@ export const CaravansPanel = ({
                         size="sm"
                         variant="outline"
                         disabled={actions.leaveEscort.isPending}
+                        loading={actions.leaveEscort.isPending}
                         onClick={() =>
                           actions.leaveEscort.mutate({ caravanId: row.id })
                         }
@@ -430,6 +442,7 @@ export const CaravansPanel = ({
                           size="sm"
                           variant="outline"
                           disabled={actions.rejoinEscort.isPending}
+                          loading={actions.rejoinEscort.isPending}
                           onClick={() =>
                             actions.rejoinEscort.mutate({ caravanId: row.id })
                           }
@@ -477,20 +490,29 @@ export const CaravansPanel = ({
             <h3 className="text-base font-semibold">Recent caravans</h3>
             <ul className="mt-2 divide-y text-sm">
               {data.history.map((row) => (
-                <li key={row.id} className="flex flex-wrap gap-x-2 py-1">
-                  <Badge variant={row.status === "DELIVERED" ? "secondary" : "outline"}>
+                <li
+                  key={row.id}
+                  className="grid grid-cols-[auto_1fr] items-baseline gap-x-2 py-1 @lg:grid-cols-[auto_1fr_auto]"
+                >
+                  <Badge
+                    variant={row.status === "DELIVERED" ? "secondary" : "outline"}
+                    className="w-24"
+                  >
                     {row.status === "DELIVERED" ? "Delivered" : "Cancelled"}
                   </Badge>
-                  <span className="grow">
+                  <span>
                     {row.outgoing ? `To ${row.partner}` : `From ${row.partner}`}:{" "}
                     {row.cargo
                       .map((line) => `${line.quantity} ${line.name}`)
                       .join(", ")}
                   </span>
                   {row.resolvedAt && (
-                    <span className="text-muted-foreground text-xs">
-                      {new Date(row.resolvedAt).toLocaleString()}
-                    </span>
+                    <time
+                      className="text-muted-foreground col-start-2 text-xs @lg:col-start-auto"
+                      dateTime={row.resolvedAt.toISOString()}
+                    >
+                      {formatDateTime(row.resolvedAt)}
+                    </time>
                   )}
                 </li>
               ))}
