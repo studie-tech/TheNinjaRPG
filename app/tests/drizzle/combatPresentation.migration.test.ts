@@ -183,7 +183,7 @@ describeWithDatabase("combat presentation migration", () => {
     for (const row of before)
       expect(after.find((saved) => saved.id === row.id)).toEqual({
         ...row,
-        effects: fixtures.find((f) => f.id === row.id)!.after,
+        effects: fixtures.find((f) => f.id === row.id)!.after as ZodAllTags[],
         updatedAt: expect.any(Date),
       });
     expect(await db.query.gameAsset.findMany()).toHaveLength(
