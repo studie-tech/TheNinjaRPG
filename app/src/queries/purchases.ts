@@ -1110,12 +1110,16 @@ export const updateUserDataForSetFederalStatusWithStoreFloor = (
   client
     .update(userData)
     .set({
-      federalStatus: sql`CASE
-        WHEN ${paypalRank >= rankOf("GOLD")} OR ${hasTier("GOLD")} OR ${paypalGrace("GOLD")} THEN 'GOLD'
-        WHEN ${paypalRank >= rankOf("SILVER")} OR ${hasTier("SILVER")} OR ${paypalGrace("SILVER")} THEN 'SILVER'
-        WHEN ${paypalRank >= rankOf("NORMAL")} OR ${hasTier("NORMAL")} OR ${paypalGrace("NORMAL")} THEN 'NORMAL'
-        ELSE 'NONE'
-      END`,
+      // Highest tier first, so the strongest source that vouches wins.
+      federalStatus: sql`CASE ${sql.join(
+        FederalStatuses.slice(1)
+          .reverse()
+          .map(
+            (tier) =>
+              sql`WHEN ${paypalRank >= rankOf(tier)} OR ${hasTier(tier)} OR ${paypalGrace(tier)} THEN ${tier}`,
+          ),
+        sql` `,
+      )} ELSE 'NONE' END`,
     })
     .where(eq(userData.userId, userId));
 

@@ -1,0 +1,105 @@
+/**
+ * Restores the pre-Diamond bloodline of players whose Diamond Federal Support has ended.
+ */
+
+import { resolveDiamondBloodlineRevert } from "@/libs/bloodline";
+import {
+  clearDiamondBloodlineSet,
+  insertActionLogForDiamondBloodlineRevert,
+  lapsedDiamondGuard,
+  listBloodlineForDiamondBloodlineRevert,
+  listBloodlineRollsForDiamondBloodlineRevert,
+  listJutsuForUpdateBloodline,
+  listUserDataForDiamondBloodlineRevert,
+  updateUserDataForClearDiamondBloodline,
+  updateUserDataForUpdateBloodline,
+  updateUserJutsuForUpdateBloodline,
+} from "@/queries/bloodline";
+import type { DrizzleClient } from "@/server/db";
+
+/** Players handled per run; the rest follow on the next cleaner run. */
+const REVERT_BATCH_SIZE = 200;
+
+/**
+ * Revert every player who still holds a remembered pre-Diamond bloodline but is no longer
+ * DIAMOND: a Diamond pick goes back to the remembered bloodline (or none), while a bloodline
+ * they own stays. Either way the remembered bloodline is forgotten. Each write is guarded on
+ * the lapsed state and the current bloodline, so a renewed subscription or a concurrent
+ * change wins; a player in battle is retried on a later run.
+ *
+ * Federal status only ever leaves DIAMOND through the derived-status writers that the
+ * subscription and cleaner crons run, so those crons call this right after them.
+ */
+export const revertLapsedDiamondBloodlines = async (
+  client: DrizzleClient,
+  userId?: string,
+) => {
+  const users = await listUserDataForDiamondBloodlineRevert(
+    client,
+    REVERT_BATCH_SIZE,
+    userId,
+  );
+  if (users.length === 0) return { reverted: 0, cleared: 0 };
+  const preIds = [
+    ...new Set(users.flatMap((user) => user.preDiamondBloodlineId ?? [])),
+  ];
+  const [rolls, preLines] = await Promise.all([
+    listBloodlineRollsForDiamondBloodlineRevert(
+      client,
+      users.map((user) => user.userId),
+    ),
+    preIds.length ? listBloodlineForDiamondBloodlineRevert(client, preIds) : [],
+  ]);
+  let reverted = 0;
+  let cleared = 0;
+  for (const user of users) {
+    const ownedBloodlineIds = rolls
+      .filter((roll) => roll.userId === user.userId)
+      .flatMap((roll) => roll.bloodlineId ?? []);
+    const preLine = preLines.find((line) => line.id === user.preDiamondBloodlineId);
+    const revert = resolveDiamondBloodlineRevert({
+      currentBloodlineId: user.bloodlineId,
+      preDiamondBloodlineId: user.preDiamondBloodlineId,
+      preDiamondBloodlineExists: !!preLine,
+      ownedBloodlineIds,
+    });
+    if (!revert) {
+      const result = await updateUserDataForClearDiamondBloodline(client, user.userId);
+      cleared += result.rowsAffected;
+      continue;
+    }
+    const restoreId = revert.restoreBloodlineId;
+    const currentJutsus = user.bloodlineId
+      ? await listJutsuForUpdateBloodline(client, { bloodlineId: user.bloodlineId })
+      : [];
+    // Queued levels of the Diamond bloodline's jutsu are refunded when their turn comes.
+    const result = await updateUserDataForUpdateBloodline(
+      client,
+      { id: restoreId ?? undefined },
+      0,
+      user,
+      new Date(),
+      { set: clearDiamondBloodlineSet, where: lapsedDiamondGuard() },
+    );
+    if (!result.rowsAffected) continue;
+    reverted += 1;
+    const from = user.bloodlineName ?? "unknown bloodline";
+    const to = preLine?.name ?? "no bloodline";
+    await Promise.all([
+      currentJutsus.length
+        ? updateUserJutsuForUpdateBloodline(
+            client,
+            user,
+            currentJutsus.map((jutsu) => jutsu.id),
+          )
+        : undefined,
+      insertActionLogForDiamondBloodlineRevert(
+        client,
+        user,
+        `Diamond Federal Support ended: bloodline reverted from ${from} to ${to}`,
+        restoreId,
+      ),
+    ]);
+  }
+  return { reverted, cleared };
+};

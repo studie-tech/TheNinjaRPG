@@ -1,3 +1,5 @@
+import type { RepsFederalStatus } from "@/drizzle/constants";
+
 /** Confirm that store-order capture has no additional profile patch or balance delta to apply. */
 export const getCaptureStoreOrderUserUpdate = () => ({
   userPatch: {},
@@ -17,7 +19,7 @@ export const getSubscribeWithRepsUserUpdate = ({
   cost: number;
   inputUserId: string;
   ctxUserId: string;
-  inputStatus: "NORMAL" | "SILVER" | "GOLD";
+  inputStatus: RepsFederalStatus;
 }) => ({
   userDelta: { reputationPoints: -cost },
   userPatch: inputUserId === ctxUserId ? { federalStatus: inputStatus } : {},

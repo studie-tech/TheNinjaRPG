@@ -3196,6 +3196,10 @@ export const userData = mysqlTable(
     federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses)
       .default("NONE")
       .notNull(),
+    // Set by the first Diamond bloodline swap: the bloodline to restore (null for none)
+    // when Diamond support ends. `diamondBloodlineActive` tells a remembered "none" apart.
+    diamondBloodlineActive: boolean("diamondBloodlineActive").default(false).notNull(),
+    preDiamondBloodlineId: varchar("preDiamondBloodlineId", { length: 191 }),
     tavernUsernameColor: mysqlEnum("tavernUsernameColor", consts.TavernColorPresets)
       .default("DEFAULT")
       .notNull(),

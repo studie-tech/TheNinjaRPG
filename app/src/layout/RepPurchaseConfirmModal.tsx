@@ -17,6 +17,7 @@ export const RepPurchaseConfirmModal = <
   isOpen,
   setIsOpen,
   onBuy,
+  note,
 }: {
   item: T | undefined;
   cost: number;
@@ -28,6 +29,8 @@ export const RepPurchaseConfirmModal = <
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   onBuy: (item: T) => void;
+  /** Terms shown above the item, such as what a free swap does not include. */
+  note?: React.ReactNode;
 }) => {
   const canAfford = isFree || reputationPoints >= cost;
   const proceedLabel = isFree
@@ -56,6 +59,9 @@ export const RepPurchaseConfirmModal = <
           : "bg-red-600 text-white hover:bg-red-700"
       }
     >
+      {item && !isPending && note && (
+        <p className="mb-2 text-muted-foreground text-sm">{note}</p>
+      )}
       {item && !isPending && <ItemWithEffects item={item} key={item.id} />}
       {item && isPending && <Loader explanation={pendingLabel} />}
     </Modal>

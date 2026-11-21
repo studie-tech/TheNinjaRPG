@@ -231,17 +231,20 @@ export const StripePendingCheckouts = () => {
               disabled={resume.isPending || cancel.isPending}
               onClick={() => {
                 setMessage("");
+                const tier = checkout.federalStatus;
+                // Stripe never sells Diamond, so no checkout of it can be resumed.
+                if (tier === "DIAMOND") return;
                 resume.mutate({
                   requestId: checkout.id,
                   expectedUserId: user.userId,
                   userId: checkout.affectedUserId,
                   purchase:
-                    checkout.federalStatus === "NONE"
+                    tier === "NONE"
                       ? {
                           type: "reputation",
                           reputationPoints: checkout.reputationPoints,
                         }
-                      : { type: "federal", federalStatus: checkout.federalStatus },
+                      : { type: "federal", federalStatus: tier },
                 });
               }}
             >

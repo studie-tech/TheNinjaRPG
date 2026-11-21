@@ -1,6 +1,7 @@
 import type { FederalStatus, LetterRank } from "@/drizzle/constants";
 import {
   BLOODLINE_SWAP_FREE,
+  DIAMOND_BLOODLINE_RANKS,
   LetterRanks,
   PITY_BLOODLINE_ROLLS,
 } from "@/drizzle/constants";
@@ -128,5 +129,48 @@ export const getBloodlineSwapAllowance = (
     hasFreeSwapAvailable,
     isStaffFree,
     isFree: hasFreeSwapAvailable || isStaffFree,
+  };
+};
+
+/** Released D–A bloodlines open to the player's village, as Diamond support may pick. */
+export const isDiamondSwapBloodline = (
+  line: Pick<Bloodline, "rank" | "hidden" | "villageId">,
+  user: Pick<UserData, "villageId">,
+) =>
+  !line.hidden &&
+  (DIAMOND_BLOODLINE_RANKS as readonly LetterRank[]).includes(line.rank) &&
+  (!line.villageId || line.villageId === user.villageId);
+
+/**
+ * Whether a Diamond swap should remember the current bloodline as the one to restore.
+ * The first Diamond swap always does; later ones only when the player has since moved back
+ * to an owned bloodline (or none), so a Diamond pick is never remembered as owned.
+ */
+export const shouldRememberPreDiamondBloodline = (info: {
+  diamondBloodlineActive: boolean;
+  currentBloodlineId: string | null;
+  ownedBloodlineIds: readonly string[];
+}) =>
+  !info.diamondBloodlineActive ||
+  info.currentBloodlineId === null ||
+  info.ownedBloodlineIds.includes(info.currentBloodlineId);
+
+/**
+ * The bloodline to restore when Diamond support ends, or `undefined` to keep the current
+ * one. A bloodline the player owns (or having none) was chosen outside Diamond and stays;
+ * a Diamond pick returns to the remembered bloodline, or none if that no longer exists.
+ */
+export const resolveDiamondBloodlineRevert = (info: {
+  currentBloodlineId: string | null;
+  preDiamondBloodlineId: string | null;
+  preDiamondBloodlineExists: boolean;
+  ownedBloodlineIds: readonly string[];
+}): { restoreBloodlineId: string | null } | undefined => {
+  const { currentBloodlineId, preDiamondBloodlineId } = info;
+  if (currentBloodlineId === null) return undefined;
+  if (info.ownedBloodlineIds.includes(currentBloodlineId)) return undefined;
+  if (currentBloodlineId === preDiamondBloodlineId) return undefined;
+  return {
+    restoreBloodlineId: info.preDiamondBloodlineExists ? preDiamondBloodlineId : null,
   };
 };

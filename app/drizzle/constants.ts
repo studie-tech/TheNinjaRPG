@@ -639,7 +639,12 @@ export const UserStatuses = [
 ] as const;
 export type UserStatus = (typeof UserStatuses)[number];
 
-export const FederalStatuses = ["NONE", "NORMAL", "SILVER", "GOLD"] as const;
+/**
+ * Federal support tiers from lowest to highest; a tier's position is its rank. DIAMOND is a
+ * PayPal-only subscription: it has no reputation price, upgrade path, Stripe price or store
+ * product.
+ */
+export const FederalStatuses = ["NONE", "NORMAL", "SILVER", "GOLD", "DIAMOND"] as const;
 export type FederalStatus = (typeof FederalStatuses)[number];
 
 /**
@@ -731,6 +736,7 @@ export const PET_FED_COLLECTION_SLOTS: Record<FederalStatus, number> = {
   NORMAL: 1,
   SILVER: 2,
   GOLD: 3,
+  DIAMOND: 4,
 };
 export const PET_MAX_ABILITY_SLOTS = 6;
 export const PET_MAX_CONSUME_PETS = 1;
@@ -779,6 +785,7 @@ export const PET_SPECIES_RARITY_WEIGHTS: Record<
   NORMAL: { COMMON: 6000, UNCOMMON: 2500, RARE: 1000, EPIC: 400, LEGENDARY: 100 },
   SILVER: { COMMON: 5000, UNCOMMON: 2800, RARE: 1500, EPIC: 550, LEGENDARY: 150 },
   GOLD: { COMMON: 4000, UNCOMMON: 3000, RARE: 2000, EPIC: 750, LEGENDARY: 250 },
+  DIAMOND: { COMMON: 4000, UNCOMMON: 3000, RARE: 2000, EPIC: 750, LEGENDARY: 250 },
 };
 /** Image attempts per evolution rank, including its initial generation. */
 export const PET_MAX_GENERATION_ATTEMPTS = 3;
@@ -801,6 +808,7 @@ export const PET_OPTION_COUNTS: Record<FederalStatus, number> = {
   NORMAL: 5,
   SILVER: 6,
   GOLD: 8,
+  DIAMOND: 8,
 };
 export const PetSpawnPositions = ["BEHIND", "LEFT", "RIGHT", "FRONT"] as const;
 export type PetSpawnPosition = (typeof PetSpawnPositions)[number];
@@ -1552,7 +1560,13 @@ export const TimedQueueKinds = [
 ] as const satisfies readonly QueueKind[];
 export type TimedQueueKind = (typeof TimedQueueKinds)[number];
 
-export const QUEUE_WAITING_SLOTS = { NONE: 1, NORMAL: 2, SILVER: 3, GOLD: 4 } as const;
+export const QUEUE_WAITING_SLOTS = {
+  NONE: 1,
+  NORMAL: 2,
+  SILVER: 3,
+  GOLD: 4,
+  DIAMOND: 5,
+} as const satisfies Record<FederalStatus, number>;
 // Training captcha cadence: no captcha below the minimum daily trainings, then one at
 // every Nth daily training, rarer for higher federal tiers.
 export const TRAINING_CAPTCHA_MIN_TRAININGS = 10;
@@ -1574,6 +1588,7 @@ export const TRAINING_CAPTCHA_INTERVAL = {
   NORMAL: 3,
   SILVER: 4,
   GOLD: 5,
+  DIAMOND: 6,
 } as const satisfies Record<FederalStatus, number>;
 // Energy restored (up to capacity) when a quest of one of these types is completed.
 export const ENERGY_QUEST_REWARDS: Partial<Record<QuestType, number>> = {
@@ -1955,7 +1970,25 @@ export const BLOODLINE_SWAP_FREE: Record<FederalStatus, number> = {
   NORMAL: 0,
   SILVER: 0,
   GOLD: 1,
+  DIAMOND: 1,
 };
+/**
+ * Ranks Diamond supporters may switch to, freely and as often as they like, among released
+ * bloodlines open to their village. Such bloodlines are not owned: they are never recorded
+ * as rolls and are reverted when Diamond support ends.
+ */
+export const DIAMOND_BLOODLINE_RANKS = [
+  "D",
+  "C",
+  "B",
+  "A",
+] as const satisfies readonly LetterRank[];
+/**
+ * Days past the paid PayPal period that an ACTIVE Diamond subscription still protects its
+ * Diamond bloodline, so a renewal the daily subscription check has not seen yet does not
+ * revert it.
+ */
+export const DIAMOND_RENEWAL_GRACE_DAYS = 2;
 
 /** Provenance stored on `SageModeRolls.type`. There is no pity or swap path. */
 export const SAGE_MODE_ROLL_TYPES = ["ITEM", "QUEST"] as const;
@@ -2013,6 +2046,7 @@ export const SKILL_TREE_RESET_FREE: Record<FederalStatus, number> = {
   NORMAL: 1,
   SILVER: 1,
   GOLD: 2,
+  DIAMOND: 2,
 };
 
 // Jutsu level transfer config
@@ -2025,6 +2059,7 @@ export const JUTSU_TRANSFER_FREE: Record<FederalStatus, number> = {
   NORMAL: 3,
   SILVER: 4,
   GOLD: 5,
+  DIAMOND: 6,
 };
 
 // Jutsu reskin config
@@ -2492,12 +2527,14 @@ export const REFERRAL_REPUTATION_SHARE = 0.1;
 export const PAYPAL_PAID_PERIOD_DAYS = 31;
 /** Days a store receipt with no expiry still vouches: a monthly cycle plus billing retry. */
 export const STORE_RECEIPT_FALLBACK_DAYS = 63;
+/** Federal tiers sold for reputation points; DIAMOND is a PayPal subscription only. */
+export type RepsFederalStatus = Exclude<FederalStatus, "NONE" | "DIAMOND">;
 export const FED_REPS_COST = {
   NORMAL: 15,
   SILVER: 35,
   GOLD: 50,
-} as const satisfies Record<Exclude<FederalStatus, "NONE">, number>;
-/** Reputation charged to move a paid federal tier up to a higher one. */
+} as const satisfies Record<RepsFederalStatus, number>;
+/** Reputation charged to move a paid federal tier up to a higher one; never into DIAMOND. */
 export const FED_UPGRADE_REPS_COST: Partial<
   Record<FederalStatus, Partial<Record<FederalStatus, number>>>
 > = {
@@ -2510,6 +2547,7 @@ export const FED_BANK_INTEREST: Record<FederalStatus, number> = {
   NORMAL: 2,
   SILVER: 5,
   GOLD: 8,
+  DIAMOND: 8,
 };
 /** Most ryo one daily interest payment can credit, for every federal tier. */
 export const BANK_INTEREST_DAILY_CAP = 1_000_000;
@@ -2518,12 +2556,14 @@ export const FED_INVENTORY_SLOTS: Record<FederalStatus, number> = {
   NORMAL: 2,
   SILVER: 5,
   GOLD: 10,
+  DIAMOND: 10,
 };
 export const FED_JUTSU_SLOTS: Record<FederalStatus, number> = {
   NONE: 0,
   NORMAL: 1,
   SILVER: 2,
   GOLD: 3,
+  DIAMOND: 3,
 };
 export const FED_JUTSU_LOADOUTS_BASE = 2;
 /** Loadouts added to the base allowance. */
@@ -2532,6 +2572,7 @@ export const FED_JUTSU_LOADOUTS: Record<FederalStatus, number> = {
   NORMAL: 1,
   SILVER: 2,
   GOLD: 3,
+  DIAMOND: 4,
 };
 
 export const FED_ITEM_LOADOUTS_BASE = 2;
@@ -2541,6 +2582,7 @@ export const FED_ITEM_LOADOUTS: Record<FederalStatus, number> = {
   NORMAL: 1,
   SILVER: 2,
   GOLD: 3,
+  DIAMOND: 4,
 };
 export const LOADOUT_NAME_MAX_LENGTH = 24;
 // Matches the `actionLog.relatedText` varchar column width; audit text must be
@@ -2554,6 +2596,7 @@ export const FED_EVENT_ITEMS: Record<FederalStatus, number> = {
   NORMAL: 15,
   SILVER: 20,
   GOLD: 25,
+  DIAMOND: 30,
 };
 
 // Missions config
@@ -4147,6 +4190,7 @@ export const FED_MATERIALS_SLOTS: Record<FederalStatus, number> = {
   NORMAL: 5,
   SILVER: 10,
   GOLD: 15,
+  DIAMOND: 20,
 };
 
 // Cooking inventory config (mirrors materials)
@@ -4156,6 +4200,7 @@ export const FED_COOKING_SLOTS: Record<FederalStatus, number> = {
   NORMAL: 5,
   SILVER: 10,
   GOLD: 15,
+  DIAMOND: 20,
 };
 
 /**
@@ -4619,7 +4664,8 @@ export const FEDERAL_MONTHLY_USD_CENTS = {
   NORMAL: 500,
   SILVER: 1000,
   GOLD: 1500,
-} as const;
+  DIAMOND: 2500,
+} as const satisfies Record<Exclude<FederalStatus, "NONE">, number>;
 export const SkillTreePathTypes = ["SKILL", "BLOODRIGHT"] as const;
 /** Highest tier a skill tree entry can sit on. */
 export const SKILL_TREE_MAX_TIER = 10;

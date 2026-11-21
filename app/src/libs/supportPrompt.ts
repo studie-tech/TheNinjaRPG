@@ -7,6 +7,7 @@ import {
   COST_EXTRA_JUTSU_SLOT,
   COST_GENERATE_AVATAR,
   COST_RESET_STATS,
+  DIAMOND_BLOODLINE_RANKS,
   ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL,
   ELITE_JONIN_JUTSU_LEVEL_CAP,
   ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER,
@@ -309,7 +310,7 @@ ${trainingIntervals}
   - Essential for non-Academy Students/Genin.
 - **Interest Rate:**  
   - Deposited ryo earns daily interest at server reset (midnight UTC), starting from a base rate of ${calcBankInterest(0)}% per day.  
-  - Upgrading the village bank raises the rate for everyone in the village. Federal support adds ${FED_BANK_INTEREST.NORMAL}, ${FED_BANK_INTEREST.SILVER} or ${FED_BANK_INTEREST.GOLD} percentage points (Normal, Silver or Gold). The Bank page shows your current rate.  
+  - Upgrading the village bank raises the rate for everyone in the village. Federal support adds ${FED_BANK_INTEREST.NORMAL}, ${FED_BANK_INTEREST.SILVER}, ${FED_BANK_INTEREST.GOLD} or ${FED_BANK_INTEREST.DIAMOND} percentage points (Normal, Silver, Gold or Diamond). The Bank page shows your current rate.  
   - Interest is capped at ${BANK_INTEREST_DAILY_CAP.toLocaleString("en-US")} ryo per day for every federal tier.  
   - Claim interest at the Bank within ${BANK_INTEREST_CLAIM_DAYS} days (UTC); older interest expires.
 
@@ -406,8 +407,9 @@ ${trainingIntervals}
 - **Points Page:**  
   - **Reputation Purchase:** Buy reputation using real money.  
   - **Federal Support Purchase:**  
-    - Available with real money or rep.  
-    - Provides appearance upgrades, increased bank interest, and extra jutsu slots.
+    - Tiers: Normal, Silver, Gold and Diamond. Normal, Silver and Gold are available with real money or rep; Diamond is a PayPal subscription only.  
+    - Provides appearance upgrades, increased bank interest, and extra jutsu slots.  
+    - Diamond includes every Gold perk and lets the player switch to any released ${DIAMOND_BLOODLINE_RANKS.join("/")}-rank bloodline for free, as often as they like and without the usual swap cooldown, from the bloodline swap screen (wrench icon on the profile). These bloodlines are not owned: they are not added to the bloodline history, and the player returns to their previous bloodline when Diamond support ends.
 
 ---
 

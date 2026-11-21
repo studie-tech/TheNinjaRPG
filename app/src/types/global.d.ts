@@ -26,6 +26,8 @@ declare global {
       NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL: string;
       NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER: string;
       NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD: string;
+      // Optional: the Diamond card shows "coming soon" until its plan id is configured.
+      NEXT_PUBLIC_PAYPAL_PLAN_ID_DIAMOND?: string;
       NEXT_PUBLIC_BASE_URL: string;
     }
   }

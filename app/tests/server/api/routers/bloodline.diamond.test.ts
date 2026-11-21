@@ -1,0 +1,275 @@
+import { beforeEach, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
+import {
+  actionLog,
+  bloodline,
+  bloodlineRolls,
+  paypalSubscription,
+  userData,
+} from "@/drizzle/schema";
+import { bloodlineRouter } from "@/server/api/routers/bloodline";
+import { revertLapsedDiamondBloodlines } from "@/server/utils/diamondBloodline";
+import { insertUsers } from "../../../setup/factories";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../setup/testDatabase";
+
+const userId = "diamond-swapper";
+const lines = [
+  { id: "owned-line", rank: "D" as const },
+  { id: "pick-a", rank: "A" as const },
+  { id: "pick-b", rank: "B" as const },
+  { id: "pick-c", rank: "C" as const },
+  { id: "s-line", rank: "S" as const },
+  { id: "sand-line", rank: "A" as const, villageId: "sand" },
+  { id: "hidden-line", rank: "D" as const, hidden: true },
+];
+
+const readUser = async () =>
+  (await getTestDatabase()).query.userData.findFirst({
+    where: eq(userData.userId, userId),
+  });
+
+/** Lift the shared swap cooldown so consecutive swaps reach the Diamond guards. */
+const expireSwapCooldown = async () =>
+  (await getTestDatabase())
+    .update(actionLog)
+    .set({ createdAt: new Date(Date.now() - 30 * 24 * 3600 * 1000) })
+    .where(eq(actionLog.userId, userId));
+
+const swap = async (bloodlineId: string) =>
+  (await callerFor(bloodlineRouter, userId)).swapDiamondBloodline({ bloodlineId });
+
+describeWithDatabase("Diamond bloodline swaps", () => {
+  beforeEach(async () => {
+    await resetTables(
+      actionLog,
+      bloodlineRolls,
+      paypalSubscription,
+      userData,
+      bloodline,
+    );
+    const db = await getTestDatabase();
+    await insertUsers([
+      {
+        userId,
+        username: "DiamondSwapper",
+        rank: "JONIN",
+        level: 50,
+        status: "AWAKE",
+        villageId: "leaf",
+        federalStatus: "DIAMOND",
+        bloodlineId: "owned-line",
+        reputationPoints: 7,
+      },
+    ]);
+    await db.insert(bloodline).values(
+      lines.map((line) => ({
+        name: line.id,
+        image: "",
+        description: "Diamond fixture",
+        effects: [],
+        ...line,
+      })),
+    );
+    await db.insert(bloodlineRolls).values({
+      id: "owned-roll",
+      userId,
+      bloodlineId: "owned-line",
+      type: "DIRECT",
+    });
+  });
+
+  it("swaps freely and repeatedly to any D–A bloodline, without the swap cooldown", async () => {
+    for (const id of ["pick-a", "pick-b", "pick-c", "pick-a"])
+      expect(await swap(id)).toMatchObject({
+        success: true,
+        message: "Bloodline swapped with Diamond support",
+      });
+    expect(await readUser()).toMatchObject({
+      bloodlineId: "pick-a",
+      reputationPoints: 7,
+      diamondBloodlineActive: true,
+      preDiamondBloodlineId: "owned-line",
+    });
+    const info = await (await callerFor(bloodlineRouter, userId)).getSwapInfo();
+    expect(info.diamond).toEqual({ restoresBloodlineId: "owned-line" });
+    // Diamond swaps still start the regular swap cooldown for owned bloodlines.
+    expect(
+      (
+        await (
+          await callerFor(bloodlineRouter, userId)
+        ).swapBloodline({
+          bloodlineId: "owned-line",
+        })
+      ).message,
+    ).toMatch(/^You can swap again in/);
+  });
+
+  it("never records Diamond picks as owned bloodlines", async () => {
+    expect((await swap("pick-a")).success).toBe(true);
+    const db = await getTestDatabase();
+    expect(await db.query.bloodlineRolls.findMany()).toEqual([
+      expect.objectContaining({ id: "owned-roll", bloodlineId: "owned-line" }),
+    ]);
+    const caller = await callerFor(bloodlineRouter, userId);
+    expect((await caller.getUserHistoricBloodlines()).map((line) => line.id)).toEqual([
+      "owned-line",
+    ]);
+    // The regular swap only reaches owned bloodlines, so a pick cannot be swapped back to.
+    await expireSwapCooldown();
+    expect((await caller.swapBloodline({ bloodlineId: "pick-b" })).message).toBe(
+      "Bloodline is not in your history",
+    );
+  });
+
+  it("rejects non-Diamond players and out-of-range bloodlines", async () => {
+    for (const id of ["s-line", "sand-line", "hidden-line"]) {
+      expect((await swap(id)).success).toBe(false);
+    }
+    const caller = await callerFor(bloodlineRouter, userId);
+    expect((await caller.getDiamondSwapBloodlines()).map((line) => line.id)).toEqual([
+      "pick-a",
+      "pick-b",
+      "pick-c",
+      "owned-line",
+    ]);
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, userId));
+    expect(await swap("pick-a")).toMatchObject({
+      success: false,
+      message: "Diamond bloodline swaps require Diamond Federal Support",
+    });
+    expect(await caller.getDiamondSwapBloodlines()).toEqual([]);
+    expect(await readUser()).toMatchObject({
+      bloodlineId: "owned-line",
+      diamondBloodlineActive: false,
+    });
+  });
+
+  it("restores the pre-Diamond bloodline once Diamond support ends", async () => {
+    expect((await swap("pick-a")).success).toBe(true);
+    const db = await getTestDatabase();
+    // Still Diamond: nothing to revert.
+    expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+      reverted: 0,
+      cleared: 0,
+    });
+    await db
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, userId));
+    expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+      reverted: 1,
+      cleared: 0,
+    });
+    expect(await readUser()).toMatchObject({
+      bloodlineId: "owned-line",
+      diamondBloodlineActive: false,
+      preDiamondBloodlineId: null,
+    });
+    expect(
+      await db.query.actionLog.findMany({
+        where: eq(actionLog.relatedMsg, "Diamond Bloodline Reverted"),
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        userId,
+        relatedId: "owned-line",
+        changes: [
+          "Diamond Federal Support ended: bloodline reverted from pick-a to owned-line",
+        ],
+      }),
+    ]);
+    // Idempotent: the remembered bloodline is gone.
+    expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+      reverted: 0,
+      cleared: 0,
+    });
+  });
+
+  it("restores no bloodline when the player had none before Diamond", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ bloodlineId: null })
+      .where(eq(userData.userId, userId));
+    expect((await swap("pick-a")).success).toBe(true);
+    await db
+      .update(userData)
+      .set({ federalStatus: "NONE" })
+      .where(eq(userData.userId, userId));
+    expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+      reverted: 1,
+      cleared: 0,
+    });
+    expect(await readUser()).toMatchObject({
+      bloodlineId: null,
+      diamondBloodlineActive: false,
+    });
+  });
+
+  it("keeps an owned bloodline chosen after a Diamond swap", async () => {
+    expect((await swap("pick-a")).success).toBe(true);
+    const db = await getTestDatabase();
+    await db.insert(bloodlineRolls).values({
+      id: "new-roll",
+      userId,
+      bloodlineId: "pick-c",
+      type: "NATURAL",
+    });
+    await db
+      .update(userData)
+      .set({ bloodlineId: "pick-c", federalStatus: "NONE" })
+      .where(eq(userData.userId, userId));
+    expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+      reverted: 0,
+      cleared: 1,
+    });
+    expect(await readUser()).toMatchObject({
+      bloodlineId: "pick-c",
+      diamondBloodlineActive: false,
+      preDiamondBloodlineId: null,
+    });
+  });
+
+  it("waits for an active Diamond subscription's renewal before reverting", async () => {
+    expect((await swap("pick-a")).success).toBe(true);
+    const db = await getTestDatabase();
+    await db.insert(paypalSubscription).values({
+      id: "diamond-subscription",
+      createdById: userId,
+      affectedUserId: userId,
+      federalStatus: "DIAMOND",
+      subscriptionId: "I-DIAMOND",
+      orderId: "I-DIAMOND",
+      status: "ACTIVE",
+      updatedAt: new Date(Date.now() - 32 * 24 * 3600 * 1000),
+    });
+    await db
+      .update(userData)
+      .set({ federalStatus: "NONE" })
+      .where(eq(userData.userId, userId));
+    expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+      reverted: 0,
+      cleared: 0,
+    });
+    expect(await readUser()).toMatchObject({ bloodlineId: "pick-a" });
+    // Once the renewal grace has passed, the revert goes ahead.
+    await db
+      .update(paypalSubscription)
+      .set({ updatedAt: new Date(Date.now() - 40 * 24 * 3600 * 1000) })
+      .where(eq(paypalSubscription.id, "diamond-subscription"));
+    expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+      reverted: 1,
+      cleared: 0,
+    });
+    expect(await readUser()).toMatchObject({ bloodlineId: "owned-line" });
+  });
+});

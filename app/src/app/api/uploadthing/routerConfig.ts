@@ -18,6 +18,7 @@ export const UPLOAD_ROUTER_CONFIG = [
   uploadRoute("avatarNormalUploader", "image", "512KB"),
   uploadRoute("avatarSilverUploader", "image", "1MB"),
   uploadRoute("avatarGoldUploader", "image", "2MB"),
+  uploadRoute("avatarDiamondUploader", "image", "2MB"),
   uploadRoute("audioSfxUploader", "audio", "64KB"),
   uploadRoute("audioMusicUploader", "audio", "4MB"),
 ];

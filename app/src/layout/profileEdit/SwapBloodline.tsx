@@ -1,8 +1,14 @@
 "use client";
+import { Gem } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { BLOODLINE_SWAP_FREE_DAYS, COST_SWAP_BLOODLINE } from "@/drizzle/constants";
+import { Input } from "@/components/ui/input";
+import {
+  BLOODLINE_SWAP_FREE_DAYS,
+  COST_SWAP_BLOODLINE,
+  DIAMOND_BLOODLINE_RANKS,
+} from "@/drizzle/constants";
 import type { Bloodline } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
 import Countdown from "@/layout/Countdown";
@@ -16,7 +22,8 @@ import { DAY_S, secondsFromDate } from "@/utils/time";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
- * Swap bloodline
+ * Swap bloodline: owned bloodlines for everyone, plus any D–A bloodline for Diamond
+ * supporters, reverted when Diamond support ends.
  */
 export const SwapBloodline: React.FC = () => {
   // State
@@ -28,10 +35,15 @@ export const SwapBloodline: React.FC = () => {
     reputationPoints: u.reputationPoints,
     staffAccount: u.staffAccount,
     federalStatus: u.federalStatus,
+    bloodlineId: u.bloodlineId,
   }));
   const [bloodline, setBloodline] = useState<Bloodline | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [diamondLine, setDiamondLine] = useState<Bloodline | undefined>(undefined);
+  const [isDiamondOpen, setIsDiamondOpen] = useState<boolean>(false);
+  const [diamondSearch, setDiamondSearch] = useState("");
   const utils = api.useUtils();
+  const isDiamond = userData?.federalStatus === "DIAMOND";
 
   // Fetch data
   const { data: bloodlines, isFetching } =
@@ -39,6 +51,10 @@ export const SwapBloodline: React.FC = () => {
   const { data: swapInfo } = api.bloodline.getSwapInfo.useQuery(undefined, {
     enabled: !!userData,
   });
+  const { data: diamondLines, isPending: isLoadingDiamondLines } =
+    api.bloodline.getDiamondSwapBloodlines.useQuery(undefined, {
+      enabled: isDiamond,
+    });
 
   // Mutations
   const { mutate: swap, isPending: isSwapping } =
@@ -54,6 +70,22 @@ export const SwapBloodline: React.FC = () => {
       },
       onSettled: () => {
         setIsOpen(false);
+      },
+    });
+  const { mutate: diamondSwap, isPending: isDiamondSwapping } =
+    api.bloodline.swapDiamondBloodline.useMutation({
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
+        showMutationToast(data);
+        await Promise.all([
+          updateUser(data, { revision }),
+          utils.bloodline.getSwapInfo.invalidate(),
+          utils.bloodright.get.invalidate(),
+        ]);
+      },
+      onSettled: () => {
+        setIsDiamondOpen(false);
+        setDiamondLine(undefined);
       },
     });
 
@@ -88,10 +120,85 @@ export const SwapBloodline: React.FC = () => {
   const hasAvailableSwaps = bloodlines && bloodlines.length > 0;
   const isDisabled = !hasAvailableSwaps;
   const isFreeSwap = hasFreeSwapAvailable;
+  const diamond = swapInfo?.diamond;
+  const restoreId = diamond?.restoresBloodlineId;
+  const restoreName = restoreId
+    ? (bloodlines?.find((line) => line.id === restoreId)?.name ??
+      diamondLines?.find((line) => line.id === restoreId)?.name ??
+      "your previous bloodline")
+    : "no bloodline";
+  const search = diamondSearch.trim().toLowerCase();
+  const visibleDiamondLines = diamondLines?.filter(
+    (line) =>
+      line.id !== userData.bloodlineId &&
+      (!search || line.name.toLowerCase().includes(search)),
+  );
 
   // Show component
   return (
     <div className="mt-2 space-y-2">
+      {isDiamond && (
+        <section
+          aria-labelledby="diamond-bloodline-swaps"
+          className="space-y-3 rounded-lg border border-cyan-500/60 bg-cyan-50/60 p-3 dark:bg-cyan-950/20"
+        >
+          <h3
+            id="diamond-bloodline-swaps"
+            className="flex items-center gap-2 font-semibold"
+          >
+            <Gem className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+            Diamond bloodlines
+          </h3>
+          <p className="text-muted-foreground text-sm">
+            Switch to any released {DIAMOND_BLOODLINE_RANKS.join(", ")} rank bloodline
+            for free, as often as you like, while your Diamond support is active. These
+            bloodlines are not added to your history, and when Diamond support ends you
+            return to{" "}
+            <span className="font-semibold text-foreground">{restoreName}</span>.
+          </p>
+          <Input
+            aria-label="Search Diamond bloodlines"
+            placeholder="Search bloodlines"
+            value={diamondSearch}
+            onChange={(e) => setDiamondSearch(e.target.value)}
+          />
+          {isLoadingDiamondLines && <Loader explanation="Loading bloodlines" />}
+          {visibleDiamondLines &&
+            DIAMOND_BLOODLINE_RANKS.map((rank) => {
+              const lines = visibleDiamondLines.filter((line) => line.rank === rank);
+              if (lines.length === 0) return null;
+              return (
+                <div key={rank}>
+                  <p className="mb-1 font-semibold text-sm">
+                    {rank} rank{" "}
+                    <span className="font-normal text-muted-foreground">
+                      ({lines.length})
+                    </span>
+                  </p>
+                  <ActionSelector
+                    items={lines}
+                    showBgColor={false}
+                    showLabels={true}
+                    selectedId={diamondLine?.id}
+                    onClick={(id) => {
+                      if (id === diamondLine?.id) {
+                        setDiamondLine(undefined);
+                        setIsDiamondOpen(false);
+                      } else {
+                        setDiamondLine(lines.find((line) => line.id === id));
+                        setIsDiamondOpen(true);
+                      }
+                    }}
+                  />
+                </div>
+              );
+            })}
+          {visibleDiamondLines?.length === 0 && (
+            <p className="text-sm">No bloodlines match your search.</p>
+          )}
+        </section>
+      )}
+      {isDiamond && <h3 className="pt-2 font-semibold">Your bloodline history</h3>}
       {/* Free Swap Timer */}
       {hasFreeSwapEligibility && swapInfo && !swapInfo.isFree && freeSwapResetTime && (
         <div className="mb-4 rounded-lg bg-slate-100 p-4 dark:bg-slate-800">
@@ -144,6 +251,19 @@ export const SwapBloodline: React.FC = () => {
         isOpen={isOpen}
         setIsOpen={setIsOpen}
         onBuy={(item) => swap({ bloodlineId: item.id })}
+      />
+      <RepPurchaseConfirmModal
+        item={diamondLine}
+        cost={0}
+        reputationPoints={userData.reputationPoints}
+        verb="Swap"
+        isFree={true}
+        isPending={isDiamondSwapping}
+        pendingLabel="Swapping"
+        isOpen={isDiamondOpen}
+        setIsOpen={setIsDiamondOpen}
+        note={`This bloodline is not added to your history and is replaced by ${restoreName} when Diamond support ends.`}
+        onBuy={(item) => diamondSwap({ bloodlineId: item.id })}
       />
     </div>
   );

@@ -215,7 +215,10 @@ export function ProfileEdit() {
         {
           id: "bloodline",
           title: "Swap bloodline",
-          description: "Switch to a bloodline you have previously possessed",
+          description:
+            userData.federalStatus === "DIAMOND"
+              ? "Switch to a bloodline you have possessed, or any D–A bloodline with Diamond support"
+              : "Switch to a bloodline you have previously possessed",
           icon: Droplets,
           notice: `${isStaffMember(userData) ? "Swap your bloodline for free as a staff member." : `Paid bloodline swaps cost ${COST_SWAP_BLOODLINE} reputation points. Eligible supporters can use their available free swap.`} You must wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Bloodlines purchased directly before 14/06/2025 have not been recorded and cannot be swapped. ${reputationBalance}`,
           content: <SwapBloodline />,

@@ -38,6 +38,7 @@ export async function GET(request: Request) {
       const factorNormal = factorFor("NORMAL");
       const factorSilver = factorFor("SILVER");
       const factorGold = factorFor("GOLD");
+      const factorDiamond = factorFor("DIAMOND");
 
       // Config for different user types
       const config = [
@@ -67,6 +68,13 @@ export async function GET(request: Request) {
           where: or(
             eq(userData.federalStatus, "GOLD"),
             ne(userData.staffAccount, false),
+          ),
+        },
+        {
+          factor: factorDiamond,
+          where: and(
+            eq(userData.federalStatus, "DIAMOND"),
+            eq(userData.staffAccount, false),
           ),
         },
       ];

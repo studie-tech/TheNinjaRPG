@@ -55,6 +55,7 @@ import {
   updateUserDataCandidates,
 } from "@/server/utils/cleaner";
 import { authenticateCronRequest } from "@/server/utils/cron";
+import { revertLapsedDiamondBloodlines } from "@/server/utils/diamondBloodline";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/federalStatus";
 import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
@@ -239,6 +240,8 @@ export async function GET(request: Request) {
     // Federal status is derived state. Reconcile its exact maximum active tier
     // across PayPal and both stores, including downgrades when a higher receipt expires.
     await reconcileFederalStatuses(drizzleDB);
+    // Diamond bloodlines are not owned: restore the pre-Diamond bloodline once Diamond ends.
+    await revertLapsedDiamondBloodlines(drizzleDB);
 
     // Clear bank interest outside the claimable UTC date window
     const { oldestDate } = getBankInterestDateRange();

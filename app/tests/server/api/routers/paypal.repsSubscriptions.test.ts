@@ -176,4 +176,55 @@ describeWithDatabase("reputation-funded subscriptions", () => {
       expect.objectContaining({ federalStatus: "SILVER" }),
     ]);
   });
+
+  it("never sells or upgrades into Diamond for reputation points", async () => {
+    await insertUsers([
+      {
+        userId: BUYER,
+        username: BUYER,
+        federalStatus: "GOLD",
+        reputationPoints: 10_000,
+        reputationPointsTotal: 10_000,
+      },
+      { userId: GIFTEE, username: GIFTEE, reputationPoints: 10_000 },
+    ]);
+    await (await getTestDatabase()).insert(paypalSubscription).values({
+      id: "reps-subscription",
+      createdById: BUYER,
+      affectedUserId: BUYER,
+      federalStatus: "GOLD",
+      subscriptionId: "reps-subscription",
+      status: "ACTIVE",
+    });
+    const buyer = await callerFor(paypalRouter, BUYER);
+    const giftee = await callerFor(paypalRouter, GIFTEE);
+    for (const result of [
+      await giftee.subscribeWithReps({
+        expectedUserId: GIFTEE,
+        userId: GIFTEE,
+        status: "DIAMOND",
+      }),
+      await buyer.subscribeWithReps({
+        expectedUserId: BUYER,
+        userId: GIFTEE,
+        status: "DIAMOND",
+      }),
+      await buyer.upgradeSubscription({ userId: BUYER, plan: "DIAMOND" }),
+    ])
+      expect(result).toMatchObject({
+        success: false,
+        message: "Diamond Federal Support is only available as a PayPal subscription.",
+      });
+    expect(await readUser(BUYER)).toMatchObject({
+      federalStatus: "GOLD",
+      reputationPoints: 10_000,
+    });
+    expect(await readUser(GIFTEE)).toMatchObject({
+      federalStatus: "NONE",
+      reputationPoints: 10_000,
+    });
+    expect(await readSubscriptions()).toEqual([
+      expect.objectContaining({ federalStatus: "GOLD" }),
+    ]);
+  });
 });

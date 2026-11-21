@@ -11,7 +11,7 @@ import type { ActionEffect, CombatResult } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
 import { groupBy } from "@/utils/grouping";
 import { parseHtml } from "@/utils/parse";
-import { getUserFederalStatus } from "@/utils/paypal";
+import { getUserFederalStatus, hasGoldPerks } from "@/utils/paypal";
 import { canViewFullBattleLog } from "@/utils/permissions";
 import { insertComponentsIntoText } from "@/utils/string";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
@@ -51,9 +51,10 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
     );
   }, [battleId]);
 
-  // Check if user can view full battle log (staff role or gold federal status)
+  // Check if user can view full battle log (staff role or Gold-level federal status)
   const canViewFull = userData
-    ? canViewFullBattleLog(userData.role) || getUserFederalStatus(userData) === "GOLD"
+    ? canViewFullBattleLog(userData.role) ||
+      hasGoldPerks(getUserFederalStatus(userData))
     : false;
 
   // From database

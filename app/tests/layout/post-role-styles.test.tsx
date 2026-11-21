@@ -34,11 +34,14 @@ const silver =
   "bg-linear-to-r from-gray-500 via-gray-400 to-gray-500 bg-clip-text text-transparent font-black";
 const gold =
   "bg-linear-to-r from-amber-600 via-amber-400 to-amber-600 bg-clip-text text-transparent font-black";
+const diamond =
+  "bg-linear-to-r from-cyan-500 via-violet-300 to-cyan-500 bg-clip-text text-transparent font-black";
 const federalName: Record<FederalStatus, string> = {
   NONE: "text-popover-foreground",
   NORMAL: sky,
   SILVER: silver,
   GOLD: gold,
+  DIAMOND: diamond,
 };
 const gradient = (from: string, via: string) =>
   `bg-linear-to-r from-${from} via-${via} to-${from} bg-clip-text text-transparent`;

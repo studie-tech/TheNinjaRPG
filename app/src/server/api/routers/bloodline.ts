@@ -26,6 +26,8 @@ import {
   filterRollableBloodlines,
   getBloodlineSwapAllowance,
   getPityRolls,
+  isDiamondSwapBloodline,
+  shouldRememberPreDiamondBloodline,
 } from "@/libs/bloodline";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import {
@@ -38,6 +40,7 @@ import { callDiscordContent } from "@/libs/socials";
 import {
   deleteBloodlineForDelete,
   deleteBloodlineReskinForDeleteReskin,
+  diamondSwapUserUpdate,
   fetchBloodline,
   fetchBloodlineProgressionUser,
   fetchBloodlineReskin,
@@ -254,6 +257,7 @@ export const bloodlineRouter = createTRPCRouter({
           freeSwapsUsed: 0,
           freeSwapsRemaining: 0,
           recentSwaps: [],
+          diamond: null,
         };
       // Derived
       const { isFree, freeSwapsUsed, freeSwapsRemaining } = getBloodlineSwapAllowance(
@@ -261,7 +265,36 @@ export const bloodlineRouter = createTRPCRouter({
         recentSwaps.length,
       );
       // Return
-      return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
+      return {
+        isFree,
+        freeSwapsUsed,
+        freeSwapsRemaining,
+        recentSwaps,
+        // The bloodline a Diamond supporter returns to when Diamond support ends.
+        diamond:
+          user.federalStatus === "DIAMOND"
+            ? {
+                restoresBloodlineId: user.diamondBloodlineActive
+                  ? user.preDiamondBloodlineId
+                  : user.bloodlineId,
+              }
+            : null,
+      };
+    }),
+  // Bloodlines a Diamond supporter may switch to without owning them
+  getDiamondSwapBloodlines: protectedProcedure
+    .meta({
+      mcp: { description: "List the D–A bloodlines a Diamond supporter can switch to" },
+    })
+    .query(async ({ ctx }) => {
+      const [user, bloodlines] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBloodlines(ctx.drizzle),
+      ]);
+      if (user.federalStatus !== "DIAMOND") return [];
+      return bloodlines
+        .filter((line) => isDiamondSwapBloodline(line, user))
+        .sort((a, b) => a.rank.localeCompare(b.rank) || a.name.localeCompare(b.name));
     }),
   // Swap bloodline of session user
   swapBloodline: protectedProcedure
@@ -313,18 +346,8 @@ export const bloodlineRouter = createTRPCRouter({
       if (!historicBloodlines.find((b) => b.id === line.id)) {
         return errorResponse("Bloodline is not in your history");
       }
-      // Check if cooldown is over
-      if (lastTransfer) {
-        const canTransferAgainDate = secondsFromDate(
-          BLOODLINE_SWAP_COOLDOWN_HOURS * 60 * 60,
-          lastTransfer.createdAt,
-        );
-        if (canTransferAgainDate > new Date()) {
-          const msLeft = -secondsPassed(canTransferAgainDate) * 1000;
-          const timeLeft = getTimeLeftStr(msLeft);
-          return errorResponse(`You can swap again in ${timeLeft}`);
-        }
-      }
+      const cooldown = swapCooldownMessage(lastTransfer);
+      if (cooldown) return errorResponse(cooldown);
 
       // Update bloodline (this creates the "Bloodline Changed" log entry)
       const swapCost = isFreeSwap ? 0 : COST_SWAP_BLOODLINE;
@@ -354,6 +377,58 @@ export const bloodlineRouter = createTRPCRouter({
         success: true,
         message: `Bloodline swapped${isFreeSwap ? ` (${freeNote})` : ""}`,
       };
+    }),
+  // Switch a Diamond supporter to any eligible bloodline without owning it
+  swapDiamondBloodline: protectedProcedure
+    .meta({
+      mcp: {
+        description:
+          "Diamond Federal Support: switch to any D–A bloodline for free, as often as wanted",
+      },
+    })
+    .input(z.object({ bloodlineId: z.string() }))
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [updatedUser, line, historicBloodlines] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchBloodline(ctx.drizzle, input.bloodlineId),
+        fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId),
+      ]);
+      const user = updatedUser.user;
+      // Guards
+      if (!user) return errorResponse("User does not exist");
+      if (!line) return errorResponse("Bloodline does not exist");
+      if (user.federalStatus !== "DIAMOND")
+        return errorResponse("Diamond bloodline swaps require Diamond Federal Support");
+      if (user.status === "BATTLE")
+        return errorResponse("You cannot change bloodline during battle");
+      if (user.bloodlineId === line.id)
+        return errorResponse("You already have this bloodline");
+      if (!isDiamondSwapBloodline(line, user))
+        return errorResponse(
+          "Diamond swaps only reach released D, C, B and A rank bloodlines open to your village",
+        );
+      // Diamond swaps are unlimited and skip the swap cooldown: the bloodline and battle-status
+      // CAS in updateBloodline still serializes concurrent changes.
+      // Mutate: one guarded statement moves the bloodline and remembers the one to restore;
+      // no roll is recorded, so the pick never becomes an owned bloodline.
+      const rememberCurrent = shouldRememberPreDiamondBloodline({
+        diamondBloodlineActive: user.diamondBloodlineActive,
+        currentBloodlineId: user.bloodlineId,
+        ownedBloodlineIds: historicBloodlines.map((owned) => owned.id),
+      });
+      const swap = await updateBloodline(
+        ctx.drizzle,
+        user,
+        line,
+        0,
+        `Diamond bloodline swap from ${user.bloodline?.name ?? "no bloodline"} to ${line.name}`,
+        diamondSwapUserUpdate({ user, rememberCurrent }),
+      );
+      if (!swap.granted) return errorResponse(swap.message);
+      // The live Bloodright refund and hydrated passive sources require profile reconciliation.
+      return { success: true, message: "Bloodline swapped with Diamond support" };
     }),
   // Bloodline reskins (staff-only creation & moderation)
   createReskin: protectedProcedure
@@ -1013,6 +1088,7 @@ export const updateBloodline = async (
   bloodline: Bloodline | null,
   repCost: number,
   logMsg: string,
+  extra?: Parameters<typeof updateUserDataForUpdateBloodline>[5],
 ): Promise<
   { granted: true; updatedAt: Date } | { granted: false; message: string }
 > => {
@@ -1046,6 +1122,7 @@ export const updateBloodline = async (
     repCost,
     user,
     updatedAt,
+    extra,
   );
   if (!updateResult.rowsAffected) {
     return {
@@ -1063,6 +1140,18 @@ export const updateBloodline = async (
     insertActionLogForUpdateBloodline(client, user, logMsg),
   ]);
   return { granted: true, updatedAt };
+};
+
+/** Why a bloodline swap must wait for the cooldown since the last change, if it must. */
+const swapCooldownMessage = (lastChange: { createdAt: Date } | undefined) => {
+  if (!lastChange) return undefined;
+  const canChangeAgain = secondsFromDate(
+    BLOODLINE_SWAP_COOLDOWN_HOURS * 60 * 60,
+    lastChange.createdAt,
+  );
+  if (canChangeAgain <= new Date()) return undefined;
+  const msLeft = -secondsPassed(canChangeAgain) * 1000;
+  return `You can swap again in ${getTimeLeftStr(msLeft)}`;
 };
 
 /**
