@@ -68,6 +68,13 @@ export const launchCaravanBattle = async (
       : [];
     if (input.state.caravanId && current?.status !== "TRAVELLING")
       return errorResponse("The caravan is not on the road");
+    // An arrived caravan stays on the road only until maintenance delivers it.
+    if (
+      input.state.type === "INTERCEPTION" &&
+      current?.arrivesAt &&
+      current.arrivesAt <= now
+    )
+      return errorResponse("The caravan has already arrived");
     if (
       input.state.type === "INTERCEPTION" &&
       current &&

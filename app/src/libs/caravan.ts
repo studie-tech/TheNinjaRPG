@@ -228,13 +228,15 @@ export const getReachedCheckpoints = (
       )
     : 0;
 
-/** Units of a manifest a caravan still carries after its losses. */
+/**
+ * Units of a manifest a caravan still carries after its losses. Each line loses whole units
+ * up to its share, so no line loses more than the journey's loss and stolen shares, which
+ * round down too, never exceed what the caravan lost.
+ */
 export const getRemainingCargo = (cargo: CargoLine[], lossBp: number): CargoLine[] =>
   cargo.map((line) => ({
     itemId: line.itemId,
-    quantity: Math.floor(
-      (line.quantity * (10_000 - Math.min(lossBp, 10_000))) / 10_000,
-    ),
+    quantity: Math.ceil((line.quantity * (10_000 - Math.min(lossBp, 10_000))) / 10_000),
   }));
 
 /** Share of the manifest a new loss may still take under the journey's cap. */
@@ -367,6 +369,8 @@ export type CaravanBattleState = {
   stealBp: number;
   /** Village that takes a marker when the assault destroys its last control. */
   captureVillageId: string | null;
+  /** Marker holder the assault was allowed against; a marker taken since keeps its control. */
+  markerControllerId: string | null;
 };
 
 /** Views a caravan or trade route notice refreshes in the recipient's open tabs. */

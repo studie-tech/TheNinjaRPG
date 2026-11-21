@@ -30,6 +30,8 @@ import {
 } from "@/drizzle/constants";
 import {
   battle,
+  type Caravan,
+  type CaravanEncounter,
   caravan,
   caravanDiscovery,
   caravanEncounter,
@@ -371,11 +373,14 @@ export const transitionCaravan = (
       ),
     );
 
-/** Record that a travelling caravan's checkpoints were processed. */
+/**
+ * Record that a travelling caravan's checkpoints were processed, only while it keeps the
+ * schedule they were counted on: a delay landed meanwhile moves them, and a later run
+ * counts them again.
+ */
 export const advanceCaravanCheckpoints = (
   client: Pick<DrizzleClient, "update">,
-  caravanId: string,
-  from: number,
+  current: Pick<Caravan, "id" | "checkpointsProcessed" | "arrivesAt">,
   to: number,
 ) =>
   client
@@ -383,9 +388,12 @@ export const advanceCaravanCheckpoints = (
     .set({ checkpointsProcessed: to })
     .where(
       and(
-        eq(caravan.id, caravanId),
+        eq(caravan.id, current.id),
         eq(caravan.status, "TRAVELLING"),
-        eq(caravan.checkpointsProcessed, from),
+        eq(caravan.checkpointsProcessed, current.checkpointsProcessed),
+        current.arrivesAt
+          ? eq(caravan.arrivesAt, current.arrivesAt)
+          : isNull(caravan.arrivesAt),
       ),
     );
 
@@ -884,7 +892,7 @@ export const expireAmbush = (
  */
 export const releaseAbandonedAmbush = (
   client: Pick<DrizzleClient, "execute">,
-  encounter: { id: string; status: "STARTING" | "FIGHTING" | "PENDING" | "RESOLVED" },
+  encounter: EncounterSnapshot,
   lossBp: number,
   now: Date,
 ) =>
@@ -897,12 +905,13 @@ export const releaseAbandonedAmbush = (
         ${caravan.version} = ${caravan.version} + 1
     WHERE ${caravanEncounter.id} = ${encounter.id}
       AND ${caravanEncounter.status} = ${encounter.status}
+      AND ${caravanEncounter.battleId} <=> ${encounter.battleId}
   `);
 
 /** Release an encounter whose battle vanished without settling; nothing changes hands. */
 export const releaseStaleEncounter = (
   client: Pick<DrizzleClient, "update">,
-  encounter: { id: string; status: "STARTING" | "FIGHTING" | "PENDING" | "RESOLVED" },
+  encounter: EncounterSnapshot,
   now: Date,
 ) =>
   client
@@ -917,6 +926,7 @@ export const releaseStaleEncounter = (
       and(
         eq(caravanEncounter.id, encounter.id),
         eq(caravanEncounter.status, encounter.status),
+        sql`${caravanEncounter.battleId} <=> ${encounter.battleId}`,
       ),
     );
 
@@ -1243,3 +1253,6 @@ const cargoLineQuantity = (lines: CargoLine[]) =>
     ),
     sql` `,
   )} ELSE 0 END`;
+
+/** An encounter as read, which a release must still find: the same status and battle. */
+type EncounterSnapshot = Pick<CaravanEncounter, "id" | "status" | "battleId">;

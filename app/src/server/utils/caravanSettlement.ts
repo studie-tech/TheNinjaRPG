@@ -22,7 +22,9 @@ import type { DrizzleClient } from "@/server/db";
 /**
  * Apply a caravan or marker fight's outcome inside the battle's terminal version claim.
  * The encounter's transition to RESOLVED admits one settlement per battle; every
- * effect reads only the snapshot frozen into battle state at initiation.
+ * effect reads only the snapshot frozen into battle state at initiation. A fight that
+ * ended with both sides standing or both fallen, such as once every player fled, is won
+ * by neither: escorts earn no objective and the caravan loses nothing.
  */
 export const settleCaravanCombat = async (
   database: DrizzleClient,
@@ -32,9 +34,9 @@ export const settleCaravanCombat = async (
   if (!state) return;
   const now = new Date();
   const defenderDirection = state.attackerDirection === "left" ? "right" : "left";
-  const attackersWon =
-    isSideStanding(battle, state.attackerDirection) &&
-    !isSideStanding(battle, defenderDirection);
+  const attackersStand = isSideStanding(battle, state.attackerDirection);
+  const defendersStand = isSideStanding(battle, defenderDirection);
+  const attackersWon = attackersStand && !defendersStand;
   const claimed = await resolveFoughtEncounter(
     database,
     state.encounterId,
@@ -46,18 +48,19 @@ export const settleCaravanCombat = async (
   const caravanId = state.caravanId;
   if (state.type === "MARKER_ASSAULT") {
     if (attackersWon && state.markerId)
-      await damageMarker(
-        database,
-        state.markerId,
-        TRADE_ROUTE_MARKER_ASSAULT_DAMAGE,
-        state.captureVillageId,
+      await damageMarker(database, {
+        markerId: state.markerId,
+        damage: TRADE_ROUTE_MARKER_ASSAULT_DAMAGE,
+        controllerVillageId: state.markerControllerId,
+        captureVillageId: state.captureVillageId,
         now,
-      );
+      });
     return;
   }
   if (!caravanId) return;
   if (!attackersWon) {
-    await creditGuardObjectives(database, caravanId, state.guardIds);
+    if (defendersStand && !attackersStand)
+      await creditGuardObjectives(database, caravanId, state.guardIds);
   } else if (state.type === "AMBUSH") {
     await applyCaravanLoss(database, caravanId, CARAVAN_AMBUSH_LOSS_BP);
   } else if (state.type === "INTERCEPTION") {

@@ -260,16 +260,21 @@ export const upsertMarkerDiscoveries = (
         });
 
 /**
- * Wear down a marker after a won assault. When its control runs out it changes hands at
- * full control: to the assaulting village, or back to the route's own villages (NULL).
+ * Wear down a marker after a won assault while it still has the holder the assault was
+ * allowed against. When its control runs out it changes hands at full control: to the
+ * assaulting village, or back to the route's own villages (NULL).
  */
 export const damageMarker = (
   client: Pick<DrizzleClient, "update">,
-  markerId: string,
-  damage: number,
-  captureVillageId: string | null,
-  now: Date,
+  input: {
+    markerId: string;
+    damage: number;
+    controllerVillageId: string | null;
+    captureVillageId: string | null;
+    now: Date;
+  },
 ) => {
+  const { markerId, damage, captureVillageId, now } = input;
   const captured = sql`${tradeRouteMarker.control} - ${damage} <= 0`;
   return client
     .update(tradeRouteMarker)
@@ -279,5 +284,10 @@ export const damageMarker = (
       // Assigned after control in column order, so it reads the new value, full only on capture.
       capturedAt: sql`CASE WHEN ${tradeRouteMarker.control} = ${TRADE_ROUTE_MARKER_MAX_CONTROL} THEN ${now} ELSE ${tradeRouteMarker.capturedAt} END`,
     })
-    .where(eq(tradeRouteMarker.id, markerId));
+    .where(
+      and(
+        eq(tradeRouteMarker.id, markerId),
+        sql`${tradeRouteMarker.controllerVillageId} <=> ${input.controllerVillageId}`,
+      ),
+    );
 };

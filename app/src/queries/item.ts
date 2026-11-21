@@ -2445,13 +2445,14 @@ export const listItemForGrantUserItems = (
 
 /**
  * Build the top-up adding granted items to one listed stack. The stack is re-checked against
- * the granted item, listing rules and stack size, so an evolved stack cannot change the reward.
+ * the granted item, listing rules, the quantity it was listed with and stack size, so an
+ * evolved stack cannot change the reward and the stack holds the listed quantity plus it.
  */
 export const updateUserItemForGrantUserItems = (
   client: Pick<DrizzleClient, "update">,
   userId: string,
   itemId: string,
-  stackId: string,
+  stack: { id: string; quantity: number },
   quantity: number,
   now: Date,
 ) =>
@@ -2463,8 +2464,9 @@ export const updateUserItemForGrantUserItems = (
     })
     .where(
       and(
-        eq(userItem.id, stackId),
+        eq(userItem.id, stack.id),
         eq(userItem.itemId, itemId),
+        eq(userItem.quantity, stack.quantity),
         grantableUserItemWhere(userId, now),
         sql`${userItem.quantity} + ${quantity} <= ${effectiveStackSizeSql(userItem.itemId)}`,
       ),

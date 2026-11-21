@@ -381,7 +381,7 @@ export const warehouseRouter = createTRPCRouter({
       const accessError = warehouseAccessError(user, villageData, structure);
       if (accessError) return errorResponse(accessError);
       if (!villageData) return errorResponse("Warehouse not found");
-      if (!info || !isWarehouseStorable(info))
+      if (!info || info.hidden || !isWarehouseStorable(info))
         return errorResponse("The Warehouse does not hold this item");
       const activeWarIds = wars
         .filter(
@@ -431,6 +431,7 @@ export const warehouseRouter = createTRPCRouter({
               quantity: input.quantity,
               day: allowance.day,
               allowance: allowance.total,
+              approvedAt: allowance.approved ? (member?.approvedAt ?? null) : null,
             });
             if (claimed.rowsAffected === 0) throw conflict;
             const granted = await grantUserItems(
@@ -478,6 +479,7 @@ export const warehouseRouter = createTRPCRouter({
     .output(warehouseResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned) return errorResponse("You are banned");
       const villageData = user.villageId
         ? await fetchVillage(ctx.drizzle, user.villageId)
         : undefined;
@@ -535,6 +537,7 @@ export const warehouseRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, input.userId),
         listOpenWars(ctx.drizzle),
       ]);
+      if (user.isBanned) return errorResponse("You are banned");
       if (!user.villageId) return errorResponse("You have no village");
       const villageData = await fetchVillage(ctx.drizzle, user.villageId);
       if (!villageData || villageData.kageId !== user.userId)
