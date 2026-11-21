@@ -79,17 +79,21 @@ export function ShopInspector({
     },
   });
 
+  const stackCapacity = item.canStack
+    ? getMaxItemShopPurchaseQuantity(item.stackSize)
+    : 1;
   const maxQuantity = Math.min(
-    item.canStack ? getMaxItemShopPurchaseQuantity(item.stackSize) : 1,
+    stackCapacity,
     allowance.data?.remaining ?? Number.POSITIVE_INFINITY,
   );
   // A cleared or invalid field reads as NaN: prices and the stepper use 1 meanwhile, while
   // the field keeps the player's draft and Buy stays off until the number is valid.
   const isQuantityEntered = Number.isFinite(requestedQuantity);
-  const quantity = Math.min(
-    isQuantityEntered ? requestedQuantity : 1,
-    Math.max(1, maxQuantity),
-  );
+  const quantity = isQuantityEntered ? requestedQuantity : 1;
+  const quantityLimitMessage =
+    isQuantityEntered && quantity > maxQuantity
+      ? `Quantity exceeds the current limit of ${maxQuantity}.`
+      : null;
   const isQuantityValid =
     !!allowance.data &&
     !allowance.isError &&
@@ -188,7 +192,7 @@ export function ShopInspector({
           wallet={wallet}
           silverLabel={silverCopy.catalog}
         />
-        {maxQuantity > 1 && (
+        {stackCapacity > 1 && (
           <div className="flex items-center justify-between gap-2 text-sm">
             <span className="font-semibold">How many</span>
             <span className="flex items-center gap-1.5">
@@ -246,6 +250,11 @@ export function ShopInspector({
               : "today (UTC)"}
           </p>
         )}
+        {quantityLimitMessage && (
+          <p role="alert" className="text-destructive text-sm">
+            {quantityLimitMessage}
+          </p>
+        )}
         {hasRyoPrice && totalDiscount > 0 && (
           <p className="text-xs text-emerald-700 dark:text-emerald-300">
             Ryo discount −{totalDiscount}% ·{" "}
@@ -266,6 +275,7 @@ export function ShopInspector({
           keepOpenOnAccept
           disabled={!canBuy}
           confirmDisabled={!canBuy}
+          onClose={() => setPurchaseError(null)}
           button={
             <Button
               id="tutorial-itemshop-buy"
@@ -298,6 +308,11 @@ export function ShopInspector({
           <p className="text-muted-foreground text-sm">
             You will have {leftText} left. Purchases cannot be undone.
           </p>
+          {quantityLimitMessage && (
+            <p role="alert" className="text-destructive text-sm">
+              {quantityLimitMessage}
+            </p>
+          )}
           {purchaseError && (
             <p role="alert" className="text-destructive text-sm">
               {purchaseError}

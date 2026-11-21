@@ -168,13 +168,32 @@ beforeEach(() => {
   vi.spyOn(Image, "default").mockImplementation(() => null);
   vi.spyOn(ItemWithEffects, "default").mockImplementation(() => null);
   vi.spyOn(Modal, "default").mockImplementation(
-    ({ children, isOpen, onAccept, proceed_label, id }) =>
+    ({
+      children,
+      isOpen,
+      setIsOpen,
+      onClose,
+      onAccept,
+      proceedDisabled,
+      proceed_label,
+      id,
+    }) =>
       isOpen ? (
         <div role="dialog">
           {children}
           <button
             type="button"
+            onClick={() => {
+              onClose?.();
+              setIsOpen(false);
+            }}
+          >
+            Close
+          </button>
+          <button
+            type="button"
             id={id ? `${id}-proceed` : undefined}
+            disabled={proceedDisabled}
             onClick={(event) => onAccept?.(event as never)}
           >
             {proceed_label}
@@ -322,6 +341,108 @@ describe("shop catalog", () => {
       stack: 3,
       villageId: "village",
     });
+  });
+
+  it("keeps the reviewed quantity and blocks buying when the allowance drops", () => {
+    remaining = 3;
+    const view = renderShop({ defaultType: "CONSUMABLE" });
+    fireEvent.click(view.getByRole("button", { name: /Pill/ }));
+    fireEvent.click(view.getByRole("button", { name: "One more" }));
+    fireEvent.click(view.getByRole("button", { name: "One more" }));
+    fireEvent.click(
+      view.baseElement.querySelector("#tutorial-itemshop-buy") as HTMLElement,
+    );
+
+    remaining = 1;
+    view.rerender(<MobileShop userData={user} defaultType="CONSUMABLE" />);
+    const dialog = view.getByRole("dialog", { name: "" });
+    expect(dialog.textContent).toContain("3× Pill");
+    expect(within(dialog).getByRole("alert").textContent).toBe(
+      "Quantity exceeds the current limit of 1.",
+    );
+    const confirm = within(dialog).getByRole("button", {
+      name: "Buy for 60 ryo",
+    }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.click(confirm);
+    expect(purchase).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    const inspector = view.getByRole("region", { name: "Pill" });
+    expect(within(inspector).getByRole("alert").textContent).toBe(
+      "Quantity exceeds the current limit of 1.",
+    );
+    expect(
+      (view.getByRole("spinbutton", { name: "How many to buy" }) as HTMLInputElement)
+        .value,
+    ).toBe("3");
+    fireEvent.click(view.getByRole("button", { name: "One less" }));
+    fireEvent.click(view.getByRole("button", { name: "One less" }));
+    fireEvent.click(
+      view.baseElement.querySelector("#tutorial-itemshop-buy") as HTMLElement,
+    );
+    fireEvent.click(
+      within(view.getByRole("dialog", { name: "" })).getByRole("button", {
+        name: "Buy for 20 ryo",
+      }),
+    );
+    expect(purchase).toHaveBeenCalledWith({
+      itemId: "pill",
+      stack: 1,
+      villageId: "village",
+    });
+  });
+
+  it("keeps a blank quantity repairable when the allowance drops to one", () => {
+    remaining = 2;
+    const view = renderShop({ defaultType: "CONSUMABLE" });
+    fireEvent.click(view.getByRole("button", { name: /Pill/ }));
+    fireEvent.input(view.getByRole("spinbutton", { name: "How many to buy" }), {
+      target: { value: "" },
+    });
+
+    remaining = 1;
+    view.rerender(<MobileShop userData={user} defaultType="CONSUMABLE" />);
+    const quantity = view.getByRole("spinbutton", {
+      name: "How many to buy",
+    }) as HTMLInputElement;
+    const buy = view.baseElement.querySelector(
+      "#tutorial-itemshop-buy",
+    ) as HTMLButtonElement;
+    expect(quantity.value).toBe("");
+    expect(buy.disabled).toBe(true);
+    expect(
+      (view.getByRole("button", { name: "One more" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.input(quantity, { target: { value: "1" } });
+    expect(quantity.value).toBe("1");
+    expect(buy.disabled).toBe(false);
+    fireEvent.click(buy);
+    expect(view.getByRole("dialog", { name: "" }).textContent).toContain(
+      "Buy Pill for 20 ryo?",
+    );
+  });
+
+  it("clears a refused purchase when closing before reviewing a new quantity", () => {
+    purchaseResult = { success: false, message: "Inventory is full" };
+    const view = renderShop({ defaultType: "CONSUMABLE" });
+    fireEvent.click(view.getByRole("button", { name: /Pill/ }));
+    fireEvent.click(
+      view.baseElement.querySelector("#tutorial-itemshop-buy") as HTMLElement,
+    );
+    const dialog = view.getByRole("dialog", { name: "" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Buy for 20 ryo" }));
+    expect(within(dialog).getByRole("alert").textContent).toBe("Inventory is full");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(view.queryByText("Inventory is full")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "One more" }));
+    fireEvent.click(
+      view.baseElement.querySelector("#tutorial-itemshop-buy") as HTMLElement,
+    );
+    const reopened = view.getByRole("dialog", { name: "" });
+    expect(reopened.textContent).toContain("2× Pill");
+    expect(within(reopened).queryByRole("alert")).toBeNull();
+    expect(purchase).toHaveBeenCalledTimes(1);
   });
 
   it("loads the rest of the catalog so the chips cover every item", () => {
