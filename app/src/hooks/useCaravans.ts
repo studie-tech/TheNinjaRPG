@@ -156,12 +156,8 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   const reload = (snapshot: Snapshot, names: (keyof typeof views)[]) => {
     for (const name of names) void views[name].updateCache(undefined, snapshot[name]);
   };
-  // A caravan delivered or cancelled elsewhere leaves the list and moved Warehouse stock;
-  // one the viewer cancels is forgotten first, as its response patches the stock.
+  // A caravan delivered or cancelled leaves the list and has moved Warehouse stock.
   const shownCaravanIds = useRef<string[] | undefined>(undefined);
-  const forgetCaravan = (caravanId: string) => {
-    shownCaravanIds.current = shownCaravanIds.current?.filter((id) => id !== caravanId);
-  };
   const onCaravansShown = useEffectEvent((ids: string[] | undefined) => {
     const shown = shownCaravanIds.current;
     shownCaravanIds.current = ids;
@@ -452,7 +448,6 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
     cancel: api.caravan.cancel.useMutation(
       bindProfile(["caravans"], (result, _input, snapshot) => {
         const cancelled = result.cancelled;
-        if (cancelled) forgetCaravan(cancelled.caravanId);
         void views.caravans.updateCache(
           cancelled && ((current) => getCancelledCaravans(current, cancelled)),
           snapshot.caravans,
