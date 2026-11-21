@@ -49,8 +49,8 @@ import {
   listOperatorProfiles,
   listTravellingCaravans,
   markGuardsRewarded,
+  moveCargo,
   releaseAbandonedAmbush,
-  releaseCargo,
   releaseParticipants,
   releaseStaleEncounter,
   resolveOperation,
@@ -211,7 +211,10 @@ export const cancelCaravan = async (
       );
       if (claimed.rowsAffected !== 1) return false;
       if (row.status === "PREPARING")
-        await releaseCargo(tx, row.originVillageId, returned);
+        await moveCargo(tx, row.originVillageId, returned, {
+          quantity: 0,
+          reserved: -1,
+        });
       else await creditWarehouseStock(tx, row.originVillageId, returned);
       await releaseParticipants(tx, row.id);
       await wakeReleasedGuards(tx, guardIds);

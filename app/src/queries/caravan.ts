@@ -43,7 +43,7 @@ import {
   village,
   warehouseStock,
 } from "@/drizzle/schema";
-import type { CargoLine } from "@/libs/caravan";
+import type { CargoLine, CargoSign } from "@/libs/caravan";
 import { withoutCaravanEscort } from "@/queries/activityReservation";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
@@ -260,68 +260,31 @@ export const listUserParticipations = (
     );
 
 /**
- * Reserve every cargo line from unreserved stock in one statement. Lines name distinct items;
- * the caller requires one changed row per line, so a line short of stock fails them all.
+ * Move cargo lines naming distinct items through Warehouse stock in one statement, per unit
+ * of each line: reservation adds to reserved stock, release removes it, and departure removes
+ * both the stock and its reservation. A row changes only while the reservation stays covered
+ * by its stock, so a line short of stock changes nothing and callers compare changed rows
+ * with lines.
  */
-export const reserveCargo = (
+export const moveCargo = (
   client: Pick<DrizzleClient, "update">,
   villageId: string,
   lines: CargoLine[],
+  sign: CargoSign,
 ) => {
-  const quantity = cargoLineQuantity(lines);
-  return client
-    .update(warehouseStock)
-    .set({ reserved: sql`${warehouseStock.reserved} + ${quantity}` })
-    .where(
-      and(
-        eq(warehouseStock.villageId, villageId),
-        inArray(
-          warehouseStock.itemId,
-          lines.map((line) => line.itemId),
-        ),
-        sql`${warehouseStock.quantity} >= ${warehouseStock.reserved} + ${quantity}`,
-      ),
-    );
-};
-
-/** Release the reservation of cargo lines naming distinct items. */
-export const releaseCargo = (
-  client: Pick<DrizzleClient, "update">,
-  villageId: string,
-  lines: CargoLine[],
-) => {
-  if (lines.length === 0) return Promise.resolve();
-  const quantity = cargoLineQuantity(lines);
-  return client
-    .update(warehouseStock)
-    .set({ reserved: sql`${warehouseStock.reserved} - ${quantity}` })
-    .where(
-      and(
-        eq(warehouseStock.villageId, villageId),
-        inArray(
-          warehouseStock.itemId,
-          lines.map((line) => line.itemId),
-        ),
-        sql`${warehouseStock.reserved} >= ${quantity}`,
-      ),
-    );
-};
-
-/**
- * Load reserved cargo lines naming distinct items onto a departing caravan in one statement;
- * the caller requires one changed row per line.
- */
-export const dispatchCargo = (
-  client: Pick<DrizzleClient, "update">,
-  villageId: string,
-  lines: CargoLine[],
-) => {
-  const quantity = cargoLineQuantity(lines);
+  if (lines.length === 0) return Promise.resolve({ rowsAffected: 0 });
+  const units = cargoLineQuantity(lines);
+  // Stock columns are unsigned, so the guard only adds: a reservation that shrinks must
+  // cover the units, and quantity + sign.quantity × units >= reserved + sign.reserved × units
+  // carries its net term on the side where it is positive.
+  const net = sign.quantity - sign.reserved;
+  const plusUnits = (column: AnyMySqlColumn, adds: boolean) =>
+    adds ? sql`${column} + ${units}` : sql`${column}`;
   return client
     .update(warehouseStock)
     .set({
-      quantity: sql`${warehouseStock.quantity} - ${quantity}`,
-      reserved: sql`${warehouseStock.reserved} - ${quantity}`,
+      quantity: sql`${warehouseStock.quantity} + ${sign.quantity} * ${units}`,
+      reserved: sql`${warehouseStock.reserved} + ${sign.reserved} * ${units}`,
     })
     .where(
       and(
@@ -330,8 +293,8 @@ export const dispatchCargo = (
           warehouseStock.itemId,
           lines.map((line) => line.itemId),
         ),
-        sql`${warehouseStock.reserved} >= ${quantity}`,
-        sql`${warehouseStock.quantity} >= ${quantity}`,
+        sign.reserved < 0 ? sql`${warehouseStock.reserved} >= ${units}` : undefined,
+        sql`${plusUnits(warehouseStock.quantity, net > 0)} >= ${plusUnits(warehouseStock.reserved, net < 0)}`,
       ),
     );
 };

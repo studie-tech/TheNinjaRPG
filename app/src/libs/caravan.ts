@@ -39,6 +39,9 @@ import { clamp, secureRandomInt } from "@/utils/math";
 /** A shipment's manifest line. */
 export type CargoLine = { itemId: string; quantity: number };
 
+/** How a cargo move changes Warehouse stock and its reservation per unit of a line. */
+export type CargoSign = { quantity: -1 | 0; reserved: -1 | 1 };
+
 /**
  * Shortest sector path between two home sectors over the world grid, both ends included.
  * Neighbors are explored in [north, east, south, west] order, so the path is stable.

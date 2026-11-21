@@ -30,7 +30,6 @@ import { findWarehouse, isWarehouseStorable } from "@/libs/warehouse";
 import {
   checkInGuard,
   deleteGuard,
-  dispatchCargo,
   insertCaravanWithinCapacity,
   insertGuard,
   listActiveSabotage,
@@ -42,8 +41,8 @@ import {
   listOpenEncounters,
   listOpenVillageCaravans,
   listUserParticipations,
+  moveCargo,
   queueGuard,
-  reserveCargo,
   resolveOperation,
   transitionCaravan,
   wakeReleasedGuards,
@@ -323,7 +322,10 @@ export const caravanRouter = createTRPCRouter({
         // transaction releases the reservation when a line falls short or capacity is full.
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
-            const reserved = await reserveCargo(tx, own.id, cargo);
+            const reserved = await moveCargo(tx, own.id, cargo, {
+              quantity: 0,
+              reserved: 1,
+            });
             if (reserved.rowsAffected !== cargo.length)
               throw new WarehouseConflict(
                 "Your stock changed meanwhile. Refresh and try again",
@@ -456,7 +458,10 @@ export const caravanRouter = createTRPCRouter({
               arrivesAt,
             });
             if (claimed.rowsAffected !== 1) throw conflict;
-            const loaded = await dispatchCargo(tx, row.originVillageId, row.cargo);
+            const loaded = await moveCargo(tx, row.originVillageId, row.cargo, {
+              quantity: -1,
+              reserved: -1,
+            });
             if (loaded.rowsAffected !== row.cargo.length) throw conflict;
             await insertWarehouseLogs(
               tx,

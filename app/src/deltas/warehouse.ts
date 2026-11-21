@@ -8,7 +8,7 @@ import type {
   UserItem,
   WarehouseDepositLedger,
 } from "@/drizzle/schema";
-import type { CargoLine } from "@/libs/caravan";
+import type { CargoLine, CargoSign } from "@/libs/caravan";
 import { getDepositCandidates } from "@/libs/warehouse";
 import { getUtcDayKey } from "@/utils/time";
 import type { WarehouseChange, WarehouseLogEntry } from "@/validators/warehouse";
@@ -121,7 +121,7 @@ export const getWithdrawWarehouseChange = ({
  */
 export const getCargoWarehouseChange = (
   cargo: CargoLine[],
-  sign: { quantity: -1 | 0; reserved: -1 | 1 },
+  sign: CargoSign,
 ): WarehouseChange => ({
   stock: cargo.map((line) => ({
     itemId: line.itemId,

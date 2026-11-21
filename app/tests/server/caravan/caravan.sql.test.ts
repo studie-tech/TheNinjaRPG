@@ -33,17 +33,15 @@ import type { CaravanBattleState } from "@/libs/caravan";
 import type { CompleteBattle } from "@/libs/combat/types";
 import {
   claimLoot,
-  dispatchCargo,
   expireAmbush,
   insertCheckpointAmbush,
   insertGuard,
   listActiveSabotage,
+  moveCargo,
   queueGuard,
   releaseAbandonedAmbush,
-  releaseCargo,
   releaseParticipants,
   renameCaravanUser,
-  reserveCargo,
   resolveOperation,
   transitionCaravan,
   upsertAttacker,
@@ -204,8 +202,11 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect((await approved()).rowsAffected).toBe(0);
   });
 
-  it("reserves, loads and releases every cargo line or, for reservations, none", async () => {
+  it("reserves, loads and releases cargo only while stock covers its reservation", async () => {
     const db = await getTestDatabase();
+    const reserve = { quantity: 0, reserved: 1 } as const;
+    const release = { quantity: 0, reserved: -1 } as const;
+    const dispatch = { quantity: -1, reserved: -1 } as const;
     await db.insert(warehouseStock).values([
       { villageId: "leaf", itemId: "ore", quantity: 100, reserved: 20 },
       { villageId: "leaf", itemId: "silk", quantity: 50, reserved: 40 },
@@ -214,10 +215,15 @@ describeWithDatabase("village Warehouse and caravans", () => {
       Object.fromEntries(
         (await db.select().from(warehouseStock)).map((row) => [row.itemId, row]),
       );
-    const short = await reserveCargo(db, "leaf", [
-      { itemId: "ore", quantity: 80 },
-      { itemId: "silk", quantity: 20 },
-    ]);
+    const short = await moveCargo(
+      db,
+      "leaf",
+      [
+        { itemId: "ore", quantity: 80 },
+        { itemId: "silk", quantity: 20 },
+      ],
+      reserve,
+    );
     // Silk lacks unreserved stock, so the caller sees fewer rows than lines and rolls back.
     expect(short.rowsAffected).toBe(1);
     await db
@@ -228,20 +234,36 @@ describeWithDatabase("village Warehouse and caravans", () => {
       { itemId: "ore", quantity: 80 },
       { itemId: "silk", quantity: 10 },
     ];
-    expect((await reserveCargo(db, "leaf", cargo)).rowsAffected).toBe(2);
+    expect((await moveCargo(db, "leaf", cargo, reserve)).rowsAffected).toBe(2);
     expect(await stockOf()).toMatchObject({
       ore: { quantity: 100, reserved: 100 },
       silk: { quantity: 50, reserved: 50 },
     });
-    await releaseCargo(db, "leaf", [{ itemId: "silk", quantity: 50 }]);
+    expect(
+      (await moveCargo(db, "leaf", [{ itemId: "silk", quantity: 50 }], release))
+        .rowsAffected,
+    ).toBe(1);
     // Releasing more than is reserved changes nothing.
-    await releaseCargo(db, "leaf", [{ itemId: "silk", quantity: 10 }]);
+    expect(
+      (await moveCargo(db, "leaf", [{ itemId: "silk", quantity: 10 }], release))
+        .rowsAffected,
+    ).toBe(0);
     // Silk is no longer reserved, so the caller sees fewer rows than lines and rolls back.
-    expect((await dispatchCargo(db, "leaf", cargo)).rowsAffected).toBe(1);
+    expect((await moveCargo(db, "leaf", cargo, dispatch)).rowsAffected).toBe(1);
     expect(await stockOf()).toMatchObject({
       ore: { quantity: 20, reserved: 20 },
       silk: { quantity: 50, reserved: 0 },
     });
+    // Departure needs the stock that covers the reservation, even when enough is reserved.
+    await db
+      .update(warehouseStock)
+      .set({ quantity: 20, reserved: 30 })
+      .where(eq(warehouseStock.itemId, "silk"));
+    expect(
+      (await moveCargo(db, "leaf", [{ itemId: "silk", quantity: 25 }], dispatch))
+        .rowsAffected,
+    ).toBe(0);
+    expect((await moveCargo(db, "leaf", [], dispatch)).rowsAffected).toBe(0);
   });
 
   it("credits several stock lines at once, creating missing rows", async () => {
