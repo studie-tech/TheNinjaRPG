@@ -836,7 +836,10 @@ export const deleteStartingEncounter = (
       ),
     );
 
-/** Close a fought encounter; only the first claim of its battle settles it. */
+/**
+ * Close a fought encounter; only the first claim of its battle settles it. A battle whose
+ * launch could not promote its encounter to FIGHTING still settles it from STARTING.
+ */
 export const resolveFoughtEncounter = (
   client: Pick<DrizzleClient, "update">,
   encounterId: string,
@@ -857,7 +860,7 @@ export const resolveFoughtEncounter = (
       and(
         eq(caravanEncounter.id, encounterId),
         eq(caravanEncounter.battleId, battleId),
-        eq(caravanEncounter.status, "FIGHTING"),
+        inArray(caravanEncounter.status, ["STARTING", "FIGHTING"]),
       ),
     );
 
@@ -881,6 +884,28 @@ export const expireAmbush = (
     WHERE ${caravanEncounter.id} = ${encounterId}
       AND ${caravanEncounter.status} = 'PENDING'
       AND ${caravanEncounter.expiresAt} <= ${now}
+  `);
+
+/**
+ * Release an abandoned defence against an ambush in one statement with the loss it costs,
+ * the share an unanswered ambush takes, so no delivery lands between the two. A caravan
+ * that already left the road keeps its loss.
+ */
+export const releaseAbandonedAmbush = (
+  client: Pick<DrizzleClient, "execute">,
+  encounter: { id: string; status: "STARTING" | "FIGHTING" | "PENDING" | "RESOLVED" },
+  lossBp: number,
+  now: Date,
+) =>
+  client.execute(sql`
+    UPDATE ${caravanEncounter}
+    INNER JOIN ${caravan} ON ${caravan.id} = ${caravanEncounter.caravanId}
+    SET ${caravanEncounter.status} = 'RESOLVED', ${caravanEncounter.resolvedAt} = ${now},
+        ${caravanEncounter.activeCaravanId} = NULL,
+        ${caravan.lossBp} = IF(${caravan.status} = 'TRAVELLING', LEAST(${CARAVAN_MAX_LOSS_BP}, ${caravan.lossBp} + ${lossBp}), ${caravan.lossBp}),
+        ${caravan.version} = ${caravan.version} + 1
+    WHERE ${caravanEncounter.id} = ${encounter.id}
+      AND ${caravanEncounter.status} = ${encounter.status}
   `);
 
 /** Release an encounter whose battle vanished without settling; nothing changes hands. */
@@ -1184,14 +1209,17 @@ export const insertCaravanWithinCapacity = (
     WHERE (SELECT COUNT(*) FROM ${caravan} AS sent WHERE sent.originVillageId = ${values.originVillageId} AND sent.status IN ('PREPARING', 'TRAVELLING')) < ${capacity}
   `);
 
-/** Move a renamed character's caravan sides, reservations and operations to the new id. */
-export const renameCaravanUser = (
+/**
+ * Move a renamed character's caravan sides, reservations and operations to the new id. It
+ * rejects only once every move has settled, so a retry never races a move still in flight.
+ */
+export const renameCaravanUser = async (
   client: Pick<DrizzleClient, "update">,
   input: { newUserId: string; userId: string },
 ) => {
   const moveActive = (column: typeof caravanParticipant.activeUserId) =>
     sql`CASE WHEN ${column} IS NULL THEN NULL ELSE ${input.newUserId} END`;
-  return Promise.all([
+  const moves = await Promise.allSettled([
     client
       .update(caravanParticipant)
       .set({
@@ -1211,6 +1239,8 @@ export const renameCaravanUser = (
       })
       .where(eq(caravanOperation.userId, input.userId)),
   ]);
+  const failed = moves.find((move) => move.status === "rejected");
+  if (failed) throw failed.reason;
 };
 
 /** A CASE yielding each cargo line's quantity for its item's stock row. */

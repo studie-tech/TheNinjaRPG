@@ -51,6 +51,18 @@ describe("hasDueCaravanWork", () => {
     expect(hasDueCaravanWork(encounter({}), NOW)).toBe(false);
     expect(hasDueCaravanWork(encounter({ expiresAt: NOW }), NOW)).toBe(true);
     expect(hasDueCaravanWork(encounter({ status: "FIGHTING" }), NOW)).toBe(false);
+    expect(hasDueCaravanWork(encounter({ status: "STARTING" }), NOW)).toBe(false);
+    expect(
+      hasDueCaravanWork(
+        encounter({
+          status: "STARTING",
+          createdAt: new Date(
+            NOW.getTime() - (CARAVAN_ENCOUNTER_STALE_MINUTES + 1) * MINUTE,
+          ),
+        }),
+        NOW,
+      ),
+    ).toBe(true);
     expect(
       hasDueCaravanWork(
         encounter({

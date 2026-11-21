@@ -21,7 +21,7 @@ import type { DrizzleClient } from "@/server/db";
 
 /**
  * Apply a caravan or marker fight's outcome inside the battle's terminal version claim.
- * The encounter's FIGHTING-to-RESOLVED transition admits one settlement per battle; every
+ * The encounter's transition to RESOLVED admits one settlement per battle; every
  * effect reads only the snapshot frozen into battle state at initiation.
  */
 export const settleCaravanCombat = async (

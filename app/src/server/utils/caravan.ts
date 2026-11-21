@@ -32,7 +32,6 @@ import {
 import { getServerPusher } from "@/libs/pusher";
 import {
   advanceCaravanCheckpoints,
-  applyCaravanLoss,
   expireAmbush,
   grantCaravanRewards,
   insertCheckpointAmbush,
@@ -49,6 +48,7 @@ import {
   listOperatorProfiles,
   listTravellingCaravans,
   markGuardsRewarded,
+  releaseAbandonedAmbush,
   releaseCargo,
   releaseParticipants,
   releaseStaleEncounter,
@@ -77,6 +77,8 @@ import { sendPushToUsers } from "@/server/utils/push";
 import { secureRandomInt } from "@/utils/math";
 
 const MINUTE_MS = 60_000;
+/** Cancellations a disbanding settlement retries against concurrent caravan writes. */
+const CANCEL_ATTEMPTS = 3;
 
 /**
  * Advance caravans and covert operations to `now`: finish due operations, roll ambushes at
@@ -240,7 +242,25 @@ export const closeVillageTrade = async (
     closeVillageTradeRoutes(client, villageId, now),
   ]);
   // One at a time: inside an outer transaction each cancel is a savepoint of the same name.
-  for (const row of caravans) await cancelCaravan(client, row, now);
+  for (const row of caravans) await callOffCaravan(client, row, now);
+};
+
+/**
+ * Cancel a caravan of a disbanded settlement despite concurrent writes, such as an expiring
+ * ambush, that bump the version the cancel claims: the caravan is reread and called off
+ * while it is still open. A caravan still open after every attempt throws, so the disband
+ * fails and can be retried; inside an outer transaction the reread repeats its snapshot,
+ * so a conflict there always ends in that throw and the caller's retry.
+ */
+const callOffCaravan = async (client: DrizzleClient, row: Caravan, now: Date) => {
+  let current: Caravan | undefined = row;
+  for (let attempt = 0; attempt < CANCEL_ATTEMPTS; attempt++) {
+    if (current?.status !== "PREPARING" && current?.status !== "TRAVELLING") return;
+    if (await cancelCaravan(client, current, now)) return;
+    [current] = await listCaravansByIds(client, [current.id]);
+  }
+  if (current?.status === "PREPARING" || current?.status === "TRAVELLING")
+    throw new Error(`Caravan ${row.id} could not be called off`);
 };
 
 /** Deliver an arrived caravan once no fight over it is still open, and pay its escorts. */
@@ -665,20 +685,17 @@ const settleDueEncounters = async (
         return;
       }
       if (encounter.battleId && running.has(encounter.battleId)) return;
-      const released = await releaseStaleEncounter(client, encounter, now);
-      if (released.rowsAffected !== 1 || !encounter.caravanId) return;
-      await Promise.all([
-        // An abandoned defence costs what an unanswered ambush would.
-        encounter.type === "AMBUSH"
-          ? applyCaravanLoss(client, encounter.caravanId, CARAVAN_AMBUSH_LOSS_BP)
-          : undefined,
-        encounter.leaderId
-          ? releaseParticipants(client, encounter.caravanId, {
-              groupLeaderId: encounter.leaderId,
-              roles: ["ENEMY", "BANDIT"],
-            })
-          : undefined,
-      ]);
+      // An abandoned defence costs what an unanswered ambush would.
+      const released =
+        encounter.type === "AMBUSH" && encounter.caravanId
+          ? await releaseAbandonedAmbush(client, encounter, CARAVAN_AMBUSH_LOSS_BP, now)
+          : await releaseStaleEncounter(client, encounter, now);
+      if (released.rowsAffected === 0 || !encounter.caravanId || !encounter.leaderId)
+        return;
+      await releaseParticipants(client, encounter.caravanId, {
+        groupLeaderId: encounter.leaderId,
+        roles: ["ENEMY", "BANDIT"],
+      });
     }),
   );
 };

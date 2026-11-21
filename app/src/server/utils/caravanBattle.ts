@@ -92,7 +92,10 @@ export const launchCaravanBattle = async (
       "CARAVAN",
     );
     started = result.success;
-    if (started) await markEncounterFighting(client, encounterId, battleId);
+    // The battle is live either way: settlement also claims a STARTING encounter, and
+    // maintenance keeps it while the battle runs, so a failed promotion still enters combat.
+    if (started)
+      await markEncounterFighting(client, encounterId, battleId).catch(() => undefined);
     return result;
   } finally {
     if (!started) {
