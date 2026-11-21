@@ -236,7 +236,7 @@ export const selectUserReportForGetRelatedReports = (
       userReportEmbedding,
       and(
         eq(userReportEmbedding.reportId, userReport.id),
-        eq(userReportEmbedding.sourceText, userReport.aiInterpretation),
+        eq(userReport.embeddedTextHash, embeddedTextHash),
         eq(userReportEmbedding.model, OPENAI_REPORT_EMBEDDING_MODEL),
       ),
     )
@@ -308,33 +308,40 @@ export const deleteUserReportEmbeddingForDeleteOrphanedReportEmbeddings = (
   );
 
 /**
- * Build the `userReport` selection for `indexReportEmbeddings`, including predicates
- * on `reportId`, `sourceText`, `aiInterpretation`.
+ * Build the `userReport` selection for `indexReportEmbeddings`: eligible reports whose
+ * summary changed since it was embedded, or whose vector came from another model.
+ * Both arms start from an index, so a run with nothing to embed reads only the
+ * flagged reports.
  */
 export const selectUserReportForIndexReportEmbeddings = (
   client: Pick<DrizzleClient, "select">,
   eligible: SQL<unknown> | undefined,
-) =>
-  client
-    .select({ id: userReport.id, text: userReport.aiInterpretation })
+) => {
+  const columns = {
+    id: userReport.id,
+    text: userReport.aiInterpretation,
+    createdAt: userReport.createdAt,
+  };
+  return client
+    .select(columns)
     .from(userReport)
-    .leftJoin(userReportEmbedding, eq(userReportEmbedding.reportId, userReport.id))
-    .where(
-      and(
-        eligible,
-        or(
-          isNull(userReportEmbedding.reportId),
-          ne(userReportEmbedding.sourceText, userReport.aiInterpretation),
-          ne(userReportEmbedding.model, OPENAI_REPORT_EMBEDDING_MODEL),
+    .where(and(eq(userReport.needsEmbedding, true), eligible))
+    .union(
+      client
+        .select(columns)
+        .from(userReport)
+        .innerJoin(userReportEmbedding, eq(userReportEmbedding.reportId, userReport.id))
+        .where(
+          and(ne(userReportEmbedding.model, OPENAI_REPORT_EMBEDDING_MODEL), eligible),
         ),
-      ),
     )
-    .orderBy(asc(userReport.createdAt), asc(userReport.id))
+    .orderBy(asc(sql`createdAt`), asc(sql`id`))
     .limit(50);
+};
 
 /**
- * Build the `userReportEmbedding` insert from `userReport` for `indexReportEmbeddings`,
- * using predicates on `id` and `aiInterpretation`, updating duplicate keys.
+ * Ensure a row exists for atomic vector publication without replacing a published vector.
+ * An interrupted insert remains retryable and unsearchable because its model is unset.
  */
 export const insertUserReportEmbeddingForIndexReportEmbeddings = (
   client: Pick<DrizzleClient, "insert" | "select">,
@@ -347,25 +354,43 @@ export const insertUserReportEmbeddingForIndexReportEmbeddings = (
       client
         .select({
           reportId: userReport.id,
-          sourceText: userReport.aiInterpretation,
-          model: sql`${OPENAI_REPORT_EMBEDDING_MODEL}`.as("model"),
+          model: sql`${""}`.as("model"),
           embedding: embedding.as("embedding"),
         })
         .from(userReport)
         .where(
           and(
             eq(userReport.id, report.id),
-            eq(userReport.aiInterpretation, report.text),
+            eq(embeddedTextHash, sql`SHA2(${report.text}, 256)`),
           ),
         ),
     )
     .onDuplicateKeyUpdate({
-      set: {
-        sourceText: report.text,
-        model: OPENAI_REPORT_EMBEDDING_MODEL,
-        embedding,
-      },
+      set: { reportId: sql`${userReportEmbedding.reportId}` },
     });
+
+/**
+ * Publish the vector and its source hash together, only while the exact source is current.
+ * A joined UPDATE keeps both tables consistent without a transaction; Drizzle's update
+ * builder cannot assign columns in multiple tables.
+ */
+export const updateUserReportForIndexReportEmbeddings = (
+  client: Pick<DrizzleClient, "execute">,
+  report: { id: string; text: string },
+  embedding: SQL<unknown>,
+) =>
+  client.execute(sql`
+    UPDATE ${userReport} INNER JOIN ${userReportEmbedding}
+      ON ${userReportEmbedding.reportId} = ${userReport.id}
+    SET ${userReport.embeddedTextHash} = SHA2(${report.text}, 256),
+      ${userReportEmbedding.model} = ${OPENAI_REPORT_EMBEDDING_MODEL},
+      ${userReportEmbedding.embedding} = ${embedding}
+    WHERE ${userReport.id} = ${report.id}
+      AND ${embeddedTextHash} = SHA2(${report.text}, 256)
+  `);
+
+/** SHA-256 of the current summary, matching what `embeddedTextHash` records. */
+const embeddedTextHash = sql<string>`SHA2(${userReport.aiInterpretation}, 256)`;
 
 /** Build report columns, omitting reporterUserId for ordinary viewers and retaining the lazy comment subquery. */
 const reportColumns = (client: Pick<DrizzleClient, "select">) => ({

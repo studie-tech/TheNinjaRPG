@@ -4304,6 +4304,13 @@ export const userReport = mysqlTable(
       sql`\`aiInterpretation\` = '' AND JSON_LENGTH(\`additionalContext\`) > 0 AND \`system\` <> 'user_profile'`,
       { mode: "stored" },
     ),
+    // SHA-256 of the summary that UserReportEmbedding holds a vector for. Keeping it on
+    // the report lets needsEmbedding follow every summary or status write in place.
+    embeddedTextHash: varchar("embeddedTextHash", { length: 64 }),
+    needsEmbedding: boolean("needsEmbedding").generatedAlwaysAs(
+      sql`\`aiInterpretation\` <> '' AND JSON_LENGTH(\`additionalContext\`) > 0 AND \`system\` <> 'user_profile' AND \`status\` <> 'UNVIEWED' AND NOT (\`embeddedTextHash\` <=> SHA2(\`aiInterpretation\`, 256))`,
+      { mode: "stored" },
+    ),
   },
   (table) => {
     return {
@@ -4319,22 +4326,33 @@ export const userReport = mysqlTable(
         table.needsAiSummary,
         table.createdAt,
       ),
+      needsEmbeddingCreatedAtIdx: index("UserReport_needsEmbedding_createdAt_idx").on(
+        table.needsEmbedding,
+        table.createdAt,
+      ),
     };
   },
 );
 export type UserReport = InferSelectModel<typeof userReport>;
 export type ReportAction = UserReport["status"];
 
-// Keep vectors out of ordinary report reads and API responses. Source text and
-// model identify stale embeddings without relying on report-update timestamps.
-export const userReportEmbedding = mysqlTable("UserReportEmbedding", {
-  reportId: varchar("reportId", { length: 191 }).primaryKey().notNull(),
-  sourceText: text("sourceText").notNull(),
-  model: varchar("model", { length: 191 }).notNull(),
-  embedding: vector("embedding", {
-    length: consts.REPORT_EMBEDDING_DIMENSIONS,
-  }).notNull(),
-});
+// Keep vectors out of ordinary report reads and API responses. The report's
+// embeddedTextHash and this row's model identify stale embeddings.
+export const userReportEmbedding = mysqlTable(
+  "UserReportEmbedding",
+  {
+    reportId: varchar("reportId", { length: 191 }).primaryKey().notNull(),
+    model: varchar("model", { length: 191 }).notNull(),
+    embedding: vector("embedding", {
+      length: consts.REPORT_EMBEDDING_DIMENSIONS,
+    }).notNull(),
+  },
+  (table) => {
+    return {
+      modelIdx: index("UserReportEmbedding_model_idx").on(table.model),
+    };
+  },
+);
 
 export const userReportRelations = relations(userReport, ({ one }) => ({
   reportedUser: one(userData, {

@@ -28,11 +28,13 @@ const database = (
   run: (query: string, params: unknown[]) => unknown[][] | Promise<unknown[][]>,
 ) => {
   const queries: string[] = [];
+  const parameters: unknown[][] = [];
   const client = drizzle(async (query, params) => {
     queries.push(query);
+    parameters.push(params);
     return { rows: await run(query, params) };
   }) as unknown as DrizzleClient;
-  return { client, queries };
+  return { client, queries, parameters };
 };
 
 describe("moderation report search capabilities", () => {
@@ -40,7 +42,9 @@ describe("moderation report search capabilities", () => {
     const { client, queries } = database((query, params) => {
       if (query.includes("from `UserReportEmbedding`")) return [];
       expect(query).toContain("DISTANCE");
-      expect(query).toContain("`sourceText` = `UserReport`.`aiInterpretation`");
+      expect(query).toContain(
+        "`UserReport`.`embeddedTextHash` = SHA2(`UserReport`.`aiInterpretation`, 256)",
+      );
       expect(params).toContain("[1,0]");
       return [precedent("semantic-match")];
     });
@@ -173,21 +177,34 @@ describe("moderation report search capabilities", () => {
     });
   });
 
-  it("backfills summaries in one embedding batch and upserts their source and model", async () => {
-    const { client, queries } = database((query, params) => {
+  it("backfills summaries in one embedding batch and records the embedded source", async () => {
+    const { client, queries, parameters } = database((query, params) => {
       if (query.includes("DISTANCE")) return [];
-      if (query.startsWith("select")) {
-        expect(query).toContain("left join `UserReportEmbedding`");
-        expect(query).toContain("`sourceText` <> `UserReport`.`aiInterpretation`");
+      if (query.startsWith("(select")) {
+        expect(query).toContain("`UserReport`.`needsEmbedding` = ?");
+        expect(query).toContain("`UserReportEmbedding`.`model` <> ?");
+        expect(query).not.toContain("left join");
         return [
-          ["first", "Harassment"],
-          ["second", "Threats"],
+          ["first", "Harassment", "2026-01-01 00:00:00.000"],
+          ["second", "Threats", "2026-01-02 00:00:00.000"],
         ];
+      }
+      if (query.trimStart().startsWith("UPDATE")) {
+        expect(query).toContain("SET `UserReport`.`embeddedTextHash` = SHA2(?, 256)");
+        expect(query).toContain("`UserReportEmbedding`.`embedding` = TO_VECTOR(?)");
+        expect(query).toContain(
+          "SHA2(`UserReport`.`aiInterpretation`, 256) = SHA2(?, 256)",
+        );
+        expect(params).toContain("text-embedding-3-small");
+        return [[{ affectedRows: 1 }]];
       }
       expect(query).toContain("TO_VECTOR(?)");
       expect(query).toContain("on duplicate key update");
       expect(query).toContain("from `UserReport` where");
-      expect(params).toContain("text-embedding-3-small");
+      expect(params).toContain("");
+      expect(query).toContain(
+        "SHA2(`UserReport`.`aiInterpretation`, 256) = SHA2(?, 256)",
+      );
       expect(params.some((param) => param === "[1,0]" || param === "[0,1]")).toBe(true);
       return [[{ insertId: 0, affectedRows: 1 }]];
     });
@@ -199,6 +216,17 @@ describe("moderation report search capabilities", () => {
     expect(embed).toHaveBeenCalledWith(["Harassment", "Threats"]);
     expect(embed).toHaveBeenCalledTimes(1);
     expect(queries.filter((query) => query.startsWith("insert"))).toHaveLength(2);
+    // Each vector and source hash are published together after ensuring a row exists.
+    for (const id of ["first", "second"]) {
+      const write = (kind: string) =>
+        queries.findIndex(
+          (query, index) =>
+            query.trimStart().toLowerCase().startsWith(kind) &&
+            parameters[index]?.includes(id),
+        );
+      expect(write("insert")).toBeGreaterThan(-1);
+      expect(write("update")).toBeGreaterThan(write("insert"));
+    }
     expect(queries.some((query) => query.startsWith("delete"))).toBe(false);
   });
 
