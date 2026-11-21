@@ -29,7 +29,6 @@ const tdQuestChallengeSchema = tdChallengeRequestSchema.extend({
   enemyHealth: z.int().min(TD_CHALLENGE_MIN_STRENGTH).max(TD_CHALLENGE_MAX_STRENGTH),
   enemyDamage: z.int().min(TD_CHALLENGE_MIN_STRENGTH).max(TD_CHALLENGE_MAX_STRENGTH),
 });
-export type TdQuestChallenge = z.infer<typeof tdQuestChallengeSchema>;
 
 /** What the server signs when a run starts; the claim replays exactly this. */
 export const towerDefenseRunTokenSchema = z.object({

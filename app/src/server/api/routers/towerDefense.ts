@@ -62,7 +62,6 @@ import {
   TD_MAX_LOG_CHARS,
   TD_MAX_TICKS,
   type TdChallengeRequest,
-  type TdQuestChallenge,
   tdChallengeRequestSchema,
   towerDefenseRunTokenSchema,
 } from "@/validators/towerDefense";
@@ -462,7 +461,7 @@ const settleChallengeRun = async (
   ctx: { drizzle: DrizzleClient; userId: string },
   input: {
     nonce: string;
-    challenge: TdQuestChallenge;
+    challenge: TdChallengeRequest;
     claimKey: string;
     result: { wave: number; kills: number; won: boolean };
   },
