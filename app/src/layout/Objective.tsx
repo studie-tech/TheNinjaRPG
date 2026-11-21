@@ -14,6 +14,7 @@ import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { CHAKRA_STORM_STAGE_NAMES } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
@@ -37,6 +38,7 @@ import { useRequiredUserDataSelector, useUserDataSelector } from "@/utils/UserCo
 import type {
   AllObjectivesType,
   QuestTrackerType,
+  WinChakraStormType,
   WinTowerDefenseType,
 } from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
@@ -82,6 +84,16 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
 
   // Offer a retry only for a lost start_battle objective the loss did not already resolve
   const status = tracker?.goals.find((g) => g.id === objective.id);
+  // Where this player finds the objective: the position rolled onto their tracker, else
+  // the authored one, as the server resolves it.
+  const located =
+    "sector" in parsed
+      ? {
+          sector: status?.sector ?? parsed.sector,
+          longitude: status?.longitude ?? parsed.longitude,
+          latitude: status?.latitude ?? parsed.latitude,
+        }
+      : null;
   const goalTarget = status?.target ?? ("value" in parsed ? parsed.value : undefined);
   const canRetryBattle =
     objective.task === "start_battle" &&
@@ -227,7 +239,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
               {indicatorIcons}
             </div>
           )}
-          {"sector" in parsed && (
+          {located && (
             <div className="flex flex-row items-center gap-2 pr-3">
               <div className="grow">
                 {!("hideLocation" in parsed && parsed.hideLocation) && (
@@ -236,19 +248,19 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                       <b>Sector: </b>{" "}
                       <Link
                         className="text-orange-600 underline dark:text-orange-400"
-                        href={`/travel?sector=${parsed.sector}${parsed.longitude !== undefined && parsed.latitude !== undefined ? `&longitude=${parsed.longitude}&latitude=${parsed.latitude}` : ""}`}
+                        href={`/travel?sector=${located.sector}${located.longitude !== undefined && located.latitude !== undefined ? `&longitude=${located.longitude}&latitude=${located.latitude}` : ""}`}
                         aria-label={
-                          parsed.longitude !== undefined &&
-                          parsed.latitude !== undefined
-                            ? `Auto travel to sector ${parsed.sector}, position ${parsed.longitude}, ${parsed.latitude}`
-                            : `Auto travel to sector ${parsed.sector}`
+                          located.longitude !== undefined &&
+                          located.latitude !== undefined
+                            ? `Auto travel to sector ${located.sector}, position ${located.longitude}, ${located.latitude}`
+                            : `Auto travel to sector ${located.sector}`
                         }
                       >
-                        {parsed.sector}
+                        {located.sector}
                       </Link>
                     </div>
                     <div>
-                      <b>Position:</b> [{parsed.longitude}, {parsed.latitude}]
+                      <b>Position:</b> [{located.longitude}, {located.latitude}]
                     </div>
                   </>
                 )}
@@ -282,7 +294,30 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
             </div>
           )}
           {parsed.task === "win_tower_defense" && !done && !props.grayedOut && (
-            <TowerDefenseChallengeAction questId={tracker.id} objective={parsed} />
+            <QuestChallengeAction
+              questId={tracker.id}
+              objective={{ ...parsed, ...located }}
+              page="/towerDefense"
+              label="Take position"
+            >
+              Hold your ground through {parsed.waves === 1 ? "wave" : "waves"}{" "}
+              {parsed.startWave}
+              {parsed.waves > 1 ? `–${parsed.startWave + parsed.waves - 1}` : ""}{" "}
+              against enemies with {parsed.enemyHealth}% health and {parsed.enemyDamage}
+              % damage.
+            </QuestChallengeAction>
+          )}
+          {parsed.task === "win_chakra_storm" && !done && !props.grayedOut && (
+            <QuestChallengeAction
+              questId={tracker.id}
+              objective={{ ...parsed, ...located }}
+              page="/chakraStorm"
+              label="Enter the storm"
+            >
+              Survive {parsed.surviveMinutes}{" "}
+              {parsed.surviveMinutes === 1 ? "minute" : "minutes"} of the Chakra Storm
+              in {CHAKRA_STORM_STAGE_NAMES[parsed.stage]}.
+            </QuestChallengeAction>
           )}
           {/* Retry button for lost start_battle objectives that are still open */}
           {canRetryBattle && (
@@ -310,9 +345,16 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
  * its location. A hidden location cannot be checked here, so the server decides.
  * Subscribes to a single boolean so movement re-renders it only when arriving or leaving.
  */
-const TowerDefenseChallengeAction = (props: {
+const QuestChallengeAction = (props: {
   questId: string;
-  objective: WinTowerDefenseType;
+  objective: Pick<
+    WinTowerDefenseType | WinChakraStormType,
+    "id" | "sector" | "longitude" | "latitude" | "hideLocation"
+  >;
+  /** The minigame page the challenge is played on. */
+  page: "/towerDefense" | "/chakraStorm";
+  label: string;
+  children: React.ReactNode;
 }) => {
   const { objective } = props;
   const { data: isHere } = useUserDataSelector(
@@ -322,24 +364,20 @@ const TowerDefenseChallengeAction = (props: {
         u.longitude === objective.longitude &&
         u.latitude === objective.latitude),
   );
-  const finalWave = objective.startWave + objective.waves - 1;
   return (
     <div className="@container mt-2 pr-3">
       <div className="flex flex-col gap-2 @md:flex-row @md:items-center">
         <p className="grow text-sm">
-          Hold your ground through {objective.waves === 1 ? "wave" : "waves"}{" "}
-          {objective.startWave}
-          {objective.waves > 1 ? `–${finalWave}` : ""} against enemies with{" "}
-          {objective.enemyHealth}% health and {objective.enemyDamage}% damage.
+          {props.children}
           {!isHere && " Travel to the position above to start."}
         </p>
         {isHere && (
           <Button asChild size="sm" className="shrink-0">
             <Link
-              href={`/towerDefense?quest=${encodeURIComponent(props.questId)}&objective=${encodeURIComponent(objective.id)}`}
+              href={`${props.page}?quest=${encodeURIComponent(props.questId)}&objective=${encodeURIComponent(objective.id)}`}
             >
               <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
-              Take position
+              {props.label}
             </Link>
           </Button>
         )}

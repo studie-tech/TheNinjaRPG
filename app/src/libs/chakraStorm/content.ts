@@ -4,6 +4,7 @@
  * Everything here is plain numbers the deterministic simulation reads, so it follows the
  * simulation's arithmetic rules (no `**`, `Math.pow`, trigonometry or clocks).
  */
+import { CHAKRA_STORM_STAGE_NAMES, CHAKRA_STORM_STAGES } from "@/drizzle/constants";
 import type { TdElement } from "@/libs/towerDefense/content";
 
 /** Simulation ticks per second. */
@@ -661,14 +662,7 @@ export const csLevelCost = (stage: CsStage, level: number) => {
   );
 };
 
-export const CS_STAGES = [
-  "horizon",
-  "akasumi",
-  "akikaze",
-  "hyorin",
-  "mei",
-  "undercover",
-] as const;
+export const CS_STAGES = CHAKRA_STORM_STAGES;
 export type CsStage = (typeof CS_STAGES)[number];
 
 /** How a region's field is laid out: ponds to wade through, trees and rocks to go around. */
@@ -717,7 +711,7 @@ export interface CsStageInfo {
 
 export const CS_STAGE_INFO: Record<CsStage, CsStageInfo> = {
   horizon: {
-    name: "Horizon Outskirts",
+    name: CHAKRA_STORM_STAGE_NAMES.horizon,
     region: "Horizon, the academy town",
     summary:
       "Map the fields and ponds beyond the academy, where outlaws have been seen watching the roads.",
@@ -735,7 +729,7 @@ export const CS_STAGE_INFO: Record<CsStage, CsStageInfo> = {
     unlockSeconds: 0,
   },
   akasumi: {
-    name: "Akasumi Spirit Forest",
+    name: CHAKRA_STORM_STAGE_NAMES.akasumi,
     region: "Akasumi, the forest village",
     summary:
       "Learn why the forest spirits grow restless. The woods are thick, and something hunts between the roots.",
@@ -753,7 +747,7 @@ export const CS_STAGE_INFO: Record<CsStage, CsStageInfo> = {
     unlockSeconds: 600,
   },
   akikaze: {
-    name: "Akikaze Storm Canyon",
+    name: CHAKRA_STORM_STAGE_NAMES.akikaze,
     region: "Akikaze, the canyon village",
     summary:
       "Chart the canyon passes as storm winds rake the floor and fast raiders pour down from the cliffs.",
@@ -771,7 +765,7 @@ export const CS_STAGE_INFO: Record<CsStage, CsStageInfo> = {
     unlockSeconds: 600,
   },
   hyorin: {
-    name: "Hyorin Alpine Pass",
+    name: CHAKRA_STORM_STAGE_NAMES.hyorin,
     region: "Hyorin, the mountain village",
     summary:
       "Scout the frozen pass where heavy brutes push through the snow and the lakes lie under ice.",
@@ -789,7 +783,7 @@ export const CS_STAGE_INFO: Record<CsStage, CsStageInfo> = {
     unlockSeconds: 600,
   },
   mei: {
-    name: "City of Mei",
+    name: CHAKRA_STORM_STAGE_NAMES.mei,
     region: "the Syndicate's outlaw stronghold",
     summary:
       "Spy on the Syndicate's own walls from sunset into the night, where every outlaw answers the alarm.",
@@ -807,7 +801,7 @@ export const CS_STAGE_INFO: Record<CsStage, CsStageInfo> = {
     unlockSeconds: 600,
   },
   undercover: {
-    name: "Undercover",
+    name: CHAKRA_STORM_STAGE_NAMES.undercover,
     region: "deep behind Syndicate lines",
     summary:
       "Slip into the Syndicate's hinterland and send word home for as long as your cover holds. No reinforcements are coming.",

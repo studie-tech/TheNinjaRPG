@@ -32,11 +32,11 @@ import {
   tdRunPoints,
 } from "@/libs/towerDefense/sim";
 import { clamp } from "@/utils/math";
+import type { QuestChallengeRequest } from "@/validators/questChallenge";
 import {
   TD_MAX_ACTIONS,
   TD_MAX_LOG_CHARS,
   TD_MAX_TICKS,
-  type TdChallengeRequest,
 } from "@/validators/towerDefense";
 
 /** A run in progress, kept outside React so the frame loop never waits on a render. */
@@ -116,7 +116,7 @@ export interface TowerDefenseBackend {
    */
   startRun: (
     startWave: number,
-    challenge?: TdChallengeRequest,
+    challenge?: QuestChallengeRequest,
   ) => Promise<{ config: TdRunConfig; token: string | null } | null>;
   claimRun: (claim: {
     token: string;
@@ -382,7 +382,11 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
    * again once the server answers, since another tab may have written it in the meantime.
    */
   const start = useCallback(
-    async (startWave: number, replaceSaved = false, challenge?: TdChallengeRequest) => {
+    async (
+      startWave: number,
+      replaceSaved = false,
+      challenge?: QuestChallengeRequest,
+    ) => {
       const chosen = replaceSaved ? saved : null;
       /** Whether storage still holds the save the player decided about. */
       const isUnchanged = () => {

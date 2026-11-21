@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { findTowerDefenseChallenge } from "@/libs/towerDefense/challenge";
+import { findQuestChallenge } from "@/libs/quest/challenge";
 import {
   trackerChallengeObjective as challengeObjective,
   trackerUser as makeUser,
   trackerQuest,
+  trackerStormObjective,
 } from "../../setup/quest";
 
 const moveObjective = (id: string) => ({
@@ -20,7 +21,7 @@ const at = (sector: number, longitude: number, latitude: number) => ({
   latitude,
 });
 
-describe("findTowerDefenseChallenge", () => {
+describe("findQuestChallenge", () => {
   it("finds the challenge with the location rolled for the player", () => {
     const quest = trackerQuest("q1", [challengeObjective("td")], "mission");
     const questData = [
@@ -32,16 +33,24 @@ describe("findTowerDefenseChallenge", () => {
         ],
       },
     ];
-    const here = findTowerDefenseChallenge(makeUser([quest], questData, at(7, 2, 2)), {
-      questId: "q1",
-      objectiveId: "td",
-    });
+    const here = findQuestChallenge(
+      makeUser([quest], questData, at(7, 2, 2)),
+      {
+        questId: "q1",
+        objectiveId: "td",
+      },
+      "win_tower_defense",
+    );
     expect(here).toMatchObject({ done: false, available: true, atLocation: true });
     expect(here?.objective).toMatchObject({ sector: 7, longitude: 2, latitude: 2 });
-    const away = findTowerDefenseChallenge(makeUser([quest], questData, at(5, 3, 4)), {
-      questId: "q1",
-      objectiveId: "td",
-    });
+    const away = findQuestChallenge(
+      makeUser([quest], questData, at(5, 3, 4)),
+      {
+        questId: "q1",
+        objectiveId: "td",
+      },
+      "win_tower_defense",
+    );
     expect(away?.atLocation).toBe(false);
   });
 
@@ -49,10 +58,14 @@ describe("findTowerDefenseChallenge", () => {
     const done = trackerQuest("q1", [challengeObjective("td")], "mission");
     const doneData = [{ id: "q1", goals: [{ id: "td", done: true, value: 0 }] }];
     expect(
-      findTowerDefenseChallenge(makeUser([done], doneData, at(5, 3, 4)), {
-        questId: "q1",
-        objectiveId: "td",
-      })?.done,
+      findQuestChallenge(
+        makeUser([done], doneData, at(5, 3, 4)),
+        {
+          questId: "q1",
+          objectiveId: "td",
+        },
+        "win_tower_defense",
+      )?.done,
     ).toBe(true);
 
     const ordered = trackerQuest(
@@ -71,21 +84,44 @@ describe("findTowerDefenseChallenge", () => {
       },
     ];
     expect(
-      findTowerDefenseChallenge(makeUser([ordered], orderedData, at(5, 3, 4)), {
-        questId: "q2",
-        objectiveId: "td",
-      })?.available,
+      findQuestChallenge(
+        makeUser([ordered], orderedData, at(5, 3, 4)),
+        {
+          questId: "q2",
+          objectiveId: "td",
+        },
+        "win_tower_defense",
+      )?.available,
     ).toBe(false);
+  });
+
+  it("finds a storm challenge only under its own task", () => {
+    const quest = trackerQuest("q1", [trackerStormObjective("cs")], "mission");
+    const user = makeUser([quest], [], at(5, 3, 4));
+    const request = { questId: "q1", objectiveId: "cs" };
+    expect(findQuestChallenge(user, request, "win_chakra_storm")).toMatchObject({
+      objective: { stage: "akasumi", surviveMinutes: 3 },
+      atLocation: true,
+    });
+    expect(findQuestChallenge(user, request, "win_tower_defense")).toBeNull();
   });
 
   it("finds nothing for another task or another player's quest", () => {
     const quest = trackerQuest("q1", [moveObjective("move")], "mission");
     const user = makeUser([quest], [], at(9, 1, 1));
     expect(
-      findTowerDefenseChallenge(user, { questId: "q1", objectiveId: "move" }),
+      findQuestChallenge(
+        user,
+        { questId: "q1", objectiveId: "move" },
+        "win_tower_defense",
+      ),
     ).toBeNull();
     expect(
-      findTowerDefenseChallenge(user, { questId: "q9", objectiveId: "td" }),
+      findQuestChallenge(
+        user,
+        { questId: "q9", objectiveId: "td" },
+        "win_tower_defense",
+      ),
     ).toBeNull();
   });
 });

@@ -116,7 +116,11 @@ export const verifyChakraStormRun = async (input: {
   const { token, endTick } = input;
   const replay = createCsReplay(
     token.seed,
-    { stage: token.stage, training: { ...csNoTraining(), ...token.training } },
+    {
+      stage: token.stage,
+      training: { ...csNoTraining(), ...token.training },
+      challenge: token.challenge,
+    },
     input.actions,
   );
   const slice = input.sliceTicks ?? CS_REPLAY_SLICE_TICKS;

@@ -293,7 +293,13 @@ export const ChakraStormPlayfield = (props: {
               outcome={run.outcome}
               goal={run.goal}
               footer={props.resultsFooter}
-              onAgain={() => run.outcome && props.onScout(run.outcome.stage)}
+              onAgain={() => {
+                const outcome = run.outcome;
+                if (!outcome) return;
+                // A challenge starts again from its objective, which the server checks.
+                if (outcome.challenge) void run.start(outcome.stage, outcome.challenge);
+                else props.onScout(outcome.stage);
+              }}
               onScout={props.onScout}
               onLeave={run.leave}
               onRetry={() => void run.retryClaim()}

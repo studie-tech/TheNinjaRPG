@@ -20,6 +20,7 @@ const validObjectives = [
   { id: "o10", task: "dialog" }, // DialogObjective
   { id: "o11", task: "win_encounter_at_location" }, // EncountersAtLocation
   { id: "o13", task: "win_tower_defense" }, // WinTowerDefense
+  { id: "o14", task: "win_chakra_storm" }, // WinChakraStorm
   { id: "collection", task: "bloodline_collection", bloodlineRanks: ["A"] },
   {
     id: "o12",

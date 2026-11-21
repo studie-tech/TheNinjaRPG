@@ -4,21 +4,24 @@ import {
   CheckCircle2,
   Flag,
   Heart,
-  MapPin,
   Play,
   RotateCcw,
   ScrollText,
   Swords,
   Waves,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import Confirm from "@/layout/Confirm";
 import Link from "@/layout/Link";
 import { Reward } from "@/layout/Objective";
+import {
+  ChallengeElsewhere,
+  ChallengeGone,
+  ChallengeNotice,
+  QUEST_LOGBOOK_HREF,
+} from "@/layout/QuestChallenge";
 import { TowerDefenseStat } from "@/layout/TowerDefenseLobby";
-import { cn } from "@/libs/shadui";
-import type { findTowerDefenseChallenge } from "@/libs/towerDefense/challenge";
+import type { findQuestChallenge } from "@/libs/quest/challenge";
 import type { TdSavedRunHead } from "@/libs/towerDefense/savedRun";
 import { parseHtml } from "@/utils/parse";
 import { hasReward } from "@/validators/rewards";
@@ -38,15 +41,7 @@ export const TowerDefenseChallenge = (props: {
   onResume: () => void;
 }) => {
   const { challenge, saved } = props;
-  if (!challenge)
-    return (
-      <div className="space-y-3 p-3 text-sm">
-        <p>This defense is no longer part of your active quests.</p>
-        <Button asChild>
-          <Link href={LOGBOOK_HREF}>Open logbook</Link>
-        </Button>
-      </div>
-    );
+  if (!challenge) return <ChallengeGone noun="defense" />;
   const { objective, quest } = challenge;
   const finalWave = objective.startWave + objective.waves - 1;
   const busy = props.isStarting || props.isResuming;
@@ -68,19 +63,11 @@ export const TowerDefenseChallenge = (props: {
   // The defense belongs to its position: elsewhere the briefing only points the way there.
   if (!challenge.done && !isHere)
     return (
-      <div className="space-y-2 p-3 text-sm">
-        <p className="text-muted-foreground">Quest: {quest.name}</p>
-        <Notice icon={<MapPin className="h-5 w-5 text-amber-500" />}>
-          Travel to{" "}
-          <Link
-            className="font-semibold underline"
-            href={`/travel?sector=${objective.sector}&longitude=${objective.longitude}&latitude=${objective.latitude}`}
-          >
-            sector {objective.sector} at [{objective.longitude}, {objective.latitude}]
-          </Link>{" "}
-          to hold your ground there.
-        </Notice>
-      </div>
+      <ChallengeElsewhere
+        questName={quest.name}
+        objective={objective}
+        purpose="hold your ground there"
+      />
     );
   return (
     <div className="@container space-y-4 p-3">
@@ -123,7 +110,7 @@ export const TowerDefenseChallenge = (props: {
         the leaderboard or the daily duty.
       </p>
       {saved && isSavedChallenge && (
-        <Notice
+        <ChallengeNotice
           icon={<RotateCcw className="h-5 w-5 text-amber-500" />}
           action={
             <Button size="sm" disabled={busy} onClick={props.onResume}>
@@ -138,28 +125,28 @@ export const TowerDefenseChallenge = (props: {
         >
           {saved.over ? "Unclaimed" : "Unfinished"} defense at wave{" "}
           <strong>{saved.wave}</strong>
-        </Notice>
+        </ChallengeNotice>
       )}
       {challenge.done ? (
-        <Notice
+        <ChallengeNotice
           tone="success"
           icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
         >
           {hasReward(objective)
             ? "You held your ground. Collect the objective's reward in your logbook."
             : "You held your ground. Continue the quest in your logbook."}
-        </Notice>
+        </ChallengeNotice>
       ) : (
         !challenge.available && (
-          <Notice icon={<ScrollText className="h-5 w-5 text-amber-500" />}>
+          <ChallengeNotice icon={<ScrollText className="h-5 w-5 text-amber-500" />}>
             Finish the earlier objectives of {quest.name} first.
-          </Notice>
+          </ChallengeNotice>
         )
       )}
       <div className="flex flex-col gap-2 @md:flex-row @md:justify-end">
         {challenge.done ? (
           <Button asChild size="lg">
-            <Link href={LOGBOOK_HREF}>
+            <Link href={QUEST_LOGBOOK_HREF}>
               <ScrollText className="mr-2 h-5 w-5" />
               Open logbook
             </Link>
@@ -190,28 +177,6 @@ export const TowerDefenseChallenge = (props: {
   );
 };
 
-/** A one-line status banner with an optional action: amber by default, green on success. */
-const Notice = (props: {
-  icon: ReactNode;
-  tone?: "success";
-  action?: ReactNode;
-  children: ReactNode;
-}) => (
-  <div
-    className={cn(
-      "flex flex-wrap items-center gap-2 rounded-lg border p-2 text-sm",
-      props.tone === "success"
-        ? "border-green-500/50 bg-green-500/10"
-        : "border-amber-500/50 bg-amber-500/10",
-    )}
-  >
-    {props.icon}
-    <p className="flex-1">{props.children}</p>
-    {props.action}
-  </div>
-);
-
-/** The logbook section on the profile dashboard. */
-const LOGBOOK_HREF = "/profile?tab=dashboard#progress-heading";
-
-type FoundChallenge = NonNullable<ReturnType<typeof findTowerDefenseChallenge>>;
+type FoundChallenge = NonNullable<
+  ReturnType<typeof findQuestChallenge<"win_tower_defense">>
+>;

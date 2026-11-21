@@ -1,7 +1,7 @@
 import type { QuestType } from "@/drizzle/constants";
 import type { getNewTrackers } from "@/libs/quest";
 import type { RewardChoiceOwnership } from "@/libs/rewardChoice";
-import { WinTowerDefense } from "@/validators/objectives";
+import { WinChakraStorm, WinTowerDefense } from "@/validators/objectives";
 
 /**
  * In-memory quest definition. `overrides` replaces quest columns; its `content` is merged into
@@ -98,6 +98,18 @@ export const trackerChallengeObjective = (id: string) =>
     waves: 5,
     enemyHealth: 150,
     enemyDamage: 80,
+  });
+
+/** A Chakra Storm challenge objective at sector 5, position [3, 4]. */
+export const trackerStormObjective = (id: string) =>
+  WinChakraStorm.parse({
+    id,
+    task: "win_chakra_storm",
+    sector: 5,
+    longitude: 3,
+    latitude: 4,
+    stage: "akasumi",
+    surviveMinutes: 3,
   });
 
 /** Player holding one repeatable quest, for the reward calculators. */

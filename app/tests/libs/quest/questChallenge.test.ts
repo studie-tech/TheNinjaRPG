@@ -1,10 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { getNewTrackers } from "@/libs/quest";
 import {
-  trackerChallengeObjective as challengeObjective,
   trackerGoal as goal,
   trackerUser as makeUser,
+  trackerChallengeObjective,
   trackerQuest,
+  trackerStormObjective,
 } from "../../setup/quest";
 
 const at = (sector: number, longitude: number, latitude: number) => ({
@@ -13,7 +14,10 @@ const at = (sector: number, longitude: number, latitude: number) => ({
   latitude,
 });
 
-describe("win_tower_defense objectives", () => {
+describe.each([
+  ["win_tower_defense", trackerChallengeObjective],
+  ["win_chakra_storm", trackerStormObjective],
+] as const)("%s objectives", (task, challengeObjective) => {
   it("completes only from the verified win naming it", () => {
     const quest = trackerQuest("q1", [challengeObjective("td")], "mission");
     const user = makeUser([quest], [], at(5, 3, 4));
@@ -29,22 +33,12 @@ describe("win_tower_defense objectives", () => {
       )?.done,
     ).toBeFalsy();
     expect(
-      goal(
-        getNewTrackers(user, [
-          { task: "win_tower_defense", contentId: "other", text: "q1" },
-        ]),
-        "q1",
-        "td",
-      )?.done,
+      goal(getNewTrackers(user, [{ task, contentId: "other", text: "q1" }]), "q1", "td")
+        ?.done,
     ).toBeFalsy();
     expect(
-      goal(
-        getNewTrackers(user, [
-          { task: "win_tower_defense", contentId: "td", text: "q1" },
-        ]),
-        "q1",
-        "td",
-      )?.done,
+      goal(getNewTrackers(user, [{ task, contentId: "td", text: "q1" }]), "q1", "td")
+        ?.done,
     ).toBe(true);
   });
 
@@ -53,9 +47,7 @@ describe("win_tower_defense objectives", () => {
     const won = trackerQuest("q1", [challengeObjective("td")], "mission");
     const clone = trackerQuest("q2", [challengeObjective("td")], "mission");
     const user = makeUser([won, clone], [], at(5, 3, 4));
-    const trackers = getNewTrackers(user, [
-      { task: "win_tower_defense", contentId: "td", text: "q1" },
-    ]);
+    const trackers = getNewTrackers(user, [{ task, contentId: "td", text: "q1" }]);
     expect(goal(trackers, "q1", "td")?.done).toBe(true);
     expect(goal(trackers, "q2", "td")?.done).toBeFalsy();
   });

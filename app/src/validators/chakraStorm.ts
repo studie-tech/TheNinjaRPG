@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { CS_CHALLENGE_MAX_MINUTES } from "@/drizzle/constants";
 import {
   CS_ENDLESS_SECONDS,
   CS_STAGES,
   CS_TPS,
   CS_TRAINING,
 } from "@/libs/chakraStorm/content";
+import { questChallengeRequestSchema } from "@/validators/questChallenge";
 
 /** Longest run a claim may replay: an Undercover run at its cap, which ends itself there. */
 export const CS_MAX_TICKS = CS_ENDLESS_SECONDS * CS_TPS;
@@ -26,5 +28,14 @@ export const chakraStormRunTokenSchema = z.object({
   stage: z.enum(CS_STAGES),
   training: z.partialRecord(z.enum(CS_TRAINING), z.int().min(0)),
   issuedAt: z.int(),
+  /** The quest objective this run is a challenge for, with its survival time. */
+  challenge: questChallengeRequestSchema
+    .extend({
+      seconds: z
+        .int()
+        .min(60)
+        .max(CS_CHALLENGE_MAX_MINUTES * 60),
+    })
+    .optional(),
 });
 export type ChakraStormRunToken = z.infer<typeof chakraStormRunTokenSchema>;

@@ -1,5 +1,8 @@
 import { z } from "zod";
 import {
+  CHAKRA_STORM_CHALLENGE_STAGES,
+  CS_CARD_URL,
+  CS_CHALLENGE_MAX_MINUTES,
   FARMING_MAX_LEVEL,
   GATHERING_RANKS,
   HUNTING_RANKS,
@@ -310,7 +313,14 @@ export const LocationTasks = [
   "deliver_item",
   "defeat_opponents",
   "win_tower_defense",
+  "win_chakra_storm",
 ] as const;
+
+/** Objectives completed only by a verified minigame win naming them, never on arrival. */
+export const QuestChallengeTasks = ["win_tower_defense", "win_chakra_storm"] as const;
+export type QuestChallengeTask = (typeof QuestChallengeTasks)[number];
+export const isQuestChallengeTask = (task: string): task is QuestChallengeTask =>
+  (QuestChallengeTasks as readonly string[]).includes(task);
 
 export const TrackerObjectiveTasks = [
   "craft_specific_item",
@@ -470,6 +480,7 @@ export const objectiveImageMap: Record<
   deliver_item: { image: IMG_BADGE_COLLECT_ITEM, title: "Deliver Item" },
   defeat_opponents: { image: IMG_BADGE_DEFEAT_OPPONENTS, title: "Defeat" },
   win_tower_defense: { image: IMG_MANUAL_TOWER_UPGRADES, title: "Hold Your Ground" },
+  win_chakra_storm: { image: CS_CARD_URL, title: "Survive the Storm" },
   fail_quest: { image: IMG_BADGE_FAIL_QUEST, title: "Fail Quest" },
   win_quest: { image: IMG_BADGE_WIN_QUEST, title: "Win Quest" },
   new_quest: { image: IMG_BADGE_NEW_QUEST, title: "New Quest" },
@@ -735,6 +746,25 @@ export const WinTowerDefense = z.object({
 });
 export type WinTowerDefenseType = z.infer<typeof WinTowerDefense>;
 
+/**
+ * Survive a Chakra Storm run at the objective's location: scout `stage`, whose region sets
+ * the difficulty, until `surviveMinutes` have passed. The player's Training Hall levels
+ * apply as in any run, and the region does not need to be open yet.
+ */
+export const WinChakraStorm = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("win_chakra_storm"),
+  stage: z.enum(CHAKRA_STORM_CHALLENGE_STAGES).prefault("horizon"),
+  surviveMinutes: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(CS_CHALLENGE_MAX_MINUTES)
+    .prefault(5),
+  ...complexObjectiveFields,
+});
+export type WinChakraStormType = z.infer<typeof WinChakraStorm>;
+
 export const RaidObjective = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
@@ -863,6 +893,7 @@ export const AllObjectives = z.discriminatedUnion("task", [
   DeliverItem,
   DefeatOpponents,
   WinTowerDefense,
+  WinChakraStorm,
   DialogObjective,
   EncountersAtLocation,
   RaidObjective,

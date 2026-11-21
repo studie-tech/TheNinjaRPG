@@ -33,6 +33,7 @@ import {
   CS_SIM_VERSION,
   type CsAction,
   type CsEvent,
+  type CsRunConfig,
   type CsState,
   createCsRun,
   csAwakenable,
@@ -42,6 +43,7 @@ import {
 } from "@/libs/chakraStorm/sim";
 import { showMutationToast } from "@/libs/toast";
 import { useUserInfo } from "@/utils/UserContext";
+import type { QuestChallengeRequest } from "@/validators/questChallenge";
 
 /** The most ticks one frame simulates, so a stalled tab catches up gently. */
 const MAX_TICKS_PER_FRAME = 6;
@@ -69,6 +71,8 @@ export interface ChakraStormOutcome extends CsRunResult {
   message?: string;
   retryable?: boolean;
   dailyReward?: { ryo: number; prestige: number; villageTokens: number };
+  /** The quest objective this run was a challenge for. */
+  challenge?: QuestChallengeRequest;
 }
 
 /** A moment worth a banner across the battlefield. */
@@ -109,6 +113,8 @@ export const useChakraStormRun = (userId: string | undefined) => {
     goal: CsUnlockGoal | null;
     /** The region's longest run before this one, in seconds. */
     record: number | null;
+    /** The quest objective this run is a challenge for. */
+    challenge?: QuestChallengeRequest;
   } | null>(null);
   const [phase, setPhase] = useState<ChakraStormPhase>("lobby");
   const [runId, setRunId] = useState<string | null>(null);
@@ -217,14 +223,16 @@ export const useChakraStormRun = (userId: string | undefined) => {
       return;
     }
     if (result.success) {
-      void updateCache(
-        getChakraStormClaimUpdate({
-          intelEarned: result.intelEarned ?? 0,
-          stage: state.config.stage,
-          record: result.record ?? null,
-        }),
-        snapshot,
-      );
+      // A quest challenge pays no intel and sets no region record.
+      if (!state.config.challenge)
+        void updateCache(
+          getChakraStormClaimUpdate({
+            intelEarned: result.intelEarned ?? 0,
+            stage: state.config.stage,
+            record: result.record ?? null,
+          }),
+          snapshot,
+        );
       void updateUser(result, { revision });
     } else if (result.alreadyClaimed) void utils.chakraStorm.getProgress.invalidate();
     setOutcome((previous) =>
@@ -253,9 +261,10 @@ export const useChakraStormRun = (userId: string | undefined) => {
         won: state.won,
         bosses: state.bossesKilled,
       };
+      const challenge = session.current?.challenge;
       setPhase("over");
       if (session.current?.token) {
-        setOutcome({ ...run, intel: 0, isBest: false, claim: "pending" });
+        setOutcome({ ...run, intel: 0, isBest: false, claim: "pending", challenge });
         void claim();
         return;
       }
@@ -321,13 +330,22 @@ export const useChakraStormRun = (userId: string | undefined) => {
     [finish, publish],
   );
 
+  /**
+   * Start a run in a region: a signed run for players, or a local one for guests. A quest
+   * challenge takes its region and survival time from the objective the server checks.
+   */
   const start = useCallback(
-    async (stage: CsStage) => {
+    async (requested: CsStage, challengeRequest?: QuestChallengeRequest) => {
       let seed = nanoid();
       let token: string | null = null;
       let training = localRef.current.training;
+      let stage = requested;
+      let challenge: CsRunConfig["challenge"];
       if (signedIn) {
-        const result = await startSigned({ stage }).catch(() => null);
+        const result = await startSigned({
+          stage: requested,
+          challenge: challengeRequest,
+        }).catch(() => null);
         if (!result?.success || !result.token || !result.seed) {
           if (result) showMutationToast(result);
           return;
@@ -335,11 +353,14 @@ export const useChakraStormRun = (userId: string | undefined) => {
         seed = result.seed;
         token = result.token;
         training = { ...csNoTraining(), ...result.training };
+        stage = result.stage ?? requested;
+        challenge = result.challenge;
       }
-      const runGoal = csNextUnlock(progress, stage);
       const runRecord = progress.stages[stage]?.seconds ?? null;
+      // A challenge opens no region, so it has no unlock to aim for.
+      const runGoal = challenge ? null : csNextUnlock(progress, stage);
       session.current = {
-        state: createCsRun(seed, { stage, training: { ...training } }),
+        state: createCsRun(seed, { stage, training: { ...training }, challenge }),
         pending: 0,
         log: [],
         token,
@@ -347,6 +368,7 @@ export const useChakraStormRun = (userId: string | undefined) => {
         publishedAt: 0,
         goal: runGoal,
         record: runRecord,
+        challenge: challenge && challengeRequest,
       };
       setGoal(runGoal);
       setRecord(runRecord);
@@ -482,6 +504,7 @@ export const useChakraStormRun = (userId: string | undefined) => {
       else if (
         !endless &&
         !state.over &&
+        !state.config.challenge &&
         reached(CS_RUN_SECONDS - REINFORCEMENT_WARNING_SECONDS)
       )
         announce(

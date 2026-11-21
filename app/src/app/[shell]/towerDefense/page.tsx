@@ -2,8 +2,7 @@
 
 import { ScrollText, Trophy } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
-import { type ReactNode, Suspense, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,12 +17,13 @@ import ContentBox from "@/layout/ContentBox";
 import { useGameSettings } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { QUEST_LOGBOOK_HREF, QuestChallengeRoute } from "@/layout/QuestChallenge";
 import { TowerDefenseChallenge } from "@/layout/TowerDefenseChallenge";
 import { TowerDefenseLobby } from "@/layout/TowerDefenseLobby";
 import { TowerDefensePlayfield } from "@/layout/TowerDefensePlayfield";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import { findQuestChallenge } from "@/libs/quest/challenge";
 import { tdDailyDutyDone } from "@/libs/towerDefense/balance";
-import { findTowerDefenseChallenge } from "@/libs/towerDefense/challenge";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -181,31 +181,29 @@ export default function TowerDefensePage() {
     // A quest challenge is opened from the logbook by its query; the prerendered page,
     // guests and visitors without one see the lobby.
     return (
-      <Suspense fallback={lobby}>
-        <ChallengeRoute
-          lobby={lobby}
-          render={(request) =>
-            user ? (
-              <ContentBox
-                title="Hold Your Ground"
-                subtitle="Defend this position until the last wave breaks"
-                defaultBackHref="/profile?tab=dashboard#progress-heading"
-              >
-                <TowerDefenseChallenge
-                  challenge={findTowerDefenseChallenge(user, request)}
-                  saved={run.saved}
-                  isStarting={run.isStarting}
-                  isResuming={run.isResuming}
-                  onStart={(replaceSaved) => void run.start(1, replaceSaved, request)}
-                  onResume={run.resume}
-                />
-              </ContentBox>
-            ) : (
-              lobby
-            )
-          }
-        />
-      </Suspense>
+      <QuestChallengeRoute
+        lobby={lobby}
+        render={(request) =>
+          user ? (
+            <ContentBox
+              title="Hold Your Ground"
+              subtitle="Defend this position until the last wave breaks"
+              defaultBackHref={QUEST_LOGBOOK_HREF}
+            >
+              <TowerDefenseChallenge
+                challenge={findQuestChallenge(user, request, "win_tower_defense")}
+                saved={run.saved}
+                isStarting={run.isStarting}
+                isResuming={run.isResuming}
+                onStart={(replaceSaved) => void run.start(1, replaceSaved, request)}
+                onResume={run.resume}
+              />
+            </ContentBox>
+          ) : (
+            lobby
+          )
+        }
+      />
     );
   }
 
@@ -237,7 +235,7 @@ export default function TowerDefensePage() {
           run.outcome?.won &&
           run.outcome.claimed && (
             <Button asChild>
-              <Link href="/profile?tab=dashboard#progress-heading">
+              <Link href={QUEST_LOGBOOK_HREF}>
                 <ScrollText className="mr-2 h-4 w-4" />
                 Open logbook
               </Link>
@@ -250,16 +248,6 @@ export default function TowerDefensePage() {
 }
 
 /** What the page's query names: a challenge, or the lobby without one. */
-const ChallengeRoute = (props: {
-  lobby: ReactNode;
-  render: (request: { questId: string; objectiveId: string }) => ReactNode;
-}) => {
-  const searchParams = useSearchParams();
-  const questId = searchParams.get("quest");
-  const objectiveId = searchParams.get("objective");
-  return questId && objectiveId ? props.render({ questId, objectiveId }) : props.lobby;
-};
-
 const LeaderboardLink = () => (
   <Button asChild size="sm">
     <Link href="/manual/towerDefense/leaderboard">

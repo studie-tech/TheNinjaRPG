@@ -4242,6 +4242,37 @@ export const TD_CHALLENGE_MAX_WAVES = 100;
 /** Bounds, in percent of a normal run, of a challenge's enemy health and damage. */
 export const TD_CHALLENGE_MIN_STRENGTH = 10;
 export const TD_CHALLENGE_MAX_STRENGTH = 1000;
+/**
+ * Chakra Storm's regions with a set difficulty, from the gentlest to the hardest. A quest's
+ * challenge picks one of these: its survival time is the goal, so it has no use for
+ * Undercover's endless climb.
+ */
+export const CHAKRA_STORM_CHALLENGE_STAGES = [
+  "horizon",
+  "akasumi",
+  "akikaze",
+  "hyorin",
+  "mei",
+] as const;
+/** Every Chakra Storm region: those above, then Undercover, the endless leaderboard region. */
+export const CHAKRA_STORM_STAGES = [
+  ...CHAKRA_STORM_CHALLENGE_STAGES,
+  "undercover",
+] as const;
+/** Chakra Storm's region names, shown wherever a region is picked or described. */
+export const CHAKRA_STORM_STAGE_NAMES: Record<
+  (typeof CHAKRA_STORM_STAGES)[number],
+  string
+> = {
+  horizon: "Horizon Outskirts",
+  akasumi: "Akasumi Spirit Forest",
+  akikaze: "Akikaze Storm Canyon",
+  hyorin: "Hyorin Alpine Pass",
+  mei: "City of Mei",
+  undercover: "Undercover",
+};
+/** Longest a quest's Chakra Storm challenge may ask the player to survive, in minutes. */
+export const CS_CHALLENGE_MAX_MINUTES = 15;
 /** Ryo per character level paid for the daily Guard Hall duty. */
 export const TD_DAILY_RYO_PER_LEVEL = 250;
 /** Village prestige paid for the daily Guard Hall duty. */

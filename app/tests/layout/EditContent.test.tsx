@@ -496,33 +496,38 @@ describe("quest structure drafts", () => {
   });
 });
 
-const savedChallengeQuest = {
-  ...savedObjectiveQuest,
-  content: {
-    ...savedObjectiveQuest.content,
-    objectives: [
-      getObjectiveSchema("win_tower_defense").parse({
-        id: "challenge",
-        task: "win_tower_defense",
-        sector: 5,
-        longitude: 3,
-        latitude: 4,
-      }),
-    ],
-  },
-} as Quest;
+/** A saved quest holding one minigame challenge objective at sector 5, position [3, 4]. */
+const savedChallengeQuest = (task: "win_tower_defense" | "win_chakra_storm") =>
+  ({
+    ...savedObjectiveQuest,
+    content: {
+      ...savedObjectiveQuest.content,
+      objectives: [
+        getObjectiveSchema(task).parse({
+          id: "challenge",
+          task,
+          sector: 5,
+          longitude: 3,
+          latitude: 4,
+        }),
+      ],
+    },
+  }) as Quest;
 
-const ChallengeObjectiveForm = () => {
+const ChallengeObjectiveForm = (props: {
+  task: "win_tower_defense" | "win_chakra_storm";
+}) => {
+  const quest = savedChallengeQuest(props.task);
   const { objectives, setObjectives, handleQuestSubmit } = useQuestEditForm(
-    savedChallengeQuest,
+    quest,
     async () => undefined,
   );
   return (
     <>
       <ObjectiveFormWrapper
         idx={0}
-        quest={savedChallengeQuest}
-        availableTags={["win_tower_defense"]}
+        quest={quest}
+        availableTags={[props.task]}
         hideTagType
         objective={objectives[0]!}
         objectives={objectives}
@@ -535,9 +540,22 @@ const ChallengeObjectiveForm = () => {
   );
 };
 
+/** Type into a numeric objective field and leave it, as an editor would. */
+const setField = async (
+  view: ReturnType<typeof render>,
+  field: string,
+  value: string,
+) => {
+  const input = view.container.querySelector<HTMLInputElement>(`[name="${field}"]`)!;
+  await act(async () => {
+    fireEvent.input(input, { target: { value } });
+  });
+  fireEvent.blur(input);
+};
+
 describe("tower defense challenge objectives", () => {
   it("lets content staff set the challenge's waves and enemy strength", async () => {
-    const view = render(<ChallengeObjectiveForm />);
+    const view = render(<ChallengeObjectiveForm task="win_tower_defense" />);
     for (const label of [
       "Tower defense start wave",
       "Waves to clear (counting the start wave)",
@@ -545,19 +563,10 @@ describe("tower defense challenge objectives", () => {
       "Enemy damage (% of a normal run)",
     ])
       expect(view.getByText(label)).toBeTruthy();
-    const set = async (field: string, value: string) => {
-      const input = view.container.querySelector<HTMLInputElement>(
-        `[name="${field}"]`,
-      )!;
-      await act(async () => {
-        fireEvent.input(input, { target: { value } });
-      });
-      fireEvent.blur(input);
-    };
-    await set("startWave", "40");
-    await set("waves", "5");
-    await set("enemyHealth", "250");
-    await set("enemyDamage", "75");
+    await setField(view, "startWave", "40");
+    await setField(view, "waves", "5");
+    await setField(view, "enemyHealth", "250");
+    await setField(view, "enemyDamage", "75");
     fireEvent.click(view.getByRole("button", { name: "Save objective" }));
     await waitFor(() => expect(saveQuest).toHaveBeenCalledTimes(1));
     expect(saveQuest.mock.calls[0]?.[0]).toMatchObject({
@@ -570,6 +579,34 @@ describe("tower defense challenge objectives", () => {
               waves: 5,
               enemyHealth: 250,
               enemyDamage: 75,
+              sector: 5,
+            },
+          ],
+        },
+      },
+    });
+  });
+});
+
+describe("chakra storm challenge objectives", () => {
+  it("lets content staff set the region and survival time", async () => {
+    const view = render(<ChallengeObjectiveForm task="win_chakra_storm" />);
+    for (const label of [
+      "Chakra Storm region (sets the difficulty)",
+      "Minutes to survive",
+    ])
+      expect(view.getByText(label)).toBeTruthy();
+    await setField(view, "surviveMinutes", "7");
+    fireEvent.click(view.getByRole("button", { name: "Save objective" }));
+    await waitFor(() => expect(saveQuest).toHaveBeenCalledTimes(1));
+    expect(saveQuest.mock.calls[0]?.[0]).toMatchObject({
+      data: {
+        content: {
+          objectives: [
+            {
+              task: "win_chakra_storm",
+              stage: "horizon",
+              surviveMinutes: 7,
               sector: 5,
             },
           ],
