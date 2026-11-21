@@ -159,6 +159,7 @@ export const useItemEditForm = (
         { ...DEFAULT_FURNITURE_DATA },
         { shouldDirty: true },
       );
+      form.setValue("warehouseItem", false, { shouldDirty: true });
       form.clearErrors();
       void form.trigger();
     } else if (previousItemType.current === "FURNITURE" && !isFurniture) {

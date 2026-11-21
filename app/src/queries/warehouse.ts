@@ -9,7 +9,6 @@ import {
   isNull,
   lt,
   lte,
-  ne,
   or,
   type SQL,
   sql,
@@ -303,7 +302,10 @@ export const ensureWarehouseMember = (
     .values({ userId })
     .onDuplicateKeyUpdate({ set: { userId: sql`${warehouseMember.userId}` } });
 
-/** Start a player's allowance on a new UTC day before a withdrawal counts against it. */
+/**
+ * Start a player's allowance on a new UTC day before a withdrawal counts against it; a request
+ * still dated an earlier day never rewinds it, and its claim then fails on the day guard.
+ */
 export const resetWarehouseAllowanceDay = (
   client: Pick<DrizzleClient, "update">,
   userId: string,
@@ -315,7 +317,7 @@ export const resetWarehouseAllowanceDay = (
     .where(
       and(
         eq(warehouseMember.userId, userId),
-        or(isNull(warehouseMember.allowanceDay), ne(warehouseMember.allowanceDay, day)),
+        or(isNull(warehouseMember.allowanceDay), lt(warehouseMember.allowanceDay, day)),
       ),
     );
 

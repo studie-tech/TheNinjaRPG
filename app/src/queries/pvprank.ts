@@ -37,7 +37,10 @@ import {
   rankedUserRewards,
   userData,
 } from "@/drizzle/schema";
-import { withoutActivityReservation } from "@/queries/activityReservation";
+import {
+  withoutActivityReservation,
+  withoutCaravanEscort,
+} from "@/queries/activityReservation";
 import {
   nextSnapshotSql,
   selectClaimedRankedQueueEntry,
@@ -346,6 +349,7 @@ export const executeResultForQueueForRankedPvp = (
             SET ${actionReadinessSqlSet(readiness)} ${userData.status} = 'QUEUED', ${rankedPvpQueue.hasClaimed} = true
             WHERE ${userData.userId} = ${user.userId}
               AND ${readiness?.where ?? eq(userData.status, "AWAKE")}
+              AND ${withoutCaravanEscort()}
               AND ${rankedPvpQueue.id} = ${queueId}
               AND ${rankedPvpQueue.hasClaimed} = false
           `);

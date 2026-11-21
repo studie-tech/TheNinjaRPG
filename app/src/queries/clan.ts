@@ -53,7 +53,10 @@ import {
   warAlly,
   warKill,
 } from "@/drizzle/schema";
-import { withoutActivityReservation } from "@/queries/activityReservation";
+import {
+  withoutActivityReservation,
+  withoutCaravanEscort,
+} from "@/queries/activityReservation";
 import {
   selectClaimedRankedQueueEntry,
   selectUnresolvedClanLobbyEntry,
@@ -699,6 +702,7 @@ export const updateUserDataForChallengeClan = (
       and(
         eq(userData.userId, user.userId),
         readiness?.where ?? eq(userData.status, "AWAKE"),
+        withoutCaravanEscort(),
         notExists(
           client
             .select({ id: mpvpBattleUser.id })

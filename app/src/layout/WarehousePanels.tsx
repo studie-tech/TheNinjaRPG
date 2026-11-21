@@ -343,7 +343,12 @@ export const WarehouseProduction = ({
   actions: CaravanActions;
 }) => {
   const [draft, setDraft] = useState<string[]>();
-  const selected = draft ?? data.production.map((row) => row.itemId);
+  // Items that stopped being producible drop out, so the next save no longer sends them.
+  const selected =
+    draft ??
+    data.production
+      .map((row) => row.itemId)
+      .filter((id) => data.producibleItems.some((item) => item.id === id));
   const changed = draft !== undefined;
   return (
     <ContentBox
@@ -445,8 +450,9 @@ export const WarehouseAccess = ({
   actions: CaravanActions;
 }) => {
   const { methods, user } = useUserPicker(1);
-  const [wartime, setWartime] = useState(false);
+  const [wartimeChoice, setWartime] = useState(false);
   const atWar = data.activeWarIds.length > 0;
+  const wartime = wartimeChoice && atWar;
   return (
     <ContentBox
       title="Access"

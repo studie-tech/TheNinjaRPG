@@ -94,7 +94,10 @@ import {
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
-import { withoutActivityReservation } from "@/queries/activityReservation";
+import {
+  withoutActivityReservation,
+  withoutCaravanEscort,
+} from "@/queries/activityReservation";
 import { revisionSql } from "@/queries/definitionRevisions";
 import { questPartyRelations } from "@/queries/questParty";
 import { questRevisionColumns, questRevisionRelation } from "@/queries/questRevisions";
@@ -2408,6 +2411,7 @@ export const queueAwakeUser = (
       and(
         eq(userData.userId, ctx.userId),
         readiness?.where ?? eq(userData.status, "AWAKE"),
+        withoutCaravanEscort(),
       ),
     );
 
