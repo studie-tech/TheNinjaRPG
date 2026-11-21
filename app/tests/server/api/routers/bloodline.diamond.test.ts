@@ -147,6 +147,16 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       message: "Diamond bloodline swaps require Diamond Federal Support",
     });
     expect(await caller.getDiamondSwapBloodlines()).toEqual([]);
+    // Staff count as Gold, whatever tier is stored.
+    await db
+      .update(userData)
+      .set({ federalStatus: "DIAMOND", staffAccount: true })
+      .where(eq(userData.userId, userId));
+    expect((await swap("pick-a")).success).toBe(false);
+    await db
+      .update(userData)
+      .set({ federalStatus: "GOLD", staffAccount: false })
+      .where(eq(userData.userId, userId));
     expect(await readUser()).toMatchObject({
       bloodlineId: "owned-line",
       diamondBloodlineActive: false,
@@ -218,6 +228,14 @@ describeWithDatabase("Diamond bloodline swaps", () => {
   it("keeps an owned bloodline chosen after a Diamond swap", async () => {
     expect((await swap("pick-a")).success).toBe(true);
     const db = await getTestDatabase();
+    await expireSwapCooldown();
+    // Back on an owned bloodline: that is what Diamond's end would leave.
+    await (await callerFor(bloodlineRouter, userId)).swapBloodline({
+      bloodlineId: "owned-line",
+    });
+    expect(
+      (await (await callerFor(bloodlineRouter, userId)).getSwapInfo()).diamond,
+    ).toEqual({ restoresBloodlineId: "owned-line" });
     await db.insert(bloodlineRolls).values({
       id: "new-roll",
       userId,

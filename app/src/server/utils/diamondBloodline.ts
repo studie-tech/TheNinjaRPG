@@ -2,9 +2,11 @@
  * Restores the pre-Diamond bloodline of players whose Diamond Federal Support has ended.
  */
 
+import { and, type SQL } from "drizzle-orm";
 import { resolveDiamondBloodlineRevert } from "@/libs/bloodline";
 import {
   clearDiamondBloodlineSet,
+  currentBloodlineNotOwnedGuard,
   insertActionLogForDiamondBloodlineRevert,
   lapsedDiamondGuard,
   listBloodlineForDiamondBloodlineRevert,
@@ -79,7 +81,10 @@ export const revertLapsedDiamondBloodlines = async (
       0,
       user,
       new Date(),
-      { set: clearDiamondBloodlineSet, where: lapsedDiamondGuard() },
+      {
+        set: clearDiamondBloodlineSet,
+        where: and(lapsedDiamondGuard(), currentBloodlineNotOwnedGuard()) as SQL,
+      },
     );
     if (!result.rowsAffected) continue;
     reverted += 1;

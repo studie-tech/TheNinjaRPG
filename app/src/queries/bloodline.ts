@@ -781,7 +781,14 @@ export const listUserDataForDiamondBloodlineRevert = (
     })
     .from(userData)
     .leftJoin(bloodline, eq(bloodline.id, userData.bloodlineId))
-    .where(and(lapsedDiamondGuard(), userId ? eq(userData.userId, userId) : undefined))
+    .where(
+      and(
+        lapsedDiamondGuard(),
+        // The restore write skips players in battle; keep them from filling the batch.
+        ne(userData.status, "BATTLE"),
+        userId ? eq(userData.userId, userId) : undefined,
+      ),
+    )
     .limit(limit);
 
 /** Owned (rolled, bought or granted) bloodline ids of the given players. */
@@ -817,6 +824,13 @@ export const lapsedDiamondGuard = () =>
     ne(userData.federalStatus, "DIAMOND"),
     sql`NOT ${pendingDiamondRenewal()}`,
   ) as SQL;
+
+/** Guards a restore to a current bloodline the player still does not own at write time. */
+export const currentBloodlineNotOwnedGuard = () => sql`NOT EXISTS (
+  SELECT 1 FROM ${bloodlineRolls}
+  WHERE ${bloodlineRolls.userId} = ${userData.userId}
+    AND ${bloodlineRolls.bloodlineId} = ${userData.bloodlineId}
+)`;
 
 /** Forget the remembered bloodline without changing the current one. */
 export const clearDiamondBloodlineSet = {

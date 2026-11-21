@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { LetterRanks } from "@/drizzle/constants";
 import {
+  getDiamondRestoreBloodlineId,
+  hasDiamondBloodlineSwaps,
   isDiamondSwapBloodline,
   resolveDiamondBloodlineRevert,
   shouldRememberPreDiamondBloodline,
@@ -67,5 +69,36 @@ describe("Diamond bloodline memory", () => {
     expect(revert("other-owned", "owned")).toBeUndefined();
     expect(revert(null, "owned")).toBeUndefined();
     expect(revert("owned", "owned")).toBeUndefined();
+  });
+});
+
+describe("Diamond swap access and restore target", () => {
+  it("follows the effective tier, so staff never get Diamond swaps", () => {
+    expect(
+      hasDiamondBloodlineSwaps({ federalStatus: "DIAMOND", staffAccount: false }),
+    ).toBe(true);
+    expect(
+      hasDiamondBloodlineSwaps({ federalStatus: "DIAMOND", staffAccount: true }),
+    ).toBe(false);
+    expect(
+      hasDiamondBloodlineSwaps({ federalStatus: "GOLD", staffAccount: false }),
+    ).toBe(false);
+  });
+
+  it("reports the bloodline the player would actually return to", () => {
+    const owned = ["owned", "other-owned"];
+    const target = (
+      diamondBloodlineActive: boolean,
+      bloodlineId: string | null,
+      preDiamondBloodlineId: string | null,
+    ) =>
+      getDiamondRestoreBloodlineId(
+        { diamondBloodlineActive, bloodlineId, preDiamondBloodlineId },
+        owned,
+      );
+    expect(target(false, "owned", null)).toBe("owned");
+    expect(target(true, "diamond-pick", "owned")).toBe("owned");
+    expect(target(true, "other-owned", "owned")).toBe("other-owned");
+    expect(target(true, null, "owned")).toBeNull();
   });
 });

@@ -773,9 +773,9 @@ const FederalTierBenefits = ({ status }: { status: FederalTier }) => {
               Training captcha every {TRAINING_CAPTCHA_INTERVAL.DIAMOND}th training
             </li>
             <li className="font-semibold">
-              Switch to any {DIAMOND_BLOODLINE_RANKS.join("/")}-rank bloodline for free,
-              as often as you like, while subscribed. Your own bloodline returns when
-              Diamond ends.
+              Switch to any released {DIAMOND_BLOODLINE_RANKS.join("/")}-rank bloodline
+              available to your village for free, as often as you like, while
+              subscribed. Your own bloodline returns when Diamond ends.
             </li>
           </>
         )}

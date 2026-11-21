@@ -15,7 +15,7 @@ import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { RepPurchaseConfirmModal } from "@/layout/RepPurchaseConfirmModal";
-import { getFreeBloodlineSwaps } from "@/libs/bloodline";
+import { getFreeBloodlineSwaps, hasDiamondBloodlineSwaps } from "@/libs/bloodline";
 import { showMutationToast } from "@/libs/toast";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { DAY_S, secondsFromDate } from "@/utils/time";
@@ -43,7 +43,7 @@ export const SwapBloodline: React.FC = () => {
   const [isDiamondOpen, setIsDiamondOpen] = useState<boolean>(false);
   const [diamondSearch, setDiamondSearch] = useState("");
   const utils = api.useUtils();
-  const isDiamond = userData?.federalStatus === "DIAMOND";
+  const isDiamond = !!userData && hasDiamondBloodlineSwaps(userData);
 
   // Fetch data
   const { data: bloodlines, isFetching } =
@@ -151,9 +151,9 @@ export const SwapBloodline: React.FC = () => {
           </h3>
           <p className="text-muted-foreground text-sm">
             Switch to any released {DIAMOND_BLOODLINE_RANKS.join(", ")} rank bloodline
-            for free, as often as you like, while your Diamond support is active. These
-            bloodlines are not added to your history, and when Diamond support ends you
-            return to{" "}
+            available to your village for free, as often as you like, while your Diamond
+            support is active. These bloodlines are not added to your history, and when
+            Diamond support ends you return to{" "}
             <span className="font-semibold text-foreground">{restoreName}</span>.
           </p>
           <Input

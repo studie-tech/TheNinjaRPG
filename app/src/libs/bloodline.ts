@@ -174,3 +174,26 @@ export const resolveDiamondBloodlineRevert = (info: {
     restoreBloodlineId: info.preDiamondBloodlineExists ? preDiamondBloodlineId : null,
   };
 };
+
+/** Diamond swaps follow the effective tier, so staff (who count as Gold) never get them. */
+export const hasDiamondBloodlineSwaps = (
+  user: Pick<UserData, "staffAccount" | "federalStatus">,
+) => getUserFederalStatus(user) === "DIAMOND";
+
+/** The bloodline a Diamond supporter would end up with if Diamond support ended now. */
+export const getDiamondRestoreBloodlineId = (
+  user: Pick<
+    UserData,
+    "bloodlineId" | "diamondBloodlineActive" | "preDiamondBloodlineId"
+  >,
+  ownedBloodlineIds: readonly string[],
+) => {
+  if (!user.diamondBloodlineActive) return user.bloodlineId;
+  const revert = resolveDiamondBloodlineRevert({
+    currentBloodlineId: user.bloodlineId,
+    preDiamondBloodlineId: user.preDiamondBloodlineId,
+    preDiamondBloodlineExists: true,
+    ownedBloodlineIds,
+  });
+  return revert ? revert.restoreBloodlineId : user.bloodlineId;
+};

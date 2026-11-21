@@ -25,7 +25,9 @@ import {
 import {
   filterRollableBloodlines,
   getBloodlineSwapAllowance,
+  getDiamondRestoreBloodlineId,
   getPityRolls,
+  hasDiamondBloodlineSwaps,
   isDiamondSwapBloodline,
   shouldRememberPreDiamondBloodline,
 } from "@/libs/bloodline";
@@ -243,12 +245,13 @@ export const bloodlineRouter = createTRPCRouter({
     })
     .query(async ({ ctx }) => {
       // Query
-      const [{ user }, recentSwaps] = await Promise.all([
+      const [{ user }, recentSwaps, owned] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchMonthlyBloodlineSwaps(ctx.drizzle, ctx.userId),
+        fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId),
       ]);
       // Guard
       if (!user)
@@ -271,14 +274,14 @@ export const bloodlineRouter = createTRPCRouter({
         freeSwapsRemaining,
         recentSwaps,
         // The bloodline a Diamond supporter returns to when Diamond support ends.
-        diamond:
-          user.federalStatus === "DIAMOND"
-            ? {
-                restoresBloodlineId: user.diamondBloodlineActive
-                  ? user.preDiamondBloodlineId
-                  : user.bloodlineId,
-              }
-            : null,
+        diamond: hasDiamondBloodlineSwaps(user)
+          ? {
+              restoresBloodlineId: getDiamondRestoreBloodlineId(
+                user,
+                owned.map((line) => line.id),
+              ),
+            }
+          : null,
       };
     }),
   // Bloodlines a Diamond supporter may switch to without owning them
@@ -291,7 +294,7 @@ export const bloodlineRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchBloodlines(ctx.drizzle),
       ]);
-      if (user.federalStatus !== "DIAMOND") return [];
+      if (!hasDiamondBloodlineSwaps(user)) return [];
       return bloodlines
         .filter((line) => isDiamondSwapBloodline(line, user))
         .sort((a, b) => a.rank.localeCompare(b.rank) || a.name.localeCompare(b.name));
@@ -399,7 +402,7 @@ export const bloodlineRouter = createTRPCRouter({
       // Guards
       if (!user) return errorResponse("User does not exist");
       if (!line) return errorResponse("Bloodline does not exist");
-      if (user.federalStatus !== "DIAMOND")
+      if (!hasDiamondBloodlineSwaps(user))
         return errorResponse("Diamond bloodline swaps require Diamond Federal Support");
       if (user.status === "BATTLE")
         return errorResponse("You cannot change bloodline during battle");
