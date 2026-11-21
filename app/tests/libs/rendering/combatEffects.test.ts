@@ -8,6 +8,8 @@ import {
   Texture,
 } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
+import { insertAction } from "@/libs/combat/actions";
+import { maskBattle } from "@/libs/combat/masking";
 import { applyEffects, expireGroundEffects } from "@/libs/combat/process";
 import type { GroundEffect, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
@@ -15,7 +17,9 @@ import { groundDecalBoundaries } from "@/libs/rendering/primitives/groundDecal";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
 import { createCombatPlayback } from "@/libs/rendering/scenes/combatPlayback";
+import { PoisonTag, SkillTreeValidator } from "@/validators/combat";
 import {
+  makeBasicAttack,
   makeBattleUser,
   makeCompleteBattle,
   makeDamageEffect,
@@ -410,6 +414,95 @@ describe("Pixi combat effects", () => {
     scene.effects.animate(0, false, false, null);
     expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
   });
+  it.each(["appear", "disappear"] as const)(
+    "preserves private primary %s cues for every viewer and deduplicates target copies",
+    async (phase) => {
+      const battle = makeCompleteBattle({
+        width: 5,
+        height: 5,
+        createdAt: new Date("2020-01-01"),
+        usersState: [
+          makeBattleUser("caster", {
+            direction: "left",
+            longitude: 0,
+            latitude: 0,
+            enemySkillIds: ["private-skill", "private-bloodright"],
+          }),
+          makeBattleUser("victim", { direction: "right", longitude: 2, latitude: 0 }),
+          makeBattleUser("other", { direction: "right", longitude: 3, latitude: 0 }),
+        ],
+      });
+      battle.extraState.enemySkills = {
+        "private-skill": [
+          PoisonTag.parse({
+            power: 20,
+            rounds: 3,
+            [`${phase}Sfx`]: "a",
+            [`${phase}SfxPrimary`]: true,
+          }),
+        ],
+        "private-bloodright": [
+          PoisonTag.parse({
+            power: 10,
+            rounds: 2,
+            [`${phase}Sfx`]: "b",
+            [`${phase}SfxPrimary`]: true,
+          }),
+        ],
+      };
+      for (const effects of Object.values(battle.extraState.enemySkills))
+        expect(SkillTreeValidator.shape.effects.safeParse(effects).success).toBe(true);
+      expect(
+        insertAction({
+          battle,
+          grid: getBattleGrid(20, battle),
+          action: makeBasicAttack({ range: 5, methodSize: { x: 1, y: 0 } }),
+          actorId: "caster",
+          longitude: 2,
+          latitude: 0,
+        }),
+      ).toBe(true);
+      expect(
+        battle.usersEffects.filter((effect) => effect.fromType === "skill"),
+      ).toHaveLength(4);
+      let { newBattle } = applyEffects(battle, "caster");
+      if (phase === "disappear") {
+        for (const effect of newBattle.usersEffects) effect.rounds = 0;
+        newBattle = applyEffects(newBattle, "caster").newBattle;
+      }
+      const before = structuredClone(newBattle);
+      for (const viewer of ["caster", "victim", "spectator"]) {
+        const scene = setup();
+        const masked = maskBattle(newBattle, viewer);
+        await scene.effects.sync({
+          ...scene.snapshot,
+          battle: masked,
+          assets: [
+            { id: "a", url: "a.wav" },
+            { id: "b", url: "b.wav" },
+          ] as GameAsset[],
+        });
+        scene.effects.animate(0, false, false, null);
+        expect(scene.play.mock.calls).toEqual([
+          ["a.wav", 0.4],
+          ["b.wav", 0.4],
+        ]);
+        if (viewer !== "caster") {
+          expect(JSON.stringify(masked)).not.toContain("private-skill");
+          expect(JSON.stringify(masked)).not.toContain("private-bloodright");
+          for (const effect of masked.usersEffects.filter(
+            (entry) => entry.fromType === "skill",
+          )) {
+            const onset = masked.groundEffects.find(
+              (entry) => entry.appearSfx === effect.appearSfx,
+            );
+            expect(onset?.soundOrigin?.actionId).toBe(effect.actionId);
+          }
+        }
+      }
+      expect(newBattle).toEqual(before);
+    },
+  );
   it("keeps primary appearance and disappearance independent during movement", async () => {
     const scene = setup();
     scene.snapshot.assets.push({ id: "accent", url: "accent.wav" } as GameAsset);

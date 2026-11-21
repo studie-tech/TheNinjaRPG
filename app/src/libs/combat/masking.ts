@@ -245,6 +245,21 @@ const maskBattleEffects = <T extends BattleEffect>(
       .filter((u) => isSummonTemplate(u, battle.usersState))
       .map((u) => u.userId),
   );
+  const sourceKey = (effect: BattleEffect) =>
+    JSON.stringify([
+      effect.creatorId,
+      effect.soundOrigin?.actionId ?? effect.actionId,
+      effect.soundOrigin?.createdRound ?? effect.createdRound,
+    ]);
+  // Public effect IDs keep private casts distinct across original and transient copies.
+  const sourceIds = new Map<string, string>();
+  for (const effect of [
+    ...(battle.usersEffects ?? []),
+    ...(battle.groundEffects ?? []),
+  ]) {
+    const key = sourceKey(effect);
+    if (!sourceIds.has(key)) sourceIds.set(key, effect.id);
+  }
   return (effects ?? [])
     .filter(
       (effect) =>
@@ -259,7 +274,7 @@ const maskBattleEffects = <T extends BattleEffect>(
           ...origin,
           actionId:
             privateSource && !controlledIds.has(effect.creatorId)
-              ? "hidden"
+              ? (sourceIds.get(sourceKey(effect)) ?? effect.id)
               : origin.actionId,
         };
       }
@@ -272,7 +287,7 @@ const maskBattleEffects = <T extends BattleEffect>(
         // skill IDs are not needed to render or apply those modifiers on the client.
         ...(!controlledIds.has(effect.creatorId) &&
         ["armor", "accessory", "skill"].includes(effect.fromType ?? "")
-          ? { actionId: "hidden" }
+          ? { actionId: sourceIds.get(sourceKey(effect)) ?? effect.id }
           : {}),
         ...(effect.type === "injectjutsus" &&
         !("targetId" in effect && controlledIds.has(String(effect.targetId)))

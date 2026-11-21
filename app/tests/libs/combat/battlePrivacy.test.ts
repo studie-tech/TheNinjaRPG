@@ -331,8 +331,12 @@ describe("battle response privacy", () => {
     ];
     const masked = maskBattle(battle, "me");
     expect(masked.usersEffects[0]).toMatchObject({
-      actionId: "hidden",
-      soundOrigin: { actionId: "hidden", createdRound: 1, phase: "appear" },
+      actionId: battle.usersEffects[0]!.id,
+      soundOrigin: {
+        actionId: battle.usersEffects[0]!.id,
+        createdRound: 1,
+        phase: "appear",
+      },
       appearAnimation: "visible-animation",
     });
     expect(masked.usersEffects[0]).not.toHaveProperty("highestGenerals");

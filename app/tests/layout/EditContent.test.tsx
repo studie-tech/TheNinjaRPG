@@ -31,6 +31,7 @@ import {
 } from "@/layout/MassEffectEditor";
 import { ObjectiveFormWrapper } from "@/layout/ObjectiveFormWrapper";
 import { RewardEditor, RewardFormWrapper } from "@/layout/RewardEditor";
+import { JUTSU_EFFECT_COSMETICS } from "@/libs/jutsu/reskins";
 import * as toastHelpers from "@/libs/toast";
 import * as errorUtils from "@/utils/error";
 import * as UserContext from "@/utils/UserContext";
@@ -2196,6 +2197,36 @@ describe("schema-derived field visibility", () => {
 
   const labels = (container: HTMLElement) =>
     [...container.querySelectorAll("label")].map((label) => label.textContent);
+
+  it("keeps linked reskin presentation editable while locking mechanics", () => {
+    const tag = DamageTag.parse({});
+    const view = render(
+      <EffectFormWrapper
+        type="jutsu"
+        idx={0}
+        tag={tag}
+        effects={[tag]}
+        setEffects={vi.fn()}
+        availableTags={["damage"]}
+        hideTagType
+        editableFields={JUTSU_EFFECT_COSMETICS}
+      />,
+    );
+    expect(labels(view.container)).toEqual(
+      expect.arrayContaining([
+        "Projectile animation",
+        "Projectile size (0.25–3×; default 1×)",
+        "Animation height (hexes; positive raises)",
+        "Ground style",
+        "Ground opacity",
+        "Ground feather",
+        "Primary appearance sound for this cast",
+        "Primary disappearance sound for this cast",
+      ]),
+    );
+    for (const field of ["Power", "Target", "Type"])
+      expect(labels(view.container)).not.toContain(field);
+  });
 
   it.each([
     [
