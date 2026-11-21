@@ -21,8 +21,10 @@ import {
   insertUsers,
 } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
+import { aroundStatements } from "../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -205,11 +207,44 @@ describeWithDatabase("tower defense quest challenges", () => {
       challengeCompleted: false,
       pointsEarned: 0,
     });
+    // An explicit empty delta spares the client a profile refetch.
+    expect(result.userDelta).toEqual({});
+    expect(result.userPatch).toBeUndefined();
     const after = await player();
     expect(goal(after?.questData)?.done).toBeFalsy();
     expect(after).toMatchObject({ points: 500, bestWave: 15, activeRun: null });
     expect((await api.startRun({ startWave: 1, challenge: request })).success).toBe(
       true,
     );
+  });
+
+  it("records the objective only while its run is still active", async () => {
+    await assignChallenge({ startWave: 1, waves: 3 });
+    await moveTo(spot);
+    const db = await getTestDatabase();
+    const api = await callerFor(towerDefenseRouter, userId);
+    const started = await api.startRun({ startWave: 1, challenge: request });
+    if (!started.token || !started.config) throw new Error("Challenge did not start");
+    const run = play(started.config);
+    // A simultaneous claim settles the run after this claim loaded the player.
+    const racing = callerForDatabase(
+      towerDefenseRouter,
+      userId,
+      aroundStatements(
+        db,
+        userData,
+        async (record) => {
+          await db
+            .update(userData)
+            .set({ towerDefenseActiveRun: null })
+            .where(eq(userData.userId, userId));
+          return record();
+        },
+        { when: (set) => "questData" in set },
+      ),
+    );
+    const result = await claim(racing, started.token, run);
+    expect(result.success).toBe(false);
+    expect(goal((await player())?.questData)?.done).toBeFalsy();
   });
 });

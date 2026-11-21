@@ -48,12 +48,15 @@ export const getDailyDutyUserUpdate = (duty: {
     : { userDelta: {} };
 
 /**
- * The profile change of a won quest challenge: the player's public quest trackers, now
- * with the challenge objective done. A challenge pays nothing else.
+ * The profile change of a challenge claim: the player's public quest trackers once the
+ * challenge objective is done, and none otherwise, since a challenge pays nothing else.
  */
 export const getChallengeQuestUserUpdate = (
-  questUser: Parameters<typeof getPublicQuestUser>[0],
-): { userDelta: UserDelta; userPatch: UserCachePatch } => ({
-  userDelta: {},
-  userPatch: { questData: getPublicQuestUser(questUser).questData },
-});
+  completedFor: Parameters<typeof getPublicQuestUser>[0] | undefined,
+): { userDelta: UserDelta; userPatch?: UserCachePatch } =>
+  completedFor
+    ? {
+        userDelta: {},
+        userPatch: { questData: getPublicQuestUser(completedFor).questData },
+      }
+    : { userDelta: {} };

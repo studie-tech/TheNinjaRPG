@@ -1,9 +1,11 @@
+import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   getChallengeQuestUserUpdate,
   getDailyDutyUserUpdate,
 } from "@/deltas/towerDefense";
+import { userData } from "@/drizzle/schema";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
 import { decodeTdActions } from "@/libs/towerDefense/actionLog";
@@ -457,6 +459,9 @@ const findQuestChallenge = (
  * best wave, entering the leaderboard or counting for the daily duty, and its receipt
  * answers a retry. The objective is recorded before the run retires, so a claim that
  * fails in between is retried in full, and completing an objective twice changes nothing.
+ * The record is guarded on the run still being active, so a simultaneous claim that
+ * loads the player after this run settled cannot complete the objective again, such as
+ * on a repeatable quest accepted anew in between.
  */
 const settleChallengeRun = async (
   ctx: { drizzle: DrizzleClient; userId: string },
@@ -468,8 +473,7 @@ const settleChallengeRun = async (
   },
 ) => {
   const { token, challenge, claimKey, result } = input;
-  let completed = false;
-  let questUpdate: ReturnType<typeof getChallengeQuestUserUpdate> | undefined;
+  let completedFor: UserWithRelations | undefined;
   if (result.won) {
     const { user } = await fetchUpdatedUser({
       client: ctx.drizzle,
@@ -480,34 +484,38 @@ const settleChallengeRun = async (
       !!questData
         ?.find((tracker) => tracker.id === challenge.questId)
         ?.goals.some((goal) => goal.id === challenge.objectiveId && goal.done);
-    // Read before the update, which can change the loaded trackers in place.
-    const wasDone = isDone(user.questData);
-    const { trackers, consequences, notifications } = getNewTrackers(user, [
-      {
-        task: "win_tower_defense",
-        contentId: challenge.objectiveId,
-        text: challenge.questId,
-      },
-    ]);
-    completed = isDone(trackers);
     // A retry after the objective was recorded only retires the run.
-    if (completed && !wasDone) {
-      user.questData = filterQuestTrackersForDbPersist(trackers, user);
-      const recorded = await handleQuestConsequences(
-        ctx.drizzle,
-        user,
-        consequences,
-        notifications,
-        { alwaysClaimUserState: true },
-      );
-      if (!recorded.claimed)
-        return errorResponse(
-          "Your character changed while the challenge was recorded. Claim it again.",
+    if (isDone(user.questData)) completedFor = user;
+    else {
+      const { trackers, consequences, notifications } = getNewTrackers(user, [
+        {
+          task: "win_tower_defense",
+          contentId: challenge.objectiveId,
+          text: challenge.questId,
+        },
+      ]);
+      if (isDone(trackers)) {
+        user.questData = filterQuestTrackersForDbPersist(trackers, user);
+        const recorded = await handleQuestConsequences(
+          ctx.drizzle,
+          user,
+          consequences,
+          notifications,
+          {
+            alwaysClaimUserState: true,
+            claimConditions: [eq(userData.towerDefenseActiveRun, token.nonce)],
+          },
         );
-      user.questData = trackers;
-      questUpdate = getChallengeQuestUserUpdate(user);
+        if (!recorded.claimed)
+          return errorResponse(
+            "Your character changed while the challenge was recorded. Claim it again.",
+          );
+        user.questData = trackers;
+        completedFor = user;
+      }
     }
   }
+  const completed = !!completedFor;
   const settled = await updateUserDataForSettleTowerDefenseChallenge(
     ctx.drizzle,
     ctx,
@@ -534,7 +542,7 @@ const settleChallengeRun = async (
     wave: result.wave,
     kills: result.kills,
     challengeCompleted: completed,
-    ...questUpdate,
+    ...getChallengeQuestUserUpdate(completedFor),
   };
 };
 
