@@ -9,6 +9,7 @@ import * as ItemWithEffects from "@/layout/ItemWithEffects";
 import * as Logbook from "@/layout/Logbook";
 import * as Modal from "@/layout/Modal";
 import * as QuestTeams from "@/layout/QuestTeams";
+import * as SupplyRequest from "@/layout/SupplyRequest";
 import * as UserContext from "@/utils/UserContext";
 
 const startQuest = vi.fn();
@@ -71,6 +72,7 @@ const setup = (hallData: ReturnType<typeof event>[], userQuests: unknown[] = [])
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(SupplyRequest, "SupplyRequest").mockImplementation(() => <></>);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));

@@ -8,6 +8,7 @@ import type { findCraftingQueueState } from "@/queries/occupation";
 import type { fetchUpdatedUser } from "@/routers/profile";
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { CraftingQueueMaterial } from "@/validators/train";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Project confirmed imbuing XP and public quest progress; consumed cached equipment still requires reconciliation. */
 export const getImbuedItemUserUpdate = ({
@@ -107,7 +108,7 @@ export const getCraftingUserUpdate = ({
   consequences: QuestConsequence[];
   questIdsUpdated: string[];
   allConsumptions: { userItemId: string }[];
-}) => {
+}): Pick<UserDeltaResponse, "userPatch" | "achievementProgress"> => {
   if (
     updatedUser.requiresProgressionRefresh ||
     consequences.some(
