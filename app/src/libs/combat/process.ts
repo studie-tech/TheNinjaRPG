@@ -1693,9 +1693,10 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
     actionEffects.push(info);
   }
 
-  // Ground-to-user copies apply mechanics; the ground cast owns its appearance.
+  // Retained visuals and ground casts own their appearance; user copies apply mechanics.
   if (
     (effect.appearAnimation || effect.appearSfx || effect.projectileAnimation) &&
+    effect.type !== "visual" &&
     !effect.fromGround &&
     effect.isNew &&
     longitude !== undefined &&

@@ -2198,6 +2198,41 @@ describe("schema-derived field visibility", () => {
   const labels = (container: HTMLElement) =>
     [...container.querySelectorAll("label")].map((label) => label.textContent);
 
+  it("labels the projectile picker with its selection and names its clear action", async () => {
+    vi.spyOn(names, "useQuery").mockReturnValue({
+      data: [{ id: "bolt", name: "Lightning Bolt", type: "ANIMATION" }],
+    } as never);
+    const tag = DamageTag.parse({ projectileAnimation: "bolt" });
+    const view = render(
+      <EffectFormWrapper
+        type="jutsu"
+        idx={0}
+        tag={tag}
+        effects={[tag]}
+        setEffects={vi.fn()}
+        availableTags={["damage"]}
+        hideTagType
+      />,
+    );
+    const label = view.getByText("Projectile animation", {
+      selector: "label",
+    }) as HTMLLabelElement;
+    const picker = view.getByRole("button", {
+      name: "Projectile animation: Lightning Bolt",
+    });
+    expect(label.control).toBe(picker);
+    expect(picker.getAttribute("aria-invalid")).toBe("false");
+    expect(picker.textContent).toBe("Lightning Bolt");
+    fireEvent.click(view.getByRole("button", { name: "Clear Projectile animation" }));
+    await waitFor(() =>
+      expect(
+        view.getByRole("button", {
+          name: "Projectile animation: Pick from dialog",
+        }),
+      ).toBe(picker),
+    );
+  });
+
   it("keeps linked reskin presentation editable while locking mechanics", () => {
     const tag = DamageTag.parse({});
     const view = render(

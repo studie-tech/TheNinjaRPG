@@ -10,6 +10,10 @@ import {
 import type { GameAsset } from "@/drizzle/schema";
 import { insertAction } from "@/libs/combat/actions";
 import { maskBattle } from "@/libs/combat/masking";
+import {
+  buildPlaybackFrames,
+  createCombatPlaybackRecorder,
+} from "@/libs/combat/playback";
 import { applyEffects, expireGroundEffects } from "@/libs/combat/process";
 import type { GroundEffect, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
@@ -17,10 +21,11 @@ import { groundDecalBoundaries } from "@/libs/rendering/primitives/groundDecal";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
 import { createCombatPlayback } from "@/libs/rendering/scenes/combatPlayback";
-import { PoisonTag, SkillTreeValidator } from "@/validators/combat";
+import { PoisonTag, SkillTreeValidator, VisualTag } from "@/validators/combat";
 import {
   makeBasicAttack,
   makeBattleUser,
+  makeCombatAction,
   makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
@@ -1033,6 +1038,79 @@ describe("Pixi combat effects", () => {
 });
 
 describe("authoritative combat effect transitions", () => {
+  it.each(["OTHER_USER", "SELF"] as const)(
+    "keeps one retained visual's cues through a %s cast and replay",
+    async (target) => {
+      const scene = setup();
+      const battle = makeCompleteBattle({
+        width: 12,
+        height: 10,
+        version: 1,
+        createdAt: new Date("2020-01-01"),
+        usersState: [
+          makeBattleUser("caster", { direction: "left", longitude: 0, latitude: 0 }),
+          makeBattleUser("victim", { direction: "right", longitude: 2, latitude: 0 }),
+        ],
+      });
+      const tag = VisualTag.parse({
+        rounds: 0,
+        projectileAnimation: "animation",
+        appearAnimation: "animation",
+        staticAnimation: "animation",
+        disappearAnimation: "animation",
+        appearSfx: "appear",
+        disappearSfx: "disappear",
+      });
+      const action = makeCombatAction({ target, range: 3, effects: [tag] });
+      const previous = maskBattle(structuredClone(battle), "caster");
+      const recorder = createCombatPlaybackRecorder(battle);
+      expect(
+        insertAction({
+          battle,
+          grid: getBattleGrid(20, battle),
+          action,
+          actorId: "caster",
+          longitude: target === "SELF" ? 0 : 2,
+          latitude: 0,
+        }),
+      ).toBe(true);
+      const { newBattle } = applyEffects(battle, "caster", action);
+      recorder.record(newBattle, 2, "caster", []);
+      newBattle.version = 2;
+      const next = maskBattle(newBattle, "caster");
+      next.playback = recorder.steps;
+      expect(next.groundEffects).toHaveLength(0);
+      expect(next.usersEffects).toHaveLength(1);
+      expect(next.usersEffects[0]).toMatchObject({
+        ...tag,
+        targetId: target === "SELF" ? "caster" : "victim",
+      });
+      const frame = buildPlaybackFrames(previous, next)[0]!;
+      if (target === "SELF") {
+        expect(frame.travel).toBeUndefined();
+      } else {
+        expect(frame.travel?.groundEffects).toHaveLength(1);
+        expect(frame.travel?.groundEffects[0]).toMatchObject({
+          longitude: 2,
+          latitude: 0,
+          projectileOnly: true,
+        });
+        await scene.effects.sync({ ...scene.snapshot, battle: frame.travel! });
+        scene.effects.animate(0, false, false, null);
+        const sprites = scene.effects.container.children.flatMap(
+          (root) => root.children,
+        );
+        expect(sprites).toHaveLength(1);
+        expect(sprites[0]?.visible).toBe(true);
+        expect(scene.play).not.toHaveBeenCalled();
+      }
+      await scene.effects.sync({ ...scene.snapshot, battle: frame.battle });
+      scene.effects.animate(1000, false, false, null);
+      expect(scene.effects.container.children).toHaveLength(1);
+      expect(scene.effects.container.children[0]?.children).toHaveLength(2);
+      expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+    },
+  );
   it("carries a projectile-only cast and its real creator through authoritative effect processing", () => {
     const battle = makeCompleteBattle({
       usersState: [

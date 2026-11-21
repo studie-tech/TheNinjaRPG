@@ -893,20 +893,24 @@ export const EditContent = <
                                 <FormItem className="min-w-0 flex-1">
                                   <FormLabel>{label}</FormLabel>
                                   <div className="flex min-w-0 items-center gap-2">
+                                    <FormControl>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        aria-label={`${label}: ${selectedOption?.label || "Pick from dialog"}`}
+                                        className={cn(
+                                          "min-w-0 flex-1 justify-between",
+                                          field.value ? "" : "text-muted-foreground",
+                                        )}
+                                        onClick={handleOpen}
+                                      >
+                                        <span className="min-w-0 truncate text-left" title={selectedOption?.label}>
+                                          {selectedOption?.label || "Pick from dialog"}
+                                        </span>
+                                      </Button>
+                                    </FormControl>
                                     <Button
-                                      type="button"
-                                      variant="outline"
-                                      className={cn(
-                                        "min-w-0 flex-1 justify-between",
-                                        field.value ? "" : "text-muted-foreground",
-                                      )}
-                                      onClick={handleOpen}
-                                    >
-                                      <span className="min-w-0 truncate text-left" title={selectedOption?.label}>
-                                        {selectedOption?.label || "Pick from dialog"}
-                                      </span>
-                                    </Button>
-                                    <Button
+                                      aria-label={`Clear ${label}`}
                                       className="w-8 shrink-0 p-0"
                                       type="button"
                                       variant="ghost"
