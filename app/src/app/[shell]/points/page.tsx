@@ -572,7 +572,7 @@ const PayPalSubscriptionButton = (props: {
 
   return (
     <div
-      className={`flex h-full flex-col rounded-lg border p-3 ${props.currentUserStatus === props.buttonStatus ? "border-primary bg-accent" : "bg-card"}`}
+      className={`row-span-5 grid grid-rows-subgrid gap-0 rounded-lg border p-3 ${props.currentUserStatus === props.buttonStatus ? "border-primary bg-accent" : "bg-card"}`}
     >
       <div className="relative">
         <Image
@@ -586,7 +586,7 @@ const PayPalSubscriptionButton = (props: {
           <Check className="absolute top-0 right-0 h-8 w-8 rounded-full bg-green-500 p-1" />
         )}
       </div>
-      <div className="flex-1">
+      <div>
         <FederalTierBenefits status={props.buttonStatus} />
       </div>
       <div className="z-0 rounded-lg border-2 border-black bg-amber-200 p-2 text-center text-black hover:cursor-pointer hover:bg-orange-200">
@@ -821,13 +821,15 @@ const FederalStore = () => {
 
       {/* Columns follow the container (the centre column, not the viewport). Container
           queries resolve rem against the 12px root, so @lg/@xl/@5xl are 384/432/768px:
-          four tiers sit 2x2 in the classic centre column, three stay in one row. */}
+          four tiers sit 2x2 in the classic centre column, three stay in one row. Cards
+          share five subgrid rows (art, perks, PayPal, Stripe, note), so their payment
+          buttons line up across a row whatever the length of each perk list. */}
       <div className="@container mt-3">
         <div
           className={`grid grid-cols-1 gap-2 ${AVAILABLE_FEDERAL_TIERS.length === 4 ? "@lg:grid-cols-2 @5xl:grid-cols-4" : "@xl:grid-cols-3"}`}
         >
           {AVAILABLE_FEDERAL_TIERS.map(({ status, image, imageClassName, planId }) => (
-            <div key={status}>
+            <div key={status} className="row-span-5 grid grid-rows-subgrid gap-0">
               {selectedUser && userData ? (
                 <PayPalSubscriptionButton
                   subscriptionPlan={planId}
