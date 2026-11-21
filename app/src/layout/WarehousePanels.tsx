@@ -175,7 +175,7 @@ export const WarehouseStock = ({
       initialBreak
     >
       <div className="@container">
-        <div className="mb-3 flex flex-wrap gap-2 text-sm">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <Badge variant="secondary">
             {allowance.approved ? "Kage approved" : "Daily allowance"}: {allowance.base}
           </Badge>
@@ -183,14 +183,13 @@ export const WarehouseStock = ({
             Loyalty: +{allowance.loyaltyBonus || WAREHOUSE_LOYALTY_BONUS}
             {allowance.loyaltyBonus ? "" : ` after ${WAREHOUSE_LOYALTY_DAYS} days`}
           </Badge>
-          <Badge variant="outline">Used today: {allowance.used}</Badge>
           {!data.isLeader && (
-            <Badge variant="outline">
+            <p className="text-muted-foreground text-sm">
               Producing:{" "}
               {data.production.length > 0
                 ? `${data.production.map((row) => row.name).join(", ")} · next batch at ${new Date(data.nextCycleAt).toLocaleTimeString()}`
                 : "nothing chosen"}
-            </Badge>
+            </p>
           )}
         </div>
         {stock.length === 0 ? (
@@ -198,7 +197,12 @@ export const WarehouseStock = ({
             The Warehouse is empty. Deposit materials or choose items to produce.
           </p>
         ) : (
-          <ul className="grid gap-2 @xl:grid-cols-2 @5xl:grid-cols-3">
+          <ul
+            className={cn(
+              "grid gap-2",
+              stock.length > 1 && "@xl:grid-cols-2 @5xl:grid-cols-3",
+            )}
+          >
             {stock.map((row) => {
               const free = row.quantity - row.reserved;
               const amount =
@@ -240,6 +244,7 @@ export const WarehouseStock = ({
                     size="icon"
                     variant="outline"
                     aria-label={`Withdraw ${row.name}`}
+                    title={`Withdraw ${row.name}`}
                     disabled={busy || max < 1 || !(amount >= 1 && amount <= max)}
                     onClick={() =>
                       actions.withdraw.mutate({ itemId: row.itemId, quantity: amount })
@@ -271,7 +276,7 @@ const DepositForm = ({
   const stack = data.depositCandidates.find((row) => row.userItemId === stackId);
   return (
     <div className="mt-4 border-t pt-3">
-      <h3 className="font-semibold">Deposit</h3>
+      <h3 className="text-base font-semibold">Deposit</h3>
       <p className="text-muted-foreground mb-2 text-sm">
         Donate at least {WAREHOUSE_MIN_DEPOSIT} units; the Warehouse adds{" "}
         {data.depositBonus}% on top. Each item can be deposited once every{" "}
@@ -371,11 +376,30 @@ export const WarehouseProduction = ({
         </p>
       ) : (
         <div className="@container">
-          <p className="mb-2 text-sm">
-            Choose up to {WAREHOUSE_MAX_PRODUCTION_ITEMS} items ({selected.length}{" "}
-            chosen).
-          </p>
-          <ul className="grid gap-2 @xl:grid-cols-2 @5xl:grid-cols-3">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <p className="grow text-sm">
+              Choose up to {WAREHOUSE_MAX_PRODUCTION_ITEMS} items ({selected.length}{" "}
+              chosen).
+            </p>
+            {changed && (
+              <Button variant="outline" onClick={() => setDraft(undefined)}>
+                Reset
+              </Button>
+            )}
+            <Button
+              disabled={!changed || actions.setProduction.isPending}
+              loading={actions.setProduction.isPending}
+              onClick={() =>
+                actions.setProduction.mutate(
+                  { itemIds: selected },
+                  { onSuccess: (result) => result.success && setDraft(undefined) },
+                )
+              }
+            >
+              Save production
+            </Button>
+          </div>
+          <ul className="grid gap-2 @lg:grid-cols-2 @3xl:grid-cols-3">
             {data.producibleItems.map((item) => {
               const isOn = selected.includes(item.id);
               return (
@@ -411,25 +435,6 @@ export const WarehouseProduction = ({
               );
             })}
           </ul>
-          <div className="mt-3 flex justify-end gap-2">
-            {changed && (
-              <Button variant="outline" onClick={() => setDraft(undefined)}>
-                Reset
-              </Button>
-            )}
-            <Button
-              disabled={!changed || actions.setProduction.isPending}
-              loading={actions.setProduction.isPending}
-              onClick={() =>
-                actions.setProduction.mutate(
-                  { itemIds: selected },
-                  { onSuccess: (result) => result.success && setDraft(undefined) },
-                )
-              }
-            >
-              Save production
-            </Button>
-          </div>
         </div>
       )}
     </ContentBox>

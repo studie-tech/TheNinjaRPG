@@ -304,7 +304,7 @@ const CaravanEncounterRate: React.FC = () => {
   });
   const value = rate ?? data?.rate ?? 0;
   return (
-    <div className="col-span-2 flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2">
+    <div className="col-span-3 flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2 sm:col-span-2">
       <Label htmlFor="caravanEncounterRate" className="font-medium text-sm">
         Caravan ambush chance per checkpoint (%)
       </Label>
