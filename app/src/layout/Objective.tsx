@@ -8,6 +8,7 @@ import {
   Loader2,
   RotateCcw,
   Sprout,
+  Swords,
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
@@ -33,7 +34,11 @@ import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { getCollectDeadline, hasEndDatePassed } from "@/utils/time";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
-import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
+import type {
+  AllObjectivesType,
+  QuestTrackerType,
+  WinTowerDefenseType,
+} from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
 import type { QuestRewardType } from "@/validators/rewardPackages";
 import { rewardPayloads } from "@/validators/rewardPackages";
@@ -62,6 +67,9 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
     autoWakeUp: u.autoWakeUp,
     battleId: u.battleId,
     userQuests: u.userQuests,
+    sector: u.sector,
+    longitude: u.longitude,
+    latitude: u.latitude,
   }));
   const { objective, tier, tracker, titlePrefix, checkRewards } = props;
   const { image, title } = getObjectiveImage(objective);
@@ -276,6 +284,18 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
               </div>
             </div>
           )}
+          {parsed.task === "win_tower_defense" && !done && !props.grayedOut && (
+            <TowerDefenseChallengeAction
+              questId={tracker.id}
+              objective={parsed}
+              isHere={
+                parsed.hideLocation ||
+                (userData?.sector === parsed.sector &&
+                  userData.longitude === parsed.longitude &&
+                  userData.latitude === parsed.latitude)
+              }
+            />
+          )}
           {/* Retry button for lost start_battle objectives that are still open */}
           {canRetryBattle && (
             <div className="mt-2 flex flex-row items-center justify-end">
@@ -292,6 +312,41 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * What a tower defense challenge asks for, and the way into it once the player stands on
+ * its location. A hidden location cannot be checked here, so the server decides.
+ */
+const TowerDefenseChallengeAction = (props: {
+  questId: string;
+  objective: WinTowerDefenseType;
+  isHere: boolean;
+}) => {
+  const { objective } = props;
+  const finalWave = objective.startWave + objective.waves - 1;
+  return (
+    <div className="@container mt-2 pr-3">
+      <div className="flex flex-col gap-2 @md:flex-row @md:items-center">
+        <p className="grow text-sm">
+          Clear {objective.waves === 1 ? "wave" : "waves"} {objective.startWave}
+          {objective.waves > 1 ? `–${finalWave}` : ""} in tower defense against enemies
+          with {objective.enemyHealth}% health and {objective.enemyDamage}% damage.
+          {!props.isHere && " Travel to the position above to start."}
+        </p>
+        {props.isHere && (
+          <Button asChild size="sm" className="shrink-0">
+            <Link
+              href={`/towerDefense?quest=${encodeURIComponent(props.questId)}&objective=${encodeURIComponent(objective.id)}`}
+            >
+              <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
+              Start challenge
+            </Link>
+          </Button>
+        )}
       </div>
     </div>
   );

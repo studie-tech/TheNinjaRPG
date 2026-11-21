@@ -341,12 +341,16 @@ const Results = (props: {
         ) : (
           <>
             <h3 className="text-2xl font-bold">
-              {props.outcome.quit ? "Retreated" : "Defeated"} at wave{" "}
-              {props.outcome.wave}
+              {props.outcome.won
+                ? "Challenge cleared"
+                : props.outcome.quit
+                  ? "Retreated"
+                  : "Defeated"}{" "}
+              at wave {props.outcome.wave}
             </h3>
             <p>
               {formatTdNumber(props.outcome.kills)} enemies defeated
-              {props.isGuest
+              {props.isGuest || props.outcome.challenge
                 ? ""
                 : ` · ${formatTdNumber(props.outcome.points)} scroll${props.outcome.points === 1 ? "" : "s"}`}
             </p>
@@ -371,7 +375,11 @@ const Results = (props: {
                   Reload
                 </Button>
               )}
-              <Button onClick={props.onLeave}>Back to the Guard Hall</Button>
+              <Button onClick={props.onLeave}>
+                {props.outcome.challenge
+                  ? "Back to the challenge"
+                  : "Back to the Guard Hall"}
+              </Button>
             </div>
             {props.footer}
           </>

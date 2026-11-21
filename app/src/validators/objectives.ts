@@ -69,6 +69,7 @@ import {
   IMG_BADGE_USE_JUTSU_COMBAT,
   IMG_BADGE_USER_LEVEL,
   IMG_BADGE_WIN_QUEST,
+  IMG_MANUAL_TOWER_UPGRADES,
   isPetTaskQuestType,
   isSharedRunQuestType,
   LetterRanks,
@@ -82,6 +83,10 @@ import {
   RetryQuestDelays,
   SAGE_MASTERY_RANKS,
   SECTOR_MAP_MAX_DIMENSION,
+  TD_CHALLENGE_MAX_START_WAVE,
+  TD_CHALLENGE_MAX_STRENGTH,
+  TD_CHALLENGE_MAX_WAVES,
+  TD_CHALLENGE_MIN_STRENGTH,
   VILLAGE_MISSION_ONLY_TASKS,
 } from "@/drizzle/constants";
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
@@ -304,6 +309,7 @@ export const LocationTasks = [
   "collect_item",
   "deliver_item",
   "defeat_opponents",
+  "win_tower_defense",
 ] as const;
 
 export const TrackerObjectiveTasks = [
@@ -463,6 +469,7 @@ export const objectiveImageMap: Record<
   collect_item: { image: IMG_BADGE_COLLECT_ITEM, title: "Collect Item" },
   deliver_item: { image: IMG_BADGE_COLLECT_ITEM, title: "Deliver Item" },
   defeat_opponents: { image: IMG_BADGE_DEFEAT_OPPONENTS, title: "Defeat" },
+  win_tower_defense: { image: IMG_MANUAL_TOWER_UPGRADES, title: "Tower Defense" },
   fail_quest: { image: IMG_BADGE_FAIL_QUEST, title: "Fail Quest" },
   win_quest: { image: IMG_BADGE_WIN_QUEST, title: "Win Quest" },
   new_quest: { image: IMG_BADGE_NEW_QUEST, title: "New Quest" },
@@ -697,6 +704,37 @@ export const DefeatOpponents = z.object({
   ...complexObjectiveFields,
 });
 
+/**
+ * Win a tower defense challenge at the objective's location: start at `startWave` and
+ * clear `waves` waves against enemies with the given health and damage, in percent of a
+ * normal run's. The player's Guard Hall upgrades and level apply as in any run.
+ */
+export const WinTowerDefense = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("win_tower_defense"),
+  startWave: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(TD_CHALLENGE_MAX_START_WAVE)
+    .prefault(1),
+  waves: z.coerce.number().int().min(1).max(TD_CHALLENGE_MAX_WAVES).prefault(10),
+  enemyHealth: z.coerce
+    .number()
+    .int()
+    .min(TD_CHALLENGE_MIN_STRENGTH)
+    .max(TD_CHALLENGE_MAX_STRENGTH)
+    .prefault(100),
+  enemyDamage: z.coerce
+    .number()
+    .int()
+    .min(TD_CHALLENGE_MIN_STRENGTH)
+    .max(TD_CHALLENGE_MAX_STRENGTH)
+    .prefault(100),
+  ...complexObjectiveFields,
+});
+export type WinTowerDefenseType = z.infer<typeof WinTowerDefense>;
+
 export const RaidObjective = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
@@ -824,6 +862,7 @@ export const AllObjectives = z.discriminatedUnion("task", [
   CollectItem,
   DeliverItem,
   DefeatOpponents,
+  WinTowerDefense,
   DialogObjective,
   EncountersAtLocation,
   RaidObjective,

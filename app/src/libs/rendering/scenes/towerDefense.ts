@@ -1521,6 +1521,16 @@ export const createTowerDefenseScene = async (options: {
         case "gameOver":
           fx.flash(0x000000, 0.6, 1.5);
           return;
+        case "victory":
+          fx.flash(0xfff6c4, 0.7, 1.5);
+          fx.ring(heroX, heroY + 0.5, {
+            to: 9,
+            color: 0xffd36b,
+            life: 1.4,
+            width: 0.4,
+            fill: 0.15,
+          });
+          return;
       }
     };
 

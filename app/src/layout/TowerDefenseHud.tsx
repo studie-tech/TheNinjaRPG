@@ -61,6 +61,7 @@ import {
   type TdState,
   type TdTargetMode,
   tdCanCallWave,
+  tdChallengeFinalWave,
   tdErasForWave,
   tdJutsuUnlocked,
   tdSealArtUnlocked,
@@ -122,9 +123,13 @@ export const TowerDefenseOverlay = (props: {
   const nextSpeed = speeds[(speeds.indexOf(props.speed) + 1) % speeds.length] ?? 1;
   const nextBlock =
     (Math.floor((state.wave - 1) / TD_ERA_INTERVAL) + 1) * TD_ERA_INTERVAL + 1;
-  const nextEras = tdErasForWave(state.config.seed, nextBlock).filter(
-    (era) => era !== "calm",
-  );
+  // A challenge ends at its final wave, so nothing after it is previewed.
+  const finalWave = tdChallengeFinalWave(state.config);
+  const isFinalWave = finalWave !== null && state.wave >= finalWave;
+  const nextEras =
+    finalWave !== null && nextBlock > finalWave
+      ? []
+      : tdErasForWave(state.config.seed, nextBlock).filter((era) => era !== "calm");
   const opening = state.waveTick < 0;
   const waveLeft = Math.ceil(
     ((opening ? 0 : TD_WAVE_TICKS) - state.waveTick) * TD_TICK_SECONDS,
@@ -141,6 +146,7 @@ export const TowerDefenseOverlay = (props: {
           <div className="flex flex-wrap items-center gap-1 text-sm">
             <span className="rounded bg-black/50 px-1.5 font-bold">
               Wave {state.wave}
+              {finalWave !== null && ` of ${finalWave}`}
             </span>
             <span className="opacity-80">{stage.name}</span>
             {state.eras
@@ -274,10 +280,13 @@ export const TowerDefenseOverlay = (props: {
             <Coins className="h-4 w-4 text-amber-400" />
             {formatTdNumber(state.ryo)}
           </span>
-          <span className="flex items-center gap-1 font-semibold">
-            <ScrollText className="h-4 w-4 text-purple-300" />
-            {formatTdNumber(state.scrolls)}
-          </span>
+          {/* Challenge runs earn no scrolls. */}
+          {finalWave === null && (
+            <span className="flex items-center gap-1 font-semibold">
+              <ScrollText className="h-4 w-4 text-purple-300" />
+              {formatTdNumber(state.scrolls)}
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <Skull className="h-4 w-4" />
             {formatTdNumber(state.kills)}
@@ -305,7 +314,9 @@ export const TowerDefenseOverlay = (props: {
             ? opening
               ? "Start now"
               : "Next wave"
-            : `${opening ? "Starts" : "Next"} in ${waveLeft}s`}
+            : isFinalWave && !opening
+              ? "Final wave"
+              : `${opening ? "Starts" : "Next"} in ${waveLeft}s`}
         </button>
       </div>
     </>

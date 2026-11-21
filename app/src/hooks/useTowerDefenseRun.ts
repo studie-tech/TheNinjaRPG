@@ -48,7 +48,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
     api.towerDefense.purchaseDojoUpgrade.useMutation();
 
   const startRun = useCallback<TowerDefenseBackend["startRun"]>(
-    async (startWave) => {
+    async (startWave, challenge) => {
       if (!userId)
         return {
           config: { seed: nanoid(), startWave: 1, bestWave: 0, level: 1, dojo: {} },
@@ -57,7 +57,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       // The server makes every started run the player's only claimable one. Two tabs
       // starting at the same moment can therefore retire the run the other one keeps; the
       // cost stays on this account and is one run's scrolls, so the start stays unguarded.
-      const result = await startSignedRun({ startWave });
+      const result = await startSignedRun({ startWave, challenge });
       if (!result.success || !result.token || !result.config) {
         showMutationToast(result);
         return null;
@@ -104,14 +104,16 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       }
       const { result } = response;
       if (result.success) {
-        void updateCache(
-          getRunClaimUpdate({
-            pointsEarned: result.pointsEarned ?? 0,
-            wave: result.wave ?? state.wave,
-          }),
-          snapshot,
-        );
-        // The daily Guard Hall duty and its reward.
+        // A quest challenge pays no scrolls and leaves the best wave alone.
+        if (!state.config.challenge)
+          void updateCache(
+            getRunClaimUpdate({
+              pointsEarned: result.pointsEarned ?? 0,
+              wave: result.wave ?? state.wave,
+            }),
+            snapshot,
+          );
+        // The daily Guard Hall duty and its reward, or a completed challenge objective.
         void updateUser(result, { revision: userRevision });
       } else if (result.alreadyClaimed) {
         // An earlier attempt paid out, but its response never arrived.

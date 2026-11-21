@@ -36,6 +36,7 @@ import {
   TD_MAX_ACTIONS,
   TD_MAX_LOG_CHARS,
   TD_MAX_TICKS,
+  type TdChallengeRequest,
 } from "@/validators/towerDefense";
 
 /** A run in progress, kept outside React so the frame loop never waits on a render. */
@@ -77,6 +78,10 @@ export interface TowerDefenseOutcome {
   reloadRequired: boolean;
   message: string | null;
   quit: boolean;
+  /** The run was a quest challenge. */
+  challenge: boolean;
+  /** The challenge run cleared its last wave. */
+  won: boolean;
 }
 
 /** How the backend settled a claimed run. */
@@ -105,9 +110,13 @@ export interface TowerDefenseBackend {
    */
   saveRuns?: boolean;
   isStarting: boolean;
-  /** A run's config and token, or null once the backend has told the player why not. */
+  /**
+   * A run's config and token, or null once the backend has told the player why not. A
+   * quest challenge takes its start wave and rules from the objective it names.
+   */
   startRun: (
     startWave: number,
+    challenge?: TdChallengeRequest,
   ) => Promise<{ config: TdRunConfig; token: string | null } | null>;
   claimRun: (claim: {
     token: string;
@@ -266,6 +275,8 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       kills: state.kills,
       points: tdRunPoints(state),
       quit: state.quit,
+      challenge: !!state.config.challenge,
+      won: state.won,
     };
     persist(true);
     if (!token) {
@@ -365,13 +376,14 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
   );
 
   /**
-   * Start a signed run from a checkpoint, or a local guest run. A new run replaces the
+   * Start a signed run from a checkpoint or for a quest challenge, or a local guest run.
+   * A new run replaces the
    * saved one, so it starts only while storage still holds the save the player chose to
    * discard, or none without `replaceSaved`. Storage is read again once the server
    * answers, since another tab may have written it in the meantime.
    */
   const start = useCallback(
-    async (startWave: number, replaceSaved = false) => {
+    async (startWave: number, replaceSaved = false, challenge?: TdChallengeRequest) => {
       const chosen = replaceSaved ? saved : null;
       /** Whether storage still holds the save the player decided about. */
       const isUnchanged = () => {
@@ -388,7 +400,7 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
       if (!isUnchanged()) return;
       const ticket = {};
       starting.current = ticket;
-      const result = await startRun(startWave);
+      const result = await startRun(startWave, challenge);
       // A run resumed or left while this request was pending keeps the page.
       if (starting.current !== ticket) return;
       starting.current = null;

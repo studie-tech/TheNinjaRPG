@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  TD_CHALLENGE_MAX_STRENGTH,
+  TD_CHALLENGE_MAX_WAVES,
+  TD_CHALLENGE_MIN_STRENGTH,
+} from "@/drizzle/constants";
 import { TD_DOJO } from "@/libs/towerDefense/content";
 
 /** Longest run a claim may replay: about 14 hours of game time. */
@@ -11,6 +16,30 @@ export const TD_MAX_ACTIONS = 300_000;
  */
 export const TD_MAX_LOG_CHARS = 4_000_000;
 
+/** Enemy health or damage of a challenge, in percent of a normal run's. */
+export const tdChallengeStrength = z.coerce
+  .number()
+  .int()
+  .min(TD_CHALLENGE_MIN_STRENGTH)
+  .max(TD_CHALLENGE_MAX_STRENGTH);
+
+/** The challenge a quest objective sets, with the objective it completes. */
+export const tdQuestChallengeSchema = z.object({
+  questId: z.string(),
+  objectiveId: z.string(),
+  waves: z.int().min(1).max(TD_CHALLENGE_MAX_WAVES),
+  enemyHealth: tdChallengeStrength,
+  enemyDamage: tdChallengeStrength,
+});
+export type TdQuestChallenge = z.infer<typeof tdQuestChallengeSchema>;
+
+/** Which quest objective a challenge run is started for. */
+export const tdChallengeRequestSchema = z.object({
+  questId: z.string().max(191),
+  objectiveId: z.string().max(191),
+});
+export type TdChallengeRequest = z.infer<typeof tdChallengeRequestSchema>;
+
 /** What the server signs when a run starts; the claim replays exactly this. */
 export const towerDefenseRunTokenSchema = z.object({
   v: z.literal(1),
@@ -22,5 +51,6 @@ export const towerDefenseRunTokenSchema = z.object({
   level: z.int().min(1),
   dojo: z.partialRecord(z.enum(TD_DOJO), z.int().min(0)),
   issuedAt: z.int(),
+  challenge: tdQuestChallengeSchema.optional(),
 });
 export type TowerDefenseRunToken = z.infer<typeof towerDefenseRunTokenSchema>;

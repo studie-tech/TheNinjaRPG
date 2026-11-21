@@ -850,6 +850,16 @@ export const getNewTrackers = (
             status.selectedNextObjectiveId = objective.nextObjectiveId;
           }
 
+          // A tower defense challenge completes only from its own verified win, which the
+          // run's claim reports with this objective's id; arriving or `any` never does.
+          if (
+            task === "win_tower_defense" &&
+            taskUpdate.task === "win_tower_defense" &&
+            taskUpdate.contentId === objective.id
+          ) {
+            status.done = true;
+          }
+
           // If objective has a location (sector & longitude/latitude), set to completed.
           // A placement-bound objective is also satisfied when the player is interacting
           // with that placement (atPlacementIds), since the placement is authoritative

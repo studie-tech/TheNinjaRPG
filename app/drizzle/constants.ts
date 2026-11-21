@@ -4235,6 +4235,13 @@ export const getCombatStatCap = (
 
 /** Waves one run must clear past its start wave to fulfil the daily Guard Hall duty. */
 export const TD_DAILY_WAVES = 10;
+/** Latest wave a quest's tower defense challenge may start from. */
+export const TD_CHALLENGE_MAX_START_WAVE = 1000;
+/** Most waves a quest's tower defense challenge may ask the player to clear. */
+export const TD_CHALLENGE_MAX_WAVES = 100;
+/** Bounds, in percent of a normal run, of a challenge's enemy health and damage. */
+export const TD_CHALLENGE_MIN_STRENGTH = 10;
+export const TD_CHALLENGE_MAX_STRENGTH = 1000;
 /** Ryo per character level paid for the daily Guard Hall duty. */
 export const TD_DAILY_RYO_PER_LEVEL = 250;
 /** Village prestige paid for the daily Guard Hall duty. */

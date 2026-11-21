@@ -75,6 +75,7 @@ describe("tower defense claim verification", () => {
       wave: state.wave,
       kills: state.kills,
       points: Math.floor(state.scrolls),
+      won: false,
     });
   });
 

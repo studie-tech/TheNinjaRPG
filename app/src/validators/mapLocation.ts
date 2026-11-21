@@ -13,6 +13,7 @@ export const STRUCTURE_OBJECTIVE_TASKS = [
   "collect_item",
   "deliver_item",
   "defeat_opponents",
+  "win_tower_defense",
   "dialog",
 ] as const;
 

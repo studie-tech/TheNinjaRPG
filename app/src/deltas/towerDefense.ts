@@ -1,4 +1,5 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
+import { getPublicQuestUser } from "@/libs/quest/projection";
 import type { TdDojoUpgrade } from "@/libs/towerDefense/content";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
@@ -45,3 +46,14 @@ export const getDailyDutyUserUpdate = (duty: {
         userPatch: { towerDefenseDutyAt: duty.paidAt },
       }
     : { userDelta: {} };
+
+/**
+ * The profile change of a won quest challenge: the player's public quest trackers, now
+ * with the challenge objective done. A challenge pays nothing else.
+ */
+export const getChallengeQuestUserUpdate = (
+  questUser: Parameters<typeof getPublicQuestUser>[0],
+): { userDelta: UserDelta; userPatch: UserCachePatch } => ({
+  userDelta: {},
+  userPatch: { questData: getPublicQuestUser(questUser).questData },
+});

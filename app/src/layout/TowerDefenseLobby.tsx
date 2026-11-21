@@ -207,18 +207,18 @@ export const TowerDefenseLobby = (props: {
                   props.level === undefined ? "grid-cols-2" : "grid-cols-3",
                 )}
               >
-                <Stat
+                <TowerDefenseStat
                   icon={<ScrollText className="h-5 w-5 text-purple-500" />}
                   label="Scrolls"
                   value={formatTdNumber(props.progress?.points ?? 0)}
                 />
-                <Stat
+                <TowerDefenseStat
                   icon={<Crown className="h-5 w-5 text-amber-500" />}
                   label="Best wave"
                   value={`${bestWave}`}
                 />
                 {props.level !== undefined && (
-                  <Stat
+                  <TowerDefenseStat
                     icon={<Swords className="h-5 w-5 text-red-500" />}
                     label={`Level ${props.level}`}
                     value={`+${Math.round(tdLevelDamageBonus(props.level) * 100)}% dmg`}
@@ -692,7 +692,12 @@ const Control = (props: { keys: string[]; name: string; description: string }) =
   </div>
 );
 
-const Stat = (props: { icon: ReactNode; label: string; value: string }) => (
+/** A labelled run figure with its icon. */
+export const TowerDefenseStat = (props: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) => (
   <div className="flex items-center gap-2 rounded-lg border p-2">
     {props.icon}
     <div>
