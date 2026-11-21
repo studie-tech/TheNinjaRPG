@@ -122,11 +122,13 @@ export const SwapBloodline: React.FC = () => {
   const isFreeSwap = hasFreeSwapAvailable;
   const diamond = swapInfo?.diamond;
   const restoreId = diamond?.restoresBloodlineId;
-  const restoreName = restoreId
-    ? (bloodlines?.find((line) => line.id === restoreId)?.name ??
-      diamondLines?.find((line) => line.id === restoreId)?.name ??
-      "your previous bloodline")
-    : "no bloodline";
+  const restoreName = !swapInfo
+    ? "your previous bloodline"
+    : restoreId
+      ? (bloodlines?.find((line) => line.id === restoreId)?.name ??
+        diamondLines?.find((line) => line.id === restoreId)?.name ??
+        "your previous bloodline")
+      : "no bloodline";
   const search = diamondSearch.trim().toLowerCase();
   const visibleDiamondLines = diamondLines?.filter(
     (line) =>
@@ -194,7 +196,11 @@ export const SwapBloodline: React.FC = () => {
               );
             })}
           {visibleDiamondLines?.length === 0 && (
-            <p className="text-sm">No bloodlines match your search.</p>
+            <p className="text-sm">
+              {search
+                ? "No bloodlines match your search."
+                : "No other bloodlines are available to your village."}
+            </p>
           )}
         </section>
       )}
@@ -262,7 +268,11 @@ export const SwapBloodline: React.FC = () => {
         pendingLabel="Swapping"
         isOpen={isDiamondOpen}
         setIsOpen={setIsDiamondOpen}
-        note={`This bloodline is not added to your history and is replaced by ${restoreName} when Diamond support ends.`}
+        note={
+          bloodlines?.some((line) => line.id === diamondLine?.id)
+            ? "You own this bloodline, so you keep it when Diamond support ends."
+            : `This bloodline is not added to your history and is replaced by ${restoreName} when Diamond support ends.`
+        }
         onBuy={(item) => diamondSwap({ bloodlineId: item.id })}
       />
     </div>

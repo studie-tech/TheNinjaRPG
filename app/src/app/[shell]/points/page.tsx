@@ -765,18 +765,16 @@ const FederalTierBenefits = ({ status }: { status: FederalTier }) => {
           queue
         </li>
         <li>Custom avatar ({benefits.avatarSize})</li>
+        <li>+{FED_MATERIALS_SLOTS[status]} Materials inventory space</li>
+        <li>
+          Training captcha once every {TRAINING_CAPTCHA_INTERVAL[status]} trainings
+        </li>
         {status === "DIAMOND" && (
-          <>
-            <li>+{FED_MATERIALS_SLOTS.DIAMOND} Materials inventory space</li>
-            <li>
-              Training captcha every {TRAINING_CAPTCHA_INTERVAL.DIAMOND}th training
-            </li>
-            <li className="font-semibold">
-              Switch to any released {DIAMOND_BLOODLINE_RANKS.join("/")}-rank bloodline
-              available to your village for free, as often as you like, while
-              subscribed. Your own bloodline returns when Diamond ends.
-            </li>
-          </>
+          <li className="font-semibold">
+            Switch to any released {DIAMOND_BLOODLINE_RANKS.join("/")}-rank bloodline
+            available to your village for free, as often as you like, while subscribed.
+            Your own bloodline returns when Diamond ends.
+          </li>
         )}
       </ul>
     </>
@@ -823,7 +821,9 @@ const FederalStore = () => {
       )}
 
       <div className="@container mt-3">
-        <div className="grid grid-cols-1 gap-2 @lg:grid-cols-2 @5xl:grid-cols-4">
+        <div
+          className={`grid grid-cols-1 gap-2 ${AVAILABLE_FEDERAL_TIERS.length === 4 ? "@lg:grid-cols-2 @5xl:grid-cols-4" : "@xl:grid-cols-3"}`}
+        >
           {AVAILABLE_FEDERAL_TIERS.map(({ status, image, imageClassName, planId }) => (
             <div key={status}>
               {selectedUser && userData ? (
