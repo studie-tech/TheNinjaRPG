@@ -2,7 +2,7 @@
 
 import { ArrowDownToLine, ArrowUpFromLine, Hammer, ShieldCheck } from "lucide-react";
 import { useState } from "react";
-import { api, type RouterOutputs } from "@/app/_trpc/client";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
@@ -19,7 +19,6 @@ import {
   WAREHOUSE_APPROVED_DAILY_ALLOWANCE,
   WAREHOUSE_DEPOSIT_BONUS_PER_LEVEL,
   WAREHOUSE_DEPOSIT_COOLDOWN_HOURS,
-  WAREHOUSE_HISTORY_PAGE_SIZE,
   WAREHOUSE_LOYALTY_BONUS,
   WAREHOUSE_LOYALTY_DAYS,
   WAREHOUSE_MAX_PRODUCTION_ITEMS,
@@ -28,7 +27,7 @@ import {
   WAREHOUSE_PRODUCTION_INTERVAL_HOURS,
   type WarehouseLogType,
 } from "@/drizzle/constants";
-import type { useCaravans } from "@/hooks/useCaravans";
+import { type useCaravans, useWarehouseHistory } from "@/hooks/useCaravans";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
@@ -545,10 +544,7 @@ export const WarehouseAccess = ({
 
 /** Paged movement history of the Warehouse. */
 export const WarehouseHistory = () => {
-  const history = api.warehouse.getHistory.useInfiniteQuery(
-    { limit: WAREHOUSE_HISTORY_PAGE_SIZE },
-    { getNextPageParam: (page) => page.nextCursor },
-  );
+  const history = useWarehouseHistory();
   const rows = history.data?.pages.flatMap((page) => page.data) ?? [];
   return (
     <ContentBox
