@@ -280,6 +280,7 @@ const KnownCaravan = ({
     !row.arrivesAt ||
     new Date(row.arrivesAt).getTime() <= now + CARAVAN_SABOTAGE_MINUTES * 60_000;
   const canSabotage = row.inSector && !arrivesFirst && !running;
+  const arrived = !row.arrivesAt || new Date(row.arrivesAt).getTime() <= now;
   return (
     <li className="rounded-md border p-2">
       <p className="font-semibold">
@@ -380,7 +381,7 @@ const KnownCaravan = ({
                   {group.leaderName}'s group · {group.members.length}/
                   {CARAVAN_MAX_GROUP}
                 </span>
-                {!data.commitment && group.members.length < CARAVAN_MAX_GROUP && (
+                {!data.commitment && group.joinable && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -409,7 +410,10 @@ const KnownCaravan = ({
                   <Button
                     size="sm"
                     variant="destructive"
-                    disabled={!row.inSector || actions.attack.isPending}
+                    title={
+                      arrived ? "The caravan has reached its destination" : undefined
+                    }
+                    disabled={!row.inSector || arrived || actions.attack.isPending}
                     onClick={() => actions.attack.mutate({ caravanId: row.id })}
                   >
                     <Swords className="mr-1 size-4" aria-hidden />
