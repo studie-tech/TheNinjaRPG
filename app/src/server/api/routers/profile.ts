@@ -160,6 +160,7 @@ import { incrementUserBank } from "@/queries/bank";
 import { fetchClan } from "@/queries/clan";
 import { claimDungeonQueue, findActiveDungeonRun } from "@/queries/dungeon";
 import { listHuntingHabitats } from "@/queries/hunting";
+import { fetchJutsu } from "@/queries/jutsu";
 import { fetchKageReplacement } from "@/queries/kage";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
 import { invalidateSectorPlacements } from "@/queries/overworldAi";
@@ -1576,12 +1577,15 @@ export const profileRouter = createTRPCRouter({
 
       // Queries
       const newUsername = input.data.username;
-      const [user, ai, villages, usernameTaken] = await Promise.all([
+      const [user, ai, villages, usernameTaken, replacementJutsu] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         findUserDataForUpdateUser(ctx.drizzle, input),
         fetchVillages(ctx.drizzle),
         newUsername
           ? findUserDataForUpdateAi(ctx.drizzle, newUsername, input)
+          : undefined,
+        input.data.basicAttackJutsuId
+          ? fetchJutsu(ctx.drizzle, input.data.basicAttackJutsuId)
           : undefined,
       ]);
 
@@ -1592,6 +1596,16 @@ export const profileRouter = createTRPCRouter({
       if (!ai.isAi) return errorResponse("Not an AI");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (usernameTaken) return errorResponse("Username already taken");
+      const replacementJutsuId =
+        input.data.basicAttackJutsuId === undefined
+          ? ai.basicAttackJutsuId
+          : input.data.basicAttackJutsuId;
+      if (replacementJutsuId && !input.data.jutsus?.includes(replacementJutsuId))
+        return errorResponse(
+          "Equip the replacement Jutsu, or clear Basic Attack Replacement before removing it.",
+        );
+      if (input.data.basicAttackJutsuId && !replacementJutsu)
+        return errorResponse("Basic Attack Replacement Jutsu no longer exists");
       if (
         input.data.npcTitle &&
         input.data.npcTitle !== ai.npcTitle &&

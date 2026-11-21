@@ -1,0 +1,1 @@
+ALTER TABLE `UserData` ADD `basicAttackJutsuId` varchar(191);

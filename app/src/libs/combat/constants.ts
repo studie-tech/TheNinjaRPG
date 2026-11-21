@@ -175,6 +175,8 @@ export const publicState = [
  * Which user state is private
  */
 export const privateState = [
+  "basicAttackJutsuId",
+  "hasBasicAttackReplacement",
   "activeSkillIds",
   "skillLockedJutsuIds",
   "anbuId",

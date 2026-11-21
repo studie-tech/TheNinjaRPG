@@ -124,6 +124,18 @@ export const availableUserActions = (
   const isImmobilized = isUserImmobilized(userId, battle?.usersEffects);
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
+  // Initiation distinguishes missing content from replacements removed by use gates.
+  // Older snapshots resolve existence from their equipped record and catalog.
+  const replacesBasicAttack =
+    !!user?.isAi &&
+    !user.isVillageDutyCopy &&
+    !!user.basicAttackJutsuId &&
+    (user.hasBasicAttackReplacement ??
+      (!!battle &&
+        !!getJutsu(battle, user.basicAttackJutsuId) &&
+        user.jutsus?.some(
+          (jutsu) => jutsu.jutsuId === user.basicAttackJutsuId && jutsu.equipped,
+        )));
   const isRankedBattle = !!battle && RankedBattleTypes.includes(battle.battleType);
   // Ranked and authored AI loadouts bypass mastery gates even when penalties or
   // level scaling lower their battle masteries below the requirements.
@@ -150,7 +162,9 @@ export const availableUserActions = (
 
   // Concatenate all actions
   let availableActions = [
-    ...(basicMoves && !isStealth ? [basicActions.basicAttack] : []),
+    ...(basicMoves && !isStealth && !replacesBasicAttack
+      ? [basicActions.basicAttack]
+      : []),
     ...(basicMoves && !isStealth ? [basicActions.basicMeditate] : []),
     ...(!isImmobilized ? [basicActions.basicMove] : []),
     ...(basicMoves && !isStealth && !isStudent
@@ -312,6 +326,7 @@ export const availableUserActions = (
   // If only 'move' and 'endTurn' actions are available, also add 'basicAttack'
   if (
     !isStealth &&
+    !replacesBasicAttack &&
     availableActions.length === 2 &&
     availableActions.some((a) => a.id === "move") &&
     availableActions.some((a) => a.id === "wait")

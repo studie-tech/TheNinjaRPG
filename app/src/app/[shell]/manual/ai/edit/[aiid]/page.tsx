@@ -137,7 +137,14 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
               relationId={processedUser.userId}
               allowImageUpload={props.canSave}
               onAccept={handleUserSubmit}
-            />
+            >
+              <p className="text-muted-foreground col-span-full text-sm">
+                Basic Attack Replacement removes the standard Basic Attack. The selected
+                equipped Jutsu uses its normal costs, cooldown, targeting, effects and
+                Jutsu animation. When it cannot be used, the AI chooses another legal
+                action. Choose None to keep the standard Basic Attack.
+              </p>
+            </EditContent>
             <div className="mt-2 flex justify-end">
               <SuggestChange
                 entityType="AI"

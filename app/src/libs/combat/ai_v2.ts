@@ -249,11 +249,11 @@ export const performAIaction = (
       enforceExtraRules(aiProfile.rules, backupRules);
     }
 
-    // Auto-combat actors, and actors with an affordable action outside
-    // nonEffectActions, get a trailing end_turn rule, so a turn that matches no
-    // earlier rule ends through it (see the end_turn branch). Without it, an
-    // unmatched actor reaches the give-up path below: an NPC loses all health,
-    // while summons and raid-battle actors forfeit the turn.
+    // Auto-combat actors, actors with a configured Basic Attack replacement, and
+    // actors with an affordable action outside nonEffectActions get a trailing
+    // end_turn rule. A replacement's cooldown or use gates must not make an NPC
+    // give up when only utility actions remain. The configured ID also covers
+    // battle snapshots without the replacement ownership flag.
     const nonEffectActions = [
       "basicHeal",
       "meditate",
@@ -266,7 +266,9 @@ export const performAIaction = (
     ];
     if (
       aiProfile &&
-      (user.isAutoCombat || allActions?.find((a) => !nonEffectActions.includes(a.id)))
+      (user.isAutoCombat ||
+        user.basicAttackJutsuId ||
+        allActions?.find((a) => !nonEffectActions.includes(a.id)))
     ) {
       aiProfile.rules.push({
         conditions: [],

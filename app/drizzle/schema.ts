@@ -3170,6 +3170,8 @@ export const userData = mysqlTable(
     sageMastery: double("sageMastery").default(10).notNull(),
     statsMultiplier: double("statsMultiplier").default(1).notNull(),
     poolsMultiplier: double("poolsMultiplier").default(1).notNull(),
+    /** Authored AI fallback attack; combat uses the equipped jutsu's normal rules. */
+    basicAttackJutsuId: varchar("basicAttackJutsuId", { length: 191 }),
     primaryElement: mysqlEnum("primaryElement", consts.ElementNames),
     secondaryElement: mysqlEnum("secondaryElement", consts.ElementNames),
     reputationPoints: float("reputationPoints")

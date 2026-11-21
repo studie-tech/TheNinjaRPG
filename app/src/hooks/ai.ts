@@ -93,6 +93,11 @@ export const useAiEditForm = (
   });
   // The default hint follows the draft innate element when the preference is cleared.
   const primaryElement = useWatch({ control: form.control, name: "primaryElement" });
+  const equippedJutsuIds = useWatch({ control: form.control, name: "jutsus" });
+  const basicAttackJutsuId = useWatch({
+    control: form.control,
+    name: "basicAttackJutsuId",
+  });
 
   // Handle updating of effects
   const setEffects = (newEffects: ZodAllTags[]) => {
@@ -191,6 +196,28 @@ export const useAiEditForm = (
       label: "Equipped Jutsus",
       values: jutsus,
       multiple: true,
+      doubleWidth: true,
+    },
+    {
+      id: "basicAttackJutsuId",
+      type: "db_values",
+      label: "Basic Attack Replacement",
+      searchable: true,
+      values: [
+        { id: "", name: "None" },
+        ...(jutsus
+          ?.filter(
+            (jutsu) =>
+              equippedJutsuIds?.includes(jutsu.id) || jutsu.id === basicAttackJutsuId,
+          )
+          .map((jutsu) => ({
+            ...jutsu,
+            name: equippedJutsuIds?.includes(jutsu.id)
+              ? jutsu.name
+              : `${jutsu.name} (not equipped)`,
+          })) ?? []),
+      ],
+      nullable: true,
       doubleWidth: true,
     },
     {
