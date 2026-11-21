@@ -614,7 +614,7 @@ const PrepareCaravan = ({
       <p className="text-muted-foreground mb-3 text-sm">
         {active.length === 0
           ? "Agree an active trade route to send caravans."
-          : "Every trade route already has a caravan preparing or on the road."}
+          : "All outgoing caravan slots are in use."}
       </p>
     );
   return (

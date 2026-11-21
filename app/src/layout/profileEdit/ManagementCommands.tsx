@@ -302,6 +302,8 @@ const CaravanEncounterRate: React.FC = () => {
       }
     },
   });
+  // Editing waits for the stored rate, so a draft never starts from a placeholder.
+  const isLoaded = data !== undefined;
   const value = rate ?? data?.rate ?? 0;
   return (
     <div className="col-span-3 flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2 sm:col-span-2">
@@ -316,11 +318,13 @@ const CaravanEncounterRate: React.FC = () => {
           max={100}
           value={value}
           onValueChange={setRate}
-          disabled={isPending}
+          disabled={isPending || !isLoaded}
         />
         <Button
           size="sm"
-          disabled={isPending || rate === undefined || !(rate >= 0 && rate <= 100)}
+          disabled={
+            isPending || !isLoaded || rate === undefined || !(rate >= 0 && rate <= 100)
+          }
           loading={isPending}
           onClick={() => rate !== undefined && mutate({ rate })}
         >

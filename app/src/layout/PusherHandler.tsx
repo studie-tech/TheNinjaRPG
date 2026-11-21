@@ -486,21 +486,22 @@ export const usePusherHandler = (
               await utils.home.getHomeRequests.invalidate();
             // A delivery or cancellation woke the escort and may have paid them. A shown
             // caravan list reloads the Warehouse itself when the refreshed list moved stock.
-            if (data.type === "caravanEscortReleased")
-              await Promise.all([
-                utils.profile.getUser.invalidate(),
-                utils.caravan.getCaravans.invalidate(),
-                utils.caravanOps.getControls.invalidate(),
-                utils.warehouse.getWarehouse.invalidate(undefined, {
-                  refetchType: "none",
-                }),
-              ]);
+            // Caravan notices can be urgent, so they show without waiting for these reads.
+            if (data.type === "caravanEscortReleased") {
+              void utils.profile.getUser.invalidate();
+              void utils.caravan.getCaravans.invalidate();
+              void utils.caravanOps.getControls.invalidate();
+              void utils.warehouse.getWarehouse.invalidate(undefined, {
+                refetchType: "none",
+              });
+            }
             const refresh = data.refresh ?? [];
-            await Promise.all([
-              refresh.includes("caravans") && utils.caravan.getCaravans.invalidate(),
-              refresh.includes("routes") && utils.tradeRoute.getRoutes.invalidate(),
-              refresh.includes("controls") && utils.caravanOps.getControls.invalidate(),
-            ]);
+            if (refresh.includes("caravans"))
+              void utils.caravan.getCaravans.invalidate();
+            if (refresh.includes("routes"))
+              void utils.tradeRoute.getRoutes.invalidate();
+            if (refresh.includes("controls"))
+              void utils.caravanOps.getControls.invalidate();
             showMutationToast({
               success: true,
               message: data.message ?? "You have a new message",
