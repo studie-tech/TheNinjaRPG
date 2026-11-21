@@ -1836,6 +1836,60 @@ const ItemQuestDraftForm = ({ initial }: { initial: ZodAllTags }) => {
   );
 };
 
+const EffectTypeDraftForm = () => {
+  const [effects, setEffects] = useState<ZodAllTags[]>([
+    DamageTag.parse({
+      projectileAnimation: "bolt",
+      projectileScale: 2,
+      animationOffsetY: 0.5,
+      groundStyle: "DECAL",
+      groundOpacity: 0.6,
+      groundFeather: 0.1,
+      appearSfxPrimary: true,
+      disappearSfxPrimary: true,
+    }),
+  ]);
+  return (
+    <>
+      <EffectFormWrapper
+        type="jutsu"
+        idx={0}
+        tag={effects[0]!}
+        effects={effects}
+        setEffects={setEffects}
+        availableTags={["damage", "heal"]}
+      />
+      <button
+        type="button"
+        onClick={() => void save({ id: "type-switch", data: { effects } })}
+      >
+        Save effect type
+      </button>
+    </>
+  );
+};
+
+describe("combat effect type changes", () => {
+  withRadixBrowserGlobals();
+  it("preserves optional artwork and primary cues when switching to a compatible tag", async () => {
+    const view = render(<EffectTypeDraftForm />);
+    fireEvent.click(view.getByRole("combobox", { name: "Type" }));
+    fireEvent.click(await view.findByRole("option", { name: "heal" }));
+    fireEvent.click(view.getByRole("button", { name: "Save effect type" }));
+    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
+      type: "heal",
+      projectileAnimation: "bolt",
+      projectileScale: 2,
+      animationOffsetY: 0.5,
+      groundStyle: "DECAL",
+      groundOpacity: 0.6,
+      groundFeather: 0.1,
+      appearSfxPrimary: true,
+      disappearSfxPrimary: true,
+    });
+  });
+});
+
 describe("Special quest item drafts", () => {
   withRadixBrowserGlobals();
   beforeEach(() => {

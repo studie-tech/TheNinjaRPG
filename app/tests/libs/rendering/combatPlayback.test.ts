@@ -110,6 +110,56 @@ describe("combat replay director", () => {
     expect(playback.tick({ ...idle, now: 650 })).toBe(next);
     expect(playback.takeHits()).toEqual([{ userId: "foe", amount: -40 }]);
     expect(playback.logVersion()).toBeUndefined();
+    expect(playback.actorId("foe")).toBe("foe");
+  });
+  it("keeps the landed attacker when a no-cue projectile advances to another actor", () => {
+    const previous = battle(1, {
+      usersState: [
+        fighter(),
+        { userId: "next", longitude: 0, latitude: 0, curHealth: 100 } as never,
+        { userId: "victim", longitude: 4, latitude: 0, curHealth: 100 } as never,
+      ],
+    });
+    const next = battle(3, {
+      usersState: [
+        fighter(),
+        { userId: "victim", longitude: 4, latitude: 0, curHealth: 60 } as never,
+        { userId: "next", longitude: 2, latitude: 0, curHealth: 100 } as never,
+      ],
+      groundEffects: [
+        {
+          id: "bolt",
+          type: "visual",
+          creatorId: "foe",
+          longitude: 4,
+          latitude: 0,
+          projectileAnimation: "art",
+        },
+      ] as ReturnedBattle["groundEffects"],
+      playback: [
+        {
+          ...step(2, [{ userId: "victim", curHealth: 60 }]),
+          addedEffectIds: ["bolt"],
+          userIds: ["foe", "next", "victim"],
+          hits: [{ userId: "victim", amount: -40 }],
+        },
+        {
+          ...step(3, [{ userId: "next", longitude: 2 }]),
+          actorId: "next",
+          userIds: ["foe", "next", "victim"],
+          hits: [],
+        },
+      ],
+    });
+    const playback = createCombatPlayback(previous);
+    playback.receive(next);
+    playback.tick({ ...idle, now: 0 });
+    playback.tick({ ...idle, now: 650 });
+    expect(playback.takeHits()).toEqual([{ userId: "victim", amount: -40 }]);
+    expect(playback.actorId()).toBe("next");
+    expect(playback.actorId("victim")).toBe("foe");
+    playback.tick({ ...idle, now: 660, moving: true });
+    expect(playback.actorId("victim")).toBe("next");
   });
   it("presents an update immediately when nothing needs replaying", () => {
     const playback = createCombatPlayback(battle(1));

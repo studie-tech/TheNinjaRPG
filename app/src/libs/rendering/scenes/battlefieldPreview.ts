@@ -25,6 +25,7 @@ import {
   sceneSoundIds,
 } from "@/libs/contentReview/battlefield";
 import { hexGridHeightRatio, stackedHexWidths, type TerrainHex } from "@/libs/hexgrid";
+import { combatEffectRenditions } from "@/libs/rendering/combatEffectAssets";
 import {
   type CombatSceneSnapshot,
   createCombatScene,
@@ -81,6 +82,7 @@ export const createBattlefieldPreview = async (
         target: targeting.target,
       }
     : TILES;
+  const targetAnchor = placements.target;
   const battle = previewBattle(id, options.background, [
     fighter(casterId, "Caster", placements.caster, null),
     fighter(
@@ -101,7 +103,7 @@ export const createBattlefieldPreview = async (
     content.effects.some((effect) => effect.placement === "target")
   ) {
     const a = grid.getHex(placements.caster);
-    const b = grid.getHex(placements.target);
+    const b = grid.getHex(targetAnchor);
     if (a && b) {
       const candidates = getTargetTiles({
         a,
@@ -138,7 +140,7 @@ export const createBattlefieldPreview = async (
   const effectTiles = (effect: BattlefieldEffect) => {
     const anchor = placements[effect.placement];
     const a = grid.getHex(placements.caster);
-    const b = grid.getHex(placements.target);
+    const b = grid.getHex(targetAnchor);
     if ((!effect.coordinateTargeting && !effect.footprint) || !a || !b) return [anchor];
     const tiles = getTargetTiles({
       a,
@@ -173,18 +175,23 @@ export const createBattlefieldPreview = async (
   const disappearMs = durationOf(
     content.effects.map((effect) => effect.disappearAnimation),
   );
+  const flightTiles = (effect: BattlefieldEffect) =>
+    effect.projectileAnimation && effect.placement !== "caster"
+      ? effectTiles(effect).filter(
+          (tile) =>
+            tile.col !== placements.caster.col || tile.row !== placements.caster.row,
+        )
+      : [];
   const travelMs = Math.max(
     0,
-    ...content.effects
-      .filter((effect) => effect.projectileAnimation && effect.placement !== "caster")
-      .flatMap((effect) =>
-        effectTiles(effect).map((tile) =>
-          projectileTravelMs(
-            { longitude: placements.caster.col, latitude: placements.caster.row },
-            { longitude: tile.col, latitude: tile.row },
-          ),
+    ...content.effects.flatMap((effect) =>
+      flightTiles(effect).map((tile) =>
+        projectileTravelMs(
+          { longitude: placements.caster.col, latitude: placements.caster.row },
+          { longitude: tile.col, latitude: tile.row },
         ),
       ),
+    ),
   );
   const endAt = travelMs + appearMs + (options.holdMs ?? 1800),
     restartAt = endAt + disappearMs + REST_MS;
@@ -199,7 +206,8 @@ export const createBattlefieldPreview = async (
     clockMs = 0,
     ended = false,
     arrived = false,
-    revision = 0;
+    revision = 0,
+    replayOnPlay = false;
   let selectedTiles: TerrainHex[] | undefined;
   let field: Awaited<ReturnType<typeof createCombatScene>> | null = null;
   const arrive = () => {
@@ -233,17 +241,15 @@ export const createBattlefieldPreview = async (
     revision++;
     battle.usersEffects = [];
     battle.groundEffects = content.effects.flatMap((effect, index) =>
-      effect.projectileAnimation && effect.placement !== "caster"
-        ? effectTiles(effect).map((tile, tileIndex) => ({
-            ...visualEffect(
-              `${id}-${cycle}-flight-${index}-${tileIndex}`,
-              tile,
-              effect,
-              casterId,
-            ),
-            projectileOnly: true,
-          }))
-        : [],
+      flightTiles(effect).map((tile, tileIndex) => ({
+        ...visualEffect(
+          `${id}-${cycle}-flight-${index}-${tileIndex}`,
+          tile,
+          effect,
+          casterId,
+        ),
+        projectileOnly: true,
+      })),
     );
     if (!travelMs) arrive();
   };
@@ -394,6 +400,10 @@ export const createBattlefieldPreview = async (
       play: () => {
         if (live || disposed) return;
         live = true;
+        if (replayOnPlay) {
+          replayOnPlay = false;
+          replay();
+        }
         renderer.refresh();
       },
       pause: () => {
@@ -403,9 +413,13 @@ export const createBattlefieldPreview = async (
       replay,
       setSound: (value, settings) => {
         sound = value;
+        replayOnPlay = false;
         if (value) {
           void preloadAudioBuffers(soundUrls);
-          if (settings?.restart !== false) replay();
+          if (settings?.restart !== false) {
+            if (live) replay();
+            else replayOnPlay = true;
+          }
         }
         renderer.refresh();
       },
@@ -420,14 +434,19 @@ export const createBattlefieldPreview = async (
         renderer.refresh();
       },
       whenLoaded: async (timeoutMs = 6000) => {
+        const renditions = drawn.map((asset) => ({
+          asset,
+          urls: combatEffectRenditions(asset, content.effects).map((width) =>
+            textureImageUrl(asset.image, width),
+          ),
+        }));
         const failed = await preloadImages(
-          drawn.map((asset) => textureImageUrl(asset.image, asset.frames > 1 ? 0 : 50)),
+          renditions.flatMap(({ urls }) => urls),
           timeoutMs,
         );
-        return drawn
-          .filter((asset) =>
-            failed.has(textureImageUrl(asset.image, asset.frames > 1 ? 0 : 50)),
-          )
+        return renditions
+          .filter(({ urls }) => urls.some((url) => failed.has(url)))
+          .map(({ asset }) => asset)
           .map((asset) => `${asset.name} (${asset.id})`);
       },
       captureFrames: async () => {

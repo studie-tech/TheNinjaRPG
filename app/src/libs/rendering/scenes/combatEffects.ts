@@ -144,6 +144,8 @@ export const createCombatEffects = (
     const boundaries = groundDecalBoundaries(
       displayed.flatMap(({ effect, tile }) =>
         effect.staticAssetPath &&
+        !effect.projectileOnly &&
+        (effect.power === undefined || effect.power > 0) &&
         (effect.groundStyle === "DECAL" || effect.groundStyle === "SURFACE")
           ? [
               {
@@ -217,6 +219,7 @@ export const createCombatEffects = (
           depleted: false,
           barrier: null,
           decal: null,
+          outerEdges: boundaries.get(effect.id),
           projectile: null,
           isProjectileOnly: !!effect.projectileOnly,
         };
@@ -321,6 +324,7 @@ export const createCombatEffects = (
             ).then((decal) => {
               if (!scope.isDisposed()) {
                 current.decal = decal;
+                if (current.outerEdges) decal.setOuterEdges(current.outerEdges);
                 current.ground?.addChild(decal);
               }
             }),
@@ -375,8 +379,8 @@ export const createCombatEffects = (
         }
       }
       record.displayed = true;
-      const outerEdges = boundaries.get(effect.id);
-      if (outerEdges) record.decal?.setOuterEdges(outerEdges);
+      record.outerEdges = boundaries.get(effect.id);
+      if (record.outerEdges) record.decal?.setOuterEdges(record.outerEdges);
       record.effect = effect;
       record.tile = tile;
       const depleted = effect.power !== undefined && effect.power <= 0;
@@ -504,6 +508,7 @@ type EffectRecord = {
   root: Container;
   ground: Container | null;
   decal: Awaited<ReturnType<typeof createGroundDecal>> | null;
+  outerEdges: boolean[] | undefined;
   effect: GroundEffect | UserEffect;
   tile: TerrainHex;
   clips: Awaited<ReturnType<typeof createSpriteClip>>[];

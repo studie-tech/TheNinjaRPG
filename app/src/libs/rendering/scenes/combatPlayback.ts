@@ -35,7 +35,9 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
    * frame without lines, or any frame skipped unlanded, leaves the scene its net change.
    */
   let landed = { frames: 0, hits: [] as LoggedHealth[], complete: true };
+  const impactActors = new Map<string, string>();
   const record = (frame: CombatPlaybackFrame) => {
+    for (const hit of frame.hits ?? []) impactActors.set(hit.userId, frame.actorId);
     landed.frames += 1;
     if (frame.hits) landed.hits.push(...frame.hits);
     else landed.complete = false;
@@ -102,6 +104,7 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
       projectilesArrived: (now: number) => boolean;
     }) => {
       const { now, moving } = input;
+      impactActors.clear();
       if (input.instant) {
         if (current || queue.length) finish();
         return presented;
@@ -137,8 +140,9 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
       return presented;
     },
     isPlaying: () => !!current || queue.length > 0,
-    /** The fighter whose action is on the field, while one is replaying. */
-    actorId: () => current?.frame.actorId,
+    /** A landed hit retains its attacker even when the next action has started. */
+    actorId: (targetId?: string) =>
+      (targetId ? impactActors.get(targetId) : undefined) ?? current?.frame.actorId,
     logVersion: () => logVersion,
     presented: () => presented,
     /**

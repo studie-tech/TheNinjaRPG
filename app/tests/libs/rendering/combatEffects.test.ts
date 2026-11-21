@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Container, type Sprite, Texture } from "pixi.js";
+import {
+  Assets,
+  BufferImageSource,
+  Container,
+  type Mesh,
+  type Sprite,
+  Texture,
+} from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
 import { applyEffects, expireGroundEffects } from "@/libs/combat/process";
 import type { GroundEffect, ReturnedBattle } from "@/libs/combat/types";
@@ -193,6 +200,123 @@ describe("Pixi combat effects", () => {
         .get("first")
         ?.filter(Boolean),
     ).toHaveLength(6);
+  });
+  it.each(["depleted", "projectile", "expired"] as const)(
+    "feathers the exposed edge of a %s neighbor",
+    async (state) => {
+      const scene = setup();
+      Object.assign(scene.effect, {
+        staticAssetPath: "animation",
+        staticAnimation: "",
+        groundStyle: "DECAL",
+        groundFeather: 0.1,
+      });
+      const neighbor = { ...scene.effect, id: "neighbor", longitude: 4 };
+      scene.snapshot.battle.groundEffects.push(neighbor);
+      await scene.effects.sync(scene.snapshot);
+      const mesh = scene.effects.ground
+        .getChildByLabel("effect")!
+        .getChildByLabel("ground-surface") as Mesh;
+      const outerEdges = () =>
+        Object.entries(mesh.shader!.resources.style.uniforms).filter(
+          ([key, value]) => key.startsWith("uEdge") && (value as number[])[3] === 1,
+        ).length;
+      expect(outerEdges()).toBe(5);
+      if (state === "depleted") neighbor.power = 0;
+      else if (state === "projectile") neighbor.projectileOnly = true;
+      else scene.snapshot.battle.groundEffects = [scene.effect];
+      await scene.effects.sync(scene.snapshot);
+      expect(outerEdges()).toBe(6);
+    },
+  );
+  it("attaches the latest perimeter when a neighbor expires during texture loading", async () => {
+    const scene = setup();
+    Object.assign(scene.effect, {
+      staticAssetPath: "animation",
+      staticAnimation: "",
+      groundStyle: "DECAL",
+      groundFeather: 0.1,
+    });
+    scene.snapshot.battle.groundEffects.push({
+      ...scene.effect,
+      id: "neighbor",
+      longitude: 4,
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(Assets, "load").mockImplementation(async () => {
+      await gate;
+      return new Texture({
+        source: new BufferImageSource({
+          resource: new Uint8Array(16 * 16 * 4),
+          width: 16,
+          height: 16,
+        }),
+      });
+    });
+    const pending = scene.effects.sync(scene.snapshot);
+    scene.snapshot.battle.groundEffects = [scene.effect];
+    await scene.effects.sync(scene.snapshot);
+    release();
+    await pending;
+    const mesh = scene.effects.ground
+      .getChildByLabel("effect")!
+      .getChildByLabel("ground-surface") as Mesh;
+    expect(
+      Object.entries(mesh.shader!.resources.style.uniforms).filter(
+        ([key, value]) => key.startsWith("uEdge") && (value as number[])[3] === 1,
+      ),
+    ).toHaveLength(6);
+  });
+  it("emits one projectile and primary cue for a persistent cast on an occupied tile", async () => {
+    const scene = setup();
+    scene.snapshot.battle.groundEffects = [
+      makeEffect(
+        "stun",
+        {
+          rounds: 3,
+          appearSfx: "appear",
+          appearSfxPrimary: true,
+          projectileAnimation: "animation",
+        },
+        {
+          id: "cast",
+          creatorId: "caster",
+          actionId: "action",
+          longitude: 4,
+          latitude: 1,
+          isNew: true,
+          createdRound: 2,
+          targetType: "user",
+        },
+      ),
+    ];
+    const battle = applyEffects(
+      makeCompleteBattle({
+        round: 2,
+        groundEffects: scene.snapshot.battle.groundEffects,
+        usersState: [
+          makeBattleUser("caster", { longitude: 2, latitude: 1 }),
+          makeBattleUser("target", { longitude: 4, latitude: 1 }),
+        ],
+      }),
+      "caster",
+    ).newBattle;
+    const onsets = battle.groundEffects.filter(
+      (effect) => effect.type === "visual" && effect.appearSfx === "appear",
+    );
+    expect(onsets).toHaveLength(1);
+    expect(onsets[0]?.projectileAnimation).toBe("animation");
+    expect(
+      battle.groundEffects.some(
+        (effect) => effect.id === "cast" && effect.type === "stun",
+      ),
+    ).toBe(true);
+    await scene.effects.sync({ ...scene.snapshot, battle });
+    scene.effects.animate(0, false, false, null);
+    expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
   });
   it("shares a cast's sound across tiles without silencing later casts or another caster", async () => {
     const scene = setup();

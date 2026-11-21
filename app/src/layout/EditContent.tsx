@@ -1573,8 +1573,8 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
             ? ["rounds", "target", "friendlyFire", "powerPerLevel", "timeTracker"]
             : []),
         ];
-        // For all typed keys in shownTag, if the key exists in curTag, keep the value, except for type
-        objectKeys(shownTag).forEach((key) => {
+        // Preserve shared optional fields as well as fields with destination defaults.
+        objectKeys(tagSchema.shape).forEach((key) => {
           if (!skipKeys.includes(key) && key in curTag) {
             // @ts-expect-error - we know this is a key of the object
             shownTag[key] = curTag[key];

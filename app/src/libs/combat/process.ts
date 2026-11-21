@@ -1693,9 +1693,10 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
     actionEffects.push(info);
   }
 
-  // Show once appearing visual/audio
+  // Ground-to-user copies apply mechanics; the ground cast owns its appearance.
   if (
     (effect.appearAnimation || effect.appearSfx || effect.projectileAnimation) &&
+    !effect.fromGround &&
     effect.isNew &&
     longitude !== undefined &&
     latitude !== undefined
