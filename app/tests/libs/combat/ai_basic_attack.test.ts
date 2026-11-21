@@ -168,6 +168,18 @@ describe("AI Basic Attack Replacement", () => {
     expect(performAIaction(battle, grid, actor.userId).nextActionId).toBe("wait");
   });
 
+  it("ends the turn during replacement cooldown in snapshots without the ownership flag", () => {
+    const { actor, opponent, battle } = fixture();
+    expect(actor.hasBasicAttackReplacement).toBeUndefined();
+    actor.jutsus[0]!.lastUsedRound = battle.round;
+    const grid = new Grid(TerrainHex, rectangle({ width: 6, height: 6 }));
+    const result = performAIaction(battle, grid, actor.userId);
+    expect(result.nextActionId).toBe("wait");
+    expect(result.nextBattle.usersState[0]?.curHealth).toBe(5000);
+    expect(result.nextBattle.usersState[1]?.curHealth).toBe(opponent.curHealth);
+    expect(result.aiDescriptions.join(" ")).not.toMatch(/give up/);
+  });
+
   it("keeps controlled summons' client actions consistent without revealing the setting to opponents", () => {
     const { actor, jutsu, battle } = fixture();
     actor.controllerId = "player";

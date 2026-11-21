@@ -33,6 +33,80 @@ const equipped = (jutsu: typeof replacement) => ({
 });
 
 describe("AI Basic Attack Replacement during battle initiation", () => {
+  it.each(["cooldown", "battle usage"])(
+    "ends the turn when its only replacement is unavailable through %s",
+    async (unavailableThrough) => {
+      const jutsu = makeJutsu({
+        ...alternative,
+        id: replacement.id,
+        battleUsageType: unavailableThrough === "battle usage" ? "PVP" : "BOTH",
+        cooldown: 3,
+      });
+      const prepared = await preloadBattle(
+        [
+          makeCombatQueryUser("ai", {
+            isAi: true,
+            rank: "STUDENT",
+            basicAttackJutsuId: jutsu.id,
+            jutsus: [equipped(jutsu)],
+            aiProfile: {
+              id: "profile",
+              userId: "ai",
+              jutsuLoadoutId: null,
+              includeDefaultRules: true,
+              rules: [
+                {
+                  conditions: [],
+                  action: ActionWithEffectHighestPower.parse({
+                    effect: "damage",
+                    target: "CLOSEST_OPPONENT",
+                  }),
+                },
+              ],
+            },
+          }),
+          makeCombatQueryUser("opponent"),
+        ],
+        { battleType: "QUEST" },
+      );
+      const actor = prepared.usersState[0]!;
+      const opponent = prepared.usersState[1]!;
+      Object.assign(actor, { longitude: 1, latitude: 1 });
+      Object.assign(opponent, { longitude: 2, latitude: 1 });
+      if (unavailableThrough === "cooldown") actor.jutsus[0]!.lastUsedRound = 1;
+      const battle = makeCompleteBattle({
+        createdAt: new Date(0),
+        battleType: "QUEST",
+        round: 2,
+        width: 10,
+        height: 10,
+        activeUserId: actor.userId,
+        usersState: prepared.usersState,
+        usersEffects: prepared.userEffects,
+        extraState: prepared.extraState,
+      });
+      expect(actor.hasBasicAttackReplacement).toBe(true);
+      expect(
+        availableUserActions(battle, actor.userId, true, true).map((a) => a.id),
+      ).toEqual(["meditate", "move", "wait"]);
+
+      const grid = new Grid(TerrainHex, rectangle({ width: 10, height: 10 }));
+      const result = performAIaction(battle, grid, actor.userId);
+      expect(result.nextActionId).toBe("wait");
+      expect(result.aiDescriptions.join(" ")).not.toMatch(/give up/);
+      expect(result.nextBattle.usersState[0]).toMatchObject({
+        curHealth: actor.curHealth,
+        curChakra: actor.curChakra,
+        actionPoints: 0,
+        usedActions: [{ id: "wait", type: "basic" }],
+      });
+      expect(result.nextBattle.usersState[1]?.curHealth).toBe(opponent.curHealth);
+      if (unavailableThrough === "cooldown") {
+        expect(result.nextBattle.usersState[0]?.jutsus[0]?.lastUsedRound).toBe(1);
+      }
+    },
+  );
+
   it.each([false, true])(
     "keeps a use-gated replacement suppressed and chooses a legal Jutsu (summon: %s)",
     async (isSummon) => {
