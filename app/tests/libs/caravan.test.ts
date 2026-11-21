@@ -72,7 +72,9 @@ describe("trade route rules", () => {
 
   it("places between one and the maximum markers on interior sectors only", () => {
     const path = Array.from({ length: 40 }, (_, i) => 200 + i);
-    const markers = planRouteMarkers(path, () => 0.5);
+    const markers = planRouteMarkers(path, (maxExclusive) =>
+      Math.floor(maxExclusive / 2),
+    );
     expect(markers.length).toBe(TRADE_ROUTE_MAX_MARKERS);
     for (const marker of markers) {
       expect(path.slice(1, -1)).toContain(marker.sector);

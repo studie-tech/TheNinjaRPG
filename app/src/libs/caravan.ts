@@ -34,6 +34,7 @@ import type { Caravan, UserData, VillageAlliance } from "@/drizzle/schema";
 import { getRankForExperience, getRankProgress } from "@/libs/occupationRank";
 import { sectorGridNeighbors } from "@/libs/sector-map/world-grid";
 import { findRelationship } from "@/utils/alliance";
+import { secureRandomInt } from "@/utils/math";
 
 /** A shipment's manifest line. */
 export type CargoLine = { itemId: string; quantity: number };
@@ -84,7 +85,7 @@ export const getRouteTravelMinutes = (level: number) =>
  */
 export const planRouteMarkers = (
   path: number[],
-  random: () => number = Math.random,
+  pick: (maxExclusive: number) => number = secureRandomInt,
 ) => {
   const interior = [...new Set(path.slice(1, -1))];
   const count = Math.min(
@@ -100,12 +101,12 @@ export const planRouteMarkers = (
   const pool = [...interior];
   const picked: { sector: number; longitude: number; latitude: number }[] = [];
   while (picked.length < count && pool.length > 0) {
-    const [sector] = pool.splice(Math.floor(random() * pool.length), 1);
+    const [sector] = pool.splice(pick(pool.length), 1);
     if (sector === undefined) break;
     picked.push({
       sector,
-      longitude: 3 + Math.floor(random() * (SECTOR_WIDTH - 6)),
-      latitude: 3 + Math.floor(random() * (SECTOR_HEIGHT - 6)),
+      longitude: 3 + pick(SECTOR_WIDTH - 6),
+      latitude: 3 + pick(SECTOR_HEIGHT - 6),
     });
   }
   return picked;
@@ -276,8 +277,10 @@ export const getAttackerRole = (
 };
 
 /** Roll a percent chance. */
-export const rollChance = (percent: number, random: () => number = Math.random) =>
-  random() * 100 < percent;
+export const rollChance = (
+  percent: number,
+  pick: (maxExclusive: number) => number = secureRandomInt,
+) => pick(10_000) < percent * 100;
 
 /**
  * Everything settlement needs about a caravan or marker fight, frozen when it starts so the
