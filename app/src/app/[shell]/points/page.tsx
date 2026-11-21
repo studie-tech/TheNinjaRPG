@@ -144,6 +144,11 @@ const FEDERAL_TIERS: {
   },
 ];
 
+/** Diamond is offered only once its PayPal plan is configured for this deployment. */
+const AVAILABLE_FEDERAL_TIERS = FEDERAL_TIERS.filter(
+  (tier) => tier.status !== "DIAMOND" || !!tier.planId,
+);
+
 const FEDERAL_TIER_BENEFITS = {
   NORMAL: {
     title: "Normal",
@@ -820,7 +825,7 @@ const FederalStore = () => {
 
       <div className="@container mt-3">
         <div className="grid grid-cols-1 gap-2 @lg:grid-cols-2 @5xl:grid-cols-4">
-          {FEDERAL_TIERS.map(({ status, image, imageClassName, planId }) => (
+          {AVAILABLE_FEDERAL_TIERS.map(({ status, image, imageClassName, planId }) => (
             <div key={status}>
               {selectedUser && userData ? (
                 <PayPalSubscriptionButton
