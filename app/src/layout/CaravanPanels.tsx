@@ -502,10 +502,12 @@ const PrepareCaravan = ({
     .filter(([, quantity]) => quantity > 0)
     .map(([itemId, quantity]) => ({ itemId, quantity }));
   const units = lines.reduce((sum, line) => sum + line.quantity, 0);
-  // An entry outside its limits holds NaN; it blocks the reservation until corrected.
-  const hasInvalidCargo = Object.values(cargo).some((quantity) =>
-    Number.isNaN(quantity),
-  );
+  // An entry outside its limits holds NaN, and free stock can shrink below an entered
+  // quantity; either blocks the reservation until corrected.
+  const hasInvalidCargo = Object.entries(cargo).some(([itemId, quantity]) => {
+    const row = warehouse.stock.find((stock) => stock.itemId === itemId);
+    return Number.isNaN(quantity) || quantity > (row ? row.quantity - row.reserved : 0);
+  });
   // Chosen goods stay listed after their free stock runs out, so they can be set to zero.
   const available = warehouse.stock.filter(
     (row) => row.quantity - row.reserved > 0 || isChosen(cargo[row.itemId]),
