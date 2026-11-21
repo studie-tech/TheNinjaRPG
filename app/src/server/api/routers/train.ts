@@ -46,7 +46,6 @@ import {
   statTrainingBlockMessage,
   trainingEnergyMessage,
 } from "@/libs/train";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchAllGameSettings } from "@/queries/profile";
 import {
   insertTrainingLog,
@@ -70,6 +69,7 @@ import {
   elementalSnapshotConditions,
   masteryGainUpdates,
 } from "@/server/utils/masteryProgression";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { flushSafe } from "@/server/utils/sentry";
 import { editTrainingQueue } from "@/server/utils/userQueue";
 import { isInArray } from "@/utils/array";

@@ -73,7 +73,6 @@ import {
 import { isTutorialActive } from "@/libs/tutorial";
 import { villageDutyPatrols } from "@/libs/villageDuty";
 import { getMapDisguise } from "@/libs/war";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   fetchAllGameSettings,
   fetchUser,
@@ -132,6 +131,7 @@ import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAv
 import { structureDefinitions } from "@/server/utils/caches/structureDefinitions";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { withQuestDefinitions } from "@/server/utils/questRevisions";
 import {
   fetchPublishedSectorMap,

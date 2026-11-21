@@ -35,7 +35,6 @@ import {
 } from "@/libs/contentReview/outdate";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { callDiscordContent } from "@/libs/socials";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   deleteBloodlineForDelete,
   deleteBloodlineReskinForDeleteReskin,
@@ -115,6 +114,7 @@ import {
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";

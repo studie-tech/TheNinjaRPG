@@ -28,7 +28,6 @@ import {
 import { canUsePet } from "@/libs/pets/progression";
 import { getServerPusher } from "@/libs/pusher";
 import { isWeightedCacheEffect } from "@/libs/weightedCache";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiUserIds } from "@/queries/ai";
 import { listUserPetForInitiateBattle } from "@/queries/combat";
 import {
@@ -94,6 +93,7 @@ import { expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import { dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
 import { notifyMapLocationsChanged } from "@/server/utils/mapLocations";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { updateRewards } from "@/server/utils/questRewards";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";

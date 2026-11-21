@@ -12,10 +12,10 @@ import {
   userVote,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { profileRouter } from "@/server/api/routers/profile";
 import { stealthRouter } from "@/server/api/routers/stealth";
 import { prepareActionReadiness } from "@/server/utils/actionReadiness";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers, insertUserVotes } from "../../../setup/factories";
 import {

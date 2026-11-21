@@ -164,10 +164,7 @@ import {
   isWeightedCacheEffect,
   resolveWeightedCache,
 } from "@/libs/weightedCache";
-import {
-  fetchActionUser,
-  updateUserForActionReadiness,
-} from "@/queries/actionReadiness";
+import { updateUserForActionReadiness } from "@/queries/actionReadiness";
 import { fetchItemBloodlineRolls, fetchRollableBloodlines } from "@/queries/bloodline";
 import { clearCosmeticVariant, deleteItemCosmetics } from "@/queries/cosmetic";
 import { listHuntingHabitats } from "@/queries/hunting";
@@ -354,6 +351,7 @@ import { joinFinishedCrafts } from "@/server/utils/itemStacks";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { assignQuestToUser } from "@/server/utils/questAssignment";
 import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { validateUrlForSsrf } from "@/server/utils/ssrf";

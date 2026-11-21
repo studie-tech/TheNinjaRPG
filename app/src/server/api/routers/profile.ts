@@ -154,7 +154,6 @@ import {
   getNoJutsuEquippedNotifications,
   getUserFactionNotifications,
 } from "@/libs/userNotifications";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchSquad } from "@/queries/anbu";
 import { incrementUserBank } from "@/queries/bank";
 import { fetchClan } from "@/queries/clan";
@@ -320,6 +319,7 @@ import {
   listUserAnnouncements,
 } from "@/server/utils/profile";
 import {
+  fetchActionUser,
   fetchProfileUser,
   fetchProgressionProfileUser,
 } from "@/server/utils/profileDefinitions";

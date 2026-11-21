@@ -24,6 +24,13 @@ export const fetchProfileUser = async (
   return user;
 };
 
+/** Load an action actor with the profile snapshot, without running hydration or settlement reads. */
+export const fetchActionUser = async (client: DrizzleClient, userId: string) => {
+  const user = await fetchProfileUser(client, userId);
+  if (!user) throw new Error("User not found");
+  return user;
+};
+
 /**
  * `fetchProfileUser` with the per-user reads of the profile refresh's opening wave in the
  * same statement: the tier/exam bootstrap candidates and the rolled bloodline ids that

@@ -6,7 +6,6 @@ import { TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest/rewards";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchClan } from "@/queries/clan";
 import { fetchAllGameSettings, fetchUser, findUserById } from "@/queries/profile";
 import {
@@ -44,6 +43,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { updateRewards } from "@/server/utils/questRewards";
 import { secondsFromDate } from "@/utils/time";
 import { checkCoLeader } from "@/validators/clan";

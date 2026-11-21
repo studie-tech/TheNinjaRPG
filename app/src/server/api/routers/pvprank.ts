@@ -21,7 +21,6 @@ import {
   validateJutsuLoadout,
 } from "@/libs/ranked_pvp";
 import { collapseRewards } from "@/libs/rewards";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { listJutsuByIds } from "@/queries/jutsu";
 import { fetchJutsuEquipCaps, fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
 import { fetchAllGameSettings, fetchUser, wakeQueuedUser } from "@/queries/profile";
@@ -71,6 +70,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { updateRewards } from "@/server/utils/questRewards";
 import {
   cleanRankedProhibitedSelections,

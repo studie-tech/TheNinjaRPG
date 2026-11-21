@@ -214,7 +214,6 @@ import { regenerationBuffs, titleCombatTag } from "@/libs/titles";
 import { isActiveEventEntrant } from "@/libs/tournament/events";
 import { getBiomeFromTileType } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiTransformations } from "@/queries/ai";
 import {
   buildQueuedTrainingClaim,
@@ -308,6 +307,7 @@ import {
   fetchDungeonEntryData,
   getDungeonEntryCharges,
 } from "@/server/utils/dungeonEntry";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { notifyBattleDefenders } from "@/server/utils/push/combat";
 import {
   commitQuestEntryBattle,

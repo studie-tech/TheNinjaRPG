@@ -6,7 +6,6 @@ import { REMOVAL_COST, SAGE_MODE_MAX_LEVEL } from "@/drizzle/constants";
 import { sageMode } from "@/drizzle/schema";
 
 import { callDiscordContent } from "@/libs/socials";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   fetchAllGameSettings,
   fetchContentViewerRole,
@@ -41,6 +40,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { offsetPage } from "@/server/utils/pagination";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";

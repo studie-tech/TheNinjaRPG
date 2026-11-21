@@ -25,12 +25,12 @@ import {
 } from "@/drizzle/schema";
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import * as liveActivity from "@/server/utils/push/liveActivity";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { statSchema } from "@/validators/combat";

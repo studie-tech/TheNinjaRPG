@@ -104,7 +104,6 @@ import {
 } from "@/libs/rewardChoice";
 import { collapseRewards } from "@/libs/rewards";
 import { callDiscordContent } from "@/libs/socials";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   fetchContentViewerRole,
   fetchUser,
@@ -201,6 +200,7 @@ import { saveMetaTutorialCompletion } from "@/server/utils/metaTracking";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
 import { consumeUserAnnouncements } from "@/server/utils/profile";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import {
   assignQuestToUser,
   claimDailyQuestSlot,
