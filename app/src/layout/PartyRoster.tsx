@@ -10,6 +10,7 @@ export const PartyRoster = ({
   disabled,
   onRemove,
   capacity,
+  openSpotLabel = "Open spot",
 }: PartyRosterProps) => (
   <ul className="grid gap-2 text-sm sm:grid-cols-3" aria-label="Party members">
     {members.map((member) => (
@@ -68,7 +69,7 @@ export const PartyRoster = ({
         className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-muted-foreground"
       >
         <UserRound className="h-4 w-4" aria-hidden="true" />
-        <span className="text-xs">Open spot</span>
+        <span className="text-xs">{openSpotLabel}</span>
       </li>
     ))}
   </ul>
@@ -78,6 +79,7 @@ export const PartyRoster = ({
 type PartyRosterProps = {
   members: { userId: string; username: string; details?: string; isReady?: boolean }[];
   capacity: number;
+  openSpotLabel?: string;
   leaderId: string;
   viewerId: string;
   disabled?: boolean;

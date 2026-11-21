@@ -21,6 +21,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import {
+  listDungeonEntryHistory,
   selectCandidatesForGetState,
   selectDungeonMemberForGetState,
 } from "@/queries/dungeon";
@@ -733,7 +734,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
       readyIds: [],
     });
   });
-  it("requires an invitation, three members and unanimous readiness", async () => {
+  it("requires an invitation and unanimous readiness", async () => {
     const { a, id, result } = await lobby();
     const b = await callerFor(dungeonRouter, "b");
     expect(result).toMatchObject({ userPatch: { status: "QUEUED" } });
@@ -753,6 +754,85 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     expect((await b.act({ id, action: "pause" })).success).toBe(false);
     expect((await a.act({ id, action: "start" })).success).toBe(false);
     expect((await a.claim({ id })).success).toBe(false);
+  });
+  it("runs a duo through every floor and delivers each member's rewards once", async () => {
+    const db = await getTestDatabase();
+    const { a, id } = await lobby();
+    const b = await callerFor(dungeonRouter, "b");
+    const c = await callerFor(dungeonRouter, "c");
+    await db.update(userData).set({
+      rank: "JONIN",
+      level: 50,
+      isOutlaw: true,
+      regeneration: 0,
+      primaryElement: "Fire",
+      secondaryElement: "Water",
+    });
+    await insertDefaultAiProfile();
+    await insertUsers([
+      { userId: "enemy", username: "enemy", isAi: true, rank: "JONIN", level: 1 },
+    ]);
+    expect((await a.act({ id, action: "invite", userId: "b" })).success).toBe(true);
+    expect((await b.act({ id, action: "accept" })).success).toBe(true);
+    expect((await a.act({ id, action: "invite", userId: "c" })).success).toBe(true);
+
+    for (let floor = 0; floor < dungeonContent().tiers.flat().length; floor++) {
+      expect((await a.act({ id, action: "ready" })).success).toBe(true);
+      expect(await a.act({ id, action: "start" })).toMatchObject({
+        success: false,
+        message: "All current party members must be ready.",
+      });
+      expect((await b.act({ id, action: "ready" })).success).toBe(true);
+      expect((await a.act({ id, action: "start" })).success).toBe(true);
+      const run = await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) });
+      expect(run).toMatchObject({
+        status: "FIGHTING",
+        state: { memberIds: ["a", "b"], invitedIds: [], floor },
+      });
+      expect((await c.act({ id, action: "accept" })).success).toBe(false);
+      const fight = await db.query.battle.findFirst({
+        where: eq(battle.id, run!.battleId!),
+      });
+      if (!fight) throw Error("Missing duo battle");
+      expect(fight.extraState.dungeon?.runState.memberIds).toEqual(["a", "b"]);
+      expect(
+        fight.usersState
+          .filter((u) => !u.isAi)
+          .map((u) => u.userId)
+          .sort(),
+      ).toEqual(["a", "b"]);
+      fight.usersState.forEach((user) => {
+        if (user.isAi) user.curHealth = 0;
+      });
+      expect(await settleDungeonBattle(db, fight, fight.version)).toBe(true);
+    }
+    expect(
+      await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) }),
+    ).toMatchObject({
+      status: "COMPLETED",
+      state: { memberIds: ["a", "b"], clearedFloors: [0, 1, 2, 3, 4] },
+    });
+    for (const caller of [a, b]) {
+      expect(await caller.claim({ id })).toMatchObject({
+        success: true,
+        reward: { money: 100, experience: 10 },
+      });
+      expect(await caller.claim({ id })).toMatchObject({
+        success: true,
+        message: "Rewards already delivered.",
+      });
+    }
+    expect(await c.claim({ id })).toMatchObject({ success: false });
+    for (const userId of ["a", "b"]) {
+      expect(
+        await db.query.userData.findFirst({ where: eq(userData.userId, userId) }),
+      ).toMatchObject({ money: 100 });
+      const history = await listDungeonEntryHistory(db, [userId]);
+      expect(history.filter((row) => row.entryPaidAt)).toHaveLength(1);
+    }
+    expect(
+      await db.query.userData.findFirst({ where: eq(userData.userId, "c") }),
+    ).toMatchObject({ money: 0, status: "AWAKE" });
   });
   it("requires canonical recovery when a rejected dungeon launch settles Cooking", async () => {
     const db = await getTestDatabase();

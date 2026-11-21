@@ -216,8 +216,10 @@ export default function DungeonPage() {
             <p className="font-semibold">Dungeon rules</p>
             <p>
               Enter when every party member is ready, or bring {DUNGEON_SOLO_PETS}{" "}
-              battle-ready pets as a solo squad. Lobbies expire after{" "}
-              {DUNGEON_LOBBY_SECONDS / 60} minutes. The {DUNGEON_RUN_SECONDS / 60}
+              battle-ready pets as a solo squad. You can enter below the dungeon's
+              player limit, including as a duo. Starting fixes the roster and cancels
+              pending invitations. Lobbies expire after {DUNGEON_LOBBY_SECONDS / 60}{" "}
+              minutes. The {DUNGEON_RUN_SECONDS / 60}
               -minute timer starts on the first floor and keeps running while paused.
             </p>
             <p>
@@ -385,6 +387,7 @@ export default function DungeonPage() {
             </div>
             <PartyRoster
               capacity={current.status === "LOBBY" ? capacity : memberCount}
+              openSpotLabel="Optional player"
               members={current.state.memberIds.map((id) => ({
                 userId: id,
                 username: usernameOf(id) ?? id,
@@ -422,6 +425,11 @@ export default function DungeonPage() {
               </ul>
             )}
             <DungeonRequirements content={current.content} />
+            {current.state.invitedIds.length > 0 && (
+              <p className="text-muted-foreground text-xs">
+                Starting with the current party cancels pending invitations.
+              </p>
+            )}
             {current.state.invitedIds.length > 0 && (
               <div className="flex flex-wrap gap-2 text-sm">
                 {current.state.invitedIds.map((id) => (
@@ -498,7 +506,9 @@ export default function DungeonPage() {
                     onClick={() => sendPartyAction(current.id, "start")}
                   >
                     <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Enter next floor
+                    {current.status === "LOBBY"
+                      ? `Enter with ${memberCount} ${memberCount === 1 ? "player" : "players"}`
+                      : "Enter next floor"}
                   </Button>
                 )}
                 {current.leaderId === user.userId && current.status === "PAUSED" && (
