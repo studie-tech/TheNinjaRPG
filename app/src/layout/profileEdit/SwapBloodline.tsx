@@ -15,7 +15,11 @@ import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { RepPurchaseConfirmModal } from "@/layout/RepPurchaseConfirmModal";
-import { getFreeBloodlineSwaps, hasDiamondBloodlineSwaps } from "@/libs/bloodline";
+import {
+  getDiamondRestoreBloodlineId,
+  getFreeBloodlineSwaps,
+  hasDiamondBloodlineSwaps,
+} from "@/libs/bloodline";
 import { showMutationToast } from "@/libs/toast";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { DAY_S, secondsFromDate } from "@/utils/time";
@@ -36,6 +40,8 @@ export const SwapBloodline: React.FC = () => {
     staffAccount: u.staffAccount,
     federalStatus: u.federalStatus,
     bloodlineId: u.bloodlineId,
+    diamondBloodlineActive: u.diamondBloodlineActive,
+    preDiamondBloodlineId: u.preDiamondBloodlineId,
   }));
   const [bloodline, setBloodline] = useState<Bloodline | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -79,7 +85,6 @@ export const SwapBloodline: React.FC = () => {
         showMutationToast(data);
         await Promise.all([
           updateUser(data, { revision }),
-          utils.bloodline.getSwapInfo.invalidate(),
           utils.bloodright.get.invalidate(),
         ]);
       },
@@ -120,9 +125,14 @@ export const SwapBloodline: React.FC = () => {
   const hasAvailableSwaps = bloodlines && bloodlines.length > 0;
   const isDisabled = !hasAvailableSwaps;
   const isFreeSwap = hasFreeSwapAvailable;
-  const diamond = swapInfo?.diamond;
-  const restoreId = diamond?.restoresBloodlineId;
-  const restoreName = !swapInfo
+  // The bloodline a Diamond supporter returns to when Diamond support ends.
+  const restoreId =
+    bloodlines &&
+    getDiamondRestoreBloodlineId(
+      userData,
+      bloodlines.map((line) => line.id),
+    );
+  const restoreName = !bloodlines
     ? "your previous bloodline"
     : restoreId
       ? (bloodlines?.find((line) => line.id === restoreId)?.name ??

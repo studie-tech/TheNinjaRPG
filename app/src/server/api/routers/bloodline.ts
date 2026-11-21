@@ -25,7 +25,6 @@ import {
 import {
   filterRollableBloodlines,
   getBloodlineSwapAllowance,
-  getDiamondRestoreBloodlineId,
   getPityRolls,
   hasDiamondBloodlineSwaps,
   isDiamondSwapBloodline,
@@ -245,13 +244,12 @@ export const bloodlineRouter = createTRPCRouter({
     })
     .query(async ({ ctx }) => {
       // Query
-      const [{ user }, recentSwaps, owned] = await Promise.all([
+      const [{ user }, recentSwaps] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchMonthlyBloodlineSwaps(ctx.drizzle, ctx.userId),
-        fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId),
       ]);
       // Guard
       if (!user)
@@ -260,7 +258,6 @@ export const bloodlineRouter = createTRPCRouter({
           freeSwapsUsed: 0,
           freeSwapsRemaining: 0,
           recentSwaps: [],
-          diamond: null,
         };
       // Derived
       const { isFree, freeSwapsUsed, freeSwapsRemaining } = getBloodlineSwapAllowance(
@@ -268,21 +265,7 @@ export const bloodlineRouter = createTRPCRouter({
         recentSwaps.length,
       );
       // Return
-      return {
-        isFree,
-        freeSwapsUsed,
-        freeSwapsRemaining,
-        recentSwaps,
-        // The bloodline a Diamond supporter returns to when Diamond support ends.
-        diamond: hasDiamondBloodlineSwaps(user)
-          ? {
-              restoresBloodlineId: getDiamondRestoreBloodlineId(
-                user,
-                owned.map((line) => line.id),
-              ),
-            }
-          : null,
-      };
+      return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
     }),
   // Bloodlines a Diamond supporter may switch to without owning them
   getDiamondSwapBloodlines: protectedProcedure

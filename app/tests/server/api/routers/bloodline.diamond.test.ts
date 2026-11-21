@@ -9,6 +9,7 @@ import {
   stripePayment,
   userData,
 } from "@/drizzle/schema";
+import { getDiamondRestoreBloodlineId } from "@/libs/bloodline";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { revertLapsedDiamondBloodlines } from "@/server/utils/diamondBloodline";
 import { insertUsers } from "../../../setup/factories";
@@ -41,6 +42,19 @@ const expireSwapCooldown = async () =>
     .update(actionLog)
     .set({ createdAt: new Date(Date.now() - 30 * 24 * 3600 * 1000) })
     .where(eq(actionLog.userId, userId));
+
+/** The restore bloodline the swap screen derives from the profile and bloodline history. */
+const readRestoreBloodlineId = async () => {
+  const [user, historic] = await Promise.all([
+    readUser(),
+    (await callerFor(bloodlineRouter, userId)).getUserHistoricBloodlines(),
+  ]);
+  if (!user) throw new Error("Missing Diamond fixture user");
+  return getDiamondRestoreBloodlineId(
+    user,
+    historic.map((line) => line.id),
+  );
+};
 
 const swap = async (bloodlineId: string) =>
   (await callerFor(bloodlineRouter, userId)).swapDiamondBloodline({ bloodlineId });
@@ -99,8 +113,7 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       diamondBloodlineActive: true,
       preDiamondBloodlineId: "owned-line",
     });
-    const info = await (await callerFor(bloodlineRouter, userId)).getSwapInfo();
-    expect(info.diamond).toEqual({ restoresBloodlineId: "owned-line" });
+    expect(await readRestoreBloodlineId()).toBe("owned-line");
     // Diamond swaps still start the regular swap cooldown for owned bloodlines.
     expect(
       (
@@ -237,9 +250,7 @@ describeWithDatabase("Diamond bloodline swaps", () => {
     await (await callerFor(bloodlineRouter, userId)).swapBloodline({
       bloodlineId: "owned-line",
     });
-    expect(
-      (await (await callerFor(bloodlineRouter, userId)).getSwapInfo()).diamond,
-    ).toEqual({ restoresBloodlineId: "owned-line" });
+    expect(await readRestoreBloodlineId()).toBe("owned-line");
     await db.insert(bloodlineRolls).values({
       id: "new-roll",
       userId,

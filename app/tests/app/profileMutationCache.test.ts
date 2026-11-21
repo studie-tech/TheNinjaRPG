@@ -29,6 +29,11 @@ const flows = [
     invalidations: 2,
   },
   {
+    file: "layout/profileEdit/SwapBloodline.tsx",
+    procedure: "bloodline.swapDiamondBloodline",
+    patch: { bloodlineId: "new", bloodline: { id: "new" } },
+  },
+  {
     file: "layout/profileEdit/ManagementCommands.tsx",
     procedure: "staff.unequipAllGear",
     patch: { items: [], maxEnergy: 100 },
