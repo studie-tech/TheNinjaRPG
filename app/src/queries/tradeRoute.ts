@@ -164,8 +164,6 @@ export const listSectorMarkers = (
       id: tradeRouteMarker.id,
       routeId: tradeRouteMarker.routeId,
       sector: tradeRouteMarker.sector,
-      longitude: tradeRouteMarker.longitude,
-      latitude: tradeRouteMarker.latitude,
       controllerVillageId: tradeRouteMarker.controllerVillageId,
       controllerName: village.name,
       control: tradeRouteMarker.control,

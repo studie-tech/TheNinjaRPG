@@ -8534,8 +8534,6 @@ export const tradeRouteMarker = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     routeId: varchar("routeId", { length: 191 }).notNull(),
     sector: smallint("sector").notNull(),
-    longitude: tinyint("longitude", { unsigned: true }).notNull(),
-    latitude: tinyint("latitude", { unsigned: true }).notNull(),
     controllerVillageId: varchar("controllerVillageId", { length: 191 }),
     control: int("control").default(consts.TRADE_ROUTE_MARKER_MAX_CONTROL).notNull(),
     capturedAt: datetime("capturedAt", { mode: "date", fsp: 3 }),

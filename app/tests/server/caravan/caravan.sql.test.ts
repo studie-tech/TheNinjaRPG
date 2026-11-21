@@ -1062,8 +1062,6 @@ describeWithDatabase("village Warehouse and caravans", () => {
       id: "m1",
       routeId: "r1",
       sector: 2,
-      longitude: 5,
-      latitude: 5,
       control: 25,
       controllerVillageId: "cloud",
     });
@@ -1122,8 +1120,6 @@ describeWithDatabase("village Warehouse and caravans", () => {
       id: "m1",
       routeId: "r1",
       sector: 2,
-      longitude: 5,
-      latitude: 5,
       control: 25,
     });
     await db

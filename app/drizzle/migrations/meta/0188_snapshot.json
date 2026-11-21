@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "30977889-9766-4842-8879-42d69e35da98",
+  "id": "f9768edc-103e-4f60-85db-eada1a6db993",
   "prevId": "9a212f58-39b6-4819-a46d-141f833f3cd0",
   "tables": {
     "AbEvent": {
@@ -18728,20 +18728,6 @@
         "sector": {
           "name": "sector",
           "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "longitude": {
-          "name": "longitude",
-          "type": "tinyint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "latitude": {
-          "name": "latitude",
-          "type": "tinyint unsigned",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false

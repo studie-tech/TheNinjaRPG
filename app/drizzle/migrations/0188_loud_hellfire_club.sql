@@ -114,8 +114,6 @@ CREATE TABLE `TradeRouteMarker` (
 	`id` varchar(191) NOT NULL,
 	`routeId` varchar(191) NOT NULL,
 	`sector` smallint NOT NULL,
-	`longitude` tinyint unsigned NOT NULL,
-	`latitude` tinyint unsigned NOT NULL,
 	`controllerVillageId` varchar(191),
 	`control` int NOT NULL DEFAULT 100,
 	`capturedAt` datetime(3),

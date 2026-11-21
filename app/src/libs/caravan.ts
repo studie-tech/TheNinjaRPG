@@ -22,8 +22,6 @@ import {
   type CaravanEncounterType,
   type CaravanOperationType,
   type CaravanRole,
-  SECTOR_HEIGHT,
-  SECTOR_WIDTH,
   STEALTH_SENSORY_DEFAULT,
   TRADE_ROUTE_BASE_TRAVEL_MINUTES,
   TRADE_ROUTE_MAX_LEVEL,
@@ -134,8 +132,8 @@ export const getCheckpointTimes = (
 };
 
 /**
- * Random hidden marker positions on the sectors between a route's two villages. Adjacent
- * villages have no sectors between them and therefore no markers.
+ * Random hidden marker sectors between a route's two villages. Adjacent villages have no
+ * sectors between them and therefore no markers.
  */
 export const planRouteMarkers = (
   path: number[],
@@ -153,15 +151,11 @@ export const planRouteMarkers = (
     ),
   );
   const pool = [...interior];
-  const picked: { sector: number; longitude: number; latitude: number }[] = [];
+  const picked: { sector: number }[] = [];
   while (picked.length < count && pool.length > 0) {
     const [sector] = pool.splice(pick(pool.length), 1);
     if (sector === undefined) break;
-    picked.push({
-      sector,
-      longitude: 3 + pick(SECTOR_WIDTH - 6),
-      latitude: 3 + pick(SECTOR_HEIGHT - 6),
-    });
+    picked.push({ sector });
   }
   return picked;
 };
