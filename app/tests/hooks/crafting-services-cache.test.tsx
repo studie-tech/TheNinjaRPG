@@ -296,6 +296,145 @@ it.each([true, false])(
   },
 );
 
+it.each(["poll", "remount"])(
+  "retries a failed Fortify inventory refresh on %s without repeating confirmed phases",
+  async (retry) => {
+    const update = fortifySubmission(true);
+    const delivered = [{ ...equipment, fortification: update.fortify!.state }];
+    let inventoryReads = 0;
+    const { client, wrapper, calls, refreshUser } = harness(async (path) => {
+      if (path === "occupation.getServiceRequests") return [update.receipt];
+      if (path === "item.getUserItems") {
+        if (++inventoryReads === 1) throw new Error("Inventory unavailable");
+        return delivered;
+      }
+      return [];
+    });
+    seedSubmissionViews(client);
+    const mutation = renderHook(useCraftingServiceCache, { wrapper });
+    const Observer = () => {
+      useServiceRequests();
+      return null;
+    };
+    const Views = ({ observe = true }: { observe?: boolean }) => {
+      testApi.item.getUserItems.useQuery();
+      testApi.occupation.getCraftingQueue.useQuery();
+      testApi.profile.getSidebarTimers.useQuery();
+      return observe ? <Observer /> : null;
+    };
+    const view = render(<Views />, { wrapper });
+    const snapshot = mutation.result.current.prepareServiceUpdate();
+    // Another inventory action changes the captured revision while Fortify is in flight.
+    client.setQueryData(inventoryKeys[0]!, [material, { ...equipment, durability: 1 }]);
+    await act(async () =>
+      mutation.result.current.updateService(
+        { success: true, message: "delivered", serviceUpdate: update },
+        snapshot,
+      ),
+    );
+    await waitFor(() =>
+      expect(client.getQueryState(inventoryKeys[0]!)?.status).toBe("error"),
+    );
+    expect(inventoryReads).toBe(1);
+    expect(client.getQueryData<UserCache>(profileKey)?.userData?.money).toBe(850);
+    if (retry === "poll")
+      await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+    else {
+      await act(async () => view.rerender(<Views observe={false} />));
+      await act(async () => view.rerender(<Views />));
+    }
+    await waitFor(() =>
+      expect(client.getQueryData(inventoryKeys[0]!)).toEqual(delivered),
+    );
+    expect(inventoryReads).toBe(2);
+    expect(refreshUser).not.toHaveBeenCalled();
+    expect(calls.filter((path) => path !== "occupation.getServiceRequests")).toEqual([
+      "item.getUserItems",
+      "item.getUserItems",
+    ]);
+    await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+    await act(async () => view.rerender(<Views observe={false} />));
+    await act(async () => view.rerender(<Views />));
+    expect(inventoryReads).toBe(2);
+    expect(refreshUser).not.toHaveBeenCalled();
+  },
+);
+
+it("confirms Fortify with only the mounted inventory view cached", async () => {
+  const { client, wrapper, calls, refreshUser } = harness();
+  seedSubmissionViews(client);
+  for (const key of [inventoryKeys[1]!, queueKey, timersKey])
+    client.removeQueries({ queryKey: key, exact: true });
+  const mutation = renderHook(useCraftingServiceCache, { wrapper });
+  const inventory = renderHook(() => testApi.item.getUserItems.useQuery(), { wrapper });
+  const observer = renderHook(useServiceRequests, { wrapper });
+  await act(async () =>
+    mutation.result.current.updateService(
+      { success: true, message: "delivered", serviceUpdate: fortifySubmission(true) },
+      mutation.result.current.prepareServiceUpdate(),
+    ),
+  );
+  observer.unmount();
+  renderHook(useServiceRequests, { wrapper });
+  await act(async () => {});
+  await waitFor(() =>
+    expect(
+      inventory.result.current.data?.find((row) => row.id === equipment.id),
+    ).toMatchObject({
+      fortification: fortifySubmission(true).fortify!.state,
+    }),
+  );
+  expect(refreshUser).not.toHaveBeenCalled();
+  expect(calls).toEqual([]);
+});
+
+it.each(["queue", "timers"])(
+  "retries a failed Fortify %s refresh while retaining confirmed phases",
+  async (phase) => {
+    const update = fortifySubmission(true);
+    const key = phase === "queue" ? queueKey : timersKey;
+    const path =
+      phase === "queue" ? "occupation.getCraftingQueue" : "profile.getSidebarTimers";
+    let reads = 0;
+    const { client, wrapper, calls, refreshUser } = harness(async (read) => {
+      if (read === path && ++reads === 1) throw new Error("View unavailable");
+      if (read === "occupation.getServiceRequests") return [update.receipt];
+      return read === "occupation.getCraftingQueue" ? { waiting: [] } : [];
+    });
+    seedSubmissionViews(client);
+    const mutation = renderHook(useCraftingServiceCache, { wrapper });
+    renderHook(
+      () => {
+        useServiceRequests();
+        testApi.item.getUserItems.useQuery();
+        testApi.occupation.getCraftingQueue.useQuery();
+        testApi.profile.getSidebarTimers.useQuery();
+      },
+      { wrapper },
+    );
+    const snapshot = mutation.result.current.prepareServiceUpdate();
+    client.setQueryData(
+      key,
+      phase === "queue" ? { waiting: [{ id: "queued" }] } : { crafting: "changed" },
+    );
+    await act(async () =>
+      mutation.result.current.updateService(
+        { success: true, message: "delivered", serviceUpdate: update },
+        snapshot,
+      ),
+    );
+    await waitFor(() => expect(client.getQueryState(key)?.status).toBe("error"));
+    expect(reads).toBe(1);
+    await act(async () => client.refetchQueries({ queryKey: requestsKey }));
+    await waitFor(() => expect(client.getQueryState(key)?.status).toBe("success"));
+    expect(reads).toBe(2);
+    expect(refreshUser).not.toHaveBeenCalled();
+    expect(calls.filter((call) => call !== "occupation.getServiceRequests")).toEqual(
+      phase === "queue" ? [path, path, "item.getUserItems"] : [path, path],
+    );
+  },
+);
+
 it.each(["inbox read", "changed profile", "unknown completion"])(
   "reconciles Fortify after %s instead of projecting an uncertain result",
   async (reason) => {

@@ -49,17 +49,17 @@ export const useCraftingServiceCache = () => {
     if (!result.success) return;
     const submission = "serviceUpdate" in result ? result.serviceUpdate : undefined;
     const inbox = client.getQueryState(inboxKey);
+    const inboxRevision = inbox?.dataUpdateCount;
+    const previousInboxRevision = snapshot.inbox?.dataUpdateCount;
     // Inbox reads acknowledge the server counter. A concurrent acknowledgement
     // leaves the delivery's notification count to authoritative reconciliation.
-    const update =
-      submission?.fortify &&
-      (inbox?.dataUpdateCount !== snapshot.inbox?.dataUpdateCount ||
-        inbox?.status === "error" ||
-        snapshot.inbox?.status === "error" ||
-        (inbox?.fetchStatus ?? "idle") !== "idle" ||
-        (snapshot.inbox?.fetchStatus ?? "idle") !== "idle")
-        ? undefined
-        : submission;
+    const inboxChanged =
+      inboxRevision !== previousInboxRevision ||
+      inbox?.status === "error" ||
+      snapshot.inbox?.status === "error" ||
+      (inbox?.fetchStatus ?? "idle") !== "idle" ||
+      (snapshot.inbox?.fetchStatus ?? "idle") !== "idle";
+    const update = submission?.fortify && inboxChanged ? undefined : submission;
     // Profile reconciliation can start queued crafts and create inventory. Dependent
     // reads must observe that settlement, and only an accepted profile projection
     // makes the response's dependent projections safe to apply.
@@ -88,24 +88,50 @@ export const useCraftingServiceCache = () => {
         reconciliation.generation,
       );
     const projected = current && getSubmittedServiceRequests(current, dependentUpdate);
-    // Polling must not settle a receipt whose exact effects this response already projected.
-    if (
+    const projectedSignature =
       dependentUpdate?.fortify &&
       projected &&
       snapshot.requests.revision !== undefined &&
       requests.prepareUpdate().revision === snapshot.requests.revision &&
       (!signature || signature === reconciliation.succeeded)
-    )
-      reconciliation.succeeded = getServiceReconciliationSignature(
-        projected,
-        dependentUpdate.requesterId,
-        reconciliation.generation,
-      );
-    await Promise.all([
-      updateInventory(
-        (rows) => getServiceSubmittedInventory(rows, dependentUpdate),
-        snapshot.inventory,
-      ),
+        ? getServiceReconciliationSignature(
+            projected,
+            dependentUpdate.requesterId,
+            reconciliation.generation + 1,
+          )
+        : undefined;
+    // Polling shares the mutation's confirmed phases and retries unfinished reads.
+    const work = projectedSignature
+      ? {
+          signature: projectedSignature,
+          revision: snapshot.requests.revision ?? 0,
+          profile: true,
+          completed: new Set<string>(["conversations"]),
+        }
+      : undefined;
+    if (work) {
+      reconciliation.generation++;
+      reconciliation.work = work;
+    }
+    const queueUpdate = queue.updateCache(
+      (current) => getServiceSubmissionUnchanged(current, dependentUpdate),
+      snapshot.queue,
+    );
+    const pending = Promise.all([
+      // A queue recovery read can settle output, so inventory must observe it.
+      queueUpdate.then((queueUpdated) => {
+        const absentQueue = !client.getQueryState(snapshot.queue.key);
+        if (work && !absentQueue && queue.prepareUpdate().revision === undefined)
+          return;
+        return updateInventory(
+          (rows) =>
+            getServiceSubmittedInventory(
+              rows,
+              queueUpdated || absentQueue ? dependentUpdate : undefined,
+            ),
+          snapshot.inventory,
+        );
+      }),
       requests.updateCache(
         (current) => getSubmittedServiceRequests(current, dependentUpdate),
         snapshot.requests,
@@ -114,11 +140,51 @@ export const useCraftingServiceCache = () => {
         (current) => getServiceSubmissionUnchanged(current, dependentUpdate),
         snapshot.timers,
       ),
-      queue.updateCache(
-        (current) => getServiceSubmissionUnchanged(current, dependentUpdate),
-        snapshot.queue,
-      ),
-    ]);
+      queueUpdate,
+    ])
+      .then(() => {
+        if (work) {
+          work.revision =
+            client.getQueryState(snapshot.requests.key)?.dataUpdateCount ?? 0;
+          const inventory = prepareInventoryUpdate();
+          for (const [name, views] of [
+            ["queue", [queue.prepareUpdate()]],
+            ["timers", [timers.prepareUpdate()]],
+            ["inventory", [inventory.inventory, inventory.variants]],
+          ] as const) {
+            if (name === "inventory" && !work.completed.has("queue")) continue;
+            if (
+              views.every(
+                (view) =>
+                  view.revision !== undefined || !client.getQueryState(view.key),
+              )
+            )
+              work.completed.add(name);
+          }
+          const receipts = client.getQueryData<
+            RouterOutputs["occupation"]["getServiceRequests"]
+          >(snapshot.requests.key);
+          if (
+            work.completed.size === 4 &&
+            reconciliation.work === work &&
+            requests.prepareUpdate().revision !== undefined &&
+            receipts &&
+            getServiceReconciliationSignature(
+              receipts,
+              dependentUpdate?.requesterId,
+              reconciliation.generation,
+            ) === work.signature
+          )
+            reconciliation.succeeded = work.signature;
+        }
+        return userUpdated;
+      })
+      .finally(() => {
+        if (work && reconciliation.inFlight.get(work.signature) === pending)
+          reconciliation.inFlight.delete(work.signature);
+      });
+    if (work) reconciliation.inFlight.set(work.signature, pending);
+    await pending;
   };
   /** Refresh the quote's owned inputs before allowing a rejected request to retry. */
   const refreshServiceOffer = async (crafterId: string, fortify: boolean) => {
