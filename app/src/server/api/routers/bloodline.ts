@@ -11,6 +11,7 @@ import {
   BLOODLINE_SWAP_COOLDOWN_HOURS,
   BLOODLINE_SWAP_FREE,
   COST_SWAP_BLOODLINE,
+  DIAMOND_BLOODLINE_RANKS,
   LetterRanks,
   REMOVAL_COST,
   ROLL_CHANCE,
@@ -407,7 +408,7 @@ export const bloodlineRouter = createTRPCRouter({
         return errorResponse("You already have this bloodline");
       if (!isDiamondSwapBloodline(line, user))
         return errorResponse(
-          "Diamond swaps only reach released D, C, B and A rank bloodlines open to your village",
+          `Diamond swaps only reach released ${DIAMOND_BLOODLINE_RANKS.join(", ")} rank bloodlines open to your village`,
         );
       // Diamond swaps are unlimited and skip the swap cooldown: the bloodline and battle-status
       // CAS in updateBloodline still serializes concurrent changes.
@@ -575,6 +576,8 @@ export const bloodlineRouter = createTRPCRouter({
           "Cannot remove the player's equipped bloodline; change it first",
         );
       }
+      // The Diamond revert restores the remembered bloodline without an ownership check
+      // (legacy grants have no roll row), so removing it would be undone when Diamond ends.
       if (target.preDiamondBloodlineId === input.bloodlineId) {
         return errorResponse(
           "Cannot remove the bloodline the player returns to when Diamond Federal Support ends",
@@ -1090,7 +1093,9 @@ export const bloodlineRouter = createTRPCRouter({
 /**
  * Update bloodline of user, ensuring the current bloodline jutsus are unequipped. A rejection
  * before the change returns `granted: false` with a user-facing message and writes nothing;
- * failures after the guarded write throw.
+ * failures after the guarded write throw. `extra` adds columns and guards to the same
+ * guarded `userData` write; `preloaded` lets a caller that already read the current
+ * bloodline's jutsu and the queued jutsu skip that read.
  */
 export const updateBloodline = async (
   client: DrizzleClient,
@@ -1107,7 +1112,9 @@ export const updateBloodline = async (
 ): Promise<
   { granted: true; updatedAt: Date } | { granted: false; message: string }
 > => {
-  // Get current bloodline jutsus, unless the caller read them with the same bloodline
+  // Get current bloodline jutsus, unless the caller read them with the same bloodline. A
+  // preload for a different bloodline (changed between reads) is ignored, so the wrong
+  // jutsu are never unequipped; the bloodline CAS below still rejects a stale swap.
   const [bloodlineJutsus, queued] = !user.bloodlineId
     ? [[], new Set<string>()]
     : preloaded?.bloodlineId === user.bloodlineId

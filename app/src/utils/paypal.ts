@@ -150,7 +150,7 @@ export const fedRepsUnavailableNote = (
 
 /** Federal tier of a PayPal plan id; unknown ids, and an unset Diamond plan, map to NONE. */
 export const plan2FedStatus = (planId: string): FederalStatus => {
-  // Optional while the Diamond plan is being rolled out; an unset id matches nothing.
+  // Optional: an unset or empty Diamond plan id must not match a missing `planId`.
   const diamondPlanId = process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_DIAMOND;
   switch (planId) {
     case process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL:

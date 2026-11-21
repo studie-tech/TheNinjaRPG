@@ -83,6 +83,8 @@ export const SwapBloodline: React.FC = () => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
+        // A Diamond swap writes no swap log and keeps the tier, so getSwapInfo stays valid;
+        // the profile reconciles the remembered bloodline and Bloodright refund.
         await Promise.all([
           updateUser(data, { revision }),
           utils.bloodright.get.invalidate(),

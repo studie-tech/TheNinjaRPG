@@ -112,8 +112,8 @@ const OPTIONS = {
 };
 
 /**
- * Plan ids stay literal `process.env` reads so Next.js inlines them. Diamond has no artwork
- * of its own yet, so it shows the Gold art with a cool tint.
+ * Plan ids stay literal `process.env` reads so Next.js inlines them. Diamond reuses the Gold
+ * art with a cool tint.
  */
 const FEDERAL_TIERS: {
   status: FederalTier;
@@ -561,6 +561,7 @@ const PayPalSubscriptionButton = (props: {
   // Derived vars
   const current = FederalStatuses.indexOf(props.currentUserStatus);
   const next = FederalStatuses.indexOf(props.buttonStatus);
+  // Diamond is sold for money only, so its card has no reputation buy or upgrade controls.
   const isRepsTier = isRepsFederalStatus(props.buttonStatus);
   const canUpgrade = isRepsTier && next > current && props.userId === userData?.userId;
   const hasSubscription = props.currentUserStatus !== "NONE";
@@ -818,6 +819,9 @@ const FederalStore = () => {
         </div>
       )}
 
+      {/* Columns follow the container (the centre column, not the viewport). Container
+          queries resolve rem against the 12px root, so @lg/@xl/@5xl are 384/432/768px:
+          four tiers sit 2x2 in the classic centre column, three stay in one row. */}
       <div className="@container mt-3">
         <div
           className={`grid grid-cols-1 gap-2 ${AVAILABLE_FEDERAL_TIERS.length === 4 ? "@lg:grid-cols-2 @5xl:grid-cols-4" : "@xl:grid-cols-3"}`}

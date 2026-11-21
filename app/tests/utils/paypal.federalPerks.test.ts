@@ -119,6 +119,7 @@ describe("plan2FedStatus", () => {
     "NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD",
     "NEXT_PUBLIC_PAYPAL_PLAN_ID_DIAMOND",
   );
+  /** Configure the three standard plan ids and the given (possibly unset) Diamond one. */
   const setPlans = (diamond: string | undefined) => {
     process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL = "P-NORMAL";
     process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER = "P-SILVER";

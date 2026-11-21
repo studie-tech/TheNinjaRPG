@@ -192,6 +192,7 @@ export const getDiamondRestoreBloodlineId = (
   const revert = resolveDiamondBloodlineRevert({
     currentBloodlineId: user.bloodlineId,
     preDiamondBloodlineId: user.preDiamondBloodlineId,
+    // The client cannot see deleted bloodlines; the cron falls back to none for those.
     preDiamondBloodlineExists: true,
     ownedBloodlineIds,
   });

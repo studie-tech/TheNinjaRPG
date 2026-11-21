@@ -24,6 +24,7 @@ import {
 } from "../../../setup/testDatabase";
 
 const userId = "diamond-swapper";
+/** Leaf-village fixtures: an owned D, eligible A/B/C picks and one line per exclusion rule. */
 const lines = [
   { id: "owned-line", rank: "D" as const },
   { id: "pick-a", rank: "A" as const },
@@ -34,6 +35,7 @@ const lines = [
   { id: "hidden-line", rank: "D" as const, hidden: true },
 ];
 
+/** The fixture player's current `userData` row. */
 const readUser = async () =>
   (await getTestDatabase()).query.userData.findFirst({
     where: eq(userData.userId, userId),
@@ -59,8 +61,10 @@ const readRestoreBloodlineId = async () => {
   );
 };
 
+/** Run the Diamond swap as the fixture player. */
 const swap = async (bloodlineId: string) =>
   (await callerFor(bloodlineRouter, userId)).swapDiamondBloodline({ bloodlineId });
+/** Change the fixture player's row directly, e.g. to end Diamond support. */
 const patch = async (data: Partial<typeof userData.$inferInsert>) =>
   (await getTestDatabase())
     .update(userData)

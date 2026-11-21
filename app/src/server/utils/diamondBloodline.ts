@@ -52,6 +52,7 @@ export const revertLapsedDiamondBloodlines = async (client: DrizzleClient) => {
     const revert = resolveDiamondBloodlineRevert({
       currentBloodlineId: user.bloodlineId,
       preDiamondBloodlineId: user.preDiamondBloodlineId,
+      // `Bloodline.name` is NOT NULL, so a joined name means the remembered row still exists.
       preDiamondBloodlineExists: user.preDiamondBloodlineName !== null,
       ownedBloodlineIds,
     });
@@ -64,6 +65,7 @@ export const revertLapsedDiamondBloodlines = async (client: DrizzleClient) => {
       (jutsu) => jutsu.bloodlineId === user.bloodlineId,
     );
     // Queued levels of the Diamond bloodline's jutsu are refunded when their turn comes.
+    // The ownership guard re-checks at write time, so a roll gained since the read keeps it.
     const result = await updateUserDataForUpdateBloodline(
       client,
       { id: restoreId ?? undefined },

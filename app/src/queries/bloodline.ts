@@ -767,7 +767,9 @@ export const diamondSwapUserUpdate = (info: {
 /**
  * Whether a Diamond payment ended recently enough that its renewal may simply not have been
  * confirmed yet: an ACTIVE PayPal subscription past its paid period, or a granted Stripe
- * period or accepted, unrevoked store receipt that expired within the grace.
+ * period or accepted, unrevoked store receipt that expired within the grace. PayPal rows
+ * record no period end, so `updatedAt` (the last payment) plus the paid period stands in.
+ * There is no sandbox filter: the grace only delays a revert and never grants anything.
  */
 const pendingDiamondRenewal = () => sql`(EXISTS (
   SELECT 1 FROM ${paypalSubscription}
@@ -881,7 +883,11 @@ export const updateUserDataForClearDiamondBloodline = (
     .set(clearDiamondBloodlineSet)
     .where(and(inArray(userData.userId, userIds), lapsedDiamondGuard()));
 
-/** Build the `actionLog` insert recording a bloodline restored when Diamond support ended. */
+/**
+ * Build the `actionLog` insert recording a bloodline restored when Diamond support ended.
+ * Its own `relatedMsg`, not "Bloodline Changed", keeps the revert from starting the swap
+ * cooldown.
+ */
 export const insertActionLogForDiamondBloodlineRevert = (
   client: Pick<DrizzleClient, "insert">,
   user: { userId: string; avatarLight: null | string; avatar: null | string },
