@@ -126,10 +126,15 @@ export const warehouseRouter = createTRPCRouter({
         now,
         current,
       );
-      // Settled production may have credited stock, here or in a competing reader.
-      const stock = settings.settled
-        ? await listWarehouseStock(ctx.drizzle, villageData.id)
-        : stocked;
+      // Settled production may have credited stock, here or in a competing reader, and a
+      // selection saved after the stock read adds rows that read has not seen.
+      const stock =
+        settings.settled ||
+        settings.productionItemIds.some(
+          (id) => !stocked.some((row) => row.itemId === id),
+        )
+          ? await listWarehouseStock(ctx.drizzle, villageData.id)
+          : stocked;
       const level = getWarehouseLevel(structure, now);
       const multiplier = structure ? getRaidStructureMultiplier(structure, now) : 1;
       const villageWars = wars.filter(
