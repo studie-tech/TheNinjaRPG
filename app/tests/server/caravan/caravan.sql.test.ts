@@ -3,6 +3,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   BANDIT_OPERATION_EXP,
+  CARAVAN_AMBUSH_LOSS_BP,
   CARAVAN_DELAY_MINUTES,
   CARAVAN_GUARD_DELIVERY_RYO,
   CARAVAN_GUARD_OBJECTIVE_RYO,
@@ -624,14 +625,15 @@ describeWithDatabase("village Warehouse and caravans", () => {
     await db
       .insert(caravan)
       .values(
-        ["c1", "c2"].map((id) =>
+        ["c1", "c2", "c3"].map((id) =>
           caravanRow({ id, routeId: id, checkpointsProcessed: 3 }),
         ),
       );
+    // c3 is an escort's defence against an ambush, which costs what an unanswered one would.
     await db.insert(caravanEncounter).values(
-      ["c1", "c2"].map((id) => ({
+      ["c1", "c2", "c3"].map((id) => ({
         id: `e-${id}`,
-        type: "INTERCEPTION" as const,
+        type: id === "c3" ? ("AMBUSH" as const) : ("INTERCEPTION" as const),
         status: "FIGHTING" as const,
         caravanId: id,
         activeCaravanId: id,
@@ -658,17 +660,25 @@ describeWithDatabase("village Warehouse and caravans", () => {
           }),
         },
       });
-    await db.insert(battle).values([fight("c1", hourAgo), fight("c2", now)]);
+    await db
+      .insert(battle)
+      .values([fight("c1", hourAgo), fight("c2", now), fight("c3", hourAgo)]);
     await afterTasks.run([], () =>
-      maintainCaravans(db, now, { caravanIds: ["c1", "c2"] }),
+      maintainCaravans(db, now, { caravanIds: ["c1", "c2", "c3"] }),
     );
     const encounters = Object.fromEntries(
       (await db.select().from(caravanEncounter)).map((row) => [row.id, row.status]),
     );
-    expect(encounters).toEqual({ "e-c1": "RESOLVED", "e-c2": "FIGHTING" });
+    expect(encounters).toEqual({
+      "e-c1": "RESOLVED",
+      "e-c2": "FIGHTING",
+      "e-c3": "RESOLVED",
+    });
     await settleCaravanCombat(db, fight("c1", now));
-    const [abandoned] = await db.select().from(caravan).where(eq(caravan.id, "c1"));
-    expect(abandoned?.lossBp).toBe(0);
+    const losses = Object.fromEntries(
+      (await db.select().from(caravan)).map((row) => [row.id, row.lossBp]),
+    );
+    expect(losses).toEqual({ c1: 0, c2: 0, c3: CARAVAN_AMBUSH_LOSS_BP });
   });
 
   it("closes a disbanded settlement's routes and calls off its caravans", async () => {
@@ -692,9 +702,13 @@ describeWithDatabase("village Warehouse and caravans", () => {
       .insert(caravan)
       .values([
         caravanRow({ id: "outbound", lossBp: 1000 }),
+        caravanRow({ id: "outbound2" }),
         caravanRow({ id: "kept", routeId: "r2", destinationVillageId: "mist" }),
       ]);
-    await afterTasks.run([], () => closeVillageTrade(db, "sand", now));
+    // Account deletion disbands the settlement inside its own transaction.
+    await afterTasks.run([], () =>
+      db.transaction((tx) => closeVillageTrade(tx, "sand", now)),
+    );
     const routes = Object.fromEntries(
       (await db.select().from(tradeRoute)).map((row) => [row.id, row]),
     );
@@ -704,10 +718,14 @@ describeWithDatabase("village Warehouse and caravans", () => {
     const caravans = Object.fromEntries(
       (await db.select().from(caravan)).map((row) => [row.id, row.status]),
     );
-    expect(caravans).toEqual({ outbound: "CANCELLED", kept: "TRAVELLING" });
-    // The caravan bound for the disbanded settlement brings its remaining 180 ore home.
+    expect(caravans).toEqual({
+      outbound: "CANCELLED",
+      outbound2: "CANCELLED",
+      kept: "TRAVELLING",
+    });
+    // Caravans bound for the disbanded settlement bring their remaining 180 + 200 ore home.
     const [stock] = await db.select().from(warehouseStock);
-    expect(stock).toMatchObject({ villageId: "leaf", quantity: 180 });
+    expect(stock).toMatchObject({ villageId: "leaf", quantity: 380 });
   });
 
   it("hands a worn-down marker to its assailant and calls off caravans still on the road", async () => {
