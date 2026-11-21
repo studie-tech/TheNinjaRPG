@@ -106,13 +106,14 @@ export const pollRouter = createTRPCRouter({
         toPollOptionRow(option, pollId, user.userId, false),
       );
 
-      // Run both database operations in parallel
+      // Invalidate after the poll commits, even if a parallel insert fails.
       await Promise.all([
-        insertPollForCreatePoll(ctx.drizzle, pollId, input, user),
+        insertPollForCreatePoll(ctx.drizzle, pollId, input, user).then(() =>
+          invalidateOpenPolls(),
+        ),
         insertPollOptions(ctx.drizzle, optionsToInsert),
         insertActionLogForCreatePoll(ctx.drizzle, user, input, pollId),
       ]);
-      await invalidateOpenPolls();
 
       return { success: true, message: "Poll created successfully" };
     }),
