@@ -20,6 +20,7 @@ import {
   type Dispatch,
   type ReactNode,
   type SetStateAction,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -32,6 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ItemTypes, TUTORIAL_ITEM_ID } from "@/drizzle/constants";
 import type { Item, ItemType } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
@@ -44,6 +46,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { UncontrolledSliderField } from "@/layout/SliderField";
+import { MobileShop } from "@/layout/shop/MobileShop";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import {
@@ -60,7 +63,16 @@ import type { UserWithRelations } from "@/routers/profile";
 import { useAwake, usePublicPathname } from "@/utils/routing";
 import { useUserInfo } from "@/utils/UserContext";
 
+/** Mount only the active shop layout so hidden catalogs do not issue queries. */
 const Shop: React.FC<ShopProps> = (props) => {
+  const isMobile = useMediaQuery("(max-width: 599px)");
+  const [isReady, setIsReady] = useState(false);
+  useEffect(() => setIsReady(true), []);
+  if (!isReady) return <Loader explanation="Loading shop" />;
+  return isMobile ? <MobileShop {...props} /> : <DesktopShop {...props} />;
+};
+
+const DesktopShop: React.FC<ShopProps> = (props) => {
   const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost, catalog } =
     props;
 
@@ -803,7 +815,7 @@ export interface ShopCatalogOverrides {
   headerExtra?: ReactNode;
 }
 
-interface ShopProps {
+export interface ShopProps {
   userData: NonNullable<UserWithRelations>;
   defaultType: ItemType;
   restrictTypes?: ItemType[];
