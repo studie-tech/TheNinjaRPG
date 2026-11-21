@@ -1619,7 +1619,10 @@ const damageHero = (
   // health alone never makes the hero untouchable.
   if (source.enemy && (source.enemy.elite || source.enemy.boss))
     amount +=
-      state.stats.maxHp * tdPiercingShare(state.wave) * (source.enemy.boss ? 2 : 1);
+      state.stats.maxHp *
+      tdPiercingShare(state.wave) *
+      (source.enemy.boss ? 2 : 1) *
+      state.stats.enemyDamageMult;
   hero.hp -= amount;
   emit(state, { type: "heroHit" });
   if (source.enemy) {

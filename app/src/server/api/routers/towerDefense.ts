@@ -468,6 +468,7 @@ const settleChallengeRun = async (
 ) => {
   const { nonce, challenge, claimKey, result } = input;
   let completedFor: UserWithRelations | undefined;
+  let battle: Awaited<ReturnType<typeof handleQuestConsequences>>["battleUserUpdate"];
   if (result.won) {
     const { user } = await fetchUpdatedUser({
       client: ctx.drizzle,
@@ -506,6 +507,7 @@ const settleChallengeRun = async (
           );
         user.questData = trackers;
         completedFor = user;
+        battle = recorded.battleUserUpdate;
       }
     }
   }
@@ -534,7 +536,7 @@ const settleChallengeRun = async (
     pointsEarned: 0,
     wave: result.wave,
     kills: result.kills,
-    ...getChallengeQuestUserUpdate(completedFor),
+    ...getChallengeQuestUserUpdate(completedFor, battle),
   };
 };
 
