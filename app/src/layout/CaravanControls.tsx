@@ -29,6 +29,7 @@ import {
 import { useCaravans } from "@/hooks/useCaravans";
 import Modal from "@/layout/Modal";
 import { cn } from "@/libs/shadui";
+import { formatDateTime } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 type Controls = NonNullable<RouterOutputs["caravanOps"]["getControls"]>;
@@ -118,13 +119,14 @@ const CaravanControlsPanel = () => {
               .map((op) => (
                 <li key={op.id}>
                   <Badge variant={op.succeeds ? "default" : "outline"}>
-                    {OPERATION_LABELS[op.type]}:{" "}
+                    {OPERATION_LABELS[op.type]}
+                    {op.type === "SEARCH" ? ` ${op.sector}` : ""}:{" "}
                     {op.status === "INTERRUPTED"
                       ? "stopped by escorts"
                       : op.succeeds
                         ? "succeeded"
                         : "failed"}{" "}
-                    · {new Date(op.finishesAt).toLocaleTimeString()}
+                    · {formatDateTime(op.finishesAt)}
                   </Badge>
                 </li>
               ))}

@@ -247,6 +247,10 @@ export const WarehouseStock = ({
                     aria-label={`Withdraw ${row.name}`}
                     title={`Withdraw ${row.name}`}
                     disabled={busy || max < 1 || !(amount >= 1 && amount <= max)}
+                    loading={
+                      actions.withdraw.isPending &&
+                      actions.withdraw.variables?.itemId === row.itemId
+                    }
                     onClick={() =>
                       actions.withdraw.mutate({ itemId: row.itemId, quantity: amount })
                     }
