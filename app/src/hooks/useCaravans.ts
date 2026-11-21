@@ -80,7 +80,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
         pushToCombat(router, result.battleId);
       } else {
         await updateUser(result, { revision });
-        showMutationToast(result);
+        await onResult(result);
       }
     },
   };
