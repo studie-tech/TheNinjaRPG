@@ -11,7 +11,7 @@ import {
   lapsedDiamondGuard,
   listBloodlineForDiamondBloodlineRevert,
   listBloodlineRollsForDiamondBloodlineRevert,
-  listJutsuForUpdateBloodline,
+  listJutsuForDiamondBloodlineRevert,
   listUserDataForDiamondBloodlineRevert,
   updateUserDataForClearDiamondBloodline,
   updateUserDataForUpdateBloodline,
@@ -46,15 +46,17 @@ export const revertLapsedDiamondBloodlines = async (
   const preIds = [
     ...new Set(users.flatMap((user) => user.preDiamondBloodlineId ?? [])),
   ];
-  const [rolls, preLines] = await Promise.all([
+  const currentIds = [...new Set(users.flatMap((user) => user.bloodlineId ?? []))];
+  const [rolls, preLines, jutsus] = await Promise.all([
     listBloodlineRollsForDiamondBloodlineRevert(
       client,
       users.map((user) => user.userId),
     ),
     preIds.length ? listBloodlineForDiamondBloodlineRevert(client, preIds) : [],
+    currentIds.length ? listJutsuForDiamondBloodlineRevert(client, currentIds) : [],
   ]);
   let reverted = 0;
-  let cleared = 0;
+  const clearIds: string[] = [];
   for (const user of users) {
     const ownedBloodlineIds = rolls
       .filter((roll) => roll.userId === user.userId)
@@ -67,14 +69,13 @@ export const revertLapsedDiamondBloodlines = async (
       ownedBloodlineIds,
     });
     if (!revert) {
-      const result = await updateUserDataForClearDiamondBloodline(client, user.userId);
-      cleared += result.rowsAffected;
+      clearIds.push(user.userId);
       continue;
     }
     const restoreId = revert.restoreBloodlineId;
-    const currentJutsus = user.bloodlineId
-      ? await listJutsuForUpdateBloodline(client, { bloodlineId: user.bloodlineId })
-      : [];
+    const currentJutsus = jutsus.filter(
+      (jutsu) => jutsu.bloodlineId === user.bloodlineId,
+    );
     // Queued levels of the Diamond bloodline's jutsu are refunded when their turn comes.
     const result = await updateUserDataForUpdateBloodline(
       client,
@@ -107,5 +108,9 @@ export const revertLapsedDiamondBloodlines = async (
       ),
     ]);
   }
+  // One guarded statement forgets the remembered bloodline of every player keeping theirs.
+  const cleared = clearIds.length
+    ? (await updateUserDataForClearDiamondBloodline(client, clearIds)).rowsAffected
+    : 0;
   return { reverted, cleared };
 };

@@ -820,6 +820,16 @@ export const listBloodlineRollsForDiamondBloodlineRevert = (
     ),
   });
 
+/** The jutsu of the given bloodlines, refunded from a player whose bloodline is reverted. */
+export const listJutsuForDiamondBloodlineRevert = (
+  client: Pick<DrizzleClient, "query">,
+  bloodlineIds: string[],
+) =>
+  client.query.jutsu.findMany({
+    columns: { id: true, bloodlineId: true },
+    where: inArray(jutsu.bloodlineId, bloodlineIds),
+  });
+
 /** The remembered bloodlines that still exist, by id. */
 export const listBloodlineForDiamondBloodlineRevert = (
   client: Pick<DrizzleClient, "query">,
@@ -854,15 +864,15 @@ export const clearDiamondBloodlineSet = {
   preDiamondBloodlineId: null,
 } satisfies MySqlUpdateSetSource<typeof userData>;
 
-/** Build the `userData` update that forgets a lapsed supporter's remembered bloodline. */
+/** Build the `userData` update that forgets lapsed supporters' remembered bloodlines. */
 export const updateUserDataForClearDiamondBloodline = (
   client: Pick<DrizzleClient, "update">,
-  userId: string,
+  userIds: string[],
 ) =>
   client
     .update(userData)
     .set(clearDiamondBloodlineSet)
-    .where(and(eq(userData.userId, userId), lapsedDiamondGuard()));
+    .where(and(inArray(userData.userId, userIds), lapsedDiamondGuard()));
 
 /** Build the `actionLog` insert recording a bloodline restored when Diamond support ended. */
 export const insertActionLogForDiamondBloodlineRevert = (

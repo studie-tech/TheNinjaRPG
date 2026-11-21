@@ -4,15 +4,17 @@ import {
   actionLog,
   bloodline,
   bloodlineRolls,
+  jutsu,
   paypalSubscription,
   storePurchase,
   stripePayment,
   userData,
+  userJutsu,
 } from "@/drizzle/schema";
 import { getDiamondRestoreBloodlineId } from "@/libs/bloodline";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { revertLapsedDiamondBloodlines } from "@/server/utils/diamondBloodline";
-import { insertUsers } from "../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -68,6 +70,8 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       storePurchase,
       stripePayment,
       userData,
+      userJutsu,
+      jutsu,
       bloodline,
     );
     const db = await getTestDatabase();
@@ -270,6 +274,80 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       diamondBloodlineActive: false,
       preDiamondBloodlineId: null,
     });
+  });
+
+  it("reverts and clears a batch of lapsed supporters, refunding only their own bloodline jutsu", async () => {
+    expect((await swap("pick-a")).success).toBe(true);
+    const db = await getTestDatabase();
+    const lapsed = {
+      rank: "JONIN" as const,
+      level: 50,
+      status: "AWAKE" as const,
+      villageId: "leaf",
+      federalStatus: "NONE" as const,
+      diamondBloodlineActive: true,
+    };
+    await insertUsers([
+      // Back on an owned bloodline, and with no bloodline: both keep what they have.
+      { ...lapsed, userId: "keeper-owned", bloodlineId: "pick-b" },
+      { ...lapsed, userId: "keeper-none", bloodlineId: null },
+      // Still Diamond: left alone.
+      {
+        ...lapsed,
+        userId: "still-diamond",
+        federalStatus: "DIAMOND",
+        bloodlineId: "pick-c",
+      },
+    ]);
+    await db.insert(bloodlineRolls).values({
+      id: "keeper-roll",
+      userId: "keeper-owned",
+      bloodlineId: "pick-b",
+      type: "NATURAL",
+    });
+    await insertJutsus([
+      { id: "pick-a-jutsu", bloodlineId: "pick-a" },
+      { id: "pick-b-jutsu", bloodlineId: "pick-b" },
+    ]);
+    await db.insert(userJutsu).values([
+      { id: "uj-a", userId, jutsuId: "pick-a-jutsu", level: 3, equipped: true },
+      { id: "uj-b", userId: "keeper-owned", jutsuId: "pick-b-jutsu", equipped: true },
+    ]);
+    await db
+      .update(userData)
+      .set({ federalStatus: "NONE" })
+      .where(eq(userData.userId, userId));
+    expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+      reverted: 1,
+      cleared: 2,
+    });
+    const users = await db.query.userData.findMany({
+      columns: { userId: true, bloodlineId: true, diamondBloodlineActive: true },
+    });
+    expect(users).toEqual(
+      expect.arrayContaining([
+        { userId, bloodlineId: "owned-line", diamondBloodlineActive: false },
+        {
+          userId: "keeper-owned",
+          bloodlineId: "pick-b",
+          diamondBloodlineActive: false,
+        },
+        { userId: "keeper-none", bloodlineId: null, diamondBloodlineActive: false },
+        {
+          userId: "still-diamond",
+          bloodlineId: "pick-c",
+          diamondBloodlineActive: true,
+        },
+      ]),
+    );
+    expect(
+      await db.query.userJutsu.findMany({ columns: { id: true, equipped: true } }),
+    ).toEqual(
+      expect.arrayContaining([
+        { id: "uj-a", equipped: false },
+        { id: "uj-b", equipped: true },
+      ]),
+    );
   });
 
   it("waits for an active Diamond subscription's renewal before reverting", async () => {
