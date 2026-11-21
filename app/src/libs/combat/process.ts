@@ -695,18 +695,22 @@ const applyGroundEffects = ({
     e.castThisRound = startRound === curRound;
     // Ignore movement passives because no combat action selected their destination.
     if (e.fromType === "skill" && e.type === "move") return;
+    // Innate casts originate on occupied cells. A jutsu with several summon/clone tags
+    // puts them all on its one target tile, so every spawn after the first finds that
+    // tile taken by the earlier one. Both move to the nearest empty tile.
     if (
       e.isNew &&
-      e.fromType === "skill" &&
-      (e.type === "clone" || e.type === "summon")
+      (e.type === "clone" || e.type === "summon") &&
+      (e.fromType === "skill" ||
+        (e.castThisRound && !!findUser(newUsersState, e.longitude, e.latitude)))
     ) {
       const creator = newUsersState.find((user) => user.userId === e.creatorId);
       spawnGrid ??= getBattleGrid(1, battle);
       const grid = spawnGrid;
       const origin = grid.getHex({ col: e.longitude, row: e.latitude });
       if (!creator || !origin) return;
-      // Innate casts originate on occupied cells; choose the nearest empty destination.
-      // Include earlier spawns in this pass when checking occupancy to prevent overlap.
+      // Choose the nearest empty destination; ties keep grid order, so placement is
+      // deterministic. Include earlier spawns in this pass when checking occupancy.
       const destination = grid
         .toArray()
         .filter(
