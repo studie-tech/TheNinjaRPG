@@ -8,7 +8,6 @@ import {
   Gift,
   GraduationCap,
   Layers,
-  LogIn,
   type LucideIcon,
   Package,
   Play,
@@ -36,7 +35,6 @@ import {
   useRankedQueuePolling,
 } from "@/hooks/kessen/useKessenPvpLobby";
 import { useNavigationRouter } from "@/hooks/navigation";
-import ContentBox from "@/layout/ContentBox";
 import { EmptyState } from "@/layout/EmptyState";
 import { FeedbackAlert } from "@/layout/FeedbackAlert";
 import { CardInspectDialog } from "@/layout/kessen/CardInspectDialog";
@@ -45,6 +43,8 @@ import { CircuitMap } from "@/layout/kessen/hub/CircuitMap";
 import { CollectionBook } from "@/layout/kessen/hub/CollectionBook";
 import { DeckBuilder, type KessenDeckSaveInput } from "@/layout/kessen/hub/DeckBuilder";
 import { DuelsPanel } from "@/layout/kessen/hub/DuelsPanel";
+import { KessenGuestHall } from "@/layout/kessen/hub/GuestHall";
+import { HallBox, type HallScene } from "@/layout/kessen/hub/HallBox";
 import { HallHeader } from "@/layout/kessen/hub/HallHeader";
 import {
   activeMatchStateText,
@@ -93,17 +93,15 @@ const KessenMatchView = dynamic(
   { ssr: false, loading: () => <Loader explanation="Setting the table" /> },
 );
 
-const GAME_NAME = "Kessen";
 const TABS = ["Play", "Duels", "Decks", "Collection", "Packs"] as const;
-/** The content box subtitle names what each section is for. */
+/** The content box subtitle names what each section is for, short enough for a phone. */
 const TAB_SUBTITLES: Record<(typeof TABS)[number], string> = {
-  Play: "Challenge the Circuit and learn in the Academy",
-  Duels: "Challenge players or climb the ranked ladder",
-  Decks: "Build the decks you take to the table",
-  Collection: "Every card you own and where to find the rest",
-  Packs: "Open packs and buy cards from the Card Master",
+  Play: "Academy and Circuit",
+  Duels: "Friendly and ranked duels",
+  Decks: "Build your decks",
+  Collection: "Your cards",
+  Packs: "Packs and the Card Master",
 };
-const HALL_SUBTITLE = "Best-of-three card duels on the war table";
 const TAB_STORAGE_KEY = "kessenTab";
 const LESSON_NPC: KessenNpcKey = "lemu";
 
@@ -114,9 +112,15 @@ const LESSON_NPC: KessenNpcKey = "lemu";
  * pack ceremony take the hall's place inside its content box while they are open. An
  * unfinished match or duel reopens on arrival, and a duel that begins (an accepted
  * challenge, a ranked match) opens its table; `?tab=packs` (or `play`, `duels`, `decks`,
- * `collection`) opens that section, also when the table closes over it.
+ * `collection`) opens that section, also when the table closes over it. Visitors
+ * without an account get the guest hall (`KessenGuestHall`) instead.
  */
 export default function KessenPage() {
+  const { isClerkLoaded, isSignedIn } = useUserDataSelector(selectPlayer);
+  // Visitors who look signed out get the guest hall at once, which also puts it in the
+  // prerendered page; its tables wait until sign-in is confirmed, so a signed-in player
+  // never starts a guest match. A signed-in player waits for the profile in the hall.
+  if (!isSignedIn) return <KessenGuestHall ready={isClerkLoaded} />;
   // Search params need a Suspense boundary on a prerendered page; the hall then renders
   // in the browser only, so its remembered section never differs between the two sides.
   return (
@@ -130,7 +134,6 @@ function KessenHall() {
   const {
     data: player,
     isClerkLoaded,
-    isSignedIn,
     status: profileStatus,
     refreshUser,
   } = useUserDataSelector(selectPlayer);
@@ -199,7 +202,6 @@ function KessenHall() {
   const queuePolling = useRankedQueuePolling(lobby, (found) => setDuelId(found));
 
   if (!isClerkLoaded) return <Loader explanation="Loading user data" />;
-  if (!isSignedIn) return <SignedOut />;
   if (!userId) {
     // A signed-in player whose profile did not load gets the reason and a retry; the
     // profile query does not retry on its own, so its error state is stable.
@@ -651,7 +653,7 @@ function KessenHall() {
   const firstLesson = hub.academy.lessons[0] ?? null;
   if (hub.needsLesson) {
     return (
-      <HallBox scene={scene} subtitle="Learn the war table with Lemu">
+      <HallBox scene={scene} subtitle="Lemu's first lesson">
         <div className="flex flex-col gap-3">
           {header}
           <section
@@ -694,7 +696,7 @@ function KessenHall() {
   // After the lesson: the starter faction, then the First Bundle opens.
   if (hub.needsStarter) {
     return (
-      <HallBox scene={scene} subtitle="Choose the faction you start with">
+      <HallBox scene={scene} subtitle="Choose your starter faction">
         <div className="flex flex-col gap-3">
           {header}
           <StarterChoice
@@ -871,43 +873,6 @@ function KessenHall() {
   );
 }
 
-/**
- * The Card Hall in the game's page frame ("Kessen", with the way back to the minigames),
- * on the content box's own surface in the game's theme, its section tabs in the frame's
- * header once the player has a collection. An open scene (the table, a pack ceremony)
- * takes the hall's place in the lacquer scene palette, the tabs leave the header and the
- * frame's title leads back to the hall; the hall stays mounted behind, hidden, so the
- * section, its scroll and the control that opened the scene are still there.
- */
-const HallBox = ({
-  children,
-  tabs,
-  subtitle = HALL_SUBTITLE,
-  scene = null,
-}: {
-  children: React.ReactNode;
-  /** The section tabs, in the frame's header. */
-  tabs?: React.ReactNode;
-  subtitle?: string;
-  scene?: HallScene | null;
-}) => (
-  <ContentBox
-    title={scene ? "Card Hall" : GAME_NAME}
-    subtitle={scene?.label ?? subtitle}
-    defaultBackHref="/manual#minigames"
-    onBack={scene?.onLeave}
-    padding={false}
-    topRightContent={scene ? undefined : tabs}
-  >
-    <div className="kessen-hall kessen-ui">
-      {scene ? <div className="kh-scene kessen-scene">{scene.content}</div> : null}
-      <div hidden={scene !== null}>
-        <div className="kh-hall-inner">{children}</div>
-      </div>
-    </div>
-  </ContentBox>
-);
-
 /** A hall that could not load: the reason and a retry. */
 const HallError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
   <HallBox>
@@ -955,25 +920,6 @@ const MatchUnavailable = ({
       Back to the Card Hall
     </Button>
   </section>
-);
-
-/** Kessen keeps a collection, so it needs an account. */
-const SignedOut = () => (
-  <HallBox>
-    <EmptyState
-      icon={Swords}
-      title="Sit at the war table"
-      description="Kessen keeps your cards, decks and Circuit wins on your character. Log in to take a seat."
-      action={
-        <Button asChild>
-          <Link href="/login">
-            <LogIn className="mr-2 h-4 w-4" aria-hidden />
-            Log in
-          </Link>
-        </Button>
-      }
-    />
-  </HallBox>
 );
 
 /** A signed-in account without a character: the cards belong to a character. */
@@ -1394,9 +1340,6 @@ const STATUS_HEAD = "font-semibold";
 type KessenTab = (typeof TABS)[number];
 
 type OpenedPack = { reveal: CardPackReveal; itemId: string };
-
-/** A scene shown in the hall's place: its content, its name and the way back. */
-type HallScene = { content: React.ReactNode; label: string; onLeave: () => void };
 
 type HallActionEntry = {
   key: string;

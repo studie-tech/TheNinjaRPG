@@ -10,7 +10,6 @@ import {
   completesAcademy,
   KESSEN_ACADEMY_FIRST_LESSON,
   KESSEN_ACADEMY_LESSON_KEYS,
-  KESSEN_ACADEMY_TIER,
 } from "@/libs/kessen/academy";
 import { catalogById } from "@/libs/kessen/deck";
 import {
@@ -63,7 +62,6 @@ import { getUtcDayKey, periodStart } from "@/utils/time";
 import type {
   KessenFirstWinChoice,
   KessenMatchResult,
-  KessenMode,
   KessenSettlement,
   KessenStoredMatch,
 } from "@/validators/kessen";
@@ -440,12 +438,6 @@ export const kessenObjectiveTrackers = (
   const { trackers } = getNewTrackers(trackerUser, [task]);
   return filterQuestTrackersForDbPersist(trackers, trackerUser, true);
 };
-
-/** The tier stored on a match row; Academy lessons store the Academy's. */
-export const tierOfMode = (npc: KessenNpc, mode: KessenMode): KessenTier =>
-  mode === "lesson"
-    ? KESSEN_ACADEMY_TIER
-    : (npcVariant(npc, mode)?.tier ?? npc.standard.tier);
 
 /**
  * Runs the guarded claims of a settlement and reports which ones this match holds. A

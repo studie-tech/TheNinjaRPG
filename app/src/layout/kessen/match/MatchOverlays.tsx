@@ -353,6 +353,7 @@ export const MatchEndScreen = ({
   startError = null,
   onEditDeck,
   onClaimChoice,
+  guestNote,
 }: {
   table: MatchTable;
   lesson: boolean;
@@ -366,6 +367,8 @@ export const MatchEndScreen = ({
   startError?: string | null;
   onEditDeck?: () => void;
   onClaimChoice?: (itemId: string) => Promise<KessenTableOutcome>;
+  /** A guest's match settles nothing; this says so in the rewards' place. */
+  guestNote?: ReactNode;
 }) => {
   const { me, them, setInspected } = table;
   const confirmed = table.npcMatch;
@@ -641,6 +644,11 @@ export const MatchEndScreen = ({
                   ))}
                 </div>
               ) : null}
+            </section>
+          ) : null}
+          {guestNote ? (
+            <section className="km-rewards" aria-label="Guest match">
+              {guestNote}
             </section>
           ) : null}
           <p className="sr-only" role="status">
