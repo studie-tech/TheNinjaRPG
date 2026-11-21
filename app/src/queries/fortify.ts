@@ -81,24 +81,6 @@ export const attemptFortify = (
   `);
 };
 
-/** Apply the receipt's durable roll to its escrowed copy during exactly-once delivery. */
-export const fortifyServiceEquipment = (
-  db: DrizzleClient,
-  receiptId: string,
-  owned: UserItemWithRelations,
-  state: NonNullable<UserItemWithRelations["fortification"]>,
-) =>
-  db
-    .update(userItem)
-    .set({ fortification: state, updatedAt: new Date() })
-    .where(
-      and(
-        eq(userItem.id, owned.id),
-        eq(userItem.userId, receiptId),
-        eq(userItem.updatedAt, owned.updatedAt),
-      ),
-    );
-
 /** Recheck authored tags and all evolution children when publishing a service receipt. */
 export const fortifyDefinitionGuard = (
   db: DrizzleClient,

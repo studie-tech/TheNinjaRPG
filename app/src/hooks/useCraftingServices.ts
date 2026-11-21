@@ -4,7 +4,9 @@ import { getQueryKey } from "@trpc/react-query";
 import { useEffect, useRef } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import {
+  getServiceReconciliationSignature,
   getServiceRequesterPatch,
+  getServiceSubmissionNotifications,
   getServiceSubmissionUnchanged,
   getServiceSubmittedInventory,
   getSubmittedServiceRequests,
@@ -15,7 +17,9 @@ import { useUserData } from "@/utils/UserContext";
 
 /** Reconcile receipt-driven inventory, profile progression and timers after service mutations. */
 export const useCraftingServiceCache = () => {
+  const client = useQueryClient();
   const utils = api.useUtils();
+  const inboxKey = getQueryKey(api.comments.getUserConversations, undefined, "query");
   const { prepareUserUpdate, updateUser } = useUserData();
   const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
     useInventoryCacheUpdate();
@@ -34,6 +38,7 @@ export const useCraftingServiceCache = () => {
     requests: requests.prepareUpdate(),
     queue: queue.prepareUpdate(),
     timers: timers.prepareUpdate(),
+    inbox: client.getQueryState(inboxKey),
   });
   const updateService = async (
     result:
@@ -42,15 +47,60 @@ export const useCraftingServiceCache = () => {
     snapshot: ReturnType<typeof prepareServiceUpdate>,
   ) => {
     if (!result.success) return;
-    const update = "serviceUpdate" in result ? result.serviceUpdate : undefined;
+    const submission = "serviceUpdate" in result ? result.serviceUpdate : undefined;
+    const inbox = client.getQueryState(inboxKey);
+    // Inbox reads acknowledge the server counter. A concurrent acknowledgement
+    // leaves the delivery's notification count to authoritative reconciliation.
+    const update =
+      submission?.fortify &&
+      (inbox?.dataUpdateCount !== snapshot.inbox?.dataUpdateCount ||
+        inbox?.status === "error" ||
+        snapshot.inbox?.status === "error" ||
+        (inbox?.fetchStatus ?? "idle") !== "idle" ||
+        (snapshot.inbox?.fetchStatus ?? "idle") !== "idle")
+        ? undefined
+        : submission;
     // Profile reconciliation can start queued crafts and create inventory. Dependent
     // reads must observe that settlement, and only an accepted profile projection
     // makes the response's dependent projections safe to apply.
     const userUpdated = await updateUser(
       (current) => getServiceRequesterPatch(current, update),
-      { revision: snapshot.user, delta: update?.userDelta },
+      {
+        revision: snapshot.user,
+        delta: update?.userDelta,
+        notifications: (current) => getServiceSubmissionNotifications(current, update),
+      },
     );
     const dependentUpdate = userUpdated ? update : undefined;
+    if (dependentUpdate?.fortify)
+      await utils.comments.getUserConversations.invalidate(undefined, {
+        refetchType: "none",
+      });
+    const current = client.getQueryData<
+      RouterOutputs["occupation"]["getServiceRequests"]
+    >(snapshot.requests.key);
+    const reconciliation = getServiceReconciliation(client);
+    const signature =
+      current &&
+      getServiceReconciliationSignature(
+        current,
+        update?.requesterId,
+        reconciliation.generation,
+      );
+    const projected = current && getSubmittedServiceRequests(current, dependentUpdate);
+    // Polling must not settle a receipt whose exact effects this response already projected.
+    if (
+      dependentUpdate?.fortify &&
+      projected &&
+      snapshot.requests.revision !== undefined &&
+      requests.prepareUpdate().revision === snapshot.requests.revision &&
+      (!signature || signature === reconciliation.succeeded)
+    )
+      reconciliation.succeeded = getServiceReconciliationSignature(
+        projected,
+        dependentUpdate.requesterId,
+        reconciliation.generation,
+      );
     await Promise.all([
       updateInventory(
         (rows) => getServiceSubmittedInventory(rows, dependentUpdate),
@@ -136,22 +186,15 @@ export const useCraftingServiceReconciliation = (
         .filter((row) => row.status === "PENDING" || row.status === "ACTIVE")
         .map((row) => row.id),
     );
-    const terminal = data
-      .filter((row) => row.status === "COMPLETED" || row.status === "REFUNDED")
-      .map((row) => `${row.id}:${row.status}`)
-      .sort()
-      .join("|");
     const userId = client.getQueryData<RouterOutputs["profile"]["getUser"]>(
       getQueryKey(api.profile.getUser, undefined, "query"),
     )?.userData?.userId;
-    const active = data
-      .filter((row) => row.status === "ACTIVE" && row.crafterId === userId)
-      .map((row) => row.id)
-      .sort()
-      .join("|");
-    if (!terminal && !active && !reconciliation.generation)
-      return Promise.resolve(false);
-    const signature = `${terminal}|${active}|${reconciliation.generation}`;
+    const signature = getServiceReconciliationSignature(
+      data,
+      userId,
+      reconciliation.generation,
+    );
+    if (!signature) return Promise.resolve(false);
     if (reconciliation.succeeded === signature) return Promise.resolve(true);
     const revision =
       client.getQueryState(

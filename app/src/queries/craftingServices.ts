@@ -185,19 +185,23 @@ export const deliverServiceEquipment = (
   db: DrizzleClient,
   request: CraftingServiceRequest,
   durability?: number,
+  fortify?: { state: NonNullable<UserItem["fortification"]>; beforeUpdatedAt: Date },
+  updatedAt = new Date(),
 ) =>
   db
     .update(userItem)
     .set({
       userId: request.requesterId,
-      updatedAt: new Date(),
+      updatedAt,
       ...(durability === undefined ? {} : { durability }),
+      ...(fortify ? { fortification: fortify.state } : {}),
     })
     .where(
       and(
         eq(userItem.id, request.targetUserItemId ?? ""),
         eq(userItem.userId, request.id),
         gt(userItem.quantity, 0),
+        fortify ? eq(userItem.updatedAt, fortify.beforeUpdatedAt) : undefined,
       ),
     );
 /** Read escrow only for a known receipt ID. */

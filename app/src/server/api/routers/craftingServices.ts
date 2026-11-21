@@ -177,7 +177,7 @@ export const craftingServiceProcedures = {
         input.itemId
           ? fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId)
           : undefined,
-        findFortifyEvolutions(ctx.drizzle),
+        input.service === "FORTIFY" ? findFortifyEvolutions(ctx.drizzle) : [],
       ]);
       const initialRequester = requesterResult.user;
       if (!initialRequester) return errorResponse("Requester not found");
@@ -418,8 +418,11 @@ export const craftingServiceProcedures = {
           }),
         );
         if (notification) publishServiceNotification(ctx.drizzle, notification);
-        if (input.service === "REPAIR" || input.service === "FORTIFY")
-          await completeCraftingService(ctx.drizzle, request);
+        const completion =
+          input.service === "REPAIR" || input.service === "FORTIFY"
+            ? await completeCraftingService(ctx.drizzle, request)
+            : undefined;
+        if (completion) request.status = "COMPLETED";
         return actionReadinessResponse(
           {
             success: true,
@@ -428,6 +431,7 @@ export const craftingServiceProcedures = {
               requesterResult,
               crafterResult,
               request,
+              completion: typeof completion === "object" ? completion : undefined,
               consumptions,
               equipment: input.service === "CRAFT" ? undefined : target,
               crafterName: crafter.username,

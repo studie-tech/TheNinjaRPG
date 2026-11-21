@@ -226,6 +226,14 @@ describeWithDatabase("Fortify guarded economy and ownership", () => {
     });
     expect(owned?.userId).toBe("hero");
     expect(owned?.fortification?.damage?.level).toBe(1);
+    expect(result).toMatchObject({
+      serviceUpdate: {
+        userDelta: { money: -1_000_100 },
+        fortify: { state: owned?.fortification },
+        inventoryChanges: [{ id: "owned", quantity: 1, updatedAt: owned?.updatedAt }],
+        receipt: { service: "FORTIFY", status: "COMPLETED" },
+      },
+    });
     expect(
       (await db.query.userData.findFirst({ where: eq(userData.userId, "hero") }))
         ?.money,

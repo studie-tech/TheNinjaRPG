@@ -17,7 +17,6 @@ import {
   rewardServiceUser,
   transitionServiceRequest,
 } from "@/queries/craftingServices";
-import { fortifyServiceEquipment } from "@/queries/fortify";
 import { fetchItemWithCraftingRequirements, insertUserItems } from "@/queries/item";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
@@ -39,6 +38,7 @@ export const completeCraftingService = async (
       : undefined,
   ]);
   if (request.service === "CRAFT" && !recipe) return refundCraftingService(db, request);
+  const updatedAt = new Date();
 
   // Receipt transition, output INSERTs, ownership transfer and payment cannot be expressed
   // as one guarded UPDATE; the transaction prevents partial delivery or lost escrow.
@@ -69,17 +69,6 @@ export const completeCraftingService = async (
       }
       if (request.service === "FORTIFY") {
         if (!request.fortify || !equipment) throw new Error("Invalid Fortify receipt");
-        if (
-          (
-            await fortifyServiceEquipment(
-              tx,
-              request.id,
-              equipment,
-              request.fortify.state,
-            )
-          ).rowsAffected !== 1
-        )
-          throw new CraftingServiceConflict("Fortify escrow changed");
       }
       if (request.service === "IMBUE") {
         if (!request.targetUserItemId || !request.crystalItemId || !request.finishesAt)
@@ -111,6 +100,10 @@ export const completeCraftingService = async (
             tx,
             request,
             request.repairDurability ?? undefined,
+            request.service === "FORTIFY" && request.fortify && equipment
+              ? { state: request.fortify.state, beforeUpdatedAt: equipment.updatedAt }
+              : undefined,
+            updatedAt,
           )
         ).rowsAffected !== 1
       )
@@ -124,7 +117,9 @@ export const completeCraftingService = async (
   );
   if (!notification) return false;
   publishServiceNotification(db, notification);
-  return true;
+  return request.service === "FORTIFY"
+    ? { updatedAt, countedAt: notification.countedAt }
+    : true;
 };
 
 /** Cancel/decline a receipt and return its complete escrow once, including active jobs on account deletion. */
@@ -175,7 +170,7 @@ export const settleCraftingServices = async (
     if (request.status !== "ACTIVE" || !request.finishesAt || request.finishesAt > now)
       continue;
     try {
-      changed = (await completeCraftingService(db, request)) || changed;
+      changed = !!(await completeCraftingService(db, request)) || changed;
     } catch (error) {
       // Failed receipts retain their escrow and a retryable status. The service desk
       // shows delivery feedback while unrelated receipts and profile actions stay usable.

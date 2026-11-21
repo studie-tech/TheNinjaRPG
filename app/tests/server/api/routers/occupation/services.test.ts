@@ -19,6 +19,7 @@ import {
   userQueue,
   userVote,
 } from "@/drizzle/schema";
+import { rollFortify } from "@/libs/fortify";
 import { Pusher } from "@/libs/pusher";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import {
@@ -34,10 +35,13 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { cleanupOrphanRows } from "@/server/utils/cleaner";
 import {
   completeCraftingService as completeService,
+  refundCraftingService,
   retireCraftingServices as retireServices,
+  settleCraftingServices,
 } from "@/server/utils/craftingServices";
 import { settleCraftingQueue } from "@/server/utils/userQueue";
 import { getNextUserSnapshotAt } from "@/utils/time";
+import { DamageTag } from "@/validators/combat";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { withAfterTasks } from "../../../../setup/after";
@@ -194,8 +198,184 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     return receipt();
   };
 
+  const fortifyReceipt = async (succeeded = true) => {
+    const db = await getTestDatabase();
+    const state = { damage: { type: "damage" as const, level: 1, failures: 0 } };
+    const fortify = rollFortify(
+      state,
+      DamageTag.parse({
+        power: 20,
+        fortifyId: "damage",
+        fortifyEnabled: true,
+      }),
+      true,
+      succeeded ? 0 : 0.99,
+    );
+    await db.insert(craftingServiceRequest).values({
+      id: "service:fortify",
+      requesterId: "requester",
+      crafterId: "crafter",
+      service: "FORTIFY",
+      status: "ACTIVE",
+      fee: 50,
+      itemId: "recipe",
+      itemName: "Service Sword",
+      targetUserItemId: "sword",
+      materials: [],
+      fortify,
+      finishesAt: new Date(1),
+    });
+    await db
+      .update(userItem)
+      .set({ userId: "service:fortify", fortification: state })
+      .where(eq(userItem.id, "sword"));
+    await db
+      .update(userData)
+      .set({ money: 20_000_000 - fortify.cost - 50 })
+      .where(eq(userData.userId, "requester"));
+    return receipt();
+  };
+
+  it.each([true, false])(
+    "delivers the recorded Fortify roll (%s) with one equipment write and pays once",
+    async (succeeded) => {
+      const db = await getTestDatabase(),
+        request = await fortifyReceipt(succeeded);
+      const before = await requireUser("requester");
+      const completion = await recordQueries(() =>
+        completeCraftingService(db, request),
+      );
+      expect(
+        completion.statements.filter((statement) =>
+          /^update `UserItem`/i.test(statement),
+        ),
+      ).toHaveLength(1);
+      const equipment = await db.query.userItem.findFirst({
+        where: eq(userItem.id, "sword"),
+      });
+      expect(equipment).toMatchObject({
+        userId: "requester",
+        fortification: request.fortify!.state,
+      });
+      expect(completion.result).toEqual({
+        updatedAt: equipment!.updatedAt,
+        countedAt: expect.any(Number),
+      });
+      expect(await completeCraftingService(db, request)).toBe(false);
+      expect((await requireUser("crafter")).money).toBe(150);
+      expect((await requireUser("requester")).money).toBe(before.money);
+      expect(await db.query.conversation.findMany()).toHaveLength(1);
+    },
+  );
+
+  it.each(["revision", "owner"])(
+    "keeps a Fortify receipt refundable when its escrow %s changes",
+    async (change) => {
+      const db = await getTestDatabase(),
+        request = await fortifyReceipt();
+      const observed = beforeTransaction(db, async () => {
+        await db
+          .update(userItem)
+          .set(
+            change === "owner"
+              ? { userId: "another-receipt" }
+              : { updatedAt: new Date(Date.now() + 1000) },
+          )
+          .where(eq(userItem.id, "sword"));
+      });
+      await expect(completeCraftingService(observed, request)).rejects.toThrow(
+        "Equipment delivery changed",
+      );
+      expect((await receipt()).status).toBe("ACTIVE");
+      expect((await requireUser("crafter")).money).toBe(100);
+      expect(await db.query.conversation.findMany()).toHaveLength(0);
+      const equipment = await db.query.userItem.findFirst({
+        where: eq(userItem.id, "sword"),
+      });
+      expect(equipment?.fortification?.damage?.level).toBe(1);
+      if (change === "owner")
+        await db
+          .update(userItem)
+          .set({ userId: request.id })
+          .where(eq(userItem.id, "sword"));
+      expect(await withAfterTasks(refundCraftingService)(db, request)).toBe(true);
+      expect(await withAfterTasks(refundCraftingService)(db, request)).toBe(false);
+      expect((await requireUser("requester")).money).toBe(20_000_000);
+      expect(
+        (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))
+          ?.fortification,
+      ).toEqual(equipment?.fortification);
+    },
+  );
+
+  it("reports a boolean when a due Fortify receipt settles", async () => {
+    const db = await getTestDatabase(),
+      request = await fortifyReceipt();
+    expect(await withAfterTasks(settleCraftingServices)(db, [request])).toEqual({
+      changed: true,
+      failedRequestIds: [],
+    });
+  });
+
+  it("withholds the submission projection when another reader wins Fortify completion", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ money: 20_000_000 })
+      .where(eq(userData.userId, "requester"));
+    await db
+      .update(item)
+      .set({
+        canBeEnhanced: true,
+        effects: [
+          DamageTag.parse({
+            power: 20,
+            fortifyId: "damage",
+            fortifyEnabled: true,
+          }),
+        ],
+      })
+      .where(eq(item.id, "recipe"));
+    await db.insert(craftingServicePrice).values({
+      userId: "crafter",
+      service: "FORTIFY",
+      rarity: "COMMON",
+      fee: 50,
+    });
+    const observed = beforeTransaction(db, async (call) => {
+      if (call === 2) await completeCraftingService(db, await receipt());
+    });
+    expect(
+      await callerForDatabase(
+        occupationRouter,
+        "requester",
+        observed,
+      ).submitServiceRequest({
+        crafterId: "crafter",
+        service: "FORTIFY",
+        userItemId: "sword",
+        expectedFee: 50,
+        fortifyTagId: "damage",
+        expectedFortifyLevel: 0,
+        expectedFortifyFailures: 0,
+      }),
+    ).toMatchObject({ success: true, serviceUpdate: undefined });
+    expect((await requireUser("crafter")).money).toBe(150);
+    expect((await requireUser("requester")).money).toBe(18_999_950);
+    expect(
+      (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))
+        ?.fortification?.damage?.level,
+    ).toBe(1);
+  });
+
   it("reserves recipe materials/fee and cancels once with a full refund", async () => {
-    const submitted = await submit();
+    const submission = await recordQueries(() => submit());
+    const submitted = submission.result;
+    expect(
+      submission.statements.some((statement) =>
+        /from `Item` where `Item`\.`parentItemId` IS NOT NULL/i.test(statement),
+      ),
+    ).toBe(false);
     expect(submitted).toMatchObject({
       success: true,
       serviceUpdate: { requesterId: "requester", userDelta: { money: -50 } },
