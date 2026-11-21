@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import {
-  type FederalStatus,
   FederalStatuses,
   PET_OPTION_COUNTS,
   PET_SPECIES_RARITY_WEIGHTS,
@@ -195,7 +194,9 @@ describe("companion species rarity", () => {
 
   it("weights rarity buckets and gives subscriber bonus slots better odds across fixed daily rolls", () => {
     const samples = 2500;
-    const firstBonusSlot: Record<FederalStatus, number> = {
+    // Diamond shares Gold's choices and odds, so only the tiers that add slots compare.
+    const slotTiers = FederalStatuses.filter((tier) => tier !== "DIAMOND");
+    const firstBonusSlot: Record<(typeof slotTiers)[number], number> = {
       NONE: 0,
       NORMAL: 3,
       SILVER: 5,
@@ -215,7 +216,7 @@ describe("companion species rarity", () => {
         PET_OPTION_COUNTS.GOLD,
       );
       for (const option of gold.species) observedRarities.add(option.rarity);
-      for (const tier of FederalStatuses) {
+      for (const tier of slotTiers) {
         const bonus = gold.species[firstBonusSlot[tier]];
         if (bonus?.rarity === "COMMON") commonCounts[tier]++;
         if (
@@ -227,7 +228,7 @@ describe("companion species rarity", () => {
       }
     }
     expect(observedRarities.size).toBe(PetRarities.length);
-    for (const tier of FederalStatuses) {
+    for (const tier of slotTiers) {
       const weights = PET_SPECIES_RARITY_WEIGHTS[tier];
       const expectedCommonRate =
         weights.COMMON /
@@ -237,9 +238,9 @@ describe("companion species rarity", () => {
         0.04,
       );
     }
-    for (let index = 1; index < FederalStatuses.length; index++) {
-      const current = FederalStatuses[index]!;
-      const previous = FederalStatuses[index - 1]!;
+    for (let index = 1; index < slotTiers.length; index++) {
+      const current = slotTiers[index]!;
+      const previous = slotTiers[index - 1]!;
       expect(commonCounts[current]).toBeLessThan(commonCounts[previous]);
       expect(rareMenuCounts[current]).toBeGreaterThan(rareMenuCounts[previous]);
     }

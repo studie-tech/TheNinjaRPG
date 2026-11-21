@@ -3,19 +3,27 @@
  */
 import type { SQL } from "drizzle-orm";
 import { and, eq, gt, gte, isNotNull } from "drizzle-orm";
+import { alias, type MySqlUpdateSetSource } from "drizzle-orm/mysql-core";
 import type { z } from "zod";
 import type {
   BloodlineDifficultyRating,
   LetterRank,
   StatType,
 } from "@/drizzle/constants";
-import { BLOODLINE_SWAP_FREE_DAYS } from "@/drizzle/constants";
+import {
+  BLOODLINE_SWAP_FREE_DAYS,
+  DIAMOND_RENEWAL_GRACE_DAYS,
+  PAYPAL_PAID_PERIOD_DAYS,
+} from "@/drizzle/constants";
 import type { Bloodline } from "@/drizzle/schema";
 import {
   actionLog,
   bloodline,
   bloodlineReskin,
   bloodlineRolls,
+  paypalSubscription,
+  storePurchase,
+  stripePayment,
   userItem,
   userSkill,
 } from "@/drizzle/schema";
@@ -686,13 +694,32 @@ export const listJutsuForUpdateBloodline = (
     where: eq(jutsu.bloodlineId, user.bloodlineId),
   });
 
-/** Build the `userData` update for `updateBloodline`, including predicates on `userId`, `status`, `reputationPoints`. */
+/**
+ * The player's current bloodline with its jutsu ids, one row per jutsu (a single row with a
+ * null `jutsuId` when it has none), so a swap can prefetch what `updateBloodline` unequips.
+ */
+export const listJutsuForSwapDiamondBloodline = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+) =>
+  client
+    .select({ bloodlineId: userData.bloodlineId, jutsuId: jutsu.id })
+    .from(userData)
+    .leftJoin(jutsu, eq(jutsu.bloodlineId, userData.bloodlineId))
+    .where(eq(userData.userId, userId));
+
+/**
+ * Build the `userData` update for `updateBloodline`, including predicates on `userId`,
+ * `status`, `reputationPoints`. `extra` adds columns and guards that must change in the
+ * same statement, such as Diamond swap bookkeeping.
+ */
 export const updateUserDataForUpdateBloodline = (
   client: Pick<DrizzleClient, "update">,
   bloodline: { id: undefined | string } | null,
   repCost: number,
   user: { userId: string; bloodlineId: null | string },
   updatedAt = new Date(),
+  extra?: { set?: MySqlUpdateSetSource<typeof userData>; where?: SQL },
 ) =>
   client
     .update(userData)
@@ -701,6 +728,7 @@ export const updateUserDataForUpdateBloodline = (
       bloodlineId: bloodline?.id || null,
       bloodlineReskinId: null,
       reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
+      ...extra?.set,
       // Advance the whole-user version so a concurrent claimUserSnapshot CAS detects this write.
       updatedAt,
     })
@@ -713,8 +741,168 @@ export const updateUserDataForUpdateBloodline = (
         user.bloodlineId
           ? eq(userData.bloodlineId, user.bloodlineId)
           : isNull(userData.bloodlineId),
+        extra?.where,
       ),
     );
+
+/**
+ * Columns and guards a Diamond swap writes with its bloodline change: the player must still
+ * be DIAMOND, and the bloodline to restore is remembered when asked.
+ */
+export const diamondSwapUserUpdate = (info: {
+  user: { diamondBloodlineActive: boolean; bloodlineId: string | null };
+  rememberCurrent: boolean;
+}): { set: MySqlUpdateSetSource<typeof userData>; where: SQL } => ({
+  set: {
+    diamondBloodlineActive: true,
+    ...(info.rememberCurrent ? { preDiamondBloodlineId: info.user.bloodlineId } : {}),
+  },
+  where: and(
+    eq(userData.federalStatus, "DIAMOND"),
+    // The remember decision was made from this flag; a concurrent change must re-read it.
+    eq(userData.diamondBloodlineActive, info.user.diamondBloodlineActive),
+  ) as SQL,
+});
+
+/**
+ * Whether a Diamond payment ended recently enough that its renewal may simply not have been
+ * confirmed yet: an ACTIVE PayPal subscription past its paid period, or a granted Stripe
+ * period or accepted, unrevoked store receipt that expired within the grace. PayPal rows
+ * record no period end, so `updatedAt` (the last payment) plus the paid period stands in.
+ * There is no sandbox filter: the grace only delays a revert and never grants anything.
+ */
+const pendingDiamondRenewal = () => sql`(EXISTS (
+  SELECT 1 FROM ${paypalSubscription}
+  WHERE ${paypalSubscription.affectedUserId} = ${userData.userId}
+    AND ${paypalSubscription.status} = 'ACTIVE'
+    AND ${paypalSubscription.federalStatus} = 'DIAMOND'
+    AND ${paypalSubscription.updatedAt} >= CURRENT_TIMESTAMP(3) - INTERVAL ${PAYPAL_PAID_PERIOD_DAYS + DIAMOND_RENEWAL_GRACE_DAYS} DAY
+) OR EXISTS (
+  SELECT 1 FROM ${stripePayment}
+  WHERE ${stripePayment.affectedUserId} = ${userData.userId}
+    AND ${stripePayment.grantedAt} IS NOT NULL
+    AND COALESCE(${stripePayment.federalStatusOverride}, ${stripePayment.federalStatus}) = 'DIAMOND'
+    AND ${stripePayment.expiresAt} >= CURRENT_TIMESTAMP(3) - INTERVAL ${DIAMOND_RENEWAL_GRACE_DAYS} DAY
+) OR EXISTS (
+  SELECT 1 FROM ${storePurchase}
+  WHERE ${storePurchase.userId} = ${userData.userId}
+    AND ${storePurchase.acceptedAt} IS NOT NULL
+    AND ${storePurchase.revokedAt} IS NULL
+    AND ${storePurchase.federalStatus} = 'DIAMOND'
+    AND ${storePurchase.expiresAt} >= CURRENT_TIMESTAMP(3) - INTERVAL ${DIAMOND_RENEWAL_GRACE_DAYS} DAY
+))`;
+
+/** Table alias for the remembered pre-Diamond bloodline, joined beside the current one. */
+const preDiamondLine = alias(bloodline, "preDiamondLine");
+
+/**
+ * Lapsed Diamond supporters still holding a remembered pre-Diamond bloodline. A core select
+ * rather than a relational query, whose root alias would rename the correlated subquery's
+ * columns in `lapsedDiamondGuard`.
+ */
+export const listUserDataForDiamondBloodlineRevert = (
+  client: Pick<DrizzleClient, "select">,
+  limit: number,
+) =>
+  client
+    .select({
+      userId: userData.userId,
+      bloodlineId: userData.bloodlineId,
+      bloodlineName: bloodline.name,
+      preDiamondBloodlineId: userData.preDiamondBloodlineId,
+      preDiamondBloodlineName: preDiamondLine.name,
+      avatar: userData.avatar,
+      avatarLight: userData.avatarLight,
+    })
+    .from(userData)
+    .leftJoin(bloodline, eq(bloodline.id, userData.bloodlineId))
+    .leftJoin(preDiamondLine, eq(preDiamondLine.id, userData.preDiamondBloodlineId))
+    .where(
+      and(
+        lapsedDiamondGuard(),
+        // The restore write skips players in battle; keep them from filling the batch.
+        ne(userData.status, "BATTLE"),
+      ),
+    )
+    .limit(limit);
+
+/** Owned (rolled, bought or granted) bloodline ids of the given players. */
+export const listBloodlineRollsForDiamondBloodlineRevert = (
+  client: Pick<DrizzleClient, "query">,
+  userIds: string[],
+) =>
+  client.query.bloodlineRolls.findMany({
+    columns: { userId: true, bloodlineId: true },
+    where: and(
+      inArray(bloodlineRolls.userId, userIds),
+      isNotNull(bloodlineRolls.bloodlineId),
+    ),
+  });
+
+/** The jutsu of the given bloodlines, refunded from a player whose bloodline is reverted. */
+export const listJutsuForDiamondBloodlineRevert = (
+  client: Pick<DrizzleClient, "query">,
+  bloodlineIds: string[],
+) =>
+  client.query.jutsu.findMany({
+    columns: { id: true, bloodlineId: true },
+    where: inArray(jutsu.bloodlineId, bloodlineIds),
+  });
+
+/**
+ * Guards a revert or marker clear to a player who is still a lapsed Diamond supporter:
+ * a remembered bloodline, no Diamond status and no Diamond renewal still pending.
+ */
+export const lapsedDiamondGuard = () =>
+  and(
+    eq(userData.diamondBloodlineActive, true),
+    ne(userData.federalStatus, "DIAMOND"),
+    sql`NOT ${pendingDiamondRenewal()}`,
+  ) as SQL;
+
+/** Guards a restore to a current bloodline the player still does not own at write time. */
+export const currentBloodlineNotOwnedGuard = () => sql`NOT EXISTS (
+  SELECT 1 FROM ${bloodlineRolls}
+  WHERE ${bloodlineRolls.userId} = ${userData.userId}
+    AND ${bloodlineRolls.bloodlineId} = ${userData.bloodlineId}
+)`;
+
+/** Forget the remembered bloodline without changing the current one. */
+export const clearDiamondBloodlineSet = {
+  diamondBloodlineActive: false,
+  preDiamondBloodlineId: null,
+} satisfies MySqlUpdateSetSource<typeof userData>;
+
+/** Build the `userData` update that forgets lapsed supporters' remembered bloodlines. */
+export const updateUserDataForClearDiamondBloodline = (
+  client: Pick<DrizzleClient, "update">,
+  userIds: string[],
+) =>
+  client
+    .update(userData)
+    .set(clearDiamondBloodlineSet)
+    .where(and(inArray(userData.userId, userIds), lapsedDiamondGuard()));
+
+/**
+ * Build the `actionLog` insert recording a bloodline restored when Diamond support ended.
+ * Its own `relatedMsg`, not "Bloodline Changed", keeps the revert from starting the swap
+ * cooldown.
+ */
+export const insertActionLogForDiamondBloodlineRevert = (
+  client: Pick<DrizzleClient, "insert">,
+  user: { userId: string; avatarLight: null | string; avatar: null | string },
+  change: string,
+  restoredBloodlineId: string | null,
+) =>
+  client.insert(actionLog).values({
+    id: nanoid(),
+    userId: user.userId,
+    tableName: "user",
+    changes: [clampActionLogText(change)],
+    relatedId: restoredBloodlineId ?? user.userId,
+    relatedMsg: "Diamond Bloodline Reverted",
+    relatedImage: user.avatarLight || user.avatar || IMG_AVATAR_DEFAULT,
+  });
 
 /** Build the `userJutsu` update for `updateBloodline`, using predicates on `userId` and `jutsuId`. */
 export const updateUserJutsuForUpdateBloodline = (

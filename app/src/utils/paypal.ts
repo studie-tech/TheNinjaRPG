@@ -10,6 +10,7 @@ import {
   MAX_REPS_PER_MONTH,
   PAYPAL_DISCOUNT_PERCENT,
   QUEUE_WAITING_SLOTS,
+  type RepsFederalStatus,
   STORE_BUNDLE_MIN_PRICE_CENTS,
 } from "@/drizzle/constants";
 import type { FederalStatus, Item, UserData } from "@/drizzle/schema";
@@ -24,6 +25,20 @@ export const getUserFederalStatus = (
     return user.federalStatus;
   }
 };
+
+/** Whether a tier includes every Gold perk: Gold itself and the tiers above it. */
+export const hasGoldPerks = (federalStatus: FederalStatus) =>
+  FederalStatuses.indexOf(federalStatus) >= FederalStatuses.indexOf("GOLD");
+
+/** Shown wherever Diamond is offered or requested for reputation points. */
+export const DIAMOND_NO_REPS_MESSAGE =
+  "Diamond Federal Support cannot be bought, gifted or upgraded to with reputation points.";
+
+/** Whether a tier is sold for reputation points; Diamond is sold for money only. */
+export const isRepsFederalStatus = (
+  federalStatus: FederalStatus,
+): federalStatus is RepsFederalStatus =>
+  federalStatus !== "NONE" && federalStatus !== "DIAMOND";
 
 /**
  * Explain a free monthly reset or swap. Staff take precedence; name the supporter tier
@@ -133,7 +148,10 @@ export const fedRepsUnavailableNote = (
     : "You have a higher Federal Support tier active. You can buy this tier with reputation points once it ends.";
 };
 
-export const plan2FedStatus = (planId: string) => {
+/** Federal tier of a PayPal plan id; unknown ids, and an unset Diamond plan, map to NONE. */
+export const plan2FedStatus = (planId: string): FederalStatus => {
+  // Optional: an unset or empty Diamond plan id must not match a missing `planId`.
+  const diamondPlanId = process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_DIAMOND;
   switch (planId) {
     case process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL:
       return "NORMAL";
@@ -142,11 +160,13 @@ export const plan2FedStatus = (planId: string) => {
     case process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD:
       return "GOLD";
     default:
-      return "NONE";
+      return diamondPlanId && planId === diamondPlanId ? "DIAMOND" : "NONE";
   }
 };
 
+/** Reputation price of a tier; Diamond has none because it is sold for money only. */
 export const fedStatusRepsCost = (status: FederalStatus) => {
   if (status === "NONE") throw new Error("Invalid federal status");
+  if (!isRepsFederalStatus(status)) throw new Error(DIAMOND_NO_REPS_MESSAGE);
   return FED_REPS_COST[status];
 };

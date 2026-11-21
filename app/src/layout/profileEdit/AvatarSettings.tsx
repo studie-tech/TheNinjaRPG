@@ -196,7 +196,9 @@ const AvatarChange: React.FC = () => {
               ? "avatarNormalUploader"
               : userstatus === "SILVER"
                 ? "avatarSilverUploader"
-                : "avatarGoldUploader"
+                : userstatus === "DIAMOND"
+                  ? "avatarDiamondUploader"
+                  : "avatarGoldUploader"
           }
           onUploadBegin={() => {
             uploadRevision.current = prepareUserUpdate();

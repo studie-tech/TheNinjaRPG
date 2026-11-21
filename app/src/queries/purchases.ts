@@ -358,7 +358,7 @@ export const insertStorePurchaseForApplyStorePurchase = (
     raw: unknown;
   },
   reps: { reputationPoints: undefined | 20 | 8 | 49 | 164 | 407 } | undefined,
-  federal: { federalStatus: undefined | "NORMAL" | "SILVER" | "GOLD" } | undefined,
+  federal: { federalStatus: undefined | Exclude<FederalStatus, "NONE"> } | undefined,
   accepted: false | true,
 ) =>
   client.insert(storePurchase).values({
@@ -435,7 +435,7 @@ export const executeResultForApplyStorePurchase = (
 export const executeResultForApplyStorePurchase2 = (
   client: Pick<DrizzleClient, "execute">,
   rankOf: (status: FederalStatus) => number,
-  federal: { federalStatus: undefined | "NORMAL" | "SILVER" | "GOLD" } | undefined,
+  federal: { federalStatus: undefined | Exclude<FederalStatus, "NONE"> } | undefined,
   grant: { transactionId: string },
 ) =>
   client.execute(sql`
@@ -1110,12 +1110,16 @@ export const updateUserDataForSetFederalStatusWithStoreFloor = (
   client
     .update(userData)
     .set({
-      federalStatus: sql`CASE
-        WHEN ${paypalRank >= rankOf("GOLD")} OR ${hasTier("GOLD")} OR ${paypalGrace("GOLD")} THEN 'GOLD'
-        WHEN ${paypalRank >= rankOf("SILVER")} OR ${hasTier("SILVER")} OR ${paypalGrace("SILVER")} THEN 'SILVER'
-        WHEN ${paypalRank >= rankOf("NORMAL")} OR ${hasTier("NORMAL")} OR ${paypalGrace("NORMAL")} THEN 'NORMAL'
-        ELSE 'NONE'
-      END`,
+      // Highest tier first, so the strongest source that vouches wins.
+      federalStatus: sql`CASE ${sql.join(
+        FederalStatuses.slice(1)
+          .reverse()
+          .map(
+            (tier) =>
+              sql`WHEN ${paypalRank >= rankOf(tier)} OR ${hasTier(tier)} OR ${paypalGrace(tier)} THEN ${tier}`,
+          ),
+        sql` `,
+      )} ELSE 'NONE' END`,
     })
     .where(eq(userData.userId, userId));
 

@@ -6,6 +6,7 @@ import {
 } from "@/queries/paypal";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
+import { revertLapsedDiamondBloodlines } from "@/server/utils/diamondBloodline";
 import {
   getPaypalAccessToken,
   getPaypalSubscription,
@@ -71,6 +72,8 @@ export async function GET(request: Request) {
       );
     });
     const results = await Promise.allSettled([...paypalUpdates, ...repUpdates]);
+    // Players who just lost Diamond support go back to their pre-Diamond bloodline.
+    await revertLapsedDiamondBloodlines(drizzleDB);
     const failedUpdate = results.find((result) => result.status === "rejected");
     if (failedUpdate?.status === "rejected") throw failedUpdate.reason;
     return Response.json(`OK`);

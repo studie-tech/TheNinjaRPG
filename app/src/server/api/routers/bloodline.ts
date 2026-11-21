@@ -11,6 +11,7 @@ import {
   BLOODLINE_SWAP_COOLDOWN_HOURS,
   BLOODLINE_SWAP_FREE,
   COST_SWAP_BLOODLINE,
+  DIAMOND_BLOODLINE_RANKS,
   LetterRanks,
   REMOVAL_COST,
   ROLL_CHANCE,
@@ -26,6 +27,9 @@ import {
   filterRollableBloodlines,
   getBloodlineSwapAllowance,
   getPityRolls,
+  hasDiamondBloodlineSwaps,
+  isDiamondSwapBloodline,
+  shouldRememberPreDiamondBloodline,
 } from "@/libs/bloodline";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import {
@@ -38,6 +42,7 @@ import { callDiscordContent } from "@/libs/socials";
 import {
   deleteBloodlineForDelete,
   deleteBloodlineReskinForDeleteReskin,
+  diamondSwapUserUpdate,
   fetchBloodline,
   fetchBloodlineProgressionUser,
   fetchBloodlineReskin,
@@ -69,6 +74,7 @@ import {
   listBloodlineForGetAllNames,
   listBloodlineReskinForGetReskinsForBloodline,
   listJutsuForDeleteReskin,
+  listJutsuForSwapDiamondBloodline,
   listJutsuForUpdateBloodline,
   listUserDataForDelete,
   selectBloodlineReskinForDeleteReskin,
@@ -263,6 +269,21 @@ export const bloodlineRouter = createTRPCRouter({
       // Return
       return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
     }),
+  // Bloodlines a Diamond supporter may switch to without owning them
+  getDiamondSwapBloodlines: protectedProcedure
+    .meta({
+      mcp: { description: "List the D–A bloodlines a Diamond supporter can switch to" },
+    })
+    .query(async ({ ctx }) => {
+      const [user, bloodlines] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchBloodlines(ctx.drizzle),
+      ]);
+      if (!hasDiamondBloodlineSwaps(user)) return [];
+      return bloodlines
+        .filter((line) => isDiamondSwapBloodline(line, user))
+        .sort((a, b) => a.rank.localeCompare(b.rank) || a.name.localeCompare(b.name));
+    }),
   // Swap bloodline of session user
   swapBloodline: protectedProcedure
     .meta({
@@ -354,6 +375,70 @@ export const bloodlineRouter = createTRPCRouter({
         success: true,
         message: `Bloodline swapped${isFreeSwap ? ` (${freeNote})` : ""}`,
       };
+    }),
+  // Switch a Diamond supporter to any eligible bloodline without owning it
+  swapDiamondBloodline: protectedProcedure
+    .meta({
+      mcp: {
+        description:
+          "Diamond Federal Support: switch to any D–A bloodline for free, as often as wanted",
+      },
+    })
+    .input(z.object({ bloodlineId: z.string() }))
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      const [updatedUser, line, historicBloodlines, currentJutsus, queuedJutsuIds] =
+        await Promise.all([
+          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+          fetchBloodline(ctx.drizzle, input.bloodlineId),
+          fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId),
+          listJutsuForSwapDiamondBloodline(ctx.drizzle, ctx.userId),
+          fetchQueuedJutsuIds(ctx.drizzle, ctx.userId),
+        ]);
+      const user = updatedUser.user;
+      // Guards
+      if (!user) return errorResponse("User does not exist");
+      if (!line) return errorResponse("Bloodline does not exist");
+      if (!hasDiamondBloodlineSwaps(user))
+        return errorResponse("Diamond bloodline swaps require Diamond Federal Support");
+      if (user.status === "BATTLE")
+        return errorResponse("You cannot change bloodline during battle");
+      if (user.bloodlineId === line.id)
+        return errorResponse("You already have this bloodline");
+      if (!isDiamondSwapBloodline(line, user))
+        return errorResponse(
+          `Diamond swaps only reach released ${DIAMOND_BLOODLINE_RANKS.join(", ")} rank bloodlines open to your village`,
+        );
+      // Diamond swaps are unlimited and skip the swap cooldown: the bloodline and battle-status
+      // CAS in updateBloodline still serializes concurrent changes.
+      // Mutate: one guarded statement moves the bloodline and remembers the one to restore;
+      // no roll is recorded, so the pick never becomes an owned bloodline.
+      const rememberCurrent = shouldRememberPreDiamondBloodline({
+        diamondBloodlineActive: user.diamondBloodlineActive,
+        currentBloodlineId: user.bloodlineId,
+        ownedBloodlineIds: historicBloodlines.map((owned) => owned.id),
+      });
+      const swap = await updateBloodline(
+        ctx.drizzle,
+        user,
+        line,
+        0,
+        `Diamond bloodline swap from ${user.bloodline?.name ?? "no bloodline"} to ${line.name}`,
+        diamondSwapUserUpdate({ user, rememberCurrent }),
+        // Profile settlement may have started queued jobs after the parallel queue read;
+        // updateBloodline then re-reads the settled queue itself.
+        updatedUser.startedQueuedJobs
+          ? undefined
+          : {
+              bloodlineId: currentJutsus[0]?.bloodlineId ?? null,
+              bloodlineJutsuIds: currentJutsus.flatMap((row) => row.jutsuId ?? []),
+              queuedJutsuIds,
+            },
+      );
+      if (!swap.granted) return errorResponse(swap.message);
+      // The live Bloodright refund and hydrated passive sources require profile reconciliation.
+      return { success: true, message: "Bloodline swapped with Diamond support" };
     }),
   // Bloodline reskins (staff-only creation & moderation)
   createReskin: protectedProcedure
@@ -493,6 +578,13 @@ export const bloodlineRouter = createTRPCRouter({
       if (target.bloodlineId === input.bloodlineId) {
         return errorResponse(
           "Cannot remove the player's equipped bloodline; change it first",
+        );
+      }
+      // The Diamond revert restores the remembered bloodline without an ownership check
+      // (legacy grants have no roll row), so removing it would be undone when Diamond ends.
+      if (target.preDiamondBloodlineId === input.bloodlineId) {
+        return errorResponse(
+          "Cannot remove the bloodline the player returns to when Diamond Federal Support ends",
         );
       }
       // AI moderation of reason
@@ -1005,7 +1097,9 @@ export const bloodlineRouter = createTRPCRouter({
 /**
  * Update bloodline of user, ensuring the current bloodline jutsus are unequipped. A rejection
  * before the change returns `granted: false` with a user-facing message and writes nothing;
- * failures after the guarded write throw.
+ * failures after the guarded write throw. `extra` adds columns and guards to the same
+ * guarded `userData` write; `preloaded` lets a caller that already read the current
+ * bloodline's jutsu and the queued jutsu skip that read.
  */
 export const updateBloodline = async (
   client: DrizzleClient,
@@ -1013,18 +1107,28 @@ export const updateBloodline = async (
   bloodline: Bloodline | null,
   repCost: number,
   logMsg: string,
+  extra?: Parameters<typeof updateUserDataForUpdateBloodline>[5],
+  preloaded?: {
+    bloodlineId: string | null;
+    bloodlineJutsuIds: string[];
+    queuedJutsuIds: Set<string>;
+  },
 ): Promise<
   { granted: true; updatedAt: Date } | { granted: false; message: string }
 > => {
-  // Get current bloodline jutsus
-  const [bloodlineJutsus, queued] = user.bloodlineId
-    ? await Promise.all([
-        listJutsuForUpdateBloodline(client, { bloodlineId: user.bloodlineId }).then(
-          (rows) => rows.map((j) => j.id),
-        ),
-        fetchQueuedJutsuIds(client, user.userId),
-      ])
-    : [[], new Set<string>()];
+  // Get current bloodline jutsus, unless the caller read them with the same bloodline. A
+  // preload for a different bloodline (changed between reads) is ignored, so the wrong
+  // jutsu are never unequipped; the bloodline CAS below still rejects a stale swap.
+  const [bloodlineJutsus, queued] = !user.bloodlineId
+    ? [[], new Set<string>()]
+    : preloaded?.bloodlineId === user.bloodlineId
+      ? [preloaded.bloodlineJutsuIds, preloaded.queuedJutsuIds]
+      : await Promise.all([
+          listJutsuForUpdateBloodline(client, { bloodlineId: user.bloodlineId }).then(
+            (rows) => rows.map((j) => j.id),
+          ),
+          fetchQueuedJutsuIds(client, user.userId),
+        ]);
   // Queued levels were bought for the current bloodline; the player cancels them for a
   // refund first. A level queued after this check is refunded when its turn comes.
   if (bloodlineJutsus.length > 0) {
@@ -1046,6 +1150,7 @@ export const updateBloodline = async (
     repCost,
     user,
     updatedAt,
+    extra,
   );
   if (!updateResult.rowsAffected) {
     return {

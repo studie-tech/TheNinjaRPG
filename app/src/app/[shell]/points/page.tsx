@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DIAMOND_BLOODLINE_RANKS,
   FARM_GOLD_FED_TIME_REDUCTION_PERCENT,
   FED_BANK_INTEREST,
   FED_COOKING_SLOTS,
@@ -43,6 +44,7 @@ import {
   FED_JUTSU_LOADOUTS,
   FED_JUTSU_LOADOUTS_BASE,
   FED_JUTSU_SLOTS,
+  FED_MATERIALS_SLOTS,
   FEDERAL_MONTHLY_USD_CENTS,
   type FederalStatus,
   FederalStatuses,
@@ -53,6 +55,7 @@ import {
   PET_FED_COLLECTION_SLOTS,
   QUEUE_WAITING_SLOTS,
   SKILL_TREE_RESET_FREE,
+  TRAINING_CAPTCHA_INTERVAL,
   WEB_REP_MAX,
   WEB_REP_MIN,
   WEB_REP_PRESETS,
@@ -81,9 +84,12 @@ import { showMutationToast } from "@/libs/toast";
 import { isPayPalCleanupError } from "@/utils/error";
 import {
   calcFedUgradeCost,
+  DIAMOND_NO_REPS_MESSAGE,
   dynamicMonthlyRepCap,
   fedRepsUnavailableNote,
   fedStatusRepsCost,
+  hasGoldPerks,
+  isRepsFederalStatus,
   reps2dollars,
 } from "@/utils/paypal";
 import { useRecipientPicker } from "@/utils/search";
@@ -105,8 +111,16 @@ const OPTIONS = {
   intent: "capture",
 };
 
-/** Plan ids stay literal `process.env` reads so Next.js inlines them. */
-const FEDERAL_TIERS: { status: FederalTier; image: string; planId: string }[] = [
+/**
+ * Plan ids stay literal `process.env` reads so Next.js inlines them. Diamond reuses the Gold
+ * art with a cool tint.
+ */
+const FEDERAL_TIERS: {
+  status: FederalTier;
+  image: string;
+  imageClassName?: string;
+  planId: string | undefined;
+}[] = [
   {
     status: "NORMAL",
     image: IMG_REPSHOP_BRONZE,
@@ -122,7 +136,19 @@ const FEDERAL_TIERS: { status: FederalTier; image: string; planId: string }[] = 
     image: IMG_REPSHOP_GOLD,
     planId: process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD,
   },
+  {
+    status: "DIAMOND",
+    image: IMG_REPSHOP_GOLD,
+    imageClassName: "hue-rotate-180 saturate-150",
+    planId: process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_DIAMOND,
+  },
 ];
+
+/** Diamond is offered only once its PayPal plan is configured for this deployment. */
+const AVAILABLE_FEDERAL_TIERS = FEDERAL_TIERS.filter(
+  (tier): tier is (typeof FEDERAL_TIERS)[number] & { planId: string } =>
+    tier.status !== "DIAMOND" || !!tier.planId,
+);
 
 const FEDERAL_TIER_BENEFITS = {
   NORMAL: {
@@ -164,7 +190,20 @@ const FEDERAL_TIER_BENEFITS = {
     skillTreeResets: SKILL_TREE_RESET_FREE.GOLD,
     avatarSize: "2MB",
   },
-};
+  DIAMOND: {
+    title: "Diamond",
+    usernameColor: "Diamond",
+    inventorySlots: FED_INVENTORY_SLOTS.DIAMOND,
+    eventItems: FED_EVENT_ITEMS.DIAMOND,
+    cookingSlots: FED_COOKING_SLOTS.DIAMOND,
+    jutsuSlots: FED_JUTSU_SLOTS.DIAMOND,
+    bankInterest: FED_BANK_INTEREST.DIAMOND,
+    jutsuLoadouts: FED_JUTSU_LOADOUTS.DIAMOND,
+    itemLoadouts: FED_ITEM_LOADOUTS.DIAMOND,
+    skillTreeResets: SKILL_TREE_RESET_FREE.DIAMOND,
+    avatarSize: "2MB",
+  },
+} satisfies Record<FederalTier, unknown>;
 
 /**
  * Main component for doing paypal transactions
@@ -444,6 +483,7 @@ const PayPalSubscriptionButton = (props: {
   subscriptionPlan: string;
   userId: string;
   imageSrc: string;
+  imageClassName?: string;
   buttonStatus: FederalTier;
   currentUserStatus: (typeof FederalStatuses)[number];
   onSuccess?: () => void;
@@ -521,7 +561,9 @@ const PayPalSubscriptionButton = (props: {
   // Derived vars
   const current = FederalStatuses.indexOf(props.currentUserStatus);
   const next = FederalStatuses.indexOf(props.buttonStatus);
-  const canUpgrade = next > current && props.userId === userData?.userId;
+  // Diamond is sold for money only, so its card has no reputation buy or upgrade controls.
+  const isRepsTier = isRepsFederalStatus(props.buttonStatus);
+  const canUpgrade = isRepsTier && next > current && props.userId === userData?.userId;
   const hasSubscription = props.currentUserStatus !== "NONE";
   const upgradeCost = calcFedUgradeCost(props.currentUserStatus, props.buttonStatus);
 
@@ -530,11 +572,11 @@ const PayPalSubscriptionButton = (props: {
 
   return (
     <div
-      className={`flex h-full flex-col rounded-lg border p-3 ${props.currentUserStatus === props.buttonStatus ? "border-primary bg-accent" : "bg-card"}`}
+      className={`row-span-5 grid grid-rows-subgrid gap-0 rounded-lg border p-3 ${props.currentUserStatus === props.buttonStatus ? "border-primary bg-accent" : "bg-card"}`}
     >
       <div className="relative">
         <Image
-          className="mx-auto mb-3 max-w-40"
+          className={`mx-auto mb-3 max-w-40 ${props.imageClassName ?? ""}`}
           src={props.imageSrc}
           alt={props.buttonStatus}
           width={512}
@@ -544,7 +586,7 @@ const PayPalSubscriptionButton = (props: {
           <Check className="absolute top-0 right-0 h-8 w-8 rounded-full bg-green-500 p-1" />
         )}
       </div>
-      <div className="flex-1">
+      <div>
         <FederalTierBenefits status={props.buttonStatus} />
       </div>
       <div className="z-0 rounded-lg border-2 border-black bg-amber-200 p-2 text-center text-black hover:cursor-pointer hover:bg-orange-200">
@@ -627,6 +669,9 @@ const PayPalSubscriptionButton = (props: {
         userId={props.userId}
         purchase={{ type: "federal", federalStatus: props.buttonStatus }}
       />
+      {!isRepsTier && (
+        <p className="mt-2 text-center text-sm">{DIAMOND_NO_REPS_MESSAGE}</p>
+      )}
       {hasSubscription && canUpgrade && (
         <Confirm
           title="Confirm Upgrade"
@@ -650,7 +695,7 @@ const PayPalSubscriptionButton = (props: {
           {userData?.reputationPoints} reputation points. Are you sure?
         </Confirm>
       )}
-      {hasSubscription && !canUpgrade && (
+      {isRepsTier && hasSubscription && !canUpgrade && (
         <p className="mt-2 text-center text-sm">
           {fedRepsUnavailableNote(
             props.currentUserStatus,
@@ -659,7 +704,7 @@ const PayPalSubscriptionButton = (props: {
           )}
         </p>
       )}
-      {!hasSubscription && (
+      {isRepsTier && !hasSubscription && (
         <Confirm
           title="Confirm Upgrade"
           button={
@@ -708,7 +753,7 @@ const FederalTierBenefits = ({ status }: { status: FederalTier }) => {
           +{benefits.jutsuSlots} Jutsu {benefits.jutsuSlots === 1 ? "slot" : "slots"}
         </li>
         <li>+{benefits.bankInterest}% bank interest</li>
-        {status === "GOLD" && (
+        {hasGoldPerks(status) && (
           <li>{FARM_GOLD_FED_TIME_REDUCTION_PERCENT}% faster farming</li>
         )}
         <li>{FED_JUTSU_LOADOUTS_BASE + benefits.jutsuLoadouts} jutsu loadouts</li>
@@ -719,6 +764,17 @@ const FederalTierBenefits = ({ status }: { status: FederalTier }) => {
           queue
         </li>
         <li>Custom avatar ({benefits.avatarSize})</li>
+        <li>+{FED_MATERIALS_SLOTS[status]} Materials inventory space</li>
+        <li>
+          Training captcha once every {TRAINING_CAPTCHA_INTERVAL[status]} trainings
+        </li>
+        {status === "DIAMOND" && (
+          <li className="font-semibold">
+            Switch to any released {DIAMOND_BLOODLINE_RANKS.join("/")}-rank bloodline
+            available to your village for free, as often as you like, while subscribed.
+            Your own bloodline returns when Diamond ends.
+          </li>
+        )}
       </ul>
     </>
   );
@@ -763,25 +819,35 @@ const FederalStore = () => {
         </div>
       )}
 
-      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-        {FEDERAL_TIERS.map(({ status, image, planId }) => (
-          <div key={status}>
-            {selectedUser && userData ? (
-              <PayPalSubscriptionButton
-                subscriptionPlan={planId}
-                userId={selectedUser.userId}
-                imageSrc={image}
-                buttonStatus={status}
-                currentUserStatus={selectedUser.federalStatus}
-                onSuccess={() => {
-                  userSearchMethods.setValue("users", []);
-                }}
-              />
-            ) : (
-              <Loader />
-            )}
-          </div>
-        ))}
+      {/* Columns follow the container (the centre column, not the viewport). Container
+          queries resolve rem against the 12px root, so @lg/@xl/@5xl are 384/432/768px:
+          four tiers sit 2x2 in the classic centre column, three stay in one row. Cards
+          share five subgrid rows (art, perks, PayPal, Stripe, note), so their payment
+          buttons line up across a row whatever the length of each perk list. */}
+      <div className="@container mt-3">
+        <div
+          className={`grid grid-cols-1 gap-2 ${AVAILABLE_FEDERAL_TIERS.length === 4 ? "@lg:grid-cols-2 @5xl:grid-cols-4" : "@xl:grid-cols-3"}`}
+        >
+          {AVAILABLE_FEDERAL_TIERS.map(({ status, image, imageClassName, planId }) => (
+            <div key={status} className="row-span-5 grid grid-rows-subgrid gap-0">
+              {selectedUser && userData ? (
+                <PayPalSubscriptionButton
+                  subscriptionPlan={planId}
+                  userId={selectedUser.userId}
+                  imageSrc={image}
+                  imageClassName={imageClassName}
+                  buttonStatus={status}
+                  currentUserStatus={selectedUser.federalStatus}
+                  onSuccess={() => {
+                    userSearchMethods.setValue("users", []);
+                  }}
+                />
+              ) : (
+                <Loader />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </>
   );

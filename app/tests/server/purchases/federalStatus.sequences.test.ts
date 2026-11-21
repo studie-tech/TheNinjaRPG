@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, expect, it } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
+import {
+  type FederalStatus,
+  STORE_FEDERAL_PRODUCTS,
+  type StorePlatform,
+} from "@/drizzle/constants";
 import {
   paypalSubscription,
   storeEntitlementRevocation,
@@ -141,11 +145,8 @@ const buyFederal = async (
   const database = await db();
   const receipt = federalReceipt({
     productId:
-      tier === "GOLD"
-        ? "tnr_federal_gold"
-        : tier === "SILVER"
-          ? "tnr_federal_silver"
-          : "tnr_federal_normal",
+      STORE_FEDERAL_PRODUCTS.find((product) => product.federalStatus === tier)
+        ?.productId ?? "tnr_federal_normal",
     store,
     purchasedAt: new Date(Date.now() - agoMs),
   });
@@ -297,6 +298,13 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     // test stamps occurredAt, and nothing guarantees those two clocks agree to the ms.
     await buyFederal("GOLD", MINUTE);
     expect(await statusOf()).toBe("GOLD");
+    await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
+    expect(await statusOf()).toBe("NONE");
+  });
+
+  it("grants Diamond from its store product like the other tiers", async () => {
+    await buyFederal("DIAMOND", MINUTE);
+    expect(await statusOf()).toBe("DIAMOND");
     await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
     expect(await statusOf()).toBe("NONE");
   });

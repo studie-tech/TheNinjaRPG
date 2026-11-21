@@ -141,6 +141,7 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     ["avatarNormalUploader", "image", "512KB"],
     ["avatarSilverUploader", "image", "1MB"],
     ["avatarGoldUploader", "image", "2MB"],
+    ["avatarDiamondUploader", "image", "2MB"],
     ["audioSfxUploader", "audio", "64KB"],
     ["audioMusicUploader", "audio", "4MB"],
   ] as const;
@@ -185,6 +186,7 @@ describeWithDatabase("uploaded avatar cache responses", () => {
       ["NORMAL", "avatarNormalUploader"],
       ["SILVER", "avatarSilverUploader"],
       ["GOLD", "avatarGoldUploader"],
+      ["DIAMOND", "avatarDiamondUploader"],
     ] as const) {
       await database
         .update(userData)
@@ -194,6 +196,7 @@ describeWithDatabase("uploaded avatar cache responses", () => {
         ["avatarNormalUploader", "NORMAL"],
         ["avatarSilverUploader", "SILVER"],
         ["avatarGoldUploader", "GOLD"],
+        ["avatarDiamondUploader", "DIAMOND"],
       ] as const) {
         if (endpoint === allowed)
           expect(await runMiddleware(endpoint)).toMatchObject({ userId });
@@ -278,6 +281,7 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     "avatarNormalUploader",
     "avatarSilverUploader",
     "avatarGoldUploader",
+    "avatarDiamondUploader",
   ] as const)(
     "%s returns exactly the confirmed pair without reading the user",
     async (endpoint) => {

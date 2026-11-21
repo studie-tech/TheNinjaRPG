@@ -2,7 +2,11 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { paypalSubscription, quest, questHistory, userData } from "@/drizzle/schema";
 import { paypalRouter } from "@/server/api/routers/paypal";
-import { calcFedUgradeCost, fedStatusRepsCost } from "@/utils/paypal";
+import {
+  calcFedUgradeCost,
+  DIAMOND_NO_REPS_MESSAGE,
+  fedStatusRepsCost,
+} from "@/utils/paypal";
 import { insertUsers } from "../../../setup/factories";
 import {
   callerFor,
@@ -174,6 +178,57 @@ describeWithDatabase("reputation-funded subscriptions", () => {
     });
     expect(await readSubscriptions()).toEqual([
       expect.objectContaining({ federalStatus: "SILVER" }),
+    ]);
+  });
+
+  it("never sells or upgrades into Diamond for reputation points", async () => {
+    await insertUsers([
+      {
+        userId: BUYER,
+        username: BUYER,
+        federalStatus: "GOLD",
+        reputationPoints: 10_000,
+        reputationPointsTotal: 10_000,
+      },
+      { userId: GIFTEE, username: GIFTEE, reputationPoints: 10_000 },
+    ]);
+    await (await getTestDatabase()).insert(paypalSubscription).values({
+      id: "reps-subscription",
+      createdById: BUYER,
+      affectedUserId: BUYER,
+      federalStatus: "GOLD",
+      subscriptionId: "reps-subscription",
+      status: "ACTIVE",
+    });
+    const buyer = await callerFor(paypalRouter, BUYER);
+    const giftee = await callerFor(paypalRouter, GIFTEE);
+    for (const result of [
+      await giftee.subscribeWithReps({
+        expectedUserId: GIFTEE,
+        userId: GIFTEE,
+        status: "DIAMOND",
+      }),
+      await buyer.subscribeWithReps({
+        expectedUserId: BUYER,
+        userId: GIFTEE,
+        status: "DIAMOND",
+      }),
+      await buyer.upgradeSubscription({ userId: BUYER, plan: "DIAMOND" }),
+    ])
+      expect(result).toMatchObject({
+        success: false,
+        message: DIAMOND_NO_REPS_MESSAGE,
+      });
+    expect(await readUser(BUYER)).toMatchObject({
+      federalStatus: "GOLD",
+      reputationPoints: 10_000,
+    });
+    expect(await readUser(GIFTEE)).toMatchObject({
+      federalStatus: "NONE",
+      reputationPoints: 10_000,
+    });
+    expect(await readSubscriptions()).toEqual([
+      expect.objectContaining({ federalStatus: "GOLD" }),
     ]);
   });
 });

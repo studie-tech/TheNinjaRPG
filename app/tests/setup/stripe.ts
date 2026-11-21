@@ -7,6 +7,7 @@ const placeholders = {
   STRIPE_PRICE_NORMAL: "price_normal",
   STRIPE_PRICE_SILVER: "price_silver",
   STRIPE_PRICE_GOLD: "price_gold",
+  STRIPE_PRICE_DIAMOND: "price_diamond",
 };
 
 /** Give each test placeholder Stripe configuration on the validated `env` object. */
@@ -17,6 +18,7 @@ export const useStripeTestEnv = () => {
     STRIPE_PRICE_NORMAL: env.STRIPE_PRICE_NORMAL,
     STRIPE_PRICE_SILVER: env.STRIPE_PRICE_SILVER,
     STRIPE_PRICE_GOLD: env.STRIPE_PRICE_GOLD,
+    STRIPE_PRICE_DIAMOND: env.STRIPE_PRICE_DIAMOND,
   };
   beforeEach(() => {
     Object.assign(env, placeholders);

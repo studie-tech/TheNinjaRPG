@@ -687,8 +687,9 @@ export function PetAcquisition() {
                     Today's {data.optionCount} choices per trait reset at midnight UTC (
                     {data.dayKey}). Returning today keeps the same choices. Regular
                     accounts receive {PET_OPTION_COUNTS.NONE} choices per trait; Normal,
-                    Silver and Gold federal support gives {PET_OPTION_COUNTS.NORMAL},{" "}
-                    {PET_OPTION_COUNTS.SILVER} and {PET_OPTION_COUNTS.GOLD}. Support
+                    Silver, Gold and Diamond federal support gives{" "}
+                    {PET_OPTION_COUNTS.NORMAL}, {PET_OPTION_COUNTS.SILVER},{" "}
+                    {PET_OPTION_COUNTS.GOLD} and {PET_OPTION_COUNTS.DIAMOND}. Support
                     also improves daily species rarity.
                   </p>
                   <p>

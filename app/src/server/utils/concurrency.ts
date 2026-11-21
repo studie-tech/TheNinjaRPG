@@ -273,7 +273,9 @@ export const removeBloodlineFromPoolAtomically = async ({
   bloodlineId,
   now,
 }: RemoveBloodlineFromPoolParams) => {
-  const notEquipped = sql`NOT EXISTS (SELECT 1 FROM ${userData} WHERE ${userData.userId} = ${userId} AND ${userData.bloodlineId} = ${bloodlineId})`;
+  // The bloodline a Diamond supporter returns to when Diamond ends counts as equipped: the
+  // revert restores it without an ownership check.
+  const notEquipped = sql`NOT EXISTS (SELECT 1 FROM ${userData} WHERE ${userData.userId} = ${userId} AND (${userData.bloodlineId} = ${bloodlineId} OR ${userData.preDiamondBloodlineId} = ${bloodlineId}))`;
   const [deleteResult, updateResult] = await Promise.all([
     deleteBloodlineRollsForRemoveBloodlineFromPoolAtomically(
       client,

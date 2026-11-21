@@ -22,7 +22,7 @@ import { getWorldDayCycleIndex } from "@/libs/dayNight";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { calcLevelRequirements } from "@/libs/profile";
 import { calculatePercent } from "@/utils/math";
-import { getUserFederalStatus } from "@/utils/paypal";
+import { getUserFederalStatus, hasGoldPerks } from "@/utils/paypal";
 import { reduceActivitySeconds } from "@/utils/time";
 import type { FarmPlotState } from "@/validators/farming";
 
@@ -116,10 +116,9 @@ export const getFarmGrowTimeSeconds = (
   user: Pick<UserData, "staffAccount" | "federalStatus">,
   farmingReductionPercent = 0,
 ) => {
-  const multiplier =
-    getUserFederalStatus(user) === "GOLD"
-      ? 1 - FARM_GOLD_FED_TIME_REDUCTION_PERCENT / 100
-      : 1;
+  const multiplier = hasGoldPerks(getUserFederalStatus(user))
+    ? 1 - FARM_GOLD_FED_TIME_REDUCTION_PERCENT / 100
+    : 1;
   return reduceActivitySeconds(
     Math.max(1, Math.ceil(baseGrowTimeSeconds * multiplier)),
     farmingReductionPercent,

@@ -46,7 +46,7 @@ describe("support chat prompt", () => {
     expect(prompt).not.toContain("without federal support");
     expect(prompt).toContain(`base rate of ${calcBankInterest(0)}% per day`);
     expect(prompt).toContain(
-      `Federal support adds ${FED_BANK_INTEREST.NORMAL}, ${FED_BANK_INTEREST.SILVER} or ${FED_BANK_INTEREST.GOLD} percentage points`,
+      `Federal support adds ${FED_BANK_INTEREST.NORMAL}, ${FED_BANK_INTEREST.SILVER}, ${FED_BANK_INTEREST.GOLD} or ${FED_BANK_INTEREST.DIAMOND} percentage points`,
     );
     expect(prompt).toContain(
       `capped at ${BANK_INTEREST_DAILY_CAP.toLocaleString("en-US")} ryo per day for every federal tier`,

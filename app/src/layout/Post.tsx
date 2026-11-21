@@ -200,6 +200,8 @@ const FEDERAL_NAME_STYLES: Partial<Record<FederalStatus, string>> = {
   SILVER:
     "bg-linear-to-r from-gray-500 via-gray-400 to-gray-500 bg-clip-text text-transparent font-black",
   GOLD: "bg-linear-to-r from-amber-600 via-amber-400 to-amber-600 bg-clip-text text-transparent font-black",
+  DIAMOND:
+    "bg-linear-to-r from-cyan-500 via-violet-300 to-cyan-500 bg-clip-text text-transparent font-black",
 };
 
 /** Username gradient, badge background and badge text colour per staff role. */

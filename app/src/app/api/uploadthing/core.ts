@@ -179,6 +179,7 @@ export const ourFileRouter = {
   avatarNormalUploader: avatarUploader("512KB", "NORMAL"),
   avatarSilverUploader: avatarUploader("1MB", "SILVER"),
   avatarGoldUploader: avatarUploader("2MB", "GOLD"),
+  avatarDiamondUploader: avatarUploader("2MB", "DIAMOND"),
   // SFX audio (small files)
   audioSfxUploader: audioUploader("64KB"),
   // MUSIC audio (larger files)

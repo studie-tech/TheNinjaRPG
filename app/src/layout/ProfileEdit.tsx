@@ -40,6 +40,7 @@ import {
   COST_SWAP_BLOODLINE,
   COST_SWAP_VILLAGE,
   COST_TAVERN_COLOR_CHANGE,
+  DIAMOND_BLOODLINE_RANKS,
   MAX_ATTRIBUTES,
 } from "@/drizzle/constants";
 import { ActionSettings } from "@/layout/ActionSettings";
@@ -77,6 +78,7 @@ import { CurrentSageMode } from "@/layout/SageMode";
 import { Titles } from "@/layout/Titles";
 import { TutorialSettings } from "@/layout/TutorialSettings";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
+import { hasDiamondBloodlineSwaps } from "@/libs/bloodline";
 import { getRedistributableStatTotal } from "@/libs/profile";
 import { getBloodlineElements } from "@/libs/userElements";
 import { round } from "@/utils/math";
@@ -215,9 +217,11 @@ export function ProfileEdit() {
         {
           id: "bloodline",
           title: "Swap bloodline",
-          description: "Switch to a bloodline you have previously possessed",
+          description: hasDiamondBloodlineSwaps(userData)
+            ? `Switch to an owned bloodline, or any ${DIAMOND_BLOODLINE_RANKS.at(0)}–${DIAMOND_BLOODLINE_RANKS.at(-1)} one with Diamond`
+            : "Switch to a bloodline you have previously possessed",
           icon: Droplets,
-          notice: `${isStaffMember(userData) ? "Swap your bloodline for free as a staff member." : `Paid bloodline swaps cost ${COST_SWAP_BLOODLINE} reputation points. Eligible supporters can use their available free swap.`} You must wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Bloodlines purchased directly before 14/06/2025 have not been recorded and cannot be swapped. ${reputationBalance}`,
+          notice: `${isStaffMember(userData) ? "Swap your bloodline for free as a staff member." : `Paid bloodline swaps cost ${COST_SWAP_BLOODLINE} reputation points. Eligible supporters can use their available free swap.`} ${hasDiamondBloodlineSwaps(userData) ? `Diamond swaps have no cooldown; history swaps wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours after any bloodline change.` : `You must wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps.`} Bloodlines purchased directly before 14/06/2025 have not been recorded and cannot be swapped. ${reputationBalance}`,
           content: <SwapBloodline />,
         },
         {

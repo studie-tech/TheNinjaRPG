@@ -24,6 +24,7 @@ import * as travel from "@/routers/travel";
 import type { DrizzleClient } from "@/server/db";
 import * as processor from "@/server/utils/accountDeletion/process";
 import * as cleanerUtils from "@/server/utils/cleaner";
+import * as diamondBloodline from "@/server/utils/diamondBloodline";
 import * as federalStatus from "@/server/utils/purchases/federalStatus";
 import { acceptWarAllyOffer } from "@/server/utils/warAlly";
 import { restoreEnvAfterEach } from "../../../setup/env";
@@ -106,6 +107,10 @@ const stubCleanerCollaborators = () => {
     filesDeleted: 0,
   });
   vi.spyOn(federalStatus, "reconcileFederalStatuses").mockImplementation(vi.fn());
+  vi.spyOn(diamondBloodline, "revertLapsedDiamondBloodlines").mockResolvedValue({
+    reverted: 0,
+    cleared: 0,
+  });
   process.env["CRON_SECRET"] = "test-cron";
 };
 
