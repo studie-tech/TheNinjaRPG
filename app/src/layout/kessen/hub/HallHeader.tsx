@@ -34,6 +34,7 @@ export const HallHeader = ({
   deck,
   onDeckClick,
   actions,
+  lead,
   className,
 }: {
   today: KessenHub["today"] | null;
@@ -43,6 +44,8 @@ export const HallHeader = ({
   /** Without it the deck chip is left out (before any deck exists). */
   onDeckClick?: () => void;
   actions?: React.ReactNode;
+  /** A line under the title, for the guest hall's pitch. */
+  lead?: React.ReactNode;
   className?: string;
 }) => (
   <header className={cn("kh-hall", className)}>
@@ -60,6 +63,7 @@ export const HallHeader = ({
     <div className="kh-hall-body">
       <p className="kh-eyebrow">The Card Hall of Wake Island</p>
       <p className="kh-hall-title">The Ninja War Table</p>
+      {lead ? <p className="kh-hall-lead">{lead}</p> : null}
       {today ? (
         <ul className="kh-today" aria-label="Rewards today and this week">
           <li className="kh-today-item">

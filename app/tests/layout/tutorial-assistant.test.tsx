@@ -138,7 +138,14 @@ vi.mock("@/hooks/tutorial", () => {
     }),
   };
 });
-vi.mock("@/layout/Image", () => ({ default: () => null }));
+// A bare image, as other suites stub it: Bun module mocks outlive this file, and later
+// suites still look for the rendered <img>.
+vi.mock("@/layout/Image", () => ({
+  default: (props: { src: string; alt: string }) => (
+    // biome-ignore lint/performance/noImgElement: isolated component test stub
+    <img src={props.src} alt={props.alt} />
+  ),
+}));
 const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}</div>;
 const dialogMocks = {
   Dialog: ({ children, open }: { children: ReactNode; open: boolean }) =>

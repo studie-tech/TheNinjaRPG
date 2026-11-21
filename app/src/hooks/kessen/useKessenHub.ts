@@ -17,12 +17,16 @@ export type KessenDeckSource = KessenStartInput["deck"];
  */
 export const useKessenHub = (enabled = true) => {
   const hub = api.kessen.getHub.useQuery(undefined, { enabled, staleTime: 60_000 });
-  const catalog = api.kessen.getCatalog.useQuery(undefined, {
+  const catalog = useKessenCatalog(enabled);
+  return { hub, catalog };
+};
+
+/** The public card catalog alone, for the guest hall that has no hub. */
+export const useKessenCatalog = (enabled = true) =>
+  api.kessen.getCatalog.useQuery(undefined, {
     enabled,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  return { hub, catalog };
-};
 
 /** What `kessen.startLesson` takes. */
 export type KessenLessonInput = RouterInputs["kessen"]["startLesson"];

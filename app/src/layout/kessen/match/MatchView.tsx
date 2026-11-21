@@ -71,6 +71,7 @@ export const KessenMatchView = ({
   onEditDeck,
   onClaimChoice,
   onStartLesson,
+  guestNote,
 }: KessenMatchViewProps) => {
   const motion = useKessenMotion();
   const [frame, setFrame] = useState<HTMLElement | null>(null);
@@ -351,6 +352,7 @@ export const KessenMatchView = ({
           startError={startError}
           onEditDeck={onEditDeck}
           onClaimChoice={onClaimChoice}
+          guestNote={guestNote}
         />
       ) : null}
       {heading && lessonInfo && !introDone && !showEnd ? (
@@ -533,4 +535,6 @@ export interface KessenMatchViewProps {
   onClaimChoice?: (itemId: string) => Promise<KessenTableOutcome>;
   /** Starts an Academy lesson; `replaceActive` concedes this one first ("Try again"). */
   onStartLesson?: (lessonKey: KessenAcademyLessonKey, replaceActive: boolean) => void;
+  /** A guest's match: shown on the end screen in place of rewards. */
+  guestNote?: React.ReactNode;
 }

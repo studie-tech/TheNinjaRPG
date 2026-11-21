@@ -12,15 +12,12 @@ import {
   academyLessonLockReason,
   academyLessonStart,
   academyLessonsCompleted,
-  academyNpcAction,
   academyProgress,
   finishedFirstLesson,
   isAcademyLessonKey,
-  KESSEN_ACADEMY_FIRST_LESSON,
   KESSEN_ACADEMY_LESSON_KEYS,
   KESSEN_ACADEMY_NPC,
 } from "@/libs/kessen/academy";
-import { aiRng, decide } from "@/libs/kessen/ai";
 import {
   catalogFingerprint,
   kessenCatalogCards,
@@ -51,11 +48,11 @@ import {
   type KessenNpcKey,
   KessenNpcKeys,
   kessenNpc,
-  kessenNpcAiProfile,
   momoFaction,
   npcLockReason,
   npcVariant,
 } from "@/libs/kessen/npcs";
+import { runNpcReplies, tierOfMode } from "@/libs/kessen/npcTurns";
 import { countPlays, weeklyWinsFor } from "@/libs/kessen/rewards";
 import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import type { KessenEvent, SeatSetup } from "@/libs/kessen/types";
@@ -100,7 +97,6 @@ import {
   planKessenFinish,
   resumeKessenSettlement,
   settleKessenPayout,
-  tierOfMode,
   unsettledKessenResult,
 } from "@/server/utils/kessenPayout";
 import { getUtcDayKey, periodStart } from "@/utils/time";
@@ -368,7 +364,7 @@ export const kessenRouter = createTRPCRouter({
           events: [] as KessenEvent[],
         };
       }
-      const ai = runAiReplies({ ...stored, engine: human.state }, npc, tier);
+      const ai = runNpcReplies({ ...stored, engine: human.state }, npc, tier);
       const events = [...human.events, ...ai.events];
       const redacted = redactEvents(events, 0);
       const next: KessenStoredMatch = {
@@ -565,7 +561,6 @@ type KessenStartResult =
 /** Stored play-log events per match; a full match stays well below it. */
 const MAX_LOG_EVENTS = 2000;
 const CONCEDED_REASON = "Conceded matches pay no reward.";
-const MAX_AI_ACTIONS = 200;
 
 const UNREWARDED_RESULT: KessenMatchResult = {
   winner: null,
@@ -623,7 +618,7 @@ const openNpcMatch = async (
   },
 ): Promise<KessenStartResult> => {
   const { userId, opening, now, active } = input;
-  const ai = runAiReplies(opening, input.npc, input.tier);
+  const ai = runNpcReplies(opening, input.npc, input.tier);
   const stored: KessenStoredMatch = {
     ...opening,
     engine: ai.engine,
@@ -728,40 +723,6 @@ const staleTurn = async (client: DrizzleClient, userId: string, matchId: string)
     match: fresh ? toPayload(fresh) : undefined,
     events: [] as KessenEvent[],
   };
-};
-
-/**
- * The NPC's replies until the player must act or the match ends. The AI decides from its
- * own redacted view and a stream keyed by the match step, with the stored catalog
- * snapshot as its public card pool; an Academy lesson follows Lemu's script.
- */
-const runAiReplies = (stored: KessenStoredMatch, npc: KessenNpc, tier: KessenTier) => {
-  const profile = kessenNpcAiProfile(npc, tier);
-  let engine = stored.engine;
-  const events: KessenEvent[] = [];
-  for (let n = 0; n < MAX_AI_ACTIONS && actingSeats(engine).includes(1); n++) {
-    const view = viewFor(engine, 1);
-    const action =
-      stored.mode === "lesson"
-        ? academyNpcAction(stored.lesson ?? KESSEN_ACADEMY_FIRST_LESSON, view)
-        : decide(view, 1, profile, aiRng(engine.seed, 1, engine.step), {
-            pool: stored.pool,
-            deck: stored.aiDeck,
-          });
-    let applied = applyAction(engine, 1, action);
-    if (!applied.ok) {
-      applied = applyAction(
-        engine,
-        1,
-        view.phase === "mulligan" ? { t: "mull", cards: [] } : { t: "pass" },
-      );
-    }
-    if (!applied.ok)
-      throw new Error(`Kessen AI has no legal action: ${applied.reason}`);
-    engine = applied.state;
-    events.push(...applied.events);
-  }
-  return { engine, events };
 };
 
 /** The player's view of a match row. */

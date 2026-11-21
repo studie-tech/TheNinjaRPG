@@ -155,6 +155,30 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
 export default TutorialAssistant;
 
 /**
+ * A guided lesson for a visitor without a character, who has no tutorial assistant: the
+ * same Activity dock, Lemu, coach card and spotlight, holding the lesson alone. Pages
+ * that teach guests (the Card Hall's guest Academy) mount it; it stands down whenever a
+ * character's assistant is on screen.
+ */
+export const GuestGuidedLesson: React.FC = () => {
+  const { data: userData } = useUserDataSelector(selectUserId);
+  const guidedLesson = useAtomValue(guidedLessonAtom);
+  if (userData || !guidedLesson) return null;
+  return (
+    <ActivityDock
+      guidedLesson={{
+        id: guidedLesson.id,
+        awaitsAnswer: guidedLesson.step.blocking === true,
+      }}
+    >
+      <GuidedLessonAssistant step={guidedLesson.step} />
+    </ActivityDock>
+  );
+};
+
+const selectUserId = (user: { userId: string }) => ({ userId: user.userId });
+
+/**
  * Finishes the tutorial of a player who graduated with the lesson collapsed, on
  * the Quests tab or behind chat. The assistant only runs while the lesson is on
  * screen, so without this they stay in the tutorial's restricted interface.

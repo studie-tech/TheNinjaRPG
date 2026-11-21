@@ -26,7 +26,11 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserDataSelector } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 
-/** A collapsible home for lessons and active quests, opposite the chat launcher. */
+/**
+ * A collapsible home for lessons and active quests, opposite the chat launcher. A
+ * visitor without a character sees it only during a guided lesson, with the lesson's
+ * tab alone.
+ */
 export function ActivityDock({
   children,
   hiddenLesson,
@@ -91,7 +95,7 @@ export function ActivityDock({
     }
     previousTutorialOn.current = user?.tutorialOn;
   }, [user?.tutorialOn, setOpen, setTab]);
-  if (!user) return null;
+  if (!user && !guided) return null;
 
   return (
     <aside
@@ -118,7 +122,7 @@ export function ActivityDock({
               aria-label="Activity"
               className="h-auto w-auto flex-1 justify-start bg-transparent p-0"
             >
-              {(["tutorial", "quests"] as const).map((value) => (
+              {(user ? DOCK_TABS : GUEST_TABS).map((value) => (
                 <TabsTrigger
                   key={value}
                   value={value}
@@ -153,14 +157,16 @@ export function ActivityDock({
               <ChevronDown className="h-4 w-4" />
             </Button>
           </header>
-          <TabsContent
-            value="quests"
-            className="mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain rounded-b-xl"
-          >
-            <ActivityQuests key={user.userId} user={user} />
-          </TabsContent>
+          {user ? (
+            <TabsContent
+              value="quests"
+              className="mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain rounded-b-xl"
+            >
+              <ActivityQuests key={user.userId} user={user} />
+            </TabsContent>
+          ) : null}
           <TabsContent value="tutorial" className="mt-0">
-            {user.tutorialOn === false && !guided ? (
+            {user?.tutorialOn === false && !guided ? (
               <p className="p-4 text-sm text-muted-foreground">
                 Tutorial is off.{" "}
                 <Link
@@ -311,6 +317,10 @@ function ActivityQuest({
     </article>
   );
 }
+
+const DOCK_TABS = ["tutorial", "quests"] as const;
+/** A visitor has no quests; the dock holds the guided lesson alone. */
+const GUEST_TABS = ["tutorial"] as const;
 
 /** The dock follows lessons and quests, not money, pools or movement. */
 const selectActivityUser = (user: NonNullable<UserWithRelations>) => ({
