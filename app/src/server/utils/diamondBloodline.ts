@@ -32,15 +32,8 @@ const REVERT_BATCH_SIZE = 200;
  * a tier that ends through a PayPal, Stripe or store webhook is reverted on the next
  * cleaner run.
  */
-export const revertLapsedDiamondBloodlines = async (
-  client: DrizzleClient,
-  userId?: string,
-) => {
-  const users = await listUserDataForDiamondBloodlineRevert(
-    client,
-    REVERT_BATCH_SIZE,
-    userId,
-  );
+export const revertLapsedDiamondBloodlines = async (client: DrizzleClient) => {
+  const users = await listUserDataForDiamondBloodlineRevert(client, REVERT_BATCH_SIZE);
   if (users.length === 0) return { reverted: 0, cleared: 0 };
   const currentIds = [...new Set(users.flatMap((user) => user.bloodlineId ?? []))];
   const [rolls, jutsus] = await Promise.all([

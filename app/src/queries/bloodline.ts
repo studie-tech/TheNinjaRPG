@@ -801,7 +801,6 @@ const preDiamondLine = alias(bloodline, "preDiamondLine");
 export const listUserDataForDiamondBloodlineRevert = (
   client: Pick<DrizzleClient, "select">,
   limit: number,
-  userId?: string,
 ) =>
   client
     .select({
@@ -821,7 +820,6 @@ export const listUserDataForDiamondBloodlineRevert = (
         lapsedDiamondGuard(),
         // The restore write skips players in battle; keep them from filling the batch.
         ne(userData.status, "BATTLE"),
-        userId ? eq(userData.userId, userId) : undefined,
       ),
     )
     .limit(limit);
