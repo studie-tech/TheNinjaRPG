@@ -327,9 +327,10 @@ const TowerDefenseChallengeAction = (props: {
     <div className="@container mt-2 pr-3">
       <div className="flex flex-col gap-2 @md:flex-row @md:items-center">
         <p className="grow text-sm">
-          Clear {objective.waves === 1 ? "wave" : "waves"} {objective.startWave}
-          {objective.waves > 1 ? `–${finalWave}` : ""} in tower defense against enemies
-          with {objective.enemyHealth}% health and {objective.enemyDamage}% damage.
+          Hold your ground through {objective.waves === 1 ? "wave" : "waves"}{" "}
+          {objective.startWave}
+          {objective.waves > 1 ? `–${finalWave}` : ""} against enemies with{" "}
+          {objective.enemyHealth}% health and {objective.enemyDamage}% damage.
           {!isHere && " Travel to the position above to start."}
         </p>
         {isHere && (
@@ -338,7 +339,7 @@ const TowerDefenseChallengeAction = (props: {
               href={`/towerDefense?quest=${encodeURIComponent(props.questId)}&objective=${encodeURIComponent(objective.id)}`}
             >
               <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
-              Open challenge
+              Take position
             </Link>
           </Button>
         )}

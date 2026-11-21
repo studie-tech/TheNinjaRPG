@@ -187,7 +187,7 @@ export default function TowerDefensePage() {
           render={(request) =>
             user ? (
               <ContentBox
-                title="Tower Defense Challenge"
+                title="Hold Your Ground"
                 subtitle="Clear the waves to complete your quest objective"
                 defaultBackHref="/profile?tab=dashboard#progress-heading"
               >
@@ -211,7 +211,7 @@ export default function TowerDefensePage() {
 
   return (
     <ContentBox
-      title={state?.config.challenge ? "Tower Defense Challenge" : "Tower Defense"}
+      title={state?.config.challenge ? "Hold Your Ground" : "Tower Defense"}
       subtitle={state ? `Wave ${state.wave}` : "Run"}
       defaultBackHref="/manual#minigames"
       noRightAlign

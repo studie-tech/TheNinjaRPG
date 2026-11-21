@@ -427,14 +427,14 @@ const findQuestChallenge = (
   const found = findTowerDefenseChallenge(user, request);
   if (!found || found.done || !found.available)
     return {
-      message: "This challenge is not an open objective of your active quests.",
+      message: "This defense is not an open objective of your active quests.",
     };
   const { objective } = found;
   if (!found.atLocation)
     return {
       message: objective.hideLocation
-        ? "You are not at this challenge's location."
-        : `Travel to sector ${objective.sector} at [${objective.longitude}, ${objective.latitude}] to take on this challenge.`,
+        ? "You are not at this position."
+        : `Travel to sector ${objective.sector} at [${objective.longitude}, ${objective.latitude}] to hold your ground there.`,
     };
   return {
     startWave: objective.startWave,
@@ -502,7 +502,7 @@ const settleChallengeRun = async (
         );
         if (!recorded.claimed)
           return errorResponse(
-            "Your character changed while the challenge was recorded. Claim it again.",
+            "Your character changed while the defense was recorded. Claim it again.",
           );
         user.questData = trackers;
         completedFor = user;
@@ -527,10 +527,10 @@ const settleChallengeRun = async (
   return {
     success: true,
     message: !result.won
-      ? `The challenge was not cleared: you reached wave ${result.wave}. Try again from the challenge.`
+      ? `The line broke at wave ${result.wave}. Take your position again when you are ready.`
       : completedFor
-        ? "Challenge complete! Continue the quest in your logbook."
-        : "Challenge cleared, but its quest objective is no longer open.",
+        ? "You held your ground! Continue the quest in your logbook."
+        : "You held your ground, but this quest objective is no longer open.",
     pointsEarned: 0,
     wave: result.wave,
     kills: result.kills,

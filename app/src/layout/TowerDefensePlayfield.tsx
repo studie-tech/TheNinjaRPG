@@ -346,7 +346,7 @@ const Results = (props: {
           <>
             <h3 className="text-2xl font-bold">
               {props.outcome.won
-                ? "Challenge cleared"
+                ? "Ground held"
                 : props.outcome.quit
                   ? "Retreated"
                   : "Defeated"}{" "}
