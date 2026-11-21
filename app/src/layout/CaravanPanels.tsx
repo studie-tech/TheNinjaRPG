@@ -502,7 +502,10 @@ const PrepareCaravan = ({
     .filter(([, quantity]) => quantity > 0)
     .map(([itemId, quantity]) => ({ itemId, quantity }));
   const units = lines.reduce((sum, line) => sum + line.quantity, 0);
-  const available = warehouse.stock.filter((row) => row.quantity - row.reserved > 0);
+  // Chosen goods stay listed after their free stock runs out, so they can be set to zero.
+  const available = warehouse.stock.filter(
+    (row) => row.quantity - row.reserved > 0 || (cargo[row.itemId] ?? 0) > 0,
+  );
   const full = routes.capacity.used >= routes.capacity.total;
   if (active.length === 0)
     return (

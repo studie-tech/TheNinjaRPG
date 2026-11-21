@@ -25,7 +25,13 @@ import {
   warehouseStock,
 } from "@/drizzle/schema";
 import type { CaravanBattleState } from "@/libs/caravan";
-import { insertGuard, queueGuard } from "@/queries/caravan";
+import {
+  claimLoot,
+  insertGuard,
+  queueGuard,
+  releaseParticipants,
+  upsertAttacker,
+} from "@/queries/caravan";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
 import {
   claimWithdrawal,
@@ -126,6 +132,53 @@ describeWithDatabase("village Warehouse and caravans", () => {
     const [stock] = await db.select().from(warehouseStock);
     expect(stock?.quantity).toBe(70);
     expect((await claim(1)).rowsAffected).toBe(0);
+    await resetWarehouseAllowanceDay(db, "u", "2026-06-14");
+    const [member] = await db.select().from(warehouseMember);
+    expect(member?.allowanceDay).toBe("2026-06-15");
+    expect(member?.allowanceUsed).toBe(30);
+  });
+
+  it("seats a released attacker in the group they rejoin", async () => {
+    const db = await getTestDatabase();
+    await db.insert(caravan).values(caravanRow());
+    const join = (groupLeaderId: string) =>
+      upsertAttacker(db, {
+        caravanId: "c1",
+        userId: "rider",
+        role: "BANDIT",
+        groupLeaderId,
+        now: new Date(),
+      });
+    await join("first");
+    await releaseParticipants(db, "c1", { userIds: ["rider"] });
+    await join("second");
+    const [rider] = await db.select().from(caravanParticipant);
+    expect(rider?.activeUserId).toBe("rider");
+    expect(rider?.groupLeaderId).toBe("second");
+    await join("third");
+    const [kept] = await db.select().from(caravanParticipant);
+    expect(kept?.groupLeaderId).toBe("second");
+  });
+
+  it("claims loot only while it holds what the claimant read", async () => {
+    const db = await getTestDatabase();
+    const read = [{ itemId: "ore", quantity: 3 }];
+    await db.insert(caravanParticipant).values({
+      caravanId: "c1",
+      userId: "leader",
+      role: "BANDIT",
+      loot: [...read, { itemId: "ore", quantity: 20 }],
+      joinedAt: new Date(),
+    });
+    expect((await claimLoot(db, "c1", "leader", read, new Date())).rowsAffected).toBe(
+      0,
+    );
+    const [row] = await db.select().from(caravanParticipant);
+    expect(row?.lootClaimedAt).toBeNull();
+    const current = row?.loot ?? [];
+    expect(
+      (await claimLoot(db, "c1", "leader", current, new Date())).rowsAffected,
+    ).toBe(1);
   });
 
   it("keeps escorts queued until their caravan releases them", async () => {
@@ -257,6 +310,46 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(paid?.banditExperience).toBe(BANDIT_OPERATION_EXP);
   });
 
+  it("awards nothing for a won robbery of a caravan that already left the road", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "leader", isOutlaw: true }]);
+    await db.insert(caravan).values(caravanRow({ status: "DELIVERED" }));
+    await db.insert(caravanParticipant).values({
+      caravanId: "c1",
+      userId: "leader",
+      role: "BANDIT",
+      activeUserId: "leader",
+      groupLeaderId: "leader",
+      joinedAt: new Date(),
+    });
+    await db.insert(caravanEncounter).values({
+      id: "e1",
+      type: "INTERCEPTION",
+      status: "FIGHTING",
+      caravanId: "c1",
+      activeCaravanId: "c1",
+      battleId: "b1",
+      createdAt: new Date(),
+    });
+    await settleCaravanCombat(
+      db,
+      makeCompleteBattle({
+        id: "b1",
+        battleType: "CARAVAN",
+        usersState: [
+          makeBattleUser("leader", { direction: "left", curHealth: 50 }),
+          makeBattleUser("npc", { direction: "right", curHealth: 0, isAi: true }),
+        ],
+        extraState: { caravan: battleState({ attackerIds: ["leader"] }) },
+      }),
+    );
+    const [rider] = await db.select().from(caravanParticipant);
+    expect(rider?.loot).toBeNull();
+    expect(rider?.activeUserId).toBeNull();
+    const [user] = await db.select().from(userData);
+    expect(user?.banditExperience).toBe(0);
+  });
+
   it("delivers remaining cargo once and pays escorts who completed objectives", async () => {
     const db = await getTestDatabase();
     await insertUsers([
@@ -367,6 +460,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
     const [marker] = await db.select().from(tradeRouteMarker);
     expect(marker?.controllerVillageId).toBe("mist");
     expect(marker?.control).toBe(100);
+    expect(marker?.capturedAt).not.toBeNull();
     await afterTasks.run([], () =>
       maintainCaravans(db, new Date(), { caravanIds: ["moving", "waiting"] }),
     );

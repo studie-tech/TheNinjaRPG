@@ -236,8 +236,9 @@ export const damageMarker = (
     .update(tradeRouteMarker)
     .set({
       controllerVillageId: sql`CASE WHEN ${captured} THEN ${captureVillageId} ELSE ${tradeRouteMarker.controllerVillageId} END`,
-      capturedAt: sql`CASE WHEN ${captured} THEN ${now} ELSE ${tradeRouteMarker.capturedAt} END`,
       control: sql`CASE WHEN ${captured} THEN ${TRADE_ROUTE_MARKER_MAX_CONTROL} ELSE ${tradeRouteMarker.control} - ${damage} END`,
+      // Assigned after control in column order, so it reads the new value, full only on capture.
+      capturedAt: sql`CASE WHEN ${tradeRouteMarker.control} = ${TRADE_ROUTE_MARKER_MAX_CONTROL} THEN ${now} ELSE ${tradeRouteMarker.capturedAt} END`,
     })
     .where(eq(tradeRouteMarker.id, markerId));
 };

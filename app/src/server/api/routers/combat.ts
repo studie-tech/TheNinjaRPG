@@ -2068,7 +2068,8 @@ export const initiateBattle = async (
     /**
      * Start every initiating human whose stored defaultAutoCombat is on with auto
      * combat, read from the user rows initiateBattle already loads. For group
-     * battles whose callers do not hold the members' settings.
+     * battles whose callers do not hold the members' settings. Caravan fights apply
+     * it to defending humans too, since escorts may be away when attacked.
      */
     autoCombatFromDefaults?: boolean;
     /** Stable event launch identity; participant claims require its WAITING recovery token. */
@@ -3198,7 +3199,13 @@ export const initiateBattle = async (
     ...(info.autoCombatUserIds ?? []),
     ...(info.autoCombatFromDefaults
       ? users
-          .filter((u) => !u.isAi && u.defaultAutoCombat && userIds.includes(u.userId))
+          .filter(
+            (u) =>
+              !u.isAi &&
+              u.defaultAutoCombat &&
+              (userIds.includes(u.userId) ||
+                (!!info.caravan && info.targetIds.includes(u.userId))),
+          )
           .map((u) => u.userId)
       : []),
   ].filter((userId) => !tutorialGuidedUserIds.includes(userId));

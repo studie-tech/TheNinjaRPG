@@ -605,7 +605,13 @@ export const caravanOpsRouter = createTRPCRouter({
         // both back keeps the loot claimable when the backpack has no room.
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
-            const claimed = await claimLoot(tx, row.caravanId, ctx.userId, new Date());
+            const claimed = await claimLoot(
+              tx,
+              row.caravanId,
+              ctx.userId,
+              loot,
+              new Date(),
+            );
             if (claimed.rowsAffected !== 1)
               throw new WarehouseConflict("Already claimed");
             const { unstacked } = await grantUserItems(tx, ctx.userId, loot, {

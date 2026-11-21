@@ -61,14 +61,17 @@ export const settleCaravanCombat = async (
   } else if (state.type === "AMBUSH") {
     await applyCaravanLoss(database, caravanId, CARAVAN_AMBUSH_LOSS_BP);
   } else if (state.type === "INTERCEPTION") {
-    // Raiders are paid only for cargo they actually took; a plundered caravan pays nothing.
+    // Raiders are paid only for cargo they actually took from a caravan still on the road;
+    // a plundered caravan pays nothing.
     const isBandit = state.attackerRole === "BANDIT";
     const takenBp = getAllowedLoss(
       state.lossBp,
       isBandit ? state.stealBp : CARAVAN_ENEMY_ATTACK_LOSS_BP,
     );
-    if (takenBp > 0) {
-      await applyCaravanLoss(database, caravanId, takenBp);
+    const taken =
+      takenBp > 0 &&
+      (await applyCaravanLoss(database, caravanId, takenBp)).rowsAffected === 1;
+    if (taken) {
       if (isBandit)
         await awardLoot(
           database,

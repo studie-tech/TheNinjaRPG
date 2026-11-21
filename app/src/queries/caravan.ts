@@ -353,7 +353,9 @@ export const upsertAttacker = (
     .onDuplicateKeyUpdate({
       set: {
         activeUserId: sql`CASE WHEN ${caravanParticipant.role} = ${values.role} AND ${caravanParticipant.activeUserId} IS NULL THEN ${values.userId} ELSE ${caravanParticipant.activeUserId} END`,
-        groupLeaderId: sql`CASE WHEN ${caravanParticipant.role} = ${values.role} AND ${caravanParticipant.activeUserId} IS NULL THEN ${values.groupLeaderId} ELSE ${caravanParticipant.groupLeaderId} END`,
+        // Assignments run in column order and see earlier results, so this tests a column the
+        // activeUserId assignment leaves alone: a released row has no leader, an active one has.
+        groupLeaderId: sql`CASE WHEN ${caravanParticipant.role} = ${values.role} AND ${caravanParticipant.groupLeaderId} IS NULL THEN ${values.groupLeaderId} ELSE ${caravanParticipant.groupLeaderId} END`,
       },
     });
 
@@ -449,11 +451,15 @@ export const awardLoot = (
           ),
         );
 
-/** Claim a robber's loot once; the caller delivers it in the same transaction. */
+/**
+ * Claim a robber's loot once, only while it still holds what the caller read and delivers
+ * in the same transaction; loot a later robbery appended stays claimable.
+ */
 export const claimLoot = (
   client: Pick<DrizzleClient, "update">,
   caravanId: string,
   userId: string,
+  loot: CargoLine[],
   now: Date,
 ) =>
   client
@@ -463,7 +469,7 @@ export const claimLoot = (
       and(
         eq(caravanParticipant.caravanId, caravanId),
         eq(caravanParticipant.userId, userId),
-        isNotNull(caravanParticipant.loot),
+        sql`${caravanParticipant.loot} = CAST(${JSON.stringify(loot)} AS JSON)`,
         isNull(caravanParticipant.lootClaimedAt),
       ),
     );
