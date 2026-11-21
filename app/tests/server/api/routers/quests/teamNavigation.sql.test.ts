@@ -3,6 +3,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import {
   quest,
   questHistory,
+  questParty,
   userData,
   village,
   villageStructure,
@@ -10,7 +11,11 @@ import {
 import { profileRouter } from "@/routers/profile";
 import { questsRouter } from "@/routers/quests";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { QuestValidator } from "@/validators/objectives";
+import {
+  ObjectiveTracker,
+  QuestTracker,
+  QuestValidator,
+} from "@/validators/objectives";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
@@ -24,7 +29,14 @@ const questId = "team-navigation-story";
 
 describeWithDatabase("quest team navigation after assignment", () => {
   beforeEach(async () => {
-    await resetTables(questHistory, quest, villageStructure, village, userData);
+    await resetTables(
+      questParty,
+      questHistory,
+      quest,
+      villageStructure,
+      village,
+      userData,
+    );
     await insertUsers([
       {
         userId: playerId,
@@ -134,5 +146,54 @@ describeWithDatabase("quest team navigation after assignment", () => {
       stop();
       client.clear();
     }
+  });
+
+  it("counts open invitations to unfinished team quests", async () => {
+    const profileApi = await callerFor(profileRouter, playerId);
+    const questsApi = await callerFor(questsRouter, playerId);
+    expect((await questsApi.startQuest({ questId, userSector: 0 })).success).toBe(true);
+    const tracker = QuestTracker.parse({
+      id: questId,
+      goals: [ObjectiveTracker.parse({ id: "destination" })],
+    });
+    const database = await getTestDatabase();
+    await database.insert(questParty).values([
+      {
+        id: "team-navigation-open",
+        questId,
+        leaderId: "team-navigation-leader",
+        memberIds: ["team-navigation-leader"],
+        invitedUserIds: [playerId],
+        tracker,
+        contributions: {},
+      },
+      {
+        id: "team-navigation-failed",
+        questId,
+        leaderId: "team-navigation-other",
+        memberIds: ["team-navigation-other"],
+        invitedUserIds: [playerId],
+        tracker: { ...tracker, failed: true },
+        contributions: {},
+      },
+      {
+        id: "team-navigation-elsewhere",
+        questId,
+        leaderId: "team-navigation-third",
+        memberIds: ["team-navigation-third"],
+        invitedUserIds: ["someone-else"],
+        tracker,
+        contributions: {},
+      },
+    ]);
+
+    expect((await profileApi.getUser()).notifications).toContainEqual(
+      expect.objectContaining({
+        href: "/questteams",
+        name: "Quest Teams: 1 invitation",
+        color: "green",
+        notificationCount: 1,
+      }),
+    );
   });
 });

@@ -78,9 +78,10 @@ const launch = (
       ),
   }).start();
 
+/** Poll, shrine lobby and active raid reads; the raid read selects quest revisions. */
 const notificationReads = (statements: string[]) =>
   statements.filter((statement) =>
-    /from `(?:Poll|MpvpBattleQueue)`|from `Quest` `quest`/.test(statement),
+    /from `(?:Poll|MpvpBattleQueue)`|`raidBossCurrentHealth` >= /.test(statement),
   );
 
 describeWithDatabase("arena readiness reads", () => {
@@ -559,7 +560,12 @@ describeWithDatabase("arena readiness reads", () => {
     const profile = await recordQueries(() =>
       fetchUpdatedUser({ client, userId, includeNotifications: true }),
     );
+    // No poll is open, so the cached open-poll listing replaces the per-user lookup.
     expect(notificationReads(profile.statements)).toHaveLength(3);
+    const repeated = await recordQueries(() =>
+      fetchUpdatedUser({ client, userId, includeNotifications: true }),
+    );
+    expect(notificationReads(repeated.statements)).toHaveLength(2);
   });
 
   it("starts the AI lookup while the readiness participant read is still pending", async () => {

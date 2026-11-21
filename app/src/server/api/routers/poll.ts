@@ -20,6 +20,7 @@ import {
   insertPollForCreatePoll,
   insertPollOptions,
   insertUserPollVoteForVote,
+  invalidateOpenPolls,
   listPollForGetPolls,
   toPollOptionRow,
   updatePollForClosePoll,
@@ -105,12 +106,16 @@ export const pollRouter = createTRPCRouter({
         toPollOptionRow(option, pollId, user.userId, false),
       );
 
-      // Run both database operations in parallel
-      await Promise.all([
-        insertPollForCreatePoll(ctx.drizzle, pollId, input, user),
+      // Shared invalidation must finish even when a sibling write fails.
+      const writes = await Promise.allSettled([
+        insertPollForCreatePoll(ctx.drizzle, pollId, input, user).then(() =>
+          invalidateOpenPolls(),
+        ),
         insertPollOptions(ctx.drizzle, optionsToInsert),
         insertActionLogForCreatePoll(ctx.drizzle, user, input, pollId),
       ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
 
       return { success: true, message: "Poll created successfully" };
     }),
@@ -146,13 +151,18 @@ export const pollRouter = createTRPCRouter({
 
       // Update poll
       await updatePollForUpdatePoll(ctx.drizzle, updateData, input);
-      await insertActionLogForUpdatePoll(
-        ctx.drizzle,
-        user,
-        existingPoll,
-        updateData,
-        input,
-      );
+      const writes = await Promise.allSettled([
+        invalidateOpenPolls(),
+        insertActionLogForUpdatePoll(
+          ctx.drizzle,
+          user,
+          existingPoll,
+          updateData,
+          input,
+        ),
+      ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
 
       return { success: true, message: "Poll updated successfully" };
     }),
@@ -326,7 +336,12 @@ export const pollRouter = createTRPCRouter({
 
       // Update poll status
       await updatePollForClosePoll(ctx.drizzle, input);
-      await insertActionLogForClosePoll(ctx.drizzle, user, input, existingPoll);
+      const writes = await Promise.allSettled([
+        invalidateOpenPolls(),
+        insertActionLogForClosePoll(ctx.drizzle, user, input, existingPoll),
+      ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
 
       return {
         success: true,
