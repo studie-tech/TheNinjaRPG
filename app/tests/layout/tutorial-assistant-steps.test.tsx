@@ -481,6 +481,32 @@ describe("routing", () => {
 });
 
 describe("highlight placement", () => {
+  it("highlights the purchase confirmation ahead of the underlying shop Buy button", () => {
+    const shopStep = TUTORIAL_STEPS.findIndex(
+      (step) => step.id === "tools-buy-shuriken",
+    );
+    const view = show(
+      shopStep,
+      {},
+      "/itemshop",
+      <>
+        <div aria-hidden="true">
+          <Target id="tutorial-itemshop-buy" />
+        </div>
+        <Target
+          id="tutorial-itemshop-confirmPurchase-proceed"
+          box={new DOMRect(240, 400, 160, 48)}
+        />
+      </>,
+    );
+    const highlight = view.getByRole("button", {
+      name: TUTORIAL_STEPS[shopStep]!.action,
+    });
+    expect(highlight.parentElement!.parentElement!.style.transform).toBe(
+      "translate(232px, 392px)",
+    );
+  });
+
   const index = TUTORIAL_STEPS.findIndex(
     (step) => step.id === "student-academy-building",
   );

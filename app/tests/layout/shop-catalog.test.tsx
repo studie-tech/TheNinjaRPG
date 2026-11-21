@@ -73,6 +73,7 @@ const purchase = vi.fn((input: Purchase) => {
 });
 
 import * as client from "@/app/_trpc/client";
+import * as sheet from "@/components/ui/sheet";
 import * as tutorial from "@/hooks/tutorial";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import * as ContentBox from "@/layout/ContentBox";
@@ -376,6 +377,48 @@ describe("shop catalog", () => {
       }
     ).mock.calls.at(-1)?.[0];
     expect(details?.item.description).toBe("");
+  });
+
+  it("keeps every paragraph of a long description readable in the inspector", () => {
+    pageItems = [
+      item({
+        id: "manual",
+        name: "Manual",
+        description:
+          "<p>First instruction.</p><p>Second instruction.</p><p>Third instruction.</p><p>Final instruction.</p>",
+      }),
+    ];
+    const view = renderShop();
+    fireEvent.click(view.getByRole("button", { name: /Manual/ }));
+    const description = view
+      .getByRole("region", { name: "Manual" })
+      .querySelector("[data-reading-text]");
+    expect(description?.querySelectorAll("p")).toHaveLength(4);
+    expect(description?.className).not.toContain("line-clamp");
+  });
+
+  it("restores focus to the last selected card when the sheet finishes closing", () => {
+    let closeAutoFocus: Parameters<typeof sheet.SheetContent>[0]["onCloseAutoFocus"];
+    // Exercise the shop's opener and close handler independently of the sheet's focus scope.
+    vi.spyOn(sheet, "SheetContent").mockImplementation(
+      Object.assign(
+        (props: Parameters<typeof sheet.SheetContent>[0]) => {
+          closeAutoFocus = props.onCloseAutoFocus;
+          return <div>{props.children}</div>;
+        },
+        { displayName: sheet.SheetContent.displayName },
+      ),
+    );
+    const view = renderShop();
+    fireEvent.click(view.getByRole("button", { name: /Bow/ }));
+    fireEvent.click(view.getByRole("button", { name: "Close item" }));
+    const card = view.getByRole("button", { name: /Axe/ });
+    fireEvent.click(card);
+    fireEvent.click(view.getByRole("button", { name: "Close item" }));
+    const event = new Event("closeAutoFocus", { cancelable: true });
+    act(() => closeAutoFocus?.(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(card);
   });
 
   it("keeps a cleared quantity editable without breaking the price or stepper", () => {

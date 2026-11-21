@@ -26,7 +26,7 @@ import { useUserInfo } from "@/utils/UserContext";
 
 /**
  * Everything about one item for sale, laid out like the backpack's inspector: art and rarity,
- * a short description, a box with price, quantity, limits, discounts and Buy, then the full
+ * the description, a box with price, quantity, limits, discounts and Buy, then the full
  * stats below. Buying asks for confirmation; a rejected purchase keeps the dialog open
  * with the server's message.
  */
@@ -173,7 +173,7 @@ export function ShopInspector({
         </Button>
       </div>
       {item.description && (
-        <div data-reading-text className="text-muted-foreground line-clamp-3 text-sm">
+        <div data-reading-text className="text-muted-foreground text-sm">
           {parseHtml(item.description)}
         </div>
       )}

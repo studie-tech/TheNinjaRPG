@@ -19,7 +19,7 @@ export function ShopItemCard({
   wallet: Record<ShopCurrency, number>;
   silverLabel: string;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: React.MouseEventHandler<HTMLButtonElement>;
 }) {
   return (
     <button

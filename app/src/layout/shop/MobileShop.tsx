@@ -1,7 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { TUTORIAL_ITEM_ID } from "@/drizzle/constants";
@@ -45,6 +45,7 @@ export const MobileShop: React.FC<ShopProps> = (props) => {
     props;
   const silverCopy = SILVER_COPY[catalog?.silverLabel ?? "seichi"];
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const returnFocusRef = useRef<HTMLButtonElement | null>(null);
   const [chip, setChip] = useState<ItemType | "ALL" | "AFFORDABLE">(defaultType);
   const [sort, setSort] = useLocalStorage<ShopSort>(
     `shop:sort:${userData.userId}`,
@@ -313,9 +314,10 @@ export const MobileShop: React.FC<ShopProps> = (props) => {
                   wallet={wallet}
                   silverLabel={silverCopy.catalog}
                   isSelected={row.item.id === selectedId}
-                  onSelect={() =>
-                    setSelectedId(row.item.id === selectedId ? undefined : row.item.id)
-                  }
+                  onSelect={(event) => {
+                    returnFocusRef.current = event.currentTarget;
+                    setSelectedId(row.item.id === selectedId ? undefined : row.item.id);
+                  }}
                 />
               </li>
             ))}
@@ -347,6 +349,12 @@ export const MobileShop: React.FC<ShopProps> = (props) => {
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             (event.currentTarget as HTMLElement | null)?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            if (returnFocusRef.current?.isConnected) {
+              event.preventDefault();
+              returnFocusRef.current.focus();
+            }
           }}
           // The sheet's strict containment would ignore the inspector's height; keep it
           // content-sized up to the maximum.

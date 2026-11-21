@@ -319,8 +319,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       "<b>Shuriken</b> hit from a distance and are used up when thrown. Tools you buy go straight into a free item slot, ready for battle.",
     action: "Tap Shuriken, then buy a few.",
     elementIds: [
-      "tutorial-itemshop-buy",
       "tutorial-itemshop-confirmPurchase-proceed",
+      "tutorial-itemshop-buy",
       "tutorial-itemshop-item",
       `tutorial-combat-action-${TUTORIAL_ITEM_ID}`,
     ],
