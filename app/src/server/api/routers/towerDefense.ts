@@ -155,7 +155,7 @@ export const towerDefenseRouter = createTRPCRouter({
         bestWave,
         level: progress.level,
         dojo: dojoLevels(upgrades),
-        ...(quest?.challenge ? { challenge: quest.challenge } : {}),
+        challenge: quest?.challenge,
       };
       const nonce = nanoid();
       // Only the latest run can be claimed, so runs are never played side by side.
@@ -440,8 +440,7 @@ const findQuestChallenge = (
   return {
     startWave: objective.startWave,
     challenge: {
-      questId: request.questId,
-      objectiveId: request.objectiveId,
+      ...request,
       waves: objective.waves,
       enemyHealth: objective.enemyHealth,
       enemyDamage: objective.enemyDamage,
@@ -511,14 +510,13 @@ const settleChallengeRun = async (
       }
     }
   }
-  const completed = !!completedFor;
   const settled = await updateUserDataForClaimTowerDefenseRun(ctx.drizzle, ctx, {
     nonce,
     points: 0,
     wave: 0,
   });
   // A simultaneous claim of this run settled it; the objective it completed stays done.
-  if (settled.rowsAffected === 0 && !completed)
+  if (settled.rowsAffected === 0 && !completedFor)
     return refusedForGood(REPLACED_RUN_MESSAGE);
   if (settled.rowsAffected > 0)
     await insertTowerDefenseClaimReceipt(ctx.drizzle, ctx, {
@@ -531,7 +529,7 @@ const settleChallengeRun = async (
     success: true,
     message: !result.won
       ? `The challenge was not cleared: you reached wave ${result.wave}. Try again from the challenge.`
-      : completed
+      : completedFor
         ? "Challenge complete! Continue the quest in your logbook."
         : "Challenge cleared, but its quest objective is no longer open.",
     pointsEarned: 0,

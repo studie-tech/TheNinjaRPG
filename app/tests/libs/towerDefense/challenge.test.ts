@@ -15,7 +15,7 @@ const config = (challenge?: TdChallenge, startWave = 1): TdRunConfig => ({
   bestWave: 0,
   level: 50,
   dojo: veteranDojo(0.5),
-  ...(challenge ? { challenge } : {}),
+  challenge,
 });
 
 const easy: TdChallenge = { waves: 3, enemyHealth: 100, enemyDamage: 100 };
