@@ -567,7 +567,7 @@ export const caravanRouter = createTRPCRouter({
   leaveEscort: protectedProcedure
     .meta({ mcp: { description: "Leave a caravan escort before it departs" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(userDeltaResponseSchema.extend({ guardId: z.string().optional() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [row] = await listCaravansByIds(ctx.drizzle, [input.caravanId]);
       if (row?.status !== "PREPARING")
@@ -580,13 +580,12 @@ export const caravanRouter = createTRPCRouter({
         success: true,
         message: "You left the escort",
         ...getEscortStatusUserUpdate("AWAKE"),
-        guardId: ctx.userId,
       };
     }),
   rejoinEscort: protectedProcedure
     .meta({ mcp: { description: "Return to your caravan's escort after a fight" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(userDeltaResponseSchema.extend({ guardId: z.string().optional() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const queued = await queueGuard(ctx.drizzle, input.caravanId, ctx.userId);
       if (queued.rowsAffected !== 1)
@@ -595,13 +594,12 @@ export const caravanRouter = createTRPCRouter({
         success: true,
         message: "You rejoined the escort",
         ...getEscortStatusUserUpdate("QUEUED"),
-        guardId: ctx.userId,
       };
     }),
   checkIn: protectedProcedure
     .meta({ mcp: { description: "Report at the checkpoint your caravan passed" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(baseServerResponse.extend({ guardId: z.string().optional() }))
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [row] = await listCaravansByIds(ctx.drizzle, [input.caravanId]);
       if (row?.status !== "TRAVELLING")
@@ -615,7 +613,6 @@ export const caravanRouter = createTRPCRouter({
       return {
         success: true,
         message: `Checked in at checkpoint ${reached}`,
-        guardId: ctx.userId,
       };
     }),
   defend: protectedProcedure

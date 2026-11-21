@@ -57,7 +57,8 @@ const HISTORY_INPUT = { limit: WAREHOUSE_HISTORY_PAGE_SIZE };
 export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) => {
   const utils = api.useUtils();
   const router = useRouter();
-  const { timeDiff, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { data, timeDiff, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const viewerId = data?.userId;
   const inventory = useInventoryCacheUpdate();
   const { prepareCombatEntry, loadBattle } = useCombatEntry();
 
@@ -488,33 +489,30 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       }),
     ),
     leaveEscort: api.caravan.leaveEscort.useMutation(
-      bindEscort((result, input: { caravanId: string }, snapshot) => {
-        const guardId = result.guardId;
+      bindEscort((_result, input: { caravanId: string }, snapshot) => {
         void views.caravans.updateCache(
-          guardId
-            ? (current) => getLeftEscortCaravans(current, input.caravanId, guardId)
+          viewerId
+            ? (current) => getLeftEscortCaravans(current, input.caravanId, viewerId)
             : undefined,
           snapshot.caravans,
         );
       }),
     ),
     rejoinEscort: api.caravan.rejoinEscort.useMutation(
-      bindEscort((result, input: { caravanId: string }, snapshot) => {
-        const guardId = result.guardId;
+      bindEscort((_result, input: { caravanId: string }, snapshot) => {
         void views.caravans.updateCache(
-          guardId
-            ? (current) => getRejoinedEscortCaravans(current, input.caravanId, guardId)
+          viewerId
+            ? (current) => getRejoinedEscortCaravans(current, input.caravanId, viewerId)
             : undefined,
           snapshot.caravans,
         );
       }),
     ),
     checkIn: api.caravan.checkIn.useMutation(
-      bind(["caravans"], (result, input: { caravanId: string }, snapshot) => {
-        const guardId = result.guardId;
+      bind(["caravans"], (_result, input: { caravanId: string }, snapshot) => {
         void views.caravans.updateCache(
-          guardId
-            ? (current) => getCheckedInCaravans(current, input.caravanId, guardId)
+          viewerId
+            ? (current) => getCheckedInCaravans(current, input.caravanId, viewerId)
             : undefined,
           snapshot.caravans,
         );
