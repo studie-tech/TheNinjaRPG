@@ -31,6 +31,7 @@ import {
 } from "@/layout/MassEffectEditor";
 import { ObjectiveFormWrapper } from "@/layout/ObjectiveFormWrapper";
 import { RewardEditor, RewardFormWrapper } from "@/layout/RewardEditor";
+import { JUTSU_EFFECT_COSMETICS } from "@/libs/jutsu/reskins";
 import * as toastHelpers from "@/libs/toast";
 import * as errorUtils from "@/utils/error";
 import * as UserContext from "@/utils/UserContext";
@@ -1311,22 +1312,22 @@ async function pickRewardNode(view: ReturnType<typeof render>, name: RegExp) {
 describe("effect drafts", () => {
   withRadixBrowserGlobals();
 
-  it("shows normal size for a legacy effect in the mass editor", () => {
-    const legacy = DamageTag.parse({});
-    delete (legacy as Partial<typeof legacy>).animationScale;
-    const onChange = vi.fn();
-    const view = render(
-      <EffectFieldInputGeneric
-        effect={legacy}
-        field="animationScale"
-        onChange={onChange}
-      />,
-    );
-    const input = view.getByRole("spinbutton") as HTMLInputElement;
-    expect(input.value).toBe("1");
-    fireEvent.input(input, { target: { value: "1.375" } });
-    expect(onChange).toHaveBeenLastCalledWith(1.375);
-  });
+  for (const field of ["animationScale", "projectileScale", "groundOpacity"] as const) {
+    it(`shows the rendering default for unset ${field} in the mass editor`, () => {
+      const legacy = DamageTag.parse({});
+      delete (legacy as Partial<typeof legacy>)[field];
+      const onChange = vi.fn();
+      const view = render(
+        <EffectFieldInputGeneric effect={legacy} field={field} onChange={onChange} />,
+      );
+      const input = view.getByRole("spinbutton") as HTMLInputElement;
+      expect(input.value).toBe("1");
+      expect(onChange).not.toHaveBeenCalled();
+      const editedValue = field === "groundOpacity" ? 0.75 : 1.375;
+      fireEvent.input(input, { target: { value: String(editedValue) } });
+      expect(onChange).toHaveBeenLastCalledWith(editedValue);
+    });
+  }
 
   it("edits one tag's animation scale without changing its sibling", async () => {
     const onChange = vi.fn();
@@ -1836,6 +1837,60 @@ const ItemQuestDraftForm = ({ initial }: { initial: ZodAllTags }) => {
   );
 };
 
+const EffectTypeDraftForm = () => {
+  const [effects, setEffects] = useState<ZodAllTags[]>([
+    DamageTag.parse({
+      projectileAnimation: "bolt",
+      projectileScale: 2,
+      animationOffsetY: 0.5,
+      groundStyle: "DECAL",
+      groundOpacity: 0.6,
+      groundFeather: 0.1,
+      appearSfxPrimary: true,
+      disappearSfxPrimary: true,
+    }),
+  ]);
+  return (
+    <>
+      <EffectFormWrapper
+        type="jutsu"
+        idx={0}
+        tag={effects[0]!}
+        effects={effects}
+        setEffects={setEffects}
+        availableTags={["damage", "heal"]}
+      />
+      <button
+        type="button"
+        onClick={() => void save({ id: "type-switch", data: { effects } })}
+      >
+        Save effect type
+      </button>
+    </>
+  );
+};
+
+describe("combat effect type changes", () => {
+  withRadixBrowserGlobals();
+  it("preserves optional artwork and primary cues when switching to a compatible tag", async () => {
+    const view = render(<EffectTypeDraftForm />);
+    fireEvent.click(view.getByRole("combobox", { name: "Type" }));
+    fireEvent.click(await view.findByRole("option", { name: "heal" }));
+    fireEvent.click(view.getByRole("button", { name: "Save effect type" }));
+    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
+      type: "heal",
+      projectileAnimation: "bolt",
+      projectileScale: 2,
+      animationOffsetY: 0.5,
+      groundStyle: "DECAL",
+      groundOpacity: 0.6,
+      groundFeather: 0.1,
+      appearSfxPrimary: true,
+      disappearSfxPrimary: true,
+    });
+  });
+});
+
 describe("Special quest item drafts", () => {
   withRadixBrowserGlobals();
   beforeEach(() => {
@@ -2143,6 +2198,71 @@ describe("schema-derived field visibility", () => {
   const labels = (container: HTMLElement) =>
     [...container.querySelectorAll("label")].map((label) => label.textContent);
 
+  it("labels the projectile picker with its selection and names its clear action", async () => {
+    vi.spyOn(names, "useQuery").mockReturnValue({
+      data: [{ id: "bolt", name: "Lightning Bolt", type: "ANIMATION" }],
+    } as never);
+    const tag = DamageTag.parse({ projectileAnimation: "bolt" });
+    const view = render(
+      <EffectFormWrapper
+        type="jutsu"
+        idx={0}
+        tag={tag}
+        effects={[tag]}
+        setEffects={vi.fn()}
+        availableTags={["damage"]}
+        hideTagType
+      />,
+    );
+    const label = view.getByText("Projectile animation", {
+      selector: "label",
+    }) as HTMLLabelElement;
+    const picker = view.getByRole("button", {
+      name: "Projectile animation: Lightning Bolt",
+    });
+    expect(label.control).toBe(picker);
+    expect(picker.getAttribute("aria-invalid")).toBe("false");
+    expect(picker.textContent).toBe("Lightning Bolt");
+    fireEvent.click(view.getByRole("button", { name: "Clear Projectile animation" }));
+    await waitFor(() =>
+      expect(
+        view.getByRole("button", {
+          name: "Projectile animation: Pick from dialog",
+        }),
+      ).toBe(picker),
+    );
+  });
+
+  it("keeps linked reskin presentation editable while locking mechanics", () => {
+    const tag = DamageTag.parse({});
+    const view = render(
+      <EffectFormWrapper
+        type="jutsu"
+        idx={0}
+        tag={tag}
+        effects={[tag]}
+        setEffects={vi.fn()}
+        availableTags={["damage"]}
+        hideTagType
+        editableFields={JUTSU_EFFECT_COSMETICS}
+      />,
+    );
+    expect(labels(view.container)).toEqual(
+      expect.arrayContaining([
+        "Projectile animation",
+        "Projectile size (0.25–3×; default 1×)",
+        "Animation height (hexes; positive raises)",
+        "Ground style",
+        "Ground opacity",
+        "Ground feather",
+        "Primary appearance sound for this cast",
+        "Primary disappearance sound for this cast",
+      ]),
+    );
+    for (const field of ["Power", "Target", "Type"])
+      expect(labels(view.container)).not.toContain(field);
+  });
+
   it.each([
     [
       "damage",
@@ -2153,9 +2273,17 @@ describe("schema-derived field visibility", () => {
         "Static animation",
         "Appear animation",
         "Disappear animation",
+        "Projectile animation",
         "Animation scale (1–3×)",
+        "Projectile size (0.25–3×; default 1×)",
+        "Animation height (hexes; positive raises)",
+        "Ground style",
+        "Ground opacity",
+        "Ground feather",
         "Appear sfx",
         "Disappear sfx",
+        "Primary appearance sound for this cast",
+        "Primary disappearance sound for this cast",
         "Rounds",
         "Power",
         "Power per level",
@@ -2180,9 +2308,17 @@ describe("schema-derived field visibility", () => {
         "Static animation",
         "Appear animation",
         "Disappear animation",
+        "Projectile animation",
         "Animation scale (1–3×)",
+        "Projectile size (0.25–3×; default 1×)",
+        "Animation height (hexes; positive raises)",
+        "Ground style",
+        "Ground opacity",
+        "Ground feather",
         "Appear sfx",
         "Disappear sfx",
+        "Primary appearance sound for this cast",
+        "Primary disappearance sound for this cast",
         "Power",
         "Power per level",
         "Target",

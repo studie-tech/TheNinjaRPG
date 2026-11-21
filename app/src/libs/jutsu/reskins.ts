@@ -59,11 +59,19 @@ export const JUTSU_EFFECT_COSMETICS = [
   "description",
   "appearAnimation",
   "appearSfx",
+  "appearSfxPrimary",
   "disappearAnimation",
   "disappearSfx",
+  "disappearSfxPrimary",
   "staticAssetPath",
   "staticAnimation",
   "animationScale",
+  "projectileAnimation",
+  "projectileScale",
+  "animationOffsetY",
+  "groundStyle",
+  "groundOpacity",
+  "groundFeather",
 ] as const;
 
 /**
@@ -83,7 +91,7 @@ export const inheritJutsuReskinEffects = (
     for (const key of JUTSU_EFFECT_COSMETICS) {
       if (key === "animationScale" && cosmetic) {
         inherited.animationScale = cosmetic.animationScale ?? 1;
-      } else if (key in inherited && cosmetic && key in cosmetic) {
+      } else if (cosmetic && key in cosmetic) {
         Object.assign(inherited, { [key]: cosmetic[key as keyof typeof cosmetic] });
       }
     }

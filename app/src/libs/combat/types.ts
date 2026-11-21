@@ -778,6 +778,15 @@ export type ShieldConversionsByUser = Map<
  * reference information added to the tag (i.e. how powerful was the effect)
  */
 export type BattleEffect = ZodAllTags & {
+  /** Client replay phase: only the travelling sprite is visible before impact. */
+  projectileOnly?: boolean;
+  /** Transient visuals retain their originating cast and audio phase. */
+  soundOrigin?: {
+    actionId: string;
+    createdRound: number;
+    phase: "appear" | "disappear";
+    privateSource?: boolean;
+  };
   id: string;
   creatorId: string;
   level: number;

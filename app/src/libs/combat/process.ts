@@ -184,9 +184,25 @@ const getVisualOrSound = (
   sfx: string | undefined,
   round: number,
   animationScale = 1,
+  source?: GroundEffect | UserEffect,
+  phase: "appear" | "disappear" = "appear",
 ): GroundEffect => {
+  const presentation = {
+    projectileAnimation: phase === "appear" ? source?.projectileAnimation : undefined,
+    projectileScale: phase === "appear" ? source?.projectileScale : undefined,
+    animationOffsetY: source?.animationOffsetY,
+    groundStyle: source?.groundStyle,
+    groundOpacity: source?.groundOpacity,
+    groundFeather: source?.groundFeather,
+    appearSfxPrimary:
+      phase === "disappear" ? source?.disappearSfxPrimary : source?.appearSfxPrimary,
+  };
   return {
     ...VisualTag.parse({
+      // Omit unset controls so SuperJSON does not add an undefined annotation for each one.
+      ...Object.fromEntries(
+        Object.entries(presentation).filter(([, value]) => value !== undefined),
+      ),
       type: "visual",
       rounds: 0,
       description: "N/A",
@@ -196,9 +212,19 @@ const getVisualOrSound = (
       createdAt: Date.now(),
     }),
     actionId: "visual",
+    soundOrigin: source
+      ? {
+          actionId: source.soundOrigin?.actionId ?? source.actionId,
+          createdRound: source.soundOrigin?.createdRound ?? source.createdRound,
+          phase,
+          privateSource:
+            source.soundOrigin?.privateSource ||
+            ["armor", "accessory", "skill"].includes(source.fromType ?? ""),
+        }
+      : undefined,
     id: nanoid(),
     createdRound: round,
-    creatorId: nanoid(),
+    creatorId: source?.creatorId ?? nanoid(),
     level: 0,
     barrierAbsorb: 0,
     isNew: true,
@@ -279,6 +305,12 @@ export const expireGroundEffects = (battle: CompleteBattle, actionRounds: number
     if (effect.type === "visual") return actionRounds.includes(effect.createdRound);
     // A newly authored instant effect still needs its first application.
     if (effect.isNew) return true;
+    // Clone gameplay IDs name the creature; presentation belongs to its immediate caster.
+    const creatorId =
+      effect.type === "clone"
+        ? (battle.usersState.find((user) => user.userId === effect.creatorId)
+            ?.controllerId ?? effect.creatorId)
+        : effect.creatorId;
     const info =
       effect.type === "clone"
         ? clone(battle.usersState, effect, battle.extraState)
@@ -295,6 +327,8 @@ export const expireGroundEffects = (battle: CompleteBattle, actionRounds: number
           effect.disappearSfx,
           battle.round,
           effect.animationScale,
+          { ...effect, creatorId },
+          "disappear",
         ),
       );
     return false;
@@ -725,6 +759,14 @@ const applyGroundEffects = ({
     }
     // Process special effects
     let info: ActionEffect | undefined;
+    // Spawn handlers consume newness and bind gameplay effects to their creatures.
+    const wasNew = e.isNew;
+    const creatorId = e.creatorId;
+    const presentationCreatorId =
+      e.type === "clone" && !wasNew
+        ? (newUsersState.find((user) => user.userId === creatorId)?.controllerId ??
+          creatorId)
+        : creatorId;
     if (e.type === "move") {
       move(e, usersEffects, newUsersState, newGroundEffects);
     } else {
@@ -781,7 +823,13 @@ const applyGroundEffects = ({
       }
 
       // Show once appearing visual/audio
-      if ((e.appearAnimation || e.appearSfx) && e.isNew && e.type !== "visual") {
+      if (
+        (e.appearAnimation || e.appearSfx || e.projectileAnimation) &&
+        wasNew &&
+        e.type !== "visual" &&
+        (e.type !== "summon" || e.summonedUserId) &&
+        (e.type !== "clone" || e.creatorId !== creatorId)
+      ) {
         newGroundEffects.push(
           getVisualOrSound(
             e.longitude,
@@ -790,8 +838,14 @@ const applyGroundEffects = ({
             e.appearSfx,
             round,
             e.animationScale,
+            { ...e, creatorId },
           ),
         );
+        if (e.type === "clone" || e.type === "summon") {
+          e.appearAnimation = "";
+          e.appearSfx = "";
+          delete e.projectileAnimation;
+        }
       }
 
       // Process round reduction & tag removal
@@ -807,6 +861,8 @@ const applyGroundEffects = ({
             e.disappearSfx,
             round,
             e.animationScale,
+            { ...e, creatorId: presentationCreatorId },
+            "disappear",
           ),
         );
       }
@@ -1658,9 +1714,10 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
     actionEffects.push(info);
   }
 
-  // Show once appearing visual/audio
+  // Ground casts own their appearance; direct user arrivals stay at the hit coordinates.
   if (
-    (effect.appearAnimation || effect.appearSfx) &&
+    (effect.appearAnimation || effect.appearSfx || effect.projectileAnimation) &&
+    !effect.fromGround &&
     effect.isNew &&
     longitude !== undefined &&
     latitude !== undefined
@@ -1673,8 +1730,15 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
         effect.appearSfx,
         battle.round,
         effect.animationScale,
+        effect,
       ),
     );
+    if (effect.type === "visual") {
+      // The retained visual owns its static artwork and exit, even after onset expires.
+      effect.appearAnimation = "";
+      effect.appearSfx = "";
+      delete effect.projectileAnimation;
+    }
   }
 
   if ((isEffectActive(effect) && !effect.fromGround) || effect.type === "visual") {
@@ -1693,6 +1757,8 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
         effect.disappearSfx,
         round,
         effect.animationScale,
+        effect,
+        "disappear",
       ),
     );
   }

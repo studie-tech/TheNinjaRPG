@@ -16,6 +16,7 @@ export const hasEffectGraphics = (effects: ZodAllTags[]) =>
   effects.some(
     (e) =>
       e.appearAnimation ||
+      e.projectileAnimation ||
       e.disappearAnimation ||
       e.staticAnimation ||
       e.staticAssetPath,
@@ -33,6 +34,7 @@ export const hasInvalidEffectAssets = (
   effects.some((e) =>
     [
       e.appearAnimation,
+      e.projectileAnimation,
       e.disappearAnimation,
       e.staticAnimation,
       e.staticAssetPath,

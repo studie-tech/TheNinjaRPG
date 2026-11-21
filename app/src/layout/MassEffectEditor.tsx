@@ -468,7 +468,14 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
   const inner = unwrapFieldSchema(fieldSchema);
   const eff = effect as unknown as Record<string, unknown>;
 
-  if (["appearAnimation", "disappearAnimation", "staticAnimation"].includes(field)) {
+  if (
+    [
+      "appearAnimation",
+      "disappearAnimation",
+      "staticAnimation",
+      "projectileAnimation",
+    ].includes(field)
+  ) {
     const raw = eff[field];
     const value = typeof raw === "string" ? raw : "";
     return (
@@ -503,7 +510,12 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     const numVal =
       typeof value === "number"
         ? value
-        : Number(value ?? (field === "animationScale" ? 1 : 0));
+        : Number(
+            value ??
+              (["animationScale", "projectileScale", "groundOpacity"].includes(field)
+                ? 1
+                : 0),
+          );
     return (
       <NumberInput
         value={numVal}

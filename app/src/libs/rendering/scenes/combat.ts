@@ -18,6 +18,7 @@ import { getWorldCycleBrightness } from "@/libs/dayNight";
 import { hexGridHeightRatio, type TerrainHex } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
+import { combatEffectRenditions } from "@/libs/rendering/combatEffectAssets";
 import {
   combatHighlightEdges,
   combatHighlightPlan,
@@ -347,10 +348,25 @@ export const createCombatScene = async (options: {
       effectArtPreloaded = true;
       const preloads = createRenderScope(game);
       const textureIds = new Set(snapshot.battle.extraState.textureAssets ?? []);
+      const authoredEffects = [
+        ...snapshot.battle.groundEffects,
+        ...snapshot.battle.usersEffects,
+        ...snapshot.actions.flatMap((action) => action.effects),
+        ...Object.values(snapshot.battle.extraState.jutsus ?? {}).flatMap(
+          (jutsu) => jutsu.effects,
+        ),
+        ...Object.values(snapshot.battle.extraState.items ?? {}).flatMap(
+          (item) => item.effects,
+        ),
+      ];
       void Promise.allSettled(
         snapshot.assets
           .filter((asset) => textureIds.has(asset.id) && asset.image)
-          .map((asset) => preloads.assets.texture(asset.image)),
+          .flatMap((asset) =>
+            combatEffectRenditions(asset, authoredEffects).map((width) =>
+              preloads.assets.texture(asset.image, width),
+            ),
+          ),
       ).then(() => preloads.dispose());
     };
     const sync = (snapshot: CombatSceneSnapshot) => {
@@ -526,6 +542,7 @@ export const createCombatScene = async (options: {
               instant,
               moving: wasMoving,
               cue: actors.cue,
+              projectilesArrived: effects.projectilesArrived,
             });
       const logVersion = playback.logVersion();
       let hits: CombatHit[] = NO_HITS;
@@ -564,7 +581,7 @@ export const createCombatScene = async (options: {
       for (const { userId, amount, severity } of hits) {
         const head = actors.headPosition(userId);
         if (!head) continue;
-        const direction = actors.hitDirection(userId, playback.actorId());
+        const direction = actors.hitDirection(userId, playback.actorId(userId));
         feedback.show({
           userId,
           amount,

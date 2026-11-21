@@ -159,6 +159,10 @@ export const EditContent = <
     control: form.control,
     name: "appearAnimation" as Path<S>,
   });
+  const watchProjectileSel = useWatch({
+    control: form.control,
+    name: "projectileAnimation" as Path<S>,
+  });
   const watchDisappearSel = useWatch({
     control: form.control,
     name: "disappearAnimation" as Path<S>,
@@ -179,6 +183,7 @@ export const EditContent = <
     () =>
       [
         watchAppearSel,
+        watchProjectileSel,
         watchDisappearSel,
         watchStaticSel,
         watchAppearSfx,
@@ -188,6 +193,7 @@ export const EditContent = <
         .filter((x) => x.length > 0),
     [
       watchAppearSel,
+      watchProjectileSel,
       watchDisappearSel,
       watchStaticSel,
       watchAppearSfx,
@@ -864,7 +870,7 @@ export const EditContent = <
                     </div>
                   )}
                   {type === "db_values" && ASSET_PICKER_FIELDS.includes(id) && (
-                      <div className="flex flex-row items-start gap-3">
+                      <div className="flex min-w-0 flex-row items-start gap-3">
                         <FormField
                           control={form.control}
                           name={id}
@@ -883,23 +889,29 @@ export const EditContent = <
                               (o) => o.value === field.value,
                             );
                             return (
-                              <div className="flex w-full flex-row items-start gap-3">
-                                <FormItem className="flex-1">
+                              <div className="flex min-w-0 w-full flex-row items-start gap-3">
+                                <FormItem className="min-w-0 flex-1">
                                   <FormLabel>{label}</FormLabel>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <FormControl>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        aria-label={`${label}: ${selectedOption?.label || "Pick from dialog"}`}
+                                        className={cn(
+                                          "min-w-0 flex-1 justify-between",
+                                          field.value ? "" : "text-muted-foreground",
+                                        )}
+                                        onClick={handleOpen}
+                                      >
+                                        <span className="min-w-0 truncate text-left" title={selectedOption?.label}>
+                                          {selectedOption?.label || "Pick from dialog"}
+                                        </span>
+                                      </Button>
+                                    </FormControl>
                                     <Button
-                                      type="button"
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full justify-between",
-                                        field.value ? "" : "text-muted-foreground",
-                                      )}
-                                      onClick={handleOpen}
-                                    >
-                                      {selectedOption?.label || "Pick from dialog"}
-                                    </Button>
-                                    <Button
-                                      className="w-8 p-0"
+                                      aria-label={`Clear ${label}`}
+                                      className="w-8 shrink-0 p-0"
                                       type="button"
                                       variant="ghost"
                                       onClick={(e) => {
@@ -919,7 +931,7 @@ export const EditContent = <
                                 {field.value ? (
                                 <div
                                   className={cn(
-                                    "h-24",
+                                    "h-24 shrink-0",
                                     id === "appearSfx" || id === "disappearSfx"
                                       ? "w-48"
                                       : "w-24",
@@ -1565,8 +1577,8 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
             ? ["rounds", "target", "friendlyFire", "powerPerLevel", "timeTracker"]
             : []),
         ];
-        // For all typed keys in shownTag, if the key exists in curTag, keep the value, except for type
-        objectKeys(shownTag).forEach((key) => {
+        // Preserve shared optional fields as well as fields with destination defaults.
+        objectKeys(tagSchema.shape).forEach((key) => {
           if (!skipKeys.includes(key) && key in curTag) {
             // @ts-expect-error - we know this is a key of the object
             shownTag[key] = curTag[key];
@@ -1597,11 +1609,13 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     const hasItemDraft = ["noncombatconsumereward", "noncombatquest"].includes(
       watchType,
     );
-    // Scale drafts reach the parent so Save validates the visible size, including invalid input.
-    const hasAnimationScaleDraft = !Object.is(
-      watchAll.animationScale,
-      tag.animationScale ?? 1,
-    );
+    // Presentation drafts reach the parent so Save validates the visible sizing and placement.
+    const hasPresentationDraft =
+      !Object.is(watchAll.animationScale, tag.animationScale ?? 1) ||
+      !Object.is(watchAll.projectileScale, tag.projectileScale) ||
+      !Object.is(watchAll.animationOffsetY, tag.animationOffsetY) ||
+      !Object.is(watchAll.groundOpacity, tag.groundOpacity) ||
+      !Object.is(watchAll.groundFeather, tag.groundFeather);
     const leftCoordinateTarget = tag.target === "COORDINATES" && !hasCoordinateDraft;
     const draft = leftCoordinateTarget
       ? { ...watchAll, coordinateTargeting: null }
@@ -1609,7 +1623,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     const parsedTag = tagSchema.safeParse(draft);
     const shownTag = parsedTag.success
       ? parsedTag.data
-      : hasCoordinateDraft || hasItemDraft || hasAnimationScaleDraft
+      : hasCoordinateDraft || hasItemDraft || hasPresentationDraft
         ? draft
         : tag;
     newEffects[idx] = shownTag;
@@ -1622,12 +1636,12 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         if (
           hasCoordinateDraft ||
           hasItemDraft ||
-          hasAnimationScaleDraft ||
+          hasPresentationDraft ||
           (leftCoordinateTarget && parsedTag.success) ||
           form.formState.isValid
         ) {
           setEffects(newEffects);
-          if (parsedTag.success && !hasAnimationScaleDraft) form.reset(draft);
+          if (parsedTag.success && !hasPresentationDraft) form.reset(draft);
         }
       }
     }
@@ -1786,7 +1800,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         };
       } else if ((value as string) === "description") {
         return { id: value, type: "richinput", doubleWidth: true };
-      } else if (innerType instanceof z.ZodString && value === "appearAnimation") {
+      } else if (
+        innerType instanceof z.ZodString &&
+        (value === "appearAnimation" || value === "projectileAnimation")
+      ) {
         return {
           id: value,
           values: animations,
@@ -1818,6 +1835,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       } else if (innerType instanceof z.ZodString && value === "appearSfx") {
         return {
           id: value,
+          label: FORM_LABEL_MAP[value],
           values: (assetData || []).filter((a) => a.type === "SFX"),
           multiple: false,
           type: "db_values",
@@ -1882,7 +1900,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         }
         return { id: value, type: "str_array", values: enumValues, multiple: true };
       } else if (innerType instanceof z.ZodBoolean) {
-        return { id: value, type: "boolean" };
+        return { id: value, label: FORM_LABEL_MAP[value], type: "boolean" };
       } else {
         return { id: value, type: "text" };
       }
@@ -2116,6 +2134,8 @@ export const rewardCatalogFormEntry = <K extends string | number | symbol>(
 
 // Form labels for different tag names
 export const FORM_LABEL_MAP: Record<string, string> = {
+  appearSfxPrimary: "Primary appearance sound for this cast",
+  disappearSfxPrimary: "Primary disappearance sound for this cast",
   damageBonusPercent: "Damage bonus (%)",
   durationSeconds: "Duration (seconds)",
   reward_items: "Reward Items [drop chance % and quantity]",
@@ -2182,6 +2202,8 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   singleBattle: "Track best single-battle only (else cumulative)",
   bloodlineRanks: "Bloodline ranks to include",
   animationScale: "Animation scale (1–3×)",
+  projectileScale: "Projectile size (0.25–3×; default 1×)",
+  animationOffsetY: "Animation height (hexes; positive raises)",
   shieldRounds: "Shield Rounds",
   delayRounds: "Diffuse Repayment Turns",
 };
@@ -2246,6 +2268,7 @@ const CATEGORY_CLASSES: Record<string, string> = {
 /** Effect fields edited through the game-asset picker instead of a combobox. */
 const ASSET_PICKER_FIELDS: readonly string[] = [
   "appearAnimation",
+  "projectileAnimation",
   "disappearAnimation",
   "staticAnimation",
   "staticAssetPath",
@@ -2255,10 +2278,18 @@ const ASSET_PICKER_FIELDS: readonly string[] = [
 
 /** Battle presentation, targeting and timing fields, which out-of-battle tags never use. */
 const BATTLE_ONLY_FIELDS = [
+  "appearSfxPrimary",
+  "disappearSfxPrimary",
   "staticAnimation",
   "animationScale",
+  "projectileScale",
+  "animationOffsetY",
+  "groundStyle",
+  "groundOpacity",
+  "groundFeather",
   "staticAssetPath",
   "appearAnimation",
+  "projectileAnimation",
   "disappearAnimation",
   "rounds",
   "target",

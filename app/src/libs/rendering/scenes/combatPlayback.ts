@@ -25,6 +25,7 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
         startedAt: number;
         landedAt: number;
         cueAt?: number;
+        travelling: boolean;
       }
     | undefined;
   /** Log rows above this version belong to actions the field has not reached. */
@@ -34,17 +35,25 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
    * frame without lines, or any frame skipped unlanded, leaves the scene its net change.
    */
   let landed = { frames: 0, hits: [] as LoggedHealth[], complete: true };
+  const impactActors = new Map<string, string>();
   const record = (frame: CombatPlaybackFrame) => {
+    for (const hit of frame.hits ?? []) impactActors.set(hit.userId, frame.actorId);
     landed.frames += 1;
     if (frame.hits) landed.hits.push(...frame.hits);
     else landed.complete = false;
   };
 
   const start = (frame: CombatPlaybackFrame, now: number) => {
-    current = { frame, landed: !frame.windup, startedAt: now, landedAt: now };
-    presented = frame.windup ?? frame.battle;
-    logVersion = frame.windup ? frame.version - 1 : frame.version;
-    if (!frame.windup) record(frame);
+    current = {
+      frame,
+      landed: !frame.windup && !frame.travel,
+      startedAt: now,
+      landedAt: now,
+      travelling: !frame.windup && !!frame.travel,
+    };
+    presented = frame.windup ?? frame.travel ?? frame.battle;
+    logVersion = current.landed ? frame.version : frame.version - 1;
+    if (current.landed) record(frame);
   };
   const land = (now: number) => {
     if (!current) return;
@@ -91,8 +100,11 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
       instant: boolean;
       moving: boolean;
       cue: (actorId: string, cueId: string) => number;
+      /** Flights finish on the renderer clock, after their artwork is ready. */
+      projectilesArrived: (now: number) => boolean;
     }) => {
       const { now, moving } = input;
+      impactActors.clear();
       if (input.instant) {
         if (current || queue.length) finish();
         return presented;
@@ -104,11 +116,18 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
       if (current) {
         const { frame } = current;
         const progress = frame.cueId ? input.cue(frame.actorId, frame.cueId) : 1;
-        if (!current.landed && !moving) {
+        if (!current.landed && !moving && current.travelling) {
+          if (input.projectilesArrived(now)) land(now);
+        } else if (!current.landed && !moving) {
           if (progress > 0) current.cueAt ??= now;
           const overdue =
             current.cueAt !== undefined && now - current.cueAt >= MAX_WINDUP_MS;
-          if (progress >= frame.impact || overdue) land(now);
+          if (progress >= frame.impact || overdue) {
+            if (frame.travel) {
+              current.travelling = true;
+              presented = frame.travel;
+            } else land(now);
+          }
         }
         const held = !frame.cueId || now - current.landedAt >= IMPACT_HOLD_MS;
         if (current.landed && !moving && progress >= 1 && held) current = undefined;
@@ -121,8 +140,9 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
       return presented;
     },
     isPlaying: () => !!current || queue.length > 0,
-    /** The fighter whose action is on the field, while one is replaying. */
-    actorId: () => current?.frame.actorId,
+    /** A landed hit retains its attacker even when the next action has started. */
+    actorId: (targetId?: string) =>
+      (targetId ? impactActors.get(targetId) : undefined) ?? current?.frame.actorId,
     logVersion: () => logVersion,
     presented: () => presented,
     /**

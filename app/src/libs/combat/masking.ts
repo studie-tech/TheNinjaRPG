@@ -204,6 +204,7 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
         ...effects
           .flatMap((e) => [
             e.appearAnimation,
+            e.projectileAnimation,
             e.disappearAnimation,
             e.staticAnimation,
             e.staticAssetPath,
@@ -244,6 +245,21 @@ const maskBattleEffects = <T extends BattleEffect>(
       .filter((u) => isSummonTemplate(u, battle.usersState))
       .map((u) => u.userId),
   );
+  const sourceKey = (effect: BattleEffect) =>
+    JSON.stringify([
+      effect.creatorId,
+      effect.soundOrigin?.actionId ?? effect.actionId,
+      effect.soundOrigin?.createdRound ?? effect.createdRound,
+    ]);
+  // Public effect IDs keep private casts distinct across original and transient copies.
+  const sourceIds = new Map<string, string>();
+  for (const effect of [
+    ...(battle.usersEffects ?? []),
+    ...(battle.groundEffects ?? []),
+  ]) {
+    const key = sourceKey(effect);
+    if (!sourceIds.has(key)) sourceIds.set(key, effect.id);
+  }
   return (effects ?? [])
     .filter(
       (effect) =>
@@ -252,6 +268,16 @@ const maskBattleEffects = <T extends BattleEffect>(
     )
     .map((effect) => {
       const masked = { ...effect };
+      if (effect.soundOrigin) {
+        const { privateSource, ...origin } = effect.soundOrigin;
+        masked.soundOrigin = {
+          ...origin,
+          actionId:
+            privateSource && !controlledIds.has(effect.creatorId)
+              ? (sourceIds.get(sourceKey(effect)) ?? effect.id)
+              : origin.actionId,
+        };
+      }
       if (!controlledIds.has(effect.creatorId)) delete masked.highestGenerals;
       // Saved effects can carry unused target stats; omit them from every response.
       Reflect.deleteProperty(masked, "targetHighestGenerals");
@@ -261,7 +287,7 @@ const maskBattleEffects = <T extends BattleEffect>(
         // skill IDs are not needed to render or apply those modifiers on the client.
         ...(!controlledIds.has(effect.creatorId) &&
         ["armor", "accessory", "skill"].includes(effect.fromType ?? "")
-          ? { actionId: "hidden" }
+          ? { actionId: sourceIds.get(sourceKey(effect)) ?? effect.id }
           : {}),
         ...(effect.type === "injectjutsus" &&
         !("targetId" in effect && controlledIds.has(String(effect.targetId)))

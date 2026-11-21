@@ -52,6 +52,49 @@ describe("linked jutsu reskin inheritance", () => {
     expect(inheritJutsuReskinEffects([large], [legacy])[0]?.animationScale).toBe(1);
     expect(inheritJutsuReskinEffects([large], [])[0]?.animationScale).toBe(2.5);
   });
+  it.each([false, true])(
+    "preserves optional child presentation when parent fields are present: %s",
+    (parentHasPresentation) => {
+      const cosmetics = {
+        projectileAnimation: "ice",
+        projectileScale: 1.5,
+        animationOffsetY: 0.5,
+        groundStyle: "DECAL" as const,
+        groundOpacity: 0.6,
+        groundFeather: 0.2,
+        appearSfxPrimary: true,
+        disappearSfxPrimary: true,
+      };
+      const parent = DamageTag.parse({
+        power: 8,
+        ...(parentHasPresentation
+          ? {
+              projectileAnimation: "fire",
+              projectileScale: 2,
+              animationOffsetY: -0.5,
+              groundStyle: "SURFACE",
+              groundOpacity: 0.8,
+              groundFeather: 0.1,
+              appearSfxPrimary: false,
+              disappearSfxPrimary: false,
+            }
+          : {}),
+      });
+      const child = DamageTag.parse({ power: 99, ...cosmetics });
+      expect(inheritJutsuReskinEffects([parent], [child])[0]).toMatchObject({
+        type: "damage",
+        power: 8,
+        ...cosmetics,
+      });
+      expect(inheritJutsuReskinEffects([parent], [HealTag.parse(cosmetics)])).toEqual([
+        parent,
+      ]);
+      expect(inheritJutsuReskinEffects([parent], [DamageTag.parse({})])[0]).toEqual(
+        parent,
+      );
+      expect(child.power).toBe(99);
+    },
+  );
   it("uses linked cosmetics without copying hidden status, rank, identity or mechanics", () => {
     const resolved = applyLinkedJutsuReskin(base, variant);
     expect(resolved).toMatchObject({

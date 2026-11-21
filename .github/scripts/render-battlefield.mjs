@@ -26,6 +26,13 @@ const VISUAL_FIELDS = [
   "staticAssetPath",
   "staticAnimation",
   "appearAnimation",
+  "projectileAnimation",
+  "animationScale",
+  "projectileScale",
+  "animationOffsetY",
+  "groundStyle",
+  "groundOpacity",
+  "groundFeather",
   "disappearAnimation",
 ];
 const GALLERY_SIZE = 32;
@@ -209,6 +216,7 @@ try {
     {
       requests: labels.requests,
       perSheet: mode === "gallery" ? 2 : 1,
+      captureAllPhases: mode === "verify",
       background: "ground",
     },
   );

@@ -30,9 +30,137 @@ const step = (version: number, users: object[] = []): CombatPlaybackStep =>
     addedEffectIds: [],
     removedEffectIds: [],
   }) as CombatPlaybackStep;
-const idle = { instant: false, moving: false, cue: () => 1 };
+const idle = {
+  instant: false,
+  moving: false,
+  cue: () => 1,
+  projectilesArrived: (now: number) => now >= 650,
+};
 
 describe("combat replay director", () => {
+  it("lands a hook at the victim before revealing the resulting pull", () => {
+    const previous = battle(1, {
+      usersState: [
+        fighter(),
+        { userId: "target", longitude: 4, latitude: 0, curHealth: 100 } as never,
+      ],
+    });
+    const next = battle(2, {
+      usersState: [
+        fighter(),
+        { userId: "target", longitude: 1, latitude: 0, curHealth: 60 } as never,
+      ],
+      usersEffects: [
+        {
+          id: "hook",
+          type: "visual",
+          creatorId: "foe",
+          targetId: "target",
+          projectileAnimation: "hook-art",
+        },
+      ] as ReturnedBattle["usersEffects"],
+      playback: [
+        {
+          ...step(2, [{ userId: "target", longitude: 1, curHealth: 60 }]),
+          userIds: ["foe", "target"],
+          addedEffectIds: ["hook"],
+          hits: [{ userId: "target", amount: -40 }],
+        },
+      ],
+    });
+    const playback = createCombatPlayback(previous);
+    playback.receive(next);
+    const travelling = playback.tick({ ...idle, now: 0 });
+    expect(travelling.groundEffects[0]?.longitude).toBe(4);
+    expect(travelling.usersState[1]?.longitude).toBe(4);
+    expect(playback.tick({ ...idle, now: 250 })).toBe(travelling);
+    expect(playback.tick({ ...idle, now: 650 })).toBe(next);
+    expect(playback.takeHits()).toEqual([{ userId: "target", amount: -40 }]);
+  });
+  it("holds health and logged hits until a projectile arrives, including actors without a strike cue", () => {
+    const previous = battle(1);
+    const next = battle(2, {
+      usersState: [fighter(60)],
+      groundEffects: [
+        {
+          id: "bolt",
+          type: "visual",
+          creatorId: "foe",
+          longitude: 4,
+          latitude: 0,
+          projectileAnimation: "bolt-art",
+        },
+      ] as ReturnedBattle["groundEffects"],
+      playback: [
+        {
+          ...step(2, [{ userId: "foe", curHealth: 60 }]),
+          addedEffectIds: ["bolt"],
+          hits: [{ userId: "foe", amount: -40 }],
+        },
+      ],
+    });
+    const playback = createCombatPlayback(previous);
+    playback.receive(next);
+    const travelling = playback.tick({ ...idle, now: 0 });
+    expect(travelling.usersState[0]?.curHealth).toBe(100);
+    expect(travelling.groundEffects[0]?.projectileOnly).toBe(true);
+    expect(playback.logVersion()).toBe(1);
+    expect(playback.takeHits()).toBeUndefined();
+    expect(playback.tick({ ...idle, now: 200 })).toBe(travelling);
+    expect(playback.tick({ ...idle, now: 650 })).toBe(next);
+    expect(playback.takeHits()).toEqual([{ userId: "foe", amount: -40 }]);
+    expect(playback.logVersion()).toBeUndefined();
+    expect(playback.actorId("foe")).toBe("foe");
+  });
+  it("keeps the landed attacker when a no-cue projectile advances to another actor", () => {
+    const previous = battle(1, {
+      usersState: [
+        fighter(),
+        { userId: "next", longitude: 0, latitude: 0, curHealth: 100 } as never,
+        { userId: "victim", longitude: 4, latitude: 0, curHealth: 100 } as never,
+      ],
+    });
+    const next = battle(3, {
+      usersState: [
+        fighter(),
+        { userId: "victim", longitude: 4, latitude: 0, curHealth: 60 } as never,
+        { userId: "next", longitude: 2, latitude: 0, curHealth: 100 } as never,
+      ],
+      groundEffects: [
+        {
+          id: "bolt",
+          type: "visual",
+          creatorId: "foe",
+          longitude: 4,
+          latitude: 0,
+          projectileAnimation: "art",
+        },
+      ] as ReturnedBattle["groundEffects"],
+      playback: [
+        {
+          ...step(2, [{ userId: "victim", curHealth: 60 }]),
+          addedEffectIds: ["bolt"],
+          userIds: ["foe", "next", "victim"],
+          hits: [{ userId: "victim", amount: -40 }],
+        },
+        {
+          ...step(3, [{ userId: "next", longitude: 2 }]),
+          actorId: "next",
+          userIds: ["foe", "next", "victim"],
+          hits: [],
+        },
+      ],
+    });
+    const playback = createCombatPlayback(previous);
+    playback.receive(next);
+    playback.tick({ ...idle, now: 0 });
+    playback.tick({ ...idle, now: 650 });
+    expect(playback.takeHits()).toEqual([{ userId: "victim", amount: -40 }]);
+    expect(playback.actorId()).toBe("next");
+    expect(playback.actorId("victim")).toBe("foe");
+    playback.tick({ ...idle, now: 660, moving: true });
+    expect(playback.actorId("victim")).toBe("next");
+  });
   it("presents an update immediately when nothing needs replaying", () => {
     const playback = createCombatPlayback(battle(1));
     const next = battle(2);
