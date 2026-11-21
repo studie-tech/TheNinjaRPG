@@ -194,7 +194,6 @@ const getVisualOrSound = (
       description: "N/A",
       appearAnimation: animation,
       projectileAnimation: phase === "appear" ? source?.projectileAnimation : undefined,
-      projectileSfx: phase === "appear" ? source?.projectileSfx : undefined,
       projectileScale: phase === "appear" ? source?.projectileScale : undefined,
       animationOffsetY: source?.animationOffsetY,
       groundStyle: source?.groundStyle,

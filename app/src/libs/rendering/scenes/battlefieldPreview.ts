@@ -663,7 +663,6 @@ const visualEffect = (
     animationOffsetY: visuals.animationOffsetY,
     projectileAnimation: visuals.projectileAnimation,
     projectileScale: visuals.projectileScale,
-    projectileSfx: visuals.projectileSfx,
     groundStyle: visuals.groundStyle,
     groundOpacity: visuals.groundOpacity,
     groundFeather: visuals.groundFeather,

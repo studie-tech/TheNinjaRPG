@@ -354,7 +354,6 @@ const MEDIA_KEYS = [
   "appearAnimation",
   "projectileAnimation",
   "disappearAnimation",
-  "projectileSfx",
   "appearSfx",
   "disappearSfx",
 ];
@@ -413,7 +412,6 @@ const VIEWS: Record<ContentAuditFocus, View> = {
       effects: effectsWith(entity.editable.effects, (key) =>
         [
           "type",
-          "projectileSfx",
           "appearSfx",
           "disappearSfx",
           "appearSfxPrimary",

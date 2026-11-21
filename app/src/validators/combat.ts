@@ -132,7 +132,6 @@ const BaseAttributes = {
   groundOpacity: z.coerce.number().min(0.1).max(1).optional(),
   groundFeather: z.coerce.number().min(0).max(0.3).optional(),
   // SFX controls
-  projectileSfx: z.string().optional(),
   appearSfx: z.string().prefault(""),
   disappearSfx: z.string().prefault(""),
   appearSfxPrimary: z.boolean().optional(),

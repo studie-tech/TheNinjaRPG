@@ -61,7 +61,7 @@ export const createCombatEffects = (
     const emittedSounds = new Set<string>();
     const castPhaseKey = (
       effect: GroundEffect | UserEffect,
-      phase: "projectile" | "appear" | "disappear",
+      phase: "appear" | "disappear",
     ) =>
       JSON.stringify([
         effect.creatorId,
@@ -99,7 +99,7 @@ export const createCombatEffects = (
     const soundEvent = (
       effect: GroundEffect | UserEffect,
       id: string,
-      phase: "projectile" | "appear" | "disappear",
+      phase: "appear" | "disappear",
     ) => {
       const cast = castPhaseKey(effect, phase),
         primary = primarySounds.get(cast),
@@ -113,7 +113,7 @@ export const createCombatEffects = (
               effect.creatorId,
               effect.actionId ?? effect.id,
               effect.createdRound,
-              phase === "projectile" || !effect.soundOrigin ? phase : "appear",
+              !effect.soundOrigin ? phase : "appear",
               id,
             ]),
       };
@@ -178,7 +178,6 @@ export const createCombatEffects = (
         !effect.appearAnimation &&
         !effect.projectileAnimation &&
         !effect.disappearAnimation &&
-        !effect.projectileSfx &&
         !effect.appearSfx &&
         !effect.disappearSfx
       )
@@ -191,9 +190,7 @@ export const createCombatEffects = (
         record = undefined;
       }
       if (!record) {
-        const onsetSfx = effect.projectileOnly
-          ? effect.projectileSfx
-          : effect.appearSfx;
+        const onsetSfx = effect.projectileOnly ? undefined : effect.appearSfx;
         const scope = createRenderScope(game),
           root = new Container();
         root.sortableChildren = true;
@@ -215,15 +212,7 @@ export const createCombatEffects = (
           displayed: true,
           events:
             !initial && next.sound && onsetSfx
-              ? [
-                  soundEvent(
-                    effect,
-                    onsetSfx,
-                    effect.projectileOnly
-                      ? "projectile"
-                      : (effect.soundOrigin?.phase ?? "appear"),
-                  ),
-                ]
+              ? [soundEvent(effect, onsetSfx, effect.soundOrigin?.phase ?? "appear")]
               : [],
           depleted: false,
           barrier: null,

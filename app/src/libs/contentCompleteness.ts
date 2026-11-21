@@ -24,7 +24,7 @@ export const hasEffectGraphics = (effects: ZodAllTags[]) =>
 
 /** Whether any effect has a sound configured. */
 export const hasEffectSfx = (effects: ZodAllTags[]) =>
-  effects.some((e) => e.projectileSfx || e.appearSfx || e.disappearSfx);
+  effects.some((e) => e.appearSfx || e.disappearSfx);
 
 /** Whether any effect references a visual asset id missing from `assetIds`. */
 export const hasInvalidEffectAssets = (

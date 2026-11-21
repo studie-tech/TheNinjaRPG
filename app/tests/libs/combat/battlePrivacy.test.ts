@@ -97,7 +97,6 @@ describe("battle response privacy", () => {
     battle.extraState.jutsus["me-jutsu"]!.effects = [
       VisualTag.parse({
         projectileAnimation: "owned-projectile",
-        projectileSfx: "owned-launch",
       }),
     ];
     battle.extraState.items["me-item"]!.effects = [
@@ -106,7 +105,6 @@ describe("battle response privacy", () => {
     battle.extraState.jutsus["foe-jutsu"]!.effects = [
       VisualTag.parse({
         projectileAnimation: "uncast-projectile",
-        projectileSfx: "uncast-launch",
       }),
     ];
     battle.usersEffects = [
@@ -114,7 +112,6 @@ describe("battle response privacy", () => {
         "visual",
         {
           projectileAnimation: "revealed-projectile",
-          projectileSfx: "revealed-launch",
         },
         { creatorId: "foe", targetId: "me" },
       ),
@@ -125,9 +122,6 @@ describe("battle response privacy", () => {
     expect(masked.extraState.textureAssets).toContain("item-projectile");
     expect(masked.extraState.textureAssets).toContain("revealed-projectile");
     expect(masked.extraState.textureAssets).not.toContain("uncast-projectile");
-    expect(masked.extraState.sfxAssets).toContain("owned-launch");
-    expect(masked.extraState.sfxAssets).toContain("revealed-launch");
-    expect(masked.extraState.sfxAssets).not.toContain("uncast-launch");
   });
 
   it("hides other participants' world location, loadouts, cooldowns and stats", () => {

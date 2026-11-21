@@ -880,7 +880,7 @@ export const EditContent = <
                               const t =
                                 id === "staticAssetPath"
                                   ? "STATIC"
-                                  : id === "projectileSfx" || id === "appearSfx" || id === "disappearSfx"
+                                  : id === "appearSfx" || id === "disappearSfx"
                                     ? "SFX"
                                     : "ANIMATION";
                               openAssetPicker(id, t);
@@ -943,7 +943,7 @@ export const EditContent = <
                                         hideBorder={false}
                                       />
                                     ) : null
-                                  ) : id === "projectileSfx" || id === "appearSfx" || id === "disappearSfx" ? (
+                                  ) : id === "appearSfx" || id === "disappearSfx" ? (
                                     (() => {
                                       const sfx = (previewAssets || []).find(
                                         (a) => a.id === (field.value as string),
@@ -1826,10 +1826,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           type: "db_values",
           current: staticImage,
         };
-      } else if (
-        innerType instanceof z.ZodString &&
-        (value === "projectileSfx" || value === "appearSfx")
-      ) {
+      } else if (innerType instanceof z.ZodString && value === "appearSfx") {
         return {
           id: value,
           label: FORM_LABEL_MAP[value],
@@ -2201,7 +2198,6 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   animationScale: "Animation scale (1–3×)",
   projectileScale: "Projectile size (0.25–3×; default 1×)",
   animationOffsetY: "Animation height (hexes; positive raises)",
-  projectileSfx: "Projectile launch sound",
   shieldRounds: "Shield Rounds",
   delayRounds: "Diffuse Repayment Turns",
 };
@@ -2270,7 +2266,6 @@ const ASSET_PICKER_FIELDS: readonly string[] = [
   "disappearAnimation",
   "staticAnimation",
   "staticAssetPath",
-  "projectileSfx",
   "appearSfx",
   "disappearSfx",
 ];
@@ -2290,7 +2285,6 @@ const BATTLE_ONLY_FIELDS = [
   "appearAnimation",
   "projectileAnimation",
   "disappearAnimation",
-  "projectileSfx",
   "rounds",
   "target",
   "friendlyFire",

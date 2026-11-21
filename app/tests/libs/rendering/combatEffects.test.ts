@@ -301,14 +301,12 @@ describe("Pixi combat effects", () => {
   });
   it("moves a cast from its creator to its target, then replaces travel with impact once", async () => {
     const scene = setup();
-    scene.snapshot.assets.push({ id: "launch", url: "launch.wav" } as GameAsset);
     scene.snapshot.battle.usersState = [
       makeBattleUser("caster", { longitude: 2, latitude: 1 }),
     ];
     Object.assign(scene.effect, {
       creatorId: "caster",
       projectileAnimation: "animation",
-      projectileSfx: "launch",
       projectileScale: 2,
       projectileOnly: true,
       staticAnimation: "",
@@ -318,7 +316,7 @@ describe("Pixi combat effects", () => {
     const root = scene.effects.container.children[0]!;
     const projectile = root.children[0] as Sprite;
     scene.effects.animate(0, false, false, null);
-    expect(scene.play.mock.calls).toEqual([["launch.wav", 0.4]]);
+    expect(scene.play).not.toHaveBeenCalled();
     const tile = scene.grid.getHex({ col: 3, row: 1 })!;
     expect(projectile.width).toBeCloseTo(tile.height * 0.65 * 2);
     const start = projectile.x;
@@ -337,13 +335,10 @@ describe("Pixi combat effects", () => {
     expect(scene.effects.container.children[0]?.children).toHaveLength(1);
     const impact = scene.effects.container.children[0]?.children[0] as Sprite;
     expect(impact.width).toBeCloseTo(tile.height);
-    expect(scene.play.mock.calls).toEqual([
-      ["launch.wav", 0.4],
-      ["appear.wav", 0.4],
-    ]);
+    expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
     await scene.effects.sync(scene.snapshot);
     scene.effects.animate(660, false, false, null);
-    expect(scene.play).toHaveBeenCalledTimes(2);
+    expect(scene.play).toHaveBeenCalledTimes(1);
   });
   it("keeps a surface loop flattened through texture-frame changes", async () => {
     const scene = setup();
@@ -769,7 +764,6 @@ describe("authoritative combat effect transitions", () => {
             animationScale: 2.5,
             animationOffsetY: 0.5,
             projectileAnimation: "bolt",
-            projectileSfx: "launch",
             projectileScale: 2,
             disappearAnimation: "animation",
             disappearSfx: "disappear",
@@ -787,7 +781,6 @@ describe("authoritative combat effect transitions", () => {
     expect(scene.effects.container.children[0]?.visible).toBe(true);
     const end = scene.snapshot.battle.groundEffects[0]!;
     expect(end.projectileAnimation).toBeUndefined();
-    expect(end.projectileSfx).toBeUndefined();
     expect(end.projectileScale).toBeUndefined();
     expect(end.animationOffsetY).toBe(0.5);
     const tile = scene.grid.getHex({ col: end.longitude, row: end.latitude })!;

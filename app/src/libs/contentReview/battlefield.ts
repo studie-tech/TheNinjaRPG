@@ -30,7 +30,6 @@ export const battlefieldSceneOf = (
         appearAnimation: text(tag.appearAnimation),
         projectileAnimation: text(tag.projectileAnimation),
         disappearAnimation: text(tag.disappearAnimation),
-        projectileSfx: text(tag.projectileSfx),
         appearSfx: text(tag.appearSfx),
         disappearSfx: text(tag.disappearSfx),
       };
@@ -111,9 +110,7 @@ export const battlefieldSceneOf = (
 export const sceneSoundIds = (scene: BattlefieldScene | null) => [
   ...new Set(
     (scene?.effects ?? []).flatMap((effect) =>
-      [effect.projectileSfx, effect.appearSfx, effect.disappearSfx].filter(
-        (id): id is string => !!id,
-      ),
+      [effect.appearSfx, effect.disappearSfx].filter((id): id is string => !!id),
     ),
   ),
 ];
@@ -219,7 +216,6 @@ export type BattlefieldEffect = {
   groundFeather?: number;
   disappearAnimation: string;
   /** Sounds combat plays as the effect appears and as it ends. */
-  projectileSfx?: string;
   appearSfx: string;
   disappearSfx: string;
   appearSfxPrimary?: boolean;

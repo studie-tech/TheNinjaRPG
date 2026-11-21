@@ -96,7 +96,7 @@ const FORBIDDEN_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 
 /** Fields that hold each media kind: asset ids for sounds and animations, URLs for images. */
 const MEDIA_FIELDS: Record<ContentProposalMediaKind, readonly string[]> = {
-  SFX: ["projectileSfx", "appearSfx", "disappearSfx"],
+  SFX: ["appearSfx", "disappearSfx"],
   ANIMATION: [
     "appearAnimation",
     "staticAnimation",

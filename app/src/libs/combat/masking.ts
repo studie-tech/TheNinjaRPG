@@ -224,7 +224,7 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
           ? [ID_SFX_TRANSFORMATION_SURGE, ID_SFX_TRANSFORMATION_BURST]
           : []),
         ...effects
-          .flatMap((e) => [e.projectileSfx, e.appearSfx, e.disappearSfx])
+          .flatMap((e) => [e.appearSfx, e.disappearSfx])
           .filter((id): id is string => !!id),
       ]),
     ],
