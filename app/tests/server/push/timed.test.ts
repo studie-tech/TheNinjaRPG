@@ -12,6 +12,7 @@ import {
   createTimedPushSender,
   deliverDueTimedPushes,
   dueTimedPushEvents,
+  TIMED_PUSH_LOOKBACK_SECONDS,
   type TimedPushEvent,
   timedPushKey,
 } from "@/server/utils/push/timed";
@@ -55,8 +56,8 @@ integration("background timer delivery receipts (real Redis)", () => {
     expect(await send(event, delivery)).toBe("duplicate");
     expect(delivery).toHaveBeenCalledTimes(1);
     const ttl = await redis.ttl(timedPushKey(event));
-    expect(ttl).toBeGreaterThan(86400);
-    expect(ttl).toBeLessThanOrEqual(172800);
+    expect(ttl).toBeGreaterThan(TIMED_PUSH_LOOKBACK_SECONDS);
+    expect(ttl).toBeLessThanOrEqual(2 * TIMED_PUSH_LOOKBACK_SECONDS);
   });
   it("retries a total transient failure without holding the receipt", async () => {
     const retry = { ...event, sourceId: "transient" };
@@ -258,6 +259,17 @@ describe("persisted timer eligibility", () => {
     ]);
     expect(new Set(events.map(timedPushKey)).size).toBe(4);
   });
+  it("keeps a timer eligible through the lookback and drops it once the window passes", () => {
+    const at = (secondsAgo: number) =>
+      dueTimedPushEvents(
+        user({
+          jutsus: [{ id: "edge", finishTraining: secondsFromDate(-secondsAgo, now) }],
+        }),
+        now,
+      );
+    expect(at(TIMED_PUSH_LOOKBACK_SECONDS)).toHaveLength(1);
+    expect(at(TIMED_PUSH_LOOKBACK_SECONDS + 1)).toEqual([]);
+  });
   it("does not replay old or cancelled training sessions", () => {
     const current = user({
       currentlyTrainingMastery: null,
@@ -266,7 +278,10 @@ describe("persisted timer eligibility", () => {
       covertTrainingStartedAt: secondsFromDate(-60, now),
       covertTrainingMinutes: 1,
       jutsus: [
-        { id: "old", finishTraining: secondsFromDate(-86401, now) },
+        {
+          id: "old",
+          finishTraining: secondsFromDate(-TIMED_PUSH_LOOKBACK_SECONDS - 1, now),
+        },
         { id: "cleared", finishTraining: null },
       ],
     });

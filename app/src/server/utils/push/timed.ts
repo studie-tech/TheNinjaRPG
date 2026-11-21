@@ -40,9 +40,15 @@ type TimerUser = Pick<
   jutsus: { id: string; finishTraining: Date | null }[];
 };
 
-const LOOKBACK_SECONDS = 24 * 60 * 60;
+/**
+ * How long an elapsed timer stays eligible. Every minute run re-checks each eligible event's
+ * receipt with a Redis command, so the window bounds that cost per timer. It outlasts the
+ * lease, so a crashed worker's event is still retried, plus a few missed runs; a timer that
+ * elapsed during a longer outage is skipped rather than announced late.
+ */
+export const TIMED_PUSH_LOOKBACK_SECONDS = 15 * 60;
 const LEASE_SECONDS = 10 * 60;
-const RETAIN_SECONDS = 2 * LOOKBACK_SECONDS;
+const RETAIN_SECONDS = 2 * TIMED_PUSH_LOOKBACK_SECONDS;
 
 /** Stable, opaque receipt: no message text, names, email or device token enters Redis. */
 export const timedPushKey = (event: TimedPushEvent) =>
@@ -103,7 +109,7 @@ export const dueTimedPushEvents = (user: TimerUser, now: Date): TimedPushEvent[]
     if (
       endsAt &&
       endsAt <= now &&
-      endsAt.getTime() >= now.getTime() - LOOKBACK_SECONDS * 1000
+      endsAt.getTime() >= now.getTime() - TIMED_PUSH_LOOKBACK_SECONDS * 1000
     ) {
       events.push({ userId: user.userId, kind, sourceId, endsAt });
     }
@@ -143,7 +149,7 @@ export const deliverDueTimedPushes = async (
       userIds,
       offset,
       now,
-      LOOKBACK_SECONDS,
+      TIMED_PUSH_LOOKBACK_SECONDS,
     );
     const events = users.flatMap((user) => dueTimedPushEvents(user, now));
     const outcomes = await mapWithConcurrency(
