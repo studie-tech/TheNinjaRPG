@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { insertAction } from "@/libs/combat/actions";
 import { applyEffects } from "@/libs/combat/process";
-import type {
-  BattleUserState,
-  CombatAction,
-  CompleteBattle,
-  ReturnedBattle,
-} from "@/libs/combat/types";
+import type { CombatAction, CompleteBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { SummonTag } from "@/validators/combat";
-import { makeCombatAction, makeCompleteBattle } from "../../setup/combat";
+import {
+  makeBattleUser,
+  makeCombatAction,
+  makeCompleteBattle,
+} from "../../setup/combat";
+import { makeSummonTemplate } from "./helpers/summon";
 
 /**
  * A jutsu may carry several summon tags (e.g. a bloodline that calls two creatures
@@ -22,73 +22,13 @@ const PLAYER_ID = "player1";
 const FIRST_AI = "ai-tortoise";
 const SECOND_AI = "ai-king";
 
-const mkTemplate = (aiId: string, username: string): BattleUserState =>
-  ({
-    userId: `${aiId}-template`,
-    controllerId: aiId,
-    username,
-    isAi: true,
-    isSummon: true,
-    isSummonTemplate: true,
-    isOriginal: true,
-    level: 10,
-    poolsMultiplier: 1,
-    statsMultiplier: 1,
-    bloodlineId: null,
-    effects: [],
-    curHealth: 0,
-    maxHealth: 100,
-    fledBattle: false,
-    leftBattle: false,
-    longitude: 0,
-    latitude: 0,
-    initiative: 0,
-    offence: 100,
-    defence: 100,
-    ninjutsuMastery: 100,
-    genjutsuMastery: 100,
-    taijutsuMastery: 100,
-    bukijutsuMastery: 100,
-    bloodlineMastery: 100,
-    sageMastery: 100,
-    strength: 100,
-    intelligence: 100,
-    willpower: 100,
-    speed: 100,
-  }) as unknown as BattleUserState;
+/** Provide the innate effects read when a template becomes a live summon. */
+const mkTemplate = (aiId: string, username: string) => ({
+  ...makeSummonTemplate(aiId, username),
+  effects: [],
+});
 
-const mkPlayer = (): BattleUserState =>
-  ({
-    userId: PLAYER_ID,
-    controllerId: PLAYER_ID,
-    username: "Player",
-    gender: "Male",
-    isAi: false,
-    isSummon: false,
-    isOriginal: true,
-    level: 10,
-    villageId: "v1",
-    direction: "left",
-    longitude: 2,
-    latitude: 2,
-    initiative: 10,
-    curHealth: 1000,
-    maxHealth: 1000,
-    curChakra: 1000,
-    curStamina: 1000,
-    actionPoints: 100,
-    highestGenerals: ["strength"],
-    fledBattle: false,
-    leftBattle: false,
-    usedActions: [],
-    items: [],
-    jutsus: [],
-    basicActions: [],
-    effects: [],
-    usedGenerals: { strength: 0, intelligence: 0, willpower: 0, speed: 0 },
-    usedStats: { offence: 0, defence: 0 },
-  }) as unknown as BattleUserState;
-
+/** Put a caster and two dormant summon templates in a fixed arena. */
 const mkBattle = (): CompleteBattle =>
   makeCompleteBattle({
     activeUserId: PLAYER_ID,
@@ -99,7 +39,15 @@ const mkBattle = (): CompleteBattle =>
     height: 10,
     round: 1,
     usersState: [
-      mkPlayer(),
+      makeBattleUser(PLAYER_ID, {
+        username: "Player",
+        isAi: false,
+        direction: "left",
+        longitude: 2,
+        latitude: 2,
+        initiative: 10,
+        effects: [],
+      }),
       mkTemplate(FIRST_AI, "Tortoise"),
       mkTemplate(SECOND_AI, "King"),
     ],
@@ -107,6 +55,7 @@ const mkBattle = (): CompleteBattle =>
     extraState: { bloodlines: {}, jutsus: {}, items: {} },
   });
 
+/** Give one targeted jutsu a summon tag for each requested creature. */
 const summonAction = (aiIds: string[]): CombatAction =>
   makeCombatAction({
     id: "zoo-jutsu",
@@ -120,9 +69,10 @@ const summonAction = (aiIds: string[]): CombatAction =>
     ),
   });
 
+/** Resolve a real cast and expose its creatures, effects and placement grid. */
 const cast = (aiIds: string[], target = { longitude: 4, latitude: 2 }) => {
   const battle = mkBattle();
-  const grid = getBattleGrid(20, battle as unknown as ReturnedBattle);
+  const grid = getBattleGrid(20, battle);
   const inserted = insertAction({
     battle,
     grid,
