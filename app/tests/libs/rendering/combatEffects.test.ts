@@ -21,7 +21,12 @@ import { groundDecalBoundaries } from "@/libs/rendering/primitives/groundDecal";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
 import { createCombatPlayback } from "@/libs/rendering/scenes/combatPlayback";
-import { PoisonTag, SkillTreeValidator, VisualTag } from "@/validators/combat";
+import {
+  DamageTag,
+  PoisonTag,
+  SkillTreeValidator,
+  VisualTag,
+} from "@/validators/combat";
 import {
   makeBasicAttack,
   makeBattleUser,
@@ -419,9 +424,13 @@ describe("Pixi combat effects", () => {
     scene.effects.animate(0, false, false, null);
     expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
   });
-  it.each(["appear", "disappear"] as const)(
-    "preserves private primary %s cues for every viewer and deduplicates target copies",
-    async (phase) => {
+  it.each([
+    { phase: "appear", tag: "poison" },
+    { phase: "appear", tag: "visual" },
+    { phase: "disappear", tag: "poison" },
+  ] as const)(
+    "preserves private primary $phase cues for $tag tags and deduplicates target copies",
+    async ({ phase, tag }) => {
       const battle = makeCompleteBattle({
         width: 5,
         height: 5,
@@ -437,9 +446,10 @@ describe("Pixi combat effects", () => {
           makeBattleUser("other", { direction: "right", longitude: 3, latitude: 0 }),
         ],
       });
+      const schema = tag === "visual" ? VisualTag : PoisonTag;
       battle.extraState.enemySkills = {
         "private-skill": [
-          PoisonTag.parse({
+          schema.parse({
             power: 20,
             rounds: 3,
             [`${phase}Sfx`]: "a",
@@ -447,7 +457,7 @@ describe("Pixi combat effects", () => {
           }),
         ],
         "private-bloodright": [
-          PoisonTag.parse({
+          schema.parse({
             power: 10,
             rounds: 2,
             [`${phase}Sfx`]: "b",
@@ -468,7 +478,9 @@ describe("Pixi combat effects", () => {
         }),
       ).toBe(true);
       expect(
-        battle.usersEffects.filter((effect) => effect.fromType === "skill"),
+        (tag === "visual" ? battle.groundEffects : battle.usersEffects).filter(
+          (effect) => effect.fromType === "skill",
+        ),
       ).toHaveLength(4);
       let { newBattle } = applyEffects(battle, "caster");
       if (phase === "disappear") {
@@ -495,11 +507,19 @@ describe("Pixi combat effects", () => {
         if (viewer !== "caster") {
           expect(JSON.stringify(masked)).not.toContain("private-skill");
           expect(JSON.stringify(masked)).not.toContain("private-bloodright");
+          if (tag === "visual")
+            expect(
+              new Set(
+                masked.groundEffects
+                  .filter((effect) => effect.fromType === "skill")
+                  .map((effect) => effect.actionId),
+              ).size,
+            ).toBe(2);
           for (const effect of masked.usersEffects.filter(
             (entry) => entry.fromType === "skill",
           )) {
             const onset = masked.groundEffects.find(
-              (entry) => entry.appearSfx === effect.appearSfx,
+              (entry) => entry.soundOrigin?.actionId === effect.actionId,
             );
             expect(onset?.soundOrigin?.actionId).toBe(effect.actionId);
           }
@@ -1038,9 +1058,16 @@ describe("Pixi combat effects", () => {
 });
 
 describe("authoritative combat effect transitions", () => {
-  it.each(["OTHER_USER", "SELF"] as const)(
-    "keeps one retained visual's cues through a %s cast and replay",
-    async (target) => {
+  it.each(
+    (["OTHER_USER", "SELF"] as const).flatMap((target) =>
+      (["surviving", "damage first", "visual first"] as const).map((outcome) => ({
+        target,
+        outcome,
+      })),
+    ),
+  )(
+    "keeps one visual's arrival through a $target cast and replay ($outcome)",
+    async ({ target, outcome }) => {
       const scene = setup();
       const battle = makeCompleteBattle({
         width: 12,
@@ -1048,20 +1075,46 @@ describe("authoritative combat effect transitions", () => {
         version: 1,
         createdAt: new Date("2020-01-01"),
         usersState: [
-          makeBattleUser("caster", { direction: "left", longitude: 0, latitude: 0 }),
-          makeBattleUser("victim", { direction: "right", longitude: 2, latitude: 0 }),
+          makeBattleUser("caster", {
+            direction: "left",
+            longitude: 0,
+            latitude: 0,
+            curHealth: 1,
+          }),
+          makeBattleUser("victim", {
+            direction: "right",
+            longitude: 2,
+            latitude: 0,
+            curHealth: 1,
+          }),
         ],
       });
       const tag = VisualTag.parse({
         rounds: 0,
         projectileAnimation: "animation",
+        projectileScale: 1.25,
         appearAnimation: "animation",
+        animationScale: 1.5,
+        animationOffsetY: 0.25,
         staticAnimation: "animation",
         disappearAnimation: "animation",
         appearSfx: "appear",
+        appearSfxPrimary: true,
         disappearSfx: "disappear",
+        disappearSfxPrimary: true,
       });
-      const action = makeCombatAction({ target, range: 3, effects: [tag] });
+      const damage = DamageTag.parse({
+        rounds: 0,
+        calculation: "static",
+        power: 99999,
+      });
+      const tags =
+        outcome === "surviving"
+          ? [tag]
+          : outcome === "damage first"
+            ? [damage, tag]
+            : [tag, damage];
+      const action = makeCombatAction({ target, range: 3, effects: tags });
       const previous = maskBattle(structuredClone(battle), "caster");
       const recorder = createCombatPlaybackRecorder(battle);
       expect(
@@ -1079,12 +1132,34 @@ describe("authoritative combat effect transitions", () => {
       newBattle.version = 2;
       const next = maskBattle(newBattle, "caster");
       next.playback = recorder.steps;
-      expect(next.groundEffects).toHaveLength(0);
+      expect(
+        next.usersState.find(
+          (user) => user.userId === (target === "SELF" ? "caster" : "victim"),
+        )?.curHealth,
+      ).toBe(outcome === "surviving" ? 1 : 0);
+      expect(next.groundEffects).toHaveLength(1);
+      expect(next.groundEffects[0]).toMatchObject({
+        appearAnimation: tag.appearAnimation,
+        appearSfx: tag.appearSfx,
+        appearSfxPrimary: tag.appearSfxPrimary,
+        projectileAnimation: tag.projectileAnimation,
+        projectileScale: tag.projectileScale,
+        animationScale: tag.animationScale,
+        animationOffsetY: tag.animationOffsetY,
+        longitude: target === "SELF" ? 0 : 2,
+        latitude: 0,
+      });
       expect(next.usersEffects).toHaveLength(1);
       expect(next.usersEffects[0]).toMatchObject({
-        ...tag,
+        type: "visual",
+        staticAnimation: tag.staticAnimation,
+        disappearAnimation: tag.disappearAnimation,
+        disappearSfx: tag.disappearSfx,
+        appearAnimation: "",
+        appearSfx: "",
         targetId: target === "SELF" ? "caster" : "victim",
       });
+      expect(next.usersEffects[0]?.projectileAnimation).toBeUndefined();
       const frame = buildPlaybackFrames(previous, next)[0]!;
       if (target === "SELF") {
         expect(frame.travel).toBeUndefined();
@@ -1106,8 +1181,33 @@ describe("authoritative combat effect transitions", () => {
       }
       await scene.effects.sync({ ...scene.snapshot, battle: frame.battle });
       scene.effects.animate(1000, false, false, null);
-      expect(scene.effects.container.children).toHaveLength(1);
-      expect(scene.effects.container.children[0]?.children).toHaveLength(2);
+      const visibleSprites = () =>
+        scene.effects.container.children
+          .filter((root) => root.visible)
+          .flatMap((root) => root.children)
+          .filter((sprite) => sprite.visible);
+      expect(visibleSprites()).toHaveLength(outcome === "surviving" ? 2 : 1);
+      expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+      scene.effects.animate(2000, false, false, null);
+      expect(scene.effects.clipFrameRate() > 0).toBe(outcome === "surviving");
+      expect(visibleSprites()).toHaveLength(outcome === "surviving" ? 1 : 0);
+      expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+
+      const hydrated = setup();
+      await hydrated.effects.sync({ ...hydrated.snapshot, battle: next }, true);
+      hydrated.effects.animate(0, false, false, null);
+      expect(hydrated.play).not.toHaveBeenCalled();
+      expect(hydrated.effects.clipFrameRate() > 0).toBe(outcome === "surviving");
+
+      expireGroundEffects(newBattle, []);
+      const settled = applyEffects(newBattle, "caster").newBattle;
+      expect(settled.groundEffects).toHaveLength(0);
+      await scene.effects.sync({
+        ...scene.snapshot,
+        battle: maskBattle(settled, "caster"),
+      });
+      scene.effects.animate(3000, false, false, null);
+      expect(visibleSprites()).toHaveLength(outcome === "surviving" ? 1 : 0);
       expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
     },
   );

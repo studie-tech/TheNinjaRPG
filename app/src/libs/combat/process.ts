@@ -1693,10 +1693,9 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
     actionEffects.push(info);
   }
 
-  // Retained visuals and ground casts own their appearance; user copies apply mechanics.
+  // Ground casts own their appearance; direct user arrivals stay at the hit coordinates.
   if (
     (effect.appearAnimation || effect.appearSfx || effect.projectileAnimation) &&
-    effect.type !== "visual" &&
     !effect.fromGround &&
     effect.isNew &&
     longitude !== undefined &&
@@ -1713,6 +1712,12 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
         effect,
       ),
     );
+    if (effect.type === "visual") {
+      // The retained visual owns its static artwork and exit, even after onset expires.
+      effect.appearAnimation = "";
+      effect.appearSfx = "";
+      delete effect.projectileAnimation;
+    }
   }
 
   if ((isEffectActive(effect) && !effect.fromGround) || effect.type === "visual") {
