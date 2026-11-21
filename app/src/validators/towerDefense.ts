@@ -17,21 +17,11 @@ export const TD_MAX_ACTIONS = 300_000;
 export const TD_MAX_LOG_CHARS = 4_000_000;
 
 /** Enemy health or damage of a challenge, in percent of a normal run's. */
-export const tdChallengeStrength = z.coerce
+const tdChallengeStrength = z.coerce
   .number()
   .int()
   .min(TD_CHALLENGE_MIN_STRENGTH)
   .max(TD_CHALLENGE_MAX_STRENGTH);
-
-/** The challenge a quest objective sets, with the objective it completes. */
-export const tdQuestChallengeSchema = z.object({
-  questId: z.string(),
-  objectiveId: z.string(),
-  waves: z.int().min(1).max(TD_CHALLENGE_MAX_WAVES),
-  enemyHealth: tdChallengeStrength,
-  enemyDamage: tdChallengeStrength,
-});
-export type TdQuestChallenge = z.infer<typeof tdQuestChallengeSchema>;
 
 /** Which quest objective a challenge run is started for. */
 export const tdChallengeRequestSchema = z.object({
@@ -39,6 +29,14 @@ export const tdChallengeRequestSchema = z.object({
   objectiveId: z.string().max(191),
 });
 export type TdChallengeRequest = z.infer<typeof tdChallengeRequestSchema>;
+
+/** The challenge a quest objective sets, with the objective it completes. */
+const tdQuestChallengeSchema = tdChallengeRequestSchema.extend({
+  waves: z.int().min(1).max(TD_CHALLENGE_MAX_WAVES),
+  enemyHealth: tdChallengeStrength,
+  enemyDamage: tdChallengeStrength,
+});
+export type TdQuestChallenge = z.infer<typeof tdQuestChallengeSchema>;
 
 /** What the server signs when a run starts; the claim replays exactly this. */
 export const towerDefenseRunTokenSchema = z.object({

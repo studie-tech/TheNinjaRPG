@@ -107,7 +107,8 @@ export const TowerDefenseLobby = (props: {
   onBuy: (upgradeId: TdDojoUpgrade) => void;
 }) => {
   const busy = props.isStarting || props.isResuming || !!props.isLoading;
-  const savedRun = props.saved?.config.challenge ? "challenge run" : "run";
+  const isSavedChallenge = !!props.saved?.config.challenge;
+  const savedRun = isSavedChallenge ? "challenge run" : "run";
   const bestWave = props.progress?.bestWave ?? 0;
   const checkpoints = tdCheckpoints(bestWave);
   const [startWave, setStartWave] = useState<number | null>(null);
@@ -197,8 +198,8 @@ export const TowerDefenseLobby = (props: {
                   onAccept={props.onDiscard}
                 >
                   {props.saved.over
-                    ? `Your ${savedRun} at wave ${props.saved.wave} has not been claimed yet. Discarding it loses ${props.saved.config.challenge ? "its result" : "the scrolls it earned"}.`
-                    : `Discarding your unfinished ${savedRun} at wave ${props.saved.wave} loses it${props.saved.config.challenge ? "" : " and the scrolls it would earn"}.`}
+                    ? `Your ${savedRun} at wave ${props.saved.wave} has not been claimed yet. Discarding it loses ${isSavedChallenge ? "its result" : "the scrolls it earned"}.`
+                    : `Discarding your unfinished ${savedRun} at wave ${props.saved.wave} loses it${isSavedChallenge ? "" : " and the scrolls it would earn"}.`}
                 </Confirm>
               </div>
             )}
@@ -282,8 +283,8 @@ export const TowerDefenseLobby = (props: {
                 }}
               >
                 {props.saved.over
-                  ? `Your ${savedRun} at wave ${props.saved.wave} has not been claimed yet. Starting a new run discards it${props.saved.config.challenge ? "" : " and the scrolls it earned"}.`
-                  : `Starting a new run discards your unfinished ${savedRun} at wave ${props.saved.wave}${props.saved.config.challenge ? "" : " and the scrolls it would earn"}.`}
+                  ? `Your ${savedRun} at wave ${props.saved.wave} has not been claimed yet. Starting a new run discards it${isSavedChallenge ? "" : " and the scrolls it earned"}.`
+                  : `Starting a new run discards your unfinished ${savedRun} at wave ${props.saved.wave}${isSavedChallenge ? "" : " and the scrolls it would earn"}.`}
               </Confirm>
             ) : (
               startButton

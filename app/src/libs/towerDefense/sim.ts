@@ -537,11 +537,7 @@ export const tdCanCallWave = (state: TdState) =>
 
 /** The last wave a challenge run must clear, or null for an endless run. */
 export const tdChallengeFinalWave = (config: TdRunConfig) =>
-  config.challenge
-    ? Math.max(1, Math.floor(config.startWave)) +
-      Math.max(1, Math.floor(config.challenge.waves)) -
-      1
-    : null;
+  config.challenge ? config.startWave + config.challenge.waves - 1 : null;
 
 /** A challenge run sends no wave after its last one. */
 const isFinalChallengeWave = (state: TdState) => {

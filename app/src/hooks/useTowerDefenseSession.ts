@@ -377,10 +377,9 @@ export const useTowerDefenseSession = (backend: TowerDefenseBackend) => {
 
   /**
    * Start a signed run from a checkpoint or for a quest challenge, or a local guest run.
-   * A new run replaces the
-   * saved one, so it starts only while storage still holds the save the player chose to
-   * discard, or none without `replaceSaved`. Storage is read again once the server
-   * answers, since another tab may have written it in the meantime.
+   * A new run replaces the saved one, so it starts only while storage still holds the
+   * save the player chose to discard, or none without `replaceSaved`. Storage is read
+   * again once the server answers, since another tab may have written it in the meantime.
    */
   const start = useCallback(
     async (startWave: number, replaceSaved = false, challenge?: TdChallengeRequest) => {

@@ -23,8 +23,6 @@ import type { TdSavedRunHead } from "@/libs/towerDefense/savedRun";
 import { parseHtml } from "@/utils/parse";
 import { hasReward } from "@/validators/rewards";
 
-type FoundChallenge = NonNullable<ReturnType<typeof findTowerDefenseChallenge>>;
-
 /**
  * The briefing of a quest's tower defense challenge: what it asks for, whether the player
  * can take it on from where they stand, and the start. A saved challenge run can be resumed
@@ -208,3 +206,5 @@ const Notice = (props: {
     {props.action}
   </div>
 );
+
+type FoundChallenge = NonNullable<ReturnType<typeof findTowerDefenseChallenge>>;

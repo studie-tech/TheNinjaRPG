@@ -150,22 +150,6 @@ export const updateUserDataForClaimTowerDefenseRun = (
     );
 
 /**
- * Build the retirement of a settled quest challenge run, which pays no scrolls and leaves
- * the best wave alone, guarded on the run still being the claimant's latest.
- */
-export const updateUserDataForSettleTowerDefenseChallenge = (
-  client: Pick<DrizzleClient, "update">,
-  ctx: { userId: string },
-  nonce: string,
-) =>
-  client
-    .update(userData)
-    .set({ towerDefenseActiveRun: null })
-    .where(
-      and(eq(userData.userId, ctx.userId), eq(userData.towerDefenseActiveRun, nonce)),
-    );
-
-/**
  * Build the daily Guard Hall duty payout, guarded on the last payout falling before
  * `dayStart`, so it pays at most once per UTC day.
  */

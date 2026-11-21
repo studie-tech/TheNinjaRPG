@@ -101,18 +101,13 @@ describe("tower defense challenges", () => {
     expect(state.won).toBe(false);
   });
 
-  it("replays a won challenge to the same win", () => {
+  it("replays a won challenge to the same win, but not under endless rules", () => {
     const { state, log } = playBotRun(config(easy), { seed: 4, ticks: 20_000 });
     expect(state.won).toBe(true);
     const replay = replayRun(config(easy), log, state.tick);
     expect(replay.invalidAt).toBeNull();
     expect(replay.state.won).toBe(true);
     expect(tdStateHash(replay.state)).toBe(tdStateHash(state));
-  });
-
-  it("does not replay as a win under endless rules", () => {
-    const { state, log } = playBotRun(config(easy), { seed: 5, ticks: 20_000 });
-    const replay = replayRun(config(), log, state.tick);
-    expect(replay.state.won).toBe(false);
+    expect(replayRun(config(), log, state.tick).state.won).toBe(false);
   });
 });

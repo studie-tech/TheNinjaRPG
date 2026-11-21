@@ -31,7 +31,6 @@ import {
   listUserTowerDefenseUpgrades,
   updateUserDataForClaimTowerDefenseRun,
   updateUserDataForPurchaseDojoUpgrade,
-  updateUserDataForSettleTowerDefenseChallenge,
   updateUserDataForStartTowerDefenseRun,
   updateUserDataForTowerDefenseDuty,
   upsertUserTowerDefenseUpgrade,
@@ -63,9 +62,8 @@ import {
   TD_MAX_LOG_CHARS,
   TD_MAX_TICKS,
   type TdChallengeRequest,
-  type TowerDefenseRunToken,
+  type TdQuestChallenge,
   tdChallengeRequestSchema,
-  tdQuestChallengeSchema,
   towerDefenseRunTokenSchema,
 } from "@/validators/towerDefense";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -126,8 +124,8 @@ export const towerDefenseRouter = createTRPCRouter({
             bestWave: true,
             level: true,
             dojo: true,
+            challenge: true,
           })
-          .extend({ challenge: tdQuestChallengeSchema.optional() })
           .optional(),
       }),
     )
@@ -266,7 +264,7 @@ export const towerDefenseRouter = createTRPCRouter({
       if (!result.ok) return refusedForGood(result.message);
       if (token.challenge)
         return await settleChallengeRun(ctx, {
-          token,
+          nonce: token.nonce,
           challenge: token.challenge,
           claimKey,
           result,
@@ -466,13 +464,13 @@ const findQuestChallenge = (
 const settleChallengeRun = async (
   ctx: { drizzle: DrizzleClient; userId: string },
   input: {
-    token: TowerDefenseRunToken;
-    challenge: NonNullable<TowerDefenseRunToken["challenge"]>;
+    nonce: string;
+    challenge: TdQuestChallenge;
     claimKey: string;
     result: { wave: number; kills: number; won: boolean };
   },
 ) => {
-  const { token, challenge, claimKey, result } = input;
+  const { nonce, challenge, claimKey, result } = input;
   let completedFor: UserWithRelations | undefined;
   if (result.won) {
     const { user } = await fetchUpdatedUser({
@@ -503,7 +501,7 @@ const settleChallengeRun = async (
           notifications,
           {
             alwaysClaimUserState: true,
-            claimConditions: [eq(userData.towerDefenseActiveRun, token.nonce)],
+            claimConditions: [eq(userData.towerDefenseActiveRun, nonce)],
           },
         );
         if (!recorded.claimed)
@@ -516,11 +514,11 @@ const settleChallengeRun = async (
     }
   }
   const completed = !!completedFor;
-  const settled = await updateUserDataForSettleTowerDefenseChallenge(
-    ctx.drizzle,
-    ctx,
-    token.nonce,
-  );
+  const settled = await updateUserDataForClaimTowerDefenseRun(ctx.drizzle, ctx, {
+    nonce,
+    points: 0,
+    wave: 0,
+  });
   // A simultaneous claim of this run settled it; the objective it completed stays done.
   if (settled.rowsAffected === 0 && !completed)
     return refusedForGood(REPLACED_RUN_MESSAGE);
