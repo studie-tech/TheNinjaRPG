@@ -93,18 +93,21 @@ export const WarehouseOverview = ({
               {structure?.raidBoosted && <Badge>Raid victory boost</Badge>}
             </div>
           </div>
-          <dl className="grid grid-cols-2 gap-2 text-sm @md:grid-cols-4">
-            <Stat label="Production bonus" value={`+${data.productionBonus}%`} />
-            <Stat label="Deposit bonus" value={`+${data.depositBonus}%`} />
-            <Stat
-              label={`Per item / ${WAREHOUSE_PRODUCTION_INTERVAL_HOURS}h`}
-              value={data.cycleQuantity.toLocaleString()}
-            />
-            <Stat
-              label={village.usesClanPoints ? "Clan points" : "Village tokens"}
-              value={village.funds.toLocaleString()}
-            />
-          </dl>
+          {/* The stats share the row with the level block, so they query their own width. */}
+          <div className="@container">
+            <dl className="grid grid-cols-2 gap-2 text-sm @lg:grid-cols-4">
+              <Stat label="Production bonus" value={`+${data.productionBonus}%`} />
+              <Stat label="Deposit bonus" value={`+${data.depositBonus}%`} />
+              <Stat
+                label={`Per item / ${WAREHOUSE_PRODUCTION_INTERVAL_HOURS}h`}
+                value={data.cycleQuantity.toLocaleString()}
+              />
+              <Stat
+                label={village.usesClanPoints ? "Clan points" : "Village tokens"}
+                value={village.funds.toLocaleString()}
+              />
+            </dl>
+          </div>
         </div>
         {data.isLeader && structure && structure.nextCost !== null && (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
@@ -181,6 +184,14 @@ export const WarehouseStock = ({
             {allowance.loyaltyBonus ? "" : ` after ${WAREHOUSE_LOYALTY_DAYS} days`}
           </Badge>
           <Badge variant="outline">Used today: {allowance.used}</Badge>
+          {!data.isLeader && (
+            <Badge variant="outline">
+              Producing:{" "}
+              {data.production.length > 0
+                ? `${data.production.map((row) => row.name).join(", ")} · next batch at ${new Date(data.nextCycleAt).toLocaleTimeString()}`
+                : "nothing chosen"}
+            </Badge>
+          )}
         </div>
         {stock.length === 0 ? (
           <p className="text-muted-foreground text-sm">
@@ -334,7 +345,7 @@ const DepositForm = ({
   );
 };
 
-/** The items the Warehouse produces, chosen by the leader. */
+/** The leader's choice of items the Warehouse produces. */
 export const WarehouseProduction = ({
   data,
   actions,
@@ -351,88 +362,74 @@ export const WarehouseProduction = ({
   return (
     <ContentBox
       title="Production"
-      subtitle={`Each item yields ${data.cycleQuantity} units every ${WAREHOUSE_PRODUCTION_INTERVAL_HOURS} hours · next at ${new Date(data.nextCycleAt).toLocaleTimeString()}`}
+      subtitle={`Next batch at ${new Date(data.nextCycleAt).toLocaleTimeString()}`}
       initialBreak
     >
-      {data.isLeader ? (
-        data.producibleItems.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No Warehouse items belong to your village yet.
-          </p>
-        ) : (
-          <div className="@container">
-            <p className="mb-2 text-sm">
-              Choose up to {WAREHOUSE_MAX_PRODUCTION_ITEMS} items ({selected.length}{" "}
-              chosen).
-            </p>
-            <ul className="grid gap-2 @xl:grid-cols-2 @5xl:grid-cols-3">
-              {data.producibleItems.map((item) => {
-                const isOn = selected.includes(item.id);
-                return (
-                  <li
-                    key={item.id}
-                    className="flex items-center gap-2 rounded-md border p-2"
-                  >
-                    <Image
-                      src={item.image}
-                      alt=""
-                      width={80}
-                      height={80}
-                      className="size-10 rounded"
-                    />
-                    <label htmlFor={`produce-${item.id}`} className="grow text-sm">
-                      {item.name}
-                    </label>
-                    <Switch
-                      id={`produce-${item.id}`}
-                      checked={isOn}
-                      disabled={
-                        !isOn && selected.length >= WAREHOUSE_MAX_PRODUCTION_ITEMS
-                      }
-                      onCheckedChange={(on) =>
-                        setDraft(
-                          on
-                            ? [...selected, item.id]
-                            : selected.filter((id) => id !== item.id),
-                        )
-                      }
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="mt-3 flex justify-end gap-2">
-              {changed && (
-                <Button variant="outline" onClick={() => setDraft(undefined)}>
-                  Reset
-                </Button>
-              )}
-              <Button
-                disabled={!changed || actions.setProduction.isPending}
-                loading={actions.setProduction.isPending}
-                onClick={() =>
-                  actions.setProduction.mutate(
-                    { itemIds: selected },
-                    { onSuccess: (result) => result.success && setDraft(undefined) },
-                  )
-                }
-              >
-                Save production
-              </Button>
-            </div>
-          </div>
-        )
-      ) : data.production.length === 0 ? (
+      {data.producibleItems.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          Your leader has not chosen production.
+          No Warehouse items belong to your village yet.
         </p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {data.production.map((row) => (
-            <Badge key={row.itemId} variant="secondary">
-              {row.name}
-            </Badge>
-          ))}
+        <div className="@container">
+          <p className="mb-2 text-sm">
+            Choose up to {WAREHOUSE_MAX_PRODUCTION_ITEMS} items ({selected.length}{" "}
+            chosen).
+          </p>
+          <ul className="grid gap-2 @xl:grid-cols-2 @5xl:grid-cols-3">
+            {data.producibleItems.map((item) => {
+              const isOn = selected.includes(item.id);
+              return (
+                <li
+                  key={item.id}
+                  className="flex items-center gap-2 rounded-md border p-2"
+                >
+                  <Image
+                    src={item.image}
+                    alt=""
+                    width={80}
+                    height={80}
+                    className="size-10 rounded"
+                  />
+                  <label htmlFor={`produce-${item.id}`} className="grow text-sm">
+                    {item.name}
+                  </label>
+                  <Switch
+                    id={`produce-${item.id}`}
+                    checked={isOn}
+                    disabled={
+                      !isOn && selected.length >= WAREHOUSE_MAX_PRODUCTION_ITEMS
+                    }
+                    onCheckedChange={(on) =>
+                      setDraft(
+                        on
+                          ? [...selected, item.id]
+                          : selected.filter((id) => id !== item.id),
+                      )
+                    }
+                  />
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-3 flex justify-end gap-2">
+            {changed && (
+              <Button variant="outline" onClick={() => setDraft(undefined)}>
+                Reset
+              </Button>
+            )}
+            <Button
+              disabled={!changed || actions.setProduction.isPending}
+              loading={actions.setProduction.isPending}
+              onClick={() =>
+                actions.setProduction.mutate(
+                  { itemIds: selected },
+                  { onSuccess: (result) => result.success && setDraft(undefined) },
+                )
+              }
+            >
+              Save production
+            </Button>
+          </div>
         </div>
       )}
     </ContentBox>
@@ -457,73 +454,75 @@ export const WarehouseAccess = ({
       subtitle={`Approved players withdraw up to ${WAREHOUSE_APPROVED_DAILY_ALLOWANCE} units a day`}
       initialBreak
     >
-      <div className="@container grid gap-4 @2xl:grid-cols-2">
-        <div>
-          <UserSearchSelect
-            useFormMethods={methods}
-            label="Approve a villager"
-            showYourself={false}
-            inline
-            showAi={false}
-            maxUsers={1}
-          />
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 text-sm">
-              <Switch
-                id="warehouse-wartime"
-                checked={wartime}
-                onCheckedChange={setWartime}
-                disabled={!atWar}
-              />
-              <label htmlFor="warehouse-wartime">
-                Wartime only {atWar ? "" : "(no active war)"}
-              </label>
-            </div>
-            <Button
-              className="ml-auto"
-              disabled={!user || actions.setApproval.isPending}
-              onClick={() =>
-                user &&
-                actions.setApproval.mutate(
-                  { userId: user.userId, approve: true, wartime },
-                  { onSuccess: (result) => result.success && methods.reset() },
-                )
-              }
-            >
-              <ShieldCheck className="mr-2 size-4" aria-hidden />
-              Approve
-            </Button>
-          </div>
-          <p className="text-muted-foreground mt-2 text-xs">
-            Elders can be approved during wartime only. Wartime approvals end with the
-            war.
-          </p>
-        </div>
-        <ul className="grid content-start gap-2">
-          {data.approvals.length === 0 && (
-            <li className="text-muted-foreground text-sm">Nobody is approved.</li>
-          )}
-          {data.approvals.map((row) => (
-            <li
-              key={row.userId}
-              className="flex items-center gap-2 rounded-md border p-2"
-            >
-              <span className="grow text-sm font-semibold">{row.username}</span>
-              {row.wartime && <Badge variant="outline">Wartime</Badge>}
-              {!row.active && <Badge variant="destructive">Inactive</Badge>}
+      <div className="@container">
+        <div className="grid gap-4 @2xl:grid-cols-2">
+          <div>
+            <UserSearchSelect
+              useFormMethods={methods}
+              label="Approve a villager"
+              showYourself={false}
+              inline
+              showAi={false}
+              maxUsers={1}
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 text-sm">
+                <Switch
+                  id="warehouse-wartime"
+                  checked={wartime}
+                  onCheckedChange={setWartime}
+                  disabled={!atWar}
+                />
+                <label htmlFor="warehouse-wartime">
+                  Wartime only {atWar ? "" : "(no active war)"}
+                </label>
+              </div>
               <Button
-                size="sm"
-                variant="outline"
-                disabled={actions.setApproval.isPending}
+                className="ml-auto"
+                disabled={!user || actions.setApproval.isPending}
                 onClick={() =>
-                  actions.setApproval.mutate({ userId: row.userId, approve: false })
+                  user &&
+                  actions.setApproval.mutate(
+                    { userId: user.userId, approve: true, wartime },
+                    { onSuccess: (result) => result.success && methods.reset() },
+                  )
                 }
               >
-                Revoke
+                <ShieldCheck className="mr-2 size-4" aria-hidden />
+                Approve
               </Button>
-            </li>
-          ))}
-        </ul>
+            </div>
+            <p className="text-muted-foreground mt-2 text-xs">
+              Elders can be approved during wartime only. Wartime approvals end with the
+              war.
+            </p>
+          </div>
+          <ul className="grid content-start gap-2">
+            {data.approvals.length === 0 && (
+              <li className="text-muted-foreground text-sm">Nobody is approved.</li>
+            )}
+            {data.approvals.map((row) => (
+              <li
+                key={row.userId}
+                className="flex items-center gap-2 rounded-md border p-2"
+              >
+                <span className="grow text-sm font-semibold">{row.username}</span>
+                {row.wartime && <Badge variant="outline">Wartime</Badge>}
+                {!row.active && <Badge variant="destructive">Inactive</Badge>}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={actions.setApproval.isPending}
+                  onClick={() =>
+                    actions.setApproval.mutate({ userId: row.userId, approve: false })
+                  }
+                >
+                  Revoke
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </ContentBox>
   );
