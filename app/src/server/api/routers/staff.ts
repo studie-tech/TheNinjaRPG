@@ -928,7 +928,7 @@ export const staffRouter = createTRPCRouter({
           warehouseMember,
           caravanDiscovery,
         ].map((table) => updateTableForUpdateUserId(ctx.drizzle, table, input)),
-        renameCaravanUser(ctx.drizzle, input),
+        ...renameCaravanUser(ctx.drizzle, input),
         updateStaffApplicationForUpdateUserId(ctx.drizzle, input),
         updateWarKillForUpdateUserId(ctx.drizzle, input),
         updateWarKillForUpdateUserId2(ctx.drizzle, input),

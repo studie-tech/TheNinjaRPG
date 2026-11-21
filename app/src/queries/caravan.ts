@@ -17,6 +17,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { alias } from "drizzle-orm/mysql-core";
 import {
   CARAVAN_GUARD_SLOTS,
@@ -1192,17 +1193,14 @@ export const insertCaravanWithinCapacity = (
     WHERE (SELECT COUNT(*) FROM ${caravan} AS sent WHERE sent.originVillageId = ${values.originVillageId} AND sent.status IN ('PREPARING', 'TRAVELLING')) < ${capacity}
   `);
 
-/**
- * Move a renamed character's caravan sides, reservations and operations to the new id. It
- * rejects only once every move has settled, so a retry never races a move still in flight.
- */
-export const renameCaravanUser = async (
+/** Moves of a renamed character's caravan sides, reservations and operations to the new id. */
+export const renameCaravanUser = (
   client: Pick<DrizzleClient, "update">,
   input: { newUserId: string; userId: string },
 ) => {
-  const moveActive = (column: typeof caravanParticipant.activeUserId) =>
+  const moveActive = (column: AnyMySqlColumn) =>
     sql`CASE WHEN ${column} IS NULL THEN NULL ELSE ${input.newUserId} END`;
-  const moves = await Promise.allSettled([
+  return [
     client
       .update(caravanParticipant)
       .set({
@@ -1218,12 +1216,10 @@ export const renameCaravanUser = async (
       .update(caravanOperation)
       .set({
         userId: input.newUserId,
-        activeUserId: sql`CASE WHEN ${caravanOperation.activeUserId} IS NULL THEN NULL ELSE ${input.newUserId} END`,
+        activeUserId: moveActive(caravanOperation.activeUserId),
       })
       .where(eq(caravanOperation.userId, input.userId)),
-  ]);
-  const failed = moves.find((move) => move.status === "rejected");
-  if (failed) throw failed.reason;
+  ];
 };
 
 /** A CASE yielding each cargo line's quantity for its item's stock row. */
