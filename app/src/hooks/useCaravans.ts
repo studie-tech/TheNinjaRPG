@@ -173,6 +173,18 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   useEffect(() => {
     if (!controls) onCaravansShown(caravans.data);
   }, [controls, caravans.data]);
+  // A cycle the Warehouse read settled wrote production logs the history has not read.
+  const shownCycle = useRef<number | undefined>(undefined);
+  const onCycleShown = useEffectEvent((current: number | undefined) => {
+    const shown = shownCycle.current;
+    shownCycle.current = current;
+    if (shown !== undefined && current !== undefined && current > shown)
+      reload(prepareViews(), ["history"]);
+  });
+  const nextCycleAt = warehouse.data?.nextCycleAt.getTime();
+  useEffect(() => {
+    if (!controls) onCycleShown(nextCycleAt);
+  }, [controls, nextCycleAt]);
   /**
    * Patch the Warehouse from a confirmed change, and the history with the logs the change
    * wrote: `patch` applies the returned logs, `reload` reads logs it does not return.
@@ -589,6 +601,9 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
 export const useWarehouseHistory = () =>
   api.warehouse.getHistory.useInfiniteQuery(HISTORY_INPUT, {
     getNextPageParam: (page) => page.nextCursor,
+    // Other members move stock too, so a return visit and the stock's fallback read reload it.
+    refetchOnMount: "always",
+    refetchInterval: QUIET_REFRESH_MS,
   });
 
 type CaravansView = RouterOutputs["caravan"]["getCaravans"];
