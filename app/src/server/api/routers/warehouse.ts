@@ -532,7 +532,7 @@ export const warehouseRouter = createTRPCRouter({
         return {
           success: true,
           message: `${target.username} lost increased access`,
-          warehouseChange: getSelfApprovalChange(user, target, null),
+          warehouseChange: getApprovalWarehouseChange(user.userId, target, null),
         };
       }
       const [war] = getVillageWars(wars, villageData.id);
@@ -551,22 +551,12 @@ export const warehouseRouter = createTRPCRouter({
         message: input.wartime
           ? `${target.username} has increased access until the war ends`
           : `${target.username} has increased access`,
-        warehouseChange: getSelfApprovalChange(user, target, {
+        warehouseChange: getApprovalWarehouseChange(user.userId, target, {
           wartime: input.wartime,
         }),
       };
     }),
 });
-
-/** An approval change, withheld when the leader changed their own allowance. */
-const getSelfApprovalChange = (
-  user: UserData,
-  target: UserData,
-  approval: Parameters<typeof getApprovalWarehouseChange>[1],
-) =>
-  target.userId === user.userId
-    ? undefined
-    : getApprovalWarehouseChange(target, approval);
 
 /** Why a player cannot use their village's Warehouse right now, if they cannot. */
 const warehouseAccessError = (

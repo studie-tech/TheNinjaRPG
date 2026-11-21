@@ -143,23 +143,31 @@ export const getProductionWarehouseChange = (
   })),
 });
 
-/** Describe a granted or revoked approval; a granted one starts active. */
+/**
+ * Describe a granted or revoked approval; a granted one starts active. A leader changing
+ * their own approval also changes their allowance, so that change is withheld for the view
+ * to reconcile.
+ */
 export const getApprovalWarehouseChange = (
+  viewerId: string,
   target: Pick<UserData, "userId" | "username">,
   approval: { wartime: boolean } | null,
-): WarehouseChange => ({
-  approval: {
-    userId: target.userId,
-    row: approval
-      ? {
+): WarehouseChange | undefined =>
+  target.userId === viewerId
+    ? undefined
+    : {
+        approval: {
           userId: target.userId,
-          username: target.username,
-          wartime: approval.wartime,
-          active: true,
-        }
-      : null,
-  },
-});
+          row: approval
+            ? {
+                userId: target.userId,
+                username: target.username,
+                wartime: approval.wartime,
+                active: true,
+              }
+            : null,
+        },
+      };
 
 /** Describe the funds a village paid: village tokens, or clan points in faction settlements. */
 export const getPaidWarehouseChange = (cost: number): WarehouseChange => ({

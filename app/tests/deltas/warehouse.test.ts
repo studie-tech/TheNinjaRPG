@@ -187,13 +187,16 @@ describe("warehouse deltas", () => {
     const target = { userId: "u", username: "Ninja" };
     const approved = applyWarehouseChange(
       view(),
-      getApprovalWarehouseChange(target, { wartime: true }),
+      getApprovalWarehouseChange("kage", target, { wartime: true }),
     );
     expect(approved?.approvals).toEqual([{ ...target, wartime: true, active: true }]);
     expect(
-      applyWarehouseChange(approved!, getApprovalWarehouseChange(target, null))
+      applyWarehouseChange(approved!, getApprovalWarehouseChange("kage", target, null))
         ?.approvals,
     ).toEqual([]);
+    // A leader's own approval changes their allowance, which the view must reconcile.
+    expect(getApprovalWarehouseChange("u", target, { wartime: false })).toBeUndefined();
+    expect(getApprovalWarehouseChange("u", target, null)).toBeUndefined();
     expect(
       applyWarehouseChange(view(), getPaidWarehouseChange(300))?.village,
     ).toMatchObject({ funds: 700 });
