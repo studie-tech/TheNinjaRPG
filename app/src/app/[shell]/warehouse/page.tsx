@@ -40,6 +40,10 @@ export default function WarehousePage() {
     );
   if (!warehouse) return <Loader explanation="Opening the Warehouse" />;
   const built = (warehouse.structure?.level ?? 0) > 0;
+  // Trade panels need both reads; a failed one is retried in their place.
+  const failedTrade = [actions.routes, actions.caravans].filter(
+    (query) => !query.data && query.isError,
+  );
   return (
     <>
       <WarehouseOverview data={warehouse} actions={actions} clanId={userData.clanId} />
@@ -60,6 +64,16 @@ export default function WarehousePage() {
               caravans={caravans ?? undefined}
               actions={actions}
             />
+          )}
+          {failedTrade.length > 0 && (
+            <ContentBox title="Caravans" initialBreak>
+              <QueryError
+                layout="panel"
+                message="Could not load the trade routes and caravans."
+                onRetry={() => failedTrade.forEach((query) => void query.refetch())}
+                isRetrying={failedTrade.some((query) => query.isFetching)}
+              />
+            </ContentBox>
           )}
           {warehouse.isLeader && (
             <>
