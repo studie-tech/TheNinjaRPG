@@ -116,9 +116,9 @@ import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import {
   leaveCombatStatusSql,
-  withoutActivityReservation,
   withoutCaravanEscort,
   withoutDungeonReservation,
+  withoutQueuedEscort,
 } from "@/queries/activityReservation";
 import { fetchAiProfileById } from "@/queries/ai";
 import { nextSnapshotSql, selectClaimedRankedQueueEntry } from "@/queries/concurrency";
@@ -1596,7 +1596,7 @@ export const updateUserDataForCreateBattle = (
                 : and(eq(userData.status, "AWAKE"), withoutCaravanEscort()),
             ]
           : !dungeonEncounter
-            ? [withoutActivityReservation()]
+            ? [withoutDungeonReservation(), withoutQueuedEscort()]
             : []),
         // Team members must still occupy the original launch tile after combat preload.
         ...(battleType === "COMBAT" ||

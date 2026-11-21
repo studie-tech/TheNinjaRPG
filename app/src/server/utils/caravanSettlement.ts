@@ -60,27 +60,30 @@ export const settleCaravanCombat = async (
     await creditGuardObjectives(database, caravanId, state.guardIds);
   } else if (state.type === "AMBUSH") {
     await applyCaravanLoss(database, caravanId, CARAVAN_AMBUSH_LOSS_BP);
-  } else if (state.type === "INTERCEPTION" && state.attackerRole === "BANDIT") {
-    const stolenBp = getAllowedLoss(state.lossBp, state.stealBp);
-    await applyCaravanLoss(database, caravanId, stolenBp);
-    await awardLoot(
-      database,
-      caravanId,
-      splitLoot(state.cargo, stolenBp, state.attackerIds),
-    );
-    await grantCaravanRewards(
-      database,
-      state.attackerIds.map((userId) => ({
-        userId,
-        banditExperience: BANDIT_OPERATION_EXP,
-      })),
-    );
   } else if (state.type === "INTERCEPTION") {
-    await applyCaravanLoss(database, caravanId, CARAVAN_ENEMY_ATTACK_LOSS_BP);
-    await grantCaravanRewards(
-      database,
-      state.attackerIds.map((userId) => ({ userId, money: CARAVAN_ENEMY_VICTORY_RYO })),
+    // Raiders are paid only for cargo they actually took; a plundered caravan pays nothing.
+    const isBandit = state.attackerRole === "BANDIT";
+    const takenBp = getAllowedLoss(
+      state.lossBp,
+      isBandit ? state.stealBp : CARAVAN_ENEMY_ATTACK_LOSS_BP,
     );
+    if (takenBp > 0) {
+      await applyCaravanLoss(database, caravanId, takenBp);
+      if (isBandit)
+        await awardLoot(
+          database,
+          caravanId,
+          splitLoot(state.cargo, takenBp, state.attackerIds),
+        );
+      await grantCaravanRewards(
+        database,
+        state.attackerIds.map((userId) =>
+          isBandit
+            ? { userId, banditExperience: BANDIT_OPERATION_EXP }
+            : { userId, money: CARAVAN_ENEMY_VICTORY_RYO },
+        ),
+      );
+    }
   }
   // An interception group disbands after its attack, whatever the result.
   if (state.type === "INTERCEPTION" && state.attackerRole)

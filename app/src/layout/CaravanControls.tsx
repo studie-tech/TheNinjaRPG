@@ -302,7 +302,12 @@ const KnownCaravan = ({
           <Button
             size="sm"
             variant="outline"
-            disabled={actions.track.isPending}
+            title={
+              row.lastSector === null
+                ? "Search the caravan's sector to sight it first"
+                : undefined
+            }
+            disabled={row.lastSector === null || actions.track.isPending}
             onClick={() => actions.track.mutate({ caravanId: row.id })}
           >
             <Footprints className="mr-1 size-4" aria-hidden />

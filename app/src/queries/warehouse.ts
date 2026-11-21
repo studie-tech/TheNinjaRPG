@@ -9,6 +9,7 @@ import {
   isNull,
   lt,
   lte,
+  ne,
   or,
   type SQL,
   sql,
@@ -302,9 +303,25 @@ export const ensureWarehouseMember = (
     .values({ userId })
     .onDuplicateKeyUpdate({ set: { userId: sql`${warehouseMember.userId}` } });
 
+/** Start a player's allowance on a new UTC day before a withdrawal counts against it. */
+export const resetWarehouseAllowanceDay = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  day: string,
+) =>
+  client
+    .update(warehouseMember)
+    .set({ allowanceDay: day, allowanceUsed: 0 })
+    .where(
+      and(
+        eq(warehouseMember.userId, userId),
+        or(isNull(warehouseMember.allowanceDay), ne(warehouseMember.allowanceDay, day)),
+      ),
+    );
+
 /**
  * Take unreserved stock and count it against the player's allowance for the UTC day in one
- * statement, so concurrent withdrawals cannot exceed either.
+ * statement, so concurrent withdrawals cannot exceed either. The day is reset first.
  */
 export const claimWithdrawal = (
   client: Pick<DrizzleClient, "execute">,
@@ -321,12 +338,12 @@ export const claimWithdrawal = (
     UPDATE ${warehouseStock}
     INNER JOIN ${warehouseMember} ON ${warehouseMember.userId} = ${input.userId}
     SET ${warehouseStock.quantity} = ${warehouseStock.quantity} - ${input.quantity},
-        ${warehouseMember.allowanceUsed} = CASE WHEN ${warehouseMember.allowanceDay} = ${input.day} THEN ${warehouseMember.allowanceUsed} + ${input.quantity} ELSE ${input.quantity} END,
-        ${warehouseMember.allowanceDay} = ${input.day}
+        ${warehouseMember.allowanceUsed} = ${warehouseMember.allowanceUsed} + ${input.quantity}
     WHERE ${warehouseStock.villageId} = ${input.villageId}
       AND ${warehouseStock.itemId} = ${input.itemId}
       AND ${warehouseStock.quantity} >= ${warehouseStock.reserved} + ${input.quantity}
-      AND (CASE WHEN ${warehouseMember.allowanceDay} = ${input.day} THEN ${warehouseMember.allowanceUsed} ELSE 0 END) + ${input.quantity} <= ${input.allowance}
+      AND ${warehouseMember.allowanceDay} = ${input.day}
+      AND ${warehouseMember.allowanceUsed} + ${input.quantity} <= ${input.allowance}
   `);
 
 /** Grant or replace a player's Kage approval. */

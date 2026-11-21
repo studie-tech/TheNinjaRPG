@@ -27,7 +27,11 @@ import {
 import type { CaravanBattleState } from "@/libs/caravan";
 import { insertGuard, queueGuard } from "@/queries/caravan";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
-import { claimWithdrawal, ensureWarehouseMember } from "@/queries/warehouse";
+import {
+  claimWithdrawal,
+  ensureWarehouseMember,
+  resetWarehouseAllowanceDay,
+} from "@/queries/warehouse";
 import { deliverCaravan, maintainCaravans } from "@/server/utils/caravan";
 import { settleCaravanCombat } from "@/server/utils/caravanSettlement";
 import { settleProduction } from "@/server/utils/warehouse";
@@ -101,6 +105,11 @@ describeWithDatabase("village Warehouse and caravans", () => {
       .insert(warehouseStock)
       .values({ villageId: "leaf", itemId: "ore", quantity: 100, reserved: 60 });
     await ensureWarehouseMember(db, "u");
+    await db
+      .update(warehouseMember)
+      .set({ allowanceDay: "2026-06-14", allowanceUsed: 30 })
+      .where(eq(warehouseMember.userId, "u"));
+    await resetWarehouseAllowanceDay(db, "u", "2026-06-15");
     const claim = (quantity: number) =>
       claimWithdrawal(db, {
         villageId: "leaf",
@@ -185,6 +194,67 @@ describeWithDatabase("village Warehouse and caravans", () => {
     const [encounter] = await db.select().from(caravanEncounter);
     expect(encounter?.status).toBe("RESOLVED");
     expect(encounter?.activeCaravanId).toBeNull();
+  });
+
+  it("pays raiders nothing once the caravan is plundered and keeps unclaimed loot", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "leader", isOutlaw: true }]);
+    await db.insert(caravan).values(caravanRow({ lossBp: 5000 }));
+    await db.insert(caravanParticipant).values({
+      caravanId: "c1",
+      userId: "leader",
+      role: "BANDIT",
+      activeUserId: "leader",
+      groupLeaderId: "leader",
+      loot: [{ itemId: "ore", quantity: 3 }],
+      joinedAt: new Date(),
+    });
+    const fight = async (id: string, lossBp: number) => {
+      await db.insert(caravanEncounter).values({
+        id,
+        type: "INTERCEPTION",
+        status: "FIGHTING",
+        caravanId: "c1",
+        activeCaravanId: "c1",
+        battleId: `b-${id}`,
+        createdAt: new Date(),
+      });
+      await settleCaravanCombat(
+        db,
+        makeCompleteBattle({
+          id: `b-${id}`,
+          battleType: "CARAVAN",
+          usersState: [
+            makeBattleUser("leader", { direction: "left", curHealth: 50 }),
+            makeBattleUser("npc", { direction: "right", curHealth: 0, isAi: true }),
+          ],
+          extraState: {
+            caravan: battleState({
+              encounterId: id,
+              battleId: `b-${id}`,
+              attackerIds: ["leader"],
+              lossBp,
+              stealBp: 1000,
+            }),
+          },
+        }),
+      );
+    };
+    await fight("capped", 5000);
+    const [capped] = await db.select().from(userData);
+    expect(capped?.banditExperience).toBe(0);
+    await db.update(caravan).set({ lossBp: 0 });
+    await db
+      .update(caravanParticipant)
+      .set({ activeUserId: "leader", groupLeaderId: "leader" });
+    await fight("open", 0);
+    const [rider] = await db.select().from(caravanParticipant);
+    expect(rider?.loot).toEqual([
+      { itemId: "ore", quantity: 3 },
+      { itemId: "ore", quantity: 20 },
+    ]);
+    const [paid] = await db.select().from(userData);
+    expect(paid?.banditExperience).toBe(BANDIT_OPERATION_EXP);
   });
 
   it("delivers remaining cargo once and pays escorts who completed objectives", async () => {

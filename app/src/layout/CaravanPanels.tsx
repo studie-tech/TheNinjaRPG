@@ -28,6 +28,8 @@ import {
   CARAVAN_GUARD_SLOTS,
   CARAVAN_MAX_CARGO_ITEMS,
   CARAVAN_MAX_CARGO_UNITS,
+  CARAVAN_MIN_CARGO_UNITS,
+  CARAVANS_PER_TRADE_ROUTE,
   TRADE_ROUTE_MARKER_MAX_CONTROL,
 } from "@/drizzle/constants";
 import type { useCaravans } from "@/hooks/useCaravans";
@@ -54,7 +56,7 @@ export const TradeRoutesPanel = ({
   return (
     <ContentBox
       title="Trade Routes"
-      subtitle={`${data.capacity.used} of ${data.capacity.total} caravans on the road · every active route adds one`}
+      subtitle={`${data.capacity.used} of ${data.capacity.total} caravans on the road · every active route adds ${CARAVANS_PER_TRADE_ROUTE}`}
       initialBreak
     >
       <div className="@container">
@@ -180,8 +182,9 @@ export const TradeRoutesPanel = ({
                           </Button>
                         }
                       >
-                        Spend {route.upgradeCost.toLocaleString()} to cut travel from{" "}
-                        {route.travelMinutes} to {route.nextTravelMinutes} minutes.
+                        Spend {route.upgradeCost.toLocaleString()} {data.fundsLabel} to
+                        cut travel from {route.travelMinutes} to{" "}
+                        {route.nextTravelMinutes} minutes.
                       </Confirm>
                     )}
                     <Confirm
@@ -418,14 +421,23 @@ export const CaravansPanel = ({
                       )}
                     {data.canManage && row.outgoing && row.status === "PREPARING" && (
                       <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={actions.cancel.isPending}
-                          onClick={() => actions.cancel.mutate({ caravanId: row.id })}
+                        <Confirm
+                          title="Cancel caravan"
+                          proceed_label="Cancel caravan"
+                          onAccept={() => actions.cancel.mutate({ caravanId: row.id })}
+                          button={
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={actions.cancel.isPending}
+                            >
+                              Cancel
+                            </Button>
+                          }
                         >
-                          Cancel
-                        </Button>
+                          The reserved cargo returns to the Warehouse and the escort is
+                          released.
+                        </Confirm>
                         <Button
                           size="sm"
                           disabled={actions.dispatch.isPending}
@@ -542,14 +554,15 @@ const PrepareCaravan = ({
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <p className="text-muted-foreground grow text-xs">
-          {units.toLocaleString()} / {CARAVAN_MAX_CARGO_UNITS.toLocaleString()} units ·{" "}
-          {lines.length}/{CARAVAN_MAX_CARGO_ITEMS} goods
+          {units.toLocaleString()} / {CARAVAN_MAX_CARGO_UNITS.toLocaleString()} units
+          (at least {CARAVAN_MIN_CARGO_UNITS}) · {lines.length}/
+          {CARAVAN_MAX_CARGO_ITEMS} goods
           {full ? " · every route already has a caravan out" : ""}
         </p>
         <Button
           disabled={
             !routeId ||
-            lines.length === 0 ||
+            units < CARAVAN_MIN_CARGO_UNITS ||
             units > CARAVAN_MAX_CARGO_UNITS ||
             full ||
             actions.prepare.isPending

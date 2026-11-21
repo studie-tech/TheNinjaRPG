@@ -432,10 +432,11 @@ export const awardLoot = (
     : client
         .update(caravanParticipant)
         .set({
+          // Unclaimed loot from an earlier robbery of the same caravan is kept.
           loot: sql`CASE ${sql.join(
             [...loot].map(
               ([userId, lines]) =>
-                sql`WHEN ${caravanParticipant.userId} = ${userId} THEN CAST(${JSON.stringify(lines)} AS JSON)`,
+                sql`WHEN ${caravanParticipant.userId} = ${userId} THEN JSON_MERGE_PRESERVE(CASE WHEN ${caravanParticipant.lootClaimedAt} IS NULL THEN COALESCE(${caravanParticipant.loot}, JSON_ARRAY()) ELSE JSON_ARRAY() END, CAST(${JSON.stringify(lines)} AS JSON))`,
             ),
             sql` `,
           )} ELSE ${caravanParticipant.loot} END`,
@@ -736,7 +737,8 @@ export const expireAmbush = (
     INNER JOIN ${caravan} ON ${caravan.id} = ${caravanEncounter.caravanId}
     SET ${caravanEncounter.status} = 'RESOLVED', ${caravanEncounter.attackersWon} = TRUE,
         ${caravanEncounter.resolvedAt} = ${now}, ${caravanEncounter.activeCaravanId} = NULL,
-        ${caravan.lossBp} = LEAST(${CARAVAN_MAX_LOSS_BP}, ${caravan.lossBp} + ${lossBp})
+        ${caravan.lossBp} = LEAST(${CARAVAN_MAX_LOSS_BP}, ${caravan.lossBp} + ${lossBp}),
+        ${caravan.version} = ${caravan.version} + 1
     WHERE ${caravanEncounter.id} = ${encounterId}
       AND ${caravanEncounter.status} = 'PENDING'
       AND ${caravanEncounter.expiresAt} <= ${now}
@@ -771,7 +773,10 @@ export const applyCaravanLoss = (
 ) =>
   client
     .update(caravan)
-    .set({ lossBp: sql`LEAST(${CARAVAN_MAX_LOSS_BP}, ${caravan.lossBp} + ${lossBp})` })
+    .set({
+      lossBp: sql`LEAST(${CARAVAN_MAX_LOSS_BP}, ${caravan.lossBp} + ${lossBp})`,
+      version: sql`${caravan.version} + 1`,
+    })
     .where(and(eq(caravan.id, caravanId), eq(caravan.status, "TRAVELLING")));
 
 /** Discoveries a player still holds. */
@@ -928,7 +933,8 @@ export const resolveOperation = (
 
 /**
  * Finish a successful sabotage together with its effect on the caravan, so neither applies
- * twice. Delay is capped per journey; disruption weakens its next fights for a while.
+ * twice. The added delay was capped against the delay read with the caravan, which the
+ * statement still requires; disruption weakens its next fights for a while.
  */
 export const resolveSabotage = (
   client: Pick<DrizzleClient, "execute">,
@@ -936,8 +942,8 @@ export const resolveSabotage = (
     operationId: string;
     caravanId: string;
     now: Date;
-    delayMinutes: number;
-    maxDelayMinutes: number;
+    expectedDelayMinutes: number;
+    addedMinutes: number;
     disruptedUntil: Date | null;
   },
 ) =>
@@ -945,17 +951,15 @@ export const resolveSabotage = (
     UPDATE ${caravanOperation}
     INNER JOIN ${caravan} ON ${caravan.id} = ${input.caravanId}
     SET ${caravanOperation.status} = 'RESOLVED', ${caravanOperation.resolvedAt} = ${input.now},
-        ${caravanOperation.activeUserId} = NULL
-        ${
-          input.delayMinutes > 0
-            ? sql`, ${caravan.arrivesAt} = DATE_ADD(${caravan.arrivesAt}, INTERVAL LEAST(${input.delayMinutes}, ${input.maxDelayMinutes} - ${caravan.delayMinutes}) MINUTE),
-                 ${caravan.delayMinutes} = LEAST(${input.maxDelayMinutes}, ${caravan.delayMinutes} + ${input.delayMinutes})`
-            : sql``
-        }
+        ${caravanOperation.activeUserId} = NULL,
+        ${caravan.arrivesAt} = DATE_ADD(${caravan.arrivesAt}, INTERVAL ${input.addedMinutes} MINUTE),
+        ${caravan.delayMinutes} = ${input.expectedDelayMinutes + input.addedMinutes},
+        ${caravan.version} = ${caravan.version} + 1
         ${input.disruptedUntil ? sql`, ${caravan.disruptedUntil} = ${input.disruptedUntil}` : sql``}
     WHERE ${caravanOperation.id} = ${input.operationId}
       AND ${caravanOperation.status} = 'ACTIVE'
       AND ${caravan.status} = 'TRAVELLING'
+      AND ${caravan.delayMinutes} = ${input.expectedDelayMinutes}
   `);
 
 /** Travelling caravans currently passing a sector, by their frozen path and schedule. */

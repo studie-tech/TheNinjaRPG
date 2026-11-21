@@ -4,6 +4,7 @@ import {
   BANDIT_RANK_LABELS,
   CARAVAN_DISCOVERY_MINUTES,
   CARAVAN_MAX_GROUP,
+  CARAVAN_MAX_LOSS_BP,
   CARAVAN_OPERATION_TYPES,
   CARAVAN_TRACK_COOLDOWN_SECONDS,
   type CaravanRole,
@@ -47,7 +48,6 @@ import {
   releaseParticipants,
   trackDiscovery,
   upsertAttacker,
-  upsertDiscoveries,
 } from "@/queries/caravan";
 import { fetchUser, updateUserBanditProfession } from "@/queries/profile";
 import {
@@ -357,35 +357,24 @@ export const caravanOpsRouter = createTRPCRouter({
       ]);
       if (target?.status !== "TRAVELLING")
         return errorResponse("The caravan is not on the road");
-      if (!discoveries.some((row) => row.caravanId === target.id))
-        return errorResponse("You have no lead on this caravan");
+      // Tracking follows a sighting; route intelligence alone needs a sector search first.
+      if (!hasSighting(discoveries, target.id))
+        return errorResponse(
+          "Search the caravan's sector to sight it before tracking it",
+        );
       const sector = getCaravanSector(target, now);
-      const expiresAt = new Date(now.getTime() + CARAVAN_DISCOVERY_MINUTES * MINUTE_MS);
-      if (hasSighting(discoveries, target.id)) {
-        const tracked = await trackDiscovery(ctx.drizzle, {
-          caravanId: target.id,
-          userId: ctx.userId,
-          sector,
-          now,
-          seenBefore: new Date(now.getTime() - CARAVAN_TRACK_COOLDOWN_SECONDS * 1000),
-          expiresAt,
-        });
-        if (tracked.rowsAffected !== 1)
-          return errorResponse(
-            `You can track a caravan once every ${CARAVAN_TRACK_COOLDOWN_SECONDS / 60} minutes`,
-          );
-      } else {
-        await upsertDiscoveries(ctx.drizzle, [
-          {
-            caravanId: target.id,
-            userId: ctx.userId,
-            kind: "LOCATION",
-            sector,
-            seenAt: now,
-            expiresAt,
-          },
-        ]);
-      }
+      const tracked = await trackDiscovery(ctx.drizzle, {
+        caravanId: target.id,
+        userId: ctx.userId,
+        sector,
+        now,
+        seenBefore: new Date(now.getTime() - CARAVAN_TRACK_COOLDOWN_SECONDS * 1000),
+        expiresAt: new Date(now.getTime() + CARAVAN_DISCOVERY_MINUTES * MINUTE_MS),
+      });
+      if (tracked.rowsAffected !== 1)
+        return errorResponse(
+          `You can track a caravan once every ${CARAVAN_TRACK_COOLDOWN_SECONDS / 60} minutes`,
+        );
       return {
         success: true,
         message: `The caravan was last seen in sector ${sector}`,
@@ -518,7 +507,11 @@ export const caravanOpsRouter = createTRPCRouter({
         return errorResponse(`Gather at least ${minimum} raiders`);
       if (group.members.some((m) => m.sector !== sector))
         return errorResponse(`Every raider must be in sector ${sector}`);
-      const guards = selectQueuedGuards(participants);
+      if (target.lossBp >= CARAVAN_MAX_LOSS_BP)
+        return errorResponse("This caravan has nothing left worth taking");
+      // Escorts meet the raiders one for one; NPC guards fill the places of absent escorts,
+      // one fewer while the caravan is disrupted.
+      const guards = selectQueuedGuards(participants).slice(0, group.members.length);
       const disrupted = !!target.disruptedUntil && target.disruptedUntil > now;
       const npcCount = Math.max(
         guards.length === 0 ? 1 : 0,

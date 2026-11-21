@@ -21,12 +21,15 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  WAREHOUSE_APPROVED_DAILY_ALLOWANCE,
+  WAREHOUSE_DEPOSIT_BONUS_PER_LEVEL,
   WAREHOUSE_DEPOSIT_COOLDOWN_HOURS,
   WAREHOUSE_HISTORY_PAGE_SIZE,
   WAREHOUSE_LOYALTY_BONUS,
   WAREHOUSE_LOYALTY_DAYS,
   WAREHOUSE_MAX_PRODUCTION_ITEMS,
   WAREHOUSE_MIN_DEPOSIT,
+  WAREHOUSE_PRODUCTION_BONUS_PER_LEVEL,
   WAREHOUSE_PRODUCTION_INTERVAL_HOURS,
   type WarehouseLogType,
 } from "@/drizzle/constants";
@@ -84,14 +87,17 @@ export const WarehouseOverview = ({
               label={`Per item / ${WAREHOUSE_PRODUCTION_INTERVAL_HOURS}h`}
               value={data.cycleQuantity.toLocaleString()}
             />
-            <Stat label="Village funds" value={village.tokens.toLocaleString()} />
+            <Stat
+              label={village.usesClanPoints ? "Clan points" : "Village tokens"}
+              value={village.funds.toLocaleString()}
+            />
           </dl>
         </div>
         {data.isLeader && structure && structure.nextCost !== null && (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
             <p className="grow text-sm">
               {built
-                ? `Next level costs ${structure.nextCost.toLocaleString()} ${funds} and adds 1% production and 2% deposit bonus.`
+                ? `Next level costs ${structure.nextCost.toLocaleString()} ${funds} and adds ${WAREHOUSE_PRODUCTION_BONUS_PER_LEVEL}% production and ${WAREHOUSE_DEPOSIT_BONUS_PER_LEVEL}% deposit bonus.`
                 : `Constructing the Warehouse costs ${structure.nextCost.toLocaleString()} ${funds}. Villages need it to store goods and send caravans.`}
             </p>
             {village.structureMaintenanceDue > 0 ? (
@@ -431,7 +437,7 @@ export const WarehouseAccess = ({
   return (
     <ContentBox
       title="Access"
-      subtitle="Approved players withdraw up to 50 units a day"
+      subtitle={`Approved players withdraw up to ${WAREHOUSE_APPROVED_DAILY_ALLOWANCE} units a day`}
       initialBreak
     >
       <div className="@container grid gap-4 @2xl:grid-cols-2">

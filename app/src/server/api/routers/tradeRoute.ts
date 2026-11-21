@@ -70,6 +70,7 @@ export const tradeRouteRouter = createTRPCRouter({
       return {
         village: { id: villageId, name: villageData.name },
         canManage: canManageTrade(user, villageData),
+        fundsLabel: isFactionVillage(villageData) ? "clan points" : "village tokens",
         hasWarehouse: (findWarehouse(villageData.structures)?.level ?? 0) > 0,
         capacity: {
           total: active.length * CARAVANS_PER_TRADE_ROUTE,

@@ -21,6 +21,10 @@ export const withoutCaravanEscort = (userId: SQLWrapper = userData.userId) =>
 export const withoutActivityReservation = (userId: SQLWrapper = userData.userId) =>
   sql`(${withoutDungeonReservation(userId)} AND ${withoutCaravanEscort(userId)})`;
 
+/** Escorts waiting in their caravan's queue; one who left it to heal fights like anyone else. */
+export const withoutQueuedEscort = (userId: SQLWrapper = userData.userId) =>
+  sql`(${userData.status} <> 'QUEUED' OR ${withoutCaravanEscort(userId)})`;
+
 /** Status of a player leaving combat: escorts return to their caravan's queue. */
 export const leaveCombatStatusSql = (userId: SQLWrapper = userData.userId) =>
   sql`CASE WHEN ${withoutCaravanEscort(userId)} THEN 'AWAKE' ELSE 'QUEUED' END`;
