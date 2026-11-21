@@ -289,8 +289,11 @@ export const updateBattle = async (
             if (deleted.rowsAffected === 1) {
               // MySQL cannot DELETE Battle while INSERTing a missing receipt/score and
               // UPDATEing the event/rewards. Only eligible awards need that transaction;
-              // scoreless encounters use a single guarded DELETE. Retrying the
-              // claim after rollback preserves credit without delivering it twice.
+              // scoreless encounters use a single guarded DELETE. A caravan fight's
+              // encounter resolves with its battle, since maintenance releases a
+              // FIGHTING encounter whose battle vanished as abandoned and charges an
+              // unanswered ambush's loss. Retrying the claim after rollback preserves
+              // credit without delivering it twice.
               if (newBattle.extraState.territoryWar)
                 await settleTerritoryWarCombat(database, newBattle);
               if (newBattle.extraState.tournamentGameId)
