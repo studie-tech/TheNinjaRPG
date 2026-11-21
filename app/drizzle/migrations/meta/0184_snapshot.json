@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "eaa554b0-a522-4738-b9b3-b86e50b4e58e",
+  "id": "d5e26275-5230-420b-b15b-d6718b3509f5",
   "prevId": "0079c206-7b3e-40f8-ad70-37ec49a7503f",
   "tables": {
     "AbEvent": {
@@ -20072,6 +20072,13 @@
           "name": "UserData_isSummon_idx",
           "columns": [
             "isSummon"
+          ],
+          "isUnique": false
+        },
+        "UserData_diamondBloodlineActive_idx": {
+          "name": "UserData_diamondBloodlineActive_idx",
+          "columns": [
+            "diamondBloodlineActive"
           ],
           "isUnique": false
         },

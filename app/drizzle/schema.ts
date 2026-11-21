@@ -3496,6 +3496,9 @@ export const userData = mysqlTable(
       inArenaIdx: index("UserData_inArena_idx").on(table.inArena),
       inShrinesIdx: index("UserData_inShrines_idx").on(table.inShrines),
       isSummonIdx: index("UserData_isSummon_idx").on(table.isSummon),
+      diamondBloodlineActiveIdx: index("UserData_diamondBloodlineActive_idx").on(
+        table.diamondBloodlineActive,
+      ),
       rankIdx: index("UserData_rank_idx").on(table.rank),
       roleIdx: index("UserData_role_idx").on(table.role),
       clanIdIdx: index("UserData_clanId_idx").on(table.clanId),
