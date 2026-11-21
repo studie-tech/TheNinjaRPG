@@ -16,6 +16,8 @@ import {
   item,
   mpvpBattleUser,
   rankedPvpQueue,
+  tradeRoute,
+  tradeRouteMarker,
   userData,
   villageWarehouse,
   warehouseLog,
@@ -26,7 +28,7 @@ import type { CaravanBattleState } from "@/libs/caravan";
 import { insertGuard, queueGuard } from "@/queries/caravan";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
 import { claimWithdrawal, ensureWarehouseMember } from "@/queries/warehouse";
-import { deliverCaravan } from "@/server/utils/caravan";
+import { deliverCaravan, maintainCaravans } from "@/server/utils/caravan";
 import { settleCaravanCombat } from "@/server/utils/caravanSettlement";
 import { settleProduction } from "@/server/utils/warehouse";
 import { afterTasks } from "../../setup/after";
@@ -51,6 +53,8 @@ describeWithDatabase("village Warehouse and caravans", () => {
       item,
       mpvpBattleUser,
       rankedPvpQueue,
+      tradeRoute,
+      tradeRouteMarker,
       userData,
       villageWarehouse,
       warehouseLog,
@@ -224,6 +228,84 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(users.idle?.money).toBe(0);
     expect(users.busy?.status).toBe("AWAKE");
     expect(users.idle?.status).toBe("AWAKE");
+  });
+  it("hands a worn-down marker to its assailant and calls off the route's caravans", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "raider", villageId: "mist" }]);
+    await db.insert(tradeRoute).values({
+      id: "r1",
+      villageIdA: "leaf",
+      villageIdB: "sand",
+      openPair: "leaf:sand",
+      status: "ACTIVE",
+      proposedByVillageId: "leaf",
+      proposedById: "kage",
+      path: [1, 2, 3],
+      createdAt: new Date(),
+    });
+    await db.insert(tradeRouteMarker).values({
+      id: "m1",
+      routeId: "r1",
+      sector: 2,
+      longitude: 5,
+      latitude: 5,
+      control: 25,
+    });
+    await db
+      .insert(warehouseStock)
+      .values([{ villageId: "leaf", itemId: "ore", quantity: 50, reserved: 50 }]);
+    await db.insert(caravan).values([
+      caravanRow({ id: "moving", lossBp: 1000 }),
+      caravanRow({
+        id: "waiting",
+        status: "PREPARING",
+        cargo: [{ itemId: "ore", quantity: 50 }],
+        departedAt: null,
+        arrivesAt: null,
+      }),
+    ]);
+    await db.insert(caravanEncounter).values({
+      id: "e1",
+      type: "MARKER_ASSAULT",
+      status: "FIGHTING",
+      markerId: "m1",
+      activeMarkerId: "m1",
+      battleId: "b1",
+      createdAt: new Date(),
+    });
+    await settleCaravanCombat(
+      db,
+      makeCompleteBattle({
+        id: "b1",
+        battleType: "CARAVAN",
+        usersState: [
+          makeBattleUser("raider", { direction: "left", curHealth: 80 }),
+          makeBattleUser("npc", { direction: "right", curHealth: 0, isAi: true }),
+        ],
+        extraState: {
+          caravan: battleState({
+            type: "MARKER_ASSAULT",
+            caravanId: null,
+            markerId: "m1",
+            attackerRole: null,
+            attackerIds: ["raider"],
+            captureVillageId: "mist",
+          }),
+        },
+      }),
+    );
+    const [marker] = await db.select().from(tradeRouteMarker);
+    expect(marker?.controllerVillageId).toBe("mist");
+    expect(marker?.control).toBe(100);
+    await afterTasks.run([], () =>
+      maintainCaravans(db, new Date(), { caravanIds: ["moving", "waiting"] }),
+    );
+    const caravans = await db.select().from(caravan);
+    expect(caravans.every((row) => row.status === "CANCELLED")).toBe(true);
+    const [stock] = await db.select().from(warehouseStock);
+    // The waiting caravan's reservation is released; the moving one brings 180 ore home.
+    expect(stock?.reserved).toBe(0);
+    expect(stock?.quantity).toBe(230);
   });
 });
 

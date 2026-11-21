@@ -144,6 +144,7 @@ export const WarehouseStock = ({
 }) => {
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const { allowance } = data;
+  const stock = data.stock.filter((row) => row.quantity > 0);
   const busy = actions.withdraw.isPending || actions.deposit.isPending;
   return (
     <ContentBox
@@ -162,13 +163,13 @@ export const WarehouseStock = ({
           </Badge>
           <Badge variant="outline">Used today: {allowance.used}</Badge>
         </div>
-        {data.stock.length === 0 ? (
+        {stock.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             The Warehouse is empty. Deposit materials or choose items to produce.
           </p>
         ) : (
-          <ul className="grid gap-2 @md:grid-cols-2 @3xl:grid-cols-3">
-            {data.stock.map((row) => {
+          <ul className="grid gap-2 @xl:grid-cols-2 @5xl:grid-cols-3">
+            {stock.map((row) => {
               const free = row.quantity - row.reserved;
               const amount =
                 amounts[row.itemId] ?? Math.min(free, allowance.remaining, 10);
@@ -181,8 +182,8 @@ export const WarehouseStock = ({
                   <Image
                     src={row.image}
                     alt=""
-                    width={40}
-                    height={40}
+                    width={80}
+                    height={80}
                     className="size-10 rounded"
                   />
                   <div className="min-w-0 grow">
@@ -342,7 +343,7 @@ export const WarehouseProduction = ({
               Choose up to {WAREHOUSE_MAX_PRODUCTION_ITEMS} items ({selected.length}{" "}
               chosen).
             </p>
-            <ul className="grid gap-2 @md:grid-cols-2 @3xl:grid-cols-3">
+            <ul className="grid gap-2 @xl:grid-cols-2 @5xl:grid-cols-3">
               {data.producibleItems.map((item) => {
                 const isOn = selected.includes(item.id);
                 return (
@@ -353,8 +354,8 @@ export const WarehouseProduction = ({
                     <Image
                       src={item.image}
                       alt=""
-                      width={40}
-                      height={40}
+                      width={80}
+                      height={80}
                       className="size-10 rounded"
                     />
                     <label htmlFor={`produce-${item.id}`} className="grow text-sm">
