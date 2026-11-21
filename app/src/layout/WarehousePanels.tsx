@@ -344,11 +344,9 @@ export const WarehouseProduction = ({
 }) => {
   const [draft, setDraft] = useState<string[]>();
   // Items that stopped being producible drop out, so the next save no longer sends them.
-  const selected =
-    draft ??
-    data.production
-      .map((row) => row.itemId)
-      .filter((id) => data.producibleItems.some((item) => item.id === id));
+  const selected = (draft ?? data.production.map((row) => row.itemId)).filter((id) =>
+    data.producibleItems.some((item) => item.id === id),
+  );
   const changed = draft !== undefined;
   return (
     <ContentBox

@@ -9,7 +9,9 @@ import {
 } from "@/drizzle/constants";
 import {
   caravan,
+  caravanDiscovery,
   caravanEncounter,
+  caravanOperation,
   caravanParticipant,
   dungeonMember,
   dungeonRun,
@@ -27,10 +29,16 @@ import {
 import type { CaravanBattleState } from "@/libs/caravan";
 import {
   claimLoot,
+  expireAmbush,
+  insertCheckpointAmbush,
   insertGuard,
+  listActiveSabotage,
   queueGuard,
   releaseParticipants,
+  resolveOperation,
+  transitionCaravan,
   upsertAttacker,
+  upsertDiscoveries,
 } from "@/queries/caravan";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
 import {
@@ -56,7 +64,9 @@ describeWithDatabase("village Warehouse and caravans", () => {
   beforeEach(async () => {
     await resetTables(
       caravan,
+      caravanDiscovery,
       caravanEncounter,
+      caravanOperation,
       caravanParticipant,
       dungeonMember,
       dungeonRun,
@@ -158,6 +168,155 @@ describeWithDatabase("village Warehouse and caravans", () => {
     await join("third");
     const [kept] = await db.select().from(caravanParticipant);
     expect(kept?.groupLeaderId).toBe("second");
+  });
+
+  it("seats no attacker on a caravan that left the road", async () => {
+    const db = await getTestDatabase();
+    await db.insert(caravan).values(caravanRow({ status: "DELIVERED" }));
+    const joined = await upsertAttacker(db, {
+      caravanId: "c1",
+      userId: "rider",
+      role: "BANDIT",
+      groupLeaderId: "rider",
+      now: new Date(),
+    });
+    expect(joined.rowsAffected).toBe(0);
+    expect(await db.select().from(caravanParticipant)).toHaveLength(0);
+  });
+
+  it("keeps a newer sighting when an older one arrives late", async () => {
+    const db = await getTestDatabase();
+    const now = Date.now();
+    const sighting = (sector: number, seenAt: number) => ({
+      caravanId: "c1",
+      userId: "scout",
+      kind: "LOCATION" as const,
+      sector,
+      seenAt: new Date(seenAt),
+      expiresAt: new Date(seenAt + HOUR),
+    });
+    await upsertDiscoveries(db, [sighting(2, now)]);
+    await upsertDiscoveries(db, [sighting(1, now - 60_000)]);
+    const [kept] = await db.select().from(caravanDiscovery);
+    expect(kept?.sector).toBe(2);
+    expect(kept?.seenAt.getTime()).toBe(now);
+    expect(kept?.expiresAt.getTime()).toBe(now + HOUR);
+    await upsertDiscoveries(db, [sighting(3, now + 60_000)]);
+    const [refreshed] = await db.select().from(caravanDiscovery);
+    expect(refreshed?.sector).toBe(3);
+    expect(refreshed?.expiresAt.getTime()).toBe(now + 60_000 + HOUR);
+  });
+
+  it("opens ambushes only on the road and delivers only once no fight is open", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await db
+      .insert(caravan)
+      .values([caravanRow(), caravanRow({ id: "done", status: "DELIVERED" })]);
+    const ambush = (id: string, caravanId: string) =>
+      insertCheckpointAmbush(db, {
+        id,
+        caravanId,
+        expiresAt: new Date(now.getTime() + HOUR),
+        now,
+      });
+    expect((await ambush("late", "done")).rowsAffected).toBe(0);
+    expect((await ambush("e1", "c1")).rowsAffected).toBe(1);
+    const deliver = (version: number) =>
+      transitionCaravan(
+        db,
+        { id: "c1", version, status: "TRAVELLING" },
+        { status: "DELIVERED", resolvedAt: now },
+        { unfought: true },
+      );
+    expect((await deliver(0)).rowsAffected).toBe(0);
+    await db
+      .update(caravanEncounter)
+      .set({ expiresAt: new Date(now.getTime() - 1000) })
+      .where(eq(caravanEncounter.id, "e1"));
+    expect((await expireAmbush(db, "e1", 1000, now)).rowsAffected).toBeGreaterThan(0);
+    // The expired ambush took its share and bumped the version.
+    expect((await deliver(1)).rowsAffected).toBe(1);
+  });
+
+  it("leaves a finished caravan's loss alone when its stray ambush expires", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await db.insert(caravan).values(caravanRow({ status: "DELIVERED", lossBp: 500 }));
+    await db.insert(caravanEncounter).values({
+      id: "e1",
+      type: "AMBUSH",
+      status: "PENDING",
+      caravanId: "c1",
+      activeCaravanId: "c1",
+      expiresAt: new Date(now.getTime() - 1000),
+      createdAt: now,
+    });
+    await expireAmbush(db, "e1", 1000, now);
+    const [row] = await db.select().from(caravan);
+    expect(row?.lossBp).toBe(500);
+    const [encounter] = await db.select().from(caravanEncounter);
+    expect(encounter?.status).toBe("RESOLVED");
+  });
+
+  it("drops sabotage that finishes only once the caravan is due", async () => {
+    const db = await getTestDatabase();
+    const now = Date.now();
+    await insertUsers([{ userId: "saboteur", status: "AWAKE" }]);
+    await db
+      .insert(caravan)
+      .values(caravanRow({ arrivesAt: new Date(now - 5 * 60_000) }));
+    await db.insert(caravanOperation).values({
+      id: "op",
+      userId: "saboteur",
+      activeUserId: "saboteur",
+      role: "BANDIT",
+      type: "DELAY",
+      caravanId: "c1",
+      sector: 2,
+      succeeds: true,
+      status: "ACTIVE",
+      startedAt: new Date(now - 30 * 60_000),
+      finishesAt: new Date(now - 60_000),
+    });
+    await afterTasks.run([], () => maintainCaravans(db, new Date(now)));
+    const [row] = await db.select().from(caravan);
+    expect(row?.status).toBe("DELIVERED");
+    expect(row?.delayMinutes).toBe(0);
+    const [operation] = await db.select().from(caravanOperation);
+    expect(operation?.status).toBe("RESOLVED");
+  });
+
+  it("lets escorts interrupt sabotage only while it is under way", async () => {
+    const db = await getTestDatabase();
+    const now = Date.now();
+    await insertUsers([
+      { userId: "busy", status: "AWAKE" },
+      { userId: "done", status: "AWAKE" },
+    ]);
+    await db.insert(caravanOperation).values(
+      [
+        { id: "running", userId: "busy", finishesAt: new Date(now + 60_000) },
+        { id: "finished", userId: "done", finishesAt: new Date(now - 1000) },
+      ].map((op) => ({
+        ...op,
+        activeUserId: op.userId,
+        role: "BANDIT" as const,
+        type: "DISRUPT" as const,
+        caravanId: "c1",
+        sector: 2,
+        succeeds: true,
+        status: "ACTIVE" as const,
+        startedAt: new Date(now - 30 * 60_000),
+      })),
+    );
+    const listed = await listActiveSabotage(db, ["c1"], new Date(now));
+    expect(listed.map((op) => op.id)).toEqual(["running"]);
+    expect(listed[0]?.userStatus).toBe("AWAKE");
+    const interrupt = (id: string) =>
+      resolveOperation(db, id, "INTERRUPTED", new Date(now));
+    expect((await interrupt("finished")).rowsAffected).toBe(0);
+    expect((await interrupt("running")).rowsAffected).toBe(1);
   });
 
   it("claims loot only while it holds what the claimant read", async () => {

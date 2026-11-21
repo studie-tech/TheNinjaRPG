@@ -222,7 +222,7 @@ export const caravanOpsRouter = createTRPCRouter({
             route: `${villageName(marker.villageIdA)} – ${villageName(marker.villageIdB)}`,
             control: marker.control,
             controller: marker.controllerVillageId
-              ? villageName(marker.controllerVillageId)
+              ? (marker.controllerName ?? "Unknown village")
               : null,
             canAssault: !getMarkerAssaultBlock(user, marker, relationships, wars, true),
           })),
@@ -238,7 +238,14 @@ export const caravanOpsRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (input.enabled && !user.isOutlaw)
         return errorResponse("Only outlaws can become bandits");
-      await updateUserBanditProfession(ctx.drizzle, ctx.userId, input.enabled);
+      const updated = await updateUserBanditProfession(
+        ctx.drizzle,
+        ctx.userId,
+        input.enabled,
+      );
+      // No change is fine for a bandit already in the trade, not for one who lost outlaw status.
+      if (input.enabled && updated.rowsAffected !== 1 && !user.isBandit)
+        return errorResponse("Only outlaws can become bandits");
       return {
         success: true,
         message: input.enabled
@@ -386,15 +393,23 @@ export const caravanOpsRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
-      const [user, relationships, wars, discoveries, [target], participants] =
-        await Promise.all([
-          fetchUser(ctx.drizzle, ctx.userId),
-          listVillageRelationships(ctx.drizzle),
-          listOpenWars(ctx.drizzle),
-          listUserDiscoveries(ctx.drizzle, ctx.userId, now),
-          listCaravansByIds(ctx.drizzle, [input.caravanId]),
-          listCaravanParticipants(ctx.drizzle, [input.caravanId]),
-        ]);
+      const [
+        user,
+        relationships,
+        wars,
+        discoveries,
+        [target],
+        participants,
+        encounters,
+      ] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        listVillageRelationships(ctx.drizzle),
+        listOpenWars(ctx.drizzle),
+        listUserDiscoveries(ctx.drizzle, ctx.userId, now),
+        listCaravansByIds(ctx.drizzle, [input.caravanId]),
+        listCaravanParticipants(ctx.drizzle, [input.caravanId]),
+        listOpenEncounters(ctx.drizzle, { caravanIds: [input.caravanId] }),
+      ]);
       if (target?.status !== "TRAVELLING")
         return errorResponse("The caravan is not on the road");
       if (user.isBanned) return errorResponse("You are banned");
@@ -419,6 +434,11 @@ export const caravanOpsRouter = createTRPCRouter({
         // A simultaneous join can take the last seat too; groups stay small either way.
         if (group.members.length >= CARAVAN_MAX_GROUP)
           return errorResponse("The group is full");
+        // Settlement disbands only the raiders who fought, so a fighting group takes no one.
+        if (
+          encounters.some((e) => e.type === "INTERCEPTION" && e.leaderId === leaderId)
+        )
+          return errorResponse("That group is already fighting");
       }
       try {
         await upsertAttacker(ctx.drizzle, {
@@ -433,9 +453,13 @@ export const caravanOpsRouter = createTRPCRouter({
           return errorResponse("You are already committed to another caravan");
         throw error;
       }
-      const [joined] = (await listCaravanParticipants(ctx.drizzle, [target.id])).filter(
-        (p) => p.userId === user.userId,
-      );
+      const [[current], joinedRows] = await Promise.all([
+        listCaravansByIds(ctx.drizzle, [target.id]),
+        listCaravanParticipants(ctx.drizzle, [target.id]),
+      ]);
+      if (current?.status !== "TRAVELLING")
+        return errorResponse("The caravan is not on the road");
+      const joined = joinedRows.find((p) => p.userId === user.userId);
       if (
         !joined?.activeUserId ||
         joined.role !== role ||

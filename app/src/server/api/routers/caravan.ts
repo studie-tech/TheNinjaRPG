@@ -10,6 +10,7 @@ import {
   CARAVAN_MIN_CARGO_UNITS,
   CARAVANS_PER_TRADE_ROUTE,
 } from "@/drizzle/constants";
+import type { VillageAlliance } from "@/drizzle/schema";
 import {
   type CargoLine,
   getCaravanSector,
@@ -17,6 +18,7 @@ import {
   getReachedCheckpoints,
   getRemainingCargo,
   getRouteTravelMinutes,
+  getTradeBlock,
 } from "@/libs/caravan";
 import { updateGameSetting } from "@/libs/gamesettings";
 import { findWarehouse, isWarehouseStorable } from "@/libs/warehouse";
@@ -41,9 +43,17 @@ import {
 } from "@/queries/caravan";
 import { findGameSettingByName } from "@/queries/gamesettings";
 import { fetchUser } from "@/queries/profile";
-import { findTradeRoute, listVillageRoutes } from "@/queries/tradeRoute";
+import {
+  findTradeRoute,
+  listVillageRelationships,
+  listVillageRoutes,
+} from "@/queries/tradeRoute";
 import { fetchVillage } from "@/queries/village";
-import { insertWarehouseLogs, listWarehouseItems } from "@/queries/warehouse";
+import {
+  insertWarehouseLogs,
+  listOpenWars,
+  listWarehouseItems,
+} from "@/queries/warehouse";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import {
   baseServerResponse,
@@ -58,6 +68,7 @@ import {
 import {
   cancelCaravan,
   canManageTrade,
+  isAtWar,
   maintainCaravans,
   notifyPlayers,
 } from "@/server/utils/caravan";
@@ -120,7 +131,7 @@ export const caravanRouter = createTRPCRouter({
       const [participants, encounters, sabotage, items] = await Promise.all([
         listCaravanParticipants(ctx.drizzle, ids),
         listOpenEncounters(ctx.drizzle, { caravanIds: ids }),
-        listActiveSabotage(ctx.drizzle, ids),
+        listActiveSabotage(ctx.drizzle, ids, now),
         listWarehouseItems(ctx.drizzle, [
           ...new Set(
             [...current, ...history].flatMap((row) => row.cargo.map((l) => l.itemId)),
@@ -235,7 +246,7 @@ export const caravanRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.villageId) return errorResponse("You have no village");
-      const [own, route, routes, items] = await Promise.all([
+      const [own, route, routes, items, relationships, wars] = await Promise.all([
         fetchVillage(ctx.drizzle, user.villageId),
         findTradeRoute(ctx.drizzle, input.routeId),
         listVillageRoutes(ctx.drizzle, user.villageId),
@@ -243,6 +254,8 @@ export const caravanRouter = createTRPCRouter({
           ctx.drizzle,
           input.cargo.map((line) => line.itemId),
         ),
+        listVillageRelationships(ctx.drizzle),
+        listOpenWars(ctx.drizzle),
       ]);
       if (!own || !canManageTrade(user, own))
         return errorResponse("Only the Kage and Elders send caravans");
@@ -255,6 +268,8 @@ export const caravanRouter = createTRPCRouter({
         return errorResponse("Select one of your active trade routes");
       if (route.markers.some((marker) => marker.controllerVillageId))
         return errorResponse("A hostile village holds a marker on this route");
+      const block = getRouteTradeBlock(route, relationships, wars);
+      if (block) return errorResponse(block);
       const cargo = mergeCargo(input.cargo);
       if (
         cargo.length !== items.length ||
@@ -354,15 +369,19 @@ export const caravanRouter = createTRPCRouter({
       ]);
       if (row?.status !== "PREPARING")
         return errorResponse("This caravan is not waiting to depart");
-      const [own, route] = await Promise.all([
+      const [own, route, relationships, wars] = await Promise.all([
         fetchVillage(ctx.drizzle, row.originVillageId),
         findTradeRoute(ctx.drizzle, row.routeId),
+        listVillageRelationships(ctx.drizzle),
+        listOpenWars(ctx.drizzle),
       ]);
       if (!own || !canManageTrade(user, own))
         return errorResponse("Only the Kage and Elders manage caravans");
       if (route?.status !== "ACTIVE") return errorResponse("The trade route is closed");
       if (route.markers.some((marker) => marker.controllerVillageId))
         return errorResponse("A hostile village holds a marker on this route");
+      const block = getRouteTradeBlock(route, relationships, wars);
+      if (block) return errorResponse(block);
       const now = new Date();
       const travelMinutes = getRouteTravelMinutes(route.level);
       const conflict = new CaravanConflict(
@@ -579,10 +598,11 @@ export const caravanRouter = createTRPCRouter({
     .input(z.object({ caravanId: z.string(), operationId: z.string() }))
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
+      const now = new Date();
       const [row, participants, sabotage] = await Promise.all([
         findCaravan(ctx.drizzle, input.caravanId),
         listCaravanParticipants(ctx.drizzle, [input.caravanId]),
-        listActiveSabotage(ctx.drizzle, [input.caravanId]),
+        listActiveSabotage(ctx.drizzle, [input.caravanId], now),
       ]);
       const operation = sabotage.find((op) => op.id === input.operationId);
       if (row?.status !== "TRAVELLING" || !operation)
@@ -592,6 +612,25 @@ export const caravanRouter = createTRPCRouter({
       );
       if (!self)
         return errorResponse("Only escorts waiting with the caravan can intervene");
+      // A saboteur busy elsewhere cannot be fought; catching them at work stops it outright.
+      if (operation.userStatus !== "AWAKE") {
+        const stopped = await resolveOperation(
+          ctx.drizzle,
+          operation.id,
+          "INTERRUPTED",
+          now,
+        );
+        if (stopped.rowsAffected !== 1) return errorResponse("The saboteur is gone");
+        notifyPlayers(ctx.drizzle, [operation.userId], {
+          title: "Sabotage stopped",
+          body: "An escort caught you at work on their caravan and stopped your sabotage.",
+          route: "/warehouse",
+        });
+        return {
+          success: true,
+          message: `You stopped ${operation.username}'s sabotage`,
+        };
+      }
       const result = await launchCaravanBattle(ctx.drizzle, {
         encounter: {
           type: "INTERVENTION",
@@ -622,6 +661,19 @@ export const caravanRouter = createTRPCRouter({
       return result;
     }),
 });
+
+/** Why a route's villages may no longer trade, once they turned enemies or went to war. */
+const getRouteTradeBlock = (
+  route: { villageIdA: string; villageIdB: string },
+  relationships: VillageAlliance[],
+  wars: { attackerVillageId: string; defenderVillageId: string }[],
+) =>
+  getTradeBlock(
+    relationships,
+    route.villageIdA,
+    route.villageIdB,
+    isAtWar(wars, route.villageIdA, route.villageIdB),
+  );
 
 /** Combine repeated cargo lines of the same item. */
 const mergeCargo = (lines: CargoLine[]) => {

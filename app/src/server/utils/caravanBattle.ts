@@ -1,10 +1,12 @@
 import { nanoid } from "nanoid";
+import { CARAVAN_MAX_LOSS_BP } from "@/drizzle/constants";
 import type { CaravanBattleState } from "@/libs/caravan";
 import {
   claimPendingEncounter,
   deleteStartingEncounter,
   insertEncounter,
   listCaravanAi,
+  listCaravansByIds,
   markEncounterFighting,
   reopenEncounter,
 } from "@/queries/caravan";
@@ -60,6 +62,19 @@ export const launchCaravanBattle = async (
   }
   let started = false;
   try {
+    // The reserved encounter holds off every other fight over the caravan, so the loss read
+    // now stays current until this battle settles and caps what its raiders can take.
+    const [current] = input.state.caravanId
+      ? await listCaravansByIds(client, [input.state.caravanId])
+      : [];
+    if (input.state.caravanId && current?.status !== "TRAVELLING")
+      return errorResponse("The caravan is not on the road");
+    if (
+      input.state.type === "INTERCEPTION" &&
+      current &&
+      current.lossBp >= CARAVAN_MAX_LOSS_BP
+    )
+      return errorResponse("This caravan has nothing left worth taking");
     const result = await initiateBattle(
       {
         client,
@@ -68,7 +83,12 @@ export const launchCaravanBattle = async (
         scaleTarget: input.scaleTarget,
         cacheUserId: input.cacheUserId,
         autoCombatFromDefaults: true,
-        caravan: { ...input.state, encounterId, battleId },
+        caravan: {
+          ...input.state,
+          lossBp: current?.lossBp ?? input.state.lossBp,
+          encounterId,
+          battleId,
+        },
       },
       "CARAVAN",
     );

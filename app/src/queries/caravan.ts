@@ -253,11 +253,15 @@ export const insertCaravan = (
   values: typeof caravan.$inferInsert,
 ) => client.insert(caravan).values(values);
 
-/** Move a caravan between lifecycle states if it is still the version that was read. */
+/**
+ * Move a caravan between lifecycle states if it is still the version that was read. With
+ * `unfought`, the move also requires that no fight over the caravan is open.
+ */
 export const transitionCaravan = (
   client: Pick<DrizzleClient, "update">,
   current: { id: string; version: number; status: CaravanStatus },
   set: Partial<typeof caravan.$inferInsert>,
+  options: { unfought?: boolean } = {},
 ) =>
   client
     .update(caravan)
@@ -267,6 +271,9 @@ export const transitionCaravan = (
         eq(caravan.id, current.id),
         eq(caravan.version, current.version),
         eq(caravan.status, current.status),
+        options.unfought
+          ? sql`NOT EXISTS (SELECT 1 FROM ${caravanEncounter} WHERE ${caravanEncounter.activeCaravanId} = ${current.id})`
+          : undefined,
       ),
     );
 
@@ -329,9 +336,15 @@ export const deleteGuard = (
       ),
     );
 
-/** Join or rejoin a journey's attacking side; a player keeps the side they first took. */
+/**
+ * Join or rejoin the attacking side of a caravan still on the road; a player keeps the side
+ * they first took. The insert reads the caravan row, so it waits for a delivery or
+ * cancellation in progress and then finds the caravan off the road. Assignments run in order
+ * and see earlier results, so the leader assignment tests a column the activeUserId
+ * assignment leaves alone: a released row has no leader, an active one has.
+ */
 export const upsertAttacker = (
-  client: Pick<DrizzleClient, "insert">,
+  client: Pick<DrizzleClient, "execute">,
   values: {
     caravanId: string;
     userId: string;
@@ -340,24 +353,15 @@ export const upsertAttacker = (
     now: Date;
   },
 ) =>
-  client
-    .insert(caravanParticipant)
-    .values({
-      caravanId: values.caravanId,
-      userId: values.userId,
-      role: values.role,
-      activeUserId: values.userId,
-      groupLeaderId: values.groupLeaderId,
-      joinedAt: values.now,
-    })
-    .onDuplicateKeyUpdate({
-      set: {
-        activeUserId: sql`CASE WHEN ${caravanParticipant.role} = ${values.role} AND ${caravanParticipant.activeUserId} IS NULL THEN ${values.userId} ELSE ${caravanParticipant.activeUserId} END`,
-        // Assignments run in column order and see earlier results, so this tests a column the
-        // activeUserId assignment leaves alone: a released row has no leader, an active one has.
-        groupLeaderId: sql`CASE WHEN ${caravanParticipant.role} = ${values.role} AND ${caravanParticipant.groupLeaderId} IS NULL THEN ${values.groupLeaderId} ELSE ${caravanParticipant.groupLeaderId} END`,
-      },
-    });
+  client.execute(sql`
+    INSERT INTO ${caravanParticipant} (caravanId, userId, role, activeUserId, groupLeaderId, joinedAt)
+    SELECT ${values.caravanId}, ${values.userId}, ${values.role}, ${values.userId}, ${values.groupLeaderId}, ${values.now}
+    FROM ${caravan}
+    WHERE ${caravan.id} = ${values.caravanId} AND ${caravan.status} = 'TRAVELLING'
+    ON DUPLICATE KEY UPDATE
+      ${caravanParticipant.activeUserId} = CASE WHEN ${caravanParticipant.role} = ${values.role} AND ${caravanParticipant.activeUserId} IS NULL THEN ${values.userId} ELSE ${caravanParticipant.activeUserId} END,
+      ${caravanParticipant.groupLeaderId} = CASE WHEN ${caravanParticipant.role} = ${values.role} AND ${caravanParticipant.groupLeaderId} IS NULL THEN ${values.groupLeaderId} ELSE ${caravanParticipant.groupLeaderId} END
+  `);
 
 /** Release participants' reservations, optionally only some players or one group. */
 export const releaseParticipants = (
@@ -635,6 +639,23 @@ export const insertEncounter = (
     createdAt: values.now,
   });
 
+/**
+ * Open an NPC ambush on a caravan that is still on the road. The insert reads the caravan
+ * row, so it waits for a delivery in progress and then finds the caravan delivered.
+ */
+export const insertCheckpointAmbush = (
+  client: Pick<DrizzleClient, "execute">,
+  values: { id: string; caravanId: string; expiresAt: Date; now: Date },
+) =>
+  client.execute(sql`
+    INSERT INTO ${caravanEncounter} (id, type, status, caravanId, activeCaravanId, expiresAt, createdAt)
+    SELECT ${values.id}, 'AMBUSH', 'PENDING', ${values.caravanId}, ${values.caravanId}, ${values.expiresAt}, ${values.now}
+    FROM ${caravan}
+    WHERE ${caravan.id} = ${values.caravanId}
+      AND ${caravan.status} = 'TRAVELLING'
+      AND ${caravan.arrivesAt} > ${values.now}
+  `);
+
 /** Reserve a pending ambush for the battle about to start. */
 export const claimPendingEncounter = (
   client: Pick<DrizzleClient, "update">,
@@ -730,7 +751,7 @@ export const resolveFoughtEncounter = (
 
 /**
  * Resolve an unanswered ambush against its caravan in one statement: the bandits take a
- * capped share of the manifest.
+ * capped share of the manifest of a caravan still on the road.
  */
 export const expireAmbush = (
   client: Pick<DrizzleClient, "execute">,
@@ -743,7 +764,7 @@ export const expireAmbush = (
     INNER JOIN ${caravan} ON ${caravan.id} = ${caravanEncounter.caravanId}
     SET ${caravanEncounter.status} = 'RESOLVED', ${caravanEncounter.attackersWon} = TRUE,
         ${caravanEncounter.resolvedAt} = ${now}, ${caravanEncounter.activeCaravanId} = NULL,
-        ${caravan.lossBp} = LEAST(${CARAVAN_MAX_LOSS_BP}, ${caravan.lossBp} + ${lossBp}),
+        ${caravan.lossBp} = IF(${caravan.status} = 'TRAVELLING', LEAST(${CARAVAN_MAX_LOSS_BP}, ${caravan.lossBp} + ${lossBp}), ${caravan.lossBp}),
         ${caravan.version} = ${caravan.version} + 1
     WHERE ${caravanEncounter.id} = ${encounterId}
       AND ${caravanEncounter.status} = 'PENDING'
@@ -798,7 +819,7 @@ export const listUserDiscoveries = (
       and(eq(caravanDiscovery.userId, userId), gt(caravanDiscovery.expiresAt, now)),
     );
 
-/** Record or refresh what a player learned about caravans. */
+/** Record or refresh what a player learned about caravans; an older sighting keeps a newer one. */
 export const upsertDiscoveries = (
   client: Pick<DrizzleClient, "insert">,
   rows: {
@@ -817,9 +838,11 @@ export const upsertDiscoveries = (
         .values(rows)
         .onDuplicateKeyUpdate({
           set: {
-            sector: sql`VALUES(${caravanDiscovery.sector})`,
-            seenAt: sql`VALUES(${caravanDiscovery.seenAt})`,
-            expiresAt: sql`VALUES(${caravanDiscovery.expiresAt})`,
+            // Assignments run in column order and see earlier results: sector compares the
+            // stored seenAt, and expiresAt follows only when seenAt became the incoming value.
+            sector: sql`IF(VALUES(${caravanDiscovery.seenAt}) > ${caravanDiscovery.seenAt}, VALUES(${caravanDiscovery.sector}), ${caravanDiscovery.sector})`,
+            seenAt: sql`GREATEST(${caravanDiscovery.seenAt}, VALUES(${caravanDiscovery.seenAt}))`,
+            expiresAt: sql`IF(${caravanDiscovery.seenAt} = VALUES(${caravanDiscovery.seenAt}), VALUES(${caravanDiscovery.expiresAt}), ${caravanDiscovery.expiresAt})`,
           },
         });
 
@@ -880,10 +903,11 @@ export const listUserOperations = (
     .orderBy(desc(caravanOperation.startedAt))
     .limit(limit);
 
-/** Running sabotage against caravans, which escorts may interrupt. */
+/** Sabotage against caravans still under way, which escorts may interrupt. */
 export const listActiveSabotage = (
   client: Pick<DrizzleClient, "select">,
   caravanIds: string[],
+  now: Date,
 ) =>
   caravanIds.length === 0
     ? Promise.resolve([])
@@ -895,6 +919,7 @@ export const listActiveSabotage = (
           userId: caravanOperation.userId,
           finishesAt: caravanOperation.finishesAt,
           username: userData.username,
+          userStatus: userData.status,
         })
         .from(caravanOperation)
         .innerJoin(userData, eq(userData.userId, caravanOperation.userId))
@@ -903,6 +928,7 @@ export const listActiveSabotage = (
             inArray(caravanOperation.caravanId, caravanIds),
             eq(caravanOperation.status, "ACTIVE"),
             inArray(caravanOperation.type, ["DISRUPT", "DELAY"]),
+            gt(caravanOperation.finishesAt, now),
           ),
         );
 
@@ -923,7 +949,7 @@ export const listDueOperations = (
       ),
     );
 
-/** Finish an operation once and free the player for another. */
+/** Finish an operation once and free the player; an interruption needs it still under way. */
 export const resolveOperation = (
   client: Pick<DrizzleClient, "update">,
   operationId: string,
@@ -934,19 +960,25 @@ export const resolveOperation = (
     .update(caravanOperation)
     .set({ status, resolvedAt: now, activeUserId: null })
     .where(
-      and(eq(caravanOperation.id, operationId), eq(caravanOperation.status, "ACTIVE")),
+      and(
+        eq(caravanOperation.id, operationId),
+        eq(caravanOperation.status, "ACTIVE"),
+        status === "INTERRUPTED" ? gt(caravanOperation.finishesAt, now) : undefined,
+      ),
     );
 
 /**
  * Finish a successful sabotage together with its effect on the caravan, so neither applies
  * twice. The added delay was capped against the delay read with the caravan, which the
- * statement still requires; disruption weakens its next fights for a while.
+ * statement still requires; disruption weakens its next fights for a while. Sabotage that
+ * finished only once the caravan was due takes no effect.
  */
 export const resolveSabotage = (
   client: Pick<DrizzleClient, "execute">,
   input: {
     operationId: string;
     caravanId: string;
+    finishesAt: Date;
     now: Date;
     expectedDelayMinutes: number;
     addedMinutes: number;
@@ -965,6 +997,7 @@ export const resolveSabotage = (
     WHERE ${caravanOperation.id} = ${input.operationId}
       AND ${caravanOperation.status} = 'ACTIVE'
       AND ${caravan.status} = 'TRAVELLING'
+      AND ${caravan.arrivesAt} > ${input.finishesAt}
       AND ${caravan.delayMinutes} = ${input.expectedDelayMinutes}
   `);
 
