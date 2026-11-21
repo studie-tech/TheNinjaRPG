@@ -61,6 +61,11 @@ const readRestoreBloodlineId = async () => {
 
 const swap = async (bloodlineId: string) =>
   (await callerFor(bloodlineRouter, userId)).swapDiamondBloodline({ bloodlineId });
+const patch = async (data: Partial<typeof userData.$inferInsert>) =>
+  (await getTestDatabase())
+    .update(userData)
+    .set(data)
+    .where(eq(userData.userId, userId));
 
 describeWithDatabase("Diamond bloodline swaps", () => {
   beforeEach(async () => {
@@ -198,26 +203,16 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       "pick-c",
       "owned-line",
     ]);
-    const db = await getTestDatabase();
-    await db
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, userId));
+    await patch({ federalStatus: "GOLD" });
     expect(await swap("pick-a")).toMatchObject({
       success: false,
       message: "Diamond bloodline swaps require Diamond Federal Support",
     });
     expect(await caller.getDiamondSwapBloodlines()).toEqual([]);
     // Staff count as Gold, whatever tier is stored.
-    await db
-      .update(userData)
-      .set({ federalStatus: "DIAMOND", staffAccount: true })
-      .where(eq(userData.userId, userId));
+    await patch({ federalStatus: "DIAMOND", staffAccount: true });
     expect((await swap("pick-a")).success).toBe(false);
-    await db
-      .update(userData)
-      .set({ federalStatus: "GOLD", staffAccount: false })
-      .where(eq(userData.userId, userId));
+    await patch({ federalStatus: "GOLD", staffAccount: false });
     expect(await readUser()).toMatchObject({
       bloodlineId: "owned-line",
       diamondBloodlineActive: false,
@@ -232,10 +227,7 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       reverted: 0,
       cleared: 0,
     });
-    await db
-      .update(userData)
-      .set({ federalStatus: "GOLD" })
-      .where(eq(userData.userId, userId));
+    await patch({ federalStatus: "GOLD" });
     expect(await revertLapsedDiamondBloodlines(db)).toEqual({
       reverted: 1,
       cleared: 0,
@@ -267,15 +259,9 @@ describeWithDatabase("Diamond bloodline swaps", () => {
 
   it("restores no bloodline when the player had none before Diamond", async () => {
     const db = await getTestDatabase();
-    await db
-      .update(userData)
-      .set({ bloodlineId: null })
-      .where(eq(userData.userId, userId));
+    await patch({ bloodlineId: null });
     expect((await swap("pick-a")).success).toBe(true);
-    await db
-      .update(userData)
-      .set({ federalStatus: "NONE" })
-      .where(eq(userData.userId, userId));
+    await patch({ federalStatus: "NONE" });
     expect(await revertLapsedDiamondBloodlines(db)).toEqual({
       reverted: 1,
       cleared: 0,
@@ -301,10 +287,7 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       bloodlineId: "pick-c",
       type: "NATURAL",
     });
-    await db
-      .update(userData)
-      .set({ bloodlineId: "pick-c", federalStatus: "NONE" })
-      .where(eq(userData.userId, userId));
+    await patch({ bloodlineId: "pick-c", federalStatus: "NONE" });
     expect(await revertLapsedDiamondBloodlines(db)).toEqual({
       reverted: 0,
       cleared: 1,
@@ -353,10 +336,7 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       { id: "uj-a", userId, jutsuId: "pick-a-jutsu", level: 3, equipped: true },
       { id: "uj-b", userId: "keeper-owned", jutsuId: "pick-b-jutsu", equipped: true },
     ]);
-    await db
-      .update(userData)
-      .set({ federalStatus: "NONE" })
-      .where(eq(userData.userId, userId));
+    await patch({ federalStatus: "NONE" });
     expect(await revertLapsedDiamondBloodlines(db)).toEqual({
       reverted: 1,
       cleared: 2,
@@ -403,10 +383,7 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       status: "ACTIVE",
       updatedAt: new Date(Date.now() - 32 * 24 * 3600 * 1000),
     });
-    await db
-      .update(userData)
-      .set({ federalStatus: "NONE" })
-      .where(eq(userData.userId, userId));
+    await patch({ federalStatus: "NONE" });
     expect(await revertLapsedDiamondBloodlines(db)).toEqual({
       reverted: 0,
       cleared: 0,
@@ -467,10 +444,7 @@ describeWithDatabase("Diamond bloodline swaps", () => {
     async (_, insertPeriod) => {
       expect((await swap("pick-a")).success).toBe(true);
       const db = await getTestDatabase();
-      await db
-        .update(userData)
-        .set({ federalStatus: "NONE" })
-        .where(eq(userData.userId, userId));
+      await patch({ federalStatus: "NONE" });
       // Expired an hour ago: the renewal may not have been confirmed yet.
       await insertPeriod(new Date(Date.now() - 3600 * 1000));
       expect(await revertLapsedDiamondBloodlines(db)).toEqual({
