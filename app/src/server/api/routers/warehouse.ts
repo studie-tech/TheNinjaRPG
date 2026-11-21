@@ -417,9 +417,6 @@ export const warehouseRouter = createTRPCRouter({
         return errorResponse(
           "Not enough unreserved stock, or your allowance changed. Refresh and try again",
         );
-      const { stacks } = await grantUserItems(ctx.drizzle, ctx.userId, [
-        { itemId: input.itemId, quantity: input.quantity },
-      ]);
       const log = {
         id: nanoid(),
         villageId: villageData.id,
@@ -428,9 +425,13 @@ export const warehouseRouter = createTRPCRouter({
         type: "WITHDRAW" as const,
         quantity: input.quantity,
       };
+      // A grant that fails after this leaves the WITHDRAW row support restores the goods from.
       await Promise.all([
         addWithdrawnUnits(ctx.drizzle, ctx.userId, input.itemId, input.quantity),
         insertWarehouseLogs(ctx.drizzle, [log], now),
+      ]);
+      const { stacks } = await grantUserItems(ctx.drizzle, ctx.userId, [
+        { itemId: input.itemId, quantity: input.quantity },
       ]);
       // Filled stacks change their snapshot time in SQL, so the inventory reloads.
       return {
