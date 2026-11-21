@@ -18,6 +18,7 @@ import {
   submitSupplyRequestAtomically,
 } from "@/queries/supplyRequest";
 import { occupationRouter } from "@/server/api/routers/occupation";
+import { profileRouter } from "@/server/api/routers/profile";
 import { periodStart } from "@/utils/time";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import {
@@ -29,7 +30,13 @@ import {
   insertUserVotes,
 } from "../../../../setup/factories";
 import {
+  barrier,
+  beforeStatements,
+  withoutTransactions,
+} from "../../../../setup/statements";
+import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -318,6 +325,228 @@ describeWithDatabase("daily supply requests", () => {
     )?.goals;
     expect(goals?.find((goal) => goal.id === "xp")?.value).toBe(4000);
     expect(goals?.find((goal) => goal.id === "gathered")?.value).toBe(0);
+  });
+
+  const seedSupplyFollowup = async () => {
+    await insertQuests([
+      {
+        id: "supply-chain",
+        questType: "mission",
+        consecutiveObjectives: true,
+        content: {
+          objectives: [
+            AllObjectives.parse({
+              id: "xp",
+              task: "gathering_experience_gained",
+              value: 2000,
+              nextObjectiveId: "start-next",
+            }),
+            AllObjectives.parse({
+              id: "start-next",
+              task: "new_quest",
+              newQuestIds: ["followup"],
+            }),
+          ],
+        },
+      },
+      {
+        id: "followup",
+        questType: "story",
+        content: {
+          objectives: [
+            AllObjectives.parse({ id: "later", task: "herbs_gathered", value: 5 }),
+          ],
+        },
+      },
+      {
+        id: "unloaded-achievement",
+        questType: "achievement",
+        content: {
+          objectives: [
+            AllObjectives.parse({
+              id: "saved-counter",
+              task: "ranked_wins",
+              value: 100,
+            }),
+          ],
+        },
+      },
+    ]);
+    await insertQuestHistory([
+      { userId: owner, questId: "supply-chain", questType: "mission" },
+    ]);
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({
+        questData: [
+          QuestTracker.parse({
+            id: "supply-chain",
+            goals: [
+              { id: "xp", value: 0, done: false },
+              { id: "start-next", done: false },
+            ],
+          }),
+          QuestTracker.parse({
+            id: "unloaded-achievement",
+            goals: [{ id: "saved-counter", value: 3, done: false }],
+          }),
+        ],
+      })
+      .where(eq(userData.userId, owner));
+  };
+
+  it("starts a follow-up quest once for concurrent submissions and preserves sparse counters", async () => {
+    await seedSupplyFollowup();
+    const { input } = await reviewed();
+    const db = await getTestDatabase();
+    const arrive = barrier(2);
+    const observed = beforeStatements(db, userItem, [arrive, arrive], {
+      operations: ["execute"],
+    });
+    const caller = callerForDatabase(
+      occupationRouter,
+      owner,
+      withoutTransactions(observed),
+    );
+    const results = await Promise.all([
+      caller.submitSupplyRequest(input),
+      caller.submitSupplyRequest(input),
+    ]);
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(results.find((result) => result.success)?.message).toContain(
+      "Started new quest:",
+    );
+    const after = await requireUser(owner);
+    expect(after.questData?.find((row) => row.id === "supply-chain")?.goals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "xp", value: 4000, done: true }),
+        expect.objectContaining({ id: "start-next", done: true }),
+      ]),
+    );
+    expect(
+      after.questData?.find((row) => row.id === "unloaded-achievement")?.goals[0]
+        ?.value,
+    ).toBe(3);
+    const historyBefore = await db.query.questHistory.findMany({
+      where: eq(questHistory.questId, "followup"),
+    });
+    expect(historyBefore).toHaveLength(1);
+    expect(await caller.submitSupplyRequest(input)).toMatchObject({ success: false });
+    const profile = await callerFor(profileRouter, owner);
+    await profile.getUser();
+    await profile.getUser();
+    expect(
+      await db.query.questHistory.findMany({
+        where: eq(questHistory.questId, "followup"),
+      }),
+    ).toEqual(historyBefore);
+    expect((await requireUser(owner)).gatheringExperience).toBe(
+      after.gatheringExperience,
+    );
+    expect((await requireUser(owner)).money).toBe(2320);
+    expect((await readStack())?.quantity).toBe(50);
+  });
+
+  it("does not execute follow-up effects for stale reviews", async () => {
+    await seedSupplyFollowup();
+    const { caller, input } = await reviewed();
+    const before = await requireUser(owner);
+    expect(
+      await caller.submitSupplyRequest({ ...input, expectedQuantity: 251 }),
+    ).toMatchObject({ success: false });
+    const db = await getTestDatabase();
+    expect(
+      await db.query.questHistory.findMany({
+        where: eq(questHistory.questId, "followup"),
+      }),
+    ).toHaveLength(0);
+    expect((await requireUser(owner)).questData).toEqual(before.questData);
+    expect((await requireUser(owner)).supplyRequestAt).toBeNull();
+  });
+
+  it.each(["ban", "snapshot"] as const)(
+    "does not execute quest effects when the atomic supply claim loses a %s race",
+    async (race) => {
+      await seedSupplyFollowup();
+      const { input } = await reviewed();
+      const db = await getTestDatabase();
+      const before = await requireUser(owner);
+      let injected = false;
+      const observed = beforeStatements(
+        db,
+        userItem,
+        [
+          async () => {
+            injected = true;
+            await db
+              .update(userData)
+              .set(
+                race === "ban"
+                  ? { isBanned: true }
+                  : { updatedAt: new Date(before.updatedAt.getTime() + 1000) },
+              )
+              .where(eq(userData.userId, owner));
+          },
+        ],
+        { operations: ["execute"] },
+      );
+      const caller = callerForDatabase(
+        occupationRouter,
+        owner,
+        withoutTransactions(observed),
+      );
+      expect(await caller.submitSupplyRequest(input)).toMatchObject({ success: false });
+      expect(injected).toBe(true);
+      expect(
+        await db.query.questHistory.findMany({
+          where: eq(questHistory.questId, "followup"),
+        }),
+      ).toHaveLength(0);
+      const after = await requireUser(owner);
+      expect(after.questData).toEqual(before.questData);
+      expect(after.money).toBe(1000);
+      expect(after.gatheringExperience).toBe(10);
+      expect(after.supplyRequestAt).toBeNull();
+      expect((await readStack())?.quantity).toBe(250);
+    },
+  );
+
+  it("persists quest resets in the atomic supply claim", async () => {
+    await seedSupplyFollowup();
+    const db = await getTestDatabase();
+    const current = (await db.query.quest.findFirst({
+      where: eq(quest.id, "supply-chain"),
+    }))!;
+    await db
+      .update(quest)
+      .set({
+        content: {
+          ...current.content,
+          objectives: [
+            current.content.objectives[0]!,
+            AllObjectives.parse({
+              id: "start-next",
+              task: "reset_quest",
+              resetObjectiveId: "xp",
+            }),
+          ],
+        },
+      })
+      .where(eq(quest.id, "supply-chain"));
+    const { caller, input } = await reviewed();
+    expect(await caller.submitSupplyRequest(input)).toMatchObject({ success: true });
+    expect(
+      (await requireUser(owner)).questData
+        ?.find((row) => row.id === "supply-chain")
+        ?.goals.some((row) => row.id === "xp"),
+    ).toBe(false);
+    expect(
+      await db.query.questHistory.findMany({
+        where: eq(questHistory.questId, "followup"),
+      }),
+    ).toHaveLength(0);
+    expect((await requireUser(owner)).money).toBe(2320);
   });
 
   it("commits automatic wake only together with an accepted supply payment", async () => {

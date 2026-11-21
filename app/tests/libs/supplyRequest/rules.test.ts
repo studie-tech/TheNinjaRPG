@@ -122,3 +122,18 @@ it("withholds the entire profile projection when progression needs reconciliatio
     ),
   ).toEqual({});
 });
+
+it.each(["add_item", "remove_item", "combat", "random_encounter"] as const)(
+  "withholds inventory projection for %s quest effects",
+  (type) => {
+    expect(
+      getSupplyRequestInventoryUpdate(
+        { id: "stock", itemId: "herb", quantity: 250 },
+        200,
+        new Date(),
+        { craftingItemsChanged: false, startedQueuedJobs: 0 },
+        [{ type, ids: ["quest-target"] }],
+      ),
+    ).toBeUndefined();
+  },
+);

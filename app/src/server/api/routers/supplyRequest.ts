@@ -24,6 +24,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { handleQuestConsequences } from "@/server/utils/questConsequences";
 import { getNextUserSnapshotAt, nextUtcDayAt } from "@/utils/time";
 import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 import { dateInputSchema } from "@/validators/misc";
@@ -94,6 +95,7 @@ export const supplyRequestProcedures = {
       if (blocked) return errorResponse(blocked);
       if (!user.occupation || user.occupation !== input.occupation)
         return errorResponse("Your profession changed. Review your supplies again.");
+      const occupation = user.occupation;
       const stack = stacks.find((entry) => entry.id === input.userItemId);
       if (
         !stack ||
@@ -109,6 +111,7 @@ export const supplyRequestProcedures = {
           "These supplies changed or are unavailable. Review your inventory and try again.",
         );
       const reward = getSupplyRequestReward(stack.item.auctionMaxPrice, input.quantity);
+      const auctionMaxPrice = stack.item.auctionMaxPrice;
       const field = supplyExperienceField(user.occupation);
       if (
         !Number.isSafeInteger(reward.ryo) ||
@@ -120,9 +123,8 @@ export const supplyRequestProcedures = {
         ...user,
         [field]: user[field] + reward.experience,
         supplyRequestAt: now,
-        updatedAt,
       };
-      const { trackers, consequences, questIdsUpdated } = getNewTrackers(
+      const { trackers, consequences, notifications, questIdsUpdated } = getNewTrackers(
         nextUser,
         getExperienceTrackerTasks({
           reward_medical_experience: 0,
@@ -134,32 +136,56 @@ export const supplyRequestProcedures = {
             user.occupation === "HUNTER" ? reward.experience : 0,
         }),
       );
-      const result = await submitSupplyRequestAtomically(
+      nextUser.questData = filterQuestTrackersForDbPersist(trackers, user, true);
+      const result = await handleQuestConsequences(
         ctx.drizzle,
-        { ...user, occupation: user.occupation },
-        stack,
+        nextUser,
+        consequences,
+        notifications,
         {
-          ...reward,
-          quantity: input.quantity,
-          auctionMaxPrice: stack.item.auctionMaxPrice,
-          claimedAt: now,
-          updatedAt,
-          questData: filterQuestTrackersForDbPersist(trackers, user),
+          readiness,
+          alwaysClaimUserState: true,
+          partyTrackers: trackers,
+          claimUserState: async ({
+            userId,
+            updatedAt: expectedUpdatedAt,
+            set = {},
+            where,
+            readiness,
+          }) => {
+            const claim = await submitSupplyRequestAtomically(
+              ctx.drizzle,
+              { userId, updatedAt: expectedUpdatedAt, occupation },
+              stack,
+              {
+                ...reward,
+                quantity: input.quantity,
+                auctionMaxPrice,
+                claimedAt: now,
+                updatedAt,
+                questData: nextUser.questData ?? [],
+              },
+              readiness,
+              { set, where },
+            );
+            return { success: claim.rowsAffected === 2, claimedAt: updatedAt };
+          },
         },
-        readiness,
       );
-      if (result.rowsAffected !== 2)
+      if (!result.claimed)
         return errorResponse(
           "Your supplies or character changed. Refresh the request and try again.",
         );
-      nextUser.questData = trackers;
       return actionReadinessResponse(
         {
           success: true,
-          message: `Submitted ${input.quantity}x ${stack.item.name} for ${reward.ryo.toLocaleString()} Ryo and ${reward.experience.toLocaleString()} ${user.occupation.toLowerCase()} EXP.`,
+          message: [
+            `Submitted ${input.quantity}x ${stack.item.name} for ${reward.ryo.toLocaleString()} Ryo and ${reward.experience.toLocaleString()} ${user.occupation.toLowerCase()} EXP.`,
+            ...result.notifications,
+          ].join("\n"),
           ...getSupplyRequestUserUpdate(
             {
-              user: nextUser,
+              user: { ...nextUser, questData: trackers },
               updatedUser,
               consequences,
               questIdsUpdated,
@@ -172,6 +198,7 @@ export const supplyRequestProcedures = {
             input.quantity,
             updatedAt,
             updatedUser,
+            consequences,
           ),
         },
         readiness,

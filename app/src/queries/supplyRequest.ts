@@ -14,6 +14,7 @@ import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { hasNoHuntingBattle } from "@/server/utils/concurrency";
 import { periodStart } from "@/utils/time";
+import type { QueryCondition } from "@/utils/typeutils";
 import type { QuestTrackerType } from "@/validators/objectives";
 
 /** Load carried supply snapshots, optionally restricted to the reviewed stack. */
@@ -80,6 +81,7 @@ export const submitSupplyRequestAtomically = (
     questData: QuestTrackerType[];
   },
   readiness?: ActionReadinessWrite,
+  questState?: { set: Record<string, unknown>; where?: QueryCondition[] },
 ) => {
   const experience = userData[supplyExperienceField(user.occupation)];
   const flag =
@@ -91,13 +93,18 @@ export const submitSupplyRequestAtomically = (
   return client.execute(sql`UPDATE ${userItem}
     INNER JOIN ${userData} ON ${eq(userData.userId, userItem.userId)}
     INNER JOIN ${item} ON ${eq(item.id, userItem.itemId)}
-    SET ${actionReadinessSqlSet(readiness, ["updatedAt", "questData"])} ${userItem.quantity} = ${userItem.quantity} - ${request.quantity},
+    SET ${actionReadinessSqlSet(
+      {
+        set: { ...readiness?.set, questData: request.questData, ...questState?.set },
+        where: readiness?.where,
+      },
+      ["updatedAt", "money", supplyExperienceField(user.occupation)],
+    )} ${userItem.quantity} = ${userItem.quantity} - ${request.quantity},
         ${userItem.updatedAt} = ${sql.param(request.updatedAt, userItem.updatedAt)},
         ${userData.money} = ${userData.money} + ${request.ryo},
         ${experience} = ${experience} + ${request.experience},
         ${userData.supplyRequestAt} = ${sql.param(request.claimedAt, userData.supplyRequestAt)},
-        ${userData.updatedAt} = ${sql.param(request.updatedAt, userData.updatedAt)},
-        ${userData.questData} = ${sql.param(request.questData, userData.questData)}
+        ${userData.updatedAt} = ${sql.param(request.updatedAt, userData.updatedAt)}
     WHERE ${and(
       eq(userItem.id, stack.id),
       eq(userItem.itemId, stack.itemId),
@@ -124,6 +131,7 @@ export const submitSupplyRequestAtomically = (
       eq(item.auctionMaxPrice, request.auctionMaxPrice),
       eq(flag, true),
       eq(userData.updatedAt, user.updatedAt),
+      ...(questState?.where ?? []),
       eq(userData.occupation, user.occupation),
       readiness?.where ?? eq(userData.status, "AWAKE"),
       eq(userData.isBanned, false),
