@@ -1,4 +1,5 @@
 import { type SQLWrapper, sql } from "drizzle-orm";
+import type { BattleType } from "@/drizzle/constants";
 import {
   caravanParticipant,
   dungeonMember,
@@ -25,6 +26,15 @@ export const withoutActivityReservation = (userId: SQLWrapper = userData.userId)
 export const withoutQueuedEscort = (userId: SQLWrapper = userData.userId) =>
   sql`(${userData.status} <> 'QUEUED' OR ${withoutCaravanEscort(userId)})`;
 
-/** Status of a player leaving combat: escorts return to their caravan's queue. */
-export const leaveCombatStatusSql = (userId: SQLWrapper = userData.userId) =>
-  sql`CASE WHEN ${withoutCaravanEscort(userId)} THEN 'AWAKE' ELSE 'QUEUED' END`;
+/**
+ * Status of a player leaving combat: escorts return to their caravan's queue from its
+ * battles. Any other battle holds only escorts who left the queue to heal, and they rejoin
+ * it themselves.
+ */
+export const leaveCombatStatus = (
+  battleType: BattleType,
+  userId: SQLWrapper = userData.userId,
+) =>
+  battleType === "CARAVAN"
+    ? sql`CASE WHEN ${withoutCaravanEscort(userId)} THEN 'AWAKE' ELSE 'QUEUED' END`
+    : ("AWAKE" as const);

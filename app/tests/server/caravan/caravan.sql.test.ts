@@ -1,6 +1,6 @@
 /** Cover the guarded Warehouse, escort, fight and delivery writes against real SQL. */
 import { beforeEach, expect, it } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   BANDIT_OPERATION_EXP,
   CARAVAN_AMBUSH_LOSS_BP,
@@ -30,6 +30,7 @@ import {
   warehouseStock,
 } from "@/drizzle/schema";
 import type { CaravanBattleState } from "@/libs/caravan";
+import type { CompleteBattle } from "@/libs/combat/types";
 import {
   claimLoot,
   dispatchCargo,
@@ -48,6 +49,7 @@ import {
   upsertDiscoveries,
 } from "@/queries/caravan";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
+import { updateUserDataForFinishBattle } from "@/queries/combat";
 import {
   claimWithdrawal,
   creditWarehouseStock,
@@ -486,6 +488,42 @@ describeWithDatabase("village Warehouse and caravans", () => {
     if (!row) throw new Error("caravan missing");
     expect(await afterTasks.run([], () => cancelCaravan(db, row))).toEqual(["guard"]);
     expect(await statusOf("guard")).toBe("AWAKE");
+  });
+
+  it("returns escorts to the queue only from their caravan's battles", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([
+      { userId: "escort", status: "BATTLE", battleId: "defence", villageId: "leaf" },
+      { userId: "raider", status: "BATTLE", battleId: "defence", villageId: "sand" },
+      { userId: "healed", status: "BATTLE", battleId: "arena", villageId: "leaf" },
+    ]);
+    await db.insert(caravan).values(caravanRow({ status: "PREPARING" }));
+    for (const userId of ["escort", "healed"])
+      expect((await insertGuard(db, "c1", userId, new Date())).rowsAffected).toBe(1);
+    const leave = (userId: string, fight: CompleteBattle) =>
+      updateUserDataForFinishBattle(
+        db,
+        () => sql`${userData.curEnergy}`,
+        fight,
+        {
+          userId,
+          curHealth: 100,
+          curStamina: 100,
+          curChakra: 100,
+          allyVillage: false,
+          sector: 1,
+          villageId: null,
+        },
+        false,
+      );
+    const defence = makeCompleteBattle({ id: "defence", battleType: "CARAVAN" });
+    await leave("escort", defence);
+    await leave("raider", defence);
+    // An escort healed out of the queue rejoins it themselves after another fight.
+    await leave("healed", makeCompleteBattle({ id: "arena", battleType: "ARENA" }));
+    expect(await statusOf("escort")).toBe("QUEUED");
+    expect(await statusOf("raider")).toBe("AWAKE");
+    expect(await statusOf("healed")).toBe("AWAKE");
   });
 
   it("settles a won robbery once, capping the loss and splitting the loot", async () => {
