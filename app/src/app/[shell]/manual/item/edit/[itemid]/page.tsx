@@ -40,7 +40,7 @@ import { SuggestChange } from "@/layout/SuggestChange";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import type { ZodItemType } from "@/validators/combat";
+import type { ZodAllTags, ZodItemType } from "@/validators/combat";
 import { DamageTag, ItemValidatorRawSchema } from "@/validators/combat";
 import type { ZodItemVariantType } from "@/validators/item";
 import { displayCostType, ItemVariantValidator } from "@/validators/item";
@@ -107,6 +107,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
     useItemEditForm(props.item, props.refetch);
 
   const itemType = useWatch({ control: form.control, name: "itemType" });
+  const canBeEnhanced = useWatch({ control: form.control, name: "canBeEnhanced" });
   const isFurniture = itemType === "FURNITURE";
   const furnitureImage = useWatch({ control: form.control, name: "image" });
   const furnitureData = useWatch({ control: form.control, name: "furnitureData" });
@@ -235,6 +236,40 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         )}
       </ContentBox>
 
+      {canBeEnhanced && !isFurniture && (
+        <ContentBox title="Fortify eligible base tags" initialBreak>
+          <p className="text-sm">
+            Selected tags gain +1 power per level. Stable tag IDs retain owned upgrades
+            when reordered. Removing a tag makes its upgrades dormant.
+          </p>
+          {(effects as ZodAllTags[]).map((tag, index) => (
+            <label
+              key={tag.fortifyId ?? index}
+              className="flex items-center gap-2 text-sm"
+            >
+              <input
+                type="checkbox"
+                checked={tag.fortifyEnabled ?? false}
+                disabled={isUpdating}
+                onChange={(event) =>
+                  setEffects(
+                    (effects as ZodAllTags[]).map((entry, i) =>
+                      i === index
+                        ? {
+                            ...entry,
+                            fortifyId: entry.fortifyId ?? crypto.randomUUID(),
+                            fortifyEnabled: event.target.checked,
+                          }
+                        : entry,
+                    ),
+                  )
+                }
+              />
+              {index + 1}. {tag.type} (power {tag.power})
+            </label>
+          ))}
+        </ContentBox>
+      )}
       {!isFurniture && (
         <EffectTagListEditor
           allowJutsuSlotGrants={itemType === "CONSUMABLE"}

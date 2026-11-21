@@ -53,6 +53,7 @@ export const fetchMasterySources = async (
           storedAtHome: true,
           isInAuction: true,
           craftingFinishedAt: true,
+          fortification: true,
         },
         where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
         with: {

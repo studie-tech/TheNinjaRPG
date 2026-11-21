@@ -78,6 +78,7 @@ beforeEach(() => {
       submitServiceRequest: { useMutation: () => ({ mutate: save, isPending: false }) },
     },
     item: {
+      getFortifyEligibility: { useQuery: () => ({ data: [], isError: false }) },
       getUserItems: {
         useQuery: () => ({
           data: [

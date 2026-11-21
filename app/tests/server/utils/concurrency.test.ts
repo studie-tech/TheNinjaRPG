@@ -45,6 +45,7 @@ const itemSnapshot = {
   craftingFinishedAt: null,
   isInAuction: false,
   activeVariantId: null,
+  fortification: null,
   dropChancePerc: 0,
 } as const;
 

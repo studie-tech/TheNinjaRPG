@@ -69,6 +69,7 @@ const isParticipantGuard = (path: string, guard: Guard) =>
 
 /** Expected awake-only actions, audited against actor guards in every registered mutation. */
 const AWAKE_ACTIONS = new Set([
+  "item.fortify",
   "bloodline.roll",
   "clan.leaveClan",
   "clan.fightLeader",

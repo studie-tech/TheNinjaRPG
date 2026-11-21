@@ -17,6 +17,7 @@ import {
   rewardServiceUser,
   transitionServiceRequest,
 } from "@/queries/craftingServices";
+import { fortifyServiceEquipment } from "@/queries/fortify";
 import { fetchItemWithCraftingRequirements, insertUserItems } from "@/queries/item";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
@@ -65,6 +66,20 @@ export const completeCraftingService = async (
             }),
           ),
         );
+      }
+      if (request.service === "FORTIFY") {
+        if (!request.fortify || !equipment) throw new Error("Invalid Fortify receipt");
+        if (
+          (
+            await fortifyServiceEquipment(
+              tx,
+              request.id,
+              equipment,
+              request.fortify.state,
+            )
+          ).rowsAffected !== 1
+        )
+          throw new CraftingServiceConflict("Fortify escrow changed");
       }
       if (request.service === "IMBUE") {
         if (!request.targetUserItemId || !request.crystalItemId || !request.finishesAt)
@@ -134,7 +149,11 @@ export const refundCraftingService = async (
         (await deliverServiceEquipment(tx, request)).rowsAffected !== 1
       )
         throw new CraftingServiceConflict("Escrow equipment changed");
-      await rewardServiceUser(tx, request.requesterId, request.fee);
+      await rewardServiceUser(
+        tx,
+        request.requesterId,
+        request.fee + (request.fortify?.cost ?? 0),
+      );
       await releaseServiceSlot(tx, request);
       return notifyServiceRequest(tx, request, "refunded");
     }),

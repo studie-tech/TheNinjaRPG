@@ -54,6 +54,7 @@ import type {
 import type { CreatorTrialState } from "@/libs/combat/creatorTrial";
 import type { EncounterWaveState } from "@/libs/combat/encounters";
 import type { DungeonBattleState } from "@/libs/dungeon";
+import type { Fortification } from "@/libs/fortify";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type { SpriteUser } from "@/libs/lpc/appearance";
 import type {
@@ -90,6 +91,7 @@ export type CombatQueryUserItem = UserItem & {
   progressionRowId?: string | null;
   /** Effects of this row's imbuements, carried when it is rebuilt from battle state. */
   imbuementEffects?: UserEffect[];
+  fortification?: Fortification;
 };
 
 /**
@@ -404,6 +406,7 @@ export type BattleUserItem = {
    * extraState.items is shared by every participant wearing the same template.
    */
   imbuementEffects?: UserEffect[];
+  fortification?: Fortification;
   activeVariantId?: string | null; // which variant is active (if any)
   variantBattleDescription?: string | null; // pre-resolved from variant at battle init
   variantImage?: string | null; // pre-resolved from variant at battle init

@@ -1652,7 +1652,14 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   const attributes = Object.keys(tagSchema.shape) as Attribute[];
 
   // Parse how to present the tag form
-  const ignore = ["timeTracker", "type", "weightedCache", "rewardMode"];
+  const ignore = [
+    "timeTracker",
+    "type",
+    "weightedCache",
+    "rewardMode",
+    "fortifyId",
+    "fortifyEnabled",
+  ];
   if (isActivityBonus(tag) || tag.type === "increasejutsuslots")
     ignore.push(
       ...attributes.filter((key) => key !== "power" && key !== "description"),

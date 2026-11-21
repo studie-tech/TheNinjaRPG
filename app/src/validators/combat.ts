@@ -14,6 +14,7 @@ import {
   DIFFUSE_MAX_PERCENTAGE,
   ELEMENTAL_SEAL_AP_COST,
   ElementNames,
+  FORTIFY_ITEM_TYPES,
   GeneralTypes,
   getCombatStatCap,
   getUserCaps,
@@ -119,6 +120,8 @@ const tagType = <T extends string>(tag: T) => z.literal(tag).prefault(tag);
 /******************** */
 const BaseTagTargets = ["INHERIT", "SELF", "COORDINATES"] as const;
 const BaseAttributes = {
+  fortifyId: z.string().min(1).max(64).optional(),
+  fortifyEnabled: z.boolean().optional(),
   // Visual controls
   staticAssetPath: z.string().prefault(""),
   staticAnimation: z.string().prefault(""),
@@ -2079,6 +2082,7 @@ export const ItemValidatorRawSchema = z.object({
     .nullable(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
   canBeImbued: z.coerce.boolean().prefault(false),
+  canBeEnhanced: z.coerce.boolean().prefault(false),
   canBeCrafted: z.coerce.boolean().prefault(false),
   canBeHunted: z.coerce.boolean().prefault(false),
   canBeGathered: z.coerce.boolean().prefault(false),
@@ -2142,7 +2146,31 @@ export const ItemValidatorRawSchema = z.object({
 });
 export const ItemValidator = ItemValidatorRawSchema.superRefine(SuperRefineBase)
   .superRefine(SuperRefineItem)
-  .superRefine(refineItemEconomy);
+  .superRefine(refineItemEconomy)
+  .superRefine((data, ctx) => {
+    const ids = data.effects.flatMap((tag) => (tag.fortifyId ? [tag.fortifyId] : []));
+    if (new Set(ids).size !== ids.length)
+      ctx.addIssue({
+        code: "custom",
+        path: ["effects"],
+        message: "Fortify tag IDs must be unique",
+      });
+    if (data.effects.some((tag) => tag.fortifyEnabled && !tag.fortifyId))
+      ctx.addIssue({
+        code: "custom",
+        path: ["effects"],
+        message: "Eligible Fortify tags require a stable ID",
+      });
+    if (
+      data.canBeEnhanced &&
+      !FORTIFY_ITEM_TYPES.some((type) => type === data.itemType)
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["canBeEnhanced"],
+        message: "Only weapons, armor, accessories and keystones can be enhanced",
+      });
+  });
 export type ZodItemType = z.output<typeof ItemValidator>;
 export type ZodItemInput = z.input<typeof ItemValidator>;
 
