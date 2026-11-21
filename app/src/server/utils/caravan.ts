@@ -26,6 +26,7 @@ import {
 import { getServerPusher } from "@/libs/pusher";
 import {
   advanceCaravanCheckpoints,
+  applyCaravanLoss,
   expireAmbush,
   grantCaravanRewards,
   insertCheckpointAmbush,
@@ -184,7 +185,8 @@ export const closeVillageTrade = async (
     listOpenVillageCaravans(client, villageId),
     closeVillageTradeRoutes(client, villageId, now),
   ]);
-  await Promise.all(caravans.map((row) => cancelCaravan(client, row, now)));
+  // One at a time: inside an outer transaction each cancel is a savepoint of the same name.
+  for (const row of caravans) await cancelCaravan(client, row, now);
 };
 
 /** Deliver an arrived caravan once no fight over it is still open, and pay its escorts. */
@@ -524,6 +526,13 @@ const settleDueEncounters = async (
     }
     if (encounter.battleId && running.has(encounter.battleId)) continue;
     const released = await releaseStaleEncounter(client, encounter, now);
+    // An abandoned defence costs what an unanswered ambush would.
+    if (
+      released.rowsAffected === 1 &&
+      encounter.type === "AMBUSH" &&
+      encounter.caravanId
+    )
+      await applyCaravanLoss(client, encounter.caravanId, CARAVAN_AMBUSH_LOSS_BP);
     if (released.rowsAffected === 1 && encounter.caravanId && encounter.leaderId)
       await releaseParticipants(client, encounter.caravanId, {
         groupLeaderId: encounter.leaderId,
