@@ -1,13 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import { nanoid } from "nanoid";
+import { signRunToken, verifyRunToken } from "@/server/utils/runTokens";
 import {
   checkTowerDefenseClaimTiming,
   TD_TOKEN_LIFETIME_MS,
   towerDefenseReplayCost,
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
-import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
-import { TD_MAX_TICKS, type TowerDefenseRunToken } from "@/validators/towerDefense";
+import {
+  TD_MAX_TICKS,
+  type TowerDefenseRunToken,
+  towerDefenseRunTokenSchema,
+} from "@/validators/towerDefense";
 import { playBotRun } from "../../libs/towerDefense/bot";
 
 const token = (
@@ -44,15 +48,15 @@ describe("tower defense run tokens", () => {
   it("round-trips a signed payload and rejects any alteration", () => {
     const payload = token();
     const signed = signRunToken(payload);
-    expect(verifyRunToken(signed)).toEqual(payload);
+    expect(verifyRunToken(signed, towerDefenseRunTokenSchema)).toEqual(payload);
     const [body, mac] = signed.split(".");
     const forged = Buffer.from(
       JSON.stringify({ ...payload, dojo: { dmg: 999 } }),
     ).toString("base64url");
-    expect(verifyRunToken(`${forged}.${mac}`)).toBeNull();
-    expect(verifyRunToken(`${body}.${mac}x`)).toBeNull();
-    expect(verifyRunToken(`${body}`)).toBeNull();
-    expect(verifyRunToken("not-a-token")).toBeNull();
+    expect(verifyRunToken(`${forged}.${mac}`, towerDefenseRunTokenSchema)).toBeNull();
+    expect(verifyRunToken(`${body}.${mac}x`, towerDefenseRunTokenSchema)).toBeNull();
+    expect(verifyRunToken(`${body}`, towerDefenseRunTokenSchema)).toBeNull();
+    expect(verifyRunToken("not-a-token", towerDefenseRunTokenSchema)).toBeNull();
   });
 });
 

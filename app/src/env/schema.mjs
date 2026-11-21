@@ -92,6 +92,8 @@ export const serverSchema = z.object({
   TOWER_DEFENSE_HMAC_SECRET: z.string().optional(),
   // Tower Defense reward claims are refused unless this is "true"
   TOWER_DEFENSE_CLAIMS_ENABLED: z.enum(["true", "false"]).optional(),
+  // Chakra Storm reward claims are refused unless this is "true"
+  CHAKRA_STORM_CLAIMS_ENABLED: z.enum(["true", "false"]).optional(),
   // Key for the IP hashes in visitor analytics; changing it breaks every stored join
   IP_HASH_SECRET: z.string().optional(),
   // Google Ads click conversions sent through the Data Manager API: the 10-digit
@@ -222,6 +224,9 @@ export const serverEnv = {
   TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,
   TOWER_DEFENSE_CLAIMS_ENABLED: /** @type {"true" | "false" | undefined} */ (
     process.env.TOWER_DEFENSE_CLAIMS_ENABLED
+  ),
+  CHAKRA_STORM_CLAIMS_ENABLED: /** @type {"true" | "false" | undefined} */ (
+    process.env.CHAKRA_STORM_CLAIMS_ENABLED
   ),
   // Apple Push Notification service
   APNS_KEY_ID: process.env.APNS_KEY_ID,

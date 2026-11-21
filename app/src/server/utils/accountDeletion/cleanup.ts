@@ -2,6 +2,8 @@ import { CLAN_ASSASSIN_SLOTS } from "@/drizzle/constants";
 import {
   abEvent,
   battleAction,
+  chakraStormClaimReceipt,
+  chakraStormProgress,
   dailyBankInterest,
   historicalSoundEffect,
   itemLoadout,
@@ -93,6 +95,8 @@ export const removeAccountGameData = async (userId: string) => {
       towerDefenseRun,
       // Claim receipts outlive a character, so a recreated one cannot claim its runs again.
       towerDefenseClaimReceipt,
+      chakraStormProgress,
+      chakraStormClaimReceipt,
       userStreakProgress,
       battleAction,
     ].map((table) => deleteRowsForUser(drizzleDB, table, userId)),

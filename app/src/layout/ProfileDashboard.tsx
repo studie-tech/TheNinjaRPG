@@ -10,6 +10,7 @@ import {
   Briefcase,
   ChevronDown,
   Coins,
+  Compass,
   Dumbbell,
   Eye,
   Gift,
@@ -57,6 +58,7 @@ import { QueryError } from "@/layout/QueryError";
 import { PendingRewardChoices } from "@/layout/RewardChoice";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { bankAccessBlockMessage } from "@/libs/bank";
+import { CS_DAILY_SECONDS } from "@/libs/chakraStorm/content";
 import { getRewardPreview } from "@/libs/objectives";
 import {
   buildDashboardCatalogue,
@@ -487,6 +489,21 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                 action={
                   <RowAction href="/towerDefense" icon={ShieldCheck}>
                     Defend
+                  </RowAction>
+                }
+              />
+            )}
+            {!tdDailyDutyDone(
+              userData.chakraStormDutyAt,
+              new Date(Date.now() - timeDiff),
+            ) && (
+              <StatusRow
+                label="Chakra Storm"
+                title="Daily scouting report"
+                detail={`Scout ${CS_DAILY_SECONDS / 60} minutes: ${dailyDuty.ryo.toLocaleString()} ryo, ${dailyDuty.prestige} prestige${userData.villageId ? `, ${dailyDuty.villageTokens} village tokens` : ""}`}
+                action={
+                  <RowAction href="/chakraStorm" icon={Compass}>
+                    Scout
                   </RowAction>
                 }
               />

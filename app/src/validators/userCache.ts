@@ -100,6 +100,7 @@ export const userPatchSchema = z.object({
   deletionAt: z.date().nullable().optional(),
   towerDefenseDutyAt: z.date().nullable().optional(),
   supplyRequestAt: z.date().nullable().optional(),
+  chakraStormDutyAt: z.date().nullable().optional(),
   isBanned: z.boolean().optional(),
   isSilenced: z.boolean().optional(),
   isTradeBanned: z.boolean().optional(),

@@ -33,6 +33,7 @@ const STATIC_ROUTES: {
   { path: "/guide", priority: 0.9, changeFrequency: "weekly" },
   { path: "/forum", priority: 0.7, changeFrequency: "daily" },
   { path: "/towerDefense", priority: 0.8, changeFrequency: "weekly" },
+  { path: "/chakraStorm", priority: 0.8, changeFrequency: "weekly" },
   { path: "/manual/bloodline", priority: 0.7, changeFrequency: "weekly" },
   { path: "/manual/jutsu", priority: 0.7, changeFrequency: "weekly" },
   { path: "/manual/item", priority: 0.7, changeFrequency: "weekly" },

@@ -369,3 +369,85 @@ export const proceduralDecoration = (
   };
   return { cost, description };
 };
+
+/** Trees and rocks a simulated battlefield places, by biome, with their base scale. */
+const FIELD_OBSTACLE_ART: Record<
+  "ground" | "dessert" | "snow",
+  Record<"tree" | "rock", { key: string; scale: number; biome?: CombatBiome }[]>
+> = {
+  ground: {
+    tree: [
+      { key: "tree.green.round", scale: 2 },
+      { key: "tree.green.tall", scale: 2 },
+      { key: "tree.green.wide", scale: 1.8 },
+    ],
+    rock: [
+      { key: "rock.grey", scale: 1.3 },
+      { key: "rock.slate", scale: 1.3 },
+    ],
+  },
+  dessert: {
+    tree: [
+      { key: "cactus.saguaro", scale: 1.5 },
+      { key: "cactus.cluster", scale: 1.3 },
+    ],
+    rock: [
+      { key: "rock.sand", scale: 1.4, biome: "dessert" },
+      { key: "rock.slate", scale: 1.4, biome: "dessert" },
+    ],
+  },
+  snow: {
+    tree: [{ key: "tree.snow.pine", scale: 2 }],
+    rock: [
+      { key: "rock.grey", scale: 1.3 },
+      { key: "rock.slate", scale: 1.3 },
+    ],
+  },
+};
+
+/**
+ * A tree or rock standing with its base at (x, groundY) in terrain pixels, for
+ * battlefields whose obstacles a simulation places. `roll` in [0, 1) picks the art and
+ * its size, so a seed always dresses the field the same way.
+ */
+export const fieldObstacleDescription = (
+  kind: "tree" | "rock",
+  biome: CombatBiome,
+  roll: number,
+  x: number,
+  groundY: number,
+  hexHeight: number,
+  id: string,
+): WorldSpriteDescription => {
+  const set =
+    FIELD_OBSTACLE_ART[
+      biome === "dessert"
+        ? "dessert"
+        : biome === "snow" || biome === "ice"
+          ? "snow"
+          : "ground"
+    ][kind];
+  const choice = set[Math.floor(roll * set.length)] ?? set[0];
+  if (!choice) throw new Error(`No ${kind} art for ${biome}`);
+  const art = decorationArt(choice.key, choice.biome);
+  const size = choice.scale * (0.85 + roll * 0.3) * (art.heightScale ?? 1);
+  const asset = DECORATION_ASSETS_BY_KEY.get(choice.key);
+  return {
+    id,
+    kind: "decoration",
+    image: art.filepath,
+    frame: art.frame,
+    shadow: art.shadow,
+    shadowCaster: art.shadowCaster,
+    preserveAspect: !!art.frame,
+    size: size * hexHeight,
+    x,
+    y: groundY + (size * hexHeight) / 2,
+    groundY,
+    small: false,
+    rendition: 128,
+    nearest: true,
+    wind: kind === "tree" && asset?.windAffected ? 0 : null,
+    rotation: 0,
+  };
+};

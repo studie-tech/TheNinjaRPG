@@ -11,6 +11,8 @@ import {
 import type { UserStatus } from "@/drizzle/constants";
 import {
   adClick,
+  chakraStormClaimReceipt,
+  chakraStormProgress,
   farmCollectionLog,
   farmExtraction,
   farmPlot,
@@ -914,6 +916,8 @@ export const staffRouter = createTRPCRouter({
           userTowerDefenseUpgrade,
           towerDefenseRun,
           towerDefenseClaimReceipt,
+          chakraStormProgress,
+          chakraStormClaimReceipt,
         ].map((table) => updateTableForUpdateUserId(ctx.drizzle, table, input)),
         updateStaffApplicationForUpdateUserId(ctx.drizzle, input),
         updateWarKillForUpdateUserId(ctx.drizzle, input),

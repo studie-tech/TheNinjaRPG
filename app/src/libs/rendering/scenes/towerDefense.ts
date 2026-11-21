@@ -20,16 +20,17 @@ import type { GameAsset } from "@/drizzle/schema";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { lpcFacing } from "@/libs/lpc/catalog";
 import { assetAnimationClip, sampleAnimationClip } from "@/libs/rendering/animation";
-import {
-  acquireAnimationTexture,
-  animationFrameViews,
-} from "@/libs/rendering/animationTextures";
-import { readTextureFramePixels } from "@/libs/rendering/assets";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
 import {
   createLpcCharacter,
   type LpcCharacter,
 } from "@/libs/rendering/primitives/character";
+import {
+  createRosterArtCache,
+  FRAME_FOOT,
+  NO_ROSTER_ART,
+  type RosterArt,
+} from "@/libs/rendering/primitives/rosterArt";
 import { createSoftShadowTexture } from "@/libs/rendering/primitives/shadow";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
@@ -39,7 +40,6 @@ import { createTowerDefenseFx } from "@/libs/rendering/scenes/towerDefenseFx";
 import { prepareTowerDefenseTerrain } from "@/libs/rendering/scenes/towerDefenseTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import {
-  type CharacterAnimation,
   type CharacterAnimations,
   spriteAnimationFrame,
 } from "@/libs/spriteAnimations";
@@ -112,10 +112,6 @@ const SENTRY_COLORS: Record<TdSentry, number> = {
 const VIEW_HALF_WIDTH = 9.5;
 const VIEW_HALF_HEIGHT = 7.5;
 const TERRAIN_SIZE = 29;
-/** How long a character's sheets outlast its last enemy, so a wave gap keeps them. */
-const ENEMY_ART_GRACE_MS = 20_000;
-/** How often characters on the field ask again for sheets the atlas budget refused. */
-const ENEMY_ART_RETRY_MS = 1_000;
 /** How long the field keeps animating after the run ends, for its closing effects. */
 const GAME_OVER_SETTLE_MS = 2_000;
 /** How long the hero keeps facing its last throw's target before turning to the nearest. */
@@ -124,25 +120,6 @@ const AIM_FACING_MS = 1_200;
 const HERO_TARGET = -1;
 /** Enemy projectiles read as hostile against the hero's white shuriken. */
 const ENEMY_SHOT_TINT = 0xd23a3a;
-/** A frame whose feet are unknown stands on its bottom edge. */
-const FRAME_FOOT: ClipFoot = { x: 0, lift: 0 };
-/** Alpha above which a pixel counts as drawn when finding a frame's feet. */
-const FOOT_ALPHA = 48;
-/** Longest side, in pixels, a frame is sampled at to find its feet. */
-const FOOT_SAMPLE_PX = 64;
-
-/** The art of a pooled record, which draws nothing. */
-const NO_ENEMY_ART: EnemyArt = {
-  still: null,
-  move: null,
-  idle: null,
-  users: 0,
-  idleSince: 0,
-  retry: () => {},
-  dispose: () => {},
-  disposed: false,
-};
-
 /**
  * Renders a tower-defense run from the deterministic simulation. The scene only drains
  * the run's event queue: `onFrame` advances the run, `getView` exposes its state, and
@@ -526,93 +503,7 @@ export const createTowerDefenseScene = async (options: {
     };
 
     // Enemy art: one sheet set per roster character, shared by every enemy drawn with it.
-    // Sheets come from the shared atlas budget, so a character nobody has drawn for a
-    // while gives its sheets back and the rotating bands of a long run keep finding room.
-    const appearances = new Map<string, EnemyArt>();
-    // Registered before any sheet lease, so closing the scene disposes each art (and
-    // disowns its leases) first, and a sheet that finishes loading later builds nothing.
-    game.own(() => {
-      for (const art of appearances.values()) art.dispose();
-      appearances.clear();
-    });
-    const maxTexture = game.renderer.gl.getParameter(
-      game.renderer.gl.MAX_TEXTURE_SIZE,
-    ) as number;
-    const artFor = (entry: TowerDefenseRosterEntry | undefined): EnemyArt => {
-      const key = entry?.userId ?? "none";
-      const existing = appearances.get(key);
-      if (existing) return existing;
-      const leases: (() => void)[] = [];
-      /** Sheets the atlas budget had no room for yet. */
-      let missing: { animation: CharacterAnimation; slot: "move" | "idle" }[] = [];
-      const art: EnemyArt = {
-        still: null,
-        move: null,
-        idle: null,
-        users: 0,
-        idleSince: 0,
-        retry: () => {
-          if (missing.length === 0 || art.disposed) return;
-          missing = missing.filter(({ animation, slot }) => !load(animation, slot));
-        },
-        dispose: () => {
-          art.disposed = true;
-          for (const clip of [art.move, art.idle])
-            for (const view of clip?.views ?? []) view.destroy(false);
-          art.move = art.idle = null;
-          for (const release of leases.splice(0)) {
-            release();
-            game.disown(release);
-          }
-        },
-        disposed: false,
-      };
-      appearances.set(key, art);
-      if (!entry) return art;
-      if (entry.avatar)
-        void game.assets
-          .texture(entry.avatar, 128)
-          .then((texture) => {
-            art.still = texture;
-          })
-          .catch(() => {});
-      /** Lease a sheet for a slot; false when the atlas budget has no room for it. */
-      const load = (animation: CharacterAnimation, slot: "move" | "idle") => {
-        const lease = acquireAnimationTexture(animation, 128, maxTexture);
-        if (!lease) return false;
-        game.own(lease.release);
-        leases.push(lease.release);
-        void lease.resource
-          .then((atlas) => {
-            if (art.disposed) return;
-            const views = animationFrameViews(atlas, animation);
-            art[slot] = { animation, views, foot: clipFoot(views[0]) };
-          })
-          .catch(() => {});
-        return true;
-      };
-      const move = entry.animations.move ?? entry.animations.idle;
-      if (move) missing.push({ animation: move, slot: "move" });
-      if (entry.animations.idle)
-        missing.push({ animation: entry.animations.idle, slot: "idle" });
-      art.retry();
-      return art;
-    };
-    let artRetriedAt = 0;
-    /**
-     * Give back the sheets of characters no enemy has used for a while, and let the
-     * characters on the field claim the room for sheets they were refused.
-     */
-    const updateArtLeases = (now: number) => {
-      for (const [key, art] of appearances)
-        if (art.users === 0 && now - art.idleSince > ENEMY_ART_GRACE_MS) {
-          art.dispose();
-          appearances.delete(key);
-        }
-      if (now - artRetriedAt < ENEMY_ART_RETRY_MS) return;
-      artRetriedAt = now;
-      for (const art of appearances.values()) if (art.users > 0) art.retry();
-    };
+    const rosterArt = createRosterArtCache(game);
     const roster = [...options.roster].sort(
       (a, b) => a.level - b.level || a.userId.localeCompare(b.userId),
     );
@@ -695,7 +586,7 @@ export const createTowerDefenseScene = async (options: {
         fallback,
         halo,
         bar,
-        art: NO_ENEMY_ART,
+        art: NO_ROSTER_ART,
         x: 0,
         y: 0,
         bornAt: 0,
@@ -706,7 +597,7 @@ export const createTowerDefenseScene = async (options: {
     /** Resets a pooled record for a new enemy; `drawEnemyBody` sets the rest each frame. */
     const spawnEnemy = (enemy: TdEnemy, wave: number) => {
       const record = spareEnemies.pop() ?? createEnemyRecord();
-      record.art = artFor(rosterFor(enemy, wave));
+      record.art = rosterArt.artFor(rosterFor(enemy, wave));
       record.art.users++;
       record.x = enemy.x;
       record.y = enemy.y;
@@ -901,12 +792,12 @@ export const createTowerDefenseScene = async (options: {
           record.root.removeFromParent();
           enemies.delete(id);
           if (--record.art.users === 0) record.art.idleSince = now;
-          record.art = NO_ENEMY_ART;
+          record.art = NO_ROSTER_ART;
           // Pooled bodies hold no frame of art that may be released before they return.
           record.body.texture = record.cast.texture = Texture.EMPTY;
           spareEnemies.push(record);
         }
-      updateArtLeases(now);
+      rosterArt.update(now);
 
       // Projectiles
       for (let i = flights.length - 1; i >= 0; i--) {
@@ -2293,34 +2184,6 @@ const meterSprite = (color: number, y: number, height: number) => {
   return sprite;
 };
 
-interface EnemyClip {
-  animation: CharacterAnimation;
-  views: Texture[];
-  /** Where the feet stand in the first frame; every frame shares it, so steps keep their bob. */
-  foot: ClipFoot;
-}
-
-/** Feet as a share of the frame: across from its centre, and up from its bottom edge. */
-interface ClipFoot {
-  x: number;
-  lift: number;
-}
-
-interface EnemyArt {
-  still: Texture | null;
-  move: EnemyClip | null;
-  idle: EnemyClip | null;
-  /** Live enemies drawn with this art. */
-  users: number;
-  /** When the last of them left the field. */
-  idleSince: number;
-  /** Ask again for the sheets the atlas budget refused. */
-  retry: () => void;
-  /** Destroy the frame views and release the sheets. */
-  dispose: () => void;
-  disposed: boolean;
-}
-
 interface EnemyRecord {
   root: Container;
   body: Sprite;
@@ -2336,7 +2199,7 @@ interface EnemyRecord {
     focus: Graphics;
   };
   bar: { root: Container; back: Sprite; fill: Sprite; shield: Sprite };
-  art: EnemyArt;
+  art: RosterArt;
   x: number;
   y: number;
   bornAt: number;
@@ -2364,41 +2227,3 @@ interface Flight {
   due: number;
   element: TdElement;
 }
-
-/**
- * Feet of a sheet's frame: the lowest drawn row and the middle of the pixels just above it,
- * read from that one cell at low resolution. Unreadable art stands on its frame's edge.
- */
-const clipFoot = (texture: Texture | undefined): ClipFoot => {
-  if (!texture) return FRAME_FOOT;
-  try {
-    const pixels = readTextureFramePixels(texture, FOOT_SAMPLE_PX);
-    const scale = Math.min(
-      1,
-      FOOT_SAMPLE_PX / Math.max(texture.frame.width, texture.frame.height),
-    );
-    const width = Math.max(1, Math.round(texture.frame.width * scale)),
-      height = Math.max(1, Math.round(texture.frame.height * scale));
-    const drawn = (x: number, y: number) =>
-      (pixels[(y * width + x) * 4 + 3] ?? 0) > FOOT_ALPHA;
-    let bottom = -1;
-    for (let y = height - 1; y >= 0 && bottom < 0; y--)
-      for (let x = 0; x < width; x++)
-        if (drawn(x, y)) {
-          bottom = y;
-          break;
-        }
-    if (bottom < 0) return FRAME_FOOT;
-    let sum = 0,
-      count = 0;
-    for (let y = Math.max(0, bottom - 2); y <= bottom; y++)
-      for (let x = 0; x < width; x++)
-        if (drawn(x, y)) {
-          sum += x + 0.5;
-          count++;
-        }
-    return { x: sum / count / width - 0.5, lift: (height - 1 - bottom) / height };
-  } catch {
-    return FRAME_FOOT;
-  }
-};

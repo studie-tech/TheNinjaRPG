@@ -30,8 +30,8 @@ export const createTowerDefenseFx = () => {
     const sprite = new Sprite(glow);
     sprite.anchor.set(0.5);
     sprite.blendMode = "add";
+    // Idle particles stay out of the scene, so the renderer never walks the whole pool.
     sprite.visible = false;
-    particleLayer.addChild(sprite);
     return {
       sprite,
       x: 0,
@@ -85,6 +85,7 @@ export const createTowerDefenseFx = () => {
       particle.drag = options.drag ?? 2;
       particle.sprite.tint = options.color;
       particle.sprite.visible = true;
+      if (!particle.sprite.parent) particleLayer.addChild(particle.sprite);
     }
   };
 
@@ -188,6 +189,7 @@ export const createTowerDefenseFx = () => {
   const createPool = (size: number, length: number) =>
     Array.from({ length: size }, () => {
       const root = new Container();
+      // Idle numbers stay out of the scene, like idle particles.
       root.visible = false;
       const glyphs = Array.from({ length }, () => {
         const glyph = new Sprite(Texture.EMPTY);
@@ -195,7 +197,7 @@ export const createTowerDefenseFx = () => {
         root.addChild(glyph);
         return glyph;
       });
-      numberLayer.addChild(root);
+
       return {
         root,
         glyphs,
@@ -229,6 +231,7 @@ export const createTowerDefenseFx = () => {
     if (!record) return;
     Object.assign(record, motion, { x, y, age: 0 });
     record.root.visible = true;
+    if (!record.root.parent) numberLayer.addChild(record.root);
     let used = 0;
     lines.forEach((segments, line) => {
       const width = segments.reduce(
@@ -338,6 +341,7 @@ export const createTowerDefenseFx = () => {
       particle.life -= dt;
       if (particle.life <= 0) {
         particle.sprite.visible = false;
+        particle.sprite.removeFromParent();
         continue;
       }
       const damping = Math.max(0, 1 - particle.drag * dt);
@@ -417,6 +421,7 @@ export const createTowerDefenseFx = () => {
       const progress = record.age / record.life;
       if (progress >= 1) {
         record.root.visible = false;
+        record.root.removeFromParent();
         continue;
       }
       const landed = Math.min(1, progress / 0.14);
@@ -466,6 +471,11 @@ export const createTowerDefenseFx = () => {
     flash,
     update,
     dispose: () => {
+      // Attached members go with the scene; idle ones are destroyed here.
+      for (const particle of particles)
+        if (!particle.sprite.parent) particle.sprite.destroy();
+      for (const record of numbers)
+        if (!record.root.parent) record.root.destroy({ children: true });
       atlas.dispose();
       glow.destroy(true);
     },
