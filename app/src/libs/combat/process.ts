@@ -187,22 +187,28 @@ const getVisualOrSound = (
   source?: GroundEffect | UserEffect,
   phase: "appear" | "disappear" = "appear",
 ): GroundEffect => {
+  const presentation = {
+    projectileAnimation: phase === "appear" ? source?.projectileAnimation : undefined,
+    projectileScale: phase === "appear" ? source?.projectileScale : undefined,
+    animationOffsetY: source?.animationOffsetY,
+    groundStyle: source?.groundStyle,
+    groundOpacity: source?.groundOpacity,
+    groundFeather: source?.groundFeather,
+    appearSfxPrimary:
+      phase === "disappear" ? source?.disappearSfxPrimary : source?.appearSfxPrimary,
+  };
   return {
     ...VisualTag.parse({
+      // Omit unset controls so SuperJSON does not add an undefined annotation for each one.
+      ...Object.fromEntries(
+        Object.entries(presentation).filter(([, value]) => value !== undefined),
+      ),
       type: "visual",
       rounds: 0,
       description: "N/A",
       appearAnimation: animation,
-      projectileAnimation: phase === "appear" ? source?.projectileAnimation : undefined,
-      projectileScale: phase === "appear" ? source?.projectileScale : undefined,
-      animationOffsetY: source?.animationOffsetY,
-      groundStyle: source?.groundStyle,
-      groundOpacity: source?.groundOpacity,
-      groundFeather: source?.groundFeather,
       animationScale,
       appearSfx: sfx ?? "",
-      appearSfxPrimary:
-        phase === "disappear" ? source?.disappearSfxPrimary : source?.appearSfxPrimary,
       createdAt: Date.now(),
     }),
     actionId: "visual",
