@@ -81,7 +81,7 @@ import {
   warMercenary,
 } from "@/drizzle/schema";
 import { getShrineHpByLevel, isVillageInvolvedInAnyWar } from "@/libs/war";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { withoutActivityReservation } from "@/queries/activityReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
@@ -783,7 +783,7 @@ export const executeRowsForFinishWarSettlement5 = (
         UPDATE ${userData} INNER JOIN ${mpvpBattleUser} ON ${userData.userId} = ${mpvpBattleUser.userId}
         INNER JOIN ${mpvpBattleQueue} ON ${mpvpBattleUser.clanBattleId} = ${mpvpBattleQueue.id}
         SET ${userData.status} = 'AWAKE' WHERE ${queueMatch} AND ${userData.status} = 'QUEUED'
-          AND ${withoutDungeonReservation()}
+          AND ${withoutActivityReservation()}
       `);
 
 /** Execute the database statement for `finishWarSettlement`. */

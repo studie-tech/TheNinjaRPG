@@ -163,6 +163,7 @@ const AI_EDITABLE_KEYS = [
   "isSummon",
   "isEvent",
   "isWarCamp",
+  "isCaravanAi",
   "inArena",
   "inShrines",
   "primaryElement",
@@ -237,6 +238,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
             ? row.expireFromStoreAt.slice(0, 10)
             : "",
           crystalTargetTypes: row.crystalTargetTypes || null,
+          villageId: row.villageId || null,
           craftingRequirements: craftingRequirements.map((req) => ({
             ids: [req.requirementItemId],
             number: req.quantity,

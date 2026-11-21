@@ -21,6 +21,10 @@ beforeEach(() => {
   });
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
+    caravan: {
+      getEncounterRate: { useQuery: () => ({ data: { rate: 25 } }) },
+      setEncounterRate: mutation("caravanRate"),
+    },
     misc: {
       getGlobalTavernEnabled: { useQuery: () => ({ data: true }) },
       toggleGlobalTavern: mutation("tavern"),

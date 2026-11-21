@@ -180,6 +180,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/users/ipsearch/[ip]",
   "/users/village/[villageid]",
   "/village",
+  "/warehouse",
 ] as const;
 
 const routeSpecificity = (template: string) =>

@@ -1,0 +1,123 @@
+import { nanoid } from "nanoid";
+import type { CaravanBattleState } from "@/libs/caravan";
+import {
+  claimPendingEncounter,
+  deleteStartingEncounter,
+  insertEncounter,
+  listCaravanAi,
+  markEncounterFighting,
+  reopenEncounter,
+} from "@/queries/caravan";
+import { initiateBattle } from "@/routers/combat";
+import { errorResponse } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+
+/**
+ * Start a caravan or marker fight. The encounter is reserved for the new battle first, so
+ * only one fight per caravan and marker can begin; a battle that fails to start releases it.
+ * Escorts and attackers start with auto combat when they keep it on by default, since
+ * escorts may be away when their caravan is attacked.
+ */
+export const launchCaravanBattle = async (
+  client: DrizzleClient,
+  input: {
+    /** An open ambush is answered; any other fight opens a new encounter. */
+    pendingEncounterId?: string;
+    encounter: Omit<
+      Parameters<typeof insertEncounter>[1],
+      "id" | "status" | "battleId" | "now"
+    >;
+    state: Omit<CaravanBattleState, "encounterId" | "battleId">;
+    userIds: string[];
+    targetIds: string[];
+    scaleTarget?: boolean;
+    cacheUserId: string;
+  },
+) => {
+  const now = new Date();
+  const battleId = nanoid();
+  const encounterId = input.pendingEncounterId ?? nanoid();
+  if (input.pendingEncounterId) {
+    const claimed = await claimPendingEncounter(client, encounterId, battleId, now);
+    if (claimed.rowsAffected !== 1)
+      return errorResponse("The ambush is over or already being fought");
+  } else {
+    try {
+      await insertEncounter(client, {
+        ...input.encounter,
+        id: encounterId,
+        status: "STARTING",
+        battleId,
+        now,
+      });
+    } catch (error) {
+      if (isMysqlDuplicateKeyError(error))
+        return errorResponse("Another fight over it is already underway");
+      throw error;
+    }
+  }
+  let started = false;
+  try {
+    const result = await initiateBattle(
+      {
+        client,
+        userIds: input.userIds,
+        targetIds: input.targetIds,
+        scaleTarget: input.scaleTarget,
+        cacheUserId: input.cacheUserId,
+        autoCombatFromDefaults: true,
+        caravan: { ...input.state, encounterId, battleId },
+      },
+      "CARAVAN",
+    );
+    started = result.success;
+    if (started) await markEncounterFighting(client, encounterId, battleId);
+    return result;
+  } finally {
+    if (!started) {
+      if (input.pendingEncounterId)
+        await reopenEncounter(client, encounterId, battleId);
+      else await deleteStartingEncounter(client, encounterId, battleId);
+    }
+  }
+};
+
+/**
+ * Draw Caravan AI opponents near a level: a random pick among the closest templates, each
+ * drawn independently so repeated templates become separate combatants.
+ */
+export const pickCaravanAi = async (
+  client: DrizzleClient,
+  count: number,
+  level: number,
+) => {
+  if (count <= 0) return [];
+  const pool = (await listCaravanAi(client)).sort(
+    (a, b) => Math.abs(a.level - level) - Math.abs(b.level - level),
+  );
+  const nearest = pool.slice(0, Math.max(3, count));
+  return Array.from(
+    { length: count },
+    () => nearest[Math.floor(Math.random() * nearest.length)]?.userId,
+  ).filter((id): id is string => !!id);
+};
+
+/**
+ * Escorts waiting in their caravan's queue, the ones a fight over it can draw in. Escorts
+ * who left to heal or fight elsewhere are backfilled by NPC guards.
+ */
+export const selectQueuedGuards = <
+  T extends {
+    role: string;
+    activeUserId: string | null;
+    status: string;
+    isBanned: boolean;
+  },
+>(
+  participants: T[],
+) =>
+  participants.filter(
+    (p) =>
+      p.role === "GUARD" && !!p.activeUserId && p.status === "QUEUED" && !p.isBanned,
+  );

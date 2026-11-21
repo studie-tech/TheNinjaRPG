@@ -21,6 +21,8 @@ export type WarSettlement = {
   cleanupCutoff?: number;
   boostsDelivered: boolean;
   structuresDelivered: boolean;
+  /** False until a won raid on a Warehouse destroys its share of the stock; absent on older receipts. */
+  warehouseDelivered?: boolean;
   notified: boolean;
 };
 

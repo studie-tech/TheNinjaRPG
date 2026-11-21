@@ -53,6 +53,7 @@ export const useItemEditForm = (
     expireFromStoreAt: expireFromStoreAt,
     crystalTargetTypes: data.crystalTargetTypes || null,
     furnitureData: data.furnitureData || null,
+    villageId: data.villageId || null,
     craftingRequirements: data.craftingRequirements.map((req) => ({
       ids: [req.requirementItemId],
       number: req.quantity,
@@ -184,6 +185,7 @@ export const useItemEditForm = (
 
   // Query for bloodlines for bloodline requirement dropdown
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
+  const { data: villages } = api.village.getAllNames.useQuery(undefined);
 
   const { data: requiredSkills } = api.skillTree.getAllNames.useQuery();
 
@@ -297,6 +299,15 @@ export const useItemEditForm = (
       id: "auctionMaxPrice",
       type: "number",
       label: "Auction maximum ryo per unit (blank for none)",
+    },
+    { id: "warehouseItem", type: "boolean", label: "Village Warehouse Item" },
+    {
+      id: "villageId",
+      type: "db_values",
+      values: villages,
+      label: "Village (Syndicate for outlaw settlements)",
+      resetButton: true,
+      nullable: true,
     },
   ];
   const crafting: FormEntry<Path<ZodItemType>>[] = [
@@ -490,6 +501,8 @@ const MEAL_FORM_FIELDS = new Set<Path<ZodItemType>>([
   "canBeTraded",
   "auctionMinPrice",
   "auctionMaxPrice",
+  "warehouseItem",
+  "villageId",
   "craftingRequirements",
   "cookingMinLevel",
   "cookingTimeSeconds",

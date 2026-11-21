@@ -138,6 +138,7 @@ import {
 import { warRaidCombatGuard } from "@/queries/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { settleCaravanCombat } from "@/server/utils/caravanSettlement";
 import { rewardClanBattleVictory } from "@/server/utils/clanBattle";
 import { settleDungeonBattle } from "@/server/utils/dungeon";
 import { settleHuntingBattle } from "@/server/utils/hunting";
@@ -152,6 +153,16 @@ import {
   applyVillageMissionShrineDamage,
   recordVillageMissionProgress,
 } from "@/server/utils/villageMission";
+
+/** Either side of a caravan or marker fight has nobody left fighting. */
+const isCaravanSideDefeated = (battle: CompleteBattle) =>
+  battle.battleType === "CARAVAN" &&
+  (["left", "right"] as const).some((direction) => {
+    const side = battle.usersState.filter(
+      (user) => !user.isSummon && user.direction === direction,
+    );
+    return side.length > 0 && side.every((user) => !stillInBattle(user));
+  });
 
 /**
  * A raid is "boss defeated" when the boss AI exists in the battle and no
@@ -240,14 +251,17 @@ export const updateBattle = async (
       .filter((u) => u.isAi && !u.isSummon)
       .every((u) => !stillInBattle(u)) ||
       humanFighters.every((u) => !stillInBattle(u)));
+  // A caravan or marker fight ends for both sides once either has nobody left fighting.
+  const caravanSideDefeated = !!result && isCaravanSideDefeated(newBattle);
   const battleOver =
     !!result &&
     (result.friendsLeft + result.targetsLeft === 0 ||
       raidBossDefeated ||
       raidTeamWiped ||
-      territoryGuardianEnded);
+      territoryGuardianEnded ||
+      caravanSideDefeated);
   const raidEnded =
-    battleOver && ["RAID", "TERRITORY_WAR"].includes(newBattle.battleType);
+    battleOver && ["RAID", "TERRITORY_WAR", "CARAVAN"].includes(newBattle.battleType);
 
   // Get user and other user
   const user = newBattle.usersState.find((u) => u.userId === userId && !u.isSummon);
@@ -271,6 +285,7 @@ export const updateBattle = async (
     const deleted = await retryOnDeadlock(() =>
       newBattle.extraState.tournamentGameId ||
       newBattle.extraState.kageMatch ||
+      newBattle.extraState.caravan ||
       territoryWarAwards(newBattle).length > 0
         ? client.transaction(async (database) => {
             const deleted = await deleteBattle(database);
@@ -287,6 +302,8 @@ export const updateBattle = async (
                 await updateTournament(database, newBattle, result, userId);
               if (newBattle.extraState.kageMatch)
                 await completeKageDefense(database, newBattle);
+              if (newBattle.extraState.caravan)
+                await settleCaravanCombat(database, newBattle);
             }
             return deleted;
           })
@@ -351,7 +368,10 @@ export const updateBattle = async (
         // teammates who took damage don't revert to pre-battle pool values on release.
         // Mirror the HOSPITALIZED handling from updateUser: teammates whose curHealth
         // dropped to 0 from boss AoE must be sent to the hospital, not released as AWAKE.
-        ...(raidBossDefeated || raidTeamWiped || territoryGuardianEnded
+        ...(raidBossDefeated ||
+        raidTeamWiped ||
+        territoryGuardianEnded ||
+        caravanSideDefeated
           ? humanTeammates
           : []
         )
@@ -395,7 +415,10 @@ export const updateBattle = async (
       // Skip teammates who already fled: their DB UPDATE above no-ops via the
       // battleId guard, so broadcasting here would overwrite their actual
       // sector/coords in other clients' map views with stale battle data.
-      if (pusher && (raidBossDefeated || territoryGuardianEnded)) {
+      if (
+        pusher &&
+        (raidBossDefeated || territoryGuardianEnded || caravanSideDefeated)
+      ) {
         humanTeammates
           .filter((u) => u.userId !== userId && !u.fledBattle)
           .forEach((teammate) => {

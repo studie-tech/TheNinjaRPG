@@ -37,12 +37,12 @@ import {
   rankedUserRewards,
   userData,
 } from "@/drizzle/schema";
+import { withoutActivityReservation } from "@/queries/activityReservation";
 import {
   nextSnapshotSql,
   selectClaimedRankedQueueEntry,
   selectUnresolvedClanLobbyEntry,
 } from "@/queries/concurrency";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { RankedLoadoutSchema } from "@/validators/pvpRank";
 
@@ -261,7 +261,7 @@ export const updateUserDataForGetRankedPvpQueue = (
       and(
         eq(userData.userId, ctx.userId),
         eq(userData.status, "QUEUED"),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
         // Independent reads may precede a ranked claim or belong to a clan lobby.
         notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
         notExists(selectUnresolvedClanLobbyEntry(client, userData.userId)),

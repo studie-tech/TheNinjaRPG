@@ -9,6 +9,8 @@ import {
   VILLAGE_MAINTAINED_STRUCTURE_ROUTES,
   VILLAGE_STRUCTURE_UPGRADE_BASE_COST,
   VILLAGE_STRUCTURE_UPGRADE_PER_LEVEL_COST,
+  WAREHOUSE_CONSTRUCTION_COST,
+  WAREHOUSE_UPGRADE_COST,
 } from "@/drizzle/constants";
 import type {
   UserData,
@@ -214,6 +216,12 @@ export const calcStructureUpgrade = (
   structure: VillageStructure,
   village: Village & { structures: VillageStructure[] },
 ) => {
+  // The Warehouse has fixed construction and upgrade prices, untaxed and undiscounted.
+  if (structure.route === "/warehouse") {
+    const cost =
+      structure.level === 0 ? WAREHOUSE_CONSTRUCTION_COST : WAREHOUSE_UPGRADE_COST;
+    return { cost, tax: 0, discount: 0, total: cost };
+  }
   // Base cost (uses base level, not effective level - upgrades are based on permanent level)
   const isVillageStructure =
     village.type === "VILLAGE" && isMaintainedStructure(structure.route);

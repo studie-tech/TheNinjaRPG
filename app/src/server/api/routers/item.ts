@@ -312,6 +312,7 @@ import {
 import { fetchSageModeRolls, fetchSageModes } from "@/queries/sageMode";
 import { fetchUserSkills, findRequiredSkillTreeEntry } from "@/queries/skillTree";
 import { fetchStructures } from "@/queries/village";
+import { findWarehouseVillage } from "@/queries/warehouse";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
@@ -814,6 +815,7 @@ export const itemRouter = createTRPCRouter({
         rewardSpecies,
         titleError,
         lpcDesign,
+        warehouseVillage,
       ] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
@@ -840,6 +842,9 @@ export const itemRouter = createTRPCRouter({
         fetchRewardPetSpecies(ctx.drizzle, input.data.effects),
         validateTitleRewardIds(ctx.drizzle, input.data),
         findLpcDesignForSelection(ctx.drizzle, input.data.lpcProfile),
+        input.data.villageId
+          ? findWarehouseVillage(ctx.drizzle, input.data.villageId)
+          : Promise.resolve(undefined),
       ]);
       if (titleError) return errorResponse(titleError);
       if (input.data.requiredSkillId && requiredSkill?.pathType !== "SKILL") {
@@ -862,6 +867,8 @@ export const itemRouter = createTRPCRouter({
       if (spriteError) return errorResponse(spriteError);
       if (entry.id === TUTORIAL_ITEM_ID && input?.data?.hidden)
         return errorResponse("Cannot hide tutorial item");
+      if (input.data.villageId && !warehouseVillage)
+        return errorResponse("Select a village or the Syndicate for this item");
       if (cacheItems.missing.length > 0)
         return errorResponse(
           `Cache rewards reference missing items: ${cacheItems.missing.join(", ")}`,

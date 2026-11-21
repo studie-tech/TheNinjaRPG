@@ -20,6 +20,7 @@ import {
   Swords,
   Users,
   UtensilsCrossed,
+  Warehouse,
 } from "lucide-react";
 import {
   DEFAULT_MOBILE_NAV_CONFIG,
@@ -46,6 +47,7 @@ describe("mobile navigation options", () => {
       bank: Banknote,
       anbu: Shield,
       occupation: Briefcase,
+      warehouse: Warehouse,
       profile: CircleUserRound,
       inbox: Inbox,
       travel: Compass,

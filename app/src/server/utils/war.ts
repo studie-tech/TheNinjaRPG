@@ -13,6 +13,7 @@ import {
   WAR_PURCHASE_SHRINE_TOKEN_COST,
   WAR_VICTORY_STRUCTURE_BOOST_DAYS,
   WAR_WINNING_BOOST_DAYS,
+  WAREHOUSE_RAID_STOCK_LOSS_PERCENT,
   type WarType,
 } from "@/drizzle/constants";
 import { mpvpBattleQueue, type War, war, warAlly } from "@/drizzle/schema";
@@ -24,6 +25,7 @@ import {
   isVillageInvolvedInAnyWar,
   shouldEndRaid,
 } from "@/libs/war";
+import { WAREHOUSE_ROUTE } from "@/libs/warehouse";
 import { updateVillageElderVoteForRejectWarDeclaration } from "@/queries/elder";
 import {
   incrementNotificationCounters,
@@ -64,6 +66,7 @@ import {
   updateWarForFinishWarSettlement,
   updateWarMercenaryForFinishWarSettlement,
 } from "@/queries/war";
+import { destroyRaidedWarehouseStock } from "@/queries/warehouse";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { invalidateGameSettings } from "@/server/utils/caches/gameSettings";
@@ -172,6 +175,11 @@ export const handleWarEnd = async (
           : `War between ${current.attackerVillage.name} and ${current.defenderVillage.name} has ended. ${isDraw ? "The result was a draw." : `${winnerName} won the war and received ${winnerTokens} tokens. `}`,
       boostsDelivered: isRaid || isSector || isDraw,
       structuresDelivered: isRaid || isSector,
+      warehouseDelivered: !(
+        isRaid &&
+        current.targetStructureRoute === WAREHOUSE_ROUTE &&
+        status === "ATTACKER_VICTORY"
+      ),
       notified: false,
     };
     const membership = alias(warAlly, "wa");
@@ -272,7 +280,7 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
     endedAt,
   );
   const stepGuard = (
-    key: "boostsDelivered" | "structuresDelivered" | "notified",
+    key: "boostsDelivered" | "structuresDelivered" | "warehouseDelivered" | "notified",
   ) => sql`
     ${war.id} = ${endedWar.id} AND ${war.settlementPending} = TRUE
     AND JSON_UNQUOTE(JSON_EXTRACT(${war.settlement}, ${`$.${key}`})) = 'false'`;
@@ -325,6 +333,16 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
               structureEnd,
 
               stepGuard,
+            ),
+          )
+        : Promise.resolve(),
+      receipt.warehouseDelivered === false
+        ? retryOnDeadlock(() =>
+            destroyRaidedWarehouseStock(
+              client,
+              endedWar.defenderVillageId,
+              WAREHOUSE_RAID_STOCK_LOSS_PERCENT,
+              stepGuard("warehouseDelivered"),
             ),
           )
         : Promise.resolve(),
