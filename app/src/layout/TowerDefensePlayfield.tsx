@@ -68,6 +68,8 @@ export const TowerDefensePlayfield = (props: {
   guestNote?: ReactNode;
   /** Extra content at the bottom of the results, such as a link to the full game. */
   resultsFooter?: ReactNode;
+  /** The results' next step, shown as the primary button beside the leave button. */
+  resultsAction?: ReactNode;
   /** The host paused the game: the arena is taken down so nothing renders until it resumes. */
   suspended?: boolean;
 }) => {
@@ -262,6 +264,7 @@ export const TowerDefensePlayfield = (props: {
                 isOnlyInTab={isOnlyInTab}
                 guestNote={props.guestNote}
                 footer={props.resultsFooter}
+                action={props.resultsAction}
                 onRetry={run.retryClaim}
                 onLeave={leave}
               />
@@ -325,6 +328,7 @@ const Results = (props: {
   isOnlyInTab: boolean;
   guestNote?: ReactNode;
   footer?: ReactNode;
+  action?: ReactNode;
   onRetry: () => void;
   onLeave: () => void;
 }) => {
@@ -364,7 +368,7 @@ const Results = (props: {
                 leaving or reloading loses it.
               </p>
             )}
-            <div className="flex justify-center gap-2">
+            <div className="flex flex-wrap justify-center gap-2">
               {canRetry && (
                 <Button variant="outline" onClick={props.onRetry}>
                   Retry claim
@@ -375,11 +379,15 @@ const Results = (props: {
                   Reload
                 </Button>
               )}
-              <Button onClick={props.onLeave}>
+              <Button
+                variant={props.action ? "outline" : "default"}
+                onClick={props.onLeave}
+              >
                 {props.outcome.challenge
                   ? "Back to the challenge"
                   : "Back to the Guard Hall"}
               </Button>
+              {props.action}
             </div>
             {props.footer}
           </>

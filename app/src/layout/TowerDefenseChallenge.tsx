@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import Confirm from "@/layout/Confirm";
 import Link from "@/layout/Link";
+import { Reward } from "@/layout/Objective";
 import { TowerDefenseStat } from "@/layout/TowerDefenseLobby";
 import { cn } from "@/libs/shadui";
 import type { findTowerDefenseChallenge } from "@/libs/towerDefense/challenge";
@@ -42,7 +43,7 @@ export const TowerDefenseChallenge = (props: {
       <div className="space-y-3 p-3 text-sm">
         <p>This challenge is not part of your active quests any more.</p>
         <Button asChild>
-          <Link href="/towerDefense">Back to the Guard Hall</Link>
+          <Link href="/towerDefense">Guard Hall</Link>
         </Button>
       </div>
     );
@@ -70,6 +71,7 @@ export const TowerDefenseChallenge = (props: {
         {objective.description && (
           <div className="mt-1">{parseHtml(objective.description)}</div>
         )}
+        <Reward info={objective} />
       </div>
       <div className="grid grid-cols-2 gap-2 text-sm @lg:grid-cols-4">
         <TowerDefenseStat
@@ -147,7 +149,7 @@ export const TowerDefenseChallenge = (props: {
       )}
       <div className="flex flex-col-reverse gap-2 @md:flex-row @md:items-center @md:justify-end">
         <Button asChild variant="outline" size="lg">
-          <Link href="/towerDefense">Back to the Guard Hall</Link>
+          <Link href="/towerDefense">Guard Hall</Link>
         </Button>
         {challenge.done ? (
           <Button asChild size="lg">

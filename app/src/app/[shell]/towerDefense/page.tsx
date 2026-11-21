@@ -178,11 +178,12 @@ export default function TowerDefensePage() {
         />
       </ContentBox>
     );
-    // A quest challenge is opened from the logbook by its query; the prerendered page
-    // and visitors without one see the lobby.
+    // A quest challenge is opened from the logbook by its query; the prerendered page,
+    // guests and visitors without one see the lobby.
     return (
       <Suspense fallback={lobby}>
         <ChallengeRoute
+          isSignedIn={!!userId}
           lobby={lobby}
           render={(request) => (
             <ContentBox
@@ -229,18 +230,16 @@ export default function TowerDefensePage() {
         guestNote={
           <p className="text-sm">Log in to keep scrolls and train in the Guard Hall.</p>
         }
-        resultsFooter={
+        resultsAction={
           run.outcome?.challenge &&
           run.outcome.won &&
           run.outcome.claimed && (
-            <div className="flex justify-center">
-              <Button asChild>
-                <Link href="/profile">
-                  <ScrollText className="mr-2 h-4 w-4" />
-                  Open logbook
-                </Link>
-              </Button>
-            </div>
+            <Button asChild>
+              <Link href="/profile">
+                <ScrollText className="mr-2 h-4 w-4" />
+                Open logbook
+              </Link>
+            </Button>
           )
         }
       />
@@ -250,13 +249,16 @@ export default function TowerDefensePage() {
 
 /** The challenge the page's query names for a signed-in player, or the lobby. */
 const ChallengeRoute = (props: {
+  isSignedIn: boolean;
   lobby: ReactNode;
   render: (request: { questId: string; objectiveId: string }) => ReactNode;
 }) => {
   const searchParams = useSearchParams();
   const questId = searchParams.get("quest");
   const objectiveId = searchParams.get("objective");
-  return questId && objectiveId ? props.render({ questId, objectiveId }) : props.lobby;
+  return props.isSignedIn && questId && objectiveId
+    ? props.render({ questId, objectiveId })
+    : props.lobby;
 };
 
 const LeaderboardLink = () => (
