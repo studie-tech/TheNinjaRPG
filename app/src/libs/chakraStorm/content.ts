@@ -698,7 +698,7 @@ export interface CsStageInfo {
   bosses: [string, string, string];
   /** Intel a run here brings home, as a multiple of the base award. */
   reward: number;
-  /** Seconds scouted in the previous region that open this one. */
+  /** Seconds scouted in the previous region that open this one; 0 opens it from the start. */
   unlockSeconds: number;
   /**
    * An endless region: no reinforcements come, the raiders' clock slows after its
@@ -816,7 +816,7 @@ export const CS_STAGE_INFO: Record<CsStage, CsStageInfo> = {
     mix: {},
     bosses: ["Syndicate Informant", "Shadow Broker", "Spymaster of Mei"],
     reward: 1,
-    unlockSeconds: 600,
+    unlockSeconds: 0,
     endless: { opening: 300, levelCost: 3, health: 0.3, damage: 0.5 },
   },
 };

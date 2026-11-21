@@ -418,11 +418,11 @@ describe("Undercover", () => {
     expect(late.interval).toBeLessThan(early.interval);
   });
 
-  it("opens after ten minutes in the City of Mei", () => {
-    expect(csNextUnlock(CS_EMPTY_PROGRESS, "mei")).toEqual({
-      stage: "undercover",
-      seconds: 600,
-    });
+  it("is open to every scout from the start", () => {
+    expect(csStageUnlocked(CS_EMPTY_PROGRESS, "undercover")).toBe(true);
+    // The City of Mei still opens after Hyorin, and opens nothing further.
+    expect(csStageUnlocked(CS_EMPTY_PROGRESS, "mei")).toBe(false);
+    expect(csNextUnlock(CS_EMPTY_PROGRESS, "mei")).toBeNull();
     expect(csNextUnlock(CS_EMPTY_PROGRESS, "undercover")).toBeNull();
   });
 });

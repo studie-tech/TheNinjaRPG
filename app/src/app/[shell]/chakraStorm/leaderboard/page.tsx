@@ -80,8 +80,8 @@ export default function ChakraStormLeaderboard() {
       )}
       {!isPending && tableData && tableData.length === 0 && (
         <p className="text-muted-foreground p-4 text-center">
-          No verified Undercover runs this month yet. Open Undercover by scouting the
-          City of Mei for ten minutes, then see how long your cover holds.
+          No verified Undercover runs this month yet. Pick Undercover in Chakra Storm
+          and see how long your cover holds.
         </p>
       )}
     </ContentBox>
