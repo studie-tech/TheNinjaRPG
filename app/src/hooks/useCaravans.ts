@@ -1,5 +1,6 @@
 import type { InfiniteData } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import {
   getActivatedTradeRoutes,
@@ -19,7 +20,6 @@ import {
   getStartedOperationControls,
   getStoppedSabotageCaravans,
   getTrackedControls,
-  getTradeRouteCapacity,
   getUpgradedTradeRoutes,
 } from "@/deltas/caravan";
 import { getInventoryQuantities } from "@/deltas/item";
@@ -63,7 +63,10 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
     enabled: !controls,
     refetchInterval: QUIET_REFRESH_MS,
   });
-  const routes = api.tradeRoute.getRoutes.useQuery(undefined, { enabled: !controls });
+  const routes = api.tradeRoute.getRoutes.useQuery(undefined, {
+    enabled: !controls,
+    refetchInterval: QUIET_REFRESH_MS,
+  });
   const caravans = api.caravan.getCaravans.useQuery(undefined, {
     enabled: !controls,
     refetchInterval: (query) =>
@@ -71,9 +74,11 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   });
   const operations = api.caravanOps.getControls.useQuery(undefined, {
     enabled: controls,
-    // Raiders gather in groups, so a committed player follows their group closely.
+    // The controls describe the viewer's current sector, which can change between visits.
+    refetchOnMount: "always",
+    // Raiders gather in groups, so a committed raider follows their group closely.
     refetchInterval: (query) =>
-      query.state.data?.commitment
+      query.state.data?.commitment && query.state.data.commitment.role !== "GUARD"
         ? GROUP_REFRESH_MS
         : query.state.data?.caravans.length
           ? ACTIVE_REFRESH_MS
@@ -151,6 +156,21 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   const reload = (snapshot: Snapshot, names: (keyof typeof views)[]) => {
     for (const name of names) void views[name].updateCache(undefined, snapshot[name]);
   };
+  // A caravan delivered or cancelled elsewhere leaves the list and moved Warehouse stock;
+  // one the viewer cancels is forgotten first, as its response patches the stock.
+  const shownCaravanIds = useRef<string[] | undefined>(undefined);
+  const forgetCaravan = (caravanId: string) => {
+    shownCaravanIds.current = shownCaravanIds.current?.filter((id) => id !== caravanId);
+  };
+  const onCaravansShown = useEffectEvent((ids: string[] | undefined) => {
+    const shown = shownCaravanIds.current;
+    shownCaravanIds.current = ids;
+    if (ids && shown?.some((id) => !ids.includes(id)))
+      reload(prepareViews(), ["warehouse", "history"]);
+  });
+  useEffect(() => {
+    if (!controls) onCaravansShown(caravans.data?.caravans.map((row) => row.id));
+  }, [controls, caravans.data]);
   /**
    * Patch the Warehouse from a confirmed change, and the history with the logs the change
    * wrote: `patch` applies the returned logs, `reload` reads logs it does not return.
@@ -404,9 +424,8 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
           removed && ((current) => getRemovedTradeRoutes(current, removed)),
           snapshot.routes,
         );
-        // Called-off caravans return their reserved cargo.
-        if (removed?.caravansChanged)
-          reload(snapshot, ["caravans", "warehouse", "history"]);
+        // Called-off caravans leave the list, which reloads the stock they return.
+        if (removed?.caravansChanged) reload(snapshot, ["caravans"]);
       }),
     ),
     upgradeRoute: api.tradeRoute.upgrade.useMutation(
@@ -420,15 +439,12 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       }),
     ),
     prepare: api.caravan.prepare.useMutation(
-      bind(["warehouse", "caravans"], (result, _input, snapshot) => {
+      // A rejection can follow a route blocked or closed since the routes were read.
+      bind(["warehouse", "caravans", "routes"], (result, _input, snapshot) => {
         const prepared = result.prepared;
         void views.caravans.updateCache(
           prepared && ((current) => getPreparedCaravans(current, prepared)),
           snapshot.caravans,
-        );
-        void views.routes.updateCache(
-          (current) => getTradeRouteCapacity(current, 1),
-          snapshot.routes,
         );
         updateStock(result, snapshot, "patch");
       }),
@@ -436,13 +452,10 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
     cancel: api.caravan.cancel.useMutation(
       bindProfile(["caravans"], (result, _input, snapshot) => {
         const cancelled = result.cancelled;
+        if (cancelled) forgetCaravan(cancelled.caravanId);
         void views.caravans.updateCache(
           cancelled && ((current) => getCancelledCaravans(current, cancelled)),
           snapshot.caravans,
-        );
-        void views.routes.updateCache(
-          (current) => getTradeRouteCapacity(current, -1),
-          snapshot.routes,
         );
         updateStock(result, snapshot, "reload");
       }),

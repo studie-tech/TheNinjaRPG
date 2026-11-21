@@ -18,6 +18,7 @@ import {
   CARAVAN_STEALTH_BASE_CHANCE,
   CARAVAN_STEALTH_CHANCE_PER_1000,
   CARAVAN_STEALTH_MAX_CHANCE,
+  CARAVANS_PER_TRADE_ROUTE,
   type CaravanEncounterType,
   type CaravanOperationType,
   type CaravanRole,
@@ -108,6 +109,20 @@ export const describeTradeRoute = (route: {
   sectors: route.sectors,
   blocked: route.markers.some((marker) => marker.controller !== null),
   markers: route.markers,
+});
+
+/**
+ * A village's caravan slots: every active route adds its share, and each open caravan the
+ * village sends fills one until it is delivered or cancelled.
+ */
+export const getCaravanCapacity = (
+  routes: { status: TradeRouteStatus }[],
+  caravans: { outgoing: boolean }[] = [],
+) => ({
+  total:
+    routes.filter((route) => route.status === "ACTIVE").length *
+    CARAVANS_PER_TRADE_ROUTE,
+  used: caravans.filter((row) => row.outgoing).length,
 });
 
 /**

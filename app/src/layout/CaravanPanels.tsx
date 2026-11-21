@@ -35,6 +35,7 @@ import {
 import type { useCaravans } from "@/hooks/useCaravans";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { getCaravanCapacity } from "@/libs/caravan";
 import { cn } from "@/libs/shadui";
 import { formatDateTime } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -44,21 +45,28 @@ type CaravanData = NonNullable<RouterOutputs["caravan"]["getCaravans"]>;
 type WarehouseData = NonNullable<RouterOutputs["warehouse"]["getWarehouse"]>;
 type CaravanActions = ReturnType<typeof useCaravans>;
 
-/** Agreements with other villages, their markers and upgrades. */
+/**
+ * Agreements with other villages, their markers and upgrades. The caravans, once loaded,
+ * show how many of the routes' caravan slots are in use.
+ */
 export const TradeRoutesPanel = ({
   data,
+  caravans,
   actions,
 }: {
   data: RouteData;
+  caravans?: CaravanData;
   actions: CaravanActions;
 }) => {
   const [partnerId, setPartnerId] = useState<string>();
   const partner = data.partners.find((row) => row.id === partnerId);
   const responding = actions.respond.isPending ? actions.respond.variables : undefined;
+  const capacity = getCaravanCapacity(data.routes, caravans?.caravans);
+  const slots = `caravan ${capacity.total === 1 ? "slot" : "slots"}`;
   return (
     <ContentBox
       title="Trade Routes"
-      subtitle={`${data.capacity.used} of ${data.capacity.total} caravan ${data.capacity.total === 1 ? "slot" : "slots"} in use · every active route adds ${CARAVANS_PER_TRADE_ROUTE}`}
+      subtitle={`${caravans ? `${capacity.used} of ${capacity.total} ${slots} in use` : `${capacity.total} ${slots}`} · every active route adds ${CARAVANS_PER_TRADE_ROUTE}`}
       initialBreak
     >
       <div className="@container">
@@ -273,7 +281,12 @@ export const CaravansPanel = ({
     >
       <div className="@container">
         {data.canManage && (
-          <PrepareCaravan routes={routes} warehouse={warehouse} actions={actions} />
+          <PrepareCaravan
+            routes={routes}
+            caravans={data}
+            warehouse={warehouse}
+            actions={actions}
+          />
         )}
         {data.caravans.length === 0 ? (
           <p className="text-muted-foreground text-sm">
@@ -558,13 +571,15 @@ export const CaravansPanel = ({
   );
 };
 
-/** Choose a route and reserve cargo for a new caravan. */
+/** Choose a route and reserve cargo for a new caravan while a caravan slot is free. */
 const PrepareCaravan = ({
   routes,
+  caravans,
   warehouse,
   actions,
 }: {
   routes: RouteData;
+  caravans: CaravanData;
   warehouse: WarehouseData;
   actions: CaravanActions;
 }) => {
@@ -592,7 +607,8 @@ const PrepareCaravan = ({
   const available = warehouse.stock.filter(
     (row) => row.quantity - row.reserved > 0 || isChosen(cargo[row.itemId]),
   );
-  const full = routes.capacity.used >= routes.capacity.total;
+  const capacity = getCaravanCapacity(routes.routes, caravans.caravans);
+  const full = capacity.used >= capacity.total;
   if (active.length === 0 || full)
     return (
       <p className="text-muted-foreground mb-3 text-sm">
