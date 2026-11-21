@@ -132,7 +132,20 @@ export const caravanOpsRouter = createTRPCRouter({
           .flatMap((route) => [route.villageA, route.villageB])
           .find((v) => v.id === id)?.name ?? "Unknown village";
       const known = new Set(markerDiscoveries.map((row) => row.markerId));
-      const active = participations.find((row) => row.activeUserId);
+      const committed = participations.find((row) => row.activeUserId);
+      // A group join racing delivery can outlive the caravan; free it so the player can act again.
+      const stranded =
+        committed?.role !== "GUARD" &&
+        !caravans.some(
+          (row) =>
+            row.id === committed?.caravanId &&
+            (row.status === "PREPARING" || row.status === "TRAVELLING"),
+        );
+      if (committed && stranded)
+        await releaseParticipants(ctx.drizzle, committed.caravanId, {
+          userIds: [ctx.userId],
+        });
+      const active = stranded ? undefined : committed;
       return {
         sector: user.sector,
         isOutlaw: user.isOutlaw,
