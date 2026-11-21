@@ -38,7 +38,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { cancelCaravan, canManageTrade, notifyPlayers } from "@/server/utils/caravan";
-import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { warehouseResponseSchema } from "@/validators/warehouse";
 
@@ -343,16 +343,14 @@ export const tradeRouteRouter = createTRPCRouter({
         return errorResponse("This route is at its maximum level");
       const clanId = isFactionVillage(own) ? user.clanId : null;
       if (isFactionVillage(own) && !clanId) return errorResponse("Faction not found");
-      const upgraded = await retryOnDeadlock(() =>
-        upgradeTradeRoute(ctx.drizzle, {
-          routeId: route.id,
-          level: route.level,
-          cost: TRADE_ROUTE_UPGRADE_COST,
-          villageId: own.id,
-          userId: user.userId,
-          clanId,
-        }),
-      );
+      const upgraded = await upgradeTradeRoute(ctx.drizzle, {
+        routeId: route.id,
+        level: route.level,
+        cost: TRADE_ROUTE_UPGRADE_COST,
+        villageId: own.id,
+        userId: user.userId,
+        clanId,
+      });
       if (upgraded.rowsAffected === 0)
         return errorResponse(
           `Upgrading costs ${TRADE_ROUTE_UPGRADE_COST.toLocaleString()} ${clanId ? "clan points" : "village tokens"}, or the route changed meanwhile`,
