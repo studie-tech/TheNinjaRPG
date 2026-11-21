@@ -882,8 +882,11 @@ const describeOption = (option: CsDraftOption, hud: ChakraStormHud) => {
 };
 
 /** The way to the monthly Undercover leaderboard. */
-export const LeaderboardButton = (props: { size?: "sm" | "default" }) => (
-  <Button asChild variant="outline" size={props.size}>
+export const LeaderboardButton = (props: {
+  size?: "sm" | "default";
+  variant?: "default" | "outline";
+}) => (
+  <Button asChild variant={props.variant ?? "outline"} size={props.size}>
     <Link href="/chakraStorm/leaderboard">
       <Trophy className="mr-1.5 h-4 w-4" />
       Leaderboard

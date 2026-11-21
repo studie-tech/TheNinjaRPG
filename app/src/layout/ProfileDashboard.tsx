@@ -498,7 +498,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
               new Date(Date.now() - timeDiff),
             ) && (
               <StatusRow
-                label="Chakra Storm"
+                label="Scout Post"
                 title="Daily scouting report"
                 detail={`Scout ${CS_DAILY_SECONDS / 60} minutes: ${dailyDuty.ryo.toLocaleString()} ryo, ${dailyDuty.prestige} prestige${userData.villageId ? `, ${dailyDuty.villageTokens} village tokens` : ""}`}
                 action={
