@@ -7,6 +7,7 @@ export const stripePriceIds = () => ({
   NORMAL: env.STRIPE_PRICE_NORMAL,
   SILVER: env.STRIPE_PRICE_SILVER,
   GOLD: env.STRIPE_PRICE_GOLD,
+  DIAMOND: env.STRIPE_PRICE_DIAMOND,
 });
 
 /** Offer checkout only with complete credentials and live mode in production. */

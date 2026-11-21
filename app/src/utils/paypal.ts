@@ -30,11 +30,11 @@ export const getUserFederalStatus = (
 export const hasGoldPerks = (federalStatus: FederalStatus) =>
   FederalStatuses.indexOf(federalStatus) >= FederalStatuses.indexOf("GOLD");
 
-/** Shown wherever Diamond is offered or requested outside its PayPal subscription. */
-export const DIAMOND_PAYPAL_ONLY_MESSAGE =
-  "Diamond Federal Support is only available as a PayPal subscription.";
+/** Shown wherever Diamond is offered or requested for reputation points. */
+export const DIAMOND_NO_REPS_MESSAGE =
+  "Diamond Federal Support cannot be bought, gifted or upgraded to with reputation points.";
 
-/** Whether a tier is sold for reputation points; Diamond is a PayPal subscription only. */
+/** Whether a tier is sold for reputation points; Diamond is sold for money only. */
 export const isRepsFederalStatus = (
   federalStatus: FederalStatus,
 ): federalStatus is RepsFederalStatus =>
@@ -164,9 +164,9 @@ export const plan2FedStatus = (planId: string): FederalStatus => {
   }
 };
 
-/** Reputation price of a tier; Diamond has none because it is only sold through PayPal. */
+/** Reputation price of a tier; Diamond has none because it is sold for money only. */
 export const fedStatusRepsCost = (status: FederalStatus) => {
   if (status === "NONE") throw new Error("Invalid federal status");
-  if (!isRepsFederalStatus(status)) throw new Error(DIAMOND_PAYPAL_ONLY_MESSAGE);
+  if (!isRepsFederalStatus(status)) throw new Error(DIAMOND_NO_REPS_MESSAGE);
   return FED_REPS_COST[status];
 };

@@ -358,7 +358,7 @@ export const insertStorePurchaseForApplyStorePurchase = (
     raw: unknown;
   },
   reps: { reputationPoints: undefined | 20 | 8 | 49 | 164 | 407 } | undefined,
-  federal: { federalStatus: undefined | "NORMAL" | "SILVER" | "GOLD" } | undefined,
+  federal: { federalStatus: undefined | Exclude<FederalStatus, "NONE"> } | undefined,
   accepted: false | true,
 ) =>
   client.insert(storePurchase).values({
@@ -435,7 +435,7 @@ export const executeResultForApplyStorePurchase = (
 export const executeResultForApplyStorePurchase2 = (
   client: Pick<DrizzleClient, "execute">,
   rankOf: (status: FederalStatus) => number,
-  federal: { federalStatus: undefined | "NORMAL" | "SILVER" | "GOLD" } | undefined,
+  federal: { federalStatus: undefined | Exclude<FederalStatus, "NONE"> } | undefined,
   grant: { transactionId: string },
 ) =>
   client.execute(sql`

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import type { FederalStatus } from "@/drizzle/constants";
+import { type FederalStatus, STORE_FEDERAL_PRODUCTS } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { getFreeBloodlineSwaps } from "@/libs/bloodline";
 import { getFreeTransfers } from "@/libs/jutsu";
@@ -41,15 +41,26 @@ describe("federal tier perks", () => {
     expect(fedStatusRepsCost("SILVER")).toBe(35);
     expect(fedStatusRepsCost("GOLD")).toBe(50);
     expect(() => fedStatusRepsCost("NONE")).toThrow("Invalid federal status");
-    expect(() => fedStatusRepsCost("DIAMOND")).toThrow("only available as a PayPal");
+    expect(() => fedStatusRepsCost("DIAMOND")).toThrow("with reputation points");
   });
 
-  it("sells Diamond only as a PayPal subscription", () => {
+  it("sells Diamond for money but not for reputation points", () => {
     expect(TIERS.map(isRepsFederalStatus)).toEqual([false, true, true, true, false]);
     expect(
       stripePurchaseSchema.safeParse({ type: "federal", federalStatus: "DIAMOND" })
         .success,
+    ).toBe(true);
+    expect(
+      stripePurchaseSchema.safeParse({ type: "federal", federalStatus: "NONE" })
+        .success,
     ).toBe(false);
+    expect(
+      STORE_FEDERAL_PRODUCTS.find((product) => product.federalStatus === "DIAMOND"),
+    ).toEqual({
+      productId: "tnr_federal_diamond",
+      androidProductId: "tnr_federal_diamond:monthly",
+      federalStatus: "DIAMOND",
+    });
     expect(
       stripePurchaseSchema.safeParse({ type: "federal", federalStatus: "GOLD" })
         .success,

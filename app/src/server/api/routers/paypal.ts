@@ -75,7 +75,7 @@ import {
 } from "@/server/utils/webStore";
 import {
   calcFedUgradeCost,
-  DIAMOND_PAYPAL_ONLY_MESSAGE,
+  DIAMOND_NO_REPS_MESSAGE,
   fedStatusRepsCost,
   getStoreBundleMinimumPriceCents,
   isRepsFederalStatus,
@@ -459,7 +459,7 @@ export const paypalRouter = createTRPCRouter({
       if (input.status === "NONE")
         return errorResponse("Choose a federal support tier.");
       if (!isRepsFederalStatus(input.status))
-        return errorResponse(DIAMOND_PAYPAL_ONLY_MESSAGE);
+        return errorResponse(DIAMOND_NO_REPS_MESSAGE);
       const cost = fedStatusRepsCost(input.status);
       const changed = new Error(
         "Your balance or recipient's subscription changed. Reload and try again.",
@@ -512,7 +512,7 @@ export const paypalRouter = createTRPCRouter({
         return errorResponse("You can only upgrade your own subscription");
       }
       if (!isRepsFederalStatus(input.plan))
-        return errorResponse(DIAMOND_PAYPAL_ONLY_MESSAGE);
+        return errorResponse(DIAMOND_NO_REPS_MESSAGE);
       const purchaseInputs = await fetchPurchaseUserCacheInputs(
         ctx.drizzle,
         ctx.userId,

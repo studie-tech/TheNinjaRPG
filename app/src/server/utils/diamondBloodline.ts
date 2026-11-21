@@ -29,8 +29,9 @@ const REVERT_BATCH_SIZE = 200;
  * the lapsed state and the current bloodline, so a renewed subscription or a concurrent
  * change wins; a player in battle is retried on a later run.
  *
- * Federal status only ever leaves DIAMOND through the derived-status writers that the
- * subscription and cleaner crons run, so those crons call this right after them.
+ * The subscription and cleaner crons call this right after their federal status writers;
+ * a tier that ends through a PayPal, Stripe or store webhook is reverted on the next
+ * cleaner run.
  */
 export const revertLapsedDiamondBloodlines = async (
   client: DrizzleClient,

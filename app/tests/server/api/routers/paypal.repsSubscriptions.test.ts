@@ -2,7 +2,11 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { paypalSubscription, quest, questHistory, userData } from "@/drizzle/schema";
 import { paypalRouter } from "@/server/api/routers/paypal";
-import { calcFedUgradeCost, fedStatusRepsCost } from "@/utils/paypal";
+import {
+  calcFedUgradeCost,
+  DIAMOND_NO_REPS_MESSAGE,
+  fedStatusRepsCost,
+} from "@/utils/paypal";
 import { insertUsers } from "../../../setup/factories";
 import {
   callerFor,
@@ -213,7 +217,7 @@ describeWithDatabase("reputation-funded subscriptions", () => {
     ])
       expect(result).toMatchObject({
         success: false,
-        message: "Diamond Federal Support is only available as a PayPal subscription.",
+        message: DIAMOND_NO_REPS_MESSAGE,
       });
     expect(await readUser(BUYER)).toMatchObject({
       federalStatus: "GOLD",

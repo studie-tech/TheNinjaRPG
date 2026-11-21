@@ -407,7 +407,7 @@ ${trainingIntervals}
 - **Points Page:**  
   - **Reputation Purchase:** Buy reputation using real money.  
   - **Federal Support Purchase:**  
-    - Tiers: Normal, Silver, Gold and Diamond. Normal, Silver and Gold are available with real money or rep; Diamond is a PayPal subscription only.  
+    - Tiers: Normal, Silver, Gold and Diamond. All tiers are available with real money (PayPal, Stripe card checkout, or the in-app store in the mobile app); Normal, Silver and Gold can also be bought with rep, Diamond cannot.  
     - Provides appearance upgrades, increased bank interest, and extra jutsu slots.  
     - Diamond includes every Gold perk and lets the player switch to any released ${DIAMOND_BLOODLINE_RANKS.join("/")}-rank bloodline available to their village for free, as often as they like and without the usual swap cooldown, from the bloodline swap screen (wrench icon on the profile). These bloodlines are not owned: they are not added to the bloodline history, and the player returns to their previous bloodline when Diamond support ends.
 

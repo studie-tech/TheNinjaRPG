@@ -640,9 +640,9 @@ export const UserStatuses = [
 export type UserStatus = (typeof UserStatuses)[number];
 
 /**
- * Federal support tiers from lowest to highest; a tier's position is its rank. DIAMOND is a
- * PayPal-only subscription: it has no reputation price, upgrade path, Stripe price or store
- * product.
+ * Federal support tiers from lowest to highest; a tier's position is its rank. DIAMOND is
+ * sold through PayPal, Stripe and the app stores like the other tiers, but has no reputation
+ * price or upgrade path.
  */
 export const FederalStatuses = ["NONE", "NORMAL", "SILVER", "GOLD", "DIAMOND"] as const;
 export type FederalStatus = (typeof FederalStatuses)[number];
@@ -2527,7 +2527,7 @@ export const REFERRAL_REPUTATION_SHARE = 0.1;
 export const PAYPAL_PAID_PERIOD_DAYS = 31;
 /** Days a store receipt with no expiry still vouches: a monthly cycle plus billing retry. */
 export const STORE_RECEIPT_FALLBACK_DAYS = 63;
-/** Federal tiers sold for reputation points; DIAMOND is a PayPal subscription only. */
+/** Federal tiers sold for reputation points; DIAMOND is sold for money only. */
 export type RepsFederalStatus = Exclude<FederalStatus, "NONE" | "DIAMOND">;
 export const FED_REPS_COST = {
   NORMAL: 15,
@@ -4656,6 +4656,11 @@ export const STORE_FEDERAL_PRODUCTS = [
     productId: "tnr_federal_gold",
     androidProductId: "tnr_federal_gold:monthly",
     federalStatus: "GOLD",
+  },
+  {
+    productId: "tnr_federal_diamond",
+    androidProductId: "tnr_federal_diamond:monthly",
+    federalStatus: "DIAMOND",
   },
 ] as const;
 

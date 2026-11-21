@@ -84,7 +84,7 @@ import { showMutationToast } from "@/libs/toast";
 import { isPayPalCleanupError } from "@/utils/error";
 import {
   calcFedUgradeCost,
-  DIAMOND_PAYPAL_ONLY_MESSAGE,
+  DIAMOND_NO_REPS_MESSAGE,
   dynamicMonthlyRepCap,
   fedRepsUnavailableNote,
   fedStatusRepsCost,
@@ -666,13 +666,12 @@ const PayPalSubscriptionButton = (props: {
           ${FEDERAL_MONTHLY_USD_CENTS[props.buttonStatus] / 100} USD / Month
         </h3>
       </div>
-      {isRepsFederalStatus(props.buttonStatus) ? (
-        <StripeCheckoutButton
-          userId={props.userId}
-          purchase={{ type: "federal", federalStatus: props.buttonStatus }}
-        />
-      ) : (
-        <p className="mt-2 text-center text-sm">{DIAMOND_PAYPAL_ONLY_MESSAGE}</p>
+      <StripeCheckoutButton
+        userId={props.userId}
+        purchase={{ type: "federal", federalStatus: props.buttonStatus }}
+      />
+      {!isRepsTier && (
+        <p className="mt-2 text-center text-sm">{DIAMOND_NO_REPS_MESSAGE}</p>
       )}
       {hasSubscription && canUpgrade && (
         <Confirm

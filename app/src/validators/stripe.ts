@@ -9,8 +9,7 @@ export const stripePurchaseSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("federal"),
-    // Diamond Federal Support is sold only as a PayPal subscription.
-    federalStatus: z.enum(FederalStatuses).exclude(["NONE", "DIAMOND"]),
+    federalStatus: z.enum(FederalStatuses).exclude(["NONE"]),
   }),
 ]);
 
