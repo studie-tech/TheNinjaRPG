@@ -1,6 +1,9 @@
 /** Cover the page-side check that decides whether caravan maintenance has work. */
 import { describe, expect, it } from "bun:test";
-import { CARAVAN_ENCOUNTER_STALE_MINUTES } from "@/drizzle/constants";
+import {
+  CARAVAN_CHECKPOINTS,
+  CARAVAN_ENCOUNTER_STALE_MINUTES,
+} from "@/drizzle/constants";
 import type { Caravan, CaravanEncounter, CaravanOperation } from "@/drizzle/schema";
 import { hasDueCaravanWork } from "@/server/utils/caravan";
 
@@ -13,17 +16,51 @@ describe("hasDueCaravanWork", () => {
   });
 
   it("finds an arrival, an unrolled checkpoint and a blocked route", () => {
-    expect(
-      hasDueCaravanWork(
-        input({ caravan: { arrivesAt: new Date(NOW.getTime() - 1) } }),
-        NOW,
-      ),
-    ).toBe(true);
+    expect(hasDueCaravanWork(input({ caravan: ARRIVED }), NOW)).toBe(true);
     expect(
       hasDueCaravanWork(input({ caravan: { checkpointsProcessed: 0 } }), NOW),
     ).toBe(true);
     expect(
       hasDueCaravanWork({ ...input(), blockedRouteIds: new Set(["r1"]) }, NOW),
+    ).toBe(true);
+  });
+
+  it("leaves an arrival or a blocked route alone while a fight over it is open", () => {
+    const fought = (overrides: Partial<CaravanEncounter>) => [
+      {
+        id: "e1",
+        type: "AMBUSH",
+        status: "PENDING",
+        caravanId: "c1",
+        expiresAt: new Date(NOW.getTime() + MINUTE),
+        createdAt: NOW,
+        ...overrides,
+      } as CaravanEncounter,
+    ];
+    const arrived = input({ caravan: ARRIVED });
+    expect(hasDueCaravanWork({ ...arrived, encounters: fought({}) }, NOW)).toBe(false);
+    expect(
+      hasDueCaravanWork(
+        { ...input(), blockedRouteIds: new Set(["r1"]), encounters: fought({}) },
+        NOW,
+      ),
+    ).toBe(false);
+    // A fight over another caravan holds nothing back.
+    expect(
+      hasDueCaravanWork({ ...arrived, encounters: fought({ caravanId: "c2" }) }, NOW),
+    ).toBe(true);
+    // The fight itself coming due is work, and so is an unrolled checkpoint.
+    expect(
+      hasDueCaravanWork({ ...arrived, encounters: fought({ expiresAt: NOW }) }, NOW),
+    ).toBe(true);
+    expect(
+      hasDueCaravanWork(
+        {
+          ...input({ caravan: { checkpointsProcessed: 0 } }),
+          encounters: fought({}),
+        },
+        NOW,
+      ),
     ).toBe(true);
   });
 
@@ -76,6 +113,12 @@ describe("hasDueCaravanWork", () => {
     ).toBe(true);
   });
 });
+
+/** A caravan that just arrived, every checkpoint on the way already rolled. */
+const ARRIVED = {
+  arrivesAt: new Date(NOW.getTime() - 1),
+  checkpointsProcessed: CARAVAN_CHECKPOINTS,
+};
 
 /** A caravan a third of the way along that has rolled its first checkpoint. */
 const input = (overrides: { caravan?: Partial<Caravan> } = {}) => ({
