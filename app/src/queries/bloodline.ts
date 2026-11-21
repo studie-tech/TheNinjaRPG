@@ -3,7 +3,7 @@
  */
 import type { SQL } from "drizzle-orm";
 import { and, eq, gt, gte, isNotNull } from "drizzle-orm";
-import type { MySqlUpdateSetSource } from "drizzle-orm/mysql-core";
+import { alias, type MySqlUpdateSetSource } from "drizzle-orm/mysql-core";
 import type { z } from "zod";
 import type {
   BloodlineDifficultyRating,
@@ -790,6 +790,9 @@ const pendingDiamondRenewal = () => sql`(EXISTS (
     AND ${storePurchase.expiresAt} >= CURRENT_TIMESTAMP(3) - INTERVAL ${DIAMOND_RENEWAL_GRACE_DAYS} DAY
 ))`;
 
+/** Table alias for the remembered pre-Diamond bloodline, joined beside the current one. */
+const preDiamondLine = alias(bloodline, "preDiamondLine");
+
 /**
  * Lapsed Diamond supporters still holding a remembered pre-Diamond bloodline. A core select
  * rather than a relational query, whose root alias would rename the correlated subquery's
@@ -806,11 +809,13 @@ export const listUserDataForDiamondBloodlineRevert = (
       bloodlineId: userData.bloodlineId,
       bloodlineName: bloodline.name,
       preDiamondBloodlineId: userData.preDiamondBloodlineId,
+      preDiamondBloodlineName: preDiamondLine.name,
       avatar: userData.avatar,
       avatarLight: userData.avatarLight,
     })
     .from(userData)
     .leftJoin(bloodline, eq(bloodline.id, userData.bloodlineId))
+    .leftJoin(preDiamondLine, eq(preDiamondLine.id, userData.preDiamondBloodlineId))
     .where(
       and(
         lapsedDiamondGuard(),
@@ -842,16 +847,6 @@ export const listJutsuForDiamondBloodlineRevert = (
   client.query.jutsu.findMany({
     columns: { id: true, bloodlineId: true },
     where: inArray(jutsu.bloodlineId, bloodlineIds),
-  });
-
-/** The remembered bloodlines that still exist, by id. */
-export const listBloodlineForDiamondBloodlineRevert = (
-  client: Pick<DrizzleClient, "query">,
-  bloodlineIds: string[],
-) =>
-  client.query.bloodline.findMany({
-    columns: { id: true, name: true },
-    where: inArray(bloodline.id, bloodlineIds),
   });
 
 /**

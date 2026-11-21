@@ -9,7 +9,6 @@ import {
   currentBloodlineNotOwnedGuard,
   insertActionLogForDiamondBloodlineRevert,
   lapsedDiamondGuard,
-  listBloodlineForDiamondBloodlineRevert,
   listBloodlineRollsForDiamondBloodlineRevert,
   listJutsuForDiamondBloodlineRevert,
   listUserDataForDiamondBloodlineRevert,
@@ -43,16 +42,12 @@ export const revertLapsedDiamondBloodlines = async (
     userId,
   );
   if (users.length === 0) return { reverted: 0, cleared: 0 };
-  const preIds = [
-    ...new Set(users.flatMap((user) => user.preDiamondBloodlineId ?? [])),
-  ];
   const currentIds = [...new Set(users.flatMap((user) => user.bloodlineId ?? []))];
-  const [rolls, preLines, jutsus] = await Promise.all([
+  const [rolls, jutsus] = await Promise.all([
     listBloodlineRollsForDiamondBloodlineRevert(
       client,
       users.map((user) => user.userId),
     ),
-    preIds.length ? listBloodlineForDiamondBloodlineRevert(client, preIds) : [],
     currentIds.length ? listJutsuForDiamondBloodlineRevert(client, currentIds) : [],
   ]);
   let reverted = 0;
@@ -61,11 +56,10 @@ export const revertLapsedDiamondBloodlines = async (
     const ownedBloodlineIds = rolls
       .filter((roll) => roll.userId === user.userId)
       .flatMap((roll) => roll.bloodlineId ?? []);
-    const preLine = preLines.find((line) => line.id === user.preDiamondBloodlineId);
     const revert = resolveDiamondBloodlineRevert({
       currentBloodlineId: user.bloodlineId,
       preDiamondBloodlineId: user.preDiamondBloodlineId,
-      preDiamondBloodlineExists: !!preLine,
+      preDiamondBloodlineExists: user.preDiamondBloodlineName !== null,
       ownedBloodlineIds,
     });
     if (!revert) {
@@ -91,7 +85,7 @@ export const revertLapsedDiamondBloodlines = async (
     if (!result.rowsAffected) continue;
     reverted += 1;
     const from = user.bloodlineName ?? "unknown bloodline";
-    const to = preLine?.name ?? "no bloodline";
+    const to = user.preDiamondBloodlineName ?? "no bloodline";
     await Promise.all([
       currentJutsus.length
         ? updateUserJutsuForUpdateBloodline(

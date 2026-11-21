@@ -333,8 +333,18 @@ export const bloodlineRouter = createTRPCRouter({
       if (!historicBloodlines.find((b) => b.id === line.id)) {
         return errorResponse("Bloodline is not in your history");
       }
-      const cooldown = swapCooldownMessage(lastTransfer);
-      if (cooldown) return errorResponse(cooldown);
+      // Check if cooldown is over
+      if (lastTransfer) {
+        const canTransferAgainDate = secondsFromDate(
+          BLOODLINE_SWAP_COOLDOWN_HOURS * 60 * 60,
+          lastTransfer.createdAt,
+        );
+        if (canTransferAgainDate > new Date()) {
+          const msLeft = -secondsPassed(canTransferAgainDate) * 1000;
+          const timeLeft = getTimeLeftStr(msLeft);
+          return errorResponse(`You can swap again in ${timeLeft}`);
+        }
+      }
 
       // Update bloodline (this creates the "Bloodline Changed" log entry)
       const swapCost = isFreeSwap ? 0 : COST_SWAP_BLOODLINE;
@@ -1147,18 +1157,6 @@ export const updateBloodline = async (
     insertActionLogForUpdateBloodline(client, user, logMsg),
   ]);
   return { granted: true, updatedAt };
-};
-
-/** Why a bloodline swap must wait for the cooldown since the last change, if it must. */
-const swapCooldownMessage = (lastChange: { createdAt: Date } | undefined) => {
-  if (!lastChange) return undefined;
-  const canChangeAgain = secondsFromDate(
-    BLOODLINE_SWAP_COOLDOWN_HOURS * 60 * 60,
-    lastChange.createdAt,
-  );
-  if (canChangeAgain <= new Date()) return undefined;
-  const msLeft = -secondsPassed(canChangeAgain) * 1000;
-  return `You can swap again in ${getTimeLeftStr(msLeft)}`;
 };
 
 /**

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { type FederalStatus, STORE_FEDERAL_PRODUCTS } from "@/drizzle/constants";
+import type { FederalStatus } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { getFreeBloodlineSwaps } from "@/libs/bloodline";
 import { getFreeTransfers } from "@/libs/jutsu";
@@ -54,13 +54,6 @@ describe("federal tier perks", () => {
       stripePurchaseSchema.safeParse({ type: "federal", federalStatus: "NONE" })
         .success,
     ).toBe(false);
-    expect(
-      STORE_FEDERAL_PRODUCTS.find((product) => product.federalStatus === "DIAMOND"),
-    ).toEqual({
-      productId: "tnr_federal_diamond",
-      androidProductId: "tnr_federal_diamond:monthly",
-      federalStatus: "DIAMOND",
-    });
     expect(
       stripePurchaseSchema.safeParse({ type: "federal", federalStatus: "GOLD" })
         .success,

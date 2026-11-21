@@ -146,7 +146,8 @@ const FEDERAL_TIERS: {
 
 /** Diamond is offered only once its PayPal plan is configured for this deployment. */
 const AVAILABLE_FEDERAL_TIERS = FEDERAL_TIERS.filter(
-  (tier) => tier.status !== "DIAMOND" || !!tier.planId,
+  (tier): tier is (typeof FEDERAL_TIERS)[number] & { planId: string } =>
+    tier.status !== "DIAMOND" || !!tier.planId,
 );
 
 const FEDERAL_TIER_BENEFITS = {
@@ -479,7 +480,7 @@ const ReputationStore = () => {
  * PayPal subscription button for one federal tier's subscription plan
  */
 const PayPalSubscriptionButton = (props: {
-  subscriptionPlan: string | undefined;
+  subscriptionPlan: string;
   userId: string;
   imageSrc: string;
   imageClassName?: string;
@@ -563,7 +564,6 @@ const PayPalSubscriptionButton = (props: {
   const isRepsTier = isRepsFederalStatus(props.buttonStatus);
   const canUpgrade = isRepsTier && next > current && props.userId === userData?.userId;
   const hasSubscription = props.currentUserStatus !== "NONE";
-  const planId = props.subscriptionPlan;
   const upgradeCost = calcFedUgradeCost(props.currentUserStatus, props.buttonStatus);
 
   // Loaders
@@ -589,15 +589,13 @@ const PayPalSubscriptionButton = (props: {
         <FederalTierBenefits status={props.buttonStatus} />
       </div>
       <div className="z-0 rounded-lg border-2 border-black bg-amber-200 p-2 text-center text-black hover:cursor-pointer hover:bg-orange-200">
-        {!planId ? (
-          <p className="font-semibold">Coming soon</p>
-        ) : isResolved ? (
+        {isResolved ? (
           <PayPalButtons
             style={{ layout: "horizontal", label: "subscribe", tagline: false }}
             forceReRender={[props.userId]}
             createSubscription={(_data, actions) => {
               return actions.subscription.create({
-                plan_id: planId,
+                plan_id: props.subscriptionPlan,
                 custom_id: `${userData.userId}-${props.userId}`,
               });
             }}
