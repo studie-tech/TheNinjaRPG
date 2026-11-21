@@ -16,6 +16,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import {
   canAwardExperience,
+  canChangeContent,
   canClearSectors,
   canEnableGlobalTavern,
   canUnequipAllUsers,
@@ -261,6 +262,7 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
           </div>
         </Confirm>
       )}
+      {canChangeContent(user.role) && <CaravanEncounterRate />}
       {canEnableGlobalTavern(user.role) && (
         <div className="flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2">
           <Label htmlFor="globalTavernToggle" className="font-medium text-sm">
@@ -282,6 +284,47 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/** Content staff tune how often NPC bandits ambush caravans at their checkpoints. */
+const CaravanEncounterRate: React.FC = () => {
+  const { data } = api.caravan.getEncounterRate.useQuery();
+  const [rate, setRate] = useState<number>();
+  const utils = api.useUtils();
+  const { mutate, isPending } = api.caravan.setEncounterRate.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success) {
+        setRate(undefined);
+        await utils.caravan.getEncounterRate.invalidate();
+      }
+    },
+  });
+  const value = rate ?? data?.rate ?? 0;
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2">
+      <Label htmlFor="caravanEncounterRate" className="font-medium text-sm">
+        Caravan ambush chance per checkpoint (%)
+      </Label>
+      <div className="flex items-center gap-2">
+        <NumberInput
+          id="caravanEncounterRate"
+          className="w-20"
+          min={0}
+          max={100}
+          value={value}
+          onValueChange={setRate}
+        />
+        <Button
+          size="sm"
+          disabled={isPending || rate === undefined || !(rate >= 0 && rate <= 100)}
+          onClick={() => rate !== undefined && mutate({ rate })}
+        >
+          Save
+        </Button>
+      </div>
     </div>
   );
 };

@@ -44,6 +44,7 @@ import type {
   War,
   WarCamp,
 } from "@/drizzle/schema";
+import type { CaravanBattleState } from "@/libs/caravan";
 import type { BattleItem, BattleJutsu, BattleVillage } from "@/libs/combat/catalog";
 import type {
   GenNames,
@@ -517,6 +518,8 @@ export type ExtraState = {
   warCamp?: WarCamp;
   /** Private event/competitor snapshot frozen at initiation for write-only strategic settlement. */
   territoryWar?: TerritoryBattleState;
+  /** Caravan or trade route marker fight, settled once from this snapshot. */
+  caravan?: CaravanBattleState;
   /** Definitions of publicly performed actions, retained after their caster despawns. */
   revealedActions?: { jutsuIds: string[]; itemIds: string[] };
   /** Persisted, unscaled player state for confirmed completion responses; never sent to opponents. */

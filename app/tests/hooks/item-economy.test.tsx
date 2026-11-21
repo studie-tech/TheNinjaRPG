@@ -101,6 +101,8 @@ const MEAL_FIELD_IDS = [
   "canBeTraded",
   "auctionMinPrice",
   "auctionMaxPrice",
+  "warehouseItem",
+  "villageId",
   "canBeCrafted",
   "cookingMinLevel",
   "cookingTimeSeconds",
@@ -123,6 +125,7 @@ beforeEach(() => {
     },
     skillTree: { getAllNames: { useQuery: () => ({ data: [] }) } },
     bloodline: { getAllNames: { useQuery: () => ({ data: [] }) } },
+    village: { getAllNames: { useQuery: () => ({ data: [] }) } },
     gameAsset: {
       getLpcCatalog: { useQuery: () => ({ data: [], error: null }) },
       getNameTags: { useQuery: () => ({ data: undefined }) },

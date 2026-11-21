@@ -59,6 +59,7 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "hunting.start",
   "farming.harvestPlot",
   "farming.harvestAll",
+  "caravanOps.startOperation",
   // Daily and once-per-period rewards
   "profile.claimVotes",
   "activityStreak.claimStreakDay",
@@ -71,6 +72,8 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "pvpRank.claimSeasonRewards",
   "towerDefense.claimRun",
   "chakraStorm.claimRun",
+  "warehouse.withdraw",
+  "caravanOps.claimLoot",
   // Account creation and value transfer
   "register.createCharacter",
   "pets.acquirePet",

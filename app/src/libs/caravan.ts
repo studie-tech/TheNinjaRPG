@@ -1,0 +1,303 @@
+import {
+  BANDIT_RANKS,
+  BANDIT_REQUIRED_EXP,
+  BANDIT_SCOUT_MINUTES,
+  BANDIT_STEAL_BP,
+  BANDIT_SUCCESS_CHANCE,
+  type BanditRank,
+  CARAVAN_BANDIT_MIN_GROUP,
+  CARAVAN_CHECKPOINTS,
+  CARAVAN_ENEMY_MIN_GROUP,
+  CARAVAN_ENEMY_SCOUT_MINUTES,
+  CARAVAN_GUARD_DELIVERY_RYO,
+  CARAVAN_GUARD_OBJECTIVE_RYO,
+  CARAVAN_MAX_DELAY_MINUTES,
+  CARAVAN_MAX_LOSS_BP,
+  CARAVAN_SABOTAGE_MINUTES,
+  CARAVAN_STEALTH_BASE_CHANCE,
+  CARAVAN_STEALTH_CHANCE_PER_1000,
+  CARAVAN_STEALTH_MAX_CHANCE,
+  type CaravanEncounterType,
+  type CaravanOperationType,
+  type CaravanRole,
+  SECTOR_HEIGHT,
+  SECTOR_WIDTH,
+  STEALTH_SENSORY_DEFAULT,
+  TRADE_ROUTE_BASE_TRAVEL_MINUTES,
+  TRADE_ROUTE_MAX_MARKERS,
+  TRADE_ROUTE_MIN_MARKERS,
+  TRADE_ROUTE_SECTORS_PER_MARKER,
+  TRADE_ROUTE_TRAVEL_REDUCTION_PER_LEVEL,
+} from "@/drizzle/constants";
+import type { Caravan, UserData, VillageAlliance } from "@/drizzle/schema";
+import { getRankForExperience, getRankProgress } from "@/libs/occupationRank";
+import { sectorGridNeighbors } from "@/libs/sector-map/world-grid";
+import { findRelationship } from "@/utils/alliance";
+
+/** A shipment's manifest line. */
+export type CargoLine = { itemId: string; quantity: number };
+
+/** Sorted village pair key, open while a route between them is proposed or active. */
+export const getRoutePair = (villageIdA: string, villageIdB: string) =>
+  [villageIdA, villageIdB].sort() as [string, string];
+
+/**
+ * Shortest sector path between two home sectors over the world grid, both ends included.
+ * Neighbors are explored in [north, east, south, west] order, so the path is stable.
+ */
+export const findSectorPath = (from: number, to: number): number[] | null => {
+  if (from === to) return [from];
+  const previous = new Map<number, number>([[from, from]]);
+  const queue = [from];
+  for (let head = 0; head < queue.length; head++) {
+    const current = queue[head] as number;
+    for (const next of sectorGridNeighbors(current)) {
+      if (next < 0 || previous.has(next)) continue;
+      previous.set(next, current);
+      if (next === to) {
+        const path = [to];
+        let step = to;
+        while (step !== from) {
+          step = previous.get(step) as number;
+          path.unshift(step);
+        }
+        return path;
+      }
+      queue.push(next);
+    }
+  }
+  return null;
+};
+
+/** Caravan travel time of a route at this level. */
+export const getRouteTravelMinutes = (level: number) =>
+  Math.round(
+    (TRADE_ROUTE_BASE_TRAVEL_MINUTES *
+      (100 - TRADE_ROUTE_TRAVEL_REDUCTION_PER_LEVEL * (Math.max(1, level) - 1))) /
+      100,
+  );
+
+/**
+ * Random hidden marker positions on the sectors between a route's two villages. Adjacent
+ * villages have no sectors between them and therefore no markers.
+ */
+export const planRouteMarkers = (
+  path: number[],
+  random: () => number = Math.random,
+) => {
+  const interior = [...new Set(path.slice(1, -1))];
+  const count = Math.min(
+    interior.length,
+    Math.max(
+      TRADE_ROUTE_MIN_MARKERS,
+      Math.min(
+        TRADE_ROUTE_MAX_MARKERS,
+        Math.round(path.length / TRADE_ROUTE_SECTORS_PER_MARKER),
+      ),
+    ),
+  );
+  const pool = [...interior];
+  const picked: { sector: number; longitude: number; latitude: number }[] = [];
+  while (picked.length < count && pool.length > 0) {
+    const [sector] = pool.splice(Math.floor(random() * pool.length), 1);
+    if (sector === undefined) break;
+    picked.push({
+      sector,
+      longitude: 3 + Math.floor(random() * (SECTOR_WIDTH - 6)),
+      latitude: 3 + Math.floor(random() * (SECTOR_HEIGHT - 6)),
+    });
+  }
+  return picked;
+};
+
+/** Whether two villages may agree a trade route: enemies and warring villages cannot. */
+export const getTradeBlock = (
+  relationships: VillageAlliance[],
+  villageIdA: string,
+  villageIdB: string,
+  atWar: boolean,
+) => {
+  if (villageIdA === villageIdB) return "A village cannot trade with itself";
+  if (atWar) return "Villages at war cannot trade";
+  if (findRelationship(relationships, villageIdA, villageIdB)?.status === "ENEMY")
+    return "Enemy villages cannot trade";
+  return null;
+};
+
+/** Share of the journey completed, from 0 at departure to 1 on arrival. */
+export const getJourneyProgress = (
+  caravan: Pick<Caravan, "departedAt" | "arrivesAt">,
+  now = new Date(),
+) => {
+  if (!caravan.departedAt || !caravan.arrivesAt) return 0;
+  const total = caravan.arrivesAt.getTime() - caravan.departedAt.getTime();
+  if (total <= 0) return 1;
+  return Math.min(
+    1,
+    Math.max(0, (now.getTime() - caravan.departedAt.getTime()) / total),
+  );
+};
+
+/** Sector a caravan is passing through; its origin until it departs. */
+export const getCaravanSector = (
+  caravan: Pick<Caravan, "departedAt" | "arrivesAt" | "path" | "status">,
+  now = new Date(),
+) => {
+  const path = caravan.path;
+  if (caravan.status === "DELIVERED") return path[path.length - 1] ?? -1;
+  if (caravan.status !== "TRAVELLING") return path[0] ?? -1;
+  const index = Math.min(
+    path.length - 1,
+    Math.floor(getJourneyProgress(caravan, now) * path.length),
+  );
+  return path[index] ?? -1;
+};
+
+/** Checkpoints the journey has passed; they sit evenly between departure and arrival. */
+export const getReachedCheckpoints = (
+  caravan: Pick<Caravan, "departedAt" | "arrivesAt" | "status">,
+  now = new Date(),
+) =>
+  caravan.status === "TRAVELLING"
+    ? Math.min(
+        CARAVAN_CHECKPOINTS,
+        Math.floor(getJourneyProgress(caravan, now) * (CARAVAN_CHECKPOINTS + 1)),
+      )
+    : 0;
+
+/** Units of a manifest a caravan still carries after its losses. */
+export const getRemainingCargo = (cargo: CargoLine[], lossBp: number): CargoLine[] =>
+  cargo.map((line) => ({
+    itemId: line.itemId,
+    quantity: Math.floor(
+      (line.quantity * (10_000 - Math.min(lossBp, 10_000))) / 10_000,
+    ),
+  }));
+
+/** Share of the manifest a new loss may still take under the journey's cap. */
+export const getAllowedLoss = (lossBp: number, requestedBp: number) =>
+  Math.max(0, Math.min(requestedBp, CARAVAN_MAX_LOSS_BP - lossBp));
+
+/** Delay a new sabotage may still add under the journey's cap. */
+export const getAllowedDelay = (delayMinutes: number, requested: number) =>
+  Math.max(0, Math.min(requested, CARAVAN_MAX_DELAY_MINUTES - delayMinutes));
+
+/**
+ * Stolen goods split between the robbers. Each line divides evenly; the leader, listed
+ * first, keeps any remainder.
+ */
+export const splitLoot = (
+  cargo: CargoLine[],
+  stolenBp: number,
+  robberIds: string[],
+) => {
+  const loot = new Map<string, CargoLine[]>(robberIds.map((id) => [id, []]));
+  for (const line of cargo) {
+    const stolen = Math.floor((line.quantity * stolenBp) / 10_000);
+    if (stolen <= 0 || robberIds.length === 0) continue;
+    const share = Math.floor(stolen / robberIds.length);
+    robberIds.forEach((id, index) => {
+      const quantity = share + (index === 0 ? stolen - share * robberIds.length : 0);
+      if (quantity > 0) loot.get(id)?.push({ itemId: line.itemId, quantity });
+    });
+  }
+  return loot;
+};
+
+/** Delivery pay of a guard; guards who completed no objective earn nothing. */
+export const getGuardReward = (objectives: number) =>
+  objectives > 0
+    ? CARAVAN_GUARD_DELIVERY_RYO + objectives * CARAVAN_GUARD_OBJECTIVE_RYO
+    : 0;
+
+/** Bandit rank of an amount of bandit experience. */
+export const getBanditRank = (experience: number): BanditRank =>
+  getRankForExperience(BANDIT_RANKS, BANDIT_REQUIRED_EXP, experience);
+
+/** Progress towards the next bandit rank. */
+export const getBanditRankProgress = (experience: number) =>
+  getRankProgress(BANDIT_RANKS, BANDIT_REQUIRED_EXP, experience);
+
+/** Covert success chance of an enemy shinobi, from their stealth. */
+export const getStealthChance = (stealth: number) =>
+  Math.min(
+    CARAVAN_STEALTH_MAX_CHANCE,
+    CARAVAN_STEALTH_BASE_CHANCE +
+      (Math.max(0, stealth - STEALTH_SENSORY_DEFAULT) / 1000) *
+        CARAVAN_STEALTH_CHANCE_PER_1000,
+  );
+
+/** Success chance of an operation for its role, in percent. */
+export const getOperationChance = (
+  role: CaravanRole,
+  user: Pick<UserData, "stealth" | "banditExperience">,
+) =>
+  role === "BANDIT"
+    ? BANDIT_SUCCESS_CHANCE[getBanditRank(user.banditExperience)]
+    : getStealthChance(user.stealth);
+
+/** Minutes an operation takes for its role. */
+export const getOperationMinutes = (
+  type: CaravanOperationType,
+  role: CaravanRole,
+  banditExperience: number,
+) => {
+  if (type === "DISRUPT" || type === "DELAY") return CARAVAN_SABOTAGE_MINUTES;
+  return role === "BANDIT"
+    ? BANDIT_SCOUT_MINUTES[getBanditRank(banditExperience)]
+    : CARAVAN_ENEMY_SCOUT_MINUTES;
+};
+
+/** Share of the manifest a robbery led by this bandit steals. */
+export const getStealBp = (banditExperience: number) =>
+  BANDIT_STEAL_BP[getBanditRank(banditExperience)];
+
+/** Smallest interception group of a role. */
+export const getMinGroupSize = (role: CaravanRole) =>
+  role === "BANDIT" ? CARAVAN_BANDIT_MIN_GROUP : CARAVAN_ENEMY_MIN_GROUP;
+
+/**
+ * Side a player may take against a caravan of another village: outlaw bandits rob any
+ * caravan, and shinobi of an enemy or warring village disrupt it. Guards are its own
+ * villagers.
+ */
+export const getAttackerRole = (
+  user: Pick<UserData, "isOutlaw" | "isBandit" | "villageId">,
+  ownerVillageId: string,
+  relationships: VillageAlliance[],
+  atWar: boolean,
+): CaravanRole | null => {
+  if (user.villageId === ownerVillageId) return null;
+  if (user.isOutlaw) return user.isBandit ? "BANDIT" : null;
+  const relation = findRelationship(relationships, user.villageId, ownerVillageId);
+  return atWar || relation?.status === "ENEMY" ? "ENEMY" : null;
+};
+
+/** Roll a percent chance. */
+export const rollChance = (percent: number, random: () => number = Math.random) =>
+  random() * 100 < percent;
+
+/**
+ * Everything settlement needs about a caravan or marker fight, frozen when it starts so the
+ * final combat write performs no reads.
+ */
+export type CaravanBattleState = {
+  encounterId: string;
+  battleId: string;
+  type: CaravanEncounterType;
+  caravanId: string | null;
+  markerId: string | null;
+  /** Battle side of the raiders, saboteur or marker assault. */
+  attackerDirection: "left" | "right";
+  attackerRole: CaravanRole | null;
+  attackerVillageId: string | null;
+  /** Human attackers and escorts; AI fill the remaining places. */
+  attackerIds: string[];
+  guardIds: string[];
+  /** Manifest and losses at the start, for capped losses and stolen goods. */
+  cargo: CargoLine[];
+  lossBp: number;
+  stealBp: number;
+  /** Village that takes a marker when the assault destroys its last control. */
+  captureVillageId: string | null;
+};

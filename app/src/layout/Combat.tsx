@@ -826,6 +826,14 @@ const Combat: React.FC<CombatProps> = (props) => {
             utils.clan.invalidate(),
           ]
         : []),
+      // A caravan fight changes its shipment, escort duty, loot or route marker.
+      ...(props.battleState.battle?.battleType === "CARAVAN"
+        ? [
+            utils.caravan.invalidate(),
+            utils.caravanOps.invalidate(),
+            utils.tradeRoute.invalidate(),
+          ]
+        : []),
       // Invalidate raid queries when a RAID battle ends so boss HP is refreshed
       ...(props.battleState.battle?.battleType === "RAID"
         ? [

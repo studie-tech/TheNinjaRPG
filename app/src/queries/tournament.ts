@@ -5,8 +5,8 @@ import { and, eq, ne, type SQL } from "drizzle-orm";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import { withoutActivityReservation } from "@/queries/activityReservation";
 import { nextSnapshotSql } from "@/queries/concurrency";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
@@ -147,7 +147,7 @@ export const updateUserDataForJoinMatch = (
     ? client.execute(sql`
   UPDATE ${userData} LEFT JOIN ${userData} AS opponent
     ON opponent.userId = ${matchData.userId1 === actorId ? matchData.userId2 : matchData.userId1}
-      AND ${withoutDungeonReservation(sql`opponent.userId`)}
+      AND ${withoutActivityReservation(sql`opponent.userId`)}
   SET ${actionReadinessSqlSet(readiness, ["status", "curHealth"])}
     ${userData.status} = 'AWAKE',
     ${userData.curHealth} = ${readiness.set.curHealth ?? sql`GREATEST(1, ${userData.curHealth})`},
@@ -156,7 +156,7 @@ export const updateUserDataForJoinMatch = (
     opponent.curHealth = CASE WHEN opponent.curHealth < 0 THEN 1 ELSE opponent.curHealth END,
     opponent.updatedAt = NOW(3)
   WHERE ${userData.userId} = ${actorId} AND ${readiness.where}
-    AND ${withoutDungeonReservation()}
+    AND ${withoutActivityReservation()}
 `)
     : client
         .update(userData)
@@ -170,7 +170,7 @@ export const updateUserDataForJoinMatch = (
               matchData.userId1 ?? "",
               matchData.userId2 ?? "",
             ]),
-            withoutDungeonReservation(),
+            withoutActivityReservation(),
           ),
         );
 
@@ -215,8 +215,8 @@ export const updateTournamentMatchForSetMatchWinner = (
           ? or(
               isNull(tournamentMatch.userId2),
               and(
-                withoutDungeonReservation(tournamentMatch.userId1),
-                withoutDungeonReservation(tournamentMatch.userId2),
+                withoutActivityReservation(tournamentMatch.userId1),
+                withoutActivityReservation(tournamentMatch.userId2),
               ),
             )
           : undefined,

@@ -47,6 +47,7 @@ import {
   StatTypes,
   TEMPORAL_AP_DELTA,
   UserRanks,
+  WAREHOUSE_ITEM_TYPES,
   WeaponTypes,
 } from "@/drizzle/constants";
 import type { Item, UserData } from "@/drizzle/schema";
@@ -1542,6 +1543,23 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
       });
     }
   }
+  if (data.warehouseItem) {
+    if (
+      !data.canStack ||
+      !(WAREHOUSE_ITEM_TYPES as readonly string[]).includes(data.itemType)
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["warehouseItem"],
+        message: `Warehouse items must be stackable ${WAREHOUSE_ITEM_TYPES.join(", ").toLowerCase()} items`,
+      });
+    if (!data.villageId)
+      ctx.addIssue({
+        code: "custom",
+        path: ["villageId"],
+        message: "Select the village whose Warehouse produces this item",
+      });
+  }
   if (data.itemType === "FURNITURE") {
     if (!data.furnitureData) {
       ctx.addIssue({
@@ -2083,6 +2101,8 @@ export const ItemValidatorRawSchema = z.object({
   canBeHunted: z.coerce.boolean().prefault(false),
   canBeGathered: z.coerce.boolean().prefault(false),
   canBeTraded: z.coerce.boolean().prefault(false),
+  warehouseItem: z.coerce.boolean().prefault(false),
+  villageId: z.string().nullable().prefault(null),
   isFarmSeed: z.coerce.boolean().prefault(false),
   farmGrowTimeSeconds: z.coerce.number().int().min(0).prefault(0),
   farmYieldItemId: z.string().nullable(),

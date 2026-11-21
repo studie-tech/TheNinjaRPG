@@ -14,6 +14,8 @@ import { bankRouter } from "./routers/bank";
 import { blackMarketRouter } from "./routers/blackmarket";
 import { bloodlineRouter } from "./routers/bloodline";
 import { bountyRouter } from "./routers/bounty";
+import { caravanRouter } from "./routers/caravan";
+import { caravanOpsRouter } from "./routers/caravanOps";
 import { chakraStormRouter } from "./routers/chakraStorm";
 import { clanRouter } from "./routers/clan";
 import { combatRouter } from "./routers/combat";
@@ -76,12 +78,14 @@ import { territoryWarRouter } from "./routers/territoryWar";
 import { titleRouter } from "./routers/title";
 import { tournamentRouter } from "./routers/tournament";
 import { towerDefenseRouter } from "./routers/towerDefense";
+import { tradeRouteRouter } from "./routers/tradeRoute";
 import { trainRouter } from "./routers/train";
 import { travelRouter } from "./routers/travel";
 import { villageRouter } from "./routers/village";
 import { villageDutyRouter } from "./routers/villageDuty";
 import { villageMissionRouter } from "./routers/villageMission";
 import { warRouter } from "./routers/war";
+import { warehouseRouter } from "./routers/warehouse";
 import { worldMapRouter } from "./routers/worldMap";
 import { createTRPCRouter } from "./trpc";
 
@@ -161,6 +165,10 @@ export const appRouter = createTRPCRouter({
   war: warRouter,
   shrine: shrineRouter,
   resourceSilos: resourceSilosRouter,
+  caravan: caravanRouter,
+  caravanOps: caravanOpsRouter,
+  tradeRoute: tradeRouteRouter,
+  warehouse: warehouseRouter,
   pvpRank: pvpRankRouter,
   bounty: bountyRouter,
   skillTree: skillTreeRouter,

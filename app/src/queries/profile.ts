@@ -94,8 +94,8 @@ import {
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
+import { withoutActivityReservation } from "@/queries/activityReservation";
 import { revisionSql } from "@/queries/definitionRevisions";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { questPartyRelations } from "@/queries/questParty";
 import { questRevisionColumns, questRevisionRelation } from "@/queries/questRevisions";
 import { userCardColumns } from "@/queries/userColumns";
@@ -410,6 +410,9 @@ export const listPublicUserRows = (
       ...(input.isWarCamp !== undefined
         ? [eq(userData.isWarCamp, !!input.isWarCamp)]
         : []),
+      ...(input.isCaravanAi !== undefined
+        ? [eq(userData.isCaravanAi, !!input.isCaravanAi)]
+        : []),
       ...(input.isSummon !== undefined
         ? [eq(userData.isSummon, !!input.isSummon)]
         : []),
@@ -432,6 +435,7 @@ export const listPublicUserRows = (
       isAi: true,
       isEvent: true,
       isWarCamp: true,
+      isCaravanAi: true,
       isOutlaw: true,
       isSummon: true,
       lastIp: true,
@@ -2416,7 +2420,7 @@ export const wakeQueuedUser = (client: Pick<DrizzleClient, "update">, userId: st
       and(
         eq(userData.userId, userId),
         eq(userData.status, "QUEUED"),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
       ),
     );
 
@@ -2610,3 +2614,19 @@ export const incrementUserVillagePrestige = (
     .update(userData)
     .set({ villagePrestige: sql`${userData.villagePrestige} + ${amount}` })
     .where(eq(userData.userId, userId));
+
+/** Take up or leave the outlaw-only Bandit profession; experience is kept. */
+export const updateUserBanditProfession = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  enabled: boolean,
+) =>
+  client
+    .update(userData)
+    .set({ isBandit: enabled })
+    .where(
+      and(
+        eq(userData.userId, userId),
+        enabled ? eq(userData.isOutlaw, true) : undefined,
+      ),
+    );

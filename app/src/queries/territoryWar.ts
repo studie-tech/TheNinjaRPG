@@ -35,7 +35,7 @@ import {
   village,
 } from "@/drizzle/schema";
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { withoutActivityReservation } from "@/queries/activityReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
@@ -253,7 +253,7 @@ export const executeRowsForCleanupTerritoryWarTeams = (
 ) =>
   client.execute(
     sql`UPDATE ${userData} INNER JOIN ${mpvpBattleUser} ON ${mpvpBattleUser.userId} = ${userData.userId} INNER JOIN ${mpvpBattleQueue} ON ${mpvpBattleQueue.id} = ${mpvpBattleUser.clanBattleId} INNER JOIN ${territoryWar} ON ${territoryWar.id} = ${mpvpBattleQueue.territoryWarId} LEFT JOIN ${battle} ON ${battle.id} = ${mpvpBattleQueue.battleId} SET ${userData.status} = 'AWAKE' WHERE ${expired} AND ${userData.status} = 'QUEUED'
-      AND ${withoutDungeonReservation()}`,
+      AND ${withoutActivityReservation()}`,
   );
 
 /** Execute the database statement for `cleanupTerritoryWarTeams`. */

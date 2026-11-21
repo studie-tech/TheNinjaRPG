@@ -40,7 +40,7 @@ import {
   BATTLE_CLAIM_LIKE_PATTERN,
   RAID_CHAT_CONVERSATION_LIKE_PATTERN,
 } from "@/libs/raids";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { withoutActivityReservation } from "@/queries/activityReservation";
 import { activeWarAllyWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
@@ -394,7 +394,7 @@ export const updateUserDataForReadyToQueue = (
       and(
         eq(userData.userId, userId),
         eq(userData.status, user.status),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
       ),
     );
 
@@ -897,7 +897,7 @@ export const updateUserDataForCheckAndCleanupExpiredRaid = (
       and(
         eq(userData.status, "QUEUED"),
         inArray(userData.userId, userIds),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
       ),
     );
 
@@ -926,7 +926,7 @@ export const updateUserDataForRollbackStartRaidBattle = (
       and(
         inArray(userData.userId, attackerUserIds),
         eq(userData.status, "QUEUED"),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
       ),
     );
 

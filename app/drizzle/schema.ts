@@ -1989,6 +1989,10 @@ export const item = mysqlTable(
     canBeHunted: boolean("canBeHunted").default(false).notNull(),
     canBeGathered: boolean("canBeGathered").default(false).notNull(),
     canBeTraded: boolean("canBeTraded").default(false).notNull(),
+    /** Village Warehouses can store it, and its owning village can select it for production. */
+    warehouseItem: boolean("warehouseItem").default(false).notNull(),
+    /** Village (or the Syndicate) whose Warehouse can produce this item. */
+    villageId: varchar("villageId", { length: 191 }),
     auctionMinPrice: int("auctionMinPrice", { unsigned: true }),
     auctionMaxPrice: int("auctionMaxPrice", { unsigned: true }),
     purchaseLimit: int("purchaseLimit", { unsigned: true }),
@@ -2037,6 +2041,10 @@ export const item = mysqlTable(
       repsCostIdx: index("Item_repsCost_idx").on(table.repsCost),
       requiredLevelIdx: index("Item_requiredLevel_idx").on(table.requiredLevel),
       bloodlineIdIdx: index("Item_bloodlineId_idx").on(table.bloodlineId),
+      warehouseVillageIdx: index("Item_warehouseItem_villageId_idx").on(
+        table.warehouseItem,
+        table.villageId,
+      ),
       requiredSkillIdIdx: index("Item_requiredSkillId_idx").on(table.requiredSkillId),
       parentItemIdHiddenIdx: index("Item_parentItemId_hidden_idx").on(
         table.parentItemId,
@@ -3245,6 +3253,8 @@ export const userData = mysqlTable(
     isEvent: boolean("isEvent").default(false).notNull(),
     /** AI templates eligible for timed camp encounters; independent of Event and shrine flags. */
     isWarCamp: boolean("isWarCamp").default(false).notNull(),
+    /** AI templates drawn at random as caravan bandits, caravan guards and marker guards. */
+    isCaravanAi: boolean("isCaravanAi").default(false).notNull(),
     /** One concurrent war attempt, separate from the character's ordinary quest run. */
     warMission: json("warMission").$type<WarMissionAttempt>(),
     inShrines: boolean("inShrines").default(false).notNull(),
@@ -3458,6 +3468,9 @@ export const userData = mysqlTable(
     occupationSignupAt: datetime("occupationSignupAt", { mode: "date", fsp: 3 }),
     /** Last paid supply request; shared across professions and guarded by the UTC reset. */
     supplyRequestAt: datetime("supplyRequestAt", { mode: "date", fsp: 3 }),
+    /** Outlaws opt into the Bandit profession alongside their occupation. */
+    isBandit: boolean("isBandit").default(false).notNull(),
+    banditExperience: int("banditExperience").default(0).notNull(),
     // Stealth & Sensory stats
     stealth: double("stealth").default(consts.STEALTH_SENSORY_DEFAULT).notNull(),
     sensory: double("sensory").default(consts.STEALTH_SENSORY_DEFAULT).notNull(),
@@ -8397,3 +8410,340 @@ export const splashAnnouncement = mysqlTable(
   ],
 );
 export type SplashAnnouncement = InferSelectModel<typeof splashAnnouncement>;
+
+/** Production choices and the settlement clock of a village's Warehouse structure. */
+export const villageWarehouse = mysqlTable("VillageWarehouse", {
+  villageId: varchar("villageId", { length: 191 }).primaryKey().notNull(),
+  productionItemIds: json("productionItemIds").$type<string[]>().notNull(),
+  /** Start of the first production cycle that has not been credited yet. */
+  productionSettledAt: datetime("productionSettledAt", {
+    mode: "date",
+    fsp: 3,
+  }).notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull(),
+});
+export type VillageWarehouse = InferSelectModel<typeof villageWarehouse>;
+
+/** Shared village stock; reserved units are held for caravans and cannot be withdrawn. */
+export const warehouseStock = mysqlTable(
+  "WarehouseStock",
+  {
+    villageId: varchar("villageId", { length: 191 }).notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+    quantity: int("quantity", { unsigned: true }).default(0).notNull(),
+    reserved: int("reserved", { unsigned: true }).default(0).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.villageId, table.itemId] }),
+    index("WarehouseStock_itemId_idx").on(table.itemId),
+  ],
+);
+export type WarehouseStock = InferSelectModel<typeof warehouseStock>;
+
+/**
+ * Per player and item, across villages: the deposit cooldown, withdrawn units that earn no
+ * deposit bonus when returned, and the fractional bonus carried between deposits (thousandths).
+ */
+export const warehouseDepositLedger = mysqlTable(
+  "WarehouseDepositLedger",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+    lastDepositAt: datetime("lastDepositAt", { mode: "date", fsp: 3 }),
+    withdrawnUnits: int("withdrawnUnits", { unsigned: true }).default(0).notNull(),
+    bonusCarry: int("bonusCarry", { unsigned: true }).default(0).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.itemId] })],
+);
+export type WarehouseDepositLedger = InferSelectModel<typeof warehouseDepositLedger>;
+
+/**
+ * A player's daily withdrawals, kept across village changes so rejoining grants no second
+ * allowance, and their Kage approval, valid only in the approving village since joining it.
+ */
+export const warehouseMember = mysqlTable("WarehouseMember", {
+  userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+  allowanceDay: varchar("allowanceDay", { length: 10 }),
+  allowanceUsed: int("allowanceUsed", { unsigned: true }).default(0).notNull(),
+  approvedVillageId: varchar("approvedVillageId", { length: 191 }),
+  approvedAt: datetime("approvedAt", { mode: "date", fsp: 3 }),
+  /** Wartime approvals expire with this war. */
+  approvedWarId: varchar("approvedWarId", { length: 191 }),
+  approvedById: varchar("approvedById", { length: 191 }),
+});
+export type WarehouseMember = InferSelectModel<typeof warehouseMember>;
+
+/** Append-only movement history of a village's Warehouse. */
+export const warehouseLog = mysqlTable(
+  "WarehouseLog",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    villageId: varchar("villageId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }),
+    itemId: varchar("itemId", { length: 191 }),
+    type: mysqlEnum("type", consts.WAREHOUSE_LOG_TYPES).notNull(),
+    quantity: int("quantity").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => [
+    index("WarehouseLog_villageId_createdAt_idx").on(table.villageId, table.createdAt),
+    index("WarehouseLog_userId_idx").on(table.userId),
+  ],
+);
+export type WarehouseLog = InferSelectModel<typeof warehouseLog>;
+
+/**
+ * A trade agreement between two Warehouses (ids sorted). openPair is set while the route is
+ * proposed or active, so a pair can hold only one open route.
+ */
+export const tradeRoute = mysqlTable(
+  "TradeRoute",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    villageIdA: varchar("villageIdA", { length: 191 }).notNull(),
+    villageIdB: varchar("villageIdB", { length: 191 }).notNull(),
+    openPair: varchar("openPair", { length: 383 }),
+    status: mysqlEnum("status", consts.TRADE_ROUTE_STATUSES).notNull(),
+    proposedByVillageId: varchar("proposedByVillageId", { length: 191 }).notNull(),
+    proposedById: varchar("proposedById", { length: 191 }).notNull(),
+    level: tinyint("level", { unsigned: true }).default(1).notNull(),
+    /** Sectors from village A's home sector to village B's. */
+    path: json("path").$type<number[]>().notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
+    acceptedAt: datetime("acceptedAt", { mode: "date", fsp: 3 }),
+    closedAt: datetime("closedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => [
+    uniqueIndex("TradeRoute_openPair_key").on(table.openPair),
+    index("TradeRoute_villageIdA_idx").on(table.villageIdA),
+    index("TradeRoute_villageIdB_idx").on(table.villageIdB),
+  ],
+);
+export type TradeRoute = InferSelectModel<typeof tradeRoute>;
+
+/** Hidden capturable point of a route; a NULL controller means its own villages hold it. */
+export const tradeRouteMarker = mysqlTable(
+  "TradeRouteMarker",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    routeId: varchar("routeId", { length: 191 }).notNull(),
+    sector: smallint("sector").notNull(),
+    longitude: tinyint("longitude", { unsigned: true }).notNull(),
+    latitude: tinyint("latitude", { unsigned: true }).notNull(),
+    controllerVillageId: varchar("controllerVillageId", { length: 191 }),
+    control: int("control").default(consts.TRADE_ROUTE_MARKER_MAX_CONTROL).notNull(),
+    capturedAt: datetime("capturedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => [
+    index("TradeRouteMarker_routeId_idx").on(table.routeId),
+    index("TradeRouteMarker_sector_idx").on(table.sector),
+  ],
+);
+export type TradeRouteMarker = InferSelectModel<typeof tradeRouteMarker>;
+
+/** Markers a village found by searching their sector, revealed until expiry. */
+export const tradeRouteDiscovery = mysqlTable(
+  "TradeRouteDiscovery",
+  {
+    markerId: varchar("markerId", { length: 191 }).notNull(),
+    villageId: varchar("villageId", { length: 191 }).notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.markerId, table.villageId] })],
+);
+
+/**
+ * One shipment along a trade route. Cargo is the immutable dispatched manifest; every loss
+ * is a share of it (lossBp) so the cap holds across concurrent attackers. version guards
+ * every lifecycle transition.
+ */
+export const caravan = mysqlTable(
+  "Caravan",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    routeId: varchar("routeId", { length: 191 }).notNull(),
+    originVillageId: varchar("originVillageId", { length: 191 }).notNull(),
+    destinationVillageId: varchar("destinationVillageId", { length: 191 }).notNull(),
+    status: mysqlEnum("status", consts.CARAVAN_STATUSES).notNull(),
+    cargo: json("cargo").$type<{ itemId: string; quantity: number }[]>().notNull(),
+    lossBp: smallint("lossBp", { unsigned: true }).default(0).notNull(),
+    delayMinutes: smallint("delayMinutes", { unsigned: true }).default(0).notNull(),
+    disruptedUntil: datetime("disruptedUntil", { mode: "date", fsp: 3 }),
+    checkpointsProcessed: tinyint("checkpointsProcessed", { unsigned: true })
+      .default(0)
+      .notNull(),
+    /** Route sectors from origin to destination, frozen when the caravan is prepared. */
+    path: json("path").$type<number[]>().notNull(),
+    travelMinutes: smallint("travelMinutes", { unsigned: true }).notNull(),
+    createdById: varchar("createdById", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
+    departedAt: datetime("departedAt", { mode: "date", fsp: 3 }),
+    arrivesAt: datetime("arrivesAt", { mode: "date", fsp: 3 }),
+    resolvedAt: datetime("resolvedAt", { mode: "date", fsp: 3 }),
+    version: int("version", { unsigned: true }).default(0).notNull(),
+  },
+  (table) => [
+    index("Caravan_status_arrivesAt_idx").on(table.status, table.arrivesAt),
+    index("Caravan_originVillageId_status_idx").on(table.originVillageId, table.status),
+    index("Caravan_destinationVillageId_status_idx").on(
+      table.destinationVillageId,
+      table.status,
+    ),
+    index("Caravan_routeId_status_idx").on(table.routeId, table.status),
+  ],
+);
+export type Caravan = InferSelectModel<typeof caravan>;
+
+/**
+ * A player's side on one journey. The key keeps them on that side for good; activeUserId
+ * reserves them for this journey only, so nobody guards or attacks two caravans at once.
+ */
+export const caravanParticipant = mysqlTable(
+  "CaravanParticipant",
+  {
+    caravanId: varchar("caravanId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    role: mysqlEnum("role", consts.CARAVAN_ROLES).notNull(),
+    activeUserId: varchar("activeUserId", { length: 191 }),
+    guardSlot: tinyint("guardSlot", { unsigned: true }),
+    /** Attackers riding in one interception group share their leader's id. */
+    groupLeaderId: varchar("groupLeaderId", { length: 191 }),
+    /** Completed defences and checkpoint check-ins of a guard. */
+    objectives: smallint("objectives", { unsigned: true }).default(0).notNull(),
+    lastCheckpoint: tinyint("lastCheckpoint", { unsigned: true }).default(0).notNull(),
+    /** Stolen goods a bandit can claim once their robbery resolved. */
+    loot: json("loot").$type<{ itemId: string; quantity: number }[]>(),
+    lootClaimedAt: datetime("lootClaimedAt", { mode: "date", fsp: 3 }),
+    rewardedAt: datetime("rewardedAt", { mode: "date", fsp: 3 }),
+    joinedAt: datetime("joinedAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.caravanId, table.userId] }),
+    uniqueIndex("CaravanParticipant_activeUserId_key").on(table.activeUserId),
+    uniqueIndex("CaravanParticipant_guardSlot_key").on(
+      table.caravanId,
+      table.guardSlot,
+    ),
+    index("CaravanParticipant_userId_idx").on(table.userId),
+  ],
+);
+export type CaravanParticipant = InferSelectModel<typeof caravanParticipant>;
+
+/** Time-limited knowledge of a caravan: its route and departure, or a sighting's sector. */
+export const caravanDiscovery = mysqlTable(
+  "CaravanDiscovery",
+  {
+    caravanId: varchar("caravanId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    kind: mysqlEnum("kind", consts.CARAVAN_DISCOVERY_KINDS).notNull(),
+    sector: smallint("sector"),
+    seenAt: datetime("seenAt", { mode: "date", fsp: 3 }).notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.caravanId, table.userId, table.kind] }),
+    index("CaravanDiscovery_userId_expiresAt_idx").on(table.userId, table.expiresAt),
+  ],
+);
+export type CaravanDiscovery = InferSelectModel<typeof caravanDiscovery>;
+
+/**
+ * A timed scouting or sabotage action. Its outcome is rolled when it starts, so retries
+ * cannot reroll it; activeUserId allows one running operation per player.
+ */
+export const caravanOperation = mysqlTable(
+  "CaravanOperation",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    activeUserId: varchar("activeUserId", { length: 191 }),
+    role: mysqlEnum("role", consts.CARAVAN_ROLES).notNull(),
+    type: mysqlEnum("type", consts.CARAVAN_OPERATION_TYPES).notNull(),
+    caravanId: varchar("caravanId", { length: 191 }),
+    sector: smallint("sector").notNull(),
+    succeeds: boolean("succeeds").notNull(),
+    status: mysqlEnum("status", consts.CARAVAN_OPERATION_STATUSES).notNull(),
+    startedAt: datetime("startedAt", { mode: "date", fsp: 3 }).notNull(),
+    finishesAt: datetime("finishesAt", { mode: "date", fsp: 3 }).notNull(),
+    resolvedAt: datetime("resolvedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => [
+    uniqueIndex("CaravanOperation_activeUserId_key").on(table.activeUserId),
+    index("CaravanOperation_status_finishesAt_idx").on(table.status, table.finishesAt),
+    index("CaravanOperation_caravanId_status_idx").on(table.caravanId, table.status),
+    index("CaravanOperation_userId_idx").on(table.userId),
+  ],
+);
+export type CaravanOperation = InferSelectModel<typeof caravanOperation>;
+
+/**
+ * A fight over a caravan or a route marker. activeCaravanId and activeMarkerId are set until
+ * it resolves, so each caravan and marker has at most one open encounter.
+ */
+export const caravanEncounter = mysqlTable(
+  "CaravanEncounter",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    type: mysqlEnum("type", consts.CARAVAN_ENCOUNTER_TYPES).notNull(),
+    status: mysqlEnum("status", consts.CARAVAN_ENCOUNTER_STATUSES).notNull(),
+    caravanId: varchar("caravanId", { length: 191 }),
+    markerId: varchar("markerId", { length: 191 }),
+    activeCaravanId: varchar("activeCaravanId", { length: 191 }),
+    activeMarkerId: varchar("activeMarkerId", { length: 191 }),
+    operationId: varchar("operationId", { length: 191 }),
+    battleId: varchar("battleId", { length: 191 }),
+    /** The attacking side's village, or the assaulting village of a marker. */
+    attackerVillageId: varchar("attackerVillageId", { length: 191 }),
+    leaderId: varchar("leaderId", { length: 191 }),
+    attackersWon: boolean("attackersWon"),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
+    resolvedAt: datetime("resolvedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => [
+    uniqueIndex("CaravanEncounter_activeCaravanId_key").on(table.activeCaravanId),
+    uniqueIndex("CaravanEncounter_activeMarkerId_key").on(table.activeMarkerId),
+    index("CaravanEncounter_caravanId_idx").on(table.caravanId),
+    index("CaravanEncounter_status_idx").on(table.status),
+  ],
+);
+export type CaravanEncounter = InferSelectModel<typeof caravanEncounter>;
+
+export const caravanRelations = relations(caravan, ({ one, many }) => ({
+  route: one(tradeRoute, { fields: [caravan.routeId], references: [tradeRoute.id] }),
+  participants: many(caravanParticipant),
+}));
+export const caravanParticipantRelations = relations(caravanParticipant, ({ one }) => ({
+  caravan: one(caravan, {
+    fields: [caravanParticipant.caravanId],
+    references: [caravan.id],
+  }),
+  user: one(userData, {
+    fields: [caravanParticipant.userId],
+    references: [userData.userId],
+  }),
+}));
+export const tradeRouteRelations = relations(tradeRoute, ({ one, many }) => ({
+  villageA: one(village, {
+    fields: [tradeRoute.villageIdA],
+    references: [village.id],
+  }),
+  villageB: one(village, {
+    fields: [tradeRoute.villageIdB],
+    references: [village.id],
+  }),
+  markers: many(tradeRouteMarker),
+}));
+export const tradeRouteMarkerRelations = relations(tradeRouteMarker, ({ one }) => ({
+  route: one(tradeRoute, {
+    fields: [tradeRouteMarker.routeId],
+    references: [tradeRoute.id],
+  }),
+}));
+export const warehouseStockRelations = relations(warehouseStock, ({ one }) => ({
+  item: one(item, { fields: [warehouseStock.itemId], references: [item.id] }),
+}));
+export const warehouseLogRelations = relations(warehouseLog, ({ one }) => ({
+  item: one(item, { fields: [warehouseLog.itemId], references: [item.id] }),
+  user: one(userData, { fields: [warehouseLog.userId], references: [userData.userId] }),
+}));

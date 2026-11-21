@@ -145,6 +145,7 @@ export const useAiEditForm = (
     { id: "isSummon", type: "boolean" },
     { id: "isEvent", label: "Event AI", type: "boolean" },
     { id: "isWarCamp", label: "War Camp AI", type: "boolean" },
+    { id: "isCaravanAi", label: "Caravan AI", type: "boolean" },
     { id: "inArena", type: "boolean" },
     { id: "inShrines", type: "boolean" },
     {

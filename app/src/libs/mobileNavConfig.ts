@@ -20,6 +20,7 @@ import {
   Swords,
   Users,
   UtensilsCrossed,
+  Warehouse,
 } from "lucide-react";
 
 // Mobile navigation option definition
@@ -47,6 +48,7 @@ export const MOBILE_NAV_OPTIONS: MobileNavOption[] = [
   { id: "bank", name: "Bank", href: "/bank", icon: Banknote },
   { id: "anbu", name: "ANBU", href: "/anbu", icon: Shield },
   { id: "occupation", name: "Occupation", href: "/occupation", icon: Briefcase },
+  { id: "warehouse", name: "Warehouse", href: "/warehouse", icon: Warehouse },
   // General pages (DEFAULT_MOBILE_NAV_CONFIG ids must stay in this list)
   { id: "profile", name: "Profile", href: "/profile", icon: CircleUserRound },
   { id: "inbox", name: "Inbox", href: "/inbox", icon: Inbox },
