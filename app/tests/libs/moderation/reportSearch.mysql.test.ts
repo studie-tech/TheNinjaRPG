@@ -285,12 +285,12 @@ describeWithDatabase("moderation retrieval against Community MySQL", () => {
     const report = { id: "reverted", text: "Summary A" };
     const originalVector = sql`TO_VECTOR(${JSON.stringify(Array(REPORT_EMBEDDING_DIMENSIONS).fill(0))})`;
     const replacementVector = sql`TO_VECTOR(${JSON.stringify(Array(REPORT_EMBEDDING_DIMENSIONS).fill(1))})`;
-    await client.insert(userReport).values(
-      reportRow(report.id, {
+    await client.insert(userReport).values({
+      ...reportRow(report.id, {
         aiInterpretation: originalText,
-        embeddedTextHash: sql`SHA2(${originalText}, 256)`,
       }),
-    );
+      embeddedTextHash: sql`SHA2(${originalText}, 256)`,
+    });
     await client.insert(userReportEmbedding).values({
       reportId: report.id,
       model: OPENAI_REPORT_EMBEDDING_MODEL,
