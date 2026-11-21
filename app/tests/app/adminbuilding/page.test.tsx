@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import AdministrationBuilding from "@/app/[shell]/adminbuilding/page";
@@ -15,6 +15,9 @@ import * as UserContext from "@/utils/UserContext";
 const startQuest = vi.fn();
 const namesQuery = vi.fn();
 const hallQuery = vi.fn();
+const startMutation = vi.fn();
+const refreshEvents = vi.fn();
+const refreshSupplies = vi.fn();
 
 const event = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
@@ -47,11 +50,14 @@ const setup = (hallData: ReturnType<typeof event>[], userQuests: unknown[] = [])
     data: options.enabled ? [{ id: "ticket", name: "Event Ticket" }] : undefined,
   }));
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ quests: { allianceBuilding: { invalidate: vi.fn() } } }),
+    useUtils: () => ({
+      quests: { allianceBuilding: { invalidate: refreshEvents } },
+      occupation: { getSupplyRequest: { invalidate: refreshSupplies } },
+    }),
     item: { getAllNames: { useQuery: namesQuery } },
     quests: {
       allianceBuilding: { useQuery: hallQuery },
-      startQuest: { useMutation: () => ({ mutate: startQuest, isPending: false }) },
+      startQuest: { useMutation: startMutation },
     },
   });
   vi.spyOn(UserContext, "useRequireInVillage").mockReturnValue({
@@ -72,6 +78,7 @@ const setup = (hallData: ReturnType<typeof event>[], userQuests: unknown[] = [])
 
 beforeEach(() => {
   vi.clearAllMocks();
+  startMutation.mockReturnValue({ mutate: startQuest, isPending: false });
   vi.spyOn(SupplyRequest, "SupplyRequest").mockImplementation(() => <></>);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
@@ -107,6 +114,19 @@ const open = (name: string) =>
   fireEvent.click(screen.getByRole("button", { name: new RegExp(name) }));
 
 describe("Administration Building", () => {
+  it("refreshes both stock panels after event entry consumes carried items", async () => {
+    setup([paidEvent(2)]);
+    await act(async () =>
+      startMutation.mock.lastCall?.[0].onSuccess(
+        { success: true, message: "Started" },
+        { questId: "Paid Event" },
+        undefined,
+      ),
+    );
+    expect(refreshEvents).toHaveBeenCalledTimes(1);
+    expect(refreshSupplies).toHaveBeenCalledTimes(1);
+  });
+
   it("confirms the entry cost before starting an event with entry items", () => {
     setup([paidEvent(2)]);
     open("Paid Event");

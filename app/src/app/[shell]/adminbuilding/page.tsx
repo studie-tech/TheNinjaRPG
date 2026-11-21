@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { IMG_BUILDING_ADMINBUILDING, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { useAdministrationBuildingCacheUpdate } from "@/hooks/useAdministrationBuildingCacheUpdate";
 import Accordion from "@/layout/Accordion";
 import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
@@ -19,7 +20,7 @@ import { showMutationToast } from "@/libs/toast";
 import { useRequireInVillage } from "@/utils/UserContext";
 
 export default function AdministrationBuilding() {
-  const util = api.useUtils();
+  const { invalidateStock } = useAdministrationBuildingCacheUpdate();
 
   const [activeElement, setActiveElement] = useState<string>("");
   const { userData, access, updateUser, prepareUserUpdate } =
@@ -48,7 +49,7 @@ export default function AdministrationBuilding() {
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       await updateUser(data, { revision });
-      await util.quests.allianceBuilding.invalidate();
+      await invalidateStock();
     },
   });
 
