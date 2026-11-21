@@ -239,7 +239,10 @@ export const SwapBloodline: React.FC = () => {
       {isFetching && <Loader explanation="Loading bloodlines" />}
       {isDisabled && (
         <div>
-          You do not have any bloodlines available to swap to. Go{" "}
+          {isDiamond
+            ? "No bloodlines in your history yet."
+            : "You do not have any bloodlines available to swap to."}{" "}
+          Go{" "}
           <Link className="font-bold" href="/travel">
             travel
           </Link>{" "}
