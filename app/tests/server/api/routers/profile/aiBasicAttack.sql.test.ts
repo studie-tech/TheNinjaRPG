@@ -28,7 +28,7 @@ describeWithDatabase("AI Basic Attack Replacement persistence", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  const save = async (replacement: string | null, equipped: string[]) => {
+  const save = async (replacement: string | null | undefined, equipped: string[]) => {
     const db = await getTestDatabase();
     const row = await db.query.userData.findFirst({ where: eq(userData.userId, AI) });
     const caller = await callerFor(profileRouter, EDITOR);
@@ -73,6 +73,19 @@ describeWithDatabase("AI Basic Attack Replacement persistence", () => {
     expect(
       await db.query.userJutsu.findMany({ where: eq(userJutsu.userId, AI) }),
     ).toHaveLength(0);
+  });
+
+  it("guards the saved replacement when an editor omits the setting", async () => {
+    await save("strike", ["strike"]);
+    expect(await save(undefined, [])).toMatchObject({ success: false });
+    const db = await getTestDatabase();
+    expect(
+      await db.query.userData.findFirst({ where: eq(userData.userId, AI) }),
+    ).toMatchObject({ basicAttackJutsuId: "strike" });
+    expect(
+      await db.query.userJutsu.findMany({ where: eq(userJutsu.userId, AI) }),
+    ).toHaveLength(1);
+    expect(await save(undefined, ["strike"])).toMatchObject({ success: true });
   });
 
   it("rejects nonexistent content before changing the equipped loadout or writing logs", async () => {

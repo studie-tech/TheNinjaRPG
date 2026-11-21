@@ -1596,6 +1596,14 @@ export const profileRouter = createTRPCRouter({
       if (!ai.isAi) return errorResponse("Not an AI");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (usernameTaken) return errorResponse("Username already taken");
+      const replacementJutsuId =
+        input.data.basicAttackJutsuId === undefined
+          ? ai.basicAttackJutsuId
+          : input.data.basicAttackJutsuId;
+      if (replacementJutsuId && !input.data.jutsus?.includes(replacementJutsuId))
+        return errorResponse(
+          "Equip the replacement Jutsu, or clear Basic Attack Replacement before removing it.",
+        );
       if (input.data.basicAttackJutsuId && !replacementJutsu)
         return errorResponse("Basic Attack Replacement Jutsu no longer exists");
       if (
