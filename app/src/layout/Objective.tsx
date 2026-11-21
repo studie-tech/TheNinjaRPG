@@ -8,6 +8,7 @@ import {
   Loader2,
   RotateCcw,
   Sprout,
+  Swords,
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
@@ -32,8 +33,12 @@ import { collapseRewards } from "@/libs/rewards";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { getCollectDeadline, hasEndDatePassed } from "@/utils/time";
-import { useRequiredUserDataSelector } from "@/utils/UserContext";
-import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
+import { useRequiredUserDataSelector, useUserDataSelector } from "@/utils/UserContext";
+import type {
+  AllObjectivesType,
+  QuestTrackerType,
+  WinTowerDefenseType,
+} from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
 import type { QuestRewardType } from "@/validators/rewardPackages";
 import { rewardPayloads } from "@/validators/rewardPackages";
@@ -276,6 +281,9 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
               </div>
             </div>
           )}
+          {parsed.task === "win_tower_defense" && !done && !props.grayedOut && (
+            <TowerDefenseChallengeAction questId={tracker.id} objective={parsed} />
+          )}
           {/* Retry button for lost start_battle objectives that are still open */}
           {canRetryBattle && (
             <div className="mt-2 flex flex-row items-center justify-end">
@@ -292,6 +300,49 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * What a tower defense challenge asks for, and the way into it once the player stands on
+ * its location. A hidden location cannot be checked here, so the server decides.
+ * Subscribes to a single boolean so movement re-renders it only when arriving or leaving.
+ */
+const TowerDefenseChallengeAction = (props: {
+  questId: string;
+  objective: WinTowerDefenseType;
+}) => {
+  const { objective } = props;
+  const { data: isHere } = useUserDataSelector(
+    (u) =>
+      objective.hideLocation ||
+      (u.sector === objective.sector &&
+        u.longitude === objective.longitude &&
+        u.latitude === objective.latitude),
+  );
+  const finalWave = objective.startWave + objective.waves - 1;
+  return (
+    <div className="@container mt-2 pr-3">
+      <div className="flex flex-col gap-2 @md:flex-row @md:items-center">
+        <p className="grow text-sm">
+          Hold your ground through {objective.waves === 1 ? "wave" : "waves"}{" "}
+          {objective.startWave}
+          {objective.waves > 1 ? `–${finalWave}` : ""} against enemies with{" "}
+          {objective.enemyHealth}% health and {objective.enemyDamage}% damage.
+          {!isHere && " Travel to the position above to start."}
+        </p>
+        {isHere && (
+          <Button asChild size="sm" className="shrink-0">
+            <Link
+              href={`/towerDefense?quest=${encodeURIComponent(props.questId)}&objective=${encodeURIComponent(objective.id)}`}
+            >
+              <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
+              Take position
+            </Link>
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -68,6 +68,7 @@ import {
   tdStageForWave,
 } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
+import type { TdSavedRunHead } from "@/libs/towerDefense/savedRun";
 import { tdDojoCost } from "@/libs/towerDefense/sim";
 import { capitalizeFirstLetter } from "@/utils/string";
 
@@ -93,7 +94,7 @@ export const TowerDefenseLobby = (props: {
   /** The village the player defends, when they belong to one. */
   villageName?: string;
   progress: { points: number; bestWave: number; dojo: TdDojoLevels } | undefined;
-  saved: { wave: number; over: boolean } | null;
+  saved: Pick<TdSavedRunHead, "wave" | "over" | "config"> | null;
   isStarting: boolean;
   isResuming: boolean;
   isPurchasing: boolean;
@@ -106,6 +107,8 @@ export const TowerDefenseLobby = (props: {
   onBuy: (upgradeId: TdDojoUpgrade) => void;
 }) => {
   const busy = props.isStarting || props.isResuming || !!props.isLoading;
+  const isSavedChallenge = !!props.saved?.config.challenge;
+  const savedRun = isSavedChallenge ? "quest defense" : "run";
   const bestWave = props.progress?.bestWave ?? 0;
   const checkpoints = tdCheckpoints(bestWave);
   const [startWave, setStartWave] = useState<number | null>(null);
@@ -166,7 +169,7 @@ export const TowerDefenseLobby = (props: {
             {props.saved && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-2">
                 <span className="flex-1">
-                  {props.saved.over ? "Unclaimed run" : "Unfinished run"} at wave{" "}
+                  {props.saved.over ? "Unclaimed" : "Unfinished"} {savedRun} at wave{" "}
                   <strong>{props.saved.wave}</strong>
                 </span>
                 <Button size="sm" disabled={busy} onClick={props.onResume}>
@@ -195,8 +198,8 @@ export const TowerDefenseLobby = (props: {
                   onAccept={props.onDiscard}
                 >
                   {props.saved.over
-                    ? `Your run at wave ${props.saved.wave} has not been claimed yet. Discarding it loses the scrolls it earned.`
-                    : `Discarding your unfinished run at wave ${props.saved.wave} loses it and the scrolls it would earn.`}
+                    ? `Your ${savedRun} at wave ${props.saved.wave} has not been claimed yet. Discarding it loses ${isSavedChallenge ? "its result" : "the scrolls it earned"}.`
+                    : `Discarding your unfinished ${savedRun} at wave ${props.saved.wave} loses it${isSavedChallenge ? "" : " and the scrolls it would earn"}.`}
                 </Confirm>
               </div>
             )}
@@ -207,18 +210,18 @@ export const TowerDefenseLobby = (props: {
                   props.level === undefined ? "grid-cols-2" : "grid-cols-3",
                 )}
               >
-                <Stat
+                <TowerDefenseStat
                   icon={<ScrollText className="h-5 w-5 text-purple-500" />}
                   label="Scrolls"
                   value={formatTdNumber(props.progress?.points ?? 0)}
                 />
-                <Stat
+                <TowerDefenseStat
                   icon={<Crown className="h-5 w-5 text-amber-500" />}
                   label="Best wave"
                   value={`${bestWave}`}
                 />
                 {props.level !== undefined && (
-                  <Stat
+                  <TowerDefenseStat
                     icon={<Swords className="h-5 w-5 text-red-500" />}
                     label={`Level ${props.level}`}
                     value={`+${Math.round(tdLevelDamageBonus(props.level) * 100)}% dmg`}
@@ -280,8 +283,8 @@ export const TowerDefenseLobby = (props: {
                 }}
               >
                 {props.saved.over
-                  ? `Your run at wave ${props.saved.wave} has not been claimed yet. Starting a new run discards it and the scrolls it earned.`
-                  : `Starting a new run discards your unfinished run at wave ${props.saved.wave} and the scrolls it would earn.`}
+                  ? `Your ${savedRun} at wave ${props.saved.wave} has not been claimed yet. Starting a new run discards it${isSavedChallenge ? "" : " and the scrolls it earned"}.`
+                  : `Starting a new run discards your unfinished ${savedRun} at wave ${props.saved.wave}${isSavedChallenge ? "" : " and the scrolls it would earn"}.`}
               </Confirm>
             ) : (
               startButton
@@ -692,7 +695,12 @@ const Control = (props: { keys: string[]; name: string; description: string }) =
   </div>
 );
 
-const Stat = (props: { icon: ReactNode; label: string; value: string }) => (
+/** A labelled run figure with its icon. */
+export const TowerDefenseStat = (props: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) => (
   <div className="flex items-center gap-2 rounded-lg border p-2">
     {props.icon}
     <div>

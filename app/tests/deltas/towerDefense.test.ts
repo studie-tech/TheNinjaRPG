@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
+  getChallengeQuestUserUpdate,
   getDailyDutyUserUpdate,
   getDojoPurchaseUpdate,
   getRunClaimUpdate,
   type TowerDefenseProgress,
 } from "@/deltas/towerDefense";
+import { QuestTracker } from "@/validators/objectives";
 
 const progress: TowerDefenseProgress = { points: 900, bestWave: 40, dojo: { dmg: 2 } };
 
@@ -58,5 +60,39 @@ describe("tower defense daily duty delta", () => {
     expect(getDailyDutyUserUpdate({ reward: null, villageId: "v1", paidAt })).toEqual({
       userDelta: {},
     });
+  });
+});
+
+describe("tower defense challenge delta", () => {
+  it("patches the quest trackers once the objective is done", () => {
+    const questData = [
+      QuestTracker.parse({
+        id: "q1",
+        goals: [{ id: "g1", done: true }],
+      }),
+    ];
+    const update = getChallengeQuestUserUpdate({
+      questData,
+      sector: 1,
+      role: "USER",
+      playsAsPlayer: true,
+      userQuests: [],
+    });
+    expect(update).toEqual({ userDelta: {}, userPatch: { questData } });
+    expect(update.userPatch?.questData).not.toBe(questData);
+    // A following objective that started a battle travels with the same patch.
+    const withBattle = getChallengeQuestUserUpdate(
+      { questData, sector: 1, role: "USER", playsAsPlayer: true, userQuests: [] },
+      { userDelta: {}, userPatch: { status: "BATTLE", battleId: "battle-1" } },
+    );
+    expect(withBattle.userPatch).toEqual({
+      status: "BATTLE",
+      battleId: "battle-1",
+      questData,
+    });
+  });
+
+  it("confirms an unchanged profile when the objective is not done", () => {
+    expect(getChallengeQuestUserUpdate(undefined)).toEqual({ userDelta: {} });
   });
 });

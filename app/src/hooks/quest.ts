@@ -39,7 +39,7 @@ import type {
   ZodQuestFormInput,
   ZodQuestFormType,
 } from "@/validators/objectives";
-import { QuestFormSchema } from "@/validators/objectives";
+import { objectiveImageMap, QuestFormSchema } from "@/validators/objectives";
 import { type QuestRewardType, questRewardFields } from "@/validators/rewardPackages";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 
@@ -147,6 +147,8 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
         }
       } else if (objective.task === "dialog") {
         objective.image = IMG_BADGE_DIALOG;
+      } else if (objective.task === "win_tower_defense") {
+        objective.image = objectiveImageMap.win_tower_defense.image;
       }
       return objective;
     });

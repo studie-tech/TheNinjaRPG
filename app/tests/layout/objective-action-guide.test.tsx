@@ -74,4 +74,41 @@ describe("objective action guide", () => {
     expect(objectives.getObjectiveActionGuide({ task: "pvp_kills" })).toBeNull();
     expect(renderObjective("pvp_kills", 0).queryByRole("link")).toBeNull();
   });
+
+  it("offers a tower defense challenge only at the objective's position", () => {
+    const renderChallenge = (position: {
+      sector: number;
+      longitude: number;
+      latitude: number;
+    }) => {
+      mockUserContextValue({
+        data: { userId: "defender", role: "USER", status: "AWAKE", ...position },
+        timeDiff: 0,
+      } as never);
+      return render(
+        <Objective
+          objective={AllObjectives.parse({
+            id: "goal",
+            task: "win_tower_defense",
+            sector: 5,
+            longitude: 3,
+            latitude: 4,
+          })}
+          tracker={QuestTracker.parse({
+            id: "quest",
+            goals: [{ id: "goal", value: 0 }],
+          })}
+          checkRewards={vi.fn()}
+        />,
+      );
+    };
+    const away = renderChallenge({ sector: 5, longitude: 2, latitude: 4 });
+    expect(away.queryByRole("link", { name: /take position/i })).toBeNull();
+    expect(away.getByText(/Travel to the position above to start/)).toBeTruthy();
+    cleanup();
+    const here = renderChallenge({ sector: 5, longitude: 3, latitude: 4 });
+    expect(
+      here.getByRole("link", { name: /take position/i }).getAttribute("href"),
+    ).toBe("/towerDefense?quest=quest&objective=goal");
+  });
 });

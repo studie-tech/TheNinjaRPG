@@ -71,7 +71,7 @@ export const areTowerDefenseClaimsEnabled = (): boolean =>
 export const towerDefenseClaimKey = (nonce: string): string => `run:${nonce}`;
 
 type TowerDefenseClaimResult =
-  | { ok: true; wave: number; kills: number; points: number }
+  | { ok: true; wave: number; kills: number; points: number; won: boolean }
   | { ok: false; message: string };
 
 /**
@@ -117,6 +117,7 @@ export const verifyTowerDefenseRun = async (input: {
       bestWave: token.bestWave,
       level: token.level,
       dojo: token.dojo,
+      challenge: token.challenge,
     },
     actions,
   );
@@ -137,5 +138,6 @@ export const verifyTowerDefenseRun = async (input: {
     wave: state.wave,
     kills: state.kills,
     points: Math.max(0, Math.min(1_000_000_000, tdRunPoints(state))),
+    won: state.won,
   };
 };

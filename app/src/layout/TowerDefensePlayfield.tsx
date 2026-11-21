@@ -68,6 +68,8 @@ export const TowerDefensePlayfield = (props: {
   guestNote?: ReactNode;
   /** Extra content at the bottom of the results, such as a link to the full game. */
   resultsFooter?: ReactNode;
+  /** The results' next step, shown as the primary button beside the leave button. */
+  resultsAction?: ReactNode;
   /** The host paused the game: the arena is taken down so nothing renders until it resumes. */
   suspended?: boolean;
 }) => {
@@ -262,6 +264,7 @@ export const TowerDefensePlayfield = (props: {
                 isOnlyInTab={isOnlyInTab}
                 guestNote={props.guestNote}
                 footer={props.resultsFooter}
+                action={props.resultsAction}
                 onRetry={run.retryClaim}
                 onLeave={leave}
               />
@@ -325,6 +328,7 @@ const Results = (props: {
   isOnlyInTab: boolean;
   guestNote?: ReactNode;
   footer?: ReactNode;
+  action?: ReactNode;
   onRetry: () => void;
   onLeave: () => void;
 }) => {
@@ -341,12 +345,16 @@ const Results = (props: {
         ) : (
           <>
             <h3 className="text-2xl font-bold">
-              {props.outcome.quit ? "Retreated" : "Defeated"} at wave{" "}
-              {props.outcome.wave}
+              {props.outcome.won
+                ? "Ground held"
+                : props.outcome.quit
+                  ? "Retreated"
+                  : "Defeated"}{" "}
+              at wave {props.outcome.wave}
             </h3>
             <p>
               {formatTdNumber(props.outcome.kills)} enemies defeated
-              {props.isGuest
+              {props.isGuest || props.outcome.challenge
                 ? ""
                 : ` · ${formatTdNumber(props.outcome.points)} scroll${props.outcome.points === 1 ? "" : "s"}`}
             </p>
@@ -360,7 +368,7 @@ const Results = (props: {
                 leaving or reloading loses it.
               </p>
             )}
-            <div className="flex justify-center gap-2">
+            <div className="flex flex-wrap justify-center gap-2">
               {canRetry && (
                 <Button variant="outline" onClick={props.onRetry}>
                   Retry claim
@@ -371,7 +379,13 @@ const Results = (props: {
                   Reload
                 </Button>
               )}
-              <Button onClick={props.onLeave}>Back to the Guard Hall</Button>
+              <Button
+                variant={props.action ? "outline" : "default"}
+                onClick={props.onLeave}
+              >
+                {props.outcome.challenge ? "Back" : "Back to the Guard Hall"}
+              </Button>
+              {props.action}
             </div>
             {props.footer}
           </>

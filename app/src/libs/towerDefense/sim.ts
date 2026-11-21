@@ -112,6 +112,19 @@ export interface TdRunConfig {
   /** The character's level when the run started; raises damage (`tdLevelDamageBonus`). */
   level: number;
   dojo: TdDojoLevels;
+  /** A quest challenge: the run is won once its last wave is cleared. */
+  challenge?: TdChallenge;
+}
+
+/**
+ * A fixed goal set by a quest objective. Enemy health and damage are percentages of a
+ * normal run's at the same wave.
+ */
+export interface TdChallenge {
+  /** Waves to clear, counting the start wave. */
+  waves: number;
+  enemyHealth: number;
+  enemyDamage: number;
 }
 
 export const TD_TARGET_MODES = ["near", "strong", "weak", "fast", "support"] as const;
@@ -323,7 +336,8 @@ export type TdEvent =
   | { type: "secondWind" }
   /** A ranged attack or boss barrage on its way to the hero; it lands at `due`. */
   | { type: "enemyShot"; sourceId: number; x: number; y: number; due: number }
-  | { type: "gameOver" };
+  | { type: "gameOver" }
+  | { type: "victory" };
 
 export const TD_BOSS_MOVES = [
   "slam",
@@ -354,6 +368,8 @@ export interface TdState {
   eras: TdEra[];
   over: boolean;
   quit: boolean;
+  /** The run cleared its challenge's last wave. */
+  won: boolean;
   hero: {
     x: number;
     y: number;
@@ -515,8 +531,19 @@ export const tdCanCallWave = (state: TdState) =>
   !state.offer &&
   (state.waveTick < 0 ||
     (state.waveTick >= 10 &&
+      !isFinalChallengeWave(state) &&
       state.spawnQueue.length === 0 &&
       state.enemies.length === 0));
+
+/** The last wave a challenge run must clear, or null for an endless run. */
+export const tdChallengeFinalWave = (config: TdRunConfig) =>
+  config.challenge ? config.startWave + config.challenge.waves - 1 : null;
+
+/** A challenge run sends no wave after its last one. */
+const isFinalChallengeWave = (state: TdState) => {
+  const finalWave = tdChallengeFinalWave(state.config);
+  return finalWave !== null && state.wave >= finalWave;
+};
 
 /** Scrolls a run ending now would pay out. */
 export const tdRunPoints = (state: TdState) => Math.floor(state.scrolls);
@@ -536,6 +563,7 @@ export const createRun = (config: TdRunConfig, recordEvents = false): TdState =>
     eras: ["calm"],
     over: false,
     quit: false,
+    won: false,
     hero: {
       x: 0,
       y: 0,
@@ -609,6 +637,9 @@ const shop = (state: TdState, id: TdShopItem) => state.shop[id] ?? 0;
 const computeStats = (state: TdState) => {
   const d = (id: TdDojoUpgrade) => dojoLevel(state.config, id);
   const eras = state.eras;
+  const challenge = state.config.challenge;
+  const challengeHealth = challenge ? challenge.enemyHealth / 100 : 1;
+  const challengeDamage = challenge ? challenge.enemyDamage / 100 : 1;
   const glass = powi(1.9, perk(state, "glass_cannon"));
   const damage =
     TD_HERO_BASE.damage *
@@ -685,7 +716,8 @@ const computeStats = (state: TdState) => {
         0.8 * perk(state, "greed")),
     interest: 0.005 * d("interest"),
     scrollMult: (1 + 0.01 * d("scrolls")) * (1 + 0.3 * perk(state, "greed")),
-    enemyHpMult: 1 + 0.25 * perk(state, "greed"),
+    enemyHpMult: (1 + 0.25 * perk(state, "greed")) * challengeHealth,
+    enemyDamageMult: challengeDamage,
     jutsuMult: 1 + 0.3 * perk(state, "jutsu_focus"),
     jutsuCdMult: (1 - 0.01 * d("jt_cd")) * powi(0.88, perk(state, "fast_seals")),
     sentryMult: powi(1.05, d("st_power")) * (1 + 0.4 * perk(state, "engineer")),
@@ -921,7 +953,12 @@ const spawnEnemy = (
       (arch.regen ?? 0) +
       (has("regenerating") ? 0.03 : 0) +
       (eras.includes("blood_moon") ? 0.015 : 0),
-    damage: arch.damage * tdReferenceDamage(wave) * (elite ? 1.5 : 1) * scale,
+    damage:
+      arch.damage *
+      tdReferenceDamage(wave) *
+      (elite ? 1.5 : 1) *
+      scale *
+      state.stats.enemyDamageMult,
     speed,
     attackTicks: Math.max(3, Math.floor(arch.attackEvery * TD_TPS)),
     attackReadyAt: 0,
@@ -1582,7 +1619,10 @@ const damageHero = (
   // health alone never makes the hero untouchable.
   if (source.enemy && (source.enemy.elite || source.enemy.boss))
     amount +=
-      state.stats.maxHp * tdPiercingShare(state.wave) * (source.enemy.boss ? 2 : 1);
+      state.stats.maxHp *
+      tdPiercingShare(state.wave) *
+      (source.enemy.boss ? 2 : 1) *
+      state.stats.enemyDamageMult;
   hero.hp -= amount;
   emit(state, { type: "heroHit" });
   if (source.enemy) {
@@ -2117,7 +2157,8 @@ export const stepRun = (state: TdState) => {
   state.tick += 1;
   state.waveTick += 1;
   const tick = state.tick;
-  if (state.waveTick >= TD_WAVE_TICKS) startWave_(state);
+  if (state.waveTick >= TD_WAVE_TICKS && !isFinalChallengeWave(state))
+    startWave_(state);
   spawnDue(state);
   heroUpkeep(state);
   updateVortices(state);
@@ -2135,6 +2176,19 @@ export const stepRun = (state: TdState) => {
   if (state.eras.includes("meteor_shower") && tick % 15 === 0) dropMeteor(state);
   cleanupDead(state);
   expireLoot(state);
+  // A hit landing this tick can fell the hero after the last enemy died; that run is lost.
+  if (
+    !state.over &&
+    isFinalChallengeWave(state) &&
+    state.waveTick >= 0 &&
+    state.spawnQueue.length === 0 &&
+    state.enemies.length === 0
+  ) {
+    state.over = true;
+    state.won = true;
+    emit(state, { type: "victory" });
+    return;
+  }
   if (state.focusId && !state.enemies.some((enemy) => enemy.id === state.focusId))
     state.focusId = 0;
   // Drafts open at the end of the tick that earned them, so an answer recorded on this

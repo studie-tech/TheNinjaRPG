@@ -496,6 +496,89 @@ describe("quest structure drafts", () => {
   });
 });
 
+const savedChallengeQuest = {
+  ...savedObjectiveQuest,
+  content: {
+    ...savedObjectiveQuest.content,
+    objectives: [
+      getObjectiveSchema("win_tower_defense").parse({
+        id: "challenge",
+        task: "win_tower_defense",
+        sector: 5,
+        longitude: 3,
+        latitude: 4,
+      }),
+    ],
+  },
+} as Quest;
+
+const ChallengeObjectiveForm = () => {
+  const { objectives, setObjectives, handleQuestSubmit } = useQuestEditForm(
+    savedChallengeQuest,
+    async () => undefined,
+  );
+  return (
+    <>
+      <ObjectiveFormWrapper
+        idx={0}
+        quest={savedChallengeQuest}
+        availableTags={["win_tower_defense"]}
+        hideTagType
+        objective={objectives[0]!}
+        objectives={objectives}
+        setObjectives={setObjectives}
+      />
+      <button type="button" onClick={() => void handleQuestSubmit()}>
+        Save objective
+      </button>
+    </>
+  );
+};
+
+describe("tower defense challenge objectives", () => {
+  it("lets content staff set the challenge's waves and enemy strength", async () => {
+    const view = render(<ChallengeObjectiveForm />);
+    for (const label of [
+      "Tower defense start wave",
+      "Waves to clear (counting the start wave)",
+      "Enemy health (% of a normal run)",
+      "Enemy damage (% of a normal run)",
+    ])
+      expect(view.getByText(label)).toBeTruthy();
+    const set = async (field: string, value: string) => {
+      const input = view.container.querySelector<HTMLInputElement>(
+        `[name="${field}"]`,
+      )!;
+      await act(async () => {
+        fireEvent.input(input, { target: { value } });
+      });
+      fireEvent.blur(input);
+    };
+    await set("startWave", "40");
+    await set("waves", "5");
+    await set("enemyHealth", "250");
+    await set("enemyDamage", "75");
+    fireEvent.click(view.getByRole("button", { name: "Save objective" }));
+    await waitFor(() => expect(saveQuest).toHaveBeenCalledTimes(1));
+    expect(saveQuest.mock.calls[0]?.[0]).toMatchObject({
+      data: {
+        content: {
+          objectives: [
+            {
+              task: "win_tower_defense",
+              startWave: 40,
+              waves: 5,
+              enemyHealth: 250,
+              enemyDamage: 75,
+              sector: 5,
+            },
+          ],
+        },
+      },
+    });
+  });
+});
+
 describe("reward node editing", () => {
   withRadixBrowserGlobals();
 

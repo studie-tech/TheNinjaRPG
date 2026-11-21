@@ -52,6 +52,26 @@ describe("getArrivalQuestTriggers", () => {
     expect(getArrivalQuestTriggers(empty, elsewhere).shouldCheckQuest).toBe(false);
   });
 
+  it("leaves tower defense challenges to their run's claim, except ambushes", () => {
+    const challenge = (extra: object = {}) =>
+      trackerUser(
+        [trackerQuest("q", [travel("td", { task: "win_tower_defense", ...extra })])],
+        [],
+        playing,
+      );
+    expect(getArrivalQuestTriggers(challenge(), here).shouldCheckQuest).toBe(false);
+    expect(
+      getArrivalQuestTriggers(challenge({ hideLocation: true }), elsewhere)
+        .shouldCheckQuest,
+    ).toBe(false);
+    expect(
+      getArrivalQuestTriggers(
+        challenge({ attackers: [{ ids: ["ai"], number: 5 }] }),
+        elsewhere,
+      ).shouldCheckQuest,
+    ).toBe(true);
+  });
+
   it("checks a running timed collection away from its tile only", () => {
     const collect = travel("collect", {
       task: "collect_item",

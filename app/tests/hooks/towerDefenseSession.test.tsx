@@ -43,7 +43,7 @@ describe("useTowerDefenseSession", () => {
     await act(async () => {
       await result.current.start(1);
     });
-    expect(backend.startRun).toHaveBeenCalledWith(1);
+    expect(backend.startRun).toHaveBeenCalledWith(1, undefined);
     expect(result.current.phase).toBe("playing");
     expect(readSavedRunHead(STORAGE_KEY)?.token).toBe("token-1");
 
