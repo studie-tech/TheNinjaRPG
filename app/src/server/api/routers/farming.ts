@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -16,7 +16,7 @@ import {
   FARM_WATER_EXPERIENCE,
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
-import { type Item, userData } from "@/drizzle/schema";
+import { type Item, userData, userItem } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getTotalItemQuantity } from "@/libs/crafting";
@@ -39,6 +39,7 @@ import {
   isPlotReady,
   mapPlotToState,
 } from "@/libs/farming";
+import { hasFortification } from "@/libs/fortify";
 import {
   countInventoryBucketSlots,
   countsTowardInventoryStorage,
@@ -1358,7 +1359,10 @@ const getAvailableFarmItemStacks = (
 ) =>
   userItems.filter(
     (stack) =>
-      stack.itemId === itemId && stack.quantity > 0 && isEquippableUserItem(stack, now),
+      stack.itemId === itemId &&
+      stack.quantity > 0 &&
+      !hasFortification(stack) &&
+      isEquippableUserItem(stack, now),
   );
 
 const consumeFarmItemQuantity = async (
@@ -1378,6 +1382,7 @@ const consumeFarmItemQuantity = async (
       userItemId: stack.id,
       expectedQuantity: stack.quantity,
       nextQuantity: stack.quantity - stackQuantity,
+      where: [isNull(userItem.fortification)],
     });
     if (!success) {
       await Promise.all(
@@ -1865,7 +1870,9 @@ const buildFarmState = async (
   const levelInfo = getFarmingLevelProgress(user.farmingExperience);
   const farmingLevel = levelInfo.level;
 
-  const eligibleItems = userItems.filter((ui) => isEquippableUserItem(ui, now));
+  const eligibleItems = userItems.filter(
+    (ui) => !hasFortification(ui) && isEquippableUserItem(ui, now),
+  );
 
   const availableSeedsByItemId = new Map<
     string,

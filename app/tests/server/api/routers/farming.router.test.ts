@@ -25,9 +25,10 @@ import { getFarmGrowTimeSeconds } from "@/libs/farming";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { itemRouter } from "@/server/api/routers/item";
 import { fetchActionUser } from "@/server/utils/profileDefinitions";
-import { DecreaseFarmingTime } from "@/validators/combat";
+import { DamageTag, DecreaseFarmingTime, ItemValidator } from "@/validators/combat";
 import { deferred } from "../../../setup/deferred";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import { validItemInput } from "../../../setup/items";
 import { queueEnergy } from "../../../setup/queues";
 import {
   beforeStatements,
@@ -1335,6 +1336,141 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       .from(userItem)
       .where(eq(userItem.itemId, "crop-1"));
     expect(crops.reduce((sum, row) => sum + row.quantity, 0)).toBe(1);
+  });
+
+  const prepareFortifiableSeed = async () => {
+    await farmer({ money: 20_000_000, level: 50, rank: "JONIN" });
+    const tag = DamageTag.parse({
+      power: 20,
+      fortifyId: "damage",
+      fortifyEnabled: true,
+    });
+    const fields = {
+      itemType: "WEAPON" as const,
+      canBeEnhanced: true,
+      effects: [tag],
+      isFarmSeed: true,
+      farmGrowTimeSeconds: 60,
+      farmYieldItemId: "crop-1",
+    };
+    expect(ItemValidator.safeParse(validItemInput(fields)).success).toBe(true);
+    const database = await getTestDatabase();
+    await database.update(item).set(fields).where(eq(item.id, "seed-1"));
+    await database.insert(farmPlot).values(
+      [0, 1].map((slotIndex) => ({
+        id: `fortify-plot-${slotIndex}`,
+        userId: "farm-user",
+        slotIndex,
+      })),
+    );
+    return database;
+  };
+
+  it.each(["single", "bulk"] as const)(
+    "%s planting spends only plain copies of a fortifiable seed",
+    async (mode) => {
+      const database = await prepareFortifiableSeed();
+      const fortification = { damage: { type: "damage", level: 1, failures: 0 } };
+      await insertUserItems([
+        { id: "a-fortified", userId: "farm-user", itemId: "seed-1", fortification },
+        { id: "b-plain", userId: "farm-user", itemId: "seed-1" },
+      ]);
+      const ordered = overrideQuery(database, "userItem", {
+        findMany: async (read, ...args) =>
+          (await read(...args)).sort((a, b) => a.id.localeCompare(b.id)),
+      });
+      const api = callerForDatabase(farmingRouter, "farm-user", ordered);
+      expect((await api.getFarmState()).availableSeeds).toMatchObject([
+        { itemId: "seed-1", quantity: 1 },
+      ]);
+      const result =
+        mode === "single"
+          ? await api.plantSeed({ plotId: "fortify-plot-0", seedItemId: "seed-1" })
+          : await api.plantAllEmpty({ seedItemId: "seed-1" });
+      expect(result.success, result.message).toBe(true);
+      expect(
+        await database.query.userItem.findFirst({
+          where: eq(userItem.id, "a-fortified"),
+        }),
+      ).toMatchObject({ quantity: 1, fortification });
+      expect(
+        (await database.query.userItem.findFirst({ where: eq(userItem.id, "b-plain") }))
+          ?.quantity ?? 0,
+      ).toBe(0);
+      expect(
+        (await database.query.farmPlot.findMany()).filter((plot) => plot.seedItemId),
+      ).toHaveLength(1);
+      expect(
+        (
+          await database.query.userData.findFirst({
+            where: eq(userData.userId, "farm-user"),
+          })
+        )?.money,
+      ).toBe(20_000_000);
+    },
+  );
+
+  it("refunds seeds and clears bulk plots when a later copy receives a paid upgrade before debit", async () => {
+    const database = await prepareFortifiableSeed();
+    await insertUserItems([
+      { id: "a-plain", userId: "farm-user", itemId: "seed-1" },
+      { id: "b-upgraded", userId: "farm-user", itemId: "seed-1" },
+    ]);
+    const fortifier = await callerFor(itemRouter, "farm-user");
+    const raced = overrideQuery(
+      beforeStatements(
+        database,
+        userItem,
+        [
+          () => {},
+          async () =>
+            expect(
+              (
+                await fortifier.fortify({
+                  userItemId: "b-upgraded",
+                  tagId: "damage",
+                  expectedLevel: 0,
+                  expectedFailures: 0,
+                })
+              ).success,
+            ).toBe(true),
+        ],
+        { operations: ["delete"] },
+      ),
+      "userItem",
+      {
+        findMany: async (read, ...args) =>
+          (await read(...args)).sort((a, b) => a.id.localeCompare(b.id)),
+      },
+    );
+    const result = await callerForDatabase(
+      farmingRouter,
+      "farm-user",
+      raced,
+    ).plantAllEmpty({ seedItemId: "seed-1" });
+    expect(result.success).toBe(false);
+    expect(result.message).toBe("Could not consume seeds — please try again");
+    expect(result.inventoryDeltas).toBeUndefined();
+    const rows = await database.query.userItem.findMany({ orderBy: userItem.id });
+    expect(rows).toHaveLength(2);
+    expect(rows).toMatchObject([
+      { id: "a-plain", quantity: 1, fortification: null },
+      {
+        id: "b-upgraded",
+        quantity: 1,
+        fortification: { damage: { level: 1, failures: 0 } },
+      },
+    ]);
+    expect(
+      (await database.query.farmPlot.findMany()).every(
+        (plot) => !plot.seedItemId && !plot.plantedAt && !plot.finishAt,
+      ),
+    ).toBe(true);
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, "farm-user"),
+      }),
+    ).toMatchObject({ money: 19_000_000, farmingExperience: 0 });
   });
 
   it("plants the first empty plots the seed stack covers when it cannot cover all", async () => {

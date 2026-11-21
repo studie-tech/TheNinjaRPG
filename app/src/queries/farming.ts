@@ -237,6 +237,7 @@ const spendFarmItemOnPlot = (
     plotWhere,
     eq(userItem.id, stack.id),
     eq(userItem.quantity, stack.quantity),
+    isNull(userItem.fortification),
     hasNoHuntingBattle(userId),
   )}
 `);

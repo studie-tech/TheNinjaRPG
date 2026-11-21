@@ -20,8 +20,10 @@ import {
   insertUsers,
   insertUserVotes,
 } from "../../../../setup/factories";
+import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -139,6 +141,44 @@ describeWithDatabase("Fortify guarded economy and ownership", () => {
     ).toBe(18_800_000);
     expect(fortifiedEffects(owned.item.effects, result.state)[0]?.power).toBe(21);
   });
+  it("restores merge claims when a candidate receives a paid upgrade after selection", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(item)
+      .set({ canStack: true, stackSize: 10 })
+      .where(eq(item.id, "sword"));
+    await insertUserItems([{ id: "a-plain", userId: "hero", itemId: "sword" }]);
+    const fortifier = await callerFor(itemRouter, "hero");
+    const raced = beforeStatements(
+      db,
+      userItem,
+      [
+        () => {},
+        async () => expect((await fortifier.fortify(input)).success).toBe(true),
+      ],
+      { when: (values) => "updatedAt" in values },
+    );
+    const result = await callerForDatabase(itemRouter, "hero", raced).mergeStacks({
+      itemId: "sword",
+    });
+    expect(result.success).toBe(false);
+    expect(result.inventoryChanges).toBeUndefined();
+    const rows = await db.query.userItem.findMany({ orderBy: userItem.id });
+    expect(rows).toMatchObject([
+      { id: "a-plain", quantity: 1, fortification: null },
+      {
+        id: "owned",
+        quantity: 1,
+        fortification: { damage: { level: 1, failures: 0 } },
+      },
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, "hero") }))
+        ?.money,
+    ).toBe(19_000_000);
+  });
+
   it("counts hidden child evolutions and leaves money untouched", async () => {
     await insertItems([
       { id: "child", name: "Hidden child", parentItemId: "sword", hidden: true },
