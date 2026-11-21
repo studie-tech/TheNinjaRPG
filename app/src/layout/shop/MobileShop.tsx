@@ -216,7 +216,6 @@ export const MobileShop: React.FC<ShopProps> = (props) => {
       defaultBackHref={props.defaultBackHref}
       initialBreak={props.initialBreak}
       padding={false}
-      stackTopRight
       topRightContent={
         <div className="flex flex-row flex-wrap items-center justify-end gap-2">
           {catalog?.headerExtra}
