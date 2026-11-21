@@ -34,6 +34,7 @@ import type { CompleteBattle } from "@/libs/combat/types";
 import {
   chargeAmbushLoss,
   claimLoot,
+  dispatchCaravan,
   insertCheckpointAmbush,
   insertGuard,
   listActiveSabotage,
@@ -261,6 +262,78 @@ describeWithDatabase("village Warehouse and caravans", () => {
         .rowsAffected,
     ).toBe(0);
     expect((await moveCargo(db, "leaf", [], dispatch)).rowsAffected).toBe(0);
+  });
+
+  it("dispatches a caravan only with every cargo line covered and its version unchanged", async () => {
+    const db = await getTestDatabase();
+    const cargo = [
+      { itemId: "ore", quantity: 80 },
+      { itemId: "silk", quantity: 10 },
+    ];
+    await db
+      .insert(caravan)
+      .values(
+        caravanRow({ status: "PREPARING", cargo, departedAt: null, arrivesAt: null }),
+      );
+    await db.insert(warehouseStock).values([
+      { villageId: "leaf", itemId: "ore", quantity: 100, reserved: 80 },
+      { villageId: "leaf", itemId: "silk", quantity: 50, reserved: 5 },
+      { villageId: "sand", itemId: "ore", quantity: 30, reserved: 0 },
+    ]);
+    const departedAt = new Date();
+    const arrivesAt = new Date(departedAt.getTime() + HOUR);
+    const read = async () => {
+      const [row] = await db.select().from(caravan);
+      if (!row) throw new Error("caravan missing");
+      return row;
+    };
+    const stockOf = async () =>
+      Object.fromEntries(
+        (await db.select().from(warehouseStock)).map((row) => [
+          `${row.villageId}:${row.itemId}`,
+          { quantity: row.quantity, reserved: row.reserved },
+        ]),
+      );
+    const before = await stockOf();
+    const prepared = await read();
+    // Silk holds less reservation than its line, so neither the caravan nor the ore moves.
+    expect(
+      (await dispatchCaravan(db, prepared, { departedAt, arrivesAt })).rowsAffected,
+    ).toBe(0);
+    expect((await read()).status).toBe("PREPARING");
+    expect(await stockOf()).toEqual(before);
+    await db
+      .update(warehouseStock)
+      .set({ reserved: 10 })
+      .where(eq(warehouseStock.itemId, "silk"));
+    // A caravan changed since it was read stays put.
+    expect(
+      (
+        await dispatchCaravan(
+          db,
+          { ...prepared, version: prepared.version + 1 },
+          { departedAt, arrivesAt },
+        )
+      ).rowsAffected,
+    ).toBe(0);
+    expect((await read()).status).toBe("PREPARING");
+    expect(
+      (await dispatchCaravan(db, prepared, { departedAt, arrivesAt })).rowsAffected,
+    ).toBe(1 + cargo.length);
+    const departed = await read();
+    expect(departed.status).toBe("TRAVELLING");
+    expect(departed.version).toBe(prepared.version + 1);
+    expect(departed.departedAt?.getTime()).toBe(departedAt.getTime());
+    expect(departed.arrivesAt?.getTime()).toBe(arrivesAt.getTime());
+    expect(await stockOf()).toEqual({
+      "leaf:ore": { quantity: 20, reserved: 0 },
+      "leaf:silk": { quantity: 40, reserved: 0 },
+      "sand:ore": { quantity: 30, reserved: 0 },
+    });
+    // The caravan departs once.
+    expect(
+      (await dispatchCaravan(db, prepared, { departedAt, arrivesAt })).rowsAffected,
+    ).toBe(0);
   });
 
   it("credits several stock lines at once, creating missing rows", async () => {

@@ -324,6 +324,47 @@ export const transitionCaravan = (
     );
 
 /**
+ * Send a prepared caravan on its way with its cargo in one statement, as the `DISPATCH`
+ * cargo move, for cargo lines naming distinct items. Each line joins its own stock row only
+ * while that row covers the line's reservation, so a short line or a caravan changed since
+ * it was read changes nothing; a departure changes the caravan and one row per line.
+ */
+export const dispatchCaravan = (
+  client: Pick<DrizzleClient, "execute">,
+  current: Pick<Caravan, "id" | "version" | "originVillageId" | "cargo">,
+  schedule: { departedAt: Date; arrivesAt: Date },
+) => {
+  const lines = current.cargo.map((line, index) => ({
+    ...line,
+    stock: alias(warehouseStock, `line${index}`),
+  }));
+  return client.execute(sql`
+    UPDATE ${caravan}
+    ${sql.join(
+      lines.map(
+        ({ stock, itemId, quantity }) => sql`INNER JOIN ${warehouseStock} AS ${stock}
+      ON ${stock.villageId} = ${current.originVillageId} AND ${stock.itemId} = ${itemId}
+      AND ${stock.reserved} >= ${quantity} AND ${stock.quantity} >= ${stock.reserved}`,
+      ),
+      sql` `,
+    )}
+    SET ${caravan.status} = 'TRAVELLING', ${caravan.version} = ${current.version + 1},
+        ${caravan.departedAt} = ${sql.param(schedule.departedAt, caravan.departedAt)},
+        ${caravan.arrivesAt} = ${sql.param(schedule.arrivesAt, caravan.arrivesAt)}
+        ${sql.join(
+          lines.map(
+            ({ stock, quantity }) =>
+              sql`, ${stock.quantity} = ${stock.quantity} - ${quantity}, ${stock.reserved} = ${stock.reserved} - ${quantity}`,
+          ),
+          sql``,
+        )}
+    WHERE ${caravan.id} = ${current.id}
+      AND ${caravan.version} = ${current.version}
+      AND ${caravan.status} = 'PREPARING'
+  `);
+};
+
+/**
  * Record that a travelling caravan's checkpoints were processed, only while it keeps the
  * schedule they were counted on: a delay landed meanwhile moves them, and a later run
  * counts them again.

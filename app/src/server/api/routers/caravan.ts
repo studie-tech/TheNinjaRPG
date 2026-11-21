@@ -31,6 +31,7 @@ import { findWarehouse, isWarehouseStorable } from "@/libs/warehouse";
 import {
   checkInGuard,
   deleteGuard,
+  dispatchCaravan,
   insertCaravanWithinCapacity,
   insertGuard,
   listActiveSabotage,
@@ -45,7 +46,6 @@ import {
   moveCargo,
   queueGuard,
   resolveOperation,
-  transitionCaravan,
   wakeReleasedGuards,
 } from "@/queries/caravan";
 import { fetchUser } from "@/queries/profile";
@@ -439,38 +439,20 @@ export const caravanRouter = createTRPCRouter({
       const now = new Date();
       const travelMinutes = getRouteTravelMinutes(route.level);
       const arrivesAt = secondsFromDate(travelMinutes * MINUTE_S, now);
-      const conflict = new WarehouseConflict(
-        "The caravan or its reserved stock changed. Refresh and try again",
-      );
-      try {
-        // Departure removes every reserved cargo line from stock; the transaction keeps the
-        // caravan from leaving without its cargo or the cargo leaving without the caravan.
-        await retryOnDeadlock(() =>
-          ctx.drizzle.transaction(async (tx) => {
-            const claimed = await transitionCaravan(tx, row, {
-              status: "TRAVELLING",
-              departedAt: now,
-              arrivesAt,
-            });
-            if (claimed.rowsAffected !== 1) throw conflict;
-            const loaded = await moveCargo(
-              tx,
-              row.originVillageId,
-              row.cargo,
-              CARGO_MOVES.DISPATCH,
-            );
-            if (loaded.rowsAffected !== row.cargo.length) throw conflict;
-            await insertWarehouseLogs(
-              tx,
-              cargoLogs(row.originVillageId, "DISPATCH", row.cargo, user.userId),
-              now,
-            );
-          }),
+      const departed = await dispatchCaravan(ctx.drizzle, row, {
+        departedAt: now,
+        arrivesAt,
+      });
+      if (departed.rowsAffected !== 1 + row.cargo.length)
+        return errorResponse(
+          "The caravan or its reserved stock changed. Refresh and try again",
         );
-      } catch (error) {
-        if (error instanceof WarehouseConflict) return errorResponse(error.message);
-        throw error;
-      }
+      // History follows the departure: a failure here costs only a log row support can add.
+      await insertWarehouseLogs(
+        ctx.drizzle,
+        cargoLogs(row.originVillageId, "DISPATCH", row.cargo, user.userId),
+        now,
+      );
       notifyPlayers(
         ctx.drizzle,
         activeGuards(participants).map((p) => p.userId),
