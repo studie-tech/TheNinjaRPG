@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
+  IMG_AVATAR_DEFAULT,
   VILLAGE_DUTY_MAX_PATROLS,
   VILLAGE_DUTY_SLOTS_PER_LEVEL,
 } from "@/drizzle/constants";
@@ -1212,6 +1213,63 @@ describeWithDatabase("village duty hourly patrol", () => {
       });
       expect(await db.query.battle.findMany()).toEqual([]);
       expect(await db.query.battleHistory.findMany()).toEqual([]);
+    },
+  );
+
+  it.each([
+    ["skips", "a member", "protector", false],
+    ["reads", "a visible visitor", "visitor", true],
+  ])(
+    "%s the guarded village for a step by %s",
+    async (_verb, _label, userId, readsVillage) => {
+      const db = await getTestDatabase();
+      vi.spyOn(sectorMaps, "fetchPublishedSectorMaps").mockResolvedValue(
+        new Map([[123, villageMap()]]),
+      );
+      vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+      await db
+        .insert(village)
+        .values({ id: "visitors", name: "Visitors", sector: 456, kageId: "visitor" });
+      await insertUsers([
+        {
+          userId: "visitor",
+          username: "Visitor",
+          villageId: "visitors",
+          sector: 123,
+          longitude: 5,
+          latitude: 5,
+          location: "Village",
+          status: "AWAKE",
+        },
+      ]);
+      await db
+        .update(userData)
+        .set({ longitude: 5, latitude: 5 })
+        .where(eq(userData.userId, "protector"));
+      const user = (await db.query.userData.findFirst({
+        where: eq(userData.userId, userId),
+      }))!;
+      const { result, statements } = await recordQueries(() =>
+        callerForDatabase(travelRouter, userId, db).moveInSector({
+          curLongitude: 5,
+          curLatitude: 5,
+          longitude: 6,
+          latitude: 5,
+          sector: 123,
+          villageId: user.villageId,
+          level: user.level,
+          avatar: IMG_AVATAR_DEFAULT,
+          avatarLight: IMG_AVATAR_DEFAULT,
+          username: user.username,
+        }),
+      );
+      expect(result.success, result.message).toBe(true);
+      expect(result.data).toMatchObject({ longitude: 6, location: "Village" });
+      expect(
+        statements.some((statement) =>
+          /from `Village` `village` where `village`.`sector`/i.test(statement),
+        ),
+      ).toBe(readsVillage);
     },
   );
 });

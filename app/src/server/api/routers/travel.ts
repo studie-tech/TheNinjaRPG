@@ -84,11 +84,11 @@ import { questRevisionRelation } from "@/queries/questRevisions";
 import { fetchIsolatedPyramid } from "@/queries/quests";
 import {
   fetchSectorWindowData,
+  findSectorVillage,
   findUserDataForCreatorBody,
   findUserDataForGetSectorData,
   findUserDataForGetSectorUsers,
   findUserForGlobalTravelFinish,
-  findVillageForMoveInSector,
   insertActionLogForRobPlayer,
   listQuestHistoryForGetSectorData,
   listQuestHistoryForGetSectorData2,
@@ -130,6 +130,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { structureDefinitions } from "@/server/utils/profileDefinitions";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { withQuestDefinitions } from "@/server/utils/questRevisions";
 import {
@@ -421,10 +422,14 @@ export const travelRouter = createTRPCRouter({
         [users, villageData, sectorData, placements, loadedDutyUsers],
         userQuests,
       ] = await Promise.all([
-        // Crossings can leave a stale query key. Never return another sector's data.
-        user.sector === input.sector
-          ? sectorWindowData
-          : fetchSectorWindowData(ctx.drizzle, ctx.userId, user.sector),
+        withSectorVillageDefinitions(
+          ctx.drizzle,
+          user.sector,
+          // Crossings can leave a stale query key. Never return another sector's data.
+          user.sector === input.sector
+            ? sectorWindowData
+            : fetchSectorWindowData(ctx.drizzle, ctx.userId, user.sector),
+        ),
         withSectorQuestDefinitions(ctx.drizzle, ctx, userQuestRevisions),
       ]);
 
@@ -1129,6 +1134,11 @@ export const travelRouter = createTRPCRouter({
       }
       const isVillage = calcIsInVillage(destination, targetMap);
       const location = isVillage ? "Village" : "";
+      // Only a visible visitor of another village can meet its protectors.
+      const isVillageVisitor =
+        isVillage &&
+        targetSector !== moveUser.village?.sector &&
+        !isUserCurrentlyStealthed(moveUser);
       // Optimistic update & query simultaneously
       const moveOutcome = await Promise.all([
         updateUserDataForMoveInSector(
@@ -1144,22 +1154,12 @@ export const travelRouter = createTRPCRouter({
           villageId,
           readiness,
         ),
-        isVillage ? findVillageForMoveInSector(ctx.drizzle, targetSector) : undefined,
-        isVillage &&
-        targetSector !== moveUser.village?.sector &&
-        !isUserCurrentlyStealthed(moveUser)
-          ? listVillageDutyRoster(ctx.drizzle, targetSector)
-          : [],
-        isVillage &&
-        targetSector !== moveUser.village?.sector &&
-        !isUserCurrentlyStealthed(moveUser)
+        isVillageVisitor ? findSectorVillage(ctx.drizzle, targetSector) : undefined,
+        isVillageVisitor ? listVillageDutyRoster(ctx.drizzle, targetSector) : [],
+        isVillageVisitor
           ? listVillageDutyVisitors(ctx.drizzle, targetSector, new Date())
           : [],
-        isVillage &&
-        targetSector !== moveUser.village?.sector &&
-        !isUserCurrentlyStealthed(moveUser)
-          ? fetchActiveWars(ctx.drizzle)
-          : [],
+        isVillageVisitor ? fetchActiveWars(ctx.drizzle) : [],
       ]).catch((error: unknown) => {
         // The CAS guard makes a blind retry unsafe: a re-issue after the first
         // attempt already applied would match zero rows. Degrade to an ordinary
@@ -1175,12 +1175,7 @@ export const travelRouter = createTRPCRouter({
       // Check if move was successful
       if (result.rowsAffected === 1) {
         // A committed village move advances the same finite patrol used by idle travel checks.
-        if (
-          isVillage &&
-          sectorVillage &&
-          user.villageId !== sectorVillage.id &&
-          !isUserCurrentlyStealthed(user)
-        ) {
+        if (sectorVillage && user.villageId !== sectorVillage.id) {
           const encounter = await prepareVillageDutyEncounter({
             client: ctx.drizzle,
             userId: ctx.userId,
@@ -1317,8 +1312,33 @@ const withSectorQuestDefinitions = async (
   (await withQuestDefinitions(client, revisions)) ??
   listQuestHistoryForGetSectorData(client, ctx, true);
 
+/**
+ * Resolve the sector village's structure revisions to their definitions; a concurrent
+ * edit repeats the village read with the structures joined.
+ */
+const withSectorVillageDefinitions = async (
+  client: DrizzleClient,
+  sector: number,
+  sectorWindow: SectorWindowData | Promise<SectorWindowData>,
+) => {
+  const [users, revisionVillage, ...rest] = await sectorWindow;
+  const resolve =
+    revisionVillage &&
+    (await structureDefinitions.hydrate(client, revisionVillage.structures));
+  const village: SectorVillageRow | undefined = !revisionVillage
+    ? undefined
+    : resolve
+      ? { ...revisionVillage, structures: revisionVillage.structures.map(resolve) }
+      : await findSectorVillage(client, sector);
+  return [users, village, ...rest] as const;
+};
+
 /** Raw sector participant data before viewer-specific masking and sprite projection. */
-type SectorUserRow = Awaited<ReturnType<typeof fetchSectorWindowData>>[0][number];
+type SectorWindowData = Awaited<ReturnType<typeof fetchSectorWindowData>>;
+type SectorUserRow = SectorWindowData[0][number];
+
+/** A sector village with whole structure rows. */
+type SectorVillageRow = NonNullable<Awaited<ReturnType<typeof findSectorVillage>>>;
 
 /**
  * Present other players to one viewer: drop finished fights and stealthed players, then

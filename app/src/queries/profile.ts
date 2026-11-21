@@ -2098,6 +2098,14 @@ const definitionIdColumn = { id: true } as const;
 const itemRevisionSql = revisionSql(item);
 const structureRevisionSql = revisionSql(villageStructure);
 
+/** The structure relation of a village read that resolves definitions by revision. */
+export const structureRevisionRelation = {
+  columns: definitionIdColumn,
+  extras: (table: (typeof villageStructure)["_"]["columns"]) => ({
+    revision: structureRevisionSql(table).as("revision"),
+  }),
+};
+
 /** The relations `fetchProfileUser` hydrates from cached definitions. */
 const definitionRevisions = {
   quest: questRevisionRelation,
@@ -2107,12 +2115,7 @@ const definitionRevisions = {
       revision: itemRevisionSql(table).as("revision"),
     }),
   },
-  structure: {
-    columns: definitionIdColumn,
-    extras: (table: (typeof villageStructure)["_"]["columns"]) => ({
-      revision: structureRevisionSql(table).as("revision"),
-    }),
-  },
+  structure: structureRevisionRelation,
 };
 const joinedDefinitions = { quest: true, item: true, structure: true } as const;
 
@@ -2159,7 +2162,7 @@ const outerColumn = (column: AnyMySqlColumn) =>
 const parseJsonColumn = <Value>(value: unknown) =>
   (typeof value === "string" ? JSON.parse(value) : value) as Value;
 
-/** Build the `villageStructure` selection of complete rows and their revisions for `fetchProfileUser`. */
+/** Build the `villageStructure` selection of complete rows and their revisions for `structureDefinitions`. */
 export const selectStructureDefinitions = (
   client: Pick<DrizzleClient, "select">,
   structureIds: string[],
