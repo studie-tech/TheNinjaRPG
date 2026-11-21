@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
+  DURABILITY_MAX_DEFAULT,
+  MATERIALS_BASE_SLOTS,
   VILLAGE_SYNDICATE_ID,
   WAREHOUSE_ANBU_DAILY_ALLOWANCE,
   WAREHOUSE_APPROVED_DAILY_ALLOWANCE,
@@ -11,9 +13,10 @@ import {
   WAREHOUSE_PRODUCTION_MAX_CYCLES,
   WAREHOUSE_UPGRADE_COST,
 } from "@/drizzle/constants";
-import type { WarehouseMember } from "@/drizzle/schema";
+import type { UserData, WarehouseMember } from "@/drizzle/schema";
 import {
   canProduceItem,
+  getBackpackBlock,
   getCycleQuantity,
   getDepositAvailableAt,
   getDepositCredit,
@@ -183,5 +186,66 @@ describe("Warehouse construction cost", () => {
     expect(calcStructureUpgrade({ ...structure, level: 4 }, village).total).toBe(
       WAREHOUSE_UPGRADE_COST,
     );
+  });
+});
+
+describe("backpack room for granted goods", () => {
+  const user = {
+    staffAccount: false,
+    federalStatus: "NONE",
+    extraItemSlots: 0,
+  } as UserData;
+  const ore = { id: "ore", itemType: "MATERIAL" as const, isEventItem: false };
+  const stack = (id: string, itemId: string, quantity: number, over = {}) => ({
+    id,
+    itemId,
+    quantity,
+    equipped: "NONE" as const,
+    storedAtHome: false,
+    isInAuction: false,
+    craftingFinishedAt: null,
+    activeVariantId: null,
+    level: 1,
+    durability: DURABILITY_MAX_DEFAULT,
+    imbuements: [],
+    item: { itemType: "MATERIAL" as const, canStack: true, stackSize: 100 },
+    ...over,
+  });
+  // A full materials bag: one ore stack with room for 30 and fillers for every other slot.
+  const full = [
+    stack("ore-stack", "ore", 70),
+    ...Array.from({ length: MATERIALS_BASE_SLOTS - 1 }, (_, index) =>
+      stack(`filler-${index}`, "wood", 100),
+    ),
+  ];
+
+  it("takes goods into a bag with free slots", () => {
+    expect(getBackpackBlock(user, full.slice(1), [{ item: ore, quantity: 500 }])).toBe(
+      undefined,
+    );
+  });
+
+  it("takes goods into a full bag only when the stacks they top up hold all of them", () => {
+    expect(getBackpackBlock(user, full, [{ item: ore, quantity: 30 }])).toBe(undefined);
+    expect(getBackpackBlock(user, full, [{ item: ore, quantity: 31 }])).toBe(
+      "Materials inventory is full",
+    );
+    // Repeated lines of one item add up against the same room.
+    expect(
+      getBackpackBlock(user, full, [
+        { item: ore, quantity: 20 },
+        { item: ore, quantity: 11 },
+      ]),
+    ).toBe("Materials inventory is full");
+  });
+
+  it("tops up only the stacks a grant may join", () => {
+    const locked = [
+      stack("ore-stack", "ore", 70, { isInAuction: true }),
+      ...full.slice(1),
+    ];
+    expect(getBackpackBlock(user, locked, [{ item: ore, quantity: 1 }])).toBeDefined();
+    const worn = [stack("ore-stack", "ore", 70, { durability: 1 }), ...full.slice(1)];
+    expect(getBackpackBlock(user, worn, [{ item: ore, quantity: 1 }])).toBeDefined();
   });
 });

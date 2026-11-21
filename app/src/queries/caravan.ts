@@ -549,8 +549,8 @@ export const awardLoot = (
         );
 
 /**
- * Claim a robber's loot once, only while it still holds what the caller read and delivers
- * in the same transaction; loot a later robbery appended stays claimable.
+ * Claim a robber's loot once, only while it still holds what the caller read and is about
+ * to deliver; loot a later robbery appended stays claimable.
  */
 export const claimLoot = (
   client: Pick<DrizzleClient, "update">,

@@ -23,7 +23,16 @@ import type {
   WarehouseDepositLedger,
   WarehouseMember,
 } from "@/drizzle/schema";
-import { isCarriedUserItem } from "@/libs/item";
+import {
+  countInventoryBucketSlots,
+  getInventoryBucket,
+  getInventoryBucketCapacity,
+  getInventoryBucketFullMessage,
+  getJoinableStackRoom,
+  type InventorySlotRow,
+  isCarriedUserItem,
+} from "@/libs/item";
+import { countHeldInventorySlots } from "@/libs/itemsPage";
 import { getVillageLoyaltyDays } from "@/libs/villageLoyalty";
 import { isFactionVillage } from "@/libs/war";
 import { getUtcDayKey, HOUR_S, secondsFromDate } from "@/utils/time";
@@ -222,6 +231,38 @@ export const getWithdrawalAllowance = (
   };
 };
 
+/**
+ * Why the backpack cannot take granted goods, judged from the inventory read for the grant:
+ * a full inventory bucket takes an item only when the stacks it may top up hold all of it.
+ */
+export const getBackpackBlock = (
+  user: UserData,
+  inventory: (InventorySlotRow & Pick<UserItem, "durability">)[],
+  grants: { item: BackpackItem; quantity: number }[],
+  now = new Date(),
+) => {
+  const totals = new Map<string, { item: BackpackItem; quantity: number }>();
+  for (const { item, quantity } of grants) {
+    const total = totals.get(item.id)?.quantity ?? 0;
+    totals.set(item.id, { item, quantity: total + quantity });
+  }
+  for (const { item, quantity } of totals.values()) {
+    const bucket = getInventoryBucket(item);
+    const isFull =
+      countInventoryBucketSlots(inventory, bucket, now) >=
+      getInventoryBucketCapacity(bucket, user);
+    if (isFull && getJoinableStackRoom(inventory, item.id, now) < quantity)
+      return getInventoryBucketFullMessage(
+        bucket,
+        countHeldInventorySlots(inventory, bucket, now),
+      );
+  }
+  return undefined;
+};
+
 /** A Warehouse bonus in percent, to one decimal, for its per-level rate. */
 const getLevelBonus = (perLevel: number, level: number, raidMultiplier: number) =>
   Math.round(Math.max(0, level) * perLevel * raidMultiplier * 10) / 10;
+
+/** An item a grant adds to the backpack, with the fields that choose its bucket. */
+type BackpackItem = { id: string } & Parameters<typeof getInventoryBucket>[0];

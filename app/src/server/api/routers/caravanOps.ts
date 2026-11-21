@@ -28,13 +28,7 @@ import {
   getStealthChance,
   rollChance,
 } from "@/libs/caravan";
-import {
-  countInventoryBucketSlots,
-  getInventoryBucket,
-  getInventoryBucketCapacity,
-  getInventoryBucketFullMessage,
-} from "@/libs/item";
-import { countHeldInventorySlots } from "@/libs/itemsPage";
+import { getBackpackBlock } from "@/libs/warehouse";
 import {
   claimLoot,
   claimOperatorReadiness,
@@ -78,8 +72,7 @@ import {
   selectQueuedGuards,
 } from "@/server/utils/caravanBattle";
 import { grantUserItems } from "@/server/utils/itemGrants";
-import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { WarehouseConflict } from "@/server/utils/warehouse";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { groupBy } from "@/utils/grouping";
 import { MINUTE_S, secondsFromDate } from "@/utils/time";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -688,45 +681,27 @@ export const caravanOpsRouter = createTRPCRouter({
         ctx.drizzle,
         loot.map((line) => line.itemId),
       );
-      const full = items.find((item) => {
-        const bucket = getInventoryBucket(item);
-        return (
-          countInventoryBucketSlots(inventory, bucket) >=
-          getInventoryBucketCapacity(bucket, user)
-        );
-      });
-      const fullBackpack = new WarehouseConflict(
-        full
-          ? getInventoryBucketFullMessage(
-              getInventoryBucket(full),
-              countHeldInventorySlots(inventory, getInventoryBucket(full)),
-            )
-          : "Your backpack is full",
+      const fullBackpack = getBackpackBlock(
+        user,
+        inventory,
+        loot.flatMap((line) => {
+          const item = items.find((entry) => entry.id === line.itemId);
+          return item ? [{ item, quantity: line.quantity }] : [];
+        }),
       );
-      try {
-        // The one-time claim and the backpack stacks it fills are separate rows; rolling
-        // both back keeps the loot claimable when the backpack has no room.
-        await retryOnDeadlock(() =>
-          ctx.drizzle.transaction(async (tx) => {
-            const claimed = await claimLoot(
-              tx,
-              row.caravanId,
-              ctx.userId,
-              loot,
-              new Date(),
-            );
-            if (claimed.rowsAffected !== 1)
-              throw new WarehouseConflict("Already claimed");
-            const { unstacked } = await grantUserItems(tx, ctx.userId, loot, {
-              topUpOnly: !!full,
-            });
-            if (full && unstacked.length > 0) throw fullBackpack;
-          }),
-        );
-      } catch (error) {
-        if (error instanceof WarehouseConflict) return errorResponse(error.message);
-        throw error;
-      }
+      if (fullBackpack) return errorResponse(fullBackpack);
+      // The one-time claim precedes delivery, so a retry or race never delivers twice. A
+      // backpack the player filled since the check above takes the goods on a new stack
+      // past its capacity, which they can clear.
+      const claimed = await claimLoot(
+        ctx.drizzle,
+        row.caravanId,
+        ctx.userId,
+        loot,
+        new Date(),
+      );
+      if (claimed.rowsAffected !== 1) return errorResponse("Already claimed");
+      await grantUserItems(ctx.drizzle, ctx.userId, loot);
       return { success: true, message: "You claimed the stolen goods" };
     }),
   assaultMarker: protectedProcedure

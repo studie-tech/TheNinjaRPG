@@ -16,18 +16,12 @@ import {
   WAREHOUSE_MIN_DEPOSIT,
 } from "@/drizzle/constants";
 import { type UserData, userItem, type Village } from "@/drizzle/schema";
-import {
-  countInventoryBucketSlots,
-  getInventoryBucket,
-  getInventoryBucketCapacity,
-  getInventoryBucketFullMessage,
-  isCarriedUserItem,
-} from "@/libs/item";
-import { countHeldInventorySlots } from "@/libs/itemsPage";
+import { isCarriedUserItem } from "@/libs/item";
 import { isFactionVillage } from "@/libs/war";
 import {
   canProduceItem,
   findWarehouse,
+  getBackpackBlock,
   getCycleQuantity,
   getDepositAvailableAt,
   getDepositBonus,
@@ -271,13 +265,13 @@ export const warehouseRouter = createTRPCRouter({
         type: "DEPOSIT" as const,
         quantity: credit.credited,
       };
+      if (!ledger) await ensureDepositLedger(ctx.drizzle, ctx.userId, stack.itemId);
       try {
-        // Consuming the stack (an update or a delete), claiming the per-item cooldown and
-        // crediting shared stock touch three rows that no single guarded statement can
-        // write together; the transaction keeps the donation from vanishing or doubling.
+        // Consuming the stack may delete it, which no UPDATE can join, and the credit is an
+        // upsert of a stock row that may be missing; committing both with the cooldown claim
+        // keeps the donation from vanishing or doubling.
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
-            await ensureDepositLedger(tx, ctx.userId, stack.itemId);
             const claimed = await claimDepositLedger(tx, {
               userId: ctx.userId,
               itemId: stack.itemId,
@@ -378,19 +372,34 @@ export const warehouseRouter = createTRPCRouter({
         return errorResponse(
           `You can withdraw ${allowance.remaining} more units today (UTC)`,
         );
-      const bucket = getInventoryBucket(info);
-      const topUpOnly =
-        countInventoryBucketSlots(inventory, bucket) >=
-        getInventoryBucketCapacity(bucket, user);
-      const fullBackpack = new WarehouseConflict(
-        getInventoryBucketFullMessage(
-          bucket,
-          countHeldInventorySlots(inventory, bucket),
-        ),
+      const fullBackpack = getBackpackBlock(
+        user,
+        inventory,
+        [{ item: info, quantity: input.quantity }],
+        now,
       );
-      const conflict = new WarehouseConflict(
-        "Not enough unreserved stock, or your allowance changed. Refresh and try again",
-      );
+      if (fullBackpack) return errorResponse(fullBackpack);
+      if (member?.allowanceDay !== allowance.day)
+        await startWarehouseAllowanceDay(ctx.drizzle, ctx.userId, allowance.day);
+      // One guarded statement takes the stock and charges the allowance before delivery, so
+      // a retry or race never delivers twice. A backpack the player filled since the check
+      // above takes the goods on a new stack past its capacity, which they can clear.
+      const claimed = await claimWithdrawal(ctx.drizzle, {
+        villageId: villageData.id,
+        itemId: input.itemId,
+        userId: ctx.userId,
+        quantity: input.quantity,
+        day: allowance.day,
+        allowance: allowance.total,
+        approvedAt: allowance.approved ? (member?.approvedAt ?? null) : null,
+      });
+      if (claimed.rowsAffected === 0)
+        return errorResponse(
+          "Not enough unreserved stock, or your allowance changed. Refresh and try again",
+        );
+      const { stacks } = await grantUserItems(ctx.drizzle, ctx.userId, [
+        { itemId: input.itemId, quantity: input.quantity },
+      ]);
       const log = {
         id: nanoid(),
         villageId: villageData.id,
@@ -399,40 +408,10 @@ export const warehouseRouter = createTRPCRouter({
         type: "WITHDRAW" as const,
         quantity: input.quantity,
       };
-      let stacks: Awaited<ReturnType<typeof grantUserItems>>["stacks"] = [];
-      try {
-        // Taking stock and charging the allowance is one guarded update, but delivering it
-        // inserts or tops up backpack stacks; the transaction undoes the claim when the
-        // backpack has no room, so stock never leaves the Warehouse without arriving.
-        await retryOnDeadlock(() =>
-          ctx.drizzle.transaction(async (tx) => {
-            await startWarehouseAllowanceDay(tx, ctx.userId, allowance.day);
-            const claimed = await claimWithdrawal(tx, {
-              villageId: villageData.id,
-              itemId: input.itemId,
-              userId: ctx.userId,
-              quantity: input.quantity,
-              day: allowance.day,
-              allowance: allowance.total,
-              approvedAt: allowance.approved ? (member?.approvedAt ?? null) : null,
-            });
-            if (claimed.rowsAffected === 0) throw conflict;
-            const granted = await grantUserItems(
-              tx,
-              ctx.userId,
-              [{ itemId: input.itemId, quantity: input.quantity }],
-              { topUpOnly },
-            );
-            if (topUpOnly && granted.unstacked.length > 0) throw fullBackpack;
-            await addWithdrawnUnits(tx, ctx.userId, input.itemId, input.quantity);
-            await insertWarehouseLogs(tx, [log], now);
-            stacks = granted.stacks;
-          }),
-        );
-      } catch (error) {
-        if (error instanceof WarehouseConflict) return errorResponse(error.message);
-        throw error;
-      }
+      await Promise.all([
+        addWithdrawnUnits(ctx.drizzle, ctx.userId, input.itemId, input.quantity),
+        insertWarehouseLogs(ctx.drizzle, [log], now),
+      ]);
       // Filled stacks change their snapshot time in SQL, so the inventory reloads.
       return {
         success: true,
