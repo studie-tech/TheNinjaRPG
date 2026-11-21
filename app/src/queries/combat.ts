@@ -115,7 +115,7 @@ import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import {
-  leaveCombatStatusSql,
+  leaveCombatStatus,
   withoutCaravanEscort,
   withoutDungeonReservation,
   withoutQueuedEscort,
@@ -2040,7 +2040,7 @@ export const updateUserDataForFinishBattle = (
       stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
       ...(sendToHospital
         ? hospitalPlacement(newBattle, teammate)
-        : { status: leaveCombatStatusSql() }),
+        : { status: leaveCombatStatus(newBattle.battleType) }),
     })
     .where(
       and(eq(userData.userId, teammate.userId), eq(userData.battleId, newBattle.id)),
@@ -2738,7 +2738,7 @@ export const updateUserDataForUpdateUser2 = (
               ? { immunityUntil: sql`NOW() + INTERVAL 1 MINUTE` }
               : {}),
           }
-        : { status: isIsolated ? "BATTLE" : leaveCombatStatusSql() }),
+        : { status: isIsolated ? "BATTLE" : leaveCombatStatus(curBattle.battleType) }),
       // Deactivate stealth and set cooldown after leaving combat (20 seconds)
       stealthActive: false,
       stealthActivatedAt: null,
