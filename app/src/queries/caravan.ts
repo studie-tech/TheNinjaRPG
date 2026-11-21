@@ -1191,7 +1191,10 @@ export const insertCaravanWithinCapacity = (
     WHERE (SELECT COUNT(*) FROM ${caravan} AS sent WHERE sent.originVillageId = ${values.originVillageId} AND sent.status IN ('PREPARING', 'TRAVELLING')) < ${capacity}
   `);
 
-/** Moves of a renamed character's caravan sides, reservations and operations to the new id. */
+/**
+ * Moves of a renamed character's caravan sides, reservations, operations and the
+ * interceptions they lead to the new id.
+ */
 export const renameCaravanUser = (
   client: Pick<DrizzleClient, "update">,
   input: { newUserId: string; userId: string },
@@ -1217,6 +1220,10 @@ export const renameCaravanUser = (
         activeUserId: moveActive(caravanOperation.activeUserId),
       })
       .where(eq(caravanOperation.userId, input.userId)),
+    client
+      .update(caravanEncounter)
+      .set({ leaderId: input.newUserId })
+      .where(eq(caravanEncounter.leaderId, input.userId)),
   ];
 };
 

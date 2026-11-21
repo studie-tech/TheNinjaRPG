@@ -42,6 +42,7 @@ import {
   releaseAbandonedAmbush,
   releaseCargo,
   releaseParticipants,
+  renameCaravanUser,
   reserveCargo,
   resolveOperation,
   transitionCaravan,
@@ -832,6 +833,51 @@ describeWithDatabase("village Warehouse and caravans", () => {
       (await db.select().from(caravan)).map((row) => [row.id, row.lossBp]),
     );
     expect(losses).toEqual({ c1: 0, c2: 0, c3: CARAVAN_AMBUSH_LOSS_BP });
+  });
+
+  it("releases the group of a leader renamed during their interception", async () => {
+    const db = await getTestDatabase();
+    const hourAgo = new Date(Date.now() - HOUR);
+    await insertUsers([
+      { userId: "leader", isOutlaw: true },
+      { userId: "rider", isOutlaw: true },
+    ]);
+    await db.insert(caravan).values(caravanRow({ checkpointsProcessed: 3 }));
+    await db.insert(caravanParticipant).values(
+      ["leader", "rider"].map((userId) => ({
+        caravanId: "c1",
+        userId,
+        role: "BANDIT" as const,
+        activeUserId: userId,
+        groupLeaderId: "leader",
+        joinedAt: hourAgo,
+      })),
+    );
+    await db.insert(caravanEncounter).values({
+      id: "e1",
+      type: "INTERCEPTION",
+      status: "FIGHTING",
+      caravanId: "c1",
+      activeCaravanId: "c1",
+      battleId: "b-gone",
+      leaderId: "leader",
+      createdAt: hourAgo,
+    });
+    await Promise.all(
+      renameCaravanUser(db, { userId: "leader", newUserId: "leader-new" }),
+    );
+    const [encounter] = await db.select().from(caravanEncounter);
+    expect(encounter?.leaderId).toBe("leader-new");
+    await afterTasks.run([], () =>
+      maintainCaravans(db, new Date(), { caravanIds: ["c1"] }),
+    );
+    const riders = await db.select().from(caravanParticipant);
+    expect(
+      riders.map((p) => [p.userId, p.activeUserId, p.groupLeaderId]).sort(),
+    ).toEqual([
+      ["leader-new", null, null],
+      ["rider", null, null],
+    ]);
   });
 
   it("charges an abandoned defence only to a caravan still on the road", async () => {
