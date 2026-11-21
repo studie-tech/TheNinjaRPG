@@ -3805,6 +3805,8 @@ export const IMG_BUILDING_BANK =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEHFjuQLfKL5D7TAFe29bymSaPCIQ846MdzGg.webp";
 export const IMG_BUILDING_ARCHIVE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXk8AUJqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv.webp";
+export const IMG_BUILDING_WAREHOUSE =
+  "https://ui0arpl8sm.ufs.sh/f/warehouse-banner-3a408a0fdbafc150d4945d8a.webp";
 export const IMG_BUILDING_ADMINBUILDING =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMyfWBKtsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
 

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  Hammer,
-  ShieldCheck,
-  Warehouse,
-} from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Hammer, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  IMG_BUILDING_WAREHOUSE,
   WAREHOUSE_APPROVED_DAILY_ALLOWANCE,
   WAREHOUSE_DEPOSIT_BONUS_PER_LEVEL,
   WAREHOUSE_DEPOSIT_COOLDOWN_HOURS,
@@ -38,6 +33,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { cn } from "@/libs/shadui";
 import { useUserPicker } from "@/utils/search";
 
 type WarehouseData = NonNullable<RouterOutputs["warehouse"]["getWarehouse"]>;
@@ -61,11 +57,28 @@ export const WarehouseOverview = ({
       title="Warehouse"
       subtitle={`${village.name} stores, produces and trades materials`}
       defaultBackHref="/village"
+      padding={false}
     >
-      <div className="@container">
+      <Image
+        alt="Inside the village Warehouse"
+        src={IMG_BUILDING_WAREHOUSE}
+        width={1024}
+        height={447}
+        className="w-full"
+        priority={true}
+      />
+      <div className="@container p-3">
         <div className="grid gap-3 @lg:grid-cols-[auto_1fr]">
           <div className="flex items-center gap-3">
-            <Warehouse className="size-14 shrink-0 text-orange-500" aria-hidden />
+            {structure && (
+              <Image
+                alt=""
+                src={structure.image}
+                width={160}
+                height={120}
+                className={cn("h-16 w-auto shrink-0", !built && "opacity-50 grayscale")}
+              />
+            )}
             <div>
               <p className="text-lg font-bold">
                 {built
