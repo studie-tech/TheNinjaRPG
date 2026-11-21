@@ -27,9 +27,9 @@ export function WelcomeBoard({
         {announcements.map((entry) => (
           <article
             key={entry.id}
-            className="mb-4 min-w-0 break-inside-avoid overflow-hidden rounded-sm border-2 border-[#b9954d] bg-[#fff7df] text-[#2d2236] shadow-sm"
+            className="mb-4 min-w-0 break-inside-avoid overflow-hidden rounded-sm border-2 border-border bg-card text-card-foreground shadow-sm"
           >
-            <h3 className="border-b-2 border-[#b9954d] bg-[#35203f] px-4 py-2 font-serif text-xl font-bold text-[#fff1c6] break-words">
+            <h3 className="border-b-2 border-border bg-primary px-4 py-2 font-serif text-xl font-bold text-primary-foreground break-words">
               {entry.name}
             </h3>
             <div className="flex items-start gap-4 p-4">
@@ -49,7 +49,7 @@ export function WelcomeBoard({
                 <Link
                   href={entry.href}
                   onClick={onNavigate}
-                  className="inline-block max-w-full rounded-sm border border-[#67452d] bg-[#f0dc9b] px-3 py-1.5 text-sm font-semibold break-words underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#35203f]"
+                  className="inline-block max-w-full rounded-sm border border-border bg-secondary px-3 py-1.5 text-sm font-semibold text-secondary-foreground break-words underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   {entry.linkLabel}
                 </Link>

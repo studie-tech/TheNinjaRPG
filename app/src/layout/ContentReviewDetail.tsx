@@ -1023,7 +1023,7 @@ const InTheGame: React.FC<{
         </div>
       </div>
       {splash?.success && (
-        <div className="space-y-3 rounded-sm border-2 border-[#b9954d] bg-[#f8edce] p-3 text-[#2d2236]">
+        <div className="space-y-3 rounded-sm border-2 border-border bg-background p-3 text-foreground">
           <h3 className="font-serif text-2xl font-bold">{splash.data.name}</h3>
           <p>{splash.data.description}</p>
           <p className="text-sm">

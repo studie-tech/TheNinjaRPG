@@ -182,7 +182,7 @@ const ActivityStreakPopup: React.FC = () => {
   return (
     <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent
-        className={`flex max-h-[calc(100dvh-1rem)] flex-col overflow-hidden border-2 border-[#b9954d] bg-[#f8edce] p-4 text-[#2d2236] sm:p-6 ${
+        className={`flex max-h-[calc(100dvh-1rem)] flex-col overflow-hidden border-2 border-border bg-background p-4 text-foreground sm:p-6 ${
           (splash.data?.announcements.length ?? 0) > 2
             ? "md:w-[94vw] md:max-w-[1440px]"
             : "md:max-w-5xl"
@@ -195,7 +195,7 @@ const ActivityStreakPopup: React.FC = () => {
               ? "Village dispatch"
               : "Daily Activity Rewards"}
           </DialogTitle>
-          <DialogDescription className="text-[#594661]">
+          <DialogDescription>
             {splash.data?.announcements.length
               ? "News, adventures and offers from across Seichi, alongside your daily rewards."
               : "View and claim your daily activity rewards"}
@@ -207,8 +207,8 @@ const ActivityStreakPopup: React.FC = () => {
             announcements={splash.data?.announcements ?? []}
             onNavigate={handleDismissForToday}
             leadingContent={
-              <section className="bg-background text-foreground overflow-hidden rounded-sm border-2 border-[#b9954d]">
-                <h3 className="flex items-center gap-2 border-b-2 border-[#b9954d] bg-[#35203f] px-4 py-2 font-serif text-xl font-bold text-[#fff1c6]">
+              <section className="overflow-hidden rounded-sm border-2 border-border bg-card text-card-foreground">
+                <h3 className="flex items-center gap-2 border-b-2 border-border bg-primary px-4 py-2 font-serif text-xl font-bold text-primary-foreground">
                   <Gift className="h-5 w-5" /> Daily activity rewards
                 </h3>
                 <div className="p-4">
