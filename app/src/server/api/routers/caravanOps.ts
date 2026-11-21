@@ -312,6 +312,9 @@ export const caravanOpsRouter = createTRPCRouter({
             : "You cannot act against caravans",
         );
       const minutes = getOperationMinutes(input.type, role, user.banditExperience);
+      const finishesAt = new Date(now.getTime() + minutes * MINUTE_MS);
+      if (target && (!target.arrivesAt || target.arrivesAt <= finishesAt))
+        return errorResponse("The caravan arrives before your sabotage could finish");
       const ready = await claimOperatorReadiness(ctx.drizzle, user.userId, readiness);
       if (ready.rowsAffected !== 1)
         return errorResponse("Your state changed. Please try again");
@@ -325,7 +328,7 @@ export const caravanOpsRouter = createTRPCRouter({
           sector: user.sector,
           succeeds: rollChance(getOperationChance(role, user)),
           startedAt: now,
-          finishesAt: new Date(now.getTime() + minutes * MINUTE_MS),
+          finishesAt,
         });
       } catch (error) {
         if (isMysqlDuplicateKeyError(error))

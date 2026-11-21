@@ -46,7 +46,11 @@ import {
   ensureWarehouseMember,
   resetWarehouseAllowanceDay,
 } from "@/queries/warehouse";
-import { deliverCaravan, maintainCaravans } from "@/server/utils/caravan";
+import {
+  cancelCaravan,
+  deliverCaravan,
+  maintainCaravans,
+} from "@/server/utils/caravan";
 import { settleCaravanCombat } from "@/server/utils/caravanSettlement";
 import { settleProduction } from "@/server/utils/warehouse";
 import { afterTasks } from "../../setup/after";
@@ -551,6 +555,30 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(users.busy?.status).toBe("AWAKE");
     expect(users.idle?.status).toBe("AWAKE");
   });
+  it("calls off a caravan for a blocked route only while no fight over it is open", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await db.insert(caravan).values(caravanRow());
+    const [row] = await db.select().from(caravan);
+    if (!row) throw new Error("caravan missing");
+    await insertCheckpointAmbush(db, {
+      id: "e1",
+      caravanId: "c1",
+      expiresAt: new Date(now.getTime() + HOUR),
+      now,
+    });
+    const cancel = () =>
+      afterTasks.run([], () => cancelCaravan(db, row, now, { unfought: true }));
+    expect(await cancel()).toBe(false);
+    const [kept] = await db.select().from(caravan);
+    expect(kept?.status).toBe("TRAVELLING");
+    expect(await db.select().from(warehouseStock)).toHaveLength(0);
+    await db.delete(caravanEncounter).where(eq(caravanEncounter.id, "e1"));
+    expect(await cancel()).toBe(true);
+    const [cancelled] = await db.select().from(caravan);
+    expect(cancelled?.status).toBe("CANCELLED");
+  });
+
   it("hands a worn-down marker to its assailant and calls off caravans still on the road", async () => {
     const db = await getTestDatabase();
     await insertUsers([{ userId: "raider", villageId: "mist" }]);
