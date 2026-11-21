@@ -791,6 +791,7 @@ export const userItemToAction = (
     chakraCost: Math.max(0, item.chakraCost - item.chakraCostReducePerLvl * level),
     staminaCost: Math.max(0, item.staminaCost - item.staminaCostReducePerLvl * level),
     actionCostPerc: item.actionCostPerc,
+    fortification: useritem.fortification,
     // The catalog item is shared by everyone holding this template; imbuements are per row.
     effects: [
       ...fortifiedEffects(item.effects, useritem.fortification),

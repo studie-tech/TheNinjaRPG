@@ -706,6 +706,7 @@ export type CombatAction = {
   level?: number;
   quantity?: number;
   hidden?: boolean;
+  fortification?: Fortification;
   durability?: number;
   maxDurability?: number;
 };
