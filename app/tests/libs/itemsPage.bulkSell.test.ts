@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { KESSEN_FIRST_BUNDLE_ITEM_ID } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import { UNSELLABLE_CARD_REASON } from "@/libs/item";
 import {
   bulkSellBlockReason,
   bulkSellMessage,
@@ -7,6 +9,7 @@ import {
   toggleRarityPick,
   warnedItems,
 } from "@/libs/itemsPage";
+import { DEFAULT_CARD_DATA } from "@/validators/itemCard";
 
 const NOW = new Date("2026-11-05T12:00:00Z");
 
@@ -65,6 +68,33 @@ describe("bulkSellBlockReason", () => {
     );
     expect(bulkSellBlockReason(seed, 10, NOW)).toBe("needs 50 farm coins to buy back");
     expect(bulkSellBlockReason(seed, 50, NOW)).toBeNull();
+  });
+});
+
+describe("unsellable Kessen goods", () => {
+  const card = (id: string, cardData: Partial<typeof DEFAULT_CARD_DATA>) =>
+    row(id, {}, { itemType: "CARD", cardData: { ...DEFAULT_CARD_DATA, ...cardData } });
+
+  it("blocks leaders, Forbidden variants and the First Bundle, also from rarity picks", () => {
+    const leader = card("leader", { kind: "LEADER", row: null });
+    const forbidden = card("forbidden", {
+      variant: "FORBIDDEN",
+      baseCardId: "kessen-moonprowler",
+    });
+    const bundle = row(
+      "bundle",
+      {},
+      { id: KESSEN_FIRST_BUNDLE_ITEM_ID, itemType: "CONSUMABLE", cost: 0 },
+    );
+    for (const ui of [leader, forbidden, bundle]) {
+      expect(bulkSellBlockReason(ui, 0, NOW)).toBe(UNSELLABLE_CARD_REASON);
+    }
+    const deckCard = card("deck-card", {});
+    expect(bulkSellBlockReason(deckCard, 0, NOW)).toBeNull();
+    const sellable = (ui: UserItemWithRelations) => bulkSellBlockReason(ui, 0, NOW);
+    expect(
+      toggleRarityPick([leader, forbidden, bundle, deckCard], "COMMON", [], sellable),
+    ).toEqual(["deck-card"]);
   });
 });
 

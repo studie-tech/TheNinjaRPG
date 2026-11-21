@@ -42,6 +42,7 @@ const request = (overrides: Partial<HomeRequest> = {}): HomeRequest => ({
   value: 0,
   relatedId: null,
   pendingAnbuSenderId: null,
+  pendingKessenPair: null,
   activeHomeReceiverId: "visitor",
   useRankedRules: false,
   spectatable: false,

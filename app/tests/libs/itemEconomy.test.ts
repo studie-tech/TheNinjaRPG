@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import { KESSEN_AUCTION_FLOORS } from "@/drizzle/constants";
 import {
   getAuctionPriceError,
   getAuctionSellerPayout,
   getItemPurchaseAllowance,
+  isOfferTradeableItem,
 } from "@/libs/itemEconomy";
 import { getItemPurchasePeriodStart } from "@/utils/time";
 
@@ -136,6 +138,7 @@ describe("auction server price guard", () => {
       const result = getAuctionPriceError(
         {
           canBeTraded: true,
+          itemType: "WEAPON",
           auctionMinPrice: auctionMinPrice as number | null,
           auctionMaxPrice: auctionMaxPrice as number | null,
         },
@@ -151,7 +154,12 @@ describe("auction server price guard", () => {
   it("ignores configured bounds when trading is disabled", () => {
     expect(
       getAuctionPriceError(
-        { canBeTraded: false, auctionMinPrice: 10, auctionMaxPrice: 20 },
+        {
+          canBeTraded: false,
+          itemType: "WEAPON",
+          auctionMinPrice: 10,
+          auctionMaxPrice: 20,
+        },
         "AUCTION",
         1,
         1,
@@ -164,4 +172,48 @@ describe("auction server price guard", () => {
 it("deducts five percent from auction proceeds, rounding down", () => {
   expect(getAuctionSellerPayout(1000)).toBe(950);
   expect(getAuctionSellerPayout(99)).toBe(94);
+});
+
+describe("card listing guards", () => {
+  const floor = KESSEN_AUCTION_FLOORS.EPIC ?? 0;
+  const epicCard = {
+    canBeTraded: true,
+    itemType: "CARD" as const,
+    auctionMinPrice: floor,
+    auctionMaxPrice: null,
+  };
+
+  it("holds direct card sales to the auction floor, unlike other items", () => {
+    expect(getAuctionPriceError(epicCard, "DIRECT", 1, 1, "MONEY")).toContain(
+      "at least",
+    );
+    expect(getAuctionPriceError(epicCard, "DIRECT", floor * 2, 2, "MONEY")).toBeNull();
+    expect(
+      getAuctionPriceError(
+        { ...epicCard, itemType: "WEAPON" },
+        "DIRECT",
+        1,
+        1,
+        "MONEY",
+      ),
+    ).toBeNull();
+  });
+
+  it("lists cards only for ryo", () => {
+    for (const listingType of ["AUCTION", "DIRECT"] as const) {
+      expect(getAuctionPriceError(epicCard, listingType, floor, 1, "REPUTATION")).toBe(
+        "Cards can only be listed for ryo",
+      );
+    }
+  });
+
+  it("keeps cards out of item-for-item trade offers", () => {
+    expect(isOfferTradeableItem(epicCard)).toBe(false);
+    expect(isOfferTradeableItem({ canBeTraded: true, itemType: "MATERIAL" })).toBe(
+      true,
+    );
+    expect(isOfferTradeableItem({ canBeTraded: false, itemType: "MATERIAL" })).toBe(
+      false,
+    );
+  });
 });

@@ -4,13 +4,21 @@ import {
   huntingProgress,
   huntingReceipt,
   huntingSession,
+  kessenDeck,
+  kessenMatch,
+  kessenNpcProgress,
+  kessenProgress,
+  kessenRankedQueue,
   metaConsent,
   metaTracking,
   userCosmetic,
   userCosmeticSlot,
 } from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
-import { deleteRowsForUser } from "@/queries/accountDeletion";
+import {
+  deleteKessenMatchForDeleteUserInternal,
+  deleteRowsForUser,
+} from "@/queries/accountDeletion";
 import { deleteAiTransformationsFor } from "@/queries/ai";
 import { updateBalanceTurnOrderUserId } from "@/queries/balance";
 import { deleteBattleQueueMembersForUser } from "@/queries/clan";
@@ -223,7 +231,13 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
       adClick,
       userCosmetic,
       userCosmeticSlot,
+      kessenDeck,
+      kessenMatch,
+      kessenProgress,
+      kessenNpcProgress,
+      kessenRankedQueue,
     ].map((table) => deleteRowsForUser(client, table, userId)),
+    deleteKessenMatchForDeleteUserInternal(client, userId),
     deleteAiSpriteAnimationBindings(client, userId),
     deleteAiTransformationsFor(client, userId),
     deleteUserItems(client, userId),

@@ -104,6 +104,76 @@ it("reveals the lesson when the player re-enables the tutorial in Settings", () 
   ).toBe("true");
 });
 
+it("opens a guided lesson on the tutorial tab without changing the stored dock state", () => {
+  user.tutorialOn = false;
+  const view = render(
+    <ActivityDock hiddenLesson="Hidden sync">Main lesson</ActivityDock>,
+  );
+  expect(view.getByRole("button", { name: "Open Activity" })).toBeTruthy();
+  view.rerender(
+    <ActivityDock
+      hiddenLesson="Hidden sync"
+      guidedLesson={{ id: "lesson-1", awaitsAnswer: false }}
+    >
+      Guided step
+    </ActivityDock>,
+  );
+  // A guided lesson shows even with the main tutorial off, above the page's dim.
+  expect(view.getByText("Guided step")).toBeTruthy();
+  const dock = view.getByRole("complementary", { name: "Activity" });
+  expect(dock.hasAttribute("data-battle-focus-layer")).toBe(true);
+  expect(dock.className).toContain("z-[61]");
+  // The main tutorial's fallback keeps running while the guided lesson has the tab.
+  expect(view.getByText("Hidden sync")).toBeTruthy();
+  fireEvent.click(view.getByRole("button", { name: "Collapse Activity" }));
+  expect(view.queryByText("Guided step")).toBeNull();
+  // The collapse holds through the lesson's steps.
+  view.rerender(
+    <ActivityDock
+      hiddenLesson="Hidden sync"
+      guidedLesson={{ id: "lesson-1", awaitsAnswer: false }}
+    >
+      Next guided step
+    </ActivityDock>,
+  );
+  expect(view.queryByText("Next guided step")).toBeNull();
+  // A step that awaits an answer shows through the collapse and the chat panel.
+  act(() => getDefaultStore().set(chatPanelAtom, { owner: "chat", tab: "tavern" }));
+  view.rerender(
+    <ActivityDock
+      hiddenLesson="Hidden sync"
+      guidedLesson={{ id: "lesson-1", awaitsAnswer: true }}
+    >
+      Pass now?
+    </ActivityDock>,
+  );
+  expect(view.getByText("Pass now?")).toBeTruthy();
+  act(() => getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" }));
+  view.rerender(
+    <ActivityDock
+      hiddenLesson="Hidden sync"
+      guidedLesson={{ id: "lesson-1", awaitsAnswer: false }}
+    >
+      Next guided step
+    </ActivityDock>,
+  );
+  expect(view.queryByText("Next guided step")).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "Open Activity" }));
+  expect(view.getByText("Next guided step")).toBeTruthy();
+  // Another lesson opens again; the stored state is still the player's own.
+  view.rerender(
+    <ActivityDock
+      hiddenLesson="Hidden sync"
+      guidedLesson={{ id: "lesson-2", awaitsAnswer: false }}
+    >
+      Second lesson
+    </ActivityDock>,
+  );
+  expect(view.getByText("Second lesson")).toBeTruthy();
+  view.rerender(<ActivityDock hiddenLesson="Hidden sync">Main lesson</ActivityDock>);
+  expect(view.getByRole("button", { name: "Open Activity" })).toBeTruthy();
+});
+
 it("pins active quest attempts, restores pins, and removes completed attempts from the list", () => {
   const quest = (id: string, name: string) => ({
     id: `attempt-${id}`,

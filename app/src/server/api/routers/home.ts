@@ -602,6 +602,9 @@ export const homeRouter = createTRPCRouter({
           "This item is reserved in an auction or trade offer and can't be stored",
         );
       }
+      if (!userItemResult.storedAtHome && userItemResult.item.itemType === "CARD") {
+        return errorResponse("Cards stay in your card collection and can't be stored");
+      }
       // Mutate
       if (userItemResult.storedAtHome) {
         const inventoryBucket = getInventoryBucket(userItemResult.item);

@@ -1,5 +1,6 @@
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
+  CARDS_BASE_SLOTS,
   COOKING_BASE_SLOTS,
   DURABILITY_POINT_PRICE_PERCENT,
   FED_COOKING_SLOTS,
@@ -16,6 +17,8 @@ import {
   ItemSlotTypes,
   type ItemType,
   ItemTypes,
+  KESSEN_CARD_SELL_VALUES,
+  KESSEN_FIRST_BUNDLE_ITEM_ID,
   MATERIALS_BASE_SLOTS,
 } from "@/drizzle/constants";
 import type {
@@ -114,7 +117,7 @@ export const calcMaxCookingItems = (user: UserData) =>
   user.extraItemSlots;
 
 /** Carried inventory backpack bucket. Dedicated types take priority over event. */
-export type InventoryBucket = "normal" | "event" | "materials" | "cooking";
+export type InventoryBucket = "normal" | "event" | "materials" | "cooking" | "cards";
 
 /** Home storage bucket. Event items share ordinary (normal) home capacity. */
 export type HomeStorageBucket = "normal" | "materials" | "cooking" | "furniture";
@@ -202,11 +205,13 @@ export type InventorySlotRow = Pick<
 
 /**
  * Classify a carried inventory item into its capacity bucket.
- * Priority: COOKING → Cooking, MATERIAL → Materials, event → Event, else Normal.
+ * Priority: COOKING → Cooking, MATERIAL → Materials, CARD → Cards, event → Event,
+ * else Normal.
  */
 export const getInventoryBucket = (item: BucketItemFields): InventoryBucket => {
   if (item.itemType === "COOKING" || item.itemType === "MEAL") return "cooking";
   if (item.itemType === "MATERIAL") return "materials";
+  if (item.itemType === "CARD") return "cards";
   if (item.isEventItem) return "event";
   return "normal";
 };
@@ -235,6 +240,8 @@ export const getInventoryBucketCapacity = (
       return calcMaxMaterials(user);
     case "event":
       return calcMaxEventItems(user);
+    case "cards":
+      return CARDS_BASE_SLOTS;
     case "normal":
       return calcMaxItems(user);
   }
@@ -252,6 +259,7 @@ export const getInventoryBucketFullMessage = (
     cooking: "Cooking inventory is full",
     materials: "Materials inventory is full",
     event: "Event item inventory is full",
+    cards: "Card collection is full",
     normal: "Inventory is full",
   }[bucket];
   const holders = [
@@ -328,6 +336,16 @@ export const calcItemSellingPrice = (
   structures: VillageStructure[] | undefined,
 ) => {
   if (!useritem) return 0;
+  if (useritem.item.itemType === "CARD") {
+    const rarity = useritem.item.rarity;
+    // Card values are fixed by rarity; rarity is stored data, so an unknown value pays nothing.
+    if (
+      isUnsellableCard(useritem.item) ||
+      !Object.hasOwn(KESSEN_CARD_SELL_VALUES, rarity)
+    )
+      return 0;
+    return KESSEN_CARD_SELL_VALUES[rarity] * useritem.quantity;
+  }
   const bDiscount = ITEM_SELL_BASE_DISCOUNT_PERC;
   const sDiscount = getStrucBoost("itemDiscountPerLvl", structures);
   const aDiscount = user.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
@@ -585,6 +603,9 @@ export const canEquipAdditional = (
   if (candidate.itemType === "FURNITURE") {
     return "Furniture belongs in your home and cannot be equipped";
   }
+  if (candidate.itemType === "CARD") {
+    return "Cards belong in your card collection and cannot be equipped";
+  }
   if (candidate.bloodlineId) {
     if (equippedItems.some((a) => a.bloodlineId)) {
       return "You can only equip one item with a bloodline requirement";
@@ -656,7 +677,7 @@ export const compatibleEquipSlots = (slotType: string | null | undefined): ItemS
 export const cosmeticSlotsForItem = (
   item: Pick<Item, "slot" | "itemType">,
 ): ItemSlot[] =>
-  item.itemType === "MEAL" || item.itemType === "FURNITURE"
+  item.itemType === "MEAL" || item.itemType === "FURNITURE" || item.itemType === "CARD"
     ? []
     : compatibleEquipSlots(item.slot);
 
@@ -939,6 +960,26 @@ export const computeAutoEquipAssignments = (
   };
 };
 
+/**
+ * Kessen goods that can never be sold or dropped: leaders, Forbidden variants and the
+ * First Bundle. Selling one would destroy it for no ryo and could break a saved deck.
+ */
+export const isUnsellableCard = (
+  item: Pick<Item, "id" | "itemType" | "cardData">,
+): boolean =>
+  item.id === KESSEN_FIRST_BUNDLE_ITEM_ID ||
+  (item.itemType === "CARD" &&
+    (item.cardData?.kind === "LEADER" || item.cardData?.variant === "FORBIDDEN"));
+
+/** Whether the sell flow drops an item for nothing; cards sell by rarity outside shops too. */
+export const isDropOnlyItem = (
+  item: Pick<Item, "itemType" | "isEventItem" | "inShop">,
+) => item.itemType !== "CARD" && (item.isEventItem || !item.inShop);
+
+/** Why `isUnsellableCard` goods cannot be sold, as a phrase after the item name. */
+export const UNSELLABLE_CARD_REASON =
+  "cannot be sold; leaders, Forbidden cards and the First Bundle stay in your collection";
+
 /** Gear that can meaningfully level — hide badges on inventory goods and thrown items. */
 export const showsItemLevelBadge = (item: {
   itemType: string;
@@ -951,6 +992,7 @@ export const showsItemLevelBadge = (item: {
   item.itemType !== "CRYSTAL" &&
   item.itemType !== "FURNITURE" &&
   item.itemType !== "COSMETIC" &&
+  item.itemType !== "CARD" &&
   item.slot !== "THROWN";
 
 /** Consumables consolidate across ownership levels; gear keeps its progression. */

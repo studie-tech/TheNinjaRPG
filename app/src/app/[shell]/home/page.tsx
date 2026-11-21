@@ -1046,7 +1046,10 @@ const HomeItemGrid = ({
   );
 };
 
-/** Sorted rows of the given storage buckets; carried rows must be unequipped to be stored. */
+/**
+ * Sorted rows of the given storage buckets. Carried rows are listed only when they could
+ * be stored: unequipped, and not cards, which stay in the card collection.
+ */
 const homeStorageList = (
   userItems: UserItemWithRelations[] | undefined,
   stored: boolean,
@@ -1056,7 +1059,8 @@ const homeStorageList = (
     .filter(
       (useritem) =>
         useritem.storedAtHome === stored &&
-        (stored || useritem.equipped === "NONE") &&
+        (stored ||
+          (useritem.equipped === "NONE" && useritem.item.itemType !== "CARD")) &&
         buckets.includes(getHomeStorageBucket(useritem.item)),
     )
     .sort(byItemName);

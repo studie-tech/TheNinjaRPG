@@ -12,6 +12,7 @@ import { BattleFocusView } from "@/layout/BattleFocusView";
 import * as logbook from "@/layout/Logbook";
 import * as objective from "@/layout/Objective";
 import TutorialAssistant from "@/layout/TutorialAssistant";
+import { guidedLessonAtom } from "@/layout/tutorial/guidedLesson";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import type { TutorialStepConfig } from "@/libs/tutorialSteps";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -138,7 +139,14 @@ vi.mock("@/hooks/tutorial", () => {
   };
 });
 vi.mock("@/hooks/useAbVariant", () => ({ useAbVariant: () => ({ variant: "A" }) }));
-vi.mock("@/layout/Image", () => ({ default: () => null }));
+// A bare image, as other suites stub it: Bun module mocks outlive this file, and later
+// suites still look for the rendered <img>.
+vi.mock("@/layout/Image", () => ({
+  default: (props: { src: string; alt: string }) => (
+    // biome-ignore lint/performance/noImgElement: isolated component test stub
+    <img src={props.src} alt={props.alt} />
+  ),
+}));
 const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}</div>;
 const dialogMocks = {
   Dialog: ({ children, open }: { children: ReactNode; open: boolean }) =>
@@ -286,6 +294,7 @@ describe("TutorialAssistant highlight activation", () => {
 afterEach(() => {
   cleanup();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  getDefaultStore().set(guidedLessonAtom, null);
   vi.restoreAllMocks();
   dialogSpies.length = 0;
   close?.();
@@ -566,4 +575,90 @@ it("shows a completed tutorial state and still presents available quest guidance
       "Tutorial complete. Quest guidance will appear here when available.",
     ),
   ).toBeNull();
+});
+
+describe("TutorialAssistant guided lessons", () => {
+  const lessonTable = () => (
+    <>
+      <button
+        type="button"
+        data-guided-target=""
+        ref={(element) => {
+          if (element)
+            element.getBoundingClientRect = () => new DOMRect(40, 140, 120, 60);
+        }}
+      >
+        Table control
+      </button>
+      {assistantElement()}
+    </>
+  );
+
+  it("shows a registered lesson step in place of the tutorial and hands the tab back", () => {
+    const onAnswer = vi.fn();
+    getDefaultStore().set(guidedLessonAtom, {
+      id: "lesson",
+      step: {
+        id: "first",
+        eyebrow: "Lesson 1 of 6 · First Blood",
+        title: "Your first card",
+        progress: { position: 1, total: 6 },
+        lead: <p>Rows hold your units.</p>,
+        action: "Tap the card.",
+        target: "[data-guided-target]",
+        footer: (
+          <button type="button" onClick={onAnswer}>
+            Try again
+          </button>
+        ),
+      },
+    });
+    const view = render(lessonTable());
+    const panel = view.getByRole("region", { name: "Tutorial: Your first card" });
+    expect(panel.textContent).toContain("Lesson 1 of 6 · First Blood");
+    expect(panel.textContent).toContain("Tap the card.");
+    expect(view.queryByRole("region", { name: "Tutorial: Welcome" })).toBeNull();
+    // The spotlight rings the target and lets taps through to it.
+    const hole = document.querySelector<HTMLElement>(
+      "[data-battle-focus-layer] > .rounded-lg",
+    );
+    expect(hole?.style.transform).toBe("translate(32px, 132px)");
+    expect(hole?.className).toContain("pointer-events-none");
+    expect(document.querySelector("[data-guided-lesson-block]")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Try again" }));
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+    act(() => getDefaultStore().set(guidedLessonAtom, null));
+    expect(view.getByRole("region", { name: "Tutorial: Welcome" })).toBeTruthy();
+  });
+
+  it("dims the page behind a blocking step and focuses its first answer", async () => {
+    const off = profile();
+    off.userData.tutorialOn = false;
+    mocks.client.setQueryData(key, off);
+    getDefaultStore().set(guidedLessonAtom, {
+      id: "lesson",
+      step: {
+        id: "pass",
+        title: "Pass now?",
+        lead: <p>Lemu would play on here.</p>,
+        blocking: true,
+        footer: (
+          <>
+            <button type="button">Keep playing</button>
+            <button type="button">Pass anyway</button>
+          </>
+        ),
+      },
+    });
+    const view = render(lessonTable());
+    // A lesson shows with the main tutorial off.
+    expect(view.getByRole("region", { name: "Tutorial: Pass now?" })).toBeTruthy();
+    expect(document.querySelector("[data-guided-lesson-block]")).toBeTruthy();
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe("Keep playing"),
+    );
+    act(() => getDefaultStore().set(guidedLessonAtom, null));
+    expect(document.querySelector("[data-guided-lesson-block]")).toBeNull();
+    expect(view.queryByRole("region", { name: "Tutorial: Pass now?" })).toBeNull();
+  });
 });

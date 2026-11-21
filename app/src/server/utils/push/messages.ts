@@ -114,3 +114,21 @@ export const privateMessage = (conversationId: string): PushMessage => ({
   url: `/inbox?conversationId=${encodeURIComponent(conversationId)}`,
   collapseId: `inbox-${conversationId}`,
 });
+
+/** A friendly Kessen challenge waits for an answer; the challenger is named in the game only. */
+export const kessenChallengeReceived = (): PushMessage => ({
+  title: "Kessen challenge",
+  body: "A player challenged you to a Kessen duel. Open the game to answer.",
+  category: "social",
+  url: "/kessen",
+  collapseId: "kessen-challenge",
+});
+
+/** A Kessen duel began; its turn clock is already running. */
+export const kessenDuelStarted = (matchId: string): PushMessage => ({
+  title: "Your Kessen duel has begun",
+  body: "Your opponent is at the table and the clock is running.",
+  category: "combat",
+  url: "/kessen",
+  collapseId: `kessen-duel-${matchId}`,
+});

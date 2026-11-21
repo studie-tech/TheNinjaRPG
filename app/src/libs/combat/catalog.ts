@@ -9,6 +9,7 @@ const OMITTED_ITEM_FIELDS = [
   "updatedAt",
   "expireFromStoreAt",
   "furnitureData",
+  "cardData",
   "cost",
   "repsCost",
   "seichiSilverCost",

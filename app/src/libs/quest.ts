@@ -1,4 +1,5 @@
 import {
+  type KessenTier,
   type LetterRank,
   type MasteryType,
   type QuestType,
@@ -762,7 +763,8 @@ export const getNewTrackers = (
             "value" in objective &&
             taskUpdate.task === task &&
             !CONTENT_GATED_TASKS.has(task) &&
-            task !== "damage_dealt"
+            task !== "damage_dealt" &&
+            task !== "win_card_duel"
           ) {
             if (taskUpdate.increment && killCounts) {
               status.value += taskUpdate.increment;
@@ -781,6 +783,14 @@ export const getNewTrackers = (
             // resolving quest is still active in getUserQuests when getReward emits this
             // (its `completed` flag flips later in checkRewards), so guard the self-tick.
             !(task === "complete_specific_quest" && quest.id === taskUpdate.contentId)
+          ) {
+            status.value += taskUpdate.increment ?? 1;
+          }
+          // Kessen wins, narrowed by the objective's optional NPC and tier filters.
+          if (
+            objective.task === "win_card_duel" &&
+            taskUpdate.task === "win_card_duel" &&
+            matchesCardDuelObjective(objective, taskUpdate)
           ) {
             status.value += taskUpdate.increment ?? 1;
           }
@@ -1616,6 +1626,15 @@ const matchesContentObjective = (
   );
 };
 
+/** A Kessen win (`contentId` is the NPC key) counts when it passes the objective's filters. */
+const matchesCardDuelObjective = (
+  objective: Extract<AllObjectivesType, { task: "win_card_duel" }>,
+  event: ObjectiveTrackerTaskInput,
+) =>
+  event.contentId !== undefined &&
+  (!objective.npcKey || objective.npcKey === event.contentId) &&
+  (objective.tier === "ANY" || objective.tier === event.duelTier);
+
 /** Select the persistent errand, mission or crime counter for a quest type and letter rank. */
 export const getQuestCounterFieldName = (
   type: QuestType | undefined,
@@ -1695,4 +1714,6 @@ export type ObjectiveTrackerTaskInput = {
   /** Opponent classification for combat-use filters, independent of the battle outcome. */
   combatType?: "PVP" | "PVE";
   warFoe?: boolean;
+  /** Opponent tier of a `win_card_duel` win. */
+  duelTier?: KessenTier;
 };

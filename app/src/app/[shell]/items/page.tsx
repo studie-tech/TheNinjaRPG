@@ -39,6 +39,7 @@ import {
   countUnlistedBagStacks,
   homeStorageBlockReason,
   homeStorageMoveBlockReason,
+  isInBag,
   unlistedBagStacksNote,
 } from "@/libs/itemsPage";
 import { showMutationToast } from "@/libs/toast";
@@ -116,18 +117,32 @@ export default function MyItems() {
   // Capacity includes unfinished crafts even though they are absent from the
   // usable-item list. Share the storage rule with server-side capacity guards.
   const carriedItems = userItems?.filter(countsTowardInventoryStorage);
-  const bags = (["normal", "event", "materials", "cooking"] as const).map((value) => {
-    const count = carriedItems ? countInventoryBucketSlots(carriedItems, value) : 0;
-    const max = userData ? getInventoryBucketCapacity(value, userData) : 0;
-    return { value, count, max, over: count > max };
-  });
-  const selectedBag = bags.find((bag) => bag.value === activeTab);
+  const bags = (["normal", "event", "materials", "cooking", "cards"] as const).map(
+    (value) => {
+      const count = carriedItems ? countInventoryBucketSlots(carriedItems, value) : 0;
+      const max = userData ? getInventoryBucketCapacity(value, userData) : 0;
+      return { value, count, max, over: count > max };
+    },
+  );
+  // "Items" lists every bag but cards. When Gear is the only one holding anything, the
+  // two would list the same stacks, so Gear is not offered separately.
+  const itemsBags = bags.filter((bag) => isInBag(bag.value, "all"));
+  const isGearAllItems = itemsBags.every((bag) => bag.value === "normal" || !bag.count);
+  const shownTab = isGearAllItems && activeTab === "normal" ? "all" : activeTab;
+  // "Items" shows the figure of its bag closest to the limit; Gear when all are empty.
+  const capacityBag =
+    shownTab === "all"
+      ? itemsBags.reduce<(typeof bags)[number] | undefined>(
+          (fullest, bag) =>
+            !fullest || bagFill(bag) > bagFill(fullest) ? bag : fullest,
+          itemsBags.find((bag) => bag.value === "normal"),
+        )
+      : bags.find((bag) => bag.value === shownTab);
   // Name the counted stacks the list leaves out, so the count matches what players see.
   const unlistedNote = unlistedBagStacksNote(
     countUnlistedBagStacks(
-      carriedItems?.filter(
-        (ui) => activeTab === "all" || getInventoryBucket(ui.item) === activeTab,
-      ) ?? [],
+      carriedItems?.filter((ui) => isInBag(getInventoryBucket(ui.item), shownTab)) ??
+        [],
       inventoryTime,
     ),
   );
@@ -197,7 +212,7 @@ export default function MyItems() {
               <ItemsWorkspace
                 userData={userData}
                 userItems={availableItems ?? []}
-                bag={shownPlace === "home" ? `home:${homeTab}` : activeTab}
+                bag={shownPlace === "home" ? `home:${homeTab}` : shownTab}
                 home={
                   isHomeShown
                     ? {
@@ -232,11 +247,19 @@ export default function MyItems() {
                 }
                 backpackStatus={
                   <div className="flex items-center gap-1">
-                    {selectedBag && (
-                      <BagCapacity used={selectedBag.count} max={selectedBag.max} />
+                    {capacityBag && (
+                      <BagCapacity
+                        used={capacityBag.count}
+                        max={capacityBag.max}
+                        bag={
+                          shownTab === "all" && !isGearAllItems
+                            ? capacityBag.value
+                            : undefined
+                        }
+                      />
                     )}
                     {/* Purchased slots extend the Gear bag only. */}
-                    {activeTab === "normal" && (
+                    {capacityBag?.value === "normal" && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -259,11 +282,17 @@ export default function MyItems() {
                       bags={[
                         {
                           value: "all",
-                          count: bags.reduce((sum, bag) => sum + bag.count, 0),
+                          count: bags.reduce(
+                            (sum, bag) =>
+                              sum + (isInBag(bag.value, "all") ? bag.count : 0),
+                            0,
+                          ),
                         },
-                        ...bags,
+                        ...bags.filter(
+                          (bag) => !isGearAllItems || bag.value !== "normal",
+                        ),
                       ]}
-                      active={activeTab}
+                      active={shownTab}
                       onChange={setActiveTab}
                     />
                     {unlistedNote && (
@@ -277,8 +306,7 @@ export default function MyItems() {
                   availableItems?.filter(
                     (ui) =>
                       ui.equipped === "NONE" &&
-                      (activeTab === "all" ||
-                        getInventoryBucket(ui.item) === activeTab),
+                      isInBag(getInventoryBucket(ui.item), shownTab),
                   ) ?? []
                 }
               />
@@ -348,8 +376,9 @@ export default function MyItems() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {userItems && (
-        // Keep hotkey setup out of the way without a mouse or trackpad.
+      {userItems && activeTab !== "cards" && (
+        // Keep hotkey setup out of the way without a mouse or trackpad; the card
+        // collection has no battle keys.
         <div className="not-any-pointer-fine:hidden">
           <ContentBox
             title="Battle Hotkeys"
@@ -381,3 +410,7 @@ export default function MyItems() {
     </>
   );
 }
+
+/** How full a bag is, from 0 for empty. */
+const bagFill = (bag: { count: number; max: number }) =>
+  bag.count / Math.max(1, bag.max);

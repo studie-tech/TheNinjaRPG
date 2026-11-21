@@ -58,6 +58,8 @@ it.each([false, true])(
       prepareInventoryUpdate: () => undefined,
       updateInventory,
       invalidateInventory,
+      cachedItemTypes: () => [],
+      reconcileCardMoves: async () => undefined,
     } as never);
     Object.assign(vi.spyOn(client, "api" as never), {
       item: {

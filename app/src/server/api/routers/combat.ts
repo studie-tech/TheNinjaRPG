@@ -4149,11 +4149,15 @@ export const processUsersForBattle = async (
           .map((skill) => skill.skillId)
       : undefined;
     // Furniture never enters battle, even when old inventory rows still have an
-    // equipment slot or drop chance. Filter before mastery and jutsu item gates.
+    // equipment slot or drop chance. Cards enter only as an AI's droppable loot, so the
+    // settlement can roll them; as non-action items they are never usable. Filter before
+    // mastery and jutsu item gates.
     user.items = user.items.filter(
       (ui) =>
         ui.item.itemType !== "FURNITURE" &&
         ui.item.itemType !== "COSMETIC" &&
+        (ui.item.itemType !== "CARD" ||
+          (!usesPlayerLoadout && ui.dropChancePerc > 0)) &&
         (!usesPlayerLoadout ||
           hasRequiredSkill(ui.item, { userSkills: requirementSkills })),
     );
@@ -4469,8 +4473,13 @@ export const processUsersForBattle = async (
           !NonActionItemTypes.includes(itemType) ||
           ["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON", "CONSUMABLE"].includes(itemType)
         ) {
-          // Check bloodline requirement for weapons and other action items
-          if (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) {
+          // Check bloodline requirement for weapons and other action items; a card's
+          // bloodline only names the clan it depicts.
+          if (
+            !ui.item.bloodlineId ||
+            ui.item.bloodlineId === user.bloodlineId ||
+            itemType === "CARD"
+          ) {
             items.push({
               ...ui,
               lastUsedRound: -ui.item.cooldown,

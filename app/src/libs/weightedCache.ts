@@ -25,16 +25,35 @@ const selectWeighted = <T extends { probability: number }>(
 };
 
 /**
+ * Overrides of one opening's draws, called after each random draw with the drawn index
+ * (Kessen packs use them for pity guarantees and dupe protection). A hook returns the
+ * index to use instead, which must name a selectable tier or an existing entry.
+ */
+export type WeightedCacheHooks = {
+  tier?: (drawnTierIndex: number, rollIndex: number) => number;
+  entry?: (tierIndex: number, drawnEntryIndex: number, rollIndex: number) => number;
+};
+
+/**
  * Validate, draw a roll count, then independently select a tier and uniform entry per roll.
  * Combine item quantities for delivery while retaining each selection for the audit receipt.
  */
-export const resolveWeightedCache = (input: WeightedCache, random = Math.random) => {
+export const resolveWeightedCache = (
+  input: WeightedCache,
+  random = Math.random,
+  hooks: WeightedCacheHooks = {},
+) => {
   const cache = weightedCacheSchema.parse(input);
   const rollCount = selectWeighted(cache.rolls, random).count;
   const quantities = new Map<string, number>();
-  const selections = Array.from({ length: rollCount }, () => {
-    const tier = selectWeighted(cache.tiers, random);
-    const entryIndex = Math.floor(random() * tier.entries.length);
+  const selections = Array.from({ length: rollCount }, (_, rollIndex) => {
+    const drawnTier = cache.tiers.indexOf(selectWeighted(cache.tiers, random));
+    const tier = cache.tiers[hooks.tier?.(drawnTier, rollIndex) ?? drawnTier];
+    if (!tier || tier.probability === 0 || tier.entries.length === 0)
+      throw new Error("Weighted cache hooks must select a selectable tier");
+    const drawnEntry = Math.floor(random() * tier.entries.length);
+    const entryIndex =
+      hooks.entry?.(cache.tiers.indexOf(tier), drawnEntry, rollIndex) ?? drawnEntry;
     const entry = tier.entries[entryIndex];
     if (!entry) throw new Error("Random source must return a value in [0, 1)");
     for (const item of entry.items)

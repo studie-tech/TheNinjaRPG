@@ -1,6 +1,7 @@
 "use client";
 
 import { ListChecks } from "lucide-react";
+import dynamic from "next/dynamic";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { useCosmetics } from "@/hooks/useCosmetics";
 import { useHomeStorageMove } from "@/hooks/useHomeStorageMove";
 import { useItemActions } from "@/hooks/useItemActions";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useSplitBeforeSale } from "@/hooks/useSplitBeforeSale";
 import { EquipmentPreview } from "@/layout/EquipmentPreview";
 import { useHotkeyAssignment } from "@/layout/HotkeyControls";
 import { BackpackList } from "@/layout/items/BackpackList";
@@ -22,7 +24,8 @@ import { EquipmentFigure } from "@/layout/items/EquipmentFigure";
 import { ItemContextMenu } from "@/layout/items/ItemContextMenu";
 import { ItemInspector } from "@/layout/items/ItemInspector";
 import { SlotPicker } from "@/layout/items/SlotPicker";
-import { applyActiveVariant } from "@/libs/item";
+import { useKessenMotion } from "@/layout/kessen/useKessenMotion";
+import { applyActiveVariant, isDropOnlyItem } from "@/libs/item";
 import {
   bulkSellBlockReason,
   bulkSellTotals,
@@ -31,11 +34,25 @@ import {
   slotName,
   toggleRarityPick,
 } from "@/libs/itemsPage";
+import {
+  cardSale,
+  cardSaleBlockReason,
+  EARNED_PACK_BLOCK_REASON,
+  isEarnedKessenPack,
+} from "@/libs/kessen/cardSale";
 import { gearMissingMastery } from "@/libs/mastery";
 import { cn } from "@/libs/shadui";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
+import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { canChangeContent, getContentRole } from "@/utils/permissions";
+import type { CardPackReveal } from "@/validators/weightedCache";
+
+// The Kessen pack ceremony and its stylesheets load only once a card pack is opened.
+const ItemPackReveal = dynamic(
+  () => import("@/layout/kessen/hub/ItemPackReveal").then((mod) => mod.ItemPackReveal),
+  { ssr: false },
+);
 
 /**
  * The Equipped figure beside the backpack, where a slot opens its picker and an item its
@@ -66,6 +83,9 @@ export function ItemsWorkspace({
   const [phoneTab, setPhoneTab] = useState("equipment");
   const [dragging, setDragging] = useState<UserItemWithRelations | null>(null);
   const [isNarrow, setIsNarrow] = useState(false);
+  const [packReveal, setPackReveal] = useState<CardPackReveal | null>(null);
+  // Read here, where it has settled long before a pack opens.
+  const packMotion = useKessenMotion();
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const backpackRef = useRef<HTMLDivElement>(null);
@@ -105,15 +125,29 @@ export function ItemsWorkspace({
   const [isSelecting, setIsSelecting] = useState(false);
   const [tickedIds, setTickedIds] = useState<string[]>([]);
   const [reviewIds, setReviewIds] = useState<string[] | null>(null);
-  const { sellMany, isSelling } = useBulkSellItems({
+  // Separating surplus before a bulk sale creates stacks the sold-stack patch cannot know.
+  const splitBeforeSale = useRef(false);
+  const {
+    keepOnStack,
+    isSplitting: isSplittingSurplus,
+    refreshInventory,
+  } = useSplitBeforeSale();
+  const { sellMany, isSelling: isSellingMany } = useBulkSellItems({
     onSold: (result) => {
       // Stacks that stayed remain selected so the player can see why and retry.
       const stayed = result.refused.map((entry) => entry.userItemId);
       setTickedIds((ids) => ids.filter((id) => stayed.includes(id)));
       if (stayed.length === 0) setIsSelecting(false);
     },
-    onSettled: () => setReviewIds(null),
+    onSettled: () => {
+      setReviewIds(null);
+      if (splitBeforeSale.current) {
+        splitBeforeSale.current = false;
+        void refreshInventory();
+      }
+    },
   });
+  const isSelling = isSellingMany || isSplittingSurplus;
   const isHome = home?.place === "home";
   const { moveItems, isMoving } = useHomeStorageMove({
     onMoved: (result) => {
@@ -126,21 +160,69 @@ export function ItemsWorkspace({
   });
   // The backpack column lists the open bag or, at home, the open storage bucket.
   const listItems = isHome ? home.items : bagItems;
+  // Cards sell only their surplus copies, judged across all stacks of the card. A stack
+  // that also holds deck copies sells only its surplus, which is split off first.
+  const sellBlock = (ui: UserItemWithRelations) =>
+    (isEarnedKessenPack(ui.item) ? EARNED_PACK_BLOCK_REASON : null) ??
+    cardSaleBlockReason(cardSale(ui, userItems)) ??
+    bulkSellBlockReason(ui, userData.farmCurrency);
+  const forSale = (ui: UserItemWithRelations) => {
+    const sale = cardSale(ui, userItems);
+    return sale?.kind === "mixed" ? { ...ui, quantity: sale.surplus } : ui;
+  };
+  const sellSelection = async (userItemIds: string[]) => {
+    // Splitting keeps the surplus on the selected stack, so the sale keeps its ids; the
+    // deck copies move to the new stack.
+    for (const userItemId of userItemIds) {
+      const ui = userItems.find((row) => row.id === userItemId);
+      const sale = ui ? cardSale(ui, userItems) : null;
+      if (sale?.kind !== "mixed") continue;
+      splitBeforeSale.current = true;
+      const result = await keepOnStack(userItemId, sale.surplus);
+      if (!result.success) {
+        showMutationToast({ ...result, variant: "destructive" });
+        splitBeforeSale.current = false;
+        setReviewIds(null);
+        void refreshInventory();
+        return;
+      }
+    }
+    sellMany(userItemIds);
+  };
+  /** A short note on card tiles: the surplus a stack holds. */
+  const cardTag = (ui: UserItemWithRelations) => {
+    const sale = cardSale(ui, userItems);
+    if (sale?.kind === "surplus") return "Surplus";
+    if (sale?.kind === "mixed") return `${sale.surplus} surplus`;
+    return undefined;
+  };
   // Selection permits either action; storing a farm seed does not require buying it back.
+  // Cards stay in the card collection, so only their sale can be selected.
   const selectBlockReason = (ui: UserItemWithRelations) => {
     if (isHome) return null;
-    const reason = bulkSellBlockReason(ui, userData.farmCurrency);
-    return reason && home && !home.blockReason(ui.id, true) ? null : reason;
+    const reason = sellBlock(ui);
+    return reason &&
+      ui.item.itemType !== "CARD" &&
+      home &&
+      !home.blockReason(ui.id, true)
+      ? null
+      : reason;
   };
   // Stacks sold elsewhere or in another bag leave the selection.
   const selectedItems = listItems.filter((ui) => tickedIds.includes(ui.id));
   const selectedIds = selectedItems.map((ui) => ui.id);
   const sellBlockedReason = selectedItems
     .map((ui) => {
-      const reason = bulkSellBlockReason(ui, userData.farmCurrency);
+      const reason = sellBlock(ui);
       return reason ? `${applyActiveVariant(ui).name} ${reason}` : undefined;
     })
     .find(Boolean);
+  const saleItems = selectedItems.map(forSale);
+  // Cards always sell; the drop wording is kept for selections that can drop something.
+  const canDrop = saleItems.some((ui) => isDropOnlyItem(ui.item));
+  const canStoreSelection =
+    isHome ||
+    (bag !== "cards" && !selectedItems.some((ui) => ui.item.itemType === "CARD"));
   // One request takes a limited number of stacks; a larger selection is trimmed first.
   const isOverLimit = selectedItems.length > MAX_BULK_SELL_ITEMS;
   const toggleTicked = (userItemId: string) =>
@@ -318,7 +400,8 @@ export function ItemsWorkspace({
           homeMove={
             home &&
             inspected.equipped === "NONE" &&
-            inspected.item.itemType !== "FURNITURE"
+            inspected.item.itemType !== "FURNITURE" &&
+            (inspected.item.itemType !== "CARD" || inspected.storedAtHome)
               ? {
                   blockedReason: home.blockReason(
                     inspected.id,
@@ -329,6 +412,8 @@ export function ItemsWorkspace({
                 }
               : undefined
           }
+          onPackReveal={setPackReveal}
+          onInspectStack={(userItemId) => openView({ kind: "item", userItemId })}
         />
       )}
     </>
@@ -342,13 +427,24 @@ export function ItemsWorkspace({
       className="@container"
     >
       {hotkeyDialog}
+      {packReveal ? (
+        <ItemPackReveal
+          reveal={packReveal}
+          onClose={() => setPackReveal(null)}
+          returnFocusTo={() => packFocusTarget(rootRef.current, packReveal.packItemId)}
+          motion={packMotion}
+        />
+      ) : null}
       <TabsList
         aria-label="Items view"
         className="flex-nowrap gap-1.5 rounded-none bg-transparent px-3 pt-3 pb-0 @min-[600px]:hidden"
       >
         <PhoneTab value="equipment">Equipment</PhoneTab>
+        {/* The backpack total stays the same whichever bag is open. */}
         <PhoneTab value="backpack">
-          {isHome ? "Home" : "Backpack"} · {choosableBag.length}
+          {isHome
+            ? `Home · ${choosableBag.length}`
+            : `Backpack · ${choosable.filter((ui) => ui.equipped === "NONE").length}`}
         </PhoneTab>
       </TabsList>
       <div className="grid @min-[600px]:grid-cols-[314px_minmax(0,1fr)]">
@@ -430,6 +526,7 @@ export function ItemsWorkspace({
                 ref={selectRef}
                 variant={isSelecting ? "default" : "outline"}
                 size="sm"
+                className={COARSE_BUTTON}
                 aria-pressed={isSelecting}
                 onClick={() => (isSelecting ? stopSelecting() : setIsSelecting(true))}
               >
@@ -452,6 +549,7 @@ export function ItemsWorkspace({
             // Stored stacks are not worn from home storage.
             onDragItem={hasFinePointer && !isHome ? setDragging : undefined}
             wrapCard={isHome ? undefined : withMenu}
+            tagFor={isHome ? undefined : cardTag}
             selection={
               isSelecting
                 ? {
@@ -467,67 +565,80 @@ export function ItemsWorkspace({
             }
           />
           {isSelecting && (
-            <section
-              aria-label="Selected items"
-              className="sticky bottom-0 z-10 mt-3 flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2 shadow-lg"
-            >
-              <p className="min-w-0 flex-1 text-sm">
-                <b>{selectedItems.length} selected</b>
-                {isOverLimit && (
-                  <span className="block font-semibold text-destructive text-xs">
-                    Select up to {MAX_BULK_SELL_ITEMS} at a time
-                  </span>
-                )}
-                {!isHome && selectedItems.length > 0 && (
-                  <span className="block text-muted-foreground text-xs">
-                    {bulkSellSummary(
-                      bulkSellTotals(
-                        selectedItems,
-                        userData,
-                        userData.village?.structures,
-                      ),
-                    )}
-                  </span>
-                )}
-              </p>
-              <Button variant="outline" size="sm" onClick={stopSelecting}>
-                Cancel
-              </Button>
-              {home && (
+            // The page and the column scroll inside containers that would keep a sticky
+            // bar below the fold, so the bar floats over the viewport, above the phone
+            // navigation and its floating buttons, and the list leaves room for it.
+            <>
+              <div aria-hidden className="h-24" />
+              <section
+                aria-label="Selected items"
+                className="fixed inset-x-2 bottom-[calc(9.5rem+env(safe-area-inset-bottom))] z-50 flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2 shadow-xl md:inset-x-auto md:bottom-4 md:left-1/2 md:w-[min(40rem,calc(100vw-2rem))] md:-translate-x-1/2"
+              >
+                <p className="min-w-0 flex-1 text-sm" aria-live="polite">
+                  <b>{selectedItems.length} selected</b>
+                  {isOverLimit && (
+                    <span className="block font-semibold text-destructive text-xs">
+                      Select up to {MAX_BULK_SELL_ITEMS} at a time
+                    </span>
+                  )}
+                  {!isHome && selectedItems.length > 0 && (
+                    <span className="block text-muted-foreground text-xs">
+                      {bulkSellSummary(
+                        bulkSellTotals(
+                          saleItems,
+                          userData,
+                          userData.village?.structures,
+                        ),
+                      )}
+                    </span>
+                  )}
+                </p>
                 <Button
-                  variant={isHome ? "default" : "outline"}
+                  variant="outline"
                   size="sm"
-                  disabled={selectedItems.length === 0 || isOverLimit || isMoving}
-                  aria-busy={isMoving}
-                  onClick={() => moveItems(selectedIds, !isHome)}
+                  className={COARSE_BUTTON}
+                  onClick={stopSelecting}
                 >
-                  {isHome ? "Take out" : "Store at home"}
+                  Cancel
                 </Button>
-              )}
-              {!isHome && (
-                <Button
-                  ref={sellTriggerRef}
-                  variant="destructive"
-                  size="sm"
-                  disabled={
-                    selectedItems.length === 0 || isOverLimit || !!sellBlockedReason
-                  }
-                  hoverText={sellBlockedReason}
-                  onClick={() => setReviewIds(selectedIds)}
-                >
-                  Sell / drop…
-                </Button>
-              )}
-            </section>
+                {home && canStoreSelection && (
+                  <Button
+                    variant={isHome ? "default" : "outline"}
+                    size="sm"
+                    className={COARSE_BUTTON}
+                    disabled={selectedItems.length === 0 || isOverLimit || isMoving}
+                    aria-busy={isMoving}
+                    onClick={() => moveItems(selectedIds, !isHome)}
+                  >
+                    {isHome ? "Take out" : "Store at home"}
+                  </Button>
+                )}
+                {!isHome && (
+                  <Button
+                    ref={sellTriggerRef}
+                    variant="destructive"
+                    size="sm"
+                    className={COARSE_BUTTON}
+                    disabled={
+                      selectedItems.length === 0 || isOverLimit || !!sellBlockedReason
+                    }
+                    hoverText={sellBlockedReason}
+                    onClick={() => setReviewIds(selectedIds)}
+                  >
+                    {canDrop ? "Sell / drop…" : "Sell…"}
+                  </Button>
+                )}
+              </section>
+            </>
           )}
           {reviewIds && (
             <BulkSellDialog
-              items={bagItems.filter((ui) => reviewIds.includes(ui.id))}
+              items={bagItems.filter((ui) => reviewIds.includes(ui.id)).map(forSale)}
               selectedIds={selectedIds}
               userData={userData}
               isSelling={isSelling}
               onToggle={toggleTicked}
-              onConfirm={sellMany}
+              onConfirm={(userItemIds) => void sellSelection(userItemIds)}
               onClose={() => setReviewIds(null)}
               onCloseAutoFocus={(event) => {
                 // A completed sale removes the opener; Select remains available.
@@ -600,7 +711,7 @@ function PlaceButton({
       aria-pressed={isPressed}
       onClick={onClick}
       className={cn(
-        "h-9 shrink-0 rounded-md px-3 font-bold text-base",
+        "h-9 shrink-0 rounded-md px-3 font-bold text-base pointer-coarse:h-[40px]",
         isPressed
           ? "bg-background text-foreground shadow-sm"
           : "text-muted-foreground hover:text-foreground",
@@ -622,6 +733,22 @@ function PhoneTab({ value, children }: { value: string; children: React.ReactNod
     </TabsTrigger>
   );
 }
+
+/**
+ * Where focus lands after a pack opened from the inspector, whose Open pack button has left
+ * the page: the stack's tile while packs of that kind remain, else the first backpack tile.
+ */
+const packFocusTarget = (root: HTMLElement | null, packItemId: string) =>
+  root?.querySelector<HTMLElement>(
+    `[data-item-id="${CSS.escape(packItemId)}"]:not([disabled])`,
+  ) ??
+  root?.querySelector<HTMLElement>(
+    '[aria-label="Backpack items"] button:not([disabled])',
+  );
+
+/** Touch screens get buttons tall enough to tap; pointers keep the compact size. */
+const COARSE_BUTTON =
+  "pointer-coarse:h-[40px] pointer-coarse:px-3 pointer-coarse:text-base";
 
 /** What the side panel shows: the backpack, one slot's picker, or one item. */
 export type ItemsView =

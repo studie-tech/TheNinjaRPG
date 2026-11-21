@@ -133,8 +133,9 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   const canRepairAll =
     itemsNeedingRepair.length > 0 && (repairKits.length > 0 || isCrafter);
   // Carried item types the merge would change; the button hides while stacks are packed.
+  // Card stacks stay apart once their surplus is separated, so they never prompt a merge.
   const mergeableStackTypes = countMergeableStackTypes(
-    userItems ?? [],
+    (userItems ?? []).filter((ui) => ui.item?.itemType !== "CARD"),
     false,
     new Date(),
   );

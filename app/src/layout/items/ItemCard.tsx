@@ -6,6 +6,8 @@ import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/sche
 import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import { applyActiveVariant, showsItemLevelBadge } from "@/libs/item";
+import { isKessenGood, shortBlockReason } from "@/libs/kessen/cardSale";
+import { isKessenPackId } from "@/libs/kessen/packs";
 import { cn } from "@/libs/shadui";
 import { capitalizeFirstLetter } from "@/utils/string";
 
@@ -18,17 +20,24 @@ export function ItemCard({
   onDragEnd,
   isTicked,
   blockReason,
+  tag,
 }: ItemCardProps) {
   const { item } = userItem;
   const look = applyActiveVariant(userItem as UserItemWithVariants);
-  const wears = item.maxDurability > 0;
+  const wears = item.maxDurability > 0 && !isKessenGood(item);
   const detail = itemDetail(userItem);
+  const isCard = item.itemType === "CARD";
+  const isPack = isKessenPackId(item.id);
+  // Card and pack names share long prefixes, so their name and meta lines wrap instead.
+  const wraps = isCard || isPack;
+  const marker = cardMarker(userItem);
   // A ticked stack that can no longer be sold can still be unticked.
   const isBlocked = !!blockReason && !isTicked;
   return (
     <button
       type="button"
       data-item-name={item.name}
+      data-item-id={item.id}
       aria-current={isSelected ? "true" : undefined}
       aria-pressed={isTicked}
       disabled={isBlocked}
@@ -46,13 +55,19 @@ export function ItemCard({
       onDragEnd={onDragEnd}
       onClick={() => onSelect(userItem.id)}
       className={cn(
-        "flex w-full min-w-0 items-center gap-2 rounded-lg border bg-card p-1.5 text-left hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-primary",
+        "flex h-full w-full min-w-0 items-center gap-2 rounded-lg border bg-card p-1.5 text-left hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-primary",
         isSelected && "border-primary ring-2 ring-primary/40",
         isTicked && "border-destructive bg-destructive/10 ring-2 ring-destructive/40",
-        isBlocked && "cursor-not-allowed opacity-50",
+        // Only the art fades, so the reason below stays readable.
+        isBlocked && "cursor-not-allowed bg-muted/40 hover:bg-muted/40",
       )}
     >
-      <span className="relative h-11 w-11 shrink-0">
+      <span
+        className={cn(
+          "relative h-11 w-11 shrink-0",
+          isBlocked && "opacity-40 grayscale",
+        )}
+      >
         <ContentImage
           image={look.image}
           alt={look.name}
@@ -73,25 +88,61 @@ export function ItemCard({
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-semibold text-sm">{look.name}</span>
+        <span
+          className={cn(
+            "font-semibold text-base",
+            wraps ? "line-clamp-2 break-words leading-tight" : "block truncate",
+          )}
+        >
+          {look.name}
+        </span>
+        {(marker || tag) && (
+          <span className="mt-0.5 flex flex-wrap gap-1">
+            {marker && (
+              <span className="rounded-sm bg-red-950 px-1 font-bold text-[11px] text-red-50 uppercase leading-tight tracking-wide dark:bg-red-900">
+                {marker}
+              </span>
+            )}
+            {tag && (
+              <span className="rounded-sm bg-amber-200 px-1 font-bold text-[11px] text-amber-950 leading-tight dark:bg-amber-900 dark:text-amber-50">
+                {tag}
+              </span>
+            )}
+          </span>
+        )}
         {blockReason ? (
-          <span className="block truncate text-xs font-medium text-destructive">
-            {capitalizeFirstLetter(blockReason)}
+          <span className="block truncate font-medium text-[11px] text-muted-foreground">
+            {shortBlockReason(blockReason)}
           </span>
         ) : (
           <span
             className={cn(
-              "block truncate text-xs font-medium",
+              "block font-medium text-[11px]",
+              wraps ? "leading-tight" : "truncate",
               rarityTextClass[item.rarity],
             )}
           >
-            {rarityLabel[item.rarity]} · {slotLabel(userItem)}
+            {rarityLabel[item.rarity]} ·{" "}
+            {isCard ? (
+              <span
+                className={cn(
+                  item.cardData?.kind === "LEADER" &&
+                    "rounded-sm bg-amber-200 px-1 font-bold text-amber-950 dark:bg-amber-900 dark:text-amber-50",
+                )}
+              >
+                {cardKindLabel(userItem)}
+              </span>
+            ) : isPack ? (
+              "Card pack"
+            ) : (
+              slotLabel(userItem)
+            )}
             {showsItemLevelBadge(item) && ` · Lv ${userItem.level}`}
           </span>
         )}
       </span>
       {detail && (
-        <span className="shrink-0 text-muted-foreground text-xs font-semibold">
+        <span className="shrink-0 font-semibold text-[11px] text-muted-foreground">
           {detail}
         </span>
       )}
@@ -125,10 +176,22 @@ export const slotLabel = (userItem: UserItemWithRelations) => {
   return capitalizeFirstLetter(value);
 };
 
+/** "Unit", "Leader" or "Tactic" for a card; "Card" when its card data is missing. */
+export const cardKindLabel = (userItem: Pick<UserItemWithRelations, "item">) => {
+  const kind = userItem.item.cardData?.kind;
+  return kind ? capitalizeFirstLetter(kind) : "Card";
+};
+
+/** The badge that sets Forbidden variants apart from their base cards. */
+const cardMarker = (userItem: UserItemWithRelations) =>
+  userItem.item.itemType === "CARD" && userItem.item.cardData?.variant === "FORBIDDEN"
+    ? "Forbidden"
+    : null;
+
 /** Stack size for stacks, remaining wear for gear that wears. */
 const itemDetail = (userItem: UserItemWithRelations) => {
   if (userItem.quantity > 1) return `×${userItem.quantity}`;
-  if (userItem.item.maxDurability > 0) {
+  if (userItem.item.maxDurability > 0 && !isKessenGood(userItem.item)) {
     return `${Math.round((userItem.durability / userItem.item.maxDurability) * 100)}%`;
   }
   return null;
@@ -145,4 +208,6 @@ interface ItemCardProps {
   isTicked?: boolean;
   /** While selecting, why the card cannot be ticked. */
   blockReason?: string | null;
+  /** A short note beside the name, such as "Surplus" on a card stack. */
+  tag?: string;
 }

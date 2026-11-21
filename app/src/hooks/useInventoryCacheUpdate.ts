@@ -1,16 +1,23 @@
-import type { InvalidateOptions } from "@tanstack/react-query";
+import { type InvalidateOptions, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import type { UserItem } from "@/drizzle/schema";
+import { useKessenCardMoves } from "@/hooks/kessen/useKessenHubCache";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import type { QueryCacheUpdate } from "@/utils/queryCache";
 
 /** Preserve each view's row extensions; undefined requests authoritative reconciliation. */
 type InventoryUpdate = <T extends UserItem>(rows: T[]) => T[] | undefined;
 
-/** Reconcile the shared inventory views together, preserving each view's extra row data. */
+/**
+ * Reconcile the shared inventory views together, preserving each view's extra row data.
+ * Card stacks that leave or change also change the Card Hall's free copies, which
+ * `reconcileCardMoves` reads again.
+ */
 export const useInventoryCacheUpdate = () => {
   const utils = api.useUtils();
+  const client = useQueryClient();
+  const { reconcileCardMoves } = useKessenCardMoves();
   const inventoryKey = getQueryKey(api.item.getUserItems, undefined, "query");
   const variantsKey = getQueryKey(
     api.item.getUserItemsWithVariants,
@@ -58,10 +65,23 @@ export const useInventoryCacheUpdate = () => {
       utils.item.getUserItemsWithVariants.invalidate(undefined, undefined, options),
     ]);
   };
+  /** Item types of cached stacks, read when a mutation starts and before it removes them. */
+  const cachedItemTypes = (userItemIds: readonly string[]) =>
+    [
+      ...(client.getQueryData<RouterOutputs["item"]["getUserItems"]>(inventoryKey) ??
+        []),
+      ...(client.getQueryData<RouterOutputs["item"]["getUserItemsWithVariants"]>(
+        variantsKey,
+      ) ?? []),
+    ]
+      .filter((row) => userItemIds.includes(row.id))
+      .map((row) => row.item?.itemType);
   return {
     prepareInventoryUpdate,
     updateInventory,
     updateInventoryViews,
     invalidateInventory,
+    cachedItemTypes,
+    reconcileCardMoves,
   };
 };

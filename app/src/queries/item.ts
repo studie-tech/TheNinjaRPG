@@ -20,9 +20,11 @@ import {
   inArray,
   isNotNull,
   isNull,
+  like,
   lt,
   lte,
   ne,
+  not,
   notExists,
   notInArray,
   or,
@@ -36,6 +38,7 @@ import {
   DEFAULT_ITEM_DESCRIPTION,
   DURABILITY_MAX_DEFAULT,
   IMG_AVATAR_DEFAULT,
+  KESSEN_PACK_ID_PREFIX,
   type VariantCostType,
   type VariantCurrencyField,
   VILLAGE_SYNDICATE_ID,
@@ -80,6 +83,7 @@ import {
 } from "@/server/utils/concurrency";
 import { getItemPurchasePeriodStart, getNextUserSnapshotAt } from "@/utils/time";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
+import { CARD_ITEM_DEFAULTS, DEFAULT_CARD_DATA } from "@/validators/itemCard";
 import {
   DEFAULT_FURNITURE_DATA,
   FURNITURE_ITEM_DEFAULTS,
@@ -184,17 +188,21 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
 };
 
 // Fetch candidate calendar periods upfront, before the item's period is known.
-/** Build the daily, weekly and monthly purchase-counter lookup before the item period is known. */
+/**
+ * Build the daily, weekly and monthly purchase-counter lookup before the item period is
+ * known. `limitKey` is the item id, or the group key of items sharing one limit
+ * (`itemPurchaseLimitKey`).
+ */
 export const fetchPurchaseCounters = (
   client: DrizzleClient,
   userId: string,
-  itemId: string,
+  limitKey: string,
   now: Date,
 ) =>
   client.query.itemPurchaseCounter.findMany({
     where: and(
       eq(itemPurchaseCounter.userId, userId),
-      eq(itemPurchaseCounter.itemId, itemId),
+      eq(itemPurchaseCounter.itemId, limitKey),
       inArray(
         itemPurchaseCounter.periodStart,
         (["DAILY", "WEEKLY", "MONTHLY"] as const)
@@ -407,7 +415,30 @@ export const insertItemForCreate = (
           seichiSilverCost: 0,
         }
       : {}),
+    ...(input.type === "CARD"
+      ? {
+          ...CARD_ITEM_DEFAULTS,
+          cardData: { ...DEFAULT_CARD_DATA },
+          inShop: false,
+          cost: 0,
+          repsCost: 0,
+          seichiSilverCost: 0,
+          canBeTraded: false,
+        }
+      : {}),
   });
+
+/**
+ * Build the catalog condition for Kessen goods (cards and card packs), which only the
+ * Card Master stall lists: `only` keeps them, `exclude` drops them.
+ */
+export const kessenGoodsCondition = (mode: "only" | "exclude") => {
+  const isKessenGood = or(
+    eq(item.itemType, "CARD"),
+    like(item.id, `${KESSEN_PACK_ID_PREFIX}%`),
+  ) as SQL;
+  return mode === "only" ? isKessenGood : not(isKessenGood);
+};
 
 /** Build the `item` insert for `clone`. */
 export const insertItemForClone = (
