@@ -102,7 +102,7 @@ export const TradeRoutesPanel = ({
             {data.routes.map((route) => (
               <li key={route.id} className="rounded-md border p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="grow font-semibold">{route.partner.name}</p>
+                  <p className="grow text-base font-semibold">{route.partner.name}</p>
                   {route.status === "PROPOSED" ? (
                     <Badge variant="outline">
                       {route.proposedByUs ? "Awaiting answer" : "Proposal received"}
@@ -117,100 +117,116 @@ export const TradeRoutesPanel = ({
                   Level {route.level}/{route.maxLevel} · {route.travelMinutes} min
                   travel · {route.sectors} sectors
                 </p>
-                {route.markers.length > 0 && (
-                  <ul className="mt-2 flex flex-wrap gap-1">
-                    {route.markers.map((marker) => (
-                      <li key={marker.id}>
-                        <Badge
-                          variant={marker.controller ? "destructive" : "secondary"}
+                {(route.markers.length > 0 || data.canManage) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {route.markers.length > 0 && (
+                      <ul className="flex flex-wrap gap-1">
+                        {route.markers.map((marker) => (
+                          <li key={marker.id}>
+                            <Badge
+                              variant={marker.controller ? "destructive" : "secondary"}
+                              title={
+                                marker.controller
+                                  ? `Held by ${marker.controller}`
+                                  : `Control ${marker.control}/${TRADE_ROUTE_MARKER_MAX_CONTROL}`
+                              }
+                            >
+                              <MapPin className="mr-1 size-3" aria-hidden />
+                              {marker.sector}
+                              {marker.controller
+                                ? ` · ${marker.controller}`
+                                : ` · ${marker.control}%`}
+                            </Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {data.canManage && (
+                      <div className="ml-auto flex flex-wrap justify-end gap-2">
+                        {route.status === "PROPOSED" && !route.proposedByUs && (
+                          <>
+                            <Button
+                              size="sm"
+                              disabled={actions.respond.isPending}
+                              loading={actions.respond.isPending}
+                              onClick={() =>
+                                actions.respond.mutate({
+                                  routeId: route.id,
+                                  accept: true,
+                                })
+                              }
+                            >
+                              Accept
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={actions.respond.isPending}
+                              loading={actions.respond.isPending}
+                              onClick={() =>
+                                actions.respond.mutate({
+                                  routeId: route.id,
+                                  accept: false,
+                                })
+                              }
+                            >
+                              Decline
+                            </Button>
+                          </>
+                        )}
+                        {route.status === "ACTIVE" &&
+                          route.nextTravelMinutes !== null && (
+                            <Confirm
+                              title="Upgrade trade route"
+                              proceed_label="Upgrade"
+                              onAccept={() =>
+                                actions.upgradeRoute.mutate({ routeId: route.id })
+                              }
+                              button={
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={actions.upgradeRoute.isPending}
+                                  loading={actions.upgradeRoute.isPending}
+                                >
+                                  <CircleArrowUp className="mr-1 size-4" aria-hidden />
+                                  Upgrade
+                                </Button>
+                              }
+                            >
+                              Spend {route.upgradeCost.toLocaleString()}{" "}
+                              {data.fundsLabel} to cut travel from {route.travelMinutes}{" "}
+                              to {route.nextTravelMinutes} minutes.
+                            </Confirm>
+                          )}
+                        <Confirm
                           title={
-                            marker.controller
-                              ? `Held by ${marker.controller}`
-                              : `Control ${marker.control}/${TRADE_ROUTE_MARKER_MAX_CONTROL}`
+                            route.status === "PROPOSED"
+                              ? "Withdraw proposal"
+                              : "Close route"
+                          }
+                          proceed_label="Close"
+                          onAccept={() =>
+                            actions.closeRoute.mutate({ routeId: route.id })
+                          }
+                          button={
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={actions.closeRoute.isPending}
+                            >
+                              <X className="mr-1 size-4" aria-hidden />
+                              {route.status === "PROPOSED" && route.proposedByUs
+                                ? "Withdraw"
+                                : "Close"}
+                            </Button>
                           }
                         >
-                          <MapPin className="mr-1 size-3" aria-hidden />
-                          {marker.sector}
-                          {marker.controller
-                            ? ` · ${marker.controller}`
-                            : ` · ${marker.control}%`}
-                        </Badge>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {data.canManage && (
-                  <div className="mt-2 flex flex-wrap justify-end gap-2">
-                    {route.status === "PROPOSED" && !route.proposedByUs && (
-                      <>
-                        <Button
-                          size="sm"
-                          disabled={actions.respond.isPending}
-                          onClick={() =>
-                            actions.respond.mutate({ routeId: route.id, accept: true })
-                          }
-                        >
-                          Accept
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={actions.respond.isPending}
-                          onClick={() =>
-                            actions.respond.mutate({ routeId: route.id, accept: false })
-                          }
-                        >
-                          Decline
-                        </Button>
-                      </>
+                          Caravans already on the road still arrive; unsent ones are
+                          called off.
+                        </Confirm>
+                      </div>
                     )}
-                    {route.status === "ACTIVE" && route.nextTravelMinutes !== null && (
-                      <Confirm
-                        title="Upgrade trade route"
-                        proceed_label="Upgrade"
-                        onAccept={() =>
-                          actions.upgradeRoute.mutate({ routeId: route.id })
-                        }
-                        button={
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={actions.upgradeRoute.isPending}
-                          >
-                            <CircleArrowUp className="mr-1 size-4" aria-hidden />
-                            Upgrade
-                          </Button>
-                        }
-                      >
-                        Spend {route.upgradeCost.toLocaleString()} {data.fundsLabel} to
-                        cut travel from {route.travelMinutes} to{" "}
-                        {route.nextTravelMinutes} minutes.
-                      </Confirm>
-                    )}
-                    <Confirm
-                      title={
-                        route.status === "PROPOSED"
-                          ? "Withdraw proposal"
-                          : "Close route"
-                      }
-                      proceed_label="Close"
-                      onAccept={() => actions.closeRoute.mutate({ routeId: route.id })}
-                      button={
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={actions.closeRoute.isPending}
-                        >
-                          <X className="mr-1 size-4" aria-hidden />
-                          {route.status === "PROPOSED" && route.proposedByUs
-                            ? "Withdraw"
-                            : "Close"}
-                        </Button>
-                      }
-                    >
-                      Caravans already on the road still arrive; unsent ones are called
-                      off.
-                    </Confirm>
                   </div>
                 )}
               </li>
@@ -261,7 +277,7 @@ export const CaravansPanel = ({
                 <li key={row.id} className="rounded-md border p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Package className="size-5 text-orange-500" aria-hidden />
-                    <p className="grow font-semibold">
+                    <p className="grow text-base font-semibold">
                       {row.outgoing ? `To ${row.partner}` : `From ${row.partner}`}
                     </p>
                     <Badge
@@ -375,6 +391,7 @@ export const CaravansPanel = ({
                           disabled={
                             actions.joinEscort.isPending || user?.status !== "AWAKE"
                           }
+                          loading={actions.joinEscort.isPending}
                           onClick={() =>
                             actions.joinEscort.mutate({ caravanId: row.id })
                           }
@@ -399,6 +416,7 @@ export const CaravansPanel = ({
                       <Button
                         size="sm"
                         disabled={actions.checkIn.isPending}
+                        loading={actions.checkIn.isPending}
                         onClick={() => actions.checkIn.mutate({ caravanId: row.id })}
                       >
                         <Flag className="mr-1 size-4" aria-hidden />
@@ -441,6 +459,7 @@ export const CaravansPanel = ({
                         <Button
                           size="sm"
                           disabled={actions.dispatch.isPending}
+                          loading={actions.dispatch.isPending}
                           onClick={() => actions.dispatch.mutate({ caravanId: row.id })}
                         >
                           Dispatch
@@ -455,7 +474,7 @@ export const CaravansPanel = ({
         )}
         {data.history.length > 0 && (
           <div className="mt-3">
-            <h3 className="font-semibold">Recent caravans</h3>
+            <h3 className="text-base font-semibold">Recent caravans</h3>
             <ul className="mt-2 divide-y text-sm">
               {data.history.map((row) => (
                 <li key={row.id} className="flex flex-wrap gap-x-2 py-1">
@@ -513,15 +532,17 @@ const PrepareCaravan = ({
     (row) => row.quantity - row.reserved > 0 || isChosen(cargo[row.itemId]),
   );
   const full = routes.capacity.used >= routes.capacity.total;
-  if (active.length === 0)
+  if (active.length === 0 || full)
     return (
       <p className="text-muted-foreground mb-3 text-sm">
-        Agree an active trade route to send caravans.
+        {active.length === 0
+          ? "Agree an active trade route to send caravans."
+          : "Every trade route already has a caravan out."}
       </p>
     );
   return (
     <div className="mb-4 rounded-md border p-3">
-      <h3 className="font-semibold">Prepare a caravan</h3>
+      <h3 className="text-base font-semibold">Prepare a caravan</h3>
       <div className="mt-2 grid gap-2 @2xl:grid-cols-[1fr_2fr]">
         <Select value={routeId} onValueChange={setRouteId}>
           <SelectTrigger aria-label="Trade route">
@@ -535,7 +556,7 @@ const PrepareCaravan = ({
             ))}
           </SelectContent>
         </Select>
-        <ul className="grid gap-1 @md:grid-cols-2">
+        <ul className="grid gap-x-4 gap-y-1 @md:grid-cols-2">
           {available.map((row) => {
             const free = row.quantity - row.reserved;
             const chosen = isChosen(cargo[row.itemId]);
@@ -566,7 +587,6 @@ const PrepareCaravan = ({
           {units.toLocaleString()} / {CARAVAN_MAX_CARGO_UNITS.toLocaleString()} units
           (at least {CARAVAN_MIN_CARGO_UNITS}) · {lines.length}/
           {CARAVAN_MAX_CARGO_ITEMS} goods
-          {full ? " · every route already has a caravan out" : ""}
         </p>
         <Button
           disabled={
@@ -574,7 +594,6 @@ const PrepareCaravan = ({
             hasInvalidCargo ||
             units < CARAVAN_MIN_CARGO_UNITS ||
             units > CARAVAN_MAX_CARGO_UNITS ||
-            full ||
             actions.prepare.isPending
           }
           loading={actions.prepare.isPending}
