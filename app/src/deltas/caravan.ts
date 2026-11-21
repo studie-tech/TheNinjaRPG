@@ -4,7 +4,6 @@ import {
   CARAVAN_HISTORY_SIZE,
   CARAVAN_MAX_GROUP,
   CARAVAN_OPERATION_HISTORY_SIZE,
-  CARAVANS_PER_TRADE_ROUTE,
 } from "@/drizzle/constants";
 import { describeTradeRoute } from "@/libs/caravan";
 
@@ -58,7 +57,7 @@ export const getProposedTradeRoutes = (
   };
 };
 
-/** Open an accepted proposal with its new markers, which add caravan capacity. */
+/** Open an accepted proposal with its new markers. */
 export const getActivatedTradeRoutes = (
   current: RoutesView,
   activated: {
@@ -70,10 +69,6 @@ export const getActivatedTradeRoutes = (
   if (!current || route?.status !== "PROPOSED") return;
   return {
     ...current,
-    capacity: {
-      ...current.capacity,
-      total: current.capacity.total + CARAVANS_PER_TRADE_ROUTE,
-    },
     routes: current.routes.map((row) =>
       row === route
         ? describeTradeRoute({
@@ -89,28 +84,18 @@ export const getActivatedTradeRoutes = (
   };
 };
 
-/**
- * Remove a declined or closed route, offer its partner again and release the capacity it
- * gave, including outgoing caravans that were called off with it.
- */
+/** Remove a declined or closed route and offer its partner again. */
 export const getRemovedTradeRoutes = (
   current: RoutesView,
   removed: {
     routeId: string;
     partner: { id: string; name: string; block: string | null };
-    calledOff: number;
   },
 ): RoutesView | undefined => {
   const route = current?.routes.find((row) => row.id === removed.routeId);
   if (!current || !route) return;
   return {
     ...current,
-    capacity: {
-      total:
-        current.capacity.total -
-        (route.status === "ACTIVE" ? CARAVANS_PER_TRADE_ROUTE : 0),
-      used: Math.max(0, current.capacity.used - removed.calledOff),
-    },
     routes: current.routes.filter((row) => row !== route),
     partners: current.partners.some((partner) => partner.id === removed.partner.id)
       ? current.partners
@@ -132,21 +117,6 @@ export const getUpgradedTradeRoutes = (
     ),
   };
 };
-
-/** Count caravans the viewer's village prepared or cancelled against its route capacity. */
-export const getTradeRouteCapacity = (
-  current: RoutesView,
-  change: number,
-): RoutesView | undefined =>
-  current
-    ? {
-        ...current,
-        capacity: {
-          ...current.capacity,
-          used: Math.max(0, current.capacity.used + change),
-        },
-      }
-    : undefined;
 
 /** List a caravan the viewer's village just prepared, newest first, awaiting escorts. */
 export const getPreparedCaravans = (

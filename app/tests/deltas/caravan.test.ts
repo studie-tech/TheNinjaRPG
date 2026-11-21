@@ -19,7 +19,6 @@ import {
   getStartedOperationControls,
   getStoppedSabotageCaravans,
   getTrackedControls,
-  getTradeRouteCapacity,
   getUpgradedTradeRoutes,
 } from "@/deltas/caravan";
 import {
@@ -28,7 +27,11 @@ import {
   CARAVAN_OPERATION_HISTORY_SIZE,
   CARAVANS_PER_TRADE_ROUTE,
 } from "@/drizzle/constants";
-import { getCheckpointTimes, getRouteTravelMinutes } from "@/libs/caravan";
+import {
+  getCaravanCapacity,
+  getCheckpointTimes,
+  getRouteTravelMinutes,
+} from "@/libs/caravan";
 
 type Routes = NonNullable<RouterOutputs["tradeRoute"]["getRoutes"]>;
 type Caravans = NonNullable<RouterOutputs["caravan"]["getCaravans"]>;
@@ -41,7 +44,6 @@ const routes = (): Routes =>
     canManage: true,
     fundsLabel: "village tokens",
     hasWarehouse: true,
-    capacity: { total: CARAVANS_PER_TRADE_ROUTE, used: 1 },
     routes: [
       {
         id: "active",
@@ -166,7 +168,7 @@ describe("trade route deltas", () => {
       status: "ACTIVE",
       markers: [{ id: "m", sector: 4, control: 100, controller: null }],
     });
-    expect(next?.capacity.total).toBe(2 * CARAVANS_PER_TRADE_ROUTE);
+    expect(getCaravanCapacity(next!.routes).total).toBe(2 * CARAVANS_PER_TRADE_ROUTE);
     expect(
       getActivatedTradeRoutes(routes(), { routeId: "active", markers: [] }),
     ).toBeUndefined();
@@ -176,11 +178,10 @@ describe("trade route deltas", () => {
     const next = getRemovedTradeRoutes(routes(), {
       routeId: "active",
       partner: { id: "b", name: "B", block: null },
-      calledOff: 1,
     });
     expect(next?.routes).toEqual([]);
     expect(next?.partners.map((row) => row.id)).toEqual(["c", "b"]);
-    expect(next?.capacity).toEqual({ total: 0, used: 0 });
+    expect(getCaravanCapacity(next!.routes).total).toBe(0);
   });
 
   it("upgrades a route from its loaded level only", () => {
@@ -190,7 +191,6 @@ describe("trade route deltas", () => {
     expect(
       getUpgradedTradeRoutes(routes(), { routeId: "active", level: 3 }),
     ).toBeUndefined();
-    expect(getTradeRouteCapacity(routes(), 1)?.capacity.used).toBe(2);
   });
 });
 
@@ -220,6 +220,12 @@ describe("caravan deltas", () => {
       resolvedAt: now,
     });
     expect(cancelled?.caravans).toEqual([]);
+    // The slot a caravan fills follows it into and out of the list.
+    expect(getCaravanCapacity(routes().routes, prepared!.caravans)).toEqual({
+      total: CARAVANS_PER_TRADE_ROUTE,
+      used: 1,
+    });
+    expect(getCaravanCapacity(routes().routes, cancelled!.caravans).used).toBe(0);
     expect(cancelled?.history[0]).toEqual({
       id: "k",
       status: "CANCELLED",

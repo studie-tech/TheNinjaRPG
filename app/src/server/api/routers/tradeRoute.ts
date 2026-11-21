@@ -3,7 +3,6 @@ import { z } from "zod";
 import { getReleasedEscortUserUpdate } from "@/deltas/caravan";
 import { getPaidWarehouseChange } from "@/deltas/warehouse";
 import {
-  CARAVANS_PER_TRADE_ROUTE,
   TRADE_ROUTE_MARKER_MAX_CONTROL,
   TRADE_ROUTE_MAX_LEVEL,
   TRADE_ROUTE_UPGRADE_COST,
@@ -18,7 +17,7 @@ import {
 } from "@/libs/caravan";
 import { isFactionVillage } from "@/libs/war";
 import { findWarehouse } from "@/libs/warehouse";
-import { countOutgoingCaravans, listOpenCaravans } from "@/queries/caravan";
+import { listOpenCaravans } from "@/queries/caravan";
 import { fetchUser } from "@/queries/profile";
 import {
   acceptTradeRoute,
@@ -58,13 +57,12 @@ const activatedRouteSchema = z.object({
 });
 
 /**
- * A declined or closed route with its partner, which may be offered again, and the
- * caravans the closure called off.
+ * A declined or closed route with its partner, which may be offered again, and whether the
+ * closure changed open caravans on it.
  */
 const removedRouteSchema = z.object({
   routeId: z.string(),
   partner: z.object({ id: z.string(), name: z.string(), block: z.string().nullable() }),
-  calledOff: z.number().int(),
   caravansChanged: z.boolean().optional(),
 });
 
@@ -74,19 +72,16 @@ export const tradeRouteRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.villageId) return null;
-      const [villageData, routes, partners, relationships, wars, [outgoing]] =
-        await Promise.all([
-          fetchVillage(ctx.drizzle, user.villageId),
-          listVillageRoutes(ctx.drizzle, user.villageId),
-          listWarehouseVillages(ctx.drizzle),
-          listVillageRelationships(ctx.drizzle),
-          listOpenWars(ctx.drizzle),
-          countOutgoingCaravans(ctx.drizzle, user.villageId),
-        ]);
+      const [villageData, routes, partners, relationships, wars] = await Promise.all([
+        fetchVillage(ctx.drizzle, user.villageId),
+        listVillageRoutes(ctx.drizzle, user.villageId),
+        listWarehouseVillages(ctx.drizzle),
+        listVillageRelationships(ctx.drizzle),
+        listOpenWars(ctx.drizzle),
+      ]);
       if (!villageData) return null;
       const villageId = villageData.id;
       const names = new Map(partners.map((row) => [row.id, row.name]));
-      const active = routes.filter((route) => route.status === "ACTIVE");
       const openPartners = new Set(
         routes.map((route) =>
           route.villageIdA === villageId ? route.villageIdB : route.villageIdA,
@@ -97,10 +92,6 @@ export const tradeRouteRouter = createTRPCRouter({
         canManage: canManageTrade(user, villageData),
         fundsLabel: isFactionVillage(villageData) ? "clan points" : "village tokens",
         hasWarehouse: (findWarehouse(villageData.structures)?.level ?? 0) > 0,
-        capacity: {
-          total: active.length * CARAVANS_PER_TRADE_ROUTE,
-          used: outgoing?.count ?? 0,
-        },
         routes: routes.map((route) => {
           const isA = route.villageIdA === villageId;
           const partner = isA ? route.villageB : route.villageA;
@@ -265,7 +256,6 @@ export const tradeRouteRouter = createTRPCRouter({
           removed: {
             routeId: route.id,
             partner: { id: route.proposedByVillageId, name: proposer.name, block },
-            calledOff: 0,
           },
         };
       }
@@ -350,9 +340,6 @@ export const tradeRouteRouter = createTRPCRouter({
               isAtWar(wars, route.villageIdA, route.villageIdB),
             ),
           },
-          calledOff: preparing.filter(
-            (row, index) => cancelled[index] && row.originVillageId === own.id,
-          ).length,
           caravansChanged: caravans.length > 0,
         },
       };

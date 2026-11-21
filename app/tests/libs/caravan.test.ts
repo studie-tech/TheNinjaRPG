@@ -9,6 +9,7 @@ import {
   CARAVAN_MAX_LOSS_BP,
   CARAVAN_STEALTH_BASE_CHANCE,
   CARAVAN_STEALTH_MAX_CHANCE,
+  CARAVANS_PER_TRADE_ROUTE,
   TRADE_ROUTE_BASE_TRAVEL_MINUTES,
   TRADE_ROUTE_MAX_MARKERS,
 } from "@/drizzle/constants";
@@ -19,6 +20,7 @@ import {
   getAllowedLoss,
   getAttackerRole,
   getBanditRank,
+  getCaravanCapacity,
   getCaravanSector,
   getGuardReward,
   getJourneyProgress,
@@ -90,6 +92,21 @@ describe("trade route rules", () => {
     expect(getTradeBlock([relation("ALLY")], "a", "b", false)).toBeNull();
     expect(getTradeBlock([relation("NEUTRAL")], "a", "b", false)).toBeNull();
     expect(getTradeBlock([], "a", "a", false)).toBeString();
+  });
+
+  it("gives slots for active routes only and fills them with outgoing caravans", () => {
+    const routes = [
+      { status: "ACTIVE" },
+      { status: "PROPOSED" },
+      { status: "ACTIVE" },
+    ] as const;
+    expect(getCaravanCapacity([...routes])).toEqual({
+      total: 2 * CARAVANS_PER_TRADE_ROUTE,
+      used: 0,
+    });
+    expect(
+      getCaravanCapacity([...routes], [{ outgoing: true }, { outgoing: false }]).used,
+    ).toBe(1);
   });
 });
 

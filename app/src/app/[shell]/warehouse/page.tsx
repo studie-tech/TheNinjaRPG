@@ -40,7 +40,13 @@ export default function WarehousePage() {
               actions={actions}
             />
           )}
-          {routes && <TradeRoutesPanel data={routes} actions={actions} />}
+          {routes && (
+            <TradeRoutesPanel
+              data={routes}
+              caravans={caravans ?? undefined}
+              actions={actions}
+            />
+          )}
           {warehouse.isLeader && (
             <>
               <WarehouseProduction data={warehouse} actions={actions} />

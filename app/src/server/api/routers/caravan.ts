@@ -13,11 +13,11 @@ import {
   CARAVAN_MAX_CARGO_ITEMS,
   CARAVAN_MAX_CARGO_UNITS,
   CARAVAN_MIN_CARGO_UNITS,
-  CARAVANS_PER_TRADE_ROUTE,
 } from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
 import {
   type CargoLine,
+  getCaravanCapacity,
   getCaravanSector,
   getJourneyProgress,
   getReachedCheckpoints,
@@ -338,9 +338,7 @@ export const caravanRouter = createTRPCRouter({
         type: "RESERVE" as const,
         quantity: line.quantity,
       }));
-      const capacity =
-        routes.filter((row) => row.status === "ACTIVE").length *
-        CARAVANS_PER_TRADE_ROUTE;
+      const capacity = getCaravanCapacity(routes).total;
       const full = new CaravanConflict(
         `Your ${capacity} trade route${capacity === 1 ? "" : "s"} allow${capacity === 1 ? "s" : ""} ${capacity} caravan${capacity === 1 ? "" : "s"} at a time`,
       );

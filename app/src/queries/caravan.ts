@@ -194,21 +194,6 @@ export const listBlockedCaravans = (
           ),
         );
 
-/** Open caravans a village sends, which count against its capacity. */
-export const countOutgoingCaravans = (
-  client: Pick<DrizzleClient, "select">,
-  villageId: string,
-) =>
-  client
-    .select({ count: sql<number>`COUNT(*)`.mapWith(Number) })
-    .from(caravan)
-    .where(
-      and(
-        eq(caravan.originVillageId, villageId),
-        inArray(caravan.status, OPEN_STATUSES),
-      ),
-    );
-
 /** Participants of caravans with the player details the escort and group lists show. */
 export const listCaravanParticipants = (
   client: Pick<DrizzleClient, "select">,
