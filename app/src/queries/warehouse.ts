@@ -18,6 +18,7 @@ import type { WarehouseLogType } from "@/drizzle/constants";
 import {
   item,
   userData,
+  userItem,
   village,
   villageWarehouse,
   war,
@@ -217,30 +218,41 @@ export const ensureDepositLedger = (
 /** Claim the deposit cooldown and bonus state read for this deposit. */
 export const claimDepositLedger = (
   client: Pick<DrizzleClient, "update">,
-  input: {
-    userId: string;
-    itemId: string;
-    cooldownStart: Date;
-    now: Date;
-    expected: { withdrawnUnits: number; bonusCarry: number };
-    next: { withdrawnUnits: number; bonusCarry: number };
-  },
+  input: DepositLedgerClaim,
 ) =>
   client
     .update(warehouseDepositLedger)
     .set({ lastDepositAt: input.now, ...input.next })
-    .where(
-      and(
-        eq(warehouseDepositLedger.userId, input.userId),
-        eq(warehouseDepositLedger.itemId, input.itemId),
-        or(
-          isNull(warehouseDepositLedger.lastDepositAt),
-          lte(warehouseDepositLedger.lastDepositAt, input.cooldownStart),
-        ),
-        eq(warehouseDepositLedger.withdrawnUnits, input.expected.withdrawnUnits),
-        eq(warehouseDepositLedger.bonusCarry, input.expected.bonusCarry),
-      ),
-    );
+    .where(depositLedgerClaimWhere(input));
+
+/**
+ * Deposit part of a stack in one statement: claim the deposit ledger as
+ * {@link claimDepositLedger} does, shrink the stack to `nextQuantity` under `stackWhere`, and
+ * credit the stock row `ensureWarehouseStock` created. Each assignment is a value or its own
+ * column, and nothing changes unless all three rows match, so the deposit lands once.
+ */
+export const depositStackPart = (
+  client: Pick<DrizzleClient, "execute">,
+  input: DepositLedgerClaim & {
+    villageId: string;
+    credited: number;
+    userItemId: string;
+    nextQuantity: number;
+    stackWhere: SQL | undefined;
+  },
+) =>
+  client.execute(sql`
+    UPDATE ${warehouseDepositLedger}
+    INNER JOIN ${userItem} ON ${userItem.id} = ${input.userItemId}
+    INNER JOIN ${warehouseStock}
+      ON ${warehouseStock.villageId} = ${input.villageId} AND ${warehouseStock.itemId} = ${input.itemId}
+    SET ${warehouseDepositLedger.lastDepositAt} = ${sql.param(input.now, warehouseDepositLedger.lastDepositAt)},
+        ${warehouseDepositLedger.withdrawnUnits} = ${input.next.withdrawnUnits},
+        ${warehouseDepositLedger.bonusCarry} = ${input.next.bonusCarry},
+        ${userItem.quantity} = ${input.nextQuantity},
+        ${warehouseStock.quantity} = ${warehouseStock.quantity} + ${input.credited}
+    WHERE ${depositLedgerClaimWhere(input)} AND ${input.stackWhere ?? sql`FALSE`}
+  `);
 
 /** Record withdrawn units, which earn no deposit bonus when they come back. */
 export const addWithdrawnUnits = (
@@ -517,3 +529,26 @@ export const listOpenWars = (client: Pick<DrizzleClient, "select">) =>
     })
     .from(war)
     .where(and(eq(war.status, "ACTIVE"), isNull(war.endedAt)));
+
+/** A deposit's claim on the ledger state it was priced from. */
+const depositLedgerClaimWhere = (input: DepositLedgerClaim) =>
+  and(
+    eq(warehouseDepositLedger.userId, input.userId),
+    eq(warehouseDepositLedger.itemId, input.itemId),
+    or(
+      isNull(warehouseDepositLedger.lastDepositAt),
+      lte(warehouseDepositLedger.lastDepositAt, input.cooldownStart),
+    ),
+    eq(warehouseDepositLedger.withdrawnUnits, input.expected.withdrawnUnits),
+    eq(warehouseDepositLedger.bonusCarry, input.expected.bonusCarry),
+  );
+
+/** The ledger state a deposit read and the state it leaves. */
+type DepositLedgerClaim = {
+  userId: string;
+  itemId: string;
+  cooldownStart: Date;
+  now: Date;
+  expected: { withdrawnUnits: number; bonusCarry: number };
+  next: { withdrawnUnits: number; bonusCarry: number };
+};

@@ -44,6 +44,7 @@ import {
   claimDepositLedger,
   claimWithdrawal,
   creditWarehouseStock,
+  depositStackPart,
   ensureDepositLedger,
   ensureWarehouseStock,
   findVillageWarehouse,
@@ -62,7 +63,10 @@ import {
 } from "@/queries/warehouse";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
-import { updateUserItemQuantityAtomically } from "@/server/utils/concurrency";
+import {
+  updateUserItemQuantityAtomically,
+  userItemQuantityWhere,
+} from "@/server/utils/concurrency";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { settleProduction, WarehouseConflict } from "@/server/utils/warehouse";
@@ -265,58 +269,74 @@ export const warehouseRouter = createTRPCRouter({
         type: "DEPOSIT" as const,
         quantity: credit.credited,
       };
-      if (!ledger) await ensureDepositLedger(ctx.drizzle, ctx.userId, stack.itemId);
-      try {
-        // Consuming the stack may delete it, which no UPDATE can join, and the credit is an
-        // upsert of a stock row that may be missing; committing both with the cooldown claim
-        // keeps the donation from vanishing or doubling.
-        await retryOnDeadlock(() =>
-          ctx.drizzle.transaction(async (tx) => {
-            const claimed = await claimDepositLedger(tx, {
-              userId: ctx.userId,
-              itemId: stack.itemId,
-              cooldownStart: secondsFromDate(
-                -WAREHOUSE_DEPOSIT_COOLDOWN_HOURS * HOUR_S,
-                now,
-              ),
-              now,
-              expected: {
-                withdrawnUnits: ledger?.withdrawnUnits ?? 0,
-                bonusCarry: ledger?.bonusCarry ?? 0,
-              },
-              next: {
-                withdrawnUnits: credit.withdrawnUnits,
-                bonusCarry: credit.bonusCarry,
-              },
-            });
-            if (claimed.rowsAffected !== 1) throw conflict;
-            const consumed = await updateUserItemQuantityAtomically({
-              client: tx,
-              userId: ctx.userId,
-              userItemId: stack.id,
-              expectedQuantity: stack.quantity,
-              nextQuantity: stack.quantity - input.quantity,
-              // The stack must still be carried and unequipped, as it was when read.
-              where: [
-                eq(userItem.storedAtHome, false),
-                eq(userItem.isInAuction, false),
-                eq(userItem.equipped, "NONE"),
-                or(
-                  isNull(userItem.craftingFinishedAt),
-                  lte(userItem.craftingFinishedAt, now),
-                ),
-              ],
-            });
-            if (!consumed) throw conflict;
-            await creditWarehouseStock(tx, villageData.id, [
-              { itemId: stack.itemId, quantity: credit.credited },
-            ]);
-            await insertWarehouseLogs(tx, [log], now);
+      const claim = {
+        userId: ctx.userId,
+        itemId: stack.itemId,
+        cooldownStart: secondsFromDate(-WAREHOUSE_DEPOSIT_COOLDOWN_HOURS * HOUR_S, now),
+        now,
+        expected: {
+          withdrawnUnits: ledger?.withdrawnUnits ?? 0,
+          bonusCarry: ledger?.bonusCarry ?? 0,
+        },
+        next: { withdrawnUnits: credit.withdrawnUnits, bonusCarry: credit.bonusCarry },
+      };
+      const remaining = stack.quantity - input.quantity;
+      // The stack must still be carried and unequipped, as it was when read.
+      const carried = [
+        eq(userItem.storedAtHome, false),
+        eq(userItem.isInAuction, false),
+        eq(userItem.equipped, "NONE"),
+        or(isNull(userItem.craftingFinishedAt), lte(userItem.craftingFinishedAt, now)),
+      ];
+      await Promise.all([
+        ledger ? undefined : ensureDepositLedger(ctx.drizzle, ctx.userId, stack.itemId),
+        ensureWarehouseStock(ctx.drizzle, villageData.id, [stack.itemId]),
+      ]);
+      if (remaining > 0) {
+        const deposited = await depositStackPart(ctx.drizzle, {
+          ...claim,
+          villageId: villageData.id,
+          credited: credit.credited,
+          userItemId: stack.id,
+          nextQuantity: remaining,
+          stackWhere: userItemQuantityWhere({
+            userId: ctx.userId,
+            userItemId: stack.id,
+            expectedQuantity: stack.quantity,
+            where: carried,
           }),
-        );
-      } catch (error) {
-        if (error instanceof WarehouseConflict) return errorResponse(error.message);
-        throw error;
+        });
+        if (deposited.rowsAffected === 0) return errorResponse(conflict.message);
+        // History follows the deposit: a failure here costs only a log row support can add.
+        await insertWarehouseLogs(ctx.drizzle, [log], now);
+      } else {
+        try {
+          // A whole stack is deleted, and no MySQL statement deletes one row while it updates
+          // others; committing the deletion with the cooldown claim and the credit keeps the
+          // donation from vanishing or doubling.
+          await retryOnDeadlock(() =>
+            ctx.drizzle.transaction(async (tx) => {
+              const claimed = await claimDepositLedger(tx, claim);
+              if (claimed.rowsAffected !== 1) throw conflict;
+              const consumed = await updateUserItemQuantityAtomically({
+                client: tx,
+                userId: ctx.userId,
+                userItemId: stack.id,
+                expectedQuantity: stack.quantity,
+                nextQuantity: 0,
+                where: carried,
+              });
+              if (!consumed) throw conflict;
+              await creditWarehouseStock(tx, villageData.id, [
+                { itemId: stack.itemId, quantity: credit.credited },
+              ]);
+              await insertWarehouseLogs(tx, [log], now);
+            }),
+          );
+        } catch (error) {
+          if (error instanceof WarehouseConflict) return errorResponse(error.message);
+          throw error;
+        }
       }
       return {
         success: true,
