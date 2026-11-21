@@ -135,19 +135,6 @@ export const caravanOpsRouter = createTRPCRouter({
           participations.flatMap((row) => row.loot?.map((line) => line.itemId) ?? []),
         ),
       ]);
-      const villageNames = new Map<string, string>();
-      for (const row of caravans) {
-        if (row.originName) villageNames.set(row.originVillageId, row.originName);
-        if (row.destinationName)
-          villageNames.set(row.destinationVillageId, row.destinationName);
-      }
-      for (const marker of markers) {
-        if (marker.villageNameA)
-          villageNames.set(marker.villageIdA, marker.villageNameA);
-        if (marker.villageNameB)
-          villageNames.set(marker.villageIdB, marker.villageNameB);
-      }
-      const villageName = (id: string) => villageNames.get(id) ?? "Unknown village";
       const known = new Set(markerDiscoveries.map((row) => row.markerId));
       const committed = participations.find((row) => row.activeUserId);
       // A group join racing delivery can outlive the caravan; free it so the player can act again.
@@ -215,8 +202,8 @@ export const caravanOpsRouter = createTRPCRouter({
             return {
               id: row.id,
               status: row.status,
-              origin: villageName(row.originVillageId),
-              destination: villageName(row.destinationVillageId),
+              origin: row.originName ?? "Unknown village",
+              destination: row.destinationName ?? "Unknown village",
               departedAt: row.departedAt,
               arrivesAt: row.arrivesAt,
               role,
@@ -249,7 +236,7 @@ export const caravanOpsRouter = createTRPCRouter({
           )
           .map((marker) => ({
             id: marker.id,
-            route: `${villageName(marker.villageIdA)} – ${villageName(marker.villageIdB)}`,
+            route: `${marker.villageNameA ?? "Unknown village"} – ${marker.villageNameB ?? "Unknown village"}`,
             control: marker.control,
             controller: marker.controllerVillageId
               ? (marker.controllerName ?? "Unknown village")
