@@ -2182,6 +2182,8 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   allyAIs: "Ally AI [and number]",
   startWave: "Tower defense start wave",
   waves: "Waves to clear (counting the start wave)",
+  stage: "Chakra Storm region (sets the difficulty)",
+  surviveMinutes: "Minutes to survive",
   enemyHealth: "Enemy health (% of a normal run)",
   enemyDamage: "Enemy damage (% of a normal run)",
   nextObjectiveId: "Next Objective ID",

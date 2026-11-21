@@ -136,7 +136,13 @@ const REFILL_PER_TICK = 1;
 export interface CsRunConfig {
   stage: CsStage;
   training: CsTrainingLevels;
+  /** A quest challenge: the run is won once the hero has survived `seconds`. */
+  challenge?: { seconds: number };
 }
+
+/** Seconds a run lasts at most: a challenge's survival time, or the region's full run. */
+export const csRunLength = (config: CsRunConfig) =>
+  config.challenge?.seconds ?? csRunSeconds(config.stage);
 
 export type CsAction =
   /** Walk in one of the sixteen directions, or stand still with -1. */
@@ -472,7 +478,7 @@ export const stepCs = (state: CsState) => {
   state.enemies = state.enemies.filter((enemy) => enemy.hp > 0);
   state.tick++;
   if (state.hero.hp <= 0) fall(state);
-  else if (state.tick >= csRunSeconds(state.config.stage) * CS_TPS) endRun(state, true);
+  else if (state.tick >= csRunLength(state.config) * CS_TPS) endRun(state, true);
   // A draft earned this tick opens at its end, so a pick recorded now replays against it.
   if (!state.over) openDraft(state);
 };

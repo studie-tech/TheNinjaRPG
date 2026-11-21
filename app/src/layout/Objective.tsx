@@ -14,6 +14,7 @@ import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { CHAKRA_STORM_STAGE_NAMES } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
@@ -37,6 +38,7 @@ import { useRequiredUserDataSelector, useUserDataSelector } from "@/utils/UserCo
 import type {
   AllObjectivesType,
   QuestTrackerType,
+  WinChakraStormType,
   WinTowerDefenseType,
 } from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
@@ -282,7 +284,30 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
             </div>
           )}
           {parsed.task === "win_tower_defense" && !done && !props.grayedOut && (
-            <TowerDefenseChallengeAction questId={tracker.id} objective={parsed} />
+            <QuestChallengeAction
+              questId={tracker.id}
+              objective={parsed}
+              page="/towerDefense"
+              label="Take position"
+            >
+              Hold your ground through {parsed.waves === 1 ? "wave" : "waves"}{" "}
+              {parsed.startWave}
+              {parsed.waves > 1 ? `–${parsed.startWave + parsed.waves - 1}` : ""}{" "}
+              against enemies with {parsed.enemyHealth}% health and {parsed.enemyDamage}
+              % damage.
+            </QuestChallengeAction>
+          )}
+          {parsed.task === "win_chakra_storm" && !done && !props.grayedOut && (
+            <QuestChallengeAction
+              questId={tracker.id}
+              objective={parsed}
+              page="/chakraStorm"
+              label="Enter the storm"
+            >
+              Survive {parsed.surviveMinutes}{" "}
+              {parsed.surviveMinutes === 1 ? "minute" : "minutes"} of the Chakra Storm
+              in {CHAKRA_STORM_STAGE_NAMES[parsed.stage]}.
+            </QuestChallengeAction>
           )}
           {/* Retry button for lost start_battle objectives that are still open */}
           {canRetryBattle && (
@@ -310,9 +335,16 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
  * its location. A hidden location cannot be checked here, so the server decides.
  * Subscribes to a single boolean so movement re-renders it only when arriving or leaving.
  */
-const TowerDefenseChallengeAction = (props: {
+const QuestChallengeAction = (props: {
   questId: string;
-  objective: WinTowerDefenseType;
+  objective: Pick<
+    WinTowerDefenseType | WinChakraStormType,
+    "id" | "sector" | "longitude" | "latitude" | "hideLocation"
+  >;
+  /** The minigame page the challenge is played on. */
+  page: "/towerDefense" | "/chakraStorm";
+  label: string;
+  children: React.ReactNode;
 }) => {
   const { objective } = props;
   const { data: isHere } = useUserDataSelector(
@@ -322,24 +354,20 @@ const TowerDefenseChallengeAction = (props: {
         u.longitude === objective.longitude &&
         u.latitude === objective.latitude),
   );
-  const finalWave = objective.startWave + objective.waves - 1;
   return (
     <div className="@container mt-2 pr-3">
       <div className="flex flex-col gap-2 @md:flex-row @md:items-center">
         <p className="grow text-sm">
-          Hold your ground through {objective.waves === 1 ? "wave" : "waves"}{" "}
-          {objective.startWave}
-          {objective.waves > 1 ? `–${finalWave}` : ""} against enemies with{" "}
-          {objective.enemyHealth}% health and {objective.enemyDamage}% damage.
+          {props.children}
           {!isHere && " Travel to the position above to start."}
         </p>
         {isHere && (
           <Button asChild size="sm" className="shrink-0">
             <Link
-              href={`/towerDefense?quest=${encodeURIComponent(props.questId)}&objective=${encodeURIComponent(objective.id)}`}
+              href={`${props.page}?quest=${encodeURIComponent(props.questId)}&objective=${encodeURIComponent(objective.id)}`}
             >
               <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
-              Take position
+              {props.label}
             </Link>
           </Button>
         )}

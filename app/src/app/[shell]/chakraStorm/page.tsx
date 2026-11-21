@@ -5,14 +5,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { CS_SFX, type CsSfx } from "@/drizzle/constants";
 import { useChakraStormRun } from "@/hooks/useChakraStormRun";
+import { ChakraStormChallenge } from "@/layout/ChakraStormChallenge";
 import { ChakraStormLobby } from "@/layout/ChakraStormLobby";
 import { ChakraStormPlayfield } from "@/layout/ChakraStormPlayfield";
 import ContentBox from "@/layout/ContentBox";
 import { useGameSettings } from "@/layout/GameSettings";
 import Loader from "@/layout/Loader";
+import { QUEST_LOGBOOK_HREF, QuestChallengeRoute } from "@/layout/QuestChallenge";
 import { CS_STAGE_INFO, CS_STAGES, type CsStage } from "@/libs/chakraStorm/content";
 import { csStageUnlocked } from "@/libs/chakraStorm/progress";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import { findQuestChallenge } from "@/libs/quest/challenge";
 import { tdDailyDutyDone, tdDailyReward } from "@/libs/towerDefense/balance";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { useUserDataSelector } from "@/utils/UserContext";
@@ -52,6 +55,11 @@ export default function ChakraStormPage() {
     bloodlineId: profile.bloodlineId,
     isOutlaw: profile.isOutlaw,
     status: profile.status,
+    userQuests: profile.userQuests,
+    questData: profile.questData,
+    sector: profile.sector,
+    longitude: profile.longitude,
+    latitude: profile.latitude,
   }));
   const run = useChakraStormRun(user?.userId);
   const roster = api.towerDefense.getRoster.useQuery(undefined, {
@@ -112,8 +120,8 @@ export default function ChakraStormPage() {
   if (isSignedIn && (!isClerkLoaded || (!user && status === "pending")))
     return <Loader explanation="Loading your scout..." />;
 
-  if (run.phase === "lobby")
-    return (
+  if (run.phase === "lobby") {
+    const lobby = (
       <ContentBox
         title="Chakra Storm"
         subtitle="Scout Seichi for your village"
@@ -151,10 +159,42 @@ export default function ChakraStormPage() {
         />
       </ContentBox>
     );
+    // A quest challenge is opened from the logbook by its query; the prerendered page,
+    // guests and visitors without one see the lobby.
+    return (
+      <QuestChallengeRoute
+        lobby={lobby}
+        render={(request) => {
+          const challenge = user
+            ? findQuestChallenge(user, request, "win_chakra_storm")
+            : null;
+          return user ? (
+            <ContentBox
+              title="Survive the Storm"
+              subtitle="Hold out in the storm until the time is up"
+              defaultBackHref={QUEST_LOGBOOK_HREF}
+            >
+              <ChakraStormChallenge
+                challenge={challenge}
+                isStarting={run.isStarting}
+                onStart={() => {
+                  if (!challenge) return;
+                  playSound("dash", 0.4);
+                  void run.start(challenge.objective.stage, request);
+                }}
+              />
+            </ContentBox>
+          ) : (
+            lobby
+          );
+        }}
+      />
+    );
+  }
 
   return (
     <ContentBox
-      title="Chakra Storm"
+      title={run.hud?.config.challenge ? "Survive the Storm" : "Chakra Storm"}
       subtitle={run.hud ? CS_STAGE_INFO[run.hud.config.stage].name : "Scouting"}
       defaultBackHref="/manual#minigames"
       onBack={run.leave}

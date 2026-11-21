@@ -31,6 +31,7 @@ import type {
 } from "@/hooks/useChakraStormRun";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import { QUEST_LOGBOOK_HREF } from "@/layout/QuestChallenge";
 import {
   CS_JUTSU_INFO,
   CS_PASSIVE_INFO,
@@ -167,7 +168,11 @@ export const ChakraStormOverlay = (props: {
             {CS_STAGE_INFO[hud.config.stage].endless ? (
               <CoverProgress seconds={seconds} record={props.record} />
             ) : (
-              <RunProgress seconds={seconds} goal={props.goal} />
+              <RunProgress
+                seconds={seconds}
+                goal={props.goal}
+                survive={hud.config.challenge?.seconds}
+              />
             )}
             <span className="flex items-center gap-1 text-sm font-bold text-white/90 tabular-nums">
               <Skull className="h-3.5 w-3.5 shrink-0" />
@@ -228,21 +233,27 @@ export const ChakraStormOverlay = (props: {
  * region opens, and one line
  * naming the next goal and how long is left to reach it.
  */
-const RunProgress = (props: { seconds: number; goal: CsUnlockGoal | null }) => {
+const RunProgress = (props: {
+  seconds: number;
+  goal: CsUnlockGoal | null;
+  /** A quest challenge's survival time, which ends the run in place of reinforcements. */
+  survive?: number;
+}) => {
   const { seconds, goal } = props;
   const pending = goal && seconds < goal.seconds ? goal : null;
+  const end = props.survive ?? CS_RUN_SECONDS;
   return (
     <>
       <div className="relative my-0.5 h-1.5 w-28 rounded-full border border-white/25 bg-black/55">
         <div
           className="h-full rounded-full bg-amber-300"
-          style={{ width: `${Math.min(100, (100 * seconds) / CS_RUN_SECONDS)}%` }}
+          style={{ width: `${Math.min(100, (100 * seconds) / end)}%` }}
         />
         {pending && (
           <span
             aria-hidden
             className="absolute -top-1 h-3 w-0.5 rounded-full bg-emerald-300"
-            style={{ left: `${(100 * pending.seconds) / CS_RUN_SECONDS}%` }}
+            style={{ left: `${(100 * pending.seconds) / end}%` }}
           />
         )}
       </div>
@@ -253,6 +264,14 @@ const RunProgress = (props: { seconds: number; goal: CsUnlockGoal | null }) => {
         >
           <Unlock className="h-3.5 w-3.5 shrink-0" />
           Next region in {formatClock(pending.seconds - seconds)}
+        </span>
+      ) : props.survive ? (
+        <span
+          className="flex items-center gap-1 text-sm font-bold whitespace-nowrap text-amber-200 tabular-nums"
+          title={`Survive until ${formatClock(props.survive)} to weather the storm`}
+        >
+          <Timer className="h-3.5 w-3.5 shrink-0" />
+          Survive {formatClock(Math.max(0, props.survive - seconds))} more
         </span>
       ) : (
         <span
@@ -598,6 +617,7 @@ export const ChakraStormPaused = (props: {
   const seconds = props.hud.tick / CS_TPS;
   const endless = !!CS_STAGE_INFO[props.hud.config.stage].endless;
   const pending = props.goal && seconds < props.goal.seconds ? props.goal : null;
+  const survive = props.hud.config.challenge?.seconds;
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/70 p-4 text-center text-white">
       <span className="text-3xl font-black">Paused</span>
@@ -618,6 +638,12 @@ export const ChakraStormPaused = (props: {
               {formatClock(props.record)}
             </p>
           )
+        ) : survive ? (
+          <p className="text-balance text-amber-200">
+            <Timer className="mr-1.5 inline h-4 w-4 align-[-0.15em]" />
+            Survive {formatClock(Math.max(0, survive - seconds))} more to weather the
+            storm
+          </p>
         ) : (
           <p className="text-balance text-amber-200">
             <Users className="mr-1.5 inline h-4 w-4 align-[-0.15em]" />
@@ -626,7 +652,9 @@ export const ChakraStormPaused = (props: {
           </p>
         )}
         <p className="text-sm font-normal text-white/75">
-          Giving up ends the run and banks the intel scouted so far.
+          {survive
+            ? "Giving up abandons the storm without surviving it."
+            : "Giving up ends the run and banks the intel scouted so far."}
         </p>
       </div>
       <div className="flex gap-2">
@@ -670,7 +698,9 @@ export const ChakraStormResults = (props: {
                 ? `Extracted with your report after ${formatClock(outcome.seconds)}`
                 : `Cover blown at ${formatClock(outcome.seconds)}`
               : outcome.won
-                ? "Scouting complete: report delivered!"
+                ? outcome.challenge
+                  ? "You survived the storm!"
+                  : "Scouting complete: report delivered!"
                 : `Forced to retreat at ${formatClock(outcome.seconds)}`}
           </h3>
         </div>
@@ -694,6 +724,8 @@ export const ChakraStormResults = (props: {
               </Button>
             )}
           </div>
+        ) : outcome.challenge ? (
+          <p className="text-base">{outcome.message}</p>
         ) : (
           <div className="flex items-center justify-center gap-2 rounded-lg border border-violet-400/50 bg-violet-500/10 p-2 text-base font-bold">
             <Gem className="h-5 w-5 shrink-0 text-violet-500" />+
@@ -726,28 +758,50 @@ export const ChakraStormResults = (props: {
             Your best run in this region
           </p>
         )}
-        <div className="flex flex-wrap justify-center gap-2">
-          <Button variant="outline" disabled={verifying} onClick={props.onLeave}>
-            Train and choose region
-          </Button>
-          <Button
-            variant={opened ? "outline" : "default"}
-            disabled={verifying}
-            onClick={props.onAgain}
-          >
-            Scout again
-          </Button>
-          {opened && (
-            <Button disabled={verifying} onClick={() => props.onScout(opened)}>
-              Scout {CS_STAGE_INFO[opened].name}
+        {outcome.challenge ? (
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" disabled={verifying} onClick={props.onLeave}>
+              Back
             </Button>
-          )}
-          {stage.endless && <LeaderboardButton />}
-        </div>
-        {stage.endless && outcome.claim === "local" && (
-          <p className="text-muted-foreground text-sm">
-            Sign in to rank your Undercover runs on the monthly leaderboard.
-          </p>
+            {outcome.won ? (
+              <Button asChild disabled={verifying}>
+                <Link href={QUEST_LOGBOOK_HREF}>
+                  <ScrollText className="mr-1.5 h-4 w-4" />
+                  Open logbook
+                </Link>
+              </Button>
+            ) : (
+              <Button disabled={verifying} onClick={props.onAgain}>
+                Try again
+              </Button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="outline" disabled={verifying} onClick={props.onLeave}>
+                Train and choose region
+              </Button>
+              <Button
+                variant={opened ? "outline" : "default"}
+                disabled={verifying}
+                onClick={props.onAgain}
+              >
+                Scout again
+              </Button>
+              {opened && (
+                <Button disabled={verifying} onClick={() => props.onScout(opened)}>
+                  Scout {CS_STAGE_INFO[opened].name}
+                </Button>
+              )}
+              {stage.endless && <LeaderboardButton />}
+            </div>
+            {stage.endless && outcome.claim === "local" && (
+              <p className="text-muted-foreground text-sm">
+                Sign in to rank your Undercover runs on the monthly leaderboard.
+              </p>
+            )}
+          </>
         )}
         {props.footer}
       </div>

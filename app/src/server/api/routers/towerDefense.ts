@@ -1,16 +1,13 @@
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import {
-  getChallengeQuestUserUpdate,
-  getDailyDutyUserUpdate,
-} from "@/deltas/towerDefense";
+import { getQuestChallengeUserUpdate } from "@/deltas/questChallenge";
+import { getDailyDutyUserUpdate } from "@/deltas/towerDefense";
 import { userData } from "@/drizzle/schema";
-import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { findQuestChallenge } from "@/libs/quest/challenge";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
 import { decodeTdActions } from "@/libs/towerDefense/actionLog";
 import { tdDailyReward, tdFulfilsDailyDuty } from "@/libs/towerDefense/balance";
-import { findTowerDefenseChallenge } from "@/libs/towerDefense/challenge";
 import {
   TD_DOJO,
   TD_DOJO_INFO,
@@ -46,7 +43,7 @@ import {
   ratelimitMiddleware,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { handleQuestConsequences } from "@/server/utils/questConsequences";
+import { recordQuestChallengeWin } from "@/server/utils/questChallenge";
 import { signRunToken, verifyRunToken } from "@/server/utils/runTokens";
 import {
   areTowerDefenseClaimsEnabled,
@@ -59,10 +56,12 @@ import {
 } from "@/server/utils/towerDefenseClaims";
 import { periodStart } from "@/utils/time";
 import {
+  type QuestChallengeRequest,
+  questChallengeRequestSchema,
+} from "@/validators/questChallenge";
+import {
   TD_MAX_LOG_CHARS,
   TD_MAX_TICKS,
-  type TdChallengeRequest,
-  tdChallengeRequestSchema,
   towerDefenseRunTokenSchema,
 } from "@/validators/towerDefense";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -110,7 +109,7 @@ export const towerDefenseRouter = createTRPCRouter({
     .input(
       z.object({
         startWave: z.int().min(1),
-        challenge: tdChallengeRequestSchema.optional(),
+        challenge: questChallengeRequestSchema.optional(),
       }),
     )
     .output(
@@ -143,7 +142,7 @@ export const towerDefenseRouter = createTRPCRouter({
       if (!progress) return errorResponse("User not found.");
       const bestWave = progress.towerDefenseBestWave;
       const quest = input.challenge
-        ? findQuestChallenge(questUser?.user, input.challenge)
+        ? findTowerDefenseChallenge(questUser?.user, input.challenge)
         : null;
       if (quest?.message) return errorResponse(quest.message);
       if (!quest && !tdCheckpoints(bestWave).includes(input.startWave))
@@ -419,12 +418,12 @@ const alreadyClaimed = (earned: { wave: number; kills: number; points: number })
  * The challenge of an active `win_tower_defense` objective the player stands on, or why
  * it cannot start. The objective's location is the one rolled for this player.
  */
-const findQuestChallenge = (
+const findTowerDefenseChallenge = (
   user: UserWithRelations | undefined,
-  request: TdChallengeRequest,
+  request: QuestChallengeRequest,
 ) => {
   if (!user) return { message: "User not found." };
-  const found = findTowerDefenseChallenge(user, request);
+  const found = findQuestChallenge(user, request, "win_tower_defense");
   if (!found || found.done || !found.available)
     return {
       message: "This defense is not an open objective of your active quests.",
@@ -453,64 +452,28 @@ const findQuestChallenge = (
  * best wave, entering the leaderboard or counting for the daily duty, and its receipt
  * answers a retry. The objective is recorded before the run retires, so a claim that
  * fails in between is retried in full, and completing an objective twice changes nothing.
- * The record is guarded on the run still being active, so a simultaneous claim that
- * loads the player after this run settled cannot complete the objective again, such as
- * on a repeatable quest accepted anew in between.
  */
 const settleChallengeRun = async (
   ctx: { drizzle: DrizzleClient; userId: string },
   input: {
     nonce: string;
-    challenge: TdChallengeRequest;
+    challenge: QuestChallengeRequest;
     claimKey: string;
     result: { wave: number; kills: number; won: boolean };
   },
 ) => {
   const { nonce, challenge, claimKey, result } = input;
-  let completedFor: UserWithRelations | undefined;
-  let battle: Awaited<ReturnType<typeof handleQuestConsequences>>["battleUserUpdate"];
-  if (result.won) {
-    const { user } = await fetchUpdatedUser({
-      client: ctx.drizzle,
-      userId: ctx.userId,
-    });
-    if (!user) return errorResponse("User not found.");
-    const isDone = (questData: typeof user.questData) =>
-      !!questData
-        ?.find((tracker) => tracker.id === challenge.questId)
-        ?.goals.some((goal) => goal.id === challenge.objectiveId && goal.done);
-    // A retry after the objective was recorded only retires the run.
-    if (isDone(user.questData)) completedFor = user;
-    else {
-      const { trackers, consequences, notifications } = getNewTrackers(user, [
-        {
-          task: "win_tower_defense",
-          contentId: challenge.objectiveId,
-          text: challenge.questId,
-        },
-      ]);
-      if (isDone(trackers)) {
-        user.questData = filterQuestTrackersForDbPersist(trackers, user);
-        const recorded = await handleQuestConsequences(
-          ctx.drizzle,
-          user,
-          consequences,
-          notifications,
-          {
-            alwaysClaimUserState: true,
-            claimConditions: [eq(userData.towerDefenseActiveRun, nonce)],
-          },
-        );
-        if (!recorded.claimed)
-          return errorResponse(
-            "Your character changed while the defense was recorded. Claim it again.",
-          );
-        user.questData = trackers;
-        completedFor = user;
-        battle = recorded.battleUserUpdate;
-      }
-    }
-  }
+  const recorded = result.won
+    ? await recordQuestChallengeWin({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        challenge,
+        task: "win_tower_defense",
+        runIsActive: eq(userData.towerDefenseActiveRun, nonce),
+      })
+    : { ok: true as const };
+  if (!recorded.ok) return errorResponse(recorded.message);
+  const { completedFor, battle } = recorded;
   const settled = await updateUserDataForClaimTowerDefenseRun(ctx.drizzle, ctx, {
     nonce,
     points: 0,
@@ -536,7 +499,7 @@ const settleChallengeRun = async (
     pointsEarned: 0,
     wave: result.wave,
     kills: result.kills,
-    ...getChallengeQuestUserUpdate(completedFor, battle),
+    ...getQuestChallengeUserUpdate(completedFor, battle),
   };
 };
 

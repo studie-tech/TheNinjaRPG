@@ -1,7 +1,19 @@
 /**
  * Database access for Chakra Storm; authorization and replay stay in callers.
  */
-import { and, desc, eq, gt, gte, isNull, lt, notExists, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gt,
+  gte,
+  isNull,
+  lt,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
@@ -19,6 +31,27 @@ export const findChakraStormProgress = (
   client.query.chakraStormProgress.findFirst({
     where: eq(chakraStormProgress.userId, ctx.userId),
   });
+
+/**
+ * Build the condition that the caller's run `nonce` is still their active one, for a
+ * guarded write on their profile row.
+ */
+export const chakraStormRunIsActive = (
+  client: Pick<DrizzleClient, "select">,
+  ctx: { userId: string },
+  nonce: string,
+) =>
+  exists(
+    client
+      .select({ userId: chakraStormProgress.userId })
+      .from(chakraStormProgress)
+      .where(
+        and(
+          eq(chakraStormProgress.userId, ctx.userId),
+          eq(chakraStormProgress.activeRun, nonce),
+        ),
+      ),
+  );
 
 /** Build the claimant's level and village, which the daily scouting report pays by. */
 export const findChakraStormClaimant = (

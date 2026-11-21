@@ -48,6 +48,7 @@ import {
   type AllObjectiveTask,
   CombatActivityTasks,
   CompletionTasks,
+  isQuestChallengeTask,
   ObjectiveTracker,
   type ObjectiveTrackerType,
   QuestCompletionTasks,
@@ -321,8 +322,8 @@ export const getArrivalQuestTriggers = (
         },
         objective,
       );
-      // A tower defense challenge completes only from its run's claim, never on arrival.
-      const completesOnArrival = objective.task !== "win_tower_defense";
+      // A minigame challenge completes only from its run's claim, never on arrival.
+      const completesOnArrival = !isQuestChallengeTask(objective.task);
       if (
         (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
         ((completesOnArrival &&
@@ -853,12 +854,12 @@ export const getNewTrackers = (
             status.selectedNextObjectiveId = objective.nextObjectiveId;
           }
 
-          // A tower defense challenge completes only from its own verified win, which the
+          // A minigame challenge completes only from its own verified win, which the
           // run's claim reports with this objective's id and its quest's id as `text`
           // (cloned quests share objective ids); arriving or `any` never does.
           if (
-            task === "win_tower_defense" &&
-            taskUpdate.task === "win_tower_defense" &&
+            isQuestChallengeTask(task) &&
+            taskUpdate.task === task &&
             taskUpdate.contentId === objective.id &&
             taskUpdate.text === quest.id
           ) {

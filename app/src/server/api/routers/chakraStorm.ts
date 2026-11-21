@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getScoutingReportUserUpdate } from "@/deltas/chakraStorm";
+import { getQuestChallengeUserUpdate } from "@/deltas/questChallenge";
 import { decodeCsActions } from "@/libs/chakraStorm/actionLog";
 import {
   CS_DAILY_SECONDS,
@@ -13,13 +14,16 @@ import {
 } from "@/libs/chakraStorm/content";
 import {
   type CsProgress,
+  type CsRunResult,
   csStageUnlocked,
   parseCsProgress,
   settleCsRun,
 } from "@/libs/chakraStorm/progress";
 import { CS_SIM_VERSION } from "@/libs/chakraStorm/sim";
+import { findQuestChallenge } from "@/libs/quest/challenge";
 import { tdDailyReward } from "@/libs/towerDefense/balance";
 import {
+  chakraStormRunIsActive,
   findChakraStormClaimant,
   findChakraStormClaimReceipt,
   findChakraStormProgress,
@@ -31,6 +35,7 @@ import {
   upsertChakraStormProgressForStartRun,
 } from "@/queries/chakraStorm";
 import { incrementVillageTokens } from "@/queries/village";
+import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
 import {
   baseServerResponse,
   cdnCachedProcedure,
@@ -39,6 +44,7 @@ import {
   protectedProcedure,
   ratelimitMiddleware,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import {
   areChakraStormClaimsEnabled,
   CHAKRA_STORM_CLAIMS_PAUSED_MESSAGE,
@@ -48,6 +54,7 @@ import {
   reserveChakraStormReplay,
   verifyChakraStormRun,
 } from "@/server/utils/chakraStormClaims";
+import { recordQuestChallengeWin } from "@/server/utils/questChallenge";
 import { signRunToken, verifyRunToken } from "@/server/utils/runTokens";
 import { getFirstOfThisMonth, periodStart } from "@/utils/time";
 import {
@@ -57,6 +64,10 @@ import {
   CS_MAX_TICKS,
   chakraStormRunTokenSchema,
 } from "@/validators/chakraStorm";
+import {
+  type QuestChallengeRequest,
+  questChallengeRequestSchema,
+} from "@/validators/questChallenge";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const stageRecordSchema = z.object({
@@ -77,22 +88,49 @@ export const chakraStormRouter = createTRPCRouter({
       progressFrom(await findChakraStormProgress(ctx.drizzle, ctx)),
     ),
 
-  /** Sign a new scouting run in an open region with the caller's training. */
+  /**
+   * Sign a new scouting run in an open region with the caller's training, or a quest
+   * challenge run for an active `win_chakra_storm` objective whose location the caller
+   * stands on. A challenge takes its region and survival time from the objective, never
+   * from the request, and its region does not need to be open.
+   */
   startRun: protectedProcedure
     .meta({ mcp: { description: "Start a Chakra Storm scouting run" } })
     .use(ratelimitMiddleware)
-    .input(z.object({ stage: z.enum(CS_STAGES) }))
+    .input(
+      z.object({
+        stage: z.enum(CS_STAGES),
+        challenge: questChallengeRequestSchema.optional(),
+      }),
+    )
     .output(
       baseServerResponse.extend({
         token: z.string().optional(),
         seed: z.string().optional(),
+        stage: z.enum(CS_STAGES).optional(),
         training: z.record(z.enum(CS_TRAINING), z.number()).optional(),
+        challenge: chakraStormRunTokenSchema.shape.challenge,
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const progress = progressFrom(await findChakraStormProgress(ctx.drizzle, ctx));
-      if (!csStageUnlocked(progress, input.stage))
-        return errorResponse(`${CS_STAGE_INFO[input.stage].name} is not open yet.`);
+      const [row, questUser] = await Promise.all([
+        findChakraStormProgress(ctx.drizzle, ctx),
+        input.challenge
+          ? fetchUpdatedUser({
+              client: ctx.drizzle,
+              userId: ctx.userId,
+              rejectIsolatedPyramid: true,
+            })
+          : undefined,
+      ]);
+      const progress = progressFrom(row);
+      const quest = input.challenge
+        ? findStormChallenge(questUser?.user, input.challenge)
+        : null;
+      if (quest?.message) return errorResponse(quest.message);
+      const stage = quest?.stage ?? input.stage;
+      if (!quest && !csStageUnlocked(progress, stage))
+        return errorResponse(`${CS_STAGE_INFO[stage].name} is not open yet.`);
       const seed = nanoid();
       const nonce = nanoid();
       // Only the latest run can be claimed, so runs are never played side by side.
@@ -103,16 +141,19 @@ export const chakraStormRouter = createTRPCRouter({
         userId: ctx.userId,
         nonce,
         seed,
-        stage: input.stage,
+        stage,
         training: progress.training,
         issuedAt: Date.now(),
+        challenge: quest?.challenge,
       };
       return {
         success: true,
         message: "Run started",
         token: signRunToken(payload),
         seed,
+        stage,
         training: progress.training,
+        challenge: quest?.challenge,
       };
     }),
 
@@ -212,6 +253,14 @@ export const chakraStormRouter = createTRPCRouter({
         won: result.won,
         bosses: result.bosses,
       };
+      if (token.challenge)
+        return await settleStormChallenge(ctx, {
+          nonce: token.nonce,
+          challenge: token.challenge,
+          claimKey,
+          run,
+          stages: progressFrom(row).stages,
+        });
       const settled = settleCsRun(progressFrom(row), run);
       const paid = await updateChakraStormProgressForClaimRun(ctx.drizzle, ctx, {
         nonce: token.nonce,
@@ -322,6 +371,86 @@ const refusedForGood = (message: string) => ({
   ...errorResponse(message),
   permanent: true,
 });
+
+/**
+ * The challenge of an active `win_chakra_storm` objective the player stands on, or why it
+ * cannot start. The objective's location is the one rolled for this player.
+ */
+const findStormChallenge = (
+  user: UserWithRelations | undefined,
+  request: QuestChallengeRequest,
+) => {
+  if (!user) return { message: "User not found." };
+  const found = findQuestChallenge(user, request, "win_chakra_storm");
+  if (!found || found.done || !found.available)
+    return { message: "This storm is not an open objective of your active quests." };
+  const { objective } = found;
+  if (!found.atLocation)
+    return {
+      message: objective.hideLocation
+        ? "You are not at this position."
+        : `Travel to sector ${objective.sector} at [${objective.longitude}, ${objective.latitude}] to face the storm there.`,
+    };
+  return {
+    stage: objective.stage,
+    challenge: { ...request, seconds: objective.surviveMinutes * 60 },
+  };
+};
+
+/**
+ * Settle a replayed quest challenge run. A win records its objective in the player's
+ * quest trackers; win or lose, the run then retires without paying intel, setting a region
+ * record or delivering the daily report, and its receipt answers a retry. The objective is
+ * recorded before the run retires, so a claim that fails in between is retried in full.
+ */
+const settleStormChallenge = async (
+  ctx: { drizzle: DrizzleClient; userId: string },
+  input: {
+    nonce: string;
+    challenge: QuestChallengeRequest;
+    claimKey: string;
+    run: CsRunResult;
+    stages: CsProgress["stages"];
+  },
+) => {
+  const { nonce, challenge, claimKey, run } = input;
+  const recorded = run.won
+    ? await recordQuestChallengeWin({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        challenge,
+        task: "win_chakra_storm",
+        runIsActive: chakraStormRunIsActive(ctx.drizzle, ctx, nonce),
+      })
+    : { ok: true as const };
+  if (!recorded.ok) return errorResponse(recorded.message);
+  const { completedFor, battle } = recorded;
+  const settled = await updateChakraStormProgressForClaimRun(ctx.drizzle, ctx, {
+    nonce,
+    intel: 0,
+    stages: input.stages,
+  });
+  // A simultaneous claim of this run settled it; the objective it completed stays done.
+  if (settled.rowsAffected === 0 && !completedFor)
+    return refusedForGood(REPLACED_RUN_MESSAGE);
+  if (settled.rowsAffected > 0)
+    await insertChakraStormClaimReceipt(ctx.drizzle, ctx, {
+      claimKey,
+      ...run,
+      intel: 0,
+    });
+  const clock = `${Math.floor(run.seconds / 60)}:${String(run.seconds % 60).padStart(2, "0")}`;
+  return {
+    success: true,
+    message: !run.won
+      ? `The storm drove you back at ${clock}. Return to the position when you are ready.`
+      : completedFor
+        ? "The storm has passed. Continue the quest in your logbook."
+        : "You survived the storm, but this quest objective is no longer open.",
+    intelEarned: 0,
+    ...getQuestChallengeUserUpdate(completedFor, battle),
+  };
+};
 
 /** Stored progress read through the same validation as the device's own. */
 const progressFrom = (

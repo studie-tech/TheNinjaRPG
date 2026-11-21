@@ -147,8 +147,11 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
         }
       } else if (objective.task === "dialog") {
         objective.image = IMG_BADGE_DIALOG;
-      } else if (objective.task === "win_tower_defense") {
-        objective.image = objectiveImageMap.win_tower_defense.image;
+      } else if (
+        objective.task === "win_tower_defense" ||
+        objective.task === "win_chakra_storm"
+      ) {
+        objective.image = objectiveImageMap[objective.task].image;
       }
       return objective;
     });
