@@ -343,7 +343,7 @@ const TowerDefenseChallengeAction = (props: {
               href={`/towerDefense?quest=${encodeURIComponent(props.questId)}&objective=${encodeURIComponent(objective.id)}`}
             >
               <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
-              Start challenge
+              Open challenge
             </Link>
           </Button>
         )}

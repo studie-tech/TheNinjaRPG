@@ -1,6 +1,6 @@
 "use client";
 
-import { Trophy } from "lucide-react";
+import { ScrollText, Trophy } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { type ReactNode, Suspense, useEffect, useMemo } from "react";
@@ -228,6 +228,20 @@ export default function TowerDefensePage() {
         confirmLeave={leaveGuard.confirmDiscard}
         guestNote={
           <p className="text-sm">Log in to keep scrolls and train in the Guard Hall.</p>
+        }
+        resultsFooter={
+          run.outcome?.challenge &&
+          run.outcome.won &&
+          run.outcome.claimed && (
+            <div className="flex justify-center">
+              <Button asChild>
+                <Link href="/profile">
+                  <ScrollText className="mr-2 h-4 w-4" />
+                  Open logbook
+                </Link>
+              </Button>
+            </div>
+          )
         }
       />
     </ContentBox>

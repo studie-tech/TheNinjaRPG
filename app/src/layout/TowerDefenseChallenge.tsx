@@ -161,10 +161,14 @@ export const TowerDefenseChallenge = (props: {
             title="Replace your saved run?"
             button={startButton}
             disabled={busy}
-            confirmDisabled={busy}
             tone="destructive"
-            proceed_label="Start challenge"
-            onAccept={() => props.onStart(true)}
+            proceed_label="Discard and start"
+            proceed_loading_label="Preparing"
+            isLoading={props.isStarting}
+            onAccept={(event) => {
+              event.preventDefault();
+              props.onStart(true);
+            }}
           >
             {saved.over
               ? `Your ${savedRun} at wave ${saved.wave} has not been claimed yet. Starting the challenge discards it${saved.config.challenge ? "" : " and the scrolls it earned"}.`

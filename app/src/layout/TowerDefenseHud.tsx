@@ -305,7 +305,9 @@ export const TowerDefenseOverlay = (props: {
           title={
             opening
               ? "Skip the preparation and start the first wave"
-              : "Call the next wave early for bonus ryo (N)"
+              : isFinalWave
+                ? "Clear this wave to win the challenge"
+                : "Call the next wave early for bonus ryo (N)"
           }
           className="pointer-events-auto flex shrink-0 items-center gap-1 rounded-md bg-amber-500 px-2 py-1 font-semibold text-black disabled:bg-black/50 disabled:text-white/80"
         >
