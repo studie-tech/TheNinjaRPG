@@ -515,6 +515,7 @@ export const caravanRouter = createTRPCRouter({
           title: "Caravan departed",
           body: `Your caravan departed and arrives in ${travelMinutes} minutes.`,
           route: "/warehouse",
+          refresh: ["caravans"],
         },
       );
       return {
@@ -745,6 +746,7 @@ export const caravanRouter = createTRPCRouter({
           title: "Sabotage stopped",
           body: "An escort caught you at work on their caravan and stopped your sabotage.",
           route: "/warehouse",
+          refresh: ["controls"],
         });
         return {
           success: true,

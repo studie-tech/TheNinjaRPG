@@ -22,6 +22,7 @@ import { useCraftingServiceEvents } from "@/hooks/useCraftingServiceEvents";
 import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
 import Link from "@/layout/Link";
 import { getAudioPreference } from "@/libs/audioPreferences";
+import type { CaravanNoticeView } from "@/libs/caravan";
 import {
   chatMentionsAtom,
   chatPanelAtom,
@@ -70,6 +71,8 @@ export type UserEvent = {
   countedAt?: number;
   /** The message accompanies a committed crafting escrow, delivery or refund. */
   craftingService?: boolean;
+  /** Caravan and trade route views the notice announces a change to. */
+  refresh?: CaravanNoticeView[];
 };
 
 /**
@@ -481,14 +484,23 @@ export const usePusherHandler = (
           ) {
             if (data.type === "homeInvitation")
               await utils.home.getHomeRequests.invalidate();
-            // A delivery or cancellation woke the escort and may have paid them.
+            // A delivery or cancellation woke the escort and may have paid them. A shown
+            // caravan list reloads the Warehouse itself when the refreshed list moved stock.
             if (data.type === "caravanEscortReleased")
               await Promise.all([
                 utils.profile.getUser.invalidate(),
                 utils.caravan.getCaravans.invalidate(),
                 utils.caravanOps.getControls.invalidate(),
-                utils.warehouse.getWarehouse.invalidate(),
+                utils.warehouse.getWarehouse.invalidate(undefined, {
+                  refetchType: "none",
+                }),
               ]);
+            const refresh = data.refresh ?? [];
+            await Promise.all([
+              refresh.includes("caravans") && utils.caravan.getCaravans.invalidate(),
+              refresh.includes("routes") && utils.tradeRoute.getRoutes.invalidate(),
+              refresh.includes("controls") && utils.caravanOps.getControls.invalidate(),
+            ]);
             showMutationToast({
               success: true,
               message: data.message ?? "You have a new message",

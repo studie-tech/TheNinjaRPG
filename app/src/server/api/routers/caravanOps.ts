@@ -403,6 +403,7 @@ export const caravanOpsRouter = createTRPCRouter({
             title: "Caravan sabotage",
             body: `${user.username} is sabotaging your caravan. Intervene within ${minutes} minutes!`,
             route: "/warehouse",
+            refresh: ["caravans"],
           },
         );
       return actionReadinessResponse(

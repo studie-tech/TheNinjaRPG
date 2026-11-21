@@ -21,6 +21,7 @@ import type {
   UserData,
 } from "@/drizzle/schema";
 import {
+  type CaravanNoticeView,
   getAllowedDelay,
   getAttackerRole,
   getCaravanSector,
@@ -340,12 +341,19 @@ export const deliverCaravan = async (
 
 /**
  * Alert players in game and on their devices. `releasesEscort` marks escorts the caravan
- * woke and may have paid, so their open tabs reload the profile and caravan views.
+ * woke and may have paid, so their open tabs reload the profile and caravan views;
+ * `refresh` names the views the notice announces a change to, which those tabs reload.
  */
 export const notifyPlayers = (
   client: DrizzleClient,
   userIds: string[],
-  message: { title: string; body: string; route: string; releasesEscort?: boolean },
+  message: {
+    title: string;
+    body: string;
+    route: string;
+    releasesEscort?: boolean;
+    refresh?: CaravanNoticeView[];
+  },
 ) => {
   const recipients = [...new Set(userIds)];
   if (recipients.length === 0) return;
@@ -357,6 +365,7 @@ export const notifyPlayers = (
           message: message.body,
           route: message.route,
           routeText: "Open",
+          refresh: message.refresh,
         }),
         sendPushToUsers(client, recipients, {
           title: message.title,
@@ -664,6 +673,7 @@ const rollCheckpointAmbushes = async (
           title: "Caravan ambushed",
           body: `Bandits ambush your caravan! Defend it within ${CARAVAN_AMBUSH_RESPONSE_MINUTES} minutes.`,
           route: "/warehouse",
+          refresh: ["caravans"],
         },
       );
     }),
