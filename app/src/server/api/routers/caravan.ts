@@ -30,12 +30,12 @@ import {
   checkInGuard,
   deleteGuard,
   dispatchCargo,
-  findCaravan,
   insertCaravanWithinCapacity,
   insertGuard,
   listActiveSabotage,
   listCaravanAi,
   listCaravanParticipants,
+  listCaravansByIds,
   listDueOperations,
   listFinishedVillageCaravans,
   listOpenEncounters,
@@ -395,9 +395,9 @@ export const caravanRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [user, row] = await Promise.all([
+      const [user, [row]] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        findCaravan(ctx.drizzle, input.caravanId),
+        listCaravansByIds(ctx.drizzle, [input.caravanId]),
       ]);
       if (row?.status !== "PREPARING")
         return errorResponse("Only caravans that have not departed can be cancelled");
@@ -436,9 +436,9 @@ export const caravanRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [user, row] = await Promise.all([
+      const [user, [row]] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        findCaravan(ctx.drizzle, input.caravanId),
+        listCaravansByIds(ctx.drizzle, [input.caravanId]),
       ]);
       if (row?.status !== "PREPARING")
         return errorResponse("This caravan is not waiting to depart");
@@ -527,9 +527,9 @@ export const caravanRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [updated, row, participations] = await Promise.all([
+      const [updated, [row], participations] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        findCaravan(ctx.drizzle, input.caravanId),
+        listCaravansByIds(ctx.drizzle, [input.caravanId]),
         listUserParticipations(ctx.drizzle, ctx.userId),
       ]);
       if (!updated.user) return errorResponse("User not found");
@@ -584,7 +584,7 @@ export const caravanRouter = createTRPCRouter({
     .input(z.object({ caravanId: z.string() }))
     .output(userDeltaResponseSchema.extend({ guardId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const row = await findCaravan(ctx.drizzle, input.caravanId);
+      const [row] = await listCaravansByIds(ctx.drizzle, [input.caravanId]);
       if (row?.status !== "PREPARING")
         return errorResponse("Escorts are committed once the caravan departs");
       const removed = await deleteGuard(ctx.drizzle, row.id, ctx.userId);
@@ -618,7 +618,7 @@ export const caravanRouter = createTRPCRouter({
     .input(z.object({ caravanId: z.string() }))
     .output(baseServerResponse.extend({ guardId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const row = await findCaravan(ctx.drizzle, input.caravanId);
+      const [row] = await listCaravansByIds(ctx.drizzle, [input.caravanId]);
       if (row?.status !== "TRAVELLING")
         return errorResponse("The caravan is not travelling");
       const reached = getReachedCheckpoints(row);
@@ -638,8 +638,8 @@ export const caravanRouter = createTRPCRouter({
     .input(z.object({ encounterId: z.string(), caravanId: z.string() }))
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const [row, participants, encounters, pool] = await Promise.all([
-        findCaravan(ctx.drizzle, input.caravanId),
+      const [[row], participants, encounters, pool] = await Promise.all([
+        listCaravansByIds(ctx.drizzle, [input.caravanId]),
         listCaravanParticipants(ctx.drizzle, [input.caravanId]),
         listOpenEncounters(ctx.drizzle, [input.caravanId]),
         listCaravanAi(ctx.drizzle),
@@ -685,8 +685,8 @@ export const caravanRouter = createTRPCRouter({
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
-      const [row, participants, sabotage] = await Promise.all([
-        findCaravan(ctx.drizzle, input.caravanId),
+      const [[row], participants, sabotage] = await Promise.all([
+        listCaravansByIds(ctx.drizzle, [input.caravanId]),
         listCaravanParticipants(ctx.drizzle, [input.caravanId]),
         listActiveSabotage(ctx.drizzle, [input.caravanId], now),
       ]);

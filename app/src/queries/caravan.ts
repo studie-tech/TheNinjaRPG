@@ -65,10 +65,6 @@ const OPEN_ENCOUNTER_STATUSES = ["PENDING", "STARTING", "FIGHTING"] as const;
 const originVillage = alias(village, "originVillage");
 const destinationVillage = alias(village, "destinationVillage");
 
-/** One caravan. */
-export const findCaravan = (client: Pick<DrizzleClient, "query">, caravanId: string) =>
-  client.query.caravan.findFirst({ where: eq(caravan.id, caravanId) });
-
 /** Caravans by id. */
 export const listCaravansByIds = (
   client: Pick<DrizzleClient, "select">,

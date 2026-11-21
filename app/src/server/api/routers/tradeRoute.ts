@@ -20,7 +20,7 @@ import { listOpenCaravans } from "@/queries/caravan";
 import { fetchUser } from "@/queries/profile";
 import {
   acceptTradeRoute,
-  closeTradeRoute,
+  closeTradeRoutes,
   findTradeRoute,
   insertRouteMarkers,
   insertTradeRoute,
@@ -224,7 +224,7 @@ export const tradeRouteRouter = createTRPCRouter({
         route.villageIdB,
       );
       if (!input.accept) {
-        const closed = await closeTradeRoute(ctx.drizzle, route.id, now);
+        const closed = await closeTradeRoutes(ctx.drizzle, { routeId: route.id }, now);
         if (closed.rowsAffected !== 1)
           return errorResponse("This proposal is no longer open");
         const proposer =
@@ -291,7 +291,7 @@ export const tradeRouteRouter = createTRPCRouter({
       if (!own || !canManageTrade(user, own))
         return errorResponse("Only the Kage and Elders manage trade routes");
       const now = new Date();
-      const closed = await closeTradeRoute(ctx.drizzle, route.id, now);
+      const closed = await closeTradeRoutes(ctx.drizzle, { routeId: route.id }, now);
       if (closed.rowsAffected !== 1) return errorResponse("Route already closed");
       // Travelling caravans continue to their destination; unsent ones are called off.
       const caravans = await listOpenCaravans(ctx.drizzle, [route.id]);

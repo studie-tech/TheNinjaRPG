@@ -78,10 +78,13 @@ export const acceptTradeRoute = (
     .set({ status: "ACTIVE", acceptedAt: now })
     .where(and(eq(tradeRoute.id, routeId), eq(tradeRoute.status, "PROPOSED")));
 
-/** Close or decline a route, freeing the pair for a new agreement. */
-export const closeTradeRoute = (
+/**
+ * Close or decline one open or proposed route, or every one of a village, freeing their
+ * pairs for new agreements.
+ */
+export const closeTradeRoutes = (
   client: Pick<DrizzleClient, "update">,
-  routeId: string,
+  target: { routeId: string } | { villageId: string },
   now: Date,
 ) =>
   client
@@ -89,23 +92,12 @@ export const closeTradeRoute = (
     .set({ status: "CLOSED", openPair: null, closedAt: now })
     .where(
       and(
-        eq(tradeRoute.id, routeId),
-        inArray(tradeRoute.status, ["PROPOSED", "ACTIVE"]),
-      ),
-    );
-
-/** Close every open or proposed route of a village. */
-export const closeVillageTradeRoutes = (
-  client: Pick<DrizzleClient, "update">,
-  villageId: string,
-  now: Date,
-) =>
-  client
-    .update(tradeRoute)
-    .set({ status: "CLOSED", openPair: null, closedAt: now })
-    .where(
-      and(
-        or(eq(tradeRoute.villageIdA, villageId), eq(tradeRoute.villageIdB, villageId)),
+        "routeId" in target
+          ? eq(tradeRoute.id, target.routeId)
+          : or(
+              eq(tradeRoute.villageIdA, target.villageId),
+              eq(tradeRoute.villageIdB, target.villageId),
+            ),
         inArray(tradeRoute.status, ["PROPOSED", "ACTIVE"]),
       ),
     );

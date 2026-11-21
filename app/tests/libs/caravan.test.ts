@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import {
-  BANDIT_REQUIRED_EXP,
   CARAVAN_CHECKPOINTS,
   CARAVAN_GUARD_DELIVERY_RYO,
   CARAVAN_GUARD_OBJECTIVE_RYO,
@@ -19,7 +18,6 @@ import {
   getAllowedDelay,
   getAllowedLoss,
   getAttackerRole,
-  getBanditRank,
   getCaravanCapacity,
   getCaravanSector,
   getCheckpointTimes,
@@ -206,12 +204,6 @@ describe("roles and rewards", () => {
     const outlaw = { isOutlaw: true, isBandit: false, villageId: "s" };
     expect(getAttackerRole(outlaw, "b", [], [])).toBeNull();
     expect(getAttackerRole({ ...outlaw, isBandit: true }, "b", [], [])).toBe("BANDIT");
-  });
-
-  it("ranks bandits by experience", () => {
-    expect(getBanditRank(0)).toBe("HIGHWAYMAN");
-    expect(getBanditRank(BANDIT_REQUIRED_EXP.MARAUDER)).toBe("MARAUDER");
-    expect(getBanditRank(BANDIT_REQUIRED_EXP["BANDIT CHIEF"])).toBe("BANDIT CHIEF");
   });
 
   it("scales covert chance with stealth up to the cap", () => {

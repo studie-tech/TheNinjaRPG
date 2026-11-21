@@ -2,7 +2,9 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   BANDIT_RANK_LABELS,
+  CARAVAN_BANDIT_MIN_GROUP,
   CARAVAN_DISCOVERY_MINUTES,
+  CARAVAN_ENEMY_MIN_GROUP,
   CARAVAN_MAX_GROUP,
   CARAVAN_MAX_LOSS_BP,
   CARAVAN_OPERATION_HISTORY_SIZE,
@@ -20,12 +22,10 @@ import {
   getBanditRank,
   getBanditRankProgress,
   getCaravanSector,
-  getMinGroupSize,
   getOperationChance,
   getOperationMinutes,
   getStealBp,
   getStealthChance,
-  isAtWar,
   rollChance,
 } from "@/libs/caravan";
 import {
@@ -80,7 +80,6 @@ import {
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { WarehouseConflict } from "@/server/utils/warehouse";
-import { findRelationship } from "@/utils/alliance";
 import { MINUTE_S, secondsFromDate } from "@/utils/time";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -652,7 +651,8 @@ export const caravanOpsRouter = createTRPCRouter({
       if (!hasSighting(discoveries, target.id))
         return errorResponse("Locate the caravan first");
       const sector = getCaravanSector(target, now);
-      const minimum = getMinGroupSize(group.role);
+      const minimum =
+        group.role === "BANDIT" ? CARAVAN_BANDIT_MIN_GROUP : CARAVAN_ENEMY_MIN_GROUP;
       if (group.members.length < minimum)
         return errorResponse(`Gather at least ${minimum} raiders`);
       if (group.members.some((m) => m.sector !== sector))
@@ -909,9 +909,7 @@ const getMarkerAssaultBlock = (
     ? [marker.controllerVillageId]
     : [marker.villageIdA, marker.villageIdB];
   const hostile = holders.some(
-    (holder) =>
-      isAtWar(wars, villageId, holder) ||
-      findRelationship(relationships, villageId, holder)?.status === "ENEMY",
+    (holder) => getAttackerRole(user, holder, relationships, wars) === "ENEMY",
   );
   return hostile ? null : "Only enemies of the holding village can assault it";
 };

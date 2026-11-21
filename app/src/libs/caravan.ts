@@ -5,9 +5,7 @@ import {
   BANDIT_STEAL_BP,
   BANDIT_SUCCESS_CHANCE,
   type BanditRank,
-  CARAVAN_BANDIT_MIN_GROUP,
   CARAVAN_CHECKPOINTS,
-  CARAVAN_ENEMY_MIN_GROUP,
   CARAVAN_ENEMY_SCOUT_MINUTES,
   CARAVAN_GUARD_DELIVERY_RYO,
   CARAVAN_GUARD_OBJECTIVE_RYO,
@@ -35,7 +33,7 @@ import type { Caravan, UserData, VillageAlliance } from "@/drizzle/schema";
 import { getRankForExperience, getRankProgress } from "@/libs/occupationRank";
 import { sectorGridNeighbors } from "@/libs/sector-map/world-grid";
 import { findRelationship, isVillagePair } from "@/utils/alliance";
-import { secureRandomInt } from "@/utils/math";
+import { clamp, secureRandomInt } from "@/utils/math";
 
 /** A shipment's manifest line. */
 export type CargoLine = { itemId: string; quantity: number };
@@ -142,12 +140,10 @@ export const planRouteMarkers = (
   const interior = [...new Set(path.slice(1, -1))];
   const count = Math.min(
     interior.length,
-    Math.max(
+    clamp(
+      Math.round(path.length / TRADE_ROUTE_SECTORS_PER_MARKER),
       TRADE_ROUTE_MIN_MARKERS,
-      Math.min(
-        TRADE_ROUTE_MAX_MARKERS,
-        Math.round(path.length / TRADE_ROUTE_SECTORS_PER_MARKER),
-      ),
+      TRADE_ROUTE_MAX_MARKERS,
     ),
   );
   const pool = [...interior];
@@ -161,7 +157,7 @@ export const planRouteMarkers = (
 };
 
 /** Whether two villages fight each other in an open war. */
-export const isAtWar = (
+const isAtWar = (
   wars: OpenWar[],
   villageIdA?: string | null,
   villageIdB?: string | null,
@@ -196,10 +192,7 @@ export const getJourneyProgress = (
   if (!caravan.departedAt || !caravan.arrivesAt) return 0;
   const total = caravan.arrivesAt.getTime() - caravan.departedAt.getTime();
   if (total <= 0) return 1;
-  return Math.min(
-    1,
-    Math.max(0, (now.getTime() - caravan.departedAt.getTime()) / total),
-  );
+  return clamp((now.getTime() - caravan.departedAt.getTime()) / total, 0, 1);
 };
 
 /** Sector a caravan is passing through; its origin until it departs. */
@@ -320,10 +313,6 @@ export const getOperationMinutes = (
 export const getStealBp = (banditExperience: number) =>
   BANDIT_STEAL_BP[getBanditRank(banditExperience)];
 
-/** Smallest interception group of a role. */
-export const getMinGroupSize = (role: CaravanRole) =>
-  role === "BANDIT" ? CARAVAN_BANDIT_MIN_GROUP : CARAVAN_ENEMY_MIN_GROUP;
-
 /**
  * Side a player may take against a caravan of another village: outlaw bandits rob any
  * caravan, and shinobi of an enemy or warring village disrupt it. Guards are its own
@@ -344,10 +333,7 @@ export const getAttackerRole = (
 };
 
 /** Roll a percent chance. */
-export const rollChance = (
-  percent: number,
-  pick: (maxExclusive: number) => number = secureRandomInt,
-) => pick(10_000) < percent * 100;
+export const rollChance = (percent: number) => secureRandomInt(10_000) < percent * 100;
 
 /**
  * Everything settlement needs about a caravan or marker fight, frozen when it starts so the

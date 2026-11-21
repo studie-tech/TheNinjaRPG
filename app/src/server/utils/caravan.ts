@@ -60,7 +60,7 @@ import {
 } from "@/queries/caravan";
 import { findGameSettingByName } from "@/queries/gamesettings";
 import {
-  closeVillageTradeRoutes,
+  closeTradeRoutes,
   listSectorMarkers,
   listVillageRelationships,
   upsertMarkerDiscoveries,
@@ -74,6 +74,7 @@ import type { DrizzleClient } from "@/server/db";
 import { isServingElder } from "@/server/utils/kageGovernance";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
+import { caravanNotice } from "@/server/utils/push/messages";
 import { secureRandomInt } from "@/utils/math";
 import { HOUR_S, MINUTE_S, secondsFromDate } from "@/utils/time";
 
@@ -247,7 +248,7 @@ export const closeVillageTrade = async (
 ) => {
   const [caravans] = await Promise.all([
     listOpenVillageCaravans(client, villageId),
-    closeVillageTradeRoutes(client, villageId, now),
+    closeTradeRoutes(client, { villageId }, now),
   ]);
   // One at a time: inside an outer transaction each cancel is a savepoint of the same name.
   for (const row of caravans) await callOffCaravan(client, row, now);
@@ -364,12 +365,7 @@ export const notifyPlayers = (
       refresh: message.refresh,
     }),
   );
-  deferPushToUsers(client, recipients, {
-    title: message.title,
-    body: message.body,
-    category: "combat",
-    url: route,
-  });
+  deferPushToUsers(client, recipients, caravanNotice(message, route));
 };
 
 /** Kage and Elders manage a village's agreements and caravans. */

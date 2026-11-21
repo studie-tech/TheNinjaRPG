@@ -37,7 +37,7 @@ import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { getCheckpointTimes } from "@/libs/caravan";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
-import { DAY_S, MINUTE_S, secondsFromDate } from "@/utils/time";
+import { MINUTE_S, nextUtcDayAt, secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -94,7 +94,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
     [
       warehouse.data?.nextCycleAt,
       // The daily allowance starts again at UTC midnight.
-      warehouse.data && Date.parse(warehouse.data.allowance.day) + DAY_S * 1000,
+      warehouse.data && nextUtcDayAt(new Date(warehouse.data.allowance.day)),
       ...(warehouse.data?.depositCandidates.map((row) => row.availableAt) ?? []),
     ],
     () => void warehouse.refetch({ cancelRefetch: false }),

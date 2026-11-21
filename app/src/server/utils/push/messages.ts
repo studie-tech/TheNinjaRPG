@@ -63,6 +63,12 @@ export const warUpdate = (warId: string): PushMessage => ({
   collapseId: `war-${warId}`,
 });
 
+/** A caravan or trade route notice, linking the page it concerns. */
+export const caravanNotice = (
+  notice: { title: string; body: string },
+  url: string,
+): PushMessage => ({ title: notice.title, body: notice.body, category: "combat", url });
+
 export const raidBattleStarted = (battleId: string): PushMessage => ({
   title: "Your raid team has started a battle",
   body: "Open the game to join your team's battle.",
