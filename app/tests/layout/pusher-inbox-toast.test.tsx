@@ -615,6 +615,54 @@ it("refreshes cached inventory and service views when an inbox event delivers co
   expect(refreshProfile).toHaveBeenCalledTimes(1);
 });
 
+it("refreshes a released escort's profile and caravan views with the notice", async () => {
+  let receiveEvent!: (data: UserEvent) => Promise<void>;
+  vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({
+      bind: (_event: string, handler: typeof receiveEvent) => {
+        receiveEvent = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+  })) as never);
+  const showToast = vi
+    .spyOn(toast, "showMutationToast")
+    .mockImplementation(() => undefined);
+  showToast.mockClear();
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  queryClients.push(queryClient);
+  const keys = [
+    getQueryKey(testApi.profile.getUser, undefined, "query"),
+    getQueryKey(testApi.caravan.getCaravans, undefined, "query"),
+    getQueryKey(testApi.caravanOps.getControls, undefined, "query"),
+    getQueryKey(testApi.warehouse.getWarehouse, undefined, "query"),
+  ];
+  for (const key of keys) queryClient.setQueryData(key, {});
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      {children}
+    </TrpcTestProviders>
+  );
+  renderHook(() => usePusherHandler("player"), { wrapper });
+  await connectPusher();
+  await act(async () =>
+    receiveEvent({
+      type: "caravanEscortReleased",
+      message: "Your caravan arrived.",
+      route: "/warehouse",
+    }),
+  );
+  for (const key of keys)
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  expect(showToast).toHaveBeenCalledTimes(1);
+  expect(showToast.mock.calls[0]![0].message).toBe("Your caravan arrived.");
+});
+
 it.each(["confirmed", "confirmed-late", "failed", "acknowledged", "list-in-flight"])(
   "uses the confirmed service profile unless inbox ordering requires another read: %s",
   async (outcome) => {
