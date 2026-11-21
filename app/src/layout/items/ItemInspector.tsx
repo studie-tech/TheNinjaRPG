@@ -262,7 +262,7 @@ export function ItemInspector({
           owned={useritem}
           crafter={userData.occupation === "CRAFTING"}
           money={userData.money}
-          blocked={isLoading || userData.status !== "AWAKE" || !!userData.battleId}
+          blocked={isLoading || !canAttemptAwakeAction(userData) || !!userData.battleId}
         />
       )}
       {!isLoading && !isStored && (

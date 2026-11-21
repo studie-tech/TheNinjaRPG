@@ -221,7 +221,7 @@ export function CraftingServices({ navigation }: { navigation?: React.ReactNode 
                                 </>
                               )}
                             </p>
-                            {row.fortify && (
+                            {row.status === "COMPLETED" && row.fortify && (
                               <p className="text-sm">
                                 Fortify {row.fortify.succeeded ? "succeeded" : "failed"}
                                 ; attempt cost {row.fortify.cost.toLocaleString()} ryo.{" "}

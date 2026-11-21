@@ -3,10 +3,15 @@ import { cleanup, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import type { Item } from "@/drizzle/schema";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import { userItemToAction } from "@/libs/combat/actions";
+import { availableUserActions, userItemToAction } from "@/libs/combat/actions";
 import type { CombatAction } from "@/libs/combat/types";
-import { FinalStandTag } from "@/validators/combat";
-import { makeBattleUserItem, makeBattleWithWeapon, makeUser } from "../setup/combat";
+import { ElementalDamageTag, FinalStandTag, HealTag } from "@/validators/combat";
+import {
+  makeBattleUserItem,
+  makeBattleWithWeapon,
+  makeCompleteBattle,
+  makeUser,
+} from "../setup/combat";
 import { mockUserContextValue } from "../setup/userContext";
 
 const names = { useQuery: () => ({ data: [] }) };
@@ -55,5 +60,34 @@ it.each([0, 1, 5])(
     }
     expect(action.effects[0]?.power).toBe(100 + level);
     expect(effect.power).toBe(100);
+  },
+);
+
+it.each([false, true])(
+  "matches authored Fortify identities in resolved combat previews (replaced=%s)",
+  (replaced) => {
+    const effect = (replaced ? HealTag : ElementalDamageTag).parse({
+      power: 100,
+      fortifyId: "elemental",
+      fortifyEnabled: true,
+    });
+    const owned = makeBattleUserItem({
+      fortification: { elemental: { type: "elementaldamage", level: 1, failures: 0 } },
+    });
+    const user = makeUser({ items: [owned], rank: "JONIN" });
+    const catalog = makeBattleWithWeapon({ item: { effects: [effect] } });
+    const battle = makeCompleteBattle({
+      usersState: [user],
+      extraState: { items: catalog.extraState.items },
+    });
+    const action = availableUserActions(battle, user.userId).find(
+      (entry) => entry.type === "item",
+    )!;
+    expect(action.effects[0]?.type).toBe(replaced ? "heal" : "damage");
+    expect(action.effects[0]?.power).toBe(replaced ? 100 : 101);
+    const view = render(<ItemWithEffects item={action as unknown as Item} hideImage />);
+    expect(
+      view.getByText(`elementaldamage: Fortify +1${replaced ? " (dormant)" : ""}`),
+    ).toBeTruthy();
   },
 );

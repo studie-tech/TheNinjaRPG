@@ -9,7 +9,7 @@ export const useFortify = (onMessage: (message: string) => void) => {
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const utils = api.useUtils();
-  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
+  const { prepareUserUpdate, updateUser, refreshUser } = useRequiredUserInfo();
   const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
     useInventoryCacheUpdate();
   const mutation = api.item.fortify.useMutation({
@@ -42,7 +42,7 @@ export const useFortify = (onMessage: (message: string) => void) => {
     setIsRefreshing(true);
     try {
       const [confirmed] = await Promise.all([
-        updateUser(undefined),
+        refreshUser(),
         invalidateInventory({ throwOnError: true }),
         utils.item.getFortifyEligibility.invalidate(undefined, undefined, {
           throwOnError: true,

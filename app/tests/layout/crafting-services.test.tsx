@@ -141,6 +141,40 @@ const renderPrices = () => {
   return view;
 };
 
+it.each(["ACTIVE", "COMPLETED"] as const)(
+  "shows a Fortify outcome only after confirmed delivery (%s)",
+  (status) => {
+    vi.spyOn(serviceCache, "useServiceRequests").mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [
+        {
+          id: "fortify-request",
+          service: "FORTIFY",
+          status,
+          crafterId: "crafter",
+          requesterId: "requester",
+          fee: 50,
+          itemName: "Sword",
+          materials: [],
+          finishesAt: new Date(0),
+          fortify: { succeeded: true, cost: 1_000_000 },
+          settlementError: status === "ACTIVE" ? "Delivery is pending" : undefined,
+        },
+      ],
+    } as never);
+    render(<CraftingServices />);
+    if (status === "COMPLETED") {
+      expect(screen.getByText(/Fortify succeeded/)).toBeTruthy();
+      expect(screen.getByText(/The selected tag gained \+1 power/)).toBeTruthy();
+    } else {
+      expect(screen.queryByText(/Fortify succeeded/)).toBeNull();
+      expect(screen.queryByText(/The selected tag gained \+1 power/)).toBeNull();
+      expect(screen.getByText("Delivery is pending")).toBeTruthy();
+    }
+  },
+);
+
 const fortifyEquipment = (level = 0, failures = 0) => ({
   id: "sword",
   itemId: "sword-item",

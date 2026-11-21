@@ -1573,6 +1573,9 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           "type",
           "calculation",
           "direction",
+          // Replacing an effect starts a new fortification identity.
+          "fortifyId",
+          "fortifyEnabled",
           ...(isActivityBonus(shownTag) || shownTag.type === "increasejutsuslots"
             ? ["rounds", "target", "friendlyFire", "powerPerLevel", "timeTracker"]
             : []),

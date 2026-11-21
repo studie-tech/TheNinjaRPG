@@ -64,6 +64,8 @@ export type GenericObject = {
   createdBy?: string;
   attacks?: string[];
   effects?: ZodAllTags[];
+  /** Authored catalog effects retained by combat actions before element resolution. */
+  data?: { effects: ZodAllTags[] };
   village?: { name: string };
   href?: string;
 };
@@ -334,6 +336,9 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     { enabled: isGameItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
   );
   const evolutionsData = isJutsuItem ? jutsuEvolutions : itemEvolutions;
+  const authoredEffects =
+    ("data" in item ? item.data?.effects : undefined) ??
+    ("effects" in item ? item.effects : undefined);
 
   // Extract effects if they exist
   const effects = [
@@ -1087,7 +1092,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 <p key={id}>
                   {entry.type}: Fortify +{entry.level}
                   {entry.failures > 0 ? ` · ${entry.failures} failed attempts` : ""}
-                  {!item.effects?.some(
+                  {!authoredEffects?.some(
                     (tag) => tag.fortifyId === id && tag.type === entry.type,
                   )
                     ? " (dormant)"
@@ -1105,7 +1110,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               if ("description" in effect) delete effect.description;
               const bonus =
                 "fortification" in item
-                  ? getFortifyProgress(item.fortification, effect).level
+                  ? getFortifyProgress(
+                      item.fortification,
+                      authoredEffects?.find(
+                        (tag) => effect.fortifyId && tag.fortifyId === effect.fortifyId,
+                      ) ?? effect,
+                    ).level
                   : 0;
               const result = schema.safeParse(
                 bonus ? { ...effect, power: effect.power - bonus } : effect,

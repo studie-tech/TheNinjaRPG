@@ -1968,6 +1968,8 @@ const EffectTypeDraftForm = () => {
       groundFeather: 0.1,
       appearSfxPrimary: true,
       disappearSfxPrimary: true,
+      fortifyId: "damage-upgrade",
+      fortifyEnabled: true,
     }),
   ]);
   return (
@@ -1992,6 +1994,22 @@ const EffectTypeDraftForm = () => {
 
 describe("combat effect type changes", () => {
   withRadixBrowserGlobals();
+  it("keeps the fortification identity when editing the existing effect's power", async () => {
+    const view = render(<EffectTypeDraftForm />);
+    await act(async () => {});
+    await act(async () => {
+      fireEvent.input(view.getByRole("spinbutton", { name: "Power" }), {
+        target: { value: "42" },
+      });
+    });
+    fireEvent.click(view.getByRole("button", { name: "Save effect type" }));
+    expect(save.mock.lastCall?.[0].data.effects[0]).toMatchObject({
+      type: "damage",
+      power: 42,
+      fortifyId: "damage-upgrade",
+      fortifyEnabled: true,
+    });
+  });
   it("preserves optional artwork and primary cues when switching to a compatible tag", async () => {
     const view = render(<EffectTypeDraftForm />);
     fireEvent.click(view.getByRole("combobox", { name: "Type" }));
@@ -2008,6 +2026,8 @@ describe("combat effect type changes", () => {
       appearSfxPrimary: true,
       disappearSfxPrimary: true,
     });
+    expect(save.mock.calls[0]?.[0].data.effects[0]?.fortifyId).toBeUndefined();
+    expect(save.mock.calls[0]?.[0].data.effects[0]?.fortifyEnabled).toBeUndefined();
   });
 });
 
