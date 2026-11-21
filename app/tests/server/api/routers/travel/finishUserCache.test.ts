@@ -23,6 +23,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { globalTravelFinishPatch } from "@/libs/travel";
+import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { profileRouter } from "@/server/api/routers/profile";
 import { completeExpiredGlobalTravel, travelRouter } from "@/server/api/routers/travel";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
@@ -206,6 +207,8 @@ describeWithDatabase("confirmed arrival profile updates", () => {
           .update(userData)
           .set({ curHealth: 55 })
           .where(eq(userData.userId, "scenery-npc"));
+        // Staff and cron writes to placements invalidate the cached listing.
+        await invalidateSectorPlacements();
       }
       const user = (await profile.getUser()).userData;
       if (scenery.includes("quest")) expect(user?.userQuests.length).toBeGreaterThan(0);

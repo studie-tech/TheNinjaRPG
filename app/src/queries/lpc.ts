@@ -1,6 +1,5 @@
 import { and, eq, exists, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { gameAsset, userData, userItem } from "@/drizzle/schema";
-import { cosmeticSlotRelation } from "@/queries/cosmetic";
 import type { DrizzleClient } from "@/server/db";
 
 /** Resolve an explicit design assignment alongside the content editor's other upfront reads. */
@@ -43,9 +42,19 @@ export const updateSpriteBodyStyle = (
       ),
     );
 
-/** Private resolver inputs join the sector snapshot; callers publish only the resolved recipe. */
+/**
+ * Private resolver inputs join the sector snapshot; callers publish only the resolved recipe.
+ * Every poll reads them for each player in view, so they hold only what
+ * `resolveSpriteAppearance` reads.
+ */
 export const spriteUserRelations = {
-  cosmeticSlots: cosmeticSlotRelation,
+  cosmeticSlots: {
+    columns: { slot: true },
+    with: {
+      item: { columns: { slot: true, lpcProfile: true, lpcColor: true } },
+      variant: { columns: { lpcProfile: true, lpcColor: true } },
+    },
+  },
   attributes: { columns: { attribute: true } },
   items: {
     // Instance IDs distinguish two worn copies; the base item ID alone cannot identify them.
@@ -61,20 +70,8 @@ export const spriteUserRelations = {
       ),
     ),
     with: {
-      item: {
-        columns: {
-          id: true,
-          name: true,
-          slot: true,
-          itemType: true,
-          weaponType: true,
-          lpcProfile: true,
-          lpcColor: true,
-        },
-      },
-      activeVariant: {
-        columns: { name: true, lpcProfile: true, lpcColor: true },
-      },
+      item: { columns: { id: true, slot: true, lpcProfile: true, lpcColor: true } },
+      activeVariant: { columns: { lpcProfile: true, lpcColor: true } },
     },
   },
 } as const;

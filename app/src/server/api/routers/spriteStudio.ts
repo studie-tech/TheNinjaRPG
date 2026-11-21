@@ -7,6 +7,7 @@ import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate"
 import { animationActions } from "@/libs/spriteAnimationActions";
 import { finishSpriteSheet } from "@/libs/spriteSheetFinish";
 import { SpriteCharacterStyles } from "@/libs/spriteStudio";
+import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { fetchUser } from "@/queries/profile";
 import {
   fetchAnimationAi,
@@ -298,6 +299,7 @@ export const spriteStudioRouter = createTRPCRouter({
             ],
           }),
         ]);
+        await invalidateSectorPlacements();
         await outdateProposalsFor(
           ctx.drizzle,
           "AI",

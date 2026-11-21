@@ -21,6 +21,7 @@ import {
   markConversationCommentReported,
   markForumPostReported,
 } from "@/queries/moderator";
+import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { deleteUserNindo, fetchUser } from "@/queries/profile";
 import {
   clearUserBanWithoutActiveReport,
@@ -662,6 +663,7 @@ export const reportsRouter = createTRPCRouter({
           thumbnailUrl,
         ),
       ]);
+      if (target.isAi) await invalidateSectorPlacements();
       return { success: true, message: "Avatar update request sent" };
     }),
   clearNindo: protectedProcedure

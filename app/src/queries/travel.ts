@@ -3,7 +3,6 @@
  */
 import {
   and,
-  asc,
   eq,
   gt,
   gte,
@@ -25,7 +24,6 @@ import {
   actionLog,
   battle,
   clan,
-  overworldAiPlacement,
   questHistory,
   userData,
   userItem,
@@ -35,6 +33,7 @@ import {
 } from "@/drizzle/schema";
 import { SECTOR_BATTLE_STALE_SECONDS, SECTOR_PRESENCE_STATUSES } from "@/libs/travel";
 import { spriteUserRelations } from "@/queries/lpc";
+import { listCachedSectorPlacements } from "@/queries/overworldAi";
 import type { questRevisionRelation } from "@/queries/questRevisions";
 import { fetchSector } from "@/queries/village";
 import { listVillageDutyPatrols } from "@/queries/villageDuty";
@@ -117,62 +116,17 @@ export const fetchSectorWindowData = (
       },
     }),
     fetchSector(client, sector),
-    client.query.overworldAiPlacement.findMany({
-      // Copies of multi-spawn and biome placements can land anywhere, so those are always read.
-      where: and(
-        or(
-          inArray(
-            overworldAiPlacement.sector,
-            buildSectorWindowLayout(sector).map((entry) => entry.sector),
-          ),
-          gt(overworldAiPlacement.spawnCount, 1),
-          eq(overworldAiPlacement.sectorType, "biome"),
-        ),
-        eq(overworldAiPlacement.isActive, true),
-      ),
-      // Stable order so the arrival-prompt `find`-first NPC can't flip between polls when two
-      // placements share a tile (which would ping-pong the modal open on every sector refresh).
-      orderBy: asc(overworldAiPlacement.id),
-      columns: {
-        id: true,
-        aiTemplateUserId: true,
-        interactionType: true,
-        sectorType: true,
-        locationType: true,
-        sector: true,
-        longitude: true,
-        latitude: true,
-        sectorList: true,
-        positionVersion: true,
-        wanderRadius: true,
-        spawnCount: true,
-        groupMin: true,
-        groupMax: true,
-        habitats: true,
-        wildOnly: true,
-        mapScale: true,
-      },
-      with: {
-        aiTemplate: {
-          columns: {
-            userId: true,
-            username: true,
-            avatar: true,
-            avatarLight: true,
-            curHealth: true,
-            maxHealth: true,
-            level: true,
-            rank: true,
-            isAi: true,
-          },
-          with: {
-            spriteAnimationBindings: {
-              where: (binding) => inArray(binding.actionKey, ["idle", "move"]),
-              with: { animation: true },
-            },
-          },
-        },
-      },
+    listCachedSectorPlacements(client).then((placements) => {
+      const window = new Set(
+        buildSectorWindowLayout(sector).map((entry) => entry.sector),
+      );
+      // Copies of multi-spawn and biome placements can land anywhere, so those always stay.
+      return placements.filter(
+        (placement) =>
+          window.has(placement.sector) ||
+          placement.spawnCount > 1 ||
+          placement.sectorType === "biome",
+      );
     }),
     listVillageDutyPatrols(client, sector),
   ]);

@@ -5,6 +5,7 @@ import {
 } from "@/libs/overworldAi";
 import { snapToWanderTile } from "@/libs/overworldWander";
 import {
+  invalidateSectorPlacements,
   listOverworldAiPlacementForGET,
   updateOverworldAiPlacementForGET,
 } from "@/queries/overworldAi";
@@ -70,6 +71,7 @@ export const GET = async (request: Request) => {
         return updateOverworldAiPlacementForGET(drizzleDB, pos, placement);
       }),
     );
+    await invalidateSectorPlacements();
 
     return Response.json("OK");
   });
