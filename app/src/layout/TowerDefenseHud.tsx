@@ -130,6 +130,9 @@ export const TowerDefenseOverlay = (props: {
     finalWave !== null && nextBlock > finalWave
       ? []
       : tdErasForWave(state.config.seed, nextBlock).filter((era) => era !== "calm");
+  // A challenge earns no scrolls, so its retreat only abandons the attempt.
+  const retreatLabel =
+    finalWave === null ? "Retreat and bank your scrolls" : "Retreat from the challenge";
   const opening = state.waveTick < 0;
   const waveLeft = Math.ceil(
     ((opening ? 0 : TD_WAVE_TICKS) - state.waveTick) * TD_TICK_SECONDS,
@@ -211,19 +214,20 @@ export const TowerDefenseOverlay = (props: {
             button={
               <button
                 type="button"
-                title="Retreat and bank your scrolls"
+                title={retreatLabel}
                 className={OVERLAY_BUTTON_CLASS}
               >
                 <Flag className="h-4 w-4" />
               </button>
             }
-            triggerLabel="Retreat and bank your scrolls"
+            triggerLabel={retreatLabel}
             tone="destructive"
             proceed_label="Retreat"
             onAccept={() => props.act(["quit"])}
           >
-            Retreating ends this run at wave {state.wave} and banks the scrolls it
-            earned.
+            {finalWave === null
+              ? `Retreating ends this run at wave ${state.wave} and banks the scrolls it earned.`
+              : `Retreating ends this challenge at wave ${state.wave} without clearing it.`}
           </Confirm>
           {props.onFullscreen && (
             <OverlayButton
