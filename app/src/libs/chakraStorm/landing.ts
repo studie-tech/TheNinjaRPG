@@ -41,7 +41,7 @@ export const CS_LANDING_FAQ = [
   {
     question: "Is there a leaderboard?",
     answer:
-      "Yes. Scouting the City of Mei for ten minutes opens Undercover, an endless region with no reinforcements: it starts gently, then hardens for as long as your cover holds. Signed-in players' verified Undercover runs rank by how long they lasted, and the leaderboard starts afresh every month.",
+      "Yes. Undercover, open to every scout from the start, is an endless region with no reinforcements: it starts gently, then hardens for as long as your cover holds. Signed-in players' verified Undercover runs rank by how long they lasted, and the leaderboard starts afresh every month.",
   },
   {
     question: "Do I need an account?",

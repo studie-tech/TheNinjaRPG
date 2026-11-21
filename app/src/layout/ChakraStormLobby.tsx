@@ -177,28 +177,24 @@ export const ChakraStormLobby = (props: {
         <h2 id="cs-stages" className="text-xl font-bold">
           Regions of Seichi
         </h2>
-        <div className="grid grid-cols-1 gap-2 @[34rem]:grid-cols-2 @[56rem]:grid-cols-6">
+        {/* Five regions and Undercover fill the rows: two by three, or three by two. */}
+        <div className="grid grid-cols-1 gap-2 @[34rem]:grid-cols-2 @[56rem]:grid-cols-3">
           {CS_REGIONS.map((id, index) => (
             <StageCard
               key={id}
               id={id}
               index={index}
-              className={cn(
-                // Five stages fill the rows: the last spans both columns, or 2 + 3.
-                index === CS_REGIONS.length - 1 && "@[34rem]:col-span-2",
-                index < 2 ? "@[56rem]:col-span-3" : "@[56rem]:col-span-2",
-              )}
               progress={props.progress}
               selected={id === props.stage}
               onSelect={() => props.onStage(id)}
             />
           ))}
+          <UndercoverCard
+            progress={props.progress}
+            selected={props.stage === CS_LEADERBOARD_STAGE}
+            onSelect={() => props.onStage(CS_LEADERBOARD_STAGE)}
+          />
         </div>
-        <UndercoverCard
-          progress={props.progress}
-          selected={props.stage === CS_LEADERBOARD_STAGE}
-          onSelect={() => props.onStage(CS_LEADERBOARD_STAGE)}
-        />
       </section>
 
       {/* Training Hall */}
@@ -475,8 +471,8 @@ const ScoutingCard = (props: {
 };
 
 /**
- * Undercover, the endless region: its painting and record beside the way to the monthly
- * leaderboard its runs rank on.
+ * Undercover, the endless region, as a card in the region grid: its painting, its record
+ * and the way to the monthly leaderboard its runs rank on.
  */
 const UndercoverCard = (props: {
   progress: CsProgress;
@@ -485,13 +481,11 @@ const UndercoverCard = (props: {
 }) => {
   const id = CS_LEADERBOARD_STAGE;
   const info = CS_STAGE_INFO[id];
-  const open = csStageUnlocked(props.progress, id);
   const record = props.progress.stages[id];
-  const previous = CS_STAGES[CS_STAGES.indexOf(id) - 1];
   return (
     <div
       className={cn(
-        "bg-card flex flex-col overflow-hidden rounded-xl border-2 transition @[40rem]:flex-row",
+        "bg-card flex flex-col overflow-hidden rounded-xl border-2 transition",
         props.selected
           ? "border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.35)]"
           : "border-border hover:border-amber-500/60",
@@ -499,63 +493,44 @@ const UndercoverCard = (props: {
     >
       <button
         type="button"
-        disabled={!open}
         onClick={props.onSelect}
         aria-pressed={props.selected}
-        className={cn(
-          "group flex flex-1 flex-col text-left focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none @[40rem]:flex-row",
-          !open && "cursor-not-allowed",
-        )}
+        className="group flex flex-1 flex-col text-left focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
       >
-        <div className="relative h-32 w-full shrink-0 overflow-hidden @[40rem]:h-auto @[40rem]:min-h-36 @[40rem]:w-2/5">
+        <div className="relative h-28 w-full overflow-hidden">
           <Image
             src={CS_STAGE_IMAGE_URLS[id]}
             alt=""
             width={480}
             height={320}
-            className={cn(
-              "h-full w-full object-cover transition-transform duration-500 group-hover:scale-105",
-              !open && "brightness-75 grayscale",
-            )}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
-          {!open && (
-            <span className="absolute top-1.5 left-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white">
-              <Lock className="h-4 w-4" />
-            </span>
-          )}
-        </div>
-        <div className="flex flex-1 flex-col gap-1 p-3">
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-semibold">
-            <span className="rounded-full bg-violet-600 px-2 py-0.5 text-white">
-              Endless
-            </span>
-            <span className="text-muted-foreground">{info.region}</span>
+          <span className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+          <span className="absolute top-1.5 right-1.5 rounded-full bg-violet-600 px-2 py-0.5 text-sm font-semibold text-white">
+            Endless
           </span>
-          <span className="text-xl leading-tight font-black">{info.name}</span>
-          <p className="text-muted-foreground text-sm leading-snug">
-            {info.summary} The longest covers this month top the leaderboard.
-          </p>
-          <p className="mt-auto flex items-center gap-1.5 text-sm font-semibold">
-            {record ? (
-              <>
-                <Trophy className="h-4 w-4 text-amber-600" />
-                Best {formatClock(record.seconds)} · level {record.level}
-              </>
-            ) : !open ? (
-              <>
-                <Lock className="text-muted-foreground h-4 w-4" />
-                Scout {formatClock(info.unlockSeconds)} in{" "}
-                {previous ? CS_STAGE_INFO[previous].name : "the previous region"}
-              </>
-            ) : (
-              <span className="text-muted-foreground font-normal">
-                Not yet attempted
-              </span>
-            )}
-          </p>
+          <span className="absolute right-2 bottom-1.5 left-2 text-white">
+            <span className="block text-sm font-semibold text-white/80">
+              {info.region}
+            </span>
+            <span className="block text-lg leading-tight font-black">{info.name}</span>
+          </span>
         </div>
+        <p className="text-muted-foreground px-2 pt-2 text-sm leading-snug">
+          {info.summary} The longest covers this month top the leaderboard.
+        </p>
       </button>
-      <div className="flex items-center justify-end border-t p-2 @[40rem]:border-t-0 @[40rem]:border-l @[40rem]:px-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2">
+        <span className="flex items-center gap-1.5 text-sm font-semibold">
+          {record ? (
+            <>
+              <Trophy className="h-4 w-4 text-amber-600" />
+              Best {formatClock(record.seconds)} · level {record.level}
+            </>
+          ) : (
+            <span className="text-muted-foreground font-normal">Not yet attempted</span>
+          )}
+        </span>
         <LeaderboardButton size="sm" />
       </div>
     </div>

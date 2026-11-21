@@ -75,10 +75,13 @@ export const parseCsProgress = (raw: string | null): CsProgress => {
   }
 };
 
-/** Whether a stage is open: the first always is, each next one after a long enough run. */
+/**
+ * Whether a stage is open: the first always is, and so is any that needs no time in the
+ * one before (Undercover); each other opens after a long enough run in the previous one.
+ */
 export const csStageUnlocked = (progress: CsProgress, stage: CsStage) => {
   const index = CS_STAGES.indexOf(stage);
-  if (index <= 0) return true;
+  if (index <= 0 || CS_STAGE_INFO[stage].unlockSeconds === 0) return true;
   const previous = CS_STAGES[index - 1];
   const record = previous ? progress.stages[previous] : undefined;
   return !!record && record.seconds >= CS_STAGE_INFO[stage].unlockSeconds;

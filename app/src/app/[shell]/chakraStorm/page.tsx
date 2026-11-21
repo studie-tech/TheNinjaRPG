@@ -111,7 +111,10 @@ export default function ChakraStormPage() {
     )
       return;
     chosen.current = true;
-    const open = CS_STAGES.filter((id) => csStageUnlocked(progress, id));
+    // The furthest scouting region; Undercover is open to all and chosen on purpose.
+    const open = CS_STAGES.filter(
+      (id) => !CS_STAGE_INFO[id].endless && csStageUnlocked(progress, id),
+    );
     setStage(open.at(-1) ?? "horizon");
   }, [progress]);
 
