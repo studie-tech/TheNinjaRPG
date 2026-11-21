@@ -18,6 +18,7 @@ import {
 } from "@/drizzle/constants";
 import type { CaravanDiscovery, UserData, VillageAlliance } from "@/drizzle/schema";
 import {
+  activeGuards,
   getAttackerRole,
   getBanditRank,
   getBanditRankProgress,
@@ -226,9 +227,7 @@ export const caravanOpsRouter = createTRPCRouter({
                 !!sighting &&
                 row.status === "TRAVELLING" &&
                 getCaravanSector(row, now) === user.sector,
-              guards: participants.filter(
-                (p) => p.caravanId === row.id && p.role === "GUARD" && p.activeUserId,
-              ).length,
+              guards: activeGuards(participants, row.id).length,
               groups,
             };
           }),
@@ -390,9 +389,7 @@ export const caravanOpsRouter = createTRPCRouter({
       if (target)
         notifyPlayers(
           ctx.drizzle,
-          targetParticipants
-            .filter((p) => p.role === "GUARD" && p.activeUserId)
-            .map((p) => p.userId),
+          activeGuards(targetParticipants).map((p) => p.userId),
           {
             title: "Caravan sabotage",
             body: `${user.username} is sabotaging your caravan. Intervene within ${minutes} minutes!`,
@@ -698,9 +695,7 @@ export const caravanOpsRouter = createTRPCRouter({
       if (result.success)
         notifyPlayers(
           ctx.drizzle,
-          participants
-            .filter((p) => p.role === "GUARD" && p.activeUserId)
-            .map((p) => p.userId),
+          activeGuards(participants).map((p) => p.userId),
           {
             title: "Caravan attacked",
             body: `${user.username}'s group attacks your caravan!`,

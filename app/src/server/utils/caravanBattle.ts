@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { CARAVAN_MAX_LOSS_BP } from "@/drizzle/constants";
-import type { CaravanBattleState } from "@/libs/caravan";
+import { activeGuards, type CaravanBattleState } from "@/libs/caravan";
 import {
   claimPendingEncounter,
   deleteStartingEncounter,
@@ -147,11 +147,7 @@ export const selectQueuedGuards = <
   },
 >(
   participants: T[],
-) =>
-  participants.filter(
-    (p) =>
-      p.role === "GUARD" && !!p.activeUserId && p.status === "QUEUED" && !p.isBanned,
-  );
+) => activeGuards(participants).filter((p) => p.status === "QUEUED" && !p.isBanned);
 
 /** Battle state a fight records where its kind leaves nothing to record. */
 const STATE_DEFAULTS: StateFields = {

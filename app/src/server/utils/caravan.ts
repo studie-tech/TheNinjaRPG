@@ -20,6 +20,7 @@ import type {
   UserData,
 } from "@/drizzle/schema";
 import {
+  activeGuards,
   type CaravanNoticeView,
   getAllowedDelay,
   getAttackerRole,
@@ -626,9 +627,7 @@ const rollCheckpointAmbushes = async (
       }
       notifyPlayers(
         client,
-        participants
-          .filter((p) => p.caravanId === row.id && p.role === "GUARD" && p.activeUserId)
-          .map((p) => p.userId),
+        activeGuards(participants, row.id).map((p) => p.userId),
         {
           title: "Caravan ambushed",
           body: `Bandits ambush your caravan! Defend it within ${CARAVAN_AMBUSH_RESPONSE_MINUTES} minutes.`,

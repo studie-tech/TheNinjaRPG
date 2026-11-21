@@ -114,6 +114,20 @@ export const getCaravanCapacity = (
   used: caravans.filter((row) => row.outgoing).length,
 });
 
+/** Escorts still signed up to guard a caravan, optionally only the given caravan's. */
+export const activeGuards = <
+  T extends { role: string; activeUserId: string | null; caravanId?: string },
+>(
+  participants: T[],
+  caravanId?: string,
+) =>
+  participants.filter(
+    (p) =>
+      p.role === "GUARD" &&
+      !!p.activeUserId &&
+      (caravanId === undefined || p.caravanId === caravanId),
+  );
+
 /**
  * Moments a journey passes each checkpoint; they sit evenly between departure and arrival.
  */

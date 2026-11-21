@@ -15,6 +15,7 @@ import {
 } from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
 import {
+  activeGuards,
   type CargoLine,
   getCaravanCapacity,
   getCaravanSector,
@@ -164,9 +165,7 @@ export const caravanRouter = createTRPCRouter({
         /** Due caravan work was settled for this read, which may have moved stock. */
         settled,
         caravans: current.map((row) => {
-          const guards = participants.filter(
-            (p) => p.caravanId === row.id && p.role === "GUARD" && p.activeUserId,
-          );
+          const guards = activeGuards(participants, row.id);
           const viewer = guards.find((p) => p.userId === user.userId);
           const encounter = encounters.find((e) => e.caravanId === row.id);
           const reached = getReachedCheckpoints(row, now);
@@ -481,9 +480,7 @@ export const caravanRouter = createTRPCRouter({
       }
       notifyPlayers(
         ctx.drizzle,
-        participants
-          .filter((p) => p.role === "GUARD" && p.activeUserId)
-          .map((p) => p.userId),
+        activeGuards(participants).map((p) => p.userId),
         {
           title: "Caravan departed",
           body: `Your caravan departed and arrives in ${travelMinutes} minutes.`,
