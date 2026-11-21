@@ -21,6 +21,7 @@ import { cn } from "@/libs/shadui";
 import type { findTowerDefenseChallenge } from "@/libs/towerDefense/challenge";
 import type { TdSavedRunHead } from "@/libs/towerDefense/savedRun";
 import { parseHtml } from "@/utils/parse";
+import { hasReward } from "@/validators/rewards";
 
 type FoundChallenge = NonNullable<ReturnType<typeof findTowerDefenseChallenge>>;
 
@@ -127,7 +128,9 @@ export const TowerDefenseChallenge = (props: {
           tone="success"
           icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
         >
-          Challenge complete. Collect the objective&apos;s reward in your logbook.
+          {hasReward(objective)
+            ? "Challenge complete. Collect the objective's reward in your logbook."
+            : "Challenge complete. Continue the quest in your logbook."}
         </Notice>
       ) : !challenge.available ? (
         <Notice icon={<ScrollText className="h-5 w-5 text-amber-500" />}>

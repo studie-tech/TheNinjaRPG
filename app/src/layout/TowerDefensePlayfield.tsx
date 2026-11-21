@@ -383,9 +383,7 @@ const Results = (props: {
                 variant={props.action ? "outline" : "default"}
                 onClick={props.onLeave}
               >
-                {props.outcome.challenge
-                  ? "Back to the challenge"
-                  : "Back to the Guard Hall"}
+                {props.outcome.challenge ? "Back" : "Back to the Guard Hall"}
               </Button>
               {props.action}
             </div>

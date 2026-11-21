@@ -536,7 +536,7 @@ const settleChallengeRun = async (
     message: !result.won
       ? `The challenge was not cleared: you reached wave ${result.wave}. Try again from the challenge.`
       : completed
-        ? "Challenge complete! Collect the objective's reward in your logbook."
+        ? "Challenge complete! Continue the quest in your logbook."
         : "Challenge cleared, but its quest objective is no longer open.",
     pointsEarned: 0,
     wave: result.wave,
