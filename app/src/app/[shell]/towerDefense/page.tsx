@@ -183,24 +183,27 @@ export default function TowerDefensePage() {
     return (
       <Suspense fallback={lobby}>
         <ChallengeRoute
-          isSignedIn={!!userId}
           lobby={lobby}
-          render={(request) => (
-            <ContentBox
-              title="Tower Defense Challenge"
-              subtitle="Clear the waves to complete your quest objective"
-              defaultBackHref="/profile?tab=dashboard#progress-heading"
-            >
-              <TowerDefenseChallenge
-                challenge={user ? findTowerDefenseChallenge(user, request) : null}
-                saved={run.saved}
-                isStarting={run.isStarting}
-                isResuming={run.isResuming}
-                onStart={(replaceSaved) => void run.start(1, replaceSaved, request)}
-                onResume={run.resume}
-              />
-            </ContentBox>
-          )}
+          render={(request) =>
+            user ? (
+              <ContentBox
+                title="Tower Defense Challenge"
+                subtitle="Clear the waves to complete your quest objective"
+                defaultBackHref="/profile?tab=dashboard#progress-heading"
+              >
+                <TowerDefenseChallenge
+                  challenge={findTowerDefenseChallenge(user, request)}
+                  saved={run.saved}
+                  isStarting={run.isStarting}
+                  isResuming={run.isResuming}
+                  onStart={(replaceSaved) => void run.start(1, replaceSaved, request)}
+                  onResume={run.resume}
+                />
+              </ContentBox>
+            ) : (
+              lobby
+            )
+          }
         />
       </Suspense>
     );
@@ -231,8 +234,7 @@ export default function TowerDefensePage() {
           <p className="text-sm">Log in to keep scrolls and train in the Guard Hall.</p>
         }
         resultsAction={
-          run.outcome?.challenge &&
-          run.outcome.won &&
+          run.outcome?.won &&
           run.outcome.claimed && (
             <Button asChild>
               <Link href="/profile?tab=dashboard#progress-heading">
@@ -247,18 +249,15 @@ export default function TowerDefensePage() {
   );
 }
 
-/** The challenge the page's query names for a signed-in player, or the lobby. */
+/** What the page's query names: a challenge, or the lobby without one. */
 const ChallengeRoute = (props: {
-  isSignedIn: boolean;
   lobby: ReactNode;
   render: (request: { questId: string; objectiveId: string }) => ReactNode;
 }) => {
   const searchParams = useSearchParams();
   const questId = searchParams.get("quest");
   const objectiveId = searchParams.get("objective");
-  return props.isSignedIn && questId && objectiveId
-    ? props.render({ questId, objectiveId })
-    : props.lobby;
+  return questId && objectiveId ? props.render({ questId, objectiveId }) : props.lobby;
 };
 
 const LeaderboardLink = () => (

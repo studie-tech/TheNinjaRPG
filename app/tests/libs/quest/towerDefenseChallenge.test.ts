@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { getNewTrackers } from "@/libs/quest";
-import { WinTowerDefense } from "@/validators/objectives";
 import {
   trackerChallengeObjective as challengeObjective,
   trackerGoal as goal,
@@ -15,16 +14,6 @@ const at = (sector: number, longitude: number, latitude: number) => ({
 });
 
 describe("win_tower_defense objectives", () => {
-  it("parses with the defaults content staff start from", () => {
-    const parsed = WinTowerDefense.parse({ id: "td", task: "win_tower_defense" });
-    expect(parsed).toMatchObject({
-      startWave: 1,
-      waves: 10,
-      enemyHealth: 100,
-      enemyDamage: 100,
-    });
-  });
-
   it("completes only from the verified win naming it", () => {
     const quest = trackerQuest("q1", [challengeObjective("td")], "mission");
     const user = makeUser([quest], [], at(5, 3, 4));

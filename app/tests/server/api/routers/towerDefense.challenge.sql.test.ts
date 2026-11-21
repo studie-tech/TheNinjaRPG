@@ -171,7 +171,6 @@ describeWithDatabase("tower defense quest challenges", () => {
     const first = await claim(api, started.token, run);
     expect(first).toMatchObject({
       success: true,
-      challengeCompleted: true,
       pointsEarned: 0,
       wave: 3,
     });
@@ -204,7 +203,6 @@ describeWithDatabase("tower defense quest challenges", () => {
     const result = await claim(api, started.token, run);
     expect(result).toMatchObject({
       success: true,
-      challengeCompleted: false,
       pointsEarned: 0,
     });
     // An explicit empty delta spares the client a profile refetch.

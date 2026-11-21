@@ -16,13 +16,6 @@ export const TD_MAX_ACTIONS = 300_000;
  */
 export const TD_MAX_LOG_CHARS = 4_000_000;
 
-/** Enemy health or damage of a challenge, in percent of a normal run's. */
-const tdChallengeStrength = z.coerce
-  .number()
-  .int()
-  .min(TD_CHALLENGE_MIN_STRENGTH)
-  .max(TD_CHALLENGE_MAX_STRENGTH);
-
 /** Which quest objective a challenge run is started for. */
 export const tdChallengeRequestSchema = z.object({
   questId: z.string().max(191),
@@ -33,8 +26,8 @@ export type TdChallengeRequest = z.infer<typeof tdChallengeRequestSchema>;
 /** The challenge a quest objective sets, with the objective it completes. */
 const tdQuestChallengeSchema = tdChallengeRequestSchema.extend({
   waves: z.int().min(1).max(TD_CHALLENGE_MAX_WAVES),
-  enemyHealth: tdChallengeStrength,
-  enemyDamage: tdChallengeStrength,
+  enemyHealth: z.int().min(TD_CHALLENGE_MIN_STRENGTH).max(TD_CHALLENGE_MAX_STRENGTH),
+  enemyDamage: z.int().min(TD_CHALLENGE_MIN_STRENGTH).max(TD_CHALLENGE_MAX_STRENGTH),
 });
 export type TdQuestChallenge = z.infer<typeof tdQuestChallengeSchema>;
 

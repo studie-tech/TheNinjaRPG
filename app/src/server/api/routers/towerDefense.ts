@@ -204,8 +204,6 @@ export const towerDefenseRouter = createTRPCRouter({
         dailyReward: z
           .object({ ryo: z.number(), prestige: z.number(), villageTokens: z.number() })
           .optional(),
-        /** A challenge run cleared its last wave and completed its quest objective. */
-        challengeCompleted: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -539,7 +537,6 @@ const settleChallengeRun = async (
     pointsEarned: 0,
     wave: result.wave,
     kills: result.kills,
-    challengeCompleted: completed,
     ...getChallengeQuestUserUpdate(completedFor),
   };
 };
