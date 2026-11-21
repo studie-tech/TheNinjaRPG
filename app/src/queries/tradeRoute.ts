@@ -145,7 +145,8 @@ export const insertRouteMarkers = (
 
 /**
  * Raise a route's level and charge the paying village in one statement: village tokens,
- * or the leading clan's points in faction settlements.
+ * or the leading clan's points in faction settlements. The payer must still be the Kage or
+ * a serving Elder, and in the paying clan.
  */
 export const upgradeTradeRoute = (
   client: Pick<DrizzleClient, "execute">,
@@ -169,7 +170,14 @@ export const upgradeTradeRoute = (
       AND ${tradeRoute.level} = ${input.level}
       AND (${tradeRoute.villageIdA} = ${input.villageId} OR ${tradeRoute.villageIdB} = ${input.villageId})
       AND ${input.clanId ? sql`${clan.points}` : sql`${village.tokens}`} >= ${input.cost}
-      AND EXISTS (SELECT 1 FROM ${userData} WHERE ${userData.userId} = ${input.userId} AND ${userData.villageId} = ${input.villageId} AND ${userData.isBanned} = FALSE)
+      AND EXISTS (
+        SELECT 1 FROM ${userData}
+        WHERE ${userData.userId} = ${input.userId}
+          AND ${userData.villageId} = ${input.villageId}
+          AND ${userData.isBanned} = FALSE
+          AND (${village.kageId} = ${input.userId} OR (${userData.rank} = 'ELDER' AND ${userData.isAi} = FALSE))
+          ${input.clanId ? sql`AND ${userData.clanId} = ${input.clanId}` : sql``}
+      )
   `);
 
 /** Markers placed in a sector on active routes, with the names of the route's villages. */
@@ -233,7 +241,7 @@ export const listMarkerDiscoveries = (
       ),
     );
 
-/** Reveal markers to a village until the given time. */
+/** Reveal markers to a village until the given time; an earlier time never shortens one. */
 export const upsertMarkerDiscoveries = (
   client: Pick<DrizzleClient, "insert">,
   markerIds: string[],
@@ -245,7 +253,11 @@ export const upsertMarkerDiscoveries = (
     : client
         .insert(tradeRouteDiscovery)
         .values(markerIds.map((markerId) => ({ markerId, villageId, expiresAt })))
-        .onDuplicateKeyUpdate({ set: { expiresAt } });
+        .onDuplicateKeyUpdate({
+          set: {
+            expiresAt: sql`GREATEST(${tradeRouteDiscovery.expiresAt}, VALUES(${tradeRouteDiscovery.expiresAt}))`,
+          },
+        });
 
 /**
  * Wear down a marker after a won assault. When its control runs out it changes hands at
