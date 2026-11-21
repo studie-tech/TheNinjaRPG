@@ -474,9 +474,21 @@ export const usePusherHandler = (
                 });
               }
             }
-          } else if (data.type === "userMessage" || data.type === "homeInvitation") {
+          } else if (
+            data.type === "userMessage" ||
+            data.type === "homeInvitation" ||
+            data.type === "caravanEscortReleased"
+          ) {
             if (data.type === "homeInvitation")
               await utils.home.getHomeRequests.invalidate();
+            // A delivery or cancellation woke the escort and may have paid them.
+            if (data.type === "caravanEscortReleased")
+              await Promise.all([
+                utils.profile.getUser.invalidate(),
+                utils.caravan.getCaravans.invalidate(),
+                utils.caravanOps.getControls.invalidate(),
+                utils.warehouse.getWarehouse.invalidate(),
+              ]);
             showMutationToast({
               success: true,
               message: data.message ?? "You have a new message",

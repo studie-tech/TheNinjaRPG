@@ -230,6 +230,7 @@ export const cancelCaravan = async (
     title: "Caravan cancelled",
     body: "Your escort duty ended; the caravan was cancelled.",
     route: "/warehouse",
+    releasesEscort: true,
   });
   return guards.flatMap((p) => (p.activeUserId ? [p.userId] : []));
 };
@@ -332,15 +333,19 @@ export const deliverCaravan = async (
         ? `Your caravan arrived. You earned ${reward.money.toLocaleString()} ryo for the escort.`
         : "Your caravan arrived. Complete a defence or checkpoint to earn escort pay.",
       route: "/warehouse",
+      releasesEscort: true,
     });
   return true;
 };
 
-/** Alert players in game and on their devices. */
+/**
+ * Alert players in game and on their devices. `releasesEscort` marks escorts the caravan
+ * woke and may have paid, so their open tabs reload the profile and caravan views.
+ */
 export const notifyPlayers = (
   client: DrizzleClient,
   userIds: string[],
-  message: { title: string; body: string; route: string },
+  message: { title: string; body: string; route: string; releasesEscort?: boolean },
 ) => {
   const recipients = [...new Set(userIds)];
   if (recipients.length === 0) return;
@@ -348,7 +353,7 @@ export const notifyPlayers = (
     try {
       await Promise.all([
         getServerPusher().trigger(recipients, "event", {
-          type: "userMessage",
+          type: message.releasesEscort ? "caravanEscortReleased" : "userMessage",
           message: message.body,
           route: message.route,
           routeText: "Open",
