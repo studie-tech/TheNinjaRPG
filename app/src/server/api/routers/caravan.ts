@@ -177,7 +177,6 @@ export const caravanRouter = createTRPCRouter({
             cargo: describeCargo(getRemainingCargo(row.cargo, row.lossBp)),
             lossPercent: row.lossBp / 100,
             delayMinutes: row.delayMinutes,
-            travelMinutes: row.travelMinutes,
             departedAt: row.departedAt,
             arrivesAt: row.arrivesAt,
             progress: getJourneyProgress(row, now),
@@ -255,7 +254,6 @@ export const caravanRouter = createTRPCRouter({
                 quantity: z.number().int(),
               }),
             ),
-            travelMinutes: z.number().int(),
             sector: z.number().int(),
           })
           .optional(),
@@ -316,7 +314,6 @@ export const caravanRouter = createTRPCRouter({
       const id = nanoid();
       const now = new Date();
       const path = toVillageA ? [...route.path].reverse() : route.path;
-      const travelMinutes = getRouteTravelMinutes(route.level);
       const logs = cargoLogs(own.id, "RESERVE", cargo, user.userId);
       const capacity = getCaravanCapacity(routes).total;
       const full = new WarehouseConflict(
@@ -341,7 +338,6 @@ export const caravanRouter = createTRPCRouter({
                 destinationVillageId: toVillageA ? route.villageIdA : route.villageIdB,
                 cargo,
                 path,
-                travelMinutes,
                 createdById: user.userId,
                 now,
               },
@@ -367,7 +363,6 @@ export const caravanRouter = createTRPCRouter({
             ...line,
             name: itemNames.get(line.itemId) ?? "Unknown item",
           })),
-          travelMinutes,
           sector: path[0] ?? -1,
         },
         warehouseChange: getCargoWarehouseChange(cargo, { quantity: 0, reserved: 1 }),
@@ -422,7 +417,6 @@ export const caravanRouter = createTRPCRouter({
             caravanId: z.string(),
             departedAt: z.date(),
             arrivesAt: z.date(),
-            travelMinutes: z.number().int(),
             sector: z.number().int(),
           })
           .optional(),
@@ -461,7 +455,6 @@ export const caravanRouter = createTRPCRouter({
             const claimed = await transitionCaravan(tx, row, {
               status: "TRAVELLING",
               departedAt: now,
-              travelMinutes,
               arrivesAt,
             });
             if (claimed.rowsAffected !== 1) throw conflict;
@@ -494,7 +487,6 @@ export const caravanRouter = createTRPCRouter({
           caravanId: row.id,
           departedAt: now,
           arrivesAt,
-          travelMinutes,
           sector: row.path[0] ?? -1,
         },
         warehouseChange: getCargoWarehouseChange(row.cargo, {
@@ -700,7 +692,6 @@ export const caravanRouter = createTRPCRouter({
         };
       }
       const result = await launchCaravanBattle(ctx.drizzle, {
-        operationId: operation.id,
         state: {
           type: "INTERVENTION",
           caravanId: row.id,

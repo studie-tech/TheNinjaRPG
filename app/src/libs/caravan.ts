@@ -352,7 +352,6 @@ export type CaravanBattleState = {
   /** Battle side of the raiders, saboteur or marker assault. */
   attackerDirection: "left" | "right";
   attackerRole: CaravanRole | null;
-  attackerVillageId: string | null;
   /** Human attackers and escorts; AI fill the remaining places. */
   attackerIds: string[];
   guardIds: string[];

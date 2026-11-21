@@ -121,7 +121,7 @@ export const getUpgradedTradeRoutes = (
 /** List a caravan the viewer's village just prepared, newest first, awaiting escorts. */
 export const getPreparedCaravans = (
   current: CaravansView,
-  prepared: Pick<CaravanEntry, "id" | "partner" | "cargo" | "travelMinutes" | "sector">,
+  prepared: Pick<CaravanEntry, "id" | "partner" | "cargo" | "sector">,
 ): CaravansView | undefined => {
   if (!current) return;
   if (current.caravans.some((row) => row.id === prepared.id)) return current;
@@ -219,10 +219,7 @@ export const hasCaravanStockMoved = (
 /** Start a dispatched caravan's journey from its origin. */
 export const getDepartedCaravans = (
   current: CaravansView,
-  departed: Pick<
-    CaravanEntry,
-    "departedAt" | "arrivesAt" | "travelMinutes" | "sector"
-  > & {
+  departed: Pick<CaravanEntry, "departedAt" | "arrivesAt" | "sector"> & {
     caravanId: string;
   },
 ): CaravansView | undefined =>
@@ -233,7 +230,6 @@ export const getDepartedCaravans = (
           status: "TRAVELLING",
           departedAt: departed.departedAt,
           arrivesAt: departed.arrivesAt,
-          travelMinutes: departed.travelMinutes,
           sector: departed.sector,
           progress: 0,
           checkpoints: 0,

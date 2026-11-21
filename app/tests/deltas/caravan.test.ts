@@ -62,7 +62,6 @@ const caravan = (overrides: Partial<Caravans["caravans"][number]> = {}) =>
     cargo: [{ itemId: "wood", name: "Wood", quantity: 100 }],
     lossPercent: 0,
     delayMinutes: 0,
-    travelMinutes: 30,
     departedAt: null,
     arrivesAt: null,
     progress: 0,
@@ -205,7 +204,6 @@ describe("caravan deltas", () => {
       id: "k",
       partner: "B",
       cargo: [{ itemId: "wood", name: "Wood", quantity: 100 }],
-      travelMinutes: 30,
       sector: 1,
     });
     expect(prepared?.caravans).toEqual([caravan()]);
@@ -240,7 +238,6 @@ describe("caravan deltas", () => {
       caravanId: "k",
       departedAt: now,
       arrivesAt,
-      travelMinutes: 30,
       sector: 1,
     };
     const next = getDepartedCaravans(caravans(), departed);

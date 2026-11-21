@@ -26,9 +26,8 @@ export const launchCaravanBattle = async (
   input: {
     /** An open ambush is answered; any other fight opens a new encounter. */
     pendingEncounterId?: string;
-    /** A new interception's or assault's leader, and the sabotage an intervention stops. */
+    /** A new interception's or assault's leader. */
     leaderId?: string;
-    operationId?: string;
     /** What the fight records beyond the defaults; see {@link STATE_DEFAULTS}. */
     state: Pick<CaravanBattleState, "type" | "attackerDirection"> &
       Partial<StateFields>;
@@ -53,9 +52,7 @@ export const launchCaravanBattle = async (
         type: state.type,
         caravanId: state.caravanId,
         markerId: state.markerId,
-        operationId: input.operationId,
         battleId,
-        attackerVillageId: state.attackerVillageId,
         leaderId: input.leaderId,
         now,
       });
@@ -154,7 +151,6 @@ const STATE_DEFAULTS: StateFields = {
   caravanId: null,
   markerId: null,
   attackerRole: null,
-  attackerVillageId: null,
   attackerIds: [],
   guardIds: [],
   cargo: [],

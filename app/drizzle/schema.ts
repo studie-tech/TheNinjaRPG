@@ -8578,7 +8578,6 @@ export const caravan = mysqlTable(
       .notNull(),
     /** Route sectors from origin to destination, frozen when the caravan is prepared. */
     path: json("path").$type<number[]>().notNull(),
-    travelMinutes: smallint("travelMinutes", { unsigned: true }).notNull(),
     createdById: varchar("createdById", { length: 191 }).notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
     departedAt: datetime("departedAt", { mode: "date", fsp: 3 }),
@@ -8702,10 +8701,7 @@ export const caravanEncounter = mysqlTable(
     markerId: varchar("markerId", { length: 191 }),
     activeCaravanId: varchar("activeCaravanId", { length: 191 }),
     activeMarkerId: varchar("activeMarkerId", { length: 191 }),
-    operationId: varchar("operationId", { length: 191 }),
     battleId: varchar("battleId", { length: 191 }),
-    /** The attacking side's village, or the assaulting village of a marker. */
-    attackerVillageId: varchar("attackerVillageId", { length: 191 }),
     leaderId: varchar("leaderId", { length: 191 }),
     attackersWon: boolean("attackersWon"),
     expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
