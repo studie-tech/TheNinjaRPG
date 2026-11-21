@@ -426,11 +426,15 @@ export const bloodlineRouter = createTRPCRouter({
         0,
         `Diamond bloodline swap from ${user.bloodline?.name ?? "no bloodline"} to ${line.name}`,
         diamondSwapUserUpdate({ user, rememberCurrent }),
-        {
-          bloodlineId: currentJutsus[0]?.bloodlineId ?? null,
-          bloodlineJutsuIds: currentJutsus.flatMap((row) => row.jutsuId ?? []),
-          queuedJutsuIds,
-        },
+        // Profile settlement may have started queued jobs after the parallel queue read;
+        // updateBloodline then re-reads the settled queue itself.
+        updatedUser.startedQueuedJobs
+          ? undefined
+          : {
+              bloodlineId: currentJutsus[0]?.bloodlineId ?? null,
+              bloodlineJutsuIds: currentJutsus.flatMap((row) => row.jutsuId ?? []),
+              queuedJutsuIds,
+            },
       );
       if (!swap.granted) return errorResponse(swap.message);
       // The live Bloodright refund and hydrated passive sources require profile reconciliation.

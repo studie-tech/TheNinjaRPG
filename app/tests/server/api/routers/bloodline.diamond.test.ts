@@ -179,6 +179,34 @@ describeWithDatabase("Diamond bloodline swaps", () => {
     });
   });
 
+  it("swaps when profile settlement starts the last queued bloodline jutsu level", async () => {
+    const db = await getTestDatabase();
+    const finished = new Date(Date.now() - 60_000);
+    await insertJutsus([{ id: "owned-jutsu", bloodlineId: "owned-line" }]);
+    await db.insert(userJutsu).values({
+      id: "uj-owned",
+      userId,
+      jutsuId: "owned-jutsu",
+      level: 2,
+      equipped: true,
+      finishTraining: finished,
+    });
+    await db.insert(userQueue).values({
+      id: "due-owned-jutsu",
+      userId,
+      kind: "JUTSU",
+      position: 1,
+      jutsuId: "owned-jutsu",
+      reservedRyo: 500,
+      durationSeconds: 60,
+      startsAt: finished,
+      finishesAt: new Date(finished.getTime() + 60_000),
+    });
+    expect(await swap("pick-a")).toMatchObject({ success: true });
+    expect(await db.query.userQueue.findMany()).toEqual([]);
+    expect(await readUser()).toMatchObject({ bloodlineId: "pick-a" });
+  });
+
   it("never records Diamond picks as owned bloodlines", async () => {
     expect((await swap("pick-a")).success).toBe(true);
     const db = await getTestDatabase();
