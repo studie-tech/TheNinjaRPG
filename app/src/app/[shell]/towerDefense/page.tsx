@@ -188,7 +188,7 @@ export default function TowerDefensePage() {
             user ? (
               <ContentBox
                 title="Hold Your Ground"
-                subtitle="Clear the waves to complete your quest objective"
+                subtitle="Defend this position until the last wave breaks"
                 defaultBackHref="/profile?tab=dashboard#progress-heading"
               >
                 <TowerDefenseChallenge
