@@ -392,7 +392,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(users.busy?.status).toBe("AWAKE");
     expect(users.idle?.status).toBe("AWAKE");
   });
-  it("hands a worn-down marker to its assailant and calls off the route's caravans", async () => {
+  it("hands a worn-down marker to its assailant and calls off caravans still on the road", async () => {
     const db = await getTestDatabase();
     await insertUsers([{ userId: "raider", villageId: "mist" }]);
     await db.insert(tradeRoute).values({
@@ -418,7 +418,9 @@ describeWithDatabase("village Warehouse and caravans", () => {
       .insert(warehouseStock)
       .values([{ villageId: "leaf", itemId: "ore", quantity: 50, reserved: 50 }]);
     await db.insert(caravan).values([
-      caravanRow({ id: "moving", lossBp: 1000 }),
+      // The checkpoint it passed is already rolled, so no random ambush holds it.
+      caravanRow({ id: "moving", lossBp: 1000, checkpointsProcessed: 1 }),
+      caravanRow({ id: "arrived", arrivesAt: new Date(Date.now() - 1000) }),
       caravanRow({
         id: "waiting",
         status: "PREPARING",
@@ -462,14 +464,25 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(marker?.control).toBe(100);
     expect(marker?.capturedAt).not.toBeNull();
     await afterTasks.run([], () =>
-      maintainCaravans(db, new Date(), { caravanIds: ["moving", "waiting"] }),
+      maintainCaravans(db, new Date(), {
+        caravanIds: ["moving", "waiting", "arrived"],
+      }),
     );
-    const caravans = await db.select().from(caravan);
-    expect(caravans.every((row) => row.status === "CANCELLED")).toBe(true);
-    const [stock] = await db.select().from(warehouseStock);
+    const caravans = Object.fromEntries(
+      (await db.select().from(caravan)).map((row) => [row.id, row.status]),
+    );
+    expect(caravans).toEqual({
+      moving: "CANCELLED",
+      waiting: "CANCELLED",
+      arrived: "DELIVERED",
+    });
+    const stock = Object.fromEntries(
+      (await db.select().from(warehouseStock)).map((row) => [row.villageId, row]),
+    );
     // The waiting caravan's reservation is released; the moving one brings 180 ore home.
-    expect(stock?.reserved).toBe(0);
-    expect(stock?.quantity).toBe(230);
+    expect(stock.leaf?.reserved).toBe(0);
+    expect(stock.leaf?.quantity).toBe(230);
+    expect(stock.sand?.quantity).toBe(200);
   });
 });
 
