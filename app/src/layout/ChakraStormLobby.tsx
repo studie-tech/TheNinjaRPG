@@ -41,6 +41,7 @@ import {
   CS_LEADERBOARD_STAGE,
   CS_PASSIVE_INFO,
   CS_PASSIVES,
+  CS_RUN_SECONDS,
   CS_STAGE_INFO,
   CS_STAGES,
   CS_TRAINING,
@@ -92,72 +93,82 @@ export const ChakraStormLobby = (props: {
   const stage = CS_STAGE_INFO[props.stage];
   return (
     <div className="@container space-y-5">
-      {/* Title */}
-      <section className="relative overflow-hidden rounded-xl border border-black/20 bg-black text-white shadow-lg">
-        <Image
-          src={CS_KEYART_URL}
-          alt="A lone shinobi surrounded by hostiles, wind sickles and a fire comet around them"
-          width={1024}
-          height={683}
-          priority
-          className="absolute inset-0 h-full w-full object-cover object-[30%_50%] opacity-90"
-        />
-        <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10 @2xl:bg-gradient-to-l @2xl:from-black/90 @2xl:via-black/55 @2xl:to-transparent" />
-        <div className="relative flex min-h-[22rem] flex-col justify-end gap-3 p-4 @2xl:ml-auto @2xl:w-[58%] @2xl:justify-center @2xl:p-6">
-          <h2 className="sr-only">Chakra Storm</h2>
+      {/* A visitor meets the landing; a signed-in scout goes straight to the run. */}
+      {props.isGuest ? (
+        <section className="relative overflow-hidden rounded-xl border border-black/20 bg-black text-white shadow-lg">
           <Image
-            src={CS_LOGO_URL}
-            alt="Chakra Storm"
-            width={480}
-            height={308}
+            src={CS_KEYART_URL}
+            alt="A lone shinobi surrounded by hostiles, wind sickles and a fire comet around them"
+            width={1024}
+            height={683}
             priority
-            className="h-auto w-[min(70%,16rem)] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]"
+            className="absolute inset-0 h-full w-full object-cover object-[30%_50%] opacity-90"
           />
-          <p className="text-base font-semibold text-white/95">
-            Your village needs eyes on Seichi. Scout a region while hostiles close in
-            from every side: your jutsu cast themselves, you choose the path, the chakra
-            to gather and the arts to learn. Hold out fifteen minutes until your
-            village's reinforcements arrive to bring the report home.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="lg"
-              className="bg-amber-500 text-lg font-bold text-black hover:bg-amber-400"
-              disabled={props.isStarting || props.isLoading}
-              onClick={props.onStart}
-            >
-              <Play className="mr-2 h-5 w-5" />
-              {props.isStarting
-                ? "Preparing..."
-                : props.isGuest
-                  ? "Play now, free"
-                  : "Begin scouting"}
-            </Button>
-            {props.isGuest && (
+          <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10 @2xl:bg-gradient-to-l @2xl:from-black/90 @2xl:via-black/55 @2xl:to-transparent" />
+          <div className="relative flex min-h-[22rem] flex-col justify-end gap-3 p-4 pt-6 @2xl:ml-auto @2xl:w-[58%] @2xl:justify-center @2xl:p-6 @2xl:py-8">
+            <h2 className="sr-only">Chakra Storm</h2>
+            <Image
+              src={CS_LOGO_URL}
+              alt="Chakra Storm"
+              width={480}
+              height={308}
+              priority
+              className="h-auto w-[min(70%,16rem)] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]"
+            />
+            <p className="text-base font-semibold text-white/95">
+              Your village needs eyes on Seichi. Scout a region while hostiles close in
+              from every side: your jutsu cast themselves, you choose the path, the
+              chakra to gather and the arts to learn. Hold out fifteen minutes until
+              your village's reinforcements arrive to bring the report home.
+            </p>
+            <div className="flex flex-wrap gap-2">
               <Button
-                asChild
                 size="lg"
-                variant="outline"
-                className="border-white/60 bg-black/30 text-white hover:bg-black/50 hover:text-white"
+                className="bg-amber-500 text-lg font-bold text-black hover:bg-amber-400"
+                disabled={props.isStarting || props.isLoading}
+                onClick={props.onStart}
               >
-                <Link href="/signup">
-                  <UserPlus className="mr-2 h-5 w-5" />
-                  Join TheNinja-RPG
-                </Link>
+                <Play className="mr-2 h-5 w-5" />
+                {props.isStarting
+                  ? "Preparing..."
+                  : props.isGuest
+                    ? "Play now, free"
+                    : "Begin scouting"}
               </Button>
-            )}
+              {props.isGuest && (
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="border-white/60 bg-black/30 text-white hover:bg-black/50 hover:text-white"
+                >
+                  <Link href="/signup">
+                    <UserPlus className="mr-2 h-5 w-5" />
+                    Join TheNinja-RPG
+                  </Link>
+                </Button>
+              )}
+            </div>
+            <p className="text-sm text-white/80">
+              Region: <span className="font-bold text-white">{stage.name}</span>
+            </p>
+            <dl className="grid grid-cols-4 gap-1.5 text-center">
+              <HeroStat value={`${CS_LANDING_STATS.jutsu}`} label="jutsu" />
+              <HeroStat value={`${CS_LANDING_STATS.jutsu}`} label="awakenings" />
+              <HeroStat value={`${CS_LANDING_STATS.stages}`} label="regions" />
+              <HeroStat value={`${CS_LANDING_STATS.minutes}`} label="minutes" />
+            </dl>
           </div>
-          <p className="text-sm text-white/80">
-            Region: <span className="font-bold text-white">{stage.name}</span>
-          </p>
-          <dl className="grid grid-cols-4 gap-1.5 text-center">
-            <HeroStat value={`${CS_LANDING_STATS.jutsu}`} label="jutsu" />
-            <HeroStat value={`${CS_LANDING_STATS.jutsu}`} label="awakenings" />
-            <HeroStat value={`${CS_LANDING_STATS.stages}`} label="regions" />
-            <HeroStat value={`${CS_LANDING_STATS.minutes}`} label="minutes" />
-          </dl>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <ScoutingCard
+          stage={props.stage}
+          progress={props.progress}
+          disabled={props.isStarting || props.isLoading}
+          isStarting={props.isStarting}
+          onStart={props.onStart}
+        />
+      )}
 
       <DailyReport daily={props.daily} />
 
@@ -282,23 +293,25 @@ export const ChakraStormLobby = (props: {
         </div>
       </section>
 
-      {/* Questions */}
-      <section aria-labelledby="cs-faq" className="space-y-2">
-        <h2 id="cs-faq" className="text-xl font-bold">
-          Frequently asked questions
-        </h2>
-        <div className="bg-card divide-y rounded-lg border">
-          {CS_LANDING_FAQ.map((entry) => (
-            <details key={entry.question} className="group px-4 py-3">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-base font-semibold [&::-webkit-details-marker]:hidden">
-                {entry.question}
-                <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
-              </summary>
-              <p className="text-muted-foreground mt-2 text-sm">{entry.answer}</p>
-            </details>
-          ))}
-        </div>
-      </section>
+      {/* Questions, for visitors deciding whether to play */}
+      {props.isGuest && (
+        <section aria-labelledby="cs-faq" className="space-y-2">
+          <h2 id="cs-faq" className="text-xl font-bold">
+            Frequently asked questions
+          </h2>
+          <div className="bg-card divide-y rounded-lg border">
+            {CS_LANDING_FAQ.map((entry) => (
+              <details key={entry.question} className="group px-4 py-3">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-base font-semibold [&::-webkit-details-marker]:hidden">
+                  {entry.question}
+                  <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+                </summary>
+                <p className="text-muted-foreground mt-2 text-sm">{entry.answer}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };
@@ -332,7 +345,7 @@ const StageCard = (props: {
         "group bg-card relative flex flex-col overflow-hidden rounded-xl border-2 text-left transition focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none",
         props.selected
           ? "border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.35)]"
-          : "border-transparent hover:border-amber-500/50",
+          : "border-border hover:border-amber-500/60",
         !open && "cursor-not-allowed",
         props.className,
       )}
@@ -405,6 +418,63 @@ const StageCard = (props: {
 };
 
 /**
+ * The signed-in scout's way into a run: the chosen region, its record and the start
+ * button, in place of the visitor's landing.
+ */
+const ScoutingCard = (props: {
+  stage: CsStage;
+  progress: CsProgress;
+  disabled?: boolean;
+  isStarting?: boolean;
+  onStart: () => void;
+}) => {
+  const info = CS_STAGE_INFO[props.stage];
+  const record = props.progress.stages[props.stage];
+  const number = CS_REGIONS.indexOf(props.stage) + 1;
+  return (
+    <section
+      aria-label="Start scouting"
+      className="bg-card flex flex-col gap-3 rounded-xl border-2 border-amber-500/70 p-3 @[34rem]:flex-row @[34rem]:items-center"
+    >
+      <Image
+        src={CS_STAGE_IMAGE_URLS[props.stage]}
+        alt=""
+        width={480}
+        height={320}
+        className="h-24 w-full rounded-lg object-cover @[34rem]:h-20 @[34rem]:w-32"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-muted-foreground text-sm font-semibold">
+          {info.endless ? "Endless" : `Region ${number}`} · {info.region}
+        </p>
+        <p className="text-xl leading-tight font-black">{info.name}</p>
+        <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
+          <Trophy className="h-4 w-4 shrink-0 text-amber-600" />
+          {record
+            ? info.endless
+              ? `Best ${formatClock(record.seconds)} · level ${record.level}`
+              : record.won
+                ? `Report delivered · ${record.kills.toLocaleString()} defeated`
+                : `Best ${formatClock(record.seconds)} · level ${record.level}`
+            : info.endless
+              ? "Hold out as long as your cover lasts"
+              : `Hold out ${formatClock(CS_RUN_SECONDS)} until reinforcements arrive`}
+        </p>
+      </div>
+      <Button
+        size="lg"
+        className="bg-amber-500 text-lg font-bold text-black hover:bg-amber-400"
+        disabled={props.disabled}
+        onClick={props.onStart}
+      >
+        <Play className="mr-2 h-5 w-5" />
+        {props.isStarting ? "Preparing..." : "Begin scouting"}
+      </Button>
+    </section>
+  );
+};
+
+/**
  * Undercover, the endless region: its painting and record beside the way to the monthly
  * leaderboard its runs rank on.
  */
@@ -424,7 +494,7 @@ const UndercoverCard = (props: {
         "bg-card flex flex-col overflow-hidden rounded-xl border-2 transition @[40rem]:flex-row",
         props.selected
           ? "border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.35)]"
-          : "border-transparent hover:border-amber-500/50",
+          : "border-border hover:border-amber-500/60",
       )}
     >
       <button
@@ -532,7 +602,8 @@ const DailyReport = (props: {
           <ScrollText className="h-6 w-6" />
         )}
       </span>
-      <div className="min-w-0 flex-1">
+      {/* The text keeps a readable width; on a narrow screen the rewards wrap below it. */}
+      <div className="min-w-[min(100%,16rem)] flex-1">
         <h2 id="cs-daily" className="text-base leading-tight font-bold">
           Daily scouting report
         </h2>

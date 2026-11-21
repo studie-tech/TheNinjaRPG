@@ -6,6 +6,7 @@ import { api } from "@/app/_trpc/client";
 import { CS_SFX, type CsSfx } from "@/drizzle/constants";
 import { useChakraStormRun } from "@/hooks/useChakraStormRun";
 import { ChakraStormChallenge } from "@/layout/ChakraStormChallenge";
+import { LeaderboardButton } from "@/layout/ChakraStormHud";
 import { ChakraStormLobby } from "@/layout/ChakraStormLobby";
 import { ChakraStormPlayfield } from "@/layout/ChakraStormPlayfield";
 import ContentBox from "@/layout/ContentBox";
@@ -124,8 +125,11 @@ export default function ChakraStormPage() {
     const lobby = (
       <ContentBox
         title="Chakra Storm"
-        subtitle="Scout Seichi for your village"
+        subtitle={
+          user ? "Scout Seichi for your village" : "Free to play in your browser"
+        }
         defaultBackHref="/manual#minigames"
+        topRightContent={<LeaderboardButton size="sm" variant="default" />}
       >
         <ChakraStormLobby
           progress={progress}
