@@ -189,7 +189,7 @@ export default function TowerDefensePage() {
             <ContentBox
               title="Tower Defense Challenge"
               subtitle="Clear the waves to complete your quest objective"
-              defaultBackHref="/profile"
+              defaultBackHref="/profile?tab=dashboard#progress-heading"
             >
               <TowerDefenseChallenge
                 challenge={user ? findTowerDefenseChallenge(user, request) : null}
@@ -235,7 +235,7 @@ export default function TowerDefensePage() {
           run.outcome.won &&
           run.outcome.claimed && (
             <Button asChild>
-              <Link href="/profile">
+              <Link href="/profile?tab=dashboard#progress-heading">
                 <ScrollText className="mr-2 h-4 w-4" />
                 Open logbook
               </Link>

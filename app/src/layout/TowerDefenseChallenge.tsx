@@ -158,7 +158,7 @@ export const TowerDefenseChallenge = (props: {
         </Button>
         {challenge.done ? (
           <Button asChild size="lg">
-            <Link href="/profile">
+            <Link href="/profile?tab=dashboard#progress-heading">
               <ScrollText className="mr-2 h-5 w-5" />
               Open logbook
             </Link>
