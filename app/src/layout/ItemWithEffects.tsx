@@ -28,6 +28,7 @@ import { getPotencyDescription, POTENCY_TAG_LABELS } from "@/libs/combat/potency
 import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFarmPlantExperience } from "@/libs/farming";
+import { type Fortification, getFortifyProgress } from "@/libs/fortify";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
 import { getQuestRewardSummary } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
@@ -84,6 +85,7 @@ export interface ItemWithEffectsProps {
     | SageMode
     | (Item & {
         imbuements?: Item[];
+        fortification?: Fortification;
         curDurability?: number;
         level?: number;
         experience?: number;
@@ -1078,6 +1080,22 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
           {"requiredSageRank" in item && (
             <RankRequirement label="Sage" rank={item.requiredSageRank} />
           )}
+          {"fortification" in item && item.fortification && (
+            <div className="my-2 rounded border p-2 text-sm">
+              <b>Fortification</b>
+              {Object.entries(item.fortification).map(([id, entry]) => (
+                <p key={id}>
+                  {entry.type}: Fortify +{entry.level}
+                  {entry.failures > 0 ? ` · ${entry.failures} failed attempts` : ""}
+                  {!item.effects?.some(
+                    (tag) => tag.fortifyId === id && tag.type === entry.type,
+                  )
+                    ? " (dormant)"
+                    : ""}
+                </p>
+              ))}
+            </div>
+          )}
           {!isFurniture &&
             !hideEffects &&
             effects?.map((effect, i) => {
@@ -1085,8 +1103,16 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               const schema = getTagSchema(effect.type);
               // Delete description, so that we get the default one
               if ("description" in effect) delete effect.description;
-              const result = schema.safeParse(effect);
-              const parsedEffect = result.success ? result.data : undefined;
+              const bonus =
+                "fortification" in item
+                  ? getFortifyProgress(item.fortification, effect).level
+                  : 0;
+              const result = schema.safeParse(
+                bonus ? { ...effect, power: effect.power - bonus } : effect,
+              );
+              const parsedEffect = result.success
+                ? { ...result.data, power: result.data.power + bonus }
+                : undefined;
 
               if (
                 parsedEffect?.type === "noncombatconsumereward" &&

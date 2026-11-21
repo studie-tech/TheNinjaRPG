@@ -50,24 +50,32 @@ export const getActivityBonuses = (user: ActivityBonusUser) => {
         (tag) => skill.target === "SELF" || tag.friendlyFire !== "ENEMIES",
       ),
     ),
-    ...items
-      .filter(
-        (gear) =>
-          isActiveWornGear(gear, user.bloodlineId) &&
-          (user.isAi || hasRequiredSkill(gear.item, wearer)) &&
-          !gearMissingMastery(gear, wearer),
-      )
-      .flatMap(wornGearTags),
-  ];
-  for (const tag of tags) {
+  ].map((tag) => ({ tag, authoredPower: tag.power }));
+  const gearTags = items
+    .filter(
+      (gear) =>
+        isActiveWornGear(gear, user.bloodlineId) &&
+        (user.isAi || hasRequiredSkill(gear.item, wearer)) &&
+        !gearMissingMastery(gear, wearer),
+    )
+    .flatMap((gear) =>
+      wornGearTags(gear).map((tag, index) => ({
+        tag,
+        // wornGearTags keeps authored base tags before the appended crystals.
+        authoredPower: gear.item.effects[index]?.power ?? tag.power,
+      })),
+    );
+  for (const { tag, authoredPower } of [...tags, ...gearTags]) {
     // Persisted content must still satisfy the self-only, noncombat contract.
     if (
+      !Number.isFinite(authoredPower) ||
+      authoredPower < 0 ||
       !Number.isFinite(tag.power) ||
       tag.power < 0 ||
       (tag.type === "increasehuntingyield" || tag.type === "increasegatheringyield"
         ? tag.calculation !== "static" || !Number.isSafeInteger(tag.power)
         : tag.calculation !== "percentage" ||
-          tag.power > MAX_ACTIVITY_REDUCTION_PERCENT) ||
+          authoredPower > MAX_ACTIVITY_REDUCTION_PERCENT) ||
       tag.powerPerLevel !== 0 ||
       tag.target !== "SELF" ||
       tag.rounds !== undefined

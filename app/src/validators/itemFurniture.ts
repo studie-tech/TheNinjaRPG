@@ -104,6 +104,7 @@ export const FURNITURE_ITEM_DEFAULTS = {
   maxImbueNumber: 0,
   maxDurability: 0,
   canBeImbued: false,
+  canBeEnhanced: false,
   range: 0,
   cooldown: 0,
   chakraCost: 0,

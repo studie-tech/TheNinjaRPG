@@ -38,6 +38,7 @@ export const getServiceSubmissionCacheUpdate = ({
   if (
     requester.status !== "AWAKE" ||
     request.service === "REPAIR" ||
+    request.service === "FORTIFY" ||
     [requesterResult, crafterResult].some(
       (result) =>
         result.requiresUserRefresh !== false ||

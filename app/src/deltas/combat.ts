@@ -128,6 +128,7 @@ export const captureCombatCacheSnapshot = (
     })),
     items: user.items.map((row) => ({
       id: row.id,
+      fortification: row.fortification,
       equipped: row.equipped,
       durability: row.durability,
       level: row.level,

@@ -1158,6 +1158,7 @@ export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserSta
       ...bi,
       ...inertUserItemColumns(user.userId, now),
       activeVariantId: bi.activeVariantId ?? null,
+      fortification: bi.fortification ?? null,
       item: {
         id: bi.itemId,
         itemType: itemData?.itemType ?? "CONSUMABLE",

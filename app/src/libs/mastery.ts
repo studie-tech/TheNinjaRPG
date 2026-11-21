@@ -10,6 +10,8 @@ import {
   MasteryNames,
 } from "@/drizzle/constants";
 import type { UserTitle } from "@/drizzle/schema";
+import type { Fortification } from "@/libs/fortify";
+import { fortifiedEffects } from "@/libs/fortify";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { titleCombatTag } from "@/libs/titles";
 import type { ZodAllTags } from "@/validators/combat";
@@ -49,6 +51,7 @@ export type MasteryStatSource = Record<MasteryName, number>;
 /** Worn gear as the mastery helpers read it; a UserItem row joined with its Item fits. */
 export type MasteryGear = {
   quantity?: number;
+  fortification?: Fortification;
   storedAtHome?: boolean;
   isInAuction?: boolean;
   craftingFinishedAt?: Date | null;
@@ -276,12 +279,13 @@ export const hasUsableDurability = (
 
 /** The gear's effects plus its finished imbuements, merged as processUsersForBattle does. */
 export const wornGearTags = (ui: MasteryGear) => {
-  if (!ui.item.canBeImbued) return ui.item.effects;
+  const base = fortifiedEffects(ui.item.effects, ui.fortification);
+  if (!ui.item.canBeImbued) return base;
   const now = new Date();
   const imbued = (ui.imbuements ?? []).filter(
     (im) => im.craftingFinishedAt !== null && im.craftingFinishedAt < now,
   );
-  return [...ui.item.effects, ...imbued.flatMap((im) => im.item.effects)];
+  return [...base, ...imbued.flatMap((im) => im.item.effects)];
 };
 
 /**

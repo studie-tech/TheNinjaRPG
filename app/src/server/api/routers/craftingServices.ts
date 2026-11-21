@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getServiceSubmissionCacheUpdate } from "@/deltas/craftingServices";
@@ -5,6 +6,8 @@ import {
   CRAFTING_SERVICE_MAX_FEE,
   CRAFTING_SERVICES,
   CRAFTING_TIMES_MINS,
+  FORTIFY_FAILURE_BONUS,
+  FORTIFY_MAX_LEVEL,
   ItemRarities,
 } from "@/drizzle/constants";
 import type { CraftingServiceRequest } from "@/drizzle/schema";
@@ -22,6 +25,7 @@ import {
   serviceImbueError,
   serviceRecipeError,
 } from "@/libs/craftingServices";
+import { fortifyTags, getFortifyQuote, rollFortify } from "@/libs/fortify";
 import { getPvpBoost } from "@/libs/pvpExperience";
 import {
   filterQuestTrackersForDbPersist,
@@ -46,6 +50,7 @@ import {
   notifyServiceRequest,
   saveServicePrice,
 } from "@/queries/craftingServices";
+import { findFortifyEvolutions, fortifyDefinitionGuard } from "@/queries/fortify";
 import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { fetchUser } from "@/queries/profile";
 import { fetchUserItems } from "@/server/api/routers/item";
@@ -137,22 +142,43 @@ export const craftingServiceProcedures = {
         userItemId: z.string().optional(),
         userCrystalItemId: z.string().optional(),
         imbuementId: z.string().optional(),
+        fortifyTagId: z.string().optional(),
+        expectedFortifyLevel: z
+          .number()
+          .int()
+          .min(0)
+          .max(FORTIFY_MAX_LEVEL - 1)
+          .optional(),
+        expectedFortifyFailures: z
+          .number()
+          .int()
+          .min(0)
+          .max(Math.ceil(100 / FORTIFY_FAILURE_BONUS))
+          .optional(),
         expectedFee: z.number().int().min(0).max(CRAFTING_SERVICE_MAX_FEE),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       if (input.crafterId === ctx.userId)
         return errorResponse("Use your occupation tools for your own items");
-      const [requesterResult, crafterResult, inventory, prices, recipe] =
-        await Promise.all([
-          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-          fetchUpdatedUser({ client: ctx.drizzle, userId: input.crafterId }),
-          fetchUserItems(ctx.drizzle, ctx.userId),
-          findServicePrices(ctx.drizzle, input.crafterId),
-          input.itemId
-            ? fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId)
-            : undefined,
-        ]);
+      const [
+        requesterResult,
+        crafterResult,
+        inventory,
+        prices,
+        recipe,
+        evolutionChildren,
+      ] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchUpdatedUser({ client: ctx.drizzle, userId: input.crafterId }),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+
+        findServicePrices(ctx.drizzle, input.crafterId),
+        input.itemId
+          ? fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId)
+          : undefined,
+        findFortifyEvolutions(ctx.drizzle),
+      ]);
       const initialRequester = requesterResult.user;
       if (!initialRequester) return errorResponse("Requester not found");
       if (initialRequester.isBanned) return errorResponse("You are banned");
@@ -212,6 +238,35 @@ export const craftingServiceProcedures = {
           target.item.itemType === "FURNITURE")
       )
         return errorResponse("This item does not need repair");
+      let fortify: CraftingServiceRequest["fortify"] = null;
+      if (input.service === "FORTIFY") {
+        if (
+          !target ||
+          evolutionChildren.some((child) => child.parentItemId === target.itemId)
+        )
+          return errorResponse(
+            "Only an available final evolution can be fortified (including hidden evolutions)",
+          );
+        const tag = fortifyTags(target.item).find(
+          (tag) => tag.fortifyId === input.fortifyTagId,
+        );
+        if (!tag) return errorResponse("Select an eligible base tag");
+        const quote = getFortifyQuote(target.fortification, tag, true);
+        if (
+          !quote.chance ||
+          quote.level !== input.expectedFortifyLevel ||
+          quote.failures !== input.expectedFortifyFailures
+        )
+          return errorResponse(
+            "Fortification changed or reached its maximum. Refresh the item",
+          );
+        fortify = rollFortify(
+          target.fortification,
+          tag,
+          true,
+          randomInt(1_000_000) / 1_000_000,
+        );
+      }
       const rarity =
         input.service === "IMBUE"
           ? crystal?.item.rarity
@@ -225,7 +280,7 @@ export const craftingServiceProcedures = {
         return errorResponse(
           "This service price changed or is unavailable. Refresh the offer",
         );
-      if (requester.money < price.fee)
+      if (requester.money < price.fee + (fortify?.cost ?? 0))
         return errorResponse("You do not have enough ryo");
       const materials: CraftingQueueMaterial[] = [];
       const consumptions: { row: (typeof inventory)[number]; quantity: number }[] = [];
@@ -274,7 +329,11 @@ export const craftingServiceProcedures = {
         requesterId: ctx.userId,
         crafterId: input.crafterId,
         service: input.service,
-        status: input.service === "REPAIR" ? "ACTIVE" : "PENDING",
+        status:
+          input.service === "REPAIR" || input.service === "FORTIFY"
+            ? "ACTIVE"
+            : "PENDING",
+        fortify,
         fee: price.fee,
         itemId: info.id,
         itemName: info.name,
@@ -293,8 +352,10 @@ export const craftingServiceProcedures = {
           input.service === "REPAIR"
             ? getServiceRepairDurability(info.maxDurability, rank)
             : null,
-        startedAt: input.service === "REPAIR" ? new Date() : null,
-        finishesAt: input.service === "REPAIR" ? new Date() : null,
+        startedAt:
+          input.service === "REPAIR" || input.service === "FORTIFY" ? new Date() : null,
+        finishesAt:
+          input.service === "REPAIR" || input.service === "FORTIFY" ? new Date() : null,
       };
       try {
         // Reserving materials and inserting their durable receipt cannot be one guarded UPDATE.
@@ -302,8 +363,14 @@ export const craftingServiceProcedures = {
         const notification = await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
             if (
-              (await claimServiceUser(tx, requester, price.fee, readiness))
-                .rowsAffected !== 1
+              (
+                await claimServiceUser(
+                  tx,
+                  requester,
+                  price.fee + (fortify?.cost ?? 0),
+                  readiness,
+                )
+              ).rowsAffected !== 1
             )
               throw new CraftingServiceConflict(
                 "Your balance or state changed. Please try again",
@@ -333,16 +400,25 @@ export const craftingServiceProcedures = {
             if (
               target &&
               input.service !== "CRAFT" &&
-              (await escrowServiceEquipment(tx, target, request.id)).rowsAffected !== 1
+              (
+                await escrowServiceEquipment(
+                  tx,
+                  target,
+                  request.id,
+                  input.service === "FORTIFY"
+                    ? fortifyDefinitionGuard(tx, target)
+                    : undefined,
+                )
+              ).rowsAffected !== 1
             )
               throw new CraftingServiceConflict("Equipment changed. Please try again");
             await insertServiceRequest(tx, request);
-            if (input.service !== "REPAIR")
+            if (input.service !== "REPAIR" && input.service !== "FORTIFY")
               return notifyServiceRequest(tx, request, "requested");
           }),
         );
         if (notification) publishServiceNotification(ctx.drizzle, notification);
-        if (input.service === "REPAIR")
+        if (input.service === "REPAIR" || input.service === "FORTIFY")
           await completeCraftingService(ctx.drizzle, request);
         return actionReadinessResponse(
           {
@@ -359,9 +435,13 @@ export const craftingServiceProcedures = {
                 input.service === "IMBUE" ? crystal?.item.name : imbuement?.item.name,
             }),
             message:
-              input.service === "REPAIR"
-                ? "Repair completed and delivered to your inventory"
-                : "Request sent. Your fee and items are held in escrow",
+              input.service === "FORTIFY"
+                ? fortify?.succeeded
+                  ? "Fortify succeeded. Your item was delivered; the attempt cost and service fee were consumed"
+                  : "Fortify failed. Your item was delivered with an increased failure bonus; the attempt cost and service fee were consumed"
+                : input.service === "REPAIR"
+                  ? "Repair completed and delivered to your inventory"
+                  : "Request sent. Your fee and items are held in escrow",
           },
           readiness,
           ctx.drizzle,

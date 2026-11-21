@@ -159,6 +159,7 @@ import {
 import type { CoopEncounter } from "@/libs/coop";
 import { dungeonBattleOutcome, dungeonRequirements } from "@/libs/dungeon";
 import { activeTrainedElement } from "@/libs/elementalMastery";
+import { fortifiedEffects } from "@/libs/fortify";
 import {
   buildJutsuEquipCaps,
   compareByLoadoutOrder,
@@ -1980,6 +1981,7 @@ const hydrateBattleItems = (battle: CompleteBattle, user: BattleUserState, now: 
         item,
         imbuements: [],
         imbuementEffects: ref.imbuementEffects ?? [],
+        fortification: ref.fortification ?? null,
         activeVariantId: ref.activeVariantId ?? null,
         variantBattleDescription: ref.variantBattleDescription ?? null,
         variantImage: ref.variantImage ?? null,
@@ -4439,7 +4441,7 @@ export const processUsersForBattle = async (
         ui.imbuements = []; // Reset to avoid storing in battle table
         // Parse item
         const effects = [
-          ...(ui.item.effects as UserEffect[]),
+          ...(fortifiedEffects(ui.item.effects, ui.fortification) as UserEffect[]),
           ...imbuementEffects,
         ].filter((effect) => !isActivityBonus(effect));
         const itemType = ui.item.itemType;
@@ -4779,6 +4781,7 @@ export const processUsersForBattle = async (
         originalCooldown: ui.originalCooldown,
         dropChancePerc: ui.dropChancePerc,
         imbuementEffects: ui.imbuementEffects ?? [],
+        fortification: ui.fortification ?? null,
         activeVariantId: ui.activeVariantId ?? null,
         variantBattleDescription,
         variantImage,

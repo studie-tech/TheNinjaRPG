@@ -78,6 +78,7 @@ import {
   isUserSummonPrevented,
   wearBattleItem,
 } from "@/libs/combat/util";
+import { fortifiedEffects } from "@/libs/fortify";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
 import { calcCombatHealPercentage } from "@/libs/hospital";
@@ -791,7 +792,10 @@ export const userItemToAction = (
     staminaCost: Math.max(0, item.staminaCost - item.staminaCostReducePerLvl * level),
     actionCostPerc: item.actionCostPerc,
     // The catalog item is shared by everyone holding this template; imbuements are per row.
-    effects: [...item.effects, ...(useritem.imbuementEffects ?? [])],
+    effects: [
+      ...fortifiedEffects(item.effects, useritem.fortification),
+      ...(useritem.imbuementEffects ?? []),
+    ],
     quantity: useritem.quantity,
     data: item,
     durability: useritem.durability,

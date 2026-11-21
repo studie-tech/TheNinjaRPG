@@ -10,6 +10,7 @@ import {
   ne,
   notExists,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -141,6 +142,7 @@ export const consumeServiceMaterial = (
         eq(userItem.userId, row.userId),
         eq(userItem.quantity, row.quantity),
         gte(userItem.quantity, quantity),
+        isNull(userItem.fortification),
         eq(userItem.updatedAt, row.updatedAt),
         eq(userItem.equipped, "NONE"),
         eq(userItem.isInAuction, false),
@@ -156,6 +158,7 @@ export const escrowServiceEquipment = (
   db: DrizzleClient,
   row: UserItem,
   requestId: string,
+  definitionGuard?: SQL,
 ) =>
   db
     .update(userItem)
@@ -166,6 +169,7 @@ export const escrowServiceEquipment = (
         eq(userItem.userId, row.userId),
         eq(userItem.updatedAt, row.updatedAt),
         eq(userItem.durability, row.durability),
+        definitionGuard,
         eq(userItem.quantity, 1),
         eq(userItem.equipped, "NONE"),
         eq(userItem.isInAuction, false),
