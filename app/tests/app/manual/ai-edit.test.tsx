@@ -22,7 +22,11 @@ import * as SuggestChange from "@/layout/SuggestChange";
 import * as toast from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
 import { humanizeIdentifier } from "@/utils/string";
-import * as UserContext from "@/utils/UserContext";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 import { mockUserContextValue } from "../../setup/userContext";
 
 const save = vi.fn();
@@ -34,6 +38,7 @@ let ai: AiWithRelations;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   // Only editor and validation inputs are needed; unrelated user columns stay absent.
   ai = {
     userId: "ai",
@@ -73,7 +78,17 @@ beforeEach(() => {
       updateAi: { useMutation: () => ({ mutate: save, isPending: false }) },
       updateNindo: { useMutation: () => ({ isPending: false }) },
     },
-    jutsu: { getAllNames: names },
+    jutsu: {
+      getAllNames: {
+        useQuery: () => ({
+          data: [
+            { id: "strike", name: "Lightning Flash Strike" },
+            { id: "other", name: "Other Jutsu" },
+          ],
+          isPending: false,
+        }),
+      },
+    },
     item: { getAllNames: names },
     bloodline: { getAllNames: names },
     clan: { getAllNames: names },
@@ -108,8 +123,10 @@ beforeEach(() => {
   vi.spyOn(toast, "showFormErrorsToast").mockImplementation(() => undefined);
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await act(flushRadixFocus);
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
 
@@ -158,33 +175,63 @@ describe("manual AI editing", () => {
 
   it("requires the replacement to stay equipped and allows clearing it", async () => {
     ai.jutsus = [{ jutsuId: "strike" }] as AiWithRelations["jutsus"];
-    await mount();
-    await act(async () => {
-      editor.form.setValue("basicAttackJutsuId", "strike");
-      await editor.handleUserSubmit();
+    ai.basicAttackJutsuId = "strike";
+    vi.spyOn(EditContent, "EditContent").mockImplementation((props) => (
+      <ActualEditContent
+        {...props}
+        formData={props.formData.filter(({ id }) =>
+          ["jutsus", "basicAttackJutsuId"].includes(id),
+        )}
+      />
+    ));
+    const view = await mount();
+    const replacement = () =>
+      view.getByRole("combobox", { name: "Basic Attack Replacement" });
+    expect(replacement().textContent).toBe("Lightning Flash Strike");
+    fireEvent.click(
+      view.getByRole("button", { name: "Remove Lightning Flash Strike" }),
+    );
+    expect(replacement().textContent).toBe("Lightning Flash Strike (not equipped)");
+    expect(editor.form.getValues("basicAttackJutsuId")).toBe("strike");
+    const field = editor.formData.find(({ id }) => id === "basicAttackJutsuId");
+    expect(field).toMatchObject({
+      values: [
+        { id: "", name: "None" },
+        { id: "strike", name: "Lightning Flash Strike (not equipped)" },
+      ],
     });
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(save.mock.lastCall?.[0].data.basicAttackJutsuId).toBe("strike");
-    save.mockClear();
-    await act(async () => {
-      editor.form.setValue("jutsus", []);
-      await editor.handleUserSubmit();
-    });
+    fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
+    await waitFor(() => expect(toast.showFormErrorsToast).toHaveBeenCalled());
     expect(save).not.toHaveBeenCalled();
     expect(editor.form.getFieldState("basicAttackJutsuId").error?.message).toContain(
       "clear Basic Attack Replacement",
     );
     await act(async () => {
-      editor.form.setValue("basicAttackJutsuId", null);
-      await editor.handleUserSubmit();
+      editor.form.setValue("jutsus", ["strike"]);
     });
-    expect(save).toHaveBeenCalledTimes(1);
+    expect(replacement().textContent).toBe("Lightning Flash Strike");
+    fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.lastCall?.[0].data.basicAttackJutsuId).toBe("strike");
+    save.mockClear();
+    fireEvent.click(
+      view.getByRole("button", { name: "Remove Lightning Flash Strike" }),
+    );
+    fireEvent.click(replacement());
+    fireEvent.click(view.getByRole("option", { name: "None" }));
+    fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.lastCall?.[0].data).toMatchObject({
       basicAttackJutsuId: null,
       jutsus: [],
     });
-    const field = editor.formData.find(({ id }) => id === "basicAttackJutsuId");
-    expect(field).toMatchObject({ nullable: true, values: [{ id: "", name: "None" }] });
+    expect(replacement().textContent).toBe("None");
+    expect(editor.formData.find(({ id }) => id === "basicAttackJutsuId")).toMatchObject(
+      {
+        nullable: true,
+        values: [{ id: "", name: "None" }],
+      },
+    );
   });
 
   it("retains validation and allows correcting invalid edits", async () => {
