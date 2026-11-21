@@ -187,6 +187,7 @@ export const TowerDefenseChallenge = (props: {
   );
 };
 
+/** A one-line status banner with an optional action: amber by default, green on success. */
 const Notice = (props: {
   icon: ReactNode;
   tone?: "success";
