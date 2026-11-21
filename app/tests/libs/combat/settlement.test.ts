@@ -11,16 +11,19 @@ import {
   battleHistory,
   dataBattleAction,
   item,
+  jutsu,
   logBattleLengths,
   userData,
   userItem,
   userItemImbuement,
+  userJutsu,
   userQueue,
 } from "@/drizzle/schema";
 import type { UserEvent } from "@/layout/PusherHandler";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import {
   combatEnergyRecoverySql,
+  prepareBattleJutsuXp,
   saveUsage,
   updateBattle,
   updateUser,
@@ -30,7 +33,7 @@ import { calcBattleResult } from "@/libs/combat/settlement";
 import { alignBattle } from "@/libs/combat/turn";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { Pusher, type PusherClient } from "@/libs/pusher";
-import { fetchBattle } from "@/queries/combat";
+import { fetchBattle, updateUserDataForFinishBattle } from "@/queries/combat";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
@@ -44,17 +47,23 @@ import {
   makeBattleUserItem,
   makeCompleteBattle,
   makeEffect,
+  makeJutsu,
 } from "../../setup/combat";
 import { deferred } from "../../setup/deferred";
 import {
   insertDefaultAiProfile,
   insertItems,
+  insertJutsus,
   insertUserItems,
   insertUsers,
 } from "../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../setup/queues";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { aroundStatements, beforeStatements } from "../../setup/statements";
+import {
+  aroundStatements,
+  beforeStatements,
+  failStatements,
+} from "../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -163,6 +172,8 @@ describeWithDatabase("CAS combat settlement", () => {
       userItemImbuement,
       userItem,
       item,
+      userJutsu,
+      jutsu,
       userQueue,
       userData,
     );
@@ -902,39 +913,144 @@ describeWithDatabase("CAS combat settlement", () => {
     ).toBe(10);
   });
 
-  it("releases raid teammates with Energy recovery and hospital handling only once", async () => {
+  it.each([false, true])(
+    "releases raid teammates with Energy and distinct jutsu XP only once (wipe=%s)",
+    async (wipe) => {
+      const db = await getTestDatabase();
+      await db
+        .update(userData)
+        .set({ regenAt: new Date(Date.now() - 120_000), regeneration: 3 })
+        .where(eq(userData.userId, "loser"));
+      const snapshot = scenario(true);
+      snapshot.battleType = "RAID";
+      snapshot.rewardScaling = 0;
+      if (wipe) snapshot.usersState[0]!.curHealth = 0;
+      const definitions = await insertJutsus([
+        { id: "used" },
+        { id: "unused" },
+        { id: "capped" },
+        { id: "elite", requiredRank: "ELITE JONIN" },
+        { id: "advanced", requiredRank: "ELITE JONIN" },
+      ]);
+      snapshot.extraState.jutsus = Object.fromEntries(
+        definitions.map((j) => [j.id, makeJutsu(j)]),
+      );
+      snapshot.extraState.settings = [
+        {
+          id: "boost",
+          name: "jutsuExpMultiplier",
+          value: 1.53,
+          time: new Date(Date.now() + 60000),
+        },
+      ];
+      const teammate = snapshot.usersState[1]!;
+      teammate.direction = "left";
+      teammate.pvpBoostPercent = 15;
+      teammate.usedActions = [
+        "used",
+        "used",
+        "elite",
+        "advanced",
+        "capped",
+        "unknown",
+      ].map((id) => ({ id, type: "jutsu" }));
+      snapshot.usersState[0]!.usedActions = [{ id: "used", type: "jutsu" }];
+      const owned = [
+        { jutsuId: "used", level: 1, experience: 0 },
+        { jutsuId: "unused", level: 1, experience: 4 },
+        { jutsuId: "capped", level: 25, experience: 5 },
+        { jutsuId: "elite", level: 24, experience: 4990 },
+        { jutsuId: "advanced", level: 25, experience: 9990 },
+      ];
+      await db
+        .insert(userJutsu)
+        .values([
+          ...owned.map((row) => ({ ...row, id: row.jutsuId, userId: "loser" })),
+          { id: "actor", jutsuId: "used", userId: "winner" },
+        ]);
+      snapshot.extraState.energyRegeneration = { loser: 6 };
+      snapshot.extraState.energyCapacity = { loser: 100 };
+      snapshot.usersState.push(
+        makeBattleUser("boss", {
+          direction: "right",
+          isAi: true,
+          isSummon: false,
+          curHealth: wipe ? 100 : 0,
+          leftBattle: !wipe,
+        }),
+      );
+      await db.insert(battle).values(snapshot);
+      await settle(snapshot);
+      const after = (await db.query.userData.findFirst({
+        where: eq(userData.userId, "loser"),
+      }))!;
+      expect(after.curEnergy).toBeGreaterThanOrEqual(22);
+      expect(after.curEnergy).toBeLessThan(22.1);
+      expect(after.status).toBe("HOSPITALIZED");
+      expect(after.curHealth).toBe(0);
+      expect(after.battleId).toBeNull();
+      const awards = await db.query.userJutsu.findMany();
+      expect(awards.find((row) => row.id === "actor")?.experience).toBe(24);
+      expect(awards.find((row) => row.id === "used")?.experience).toBe(27);
+      expect(awards.find((row) => row.id === "elite")).toMatchObject({
+        level: 25,
+        experience: 0,
+      });
+      expect(awards.find((row) => row.id === "advanced")).toMatchObject({
+        level: 26,
+        experience: 0,
+      });
+      for (const row of owned.filter((row) =>
+        ["unused", "capped"].includes(row.jutsuId),
+      ))
+        expect(awards.find((entry) => entry.jutsuId === row.jutsuId)).toMatchObject(
+          row,
+        );
+      expect(await settle(snapshot)).toBeNull();
+      expect(
+        (await db.query.userData.findFirst({ where: eq(userData.userId, "loser") }))
+          ?.curEnergy,
+      ).toBe(after.curEnergy);
+      expect(await db.query.userJutsu.findMany()).toEqual(awards);
+    },
+  );
+
+  it("keeps a failed raid release and jutsu award retryable under the battle guard", async () => {
     const db = await getTestDatabase();
+    await insertJutsus([{ id: "used" }]);
     await db
-      .update(userData)
-      .set({ regenAt: new Date(Date.now() - 120_000), regeneration: 3 })
-      .where(eq(userData.userId, "loser"));
+      .insert(userJutsu)
+      .values({ id: "owned", userId: "loser", jutsuId: "used" });
     const snapshot = scenario(true);
     snapshot.battleType = "RAID";
-    snapshot.extraState.energyRegeneration = { loser: 6 };
-    snapshot.extraState.energyCapacity = { loser: 100 };
-    snapshot.usersState.push(
-      makeBattleUser("boss", {
-        isAi: true,
-        isSummon: false,
-        curHealth: 0,
-        leftBattle: true,
-      }),
+    snapshot.extraState.jutsus = {
+      used: makeJutsu({ id: "used" }),
+    };
+    const teammate = snapshot.usersState[1]!;
+    teammate.usedActions = [{ id: "used", type: "jutsu" }];
+    const release = (client: typeof db) =>
+      updateUserDataForFinishBattle(
+        client,
+        combatEnergyRecoverySql,
+        snapshot,
+        teammate,
+        true,
+        prepareBattleJutsuXp(snapshot, teammate),
+      );
+    await expect(release(failStatements(db, userJutsu))).rejects.toThrow(
+      "Statement failed on purpose",
     );
-    await db.insert(battle).values(snapshot);
-    await settle(snapshot);
-    const after = (await db.query.userData.findFirst({
-      where: eq(userData.userId, "loser"),
-    }))!;
-    expect(after.curEnergy).toBeGreaterThanOrEqual(22);
-    expect(after.curEnergy).toBeLessThan(22.1);
-    expect(after.status).toBe("HOSPITALIZED");
-    expect(after.curHealth).toBe(0);
-    expect(after.battleId).toBeNull();
-    expect(await settle(snapshot)).toBeNull();
     expect(
       (await db.query.userData.findFirst({ where: eq(userData.userId, "loser") }))
-        ?.curEnergy,
-    ).toBe(after.curEnergy);
+        ?.battleId,
+    ).toBe(snapshot.id);
+    expect((await db.query.userJutsu.findFirst())?.experience).toBe(0);
+    await Promise.all([release(db), release(db)]);
+    expect((await db.query.userJutsu.findFirst())?.experience).toBe(16);
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, "loser") }))
+        ?.battleId,
+    ).toBeNull();
   });
 
   it("orphan recovery credits base Energy without advancing queued stats or other pools", async () => {

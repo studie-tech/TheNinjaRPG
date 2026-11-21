@@ -269,6 +269,7 @@ export const battleJutsuExp = (
   battleType: BattleType,
   experienceGain: number,
   settings?: GameSetting[],
+  isDungeon = false,
 ) => {
   let baseExp = 0;
 
@@ -283,7 +284,10 @@ export const battleJutsuExp = (
       baseExp = experienceGain * 0.5;
       break;
     case "QUEST":
-      baseExp = experienceGain * 0.5;
+      baseExp = isDungeon ? 16 : experienceGain * 0.5;
+      break;
+    case "RAID":
+      baseExp = 16;
       break;
     case "VILLAGE_PROTECTOR":
       baseExp = experienceGain * 0.0;

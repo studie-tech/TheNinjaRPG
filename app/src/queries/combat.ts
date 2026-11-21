@@ -13,6 +13,7 @@ import {
   gt,
   gte,
   inArray,
+  is,
   isNotNull,
   isNull,
   like,
@@ -22,7 +23,7 @@ import {
   notExists,
   notInArray,
   or,
-  type SQL,
+  SQL,
   sql,
 } from "drizzle-orm";
 import { type AnyMySqlColumn, alias } from "drizzle-orm/mysql-core";
@@ -37,10 +38,15 @@ import {
   type CombatBiome,
   type CombatStatName,
   CombatStatNames,
+  ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL,
+  ELITE_JONIN_JUTSU_LEVEL_CAP,
+  ELITE_JONIN_JUTSU_XP_TO_LEVEL,
   HOSPITAL_LAT,
   HOSPITAL_LONG,
   HUNTING_REQUIRED_EXP,
   ITEM_LEVEL_CAP,
+  JUTSU_TRAIN_LEVEL_CAP,
+  JUTSU_XP_TO_LEVEL,
   KAGE_DEFENSE_GRACE_MINUTES,
   KAGE_MIN_DAYS_IN_VILLAGE,
   KAGE_PRESTIGE_REQUIREMENT,
@@ -2004,7 +2010,7 @@ export const deleteMpvpBattleUserForFinishBattle = (
 
 /** Build the `userData` update for `finishBattle`, using predicates on `userId` and `battleId`. */
 export const updateUserDataForFinishBattle = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "execute">,
   combatEnergyRecoverySql: (
     snapshot?: CompleteBattle,
     userId?: string,
@@ -2022,30 +2028,77 @@ export const updateUserDataForFinishBattle = (
     villageId: null | string;
   },
   sendToHospital: false | true,
-) =>
-  client
-    .update(userData)
-    .set({
-      bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
-      bracketImmunityPausedAt: null,
-      battleId: null,
-      updatedAt: nextSnapshotSql(userData.updatedAt),
-      curEnergy: combatEnergyRecoverySql(newBattle, teammate.userId),
-      // Only Energy recovers in combat; reset the shared clock for other pools.
-      regenAt: sql`NOW(3)`,
-      curHealth: teammate.curHealth,
-      curStamina: teammate.curStamina,
-      curChakra: teammate.curChakra,
-      stealthActive: false,
-      stealthActivatedAt: null,
-      stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
-      ...(sendToHospital
-        ? hospitalPlacement(newBattle, teammate)
-        : { status: leaveCombatStatus(newBattle.battleType) }),
-    })
-    .where(
-      and(eq(userData.userId, teammate.userId), eq(userData.battleId, newBattle.id)),
-    );
+  jutsuXp?: { experience: number; groups: Map<number, string[]> },
+) => {
+  const values = {
+    bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
+    bracketImmunityPausedAt: null,
+    battleId: null,
+    updatedAt: nextSnapshotSql(userData.updatedAt),
+    curEnergy: combatEnergyRecoverySql(newBattle, teammate.userId),
+    // Only Energy recovers in combat; reset the shared clock for other pools.
+    regenAt: sql`NOW(3)`,
+    curHealth: teammate.curHealth,
+    curStamina: teammate.curStamina,
+    curChakra: teammate.curChakra,
+    stealthActive: false,
+    stealthActivatedAt: null,
+    stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
+    ...(sendToHospital
+      ? hospitalPlacement(newBattle, teammate)
+      : { status: leaveCombatStatus(newBattle.battleType) }),
+  };
+  const guard = and(
+    eq(userData.userId, teammate.userId),
+    eq(userData.battleId, newBattle.id),
+  );
+  if (!jutsuXp || jutsuXp.experience <= 0 || jutsuXp.groups.size === 0)
+    return client.update(userData).set(values).where(guard);
+
+  const groups = [...jutsuXp.groups];
+  const eligible = or(
+    ...groups.map(([cap, ids]) =>
+      and(inArray(userJutsu.jutsuId, ids), lt(userJutsu.level, cap)),
+    ),
+  );
+  const xpToLevel = sql`CASE ${sql.join(
+    groups.map(
+      ([cap, ids]) =>
+        sql`WHEN ${inArray(userJutsu.jutsuId, ids)} THEN ${jutsuXpToLevelSql(cap)}`,
+    ),
+    sql` `,
+  )} END`;
+  const fields = Object.entries(values).filter(([, value]) => value !== undefined);
+  const releaseValues = fields.map(([key, value]) => {
+    const column = userData[key as keyof typeof values];
+    return sql`${is(value, SQL) ? value : sql.param(value, column)} AS ${sql.identifier(key)}`;
+  });
+  const assignments = fields.map(
+    ([key]) =>
+      sql`${userData[key as keyof typeof values]} = released.${sql.identifier(key)}`,
+  );
+  // LIMIT prevents merging these snapshots: multi-table SET order cannot preserve recovery clocks or XP thresholds.
+  // Lock current rows so the snapshots cannot overwrite concurrent Energy or XP increments.
+  return client.execute(sql`
+    UPDATE ${userData}
+    INNER JOIN (
+      SELECT ${userData.userId} AS userId, ${sql.join(releaseValues, sql`, `)}
+      FROM ${userData} WHERE ${guard} LIMIT 1 FOR UPDATE
+    ) AS released ON ${userData.userId} = released.userId
+    LEFT JOIN (
+      SELECT ${userJutsu.id} AS id, ${userJutsu.experience} AS experience,
+             ${userJutsu.level} AS level, ${xpToLevel} AS xpToLevel
+      FROM ${userJutsu}
+      WHERE ${eq(userJutsu.userId, teammate.userId)} AND ${eligible}
+      LIMIT 18446744073709551615 FOR UPDATE
+    ) AS xp ON TRUE
+    LEFT JOIN ${userJutsu} ON ${userJutsu.id} = xp.id
+    SET ${sql.join(assignments, sql`, `)},
+        ${userJutsu.experience} = IF(xp.experience + ${jutsuXp.experience} >= xp.xpToLevel, 0, xp.experience + ${jutsuXp.experience}),
+        ${userJutsu.level} = xp.level + (xp.experience + ${jutsuXp.experience} >= xp.xpToLevel)
+    WHERE ${guard}
+  `);
+};
 
 /** Build the `mpvpBattleQueue` deletion for `finishBattle`, using predicates on `battleId`. */
 export const deleteMpvpBattleQueueForFinishBattle = (
@@ -2588,6 +2641,12 @@ export const updateUserItemForUpdateUser = (
       ),
     );
 
+/** Jutsu rank selects its ownership XP threshold at the persisted level. */
+export const jutsuXpToLevelSql = (cap: number) =>
+  cap === ELITE_JONIN_JUTSU_LEVEL_CAP
+    ? sql`IF(${userJutsu.level} < ${JUTSU_TRAIN_LEVEL_CAP}, ${ELITE_JONIN_JUTSU_XP_TO_LEVEL}, ${ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL})`
+    : sql`${JUTSU_XP_TO_LEVEL}`;
+
 /** Execute the database statement for `updateUser`. */
 export const executeRowsForUpdateUser = (
   client: Pick<DrizzleClient, "execute">,
@@ -2596,6 +2655,7 @@ export const executeRowsForUpdateUser = (
   user: { userId: string },
   cap: number,
   ids: string[],
+  battleId?: string,
 ) =>
   client.execute(sql`
               UPDATE ${userJutsu}
@@ -2604,6 +2664,7 @@ export const executeRowsForUpdateUser = (
               WHERE ${userJutsu.userId} = ${user.userId}
                 AND ${userJutsu.level} < ${cap}
                 AND ${inArray(userJutsu.jutsuId, ids)}
+                ${battleId ? sql`AND EXISTS (SELECT 1 FROM ${userData} WHERE ${eq(userData.userId, user.userId)} AND ${eq(userData.battleId, battleId)})` : sql``}
             `);
 
 /** Build the `userItem` update for `updateUser`, using predicates on `userId`, `level`, `id`. */
