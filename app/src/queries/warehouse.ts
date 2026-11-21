@@ -433,6 +433,16 @@ export const insertWarehouseLogs = (
         })),
       );
 
+/** Keep a deleted character's Warehouse history without linking it to a recreated one. */
+export const unlinkWarehouseLogUser = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+) =>
+  client
+    .update(warehouseLog)
+    .set({ userId: null })
+    .where(eq(warehouseLog.userId, userId));
+
 /** One page of a Warehouse's history, newest first. */
 export const listWarehouseLogs = (
   client: Pick<DrizzleClient, "select">,

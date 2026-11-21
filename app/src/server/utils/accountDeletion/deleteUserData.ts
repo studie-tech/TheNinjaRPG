@@ -104,6 +104,7 @@ import {
   updateUserDataForDeleteUserInternal,
   updateWebStoreOrderForDeleteUserInternal,
 } from "@/queries/staff";
+import { unlinkWarehouseLogUser } from "@/queries/warehouse";
 import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { retireCraftingServices } from "@/server/utils/craftingServices";
@@ -261,6 +262,8 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     deleteUserActivityEventForDeleteUserInternal(client, userId),
     deleteActionLogForDeleteUserInternal(client, userId),
     deleteTrainingLogForDeleteUserInternal(client, userId),
+    // Village Warehouse history stays, unlinked from a recreated character.
+    unlinkWarehouseLogUser(client, userId),
     deleteAiProfileForDeleteUserInternal(client, userId),
     ...(aiPlacementIds.length > 0
       ? [
