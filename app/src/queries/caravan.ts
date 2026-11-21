@@ -682,7 +682,6 @@ export const insertEncounter = (
     type: values.type,
     status: "STARTING",
     caravanId: values.caravanId,
-    markerId: values.markerId,
     activeCaravanId: values.caravanId,
     activeMarkerId: values.markerId,
     battleId: values.battleId,
@@ -783,14 +782,12 @@ export const resolveFoughtEncounter = (
   client: Pick<DrizzleClient, "update">,
   encounterId: string,
   battleId: string,
-  attackersWon: boolean,
   now: Date,
 ) =>
   client
     .update(caravanEncounter)
     .set({
       status: "RESOLVED",
-      attackersWon,
       resolvedAt: now,
       activeCaravanId: null,
       activeMarkerId: null,
@@ -816,8 +813,8 @@ export const expireAmbush = (
   client.execute(sql`
     UPDATE ${caravanEncounter}
     INNER JOIN ${caravan} ON ${caravan.id} = ${caravanEncounter.caravanId}
-    SET ${caravanEncounter.status} = 'RESOLVED', ${caravanEncounter.attackersWon} = TRUE,
-        ${caravanEncounter.resolvedAt} = ${now}, ${caravanEncounter.activeCaravanId} = NULL,
+    SET ${caravanEncounter.status} = 'RESOLVED', ${caravanEncounter.resolvedAt} = ${now},
+        ${caravanEncounter.activeCaravanId} = NULL,
         ${caravan.lossBp} = IF(${caravan.status} = 'TRAVELLING', LEAST(${CARAVAN_MAX_LOSS_BP}, ${caravan.lossBp} + ${lossBp}), ${caravan.lossBp}),
         ${caravan.version} = ${caravan.version} + 1
     WHERE ${caravanEncounter.id} = ${encounterId}

@@ -41,7 +41,6 @@ export const settleCaravanCombat = async (
     database,
     state.encounterId,
     state.battleId,
-    attackersWon,
     now,
   );
   if (claimed.rowsAffected !== 1) return;

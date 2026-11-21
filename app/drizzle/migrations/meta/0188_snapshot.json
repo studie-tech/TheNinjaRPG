@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "6edea128-2fc2-4d3a-9600-a62b6c72bb0c",
+  "id": "e17ff051-ce00-4776-952d-a87c2476fa49",
   "prevId": "9a212f58-39b6-4819-a46d-141f833f3cd0",
   "tables": {
     "AbEvent": {
@@ -3266,13 +3266,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "markerId": {
-          "name": "markerId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "activeCaravanId": {
           "name": "activeCaravanId",
           "type": "varchar(191)",
@@ -3297,13 +3290,6 @@
         "leaderId": {
           "name": "leaderId",
           "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "attackersWon": {
-          "name": "attackersWon",
-          "type": "boolean",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
