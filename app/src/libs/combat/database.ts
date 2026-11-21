@@ -427,7 +427,10 @@ export const updateBattle = async (
               ...teammate,
               longitude: teammate.originalLongitude,
               latitude: teammate.originalLatitude,
-              status: "AWAKE",
+              // Escorts leave their caravan's fight back in its queue, as leaveCombatStatus writes.
+              status: newBattle.extraState.caravan?.guardIds.includes(teammate.userId)
+                ? "QUEUED"
+                : "AWAKE",
               battleId: null,
             });
           });
