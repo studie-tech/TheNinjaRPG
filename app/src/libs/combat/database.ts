@@ -138,7 +138,7 @@ import {
 import { warRaidCombatGuard } from "@/queries/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
-import { settleCaravanCombat } from "@/server/utils/caravanSettlement";
+import { isSideStanding, settleCaravanCombat } from "@/server/utils/caravanSettlement";
 import { rewardClanBattleVictory } from "@/server/utils/clanBattle";
 import { settleDungeonBattle } from "@/server/utils/dungeon";
 import { settleHuntingBattle } from "@/server/utils/hunting";
@@ -154,15 +154,10 @@ import {
   recordVillageMissionProgress,
 } from "@/server/utils/villageMission";
 
-/** Either side of a caravan or marker fight has nobody left fighting. */
+/** Either side of a caravan or marker fight, which always fields both, has nobody left. */
 const isCaravanSideDefeated = (battle: CompleteBattle) =>
   battle.battleType === "CARAVAN" &&
-  (["left", "right"] as const).some((direction) => {
-    const side = battle.usersState.filter(
-      (user) => !user.isSummon && user.direction === direction,
-    );
-    return side.length > 0 && side.every((user) => !stillInBattle(user));
-  });
+  (!isSideStanding(battle, "left") || !isSideStanding(battle, "right"));
 
 /**
  * A raid is "boss defeated" when the boss AI exists in the battle and no

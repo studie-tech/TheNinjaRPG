@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/nextjs";
 import { nanoid } from "nanoid";
 import { after } from "next/server";
 import {
@@ -74,12 +73,14 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { isServingElder } from "@/server/utils/kageGovernance";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { sendPushToUsers } from "@/server/utils/push";
+import { deferPushToUsers } from "@/server/utils/push/defer";
 import { secureRandomInt } from "@/utils/math";
+import { HOUR_S, MINUTE_S, secondsFromDate } from "@/utils/time";
 
-const MINUTE_MS = 60_000;
 /** Cancellations a disbanding settlement retries against concurrent caravan writes. */
 const CANCEL_ATTEMPTS = 3;
+/** Escorts a caravan released, and may have paid, reload their profile and caravans. */
+const ESCORT_RELEASE_VIEWS: CaravanNoticeView[] = ["profile", "caravans", "controls"];
 
 /**
  * Advance caravans and covert operations to `now`: finish due operations, roll ambushes at
@@ -98,9 +99,7 @@ export const maintainCaravans = async (
   // sabotage that finished first lands before delivery; the job finishes everyone's.
   const resolvesOperations = !scope || !!scope.userId || !!caravanIds?.length;
   const watchesCaravans = !scope || !!caravanIds?.length;
-  const staleBefore = new Date(
-    now.getTime() - CARAVAN_ENCOUNTER_STALE_MINUTES * MINUTE_MS,
-  );
+  const staleBefore = secondsFromDate(-CARAVAN_ENCOUNTER_STALE_MINUTES * MINUTE_S, now);
   const readCaravans = () =>
     caravanIds ? listCaravansByIds(client, caravanIds) : listTravellingCaravans(client);
   // Neither landing sabotage nor rolling ambushes makes an encounter due, so the due
@@ -156,7 +155,7 @@ export const hasDueCaravanWork = (
   },
   now: Date,
 ) => {
-  const staleBefore = now.getTime() - CARAVAN_ENCOUNTER_STALE_MINUTES * MINUTE_MS;
+  const staleBefore = secondsFromDate(-CARAVAN_ENCOUNTER_STALE_MINUTES * MINUTE_S, now);
   const fought = new Set(input.encounters.map((row) => row.caravanId));
   return (
     input.dueOperations.length > 0 ||
@@ -174,7 +173,7 @@ export const hasDueCaravanWork = (
       row.status === "PENDING"
         ? row.type === "AMBUSH" && !!row.expiresAt && row.expiresAt <= now
         : (row.status === "STARTING" || row.status === "FIGHTING") &&
-          row.createdAt.getTime() < staleBefore,
+          row.createdAt < staleBefore,
     )
   );
 };
@@ -231,8 +230,7 @@ export const cancelCaravan = async (
   notifyPlayers(client, guardIds, {
     title: "Caravan cancelled",
     body: "Your escort duty ended; the caravan was cancelled.",
-    route: "/warehouse",
-    releasesEscort: true,
+    refresh: ESCORT_RELEASE_VIEWS,
   });
   return guards.flatMap((p) => (p.activeUserId ? [p.userId] : []));
 };
@@ -280,7 +278,7 @@ export const deliverCaravan = async (
   now = new Date(),
 ) => {
   const [encounters, participants] = await Promise.all([
-    listOpenEncounters(client, { caravanIds: [row.id] }),
+    listOpenEncounters(client, [row.id]),
     listCaravanParticipants(client, [row.id]),
   ]);
   if (encounters.length > 0) return false;
@@ -335,16 +333,14 @@ export const deliverCaravan = async (
       body: reward.money
         ? `Your caravan arrived. You earned ${reward.money.toLocaleString()} ryo for the escort.`
         : "Your caravan arrived. Complete a defence or checkpoint to earn escort pay.",
-      route: "/warehouse",
-      releasesEscort: true,
+      refresh: ESCORT_RELEASE_VIEWS,
     });
   return true;
 };
 
 /**
- * Alert players in game and on their devices. `releasesEscort` marks escorts the caravan
- * woke and may have paid, so their open tabs reload the profile and caravan views;
- * `refresh` names the views the notice announces a change to, which those tabs reload.
+ * Alert players in game and on their devices, linking the Warehouse unless the notice names
+ * another route; `refresh` names the views the notice changed, which their open tabs reload.
  */
 export const notifyPlayers = (
   client: DrizzleClient,
@@ -352,33 +348,27 @@ export const notifyPlayers = (
   message: {
     title: string;
     body: string;
-    route: string;
-    releasesEscort?: boolean;
+    route?: string;
     refresh?: CaravanNoticeView[];
   },
 ) => {
   const recipients = [...new Set(userIds)];
   if (recipients.length === 0) return;
-  after(async () => {
-    try {
-      await Promise.all([
-        getServerPusher().trigger(recipients, "event", {
-          type: message.releasesEscort ? "caravanEscortReleased" : "userMessage",
-          message: message.body,
-          route: message.route,
-          routeText: "Open",
-          refresh: message.refresh,
-        }),
-        sendPushToUsers(client, recipients, {
-          title: message.title,
-          body: message.body,
-          category: "combat",
-          url: message.route,
-        }),
-      ]);
-    } catch (error) {
-      Sentry.captureException(error, { tags: { source: "caravanNotification" } });
-    }
+  const route = message.route ?? "/warehouse";
+  after(() =>
+    getServerPusher().trigger(recipients, "event", {
+      type: "userMessage",
+      message: message.body,
+      route,
+      routeText: "Open",
+      refresh: message.refresh,
+    }),
+  );
+  deferPushToUsers(client, recipients, {
+    title: message.title,
+    body: message.body,
+    category: "combat",
+    url: route,
   });
 };
 
@@ -390,18 +380,6 @@ export const canManageTrade = (
   !user.isBanned &&
   user.villageId === villageData.id &&
   (villageData.kageId === user.userId || isServingElder(user, villageData.id));
-
-/** Whether two villages fight each other in an open war. */
-export const isAtWar = (
-  wars: { attackerVillageId: string; defenderVillageId: string }[],
-  villageIdA: string,
-  villageIdB: string,
-) =>
-  wars.some(
-    (war) =>
-      (war.attackerVillageId === villageIdA && war.defenderVillageId === villageIdB) ||
-      (war.attackerVillageId === villageIdB && war.defenderVillageId === villageIdA),
-  );
 
 /**
  * Finish due operations and apply what they found or changed, and report whether sabotage
@@ -503,7 +481,7 @@ const landSabotage = async (
         : 0,
     disruptedUntil:
       operation.type === "DISRUPT"
-        ? new Date(now.getTime() + CARAVAN_DISRUPTION_MINUTES * MINUTE_MS)
+        ? secondsFromDate(CARAVAN_DISRUPTION_MINUTES * MINUTE_S, now)
         : null,
   });
   return landed.rowsAffected > 0;
@@ -557,10 +535,10 @@ const applyScouting = async (
         user,
         row.originVillageId,
         context.relationships,
-        isAtWar(context.wars, user.villageId ?? "", row.originVillageId),
+        context.wars,
       ) === operation.role,
   );
-  const expiresAt = new Date(now.getTime() + CARAVAN_DISCOVERY_MINUTES * MINUTE_MS);
+  const expiresAt = secondsFromDate(CARAVAN_DISCOVERY_MINUTES * MINUTE_S, now);
   const investigated =
     operation.type === "INVESTIGATE" && eligible.length
       ? eligible[secureRandomInt(eligible.length)]
@@ -609,7 +587,7 @@ const applyScouting = async (
           client,
           markerIds,
           user.villageId,
-          new Date(now.getTime() + TRADE_ROUTE_MARKER_DISCOVERY_HOURS * 3_600_000),
+          secondsFromDate(TRADE_ROUTE_MARKER_DISCOVERY_HOURS * HOUR_S, now),
         )
       : undefined,
     operation.role === "BANDIT"
@@ -652,9 +630,7 @@ const rollCheckpointAmbushes = async (
         const inserted = await insertCheckpointAmbush(client, {
           id: nanoid(),
           caravanId: row.id,
-          expiresAt: new Date(
-            now.getTime() + CARAVAN_AMBUSH_RESPONSE_MINUTES * MINUTE_MS,
-          ),
+          expiresAt: secondsFromDate(CARAVAN_AMBUSH_RESPONSE_MINUTES * MINUTE_S, now),
           now,
         });
         // A caravan delivered meanwhile is no longer ambushed.
@@ -672,7 +648,6 @@ const rollCheckpointAmbushes = async (
         {
           title: "Caravan ambushed",
           body: `Bandits ambush your caravan! Defend it within ${CARAVAN_AMBUSH_RESPONSE_MINUTES} minutes.`,
-          route: "/warehouse",
           refresh: ["caravans"],
         },
       );
@@ -733,7 +708,10 @@ const cancelBlockedCaravans = async (
   // off once its fight settles; one that already arrived is delivered instead.
   const fighting = new Set(
     (
-      await listOpenEncounters(client, { caravanIds: blocked.map((row) => row.id) })
+      await listOpenEncounters(
+        client,
+        blocked.map((row) => row.id),
+      )
     ).map((row) => row.caravanId),
   );
   await Promise.all(

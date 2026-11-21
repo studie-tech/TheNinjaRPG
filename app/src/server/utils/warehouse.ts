@@ -14,7 +14,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { getRaidStructureMultiplier } from "@/utils/village";
 
-/** Domain conflict that rolls back a Warehouse transaction with a player-facing message. */
+/** Rolls back a Warehouse or caravan transaction with a player-facing message. */
 export class WarehouseConflict extends Error {}
 
 /**

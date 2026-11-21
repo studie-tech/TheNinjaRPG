@@ -15,7 +15,6 @@ import {
   lt,
   lte,
   or,
-  type SQL,
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -343,12 +342,6 @@ export const dispatchCargo = (
     );
 };
 
-/** Create a prepared caravan. */
-export const insertCaravan = (
-  client: Pick<DrizzleClient, "insert">,
-  values: typeof caravan.$inferInsert,
-) => client.insert(caravan).values(values);
-
 /**
  * Move a caravan between lifecycle states if it is still the version that was read. With
  * `unfought`, the move also requires that no fight over the caravan is open.
@@ -668,22 +661,19 @@ export const queueGuard = (
 /** Open encounters of caravans. */
 export const listOpenEncounters = (
   client: Pick<DrizzleClient, "select">,
-  filter: { caravanIds?: string[]; markerIds?: string[] },
-) => {
-  const scopes: SQL[] = [];
-  if (filter.caravanIds?.length)
-    scopes.push(inArray(caravanEncounter.caravanId, filter.caravanIds));
-  if (filter.markerIds?.length)
-    scopes.push(inArray(caravanEncounter.markerId, filter.markerIds));
-  return scopes.length === 0
+  caravanIds: string[],
+) =>
+  caravanIds.length === 0
     ? Promise.resolve([])
     : client
         .select()
         .from(caravanEncounter)
         .where(
-          and(inArray(caravanEncounter.status, OPEN_ENCOUNTER_STATUSES), or(...scopes)),
+          and(
+            inArray(caravanEncounter.status, OPEN_ENCOUNTER_STATUSES),
+            inArray(caravanEncounter.caravanId, caravanIds),
+          ),
         );
-};
 
 /**
  * Unanswered ambushes past their deadline and fights whose battle never settled, optionally
@@ -717,36 +707,33 @@ export const listDueEncounters = (
           ),
         );
 
-/** Open an encounter; the active keys allow one per caravan and per marker. */
+/** Reserve a new fight's encounter; the active keys allow one per caravan and per marker. */
 export const insertEncounter = (
   client: Pick<DrizzleClient, "insert">,
   values: {
     id: string;
     type: CaravanEncounterType;
-    status: "PENDING" | "STARTING";
-    caravanId?: string | null;
-    markerId?: string | null;
-    operationId?: string | null;
-    battleId?: string | null;
-    attackerVillageId?: string | null;
-    leaderId?: string | null;
-    expiresAt?: Date | null;
+    caravanId: string | null;
+    markerId: string | null;
+    operationId?: string;
+    battleId: string;
+    attackerVillageId: string | null;
+    leaderId?: string;
     now: Date;
   },
 ) =>
   client.insert(caravanEncounter).values({
     id: values.id,
     type: values.type,
-    status: values.status,
-    caravanId: values.caravanId ?? null,
-    markerId: values.markerId ?? null,
-    activeCaravanId: values.caravanId ?? null,
-    activeMarkerId: values.markerId ?? null,
+    status: "STARTING",
+    caravanId: values.caravanId,
+    markerId: values.markerId,
+    activeCaravanId: values.caravanId,
+    activeMarkerId: values.markerId,
     operationId: values.operationId ?? null,
-    battleId: values.battleId ?? null,
-    attackerVillageId: values.attackerVillageId ?? null,
+    battleId: values.battleId,
+    attackerVillageId: values.attackerVillageId,
     leaderId: values.leaderId ?? null,
-    expiresAt: values.expiresAt ?? null,
     createdAt: values.now,
   });
 

@@ -26,15 +26,13 @@ import type {
 import { isCarriedUserItem } from "@/libs/item";
 import { getVillageLoyaltyDays } from "@/libs/villageLoyalty";
 import { isFactionVillage } from "@/libs/war";
+import { getUtcDayKey, HOUR_S, secondsFromDate } from "@/utils/time";
 import { getEffectiveStructureLevel } from "@/utils/village";
-
-export const WAREHOUSE_ROUTE = "/warehouse";
-const HOUR_MS = 3_600_000;
 
 /** The Warehouse structure of a village, built or not. */
 export const findWarehouse = <T extends Pick<VillageStructure, "route">>(
   structures: T[] | undefined,
-) => structures?.find((structure) => structure.route === WAREHOUSE_ROUTE);
+) => structures?.find((structure) => structure.route === "/warehouse");
 
 /** Level of a Warehouse including temporary war bonuses; 0 while unbuilt. */
 export const getWarehouseLevel = (
@@ -48,15 +46,11 @@ export const getWarehouseLevel = (
  * won faction raid boosts the Warehouse.
  */
 export const getProductionBonus = (level: number, raidMultiplier = 1) =>
-  Math.round(
-    Math.max(0, level) * WAREHOUSE_PRODUCTION_BONUS_PER_LEVEL * raidMultiplier * 10,
-  ) / 10;
+  getLevelBonus(WAREHOUSE_PRODUCTION_BONUS_PER_LEVEL, level, raidMultiplier);
 
 /** Deposit bonus in percent: 2% at level 1 up to 20% at level 10, with the raid boost. */
 export const getDepositBonus = (level: number, raidMultiplier = 1) =>
-  Math.round(
-    Math.max(0, level) * WAREHOUSE_DEPOSIT_BONUS_PER_LEVEL * raidMultiplier * 10,
-  ) / 10;
+  getLevelBonus(WAREHOUSE_DEPOSIT_BONUS_PER_LEVEL, level, raidMultiplier);
 
 /** Units of one selected item a production cycle adds, rounded down without carry. */
 export const getCycleQuantity = (level: number, raidMultiplier = 1) =>
@@ -73,7 +67,7 @@ export const getCycleQuantity = (level: number, raidMultiplier = 1) =>
  * credited; the clock still moves past every elapsed cycle so forfeited ones never return.
  */
 export const getDueProduction = (settledAt: Date, now: Date) => {
-  const interval = WAREHOUSE_PRODUCTION_INTERVAL_HOURS * HOUR_MS;
+  const interval = WAREHOUSE_PRODUCTION_INTERVAL_HOURS * HOUR_S * 1000;
   const elapsed = Math.max(
     0,
     Math.floor((now.getTime() - settledAt.getTime()) / interval),
@@ -134,8 +128,9 @@ export const getDepositAvailableAt = (
   now = new Date(),
 ) => {
   if (!ledger?.lastDepositAt) return null;
-  const at = new Date(
-    ledger.lastDepositAt.getTime() + WAREHOUSE_DEPOSIT_COOLDOWN_HOURS * HOUR_MS,
+  const at = secondsFromDate(
+    WAREHOUSE_DEPOSIT_COOLDOWN_HOURS * HOUR_S,
+    ledger.lastDepositAt,
   );
   return at > now ? at : null;
 };
@@ -180,9 +175,6 @@ export const getDepositCandidates = (
       ),
     }));
 
-/** The UTC day a withdrawal counts against. */
-export const getAllowanceDay = (now = new Date()) => now.toISOString().slice(0, 10);
-
 /**
  * A Kage approval counts in the approving village, for approvals given since the player
  * last joined it; wartime approvals also need their war to still be active.
@@ -217,7 +209,7 @@ export const getWithdrawalAllowance = (
     getVillageLoyaltyDays(user, now) >= WAREHOUSE_LOYALTY_DAYS
       ? WAREHOUSE_LOYALTY_BONUS
       : 0;
-  const day = getAllowanceDay(now);
+  const day = getUtcDayKey(now);
   const used = member?.allowanceDay === day ? member.allowanceUsed : 0;
   const total = base + loyaltyBonus;
   return {
@@ -230,3 +222,7 @@ export const getWithdrawalAllowance = (
     day,
   };
 };
+
+/** A Warehouse bonus in percent, to one decimal, for its per-level rate. */
+const getLevelBonus = (perLevel: number, level: number, raidMultiplier: number) =>
+  Math.round(Math.max(0, level) * perLevel * raidMultiplier * 10) / 10;

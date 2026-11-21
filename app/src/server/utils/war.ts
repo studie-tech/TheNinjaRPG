@@ -25,7 +25,6 @@ import {
   isVillageInvolvedInAnyWar,
   shouldEndRaid,
 } from "@/libs/war";
-import { WAREHOUSE_ROUTE } from "@/libs/warehouse";
 import { updateVillageElderVoteForRejectWarDeclaration } from "@/queries/elder";
 import {
   incrementNotificationCounters,
@@ -177,7 +176,7 @@ export const handleWarEnd = async (
       structuresDelivered: isRaid || isSector,
       warehouseDelivered: !(
         isRaid &&
-        current.targetStructureRoute === WAREHOUSE_ROUTE &&
+        current.targetStructureRoute === "/warehouse" &&
         status === "ATTACKER_VICTORY"
       ),
       notified: false,

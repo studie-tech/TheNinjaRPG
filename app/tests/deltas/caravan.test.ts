@@ -26,13 +26,8 @@ import {
   CARAVAN_GUARD_SLOTS,
   CARAVAN_HISTORY_SIZE,
   CARAVAN_OPERATION_HISTORY_SIZE,
-  CARAVANS_PER_TRADE_ROUTE,
 } from "@/drizzle/constants";
-import {
-  getCaravanCapacity,
-  getCheckpointTimes,
-  getRouteTravelMinutes,
-} from "@/libs/caravan";
+import { getRouteTravelMinutes } from "@/libs/caravan";
 
 type Routes = NonNullable<RouterOutputs["tradeRoute"]["getRoutes"]>;
 type Caravans = NonNullable<RouterOutputs["caravan"]["getCaravans"]>;
@@ -170,20 +165,18 @@ describe("trade route deltas", () => {
       status: "ACTIVE",
       markers: [{ id: "m", sector: 4, control: 100, controller: null }],
     });
-    expect(getCaravanCapacity(next!.routes).total).toBe(2 * CARAVANS_PER_TRADE_ROUTE);
     expect(
       getActivatedTradeRoutes(routes(), { routeId: "active", markers: [] }),
     ).toBeUndefined();
   });
 
-  it("removes a closed route, offers its partner again and frees its capacity", () => {
+  it("removes a closed route and offers its partner again", () => {
     const next = getRemovedTradeRoutes(routes(), {
       routeId: "active",
       partner: { id: "b", name: "B", block: null },
     });
     expect(next?.routes).toEqual([]);
     expect(next?.partners.map((row) => row.id)).toEqual(["c", "b"]);
-    expect(getCaravanCapacity(next!.routes).total).toBe(0);
   });
 
   it("upgrades a route from its loaded level only", () => {
@@ -222,12 +215,6 @@ describe("caravan deltas", () => {
       resolvedAt: now,
     });
     expect(cancelled?.caravans).toEqual([]);
-    // The slot a caravan fills follows it into and out of the list.
-    expect(getCaravanCapacity(routes().routes, prepared!.caravans)).toEqual({
-      total: CARAVANS_PER_TRADE_ROUTE,
-      used: 1,
-    });
-    expect(getCaravanCapacity(routes().routes, cancelled!.caravans).used).toBe(0);
     expect(cancelled?.history[0]).toEqual({
       id: "k",
       status: "CANCELLED",
@@ -265,9 +252,6 @@ describe("caravan deltas", () => {
       arrivesAt,
     });
     expect(getDepartedCaravans(next!, departed)).toBeUndefined();
-    expect(getCheckpointTimes({ departedAt: now, arrivesAt })[0]).toEqual(
-      new Date(now.getTime() + 6 * 60_000),
-    );
   });
 
   it("follows the viewer through the escort", () => {

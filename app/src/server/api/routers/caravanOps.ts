@@ -25,6 +25,7 @@ import {
   getOperationMinutes,
   getStealBp,
   getStealthChance,
+  isAtWar,
   rollChance,
 } from "@/libs/caravan";
 import {
@@ -70,7 +71,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
-import { isAtWar, maintainCaravans, notifyPlayers } from "@/server/utils/caravan";
+import { maintainCaravans, notifyPlayers } from "@/server/utils/caravan";
 import {
   launchCaravanBattle,
   pickCaravanAi,
@@ -80,9 +81,8 @@ import { grantUserItems } from "@/server/utils/itemGrants";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { WarehouseConflict } from "@/server/utils/warehouse";
 import { findRelationship } from "@/utils/alliance";
+import { MINUTE_S, secondsFromDate } from "@/utils/time";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-
-const MINUTE_MS = 60_000;
 
 export const caravanOpsRouter = createTRPCRouter({
   getControls: protectedProcedure
@@ -125,7 +125,7 @@ export const caravanOpsRouter = createTRPCRouter({
       ] = await Promise.all([
         listCaravansWithVillageNames(ctx.drizzle, caravanIds),
         listCaravanParticipants(ctx.drizzle, caravanIds),
-        listOpenEncounters(ctx.drizzle, { caravanIds }),
+        listOpenEncounters(ctx.drizzle, caravanIds),
         listSectorMarkers(ctx.drizzle, user.sector),
         user.villageId
           ? listMarkerDiscoveries(ctx.drizzle, user.villageId, now)
@@ -203,7 +203,7 @@ export const caravanOpsRouter = createTRPCRouter({
               user,
               row.originVillageId,
               relationships,
-              isAtWar(wars, user.villageId ?? "", row.originVillageId),
+              wars,
             );
             const sighting = discoveries.find(
               (d) => d.caravanId === row.id && d.kind === "LOCATION",
@@ -344,12 +344,7 @@ export const caravanOpsRouter = createTRPCRouter({
       if (isSabotage) {
         if (target?.status !== "TRAVELLING")
           return errorResponse("Select a travelling caravan you have located");
-        role = getAttackerRole(
-          user,
-          target.originVillageId,
-          relationships,
-          isAtWar(wars, user.villageId ?? "", target.originVillageId),
-        );
+        role = getAttackerRole(user, target.originVillageId, relationships, wars);
         if (role !== "ENEMY")
           return errorResponse("Only shinobi of a hostile village sabotage caravans");
         if (!hasSighting(discoveries, target.id))
@@ -364,7 +359,7 @@ export const caravanOpsRouter = createTRPCRouter({
             : "You cannot act against caravans",
         );
       const minutes = getOperationMinutes(input.type, role, user.banditExperience);
-      const finishesAt = new Date(now.getTime() + minutes * MINUTE_MS);
+      const finishesAt = secondsFromDate(minutes * MINUTE_S, now);
       if (target && (!target.arrivesAt || target.arrivesAt <= finishesAt))
         return errorResponse("The caravan arrives before your sabotage could finish");
       const ready = await claimOperatorReadiness(ctx.drizzle, user.userId, readiness);
@@ -402,7 +397,6 @@ export const caravanOpsRouter = createTRPCRouter({
           {
             title: "Caravan sabotage",
             body: `${user.username} is sabotaging your caravan. Intervene within ${minutes} minutes!`,
-            route: "/warehouse",
             refresh: ["caravans"],
           },
         );
@@ -452,8 +446,8 @@ export const caravanOpsRouter = createTRPCRouter({
         userId: ctx.userId,
         sector,
         now,
-        seenBefore: new Date(now.getTime() - CARAVAN_TRACK_COOLDOWN_SECONDS * 1000),
-        expiresAt: new Date(now.getTime() + CARAVAN_DISCOVERY_MINUTES * MINUTE_MS),
+        seenBefore: secondsFromDate(-CARAVAN_TRACK_COOLDOWN_SECONDS, now),
+        expiresAt: secondsFromDate(CARAVAN_DISCOVERY_MINUTES * MINUTE_S, now),
       });
       if (tracked.rowsAffected !== 1)
         return errorResponse(
@@ -517,17 +511,12 @@ export const caravanOpsRouter = createTRPCRouter({
         listUserDiscoveries(ctx.drizzle, ctx.userId, now),
         listCaravansByIds(ctx.drizzle, [input.caravanId]),
         listCaravanParticipants(ctx.drizzle, [input.caravanId]),
-        listOpenEncounters(ctx.drizzle, { caravanIds: [input.caravanId] }),
+        listOpenEncounters(ctx.drizzle, [input.caravanId]),
       ]);
       if (target?.status !== "TRAVELLING")
         return errorResponse("The caravan is not on the road");
       if (user.isBanned) return errorResponse("You are banned");
-      const role = getAttackerRole(
-        user,
-        target.originVillageId,
-        relationships,
-        isAtWar(wars, user.villageId ?? "", target.originVillageId),
-      );
+      const role = getAttackerRole(user, target.originVillageId, relationships, wars);
       if (!role) return errorResponse("You cannot attack this caravan");
       if (!hasSighting(discoveries, target.id))
         return errorResponse("Locate the caravan first");
@@ -615,9 +604,7 @@ export const caravanOpsRouter = createTRPCRouter({
         (p) => p.caravanId === input.caravanId && p.activeUserId && p.role !== "GUARD",
       );
       if (!own) return errorResponse("You are not in an interception group");
-      const encounters = await listOpenEncounters(ctx.drizzle, {
-        caravanIds: [own.caravanId],
-      });
+      const encounters = await listOpenEncounters(ctx.drizzle, [own.caravanId]);
       if (
         encounters.some(
           (e) => e.type === "INTERCEPTION" && e.leaderId === own.groupLeaderId,
@@ -691,16 +678,10 @@ export const caravanOpsRouter = createTRPCRouter({
         ...group.members.filter((m) => m.userId !== user.userId).map((m) => m.userId),
       ];
       const result = await launchCaravanBattle(ctx.drizzle, {
-        encounter: {
-          type: "INTERCEPTION",
-          caravanId: target.id,
-          leaderId: user.userId,
-          attackerVillageId: user.villageId,
-        },
+        leaderId: user.userId,
         state: {
           type: "INTERCEPTION",
           caravanId: target.id,
-          markerId: null,
           attackerDirection: "left",
           attackerRole: group.role,
           attackerVillageId: user.villageId,
@@ -709,8 +690,6 @@ export const caravanOpsRouter = createTRPCRouter({
           cargo: target.cargo,
           lossBp: target.lossBp,
           stealBp: getStealBp(user.banditExperience),
-          captureVillageId: null,
-          markerControllerId: null,
         },
         userIds: attackerIds,
         targetIds: [...guards.map((g) => g.userId), ...npcGuards],
@@ -816,24 +795,13 @@ export const caravanOpsRouter = createTRPCRouter({
       const guards = pickCaravanAi(pool, TRADE_ROUTE_MARKER_GUARDS, user.level);
       if (guards.length === 0) return errorResponse("No marker guards are configured");
       return launchCaravanBattle(ctx.drizzle, {
-        encounter: {
-          type: "MARKER_ASSAULT",
-          markerId: marker.id,
-          leaderId: user.userId,
-          attackerVillageId: user.villageId,
-        },
+        leaderId: user.userId,
         state: {
           type: "MARKER_ASSAULT",
-          caravanId: null,
           markerId: marker.id,
           attackerDirection: "left",
-          attackerRole: null,
           attackerVillageId: user.villageId,
           attackerIds: [user.userId],
-          guardIds: [],
-          cargo: [],
-          lossBp: 0,
-          stealBp: 0,
           captureVillageId: isRouteVillage ? null : user.villageId,
           markerControllerId: marker.controllerVillageId,
         },
