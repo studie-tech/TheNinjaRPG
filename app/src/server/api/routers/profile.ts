@@ -248,6 +248,7 @@ import {
   selectUserReportForGetUser,
   USER_SEARCH_LIMIT,
   updateQuestHistoryForFetchUpdatedUserOnce,
+  updateUserActivity,
   updateUserDataForAwardExperience,
   updateUserDataForAwardExperienceToAll,
   updateUserDataForFetchUpdatedUserOnce,
@@ -3192,6 +3193,10 @@ const fetchUpdatedUserOnce = async (
 
   // Rewards, e.g. for activity streak
   const toastMessages: string[] = [];
+  // Other players and background work can advance updatedAt without recording a visit.
+  const activityDue = Boolean(
+    userIp && user && (!user.lastActiveAt || secondsPassed(user.lastActiveAt) > 300),
+  );
 
   // Settle passive regen, queued training and activity rewards for awake or sleeping users;
   // the conditions for persisting the result follow below.
@@ -3247,6 +3252,7 @@ const fetchUpdatedUserOnce = async (
       newDay ||
       hasQueueProgress ||
       queuedMastery ||
+      activityDue ||
       sinceUpdate > 300 || // Update user in database every 5 minutes only so as to reduce server load
       forceRegen || // Hard overwrite for e.g. debugging or simply ensuring updated user
       (user.villagePrestige < 0 && !user.isOutlaw) // To trigger getting kicked out of village
@@ -3346,6 +3352,14 @@ const fetchUpdatedUserOnce = async (
           tags: { source: "persistPassiveRegenToDb" },
         });
       }
+    }
+  } else if (user && activityDue) {
+    // Battle, travel and hospital visits also count, without settling their passive pools.
+    try {
+      await updateUserActivity(client, userId, now, secondsFromDate(-300, now));
+    } catch (error) {
+      // Activity bookkeeping can retry on the next visit without blocking the profile.
+      Sentry.captureException(error, { tags: { source: "updateUserActivity" } });
     }
   }
   if (user) {
