@@ -28,13 +28,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Player tiles and staff tiles rendered for the role, in display order. */
+/** Player, minigame and staff tiles rendered for the role, in display order. */
 const manualGrids = (role: string) => {
   grids = [];
   mockUserContextValue({ data: { role } } as never);
   render(<ManualMain />);
-  const [player = [], staff = []] = grids;
-  return { player, staff };
+  const [player = [], minigames = [], staff = []] = grids;
+  return { player, minigames, staff };
 };
 const manualCards = (role: string) => {
   const { player, staff } = manualGrids(role);
@@ -74,7 +74,6 @@ const playerCards = [
   "skillTree",
   "staff",
   "title",
-  "towerDefense",
 ];
 const moderatorCards = ["recruitment", "resource_silos", "review", "rewards"];
 const contentCards = [
@@ -104,6 +103,19 @@ const roleCards: Record<string, string[]> = {
   EVENT: contentCards,
   CODER: contentCards,
 };
+
+it("gives every role the minigames section, opening straight into play", () => {
+  for (const role of ["USER", "CONTENT"]) {
+    const { minigames } = manualGrids(role);
+    expect(minigames.map((tile) => tile.href)).toEqual([
+      "/towerDefense",
+      "/chakraStorm",
+      "/manual/towerDefense/leaderboard",
+    ]);
+    expect(document.getElementById("minigames")).not.toBeNull();
+    cleanup();
+  }
+});
 
 it("lists player pages, then the staff tools permitted to each role, by caption", () => {
   const byHref = (names: string[]) => names.map((name) => `/manual/${name}`).sort();

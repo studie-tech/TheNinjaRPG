@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CS_CARD_URL,
   IMG_MANUAL_ACTIVITY_STREAK,
   IMG_MANUAL_AI,
   IMG_MANUAL_ASSET,
@@ -32,6 +33,7 @@ import {
   IMG_MANUAL_STAFF,
   IMG_MANUAL_TITLE,
   IMG_MANUAL_TOURNAMENTS,
+  IMG_MANUAL_TOWER_LEADERBOARD,
   IMG_MANUAL_TOWER_UPGRADES,
   IMG_MANUAL_TRAVEL,
 } from "@/drizzle/constants";
@@ -89,7 +91,6 @@ export default function ManualMain() {
     { name: "pvp_rank", label: "Ranked PvP", img: IMG_MANUAL_RANKED },
     { name: "balance", label: "Balance Data", img: IMG_MANUAL_BALANCE },
     { name: "staff", label: "Staff", img: IMG_MANUAL_STAFF },
-    { name: "towerDefense", label: "Tower Defense", img: IMG_MANUAL_TOWER_UPGRADES },
     {
       name: "activityStreak",
       label: "Activity Streaks",
@@ -158,6 +159,27 @@ export default function ManualMain() {
       .sort((a, b) => a.label.localeCompare(b.label))
       .map(({ name, label, img }) => ({ name, label, img, href: `/manual/${name}` }));
   const playerTiles = toTiles(entries.filter((page) => page.visible === undefined));
+  // The minigames open straight into play; leaderboards sit beside their game.
+  const minigameTiles = [
+    {
+      name: "towerDefense",
+      label: "Tower Defense",
+      img: IMG_MANUAL_TOWER_UPGRADES,
+      href: "/towerDefense",
+    },
+    {
+      name: "chakraStorm",
+      label: "Chakra Storm",
+      img: CS_CARD_URL,
+      href: "/chakraStorm",
+    },
+    {
+      name: "towerDefenseLeaderboard",
+      label: "Tower Defense Leaderboard",
+      img: IMG_MANUAL_TOWER_LEADERBOARD,
+      href: "/manual/towerDefense/leaderboard",
+    },
+  ];
   const staffTiles = toTiles(entries.filter((page) => page.visible === true));
 
   return (
@@ -182,6 +204,14 @@ export default function ManualMain() {
         alreadyHasH1={true}
       >
         <ImageLinkGrid entries={playerTiles} />
+      </ContentBox>
+      <ContentBox
+        id="minigames"
+        title="Minigames"
+        subtitle="Fun games to play in the ninja world"
+        initialBreak={true}
+      >
+        <ImageLinkGrid entries={minigameTiles} />
       </ContentBox>
       {staffTiles.length > 0 && (
         <ContentBox
