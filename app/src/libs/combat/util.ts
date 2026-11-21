@@ -687,6 +687,7 @@ export const hasEffectActivated = (effect: UserEffect | GroundEffect) =>
 
 /**
  * Enabled effects on the target whose activation delay has passed.
+ * Instant statuses must resolve their success roll before later actions see them.
  * Prevention callers can retain their casting-round exclusion.
  * Effects without a duration count, unlike in findActiveEffectOfType.
  */
@@ -700,7 +701,7 @@ export const getActiveTargetEffects = <T extends UserEffect["type"]>(
     (e): e is Extract<UserEffect, { type: T }> =>
       e.type === type &&
       e.targetId === targetId &&
-      (!e.castThisRound || (includeInstant && isInstantJutsuEffect(e))) &&
+      (!e.castThisRound || (includeInstant && !e.isNew && isInstantJutsuEffect(e))) &&
       isEffectEnabled(e, effects),
   ) ?? [];
 

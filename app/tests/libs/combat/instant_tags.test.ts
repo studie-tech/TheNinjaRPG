@@ -115,6 +115,34 @@ describe("instant Jutsu tags", () => {
     }
   });
 
+  it.each([false, true])(
+    "resolves stealth after inserting the full cast (stealth first: %s)",
+    (stealthFirst) => {
+      const base = hp(cast(scenario(), [damage()]).newBattle);
+      for (const instant of [false, true]) {
+        for (const power of [0, 100]) {
+          const tags = [makeTag("stealth", { instant, power, rounds: 3 }), damage()];
+          const { action, newBattle } = cast(
+            scenario(),
+            stealthFirst ? tags : tags.reverse(),
+          );
+          expect(hp(newBattle)).toBe(base);
+          expect(action.battleDescription).not.toContain("cannot be targeted");
+          expect(
+            newBattle.usersEffects.some((effect) => effect.type === "stealth"),
+          ).toBe(power === 100);
+          const followup = cast(newBattle, [damage()], { id: "followup-jutsu" });
+          if (instant && power === 100) {
+            expect(hp(followup.newBattle)).toBe(base);
+            expect(followup.action.battleDescription).toContain("cannot be targeted");
+          } else {
+            expect(hp(followup.newBattle)).toBeLessThan(base);
+          }
+        }
+      }
+    },
+  );
+
   it("handles mixed instant and delayed recurring tags independently", () => {
     const { newBattle } = cast(scenario(), [
       damage(true, 3),
