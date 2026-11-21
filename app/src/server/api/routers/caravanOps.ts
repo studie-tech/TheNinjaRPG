@@ -192,7 +192,6 @@ export const caravanOpsRouter = createTRPCRouter({
           ? {
               caravanId: active.caravanId,
               role: active.role,
-              userId: user.userId,
               groupLeaderId: active.groupLeaderId,
             }
           : null,
@@ -465,7 +464,6 @@ export const caravanOpsRouter = createTRPCRouter({
             commitment: z.object({
               caravanId: z.string(),
               role: z.enum(CARAVAN_ROLES),
-              userId: z.string(),
               groupLeaderId: z.string().nullable(),
             }),
             groups: z.array(
@@ -565,7 +563,6 @@ export const caravanOpsRouter = createTRPCRouter({
           commitment: {
             caravanId: target.id,
             role,
-            userId: user.userId,
             groupLeaderId: leaderId,
           },
           groups: describeGroups(joinedRows, target.id, role, {
@@ -579,11 +576,7 @@ export const caravanOpsRouter = createTRPCRouter({
   leaveGroup: protectedProcedure
     .meta({ mcp: { description: "Leave or disband your interception group" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(
-      baseServerResponse.extend({
-        left: z.object({ caravanId: z.string(), userId: z.string() }).optional(),
-      }),
-    )
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const participations = await listUserParticipations(ctx.drizzle, ctx.userId);
       const own = participations.find(
@@ -604,11 +597,7 @@ export const caravanOpsRouter = createTRPCRouter({
           ? { groupLeaderId: ctx.userId }
           : { userIds: [ctx.userId] },
       );
-      return {
-        success: true,
-        message: "You left the group",
-        left: { caravanId: own.caravanId, userId: ctx.userId },
-      };
+      return { success: true, message: "You left the group" };
     }),
   attack: protectedProcedure
     .meta({ mcp: { description: "Lead your interception group against a caravan" } })

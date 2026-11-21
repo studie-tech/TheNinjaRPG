@@ -497,11 +497,7 @@ export const caravanRouter = createTRPCRouter({
   joinEscort: protectedProcedure
     .meta({ mcp: { description: "Sign up to escort one of your village's caravans" } })
     .input(z.object({ caravanId: z.string() }))
-    .output(
-      userDeltaResponseSchema.extend({
-        guard: z.object({ userId: z.string(), username: z.string() }).optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [updated, [row], participations] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
@@ -548,7 +544,6 @@ export const caravanRouter = createTRPCRouter({
           success: true,
           message: "You joined the escort and wait at departure",
           ...getEscortStatusUserUpdate("QUEUED"),
-          guard: { userId: user.userId, username: user.username },
         },
         readiness,
         ctx.drizzle,

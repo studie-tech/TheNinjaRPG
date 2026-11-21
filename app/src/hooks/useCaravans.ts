@@ -59,6 +59,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   const router = useRouter();
   const { data, timeDiff, prepareUserUpdate, updateUser } = useRequiredUserData();
   const viewerId = data?.userId;
+  const viewerName = data?.username;
   const inventory = useInventoryCacheUpdate();
   const { prepareCombatEntry, loadBattle } = useCombatEntry();
 
@@ -479,11 +480,15 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       }),
     ),
     joinEscort: api.caravan.joinEscort.useMutation(
-      bindEscort((result, input: { caravanId: string }, snapshot) => {
-        const guard = result.guard;
+      bindEscort((_result, input: { caravanId: string }, snapshot) => {
         void views.caravans.updateCache(
-          guard &&
-            ((current) => getJoinedEscortCaravans(current, input.caravanId, guard)),
+          viewerId && viewerName
+            ? (current) =>
+                getJoinedEscortCaravans(current, input.caravanId, {
+                  userId: viewerId,
+                  username: viewerName,
+                })
+            : undefined,
           snapshot.caravans,
         );
       }),
@@ -569,10 +574,15 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       }),
     ),
     leaveGroup: api.caravanOps.leaveGroup.useMutation(
-      bind(["controls"], (result, _input, snapshot) => {
-        const left = result.left;
+      bind(["controls"], (_result, input: { caravanId: string }, snapshot) => {
         void views.controls.updateCache(
-          left && ((current) => getLeftGroupControls(current, left)),
+          viewerId
+            ? (current) =>
+                getLeftGroupControls(current, {
+                  caravanId: input.caravanId,
+                  userId: viewerId,
+                })
+            : undefined,
           snapshot.controls,
         );
       }),

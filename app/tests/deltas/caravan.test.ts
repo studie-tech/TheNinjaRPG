@@ -85,12 +85,7 @@ const controls = (): Controls =>
     sector: 3,
     bandit: { enabled: false },
     operations: [],
-    commitment: {
-      caravanId: "k",
-      role: "BANDIT",
-      userId: "me",
-      groupLeaderId: "lead",
-    },
+    commitment: { caravanId: "k", role: "BANDIT", groupLeaderId: "lead" },
     caravans: [
       {
         id: "k",

@@ -70,7 +70,7 @@ export const CaravanControls = ({ className }: { className: string }) => {
 /** Everything a player can do against caravans and route markers from their sector. */
 const CaravanControlsPanel = () => {
   const actions = useCaravans({ controls: true });
-  const { timeDiff } = useRequiredUserData();
+  const { data: userData, timeDiff } = useRequiredUserData();
   const data = actions.operations.data;
   if (!data) return <p className="text-sm">Loading caravan intelligence…</p>;
   const now = Date.now() - timeDiff;
@@ -151,6 +151,7 @@ const CaravanControlsPanel = () => {
                 running={!!running}
                 starting={starting}
                 now={now}
+                viewerId={userData?.userId}
               />
             ))}
           </ul>
@@ -285,6 +286,7 @@ const KnownCaravan = ({
   running,
   starting,
   now,
+  viewerId,
 }: {
   row: Controls["caravans"][number];
   data: Controls;
@@ -292,10 +294,11 @@ const KnownCaravan = ({
   running: boolean;
   starting: Actions["startOperation"]["variables"];
   now: number;
+  viewerId: string | undefined;
 }) => {
   const committedHere = data.commitment?.caravanId === row.id;
   const myLeaderId = committedHere ? data.commitment?.groupLeaderId : undefined;
-  const leading = !!myLeaderId && myLeaderId === data.commitment?.userId;
+  const leading = !!myLeaderId && myLeaderId === viewerId;
   const travelling = row.status === "TRAVELLING";
   const arrivesFirst =
     !row.arrivesAt ||
