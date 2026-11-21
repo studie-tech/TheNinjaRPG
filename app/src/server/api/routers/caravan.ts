@@ -319,10 +319,11 @@ export const caravanRouter = createTRPCRouter({
         `Your ${capacity} trade route${capacity === 1 ? "" : "s"} allow${capacity === 1 ? "s" : ""} ${capacity} caravan${capacity === 1 ? "" : "s"} at a time`,
       );
       try {
-        // No MySQL statement both inserts the caravan and reserves its stock, and undoing either
-        // write afterwards is unsafe: a caravan left without its reservation could be
+        // No MySQL statement both inserts the caravan and reserves its stock, and neither order
+        // is safe on its own. Inserted first, a caravan whose reservation then fails could be
         // dispatched against other caravans' reserved stock, since dispatch only checks that
-        // each line's stock holds that much reserved.
+        // each line's stock holds that much reserved. Reserved first, a release lost after a
+        // failed insert leaves stock reserved by no caravan, and no flow releases it.
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
             const reserved = await moveCargo(tx, own.id, cargo, CARGO_MOVES.RESERVE);
@@ -344,13 +345,14 @@ export const caravanRouter = createTRPCRouter({
               capacity,
             );
             if (inserted.rowsAffected !== 1) throw full;
-            await insertWarehouseLogs(tx, logs, now);
           }),
         );
       } catch (error) {
         if (error instanceof WarehouseConflict) return errorResponse(error.message);
         throw error;
       }
+      // History follows the reservation: a failure here costs only a log row support can add.
+      await insertWarehouseLogs(ctx.drizzle, logs, now);
       const itemNames = new Map(items.map((row) => [row.id, row.name]));
       const partner = toVillageA ? route.villageA : route.villageB;
       return {
