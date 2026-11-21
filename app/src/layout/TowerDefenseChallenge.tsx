@@ -27,8 +27,9 @@ type FoundChallenge = NonNullable<ReturnType<typeof findTowerDefenseChallenge>>;
 
 /**
  * The briefing of a quest's tower defense challenge: what it asks for, whether the player
- * can take it on from where they stand, and the start. A saved run can be resumed or
- * claimed from here; a challenge run replaces it, so the start asks first when one is kept.
+ * can take it on from where they stand, and the start. A saved challenge run can be resumed
+ * or claimed from here; a Guard Hall run resumes from the lobby. A challenge run replaces
+ * either, so the start asks first when one is kept.
  */
 export const TowerDefenseChallenge = (props: {
   challenge: FoundChallenge | null;
@@ -53,7 +54,8 @@ export const TowerDefenseChallenge = (props: {
   const busy = props.isStarting || props.isResuming;
   const isHere = challenge.atLocation || objective.hideLocation;
   const canStart = !challenge.done && challenge.available && isHere;
-  const savedRun = saved?.config.challenge ? "challenge run" : "run";
+  const isSavedChallenge = !!saved?.config.challenge;
+  const savedRun = isSavedChallenge ? "challenge run" : "Guard Hall run";
   const startButton = (
     <Button
       size="lg"
@@ -105,7 +107,7 @@ export const TowerDefenseChallenge = (props: {
         level count as in any run; challenge runs earn no scrolls and do not count for
         the leaderboard or the daily duty.
       </p>
-      {saved && (
+      {saved && isSavedChallenge && (
         <Notice
           icon={<RotateCcw className="h-5 w-5 text-amber-500" />}
           action={
@@ -119,7 +121,7 @@ export const TowerDefenseChallenge = (props: {
             </Button>
           }
         >
-          {saved.over ? "Unclaimed" : "Unfinished"} {savedRun} at wave{" "}
+          {saved.over ? "Unclaimed" : "Unfinished"} challenge run at wave{" "}
           <strong>{saved.wave}</strong>
         </Notice>
       )}
@@ -176,8 +178,8 @@ export const TowerDefenseChallenge = (props: {
             }}
           >
             {saved.over
-              ? `Your ${savedRun} at wave ${saved.wave} has not been claimed yet. Starting the challenge discards it${saved.config.challenge ? "" : " and the scrolls it earned"}.`
-              : `Starting the challenge discards your unfinished ${savedRun} at wave ${saved.wave}${saved.config.challenge ? "" : " and the scrolls it would earn"}.`}
+              ? `Your ${savedRun} at wave ${saved.wave} has not been claimed yet. Starting the challenge discards it${isSavedChallenge ? "" : " and the scrolls it earned"}.`
+              : `Starting the challenge discards your unfinished ${savedRun} at wave ${saved.wave}${isSavedChallenge ? "" : " and the scrolls it would earn"}.`}
           </Confirm>
         ) : (
           startButton
