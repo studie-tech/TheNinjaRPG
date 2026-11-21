@@ -1,11 +1,12 @@
 import { beforeEach, expect, it } from "bun:test";
+import { setImmediate } from "node:timers/promises";
 import { actionLog, poll, pollOption, userData, userPollVote } from "@/drizzle/schema";
 import { fetchHasUnvotedPolls } from "@/queries/profile";
 import { pollRouter } from "@/routers/poll";
 import { secondsFromNow } from "@/utils/time";
 import { deferred } from "../../../setup/deferred";
 import { insertUsers } from "../../../setup/factories";
-import { aroundStatements, beforeStatements } from "../../../setup/statements";
+import { aroundStatements, pollUntil } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -94,36 +95,37 @@ describeWithDatabase("unvoted poll alert", () => {
     );
   });
 
-  it("shows a committed poll when its parallel audit insert fails", async () => {
+  it("awaits a committed poll's invalidation when its parallel audit insert fails", async () => {
     const database = await getTestDatabase();
     expect(await fetchHasUnvotedPolls(database, "genin", new Date())).toEqual([]);
 
     const pollInserted = deferred();
-    const optionsInserted = deferred();
-    const inserts = aroundStatements(
+    const releasePoll = deferred();
+    const auditFailed = deferred();
+    const client = aroundStatements(
       aroundStatements(database, poll, async (run) => {
         const result = await run();
         pollInserted.resolve();
+        await releasePoll.promise;
         return result;
       }),
-      pollOption,
+      actionLog,
       async (run) => {
-        const result = await run();
-        optionsInserted.resolve();
-        return result;
+        await pollInserted.promise;
+        try {
+          return await run();
+        } finally {
+          auditFailed.resolve();
+        }
       },
     );
-    // Promise.all rejects without waiting for siblings; finish both inserts before failing.
-    const client = beforeStatements(inserts, actionLog, [
-      () => Promise.all([pollInserted.promise, optionsInserted.promise]),
-    ]);
     await runRawSql(
       "CREATE TRIGGER reject_poll_audit BEFORE INSERT ON ActionLog FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Audit unavailable'",
     );
     try {
       const editor = callerForDatabase(pollRouter, "editor", client);
-      await expect(
-        editor.createPoll({
+      const outcome = editor
+        .createPoll({
           title: "Fresh poll",
           description: "Pick one",
           options: [
@@ -131,8 +133,23 @@ describeWithDatabase("unvoted poll alert", () => {
             { type: "text", text: "B" },
           ],
           allowCustomOptions: false,
-        }),
-      ).rejects.toThrow();
+        })
+        .catch((error: unknown) => error);
+      try {
+        await auditFailed.promise;
+        expect(await Promise.race([outcome, setImmediate("pending")])).toBe("pending");
+      } finally {
+        releasePoll.resolve();
+        await outcome;
+        // Drain invalidation even when the pending-request assertion fails.
+        expect(
+          await pollUntil(
+            async () =>
+              (await fetchHasUnvotedPolls(database, "genin", new Date())).length === 1,
+          ),
+        ).toBe(true);
+      }
+      expect(await outcome).toBeInstanceOf(Error);
       const polls = await database.query.poll.findMany({
         where: (table, { eq }) => eq(table.title, "Fresh poll"),
       });

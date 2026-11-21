@@ -106,14 +106,16 @@ export const pollRouter = createTRPCRouter({
         toPollOptionRow(option, pollId, user.userId, false),
       );
 
-      // Invalidate after the poll commits, even if a parallel insert fails.
-      await Promise.all([
+      // Shared invalidation must finish even when a sibling write fails.
+      const writes = await Promise.allSettled([
         insertPollForCreatePoll(ctx.drizzle, pollId, input, user).then(() =>
           invalidateOpenPolls(),
         ),
         insertPollOptions(ctx.drizzle, optionsToInsert),
         insertActionLogForCreatePoll(ctx.drizzle, user, input, pollId),
       ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
 
       return { success: true, message: "Poll created successfully" };
     }),
@@ -149,7 +151,7 @@ export const pollRouter = createTRPCRouter({
 
       // Update poll
       await updatePollForUpdatePoll(ctx.drizzle, updateData, input);
-      await Promise.all([
+      const writes = await Promise.allSettled([
         invalidateOpenPolls(),
         insertActionLogForUpdatePoll(
           ctx.drizzle,
@@ -159,6 +161,8 @@ export const pollRouter = createTRPCRouter({
           input,
         ),
       ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
 
       return { success: true, message: "Poll updated successfully" };
     }),
@@ -332,10 +336,12 @@ export const pollRouter = createTRPCRouter({
 
       // Update poll status
       await updatePollForClosePoll(ctx.drizzle, input);
-      await Promise.all([
+      const writes = await Promise.allSettled([
         invalidateOpenPolls(),
         insertActionLogForClosePoll(ctx.drizzle, user, input, existingPoll),
       ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
 
       return {
         success: true,
