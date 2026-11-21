@@ -1311,22 +1311,22 @@ async function pickRewardNode(view: ReturnType<typeof render>, name: RegExp) {
 describe("effect drafts", () => {
   withRadixBrowserGlobals();
 
-  it("shows normal size for a legacy effect in the mass editor", () => {
-    const legacy = DamageTag.parse({});
-    delete (legacy as Partial<typeof legacy>).animationScale;
-    const onChange = vi.fn();
-    const view = render(
-      <EffectFieldInputGeneric
-        effect={legacy}
-        field="animationScale"
-        onChange={onChange}
-      />,
-    );
-    const input = view.getByRole("spinbutton") as HTMLInputElement;
-    expect(input.value).toBe("1");
-    fireEvent.input(input, { target: { value: "1.375" } });
-    expect(onChange).toHaveBeenLastCalledWith(1.375);
-  });
+  for (const field of ["animationScale", "projectileScale", "groundOpacity"] as const) {
+    it(`shows the rendering default for unset ${field} in the mass editor`, () => {
+      const legacy = DamageTag.parse({});
+      delete (legacy as Partial<typeof legacy>)[field];
+      const onChange = vi.fn();
+      const view = render(
+        <EffectFieldInputGeneric effect={legacy} field={field} onChange={onChange} />,
+      );
+      const input = view.getByRole("spinbutton") as HTMLInputElement;
+      expect(input.value).toBe("1");
+      expect(onChange).not.toHaveBeenCalled();
+      const editedValue = field === "groundOpacity" ? 0.75 : 1.375;
+      fireEvent.input(input, { target: { value: String(editedValue) } });
+      expect(onChange).toHaveBeenLastCalledWith(editedValue);
+    });
+  }
 
   it("edits one tag's animation scale without changing its sibling", async () => {
     const onChange = vi.fn();

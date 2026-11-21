@@ -870,7 +870,7 @@ export const EditContent = <
                     </div>
                   )}
                   {type === "db_values" && ASSET_PICKER_FIELDS.includes(id) && (
-                      <div className="flex flex-row items-start gap-3">
+                      <div className="flex min-w-0 flex-row items-start gap-3">
                         <FormField
                           control={form.control}
                           name={id}
@@ -889,23 +889,25 @@ export const EditContent = <
                               (o) => o.value === field.value,
                             );
                             return (
-                              <div className="flex w-full flex-row items-start gap-3">
-                                <FormItem className="flex-1">
+                              <div className="flex min-w-0 w-full flex-row items-start gap-3">
+                                <FormItem className="min-w-0 flex-1">
                                   <FormLabel>{label}</FormLabel>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex min-w-0 items-center gap-2">
                                     <Button
                                       type="button"
                                       variant="outline"
                                       className={cn(
-                                        "w-full justify-between",
+                                        "min-w-0 flex-1 justify-between",
                                         field.value ? "" : "text-muted-foreground",
                                       )}
                                       onClick={handleOpen}
                                     >
-                                      {selectedOption?.label || "Pick from dialog"}
+                                      <span className="min-w-0 truncate text-left" title={selectedOption?.label}>
+                                        {selectedOption?.label || "Pick from dialog"}
+                                      </span>
                                     </Button>
                                     <Button
-                                      className="w-8 p-0"
+                                      className="w-8 shrink-0 p-0"
                                       type="button"
                                       variant="ghost"
                                       onClick={(e) => {
@@ -925,7 +927,7 @@ export const EditContent = <
                                 {field.value ? (
                                 <div
                                   className={cn(
-                                    "h-24",
+                                    "h-24 shrink-0",
                                     id === "appearSfx" || id === "disappearSfx"
                                       ? "w-48"
                                       : "w-24",

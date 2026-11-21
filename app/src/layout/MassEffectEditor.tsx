@@ -512,7 +512,9 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
         ? value
         : Number(
             value ??
-              (field === "animationScale" || field === "projectileScale" ? 1 : 0),
+              (["animationScale", "projectileScale", "groundOpacity"].includes(field)
+                ? 1
+                : 0),
           );
     return (
       <NumberInput
