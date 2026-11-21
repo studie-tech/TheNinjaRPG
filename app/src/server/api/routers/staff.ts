@@ -31,6 +31,7 @@ import {
   userSkill,
   userTowerDefenseUpgrade,
   warehouseDepositLedger,
+  warehouseLog,
   warehouseMember,
 } from "@/drizzle/schema";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
@@ -923,6 +924,7 @@ export const staffRouter = createTRPCRouter({
           chakraStormProgress,
           chakraStormClaimReceipt,
           warehouseDepositLedger,
+          warehouseLog,
           warehouseMember,
           caravanDiscovery,
         ].map((table) => updateTableForUpdateUserId(ctx.drizzle, table, input)),

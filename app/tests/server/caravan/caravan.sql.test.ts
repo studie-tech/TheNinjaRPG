@@ -38,6 +38,7 @@ import {
   insertGuard,
   listActiveSabotage,
   queueGuard,
+  releaseAbandonedAmbush,
   releaseCargo,
   releaseParticipants,
   reserveCargo,
@@ -63,6 +64,7 @@ import { settleProduction } from "@/server/utils/warehouse";
 import { afterTasks } from "../../setup/after";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { insertItems, insertUsers } from "../../setup/factories";
+import { aroundStatements } from "../../setup/statements";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -154,6 +156,18 @@ describeWithDatabase("village Warehouse and caravans", () => {
     const [stock] = await db.select().from(warehouseStock);
     expect(stock?.quantity).toBe(70);
     expect((await claim(1)).rowsAffected).toBe(0);
+    // A generous allowance still cannot reach the 10 units held for caravans.
+    const wide = await claimWithdrawal(db, {
+      villageId: "leaf",
+      itemId: "ore",
+      userId: "u",
+      quantity: 11,
+      day: "2026-06-15",
+      allowance: 100,
+    });
+    expect(wide.rowsAffected).toBe(0);
+    const [unchanged] = await db.select().from(warehouseStock);
+    expect(unchanged?.quantity).toBe(70);
     // Neither the same day nor a request still dated the day before rewinds the count.
     await startWarehouseAllowanceDay(db, "u", "2026-06-15");
     await startWarehouseAllowanceDay(db, "u", "2026-06-14");
@@ -745,6 +759,90 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(losses).toEqual({ c1: 0, c2: 0, c3: CARAVAN_AMBUSH_LOSS_BP });
   });
 
+  it("charges an abandoned defence only to a caravan still on the road", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await db
+      .insert(caravan)
+      .values([
+        caravanRow({ id: "road" }),
+        caravanRow({ id: "done", status: "DELIVERED", lossBp: 500 }),
+      ]);
+    await db.insert(caravanEncounter).values(
+      ["road", "done"].map((id) => ({
+        id: `e-${id}`,
+        type: "AMBUSH" as const,
+        status: "STARTING" as const,
+        caravanId: id,
+        activeCaravanId: id,
+        battleId: `b-${id}`,
+        createdAt: now,
+      })),
+    );
+    for (const id of ["road", "done"])
+      await releaseAbandonedAmbush(
+        db,
+        { id: `e-${id}`, status: "STARTING" },
+        CARAVAN_AMBUSH_LOSS_BP,
+        now,
+      );
+    // A second pass finds nothing left to release.
+    expect(
+      (
+        await releaseAbandonedAmbush(
+          db,
+          { id: "e-road", status: "STARTING" },
+          CARAVAN_AMBUSH_LOSS_BP,
+          now,
+        )
+      ).rowsAffected,
+    ).toBe(0);
+    const losses = Object.fromEntries(
+      (await db.select().from(caravan)).map((row) => [row.id, row.lossBp]),
+    );
+    expect(losses).toEqual({ road: CARAVAN_AMBUSH_LOSS_BP, done: 500 });
+    const encounters = await db.select().from(caravanEncounter);
+    expect(encounters.every((row) => row.status === "RESOLVED")).toBe(true);
+    expect(encounters.every((row) => row.activeCaravanId === null)).toBe(true);
+  });
+
+  it("settles a battle whose encounter was never promoted from its start", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "leader", isOutlaw: true }]);
+    await db.insert(caravan).values(caravanRow());
+    await db.insert(caravanEncounter).values({
+      id: "e1",
+      type: "AMBUSH",
+      status: "STARTING",
+      caravanId: "c1",
+      activeCaravanId: "c1",
+      battleId: "b1",
+      createdAt: new Date(),
+    });
+    await settleCaravanCombat(
+      db,
+      makeCompleteBattle({
+        id: "b1",
+        battleType: "CARAVAN",
+        usersState: [
+          makeBattleUser("npc", { direction: "left", curHealth: 50, isAi: true }),
+          makeBattleUser("leader", { direction: "right", curHealth: 0 }),
+        ],
+        extraState: {
+          caravan: battleState({
+            type: "AMBUSH",
+            attackerIds: [],
+            guardIds: ["leader"],
+          }),
+        },
+      }),
+    );
+    const [encounter] = await db.select().from(caravanEncounter);
+    expect(encounter?.status).toBe("RESOLVED");
+    const [row] = await db.select().from(caravan);
+    expect(row?.lossBp).toBe(CARAVAN_AMBUSH_LOSS_BP);
+  });
+
   it("closes a disbanded settlement's routes and calls off its caravans", async () => {
     const db = await getTestDatabase();
     const now = new Date();
@@ -790,6 +888,35 @@ describeWithDatabase("village Warehouse and caravans", () => {
     // Caravans bound for the disbanded settlement bring their remaining 180 + 200 ore home.
     const [stock] = await db.select().from(warehouseStock);
     expect(stock).toMatchObject({ villageId: "leaf", quantity: 380 });
+  });
+
+  it("calls off a disbanded settlement's caravan whose version moved after the read", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await db.insert(caravan).values(caravanRow());
+    // An ambush expires between the disband's read and its cancel, taking 10% of the ore.
+    let bumped = false;
+    const racing = aroundStatements(
+      db,
+      caravan,
+      async (run) => {
+        const rows = await run();
+        if (!bumped) {
+          bumped = true;
+          await db
+            .update(caravan)
+            .set({ lossBp: 1000, version: 1 })
+            .where(eq(caravan.id, "c1"));
+        }
+        return rows;
+      },
+      { operations: ["select"] },
+    );
+    await afterTasks.run([], () => closeVillageTrade(racing, "sand", now));
+    const [row] = await db.select().from(caravan);
+    expect(row?.status).toBe("CANCELLED");
+    const [stock] = await db.select().from(warehouseStock);
+    expect(stock).toMatchObject({ villageId: "leaf", quantity: 180 });
   });
 
   it("hands a worn-down marker to its assailant and calls off caravans still on the road", async () => {
