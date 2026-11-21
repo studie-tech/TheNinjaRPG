@@ -26,11 +26,12 @@ export const launchCaravanBattle = async (
   input: {
     /** An open ambush is answered; any other fight opens a new encounter. */
     pendingEncounterId?: string;
-    encounter: Omit<
-      Parameters<typeof insertEncounter>[1],
-      "id" | "status" | "battleId" | "now"
-    >;
-    state: Omit<CaravanBattleState, "encounterId" | "battleId">;
+    /** A new interception's or assault's leader, and the sabotage an intervention stops. */
+    leaderId?: string;
+    operationId?: string;
+    /** What the fight records beyond the defaults; see {@link STATE_DEFAULTS}. */
+    state: Pick<CaravanBattleState, "type" | "attackerDirection"> &
+      Partial<StateFields>;
     userIds: string[];
     targetIds: string[];
     scaleTarget?: boolean;
@@ -40,6 +41,7 @@ export const launchCaravanBattle = async (
   const now = new Date();
   const battleId = nanoid();
   const encounterId = input.pendingEncounterId ?? nanoid();
+  const state = { ...STATE_DEFAULTS, ...input.state };
   if (input.pendingEncounterId) {
     const claimed = await claimPendingEncounter(client, encounterId, battleId, now);
     if (claimed.rowsAffected !== 1)
@@ -47,10 +49,14 @@ export const launchCaravanBattle = async (
   } else {
     try {
       await insertEncounter(client, {
-        ...input.encounter,
         id: encounterId,
-        status: "STARTING",
+        type: state.type,
+        caravanId: state.caravanId,
+        markerId: state.markerId,
+        operationId: input.operationId,
         battleId,
+        attackerVillageId: state.attackerVillageId,
+        leaderId: input.leaderId,
         now,
       });
     } catch (error) {
@@ -63,20 +69,16 @@ export const launchCaravanBattle = async (
   try {
     // The reserved encounter holds off every other fight over the caravan, so the loss read
     // now stays current until this battle settles and caps what its raiders can take.
-    const [current] = input.state.caravanId
-      ? await listCaravansByIds(client, [input.state.caravanId])
+    const [current] = state.caravanId
+      ? await listCaravansByIds(client, [state.caravanId])
       : [];
-    if (input.state.caravanId && current?.status !== "TRAVELLING")
+    if (state.caravanId && current?.status !== "TRAVELLING")
       return errorResponse("The caravan is not on the road");
     // An arrived caravan stays on the road only until maintenance delivers it.
-    if (
-      input.state.type === "INTERCEPTION" &&
-      current?.arrivesAt &&
-      current.arrivesAt <= now
-    )
+    if (state.type === "INTERCEPTION" && current?.arrivesAt && current.arrivesAt <= now)
       return errorResponse("The caravan has already arrived");
     if (
-      input.state.type === "INTERCEPTION" &&
+      state.type === "INTERCEPTION" &&
       current &&
       current.lossBp >= CARAVAN_MAX_LOSS_BP
     )
@@ -90,8 +92,8 @@ export const launchCaravanBattle = async (
         cacheUserId: input.cacheUserId,
         autoCombatFromDefaults: true,
         caravan: {
-          ...input.state,
-          lossBp: current?.lossBp ?? input.state.lossBp,
+          ...state,
+          lossBp: current?.lossBp ?? state.lossBp,
           encounterId,
           battleId,
         },
@@ -150,3 +152,23 @@ export const selectQueuedGuards = <
     (p) =>
       p.role === "GUARD" && !!p.activeUserId && p.status === "QUEUED" && !p.isBanned,
   );
+
+/** Battle state a fight records where its kind leaves nothing to record. */
+const STATE_DEFAULTS: StateFields = {
+  caravanId: null,
+  markerId: null,
+  attackerRole: null,
+  attackerVillageId: null,
+  attackerIds: [],
+  guardIds: [],
+  cargo: [],
+  lossBp: 0,
+  stealBp: 0,
+  captureVillageId: null,
+  markerControllerId: null,
+};
+
+type StateFields = Omit<
+  CaravanBattleState,
+  "encounterId" | "battleId" | "type" | "attackerDirection"
+>;

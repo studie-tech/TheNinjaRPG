@@ -10,7 +10,6 @@ import {
 import {
   describeTradeRoute,
   findSectorPath,
-  getRoutePair,
   getRouteTravelMinutes,
   getTradeBlock,
   planRouteMarkers,
@@ -38,12 +37,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
-import {
-  cancelCaravan,
-  canManageTrade,
-  isAtWar,
-  notifyPlayers,
-} from "@/server/utils/caravan";
+import { cancelCaravan, canManageTrade, notifyPlayers } from "@/server/utils/caravan";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { warehouseResponseSchema } from "@/validators/warehouse";
@@ -121,12 +115,7 @@ export const tradeRouteRouter = createTRPCRouter({
           .map((row) => ({
             id: row.id,
             name: row.name,
-            block: getTradeBlock(
-              relationships,
-              villageId,
-              row.id,
-              isAtWar(wars, villageId, row.id),
-            ),
+            block: getTradeBlock(relationships, wars, villageId, row.id),
           })),
       };
     }),
@@ -164,14 +153,10 @@ export const tradeRouteRouter = createTRPCRouter({
         return errorResponse("Construct your Warehouse first");
       if ((findWarehouse(partner.structures)?.level ?? 0) <= 0)
         return errorResponse(`${partner.name} has no Warehouse`);
-      const block = getTradeBlock(
-        relationships,
-        own.id,
-        partner.id,
-        isAtWar(wars, own.id, partner.id),
-      );
+      const block = getTradeBlock(relationships, wars, own.id, partner.id);
       if (block) return errorResponse(block);
-      const [villageIdA, villageIdB] = getRoutePair(own.id, partner.id);
+      // Sorted, so the open-pair key holds one open route between two villages.
+      const [villageIdA, villageIdB] = [own.id, partner.id].sort() as [string, string];
       const sectorA = villageIdA === own.id ? own.sector : partner.sector;
       const sectorB = villageIdB === own.id ? own.sector : partner.sector;
       const path = findSectorPath(sectorA, sectorB);
@@ -197,7 +182,6 @@ export const tradeRouteRouter = createTRPCRouter({
       notifyPlayers(ctx.drizzle, [partner.kageId], {
         title: "Trade route proposed",
         body: `${own.name} proposes a trade route to ${partner.name}.`,
-        route: "/warehouse",
         refresh: ["routes"],
       });
       return {
@@ -241,9 +225,9 @@ export const tradeRouteRouter = createTRPCRouter({
       const now = new Date();
       const block = getTradeBlock(
         relationships,
+        wars,
         route.villageIdA,
         route.villageIdB,
-        isAtWar(wars, route.villageIdA, route.villageIdB),
       );
       if (!input.accept) {
         const closed = await closeTradeRoute(ctx.drizzle, route.id, now);
@@ -278,7 +262,6 @@ export const tradeRouteRouter = createTRPCRouter({
       notifyPlayers(ctx.drizzle, [proposer.kageId], {
         title: "Trade route agreed",
         body: `${own.name} accepted your trade route.`,
-        route: "/warehouse",
         refresh: ["routes"],
       });
       return {
@@ -337,9 +320,9 @@ export const tradeRouteRouter = createTRPCRouter({
             name: (partnerIsA ? route.villageA : route.villageB).name,
             block: getTradeBlock(
               relationships,
+              wars,
               route.villageIdA,
               route.villageIdB,
-              isAtWar(wars, route.villageIdA, route.villageIdB),
             ),
           },
           caravansChanged: caravans.length > 0,

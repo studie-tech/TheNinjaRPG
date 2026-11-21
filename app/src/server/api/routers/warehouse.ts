@@ -38,6 +38,7 @@ import {
   getProductionVillageId,
   getWarehouseLevel,
   getWithdrawalAllowance,
+  isApprovalActive,
   isWarehouseStorable,
 } from "@/libs/warehouse";
 import { fetchClan } from "@/queries/clan";
@@ -67,11 +68,12 @@ import {
 } from "@/queries/warehouse";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import { canManageTrade } from "@/server/utils/caravan";
 import { updateUserItemQuantityAtomically } from "@/server/utils/concurrency";
 import { grantUserItems } from "@/server/utils/itemGrants";
-import { isServingElder } from "@/server/utils/kageGovernance";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { settleProduction, WarehouseConflict } from "@/server/utils/warehouse";
+import { HOUR_S, secondsFromDate } from "@/utils/time";
 import { calcStructureUpgrade, getRaidStructureMultiplier } from "@/utils/village";
 import { warehouseResponseSchema } from "@/validators/warehouse";
 
@@ -137,12 +139,7 @@ export const warehouseRouter = createTRPCRouter({
           : stocked;
       const level = getWarehouseLevel(structure, now);
       const multiplier = structure ? getRaidStructureMultiplier(structure, now) : 1;
-      const villageWars = wars.filter(
-        (war) =>
-          war.attackerVillageId === villageData.id ||
-          war.defenderVillageId === villageData.id,
-      );
-      const activeWarIds = villageWars.map((war) => war.id);
+      const activeWarIds = getVillageWars(wars, villageData.id).map((war) => war.id);
       const allowance = getWithdrawalAllowance(user, member, activeWarIds, now);
       const nextCycleAt = getDueProduction(
         settings.productionSettledAt,
@@ -174,7 +171,7 @@ export const warehouseRouter = createTRPCRouter({
             }
           : null,
         isLeader,
-        canManageTrade: isLeader || isServingElder(user, villageData.id),
+        canManageTrade: canManageTrade(user, villageData),
         productionBonus: getProductionBonus(level, multiplier),
         depositBonus: getDepositBonus(level, multiplier),
         cycleQuantity: getCycleQuantity(level, multiplier),
@@ -196,10 +193,7 @@ export const warehouseRouter = createTRPCRouter({
           avatar: row.avatar,
           rank: row.rank,
           wartime: !!row.approvedWarId,
-          active:
-            !!row.approvedAt &&
-            row.approvedAt >= new Date(row.joinedVillageAt) &&
-            (!row.approvedWarId || activeWarIds.includes(row.approvedWarId)),
+          active: isApprovalActive(row, row, activeWarIds),
         })),
         activeWarIds: isLeader ? activeWarIds : [],
       };
@@ -293,8 +287,9 @@ export const warehouseRouter = createTRPCRouter({
             const claimed = await claimDepositLedger(tx, {
               userId: ctx.userId,
               itemId: stack.itemId,
-              cooldownStart: new Date(
-                now.getTime() - WAREHOUSE_DEPOSIT_COOLDOWN_HOURS * 3_600_000,
+              cooldownStart: secondsFromDate(
+                -WAREHOUSE_DEPOSIT_COOLDOWN_HOURS * HOUR_S,
+                now,
               ),
               now,
               expected: {
@@ -383,13 +378,7 @@ export const warehouseRouter = createTRPCRouter({
       if (!villageData) return errorResponse("Warehouse not found");
       if (!info || info.hidden || !isWarehouseStorable(info))
         return errorResponse("The Warehouse does not hold this item");
-      const activeWarIds = wars
-        .filter(
-          (war) =>
-            war.attackerVillageId === villageData.id ||
-            war.defenderVillageId === villageData.id,
-        )
-        .map((war) => war.id);
+      const activeWarIds = getVillageWars(wars, villageData.id).map((war) => war.id);
       const allowance = getWithdrawalAllowance(user, member, activeWarIds, now);
       if (input.quantity > allowance.remaining)
         return errorResponse(
@@ -552,11 +541,7 @@ export const warehouseRouter = createTRPCRouter({
           warehouseChange: getSelfApprovalChange(user, target, null),
         };
       }
-      const war = wars.find(
-        (row) =>
-          row.attackerVillageId === villageData.id ||
-          row.defenderVillageId === villageData.id,
-      );
+      const [war] = getVillageWars(wars, villageData.id);
       if (input.wartime && !war)
         return errorResponse("Wartime access requires an active war");
       if (!input.wartime && target.rank === "ELDER")
@@ -603,3 +588,12 @@ const warehouseAccessError = (
     return "Travel to your village to use its Warehouse";
   return null;
 };
+
+/** Open wars a village fights in, on either side. */
+const getVillageWars = (
+  wars: Awaited<ReturnType<typeof listOpenWars>>,
+  villageId: string,
+) =>
+  wars.filter(
+    (war) => war.attackerVillageId === villageId || war.defenderVillageId === villageId,
+  );

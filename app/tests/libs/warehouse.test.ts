@@ -3,21 +3,21 @@ import {
   VILLAGE_SYNDICATE_ID,
   WAREHOUSE_ANBU_DAILY_ALLOWANCE,
   WAREHOUSE_APPROVED_DAILY_ALLOWANCE,
+  WAREHOUSE_CONSTRUCTION_COST,
   WAREHOUSE_DAILY_ALLOWANCE,
   WAREHOUSE_LOYALTY_BONUS,
   WAREHOUSE_PRODUCTION_BASE_QUANTITY,
   WAREHOUSE_PRODUCTION_INTERVAL_HOURS,
   WAREHOUSE_PRODUCTION_MAX_CYCLES,
+  WAREHOUSE_UPGRADE_COST,
 } from "@/drizzle/constants";
 import type { WarehouseMember } from "@/drizzle/schema";
 import {
   canProduceItem,
   getCycleQuantity,
   getDepositAvailableAt,
-  getDepositBonus,
   getDepositCredit,
   getDueProduction,
-  getProductionBonus,
   getWithdrawalAllowance,
   isWarehouseStorable,
 } from "@/libs/warehouse";
@@ -27,9 +27,7 @@ const HOUR = 3_600_000;
 const now = new Date("2026-06-15T12:00:00Z");
 
 describe("production", () => {
-  it("adds 1% per level and rounds each cycle down", () => {
-    expect(getProductionBonus(1)).toBe(1);
-    expect(getProductionBonus(10)).toBe(10);
+  it("adds the level and raid bonus to each cycle and rounds it down", () => {
     expect(getCycleQuantity(0)).toBe(0);
     expect(getCycleQuantity(1)).toBe(WAREHOUSE_PRODUCTION_BASE_QUANTITY + 1);
     expect(getCycleQuantity(10)).toBe(110);
@@ -66,11 +64,6 @@ describe("production", () => {
 });
 
 describe("deposits", () => {
-  it("adds 2% per level", () => {
-    expect(getDepositBonus(1)).toBe(2);
-    expect(getDepositBonus(10)).toBe(20);
-  });
-
   it("carries fractional bonuses so split deposits never round up", () => {
     const first = getDepositCredit(50, 3, undefined);
     expect(first).toEqual({
@@ -176,7 +169,7 @@ describe("withdrawal allowance", () => {
 });
 
 describe("Warehouse construction cost", () => {
-  it("costs 500k to build and 150k per later level, untaxed", () => {
+  it("charges fixed, untaxed prices to build and upgrade", () => {
     const village = {
       type: "VILLAGE",
       populationCount: 5000,
@@ -185,9 +178,11 @@ describe("Warehouse construction cost", () => {
     const structure = { route: "/warehouse", level: 0 } as Parameters<
       typeof calcStructureUpgrade
     >[0];
-    expect(calcStructureUpgrade(structure, village).total).toBe(500_000);
+    expect(calcStructureUpgrade(structure, village).total).toBe(
+      WAREHOUSE_CONSTRUCTION_COST,
+    );
     expect(calcStructureUpgrade({ ...structure, level: 4 }, village).total).toBe(
-      150_000,
+      WAREHOUSE_UPGRADE_COST,
     );
   });
 });

@@ -71,7 +71,7 @@ export type UserEvent = {
   countedAt?: number;
   /** The message accompanies a committed crafting escrow, delivery or refund. */
   craftingService?: boolean;
-  /** Caravan and trade route views the notice announces a change to. */
+  /** Profile, caravan and trade route views the notice announces a change to. */
   refresh?: CaravanNoticeView[];
 };
 
@@ -477,25 +477,13 @@ export const usePusherHandler = (
                 });
               }
             }
-          } else if (
-            data.type === "userMessage" ||
-            data.type === "homeInvitation" ||
-            data.type === "caravanEscortReleased"
-          ) {
+          } else if (data.type === "userMessage" || data.type === "homeInvitation") {
             if (data.type === "homeInvitation")
               await utils.home.getHomeRequests.invalidate();
-            // A delivery or cancellation woke the escort and may have paid them. A shown
-            // caravan list reloads the Warehouse itself when the refreshed list moved stock.
-            // Caravan notices can be urgent, so they show without waiting for these reads.
-            if (data.type === "caravanEscortReleased") {
-              void utils.profile.getUser.invalidate();
-              void utils.caravan.getCaravans.invalidate();
-              void utils.caravanOps.getControls.invalidate();
-              void utils.warehouse.getWarehouse.invalidate(undefined, {
-                refetchType: "none",
-              });
-            }
+            // Caravan notices can be urgent, so they show without waiting for these reads. A
+            // shown caravan list reloads the Warehouse itself when the reread moved stock.
             const refresh = data.refresh ?? [];
+            if (refresh.includes("profile")) void utils.profile.getUser.invalidate();
             if (refresh.includes("caravans"))
               void utils.caravan.getCaravans.invalidate();
             if (refresh.includes("routes"))

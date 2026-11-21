@@ -9,7 +9,8 @@ import type {
   WarehouseDepositLedger,
 } from "@/drizzle/schema";
 import type { CargoLine } from "@/libs/caravan";
-import { getAllowanceDay, getDepositCandidates } from "@/libs/warehouse";
+import { getDepositCandidates } from "@/libs/warehouse";
+import { getUtcDayKey } from "@/utils/time";
 import type { WarehouseChange, WarehouseLogEntry } from "@/validators/warehouse";
 
 type WarehouseView = RouterOutputs["warehouse"]["getWarehouse"];
@@ -112,7 +113,7 @@ export const getWithdrawWarehouseChange = ({
   ];
   return {
     stock: [{ itemId: item.id, quantity: -quantity, reserved: 0 }],
-    allowanceUsed: { day: getAllowanceDay(now), quantity },
+    allowanceUsed: { day: getUtcDayKey(now), quantity },
     candidates: getItemCandidates(item.id, updated, ledgers, now),
   };
 };

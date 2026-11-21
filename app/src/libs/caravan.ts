@@ -37,15 +37,11 @@ import {
 import type { Caravan, UserData, VillageAlliance } from "@/drizzle/schema";
 import { getRankForExperience, getRankProgress } from "@/libs/occupationRank";
 import { sectorGridNeighbors } from "@/libs/sector-map/world-grid";
-import { findRelationship } from "@/utils/alliance";
+import { findRelationship, isVillagePair } from "@/utils/alliance";
 import { secureRandomInt } from "@/utils/math";
 
 /** A shipment's manifest line. */
 export type CargoLine = { itemId: string; quantity: number };
-
-/** Sorted village pair key, open while a route between them is proposed or active. */
-export const getRoutePair = (villageIdA: string, villageIdB: string) =>
-  [villageIdA, villageIdB].sort() as [string, string];
 
 /**
  * Shortest sector path between two home sectors over the world grid, both ends included.
@@ -173,15 +169,29 @@ export const planRouteMarkers = (
   return picked;
 };
 
+/** Whether two villages fight each other in an open war. */
+export const isAtWar = (
+  wars: OpenWar[],
+  villageIdA?: string | null,
+  villageIdB?: string | null,
+) =>
+  wars.some((war) =>
+    isVillagePair(
+      { villageIdA: war.attackerVillageId, villageIdB: war.defenderVillageId },
+      villageIdA,
+      villageIdB,
+    ),
+  );
+
 /** Whether two villages may agree a trade route: enemies and warring villages cannot. */
 export const getTradeBlock = (
   relationships: VillageAlliance[],
+  wars: OpenWar[],
   villageIdA: string,
   villageIdB: string,
-  atWar: boolean,
 ) => {
   if (villageIdA === villageIdB) return "A village cannot trade with itself";
-  if (atWar) return "Villages at war cannot trade";
+  if (isAtWar(wars, villageIdA, villageIdB)) return "Villages at war cannot trade";
   if (findRelationship(relationships, villageIdA, villageIdB)?.status === "ENEMY")
     return "Enemy villages cannot trade";
   return null;
@@ -332,12 +342,14 @@ export const getAttackerRole = (
   user: Pick<UserData, "isOutlaw" | "isBandit" | "villageId">,
   ownerVillageId: string,
   relationships: VillageAlliance[],
-  atWar: boolean,
+  wars: OpenWar[],
 ): CaravanRole | null => {
   if (user.villageId === ownerVillageId) return null;
   if (user.isOutlaw) return user.isBandit ? "BANDIT" : null;
   const relation = findRelationship(relationships, user.villageId, ownerVillageId);
-  return atWar || relation?.status === "ENEMY" ? "ENEMY" : null;
+  return isAtWar(wars, user.villageId, ownerVillageId) || relation?.status === "ENEMY"
+    ? "ENEMY"
+    : null;
 };
 
 /** Roll a percent chance. */
@@ -374,4 +386,7 @@ export type CaravanBattleState = {
 };
 
 /** Views a caravan or trade route notice refreshes in the recipient's open tabs. */
-export type CaravanNoticeView = "caravans" | "routes" | "controls";
+export type CaravanNoticeView = "profile" | "caravans" | "routes" | "controls";
+
+/** The sides of an open war, which the trade and raiding rules read. */
+type OpenWar = { attackerVillageId: string; defenderVillageId: string };

@@ -22,14 +22,12 @@ import {
   getBanditRank,
   getCaravanCapacity,
   getCaravanSector,
+  getCheckpointTimes,
   getGuardReward,
   getJourneyProgress,
-  getOperationChance,
-  getOperationMinutes,
   getReachedCheckpoints,
   getRemainingCargo,
   getRouteTravelMinutes,
-  getStealBp,
   getStealthChance,
   getTradeBlock,
   planRouteMarkers,
@@ -45,6 +43,7 @@ const relation = (status: VillageAlliance["status"]): VillageAlliance => ({
   createdAt: null,
   updatedAt: null,
 });
+const war = [{ attackerVillageId: "b", defenderVillageId: "a" }];
 
 describe("findSectorPath", () => {
   it("returns a contiguous shortest path including both ends", () => {
@@ -87,11 +86,11 @@ describe("trade route rules", () => {
   });
 
   it("blocks enemies and warring villages but lets allies and neutrals trade", () => {
-    expect(getTradeBlock([relation("ENEMY")], "a", "b", false)).toBeString();
-    expect(getTradeBlock([relation("ALLY")], "a", "b", true)).toBeString();
-    expect(getTradeBlock([relation("ALLY")], "a", "b", false)).toBeNull();
-    expect(getTradeBlock([relation("NEUTRAL")], "a", "b", false)).toBeNull();
-    expect(getTradeBlock([], "a", "a", false)).toBeString();
+    expect(getTradeBlock([relation("ENEMY")], [], "a", "b")).toBeString();
+    expect(getTradeBlock([relation("ALLY")], war, "a", "b")).toBeString();
+    expect(getTradeBlock([relation("ALLY")], [], "a", "b")).toBeNull();
+    expect(getTradeBlock([relation("NEUTRAL")], [], "a", "b")).toBeNull();
+    expect(getTradeBlock([], [], "a", "a")).toBeString();
   });
 
   it("gives slots for active routes only and fills them with outgoing caravans", () => {
@@ -133,6 +132,7 @@ describe("journey progress", () => {
     expect(getReachedCheckpoints(journey, at(19))).toBe(0);
     expect(getReachedCheckpoints(journey, at(21))).toBe(1);
     expect(getReachedCheckpoints(journey, at(100))).toBe(CARAVAN_CHECKPOINTS);
+    expect(getCheckpointTimes(journey)[0]).toEqual(at(100 / (CARAVAN_CHECKPOINTS + 1)));
   });
 });
 
@@ -202,28 +202,19 @@ describe("roles and rewards", () => {
   });
 
   it("decides sides from village relations and the bandit profession", () => {
-    expect(getAttackerRole(villager, "b", [relation("ENEMY")], false)).toBe("ENEMY");
-    expect(getAttackerRole(villager, "b", [relation("NEUTRAL")], true)).toBe("ENEMY");
-    expect(getAttackerRole(villager, "b", [relation("ALLY")], false)).toBeNull();
-    expect(getAttackerRole(villager, "a", [], true)).toBeNull();
+    expect(getAttackerRole(villager, "b", [relation("ENEMY")], [])).toBe("ENEMY");
+    expect(getAttackerRole(villager, "b", [relation("NEUTRAL")], war)).toBe("ENEMY");
+    expect(getAttackerRole(villager, "b", [relation("ALLY")], [])).toBeNull();
+    expect(getAttackerRole(villager, "a", [], war)).toBeNull();
     const outlaw = { isOutlaw: true, isBandit: false, villageId: "s" };
-    expect(getAttackerRole(outlaw, "b", [], false)).toBeNull();
-    expect(getAttackerRole({ ...outlaw, isBandit: true }, "b", [], false)).toBe(
-      "BANDIT",
-    );
+    expect(getAttackerRole(outlaw, "b", [], [])).toBeNull();
+    expect(getAttackerRole({ ...outlaw, isBandit: true }, "b", [], [])).toBe("BANDIT");
   });
 
-  it("ranks bandits by experience with faster scouting and bigger hauls", () => {
+  it("ranks bandits by experience", () => {
     expect(getBanditRank(0)).toBe("HIGHWAYMAN");
     expect(getBanditRank(BANDIT_REQUIRED_EXP.MARAUDER)).toBe("MARAUDER");
     expect(getBanditRank(BANDIT_REQUIRED_EXP["BANDIT CHIEF"])).toBe("BANDIT CHIEF");
-    expect(getOperationChance("BANDIT", { stealth: 0, banditExperience: 0 })).toBe(20);
-    expect(getOperationMinutes("SEARCH", "BANDIT", 0)).toBe(10);
-    expect(
-      getOperationMinutes("SEARCH", "BANDIT", BANDIT_REQUIRED_EXP["BANDIT CHIEF"]),
-    ).toBe(3);
-    expect(getOperationMinutes("DELAY", "ENEMY", 0)).toBe(5);
-    expect(getStealBp(BANDIT_REQUIRED_EXP.MARAUDER)).toBe(1000);
   });
 
   it("scales covert chance with stealth up to the cap", () => {

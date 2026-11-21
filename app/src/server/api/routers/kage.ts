@@ -16,7 +16,6 @@ import {
 import { clan, village, villageStructure } from "@/drizzle/schema";
 import { tallyElderVotes } from "@/libs/elder";
 import { isFactionVillage } from "@/libs/war";
-import { WAREHOUSE_ROUTE } from "@/libs/warehouse";
 import { fetchClan } from "@/queries/clan";
 import {
   fetchElderVote,
@@ -271,7 +270,7 @@ export const kageRouter = createTRPCRouter({
         return errorResponse("Faction not found");
       if (userVillage.kageId !== user.userId) return errorResponse("Not the leader");
       // Only the Warehouse starts unbuilt; its first level is its construction.
-      const isWarehouse = structure.route === WAREHOUSE_ROUTE;
+      const isWarehouse = structure.route === "/warehouse";
       if (structure.level === 0 && !isWarehouse)
         return errorResponse("Can't upgrade from lvl 0 yet");
       if (structure.level >= structure.maxLevel)

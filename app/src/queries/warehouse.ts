@@ -406,12 +406,12 @@ export const listWarehouseApprovals = (
   client
     .select({
       userId: warehouseMember.userId,
+      approvedVillageId: warehouseMember.approvedVillageId,
       approvedAt: warehouseMember.approvedAt,
       approvedWarId: warehouseMember.approvedWarId,
       username: userData.username,
       avatar: userData.avatar,
       rank: userData.rank,
-      anbuId: userData.anbuId,
       villageId: userData.villageId,
       joinedVillageAt: userData.joinedVillageAt,
     })

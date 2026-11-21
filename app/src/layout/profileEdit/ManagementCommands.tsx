@@ -8,7 +8,11 @@ import { Button, type ButtonProps } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
-import { MAX_MASS_EXPERIENCE_AWARD } from "@/drizzle/constants";
+import {
+  CARAVAN_DEFAULT_ENCOUNTER_RATE,
+  CARAVAN_ENCOUNTER_RATE_SETTING,
+  MAX_MASS_EXPERIENCE_AWARD,
+} from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { cn } from "@/libs/shadui";
@@ -290,7 +294,8 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
 
 /** Content staff tune how often NPC bandits ambush caravans at their checkpoints. */
 const CaravanEncounterRate: React.FC = () => {
-  const { data } = api.caravan.getEncounterRate.useQuery();
+  const setting = { name: CARAVAN_ENCOUNTER_RATE_SETTING };
+  const { data } = api.misc.getSetting.useQuery(setting);
   const [rate, setRate] = useState<number>();
   const utils = api.useUtils();
   const { mutate, isPending } = api.caravan.setEncounterRate.useMutation({
@@ -298,13 +303,13 @@ const CaravanEncounterRate: React.FC = () => {
       showMutationToast(result);
       if (result.success) {
         setRate(undefined);
-        await utils.caravan.getEncounterRate.invalidate();
+        await utils.misc.getSetting.invalidate(setting);
       }
     },
   });
   // Editing waits for the stored rate, so a draft never starts from a placeholder.
   const isLoaded = data !== undefined;
-  const value = rate ?? data?.rate ?? 0;
+  const value = rate ?? data?.value ?? CARAVAN_DEFAULT_ENCOUNTER_RATE;
   return (
     <div className="col-span-3 flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2 sm:col-span-2">
       <Label htmlFor="caravanEncounterRate" className="font-medium text-sm">

@@ -100,7 +100,7 @@ export const settleCaravanCombat = async (
 };
 
 /** Whether anyone on a battle side is still fighting. */
-const isSideStanding = (battle: CompleteBattle, direction: "left" | "right") =>
+export const isSideStanding = (battle: CompleteBattle, direction: "left" | "right") =>
   battle.usersState.some(
     (user) => !user.isSummon && user.direction === direction && stillInBattle(user),
   );
