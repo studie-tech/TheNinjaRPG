@@ -35,6 +35,7 @@ import Image from "@/layout/Image";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { cn } from "@/libs/shadui";
 import { useUserPicker } from "@/utils/search";
+import { formatDateTime } from "@/utils/time";
 
 type WarehouseData = NonNullable<RouterOutputs["warehouse"]["getWarehouse"]>;
 type CaravanActions = ReturnType<typeof useCaravans>;
@@ -453,6 +454,9 @@ export const WarehouseAccess = ({
   const [wartimeChoice, setWartime] = useState(false);
   const atWar = data.activeWarIds.length > 0;
   const wartime = wartimeChoice && atWar;
+  const pending = actions.setApproval.isPending
+    ? actions.setApproval.variables
+    : undefined;
   return (
     <ContentBox
       title="Access"
@@ -485,6 +489,7 @@ export const WarehouseAccess = ({
               <Button
                 className="ml-auto"
                 disabled={!user || actions.setApproval.isPending}
+                loading={pending?.approve === true}
                 onClick={() =>
                   user &&
                   actions.setApproval.mutate(
@@ -518,6 +523,7 @@ export const WarehouseAccess = ({
                   size="sm"
                   variant="outline"
                   disabled={actions.setApproval.isPending}
+                  loading={pending?.approve === false && pending.userId === row.userId}
                   onClick={() =>
                     actions.setApproval.mutate({ userId: row.userId, approve: false })
                   }
@@ -549,21 +555,24 @@ export const WarehouseHistory = () => {
       {rows.length === 0 ? (
         <p className="text-muted-foreground text-sm">Nothing has moved yet.</p>
       ) : (
-        <ul className="divide-y text-sm">
+        <ul className="@container divide-y text-sm">
           {rows.map((row) => (
-            <li key={row.id} className="flex flex-wrap items-baseline gap-x-2 py-1">
+            <li
+              key={row.id}
+              className="grid grid-cols-[auto_1fr] items-baseline gap-x-2 py-1 @lg:grid-cols-[auto_1fr_auto]"
+            >
               <Badge variant="outline" className="w-24">
                 {HISTORY_LABELS[row.type]}
               </Badge>
-              <span className="grow">
+              <span>
                 {row.quantity.toLocaleString()} {row.itemName ?? "items"}
                 {row.username ? ` · ${row.username}` : ""}
               </span>
               <time
-                className="text-muted-foreground text-xs"
-                dateTime={new Date(row.createdAt).toISOString()}
+                className="text-muted-foreground col-start-2 text-xs @lg:col-start-auto"
+                dateTime={row.createdAt.toISOString()}
               >
-                {new Date(row.createdAt).toLocaleString()}
+                {formatDateTime(row.createdAt)}
               </time>
             </li>
           ))}

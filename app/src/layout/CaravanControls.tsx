@@ -75,6 +75,9 @@ const CaravanControlsPanel = () => {
   const now = Date.now() - timeDiff;
   const running = data.operations.find((op) => op.status === "ACTIVE");
   const canScout = !data.isOutlaw || data.bandit.enabled;
+  const starting = actions.startOperation.isPending
+    ? actions.startOperation.variables
+    : undefined;
   return (
     <div className="@container grid gap-4 text-sm">
       <RoleSummary data={data} actions={actions} />
@@ -91,6 +94,7 @@ const CaravanControlsPanel = () => {
             <Button
               variant="outline"
               disabled={!canScout || actions.startOperation.isPending}
+              loading={starting?.type === "INVESTIGATE"}
               onClick={() => actions.startOperation.mutate({ type: "INVESTIGATE" })}
             >
               <Binoculars className="mr-2 size-4" aria-hidden />
@@ -99,6 +103,7 @@ const CaravanControlsPanel = () => {
             <Button
               variant="outline"
               disabled={!canScout || actions.startOperation.isPending}
+              loading={starting?.type === "SEARCH"}
               onClick={() => actions.startOperation.mutate({ type: "SEARCH" })}
             >
               <Search className="mr-2 size-4" aria-hidden />
@@ -164,6 +169,10 @@ const CaravanControlsPanel = () => {
                 <Button
                   size="sm"
                   disabled={actions.claimLoot.isPending}
+                  loading={
+                    actions.claimLoot.isPending &&
+                    actions.claimLoot.variables?.caravanId === row.caravanId
+                  }
                   onClick={() => actions.claimLoot.mutate({ caravanId: row.caravanId })}
                 >
                   <Gift className="mr-1 size-4" aria-hidden />
@@ -205,6 +214,10 @@ const CaravanControlsPanel = () => {
                   className="mt-1 w-full"
                   variant="destructive"
                   disabled={!marker.canAssault || actions.assaultMarker.isPending}
+                  loading={
+                    actions.assaultMarker.isPending &&
+                    actions.assaultMarker.variables?.markerId === marker.id
+                  }
                   onClick={() => actions.assaultMarker.mutate({ markerId: marker.id })}
                 >
                   <Swords className="mr-1 size-4" aria-hidden />
@@ -285,6 +298,12 @@ const KnownCaravan = ({
     new Date(row.arrivesAt).getTime() <= now + CARAVAN_SABOTAGE_MINUTES * 60_000;
   const canSabotage = row.inSector && !arrivesFirst && !running;
   const arrived = !row.arrivesAt || new Date(row.arrivesAt).getTime() <= now;
+  const starting = actions.startOperation.isPending
+    ? actions.startOperation.variables
+    : undefined;
+  const grouping = actions.formGroup.isPending
+    ? actions.formGroup.variables
+    : undefined;
   return (
     <li className="rounded-md border p-2">
       <p className="font-semibold">
@@ -320,6 +339,9 @@ const KnownCaravan = ({
                 : undefined
             }
             disabled={row.lastSector === null || actions.track.isPending}
+            loading={
+              actions.track.isPending && actions.track.variables?.caravanId === row.id
+            }
             onClick={() => actions.track.mutate({ caravanId: row.id })}
           >
             <Footprints className="mr-1 size-4" aria-hidden />
@@ -336,6 +358,7 @@ const KnownCaravan = ({
                     : `Removes an NPC guard from fights for ${CARAVAN_DISRUPTION_MINUTES} minutes`
                 }
                 disabled={!canSabotage || actions.startOperation.isPending}
+                loading={starting?.type === "DISRUPT" && starting.caravanId === row.id}
                 onClick={() =>
                   actions.startOperation.mutate({ type: "DISRUPT", caravanId: row.id })
                 }
@@ -352,6 +375,7 @@ const KnownCaravan = ({
                     : `Adds ${CARAVAN_DELAY_MINUTES} minutes of travel`
                 }
                 disabled={!canSabotage || actions.startOperation.isPending}
+                loading={starting?.type === "DELAY" && starting.caravanId === row.id}
                 onClick={() =>
                   actions.startOperation.mutate({ type: "DELAY", caravanId: row.id })
                 }
@@ -366,6 +390,7 @@ const KnownCaravan = ({
               size="sm"
               variant="outline"
               disabled={!!data.commitment || actions.formGroup.isPending}
+              loading={grouping?.caravanId === row.id && !grouping.leaderId}
               onClick={() => actions.formGroup.mutate({ caravanId: row.id })}
             >
               <Users className="mr-1 size-4" aria-hidden />
@@ -392,6 +417,7 @@ const KnownCaravan = ({
                     size="sm"
                     variant="outline"
                     disabled={actions.formGroup.isPending}
+                    loading={grouping?.leaderId === group.leaderId}
                     onClick={() =>
                       actions.formGroup.mutate({
                         caravanId: row.id,
@@ -407,6 +433,7 @@ const KnownCaravan = ({
                     size="sm"
                     variant="ghost"
                     disabled={actions.leaveGroup.isPending}
+                    loading={actions.leaveGroup.isPending}
                     onClick={() => actions.leaveGroup.mutate({ caravanId: row.id })}
                   >
                     Leave
@@ -420,6 +447,7 @@ const KnownCaravan = ({
                       arrived ? "The caravan has reached its destination" : undefined
                     }
                     disabled={!row.inSector || arrived || actions.attack.isPending}
+                    loading={actions.attack.isPending}
                     onClick={() => actions.attack.mutate({ caravanId: row.id })}
                   >
                     <Swords className="mr-1 size-4" aria-hidden />
