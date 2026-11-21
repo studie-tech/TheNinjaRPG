@@ -26,6 +26,7 @@ import {
   warehouseMember,
   warehouseStock,
 } from "@/drizzle/schema";
+import type { CargoLine } from "@/libs/caravan";
 import type { DrizzleClient } from "@/server/db";
 
 /** A village or settlement that can own Warehouse items, with its type. */
@@ -90,16 +91,7 @@ export const listProducibleItems = (
   productionVillageId: string,
 ) =>
   client
-    .select({
-      id: item.id,
-      name: item.name,
-      image: item.image,
-      itemType: item.itemType,
-      canStack: item.canStack,
-      warehouseItem: item.warehouseItem,
-      villageId: item.villageId,
-      hidden: item.hidden,
-    })
+    .select(warehouseItemColumns)
     .from(item)
     .where(
       and(
@@ -118,19 +110,21 @@ export const listWarehouseItems = (
   itemIds.length === 0
     ? Promise.resolve([])
     : client
-        .select({
-          id: item.id,
-          name: item.name,
-          image: item.image,
-          itemType: item.itemType,
-          canStack: item.canStack,
-          warehouseItem: item.warehouseItem,
-          villageId: item.villageId,
-          hidden: item.hidden,
-          isEventItem: item.isEventItem,
-        })
+        .select({ ...warehouseItemColumns, isEventItem: item.isEventItem })
         .from(item)
         .where(inArray(item.id, itemIds));
+
+/** Item fields behind Warehouse eligibility and display. */
+const warehouseItemColumns = {
+  id: item.id,
+  name: item.name,
+  image: item.image,
+  itemType: item.itemType,
+  canStack: item.canStack,
+  warehouseItem: item.warehouseItem,
+  villageId: item.villageId,
+  hidden: item.hidden,
+};
 
 /** Create empty stock rows so production and deliveries can add to them in place. */
 export const ensureWarehouseStock = (
@@ -415,6 +409,22 @@ export const listWarehouseApprovals = (
         eq(userData.villageId, villageId),
       ),
     );
+
+/** History rows for cargo lines moving through a village's Warehouse, each with its id. */
+export const cargoLogs = (
+  villageId: string,
+  type: WarehouseLogType,
+  lines: CargoLine[],
+  userId?: string,
+) =>
+  lines.map((line) => ({
+    id: nanoid(),
+    villageId,
+    userId,
+    itemId: line.itemId,
+    type,
+    quantity: line.quantity,
+  }));
 
 /** Append Warehouse history rows; callers that report a row back give its id. */
 export const insertWarehouseLogs = (

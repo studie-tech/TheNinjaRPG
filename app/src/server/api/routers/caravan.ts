@@ -55,6 +55,7 @@ import {
 } from "@/queries/tradeRoute";
 import { fetchVillage } from "@/queries/village";
 import {
+  cargoLogs,
   insertWarehouseLogs,
   listOpenWars,
   listWarehouseItems,
@@ -317,14 +318,7 @@ export const caravanRouter = createTRPCRouter({
       const now = new Date();
       const path = toVillageA ? [...route.path].reverse() : route.path;
       const travelMinutes = getRouteTravelMinutes(route.level);
-      const logs = cargo.map((line) => ({
-        id: nanoid(),
-        villageId: own.id,
-        userId: user.userId,
-        itemId: line.itemId,
-        type: "RESERVE" as const,
-        quantity: line.quantity,
-      }));
+      const logs = cargoLogs(own.id, "RESERVE", cargo, user.userId);
       const capacity = getCaravanCapacity(routes).total;
       const full = new WarehouseConflict(
         `Your ${capacity} trade route${capacity === 1 ? "" : "s"} allow${capacity === 1 ? "s" : ""} ${capacity} caravan${capacity === 1 ? "" : "s"} at a time`,
@@ -476,13 +470,7 @@ export const caravanRouter = createTRPCRouter({
             if (loaded.rowsAffected !== row.cargo.length) throw conflict;
             await insertWarehouseLogs(
               tx,
-              row.cargo.map((line) => ({
-                villageId: row.originVillageId,
-                userId: user.userId,
-                itemId: line.itemId,
-                type: "DISPATCH" as const,
-                quantity: line.quantity,
-              })),
+              cargoLogs(row.originVillageId, "DISPATCH", row.cargo, user.userId),
               now,
             );
           }),

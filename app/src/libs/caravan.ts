@@ -230,7 +230,7 @@ export const getReachedCheckpoints = (
 export const getRemainingCargo = (cargo: CargoLine[], lossBp: number): CargoLine[] =>
   cargo.map((line) => ({
     itemId: line.itemId,
-    quantity: Math.ceil((line.quantity * (10_000 - Math.min(lossBp, 10_000))) / 10_000),
+    quantity: Math.ceil((line.quantity * (10_000 - lossBp)) / 10_000),
   }));
 
 /** Share of the manifest a new loss may still take under the journey's cap. */

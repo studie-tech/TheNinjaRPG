@@ -66,6 +66,7 @@ import {
   upsertMarkerDiscoveries,
 } from "@/queries/tradeRoute";
 import {
+  cargoLogs,
   creditWarehouseStock,
   insertWarehouseLogs,
   listOpenWars,
@@ -192,9 +193,8 @@ export const cancelCaravan = async (
   options: { unfought?: boolean } = {},
 ) => {
   const participants = await listCaravanParticipants(client, [row.id]);
-  const returned = (
-    row.status === "TRAVELLING" ? getRemainingCargo(row.cargo, row.lossBp) : row.cargo
-  ).filter((line) => line.quantity > 0);
+  const returned =
+    row.status === "TRAVELLING" ? getRemainingCargo(row.cargo, row.lossBp) : row.cargo;
   const guards = participants.filter((p) => p.role === "GUARD");
   const guardIds = guards.map((p) => p.userId);
   // The lifecycle claim and the stock it returns span the caravan and several stock rows;
@@ -216,12 +216,7 @@ export const cancelCaravan = async (
       await wakeReleasedGuards(tx, guardIds);
       await insertWarehouseLogs(
         tx,
-        returned.map((line) => ({
-          villageId: row.originVillageId,
-          itemId: line.itemId,
-          type: "RELEASE" as const,
-          quantity: line.quantity,
-        })),
+        cargoLogs(row.originVillageId, "RELEASE", returned),
         now,
       );
       return true;
@@ -283,9 +278,7 @@ export const deliverCaravan = async (
     listCaravanParticipants(client, [row.id]),
   ]);
   if (encounters.length > 0) return false;
-  const remaining = getRemainingCargo(row.cargo, row.lossBp).filter(
-    (line) => line.quantity > 0,
-  );
+  const remaining = getRemainingCargo(row.cargo, row.lossBp);
   const guards = participants.filter(
     (p) => p.role === "GUARD" && p.activeUserId && !p.rewardedAt,
   );
@@ -316,12 +309,7 @@ export const deliverCaravan = async (
       );
       await insertWarehouseLogs(
         tx,
-        remaining.map((line) => ({
-          villageId: row.destinationVillageId,
-          itemId: line.itemId,
-          type: "DELIVERY" as const,
-          quantity: line.quantity,
-        })),
+        cargoLogs(row.destinationVillageId, "DELIVERY", remaining),
         now,
       );
       return true;
