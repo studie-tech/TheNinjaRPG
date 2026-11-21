@@ -21,6 +21,7 @@ import {
   getStoppedSabotageCaravans,
   getTrackedControls,
   getUpgradedTradeRoutes,
+  hasCaravanStockMoved,
 } from "@/deltas/caravan";
 import { getInventoryQuantities } from "@/deltas/item";
 import { applyWarehouseChange, getWarehouseHistoryWithLogs } from "@/deltas/warehouse";
@@ -59,16 +60,20 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   const inventory = useInventoryCacheUpdate();
   const { prepareCombatEntry, loadBattle } = useCombatEntry();
 
+  // A return visit reads again: deadlines may have passed and others acted meanwhile.
   const warehouse = api.warehouse.getWarehouse.useQuery(undefined, {
     enabled: !controls,
+    refetchOnMount: "always",
     refetchInterval: QUIET_REFRESH_MS,
   });
   const routes = api.tradeRoute.getRoutes.useQuery(undefined, {
     enabled: !controls,
+    refetchOnMount: "always",
     refetchInterval: QUIET_REFRESH_MS,
   });
   const caravans = api.caravan.getCaravans.useQuery(undefined, {
     enabled: !controls,
+    refetchOnMount: "always",
     refetchInterval: (query) =>
       query.state.data?.caravans.length ? ACTIVE_REFRESH_MS : QUIET_REFRESH_MS,
   });
@@ -156,16 +161,17 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   const reload = (snapshot: Snapshot, names: (keyof typeof views)[]) => {
     for (const name of names) void views[name].updateCache(undefined, snapshot[name]);
   };
-  // A caravan delivered or cancelled leaves the list and has moved Warehouse stock.
-  const shownCaravanIds = useRef<string[] | undefined>(undefined);
-  const onCaravansShown = useEffectEvent((ids: string[] | undefined) => {
-    const shown = shownCaravanIds.current;
-    shownCaravanIds.current = ids;
-    if (ids && shown?.some((id) => !ids.includes(id)))
+  // Caravans that moved the village's stock reload it, whoever moved them; the viewer's own
+  // prepare, dispatch or cancel, already patched from its response, reads it once more.
+  const shownCaravans = useRef<CaravansView | undefined>(undefined);
+  const onCaravansShown = useEffectEvent((current: CaravansView | undefined) => {
+    const shown = shownCaravans.current;
+    shownCaravans.current = current;
+    if (hasCaravanStockMoved(shown, current))
       reload(prepareViews(), ["warehouse", "history"]);
   });
   useEffect(() => {
-    if (!controls) onCaravansShown(caravans.data?.caravans.map((row) => row.id));
+    if (!controls) onCaravansShown(caravans.data);
   }, [controls, caravans.data]);
   /**
    * Patch the Warehouse from a confirmed change, and the history with the logs the change
@@ -584,3 +590,5 @@ export const useWarehouseHistory = () =>
   api.warehouse.getHistory.useInfiniteQuery(HISTORY_INPUT, {
     getNextPageParam: (page) => page.nextCursor,
   });
+
+type CaravansView = RouterOutputs["caravan"]["getCaravans"];

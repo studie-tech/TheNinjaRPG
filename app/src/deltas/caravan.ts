@@ -175,6 +175,37 @@ export const getCancelledCaravans = (
   };
 };
 
+/**
+ * Whether the village's Warehouse stock moved between two caravan lists it was shown:
+ * preparing reserves and departing removes the origin's stock, a cancellation returns it
+ * to the origin and a delivery credits the destination. A caravan that left the list
+ * without a history entry may have done either, so it counts as moved.
+ */
+export const hasCaravanStockMoved = (
+  shown: CaravansView | undefined,
+  current: CaravansView | undefined,
+) => {
+  if (!shown || !current) return false;
+  const before = new Map(shown.caravans.map((row) => [row.id, row]));
+  const open = new Set(current.caravans.map((row) => row.id));
+  return (
+    current.caravans.some((row) => {
+      const was = before.get(row.id);
+      return (
+        row.outgoing &&
+        (!was || (was.status === "PREPARING" && row.status === "TRAVELLING"))
+      );
+    }) ||
+    shown.caravans.some((row) => {
+      if (open.has(row.id)) return false;
+      const finished = current.history.find((entry) => entry.id === row.id);
+      return (
+        !finished || finished.status === (finished.outgoing ? "CANCELLED" : "DELIVERED")
+      );
+    })
+  );
+};
+
 /** Start a dispatched caravan's journey from its origin. */
 export const getDepartedCaravans = (
   current: CaravansView,

@@ -20,6 +20,7 @@ import {
   getStoppedSabotageCaravans,
   getTrackedControls,
   getUpgradedTradeRoutes,
+  hasCaravanStockMoved,
 } from "@/deltas/caravan";
 import {
   CARAVAN_GUARD_SLOTS,
@@ -290,6 +291,54 @@ describe("caravan deltas", () => {
     });
     expect(getLeftEscortCaravans(left!, "k", "me")).toBeUndefined();
     expect(getJoinedEscortCaravans(caravans(), "missing", guard)).toBeUndefined();
+  });
+
+  it("reloads stock only for caravan changes that moved the village's stock", () => {
+    const travelling = caravan({ status: "TRAVELLING" });
+    const incoming = caravan({ id: "in", outgoing: false });
+    const finished = (status: "DELIVERED" | "CANCELLED", outgoing = true) => ({
+      ...caravans([]),
+      history: [
+        {
+          id: outgoing ? "k" : "in",
+          status,
+          outgoing,
+          partner: "B",
+          cargo: [],
+          lossPercent: 0,
+          resolvedAt: now,
+        },
+      ],
+    });
+    // The first list shown has nothing to compare with.
+    expect(hasCaravanStockMoved(undefined, caravans())).toBe(false);
+    // Preparing reserves and departing removes the origin's stock.
+    expect(hasCaravanStockMoved(caravans([]), caravans())).toBe(true);
+    expect(hasCaravanStockMoved(caravans([]), caravans([travelling]))).toBe(true);
+    expect(hasCaravanStockMoved(caravans(), caravans([travelling]))).toBe(true);
+    expect(hasCaravanStockMoved(caravans([]), caravans([incoming]))).toBe(false);
+    expect(
+      hasCaravanStockMoved(
+        caravans([incoming]),
+        caravans([{ ...incoming, status: "TRAVELLING" }]),
+      ),
+    ).toBe(false);
+    expect(hasCaravanStockMoved(caravans([travelling]), caravans([travelling]))).toBe(
+      false,
+    );
+    // A cancellation returns stock to the origin; a delivery credits the destination.
+    expect(hasCaravanStockMoved(caravans(), finished("CANCELLED"))).toBe(true);
+    expect(hasCaravanStockMoved(caravans([travelling]), finished("DELIVERED"))).toBe(
+      false,
+    );
+    expect(
+      hasCaravanStockMoved(caravans([incoming]), finished("DELIVERED", false)),
+    ).toBe(true);
+    expect(
+      hasCaravanStockMoved(caravans([incoming]), finished("CANCELLED", false)),
+    ).toBe(false);
+    // A caravan gone from the list and its history may have moved either.
+    expect(hasCaravanStockMoved(caravans([travelling]), caravans([]))).toBe(true);
   });
 
   it("removes sabotage an escort stopped", () => {
