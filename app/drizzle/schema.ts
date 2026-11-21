@@ -8590,6 +8590,14 @@ export const caravan = mysqlTable(
       table.status,
     ),
     index("Caravan_routeId_status_idx").on(table.routeId, table.status),
+    index("Caravan_originVillageId_resolvedAt_idx").on(
+      table.originVillageId,
+      table.resolvedAt,
+    ),
+    index("Caravan_destinationVillageId_resolvedAt_idx").on(
+      table.destinationVillageId,
+      table.resolvedAt,
+    ),
   ],
 );
 export type Caravan = InferSelectModel<typeof caravan>;
@@ -8671,7 +8679,7 @@ export const caravanOperation = mysqlTable(
     uniqueIndex("CaravanOperation_activeUserId_key").on(table.activeUserId),
     index("CaravanOperation_status_finishesAt_idx").on(table.status, table.finishesAt),
     index("CaravanOperation_caravanId_status_idx").on(table.caravanId, table.status),
-    index("CaravanOperation_userId_idx").on(table.userId),
+    index("CaravanOperation_userId_startedAt_idx").on(table.userId, table.startedAt),
   ],
 );
 export type CaravanOperation = InferSelectModel<typeof caravanOperation>;
