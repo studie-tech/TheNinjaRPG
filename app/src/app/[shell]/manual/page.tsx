@@ -33,7 +33,6 @@ import {
   IMG_MANUAL_STAFF,
   IMG_MANUAL_TITLE,
   IMG_MANUAL_TOURNAMENTS,
-  IMG_MANUAL_TOWER_LEADERBOARD,
   IMG_MANUAL_TOWER_UPGRADES,
   IMG_MANUAL_TRAVEL,
 } from "@/drizzle/constants";
@@ -159,7 +158,7 @@ export default function ManualMain() {
       .sort((a, b) => a.label.localeCompare(b.label))
       .map(({ name, label, img }) => ({ name, label, img, href: `/manual/${name}` }));
   const playerTiles = toTiles(entries.filter((page) => page.visible === undefined));
-  // The minigames open straight into play; leaderboards sit beside their game.
+  // The minigames open straight into play.
   const minigameTiles = [
     {
       name: "towerDefense",
@@ -172,12 +171,6 @@ export default function ManualMain() {
       label: "Chakra Storm",
       img: CS_CARD_URL,
       href: "/chakraStorm",
-    },
-    {
-      name: "towerDefenseLeaderboard",
-      label: "Tower Defense Leaderboard",
-      img: IMG_MANUAL_TOWER_LEADERBOARD,
-      href: "/manual/towerDefense/leaderboard",
     },
   ];
   const staffTiles = toTiles(entries.filter((page) => page.visible === true));

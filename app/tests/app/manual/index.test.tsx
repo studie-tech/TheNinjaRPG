@@ -110,7 +110,6 @@ it("gives every role the minigames section, opening straight into play", () => {
     expect(minigames.map((tile) => tile.href)).toEqual([
       "/towerDefense",
       "/chakraStorm",
-      "/manual/towerDefense/leaderboard",
     ]);
     expect(document.getElementById("minigames")).not.toBeNull();
     cleanup();
