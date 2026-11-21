@@ -198,6 +198,7 @@ export const caravanOpsRouter = createTRPCRouter({
               .map((group) => ({
                 ...group,
                 joinable:
+                  !!sighting &&
                   group.members.length < CARAVAN_MAX_GROUP &&
                   (role === "BANDIT" || group.villageId === user.villageId) &&
                   !encounters.some(
