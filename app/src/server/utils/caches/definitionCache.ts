@@ -1,30 +1,6 @@
 import superjson, { type SuperJSONResult } from "superjson";
-import type { Bloodline, Item, Jutsu } from "@/drizzle/schema";
-import { selectItemDefinitions } from "@/queries/item";
-import { selectBloodlineDefinitions, selectJutsuDefinitions } from "@/queries/jutsu";
 import type { DrizzleClient } from "@/server/db";
-import { createRuntimeEntryCache } from "@/server/utils/runtimeCache";
-
-/** Item definitions shared by profile and inventory reads. */
-export const itemDefinitions = createDefinitionCache<Item>({
-  name: "item-definition",
-  memoryLimit: 2000,
-  select: (client, ids) => selectItemDefinitions(client, ids),
-});
-
-/** Jutsu definitions of jutsu list reads. */
-export const jutsuDefinitions = createDefinitionCache<Jutsu>({
-  name: "jutsu-definition",
-  memoryLimit: 4000,
-  select: (client, ids) => selectJutsuDefinitions(client, ids),
-});
-
-/** Bloodline definitions attached to bloodline jutsu in jutsu list reads. */
-export const bloodlineDefinitions = createDefinitionCache<Bloodline>({
-  name: "bloodline-definition",
-  memoryLimit: 1000,
-  select: (client, ids) => selectBloodlineDefinitions(client, ids),
-});
+import { createRuntimeEntryCache } from "@/server/utils/caches/runtimeCache";
 
 /**
  * Definitions of one table, keyed by id and content revision in the Runtime Cache.
@@ -47,15 +23,14 @@ export function createDefinitionCache<Definition extends { id: string }>({
     ids: string[],
   ) => Promise<{ definition: Definition; revision: string }[]>;
 }) {
-  // Keys name the deployment, whose schema shapes the rows, as `createRuntimeCache`
-  // payload keys do.
+  // The deployment's schema shapes the rows.
   const entries = createRuntimeEntryCache<SuperJSONResult>({
     name,
     ttlSeconds: 24 * 60 * 60,
+    scope: "deployment",
     memoryLimit,
   });
-  const entryKey = (revision: Revision) =>
-    `${deploymentKey}:${revision.id}:${revision.revision}`;
+  const entryKey = (revision: Revision) => `${revision.id}:${revision.revision}`;
   const pendingReads = new Map<
     string,
     Promise<Map<string, SuperJSONResult> | undefined>
@@ -143,8 +118,6 @@ export function createDefinitionCache<Definition extends { id: string }>({
     },
   };
 }
-
-const deploymentKey = process.env.VERCEL_DEPLOYMENT_ID ?? "local";
 
 /** The id and content hash a player read selects in place of a definition. */
 type Revision = { id: string; revision: string };

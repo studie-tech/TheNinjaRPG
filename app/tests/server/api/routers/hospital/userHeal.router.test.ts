@@ -18,11 +18,11 @@ import {
 } from "@/drizzle/schema";
 import { AUTO_CHECKOUT_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { questsRouter } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import {
   DialogObjective,

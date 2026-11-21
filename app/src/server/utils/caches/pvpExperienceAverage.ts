@@ -3,19 +3,17 @@ import type { GameSetting } from "@/drizzle/schema";
 import { selectUserDataForLoadAverage } from "@/queries/pvprank";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
-import { createRuntimeCache } from "@/server/utils/runtimeCache";
+import { createRuntimeCache } from "@/server/utils/caches/runtimeCache";
 
-/*
- * The average scans every human UserData row, while combat, travel, quests, profile and
- * the user queue read it on almost every request, so every instance shares one value
- * through the Runtime Cache. Between daily decays it moves only through PvP rewards: at
- * most 472.5 XP per one-on-one battle (win and participation at the highest boost)
- * spread over ~48k players, about 0.01 per battle, so even a peak hour of 30 battles shifts an
- * average near 20 by about 1.5%. Ten minutes of staleness therefore stays well below
- * the gaps between boost tiers. The daily decay moves it by 10% at once, so that cron
- * invalidates the cache. Instances check the shared version once a minute, keeping
- * Runtime Cache reads off the hot path.
- */
+// The average scans every human UserData row, while combat, travel, quests, profile and
+// the user queue read it on almost every request, so every instance shares one value
+// through the Runtime Cache. Between daily decays it moves only through PvP rewards: at
+// most 472.5 XP per one-on-one battle (win and participation at the highest boost)
+// spread over ~48k players, about 0.01 per battle, so even a peak hour of 30 battles shifts an
+// average near 20 by about 1.5%. Ten minutes of staleness therefore stays well below
+// the gaps between boost tiers. The daily decay moves it by 10% at once, so that cron
+// invalidates the cache. Instances check the shared version once a minute, keeping
+// Runtime Cache reads off the hot path.
 const pvpExperienceAverage = createRuntimeCache({
   name: "pvp-experience-average",
   ttlSeconds: 10 * 60,

@@ -50,7 +50,6 @@ import { isElderCandidateWithoutCutoff } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
 import { hasEnergyQueue } from "@/libs/queue";
 import { hasRequiredRank } from "@/libs/rank";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { findHistoricalAvatarByImage } from "@/queries/avatar";
 import {
   deleteBattleQueueMemberById,
@@ -140,6 +139,7 @@ import {
 import { clearClanCombat, deleteClanBattle } from "@/server/utils/clanBattle";
 import { syncStrongholdMembership } from "@/server/utils/faction";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { membershipUpdate } from "@/server/utils/push/messages";
 import { isSectorAvailableForHideout } from "@/server/utils/sectorMap";

@@ -22,9 +22,9 @@ import {
 } from "@/drizzle/schema";
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { getFarmGrowTimeSeconds } from "@/libs/farming";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { itemRouter } from "@/server/api/routers/item";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { DecreaseFarmingTime } from "@/validators/combat";
 import { deferred } from "../../../setup/deferred";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";

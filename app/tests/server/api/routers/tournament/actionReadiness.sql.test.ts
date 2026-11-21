@@ -1,9 +1,9 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { updateUserDataForJoinMatch } from "@/queries/tournament";
 import { prepareActionReadiness } from "@/server/utils/actionReadiness";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { insertUsers } from "../../../../setup/factories";
 import {
   describeWithDatabase,

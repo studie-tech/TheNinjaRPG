@@ -26,7 +26,11 @@ import {
   listVillagesForSectorWindow,
 } from "@/queries/worldMap";
 import type { DrizzleClient } from "@/server/db";
-import { createRuntimeEntryCache } from "@/server/utils/runtimeCache";
+import {
+  type PublishedMap,
+  type PublishedMapRevision,
+  publishedSectorMaps,
+} from "@/server/utils/caches/publishedSectorMaps";
 
 const globalMap = globalMapData as unknown as GlobalMapData;
 
@@ -41,18 +45,9 @@ export const hashTiledJson = (json: unknown) =>
 // A published row never changes: publishing writes a new version and archives the old
 // one. Each instance keeps decoded maps and, after a short TTL, compares the highest
 // published row without downloading unchanged blobs. Maps an instance does not hold come
-// from the shared Runtime Cache when its entry names the published row, so a cold
-// instance downloads a blob only when the sector was republished or its regional entry
-// has expired, at most a day after it was written.
+// from `publishedSectorMaps` when its entry names the published row.
 const PUBLISHED_MAP_TTL_MS = 60_000;
 const PUBLISHED_MAP_CACHE_LIMIT = 200;
-const sharedPublishedMaps = createRuntimeEntryCache<PublishedMap>({
-  name: "published-sector-map",
-  ttlSeconds: 24 * 60 * 60,
-});
-// Environments read different databases, so each keeps its own entries.
-const sharedMapKey = (sector: number) =>
-  `${process.env.VERCEL_ENV ?? "local"}:${sector}`;
 const publishedMapCache = new Map<number, PublishedMapCacheEntry>();
 // Bumped on every invalidation. A read captures it before its DB query and only
 // caches the row if it is still current, so a read that started before a publish
@@ -348,7 +343,7 @@ export const fetchPublishedSectorMaps = async (
   const [rows, shared] = await Promise.all([
     listSectorMapForFetchPublishedSectorMaps(client, [...missing, ...expired.keys()]),
     missing.length > 0
-      ? sharedPublishedMaps.read(missing.map(sharedMapKey))
+      ? publishedSectorMaps.read(missing.map(String))
       : Promise.resolve(new Map<string, PublishedMap>()),
   ]);
   const published = new Map<number, PublishedMapRevision>();
@@ -361,7 +356,7 @@ export const fetchPublishedSectorMaps = async (
   for (const sector of missing) {
     const latest = published.get(sector);
     if (!latest) continue;
-    const entry = shared.get(sharedMapKey(sector));
+    const entry = shared.get(String(sector));
     if (entry && holdsRevision(entry, latest)) {
       setCachedPublishedMap(sector, entry, generation, checkedAt);
       result.set(sector, entry.map);
@@ -428,7 +423,7 @@ const fetchUncachedPublishedMaps = async (
   const share = () =>
     Promise.all(
       [...bySector].map(([sector, entry]) =>
-        sharedPublishedMaps.write(sharedMapKey(sector), entry),
+        publishedSectorMaps.write(String(sector), entry),
       ),
     );
   try {
@@ -505,7 +500,5 @@ export const fetchSectorWindowEntries = async (
   return entries;
 };
 
-/** The published row a cached map was read from. */
-type PublishedMapRevision = { id: string; version: number };
-type PublishedMap = PublishedMapRevision & { map: NormalizedSectorMap };
+/** A held map and when its published row was last confirmed. */
 type PublishedMapCacheEntry = PublishedMap & { at: number };

@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "bun:test";
 import { type SQL, sql } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { type UserData, village as villageTable } from "@/drizzle/schema";
-import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { travelRouter } from "@/server/api/routers/travel";
+import { invalidateOverworldSectorPlacements } from "@/server/utils/caches/overworldSectorPlacements";
 import { buildSectorWindowLayout } from "@/server/utils/sectorMap";
 import {
   MoveToObjective,
@@ -341,7 +341,7 @@ describe("travel.getSectorData query scheduling", () => {
     await test.caller.getSectorData({ sector: SECTOR });
     await test.caller.getSectorData({ sector: SECTOR });
     expect(test.reads.placements).toHaveBeenCalledTimes(1);
-    await invalidateSectorPlacements();
+    await invalidateOverworldSectorPlacements();
     const result = await test.caller.getSectorData({ sector: SECTOR });
     expect(test.reads.placements).toHaveBeenCalledTimes(2);
     expect(result.overworldAis?.map((p) => p.npcPlacementId)).toEqual([

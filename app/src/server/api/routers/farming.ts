@@ -58,7 +58,6 @@ import {
 } from "@/libs/quest";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   deleteFarmExtractionForExtractSeeds,
   deleteFarmExtractionForPayOutExtractions,
@@ -119,6 +118,7 @@ import {
   recordFirstFarmHarvests,
 } from "@/server/utils/farming";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
 import { getNextUserSnapshotAt } from "@/utils/time";
 import {

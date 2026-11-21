@@ -10,13 +10,13 @@ import {
   userBadge,
   userData,
 } from "@/drizzle/schema";
-import { fetchAchievementCatalogue } from "@/queries/profile";
 import { gameAssetRouter } from "@/server/api/routers/asset";
 import { badgeRouter } from "@/server/api/routers/badge";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { questsRouter } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
-import { fetchBloodlineCollectionCatalogue } from "@/server/utils/questCollections";
+import { fetchAchievementCatalogue } from "@/server/utils/caches/achievementCatalogue";
+import { fetchBloodlineCollectionCatalogue } from "@/server/utils/caches/bloodlineCollectionCatalogue";
 import { deferred } from "../../../setup/deferred";
 import { insertQuests, insertUsers } from "../../../setup/factories";
 import { aroundStatements } from "../../../setup/statements";

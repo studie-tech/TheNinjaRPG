@@ -21,8 +21,8 @@ import {
 } from "@/drizzle/schema";
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { travelRouter } from "@/server/api/routers/travel";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { withAfterTasks } from "../../../../setup/after";
@@ -226,7 +226,7 @@ describeWithDatabase("robbery generated prestige PvP boost", () => {
       );
       const callbacks = source
         .slice(source.indexOf("api.travel.robPlayer.useMutation("))
-        .match(/useMutation\((\{[\s\S]*?\n  \})\);/)?.[1];
+        .match(/useMutation\((\{[\s\S]*?\n {2}\})\);/)?.[1];
       if (!callbacks) throw new Error("Robbery callbacks were not found");
       const toast = vi.fn();
       const options = new Function(

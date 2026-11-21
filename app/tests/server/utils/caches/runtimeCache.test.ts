@@ -12,8 +12,8 @@ import {
   createRuntimeCache,
   createRuntimeEntryCache,
   invalidateRuntimeCaches,
-} from "@/server/utils/runtimeCache";
-import { deferred } from "../../setup/deferred";
+} from "@/server/utils/caches/runtimeCache";
+import { deferred } from "../../../setup/deferred";
 
 const start = new Date("2026-11-14T12:00:00Z");
 const TTL_SECONDS = 60;
@@ -340,18 +340,20 @@ describe("createRuntimeEntryCache", () => {
     const writer = createRuntimeEntryCache<{ rev: number }>({
       name: "test-entries",
       ttlSeconds: TTL_SECONDS,
+      scope: "deployment",
       store,
     });
     const reader = createRuntimeEntryCache<{ rev: number }>({
       name: "test-entries",
       ttlSeconds: TTL_SECONDS,
+      scope: "deployment",
       store,
     });
     await writer.write("a", { rev: 1 });
     const found = await reader.read(["a", "b"]);
     expect([...found]).toEqual([["a", { rev: 1 }]]);
     expect(store.set).toHaveBeenCalledWith(
-      "test-entries:a",
+      "test-entries:local:a",
       { rev: 1 },
       { ttl: TTL_SECONDS, tags: ["test-entries:entries"] },
     );
@@ -365,6 +367,7 @@ describe("createRuntimeEntryCache", () => {
     const cache = createRuntimeEntryCache<{ rev: number }>({
       name: "failing-entries",
       ttlSeconds: TTL_SECONDS,
+      scope: "deployment",
       store,
     });
     await cache.write("a", { rev: 1 });
@@ -386,11 +389,13 @@ describe("createRuntimeEntryCache", () => {
       const shared = createRuntimeEntryCache<{ rev: number }>({
         name: "memory-entries",
         ttlSeconds: TTL_SECONDS,
+        scope: "deployment",
         store,
       });
       const cache = createRuntimeEntryCache<{ rev: number }>({
         name: "memory-entries",
         ttlSeconds: TTL_SECONDS,
+        scope: "deployment",
         memoryLimit: 2,
         store,
       });
@@ -403,11 +408,13 @@ describe("createRuntimeEntryCache", () => {
       // Held entries skip the Runtime Cache; reading `c` evicts the least recent, `b`.
       expect((await cache.read(["a"])).get("a")).toEqual({ rev: 0 });
       expect((await cache.read(["c"])).get("c")).toEqual({ rev: 2 });
-      expect(store.get.mock.calls.map(([key]) => key)).toEqual(["memory-entries:c"]);
+      expect(store.get.mock.calls.map(([key]) => key)).toEqual([
+        "memory-entries:local:c",
+      ]);
       await cache.read(["a", "b"]);
       expect(store.get.mock.calls.map(([key]) => key)).toEqual([
-        "memory-entries:c",
-        "memory-entries:b",
+        "memory-entries:local:c",
+        "memory-entries:local:b",
       ]);
       // Written entries are held too, and expire with the TTL.
       await cache.write("d", { rev: 3 });
@@ -416,7 +423,7 @@ describe("createRuntimeEntryCache", () => {
       expect(store.get).not.toHaveBeenCalled();
       setSystemTime(new Date(start.getTime() + TTL_SECONDS * 1000));
       await cache.read(["d"]);
-      expect(store.get).toHaveBeenCalledWith("memory-entries:d");
+      expect(store.get).toHaveBeenCalledWith("memory-entries:local:d");
       // Clearing drops held entries along with the shared ones.
       await cache.clear();
       expect((await cache.read(["a", "b", "c", "d"])).size).toBe(0);

@@ -96,8 +96,6 @@ import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
 import { revisionSql } from "@/queries/definitionRevisions";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
-import { listCachedGameSettings } from "@/queries/gamesettings";
-import { hasCachedOpenPoll } from "@/queries/poll";
 import { questPartyRelations } from "@/queries/questParty";
 import { questRevisionColumns, questRevisionRelation } from "@/queries/questRevisions";
 import { userCardColumns } from "@/queries/userColumns";
@@ -111,10 +109,11 @@ import {
   userQuestHistoryRelation,
 } from "@/server/utils/achievementObjectives";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
+import { fetchGameSettings } from "@/server/utils/caches/gameSettings";
+import { hasOpenPoll } from "@/server/utils/caches/openPolls";
+import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import { hashIp } from "@/server/utils/ipHash";
-import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { resolveQuestRevisions } from "@/server/utils/questRevisions";
-import { createRuntimeCache } from "@/server/utils/runtimeCache";
 import { missingUserMessage } from "@/server/utils/sentry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
@@ -220,32 +219,10 @@ export const fetchUser = async (client: DrizzleClient, userId: string) => {
   return user;
 };
 
-// Achievements change only when staff edit quests, which invalidate the cache. Rows stay
-// complete because they become the `quest` of each player's achievement entries.
-const achievementCatalogue = createRuntimeCache({
-  name: "achievement-catalogue",
-  ttlSeconds: 60 * 60,
-  load: (client: Pick<DrizzleClient, "select">) =>
-    client
-      .select()
-      .from(quest)
-      .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
-});
-
-/**
- * Visible achievements from the Runtime Cache. Each caller receives a clone, so per-user
- * rewrites such as hidden quest locations operate on private copies.
- */
-export const fetchAchievementCatalogue = (client: Pick<DrizzleClient, "select">) =>
-  achievementCatalogue.read(client);
-
-/** Make every instance read achievements again; await after quest definition writes. */
-export const invalidateAchievementCatalogue = achievementCatalogue.invalidate;
-
 /** Load persisted settings from the Runtime Cache, followed by the computed PvP average. */
 export const fetchAllGameSettings = async (client: DrizzleClient) => {
   const [settings, average] = await Promise.all([
-    listCachedGameSettings(client),
+    fetchGameSettings(client),
     fetchPvpExperienceAverage(client),
   ]);
   return [...settings, average];
@@ -269,7 +246,7 @@ export const fetchHasUnvotedPolls = (
   now: Date,
 ) =>
   scopedRead(`unvotedPolls:${userId}`, async () => {
-    if (!(await hasCachedOpenPoll(client, now))) return [];
+    if (!(await hasOpenPoll(client, now))) return [];
     return client
       .select({ id: poll.id })
       .from(poll)

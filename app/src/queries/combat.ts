@@ -139,13 +139,13 @@ import {
   packBattleExtraState,
   unpackBattleExtraState,
 } from "@/server/utils/battleStorage";
+import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import {
   elementalSnapshotConditions,
   masteryGainUpdates,
 } from "@/server/utils/masteryProgression";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
-import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { questAttemptIsActive } from "@/server/utils/questEntry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { getContentRole } from "@/utils/permissions";

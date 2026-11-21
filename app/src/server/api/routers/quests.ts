@@ -104,13 +104,11 @@ import {
 } from "@/libs/rewardChoice";
 import { collapseRewards } from "@/libs/rewards";
 import { callDiscordContent } from "@/libs/socials";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   fetchContentViewerRole,
   fetchUser,
   findOwnedUserPet,
   findUserById,
-  invalidateAchievementCatalogue,
 } from "@/queries/profile";
 import {
   deleteOverworldAiPlacementQuestForDelete,
@@ -190,6 +188,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { invalidateAchievementCatalogue } from "@/server/utils/caches/achievementCatalogue";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import {
@@ -201,6 +200,7 @@ import { saveMetaTutorialCompletion } from "@/server/utils/metaTracking";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
 import { consumeUserAnnouncements } from "@/server/utils/profile";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import {
   assignQuestToUser,
   claimDailyQuestSlot,

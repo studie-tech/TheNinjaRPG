@@ -25,10 +25,11 @@ import {
   userSkill,
   userUpload,
 } from "@/drizzle/schema";
-import { actionReadinessSqlSet, fetchActionUser } from "@/queries/actionReadiness";
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import { fetchAllGameSettings } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { clampActionLogText } from "@/utils/actionLog";
 import { getNextUserSnapshotAt } from "@/utils/time";
 

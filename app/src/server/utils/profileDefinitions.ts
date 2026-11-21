@@ -1,12 +1,11 @@
-import type { VillageStructure } from "@/drizzle/schema";
 import {
   findProfileUserWithDefinitions,
   findUserDataForQueryUpdatedUser,
-  selectStructureDefinitions,
 } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
-import { createDefinitionCache, itemDefinitions } from "@/server/utils/definitionCache";
-import { questDefinitionCache } from "@/server/utils/questRevisions";
+import { itemDefinitions } from "@/server/utils/caches/itemDefinitions";
+import { questDefinitions } from "@/server/utils/caches/questDefinitions";
+import { structureDefinitions } from "@/server/utils/caches/structureDefinitions";
 
 /**
  * Load the profile snapshot with complete quest, item and village structure definitions.
@@ -22,6 +21,13 @@ export const fetchProfileUser = async (
   const read = await readProfileUser(client, userId, false);
   if (!read) return undefined;
   const { questBootstrap: _bootstrap, rolledBloodlineIds: _rolled, ...user } = read;
+  return user;
+};
+
+/** Load an action actor with the profile snapshot, without running hydration or settlement reads. */
+export const fetchActionUser = async (client: DrizzleClient, userId: string) => {
+  const user = await fetchProfileUser(client, userId);
+  if (!user) throw new Error("User not found");
   return user;
 };
 
@@ -60,7 +66,7 @@ const readProfileUser = async (
   const items = user.items ?? [];
   const structures = user.village?.structures ?? [];
   const [quests, hydratedItems, hydratedStructures] = await Promise.all([
-    questDefinitionCache.hydrate(
+    questDefinitions.hydrate(
       client,
       (user.userQuests ?? []).map((entry) => entry.quest),
     ),
@@ -105,16 +111,6 @@ const readProfileUser = async (
     }),
   } as ProfileRead;
 };
-
-/**
- * Village structure rows shared by profile and sector reads. Rows change with upgrades
- * and raids; each change is one read per village.
- */
-export const structureDefinitions = createDefinitionCache<VillageStructure>({
-  name: "village-structure",
-  memoryLimit: 1000,
-  select: (client, ids) => selectStructureDefinitions(client, ids),
-});
 
 /** The profile snapshot with complete definitions, shaped as the joined read. */
 type ProfileRead = NonNullable<

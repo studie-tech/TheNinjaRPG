@@ -16,7 +16,7 @@ import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
 import type { DrizzleClient } from "@/server/db";
-import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import {
   fetchJutsuTrainingQueue,
   settleCraftingQueue,

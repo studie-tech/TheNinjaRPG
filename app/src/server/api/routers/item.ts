@@ -164,10 +164,7 @@ import {
   isWeightedCacheEffect,
   resolveWeightedCache,
 } from "@/libs/weightedCache";
-import {
-  fetchActionUser,
-  updateUserForActionReadiness,
-} from "@/queries/actionReadiness";
+import { updateUserForActionReadiness } from "@/queries/actionReadiness";
 import { fetchItemBloodlineRolls, fetchRollableBloodlines } from "@/queries/bloodline";
 import { clearCosmeticVariant, deleteItemCosmetics } from "@/queries/cosmetic";
 import { listHuntingHabitats } from "@/queries/hunting";
@@ -337,6 +334,7 @@ import {
   commitCacheConsumption,
   readCacheReceipt,
 } from "@/server/utils/cacheConsumption";
+import { itemDefinitions } from "@/server/utils/caches/itemDefinitions";
 import {
   consumeUserItemAtomically,
   MERGE_STACK_CLAIM_TIMEOUT_MS,
@@ -347,13 +345,13 @@ import {
 } from "@/server/utils/concurrency";
 import { planConsumeEffects } from "@/server/utils/consumeEffects";
 import { consumeMeal } from "@/server/utils/cooking";
-import { itemDefinitions } from "@/server/utils/definitionCache";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { joinFinishedCrafts } from "@/server/utils/itemStacks";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { assignQuestToUser } from "@/server/utils/questAssignment";
 import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { validateUrlForSsrf } from "@/server/utils/ssrf";

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { DrizzleClient } from "@/server/db";
-import { createDefinitionCache } from "@/server/utils/definitionCache";
-import { deferred } from "../../setup/deferred";
+import { createDefinitionCache } from "@/server/utils/caches/definitionCache";
+import { deferred } from "../../../setup/deferred";
 
 const client = {} as DrizzleClient;
 const revision = (id: string, version = "current") => ({ id, revision: version });

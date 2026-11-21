@@ -29,7 +29,6 @@ import {
   raidRewardBlockMessage,
   validateRaidIsActive,
 } from "@/libs/raids";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   deleteBattleQueueMemberById,
   deleteBattleQueueMembersForTeam,
@@ -114,6 +113,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { raidBattleStarted } from "@/server/utils/push/messages";
 import { updateRewards } from "@/server/utils/questRewards";

@@ -6,7 +6,6 @@ import type {
   ActionReadiness,
   ActionReadinessWrite,
 } from "@/server/utils/actionReadiness";
-import { fetchProfileUser } from "@/server/utils/profileDefinitions";
 
 /** Build recovery for actions with no account write; callers await it in their existing mutation phase. */
 export const updateUserForActionReadiness = (
@@ -41,11 +40,4 @@ export const actionReadinessSqlSet = (
       : [];
   });
   return sql.join(assignments, sql` `);
-};
-
-/** Load an action actor with the existing profile snapshot query, without running hydration or settlement reads. */
-export const fetchActionUser = async (client: DrizzleClient, userId: string) => {
-  const user = await fetchProfileUser(client, userId);
-  if (!user) throw new Error("User not found");
-  return user;
 };

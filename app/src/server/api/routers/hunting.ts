@@ -7,7 +7,6 @@ import { huntingAllowance, huntingEligibility } from "@/libs/hunting/contracts";
 import { getEffectiveStackSize } from "@/libs/item";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiUserIds } from "@/queries/ai";
 import {
   deleteHuntingHabitatForDelete,
@@ -53,6 +52,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
 import { getRandomElement } from "@/utils/array";
 import { canChangeContent } from "@/utils/permissions";

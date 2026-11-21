@@ -23,9 +23,9 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { globalTravelFinishPatch } from "@/libs/travel";
-import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { profileRouter } from "@/server/api/routers/profile";
 import { completeExpiredGlobalTravel, travelRouter } from "@/server/api/routers/travel";
+import { invalidateOverworldSectorPlacements } from "@/server/utils/caches/overworldSectorPlacements";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { DecreaseGatheringTime, IncreaseGatheringYield } from "@/validators/combat";
@@ -208,7 +208,7 @@ describeWithDatabase("confirmed arrival profile updates", () => {
           .set({ curHealth: 55 })
           .where(eq(userData.userId, "scenery-npc"));
         // Staff and cron writes to placements invalidate the cached listing.
-        await invalidateSectorPlacements();
+        await invalidateOverworldSectorPlacements();
       }
       const user = (await profile.getUser()).userData;
       if (scenery.includes("quest")) expect(user?.userQuests.length).toBeGreaterThan(0);

@@ -5,11 +5,11 @@ import {
 } from "@/libs/overworldAi";
 import { snapToWanderTile } from "@/libs/overworldWander";
 import {
-  invalidateSectorPlacements,
   listOverworldAiPlacementForGET,
   updateOverworldAiPlacementForGET,
 } from "@/queries/overworldAi";
 import { drizzleDB } from "@/server/db";
+import { invalidateOverworldSectorPlacements } from "@/server/utils/caches/overworldSectorPlacements";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { fetchPublishedSectorMaps, habitatSectorPool } from "@/server/utils/sectorMap";
 
@@ -71,7 +71,9 @@ export const GET = async (request: Request) => {
         return updateOverworldAiPlacementForGET(drizzleDB, pos, placement);
       }),
     );
-    await invalidateSectorPlacements();
+    // The cache's TTL bounds the stale positions when invalidation fails, so the reroll,
+    // which has already committed, still reports success.
+    await invalidateOverworldSectorPlacements().catch(() => undefined);
 
     return Response.json("OK");
   });

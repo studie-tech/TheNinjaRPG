@@ -4,7 +4,6 @@ import { RANKED_PVP_STATS } from "@/drizzle/constants";
 import type { RankedLoadout, UserRequest } from "@/drizzle/schema";
 import { SPAR_EXPIRY_SECONDS } from "@/libs/combat/constants";
 import { getServerPusher } from "@/libs/pusher";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
 import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
 import { findRankedLoadoutByUserId } from "@/queries/pvprank";
@@ -27,6 +26,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";

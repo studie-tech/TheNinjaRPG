@@ -3,11 +3,11 @@ import { setImmediate } from "node:timers/promises";
 import { eq } from "drizzle-orm";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { actionLog, gameAsset, userData } from "@/drizzle/schema";
-import * as assetQueries from "@/queries/asset";
-import { listBattlefieldAssets } from "@/queries/asset";
 import { gameAssetRouter } from "@/server/api/routers/asset";
 import type { DrizzleClient } from "@/server/db";
-import * as lpcCatalog from "@/server/utils/lpcCatalog";
+import * as battlefieldAssets from "@/server/utils/caches/battlefieldAssets";
+import { fetchBattlefieldAssets } from "@/server/utils/caches/battlefieldAssets";
+import * as lpcSceneCatalog from "@/server/utils/caches/lpcSceneCatalog";
 import { deferred } from "../../../setup/deferred";
 import { insertUsers } from "../../../setup/factories";
 import { lpcAssets } from "../../../setup/lpc";
@@ -82,17 +82,17 @@ describeWithDatabase("battlefield assets", () => {
 
   const ids = async () => {
     const db = await getTestDatabase();
-    return (await listBattlefieldAssets(db)).map((asset) => asset.id).sort();
+    return (await fetchBattlefieldAssets(db)).map((asset) => asset.id).sort();
   };
 
   it("lists released battlefield assets and serves later reads from the cache", async () => {
     const db = await getTestDatabase();
-    expect(await listBattlefieldAssets(db)).toEqual([{ id: "rock", type: "STATIC" }]);
+    expect(await fetchBattlefieldAssets(db)).toEqual([{ id: "rock", type: "STATIC" }]);
     // A row written outside the asset editor stays out until the cache is invalidated.
     await db
       .insert(gameAsset)
       .values({ id: "boulder", ...assetData, url: IMG_AVATAR_DEFAULT, folder: "" });
-    expect(await listBattlefieldAssets(db)).toEqual([{ id: "rock", type: "STATIC" }]);
+    expect(await fetchBattlefieldAssets(db)).toEqual([{ id: "rock", type: "STATIC" }]);
   });
 
   it("follows saves that add, hide and restore battlefield assets", async () => {
@@ -158,11 +158,13 @@ describeWithDatabase("battlefield assets", () => {
       .where(eq(gameAsset.id, "rock"));
     const battlefield = deferred<void>();
     const started = deferred<void>();
-    vi.spyOn(assetQueries, "invalidateBattlefieldAssets").mockImplementation(() => {
-      started.resolve();
-      return battlefield.promise;
-    });
-    vi.spyOn(lpcCatalog, "invalidateLpcCatalog").mockRejectedValue(
+    vi.spyOn(battlefieldAssets, "invalidateBattlefieldAssets").mockImplementation(
+      () => {
+        started.resolve();
+        return battlefield.promise;
+      },
+    );
+    vi.spyOn(lpcSceneCatalog, "invalidateLpcSceneCatalog").mockRejectedValue(
       new Error("LPC cache unavailable"),
     );
     const caller = await callerFor(gameAssetRouter, staffId);

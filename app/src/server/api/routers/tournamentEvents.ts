@@ -45,7 +45,6 @@ import {
   insertTournamentMatchForLaunchEventGame,
   insertTournamentMatchForSyncEventTournament,
   insertTournamentRewardClaimForPayEventRewards,
-  invalidateEventNoticeParticipants,
   listRankedLoadoutForLaunchEventGame,
   listTournamentForListEvents,
   listTournamentForMaintainEventTournaments,
@@ -69,6 +68,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { invalidateEventNoticeParticipants } from "@/server/utils/caches/eventNoticeParticipants";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { updateRewards } from "@/server/utils/questRewards";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";

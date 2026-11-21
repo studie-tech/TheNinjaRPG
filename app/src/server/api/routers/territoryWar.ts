@@ -12,7 +12,6 @@ import {
 } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
 import { getTerritoryCompetitor, getTerritoryWarBoostUntil } from "@/libs/territoryWar";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { deleteBattleQueueMemberById } from "@/queries/clan";
 import { fetchAllGameSettings, wakeQueuedUser } from "@/queries/profile";
 import { claimBattleQueue, listQueueMembers } from "@/queries/raids";
@@ -44,6 +43,7 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { missingUserMessage } from "@/server/utils/sentry";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 

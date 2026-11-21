@@ -13,8 +13,8 @@ import {
 } from "@/drizzle/schema";
 import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { shrineRouter } from "@/server/api/routers/shrine";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";

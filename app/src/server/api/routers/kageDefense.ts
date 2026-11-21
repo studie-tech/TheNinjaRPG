@@ -11,7 +11,6 @@ import {
   KAGE_DEFENSE_SLOT_MINUTES,
 } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   executeResultForDismissInstantDefense,
   executeResultForRequestInstantDefense,
@@ -50,6 +49,7 @@ import {
   withKageHall,
 } from "@/server/utils/kage";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { getKageEligibility } from "@/utils/kage";
 import { secondsFromDate } from "@/utils/time";
 import {

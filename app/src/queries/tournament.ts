@@ -337,3 +337,19 @@ export const updateTournamentRecordForFinalizeTournamentAndPayWinner = (
     .where(
       and(eq(tournamentRecord.id, tournamentId), isNull(tournamentRecord.winnerId)),
     );
+
+/** Build the seated user ids of each open or running event, withdrawn seats included. */
+export const selectOpenEventParticipantIds = (client: Pick<DrizzleClient, "select">) =>
+  client
+    .select({
+      userIds: sql<
+        string[] | null
+      >`JSON_EXTRACT(${tournament.eventData}, '$.participants[*].userId')`,
+    })
+    .from(tournament)
+    .where(
+      and(
+        eq(tournament.type, "EVENT"),
+        inArray(tournament.status, ["OPEN", "IN_PROGRESS"]),
+      ),
+    );

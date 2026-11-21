@@ -56,7 +56,6 @@ import {
   isFactionVillage,
   isVillageInvolvedInAnyWar,
 } from "@/libs/war";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchElderVote } from "@/queries/elder";
 import { incrementNotificationCounters } from "@/queries/misc";
 import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
@@ -144,6 +143,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { applyObjectiveWarAction, fetchWarRules } from "@/server/utils/objectiveWar";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { notifyWarVillages } from "@/server/utils/push/war";
 import {
   handleWarEnd,

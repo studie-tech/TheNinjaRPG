@@ -8,9 +8,9 @@ import {
 } from "@/queries/quests";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { fetchBloodlineCollectionCatalogue } from "@/server/utils/caches/bloodlineCollectionCatalogue";
 import { queryInTransaction } from "@/server/utils/concurrency";
 import { getFarmCollectionCount } from "@/server/utils/farming";
-import { createRuntimeCache } from "@/server/utils/runtimeCache";
 import type { AllObjectivesType } from "@/validators/objectives";
 
 /**
@@ -87,21 +87,6 @@ export const hydrateQuestCollections = async (
     })),
   };
 };
-
-// Bloodline editors invalidate the cache. Ownership is always read per caller.
-const bloodlineCollectionCatalogue = createRuntimeCache({
-  name: "bloodline-collection-catalogue",
-  ttlSeconds: 60 * 60,
-  load: queryBloodlineCollectionCatalogue,
-});
-
-/** The visible bloodline catalogue from the Runtime Cache. */
-export const fetchBloodlineCollectionCatalogue = (client: DrizzleClient) =>
-  bloodlineCollectionCatalogue.read(client);
-
-/** Make every instance read the bloodline catalogue again; await after bloodline writes. */
-export const invalidateBloodlineCollectionCatalogue =
-  bloodlineCollectionCatalogue.invalidate;
 
 /**
  * Read which `train_specific_jutsu` targets of the achievement catalogue the user owns.

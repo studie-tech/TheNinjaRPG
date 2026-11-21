@@ -15,8 +15,8 @@ import {
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
+import { fetchEventNoticeParticipants } from "@/server/utils/caches/eventNoticeParticipants";
 import { fetchProfileUser } from "@/server/utils/profileDefinitions";
-import { createRuntimeCache } from "@/server/utils/runtimeCache";
 import { ObjectiveReward } from "@/validators/rewards";
 import type { EventTournamentState } from "@/validators/tournament";
 
@@ -41,34 +41,6 @@ export const fetchEventUser = async (client: DrizzleClient, id: string) => {
     : null;
 };
 
-// Every seated player of an open event, withdrawn seats included, so players outside it
-// skip the notice read. Saves that seat a player invalidate it; the TTL bounds a missed
-// invalidation. Closed events and withdrawn seats only cost the notice read a no-op.
-const eventNoticeParticipants = createRuntimeCache({
-  name: "event-notice-participants",
-  ttlSeconds: 60,
-  cloneReads: false,
-  load: async (client: Pick<DrizzleClient, "select">) => {
-    const rows = await client
-      .select({
-        userIds: sql<
-          string[] | null
-        >`JSON_EXTRACT(${tournament.eventData}, '$.participants[*].userId')`,
-      })
-      .from(tournament)
-      .where(
-        and(
-          eq(tournament.type, "EVENT"),
-          inArray(tournament.status, ["OPEN", "IN_PROGRESS"]),
-        ),
-      );
-    return [...new Set(rows.flatMap((row) => row.userIds ?? []))];
-  },
-});
-
-/** Make every instance list open-event participants again; await after seating players. */
-export const invalidateEventNoticeParticipants = eventNoticeParticipants.invalidate;
-
 /**
  * Share actionable invitations and match notices between global prompts and navigation.
  * Reuse the same rows for profile participation, including seats between actionable checks.
@@ -76,7 +48,7 @@ export const invalidateEventNoticeParticipants = eventNoticeParticipants.invalid
  */
 export const fetchEventNoticeState = async (client: DrizzleClient, userId: string) => {
   const now = Date.now();
-  const participants = await eventNoticeParticipants.read(client);
+  const participants = await fetchEventNoticeParticipants(client);
   const events = participants.includes(userId)
     ? await client.query.tournament.findMany({
         where: and(

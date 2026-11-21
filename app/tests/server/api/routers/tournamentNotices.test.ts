@@ -4,12 +4,9 @@ import {
   createEventState,
   generateEventBracket,
 } from "@/libs/tournament/events";
-import {
-  fetchEventNoticeState,
-  invalidateEventNoticeParticipants,
-} from "@/queries/tournamentEvents";
-
+import { fetchEventNoticeState } from "@/queries/tournamentEvents";
 import type { DrizzleClient } from "@/server/db";
+import { invalidateEventNoticeParticipants } from "@/server/utils/caches/eventNoticeParticipants";
 import {
   type EventParticipant,
   type EventTournamentState,

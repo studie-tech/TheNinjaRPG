@@ -111,7 +111,6 @@ import {
   findJutsuInTraining,
   isJutsuInTraining,
 } from "@/libs/train";
-import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchItemLoadouts } from "@/queries/item";
 import {
   deleteJutsuForDelete,
@@ -244,10 +243,12 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
-import { bloodlineDefinitions, jutsuDefinitions } from "@/server/utils/definitionCache";
+import { bloodlineDefinitions } from "@/server/utils/caches/bloodlineDefinitions";
+import { jutsuDefinitions } from "@/server/utils/caches/jutsuDefinitions";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
+import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import {
   cancelQueuedJutsuTraining,
   enqueueJutsuLevels,

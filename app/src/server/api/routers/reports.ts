@@ -21,7 +21,6 @@ import {
   markConversationCommentReported,
   markForumPostReported,
 } from "@/queries/moderator";
-import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { deleteUserNindo, fetchUser } from "@/queries/profile";
 import {
   clearUserBanWithoutActiveReport,
@@ -68,6 +67,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { invalidateOverworldSectorPlacements } from "@/server/utils/caches/overworldSectorPlacements";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { offsetPage } from "@/server/utils/pagination";
 import { fetchUserReport } from "@/server/utils/reports";
@@ -663,7 +663,7 @@ export const reportsRouter = createTRPCRouter({
           thumbnailUrl,
         ),
       ]);
-      if (target.isAi) await invalidateSectorPlacements();
+      if (target.isAi) await invalidateOverworldSectorPlacements();
       return { success: true, message: "Avatar update request sent" };
     }),
   clearNindo: protectedProcedure

@@ -11,7 +11,7 @@ import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { deleteUnreferencedLpcAsset, listLpcAssets } from "@/queries/asset";
 import { findLpcDesignForSelection } from "@/queries/lpc";
 import { gameAssetRouter } from "@/routers/asset";
-import * as lpcCatalog from "@/server/utils/lpcCatalog";
+import * as lpcSceneCatalog from "@/server/utils/caches/lpcSceneCatalog";
 import * as ssrf from "@/server/utils/ssrf";
 import { gameAssetValidator } from "@/validators/asset";
 import type { LpcConfig } from "@/validators/lpcAsset";
@@ -291,12 +291,14 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     const config = { ...saved!.lpcConfig!, replacementSlot: "shirt" };
     const invalidating = deferred();
     const release = deferred();
-    const invalidate = lpcCatalog.invalidateLpcCatalog;
-    vi.spyOn(lpcCatalog, "invalidateLpcCatalog").mockImplementation(async () => {
-      invalidating.resolve();
-      await release.promise;
-      await invalidate();
-    });
+    const invalidate = lpcSceneCatalog.invalidateLpcSceneCatalog;
+    vi.spyOn(lpcSceneCatalog, "invalidateLpcSceneCatalog").mockImplementation(
+      async () => {
+        invalidating.resolve();
+        await release.promise;
+        await invalidate();
+      },
+    );
     const update = caller
       .update({
         id: "katana",
