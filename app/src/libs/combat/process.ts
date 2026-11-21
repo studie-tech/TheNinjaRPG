@@ -305,6 +305,12 @@ export const expireGroundEffects = (battle: CompleteBattle, actionRounds: number
     if (effect.type === "visual") return actionRounds.includes(effect.createdRound);
     // A newly authored instant effect still needs its first application.
     if (effect.isNew) return true;
+    // Clone gameplay IDs name the creature; presentation belongs to its immediate caster.
+    const creatorId =
+      effect.type === "clone"
+        ? (battle.usersState.find((user) => user.userId === effect.creatorId)
+            ?.controllerId ?? effect.creatorId)
+        : effect.creatorId;
     const info =
       effect.type === "clone"
         ? clone(battle.usersState, effect, battle.extraState)
@@ -321,7 +327,7 @@ export const expireGroundEffects = (battle: CompleteBattle, actionRounds: number
           effect.disappearSfx,
           battle.round,
           effect.animationScale,
-          effect,
+          { ...effect, creatorId },
           "disappear",
         ),
       );
@@ -756,6 +762,11 @@ const applyGroundEffects = ({
     // Spawn handlers consume newness and bind gameplay effects to their creatures.
     const wasNew = e.isNew;
     const creatorId = e.creatorId;
+    const presentationCreatorId =
+      e.type === "clone" && !wasNew
+        ? (newUsersState.find((user) => user.userId === creatorId)?.controllerId ??
+          creatorId)
+        : creatorId;
     if (e.type === "move") {
       move(e, usersEffects, newUsersState, newGroundEffects);
     } else {
@@ -850,7 +861,7 @@ const applyGroundEffects = ({
             e.disappearSfx,
             round,
             e.animationScale,
-            e,
+            { ...e, creatorId: presentationCreatorId },
             "disappear",
           ),
         );

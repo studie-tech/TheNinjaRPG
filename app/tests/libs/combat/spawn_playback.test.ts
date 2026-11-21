@@ -158,7 +158,7 @@ describe("spawn playback through action processing", () => {
       expect(later.usersState.some((user) => user.userId === "caster")).toBe(true);
       const exit = later.groundEffects.find((effect) => effect.type === "visual");
       expect(exit).toMatchObject({
-        creatorId: kind === "clone" ? spawned!.userId : "caster",
+        creatorId: "caster",
         appearAnimation: "exit",
         appearSfx: "departure",
       });

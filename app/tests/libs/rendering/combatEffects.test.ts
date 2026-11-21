@@ -1059,47 +1059,152 @@ describe("Pixi combat effects", () => {
 });
 
 describe("authoritative combat effect transitions", () => {
-  it("groups marked clone arrivals from one cast under the caster's primary cue", async () => {
-    const scene = setup();
-    const battle = makeCompleteBattle({
-      width: 12,
-      height: 10,
-      round: 1,
-      createdAt: new Date(0),
-      usersState: [makeBattleUser("caster", { longitude: 0, latitude: 0 })],
-    });
-    const action = makeCombatAction({
-      target: "EMPTY_GROUND",
-      range: 3,
-      level: 1,
-      effects: [0, 1].map(() =>
-        CloneTag.parse({
-          rounds: 3,
-          power: 50,
-          appearSfx: "appear",
-          appearSfxPrimary: true,
-        }),
+  it.each(
+    [false, true].flatMap((cloneActor) =>
+      [false, true].flatMap((privateSource) =>
+        (["boundary", "application"] as const).map((expiry) => ({
+          cloneActor,
+          privateSource,
+          expiry,
+        })),
       ),
-    });
-    expect(
-      insertAction({
-        battle,
-        grid: getBattleGrid(20, battle),
-        action,
-        actorId: "caster",
-        longitude: 2,
-        latitude: 0,
-      }),
-    ).toBe(true);
-    const resolved = applyEffects(battle, "caster", action).newBattle;
-    expect(resolved.usersState.filter((user) => user.isSummon)).toHaveLength(2);
-    await scene.effects.sync({
-      ...scene.snapshot,
-      battle: maskBattle(resolved, "caster"),
-    });
-    scene.effects.animate(0, false, false, null);
-    expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
-  });
+    ),
+  )(
+    "groups each clone cast phase (clone actor: $cloneActor, private: $privateSource, expiry: $expiry)",
+    async ({ cloneActor, privateSource, expiry }) => {
+      const scene = setup();
+      const battle = makeCompleteBattle({
+        width: 12,
+        height: 10,
+        version: 1,
+        round: 1,
+        createdAt: new Date(0),
+        usersState: [
+          makeBattleUser("caster", {
+            longitude: 0,
+            latitude: 0,
+            controllerId: cloneActor ? "owner" : "caster",
+            isSummon: cloneActor,
+            isOriginal: !cloneActor,
+          }),
+          makeBattleUser("owner", { longitude: 5, latitude: 0 }),
+        ],
+      });
+      const action = makeCombatAction({
+        target: "EMPTY_GROUND",
+        range: 3,
+        level: 1,
+        effects: [0, 1].map(() =>
+          CloneTag.parse({
+            rounds: 3,
+            power: 50,
+            projectileAnimation: "animation",
+            appearSfx: "appear",
+            appearSfxPrimary: true,
+            disappearSfx: "disappear",
+            disappearSfxPrimary: true,
+          }),
+        ),
+      });
+      const previous = maskBattle(structuredClone(battle), "observer");
+      const recorder = createCombatPlaybackRecorder(battle);
+      expect(
+        insertAction({
+          battle,
+          grid: getBattleGrid(20, battle),
+          action,
+          actorId: "caster",
+          longitude: 2,
+          latitude: 0,
+        }),
+      ).toBe(true);
+      if (privateSource)
+        for (const effect of battle.groundEffects) effect.fromType = "armor";
+      let resolved = applyEffects(battle, "caster", action).newBattle;
+      const cloneEffects = resolved.groundEffects.filter((e) => e.type === "clone");
+      const cloneIds = cloneEffects.map((e) => e.creatorId);
+      expect(cloneIds).toHaveLength(2);
+      expect(new Set(cloneIds).size).toBe(2);
+      expect(cloneIds).not.toContain("caster");
+      expect(
+        resolved.usersState.filter((u) => cloneIds.includes(u.userId)),
+      ).toHaveLength(2);
+      recorder.record(resolved, 2, "caster", []);
+      resolved.version = 2;
+      const arrival = maskBattle(structuredClone(resolved), "observer");
+      arrival.playback = recorder.steps;
+      const [arrivalFrame] = buildPlaybackFrames(previous, arrival);
+      expect(arrivalFrame?.actorId).toBe("caster");
+      expect(arrivalFrame?.travel?.groundEffects).toHaveLength(2);
+      expect(arrivalFrame?.travel?.groundEffects.map((e) => e.creatorId)).toEqual([
+        "caster",
+        "caster",
+      ]);
+      await scene.effects.sync({ ...scene.snapshot, battle: arrivalFrame!.travel! });
+      scene.effects.animate(0, false, false, null);
+      expect(scene.play).not.toHaveBeenCalled();
+      await scene.effects.sync({ ...scene.snapshot, battle: arrivalFrame!.battle });
+      scene.effects.animate(1000, false, false, null);
+      expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+
+      resolved = applyEffects(resolved, "caster").newBattle;
+      expect(resolved.groundEffects.filter((e) => e.type === "clone")).toHaveLength(2);
+      expect(resolved.usersState.map((u) => u.userId)).toEqual([
+        "caster",
+        "owner",
+        ...cloneIds,
+      ]);
+      await scene.effects.sync({
+        ...scene.snapshot,
+        battle: maskBattle(resolved, "observer"),
+      });
+      scene.effects.animate(2000, false, false, null);
+      expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+      const expiryRecorder = createCombatPlaybackRecorder(resolved);
+      resolved.round = 4;
+      for (const effect of resolved.groundEffects)
+        if (effect.type === "clone") effect.rounds = 0;
+      if (expiry === "boundary") {
+        expect(expireGroundEffects(resolved, [])).toHaveLength(2);
+      } else {
+        const result = applyEffects(resolved, "owner");
+        resolved = result.newBattle;
+        expect(
+          result.actionEffects.filter((e) => e.txt.includes("disappears")),
+        ).toHaveLength(2);
+      }
+      expect(resolved.usersState.map((u) => u.userId)).toEqual(["caster", "owner"]);
+      const exits = resolved.groundEffects.filter(
+        (e) => e.soundOrigin?.phase === "disappear",
+      );
+      expect(exits).toHaveLength(2);
+      expect(cloneEffects.map((e) => e.creatorId)).toEqual(cloneIds);
+      expect(exits.every((e) => !!e.soundOrigin?.privateSource)).toBe(privateSource);
+      expiryRecorder.record(resolved, 3, "owner", []);
+      resolved.version = 3;
+      const next = maskBattle(resolved, "observer");
+      next.playback = expiryRecorder.steps;
+      const maskedExits = next.groundEffects.filter(
+        (e) => e.soundOrigin?.phase === "disappear",
+      );
+      expect(new Set(maskedExits.map((e) => e.soundOrigin?.actionId)).size).toBe(1);
+      if (privateSource)
+        expect(maskedExits[0]?.soundOrigin?.actionId).not.toBe(action.id);
+      const [frame] = buildPlaybackFrames(arrival, next);
+      expect(frame?.actorId).toBe("owner");
+      expect(frame?.travel).toBeUndefined();
+      await scene.effects.sync({ ...scene.snapshot, battle: frame!.battle });
+      scene.effects.animate(3000, false, false, null);
+      expect(scene.play.mock.calls).toEqual([
+        ["appear.wav", 0.4],
+        ["disappear.wav", 0.4],
+      ]);
+      expect(exits.map((e) => e.creatorId)).toEqual(["caster", "caster"]);
+      await scene.effects.sync({ ...scene.snapshot, battle: next });
+      scene.effects.animate(4000, false, false, null);
+      expect(scene.play).toHaveBeenCalledTimes(2);
+    },
+  );
   it.each(
     (["OTHER_USER", "SELF"] as const).flatMap((target) =>
       (["surviving", "damage first", "visual first"] as const).map((outcome) => ({
