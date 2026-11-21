@@ -38,6 +38,7 @@ import {
   beginEventRound,
   createEventState,
   generateEventBracket,
+  isActiveEventEntrant,
 } from "@/libs/tournament/events";
 import * as questQueries from "@/queries/quests";
 import * as eventQueries from "@/queries/tournamentEvents";
@@ -751,6 +752,7 @@ describeWithDatabase("event tournament persistence", () => {
   const readyEvent = async (
     rules: "OPEN" | "RANKED" = "OPEN",
     userIds = ["hero", "foe"],
+    scheduling: "SIMULTANEOUS" | "SEQUENTIAL" = "SIMULTANEOUS",
   ) => {
     const database = await getTestDatabase();
     await insertUsers(
@@ -774,7 +776,11 @@ describeWithDatabase("event tournament persistence", () => {
       })),
     );
     await insertDefaultAiProfile({ userId: "ai" });
-    const event = createEventState({ ...eventConfig("Launch race"), rules });
+    const event = createEventState({
+      ...eventConfig("Launch race"),
+      rules,
+      scheduling,
+    });
     event.participants = userIds.map((userId, i) =>
       participant(userId, { id: `seat-${i}` }),
     );
@@ -1118,6 +1124,47 @@ describeWithDatabase("event tournament persistence", () => {
       { id: game.battleId },
     ]);
   });
+
+  it.each(["SIMULTANEOUS", "SEQUENTIAL"] as const)(
+    "keeps surviving entrants protected after the first ranked setup fails (%s)",
+    async (scheduling) => {
+      const userIds =
+        scheduling === "SEQUENTIAL"
+          ? ["hero", "foe", "other", "last"]
+          : ["hero", "foe"];
+      const { database, game, accept } = await readyEvent(
+        "RANKED",
+        userIds,
+        scheduling,
+      );
+      // Missing ranked loadouts produce a repairable setup failure after both accept.
+      expect((await accept(game.userIds[1]!)).success).toBe(true);
+      const event = (await fetchEvent(database, "launch"))!.eventData!;
+      expect(event.status).toBe("RUNNING");
+      expect(event.series.every((s) => !s.begun)).toBe(true);
+      expect(event.series[0]).toMatchObject({
+        complete: false,
+        scores: [0, 0],
+        dodges: [0, 0],
+        games: [{ id: game.id, status: "COMPLETE", outcome: "DRAW" }],
+      });
+      expect(event.audit.at(-1)?.action).toContain("Game setup failed");
+      expect(userIds.every((id) => isActiveEventEntrant(event, id))).toBe(true);
+      const targetId = userIds.at(-1)!;
+      const blocked = await initiateBattle(
+        {
+          client: database,
+          userIds: [userIds.find((id) => id !== targetId)!],
+          targetIds: [targetId],
+          sector: MAP_WAKE_ISLAND_SECTOR,
+        },
+        "COMBAT",
+      );
+      expect(blocked.success).toBe(false);
+      expect(blocked.message).toContain("registered for an ongoing tournament");
+      expect(await database.query.battle.findMany()).toHaveLength(0);
+    },
+  );
 
   it.each(["REGISTRATION", "PREPARED", "RUNNING"] as const)(
     "protects entrants from open-world attacks only after the tournament begins (%s)",

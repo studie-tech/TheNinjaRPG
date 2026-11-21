@@ -240,6 +240,7 @@ export const resolveEventSlots = (event: EventTournamentState) => {
 /**
  * Whether a player holds a surviving seat in a tournament whose first round has begun.
  * Shield waiting entrants from open-world attacks that would fail their ready check.
+ * Retained games preserve start evidence while a setup failure waits for staff repair.
  */
 export const isActiveEventEntrant = (event: EventTournamentState, userId: string) => {
   const seat = event.participants.find(
@@ -248,7 +249,7 @@ export const isActiveEventEntrant = (event: EventTournamentState, userId: string
   if (
     !seat ||
     !["PREPARED", "RUNNING"].includes(event.status) ||
-    !event.series.some((series) => series.begun)
+    !event.series.some((series) => series.games.length > 0)
   )
     return false;
   // A seat stays live while it occupies an unfinished series or a finished series
