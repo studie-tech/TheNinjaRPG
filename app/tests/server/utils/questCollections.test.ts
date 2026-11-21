@@ -16,6 +16,7 @@ const catalogue = [
   { id: "missing", rank: "C", hidden: false },
 ] as const;
 const rolls = [{ bloodlineId: "rolled" }, { bloodlineId: "rolled" }];
+const rolledBloodlineIds = rolls.map((roll) => roll.bloodlineId);
 
 const userWithCollection = () =>
   ({
@@ -63,7 +64,7 @@ const database = () => {
 describe("quest collection snapshots", () => {
   it("uses preloaded rows without more reads and still counts the equipped bloodline", async () => {
     const { client, findCatalogue, findRolls } = database();
-    const snapshot = { catalogue: [...catalogue], rolls };
+    const snapshot = { catalogue: [...catalogue], rolledBloodlineIds };
     const result = await hydrateQuestCollections(
       client,
       userWithCollection(),
@@ -83,7 +84,7 @@ describe("quest collection snapshots", () => {
     });
     expect(findCatalogue).not.toHaveBeenCalled();
     expect(findRolls).not.toHaveBeenCalled();
-    expect(snapshot.rolls).toEqual(rolls);
+    expect(snapshot.rolledBloodlineIds).toEqual(["rolled", "rolled"]);
   });
 
   it("retains the lazy fallback for callers without a snapshot", async () => {
@@ -110,7 +111,7 @@ describe("quest collection snapshots", () => {
         client,
         user,
         false,
-        preloaded ? { catalogue: [...catalogue], rolls } : undefined,
+        preloaded ? { catalogue: [...catalogue], rolledBloodlineIds } : undefined,
       );
       expect(result.bloodlineCollectionProgress).toBeUndefined();
       expect(findCatalogue).not.toHaveBeenCalled();
@@ -122,7 +123,7 @@ describe("quest collection snapshots", () => {
     const { client, findCatalogue, findRolls } = database();
     const result = await hydrateQuestCollections(client, userWithCollection(), false, {
       catalogue: [],
-      rolls: [],
+      rolledBloodlineIds: [],
     });
     expect(result.bloodlineCollectionProgress?.every((rank) => rank.total === 0)).toBe(
       true,
@@ -175,7 +176,7 @@ describe("quest collection snapshots", () => {
         true,
         {
           catalogue: [],
-          rolls,
+          rolledBloodlineIds,
         },
       );
       expect(result.bloodlineCollectionProgress).toContainEqual({
@@ -253,7 +254,7 @@ describe("quest collection snapshots", () => {
       const { client, findOwned } = jutsuDatabase();
       const preloaded = {
         catalogue: [],
-        rolls: [],
+        rolledBloodlineIds: [],
         objectiveJutsus: {
           jutsuIds: ["achievement", "other-achievement"],
           owned: [
