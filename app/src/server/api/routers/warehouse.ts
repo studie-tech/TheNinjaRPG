@@ -134,6 +134,7 @@ export const warehouseRouter = createTRPCRouter({
         structure: structure
           ? {
               id: structure.id,
+              image: structure.image,
               level: structure.level,
               maxLevel: structure.maxLevel,
               effectiveLevel: level,
