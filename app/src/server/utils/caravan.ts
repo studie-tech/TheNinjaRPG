@@ -143,7 +143,8 @@ export const maintainCaravans = async (
  * Whether maintaining a page's caravans would change anything at `now`, judged from rows
  * the page already read: an operation against them is due, one has arrived, passed an
  * unrolled checkpoint or travels a blocked route, or a fight over one is due. Mirrors the
- * steps of {@link maintainCaravans}, so a page can skip it when nothing is due.
+ * steps of {@link maintainCaravans}, so a page can skip it when nothing is due; like them,
+ * an arrival or a blocked route waits while a fight over the caravan is open.
  */
 export const hasDueCaravanWork = (
   input: {
@@ -155,14 +156,18 @@ export const hasDueCaravanWork = (
   now: Date,
 ) => {
   const staleBefore = now.getTime() - CARAVAN_ENCOUNTER_STALE_MINUTES * MINUTE_MS;
+  const fought = new Set(input.encounters.map((row) => row.caravanId));
   return (
     input.dueOperations.length > 0 ||
     input.caravans.some(
       (row) =>
-        input.blockedRouteIds.has(row.routeId) ||
+        (!fought.has(row.id) &&
+          (input.blockedRouteIds.has(row.routeId) ||
+            (row.status === "TRAVELLING" &&
+              !!row.arrivesAt &&
+              row.arrivesAt <= now))) ||
         (row.status === "TRAVELLING" &&
-          ((!!row.arrivesAt && row.arrivesAt <= now) ||
-            getReachedCheckpoints(row, now) > row.checkpointsProcessed)),
+          getReachedCheckpoints(row, now) > row.checkpointsProcessed),
     ) ||
     input.encounters.some((row) =>
       row.status === "PENDING"
