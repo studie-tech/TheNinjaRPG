@@ -4328,6 +4328,9 @@ export const CS_LOGO_URL =
   "https://uploadthing.b-cdn.net/f/chakra-storm-logo-a7d169b1378e0ea2.webp";
 export const CS_KEYART_URL =
   "https://uploadthing.b-cdn.net/f/chakra-storm-keyart-80b435bc5c42875b.webp";
+/** Square card art for the minigames hub, matching the other square game cards. */
+export const CS_CARD_URL =
+  "https://uploadthing.b-cdn.net/f/chakra-storm-card-8168670a8ce4fbf6.webp";
 export const CS_OG_IMAGE_URL =
   "https://uploadthing.b-cdn.net/f/chakra-storm-og-da58616a96c8cc4f.jpg";
 export const CS_STAGE_IMAGE_URLS = {
