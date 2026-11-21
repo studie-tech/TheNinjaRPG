@@ -5,7 +5,6 @@ import {
   claimPendingEncounter,
   deleteStartingEncounter,
   insertEncounter,
-  listCaravanAi,
   listCaravansByIds,
   markEncounterFighting,
   reopenEncounter,
@@ -105,19 +104,18 @@ export const launchCaravanBattle = async (
 };
 
 /**
- * Draw Caravan AI opponents near a level: a random pick among the closest templates, each
- * drawn independently so repeated templates become separate combatants.
+ * Draw Caravan AI opponents near a level from the configured templates: a random pick among
+ * the closest, each drawn independently so repeated templates become separate combatants.
  */
-export const pickCaravanAi = async (
-  client: DrizzleClient,
+export const pickCaravanAi = (
+  pool: { userId: string; level: number }[],
   count: number,
   level: number,
 ) => {
   if (count <= 0) return [];
-  const pool = (await listCaravanAi(client)).sort(
-    (a, b) => Math.abs(a.level - level) - Math.abs(b.level - level),
-  );
-  const nearest = pool.slice(0, Math.max(3, count));
+  const nearest = [...pool]
+    .sort((a, b) => Math.abs(a.level - level) - Math.abs(b.level - level))
+    .slice(0, Math.max(3, count));
   return Array.from(
     { length: count },
     () => nearest[secureRandomInt(Math.max(1, nearest.length))]?.userId,

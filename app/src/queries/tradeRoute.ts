@@ -1,7 +1,8 @@
 /**
  * Database access for trade routes and their markers; authorization stays in callers.
  */
-import { and, eq, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { TRADE_ROUTE_MARKER_MAX_CONTROL } from "@/drizzle/constants";
 import {
   clan,
@@ -25,6 +26,10 @@ const villageColumns = {
     villageLogo: true,
   },
 } as const;
+
+/** Table aliases for the two villages of a route, apart from a marker's controller. */
+const routeVillageA = alias(village, "routeVillageA");
+const routeVillageB = alias(village, "routeVillageB");
 
 /** Open and proposed routes of a village, with both villages and every marker. */
 export const listVillageRoutes = (
@@ -167,7 +172,7 @@ export const upgradeTradeRoute = (
       AND EXISTS (SELECT 1 FROM ${userData} WHERE ${userData.userId} = ${input.userId} AND ${userData.villageId} = ${input.villageId} AND ${userData.isBanned} = FALSE)
   `);
 
-/** Markers placed in a sector on active routes. */
+/** Markers placed in a sector on active routes, with the names of the route's villages. */
 export const listSectorMarkers = (
   client: Pick<DrizzleClient, "select">,
   sector: number,
@@ -184,10 +189,14 @@ export const listSectorMarkers = (
       control: tradeRouteMarker.control,
       villageIdA: tradeRoute.villageIdA,
       villageIdB: tradeRoute.villageIdB,
+      villageNameA: routeVillageA.name,
+      villageNameB: routeVillageB.name,
     })
     .from(tradeRouteMarker)
     .innerJoin(tradeRoute, eq(tradeRoute.id, tradeRouteMarker.routeId))
     .leftJoin(village, eq(village.id, tradeRouteMarker.controllerVillageId))
+    .leftJoin(routeVillageA, eq(routeVillageA.id, tradeRoute.villageIdA))
+    .leftJoin(routeVillageB, eq(routeVillageB.id, tradeRoute.villageIdB))
     .where(and(eq(tradeRouteMarker.sector, sector), eq(tradeRoute.status, "ACTIVE")));
 
 /** One marker with its route's villages. */
@@ -260,16 +269,3 @@ export const damageMarker = (
     })
     .where(eq(tradeRouteMarker.id, markerId));
 };
-
-/** Routes whose markers include one held by a village outside the route. */
-export const listBlockedRouteIds = (client: Pick<DrizzleClient, "selectDistinct">) =>
-  client
-    .selectDistinct({ routeId: tradeRouteMarker.routeId })
-    .from(tradeRouteMarker)
-    .innerJoin(tradeRoute, eq(tradeRoute.id, tradeRouteMarker.routeId))
-    .where(
-      and(
-        eq(tradeRoute.status, "ACTIVE"),
-        isNotNull(tradeRouteMarker.controllerVillageId),
-      ),
-    );
