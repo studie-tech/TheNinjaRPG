@@ -26,8 +26,6 @@ const wood = {
   name: "Wood",
   image: "wood.png",
   itemType: "MATERIAL" as const,
-  rarity: "COMMON" as const,
-  stackSize: 500,
   canStack: true,
   warehouseItem: true,
 };
@@ -44,7 +42,7 @@ const stack = (id: string, quantity: number, extra: object = {}) => ({
 });
 const view = (overrides: Partial<Warehouse> = {}) =>
   ({
-    village: { id: "v", name: "V", tokens: 1000, funds: 1000, usesClanPoints: false },
+    village: { id: "v", name: "V", funds: 1000, usesClanPoints: false },
     stock: [
       {
         itemId: "iron",
@@ -52,10 +50,6 @@ const view = (overrides: Partial<Warehouse> = {}) =>
         reserved: 0,
         name: "Iron",
         image: "",
-        itemType: "MATERIAL",
-        rarity: "COMMON",
-        stackSize: 500,
-        canStack: true,
       },
       {
         itemId: "wood",
@@ -192,12 +186,7 @@ describe("warehouse deltas", () => {
     );
     expect(produced?.production).toEqual([{ itemId: "wood", name: "Wood" }]);
     expect(produced?.stock[1]).toMatchObject({ quantity: 50, reserved: 5 });
-    const target = {
-      userId: "u",
-      username: "Ninja",
-      avatar: null,
-      rank: "JONIN" as const,
-    };
+    const target = { userId: "u", username: "Ninja" };
     const approved = applyWarehouseChange(
       view(),
       getApprovalWarehouseChange(target, { wartime: true }),
@@ -208,11 +197,8 @@ describe("warehouse deltas", () => {
         ?.approvals,
     ).toEqual([]);
     expect(
-      applyWarehouseChange(view(), getPaidWarehouseChange(300, true))?.village,
-    ).toMatchObject({
-      tokens: 1000,
-      funds: 700,
-    });
+      applyWarehouseChange(view(), getPaidWarehouseChange(300))?.village,
+    ).toMatchObject({ funds: 700 });
   });
 
   it("shows written logs at the top of the first history page once", () => {

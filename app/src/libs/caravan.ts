@@ -31,7 +31,6 @@ import {
   TRADE_ROUTE_MIN_MARKERS,
   TRADE_ROUTE_SECTORS_PER_MARKER,
   TRADE_ROUTE_TRAVEL_REDUCTION_PER_LEVEL,
-  TRADE_ROUTE_UPGRADE_COST,
   type TradeRouteStatus,
 } from "@/drizzle/constants";
 import type { Caravan, UserData, VillageAlliance } from "@/drizzle/schema";
@@ -87,7 +86,7 @@ export const describeTradeRoute = (route: {
   id: string;
   status: TradeRouteStatus;
   level: number;
-  partner: { id: string; name: string; sector: number | null };
+  partner: { id: string; name: string };
   proposedByUs: boolean;
   sectors: number;
   markers: { id: string; sector: number; control: number; controller: string | null }[];
@@ -95,11 +94,9 @@ export const describeTradeRoute = (route: {
   id: route.id,
   status: route.status,
   level: route.level,
-  maxLevel: TRADE_ROUTE_MAX_LEVEL,
   travelMinutes: getRouteTravelMinutes(route.level),
   nextTravelMinutes:
     route.level < TRADE_ROUTE_MAX_LEVEL ? getRouteTravelMinutes(route.level + 1) : null,
-  upgradeCost: TRADE_ROUTE_UPGRADE_COST,
   partner: route.partner,
   proposedByUs: route.proposedByUs,
   sectors: route.sectors,

@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-  ItemRarities,
-  ItemTypes,
-  UserRanks,
-  WAREHOUSE_LOG_TYPES,
-} from "@/drizzle/constants";
+import { WAREHOUSE_LOG_TYPES } from "@/drizzle/constants";
 import { baseServerResponse } from "@/validators/base";
 import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 
@@ -21,16 +16,7 @@ export const warehouseChangeSchema = z.object({
         quantity: z.number().int(),
         reserved: z.number().int(),
         /** Present when the change may create the item's first stock row. */
-        item: z
-          .object({
-            name: z.string(),
-            image: z.string(),
-            itemType: z.enum(ItemTypes),
-            rarity: z.enum(ItemRarities),
-            stackSize: z.number().int(),
-            canStack: z.boolean(),
-          })
-          .optional(),
+        item: z.object({ name: z.string(), image: z.string() }).optional(),
       }),
     )
     .optional(),
@@ -50,7 +36,8 @@ export const warehouseChangeSchema = z.object({
       ),
     })
     .optional(),
-  funds: z.object({ tokens: z.number().int(), funds: z.number().int() }).optional(),
+  /** Village tokens, or clan points in faction settlements, added to the loaded funds. */
+  funds: z.number().int().optional(),
   production: z.array(z.object({ itemId: z.string(), name: z.string() })).optional(),
   approval: z
     .object({
@@ -59,8 +46,6 @@ export const warehouseChangeSchema = z.object({
         .object({
           userId: z.string(),
           username: z.string(),
-          avatar: z.string().nullable(),
-          rank: z.enum(UserRanks),
           wartime: z.boolean(),
           active: z.boolean(),
         })

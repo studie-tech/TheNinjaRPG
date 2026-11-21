@@ -16,10 +16,7 @@ import type { WarehouseChange, WarehouseLogEntry } from "@/validators/warehouse"
 type WarehouseView = RouterOutputs["warehouse"]["getWarehouse"];
 type HistoryPages = InfiniteData<RouterOutputs["warehouse"]["getHistory"]>;
 type CandidateStack = Parameters<typeof getDepositCandidates>[0][number];
-type StockItem = Pick<
-  Item,
-  "name" | "image" | "itemType" | "rarity" | "stackSize" | "canStack"
->;
+type StockItem = Pick<Item, "name" | "image">;
 
 /**
  * Describe a confirmed deposit: the credited stock, the stack it consumed and the cooldown
@@ -33,7 +30,7 @@ export const getDepositWarehouseChange = ({
   ledgers,
   now,
 }: {
-  stack: CandidateStack & { item: StockItem };
+  stack: CandidateStack;
   quantity: number;
   credited: number;
   inventory: CandidateStack[];
@@ -45,7 +42,7 @@ export const getDepositWarehouseChange = ({
       itemId: stack.itemId,
       quantity: credited,
       reserved: 0,
-      item: getStockItem(stack.item),
+      item: { name: stack.item.name, image: stack.item.image },
     },
   ],
   candidates: getItemCandidates(
@@ -142,13 +139,13 @@ export const getProductionWarehouseChange = (
     itemId: item.id,
     quantity: 0,
     reserved: 0,
-    item: getStockItem(item),
+    item: { name: item.name, image: item.image },
   })),
 });
 
 /** Describe a granted or revoked approval; a granted one starts active. */
 export const getApprovalWarehouseChange = (
-  target: Pick<UserData, "userId" | "username" | "avatar" | "rank">,
+  target: Pick<UserData, "userId" | "username">,
   approval: { wartime: boolean } | null,
 ): WarehouseChange => ({
   approval: {
@@ -157,8 +154,6 @@ export const getApprovalWarehouseChange = (
       ? {
           userId: target.userId,
           username: target.username,
-          avatar: target.avatar,
-          rank: target.rank,
           wartime: approval.wartime,
           active: true,
         }
@@ -166,12 +161,9 @@ export const getApprovalWarehouseChange = (
   },
 });
 
-/** Describe the funds a village paid; faction settlements pay with clan points, not tokens. */
-export const getPaidWarehouseChange = (
-  cost: number,
-  usesClanPoints: boolean,
-): WarehouseChange => ({
-  funds: { tokens: usesClanPoints ? 0 : -cost, funds: -cost },
+/** Describe the funds a village paid: village tokens, or clan points in faction settlements. */
+export const getPaidWarehouseChange = (cost: number): WarehouseChange => ({
+  funds: -cost,
 });
 
 /** History rows for written logs, named the way the history pages list them. */
@@ -243,11 +235,7 @@ export const applyWarehouseChange = (
       ? replaceCandidates(current.depositCandidates, change.candidates)
       : current.depositCandidates,
     village: change.funds
-      ? {
-          ...current.village,
-          tokens: current.village.tokens + change.funds.tokens,
-          funds: current.village.funds + change.funds.funds,
-        }
+      ? { ...current.village, funds: current.village.funds + change.funds }
       : current.village,
     production: change.production ?? current.production,
     approvals: change.approval
@@ -286,15 +274,6 @@ const compareHistory = (
   a: { createdAt: Date; id: string },
   b: { createdAt: Date; id: string },
 ) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id);
-
-const getStockItem = (item: StockItem) => ({
-  name: item.name,
-  image: item.image,
-  itemType: item.itemType,
-  rarity: item.rarity,
-  stackSize: item.stackSize,
-  canStack: item.canStack,
-});
 
 const getItemCandidates = (
   itemId: string,

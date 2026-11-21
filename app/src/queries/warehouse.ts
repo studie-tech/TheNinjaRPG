@@ -78,10 +78,6 @@ export const listWarehouseStock = (
       reserved: warehouseStock.reserved,
       name: item.name,
       image: item.image,
-      itemType: item.itemType,
-      rarity: item.rarity,
-      stackSize: item.stackSize,
-      canStack: item.canStack,
     })
     .from(warehouseStock)
     .innerJoin(item, eq(item.id, warehouseStock.itemId))
@@ -127,9 +123,7 @@ export const listWarehouseItems = (
           name: item.name,
           image: item.image,
           itemType: item.itemType,
-          rarity: item.rarity,
           canStack: item.canStack,
-          stackSize: item.stackSize,
           warehouseItem: item.warehouseItem,
           villageId: item.villageId,
           hidden: item.hidden,
@@ -410,8 +404,6 @@ export const listWarehouseApprovals = (
       approvedAt: warehouseMember.approvedAt,
       approvedWarId: warehouseMember.approvedWarId,
       username: userData.username,
-      avatar: userData.avatar,
-      rank: userData.rank,
       villageId: userData.villageId,
       joinedVillageAt: userData.joinedVillageAt,
     })

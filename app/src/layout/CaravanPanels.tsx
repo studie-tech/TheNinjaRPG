@@ -31,6 +31,8 @@ import {
   CARAVAN_MIN_CARGO_UNITS,
   CARAVANS_PER_TRADE_ROUTE,
   TRADE_ROUTE_MARKER_MAX_CONTROL,
+  TRADE_ROUTE_MAX_LEVEL,
+  TRADE_ROUTE_UPGRADE_COST,
 } from "@/drizzle/constants";
 import type { useCaravans } from "@/hooks/useCaravans";
 import Confirm from "@/layout/Confirm";
@@ -124,8 +126,8 @@ export const TradeRoutesPanel = ({
                   )}
                 </div>
                 <p className="text-muted-foreground text-sm">
-                  Level {route.level}/{route.maxLevel} · {route.travelMinutes} min
-                  travel · {route.sectors} sectors
+                  Level {route.level}/{TRADE_ROUTE_MAX_LEVEL} · {route.travelMinutes}{" "}
+                  min travel · {route.sectors} sectors
                 </p>
                 {(route.markers.length > 0 || data.canManage) && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -211,7 +213,7 @@ export const TradeRoutesPanel = ({
                                 </Button>
                               }
                             >
-                              Spend {route.upgradeCost.toLocaleString()}{" "}
+                              Spend {TRADE_ROUTE_UPGRADE_COST.toLocaleString()}{" "}
                               {data.fundsLabel} to cut travel from {route.travelMinutes}{" "}
                               to {route.nextTravelMinutes} minutes.
                             </Confirm>

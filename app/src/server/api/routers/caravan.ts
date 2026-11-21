@@ -187,8 +187,6 @@ export const caravanRouter = createTRPCRouter({
             guards: guards.map((p) => ({
               userId: p.userId,
               username: p.username,
-              avatar: p.avatar,
-              level: p.level,
               status: p.status,
               objectives: p.objectives,
             })),
@@ -229,7 +227,6 @@ export const caravanRouter = createTRPCRouter({
               ? getRemainingCargo(row.cargo, row.lossBp)
               : row.cargo,
           ),
-          lossPercent: row.lossBp / 100,
           resolvedAt: row.resolvedAt,
         })),
       };
@@ -526,14 +523,7 @@ export const caravanRouter = createTRPCRouter({
     .input(z.object({ caravanId: z.string() }))
     .output(
       userDeltaResponseSchema.extend({
-        guard: z
-          .object({
-            userId: z.string(),
-            username: z.string(),
-            avatar: z.string().nullable(),
-            level: z.number().int(),
-          })
-          .optional(),
+        guard: z.object({ userId: z.string(), username: z.string() }).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -582,12 +572,7 @@ export const caravanRouter = createTRPCRouter({
           success: true,
           message: "You joined the escort and wait at departure",
           ...getEscortStatusUserUpdate("QUEUED"),
-          guard: {
-            userId: user.userId,
-            username: user.username,
-            avatar: user.avatar,
-            level: user.level,
-          },
+          guard: { userId: user.userId, username: user.username },
         },
         readiness,
         ctx.drizzle,

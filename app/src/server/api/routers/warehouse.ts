@@ -68,7 +68,6 @@ import {
 } from "@/queries/warehouse";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
-import { canManageTrade } from "@/server/utils/caravan";
 import { updateUserItemQuantityAtomically } from "@/server/utils/concurrency";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
@@ -152,8 +151,6 @@ export const warehouseRouter = createTRPCRouter({
         village: {
           id: villageData.id,
           name: villageData.name,
-          type: villageData.type,
-          tokens: villageData.tokens,
           structureMaintenanceDue: villageData.structureMaintenanceDue,
           usesClanPoints: isFaction,
           // Faction settlements build and upgrade with their clan's points.
@@ -171,7 +168,6 @@ export const warehouseRouter = createTRPCRouter({
             }
           : null,
         isLeader,
-        canManageTrade: canManageTrade(user, villageData),
         productionBonus: getProductionBonus(level, multiplier),
         depositBonus: getDepositBonus(level, multiplier),
         cycleQuantity: getCycleQuantity(level, multiplier),
@@ -190,8 +186,6 @@ export const warehouseRouter = createTRPCRouter({
         approvals: approvals.map((row) => ({
           userId: row.userId,
           username: row.username,
-          avatar: row.avatar,
-          rank: row.rank,
           wartime: !!row.approvedWarId,
           active: isApprovalActive(row, row, activeWarIds),
         })),

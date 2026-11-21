@@ -16,16 +16,7 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
-const villageColumns = {
-  columns: {
-    id: true,
-    name: true,
-    sector: true,
-    type: true,
-    kageId: true,
-    villageLogo: true,
-  },
-} as const;
+const villageColumns = { columns: { id: true, name: true, kageId: true } } as const;
 
 /** Table aliases for the two villages of a route, apart from a marker's controller. */
 const routeVillageA = alias(village, "routeVillageA");
@@ -54,12 +45,7 @@ export const findTradeRoute = (client: Pick<DrizzleClient, "query">, routeId: st
 /** Villages and settlements with a built Warehouse, the possible trade partners. */
 export const listWarehouseVillages = (client: Pick<DrizzleClient, "select">) =>
   client
-    .select({
-      id: village.id,
-      name: village.name,
-      sector: village.sector,
-      type: village.type,
-    })
+    .select({ id: village.id, name: village.name })
     .from(village)
     .innerJoin(
       villageStructure,

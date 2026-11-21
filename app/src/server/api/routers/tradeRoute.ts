@@ -85,7 +85,6 @@ export const tradeRouteRouter = createTRPCRouter({
         village: { id: villageId, name: villageData.name },
         canManage: canManageTrade(user, villageData),
         fundsLabel: isFactionVillage(villageData) ? "clan points" : "village tokens",
-        hasWarehouse: (findWarehouse(villageData.structures)?.level ?? 0) > 0,
         routes: routes.map((route) => {
           const isA = route.villageIdA === villageId;
           const partner = isA ? route.villageB : route.villageA;
@@ -96,7 +95,6 @@ export const tradeRouteRouter = createTRPCRouter({
             partner: {
               id: isA ? route.villageIdB : route.villageIdA,
               name: partner?.name ?? "Former partner",
-              sector: partner?.sector ?? null,
             },
             proposedByUs: route.proposedByVillageId === villageId,
             sectors: route.path.length,
@@ -127,11 +125,7 @@ export const tradeRouteRouter = createTRPCRouter({
         proposed: z
           .object({
             id: z.string(),
-            partner: z.object({
-              id: z.string(),
-              name: z.string(),
-              sector: z.number().int(),
-            }),
+            partner: z.object({ id: z.string(), name: z.string() }),
             sectors: z.number().int(),
           })
           .optional(),
@@ -189,7 +183,7 @@ export const tradeRouteRouter = createTRPCRouter({
         message: `Proposed a trade route to ${partner.name}`,
         proposed: {
           id: routeId,
-          partner: { id: partner.id, name: partner.name, sector: partner.sector },
+          partner: { id: partner.id, name: partner.name },
           sectors: path.length,
         },
       };
@@ -371,7 +365,7 @@ export const tradeRouteRouter = createTRPCRouter({
         success: true,
         message: `Route upgraded; caravans now travel ${getRouteTravelMinutes(route.level + 1)} minutes`,
         upgraded: { routeId: route.id, level: route.level + 1 },
-        warehouseChange: getPaidWarehouseChange(TRADE_ROUTE_UPGRADE_COST, !!clanId),
+        warehouseChange: getPaidWarehouseChange(TRADE_ROUTE_UPGRADE_COST),
       };
     }),
 });

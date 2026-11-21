@@ -39,13 +39,12 @@ const routes = (): Routes =>
     village: { id: "v", name: "V" },
     canManage: true,
     fundsLabel: "village tokens",
-    hasWarehouse: true,
     routes: [
       {
         id: "active",
         status: "ACTIVE",
         level: 1,
-        partner: { id: "b", name: "B", sector: 2 },
+        partner: { id: "b", name: "B" },
         proposedByUs: true,
         sectors: 4,
         markers: [],
@@ -131,7 +130,7 @@ describe("trade route deltas", () => {
   it("lists a proposal and drops its partner from the choices", () => {
     const next = getProposedTradeRoutes(routes(), {
       id: "new",
-      partner: { id: "c", name: "C", sector: 9 },
+      partner: { id: "c", name: "C" },
       sectors: 6,
     });
     expect(next?.routes[1]).toMatchObject({
@@ -145,7 +144,7 @@ describe("trade route deltas", () => {
     expect(
       getProposedTradeRoutes(null, {
         id: "x",
-        partner: { id: "c", name: "C", sector: 1 },
+        partner: { id: "c", name: "C" },
         sectors: 1,
       }),
     ).toBeUndefined();
@@ -154,7 +153,7 @@ describe("trade route deltas", () => {
   it("activates an accepted proposal only from its proposed state", () => {
     const proposed = getProposedTradeRoutes(routes(), {
       id: "new",
-      partner: { id: "c", name: "C", sector: 9 },
+      partner: { id: "c", name: "C" },
       sectors: 6,
     })!;
     const next = getActivatedTradeRoutes(proposed, {
@@ -221,7 +220,6 @@ describe("caravan deltas", () => {
       outgoing: true,
       partner: "B",
       cargo: [{ itemId: "wood", name: "Wood", quantity: 100 }],
-      lossPercent: 0,
       resolvedAt: now,
     });
     const full = {
@@ -255,7 +253,7 @@ describe("caravan deltas", () => {
   });
 
   it("follows the viewer through the escort", () => {
-    const guard = { userId: "me", username: "Me", avatar: null, level: 5 };
+    const guard = { userId: "me", username: "Me" };
     const joined = getJoinedEscortCaravans(caravans(), "k", guard);
     expect(joined?.caravans[0]).toMatchObject({
       guards: [{ ...guard, status: "QUEUED", objectives: 0 }],
@@ -290,7 +288,6 @@ describe("caravan deltas", () => {
           outgoing,
           partner: "B",
           cargo: [],
-          lossPercent: 0,
           resolvedAt: now,
         },
       ],

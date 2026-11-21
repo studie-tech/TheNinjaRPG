@@ -35,7 +35,7 @@ export const getProposedTradeRoutes = (
   current: RoutesView,
   proposed: {
     id: string;
-    partner: { id: string; name: string; sector: number | null };
+    partner: { id: string; name: string };
     sectors: number;
   },
 ): RoutesView | undefined => {
@@ -167,7 +167,6 @@ export const getCancelledCaravans = (
         outgoing: row.outgoing,
         partner: row.partner,
         cargo: row.cargo,
-        lossPercent: row.lossPercent,
         resolvedAt: cancelled.resolvedAt,
       },
       ...current.history,
@@ -247,10 +246,7 @@ export const getDepartedCaravans = (
 export const getJoinedEscortCaravans = (
   current: CaravansView,
   caravanId: string,
-  guard: Pick<
-    CaravanEntry["guards"][number],
-    "userId" | "username" | "avatar" | "level"
-  >,
+  guard: Pick<CaravanEntry["guards"][number], "userId" | "username">,
 ): CaravansView | undefined =>
   updateCaravan(current, caravanId, (row) =>
     row.guards.some((entry) => entry.userId === guard.userId) || row.openSlots <= 0

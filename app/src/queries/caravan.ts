@@ -216,7 +216,6 @@ export const listCaravanParticipants = (
           lootClaimedAt: caravanParticipant.lootClaimedAt,
           rewardedAt: caravanParticipant.rewardedAt,
           username: userData.username,
-          avatar: userData.avatar,
           level: userData.level,
           status: userData.status,
           sector: userData.sector,
