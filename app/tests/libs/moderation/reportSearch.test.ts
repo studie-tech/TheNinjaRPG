@@ -189,17 +189,22 @@ describe("moderation report search capabilities", () => {
           ["second", "Threats", "2026-01-02 00:00:00.000"],
         ];
       }
-      if (query.startsWith("update")) {
+      if (query.trimStart().startsWith("UPDATE")) {
+        expect(query).toContain("SET `UserReport`.`embeddedTextHash` = SHA2(?, 256)");
+        expect(query).toContain("`UserReportEmbedding`.`embedding` = TO_VECTOR(?)");
         expect(query).toContain(
-          "set `embeddedTextHash` = SHA2(`UserReport`.`aiInterpretation`, 256)",
+          "SHA2(`UserReport`.`aiInterpretation`, 256) = SHA2(?, 256)",
         );
-        expect(query).toContain("`UserReport`.`aiInterpretation` = ?");
+        expect(params).toContain("text-embedding-3-small");
         return [[{ affectedRows: 1 }]];
       }
       expect(query).toContain("TO_VECTOR(?)");
       expect(query).toContain("on duplicate key update");
       expect(query).toContain("from `UserReport` where");
-      expect(params).toContain("text-embedding-3-small");
+      expect(params).toContain("");
+      expect(query).toContain(
+        "SHA2(`UserReport`.`aiInterpretation`, 256) = SHA2(?, 256)",
+      );
       expect(params.some((param) => param === "[1,0]" || param === "[0,1]")).toBe(true);
       return [[{ insertId: 0, affectedRows: 1 }]];
     });
@@ -211,11 +216,13 @@ describe("moderation report search capabilities", () => {
     expect(embed).toHaveBeenCalledWith(["Harassment", "Threats"]);
     expect(embed).toHaveBeenCalledTimes(1);
     expect(queries.filter((query) => query.startsWith("insert"))).toHaveLength(2);
-    // Each source hash is recorded only after its own vector write.
+    // Each vector and source hash are published together after ensuring a row exists.
     for (const id of ["first", "second"]) {
       const write = (kind: string) =>
         queries.findIndex(
-          (query, index) => query.startsWith(kind) && parameters[index]?.includes(id),
+          (query, index) =>
+            query.trimStart().toLowerCase().startsWith(kind) &&
+            parameters[index]?.includes(id),
         );
       expect(write("insert")).toBeGreaterThan(-1);
       expect(write("update")).toBeGreaterThan(write("insert"));

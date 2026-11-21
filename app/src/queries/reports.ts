@@ -340,8 +340,8 @@ export const selectUserReportForIndexReportEmbeddings = (
 };
 
 /**
- * Build the `userReportEmbedding` insert from `userReport` for `indexReportEmbeddings`,
- * using predicates on `id` and `aiInterpretation`, updating duplicate keys.
+ * Ensure a row exists for atomic vector publication without replacing a published vector.
+ * An interrupted insert remains retryable and unsearchable because its model is unset.
  */
 export const insertUserReportEmbeddingForIndexReportEmbeddings = (
   client: Pick<DrizzleClient, "insert" | "select">,
@@ -354,35 +354,40 @@ export const insertUserReportEmbeddingForIndexReportEmbeddings = (
       client
         .select({
           reportId: userReport.id,
-          model: sql`${OPENAI_REPORT_EMBEDDING_MODEL}`.as("model"),
+          model: sql`${""}`.as("model"),
           embedding: embedding.as("embedding"),
         })
         .from(userReport)
         .where(
           and(
             eq(userReport.id, report.id),
-            eq(userReport.aiInterpretation, report.text),
+            eq(embeddedTextHash, sql`SHA2(${report.text}, 256)`),
           ),
         ),
     )
     .onDuplicateKeyUpdate({
-      set: { model: OPENAI_REPORT_EMBEDDING_MODEL, embedding },
+      set: { reportId: sql`${userReportEmbedding.reportId}` },
     });
 
 /**
- * Build the `userReport` update for `indexReportEmbeddings`, recording the summary the
- * stored vector encodes; a summary changed since it was read stays flagged.
+ * Publish the vector and its source hash together, only while the exact source is current.
+ * A joined UPDATE keeps both tables consistent without a transaction; Drizzle's update
+ * builder cannot assign columns in multiple tables.
  */
 export const updateUserReportForIndexReportEmbeddings = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "execute">,
   report: { id: string; text: string },
+  embedding: SQL<unknown>,
 ) =>
-  client
-    .update(userReport)
-    .set({ embeddedTextHash })
-    .where(
-      and(eq(userReport.id, report.id), eq(userReport.aiInterpretation, report.text)),
-    );
+  client.execute(sql`
+    UPDATE ${userReport} INNER JOIN ${userReportEmbedding}
+      ON ${userReportEmbedding.reportId} = ${userReport.id}
+    SET ${userReport.embeddedTextHash} = SHA2(${report.text}, 256),
+      ${userReportEmbedding.model} = ${OPENAI_REPORT_EMBEDDING_MODEL},
+      ${userReportEmbedding.embedding} = ${embedding}
+    WHERE ${userReport.id} = ${report.id}
+      AND ${embeddedTextHash} = SHA2(${report.text}, 256)
+  `);
 
 /** SHA-256 of the current summary, matching what `embeddedTextHash` records. */
 const embeddedTextHash = sql<string>`SHA2(${userReport.aiInterpretation}, 256)`;

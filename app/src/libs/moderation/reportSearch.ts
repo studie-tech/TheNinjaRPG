@@ -232,8 +232,7 @@ export const indexReportEmbeddings = async (
         embedding,
         report,
       );
-      // Recorded only after the vector is stored; an interrupted run re-embeds the report.
-      await updateUserReportForIndexReportEmbeddings(client, report);
+      await updateUserReportForIndexReportEmbeddings(client, report, embedding);
     }),
   );
 };

@@ -11,6 +11,10 @@ import {
   indexReportEmbeddings,
 } from "@/libs/moderation/reportSearch";
 import {
+  insertUserReportEmbeddingForIndexReportEmbeddings,
+  updateUserReportForIndexReportEmbeddings,
+} from "@/queries/reports";
+import {
   describeWithDatabase,
   getTestDatabase,
   indexColumns,
@@ -228,6 +232,93 @@ describeWithDatabase("moderation retrieval against Community MySQL", () => {
       (await indexColumns("UserReport", "UserReport_needsEmbedding_createdAt_idx"))
         .columns,
     ).toEqual(["needsEmbedding", "createdAt"]);
+  });
+
+  it("does not publish embeddings after a byte-different summary change", async () => {
+    const client = await getTestDatabase();
+    const embedding = sql`TO_VECTOR(${JSON.stringify(Array(REPORT_EMBEDDING_DIMENSIONS).fill(1))})`;
+    for (const [index, text] of ["HARASSMENT", "Harassmént", "Harassment "].entries()) {
+      const report = { id: `changed-${index}`, text: "Harassment" };
+      await client.insert(userReport).values(
+        reportRow(report.id, {
+          aiInterpretation: report.text,
+        }),
+      );
+      await insertUserReportEmbeddingForIndexReportEmbeddings(
+        client,
+        embedding,
+        report,
+      );
+      await client
+        .update(userReport)
+        .set({ aiInterpretation: text })
+        .where(eq(userReport.id, report.id));
+      await updateUserReportForIndexReportEmbeddings(client, report, embedding);
+      const [row] = await client
+        .select()
+        .from(userReport)
+        .where(eq(userReport.id, report.id));
+      expect(row?.embeddedTextHash).toBeNull();
+      expect(row?.needsEmbedding).toBe(true);
+
+      // A stale input must also fail the initial insert guard.
+      await client
+        .delete(userReportEmbedding)
+        .where(eq(userReportEmbedding.reportId, report.id));
+      await insertUserReportEmbeddingForIndexReportEmbeddings(
+        client,
+        embedding,
+        report,
+      );
+      expect(
+        await client
+          .select()
+          .from(userReportEmbedding)
+          .where(eq(userReportEmbedding.reportId, report.id)),
+      ).toEqual([]);
+    }
+  });
+
+  it("keeps the published vector and hash together when a summary reverts during indexing", async () => {
+    const client = await getTestDatabase();
+    const originalText = "Summary B";
+    const report = { id: "reverted", text: "Summary A" };
+    const originalVector = sql`TO_VECTOR(${JSON.stringify(Array(REPORT_EMBEDDING_DIMENSIONS).fill(0))})`;
+    const replacementVector = sql`TO_VECTOR(${JSON.stringify(Array(REPORT_EMBEDDING_DIMENSIONS).fill(1))})`;
+    await client.insert(userReport).values(
+      reportRow(report.id, {
+        aiInterpretation: originalText,
+        embeddedTextHash: sql`SHA2(${originalText}, 256)`,
+      }),
+    );
+    await client.insert(userReportEmbedding).values({
+      reportId: report.id,
+      model: OPENAI_REPORT_EMBEDDING_MODEL,
+      embedding: originalVector,
+    });
+    await client
+      .update(userReport)
+      .set({ aiInterpretation: report.text })
+      .where(eq(userReport.id, report.id));
+    await insertUserReportEmbeddingForIndexReportEmbeddings(
+      client,
+      replacementVector,
+      report,
+    );
+    await client
+      .update(userReport)
+      .set({ aiInterpretation: originalText })
+      .where(eq(userReport.id, report.id));
+    await updateUserReportForIndexReportEmbeddings(client, report, replacementVector);
+    const [row] = await client
+      .select({
+        needsEmbedding: userReport.needsEmbedding,
+        embedding: userReportEmbedding.embedding,
+      })
+      .from(userReport)
+      .innerJoin(userReportEmbedding, eq(userReportEmbedding.reportId, userReport.id));
+    expect(row?.needsEmbedding).toBe(false);
+    expect(new Float32Array(row?.embedding ?? new ArrayBuffer(0))[0]).toBe(0);
   });
 
   it("deletes only orphans and preserves a parent restored between scan and delete", async () => {
