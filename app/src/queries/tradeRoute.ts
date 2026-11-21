@@ -164,12 +164,14 @@ export const listSectorMarkers = (
       longitude: tradeRouteMarker.longitude,
       latitude: tradeRouteMarker.latitude,
       controllerVillageId: tradeRouteMarker.controllerVillageId,
+      controllerName: village.name,
       control: tradeRouteMarker.control,
       villageIdA: tradeRoute.villageIdA,
       villageIdB: tradeRoute.villageIdB,
     })
     .from(tradeRouteMarker)
     .innerJoin(tradeRoute, eq(tradeRoute.id, tradeRouteMarker.routeId))
+    .leftJoin(village, eq(village.id, tradeRouteMarker.controllerVillageId))
     .where(and(eq(tradeRouteMarker.sector, sector), eq(tradeRoute.status, "ACTIVE")));
 
 /** One marker with its route's villages. */

@@ -1,3 +1,4 @@
+import { eq, isNull, lte, or } from "drizzle-orm";
 import { z } from "zod";
 import {
   WAREHOUSE_DEPOSIT_COOLDOWN_HOURS,
@@ -5,7 +6,7 @@ import {
   WAREHOUSE_MAX_PRODUCTION_ITEMS,
   WAREHOUSE_MIN_DEPOSIT,
 } from "@/drizzle/constants";
-import type { UserData, Village } from "@/drizzle/schema";
+import { type UserData, userItem, type Village } from "@/drizzle/schema";
 import {
   countInventoryBucketSlots,
   getInventoryBucket,
@@ -289,6 +290,16 @@ export const warehouseRouter = createTRPCRouter({
               userItemId: stack.id,
               expectedQuantity: stack.quantity,
               nextQuantity: stack.quantity - input.quantity,
+              // The stack must still be carried and unequipped, as it was when read.
+              where: [
+                eq(userItem.storedAtHome, false),
+                eq(userItem.isInAuction, false),
+                eq(userItem.equipped, "NONE"),
+                or(
+                  isNull(userItem.craftingFinishedAt),
+                  lte(userItem.craftingFinishedAt, now),
+                ),
+              ],
             });
             if (!consumed) throw conflict;
             await creditWarehouseStock(

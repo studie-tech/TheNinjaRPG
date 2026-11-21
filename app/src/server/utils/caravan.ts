@@ -28,7 +28,7 @@ import {
   advanceCaravanCheckpoints,
   expireAmbush,
   grantCaravanRewards,
-  insertEncounter,
+  insertCheckpointAmbush,
   listArrivedCaravans,
   listCaravanParticipants,
   listCaravansByIds,
@@ -187,10 +187,13 @@ export const deliverCaravan = async (
   // transaction ties them to one DELIVERED claim so a retry neither repeats nor loses them.
   const delivered = await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
-      const claimed = await transitionCaravan(tx, row, {
-        status: "DELIVERED",
-        resolvedAt: now,
-      });
+      // A fight opened since the read above keeps the caravan on the road until it settles.
+      const claimed = await transitionCaravan(
+        tx,
+        row,
+        { status: "DELIVERED", resolvedAt: now },
+        { unfought: true },
+      );
       if (claimed.rowsAffected !== 1) return false;
       for (const line of remaining)
         await creditWarehouseStock(
@@ -300,8 +303,13 @@ const resolveDueOperations = async (
         continue;
       }
       const [target] = await listCaravansByIds(client, [operation.caravanId]);
-      // A caravan that arrived or was called off meanwhile cannot be sabotaged.
-      if (target?.status !== "TRAVELLING") {
+      // A caravan that was due, arrived or was called off before the operation finished
+      // cannot be sabotaged.
+      if (
+        target?.status !== "TRAVELLING" ||
+        !target.arrivesAt ||
+        target.arrivesAt <= operation.finishesAt
+      ) {
         await resolveOperation(client, operation.id, "RESOLVED", now);
         continue;
       }
@@ -309,6 +317,7 @@ const resolveDueOperations = async (
       await resolveSabotage(client, {
         operationId: operation.id,
         caravanId: target.id,
+        finishesAt: operation.finishesAt,
         now,
         expectedDelayMinutes: target.delayMinutes,
         addedMinutes:
@@ -429,16 +438,16 @@ const rollCheckpointAmbushes = async (
     ).some(Boolean);
     if (!ambushed) continue;
     try {
-      await insertEncounter(client, {
+      const inserted = await insertCheckpointAmbush(client, {
         id: nanoid(),
-        type: "AMBUSH",
-        status: "PENDING",
         caravanId: row.id,
         expiresAt: new Date(
           now.getTime() + CARAVAN_AMBUSH_RESPONSE_MINUTES * MINUTE_MS,
         ),
         now,
       });
+      // A caravan delivered meanwhile is no longer ambushed.
+      if (inserted.rowsAffected !== 1) continue;
     } catch (error) {
       // Another fight already holds the caravan; this checkpoint passes quietly.
       if (isMysqlDuplicateKeyError(error)) continue;

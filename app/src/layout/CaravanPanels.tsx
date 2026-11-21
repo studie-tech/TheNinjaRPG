@@ -502,9 +502,13 @@ const PrepareCaravan = ({
     .filter(([, quantity]) => quantity > 0)
     .map(([itemId, quantity]) => ({ itemId, quantity }));
   const units = lines.reduce((sum, line) => sum + line.quantity, 0);
+  // An entry outside its limits holds NaN; it blocks the reservation until corrected.
+  const hasInvalidCargo = Object.values(cargo).some((quantity) =>
+    Number.isNaN(quantity),
+  );
   // Chosen goods stay listed after their free stock runs out, so they can be set to zero.
   const available = warehouse.stock.filter(
-    (row) => row.quantity - row.reserved > 0 || (cargo[row.itemId] ?? 0) > 0,
+    (row) => row.quantity - row.reserved > 0 || isChosen(cargo[row.itemId]),
   );
   const full = routes.capacity.used >= routes.capacity.total;
   if (active.length === 0)
@@ -532,7 +536,7 @@ const PrepareCaravan = ({
         <ul className="grid gap-1 @md:grid-cols-2">
           {available.map((row) => {
             const free = row.quantity - row.reserved;
-            const chosen = (cargo[row.itemId] ?? 0) > 0;
+            const chosen = isChosen(cargo[row.itemId]);
             return (
               <li key={row.itemId} className="flex items-center gap-2 text-sm">
                 <span className="grow truncate" title={row.name}>
@@ -565,6 +569,7 @@ const PrepareCaravan = ({
         <Button
           disabled={
             !routeId ||
+            hasInvalidCargo ||
             units < CARAVAN_MIN_CARGO_UNITS ||
             units > CARAVAN_MAX_CARGO_UNITS ||
             full ||
@@ -586,3 +591,7 @@ const PrepareCaravan = ({
     </div>
   );
 };
+
+/** Whether a cargo entry is part of the shipment, including one still being corrected. */
+const isChosen = (quantity: number | undefined) =>
+  quantity !== undefined && quantity !== 0;
