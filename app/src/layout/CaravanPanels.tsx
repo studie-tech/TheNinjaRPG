@@ -454,8 +454,8 @@ export const CaravansPanel = ({
           </ul>
         )}
         {data.history.length > 0 && (
-          <details className="mt-3">
-            <summary className="cursor-pointer text-sm">Recent caravans</summary>
+          <div className="mt-3">
+            <h3 className="font-semibold">Recent caravans</h3>
             <ul className="mt-2 divide-y text-sm">
               {data.history.map((row) => (
                 <li key={row.id} className="flex flex-wrap gap-x-2 py-1">
@@ -476,7 +476,7 @@ export const CaravansPanel = ({
                 </li>
               ))}
             </ul>
-          </details>
+          </div>
         )}
       </div>
     </ContentBox>

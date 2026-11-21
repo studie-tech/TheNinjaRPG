@@ -28,6 +28,7 @@ import {
 } from "@/drizzle/constants";
 import { useCaravans } from "@/hooks/useCaravans";
 import Modal from "@/layout/Modal";
+import { cn } from "@/libs/shadui";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 type Controls = NonNullable<RouterOutputs["caravanOps"]["getControls"]>;
@@ -117,7 +118,8 @@ const CaravanControlsPanel = () => {
                       ? "stopped by escorts"
                       : op.succeeds
                         ? "succeeded"
-                        : "failed"}
+                        : "failed"}{" "}
+                    · {new Date(op.finishesAt).toLocaleTimeString()}
                   </Badge>
                 </li>
               ))}
@@ -131,7 +133,9 @@ const CaravanControlsPanel = () => {
             Investigate trade activity or search sectors to find caravans.
           </p>
         ) : (
-          <ul className="grid gap-2 @2xl:grid-cols-2">
+          <ul
+            className={cn("grid gap-2", data.caravans.length > 1 && "@2xl:grid-cols-2")}
+          >
             {data.caravans.map((row) => (
               <KnownCaravan
                 key={row.id}
@@ -296,7 +300,9 @@ const KnownCaravan = ({
       </p>
       <div className="mt-1 flex flex-wrap gap-1">
         {row.inSector && <Badge variant="destructive">In your sector</Badge>}
-        <Badge variant="outline">{row.guards} escorts</Badge>
+        <Badge variant="outline">
+          {row.guards} escort{row.guards === 1 ? "" : "s"}
+        </Badge>
         {row.role && (
           <Badge variant="secondary">
             {row.role === "BANDIT" ? "Robbery" : "Hostile"}
