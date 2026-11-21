@@ -1023,6 +1023,7 @@ export const insertUserJutsuForCloneAi = (
       userId: aiData.userId,
       jutsuId: jutsu.jutsuId,
       level: jutsu.level,
+      equipped: jutsu.equipped,
     })),
   );
 

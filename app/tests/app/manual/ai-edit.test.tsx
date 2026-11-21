@@ -156,6 +156,37 @@ describe("manual AI editing", () => {
     },
   );
 
+  it("requires the replacement to stay equipped and allows clearing it", async () => {
+    ai.jutsus = [{ jutsuId: "strike" }] as AiWithRelations["jutsus"];
+    await mount();
+    await act(async () => {
+      editor.form.setValue("basicAttackJutsuId", "strike");
+      await editor.handleUserSubmit();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.lastCall?.[0].data.basicAttackJutsuId).toBe("strike");
+    save.mockClear();
+    await act(async () => {
+      editor.form.setValue("jutsus", []);
+      await editor.handleUserSubmit();
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(editor.form.getFieldState("basicAttackJutsuId").error?.message).toContain(
+      "clear Basic Attack Replacement",
+    );
+    await act(async () => {
+      editor.form.setValue("basicAttackJutsuId", null);
+      await editor.handleUserSubmit();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.lastCall?.[0].data).toMatchObject({
+      basicAttackJutsuId: null,
+      jutsus: [],
+    });
+    const field = editor.formData.find(({ id }) => id === "basicAttackJutsuId");
+    expect(field).toMatchObject({ nullable: true, values: [{ id: "", name: "None" }] });
+  });
+
   it("retains validation and allows correcting invalid edits", async () => {
     await mount();
     await act(async () => {

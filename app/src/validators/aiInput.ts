@@ -69,6 +69,14 @@ export const insertAiSchema = createInsertSchema(userData)
     }).shape,
   )
   .superRefine((data, ctx) => {
+    if (data.basicAttackJutsuId && !data.jutsus?.includes(data.basicAttackJutsuId)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["basicAttackJutsuId"],
+        message:
+          "Equip the replacement Jutsu, or clear Basic Attack Replacement before removing it.",
+      });
+    }
     const allowed = maxPoolsMultiplier(data.level);
     if (data.poolsMultiplier > allowed) {
       ctx.addIssue({

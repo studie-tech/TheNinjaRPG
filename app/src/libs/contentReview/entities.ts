@@ -173,6 +173,7 @@ const AI_EDITABLE_KEYS = [
   "anbuId",
   "clanId",
   "jutsus",
+  "basicAttackJutsuId",
   "items",
   "effects",
 ] as const;
