@@ -414,6 +414,7 @@ export const occupationRouter = createTRPCRouter({
         craftingFinishedAt: finishTime,
         isInAuction: false,
         activeVariantId: null,
+        fortification: null,
         dropChancePerc: 0,
       }));
       const {
@@ -862,7 +863,7 @@ export const occupationRouter = createTRPCRouter({
               userItemId: crystalUserItem.id,
               expectedQuantity: crystalUserItem.quantity,
               nextQuantity: crystalUserItem.quantity - 1,
-              where: [eq(userItem.isInAuction, false)],
+              where: [eq(userItem.isInAuction, false), isNull(userItem.fortification)],
             });
             if (!consumed)
               throw new CraftingServiceConflict("Crystal no longer available");
@@ -1107,5 +1108,5 @@ const takeCraftMaterial = (
     userItemId: consumption.userItemId,
     expectedQuantity: consumption.consumeQuantity + consumption.newQuantity,
     nextQuantity: consumption.newQuantity,
-    where: [eq(userItem.isInAuction, false)],
+    where: [eq(userItem.isInAuction, false), isNull(userItem.fortification)],
   });

@@ -8,6 +8,7 @@ export const MEAL_ITEM_DEFAULTS = {
   slot: "ITEM",
   weaponType: "NONE",
   canBeImbued: false,
+  canBeEnhanced: false,
   maxEquips: 0,
   isFarmSeed: false,
   isFarmFertilizer: false,

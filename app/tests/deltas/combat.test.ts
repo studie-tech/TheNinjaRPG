@@ -210,6 +210,18 @@ describe("confirmed combat profile reconciliation", () => {
     },
   );
 
+  it("retains Fortify mastery through combat completion cache reconciliation", () => {
+    const { raw } = fixture();
+    raw.items[0]!.item.effects[0]!.fortifyId = "mastery";
+    raw.items[0]!.fortification = {
+      mastery: { type: "increasemastery", level: 3, failures: 0 },
+    };
+    const snapshot = captureCombatCacheSnapshot(raw);
+    expect(
+      combatCacheDerived(snapshot, snapshot.items, {}).effectiveMasteries
+        .ninjutsuMastery,
+    ).toBe(113);
+  });
   it("retains permanent title mastery through combat completion cache reconciliation", () => {
     const { raw } = fixture();
     raw.titles = [

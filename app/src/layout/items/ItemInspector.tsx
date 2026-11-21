@@ -33,6 +33,7 @@ import Confirm from "@/layout/Confirm";
 import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import { rarityLabel, rarityTextClass, slotLabel } from "@/layout/items/ItemCard";
+import { ItemFortify } from "@/layout/items/ItemFortify";
 import {
   ItemDurabilityRepairActions,
   RepairItemSelectionModal,
@@ -256,6 +257,14 @@ export function ItemInspector({
           </p>
         )}
       </div>
+      {useritem.item.canBeEnhanced && (
+        <ItemFortify
+          owned={useritem}
+          crafter={userData.occupation === "CRAFTING"}
+          money={userData.money}
+          blocked={isLoading || userData.status !== "AWAKE" || !!userData.battleId}
+        />
+      )}
       {!isLoading && !isStored && (
         <>
           <div className="flex flex-row flex-wrap items-center gap-2">

@@ -238,6 +238,7 @@ export const useItemEditForm = (
     { id: "preventBattleUsage", type: "boolean" },
     { id: "maxImbueNumber", type: "number" },
     { id: "canBeImbued", type: "boolean" },
+    { id: "canBeEnhanced", type: "boolean", label: "Can be enhanced (Fortify)" },
   ];
   const requirements: FormEntry<Path<ZodItemType>>[] = [
     { id: "requiredLevel", type: "number", label: "Required Level" },

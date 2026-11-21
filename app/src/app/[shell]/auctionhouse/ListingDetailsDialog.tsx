@@ -37,7 +37,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { QueryError } from "@/layout/QueryError";
 import Table from "@/layout/Table";
-import { finishedImbuementItems } from "@/libs/item";
+import { finishedImbuementItems, userItemDisplay } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
@@ -280,7 +280,16 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         <div className="[&>div]:!mb-1.5">
           <ItemWithEffects
             item={{
-              ...listing.item,
+              ...(listing.userItem
+                ? userItemDisplay(
+                    {
+                      ...listing.userItem,
+                      item: listing.item,
+                      imbuements: listing.userItem.imbuements ?? [],
+                    },
+                    listing.item,
+                  )
+                : listing.item),
               imbuements: listing.userItem
                 ? finishedImbuementItems(listing.userItem)
                 : [],

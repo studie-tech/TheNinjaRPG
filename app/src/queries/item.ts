@@ -2096,6 +2096,7 @@ export const updateUserItemForSplitItemStack = (
         eq(userItem.id, userItemId),
         eq(userItem.userId, userId),
         eq(userItem.quantity, currentUserItem.quantity),
+        isNull(userItem.fortification),
         gt(userItem.quantity, 0),
         eq(userItem.isInAuction, false),
         eq(userItem.equipped, currentUserItem.equipped),
@@ -2401,6 +2402,7 @@ const joinableUserItemWhere = (userId: string, now: Date) =>
     eq(userItem.equipped, "NONE"),
     eq(userItem.isInAuction, false),
     isNull(userItem.activeVariantId),
+    isNull(userItem.fortification),
     gt(userItem.quantity, 0),
     eq(userItem.durability, DURABILITY_MAX_DEFAULT),
     or(isNull(userItem.craftingFinishedAt), lte(userItem.craftingFinishedAt, now)),
@@ -2672,6 +2674,7 @@ const mergeStackRowGuard = (
 ) =>
   and(
     eq(userItem.id, item.id),
+    isNull(userItem.fortification),
     eq(userItem.userId, userId),
     eq(userItem.isInAuction, false),
     eq(userItem.quantity, quantity),
