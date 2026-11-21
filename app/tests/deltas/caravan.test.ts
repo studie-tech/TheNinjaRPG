@@ -84,6 +84,7 @@ const caravan = (overrides: Partial<Caravans["caravans"][number]> = {}) =>
   }) as Caravans["caravans"][number];
 const caravans = (rows = [caravan()]): Caravans => ({
   canManage: true,
+  settled: false,
   caravans: rows,
   history: [],
 });
@@ -336,6 +337,13 @@ describe("caravan deltas", () => {
     ).toBe(true);
     expect(
       hasCaravanStockMoved(caravans([incoming]), finished("CANCELLED", false)),
+    ).toBe(false);
+    // A preparing caravan delivered unseen departed meanwhile.
+    expect(hasCaravanStockMoved(caravans(), finished("DELIVERED"))).toBe(true);
+    // A delivery that arrived between two lists shows only in the history, once.
+    expect(hasCaravanStockMoved(caravans([]), finished("DELIVERED", false))).toBe(true);
+    expect(
+      hasCaravanStockMoved(finished("DELIVERED", false), finished("DELIVERED", false)),
     ).toBe(false);
     // A caravan gone from the list and its history may have moved either.
     expect(hasCaravanStockMoved(caravans([travelling]), caravans([]))).toBe(true);

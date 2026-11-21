@@ -10,7 +10,8 @@ import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 
 /**
  * Confirmed changes to the viewer's Warehouse view. Stock and allowance figures are amounts
- * added to the loaded values; deposit candidates replace every loaded stack of their items.
+ * added to the loaded values, the allowance only to a view of the same UTC day; deposit
+ * candidates replace every loaded stack of their items.
  */
 export const warehouseChangeSchema = z.object({
   stock: z
@@ -33,7 +34,7 @@ export const warehouseChangeSchema = z.object({
       }),
     )
     .optional(),
-  allowanceUsed: z.number().int().optional(),
+  allowanceUsed: z.object({ day: z.string(), quantity: z.number().int() }).optional(),
   candidates: z
     .object({
       itemIds: z.array(z.string()),

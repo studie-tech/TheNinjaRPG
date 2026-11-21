@@ -179,7 +179,8 @@ export const getCancelledCaravans = (
  * Whether the village's Warehouse stock moved between two caravan lists it was shown:
  * preparing reserves and departing removes the origin's stock, a cancellation returns it
  * to the origin and a delivery credits the destination. A caravan that left the list
- * without a history entry may have done either, so it counts as moved.
+ * without a history entry may have done either, so it counts as moved, as does one that
+ * finished unseen or was still preparing when last shown.
  */
 export const hasCaravanStockMoved = (
   shown: CaravansView | undefined,
@@ -188,6 +189,7 @@ export const hasCaravanStockMoved = (
   if (!shown || !current) return false;
   const before = new Map(shown.caravans.map((row) => [row.id, row]));
   const open = new Set(current.caravans.map((row) => row.id));
+  const finishedBefore = new Set(shown.history.map((entry) => entry.id));
   return (
     current.caravans.some((row) => {
       const was = before.get(row.id);
@@ -200,9 +202,18 @@ export const hasCaravanStockMoved = (
       if (open.has(row.id)) return false;
       const finished = current.history.find((entry) => entry.id === row.id);
       return (
-        !finished || finished.status === (finished.outgoing ? "CANCELLED" : "DELIVERED")
+        !finished ||
+        (row.outgoing && row.status === "PREPARING") ||
+        finished.status === (finished.outgoing ? "CANCELLED" : "DELIVERED")
       );
-    })
+    }) ||
+    current.history.some(
+      (entry) =>
+        !entry.outgoing &&
+        entry.status === "DELIVERED" &&
+        !before.has(entry.id) &&
+        !finishedBefore.has(entry.id),
+    )
   );
 };
 

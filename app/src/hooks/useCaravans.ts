@@ -37,6 +37,7 @@ import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { getCheckpointTimes } from "@/libs/caravan";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
+import { DAY_S } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -92,6 +93,8 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   useRefreshAt(
     [
       warehouse.data?.nextCycleAt,
+      // The daily allowance starts again at UTC midnight.
+      warehouse.data && Date.parse(warehouse.data.allowance.day) + DAY_S * 1000,
       ...(warehouse.data?.depositCandidates.map((row) => row.availableAt) ?? []),
     ],
     () => void warehouse.refetch({ cancelRefetch: false }),
@@ -162,12 +165,13 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
     for (const name of names) void views[name].updateCache(undefined, snapshot[name]);
   };
   // Caravans that moved the village's stock reload it, whoever moved them; the viewer's own
-  // prepare, dispatch or cancel, already patched from its response, reads it once more.
+  // prepare, dispatch or cancel, already patched from its response, reads it once more. A
+  // first list whose read settled caravans may have moved stock the Warehouse read missed.
   const shownCaravans = useRef<CaravansView | undefined>(undefined);
   const onCaravansShown = useEffectEvent((current: CaravansView | undefined) => {
     const shown = shownCaravans.current;
     shownCaravans.current = current;
-    if (hasCaravanStockMoved(shown, current))
+    if ((!shown && current?.settled) || hasCaravanStockMoved(shown, current))
       reload(prepareViews(), ["warehouse", "history"]);
   });
   useEffect(() => {
@@ -210,7 +214,8 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   };
   /**
    * Bind a mutation to the views it changes: a confirmation applies `patch`, while a
-   * rejection or a lost response reloads `affected`.
+   * rejection or a lost response reloads `affected`. Failures settle here rather than in
+   * `onError`, so the provider's error handler still reports them.
    */
   const bind = <Result extends { success: boolean; message: string }, Input>(
     affected: (keyof typeof views)[],
@@ -222,8 +227,13 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       if (result.success) patch(result, input, snapshot);
       else reload(snapshot, affected);
     },
-    onError: (_error: unknown, _input: Input, snapshot: Snapshot | undefined) => {
-      if (snapshot) reload(snapshot, affected);
+    onSettled: (
+      _result: Result | undefined,
+      error: unknown,
+      _input: Input,
+      snapshot: Snapshot | undefined,
+    ) => {
+      if (error && snapshot) reload(snapshot, affected);
     },
   });
   /**
@@ -247,13 +257,14 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
         if (result.userPatch || result.userRecovery)
           await updateUser(result, { revision: snapshot.user, refetch: false });
       },
-      onError: async (
+      onSettled: async (
+        result: Result | undefined,
         error: unknown,
         input: Input,
         snapshot: { views: Snapshot; user: number | undefined } | undefined,
       ) => {
-        options.onError(error, input, snapshot?.views);
-        if (snapshot) await updateUser(undefined, { revision: snapshot.user });
+        options.onSettled(result, error, input, snapshot?.views);
+        if (error && snapshot) await updateUser(undefined, { revision: snapshot.user });
       },
     };
   };
@@ -279,12 +290,13 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
           await updateUser(result, { revision: snapshot.user, refetch: false });
       }
     },
-    onError: async (
-      _error: unknown,
+    onSettled: async (
+      _result: Result | undefined,
+      error: unknown,
       _input: Input,
       snapshot: { views: Snapshot; user: number | undefined } | undefined,
     ) => {
-      if (!snapshot) return;
+      if (!error || !snapshot) return;
       reload(snapshot.views, ["caravans", "controls"]);
       await updateUser(undefined, { revision: snapshot.user });
     },
@@ -322,12 +334,13 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       if (result.userRecovery)
         await updateUser(result, { revision: snapshot.user, refetch: false });
     },
-    onError: async (
-      _error: unknown,
+    onSettled: async (
+      _result: Result | undefined,
+      error: unknown,
       _input: Input,
       snapshot: { views: Snapshot; user: number | undefined } | undefined,
     ) => {
-      if (!snapshot) return;
+      if (!error || !snapshot) return;
       reload(snapshot.views, [affected]);
       await updateUser(undefined, { revision: snapshot.user });
     },
@@ -364,7 +377,8 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
           snapshot.inventory,
         );
       },
-      onError: (
+      onSettled: (
+        result: Result | undefined,
         error: unknown,
         input: Input,
         snapshot:
@@ -374,8 +388,9 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
             }
           | undefined,
       ) => {
-        options.onError(error, input, snapshot?.views);
-        if (snapshot) void inventory.updateInventory(undefined, snapshot.inventory);
+        options.onSettled(result, error, input, snapshot?.views);
+        if (error && snapshot)
+          void inventory.updateInventory(undefined, snapshot.inventory);
       },
     };
   };
@@ -386,12 +401,12 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
     caravans,
     operations,
     deposit: api.warehouse.deposit.useMutation(
-      bindInventory(["warehouse"], (result, _input, snapshot) =>
+      bindInventory(["warehouse", "history"], (result, _input, snapshot) =>
         updateStock(result, snapshot, "patch"),
       ),
     ),
     withdraw: api.warehouse.withdraw.useMutation(
-      bindInventory(["warehouse"], (result, _input, snapshot) =>
+      bindInventory(["warehouse", "history"], (result, _input, snapshot) =>
         updateStock(result, snapshot, "patch"),
       ),
     ),
@@ -538,12 +553,15 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
           ),
       ),
     ),
+    // The profession also decides the viewer's role against each caravan, so the controls
+    // reload after showing the switch.
     setBandit: api.caravanOps.setBandit.useMutation(
       bind(["controls"], (_result, input: { enabled: boolean }, snapshot) => {
         void views.controls.updateCache(
           (current) => getBanditControls(current, input.enabled),
           snapshot.controls,
         );
+        reload(snapshot, ["controls"]);
       }),
     ),
     startOperation: api.caravanOps.startOperation.useMutation(

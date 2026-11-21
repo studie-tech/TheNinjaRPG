@@ -64,7 +64,7 @@ const view = (overrides: Partial<Warehouse> = {}) =>
         ...wood,
       },
     ],
-    allowance: { total: 100, used: 10, remaining: 90 },
+    allowance: { total: 100, used: 10, remaining: 90, day: "2026-11-21" },
     depositCandidates: [
       {
         userItemId: "s1",
@@ -155,6 +155,9 @@ describe("warehouse deltas", () => {
     const next = applyWarehouseChange(view(), change);
     expect(next?.stock.find((row) => row.itemId === "wood")?.quantity).toBe(15);
     expect(next?.allowance).toMatchObject({ total: 100, used: 45, remaining: 55 });
+    // A view still showing the previous UTC day reads the new day's allowance instead.
+    const allowance = { ...view().allowance, day: "2026-11-20" };
+    expect(applyWarehouseChange(view({ allowance }), change)).toBeUndefined();
     // The opened stack is below the deposit minimum; the filled one keeps the cooldown.
     expect(next?.depositCandidates).toEqual([
       expect.objectContaining({
@@ -244,5 +247,31 @@ describe("warehouse deltas", () => {
     expect(next?.pages[0]?.data[0]?.itemName).toBeNull();
     expect(getWarehouseHistoryWithLogs(next!, logs)?.pages[0]?.data).toHaveLength(3);
     expect(getWarehouseHistoryWithLogs(history, undefined)).toBeUndefined();
+  });
+
+  it("keeps the history order around logs written before a newer shown row", () => {
+    const row = (id: string, at: number) => ({
+      id,
+      type: "DEPOSIT" as const,
+      quantity: 1,
+      createdAt: new Date(now.getTime() + at),
+      itemName: "Wood",
+      username: "A",
+    });
+    const history: History = {
+      pages: [
+        {
+          data: [row("newer", 1000), row("last", -5000)],
+          nextCursor: { createdAt: new Date(now.getTime() - 5000), id: "last" },
+        },
+      ],
+      pageParams: [null],
+    };
+    const logs = [row("mine", 0), row("older", -9000)];
+    expect(
+      getWarehouseHistoryWithLogs(history, logs)?.pages[0]?.data.map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["newer", "mine", "last"]);
   });
 });

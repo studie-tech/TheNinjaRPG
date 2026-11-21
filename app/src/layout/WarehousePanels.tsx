@@ -31,6 +31,7 @@ import { type useCaravans, useWarehouseHistory } from "@/hooks/useCaravans";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { cn } from "@/libs/shadui";
 import { useUserPicker } from "@/utils/search";
@@ -558,7 +559,21 @@ export const WarehouseHistory = () => {
       subtitle="Deposits, withdrawals, production and shipments"
       initialBreak
     >
-      {rows.length === 0 ? (
+      {rows.length === 0 && history.status === "pending" ? (
+        <Loader explanation="Loading history" />
+      ) : rows.length === 0 && history.status === "error" ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-muted-foreground text-sm">Could not load the history.</p>
+          <Button
+            size="sm"
+            variant="outline"
+            loading={history.isFetching}
+            onClick={() => void history.refetch()}
+          >
+            Try again
+          </Button>
+        </div>
+      ) : rows.length === 0 ? (
         <p className="text-muted-foreground text-sm">Nothing has moved yet.</p>
       ) : (
         <ul className="@container divide-y text-sm">

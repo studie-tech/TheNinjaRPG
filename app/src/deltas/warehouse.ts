@@ -9,7 +9,7 @@ import type {
   WarehouseDepositLedger,
 } from "@/drizzle/schema";
 import type { CargoLine } from "@/libs/caravan";
-import { getDepositCandidates } from "@/libs/warehouse";
+import { getAllowanceDay, getDepositCandidates } from "@/libs/warehouse";
 import type { WarehouseChange, WarehouseLogEntry } from "@/validators/warehouse";
 
 type WarehouseView = RouterOutputs["warehouse"]["getWarehouse"];
@@ -112,7 +112,7 @@ export const getWithdrawWarehouseChange = ({
   ];
   return {
     stock: [{ itemId: item.id, quantity: -quantity, reserved: 0 }],
-    allowanceUsed: quantity,
+    allowanceUsed: { day: getAllowanceDay(now), quantity },
     candidates: getItemCandidates(item.id, updated, ledgers, now),
   };
 };
@@ -189,14 +189,17 @@ export const getWarehouseLogEntries = (
   }));
 
 /**
- * Apply a confirmed change to the Warehouse view. Unknown stock rows without item details
- * and stock removed from rows the view lacks return undefined for an authoritative read.
+ * Apply a confirmed change to the Warehouse view. Unknown stock rows without item details,
+ * stock removed from rows the view lacks and allowance used on another UTC day than the
+ * view shows return undefined for an authoritative read.
  */
 export const applyWarehouseChange = (
   current: WarehouseView,
   change: WarehouseChange | undefined,
 ): WarehouseView | undefined => {
   if (!current || !change) return;
+  if (change.allowanceUsed && change.allowanceUsed.day !== current.allowance.day)
+    return;
   let stock = current.stock;
   for (const entry of change.stock ?? []) {
     const row = stock.find((item) => item.itemId === entry.itemId);
@@ -226,7 +229,7 @@ export const applyWarehouseChange = (
         ? [...stock, added]
         : [...stock.slice(0, index), added, ...stock.slice(index)];
   }
-  const used = current.allowance.used + (change.allowanceUsed ?? 0);
+  const used = current.allowance.used + (change.allowanceUsed?.quantity ?? 0);
   return {
     ...current,
     stock,
@@ -252,25 +255,36 @@ export const applyWarehouseChange = (
   };
 };
 
-/** Show the logs a mutation wrote at the top of the loaded history. */
+/**
+ * Show the logs a mutation wrote in the first page of the loaded history, in its order. A
+ * log that sorts past the page's cursor belongs to a later page, which reads it.
+ */
 export const getWarehouseHistoryWithLogs = (
   current: HistoryPages,
   logs: WarehouseLogEntry[] | undefined,
 ): HistoryPages | undefined => {
   const [first, ...rest] = current.pages;
   if (!first || !logs) return;
-  const fresh = logs
-    .filter((log) => !first.data.some((row) => row.id === log.id))
-    // History lists newest first, then by descending id.
-    .sort(
-      (a, b) =>
-        b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
-    );
+  const cursor = first.nextCursor;
+  const fresh = logs.filter(
+    (log) =>
+      !first.data.some((row) => row.id === log.id) &&
+      (!cursor || compareHistory(log, cursor) < 0),
+  );
   return {
     ...current,
-    pages: [{ ...first, data: [...fresh, ...first.data] }, ...rest],
+    pages: [
+      { ...first, data: [...fresh, ...first.data].sort(compareHistory) },
+      ...rest,
+    ],
   };
 };
+
+/** History lists newest first, then by descending id. */
+const compareHistory = (
+  a: { createdAt: Date; id: string },
+  b: { createdAt: Date; id: string },
+) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id);
 
 const getStockItem = (item: StockItem) => ({
   name: item.name,
