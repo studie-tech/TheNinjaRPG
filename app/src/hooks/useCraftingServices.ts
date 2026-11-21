@@ -15,8 +15,10 @@ import { useUserData } from "@/utils/UserContext";
 
 /** Reconcile receipt-driven inventory, profile progression and timers after service mutations. */
 export const useCraftingServiceCache = () => {
+  const utils = api.useUtils();
   const { prepareUserUpdate, updateUser } = useUserData();
-  const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
+  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
+    useInventoryCacheUpdate();
   const requests = useQueryCacheUpdate<
     RouterOutputs["occupation"]["getServiceRequests"]
   >(getQueryKey(api.occupation.getServiceRequests, undefined, "query"));
@@ -68,7 +70,21 @@ export const useCraftingServiceCache = () => {
       ),
     ]);
   };
-  return { prepareServiceUpdate, updateService };
+  /** Refresh the quote's owned inputs before allowing a rejected request to retry. */
+  const refreshServiceOffer = async (crafterId: string, fortify: boolean) => {
+    await Promise.all([
+      utils.occupation.getServicePrices.invalidate({ crafterId }, undefined, {
+        throwOnError: true,
+      }),
+      invalidateInventory({ throwOnError: true }),
+      fortify
+        ? utils.item.getFortifyEligibility.invalidate(undefined, undefined, {
+            throwOnError: true,
+          })
+        : undefined,
+    ]);
+  };
+  return { prepareServiceUpdate, updateService, refreshServiceOffer };
 };
 
 /** Bind price edits to the captured crafter key even when a profile selection changes. */

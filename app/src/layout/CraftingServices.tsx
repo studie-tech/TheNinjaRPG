@@ -26,6 +26,7 @@ import {
 import {
   CRAFTING_SERVICE_MAX_FEE,
   CRAFTING_SERVICES,
+  FORTIFY_MAX_LEVEL,
   ItemRarities,
 } from "@/drizzle/constants";
 import {
@@ -365,23 +366,31 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
   });
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState<"idle" | "pending" | "failed">(
+    "idle",
+  );
   const offers = api.occupation.getServicePrices.useQuery(
     { crafterId },
     { staleTime: 0 },
   );
   const recipes = api.occupation.getCraftableItems.useQuery();
   const inventory = api.item.getUserItems.useQuery();
-  const { prepareServiceUpdate, updateService } = useCraftingServiceCache();
+  const { prepareServiceUpdate, updateService, refreshServiceOffer } =
+    useCraftingServiceCache();
   const submit = api.occupation.submitServiceRequest.useMutation({
     onMutate: prepareServiceUpdate,
     onSuccess: async (result, _input, snapshot) => {
       setMessage(result.message);
       setSubmitted(result.success);
+      if (!result.success && service === "FORTIFY") setRefreshStatus("failed");
       showMutationToast(result);
       await updateService(result, snapshot);
     },
     onSettled: (_result, error) => {
-      if (error) setMessage(error.message);
+      if (error) {
+        setMessage(error.message);
+        if (service === "FORTIFY") setRefreshStatus("failed");
+      }
     },
   });
   const rank = offers.data?.crafter.rank ?? "NOVICE";
@@ -441,7 +450,11 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           label: `${row.item.name} (${row.item.rarity}, ${row.durability}/${row.item.maxDurability} durability)`,
         }));
   if (offers.isLoading || inventory.isLoading || recipes.isLoading) return <Loader />;
-  if (offers.isError || inventory.isError || recipes.isError)
+  if (
+    (offers.isError && !offers.data) ||
+    (inventory.isError && !inventory.data) ||
+    recipes.isError
+  )
     return (
       <p role="alert">
         Could not load crafting services. Close this dialog and try again.
@@ -466,7 +479,7 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
             key={value}
             variant={service === value ? "default" : "outline"}
             aria-pressed={service === value}
-            disabled={submit.isPending}
+            disabled={submit.isPending || refreshStatus === "pending"}
             onClick={() => {
               if (value === service) return;
               setService(value);
@@ -476,6 +489,7 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
               setFortifyTagId("");
               setMessage("");
               setSubmitted(false);
+              setRefreshStatus("idle");
             }}
           >
             {SERVICE_SHORT_LABELS[value]}
@@ -536,14 +550,17 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           {fortifyEligibility.isError && (
             <p role="alert">Could not check evolutions. Close and retry.</p>
           )}
-          {fortifyQuote && (
-            <p>
-              Fortify +{fortifyQuote.level} → +{fortifyQuote.level + 1}:{" "}
-              {fortifyQuote.chance}% success chance (crafter rates). Attempt cost:{" "}
-              {fortifyQuote.cost.toLocaleString()} ryo plus the service fee. Both are
-              consumed on failure. Failure bonuses reset on success.
-            </p>
-          )}
+          {fortifyQuote &&
+            (fortifyQuote.level >= FORTIFY_MAX_LEVEL ? (
+              <p>This tag is at the maximum Fortify level (+{FORTIFY_MAX_LEVEL}).</p>
+            ) : (
+              <p>
+                Fortify +{fortifyQuote.level} → +{fortifyQuote.level + 1}:{" "}
+                {fortifyQuote.chance}% success chance (crafter rates). Attempt cost:{" "}
+                {fortifyQuote.cost.toLocaleString()} ryo plus the service fee. Both are
+                consumed on failure. Failure bonuses reset on success.
+              </p>
+            ))}
         </div>
       )}
       {service === "IMBUE" && (
@@ -627,9 +644,17 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           {!submitted && (
             <Button
               variant="outline"
+              disabled={submit.isPending || refreshStatus === "pending"}
               onClick={async () => {
-                await offers.refetch();
-                setMessage("");
+                setRefreshStatus("pending");
+                try {
+                  await refreshServiceOffer(crafterId, service === "FORTIFY");
+                  setRefreshStatus("idle");
+                  setMessage("");
+                } catch {
+                  setRefreshStatus("failed");
+                  setMessage("Could not refresh the offer and items. Please retry.");
+                }
               }}
             >
               Refresh offer
@@ -645,9 +670,13 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
             !info ||
             submit.isPending ||
             submitted ||
+            refreshStatus !== "idle" ||
             (service === "DISIMBUE" && !imbuement) ||
             (service === "FORTIFY" &&
-              (!fortifyQuote?.chance || !fortifyEligibility.data))
+              (!fortifyQuote?.chance ||
+                !fortifyEligibility.data ||
+                fortifyEligibility.isError ||
+                fortifyEligibility.isFetching))
           }
           onClick={() =>
             submit.mutate({

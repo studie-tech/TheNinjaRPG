@@ -162,6 +162,44 @@ const seedSubmissionViews = (client: QueryClient) => {
   client.setQueryData(timersKey, { crafting: null });
 };
 
+it("refreshes offer inputs together and exposes failed inventory or evolution reads", async () => {
+  let failed: string | undefined;
+  const { wrapper, calls } = harness(async (path) => {
+    if (path === failed) throw new Error("offline");
+    return [];
+  });
+  const hook = renderHook(
+    () => {
+      testApi.occupation.getServicePrices.useQuery({ crafterId: "crafter" });
+      testApi.item.getUserItems.useQuery();
+      testApi.item.getUserItemsWithVariants.useQuery();
+      testApi.item.getFortifyEligibility.useQuery();
+      return useCraftingServiceCache();
+    },
+    { wrapper },
+  );
+  await waitFor(() => expect(calls).toHaveLength(4));
+  for (const failure of [
+    undefined,
+    "item.getUserItems",
+    "item.getFortifyEligibility",
+  ]) {
+    failed = failure;
+    calls.length = 0;
+    await act(async () => {
+      const refresh = hook.result.current.refreshServiceOffer("crafter", true);
+      if (failure) await expect(refresh).rejects.toThrow("offline");
+      else await refresh;
+    });
+    expect(calls.sort()).toEqual([
+      "item.getFortifyEligibility",
+      "item.getUserItems",
+      "item.getUserItemsWithVariants",
+      "occupation.getServicePrices",
+    ]);
+  }
+});
+
 it("patches confirmed fee, material quantities and equipment escrow across views without a read", async () => {
   const { client, wrapper, calls } = harness();
   seedSubmissionViews(client);

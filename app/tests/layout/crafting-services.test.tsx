@@ -23,9 +23,11 @@ import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
 import { CraftForMe, CraftingServices } from "@/layout/CraftingServices";
 import * as userContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { deferred } from "../setup/deferred";
 
 const save = vi.fn();
 const retry = vi.fn();
+const refreshOffer = vi.fn(async () => {});
 let query: {
   isPending: boolean;
   isError: boolean;
@@ -44,6 +46,7 @@ beforeEach(() => {
   });
   save.mockClear();
   retry.mockClear();
+  refreshOffer.mockReset().mockResolvedValue(undefined);
   query = {
     isPending: false,
     isError: false,
@@ -62,6 +65,7 @@ beforeEach(() => {
   vi.spyOn(serviceCache, "useCraftingServiceCache").mockReturnValue({
     prepareServiceUpdate: vi.fn(),
     updateService: vi.fn(async () => {}),
+    refreshServiceOffer: refreshOffer,
   } as never);
   vi.spyOn(serviceCache, "useCraftingServicePriceCache").mockReturnValue({
     prepareUpdate: vi.fn(),
@@ -136,6 +140,149 @@ const renderPrices = () => {
   });
   return view;
 };
+
+const fortifyEquipment = (level = 0, failures = 0) => ({
+  id: "sword",
+  itemId: "sword-item",
+  quantity: 1,
+  equipped: "NONE",
+  durability: 50,
+  imbuements: [],
+  fortification: { damage: { type: "damage", level, failures } },
+  item: {
+    name: "Fortify Sword",
+    rarity: "COMMON",
+    maxDurability: 100,
+    itemType: "WEAPON",
+    canBeEnhanced: true,
+    effects: ["damage", "heal"].map((type) => ({
+      type,
+      power: 10,
+      fortifyId: type,
+      fortifyEnabled: true,
+    })),
+  },
+});
+const openFortify = () => {
+  fireEvent.click(screen.getByRole("button", { name: "Craft for Me" }));
+  fireEvent.click(screen.getByRole("button", { name: "Fortify" }));
+  fireEvent.click(screen.getByRole("combobox", { name: "Your item" }));
+  fireEvent.click(screen.getByRole("option", { name: /Fortify Sword/ }));
+  fireEvent.click(screen.getByRole("combobox", { name: "Base tag" }));
+  fireEvent.click(screen.getByRole("option", { name: /damage/ }));
+};
+
+it("explains maximum fortification while allowing another tag to be selected", () => {
+  query.data = {
+    prices: [{ service: "FORTIFY", rarity: "COMMON", fee: 50, enabled: true }],
+    crafter: { rank: "MASTER", occupation: "CRAFTING", username: "Crafter" },
+  };
+  Object.assign(client.api.item.getUserItems, {
+    useQuery: () => ({ data: [fortifyEquipment(5)] }),
+  });
+  render(<CraftForMe crafterId="crafter" />);
+  openFortify();
+  expect(screen.getByText(/maximum Fortify level \(\+5\)/)).toBeTruthy();
+  expect(screen.queryByText(/Attempt cost:/)).toBeNull();
+  expect(screen.queryByText(/→ \+6/)).toBeNull();
+  expect(
+    (screen.getByRole("button", { name: "Fortify now" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("combobox", { name: "Base tag" }));
+  fireEvent.click(screen.getByRole("option", { name: /heal/ }));
+  expect(screen.getByText(/Fortify \+0 → \+1/)).toBeTruthy();
+  expect(
+    (screen.getByRole("button", { name: "Fortify now" }) as HTMLButtonElement).disabled,
+  ).toBe(false);
+});
+
+it.each(["fortification", "evolution"])(
+  "requires a successful offer refresh and reconciles changed %s before retrying",
+  async (change) => {
+    query.data = {
+      prices: [{ service: "FORTIFY", rarity: "COMMON", fee: 50, enabled: true }],
+      crafter: { rank: "MASTER", occupation: "CRAFTING", username: "Crafter" },
+    };
+    let inventory = { data: [fortifyEquipment()], isError: false };
+    let children: string[] = [];
+    Object.assign(client.api.item.getUserItems, { useQuery: () => inventory });
+    Object.assign(client.api.item.getFortifyEligibility, {
+      useQuery: () => ({ data: children }),
+    });
+    Object.assign(client.api.occupation.submitServiceRequest, {
+      useMutation: (options: object) =>
+        useMutation({
+          ...options,
+          mutationFn: async (input: unknown) => {
+            save(input);
+            return { success: false, message: "The item changed. Refresh and retry." };
+          },
+        }),
+    });
+    const cache = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={cache}>
+        <CraftForMe crafterId="crafter" />
+      </QueryClientProvider>,
+    );
+    openFortify();
+    fireEvent.click(screen.getByRole("button", { name: "Fortify now" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toContain("The item changed"),
+    );
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Refresh offer" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    const pending = deferred();
+    refreshOffer.mockImplementationOnce(() => pending.promise);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh offer" }));
+    expect(refreshOffer).toHaveBeenCalledWith("crafter", true);
+    expect(
+      (screen.getByRole("button", { name: "Refresh offer" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "Fortify now" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    await act(async () => {
+      inventory = { ...inventory, isError: true };
+      pending.reject(new Error("offline"));
+    });
+    expect(screen.getByRole("status").textContent).toContain("Could not refresh");
+    expect(
+      (screen.getByRole("button", { name: "Fortify now" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    refreshOffer.mockImplementationOnce(async () => {
+      inventory = { data: [fortifyEquipment(1, 2)], isError: false };
+      children = change === "evolution" ? ["sword-item"] : [];
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Refresh offer" }));
+    await waitFor(() => expect(screen.queryByRole("status") === null).toBe(true));
+    const submit = screen.getByRole("button", {
+      name: "Fortify now",
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(change === "evolution");
+    if (change === "fortification") {
+      expect(screen.getByText(/Fortify \+1 → \+2: 81%/)).toBeTruthy();
+      fireEvent.click(submit);
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+      expect(save.mock.lastCall?.[0]).toMatchObject({
+        expectedFortifyLevel: 1,
+        expectedFortifyFailures: 2,
+      });
+    } else
+      expect(screen.getByRole("combobox", { name: "Your item" }).textContent).toContain(
+        "Select your item",
+      );
+    view.unmount();
+    cache.clear();
+  },
+);
 it("shows loading and retry feedback before any saved price can be edited", () => {
   query = { ...query, isPending: true, data: undefined, isFetching: true };
   const view = renderPrices();
