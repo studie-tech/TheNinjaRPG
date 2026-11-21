@@ -81,6 +81,7 @@ import {
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { WarehouseConflict } from "@/server/utils/warehouse";
+import { groupBy } from "@/utils/grouping";
 import { MINUTE_S, secondsFromDate } from "@/utils/time";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -332,7 +333,7 @@ export const caravanOpsRouter = createTRPCRouter({
       const readiness = prepareActionReadiness(updated.user, updated.settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      if (participations.some((p) => p.activeUserId && p.role === "GUARD"))
+      if (activeGuards(participations).length > 0)
         return errorResponse("Escorts cannot work against caravans");
       let role: CaravanRole | null = user.isOutlaw
         ? user.isBandit
@@ -850,11 +851,10 @@ const groupsOf = (
       p.role !== "GUARD" &&
       p.groupLeaderId,
   );
-  return [...new Set(raiders.map((p) => p.groupLeaderId as string))].map((leaderId) => {
-    const members = raiders.filter((p) => p.groupLeaderId === leaderId);
+  return [...groupBy(raiders, "groupLeaderId")].map(([leaderId, members]) => {
     const leader = members.find((p) => p.userId === leaderId);
     return {
-      leaderId,
+      leaderId: leaderId as string,
       leaderName: leader?.username ?? "Unknown",
       role: leader?.role ?? null,
       villageId: leader?.villageId ?? null,

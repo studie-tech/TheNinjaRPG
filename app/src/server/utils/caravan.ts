@@ -229,7 +229,7 @@ export const cancelCaravan = async (
     body: "Your escort duty ended; the caravan was cancelled.",
     refresh: ESCORT_RELEASE_VIEWS,
   });
-  return guards.flatMap((p) => (p.activeUserId ? [p.userId] : []));
+  return activeGuards(participants).map((p) => p.userId);
 };
 
 /**
@@ -280,9 +280,7 @@ export const deliverCaravan = async (
   ]);
   if (encounters.length > 0) return false;
   const remaining = getRemainingCargo(row.cargo, row.lossBp);
-  const guards = participants.filter(
-    (p) => p.role === "GUARD" && p.activeUserId && !p.rewardedAt,
-  );
+  const guards = activeGuards(participants).filter((p) => !p.rewardedAt);
   const rewards = guards.map((guard) => ({
     userId: guard.userId,
     money: getGuardReward(guard.objectives),

@@ -44,6 +44,7 @@ import {
   warehouseStock,
 } from "@/drizzle/schema";
 import type { CargoLine } from "@/libs/caravan";
+import { withoutCaravanEscort } from "@/queries/activityReservation";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
@@ -625,7 +626,7 @@ export const wakeReleasedGuards = (
           and(
             inArray(userData.userId, userIds),
             eq(userData.status, "QUEUED"),
-            sql`NOT EXISTS (SELECT 1 FROM ${caravanParticipant} WHERE ${caravanParticipant.activeUserId} = ${userData.userId})`,
+            withoutCaravanEscort(),
           ),
         );
 
