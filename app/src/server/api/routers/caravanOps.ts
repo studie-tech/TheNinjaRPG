@@ -107,14 +107,16 @@ export const caravanOpsRouter = createTRPCRouter({
           ...participations.map((row) => row.caravanId),
         ]),
       ];
-      const [caravans, participants, markers, markerDiscoveries] = await Promise.all([
-        listCaravansByIds(ctx.drizzle, caravanIds),
-        listCaravanParticipants(ctx.drizzle, caravanIds),
-        listSectorMarkers(ctx.drizzle, user.sector),
-        user.villageId
-          ? listMarkerDiscoveries(ctx.drizzle, user.villageId, now)
-          : Promise.resolve([]),
-      ]);
+      const [caravans, participants, encounters, markers, markerDiscoveries] =
+        await Promise.all([
+          listCaravansByIds(ctx.drizzle, caravanIds),
+          listCaravanParticipants(ctx.drizzle, caravanIds),
+          listOpenEncounters(ctx.drizzle, { caravanIds }),
+          listSectorMarkers(ctx.drizzle, user.sector),
+          user.villageId
+            ? listMarkerDiscoveries(ctx.drizzle, user.villageId, now)
+            : Promise.resolve([]),
+        ]);
       const [routes, lootItems] = await Promise.all([
         listTradeRoutes(ctx.drizzle, [
           ...new Set([
@@ -190,9 +192,21 @@ export const caravanOpsRouter = createTRPCRouter({
             const sighting = discoveries.find(
               (d) => d.caravanId === row.id && d.kind === "LOCATION",
             );
-            const groups = groupsOf(participants, row.id).filter(
-              (group) => group.role === role,
-            );
+            // Mirrors formGroup's join guards so the controls offer only joins it accepts.
+            const groups = groupsOf(participants, row.id)
+              .filter((group) => group.role === role)
+              .map((group) => ({
+                ...group,
+                joinable:
+                  group.members.length < CARAVAN_MAX_GROUP &&
+                  (role === "BANDIT" || group.villageId === user.villageId) &&
+                  !encounters.some(
+                    (e) =>
+                      e.caravanId === row.id &&
+                      e.type === "INTERCEPTION" &&
+                      e.leaderId === group.leaderId,
+                  ),
+              }));
             return {
               id: row.id,
               status: row.status,
@@ -535,7 +549,12 @@ export const caravanOpsRouter = createTRPCRouter({
         listCaravanParticipants(ctx.drizzle, [input.caravanId]),
         listUserDiscoveries(ctx.drizzle, ctx.userId, now),
       ]);
-      if (target?.status !== "TRAVELLING")
+      // Interceptions end at arrival, like ambushes and sabotage, before delivery runs.
+      if (
+        target?.status !== "TRAVELLING" ||
+        !target.arrivesAt ||
+        target.arrivesAt <= now
+      )
         return errorResponse("The caravan is not on the road");
       const group = groupsOf(participants, target.id).find(
         (g) => g.leaderId === user.userId,
