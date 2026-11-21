@@ -1303,6 +1303,13 @@
       "when": 1795276076409,
       "tag": "0186_heavy_colonel_america",
       "breakpoints": false
+    },
+    {
+      "idx": 187,
+      "version": "5",
+      "when": 1795278818425,
+      "tag": "0187_chakra_storm_scout_post",
+      "breakpoints": false
     }
   ]
 }
