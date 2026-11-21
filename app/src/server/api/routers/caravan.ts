@@ -145,11 +145,9 @@ export const caravanRouter = createTRPCRouter({
           row.originVillageId === villageData.id
             ? row.destinationVillageId
             : row.originVillageId;
-        return route
-          ? route.villageIdA === otherId
-            ? route.villageA.name
-            : route.villageB.name
-          : "Former partner";
+        const partner =
+          route?.villageIdA === otherId ? route.villageA : route?.villageB;
+        return partner?.name ?? "Former partner";
       };
       const describeCargo = (cargo: CargoLine[]) =>
         cargo.map((line) => ({

@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   gt,
+  gte,
   inArray,
   isNotNull,
   isNull,
@@ -1015,17 +1016,21 @@ export const listArrivedCaravans = (client: Pick<DrizzleClient, "select">, now: 
     .from(caravan)
     .where(and(eq(caravan.status, "TRAVELLING"), lte(caravan.arrivesAt, now)));
 
-/** Battles that still exist, to tell running fights from ones that vanished. */
-export const listExistingBattleIds = (
+/**
+ * Battles still being played, to tell running fights from ones that vanished or that
+ * nobody has touched since `activeSince`.
+ */
+export const listLiveBattleIds = (
   client: Pick<DrizzleClient, "select">,
   battleIds: string[],
+  activeSince: Date,
 ) =>
   battleIds.length === 0
     ? Promise.resolve([])
     : client
         .select({ id: battle.id })
         .from(battle)
-        .where(inArray(battle.id, battleIds));
+        .where(and(inArray(battle.id, battleIds), gte(battle.updatedAt, activeSince)));
 
 /** AI templates marked as Caravan AI, with their levels for matching opponents. */
 export const listCaravanAi = (client: Pick<DrizzleClient, "select">) =>

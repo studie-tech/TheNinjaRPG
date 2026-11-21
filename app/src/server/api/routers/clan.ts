@@ -136,6 +136,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { closeVillageTrade } from "@/server/utils/caravan";
 import { clearClanCombat, deleteClanBattle } from "@/server/utils/clanBattle";
 import { syncStrongholdMembership } from "@/server/utils/faction";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
@@ -1963,6 +1964,7 @@ export const removeFromClan = async (
             deleteWarKillForRemoveFromClan(client, clanData),
             deleteWarKillForRemoveFromClan2(client, clanData),
             deleteSectorForRemoveFromClan(client, clanData),
+            closeVillageTrade(client, clanData.villageId),
           ]
         : []),
       ...(!otherUser
