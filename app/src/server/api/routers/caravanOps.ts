@@ -457,8 +457,11 @@ export const caravanOpsRouter = createTRPCRouter({
         listCaravansByIds(ctx.drizzle, [target.id]),
         listCaravanParticipants(ctx.drizzle, [target.id]),
       ]);
-      if (current?.status !== "TRAVELLING")
+      if (current?.status !== "TRAVELLING") {
+        // Delivery released the group before this commitment landed; drop it too.
+        await releaseParticipants(ctx.drizzle, target.id, { userIds: [user.userId] });
         return errorResponse("The caravan is not on the road");
+      }
       const joined = joinedRows.find((p) => p.userId === user.userId);
       if (
         !joined?.activeUserId ||
