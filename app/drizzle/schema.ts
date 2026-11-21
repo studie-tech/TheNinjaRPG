@@ -7108,10 +7108,24 @@ export const chakraStormClaimReceipt = mysqlTable(
         table.claimKey,
       ),
       userIdIdx: index("ChakraStormClaimReceipt_userId_idx").on(table.userId),
+      stageCreatedAtIdx: index("ChakraStormClaimReceipt_stage_createdAt_idx").on(
+        table.stage,
+        table.createdAt,
+      ),
     };
   },
 );
 export type ChakraStormClaimReceipt = InferSelectModel<typeof chakraStormClaimReceipt>;
+
+export const chakraStormClaimReceiptRelations = relations(
+  chakraStormClaimReceipt,
+  ({ one }) => ({
+    user: one(userData, {
+      fields: [chakraStormClaimReceipt.userId],
+      references: [userData.userId],
+    }),
+  }),
+);
 
 // Activity Streak System Tables
 export const activityStreakConfig = mysqlTable("ActivityStreakConfig", {

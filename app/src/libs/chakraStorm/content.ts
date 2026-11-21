@@ -535,7 +535,12 @@ export const csStageFactor = (
   stage: CsStage,
   key: "health" | "damage",
   seconds: number,
-) => 1 + (CS_STAGE_INFO[stage][key] - 1) * Math.min(1, seconds / 300);
+) => {
+  const info = CS_STAGE_INFO[stage];
+  const base = 1 + (info[key] - 1) * Math.min(1, seconds / 300);
+  // Undercover keeps hardening for as long as the cover holds.
+  return info.endless ? base * (1 + (info.endless[key] * seconds) / 3600) : base;
+};
 
 /**
  * The run's pressure by minute: raiders kept alive at the least (the field refills to
@@ -560,20 +565,110 @@ const CS_SPAWN_SCHEDULE: readonly [minimum: number, interval: number][] = [
   [165, 0.25],
 ];
 
-/** The minimum alive and trickle interval `seconds` into the run. */
-export const csSpawnPressure = (seconds: number) => {
-  const minute = Math.min(CS_SPAWN_SCHEDULE.length - 1, Math.floor(seconds / 60));
-  const [minimum, interval] = CS_SPAWN_SCHEDULE[minute] ?? [12, 1];
+/**
+ * The minimum alive and trickle interval `seconds` into the run. After an opening like
+ * Horizon's, Undercover drops the refill: raiders arrive at a steadily rising rate, so a
+ * build that kills as fast as they come keeps the field thin and one that falls behind
+ * is buried. Killing power, not a clock, decides how long the cover holds.
+ */
+export const csSpawnPressure = (seconds: number, stage: CsStage) => {
+  const minute = seconds / 60;
+  if (CS_STAGE_INFO[stage].endless && minute >= CS_ENDLESS_STEADY_MINUTE)
+    return {
+      minimum: CS_ENDLESS_MINIMUM,
+      interval: 1 / (CS_ENDLESS_RATE + minute * CS_ENDLESS_RATE_PER_MINUTE),
+    };
+  const index = Math.min(CS_SPAWN_SCHEDULE.length - 1, Math.floor(minute));
+  const [minimum, interval] = CS_SPAWN_SCHEDULE[index] ?? [12, 1];
   return { minimum, interval };
 };
+/** Undercover's steady arrivals: raiders per second, and how much faster per minute of its clock. */
+const CS_ENDLESS_STEADY_MINUTE = 5;
+const CS_ENDLESS_MINIMUM = 30;
+const CS_ENDLESS_RATE = 0.5;
+const CS_ENDLESS_RATE_PER_MINUTE = 0.4;
 
 /** An elite raider joins the run every this many seconds after the first. */
 export const CS_ELITE_FIRST_SECONDS = 75;
 export const CS_ELITE_EVERY_SECONDS = 50;
+/** Undercover fades each new raider kind in over this many of its paced seconds. */
+const CS_ENDLESS_FADE_SECONDS = 600;
 /** Swarms: a ring of grunts closes in around the hero at these times. */
 export const CS_SWARM_SECONDS = [150, 330, 510, 690, 810] as const;
+/** Past the usual schedule, Undercover sends a hunter and an ambush this often. */
+export const CS_ENDLESS_BOSS_SECONDS = 300;
+export const CS_ENDLESS_SWARM_SECONDS = 180;
+/**
+ * An Undercover run that somehow outlasts this is extracted with its report; the
+ * region is tuned so that even a perfect run cannot get near it.
+ */
+export const CS_ENDLESS_SECONDS = 4 * 60 * 60;
 
-export const CS_STAGES = ["horizon", "akasumi", "akikaze", "hyorin", "mei"] as const;
+/** When the run's `index`-th hunter arrives, or null when no more come. */
+export const csBossSeconds = (stage: CsStage, index: number): number | null => {
+  const minute = CS_BOSS_MINUTES[index];
+  if (minute !== undefined) return minute * 60;
+  if (!CS_STAGE_INFO[stage].endless) return null;
+  const last = CS_BOSS_MINUTES[CS_BOSS_MINUTES.length - 1] ?? 0;
+  return last * 60 + (index - CS_BOSS_MINUTES.length + 1) * CS_ENDLESS_BOSS_SECONDS;
+};
+
+/** When the run's `index`-th ambush closes in, or null when no more come. */
+export const csSwarmSeconds = (stage: CsStage, index: number): number | null => {
+  const at = CS_SWARM_SECONDS[index];
+  if (at !== undefined) return at;
+  if (!CS_STAGE_INFO[stage].endless) return null;
+  const last = CS_SWARM_SECONDS[CS_SWARM_SECONDS.length - 1] ?? 0;
+  return last + (index - CS_SWARM_SECONDS.length + 1) * CS_ENDLESS_SWARM_SECONDS;
+};
+
+/** The endless region whose runs rank on the monthly leaderboard. */
+export const CS_LEADERBOARD_STAGE = "undercover" satisfies CsStage;
+
+/** How long a run in the region lasts at most: the report's due time, or Undercover's cap. */
+export const csRunSeconds = (stage: CsStage) =>
+  CS_STAGE_INFO[stage].endless ? CS_ENDLESS_SECONDS : CS_RUN_SECONDS;
+
+/**
+ * The run's clock as the raiders feel it. Undercover keeps the usual pace through its
+ * `opening`, so it starts like Horizon, then slows to the square root of the time: the
+ * usual fifteen-minute arc completes after about three quarters of an hour, and three
+ * hours feel like thirty minutes, so the climb is long and steady instead of a wall.
+ */
+export const csPaced = (stage: CsStage, seconds: number) => {
+  const endless = CS_STAGE_INFO[stage].endless;
+  if (!endless || seconds <= endless.opening) return seconds;
+  return Math.sqrt(endless.opening * seconds);
+};
+
+/**
+ * Raiders defeated as the toughness ramp counts them: Undercover counts them at its
+ * clock's slower pace; every other region counts them as they are.
+ */
+export const csPacedKills = (stage: CsStage, seconds: number, kills: number) =>
+  CS_STAGE_INFO[stage].endless && seconds > 0
+    ? (kills * csPaced(stage, seconds)) / seconds
+    : kills;
+
+/**
+ * Experience the hero's `level` costs in a region. Undercover's levels grow dearer
+ * through the first twenty, so it opens like Horizon and slows from there.
+ */
+export const csLevelCost = (stage: CsStage, level: number) => {
+  const extra = (CS_STAGE_INFO[stage].endless?.levelCost ?? 1) - 1;
+  return Math.round(
+    csExperienceFor(level) * (1 + extra * Math.min(1, (level - 1) / 20)),
+  );
+};
+
+export const CS_STAGES = [
+  "horizon",
+  "akasumi",
+  "akikaze",
+  "hyorin",
+  "mei",
+  "undercover",
+] as const;
 export type CsStage = (typeof CS_STAGES)[number];
 
 /** How a region's field is laid out: ponds to wade through, trees and rocks to go around. */
@@ -611,6 +706,13 @@ export interface CsStageInfo {
   reward: number;
   /** Seconds scouted in the previous region that open this one. */
   unlockSeconds: number;
+  /**
+   * An endless region: no reinforcements come, the raiders' clock slows after its
+   * `opening` seconds (see `csPaced`), levels cost `levelCost` times the usual
+   * experience, and health and damage grow by these shares every hour on top. Its runs
+   * rank on the leaderboard.
+   */
+  endless?: { opening: number; levelCost: number; health: number; damage: number };
 }
 
 export const CS_STAGE_INFO: Record<CsStage, CsStageInfo> = {
@@ -704,6 +806,25 @@ export const CS_STAGE_INFO: Record<CsStage, CsStageInfo> = {
     reward: 1.7,
     unlockSeconds: 600,
   },
+  undercover: {
+    name: "Undercover",
+    region: "deep behind Syndicate lines",
+    summary:
+      "Slip into the Syndicate's hinterland and send word home for as long as your cover holds. No reinforcements are coming.",
+    biome: "ground",
+    sun: [0.2, 0.8],
+    dusk: 0xff9a5a,
+    field: { ponds: 3, trees: 24, rocks: 8 },
+    health: 0.75,
+    speed: 1,
+    damage: 0.8,
+    spawns: 1,
+    mix: {},
+    bosses: ["Syndicate Informant", "Shadow Broker", "Spymaster of Mei"],
+    reward: 1,
+    unlockSeconds: 600,
+    endless: { opening: 300, levelCost: 3, health: 0.3, damage: 0.5 },
+  },
 };
 
 /** Collision radius of a tree trunk and a rock, in units. */
@@ -717,15 +838,22 @@ export const csSpawnTable = (
   seconds: number,
   stage: CsStage,
 ): [CsEnemyKind, number][] => {
-  const mix = CS_STAGE_INFO[stage].mix;
+  const { mix, endless } = CS_STAGE_INFO[stage];
+  // In Undercover each new kind fades in rather than arriving at full strength, so no
+  // single minute becomes a wall that no build can outgrow.
+  const fade = (start: number) =>
+    endless ? Math.min(1, (seconds - start) / CS_ENDLESS_FADE_SECONDS) : 1;
   // Tougher kinds join as the run goes on and the early ones thin out, which carries
   // most of the late game's health growth, as survivors-likes swap in new enemy types.
   const table: [CsEnemyKind, number][] = [["grunt", Math.max(2, 10 - seconds / 90)]];
-  if (seconds >= 90) table.push(["runner", 4 + seconds / 120 + (mix.runner ?? 0)]);
-  if (seconds >= 180) table.push(["caster", 2 + seconds / 200 + (mix.caster ?? 0)]);
-  if (seconds >= 240) table.push(["brute", 1 + seconds / 150 + (mix.brute ?? 0)]);
-  if (seconds >= 480) table.push(["veteran", 2 + seconds / 150]);
-  if (seconds >= 690) table.push(["juggernaut", 1 + seconds / 300]);
+  if (seconds >= 90)
+    table.push(["runner", (4 + seconds / 120 + (mix.runner ?? 0)) * fade(90)]);
+  if (seconds >= 180)
+    table.push(["caster", (2 + seconds / 200 + (mix.caster ?? 0)) * fade(180)]);
+  if (seconds >= 240)
+    table.push(["brute", (1 + seconds / 150 + (mix.brute ?? 0)) * fade(240)]);
+  if (seconds >= 480) table.push(["veteran", (2 + seconds / 150) * fade(480)]);
+  if (seconds >= 690) table.push(["juggernaut", (1 + seconds / 300) * fade(690)]);
   return table;
 };
 

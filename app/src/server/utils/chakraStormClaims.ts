@@ -32,7 +32,9 @@ export const CS_TOKEN_LIFETIME_MS = 2 * 24 * 60 * 60 * 1000;
 const CS_TIME_SLACK_MS = 30_000;
 /**
  * Replay units a player may spend per window; a full fifteen-minute run costs three, a
- * quick retreat one, so steady play never meets the limit while scripted floods do.
+ * quick retreat one, so steady play never meets the limit while scripted floods do. An
+ * Undercover run of hours costs the whole window at most: it took hours to play, and a
+ * player holds one claimable run at a time.
  */
 const CS_REPLAY_UNITS_PER_WINDOW = 30;
 const CS_REPLAY_TICKS_PER_UNIT = 6_000;
@@ -47,7 +49,10 @@ const replayLimiter = new Ratelimit({
 
 /** The limiter units a claim replaying `endTick` ticks spends. */
 export const chakraStormReplayCost = (endTick: number): number =>
-  Math.max(1, Math.ceil(endTick / CS_REPLAY_TICKS_PER_UNIT));
+  Math.min(
+    CS_REPLAY_UNITS_PER_WINDOW,
+    Math.max(1, Math.ceil(endTick / CS_REPLAY_TICKS_PER_UNIT)),
+  );
 
 /** Reserve a claim replay of `endTick` ticks for a player through the shared Redis limiter. */
 export const reserveChakraStormReplay = (userId: string, endTick: number) =>

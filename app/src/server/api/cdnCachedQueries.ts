@@ -6,6 +6,7 @@
  * router's procedure metadata.
  */
 export const CDN_CACHED_QUERY_PATHS: readonly string[] = [
+  "chakraStorm.getLeaderboard",
   "profile.getStrongestUsers",
   "towerDefense.getLeaderboard",
   "towerDefense.getRoster",

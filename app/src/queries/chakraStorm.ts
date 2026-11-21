@@ -1,7 +1,8 @@
 /**
  * Database access for Chakra Storm; authorization and replay stay in callers.
  */
-import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNull, lt, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
   chakraStormClaimReceipt,
@@ -155,3 +156,58 @@ export const insertChakraStormClaimReceipt = (
     won: claim.won,
     intelEarned: claim.intel,
   });
+
+/**
+ * Build the Undercover leaderboard since `since`: each player's best verified run,
+ * longest first, then most raiders defeated, then the earliest to set it.
+ */
+export const listChakraStormReceiptForGetLeaderboard = (
+  client: Pick<DrizzleClient, "query" | "select">,
+  input: { limit: number; stage: string; since: Date },
+) => {
+  const better = alias(chakraStormClaimReceipt, "betterReceipt");
+  return client.query.chakraStormClaimReceipt.findMany({
+    columns: { id: true, seconds: true, kills: true, level: true, createdAt: true },
+    where: (receipt) =>
+      and(
+        eq(receipt.stage, input.stage),
+        gte(receipt.createdAt, input.since),
+        notExists(
+          client
+            .select({ id: better.id })
+            .from(better)
+            .where(
+              and(
+                eq(better.userId, receipt.userId),
+                eq(better.stage, input.stage),
+                gte(better.createdAt, input.since),
+                or(
+                  gt(better.seconds, receipt.seconds),
+                  and(
+                    eq(better.seconds, receipt.seconds),
+                    gt(better.kills, receipt.kills),
+                  ),
+                  and(
+                    eq(better.seconds, receipt.seconds),
+                    eq(better.kills, receipt.kills),
+                    or(
+                      lt(better.createdAt, receipt.createdAt),
+                      and(
+                        eq(better.createdAt, receipt.createdAt),
+                        lt(better.id, receipt.id),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ),
+      ),
+    orderBy: [
+      desc(chakraStormClaimReceipt.seconds),
+      desc(chakraStormClaimReceipt.kills),
+    ],
+    limit: input.limit,
+    with: { user: { columns: { username: true, avatar: true, rank: true } } },
+  });
+};

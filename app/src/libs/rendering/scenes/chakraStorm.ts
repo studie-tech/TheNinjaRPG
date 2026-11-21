@@ -20,6 +20,7 @@ import {
   CS_TICK_SECONDS,
   type CsJutsu,
   type CsStage,
+  csPaced,
 } from "@/libs/chakraStorm/content";
 import {
   CS_DIRECTIONS,
@@ -84,6 +85,10 @@ const POINTER_INSET = 22;
 const FROZEN_TINT = 0x9fe8ff;
 /** Damage numbers a frame shows before only critical hits still get one. */
 const NUMBERS_PER_FRAME = 8;
+/** Undercover's hostiles climb the whole roster over this much of its paced clock. */
+const ENDLESS_ROSTER_SECONDS = 1_800;
+/** Undercover's sun crosses the sky and back every two of these. */
+const ENDLESS_DAY_SECONDS = 1_200;
 
 /**
  * Renders a Chakra Storm run from the deterministic simulation: the stage's battlefield,
@@ -291,11 +296,19 @@ export const createChakraStormScene = async (options: {
     const roster = [...options.roster].sort(
       (a, b) => a.level - b.level || a.userId.localeCompare(b.userId),
     );
-    const stageRank = CS_STAGES.indexOf(options.stage) / CS_STAGES.length;
+    const endless = !!stageInfo.endless;
+    const stageRank = endless ? 0 : CS_STAGES.indexOf(options.stage) / CS_STAGES.length;
     const rosterFor = (enemy: CsEnemy, seconds: number) => {
       if (roster.length === 0) return undefined;
-      const climb = Math.min(1, seconds / CS_RUN_SECONDS);
-      const rank = Math.min(0.97, 0.01 + stageRank * 0.8 + climb * 0.18);
+      // Undercover starts among Horizon's raiders and climbs the whole roster as its
+      // clock runs on.
+      const climb = endless
+        ? Math.min(1, csPaced(options.stage, seconds) / ENDLESS_ROSTER_SECONDS)
+        : Math.min(1, seconds / CS_RUN_SECONDS);
+      const rank = Math.min(
+        0.97,
+        0.01 + stageRank * 0.8 + climb * (endless ? 0.96 : 0.18),
+      );
       const step = Math.max(1, Math.round(roster.length * 0.01));
       const base = Math.floor(rank * (roster.length - 6 * step));
       const kind = Math.min(5, CS_ENEMY_KINDS.indexOf(enemy.kind));
@@ -808,7 +821,7 @@ export const createChakraStormScene = async (options: {
 
       // Lighting: the sun crosses the region's sky over the run, warm at its ends; a
       // region that runs past sunset fades into dusk.
-      const sun = sunAt(stageInfo.sun, seconds);
+      const sun = sunAt(stageInfo.sun, seconds, endless);
       // Terrain pixels run as arena units do, scaled and offset by its centre.
       lightView.minX = center.x + (cameraX - halfWidth - 2) * unitPx;
       lightView.maxX = center.x + (cameraX + halfWidth + 2) * unitPx;
@@ -1217,9 +1230,12 @@ const createVignetteTexture = () => {
  * The sun at a point of the run: `path` gives its progress from sunrise (0) to sunset
  * (1) at the start and end of the run. Low suns are warm; past sunset the day fades.
  */
-const sunAt = (path: [number, number], seconds: number) => {
-  const progress =
-    path[0] + (path[1] - path[0]) * Math.min(1, seconds / CS_RUN_SECONDS);
+const sunAt = (path: [number, number], seconds: number, endless: boolean) => {
+  // A scouting run follows the sun across one afternoon; Undercover's days come and go.
+  const share = endless
+    ? Math.abs(((seconds / ENDLESS_DAY_SECONDS) % 2) - 1)
+    : Math.min(1, seconds / CS_RUN_SECONDS);
+  const progress = path[0] + (path[1] - path[0]) * share;
   const angle = Math.PI * Math.max(0.04, Math.min(0.96, progress));
   const x = Math.cos(angle),
     y = -Math.sin(angle) * 0.65,

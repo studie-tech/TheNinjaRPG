@@ -259,6 +259,7 @@ export const ChakraStormPlayfield = (props: {
               isFullscreen={isFullscreen}
               announcement={run.announcement}
               goal={run.goal}
+              record={run.record}
               onPause={setPaused}
               onSound={props.onSound}
               onFullscreen={toggleFullscreen}
@@ -282,6 +283,7 @@ export const ChakraStormPlayfield = (props: {
             <ChakraStormPaused
               hud={hud}
               goal={run.goal}
+              record={run.record}
               onGiveUp={() => act(["quit"])}
               onResume={() => setPaused(false)}
             />

@@ -143,5 +143,7 @@ describe("Chakra Storm claims", () => {
   it("charges more replay budget for longer runs", () => {
     expect(chakraStormReplayCost(100)).toBe(1);
     expect(chakraStormReplayCost(15 * 60 * CS_TPS)).toBe(3);
+    // An Undercover run of hours costs one window at most.
+    expect(chakraStormReplayCost(4 * 60 * 60 * CS_TPS)).toBe(30);
   });
 });

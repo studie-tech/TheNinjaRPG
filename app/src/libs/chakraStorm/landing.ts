@@ -39,6 +39,11 @@ export const CS_LANDING_FAQ = [
     answer: `${CS_STAGES.length}, across the land of Seichi: ${CS_STAGES.map((stage) => CS_STAGE_INFO[stage].name).join(", ")}. Scout one for ten minutes to open the next. Hunters arrive at minutes ${CS_BOSS_MINUTES.join(", ")}.`,
   },
   {
+    question: "Is there a leaderboard?",
+    answer:
+      "Yes. Scouting the City of Mei for ten minutes opens Undercover, an endless region with no reinforcements: it starts gently, then hardens for as long as your cover holds. Signed-in players' verified Undercover runs rank by how long they lasted, and the leaderboard starts afresh every month.",
+  },
+  {
     question: "Do I need an account?",
     answer:
       "No. Press Play and your first scouting run starts at once. Your intel, Training Hall upgrades and best runs are kept on your device.",

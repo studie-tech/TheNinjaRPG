@@ -1296,6 +1296,13 @@
       "when": 1795271485045,
       "tag": "0185_kind_husk",
       "breakpoints": false
+    },
+    {
+      "idx": 186,
+      "version": "5",
+      "when": 1795276076409,
+      "tag": "0186_heavy_colonel_america",
+      "breakpoints": false
     }
   ]
 }
