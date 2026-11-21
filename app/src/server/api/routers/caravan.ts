@@ -319,8 +319,10 @@ export const caravanRouter = createTRPCRouter({
         `Your ${capacity} trade route${capacity === 1 ? "" : "s"} allow${capacity === 1 ? "s" : ""} ${capacity} caravan${capacity === 1 ? "" : "s"} at a time`,
       );
       try {
-        // Reserving the cargo and creating the caravan are separate statements; the
-        // transaction releases the reservation when a line falls short or capacity is full.
+        // No MySQL statement both inserts the caravan and reserves its stock, and undoing either
+        // write afterwards is unsafe: a caravan left without its reservation could be
+        // dispatched against other caravans' reserved stock, since dispatch only checks that
+        // each line's stock holds that much reserved.
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
             const reserved = await moveCargo(tx, own.id, cargo, CARGO_MOVES.RESERVE);
