@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
+import { eq } from "drizzle-orm";
+import {
+  TUTORIAL_GENIN_EXAM_QUEST_ID,
+  TUTORIAL_STEPS_COUNT,
+} from "@/drizzle/constants";
 import {
   historicalIp,
   item,
@@ -16,6 +20,7 @@ import { dataRouter } from "@/server/api/routers/data";
 import {
   insertItems,
   insertJutsus,
+  insertQuestHistory,
   insertQuests,
   insertUsers,
   jutsuRow,
@@ -211,7 +216,7 @@ describeWithDatabase("recruitment main metrics", () => {
 
   it("reports every metric across all devices", async () => {
     const result = await metrics({ utmSource: "discord" });
-    const { tutorialSteps, ...scalars } = result;
+    const { tutorialSteps, geninPathSteps, geninPathPlayers, ...scalars } = result;
     expect(scalars).toEqual({
       signupRate: 3 / 6,
       visitors: 6,
@@ -233,6 +238,14 @@ describeWithDatabase("recruitment main metrics", () => {
       ],
       tierQuestDescriptions: ["Tier one: First", "Tier two: Second"],
     });
+    expect(geninPathPlayers).toEqual([
+      {
+        steps: geninPathSteps.length - 1,
+        deviceType: "mobile",
+        username: "MobileRecruit",
+        isStalled: true,
+      },
+    ]);
     expect(tutorialSteps).toHaveLength(2);
     expect(tutorialSteps).toEqual(
       expect.arrayContaining([
@@ -279,6 +292,106 @@ describeWithDatabase("recruitment main metrics", () => {
     const result = await metrics({});
     expect(result.visitors).toBe(7);
     expect(result.visitorsByDevice).toEqual({ mobile: 4, desktop: 2, unknown: 1 });
+  });
+
+  it("places graduates on the Genin path by level, exam progress and activity", async () => {
+    const db = await getTestDatabase();
+    await insertQuests([
+      {
+        id: TUTORIAL_GENIN_EXAM_QUEST_ID,
+        questType: "starter",
+        hidden: false,
+        content: { objectives: [{ id: "lvl", task: "user_level", value: 5 }] as never },
+      },
+      {
+        id: "chunin-exam",
+        name: "The Chunin Exams",
+        questType: "starter",
+        hidden: false,
+        requiredLevel: 27,
+        content: {
+          objectives: [
+            { id: "e1", task: "dialog" },
+            { id: "e2", task: "dialog" },
+            { id: "e3", task: "win_quest" },
+          ] as never,
+          reward: { reward_rank: "CHUNIN" } as never,
+        },
+      },
+      {
+        id: "retired-exam",
+        questType: "starter",
+        hidden: true,
+        requiredLevel: 1,
+        content: { reward: { reward_rank: "CHUNIN" } as never },
+      },
+    ]);
+    await db
+      .update(userData)
+      .set({
+        rank: "GENIN",
+        level: 28,
+        lastActiveAt: new Date(),
+        questData: [
+          {
+            id: "chunin-exam",
+            startAt: VISITED_AT.toISOString(),
+            goals: [
+              { id: "e1", done: true },
+              { id: "e2", done: true },
+              { id: "e3", done: false },
+            ],
+          },
+          // A hidden quest awarding Chunin is not the exam.
+          {
+            id: "retired-exam",
+            startAt: VISITED_AT.toISOString(),
+            goals: [{ id: "x", done: true }],
+          },
+        ] as never,
+      })
+      .where(eq(userData.userId, "mobile"));
+
+    const { geninPathSteps, geninPathPlayers } = await metrics({
+      utmSource: "discord",
+    });
+    // Levels 5-26, the exam-eligible level, three exam objectives, then Chunin.
+    expect(geninPathSteps.map((step) => step.label)).toEqual([
+      ...Array.from({ length: 22 }, (_, i) => `Lv ${i + 5}`),
+      "Lv 27+",
+      "Exam 1",
+      "Exam 2",
+      "Exam 3",
+      "Chunin",
+    ]);
+    expect(geninPathPlayers).toEqual([
+      { steps: 24, deviceType: "mobile", username: "MobileRecruit", isStalled: false },
+    ]);
+  });
+
+  it("falls back to player-started quests when there is no recorded activity", async () => {
+    await insertQuestHistory([
+      { userId: "mobile", questId: "daily", questType: "daily", startedAt: new Date() },
+      {
+        userId: "mobile",
+        questId: "mission",
+        questType: "mission",
+        startedAt: VISITED_AT,
+      },
+    ]);
+    const stalled = (await metrics({ utmSource: "discord" })).geninPathPlayers;
+    expect(stalled.map((player) => player.isStalled)).toEqual([true]);
+
+    await insertQuestHistory([
+      {
+        userId: "mobile",
+        questId: "errand",
+        questType: "errand",
+        startedAt: new Date(),
+      },
+    ]);
+    const active = (await metrics({ utmSource: "discord" })).geninPathPlayers;
+    expect(active.map((player) => player.isStalled)).toEqual([false]);
   });
 
   it("keeps tutorial-disabled signups only on request", async () => {

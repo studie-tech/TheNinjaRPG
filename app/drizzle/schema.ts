@@ -3221,6 +3221,8 @@ export const userData = mysqlTable(
     updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
+    // Last recorded visit from the player's own session; background jobs never set it.
+    lastActiveAt: datetime("lastActiveAt", { mode: "date", fsp: 3 }),
     questFinishAt: datetime("questFinishAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),

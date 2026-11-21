@@ -26,7 +26,12 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
-import { type BattleType, TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
+import {
+  type BattleType,
+  type QuestType,
+  TUTORIAL_GENIN_EXAM_QUEST_ID,
+  TUTORIAL_STEPS_COUNT,
+} from "@/drizzle/constants";
 import {
   abEvent,
   actionLog,
@@ -324,6 +329,93 @@ export const selectQuestForGetRecruitmentMainMetrics2 = (
     .from(quest)
     .where(eq(quest.questType, "tier"))
     .orderBy(asc(quest.tierLevel));
+
+/** Quests bounding the Genin path: the tutorial's graduation quest and every quest awarding Chunin. */
+export const selectQuestForGeninPath = (client: Pick<DrizzleClient, "select">) =>
+  client
+    .select({
+      id: quest.id,
+      name: quest.name,
+      requiredLevel: quest.requiredLevel,
+      hidden: quest.hidden,
+      content: quest.content,
+    })
+    .from(quest)
+    .where(or(eq(quest.id, TUTORIAL_GENIN_EXAM_QUEST_ID), awardsChuninRank));
+
+/**
+ * Tutorial graduates among the visitor cohort, with what places them on the Genin path:
+ * level, rank, objectives done on an active Chunin exam, and their latest activity.
+ * Tracker IDs are compared as binary because JSON_TABLE columns take the server's default
+ * collation rather than the `Quest` table's.
+ */
+export const selectVisitorLogForGeninPath = (
+  client: Pick<DrizzleClient, "select">,
+  visitorWhere: QueryCondition[],
+  input: { utmSource?: undefined | string },
+) =>
+  client
+    .select({
+      userId: userData.userId,
+      username: userData.username,
+      userAgent: visitorLog.userAgent,
+      level: userData.level,
+      rank: userData.rank,
+      createdAt: userData.createdAt,
+      lastActiveAt: userData.lastActiveAt,
+      lastQuestStartedAt: sql<string | null>`(
+        SELECT MAX(${questHistory.startedAt}) FROM ${questHistory}
+        WHERE ${questHistory.userId} = ${userData.userId}
+          AND ${inArray(questHistory.questType, PLAYER_STARTED_QUEST_TYPES)}
+      )`,
+      examGoalsDone: sql<number>`(
+        SELECT COUNT(*) FROM JSON_TABLE(
+          ${userData.questData}, '$[*]' COLUMNS(
+            id VARCHAR(191) PATH '$.id',
+            NESTED PATH '$.goals[*]' COLUMNS(done BOOLEAN PATH '$.done')
+          )
+        ) AS tracker
+        WHERE tracker.done = 1
+          AND CAST(tracker.id AS BINARY) IN (
+            SELECT ${quest.id} FROM ${quest} WHERE ${awardsChuninRank}
+          )
+      )`.mapWith(Number),
+    })
+    .from(visitorLog)
+    .innerJoin(historicalIp, eq(historicalIp.ipHash, visitorLog.ipHash))
+    .innerJoin(userData, eq(userData.userId, historicalIp.userId))
+    .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
+    .where(
+      and(
+        ...visitorWhere,
+        eq(userData.isAi, false),
+        gte(userData.createdAt, visitorLog.createdAt),
+        gte(userData.tutorialStep, TUTORIAL_STEPS_COUNT),
+        lt(userData.tutorialStep, 100),
+        ...(input.utmSource ? [eq(referralSource.source, input.utmSource)] : []),
+      ),
+    );
+
+/** Visible quests whose reward promotes the player to Chunin. */
+const awardsChuninRank = and(
+  eq(quest.hidden, false),
+  sql`JSON_UNQUOTE(JSON_EXTRACT(${quest.content}, '$.reward.reward_rank')) = 'CHUNIN'`,
+);
+
+/** Quest types a player starts by choice, so their start time shows the player was active. */
+const PLAYER_STARTED_QUEST_TYPES: QuestType[] = [
+  "mission",
+  "village_mission",
+  "errand",
+  "crime",
+  "medical",
+  "hunting",
+  "gathering",
+  "battlepyramid",
+  "anbu",
+  "pvp",
+  "war",
+];
 
 /**
  * Build the `questHistory` selection for `getRecruitmentMainMetrics`, including

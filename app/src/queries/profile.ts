@@ -2258,6 +2258,23 @@ export const findVillageForFetchUpdatedUserOnce = (
     with: { structures: true },
   });
 
+/** Record a due session heartbeat without changing the gameplay snapshot or overwriting newer activity. */
+export const updateUserActivity = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  now: Date,
+  staleBefore: Date,
+) =>
+  client
+    .update(userData)
+    .set({ lastActiveAt: now })
+    .where(
+      and(
+        eq(userData.userId, userId),
+        or(isNull(userData.lastActiveAt), lt(userData.lastActiveAt, staleBefore)),
+      ),
+    );
+
 /** Build the `userData` update for `fetchUpdatedUserOnce`, using predicates on `userId`, `villagePrestige`, `isOutlaw`. */
 export const updateUserDataForFetchUpdatedUserOnce = (
   client: Pick<DrizzleClient, "update">,

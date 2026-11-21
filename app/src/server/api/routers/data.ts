@@ -14,6 +14,7 @@ import {
   RecruitmentMetricMax,
   RecruitmentMetrics,
   StatTypes,
+  TUTORIAL_GENIN_EXAM_QUEST_ID,
   UserRanks,
 } from "@/drizzle/constants";
 import {
@@ -32,6 +33,7 @@ import {
   visitorLog,
 } from "@/drizzle/schema";
 import { aggregateExperiments } from "@/libs/experimentAnalytics";
+import { buildGeninPath, isStalledPlayer } from "@/libs/geninPath";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { collapseRewards } from "@/libs/rewards";
 import { isSkillVisible } from "@/libs/skillRequirements";
@@ -81,6 +83,7 @@ import {
   selectLogRankedPicksForGetRankedLoadoutStatistics,
   selectPaypalTransactionForGetRecruitmentMainMetrics,
   selectPaypalTransactionForGetRevenueByReferralSource,
+  selectQuestForGeninPath,
   selectQuestForGetQuestRewardStatistics,
   selectQuestForGetRecruitmentMainMetrics2,
   selectQuestHistoryForGetRecruitmentMainMetrics2,
@@ -100,6 +103,7 @@ import {
   selectUserJutsuForGetJutsuBalanceStatistics,
   selectUserJutsuForGetStatistics,
   selectUserSkillForGetSkillTreeBalanceStatistics,
+  selectVisitorLogForGeninPath,
   selectVisitorLogForGetRecruitmentMainMetrics,
   selectVisitorLogForGetRecruitmentMainMetrics2,
   selectVisitorLogForGetRecruitmentMainMetrics3,
@@ -234,6 +238,8 @@ export const dataRouter = createTRPCRouter({
         allTimeSignupsForValueRaw,
         tierQuests,
         completedTierQuestsRaw,
+        geninPathQuests,
+        geninPathRowsRaw,
       ] = await Promise.all([
         // allVisitorsRow (with userAgent for device splitting)
         selectVisitorLogForGetRecruitmentMainMetrics(ctx.drizzle, visitorWhere),
@@ -259,6 +265,9 @@ export const dataRouter = createTRPCRouter({
           visitorWhere,
           input,
         ),
+        // geninPath: the path's bounding quests and each tutorial graduate's position on it
+        selectQuestForGeninPath(ctx.drizzle),
+        selectVisitorLogForGeninPath(ctx.drizzle, visitorWhere, input),
       ]);
 
       // Filter the different rows by device type if specified
@@ -340,6 +349,23 @@ export const dataRouter = createTRPCRouter({
           };
         });
 
+      // Genin path: furthest step and activity for each graduate, counted once
+      const geninPath = buildGeninPath(geninPathQuests, TUTORIAL_GENIN_EXAM_QUEST_ID);
+      const now = new Date();
+      const geninPathPlayers = [
+        ...new Map(
+          geninPathRowsRaw.filter(inDevices).map((row) => [row.userId, row]),
+        ).values(),
+      ].map((row) => ({
+        steps: geninPath.stepOf(row),
+        deviceType: getDeviceType(row.userAgent ?? undefined),
+        username: row.username,
+        isStalled: isStalledPlayer(
+          [row.lastActiveAt, row.lastQuestStartedAt, row.createdAt],
+          now,
+        ),
+      }));
+
       // Get tier quest info for descriptions (name + description)
       const tierQuestDescriptions = tierQuests.map(
         (tq) => `${tq.name}: ${tq.description}`,
@@ -364,6 +390,8 @@ export const dataRouter = createTRPCRouter({
         nonStudentGeninSignups,
         tierQuestCompletions,
         tierQuestDescriptions,
+        geninPathSteps: geninPath.steps,
+        geninPathPlayers,
       };
     }),
   // Recruitment analytics

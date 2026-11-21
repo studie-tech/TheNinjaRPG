@@ -354,11 +354,19 @@ export const RevenueBySourceBar: React.FC<RevenueBySourceProps> = (props) => {
 };
 
 interface QuestFunnelBarProps {
-  stepsCompleted: Array<{ steps: number; deviceType: DeviceType; username?: string }>;
+  stepsCompleted: Array<{
+    steps: number;
+    deviceType: DeviceType;
+    username?: string;
+    /** Whether the player stopped playing; present only on funnels that track activity. */
+    isStalled?: boolean;
+  }>;
   title: string;
   stepDescriptions?: string[];
   stepLabels?: string[];
   extraControls?: React.ReactNode;
+  /** Inactivity threshold behind `isStalled`, shown in the drop-off legend. */
+  stalledAfterDays?: number;
 }
 
 export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
@@ -367,102 +375,78 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
   stepDescriptions,
   stepLabels,
   extraControls,
+  stalledAfterDays,
 }) => {
   const [mode, setMode] = useState<"count" | "dropoff">("count");
-  const [selectedStep, setSelectedStep] = useState<{
-    step: number;
-    description?: string;
-    usernames: { mobile: string[]; desktop: string[]; unknown: string[] };
-  } | null>(null);
+  const [selectedStep, setSelectedStep] = useState<number | null>(null);
   const chartRef = useRef<HTMLCanvasElement>(null);
-
-  // Helper function to extract usernames by step and device
-  const getUsernamesForStep = useCallback(
-    (step: number): { mobile: string[]; desktop: string[]; unknown: string[] } => {
-      const result = {
-        mobile: [] as string[],
-        desktop: [] as string[],
-        unknown: [] as string[],
-      };
-
-      stepsCompleted.forEach((item) => {
-        if (item.steps === step && item.username) {
-          if (result[item.deviceType].length < 10) {
-            result[item.deviceType].push(item.username);
-          }
-        }
-      });
-
-      return result;
-    },
-    [stepsCompleted],
+  const tracksActivity = stepsCompleted.some((item) => item.isStalled !== undefined);
+  const stepCount = Math.max(
+    stepLabels?.length ?? 0,
+    ...stepsCompleted.map((item) => item.steps + 1),
   );
+  const labelOf = useCallback(
+    (step: number) =>
+      stepLabels?.[step] ?? (step === 0 ? "0 steps (all)" : `${step}+ steps`),
+    [stepLabels],
+  );
+  const stoppedLabel = `Stopped (inactive ${stalledAfterDays ?? "?"}+ days)`;
+
+  const biggestStops = tracksActivity
+    ? furthestStepCounts(stepsCompleted, stepCount, true)
+        .map((stopped, step) => ({ step, stopped }))
+        .filter((entry) => entry.stopped > 0)
+        .sort((a, b) => b.stopped - a.stopped)
+        .slice(0, 3)
+    : [];
 
   useEffect(() => {
     const ctx = chartRef?.current?.getContext("2d");
     if (!ctx || !stepsCompleted.length) return;
 
-    // Stacked bars by device type
-    // Find the max number of steps completed by any user
-    const maxSteps = Math.max(...stepsCompleted.map((d) => d.steps));
-
-    // For each step level, count users by device type
-    const labels: string[] = [];
-    const mobileData: number[] = [];
-    const desktopData: number[] = [];
-    const unknownData: number[] = [];
-
-    for (let step = 0; step <= maxSteps; step++) {
-      labels.push(
-        stepLabels?.[step] ?? (step === 0 ? "0 steps (all)" : `${step}+ steps`),
+    const labels = Array.from({ length: stepCount }, (_, step) => labelOf(step));
+    const steps = labels.map((_, step) => step);
+    // Reached counts are cumulative; drop-off counts players whose furthest step it is.
+    const reached = (match: (d: FunnelPlayer) => boolean) =>
+      steps.map(
+        (step) => stepsCompleted.filter((d) => d.steps >= step && match(d)).length,
       );
 
-      // Count users who completed at least this many steps, by device type
-      const usersAtStep = stepsCompleted.filter((d) => d.steps >= step);
-      mobileData.push(usersAtStep.filter((d) => d.deviceType === "mobile").length);
-      desktopData.push(usersAtStep.filter((d) => d.deviceType === "desktop").length);
-      unknownData.push(usersAtStep.filter((d) => d.deviceType === "unknown").length);
-    }
-
-    const toSeries = mode === "dropoff" ? toDropoff : (counts: number[]) => counts;
+    const datasets =
+      mode === "dropoff" && tracksActivity
+        ? [
+            {
+              label: stoppedLabel,
+              data: furthestStepCounts(stepsCompleted, stepCount, true),
+              borderColor: "hsl(0 70% 45%)",
+              backgroundColor: "hsl(0 70% 60% / 0.7)",
+            },
+            {
+              label: "Still active",
+              data: furthestStepCounts(stepsCompleted, stepCount, false),
+              borderColor: "hsl(150 70% 45%)",
+              backgroundColor: "hsl(150 70% 60% / 0.7)",
+            },
+          ]
+        : DEVICE_SERIES.map((series) => {
+            const counts = reached((d) => d.deviceType === series.deviceType);
+            return {
+              label: series.label,
+              data: mode === "dropoff" ? toDropoff(counts) : counts,
+              borderColor: series.borderColor,
+              backgroundColor: series.backgroundColor,
+            };
+          });
 
     const chart = new ChartJS(ctx, {
       type: "bar",
-      data: {
-        labels,
-        datasets: [
-          {
-            label: "Mobile",
-            data: toSeries(mobileData),
-            borderColor: "hsl(150 70% 45%)",
-            backgroundColor: "hsl(150 70% 60% / 0.7)",
-          },
-          {
-            label: "Desktop",
-            data: toSeries(desktopData),
-            borderColor: "hsl(210 70% 45%)",
-            backgroundColor: "hsl(210 70% 60% / 0.7)",
-          },
-          {
-            label: "Unknown",
-            data: toSeries(unknownData),
-            borderColor: "hsl(0 0% 45%)",
-            backgroundColor: "hsl(0 0% 60% / 0.7)",
-          },
-        ],
-      },
+      data: { labels, datasets },
       options: {
         maintainAspectRatio: false,
         responsive: true,
         onClick: (_event, elements) => {
-          if (elements.length > 0 && elements[0]) {
-            const dataIndex = elements[0].index;
-            setSelectedStep({
-              step: dataIndex,
-              description: stepDescriptions?.[dataIndex],
-              usernames: getUsernamesForStep(dataIndex),
-            });
-          }
+          const dataIndex = elements[0]?.index;
+          if (dataIndex !== undefined) setSelectedStep(dataIndex);
         },
         scales: {
           x: { type: "category", stacked: true },
@@ -472,11 +456,14 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
             stacked: true,
             title: {
               display: true,
-              text: mode === "dropoff" ? "Users Lost (Drop-off)" : "Number of Users",
+              text:
+                mode === "count"
+                  ? "Number of Users"
+                  : tracksActivity
+                    ? "Users Whose Furthest Step It Is"
+                    : "Users Lost (Drop-off)",
             },
-            ticks: {
-              precision: 0,
-            },
+            ticks: { precision: 0 },
           },
         },
         plugins: {
@@ -485,14 +472,10 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
               footer: (tooltipItems) => {
                 const dataIndex = tooltipItems[0]?.dataIndex;
                 const lines: string[] = [];
-
                 if (dataIndex !== undefined && stepDescriptions?.[dataIndex]) {
                   lines.push(stepDescriptions[dataIndex]);
                 }
-
-                lines.push("");
-                lines.push("Click bar to see usernames");
-
+                lines.push("", "Click bar to see usernames");
                 return lines.join("\n");
               },
             },
@@ -502,38 +485,83 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
     });
 
     return () => chart.destroy();
-  }, [stepsCompleted, title, stepDescriptions, stepLabels, mode, getUsernamesForStep]);
+  }, [
+    stepsCompleted,
+    stepDescriptions,
+    labelOf,
+    mode,
+    stepCount,
+    tracksActivity,
+    stoppedLabel,
+  ]);
+
+  // Usernames of players whose furthest step is the selected one, up to ten per group.
+  const usernameGroups =
+    selectedStep === null
+      ? []
+      : (tracksActivity ? ACTIVITY_GROUPS(stoppedLabel) : DEVICE_GROUPS)
+          .map((group) => {
+            const players = stepsCompleted.filter(
+              (d) => d.steps === selectedStep && d.username && group.match(d),
+            );
+            return {
+              label: group.label,
+              total: players.length,
+              usernames: players.slice(0, 10).map((d) => d.username ?? ""),
+            };
+          })
+          .filter((group) => group.total > 0);
 
   return (
     <Card>
       <CardHeader className="pt-2 pb-0">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <CardTitle className="font-medium text-sm">{title}</CardTitle>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {extraControls}
             <div className="flex items-center gap-2">
               <Switch
-                id="quest-funnel-mode"
+                id={`quest-funnel-mode-${title}`}
                 checked={mode === "dropoff"}
                 onCheckedChange={(checked) => setMode(checked ? "dropoff" : "count")}
               />
-              <Label htmlFor="quest-funnel-mode" className="cursor-pointer text-xs">
+              <Label
+                htmlFor={`quest-funnel-mode-${title}`}
+                className="cursor-pointer text-xs"
+              >
                 Show drop-off
               </Label>
             </div>
           </div>
         </div>
+        {biggestStops.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 pt-1 text-xs">
+            <span className="text-muted-foreground">Most players stop at:</span>
+            {biggestStops.map((entry) => (
+              <button
+                key={entry.step}
+                type="button"
+                onClick={() => setSelectedStep(entry.step)}
+                className="rounded-full border border-border px-2 py-0.5 hover:bg-muted"
+                title={stepDescriptions?.[entry.step]}
+              >
+                {labelOf(entry.step)} · {entry.stopped}
+              </button>
+            ))}
+          </div>
+        )}
       </CardHeader>
       <CardContent className="py-1">
         <div style={{ height: 360 }}>
-          <canvas ref={chartRef} id="questFunnel"></canvas>
+          <canvas ref={chartRef}></canvas>
         </div>
-        {selectedStep && (
+        {selectedStep !== null && (
           <div className="mt-4 rounded-md border border-border bg-card p-3">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between gap-2">
               <h4 className="font-semibold text-sm">
-                Step {selectedStep.step}
-                {selectedStep.description && `: ${selectedStep.description}`}
+                {stepLabels?.[selectedStep] ?? `Step ${selectedStep}`}
+                {stepDescriptions?.[selectedStep] &&
+                  `: ${stepDescriptions[selectedStep]}`}
               </h4>
               <button
                 type="button"
@@ -543,40 +571,21 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
                 Clear
               </button>
             </div>
-            {selectedStep.usernames.mobile.length > 0 ||
-            selectedStep.usernames.desktop.length > 0 ||
-            selectedStep.usernames.unknown.length > 0 ? (
+            {usernameGroups.length > 0 ? (
               <div className="space-y-3">
-                {selectedStep.usernames.mobile.length > 0 && (
-                  <div>
+                {usernameGroups.map((group) => (
+                  <div key={group.label}>
                     <p className="mb-1 text-muted-foreground text-xs">
-                      📱 Mobile users ({selectedStep.usernames.mobile.length}):
+                      {group.label} ({group.total}
+                      {group.total > group.usernames.length &&
+                        `, first ${group.usernames.length} shown`}
+                      ):
                     </p>
                     <p className="select-all rounded bg-muted p-2 font-mono text-sm">
-                      {selectedStep.usernames.mobile.join(", ")}
+                      {group.usernames.join(", ")}
                     </p>
                   </div>
-                )}
-                {selectedStep.usernames.desktop.length > 0 && (
-                  <div>
-                    <p className="mb-1 text-muted-foreground text-xs">
-                      💻 Desktop users ({selectedStep.usernames.desktop.length}):
-                    </p>
-                    <p className="select-all rounded bg-muted p-2 font-mono text-sm">
-                      {selectedStep.usernames.desktop.join(", ")}
-                    </p>
-                  </div>
-                )}
-                {selectedStep.usernames.unknown.length > 0 && (
-                  <div>
-                    <p className="mb-1 text-muted-foreground text-xs">
-                      ❓ Unknown device ({selectedStep.usernames.unknown.length}):
-                    </p>
-                    <p className="select-all rounded bg-muted p-2 font-mono text-sm">
-                      {selectedStep.usernames.unknown.join(", ")}
-                    </p>
-                  </div>
-                )}
+                ))}
               </div>
             ) : (
               <p className="text-muted-foreground text-xs">
@@ -670,8 +679,63 @@ const getUsageChart = (
   return myChart;
 };
 
+/** Device stacks of the reached and drop-off views. */
+const DEVICE_SERIES = [
+  {
+    deviceType: "mobile",
+    label: "Mobile",
+    borderColor: "hsl(150 70% 45%)",
+    backgroundColor: "hsl(150 70% 60% / 0.7)",
+  },
+  {
+    deviceType: "desktop",
+    label: "Desktop",
+    borderColor: "hsl(210 70% 45%)",
+    backgroundColor: "hsl(210 70% 60% / 0.7)",
+  },
+  {
+    deviceType: "unknown",
+    label: "Unknown",
+    borderColor: "hsl(0 0% 45%)",
+    backgroundColor: "hsl(0 0% 60% / 0.7)",
+  },
+] as const;
+
+/** Username groups of a funnel step without activity tracking. */
+const DEVICE_GROUPS = [
+  { label: "📱 Mobile users", match: (d: FunnelPlayer) => d.deviceType === "mobile" },
+  { label: "💻 Desktop users", match: (d: FunnelPlayer) => d.deviceType === "desktop" },
+  {
+    label: "❓ Unknown device",
+    match: (d: FunnelPlayer) => d.deviceType === "unknown",
+  },
+];
+
+/** Username groups of a funnel step that tracks activity. */
+const ACTIVITY_GROUPS = (stoppedLabel: string) => [
+  { label: stoppedLabel, match: (d: FunnelPlayer) => d.isStalled === true },
+  { label: "Still active", match: (d: FunnelPlayer) => d.isStalled === false },
+];
+
 /** Users lost after each step; the last step has no next step to compare to. */
 const toDropoff = (counts: number[]) =>
   counts.map((count, step) =>
     step < counts.length - 1 ? count - (counts[step + 1] ?? 0) : 0,
   );
+
+/**
+ * Players whose furthest step is each step, by activity. The final step completes the
+ * path, so nobody stops there.
+ */
+const furthestStepCounts = (
+  players: FunnelPlayer[],
+  stepCount: number,
+  isStalled: boolean,
+) =>
+  Array.from({ length: stepCount }, (_, step) =>
+    step < stepCount - 1
+      ? players.filter((d) => d.steps === step && d.isStalled === isStalled).length
+      : 0,
+  );
+
+type FunnelPlayer = QuestFunnelBarProps["stepsCompleted"][number];
