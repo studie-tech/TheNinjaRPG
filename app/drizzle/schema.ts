@@ -3449,6 +3449,11 @@ export const userData = mysqlTable(
      * before the current UTC day, independent of the daily counter reset.
      */
     towerDefenseDutyAt: datetime("towerDefenseDutyAt", { mode: "date", fsp: 3 }),
+    /**
+     * When the daily Chakra Storm scouting report last paid out, guarded like the Guard
+     * Hall duty on falling before the current UTC day.
+     */
+    chakraStormDutyAt: datetime("chakraStormDutyAt", { mode: "date", fsp: 3 }),
     occupation: mysqlEnum("occupation", consts.OCCUPATIONS),
     occupationSignupAt: datetime("occupationSignupAt", { mode: "date", fsp: 3 }),
     /** Last paid supply request; shared across professions and guarded by the UTC reset. */
@@ -7051,6 +7056,62 @@ export const towerDefenseClaimReceipt = mysqlTable(
 export type TowerDefenseClaimReceipt = InferSelectModel<
   typeof towerDefenseClaimReceipt
 >;
+
+/**
+ * A player's Chakra Storm progress: intel banked from verified scouting runs, Training
+ * Hall levels bought with it, each region's best run, and the nonce of the latest signed
+ * run, which is the only one that can be claimed.
+ */
+export const chakraStormProgress = mysqlTable("ChakraStormProgress", {
+  userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+  intel: int("intel").default(0).notNull(),
+  /** `CsTrainingLevels` keyed by Training Hall upgrade. */
+  training: json("training").$type<Partial<Record<string, number>>>().notNull(),
+  /** `CsStageRecord` keyed by region. */
+  stages: json("stages")
+    .$type<
+      Partial<
+        Record<string, { seconds: number; kills: number; level: number; won: boolean }>
+      >
+    >()
+    .notNull(),
+  activeRun: varchar("activeRun", { length: 21 }),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+});
+export type ChakraStormProgress = InferSelectModel<typeof chakraStormProgress>;
+
+/**
+ * One row per claimed Chakra Storm run. The unique claim key (from the signed run nonce)
+ * makes each run claimable once and answers a claim retried after its response was lost.
+ */
+export const chakraStormClaimReceipt = mysqlTable(
+  "ChakraStormClaimReceipt",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    claimKey: varchar("claimKey", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    stage: varchar("stage", { length: 32 }).notNull(),
+    seconds: int("seconds").notNull(),
+    kills: int("kills").notNull(),
+    level: int("level").notNull(),
+    won: boolean("won").notNull(),
+    intelEarned: int("intelEarned").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      claimKeyKey: uniqueIndex("ChakraStormClaimReceipt_claimKey_key").on(
+        table.claimKey,
+      ),
+      userIdIdx: index("ChakraStormClaimReceipt_userId_idx").on(table.userId),
+    };
+  },
+);
+export type ChakraStormClaimReceipt = InferSelectModel<typeof chakraStormClaimReceipt>;
 
 // Activity Streak System Tables
 export const activityStreakConfig = mysqlTable("ActivityStreakConfig", {

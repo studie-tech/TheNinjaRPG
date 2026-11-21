@@ -4267,6 +4267,44 @@ export const TD_SFX = {
 } as const;
 export type TdSfx = keyof typeof TD_SFX;
 
+/**
+ * Game sound effects Chakra Storm plays, by cue: tower defense's shuriken, element and
+ * fanfare sounds, plus library sounds for its wind, water and ice jutsu, blade crits,
+ * crowd kills and chakra crystals.
+ */
+export const CS_SFX = {
+  throw: TD_SFX.throw,
+  impact: TD_SFX.impact,
+  explosion: TD_SFX.explosion,
+  fire: TD_SFX.fire,
+  lightning: TD_SFX.lightning,
+  ice: TD_SFX.ice,
+  earth: TD_SFX.earth,
+  seal: TD_SFX.seal,
+  heal: TD_SFX.heal,
+  charge: TD_SFX.charge,
+  shimmer: TD_SFX.shimmer,
+  hurt: TD_SFX.hurt,
+  roar: TD_SFX.roar,
+  chime: TD_SFX.chime,
+  pulse: TD_SFX.pulse,
+  whoosh: TD_SFX.whoosh,
+  wind: "oDdj-mBmiWTswFi_NkOqc",
+  splash: "NThXOSKNDXPwNnGxDtH0Z",
+  shatter: "epidemic-f83db7db-c74f-49ed-919c-0b0c4d3b99f6",
+  slash: "muq1tu3xvolOsUHm-NqBr",
+  scrape: "RP8T6vyPbbb3M2EUm91Wt",
+  dash: "gR2880EZVlWV4eam-ufei",
+  release: "mOSkDnYv4hchkPbhdpTDd",
+  sparkle: "epidemic-3f7b2696-7045-48d9-ba86-93e13bd8456d",
+  crystal: "3Oqg2QPzBNI7KqSRCTHLi",
+  airy: "epidemic-07381e8f-01ad-41cf-8dd7-8a84a34e2976",
+  zap: "lOMOeSF9w5t1j8oIbj2U6",
+  puff: "9sHx08bCI4_d_pfD7JEaZ",
+  heavy: "byBIocUZ7zV_WdcFOD2I0",
+} as const;
+export type CsSfx = keyof typeof CS_SFX;
+
 /** Painted backdrop of each tower defense stage, keyed by stage name. */
 export const TD_STAGE_IMAGE_URLS = {
   Dawn: "https://uploadthing.b-cdn.net/f/td-stage-dawn-89331f2390bb603c.webp",
@@ -4284,6 +4322,81 @@ export const TD_STAGE_IMAGE_URLS = {
 /** Title logo of Shuriken Siege, the standalone tower defense build for game portals. */
 export const SHURIKEN_SIEGE_LOGO_URL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDUtFWrzEwoh0WXMnscL279N8ayVQUCbRzS3p";
+
+/** Chakra Storm artwork: title logo, key art, the share card and each stage's painting. */
+export const CS_LOGO_URL =
+  "https://uploadthing.b-cdn.net/f/chakra-storm-logo-a7d169b1378e0ea2.webp";
+export const CS_KEYART_URL =
+  "https://uploadthing.b-cdn.net/f/chakra-storm-keyart-80b435bc5c42875b.webp";
+/** Square card art for the minigames hub, matching the other square game cards. */
+export const CS_CARD_URL =
+  "https://uploadthing.b-cdn.net/f/chakra-storm-card-8168670a8ce4fbf6.webp";
+export const CS_OG_IMAGE_URL =
+  "https://uploadthing.b-cdn.net/f/chakra-storm-og-da58616a96c8cc4f.jpg";
+export const CS_STAGE_IMAGE_URLS = {
+  horizon:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-stage-horizon-3e805a78bc08a5d7.webp",
+  akasumi:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-stage-akasumi-7217e63d459c2cdf.webp",
+  akikaze:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-stage-akikaze-80817814d236d2f3.webp",
+  hyorin:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-stage-hyorin-f5903ec987fecbbc.webp",
+  mei: "https://uploadthing.b-cdn.net/f/chakra-storm-stage-mei-9ff8ebbd1ab81f47.webp",
+} as const;
+
+/** Chakra Storm pickups: chakra crystals by value, onigiri, scrolls and gust talismans. */
+export const CS_PICKUP_URLS = {
+  chakraBlue:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-pickup-chakra-blue-ad309c241bd97344.webp",
+  chakraGreen:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-pickup-chakra-green-6ce8168d3c69f62d.webp",
+  chakraPurple:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-pickup-chakra-purple-1c8e8e0184eb9703.webp",
+  chakraGold:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-pickup-chakra-gold-05be32171036162b.webp",
+  onigiri:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-pickup-onigiri-bc0b59e152370b3a.webp",
+  scroll:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-pickup-scroll-f176658f49e1994d.webp",
+  talisman:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-pickup-talisman-78b1f8c08f3b5b47.webp",
+} as const;
+
+/** Chakra Storm icons for each jutsu and passive art. */
+export const CS_ICON_URLS = {
+  shuriken:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-shuriken-ad674ecdf09b4c43.webp",
+  ember:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-ember-89b764d79ecdccd6.webp",
+  gale: "https://uploadthing.b-cdn.net/f/chakra-storm-icon-gale-62b4185fc0bb0a4f.webp",
+  thunder:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-thunder-4796b78f3ecac85e.webp",
+  tidal:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-tidal-e17cd251ad7183c2.webp",
+  stonefang:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-stonefang-6994adcb2c7fe69c.webp",
+  frost:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-frost-f81289564a95b90f.webp",
+  wisps:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-wisps-bf2b99b1909ebd31.webp",
+  swiftFeet:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-swiftFeet-b8652c85ca189ed7.webp",
+  ironBody:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-ironBody-40c7f458e6e3bdde.webp",
+  chakraControl:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-chakraControl-ae1a06128ccbb1b0.webp",
+  battleFocus:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-battleFocus-78aee2b44d4b06b2.webp",
+  magnetSeal:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-magnetSeal-33ae1ff63d443cfb.webp",
+  expansion:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-expansion-807cfbba5953af85.webp",
+  echoSeal:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-echoSeal-534698170fbf8bf9.webp",
+  fortune:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-icon-fortune-f04182f09654530d.webp",
+} as const;
 
 /** Shuriken sprite thrown by the hero, shadow clones and kunai turrets. */
 export const TD_SHURIKEN_IMAGE_URL =

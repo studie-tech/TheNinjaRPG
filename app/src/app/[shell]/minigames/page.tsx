@@ -1,6 +1,6 @@
 "use client";
 
-import { IMG_MANUAL_TOWER_UPGRADES } from "@/drizzle/constants";
+import { CS_CARD_URL, IMG_MANUAL_TOWER_UPGRADES } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { ImageLinkGrid } from "@/layout/ImageLinkGrid";
 
@@ -10,6 +10,11 @@ export default function MinigamesMain() {
       name: "Tower Defense",
       href: "/towerDefense",
       img: IMG_MANUAL_TOWER_UPGRADES,
+    },
+    {
+      name: "Chakra Storm",
+      href: "/chakraStorm",
+      img: CS_CARD_URL,
     },
   ];
 

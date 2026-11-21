@@ -14,6 +14,7 @@ import { bankRouter } from "./routers/bank";
 import { blackMarketRouter } from "./routers/blackmarket";
 import { bloodlineRouter } from "./routers/bloodline";
 import { bountyRouter } from "./routers/bounty";
+import { chakraStormRouter } from "./routers/chakraStorm";
 import { clanRouter } from "./routers/clan";
 import { combatRouter } from "./routers/combat";
 import { commentsRouter } from "./routers/comments";
@@ -170,6 +171,7 @@ export const appRouter = createTRPCRouter({
   support: supportRouter,
   applications: applicationsRouter,
   towerDefense: towerDefenseRouter,
+  chakraStorm: chakraStormRouter,
   stealth: stealthRouter,
   overworldAi: overworldAiRouter,
   raids: raidsRouter,

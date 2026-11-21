@@ -70,6 +70,7 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "coop.dungeon.claim",
   "pvpRank.claimSeasonRewards",
   "towerDefense.claimRun",
+  "chakraStorm.claimRun",
   // Account creation and value transfer
   "register.createCharacter",
   "pets.acquirePet",

@@ -11,11 +11,11 @@ export const hasSensitiveTrpcInput = (path: string | undefined) =>
   );
 
 /**
- * Operations whose input is too large for error telemetry: a tower defense claim carries
- * an action log of up to megabytes, past the size of an event Sentry accepts.
+ * Operations whose input is too large for error telemetry: a minigame claim carries an
+ * action log of up to megabytes, past the size of an event Sentry accepts.
  */
 export const hasOversizedTrpcInput = (path: string | undefined) =>
-  path === "towerDefense.claimRun";
+  path === "towerDefense.claimRun" || path === "chakraStorm.claimRun";
 
 /** Whether error telemetry may carry an operation's input. */
 export const canAttachTrpcInput = (path: string | undefined) =>

@@ -279,6 +279,7 @@ const guard = (record: () => void) => {
 export type RendererSurface =
   | "battlefield-preview"
   | "character-preview"
+  | "chakra-storm"
   | "combat"
   | "farm"
   | "globe"

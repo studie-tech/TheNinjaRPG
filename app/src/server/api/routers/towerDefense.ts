@@ -37,6 +37,7 @@ import {
   protectedProcedure,
   ratelimitMiddleware,
 } from "@/server/api/trpc";
+import { signRunToken, verifyRunToken } from "@/server/utils/runTokens";
 import {
   areTowerDefenseClaimsEnabled,
   checkTowerDefenseClaimTiming,
@@ -46,7 +47,6 @@ import {
   towerDefenseClaimKey,
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
-import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
 import { periodStart } from "@/utils/time";
 import {
   TD_MAX_LOG_CHARS,
@@ -183,7 +183,7 @@ export const towerDefenseRouter = createTRPCRouter({
           ),
           reloadRequired: true,
         };
-      const token = verifyRunToken(input.token);
+      const token = verifyRunToken(input.token, towerDefenseRunTokenSchema);
       if (!token) return refusedForGood("This run's token is invalid.");
       if (token.userId !== ctx.userId)
         return refusedForGood("This run belongs to another player.");
