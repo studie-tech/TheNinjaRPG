@@ -1076,7 +1076,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
       ]);
     // Account deletion disbands the settlement inside its own transaction.
     await afterTasks.run([], () =>
-      db.transaction((tx) => closeVillageTrade(tx, "sand", now)),
+      db.transaction((tx) => closeVillageTrade(tx, "sand", now, true)),
     );
     const routes = Object.fromEntries(
       (await db.select().from(tradeRoute)).map((row) => [row.id, row]),

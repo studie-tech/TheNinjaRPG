@@ -1908,6 +1908,8 @@ const undoClanBattleJoin = async (
  * @param clanData - The clan from which the user will be removed.
  * @param user - The user to be removed from the clan.
  * @param reasons - The departure reasons recorded in the action log.
+ * @param readiness - The departing account's readiness claim, committed before cleanup.
+ * @param inTransaction - Write on the caller's transaction instead of opening others.
  * @returns Surviving succession fields, undefined for a deleted clan, or null when recovery lost its claim.
  */
 export const removeFromClan = async (
@@ -1916,6 +1918,7 @@ export const removeFromClan = async (
   user: UserData,
   reasons: string[],
   readiness?: ActionReadinessWrite,
+  inTransaction = false,
 ): Promise<UserCachePatch | null | undefined> => {
   // Derived
   const userId = user.userId;
@@ -1952,7 +1955,8 @@ export const removeFromClan = async (
     !otherUser && ["HIDEOUT", "STRONGHOLD"].includes(clanData.village?.type);
   const cleanup = async () => {
     // Trade ends first, so a settlement whose caravans could not be called off is not deleted.
-    if (disbands) await closeVillageTrade(client, clanData.villageId);
+    if (disbands)
+      await closeVillageTrade(client, clanData.villageId, new Date(), inTransaction);
     await Promise.all([
       ...(readiness?.where ? [] : [updateUserDataForRemoveFromClan(client, userId)]),
       deleteUserRequestForRemoveFromClan(client, userId),
