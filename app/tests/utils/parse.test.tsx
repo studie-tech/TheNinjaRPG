@@ -125,4 +125,17 @@ describe("parseHtml during server rendering", () => {
     expect(html).not.toContain("<animate");
     expect(html).not.toContain("javascript:alert(1)");
   });
+
+  it("wraps tables in a scroll box and gives their cells borders and padding", () => {
+    const html = render(
+      "<table>\n  <thead><tr><th>Rank</th><th>Cap</th></tr></thead>\n  <tbody>\n    <tr><td>Genin</td><td>60,000</td></tr>\n  </tbody>\n</table>",
+    );
+    expect(html).toContain(
+      '<div class="my-2 max-w-full overflow-x-auto"><table class="w-full border-collapse text-sm">',
+    );
+    expect(html).toContain(
+      '<th class="border bg-popover px-2 py-1 text-left font-bold">Rank</th>',
+    );
+    expect(html).toContain('<td class="border px-2 py-1">60,000</td>');
+  });
 });
