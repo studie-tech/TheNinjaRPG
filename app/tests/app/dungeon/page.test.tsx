@@ -195,11 +195,57 @@ it("lets a ready solo player enter a dungeon with an eight-player limit", async 
   );
 
   await waitFor(() => expect(view.getByText("1/8 players · 1/1 ready")).toBeDefined());
-  fireEvent.click(view.getByRole("button", { name: "Enter next floor" }));
+  fireEvent.click(view.getByRole("button", { name: "Enter with 1 player" }));
   await waitFor(() =>
     expect(actCall).toHaveBeenCalledWith({ id: "run", action: "start" }),
   );
 });
+
+it.each(["LOBBY", "BETWEEN"] as const)(
+  "lets a ready duo enter from %s without filling the optional seat",
+  async (status) => {
+    const data = partyState(status);
+    const run = data.runs[0]!;
+    run.state.memberIds = ["a", "b"];
+    run.state.readyIds = ["a"];
+    run.state.invitedIds = status === "LOBBY" ? ["c"] : [];
+    const { view, queryClient, actCall } = mount(
+      status,
+      async () => [],
+      async () => data,
+    );
+    const label = status === "LOBBY" ? "Enter with 2 players" : "Enter next floor";
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: label }).hasAttribute("disabled")).toBe(
+        true,
+      ),
+    );
+    expect(view.getByText("2/3 players · 1/2 ready")).toBeDefined();
+    if (status === "LOBBY") {
+      expect(view.getByText("Optional player")).toBeDefined();
+      expect(
+        view.getByText("Starting with the current party cancels pending invitations."),
+      ).toBeDefined();
+    } else {
+      expect(view.queryByText("Optional player")).toBeNull();
+    }
+    await act(async () => {
+      queryClient.setQueryData(["state"], {
+        ...data,
+        runs: [{ ...run, state: { ...run.state, readyIds: ["a", "b"] } }],
+      });
+    });
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: label }).hasAttribute("disabled")).toBe(
+        false,
+      ),
+    );
+    const enter = view.getByRole("button", { name: label });
+    expect(view.getByText("2/3 players · 2/2 ready")).toBeDefined();
+    fireEvent.click(enter);
+    expect(actCall).toHaveBeenCalledWith({ id: "run", action: "start" });
+  },
+);
 
 it("forwards confirmed achievement progress with the claim's captured profile revision", async () => {
   const { view, updateUser, respondToClaim } = mount("COMPLETED", async () => []);

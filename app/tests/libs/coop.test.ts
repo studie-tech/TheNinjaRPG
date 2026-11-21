@@ -145,4 +145,35 @@ describe("co-op party policies", () => {
         .success,
     ).toBe(false);
   });
+  it.each(["LOBBY", "BETWEEN"] as const)(
+    "starts a ready duo in %s and requires both members to be ready",
+    (phase) => {
+      const duo = party({
+        phase,
+        memberIds: ["a", "b"],
+        readyIds: ["a"],
+        invitedIds: phase === "LOBBY" ? ["c"] : [],
+      });
+      expect(transitionCoopParty("dungeon", duo, "a", "start")).toMatchObject({
+        success: false,
+        message: "All current party members must be ready.",
+      });
+      duo.readyIds.push("b");
+      expect(transitionCoopParty("dungeon", duo, "b", "start").success).toBe(false);
+      const started = transitionCoopParty("dungeon", duo, "a", "start");
+      expect(started).toMatchObject({
+        success: true,
+        party: {
+          memberIds: ["a", "b"],
+          invitedIds: [],
+          readyIds: [],
+          phase: "STARTING",
+        },
+      });
+      if (!started.success) throw Error("Duo did not start");
+      expect(transitionCoopParty("dungeon", started.party, "c", "join").success).toBe(
+        false,
+      );
+    },
+  );
 });
