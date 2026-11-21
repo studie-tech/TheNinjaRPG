@@ -16,7 +16,7 @@ import type {
   CompleteBattle,
   ReturnedBattle,
 } from "./types";
-import { getActiveTargetEffects, isEffectActive } from "./util";
+import { getActiveTargetEffects, isEffectActive, isInstantJutsuEffect } from "./util";
 
 /**
  * Align the round, active actor and action points in place using the battle timer.
@@ -58,7 +58,10 @@ export const alignBattle = (
   if (progressRound) {
     const expiringCurses = battle.usersEffects.filter(
       (e) =>
-        e.type === "curse" && e.rounds === 1 && !e.castThisRound && isEffectActive(e),
+        e.type === "curse" &&
+        e.rounds === 1 &&
+        (!e.castThisRound || isInstantJutsuEffect(e)) &&
+        isEffectActive(e),
     );
     battle.usersState.forEach((u) => {
       u.actionPoints = 100;
@@ -69,7 +72,8 @@ export const alignBattle = (
     // in the battle row and fails the tag schemas, which all require rounds >= 0.
     for (const e of [...battle.usersEffects, ...battle.groundEffects]) {
       if (e.rounds === undefined) continue;
-      if (!e.castThisRound) e.rounds = Math.max(0, e.rounds - 1);
+      if (!e.castThisRound || isInstantJutsuEffect(e))
+        e.rounds = Math.max(0, e.rounds - 1);
       e.isNew = false;
       e.castThisRound = false;
     }

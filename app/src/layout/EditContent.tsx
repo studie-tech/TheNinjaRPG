@@ -1653,6 +1653,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
 
   // Parse how to present the tag form
   const ignore = ["timeTracker", "type", "weightedCache", "rewardMode"];
+  if (props.type !== "jutsu") ignore.push("instant");
   if (isActivityBonus(tag) || tag.type === "increasejutsuslots")
     ignore.push(
       ...attributes.filter((key) => key !== "power" && key !== "description"),
@@ -2134,6 +2135,7 @@ export const rewardCatalogFormEntry = <K extends string | number | symbol>(
 
 // Form labels for different tag names
 export const FORM_LABEL_MAP: Record<string, string> = {
+  instant: "Instant (active on cast; casting round counts toward duration)",
   appearSfxPrimary: "Primary appearance sound for this cast",
   disappearSfxPrimary: "Primary disappearance sound for this cast",
   damageBonusPercent: "Damage bonus (%)",
