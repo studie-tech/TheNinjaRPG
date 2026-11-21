@@ -1948,13 +1948,17 @@ export const removeFromClan = async (
     const saved = await updateUserDataForRemoveFromClan(client, userId, readiness);
     if (!saved.rowsAffected) return null;
   }
+  const disbands =
+    !otherUser && ["HIDEOUT", "STRONGHOLD"].includes(clanData.village?.type);
   const cleanup = async () => {
+    // Trade ends first, so a settlement whose caravans could not be called off is not deleted.
+    if (disbands) await closeVillageTrade(client, clanData.villageId);
     await Promise.all([
       ...(readiness?.where ? [] : [updateUserDataForRemoveFromClan(client, userId)]),
       deleteUserRequestForRemoveFromClan(client, userId),
       deleteBattleQueueMembersForUser(client, userId),
       insertActionLogForRemoveFromClan(client, userId, reasons, clanData, user),
-      ...(!otherUser && ["HIDEOUT", "STRONGHOLD"].includes(clanData.village?.type)
+      ...(disbands
         ? [
             deleteVillageForRemoveFromClan(client, clanData),
             deleteVillageStructureForRemoveFromClan(client, clanData),
@@ -1964,7 +1968,6 @@ export const removeFromClan = async (
             deleteWarKillForRemoveFromClan(client, clanData),
             deleteWarKillForRemoveFromClan2(client, clanData),
             deleteSectorForRemoveFromClan(client, clanData),
-            closeVillageTrade(client, clanData.villageId),
           ]
         : []),
       ...(!otherUser
