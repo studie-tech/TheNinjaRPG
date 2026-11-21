@@ -115,6 +115,22 @@ export const closeTradeRoute = (
       ),
     );
 
+/** Close every open or proposed route of a village. */
+export const closeVillageTradeRoutes = (
+  client: Pick<DrizzleClient, "update">,
+  villageId: string,
+  now: Date,
+) =>
+  client
+    .update(tradeRoute)
+    .set({ status: "CLOSED", openPair: null, closedAt: now })
+    .where(
+      and(
+        or(eq(tradeRoute.villageIdA, villageId), eq(tradeRoute.villageIdB, villageId)),
+        inArray(tradeRoute.status, ["PROPOSED", "ACTIVE"]),
+      ),
+    );
+
 /** Place a route's hidden markers. */
 export const insertRouteMarkers = (
   client: Pick<DrizzleClient, "insert">,

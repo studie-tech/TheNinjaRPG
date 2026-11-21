@@ -9,6 +9,7 @@ import {
   WAREHOUSE_PRODUCTION_INTERVAL_HOURS,
 } from "@/drizzle/constants";
 import {
+  battle,
   caravan,
   caravanDiscovery,
   caravanEncounter,
@@ -49,6 +50,7 @@ import {
 } from "@/queries/warehouse";
 import {
   cancelCaravan,
+  closeVillageTrade,
   deliverCaravan,
   maintainCaravans,
 } from "@/server/utils/caravan";
@@ -68,6 +70,7 @@ const HOUR = 3_600_000;
 describeWithDatabase("village Warehouse and caravans", () => {
   beforeEach(async () => {
     await resetTables(
+      battle,
       caravan,
       caravanDiscovery,
       caravanEncounter,
@@ -611,6 +614,100 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(await cancel()).toBe(true);
     const [cancelled] = await db.select().from(caravan);
     expect(cancelled?.status).toBe("CANCELLED");
+  });
+
+  it("releases a fight whose battle was abandoned and settles nothing when it ends", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    const hourAgo = new Date(now.getTime() - HOUR);
+    await insertUsers([{ userId: "leader", isOutlaw: true }]);
+    await db
+      .insert(caravan)
+      .values(
+        ["c1", "c2"].map((id) =>
+          caravanRow({ id, routeId: id, checkpointsProcessed: 3 }),
+        ),
+      );
+    await db.insert(caravanEncounter).values(
+      ["c1", "c2"].map((id) => ({
+        id: `e-${id}`,
+        type: "INTERCEPTION" as const,
+        status: "FIGHTING" as const,
+        caravanId: id,
+        activeCaravanId: id,
+        battleId: `b-${id}`,
+        leaderId: "leader",
+        createdAt: hourAgo,
+      })),
+    );
+    const fight = (id: string, updatedAt: Date) =>
+      makeCompleteBattle({
+        id: `b-${id}`,
+        battleType: "CARAVAN",
+        updatedAt,
+        usersState: [
+          makeBattleUser("leader", { direction: "left", curHealth: 50 }),
+          makeBattleUser("npc", { direction: "right", curHealth: 0, isAi: true }),
+        ],
+        extraState: {
+          caravan: battleState({
+            encounterId: `e-${id}`,
+            battleId: `b-${id}`,
+            caravanId: id,
+            attackerIds: ["leader"],
+          }),
+        },
+      });
+    await db.insert(battle).values([fight("c1", hourAgo), fight("c2", now)]);
+    await afterTasks.run([], () =>
+      maintainCaravans(db, now, { caravanIds: ["c1", "c2"] }),
+    );
+    const encounters = Object.fromEntries(
+      (await db.select().from(caravanEncounter)).map((row) => [row.id, row.status]),
+    );
+    expect(encounters).toEqual({ "e-c1": "RESOLVED", "e-c2": "FIGHTING" });
+    await settleCaravanCombat(db, fight("c1", now));
+    const [abandoned] = await db.select().from(caravan).where(eq(caravan.id, "c1"));
+    expect(abandoned?.lossBp).toBe(0);
+  });
+
+  it("closes a disbanded settlement's routes and calls off its caravans", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    const route = (id: string, villageIdB: string, status: "ACTIVE" | "PROPOSED") => ({
+      id,
+      villageIdA: "leaf",
+      villageIdB,
+      openPair: `leaf:${villageIdB}`,
+      status,
+      proposedByVillageId: "leaf",
+      proposedById: "kage",
+      path: [1, 2, 3],
+      createdAt: now,
+    });
+    await db
+      .insert(tradeRoute)
+      .values([route("r1", "sand", "ACTIVE"), route("r2", "mist", "ACTIVE")]);
+    await db
+      .insert(caravan)
+      .values([
+        caravanRow({ id: "outbound", lossBp: 1000 }),
+        caravanRow({ id: "kept", routeId: "r2", destinationVillageId: "mist" }),
+      ]);
+    await afterTasks.run([], () => closeVillageTrade(db, "sand", now));
+    const routes = Object.fromEntries(
+      (await db.select().from(tradeRoute)).map((row) => [row.id, row]),
+    );
+    expect(routes.r1?.status).toBe("CLOSED");
+    expect(routes.r1?.openPair).toBeNull();
+    expect(routes.r2?.status).toBe("ACTIVE");
+    const caravans = Object.fromEntries(
+      (await db.select().from(caravan)).map((row) => [row.id, row.status]),
+    );
+    expect(caravans).toEqual({ outbound: "CANCELLED", kept: "TRAVELLING" });
+    // The caravan bound for the disbanded settlement brings its remaining 180 ore home.
+    const [stock] = await db.select().from(warehouseStock);
+    expect(stock).toMatchObject({ villageId: "leaf", quantity: 180 });
   });
 
   it("hands a worn-down marker to its assailant and calls off caravans still on the road", async () => {

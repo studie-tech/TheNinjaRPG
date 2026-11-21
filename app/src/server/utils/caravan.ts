@@ -34,9 +34,10 @@ import {
   listCaravansByIds,
   listDueEncounters,
   listDueOperations,
-  listExistingBattleIds,
+  listLiveBattleIds,
   listOpenCaravans,
   listOpenEncounters,
+  listOpenVillageCaravans,
   listTravellingCaravans,
   markGuardsRewarded,
   releaseCargo,
@@ -51,6 +52,7 @@ import {
 import { findGameSettingByName } from "@/queries/gamesettings";
 import { fetchUser } from "@/queries/profile";
 import {
+  closeVillageTradeRoutes,
   listBlockedRouteIds,
   listSectorMarkers,
   listVillageRelationships,
@@ -71,10 +73,10 @@ const MINUTE_MS = 60_000;
 
 /**
  * Advance caravans and covert operations to `now`: finish due operations, roll ambushes at
- * passed checkpoints, resolve unanswered ambushes and vanished fights, cancel shipments on
- * routes a hostile village cut, and deliver arrivals. Every step is a guarded transition, so
- * the per-minute job and page reads can run it concurrently. A scope limits the work to the
- * caravans and operator a page shows.
+ * passed checkpoints, resolve unanswered ambushes and vanished or abandoned fights, cancel
+ * shipments on routes a hostile village cut, and deliver arrivals. Every step is a guarded
+ * transition, so the per-minute job and page reads can run it concurrently. A scope limits
+ * the work to the caravans and operator a page shows.
  */
 export const maintainCaravans = async (
   client: DrizzleClient,
@@ -166,6 +168,23 @@ export const cancelCaravan = async (
     route: "/warehouse",
   });
   return true;
+};
+
+/**
+ * End the trade of a disbanded settlement: its routes close and every open caravan to or
+ * from it is called off. One bound for it brings its cargo home; one it sent returns to the
+ * settlement's own stock and is lost with it.
+ */
+export const closeVillageTrade = async (
+  client: DrizzleClient,
+  villageId: string,
+  now = new Date(),
+) => {
+  const [caravans] = await Promise.all([
+    listOpenVillageCaravans(client, villageId),
+    closeVillageTradeRoutes(client, villageId, now),
+  ]);
+  await Promise.all(caravans.map((row) => cancelCaravan(client, row, now)));
 };
 
 /** Deliver an arrived caravan once no fight over it is still open, and pay its escorts. */
@@ -474,27 +493,27 @@ const rollCheckpointAmbushes = async (
   }
 };
 
-/** Resolve unanswered ambushes and release fights whose battle vanished unsettled. */
+/** Resolve unanswered ambushes and release fights whose battle vanished or was abandoned. */
 const settleDueEncounters = async (
   client: DrizzleClient,
   now: Date,
   caravanIds?: string[],
 ) => {
-  const due = (
-    await listDueEncounters(
-      client,
-      now,
-      new Date(now.getTime() - CARAVAN_ENCOUNTER_STALE_MINUTES * MINUTE_MS),
-    )
-  ).filter(
+  const staleBefore = new Date(
+    now.getTime() - CARAVAN_ENCOUNTER_STALE_MINUTES * MINUTE_MS,
+  );
+  const due = (await listDueEncounters(client, now, staleBefore)).filter(
     (row) => !caravanIds || (row.caravanId && caravanIds.includes(row.caravanId)),
   );
   if (due.length === 0) return;
+  // An abandoned battle releases its caravan too; finishing it later settles nothing, since
+  // settlement claims only a FIGHTING encounter.
   const running = new Set(
     (
-      await listExistingBattleIds(
+      await listLiveBattleIds(
         client,
         due.flatMap((row) => (row.battleId ? [row.battleId] : [])),
+        staleBefore,
       )
     ).map((row) => row.id),
   );

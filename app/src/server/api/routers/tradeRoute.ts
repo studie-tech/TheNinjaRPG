@@ -77,8 +77,8 @@ export const tradeRouteRouter = createTRPCRouter({
           used: outgoing?.count ?? 0,
         },
         routes: routes.map((route) => {
-          const partner =
-            route.villageIdA === villageId ? route.villageB : route.villageA;
+          const isA = route.villageIdA === villageId;
+          const partner = isA ? route.villageB : route.villageA;
           return {
             id: route.id,
             status: route.status,
@@ -90,7 +90,11 @@ export const tradeRouteRouter = createTRPCRouter({
                 ? getRouteTravelMinutes(route.level + 1)
                 : null,
             upgradeCost: TRADE_ROUTE_UPGRADE_COST,
-            partner: { id: partner.id, name: partner.name, sector: partner.sector },
+            partner: {
+              id: isA ? route.villageIdB : route.villageIdA,
+              name: partner?.name ?? "Former partner",
+              sector: partner?.sector ?? null,
+            },
             proposedByUs: route.proposedByVillageId === villageId,
             sectors: route.path.length,
             blocked: route.markers.some((marker) => marker.controllerVillageId),

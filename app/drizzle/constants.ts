@@ -5154,7 +5154,11 @@ export const CARAVAN_GUARD_OBJECTIVE_RYO = 2_500;
 /** Objectives a guard is paid for per journey: every checkpoint and a few defences. */
 export const CARAVAN_MAX_GUARD_OBJECTIVES = 7;
 export const CARAVAN_ENEMY_VICTORY_RYO = 5_000;
-/** An encounter whose battle vanished without settling is released after this long. */
+/**
+ * An encounter whose battle vanished, or sat untouched this long, is released. Idle turns
+ * time out every COMBAT_SECONDS while anyone has the battle open, so only an abandoned
+ * battle goes this long without an update.
+ */
 export const CARAVAN_ENCOUNTER_STALE_MINUTES = 30;
 export const CARAVAN_ENCOUNTER_TYPES = [
   "AMBUSH",
