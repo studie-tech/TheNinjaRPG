@@ -39,7 +39,7 @@ import {
 import { resolveElementalDamage } from "@/libs/combat/elementalDamage";
 import { recordMasteryUsage } from "@/libs/combat/mastery";
 import { areBattleAllies, fitsBattleUsage } from "@/libs/combat/participants";
-import { resolvePotencyTags } from "@/libs/combat/potency";
+import { hasInstantPotency, resolvePotencyTags } from "@/libs/combat/potency";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { isClone } from "@/libs/combat/summon";
 import { getPower, realizeTag, updateStatUsage } from "@/libs/combat/tags";
@@ -1064,15 +1064,15 @@ export const insertAction = (info: {
         !usersEffects.some((userEffect) => userEffect.id === effect.id),
     )
     .map((effect) => ({ ...effect, targetId: actorId, fromGround: true }));
-  // Raw actions can bypass selection; resolve their elements before element-specific potency.
-  const castTags = resolvePotencyTags(
-    {
-      ...action,
-      effects: action.effects.map((tag) => resolveElementalDamage(tag, user)),
-    },
-    [...usersEffects, ...groundPotency],
-    actorId,
-  );
+  // Raw actions can bypass selection; resolve elements before element-specific potency.
+  const elementalAction = {
+    ...action,
+    effects: action.effects.map((tag) => resolveElementalDamage(tag, user)),
+  };
+  // Same-cast potency waits for Clear and its normal resistance roll during resolution.
+  const castTags = hasInstantPotency(action)
+    ? structuredClone(elementalAction.effects)
+    : resolvePotencyTags(elementalAction, [...usersEffects, ...groundPotency], actorId);
   // Each tag uses its own resolved tiles, or the shared parent pattern.
   affectedTiles.forEach((tile) => {
     // Calculate how many barriers are between origin & target

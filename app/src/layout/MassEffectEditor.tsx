@@ -419,19 +419,23 @@ const EffectFieldCell = memo(
 
 /** Select editable effect columns from the combat damage schema's shared field names. */
 export const EffectFieldSelector: React.FC<{
+  allowInstant?: boolean;
   selected: string[];
   setSelected: React.Dispatch<React.SetStateAction<string[]>>;
   className?: string;
   disabled?: boolean;
-}> = ({ selected, setSelected, className, disabled }) => {
+}> = ({ selected, setSelected, className, disabled, allowInstant = false }) => {
   // The selectable fields are the damage tag's fields
   const fieldOptions = useMemo<OptionType[]>(() => {
     const all = getTagSchema("damage").shape as Record<string, unknown>;
     return Object.keys(all)
-      .filter((k) => !["type", "timeTracker"].includes(k))
+      .filter(
+        (k) =>
+          !["type", "timeTracker"].includes(k) && (k !== "instant" || allowInstant),
+      )
       .sort((a, b) => a.localeCompare(b))
       .map((f) => ({ label: f, value: f }));
-  }, []);
+  }, [allowInstant]);
 
   return (
     <div className={cn("min-w-[240px]", className)}>

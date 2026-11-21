@@ -34,7 +34,7 @@ import Loader from "@/layout/Loader";
 import { availableUserActions } from "@/libs/combat/actions";
 import { EFFECT_TEXT_COLORS } from "@/libs/combat/constants";
 import type { ActionEffect, ReturnedBattle } from "@/libs/combat/types";
-import { getItem, getJutsu } from "@/libs/combat/util";
+import { getItem, getJutsu, isInstantJutsuEffect } from "@/libs/combat/util";
 import { cn } from "@/libs/shadui";
 import { parseHtml } from "@/utils/parse";
 import {
@@ -204,7 +204,9 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
           if (actionEffects.length > 0) {
             remainingRounds = Math.max(...actionEffects.map((e) => e.rounds ?? 0));
             // Check if any effect was cast this round (not active yet)
-            isNewEffect = actionEffects.some((e) => e.castThisRound);
+            isNewEffect = actionEffects.some(
+              (e) => e.castThisRound && !isInstantJutsuEffect(e),
+            );
           }
         }
 

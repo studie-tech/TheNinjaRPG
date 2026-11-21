@@ -8,7 +8,7 @@ import * as itemWithEffects from "@/layout/ItemWithEffects";
 import { maskBattle } from "@/libs/combat/masking";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { combatPendingActionAtom } from "@/utils/UserContext";
-import { makeCompleteBattle, makeUser } from "../setup/combat";
+import { makeCompleteBattle, makeEffect, makeUser } from "../setup/combat";
 import { stubDialog } from "../setup/dialog";
 
 const spies: { mockRestore: () => void }[] = [];
@@ -152,3 +152,26 @@ it("holds the next slot for the player's pending action", () => {
     view.getByRole("status", { name: "Performing Sonic Slash" }).textContent,
   ).toContain("Round 4");
 });
+
+it.each([false, true])(
+  "labels only delayed casting-round effects as pending (instant=%s)",
+  (instant) => {
+    const shown = battle();
+    shown.usersEffects = [
+      makeEffect(
+        "increasestat",
+        { rounds: 3, instant },
+        {
+          fromType: "jutsu",
+          actionId: "unknown-action",
+          targetId: "player",
+          isNew: false,
+          castThisRound: true,
+          createdRound: 4,
+        },
+      ),
+    ];
+    const view = render(<CombatTimeline battle={shown} />);
+    expect(view.container.querySelector(".border-red-400") !== null).toBe(!instant);
+  },
+);

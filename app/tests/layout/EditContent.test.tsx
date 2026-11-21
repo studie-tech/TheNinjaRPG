@@ -2404,6 +2404,7 @@ describe("schema-derived field visibility", () => {
         "Disappear sfx",
         "Primary appearance sound for this cast",
         "Primary disappearance sound for this cast",
+        "Instant (active on cast; casting round counts toward duration)",
         "Rounds",
         "Power",
         "Power per level",
@@ -2683,4 +2684,41 @@ describe("MassEffectEditor save failures", () => {
       retryable.mockRestore();
     });
   }
+});
+
+const InstantEffectForm = ({ type }: { type: "jutsu" | "item" | "bloodline" }) => {
+  const [effects, setEffects] = useState<ZodAllTags[]>([
+    DamageTag.parse({ rounds: 3 }),
+  ]);
+  return (
+    <>
+      <EffectFormWrapper
+        type={type}
+        idx={0}
+        tag={effects[0]!}
+        effects={effects}
+        setEffects={setEffects}
+        availableTags={["damage"]}
+      />
+      <output data-testid="instant-value">
+        {String(effects[0]?.instant ?? false)}
+      </output>
+    </>
+  );
+};
+
+describe("instant effect editing", () => {
+  withRadixBrowserGlobals();
+  it("offers and persists the timing toggle only on Jutsu", async () => {
+    const view = render(<InstantEffectForm type="jutsu" />);
+    await act(async () => {});
+    fireEvent.click(view.getByRole("switch", { name: /Instant/ }));
+    await waitFor(() =>
+      expect(view.getByTestId("instant-value").textContent).toBe("true"),
+    );
+    view.rerender(<InstantEffectForm type="item" />);
+    expect(view.queryByRole("switch", { name: /Instant/ })).toBeNull();
+    view.rerender(<InstantEffectForm type="bloodline" />);
+    expect(view.queryByRole("switch", { name: /Instant/ })).toBeNull();
+  });
 });
