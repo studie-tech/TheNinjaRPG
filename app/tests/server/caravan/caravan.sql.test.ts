@@ -27,6 +27,7 @@ import {
   userData,
   userItem,
   villageWarehouse,
+  war,
   warehouseDepositLedger,
   warehouseLog,
   warehouseMember,
@@ -56,6 +57,7 @@ import { deleteEmptyUserItem } from "@/queries/item";
 import {
   claimWithdrawal,
   depositStackPart,
+  destroyRaidedWarehouseStock,
   ensureDepositLedger,
   ensureWarehouseStock,
   startWarehouseAllowanceDay,
@@ -100,6 +102,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
       userData,
       userItem,
       villageWarehouse,
+      war,
       warehouseDepositLedger,
       warehouseLog,
       warehouseMember,
@@ -136,6 +139,76 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(stock?.quantity).toBe(2 * 105);
     const logs = await db.select().from(warehouseLog);
     expect(logs).toHaveLength(1);
+  });
+
+  it("credits production to every selected stock row alongside the clock", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    const settledAt = new Date(
+      now.getTime() - 2 * WAREHOUSE_PRODUCTION_INTERVAL_HOURS * HOUR,
+    );
+    await db.insert(villageWarehouse).values({
+      villageId: "leaf",
+      productionItemIds: ["ore", "silk", "wood"],
+      productionSettledAt: settledAt,
+      updatedAt: settledAt,
+    });
+    await db.insert(warehouseStock).values([
+      { villageId: "leaf", itemId: "ore", quantity: 7 },
+      { villageId: "leaf", itemId: "iron", quantity: 3 },
+    ]);
+    const structure = { level: 5, temporaryLevelBonus: 0 } as never;
+    await settleProduction(db, "leaf", structure, now);
+    const stock = Object.fromEntries(
+      (await db.select().from(warehouseStock)).map((row) => [row.itemId, row.quantity]),
+    );
+    expect(stock).toEqual({ ore: 7 + 2 * 105, silk: 2 * 105, wood: 2 * 105, iron: 3 });
+  });
+
+  it("destroys a raided share of every stock row with the war receipt step", async () => {
+    const db = await getTestDatabase();
+    await db.insert(war).values({
+      id: "raid",
+      type: "WAR_RAID",
+      status: "ATTACKER_VICTORY",
+      attackerVillageId: "sand",
+      defenderVillageId: "leaf",
+      settlementPending: true,
+      settlement: {
+        villageIds: ["sand", "leaf"],
+        winningVillageIds: ["sand"],
+        warIds: ["raid"],
+        notificationContent: "",
+        boostsDelivered: true,
+        structuresDelivered: true,
+        warehouseDelivered: false,
+        notified: false,
+      },
+    });
+    await db.insert(warehouseStock).values([
+      { villageId: "leaf", itemId: "ore", quantity: 100, reserved: 20 },
+      { villageId: "leaf", itemId: "silk", quantity: 50 },
+      { villageId: "leaf", itemId: "wood", quantity: 10, reserved: 10 },
+      { villageId: "sand", itemId: "ore", quantity: 100 },
+    ]);
+    const step = sql`${war.id} = ${"raid"} AND ${war.settlementPending} = TRUE
+      AND JSON_UNQUOTE(JSON_EXTRACT(${war.settlement}, '$.warehouseDelivered')) = 'false'`;
+    await destroyRaidedWarehouseStock(db, "leaf", 25, step);
+    await destroyRaidedWarehouseStock(db, "leaf", 25, step);
+    const stock = Object.fromEntries(
+      (await db.select().from(warehouseStock)).map((row) => [
+        `${row.villageId}:${row.itemId}`,
+        row.quantity,
+      ]),
+    );
+    expect(stock).toEqual({
+      "leaf:ore": 80,
+      "leaf:silk": 38,
+      "leaf:wood": 10,
+      "sand:ore": 100,
+    });
+    const [raid] = await db.select().from(war);
+    expect(raid?.settlement?.warehouseDelivered).toBe(true);
   });
 
   it("caps withdrawals by unreserved stock and the shared daily allowance", async () => {
