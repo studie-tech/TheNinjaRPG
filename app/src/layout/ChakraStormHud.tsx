@@ -764,12 +764,21 @@ export const ChakraStormResults = (props: {
               Back
             </Button>
             {outcome.won ? (
-              <Button asChild disabled={verifying}>
-                <Link href={QUEST_LOGBOOK_HREF}>
+              // The link opens once the win is recorded: leaving earlier would drop the
+              // run a failed claim retries.
+              outcome.claim === "paid" ? (
+                <Button asChild>
+                  <Link href={QUEST_LOGBOOK_HREF}>
+                    <ScrollText className="mr-1.5 h-4 w-4" />
+                    Open logbook
+                  </Link>
+                </Button>
+              ) : (
+                <Button disabled>
                   <ScrollText className="mr-1.5 h-4 w-4" />
                   Open logbook
-                </Link>
-              </Button>
+                </Button>
+              )
             ) : (
               <Button disabled={verifying} onClick={props.onAgain}>
                 Try again

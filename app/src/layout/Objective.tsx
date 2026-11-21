@@ -84,6 +84,16 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
 
   // Offer a retry only for a lost start_battle objective the loss did not already resolve
   const status = tracker?.goals.find((g) => g.id === objective.id);
+  // Where this player finds the objective: the position rolled onto their tracker, else
+  // the authored one, as the server resolves it.
+  const located =
+    "sector" in parsed
+      ? {
+          sector: status?.sector ?? parsed.sector,
+          longitude: status?.longitude ?? parsed.longitude,
+          latitude: status?.latitude ?? parsed.latitude,
+        }
+      : null;
   const goalTarget = status?.target ?? ("value" in parsed ? parsed.value : undefined);
   const canRetryBattle =
     objective.task === "start_battle" &&
@@ -229,7 +239,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
               {indicatorIcons}
             </div>
           )}
-          {"sector" in parsed && (
+          {located && (
             <div className="flex flex-row items-center gap-2 pr-3">
               <div className="grow">
                 {!("hideLocation" in parsed && parsed.hideLocation) && (
@@ -238,19 +248,19 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                       <b>Sector: </b>{" "}
                       <Link
                         className="text-orange-600 underline dark:text-orange-400"
-                        href={`/travel?sector=${parsed.sector}${parsed.longitude !== undefined && parsed.latitude !== undefined ? `&longitude=${parsed.longitude}&latitude=${parsed.latitude}` : ""}`}
+                        href={`/travel?sector=${located.sector}${located.longitude !== undefined && located.latitude !== undefined ? `&longitude=${located.longitude}&latitude=${located.latitude}` : ""}`}
                         aria-label={
-                          parsed.longitude !== undefined &&
-                          parsed.latitude !== undefined
-                            ? `Auto travel to sector ${parsed.sector}, position ${parsed.longitude}, ${parsed.latitude}`
-                            : `Auto travel to sector ${parsed.sector}`
+                          located.longitude !== undefined &&
+                          located.latitude !== undefined
+                            ? `Auto travel to sector ${located.sector}, position ${located.longitude}, ${located.latitude}`
+                            : `Auto travel to sector ${located.sector}`
                         }
                       >
-                        {parsed.sector}
+                        {located.sector}
                       </Link>
                     </div>
                     <div>
-                      <b>Position:</b> [{parsed.longitude}, {parsed.latitude}]
+                      <b>Position:</b> [{located.longitude}, {located.latitude}]
                     </div>
                   </>
                 )}
@@ -286,7 +296,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
           {parsed.task === "win_tower_defense" && !done && !props.grayedOut && (
             <QuestChallengeAction
               questId={tracker.id}
-              objective={parsed}
+              objective={{ ...parsed, ...located }}
               page="/towerDefense"
               label="Take position"
             >
@@ -300,7 +310,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
           {parsed.task === "win_chakra_storm" && !done && !props.grayedOut && (
             <QuestChallengeAction
               questId={tracker.id}
-              objective={parsed}
+              objective={{ ...parsed, ...located }}
               page="/chakraStorm"
               label="Enter the storm"
             >

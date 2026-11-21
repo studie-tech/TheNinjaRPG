@@ -111,4 +111,38 @@ describe("objective action guide", () => {
       here.getByRole("link", { name: /take position/i }).getAttribute("href"),
     ).toBe("/towerDefense?quest=quest&objective=goal");
   });
+
+  it("locates a storm challenge at the position rolled onto the tracker", () => {
+    mockUserContextValue({
+      data: {
+        userId: "scout",
+        role: "USER",
+        status: "AWAKE",
+        sector: 9,
+        longitude: 6,
+        latitude: 7,
+      },
+      timeDiff: 0,
+    } as never);
+    const view = render(
+      <Objective
+        objective={AllObjectives.parse({
+          id: "goal",
+          task: "win_chakra_storm",
+          sector: 5,
+          longitude: 3,
+          latitude: 4,
+        })}
+        tracker={QuestTracker.parse({
+          id: "quest",
+          goals: [{ id: "goal", value: 0, sector: 9, longitude: 6, latitude: 7 }],
+        })}
+        checkRewards={vi.fn()}
+      />,
+    );
+    expect(view.getByText("[6, 7]")).toBeTruthy();
+    expect(
+      view.getByRole("link", { name: /enter the storm/i }).getAttribute("href"),
+    ).toBe("/chakraStorm?quest=quest&objective=goal");
+  });
 });
