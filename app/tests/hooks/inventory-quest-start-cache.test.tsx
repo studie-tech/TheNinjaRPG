@@ -33,6 +33,7 @@ beforeEach(() =>
     bloodline: api.bloodline,
     pets: api.pets,
     quests: api.quests,
+    kessen: api.kessen,
     useUtils: api.useUtils,
   }),
 );

@@ -27,6 +27,7 @@ import {
   isNull,
   like,
   lte,
+  ne,
   notExists,
   or,
   sql,
@@ -42,10 +43,14 @@ import {
   userItemImbuement,
 } from "@/drizzle/schema";
 
-/** Build the `item` listing for `getAuctionOfferItems`, using predicates on `canBeTraded` and `hidden`. */
+/** Build the `item` listing for `getAuctionOfferItems`: visible items `isOfferTradeableItem` accepts. */
 export const listItemForGetAuctionOfferItems = (client: Pick<DrizzleClient, "query">) =>
   client.query.item.findMany({
-    where: and(eq(item.canBeTraded, true), eq(item.hidden, false)),
+    where: and(
+      eq(item.canBeTraded, true),
+      ne(item.itemType, "CARD"),
+      eq(item.hidden, false),
+    ),
     columns: {
       id: true,
       name: true,
@@ -311,7 +316,13 @@ export const updateUserItemForMoveOfferItem = (
           client
             .select({ id: item.id })
             .from(item)
-            .where(and(eq(item.id, row.itemId), eq(item.canBeTraded, true))),
+            .where(
+              and(
+                eq(item.id, row.itemId),
+                eq(item.canBeTraded, true),
+                ne(item.itemType, "CARD"),
+              ),
+            ),
         ),
         // Completed imbuements follow a whole item; splitting one would duplicate them.
         notExists(

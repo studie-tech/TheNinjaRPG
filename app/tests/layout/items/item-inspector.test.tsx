@@ -8,14 +8,17 @@ import {
   within,
 } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
-import type { ItemSlot } from "@/drizzle/constants";
+import { type ItemSlot, KESSEN_FIRST_BUNDLE_ITEM_ID } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as itemActions from "@/hooks/useItemActions";
+import * as mediaQuery from "@/hooks/useMediaQuery";
+import * as splitBeforeSale from "@/hooks/useSplitBeforeSale";
 import * as contentImage from "@/layout/ContentImage";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
 import * as itemFortify from "@/layout/items/ItemFortify";
 import { ItemInspector } from "@/layout/items/ItemInspector";
 import * as itemLib from "@/libs/item";
+import { DEFAULT_CARD_DATA } from "@/validators/itemCard";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
@@ -28,8 +31,15 @@ let cosmeticState: ReturnType<typeof mockCosmetics>;
 
 beforeEach(() => {
   cosmeticState = mockCosmetics();
+  vi.spyOn(splitBeforeSale, "useSplitBeforeSale").mockReturnValue({
+    keepOnStack: vi.fn(async () => ({ success: true, message: "" })),
+    isSplitting: false,
+    refreshInventory: vi.fn(async () => {}),
+  } as never);
   installBrowserGlobals();
   equip = vi.fn();
+  // The card face reads the reduced-motion preference once it has loaded.
+  vi.spyOn(mediaQuery, "useMediaQuery").mockImplementation(() => false);
   vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => (
     <span>{alt} art</span>
   ));
@@ -256,19 +266,19 @@ it("shows split only for stacks of 2+", () => {
       isEquipping={false}
     />,
   );
-  expect(screen.getByRole("button", { name: /Merge Stacks/ })).toBeDefined();
-  expect(screen.queryByRole("button", { name: /Split Stack/ })).toBeNull();
+  expect(screen.getByRole("button", { name: /Merge stacks/ })).toBeDefined();
+  expect(screen.queryByRole("button", { name: /Split stack/ })).toBeNull();
   view.unmount();
   renderInspector({ userItem: userItem({ canStack: true, quantity: 4 }) });
-  expect(screen.getByRole("button", { name: /Split Stack/ })).toBeDefined();
+  expect(screen.getByRole("button", { name: /Split stack/ })).toBeDefined();
 });
 
 it("hides split for equipped stacks while preserving merge", () => {
   renderInspector({
     userItem: userItem({ canStack: true, quantity: 4, equipped: "HAND_1" }),
   });
-  expect(screen.queryByRole("button", { name: /Split Stack/ })).toBeNull();
-  expect(screen.getByRole("button", { name: /Merge Stacks/ })).toBeDefined();
+  expect(screen.queryByRole("button", { name: /Split stack/ })).toBeNull();
+  expect(screen.getByRole("button", { name: /Merge stacks/ })).toBeDefined();
 });
 
 it("shows drop for event or non-shop items and sell otherwise", () => {
@@ -429,4 +439,115 @@ it("offers dedicated cosmetics for appearance unlocking without a normal equip a
   expect(screen.getByRole("button", { name: "Make Cosmetic" })).toBeDefined();
   expect(screen.queryByRole("button", { name: /^Equip$/ })).toBeNull();
   expect(screen.queryByRole("button", { name: /Set hotkey/ })).toBeNull();
+});
+
+const cardStack = (id: string, quantity: number, cardData = DEFAULT_CARD_DATA) =>
+  ({
+    ...userItem({ itemType: "CARD", quantity, canStack: true }),
+    id,
+    itemId: "kessen-moonprowler",
+    item: {
+      ...userItem().item,
+      id: "kessen-moonprowler",
+      name: "Moonprowler",
+      itemType: "CARD",
+      slot: "NONE",
+      rarity: "COMMON",
+      maxDurability: 0,
+      canStack: true,
+      description: "",
+      cardData,
+    },
+  }) as unknown as UserItemWithRelations;
+
+it("offers only a card's surplus copies for sale, never its deck copies", () => {
+  const splitStack = vi.fn();
+  vi.spyOn(itemActions, "useItemActions").mockReturnValue({
+    ...itemActions.useItemActions({ useritem: undefined, onDone: () => {} }),
+    splitStack,
+  } as never);
+  const single = cardStack("only", 2);
+  const view = render(
+    <ItemInspector
+      userItem={single}
+      allUserItems={[single]}
+      userData={player}
+      onClose={vi.fn()}
+      onEquip={equip}
+      isEquipping={false}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: /Sell/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Merge Stacks|Split Stack/ })).toBeNull();
+  expect(screen.getByText(/No surplus copy to sell/)).toBeDefined();
+  view.unmount();
+
+  const mixed = cardStack("mixed", 5);
+  const second = render(
+    <ItemInspector
+      userItem={mixed}
+      allUserItems={[mixed]}
+      userData={player}
+      onClose={vi.fn()}
+      onEquip={equip}
+      isEquipping={false}
+    />,
+  );
+  // Only the surplus is offered: selling it splits the deck copies off first.
+  expect(nativeButton(/Sell 2 surplus copies · 120 ryo/)).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Separate surplus" }));
+  expect(splitStack).toHaveBeenCalledWith({ userItemId: "mixed", quantityToKeep: 3 });
+  second.unmount();
+
+  const kept = cardStack("kept", 3);
+  const surplus = cardStack("surplus", 2);
+  renderInspector({ userItem: surplus, allUserItems: [kept, surplus] });
+  expect(nativeButton(/Sell 2 surplus copies · 120 ryo/)).toBeDefined();
+  // Separated surplus stays apart from the deck copies.
+  expect(screen.queryByRole("button", { name: "Merge Stacks" })).toBeNull();
+  cleanup();
+
+  // The deck-copy stack offers no sale and points at its surplus instead.
+  const onInspectStack = vi.fn();
+  renderInspector({ userItem: kept, allUserItems: [kept, surplus], onInspectStack });
+  expect(screen.queryByRole("button", { name: /^Sell/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Open surplus stack" }));
+  expect(onInspectStack).toHaveBeenCalledWith("surplus");
+});
+
+it("explains why leaders cannot be sold", () => {
+  const leader = cardStack("leader", 1, {
+    ...DEFAULT_CARD_DATA,
+    kind: "LEADER",
+    row: null,
+  });
+  renderInspector({ userItem: leader, allUserItems: [leader] });
+  expect(screen.queryByRole("button", { name: /Sell/ })).toBeNull();
+  expect(
+    screen.getByText(
+      "Moonprowler is a leader. Leaders are never sold and stay in your collection.",
+    ),
+  ).toBeDefined();
+});
+
+it("explains once that an earned pack is only opened", () => {
+  const base = userItem({ itemType: "CONSUMABLE", inShop: false });
+  const firstBundle = {
+    ...base,
+    itemId: KESSEN_FIRST_BUNDLE_ITEM_ID,
+    item: {
+      ...base.item,
+      id: KESSEN_FIRST_BUNDLE_ITEM_ID,
+      name: "First Bundle",
+      canBeTraded: false,
+    },
+  } as UserItemWithRelations;
+  renderInspector({ userItem: firstBundle, allUserItems: [firstBundle] });
+  expect(screen.queryByRole("button", { name: /Sell|Drop/ })).toBeNull();
+  expect(
+    screen.getByText(
+      "First Bundle cannot be sold, traded or dropped; open it for its cards.",
+    ),
+  ).toBeDefined();
+  expect(screen.queryByText(/cannot be sold or traded/)).toBeNull();
 });

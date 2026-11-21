@@ -1,0 +1,18 @@
+/*
+ * Card Hall page: the site's floating Activity pill on phones and the scenes (the match
+ * table, the pack ceremony) that take the hall's place in the content box.
+ */
+
+/* Phones float the collapsed Activity pill over the hall's rows and the deck builder's
+   bottom bars, so the Card Hall leaves it out there; an open Activity panel (a lesson
+   the player expanded) still shows. */
+@media (max-width: 767.98px) {
+  body:has(.kessen-hall) [data-activity-dock] > button[aria-expanded="false"] {
+    display: none;
+  }
+}
+
+/* A scene fills the content box edge to edge. */
+.kh-scene {
+  position: relative;
+}

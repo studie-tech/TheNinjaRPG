@@ -13,6 +13,7 @@ import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as bulkSell from "@/hooks/useBulkSellItems";
 import * as homeMove from "@/hooks/useHomeStorageMove";
 import * as itemActions from "@/hooks/useItemActions";
+import * as splitBeforeSale from "@/hooks/useSplitBeforeSale";
 import * as contentImage from "@/layout/ContentImage";
 import * as equipmentPreview from "@/layout/EquipmentPreview";
 import * as hotkeyControls from "@/layout/HotkeyControls";
@@ -37,6 +38,11 @@ let finish: (result: {
 
 beforeEach(() => {
   mockCosmetics();
+  vi.spyOn(splitBeforeSale, "useSplitBeforeSale").mockReturnValue({
+    keepOnStack: vi.fn(async () => ({ success: true, message: "" })),
+    isSplitting: false,
+    refreshInventory: vi.fn(async () => {}),
+  } as never);
   window.localStorage.clear();
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -176,9 +182,7 @@ const startSelecting = () =>
   act(() => fireEvent.click(screen.getByRole("button", { name: "Select" })));
 const bar = () => screen.getByRole("region", { name: "Selected items" });
 const openReview = () =>
-  act(() =>
-    fireEvent.click(within(bar()).getByRole("button", { name: "Sell / drop…" })),
-  );
+  act(() => fireEvent.click(within(bar()).getByRole("button", { name: SELL_OPENER })));
 
 it("ticks cards instead of opening the inspector while selecting", () => {
   renderWorkspace();
@@ -218,7 +222,7 @@ it("lists art, name and quantity in the review window, where unticking updates t
   act(() => fireEvent.click(card("Chakra Pill")));
   act(() => fireEvent.click(card("Old Scroll")));
   openReview();
-  const review = screen.getByRole("dialog", { name: "Sell or drop 2 items" });
+  const review = screen.getByRole("dialog", { name: /^Sell (or drop )?2 items$/ });
   const row = within(review).getByRole("listitem", { name: "Chakra Pill" });
   expect(within(row).getByText("Chakra Pill art")).toBeDefined();
   expect(row.textContent).toContain("×3");
@@ -230,7 +234,7 @@ it("lists art, name and quantity in the review window, where unticking updates t
   );
   expect(within(review).getByRole("listitem", { name: "Chakra Pill" })).toBeDefined();
   expect(review.textContent).toContain("Sell for 20 ryo");
-  expect(screen.getByRole("dialog", { name: "Sell or drop 1 item" })).toBe(review);
+  expect(screen.getByRole("dialog", { name: /^Sell (or drop )?1 item$/ })).toBe(review);
   act(() => fireEvent.keyDown(review, { key: "Escape" }));
   expect(card("Chakra Pill").getAttribute("aria-pressed")).toBe("false");
   expect(card("Old Scroll").getAttribute("aria-pressed")).toBe("true");
@@ -243,7 +247,7 @@ it("sells straight from the review window when nothing rare is ticked", () => {
   openReview();
   act(() =>
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Sell / drop" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: SELL_SUBMIT }),
     ),
   );
   expect(sellMany).toHaveBeenCalledWith(["Chakra Pill"]);
@@ -255,7 +259,7 @@ it.each(["Back", "Close", "Escape"])(
     renderWorkspace();
     startSelecting();
     act(() => fireEvent.click(card("Chakra Pill")));
-    const opener = within(bar()).getByRole("button", { name: "Sell / drop…" });
+    const opener = within(bar()).getByRole("button", { name: SELL_OPENER });
     opener.focus();
     openReview();
     const review = screen.getByRole("dialog");
@@ -274,7 +278,7 @@ it("returns focus to Select after a completed sale removes the opener", async ()
   openReview();
   act(() =>
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Sell / drop" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: SELL_SUBMIT }),
     ),
   );
   act(() => finish({ soldUserItemIds: ["Chakra Pill"], refused: [] }));
@@ -315,9 +319,11 @@ it.each([false, true])(
         ),
       );
     const review = screen.getByRole("dialog");
-    const submitName = rare ? "Confirm" : "Sell / drop";
+    const submitName = rare ? "Confirm" : "Sell";
     act(() =>
-      fireEvent.click(within(review).getByRole("button", { name: submitName })),
+      fireEvent.click(
+        within(review).getByRole("button", { name: new RegExp(`^${submitName}`) }),
+      ),
     );
     isSelling = true;
     rerender([pill, scroll, token, blade]);
@@ -411,7 +417,7 @@ it("keeps refused items selected after a partial result", () => {
   openReview();
   act(() =>
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Sell / drop" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: SELL_SUBMIT }),
     ),
   );
   act(() =>
@@ -448,12 +454,16 @@ it("holds a selection larger than one request until it is trimmed", () => {
   act(() => fireEvent.click(screen.getByRole("button", { name: "All Common" })));
   expect(bar().textContent).toContain(`Select up to ${MAX_BULK_SELL_ITEMS} at a time`);
   expect(
-    (within(bar()).getByRole("button", { name: "Sell / drop…" }) as HTMLButtonElement)
+    (within(bar()).getByRole("button", { name: SELL_OPENER }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
   act(() => fireEvent.click(card("Pebble 0 ")));
   expect(
-    (within(bar()).getByRole("button", { name: "Sell / drop…" }) as HTMLButtonElement)
+    (within(bar()).getByRole("button", { name: SELL_OPENER }) as HTMLButtonElement)
       .disabled,
   ).toBe(false);
 });
+
+/** The bulk sale opener and submit say "drop" only when a ticked stack drops. */
+const SELL_OPENER = /^Sell( \/ drop)?…$/;
+const SELL_SUBMIT = /^Sell( \/ drop)?$/;

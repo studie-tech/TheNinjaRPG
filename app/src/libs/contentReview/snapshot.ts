@@ -339,6 +339,21 @@ const textOnly = (node: unknown): unknown => {
   return node;
 };
 
+/** Texts the grammar focus reads from an entity: quest content and card flavor reduced to their prose. */
+export const grammarFields = (
+  type: ContentProposalEntityType,
+  editable: Record<string, unknown>,
+) => {
+  const fields = pick(editable, TEXT_FIELDS[type]);
+  if ("content" in fields) return { ...fields, content: textOnly(fields.content) };
+  if ("cardData" in fields) {
+    const card = fields.cardData as { flavor?: unknown } | null;
+    const rest = omit(fields, ["cardData"]);
+    return card?.flavor ? { ...rest, cardData: { flavor: card.flavor } } : rest;
+  }
+  return fields;
+};
+
 /** Number of the scheduled run window `now` falls in, counted from the epoch. */
 const auditRun = (now: Date) =>
   Math.floor(now.getTime() / 1000 / (CONTENT_AUDIT_INTERVAL_HOURS * HOUR_S));
@@ -408,7 +423,7 @@ const battlefieldFields = (entity: ContentEntity) => ({
 /** Fields the grammar focus reads per type: the texts players see, and what they describe. */
 const TEXT_FIELDS: Record<ContentProposalEntityType, string[]> = {
   JUTSU: ["name", "description", "battleDescription", "jutsuRank", "jutsuType"],
-  ITEM: ["name", "description", "battleDescription", "rarity", "itemType"],
+  ITEM: ["name", "description", "battleDescription", "rarity", "itemType", "cardData"],
   BLOODLINE: ["name", "description", "rank"],
   QUEST: ["name", "description", "successDescription", "questType", "content"],
   BADGE: ["name", "description"],
@@ -428,12 +443,7 @@ const VIEWS: Record<ContentAuditFocus, View> = {
   },
   grammar: {
     types: ["JUTSU", "ITEM", "BLOODLINE", "QUEST", "BADGE", "TITLE", "AI"],
-    fields: (entity) => {
-      const fields = pick(entity.editable, TEXT_FIELDS[entity.type]);
-      return "content" in fields
-        ? { ...fields, content: textOnly(fields.content) }
-        : fields;
-    },
+    fields: (entity) => grammarFields(entity.type, entity.editable),
     hasUsage: false,
     assets: [],
   },

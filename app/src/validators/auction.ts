@@ -54,7 +54,10 @@ export const createAuctionListingSchema = z
 
 /** Item-specific validation for the listing form; the router checks fresh item data. */
 export const auctionListingSchemaForItem = (
-  item?: Pick<Item, "canBeTraded" | "auctionMinPrice" | "auctionMaxPrice"> &
+  item?: Pick<
+    Item,
+    "canBeTraded" | "itemType" | "auctionMinPrice" | "auctionMaxPrice"
+  > &
     Partial<Pick<Item, "canStack">>,
   fullQuantity = 1,
 ) =>

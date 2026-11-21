@@ -82,11 +82,16 @@ const Button = ({
       </div>
     ) : null;
   const isGlow = animation === "glow";
-  const widthClassesFromUser = React.useMemo(() => {
+  // The glow and decoration wrapper takes the button's place in its parent, so it takes
+  // the button's width and flex self-alignment, including responsive variants such as
+  // `sm:w-auto`; a wrapper wider than its button sets the right decoration apart from it.
+  const wrapperClassesFromUser = React.useMemo(() => {
     if (typeof className !== "string") return undefined;
     const tokens = className.split(/\s+/).filter(Boolean);
-    const widthy = tokens.filter((t) => /^(w-|min-w-|max-w-|flex-1$|grow$)/.test(t));
-    return widthy.length ? widthy.join(" ") : undefined;
+    const placement = tokens.filter((t) =>
+      /^(?:[^\s:]+:)*(?:w-|min-w-|max-w-|flex-1$|grow$|self-)/.test(t),
+    );
+    return placement.length ? placement.join(" ") : undefined;
   }, [className]);
   const glowBaseColor = React.useMemo(() => {
     switch (variant) {
@@ -155,7 +160,7 @@ const Button = ({
   // Wrap to support glow and/or decoration layers
   return (
     <div
-      className={cn("relative z-0 inline-block", widthClassesFromUser)}
+      className={cn("relative z-0 inline-block", wrapperClassesFromUser)}
       style={
         isGlow ? ({ "--tnr-glow": glowBaseColor } as React.CSSProperties) : undefined
       }

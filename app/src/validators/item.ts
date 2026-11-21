@@ -36,6 +36,8 @@ export const itemFilteringSchema = z.object({
   minSeichiSilverCost: z.number().prefault(0),
   maxSeichiSilverCost: z.number().optional(),
   onlyInShop: z.boolean().optional(),
+  /** Kessen goods (cards and packs) are listed only by the Card Master stall. */
+  kessenGoods: z.enum(["only", "exclude"]).optional(),
   /** Drop rows whose store listing date has passed. Shop catalogs page on this. */
   excludeExpiredFromStore: z.boolean().optional(),
   eventItems: z.boolean().optional(),

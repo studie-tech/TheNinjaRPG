@@ -34,6 +34,7 @@ beforeEach(() => {
         }),
       },
     },
+    kessen: { getHub: { useQuery: () => ({ data: undefined }) } },
     auction: {
       createAuctionListing: {
         useMutation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -54,7 +55,8 @@ it("leaves items still being imbued out of the listing picker", async () => {
   fireEvent.click(screen.getByRole("button", { name: "List item" }));
   await waitFor(() => expect(screen.getByText("Available Sword")).toBeTruthy());
   expect(screen.getByText("Stored Sword")).toBeTruthy();
-  expect(screen.getByText("Imbued Sword (1 imbuement(s))")).toBeTruthy();
+  expect(screen.getByText("Imbued Sword")).toBeTruthy();
+  expect(screen.getByText(/1 imbuement$/)).toBeTruthy();
   expect(screen.queryByText("Imbuing Sword", { exact: false })).toBeNull();
 });
 

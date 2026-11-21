@@ -9,7 +9,8 @@ import {
   List,
   ShoppingCart,
 } from "lucide-react";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -24,6 +25,7 @@ import {
   type AuctionListingState,
   auctionHouseLevelMessage,
 } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -33,10 +35,31 @@ import { NewAuctionListingDialog } from "./NewListingDialog";
 import { AuctionOffers, NewOfferDialog } from "./Offers";
 
 export default function AuctionHousePage() {
+  // Search params need a Suspense boundary on a prerendered page.
+  return (
+    <Suspense fallback={<Loader explanation="Loading Auction House" />}>
+      <AuctionHouse />
+    </Suspense>
+  );
+}
+
+function AuctionHouse() {
   // Settings
   const { userData, access } = useRequireInVillage("/auctionhouse");
+  const router = useNavigationRouter();
+  const searchParams = useSearchParams();
 
   const [browseTab, setBrowseTab] = useState<BrowseTab>("AUCTION");
+  // `?list=<userItemId>` (from the Items page) opens the new-listing dialog on that stack.
+  const [listUserItemId, setListUserItemId] = useState<string | null>(null);
+  const requestedListing = searchParams.get("list");
+  useEffect(() => {
+    if (!requestedListing) return;
+    setBrowseTab("AUCTION");
+    setListUserItemId(requestedListing);
+    router.replace("/auctionhouse", { scroll: false });
+  }, [requestedListing, router]);
+  const clearListRequest = useCallback(() => setListUserItemId(null), []);
 
   // State
   const [selectedStatus, setSelectedStatus] = useState<AuctionListingState>("ACTIVE");
@@ -80,11 +103,14 @@ export default function AuctionHousePage() {
                 key={browseTab}
                 offerType={browseTab}
                 onCreated={() => setSelectedStatus("ACTIVE")}
+                onShowAuctions={() => setBrowseTab("AUCTION")}
               />
             ) : (
               <NewAuctionListingDialog
                 key={browseTab === "DIRECT" ? "DIRECT" : "AUCTION"}
                 defaultListingType={browseTab === "DIRECT" ? "DIRECT" : "AUCTION"}
+                initialUserItemId={access ? listUserItemId : null}
+                onInitialHandled={clearListRequest}
                 onCreated={() => {
                   setSelectedStatus("ACTIVE");
                   if (browseTab === "MY_BIDS") setBrowseTab("MINE");

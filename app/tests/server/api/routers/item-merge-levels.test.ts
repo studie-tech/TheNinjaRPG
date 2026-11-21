@@ -188,6 +188,34 @@ describeWithDatabase("consumable merges across ownership levels", () => {
     ]);
   });
 
+  it("leaves separated card stacks apart while merging other items", async () => {
+    await insertItems([
+      { id: "card", name: "Card", itemType: "CARD", canStack: true, stackSize: 99 },
+    ]);
+    await insertUserItems([
+      { id: "deck", userId: "merge-user", itemId: "card", quantity: 3 },
+      { id: "surplus", userId: "merge-user", itemId: "card", quantity: 3 },
+      { id: "c1", userId: "merge-user", itemId: "consumable", quantity: 2 },
+      { id: "c2", userId: "merge-user", itemId: "consumable", quantity: 2 },
+    ]);
+    const result = await (await callerFor(itemRouter, "merge-user")).mergeAllStacks({
+      storedAtHome: false,
+    });
+    expect(result).toMatchObject({
+      success: true,
+      message: "Merged stacks for 1 item type",
+    });
+    expect(new Set(result.inventoryChanges?.map((change) => change.itemId))).toEqual(
+      new Set(["consumable"]),
+    );
+    const rows = await (await getTestDatabase()).select().from(userItem);
+    expect(rows.map((row) => [row.id, row.quantity]).sort()).toEqual([
+      ["c1", 4],
+      ["deck", 3],
+      ["surplus", 3],
+    ]);
+  });
+
   it.each(["ASLEEP", "HOSPITALIZED"] as const)(
     "reports confirmed %s recovery when only one item type merges",
     async (status) => {

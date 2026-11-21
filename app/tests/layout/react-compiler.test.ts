@@ -47,8 +47,12 @@ const targets = [
   ["layout/TutorialSettings.tsx", ["TutorialSettings"]],
   ["components/layout/shared/LayoutNotifications.tsx", ["MobileNotificationsPopover"]],
   ["hooks/tutorial.tsx", ["useTutorialStep"]],
-  ["layout/TutorialAssistant.tsx", ["PlayerTutorialAssistant"]],
+  [
+    "layout/TutorialAssistant.tsx",
+    ["PlayerTutorialAssistant", "GuidedLessonAssistant"],
+  ],
   ["layout/ActivityDock.tsx", ["ActivityDock", "ActivityQuests"]],
+  ["layout/kessen/match/LessonSpotlight.tsx", ["LessonGuide"]],
   ["components/layout/shared/GameLayoutController.tsx", ["GameLayoutController"]],
   [
     "components/layout/shared/LayoutSidebars.tsx",

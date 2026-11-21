@@ -2264,6 +2264,7 @@ const guardBulkItemAwardInventoryCapacity = (
     event: 0,
     materials: 0,
     cooking: 0,
+    cards: 0,
     normal: 0,
   };
   const now = new Date();

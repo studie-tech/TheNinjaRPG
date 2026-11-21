@@ -15,6 +15,10 @@ import {
   huntingProgress,
   huntingReceipt,
   huntingSession,
+  kessenDeck,
+  kessenMatch,
+  kessenNpcProgress,
+  kessenProgress,
   notification,
   paypalSubscription,
   petSpecies,
@@ -121,6 +125,10 @@ describeWithDatabase("staff user-id rename", () => {
       huntingProgress,
       huntingReceipt,
       adClick,
+      kessenDeck,
+      kessenMatch,
+      kessenProgress,
+      kessenNpcProgress,
       auctionOffer,
       bloodline,
       dataBattleTurnOrder,
@@ -259,6 +267,58 @@ describeWithDatabase("staff user-id rename", () => {
         ).toBe(true);
       } else await deleteUser(database, OLD_USER_ID);
       for (const table of [huntingSession, huntingProgress, huntingReceipt, adClick]) {
+        expect(
+          await database.select().from(table).where(eq(table.userId, OLD_USER_ID)),
+        ).toHaveLength(0);
+        expect(
+          await database.select().from(table).where(eq(table.userId, NEW_USER_ID)),
+        ).toHaveLength(operation === "rename" ? 1 : 0);
+      }
+    },
+  );
+
+  it.each(["rename", "delete"] as const)(
+    "keeps Kessen decks, matches and progress aligned with character %s",
+    async (operation) => {
+      const database = await getTestDatabase();
+      await database.insert(kessenDeck).values({
+        id: "kessen-deck",
+        userId: OLD_USER_ID,
+        name: "Deck",
+        leaderItemId: "kessen-leader",
+        cards: [{ itemId: "kessen-card", count: 2 }],
+      });
+      await database.insert(kessenMatch).values({
+        id: "kessen-match",
+        userId: OLD_USER_ID,
+        npcKey: "lemu",
+        tier: "GENIN",
+        engineVersion: 1,
+        seed: "seed",
+        state: {},
+      });
+      await database.insert(kessenProgress).values({
+        userId: OLD_USER_ID,
+        academy: {},
+        seenKeywords: [],
+        npcWinsToday: {},
+      });
+      await database
+        .insert(kessenNpcProgress)
+        .values({ userId: OLD_USER_ID, npcKey: "lemu", wins: 1 });
+      if (operation === "rename") {
+        const caller = await callerFor(staffRouter, STAFF);
+        expect(
+          (await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }))
+            .success,
+        ).toBe(true);
+      } else await deleteUser(database, OLD_USER_ID);
+      for (const table of [
+        kessenDeck,
+        kessenMatch,
+        kessenProgress,
+        kessenNpcProgress,
+      ]) {
         expect(
           await database.select().from(table).where(eq(table.userId, OLD_USER_ID)),
         ).toHaveLength(0);

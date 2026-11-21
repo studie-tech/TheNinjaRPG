@@ -15,6 +15,7 @@ import {
   filterBackpack,
   sortBackpack,
 } from "@/libs/itemsPage";
+import { isKessenGood } from "@/libs/kessen/cardSale";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
 import { canChangeContent, getContentRole } from "@/utils/permissions";
@@ -30,6 +31,7 @@ export function BackpackList({
   onSelect,
   onDragItem,
   wrapCard,
+  tagFor,
   selection,
 }: BackpackListProps) {
   const [query, setQuery] = useState("");
@@ -45,8 +47,12 @@ export function BackpackList({
     ? items
     : items.filter((ui) => !ui.item.hidden);
   const chips = backpackFilterChips(visible);
+  // A bag of a single item type, such as the card collection, needs no type chips.
+  const showChips = chips.length > 2;
   // A chip remembered from another bag falls back to everything in this one.
   const type = chips.some((chip) => chip.value === storedType) ? storedType : "ALL";
+  // Card names and type lines need wider tiles than gear.
+  const isCardBag = visible.length > 0 && visible.every((ui) => isKessenGood(ui.item));
   const shown = sortBackpack(
     filterBackpack(visible, { query, type }),
     BACKPACK_SORTS.some((option) => option.value === sort) ? sort : "rarity",
@@ -55,7 +61,7 @@ export function BackpackList({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex gap-2">
-        <label className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md border bg-background px-2 text-muted-foreground">
+        <label className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md border bg-background px-2 text-muted-foreground pointer-coarse:h-[40px]">
           <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="sr-only">Search items</span>
           <input
@@ -63,7 +69,7 @@ export function BackpackList({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search"
-            className="h-full min-w-0 flex-1 bg-transparent text-foreground text-sm outline-none"
+            className="h-full min-w-0 flex-1 bg-transparent text-foreground text-sm outline-none pointer-coarse:text-[16px]"
           />
         </label>
         <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
@@ -71,7 +77,7 @@ export function BackpackList({
           <select
             value={sort}
             onChange={(event) => setSort(event.target.value as BackpackSort)}
-            className="h-9 rounded-md border bg-background px-1.5 text-foreground text-sm"
+            className="h-9 rounded-md border bg-background px-1.5 text-foreground text-sm pointer-coarse:h-[40px] pointer-coarse:text-[16px]"
           >
             {BACKPACK_SORTS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -81,32 +87,37 @@ export function BackpackList({
           </select>
         </label>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {chips.map((chip) => {
-          const isActive = chip.value === type;
-          return (
-            <button
-              key={chip.value}
-              type="button"
-              aria-pressed={isActive}
-              onClick={() => setStoredType(chip.value)}
-              className={cn(
-                "h-8 rounded-full border px-2.5 text-xs",
-                isActive
-                  ? "border-primary bg-primary font-semibold text-primary-foreground"
-                  : "bg-background hover:bg-muted",
-                chip.value === "NEEDS_REPAIR" &&
-                  !isActive &&
-                  "border-orange-300 text-orange-800 dark:text-orange-300",
-              )}
-            >
-              {chip.label} <span className="opacity-70">{chip.count}</span>
-            </button>
-          );
-        })}
-      </div>
+      {showChips && (
+        <div className="flex flex-wrap gap-1.5">
+          {chips.map((chip) => {
+            const isActive = chip.value === type;
+            return (
+              <button
+                key={chip.value}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setStoredType(chip.value)}
+                className={cn(
+                  "h-8 rounded-full border px-2.5 text-xs pointer-coarse:h-[40px] pointer-coarse:px-3 pointer-coarse:text-[11px]",
+                  isActive
+                    ? "border-primary bg-primary font-semibold text-primary-foreground"
+                    : "bg-background hover:bg-muted",
+                  chip.value === "NEEDS_REPAIR" &&
+                    !isActive &&
+                    "border-orange-300 text-orange-800 dark:text-orange-300",
+                )}
+              >
+                {chip.label} <span className="opacity-70">{chip.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       {selection && (
-        <fieldset aria-label="Quick select" className="flex flex-wrap gap-1.5">
+        <fieldset
+          aria-label="Quick select"
+          className="flex flex-wrap gap-1.5 pointer-coarse:gap-2"
+        >
           {ItemRarities.filter((rarity) =>
             shown.some((userItem) => userItem.item.rarity === rarity),
           ).map((rarity) => (
@@ -114,7 +125,7 @@ export function BackpackList({
               key={rarity}
               type="button"
               onClick={() => selection.onPickRarity(rarity, shown)}
-              className="h-8 rounded-full border border-dashed bg-background px-2.5 text-xs hover:bg-muted"
+              className="h-8 rounded-full border border-dashed bg-background px-2.5 text-[11px] hover:bg-muted pointer-coarse:h-[40px] pointer-coarse:px-3.5"
             >
               All {rarityLabel[rarity]}
             </button>
@@ -123,7 +134,12 @@ export function BackpackList({
       )}
       <ul
         aria-label="Backpack items"
-        className="grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-2"
+        className={cn(
+          "grid gap-2",
+          isCardBag
+            ? "grid-cols-[repeat(auto-fill,minmax(13rem,1fr))]"
+            : "grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))]",
+        )}
       >
         {shown.map((userItem) => {
           if (selection) {
@@ -135,6 +151,7 @@ export function BackpackList({
                   onSelect={selection.onToggle}
                   isTicked={selection.ids.includes(userItem.id)}
                   blockReason={selection.blockReason(userItem)}
+                  tag={tagFor?.(userItem)}
                 />
               </li>
             );
@@ -146,6 +163,7 @@ export function BackpackList({
               onSelect={onSelect}
               onDragStart={onDragItem}
               onDragEnd={onDragItem ? () => onDragItem(null) : undefined}
+              tag={tagFor?.(userItem)}
             />
           );
           return (
@@ -174,6 +192,8 @@ interface BackpackListProps {
     userItem: UserItemWithRelations,
     card: React.ReactNode,
   ) => React.ReactNode;
+  /** A short note on a tile, such as the surplus a card stack holds. */
+  tagFor?: (userItem: UserItemWithRelations) => string | undefined;
   /** Select mode: cards tick instead of opening, without menus or dragging. */
   selection?: {
     ids: string[];

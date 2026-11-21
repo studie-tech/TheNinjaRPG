@@ -7,6 +7,7 @@ import {
   CACHE_MAX_ROLLS,
   CACHE_MAX_TIERS,
   CACHE_PROBABILITY_TOTAL,
+  ItemRarities,
 } from "@/drizzle/constants";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 
@@ -127,6 +128,27 @@ export const cacheRewardDisplaySchema = z.object({
 });
 export type CacheRewardDisplay = z.infer<typeof cacheRewardDisplaySchema>;
 
+/**
+ * The cards a Kessen pack granted, slot by slot, for the opening animation. `surplus`
+ * copies exceeded their copy limit; `soldFor` is the ryo an auto-sold surplus paid.
+ */
+export const cardPackRevealSchema = z.object({
+  packItemId: z.string(),
+  cards: z.array(
+    z.object({
+      itemId: z.string(),
+      rarity: z.enum(ItemRarities),
+      forbidden: z.boolean(),
+      isNew: z.boolean(),
+      surplus: z.boolean(),
+      soldFor: z.number().int().nullable(),
+    }),
+  ),
+  /** Packs until each pity guarantee, counting the guaranteed pack. */
+  pity: z.object({ epicIn: z.number().int(), legendaryIn: z.number().int() }),
+});
+export type CardPackReveal = z.infer<typeof cardPackRevealSchema>;
+
 /** Saved with the audit record so a transport retry returns the original result. */
 export const cacheConsumptionResponseSchema = z.object({
   success: z.literal(true),
@@ -144,6 +166,7 @@ export const cacheConsumptionResponseSchema = z.object({
       }),
     )
     .optional(),
+  kessenReveal: cardPackRevealSchema.optional(),
 });
 /** Bind the saved response to its inventory stack before accepting a replay. */
 export const cacheConsumptionReceiptSchema = z.object({

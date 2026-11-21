@@ -28,6 +28,7 @@ import {
   auctionHouseLevelMessage,
   IMG_AVATAR_DEFAULT,
 } from "@/drizzle/constants";
+import { useKessenCardMoves } from "@/hooks/kessen/useKessenHubCache";
 import { useAuctionBidCacheUpdate } from "@/hooks/useAuctionBidCacheUpdate";
 import { useAvatarRenditionWidth } from "@/layout/Avatar";
 import Countdown from "@/layout/Countdown";
@@ -85,6 +86,7 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   // Utils
   const utils = api.useUtils();
   const { prepareBidUpdate, updateBid } = useAuctionBidCacheUpdate(auctionId, search);
+  const { reconcileCardMoves } = useKessenCardMoves();
 
   // Query single auction listing
   const {
@@ -118,7 +120,12 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
           updateUser(data, { revision: context.user }),
           updateBid(data, context.bid),
           // A buyout delivers the item, which may join a carried stack.
-          data.placedBid ? undefined : utils.item.getUserItems.invalidate(),
+          data.placedBid
+            ? undefined
+            : Promise.all([
+                utils.item.getUserItems.invalidate(),
+                reconcileCardMoves([listing?.item?.itemType]),
+              ]),
         ]);
       }
     },
@@ -138,6 +145,7 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             utils.auction.getAuctionListings.invalidate(),
             utils.auction.getAuctionListing.invalidate(),
             utils.item.getUserItems.invalidate(),
+            reconcileCardMoves([listing?.item?.itemType]),
           ]);
         }
       },

@@ -12,7 +12,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserData, UserItemWithRelations } from "@/drizzle/schema";
 import { isEquippableUserItem, isImbuing } from "@/libs/item";
-import { getAuctionPriceError } from "@/libs/itemEconomy";
+import { getAuctionPriceError, isOfferTradeableItem } from "@/libs/itemEconomy";
 import {
   fetchOfferItem,
   findAuctionOfferForAcceptAuctionOffer,
@@ -87,7 +87,7 @@ export const auctionOfferProcedures = {
       ]);
       const userError = offerUserError(user);
       if (userError) return errorResponse(userError);
-      if (!requested?.canBeTraded || requested.hidden)
+      if (!requested || !isOfferTradeableItem(requested) || requested.hidden)
         return errorResponse("Requested item is not tradable");
       if (input.offerType === "REQUEST" && requested.itemType !== "MATERIAL")
         return errorResponse("Ryo requests are for materials");
@@ -162,7 +162,8 @@ export const auctionOfferProcedures = {
       const userError = offerUserError(accepter) ?? offerUserError(offer.owner);
       if (userError) return errorResponse(userError);
       if (
-        !offer.requestedItem?.canBeTraded ||
+        !offer.requestedItem ||
+        !isOfferTradeableItem(offer.requestedItem) ||
         supplied?.itemId !== offer.requestedItemId
       )
         return errorResponse("Choose the requested item from your inventory");
@@ -170,7 +171,8 @@ export const auctionOfferProcedures = {
       if (itemError) return errorResponse(itemError);
       if (
         offer.offerType === "TRADE" &&
-        (!offer.offeredUserItem?.item.canBeTraded ||
+        (!offer.offeredUserItem ||
+          !isOfferTradeableItem(offer.offeredUserItem.item) ||
           !offer.offeredUserItem.isInAuction ||
           offer.offeredUserItem.userId !== offer.ownerId ||
           offer.offeredUserItem.quantity !== offer.offeredQuantity)
@@ -319,7 +321,8 @@ const claimOfferUser = async (tx: DrizzleTransaction, id: string) => {
 
 const offerItemError = (row: UserItemWithRelations | undefined, quantity: number) => {
   if (
-    !row?.item.canBeTraded ||
+    !row ||
+    !isOfferTradeableItem(row.item) ||
     row.quantity < quantity ||
     row.equipped !== "NONE" ||
     !isEquippableUserItem(row) ||

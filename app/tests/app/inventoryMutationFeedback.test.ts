@@ -32,7 +32,7 @@ for (const procedure of [
     const call = source.indexOf(`api.${procedure}.useMutation(`);
     const callbacks = source
       .slice(call)
-      .match(/useMutation\((\{[\s\S]*?\n  \})\);/)?.[1];
+      .match(/useMutation\((\{[\s\S]*?\n {2}\})\);/)?.[1];
     if (!callbacks) throw new Error(`${procedure} callbacks were not found`);
 
     const defaultError = vi.fn();
@@ -70,6 +70,9 @@ for (const procedure of [
       prepareInventoryUpdate: vi.fn(),
       updateInventory: vi.fn(),
       invalidateInventory: () => Promise.all(caches.map((cache) => cache.invalidate())),
+      cachedItemTypes: vi.fn(() => []),
+      reconcileCardMoves: vi.fn(async () => undefined),
+      useritem: undefined,
       prepareJutsuUpdate: vi.fn(),
       prepareUserUpdate: vi.fn(),
       prepareLoadoutUpdate: vi.fn(),

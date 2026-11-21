@@ -56,6 +56,9 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "coop.quest.create",
   "coop.quest.join",
   "combat.startArenaBattle",
+  "kessen.startMatch",
+  "kessen.startLesson",
+  "kessenPvp.joinRankedQueue",
   "hunting.start",
   "farming.harvestPlot",
   "farming.harvestAll",
@@ -74,6 +77,8 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "chakraStorm.claimRun",
   "warehouse.withdraw",
   "caravanOps.claimLoot",
+  "kessenCollection.chooseStarter",
+  "kessen.claimFirstWinChoice",
   // Account creation and value transfer
   "register.createCharacter",
   "pets.acquirePet",

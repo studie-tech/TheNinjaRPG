@@ -5,14 +5,17 @@ import {
   CircleDollarSign,
   CircleFadingArrowUp,
   Cookie,
+  Gavel,
   Gem,
   House,
   Merge,
+  PackageOpen,
   Shirt,
   Split,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import dynamic from "next/dynamic";
+import { type ReactNode, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,10 +32,17 @@ import type { ItemSlot } from "@/drizzle/constants";
 import { ITEM_LEVEL_CAP, NonActionItemTypes } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import { useItemActions } from "@/hooks/useItemActions";
+import { useSplitBeforeSale } from "@/hooks/useSplitBeforeSale";
 import Confirm from "@/layout/Confirm";
 import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import { rarityLabel, rarityTextClass, slotLabel } from "@/layout/items/ItemCard";
+import { itemCardDisplay } from "@/layout/items/cardDisplay";
+import {
+  cardKindLabel,
+  rarityLabel,
+  rarityTextClass,
+  slotLabel,
+} from "@/layout/items/ItemCard";
 import { ItemFortify } from "@/layout/items/ItemFortify";
 import {
   ItemDurabilityRepairActions,
@@ -40,6 +50,7 @@ import {
 } from "@/layout/items/ItemRepair";
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
 import { MakeCosmetic } from "@/layout/items/MakeCosmetic";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
@@ -47,6 +58,8 @@ import {
   applyActiveVariant,
   calcItemSellingPrice,
   cosmeticSlotsForItem,
+  isDropOnlyItem,
+  isUnsellableCard,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
   showsItemLevelBadge,
@@ -54,12 +67,31 @@ import {
 } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
 import { fittingSlots, slotName } from "@/libs/itemsPage";
+import {
+  auctionListingHref,
+  canListAtAuction,
+  cardSale,
+  hasOtherStack,
+  isEarnedKessenPack,
+  isKessenGood,
+  surplusCopiesLabel,
+  surplusStackOf,
+} from "@/libs/kessen/cardSale";
+import { isKessenPackId } from "@/libs/kessen/packs";
 import { hasRequiredLevel } from "@/libs/rank";
 import { getRepairKits } from "@/libs/repair";
 import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
 import { remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
+import type { CardPackReveal } from "@/validators/weightedCache";
+
+// The Kessen card face and its stylesheet load only when a card is inspected.
+const CardFace = dynamic(
+  () => import("@/layout/kessen/CardFace").then((mod) => mod.CardFace),
+  { ssr: false },
+);
 
 /**
  * Everything about one carried item and every action on it: effects and level, equip or
@@ -79,6 +111,8 @@ export function ItemInspector({
   onSetHotkey,
   masteryWarning,
   homeMove,
+  onPackReveal,
+  onInspectStack,
 }: ItemInspectorProps) {
   const [isSplitDialogOpen, setIsSplitDialogOpen] = useState<boolean>(false);
   const [quantityToKeep, setQuantityToKeep] = useState<number>(Number.NaN);
@@ -87,6 +121,8 @@ export function ItemInspector({
     undefined,
   );
 
+  // Separating card surplus keeps the inspector on the stack of deck copies.
+  const keepOpenAfterSplit = useRef(false);
   const {
     merge,
     consume,
@@ -106,13 +142,40 @@ export function ItemInspector({
     isRepairingWithRyo,
   } = useItemActions({
     useritem,
+    onPackReveal,
     onDone: () => {
       setIsSplitDialogOpen(false);
       setQuantityToKeep(Number.NaN);
       setIsRepairModalOpen(false);
+      if (keepOpenAfterSplit.current) {
+        keepOpenAfterSplit.current = false;
+        return;
+      }
       onClose();
     },
   });
+  // Selling part of a stack splits the rest off first, so the sale keeps this stack's id.
+  const {
+    keepOnStack,
+    isSplitting: isSplittingOff,
+    refreshInventory,
+  } = useSplitBeforeSale();
+  const sellCopies = async (quantity: number) => {
+    if (quantity < useritem.quantity) {
+      const result = await keepOnStack(useritem.id, quantity);
+      if (!result.success) {
+        showMutationToast({ ...result, variant: "destructive" });
+        return;
+      }
+    }
+    sell(
+      { userItemId: useritem.id },
+      // The split-off stack is not in the cached inventory yet.
+      quantity < useritem.quantity
+        ? { onSettled: () => void refreshInventory() }
+        : undefined,
+    );
+  };
 
   const { data: wardrobe } = api.cosmetic.get.useQuery();
   const selectedCosmetic = wardrobe?.slots.find(
@@ -123,20 +186,51 @@ export function ItemInspector({
     { staleTime: 5 * 60 * 1000 },
   );
 
-  const isLoading = isPending || isEquipping;
+  const isLoading = isPending || isEquipping || isSplittingOff;
   const isStored = useritem.storedAtHome;
 
   // Derived
   const structures = userData?.village?.structures;
-  const isDropOnly = useritem.item.isEventItem || !useritem.item.inShop;
+  const isDropOnly = isDropOnlyItem(useritem.item);
+  // Cards and card packs skip equipment controls; cards sell only their surplus copies.
+  const isCard = useritem.item.itemType === "CARD";
+  const isPack = isKessenPackId(useritem.itemId);
+  const isKessen = isKessenGood(useritem.item);
+  const isEarnedPack = isEarnedKessenPack(useritem.item);
+  const sale = cardSale(useritem, allUserItems ?? []);
+  const unsellableReason = isUnsellableCard(useritem.item)
+    ? sale?.kind === "unsellable"
+      ? sale.detail
+      : "cannot be sold or traded"
+    : null;
+  const canSell =
+    !unsellableReason && (!sale || sale.kind === "surplus" || sale.kind === "mixed");
+  // How many copies a sale removes: a card stack's surplus, else the whole stack.
+  const sellQuantity = sale?.kind === "mixed" ? sale.surplus : useritem.quantity;
+  const surplusStack =
+    sale?.kind === "kept" && sale.surplusElsewhere
+      ? surplusStackOf(useritem, allUserItems ?? [])
+      : undefined;
+  const cardFace = isCard ? itemCardDisplay(useritem.item) : null;
   const stackLabel =
-    useritem.quantity > 1
-      ? `${useritem.quantity}x ${useritem.item.name}`
-      : useritem.item.name;
+    sale?.kind === "surplus" || sale?.kind === "mixed"
+      ? `${surplusCopiesLabel(sellQuantity)} of ${useritem.item.name}`
+      : useritem.quantity > 1
+        ? `${useritem.quantity}x ${useritem.item.name}`
+        : useritem.item.name;
   const isMeal = useritem.item.itemType === "MEAL";
   const canEatMeal =
     !isLoading && canAttemptAwakeAction(userData) && !userData.battleId;
-  const sellPrice = calcItemSellingPrice(userData, useritem, structures);
+  const sellPrice = calcItemSellingPrice(
+    userData,
+    { ...useritem, quantity: sellQuantity },
+    structures,
+  );
+  const packPrice = calcItemSellingPrice(
+    userData,
+    { ...useritem, quantity: 1 },
+    structures,
+  );
   const repairKits = getRepairKits(allUserItems, userData);
   const equippedIn = useritem.equipped === "NONE" ? null : useritem.equipped;
   // Battle keys fire only for equipped items.
@@ -169,19 +263,36 @@ export function ItemInspector({
   const hasVariants =
     ((useritem as UserItemWithVariants).item.variants?.length ?? 0) > 0;
   const durabilityPercent =
-    useritem.item.maxDurability > 0
+    useritem.item.maxDurability > 0 && !isKessen
       ? Math.round((useritem.durability / useritem.item.maxDurability) * 100)
       : null;
+  // Card stacks stay apart once their surplus is separated; packs merge with another stack.
+  const canMerge =
+    useritem.item.canStack &&
+    !isCard &&
+    (!isKessen || hasOtherStack(useritem, allUserItems ?? []));
+  // Card stacks split only to separate their surplus, offered with the sale below.
+  const canSplit =
+    useritem.item.canStack &&
+    useritem.quantity > 1 &&
+    useritem.equipped === "NONE" &&
+    !isCard;
   const hasMoreActions =
     cosmeticSlotsForItem(useritem.item).length > 0 ||
-    useritem.item.canStack ||
+    canMerge ||
+    canSplit ||
     hasVariants ||
     (availableEvolutions?.length ?? 0) > 0;
+  // The card face already carries the flavor line the description repeats.
+  const flavor = cardFace?.flavor?.trim();
+  const showDescription =
+    !!look.description && !(flavor && look.description.includes(flavor));
 
   return (
     <section
       aria-label={look.name}
-      className="flex flex-col gap-3"
+      // Touch screens get finger-sized buttons.
+      className="flex flex-col gap-3 pointer-coarse:[&_:is(button,a)]:min-h-[40px]"
       onKeyDown={(event) => {
         // Escape inside a confirmation or dialog opened from here belongs to that dialog.
         if (
@@ -209,25 +320,38 @@ export function ItemInspector({
         </Button>
       </div>
       <div className="flex items-start gap-3">
-        <span className="relative h-16 w-16 shrink-0">
-          <ContentImage
-            image={look.image}
-            alt={look.name}
-            rarity={useritem.item.rarity}
-            className="h-16 w-16"
-          />
-          {showsItemLevelBadge(useritem.item) && (
-            <span className="absolute -bottom-1 -left-1 rounded-md border-2 border-red-600 bg-background px-1 font-bold text-[10px] text-foreground">
-              Lv {useritem.level}
-            </span>
-          )}
-        </span>
+        {cardFace ? (
+          // Short landscape screens take a smaller face so the actions show on open.
+          <span className={cn("aspect-[5/7] w-[136px] shrink-0", SHORT_SCREEN.face)}>
+            <CardFace card={cardFace} renderSize={136} priority className="w-full" />
+          </span>
+        ) : (
+          <span className="relative h-16 w-16 shrink-0">
+            <ContentImage
+              image={look.image}
+              alt={look.name}
+              rarity={useritem.item.rarity}
+              className="h-16 w-16"
+            />
+            {showsItemLevelBadge(useritem.item) && (
+              <span className="absolute -bottom-1 -left-1 rounded-md border-2 border-red-600 bg-background px-1 font-bold text-[10px] text-foreground">
+                Lv {useritem.level}
+              </span>
+            )}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <h2 className="font-bold text-foreground text-lg">{look.name}</h2>
           <p
             className={cn("text-sm font-medium", rarityTextClass[useritem.item.rarity])}
           >
-            {rarityLabel[useritem.item.rarity]} {useritem.item.itemType.toLowerCase()}
+            {rarityLabel[useritem.item.rarity]}{" "}
+            {isCard
+              ? cardKindLabel(useritem).toLowerCase()
+              : isPack
+                ? "card pack"
+                : useritem.item.itemType.toLowerCase()}
+            {useritem.item.cardData?.variant === "FORBIDDEN" && " · Forbidden"}
             {useritem.item.slot !== "NONE" && ` · fits ${slotLabel(useritem)}`}
             {useritem.quantity > 1 && ` · ×${useritem.quantity}`}
           </p>
@@ -244,7 +368,7 @@ export function ItemInspector({
           )}
         </div>
       </div>
-      {look.description && (
+      {showDescription && (
         <div data-reading-text className="text-muted-foreground text-sm">
           {parseHtml(look.description)}
         </div>
@@ -324,8 +448,17 @@ export function ItemInspector({
                 disabled={isConsuming}
                 onClick={() => consume(getItemConsumeInput(userData.userId, useritem))}
               >
-                <Cookie className="mr-2 h-5 w-5" />
-                Consume
+                {isPack ? (
+                  <>
+                    <PackageOpen className="mr-2 h-5 w-5" aria-hidden />
+                    Open pack
+                  </>
+                ) : (
+                  <>
+                    <Cookie className="mr-2 h-5 w-5" />
+                    Consume
+                  </>
+                )}
               </Button>
             )}
             {canSetHotkey && (
@@ -369,28 +502,26 @@ export function ItemInspector({
           )}
           {hasMoreActions && (
             <div className="flex flex-row flex-wrap items-center gap-2">
-              {useritem.item.canStack && (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => merge({ itemId: useritem.itemId })}
-                  >
-                    <Merge className="mr-2 h-5 w-5" />
-                    Merge Stacks
-                  </Button>
-                  {useritem.quantity > 1 && useritem.equipped === "NONE" && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setIsSplitDialogOpen(true);
-                        setQuantityToKeep(Number.NaN);
-                      }}
-                    >
-                      <Split className="mr-2 h-5 w-5" />
-                      Split Stack
-                    </Button>
-                  )}
-                </>
+              {canMerge && (
+                <Button
+                  variant="outline"
+                  onClick={() => merge({ itemId: useritem.itemId })}
+                >
+                  <Merge className="mr-2 h-5 w-5" />
+                  Merge stacks
+                </Button>
+              )}
+              {canSplit && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsSplitDialogOpen(true);
+                    setQuantityToKeep(Number.NaN);
+                  }}
+                >
+                  <Split className="mr-2 h-5 w-5" />
+                  Split stack…
+                </Button>
               )}
               {selectedCosmetic && (
                 <p className="text-sm">
@@ -566,11 +697,15 @@ export function ItemInspector({
       {isMerging && <Loader explanation="Merging" />}
       {isConsuming && <Loader explanation="Using" />}
       {isSelling && <Loader explanation="Selling" />}
+      {isSplitting && !isSplitDialogOpen && <Loader explanation="Separating" />}
       {isEquipping && <Loader explanation="Equipping" />}
       {isEvolving && <Loader explanation="Evolving" />}
       {isRepairingWithRyo && <Loader explanation="Repairing" />}
       {/* The full stats show straight away; the header above already carries the name and art. */}
-      <section aria-label="Details" className="rounded-lg border bg-card">
+      <section
+        aria-label="Details"
+        className={cn("rounded-lg border bg-card", SHORT_SCREEN.after)}
+      >
         <h3 className="px-3 pt-2 font-semibold text-sm">Details</h3>
         <div className="p-2">
           <ItemWithEffects
@@ -580,7 +715,7 @@ export function ItemInspector({
               description: "",
             })}
             key={useritem.id}
-            showStatistic="item"
+            showStatistic={isKessen ? undefined : "item"}
             showEvolutions
             hideTitle
             hideImage
@@ -588,47 +723,157 @@ export function ItemInspector({
           />
         </div>
       </section>
-      {!isLoading && !isStored && (
-        <div className="flex items-center gap-2 border-t pt-3">
-          <span className="flex-1 text-muted-foreground text-xs">
-            Asks for a security confirmation
-          </span>
-          <Confirm
-            title={isDropOnly ? "Drop item?" : "Sell item?"}
-            tone="destructive"
-            proceed_label={
-              isDropOnly
-                ? "Drop item"
-                : `Sell for ${Math.floor(sellPrice).toLocaleString()} ryo`
-            }
-            proceed_loading_label={isDropOnly ? "Dropping" : "Selling"}
-            isLoading={isSelling}
-            button={
-              isDropOnly ? (
-                <Button id="sell" variant="destructive">
-                  <ArrowDownToLine className="mr-2 h-5 w-5" />
-                  Drop Item
-                </Button>
+      {!isLoading &&
+        !isStored &&
+        !canSell &&
+        !isEarnedPack &&
+        (unsellableReason || sale) && (
+          <div className="flex flex-col gap-2 border-t pt-3 text-muted-foreground text-sm">
+            {unsellableReason ? (
+              <>
+                <p>
+                  {useritem.item.name} {unsellableReason}.
+                </p>
+                {useritem.item.cardData?.kind !== "LEADER" &&
+                  canListAtAuction(useritem) && (
+                    <Button asChild variant="outline" className="self-start">
+                      <Link href={auctionListingHref(useritem.id)}>
+                        <Gavel className="mr-2 h-5 w-5" aria-hidden />
+                        List at auction…
+                      </Link>
+                    </Button>
+                  )}
+              </>
+            ) : sale?.kind === "listed" ? (
+              <p>This stack is listed in the auction house.</p>
+            ) : sale?.kind === "kept" ? (
+              sale.surplusElsewhere ? (
+                <>
+                  <p>
+                    These are your deck copies: a deck holds up to {sale.limit}. Your
+                    other {surplusCopiesLabel(sale.owned - sale.limit)} are in their own
+                    stack.
+                  </p>
+                  {surplusStack && onInspectStack && (
+                    <Button
+                      variant="outline"
+                      className="self-start"
+                      onClick={() => onInspectStack(surplusStack.id)}
+                    >
+                      Open surplus stack
+                    </Button>
+                  )}
+                </>
               ) : (
-                <Button id="sell" variant="destructive">
-                  <CircleDollarSign className="mr-2 h-5 w-5" />
-                  Sell Item [{Math.floor(sellPrice)} ryo]
-                </Button>
+                <p>
+                  No surplus copy to sell: you own {sale.owned}, and a deck can hold up
+                  to {sale.limit}. Copies beyond {sale.limit} can be sold.
+                </p>
               )
-            }
-            onAccept={() => sell({ userItemId: useritem.id })}
-          >
-            {isDropOnly
-              ? `Drop ${stackLabel}? It is removed from your inventory and cannot be recovered.`
-              : `Sell ${stackLabel} for ${Math.floor(sellPrice).toLocaleString()} ryo? This cannot be undone.`}
-          </Confirm>
+            ) : null}
+          </div>
+        )}
+      {!isLoading && !isStored && isEarnedPack && (
+        <p className="border-t pt-3 text-muted-foreground text-sm">
+          {`${useritem.item.name} cannot be ${useritem.item.canBeTraded ? "sold or dropped" : "sold, traded or dropped"}; open it for its cards.`}
+        </p>
+      )}
+      {!isLoading && !isStored && canSell && !isEarnedPack && (
+        <div className="flex flex-col gap-2 border-t pt-3">
+          {sale?.kind === "mixed" && (
+            <p className="text-muted-foreground text-sm">
+              {surplusCopiesLabel(sale.surplus)} of this stack{" "}
+              {sale.surplus === 1 ? "is" : "are"} beyond the copy limit; the {sale.keep}{" "}
+              deck {sale.keep === 1 ? "copy stays" : "copies stay"} in your collection.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {isPack && useritem.quantity > 1 && (
+              <SellConfirm
+                title="Sell a pack?"
+                buttonLabel={`Sell 1 pack · ${Math.floor(packPrice).toLocaleString()} ryo`}
+                proceedLabel={`Sell for ${Math.floor(packPrice).toLocaleString()} ryo`}
+                isSecondary
+                isSelling={isSelling}
+                onAccept={() => void sellCopies(1)}
+              >
+                Sell 1 {useritem.item.name} for {Math.floor(packPrice).toLocaleString()}{" "}
+                ryo? This cannot be undone.
+              </SellConfirm>
+            )}
+            {isDropOnly ? (
+              <SellConfirm
+                id="sell"
+                title="Drop item?"
+                buttonLabel="Drop Item"
+                proceedLabel="Drop item"
+                isDrop
+                isSelling={isSelling}
+                onAccept={() => sell({ userItemId: useritem.id })}
+              >
+                Drop {stackLabel}? It is removed from your inventory and cannot be
+                recovered.
+              </SellConfirm>
+            ) : (
+              <SellConfirm
+                id="sell"
+                title={sale ? "Sell surplus?" : isPack ? "Sell packs?" : "Sell item?"}
+                buttonLabel={
+                  sale
+                    ? `Sell ${surplusCopiesLabel(sellQuantity)} · ${Math.floor(sellPrice).toLocaleString()} ryo`
+                    : isPack
+                      ? `Sell ${useritem.quantity === 1 ? "pack" : `all ${useritem.quantity} packs`} · ${Math.floor(sellPrice).toLocaleString()} ryo`
+                      : `Sell Item [${Math.floor(sellPrice)} ryo]`
+                }
+                proceedLabel={`Sell for ${Math.floor(sellPrice).toLocaleString()} ryo`}
+                // Opening a pack is its main action; selling sits beside it.
+                isSecondary={isPack}
+                isSelling={isSelling}
+                onAccept={() => void sellCopies(sellQuantity)}
+              >
+                {sale
+                  ? `Sell ${stackLabel} for ${Math.floor(sellPrice).toLocaleString()} ryo? The copies your decks can use stay in your collection. This cannot be undone.`
+                  : `Sell ${stackLabel} for ${Math.floor(sellPrice).toLocaleString()} ryo? This cannot be undone.`}
+              </SellConfirm>
+            )}
+            {sale?.kind === "mixed" && (
+              <Button
+                variant="outline"
+                disabled={isSplitting}
+                aria-busy={isSplitting}
+                onClick={() => {
+                  keepOpenAfterSplit.current = true;
+                  splitStack({ userItemId: useritem.id, quantityToKeep: sale.keep });
+                }}
+              >
+                <Split className="mr-2 h-5 w-5" aria-hidden />
+                {isSplitting ? "Separating" : "Separate surplus"}
+              </Button>
+            )}
+          </div>
+          <span className="text-[11px] text-muted-foreground">
+            {isDropOnly ? "Dropping" : "Selling"} asks for a confirmation
+          </span>
         </div>
       )}
+      {/* Tradeable cards also go to the auction house, deck copies included. */}
+      {!isLoading &&
+        !isStored &&
+        sale &&
+        sale.kind !== "unsellable" &&
+        canListAtAuction(useritem) && (
+          <Button asChild variant="outline" className="self-start">
+            <Link href={auctionListingHref(useritem.id)}>
+              <Gavel className="mr-2 h-5 w-5" aria-hidden />
+              List at auction…
+            </Link>
+          </Button>
+        )}
       {isSplitDialogOpen && useritem && (
         <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Split Stack</DialogTitle>
+              <DialogTitle>Split stack</DialogTitle>
               <DialogDescription>
                 How many items do you want to keep in this stack? The rest will be moved
                 to a new stack.
@@ -675,7 +920,7 @@ export function ItemInspector({
                   quantityToKeep >= useritem.quantity
                 }
               >
-                {isSplitting ? "Splitting" : "Split Stack"}
+                {isSplitting ? "Splitting" : "Split stack"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -701,6 +946,60 @@ export function ItemInspector({
         />
       )}
     </section>
+  );
+}
+
+/**
+ * Short landscape screens (a phone on its side) open the inspector in a low sheet: a
+ * smaller face, and the details after the actions, keep the actions in view on open.
+ */
+const SHORT_SCREEN = {
+  face: "[@media(max-height:500px)_and_(orientation:landscape)]:w-[88px]",
+  after: "[@media(max-height:500px)_and_(orientation:landscape)]:order-last",
+};
+
+/** A sell or drop button with its confirmation. */
+function SellConfirm({
+  title,
+  buttonLabel,
+  proceedLabel,
+  isDrop = false,
+  isSecondary = false,
+  isSelling,
+  onAccept,
+  children,
+  id,
+}: {
+  title: string;
+  buttonLabel: string;
+  proceedLabel: string;
+  isDrop?: boolean;
+  /** Outlined, for goods whose sale is not their main action. */
+  isSecondary?: boolean;
+  isSelling: boolean;
+  onAccept: () => void;
+  children: ReactNode;
+  /** The main sale button keeps the `sell` id other screens and tests look up. */
+  id?: string;
+}) {
+  const Icon = isDrop ? ArrowDownToLine : CircleDollarSign;
+  return (
+    <Confirm
+      title={title}
+      tone="destructive"
+      proceed_label={proceedLabel}
+      proceed_loading_label={isDrop ? "Dropping" : "Selling"}
+      isLoading={isSelling}
+      button={
+        <Button id={id} variant={isSecondary ? "outline" : "destructive"}>
+          <Icon className="mr-2 h-5 w-5" aria-hidden />
+          {buttonLabel}
+        </Button>
+      }
+      onAccept={onAccept}
+    >
+      {children}
+    </Confirm>
   );
 }
 
@@ -731,4 +1030,8 @@ interface ItemInspectorProps {
     isMoving: boolean;
     onMove: () => void;
   };
+  /** Shows the ceremony of an opened Kessen card pack, which outlives the inspector. */
+  onPackReveal?: (reveal: CardPackReveal) => void;
+  /** Opens another stack, such as the separated surplus of a card. */
+  onInspectStack?: (userItemId: string) => void;
 }

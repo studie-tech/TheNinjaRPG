@@ -15,6 +15,7 @@ import {
   incrementInboxNotifications,
   isInboxDeliveryAfterProfile,
 } from "@/deltas/chat";
+import { getKessenPvpLobbyWithoutChallenge } from "@/deltas/kessenPvp";
 import { BATTLE_ALERT_SFX_URL, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
@@ -73,6 +74,15 @@ export type UserEvent = {
   craftingService?: boolean;
   /** Profile, caravan and trade route views the notice announces a change to. */
   refresh?: CaravanNoticeView[];
+  /** A Kessen duel notice riding on a `userMessage`: a challenge arrived or a duel began. */
+  kessen?: {
+    event: "challengeReceived" | "matchStarted";
+    matchId?: string;
+    kind?: string;
+  };
+  /** What happened to a Kessen challenge (`kessenChallenge`). */
+  event?: "rejected" | "cancelled";
+  requestId?: string;
 };
 
 /**
@@ -490,6 +500,8 @@ export const usePusherHandler = (
               void utils.tradeRoute.getRoutes.invalidate();
             if (refresh.includes("controls"))
               void utils.caravanOps.getControls.invalidate();
+            // The duel lobby lists the new challenge, or the duel that began.
+            if (data.kessen) void utils.kessenPvp.getLobby.invalidate();
             showMutationToast({
               success: true,
               message: data.message ?? "You have a new message",
@@ -500,6 +512,20 @@ export const usePusherHandler = (
                 data.route ?? "/battlearena",
                 data.routeText ?? "To Profile",
               ),
+            });
+          } else if (data.type === "kessenChallenge") {
+            const requestId = data.requestId;
+            if (requestId)
+              utils.kessenPvp.getLobby.setData(undefined, (lobby) =>
+                lobby ? getKessenPvpLobbyWithoutChallenge(lobby, requestId) : lobby,
+              );
+            showMutationToast({
+              success: true,
+              message:
+                data.event === "rejected"
+                  ? "Your Kessen challenge was declined."
+                  : "A Kessen challenge was withdrawn.",
+              title: "Notification!",
             });
           } else if (data.type === "pinged") {
             const conversationId = data.conversationId;
