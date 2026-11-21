@@ -195,8 +195,11 @@ export const cancelCaravan = async (
   const returned = (
     row.status === "TRAVELLING" ? getRemainingCargo(row.cargo, row.lossBp) : row.cargo
   ).filter((line) => line.quantity > 0);
+  const guards = participants.filter((p) => p.role === "GUARD");
+  const guardIds = guards.map((p) => p.userId);
   // The lifecycle claim and the stock it returns span the caravan and several stock rows;
-  // the transaction prevents a cancelled caravan whose goods never came back.
+  // the transaction prevents a cancelled caravan whose goods never came back, or escorts
+  // released but left in its queue.
   const cancelled = await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
       const claimed = await transitionCaravan(
@@ -210,6 +213,7 @@ export const cancelCaravan = async (
         await releaseCargo(tx, row.originVillageId, returned);
       else await creditWarehouseStock(tx, row.originVillageId, returned);
       await releaseParticipants(tx, row.id);
+      await wakeReleasedGuards(tx, guardIds);
       await insertWarehouseLogs(
         tx,
         returned.map((line) => ({
@@ -224,9 +228,6 @@ export const cancelCaravan = async (
     }),
   );
   if (!cancelled) return false;
-  const guards = participants.filter((p) => p.role === "GUARD");
-  const guardIds = guards.map((p) => p.userId);
-  await wakeReleasedGuards(client, guardIds);
   notifyPlayers(client, guardIds, {
     title: "Caravan cancelled",
     body: "Your escort duty ended; the caravan was cancelled.",
@@ -293,8 +294,9 @@ export const deliverCaravan = async (
     userId: guard.userId,
     money: getGuardReward(guard.objectives),
   }));
-  // Delivering credits stock rows, pays escorts and records the receipt across tables; the
-  // transaction ties them to one DELIVERED claim so a retry neither repeats nor loses them.
+  // Delivering credits stock rows, pays and wakes escorts and records the receipt across
+  // tables; the transaction ties them to one DELIVERED claim so a retry neither repeats nor
+  // loses them.
   const delivered = await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
       // A fight opened since the read above keeps the caravan on the road until it settles.
@@ -309,6 +311,10 @@ export const deliverCaravan = async (
       await grantCaravanRewards(tx, rewards);
       await markGuardsRewarded(tx, row.id, now);
       await releaseParticipants(tx, row.id);
+      await wakeReleasedGuards(
+        tx,
+        guards.map((guard) => guard.userId),
+      );
       await insertWarehouseLogs(
         tx,
         remaining.map((line) => ({
@@ -323,10 +329,6 @@ export const deliverCaravan = async (
     }),
   );
   if (!delivered) return false;
-  await wakeReleasedGuards(
-    client,
-    guards.map((guard) => guard.userId),
-  );
   for (const reward of rewards)
     notifyPlayers(client, [reward.userId], {
       title: "Caravan delivered",
@@ -443,11 +445,14 @@ const resolveDueOperations = async (
       await resolveOperation(client, operation.id, "RESOLVED", now);
       return false;
     }),
-    // Sabotage against one caravan lands in turn, each against the caravan the last left.
+    // Sabotage against one caravan lands in turn, in the order it finished, each against the
+    // caravan the last left: an earlier delay moves the arrival a later one is judged by.
     ...targetIds.map(async (caravanId) => {
       let landed = false;
       let target = targets.get(caravanId);
-      const operations = sabotage.filter((row) => row.caravanId === caravanId);
+      const operations = sabotage
+        .filter((row) => row.caravanId === caravanId)
+        .sort((a, b) => a.finishesAt.getTime() - b.finishesAt.getTime());
       for (const [index, operation] of operations.entries()) {
         if (index > 0) [target] = await listCaravansByIds(client, [caravanId]);
         if (await landSabotage(client, operation, target, now)) landed = true;
@@ -636,12 +641,7 @@ const rollCheckpointAmbushes = async (
   await Promise.all(
     due.map(async (row) => {
       const reached = getReachedCheckpoints(row, now);
-      const claimed = await advanceCaravanCheckpoints(
-        client,
-        row.id,
-        row.checkpointsProcessed,
-        reached,
-      );
+      const claimed = await advanceCaravanCheckpoints(client, row, reached);
       // Checkpoints a late run catches up on after arrival pass without an ambush.
       if (claimed.rowsAffected !== 1 || (row.arrivesAt && row.arrivesAt <= now)) return;
       const ambushed = Array.from({ length: reached - row.checkpointsProcessed }, () =>

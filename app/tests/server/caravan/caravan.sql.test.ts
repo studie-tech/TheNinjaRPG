@@ -150,6 +150,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
         quantity,
         day: "2026-06-15",
         allowance: 30,
+        approvedAt: null,
       });
     const results = await Promise.all([claim(20), claim(20)]);
     expect(results.filter((result) => result.rowsAffected > 0)).toHaveLength(1);
@@ -166,6 +167,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
       quantity: 11,
       day: "2026-06-15",
       allowance: 100,
+      approvedAt: null,
     });
     expect(wide.rowsAffected).toBe(0);
     const [unchanged] = await db.select().from(warehouseStock);
@@ -176,6 +178,29 @@ describeWithDatabase("village Warehouse and caravans", () => {
     const [member] = await db.select().from(warehouseMember);
     expect(member?.allowanceDay).toBe("2026-06-15");
     expect(member?.allowanceUsed).toBe(30);
+    // An approved allowance holds only while the approval it was read with stands.
+    const approvedAt = new Date("2026-06-15T08:00:00.123Z");
+    const approved = () =>
+      claimWithdrawal(db, {
+        villageId: "leaf",
+        itemId: "ore",
+        userId: "u",
+        quantity: 5,
+        day: "2026-06-15",
+        allowance: 100,
+        approvedAt,
+      });
+    expect((await approved()).rowsAffected).toBe(0);
+    await db
+      .update(warehouseMember)
+      .set({ approvedVillageId: "leaf", approvedAt, approvedById: "kage" })
+      .where(eq(warehouseMember.userId, "u"));
+    expect((await approved()).rowsAffected).toBeGreaterThan(0);
+    await db
+      .update(warehouseMember)
+      .set({ approvedVillageId: null, approvedAt: null, approvedById: null })
+      .where(eq(warehouseMember.userId, "u"));
+    expect((await approved()).rowsAffected).toBe(0);
   });
 
   it("reserves, loads and releases every cargo line or, for reservations, none", async () => {
@@ -829,10 +854,21 @@ describeWithDatabase("village Warehouse and caravans", () => {
         createdAt: now,
       })),
     );
+    // A snapshot of an earlier battle over the encounter releases nothing.
+    expect(
+      (
+        await releaseAbandonedAmbush(
+          db,
+          { id: "e-road", status: "STARTING", battleId: "b-earlier" },
+          CARAVAN_AMBUSH_LOSS_BP,
+          now,
+        )
+      ).rowsAffected,
+    ).toBe(0);
     for (const id of ["road", "done"])
       await releaseAbandonedAmbush(
         db,
-        { id: `e-${id}`, status: "STARTING" },
+        { id: `e-${id}`, status: "STARTING", battleId: `b-${id}` },
         CARAVAN_AMBUSH_LOSS_BP,
         now,
       );
@@ -841,7 +877,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
       (
         await releaseAbandonedAmbush(
           db,
-          { id: "e-road", status: "STARTING" },
+          { id: "e-road", status: "STARTING", battleId: "b-road" },
           CARAVAN_AMBUSH_LOSS_BP,
           now,
         )
@@ -891,6 +927,56 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(encounter?.status).toBe("RESOLVED");
     const [row] = await db.select().from(caravan);
     expect(row?.lossBp).toBe(CARAVAN_AMBUSH_LOSS_BP);
+  });
+
+  it("credits no defence for an ambush every player fled", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "guard" }]);
+    await db.insert(caravan).values(caravanRow());
+    await db.insert(caravanParticipant).values({
+      caravanId: "c1",
+      userId: "guard",
+      role: "GUARD",
+      activeUserId: "guard",
+      guardSlot: 0,
+      joinedAt: new Date(),
+    });
+    await db.insert(caravanEncounter).values({
+      id: "e1",
+      type: "AMBUSH",
+      status: "FIGHTING",
+      caravanId: "c1",
+      activeCaravanId: "c1",
+      battleId: "b1",
+      createdAt: new Date(),
+    });
+    await settleCaravanCombat(
+      db,
+      makeCompleteBattle({
+        id: "b1",
+        battleType: "CARAVAN",
+        usersState: [
+          makeBattleUser("bandit", { direction: "left", curHealth: 50, isAi: true }),
+          makeBattleUser("ally", { direction: "right", curHealth: 50, isAi: true }),
+          makeBattleUser("guard", {
+            direction: "right",
+            curHealth: 50,
+            fledBattle: true,
+          }),
+        ],
+        extraState: {
+          caravan: battleState({
+            type: "AMBUSH",
+            attackerIds: [],
+            guardIds: ["guard"],
+          }),
+        },
+      }),
+    );
+    const [guard] = await db.select().from(caravanParticipant);
+    expect(guard?.objectives).toBe(0);
+    const [row] = await db.select().from(caravan);
+    expect(row?.lossBp).toBe(0);
   });
 
   it("closes a disbanded settlement's routes and calls off its caravans", async () => {
@@ -967,6 +1053,55 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(row?.status).toBe("CANCELLED");
     const [stock] = await db.select().from(warehouseStock);
     expect(stock).toMatchObject({ villageId: "leaf", quantity: 180 });
+  });
+
+  it("leaves a marker that changed hands since its assault started", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "raider", villageId: "mist" }]);
+    await db.insert(tradeRouteMarker).values({
+      id: "m1",
+      routeId: "r1",
+      sector: 2,
+      longitude: 5,
+      latitude: 5,
+      control: 25,
+      controllerVillageId: "cloud",
+    });
+    await db.insert(caravanEncounter).values({
+      id: "e1",
+      type: "MARKER_ASSAULT",
+      status: "FIGHTING",
+      markerId: "m1",
+      activeMarkerId: "m1",
+      battleId: "b1",
+      createdAt: new Date(),
+    });
+    await settleCaravanCombat(
+      db,
+      makeCompleteBattle({
+        id: "b1",
+        battleType: "CARAVAN",
+        usersState: [
+          makeBattleUser("raider", { direction: "left", curHealth: 80 }),
+          makeBattleUser("npc", { direction: "right", curHealth: 0, isAi: true }),
+        ],
+        extraState: {
+          caravan: battleState({
+            type: "MARKER_ASSAULT",
+            caravanId: null,
+            markerId: "m1",
+            attackerRole: null,
+            attackerIds: ["raider"],
+            captureVillageId: "mist",
+            markerControllerId: null,
+          }),
+        },
+      }),
+    );
+    const [marker] = await db.select().from(tradeRouteMarker);
+    expect(marker).toMatchObject({ controllerVillageId: "cloud", control: 25 });
+    const [encounter] = await db.select().from(caravanEncounter);
+    expect(encounter?.status).toBe("RESOLVED");
   });
 
   it("hands a worn-down marker to its assailant and calls off caravans still on the road", async () => {
@@ -1096,6 +1231,7 @@ const battleState = (overrides: Partial<CaravanBattleState>): CaravanBattleState
   lossBp: 0,
   stealBp: 1000,
   captureVillageId: null,
+  markerControllerId: null,
   ...overrides,
 });
 

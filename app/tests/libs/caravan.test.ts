@@ -142,10 +142,13 @@ describe("cargo losses", () => {
     { itemId: "herb", quantity: 7 },
   ];
 
-  it("removes a share of every line, rounding down", () => {
+  it("removes whole units of every line, never more than its share", () => {
     expect(getRemainingCargo(cargo, 1000)).toEqual([
       { itemId: "ore", quantity: 270 },
-      { itemId: "herb", quantity: 6 },
+      { itemId: "herb", quantity: 7 },
+    ]);
+    expect(getRemainingCargo([{ itemId: "herb", quantity: 1 }], 500)).toEqual([
+      { itemId: "herb", quantity: 1 },
     ]);
   });
 

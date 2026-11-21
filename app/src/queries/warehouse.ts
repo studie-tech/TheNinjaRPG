@@ -320,7 +320,9 @@ export const startWarehouseAllowanceDay = (
 
 /**
  * Take unreserved stock and count it against the player's allowance for the UTC day in one
- * statement, so concurrent withdrawals cannot exceed either. The day is started first.
+ * statement, so concurrent withdrawals cannot exceed either. The day is started first. An
+ * allowance raised by a Kage approval, given as `approvedAt`, needs that approval to still
+ * stand in this village.
  */
 export const claimWithdrawal = (
   client: Pick<DrizzleClient, "execute">,
@@ -331,6 +333,7 @@ export const claimWithdrawal = (
     quantity: number;
     day: string;
     allowance: number;
+    approvedAt: Date | null;
   },
 ) =>
   client.execute(sql`
@@ -343,6 +346,12 @@ export const claimWithdrawal = (
       AND ${warehouseStock.quantity} >= ${warehouseStock.reserved} + ${input.quantity}
       AND ${warehouseMember.allowanceDay} = ${input.day}
       AND ${warehouseMember.allowanceUsed} + ${input.quantity} <= ${input.allowance}
+      ${
+        input.approvedAt
+          ? sql`AND ${warehouseMember.approvedVillageId} = ${input.villageId}
+      AND ${warehouseMember.approvedAt} = ${sql.param(input.approvedAt, warehouseMember.approvedAt)}`
+          : sql``
+      }
   `);
 
 /** Grant or replace a player's Kage approval. */

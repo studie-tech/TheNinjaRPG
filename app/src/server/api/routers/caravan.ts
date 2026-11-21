@@ -132,6 +132,7 @@ export const caravanRouter = createTRPCRouter({
       ]);
       if (!villageData) return null;
       let view = loaded;
+      let settled = false;
       const blockedRouteIds = new Set(
         routes
           .filter(
@@ -149,6 +150,7 @@ export const caravanRouter = createTRPCRouter({
         });
         // A competing reader can win the work, so reread even when this one changed nothing.
         view = await loadVillageCaravans(ctx.drizzle, villageData.id, now);
+        settled = true;
       }
       const { current, history, participants, encounters, sabotage, items } = view;
       const itemNames = new Map(items.map((row) => [row.id, row.name]));
@@ -170,6 +172,8 @@ export const caravanRouter = createTRPCRouter({
         }));
       return {
         canManage: canManageTrade(user, villageData),
+        /** Due caravan work was settled for this read, which may have moved stock. */
+        settled,
         caravans: current.map((row) => {
           const guards = participants.filter(
             (p) => p.caravanId === row.id && p.role === "GUARD" && p.activeUserId,
@@ -707,6 +711,7 @@ export const caravanRouter = createTRPCRouter({
           lossBp: row.lossBp,
           stealBp: 0,
           captureVillageId: null,
+          markerControllerId: null,
         },
         userIds,
         targetIds: bandits,
@@ -772,6 +777,7 @@ export const caravanRouter = createTRPCRouter({
           lossBp: row.lossBp,
           stealBp: 0,
           captureVillageId: null,
+          markerControllerId: null,
         },
         userIds: [self.userId],
         targetIds: [operation.userId],

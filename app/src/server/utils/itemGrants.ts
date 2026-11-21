@@ -62,7 +62,7 @@ export const grantUserItems = async (
         client,
         userId,
         itemId,
-        target.id,
+        target,
         fill,
         now,
       );
