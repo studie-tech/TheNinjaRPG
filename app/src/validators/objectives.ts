@@ -469,7 +469,7 @@ export const objectiveImageMap: Record<
   collect_item: { image: IMG_BADGE_COLLECT_ITEM, title: "Collect Item" },
   deliver_item: { image: IMG_BADGE_COLLECT_ITEM, title: "Deliver Item" },
   defeat_opponents: { image: IMG_BADGE_DEFEAT_OPPONENTS, title: "Defeat" },
-  win_tower_defense: { image: IMG_MANUAL_TOWER_UPGRADES, title: "Tower Defense" },
+  win_tower_defense: { image: IMG_MANUAL_TOWER_UPGRADES, title: "Hold Your Ground" },
   fail_quest: { image: IMG_BADGE_FAIL_QUEST, title: "Fail Quest" },
   win_quest: { image: IMG_BADGE_WIN_QUEST, title: "Win Quest" },
   new_quest: { image: IMG_BADGE_NEW_QUEST, title: "New Quest" },
