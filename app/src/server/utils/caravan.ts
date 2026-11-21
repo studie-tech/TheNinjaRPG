@@ -511,7 +511,8 @@ const cancelBlockedCaravans = async (
     blocked.map((row) => row.routeId),
   );
   const scoped = caravans.filter((row) => !caravanIds || caravanIds.includes(row.id));
-  // A caravan still being fought over is called off once its fight settles.
+  // A caravan still being fought over is called off once its fight settles; one that
+  // already arrived is delivered instead.
   const fighting = new Set(
     (await listOpenEncounters(client, { caravanIds: scoped.map((row) => row.id) })).map(
       (row) => row.caravanId,
@@ -519,7 +520,9 @@ const cancelBlockedCaravans = async (
   );
   await Promise.all(
     scoped
-      .filter((row) => !fighting.has(row.id))
+      .filter(
+        (row) => !fighting.has(row.id) && !(row.arrivesAt && row.arrivesAt <= now),
+      )
       .map((row) => cancelCaravan(client, row, now)),
   );
 };

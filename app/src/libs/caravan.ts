@@ -186,21 +186,22 @@ export const getAllowedDelay = (delayMinutes: number, requested: number) =>
 
 /**
  * Stolen goods split between the robbers. Each line divides evenly; the leader, listed
- * first, keeps any remainder.
+ * first, keeps any remainder. A robber whose share rounds to nothing gets no entry.
  */
 export const splitLoot = (
   cargo: CargoLine[],
   stolenBp: number,
   robberIds: string[],
 ) => {
-  const loot = new Map<string, CargoLine[]>(robberIds.map((id) => [id, []]));
+  const loot = new Map<string, CargoLine[]>();
   for (const line of cargo) {
     const stolen = Math.floor((line.quantity * stolenBp) / 10_000);
     if (stolen <= 0 || robberIds.length === 0) continue;
     const share = Math.floor(stolen / robberIds.length);
     robberIds.forEach((id, index) => {
       const quantity = share + (index === 0 ? stolen - share * robberIds.length : 0);
-      if (quantity > 0) loot.get(id)?.push({ itemId: line.itemId, quantity });
+      if (quantity > 0)
+        loot.set(id, [...(loot.get(id) ?? []), { itemId: line.itemId, quantity }]);
     });
   }
   return loot;

@@ -149,6 +149,22 @@ describe("cargo losses", () => {
     expect(loot.get("second")).toEqual([{ itemId: "ore", quantity: 20 }]);
     expect(loot.get("third")).toEqual([{ itemId: "ore", quantity: 20 }]);
   });
+
+  it("leaves robbers whose share rounds to nothing out of the loot", () => {
+    const loot = splitLoot(
+      [
+        { itemId: "ore", quantity: 50 },
+        { itemId: "wood", quantity: 50 },
+      ],
+      500,
+      ["leader", "second", "third"],
+    );
+    expect([...loot.keys()]).toEqual(["leader"]);
+    expect(loot.get("leader")).toEqual([
+      { itemId: "ore", quantity: 2 },
+      { itemId: "wood", quantity: 2 },
+    ]);
+  });
 });
 
 describe("roles and rewards", () => {
