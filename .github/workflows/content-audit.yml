@@ -5,7 +5,7 @@
 # The jobs keep the model away from secrets:
 #   target       picks the deployment to audit: production, or a pull request's preview
 #   snapshot     fetches the audit input with CRON_SECRET
-#   gallery      on animation runs, draws the most used animation and static assets with the
+#   gallery      on animation/sound runs, draws the most used animation and static assets with the
 #                game's combat renderer (/manual/review/battlefield) in headless Chrome
 #   scene-gallery renders scene character/background pixels on checkerboard contact sheets
 #   audit        runs Codex with no secret and a read-only sandbox; its final message must
@@ -127,7 +127,7 @@ jobs:
 
   gallery:
     needs: [target, snapshot]
-    if: needs.snapshot.outputs.focus == 'animation'
+    if: contains(fromJSON('["animation", "sound"]'), needs.snapshot.outputs.focus)
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 20
     steps:
@@ -363,6 +363,9 @@ jobs:
             audit/battlefield/index.json lists the blocks on each image, and "Suggestion N" is proposals[N].
             Captions may be shortened; blocks[].description and blocks[].variants[].description in the index preserve the full labels and candidate asset IDs.
             Return one verdict per suggestion that appears in the renders.
+            Inspect projectile departure/arrival, appearance, active and disappearance frames on desktop and phone.
+            Read authored targets, footprints and rounds from the snapshot; preview milliseconds are not combat rounds.
+            These sheets contain images, not audio. Do not claim that sounds were auditioned or verified from these frames.
             Your final message must be only the JSON object described by the output schema.
 
   submit:

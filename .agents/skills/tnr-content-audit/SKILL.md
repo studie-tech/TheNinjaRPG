@@ -108,12 +108,16 @@ Only one JSON object: `{ "proposals": [ ... ] }`. Each proposal:
   battle descriptions and quest text. Keep meaning and length close to the original.
 - **balance**: mechanical outliers among comparable peers. Explain why the full effect and
   cost tradeoff is unreasonable; low usage or a win-rate difference alone is insufficient.
-- **sound**: jutsu and items whose appear or disappear sound does not fit their element or
-  action (a fire attack with a generic hit, a heal with a slash). Use `media` with catalog ids
-  and, when nothing fits, an Epidemic `search`.
+- **sound**: judge appearance and disappearance cues against the actual animation, function
+  and lifetime. The snapshot includes their paired visual assets and cast geometry. Prefer
+  consistent use of an accepted cue for the same animation. Use `media` with catalog ids and,
+  when nothing fits, an Epidemic `search`. Follow **Combat presentation** below, including its
+  distinction between an auditioned match and a candidate awaiting listening.
 - **animation**: effects using a generic animation where a fitting one exists in `assets[]`,
-  and effects whose battlefield render shows a problem. Entity fields include each effect's
-  `target` and the entity's `target`, which decide where combat draws it.
+  and effects whose battlefield render shows a problem. Review the whole cast: travel,
+  arrival, persistent artwork and removal, using authored targets, footprints and rounds.
+  Consider the presentation controls in **Combat presentation**, rather than replacing art
+  when sizing, height or terrain blending solves the problem.
 - **visual**: placeholder images or images shared by unrelated entities. Use `media` with
   `kind: "IMAGE"`, `path: "image"` and a `generate` prompt describing the subject.
   For quest casts, follow **Scene characters and generated art** below; scene slots hold
@@ -249,6 +253,48 @@ scheduled audit. With the same cron authentication as submission:
   above. Request a fresh candidate through media to replace a failed generation. A catalog
   character can be retained by its inspected id; ordinary image fields can retain their URL.
 
+## Combat presentation
+
+Read the entity's description, target, method, range, method size and coordinate pattern,
+and each effect's target and `rounds`, before choosing media. Distinguish an instant hit,
+a persistent status on a fighter and a field that occupies terrain for several rounds.
+Keep gameplay targets, durations and costs intact when proposing a cosmetic improvement.
+
+- `projectileAnimation` is optional travel from caster to destination, before arrival.
+  Consider it for ranged attacks, thrown items or distant field placement when that motion
+  fits the function. Self buffs and same-tile effects usually need no travel. Empty phases
+  may stay empty. Use `media.kind: "ANIMATION"` at `effects.<index>.projectileAnimation`
+  for catalogue candidates, just as for appear/static/disappear animations.
+- `projectileScale` sizes travel independently; `animationScale` sizes impact and loops,
+  and `animationOffsetY` raises or lowers them in hex units. Use the validator's bounds and
+  inspect desktop and phone before increasing scale; transparent atlas padding can differ
+  from the visible sprite.
+- `groundStyle` distinguishes upright art from terrain-aligned `SURFACE` loops and `DECAL`
+  materials. `groundOpacity` and `groundFeather` blend those materials into the terrain.
+  Preserve readable walls, barriers and eruptions; flattening or fading all ground art is
+  not an improvement. Check adjoining tiles, boundaries, characters and several terrains.
+- Sounds belong to appearance and disappearance (`appearSfx`, `disappearSfx`); static loops
+  and projectile travel stay silent. Check that every authored appearance/removal animation
+  has a suitable phase cue; an intentionally empty phase needs no filler. For a composite cast, `appearSfxPrimary` and
+  `disappearSfxPrimary` select a single foreground cue per phase. Check the complete cast
+  instead of judging each overlapping layer alone. For changed clone/summon presentation,
+  verify the spawn and removal phases, including failed spawns and multiple spawned units.
+- Inspect actual sprite frames and listen to actual candidate audio, or use an authorized
+  audio-capable evaluator with both inputs. Names, descriptions, downloads, waveforms and
+  successful playback calls alone do not establish an auditory match. If the run has only
+  images/text, identify a sound as a candidate awaiting audition and state the uncertainty;
+  never claim to have heard it. Staff can audition candidates and enable Sound in the
+  Current/Proposed battlefield preview; local game combat sounds default off in settings.
+- Explain whether an asset is reused or newly created, its phase and the visible/audible
+  evidence. Catalogue media requests retain their catalogue provenance; `ANIMATION` media
+  selects existing effect assets and does not generate a sheet. Publish new effect sheets
+  through the asset/CDN workflow with verified frame and speed metadata, then refresh the
+  snapshot before referencing their `GameAsset` IDs. Sprite Studio's character
+  `SpriteAnimation` IDs are a different catalogue. Sound generation still requires the
+  explicit authorization in rule 9. Keep generation and additional audio-evaluation calls
+  within the user's authorization and configured media budget; staff approval still
+  governs content writes.
+
 ## Battlefield renders
 
 Effects play out on a hex battlefield, so the audit judges them the way players see them. The
@@ -256,18 +302,19 @@ workflow draws content with the game's own combat renderer (`/manual/review/batt
 preview staff get on every suggestion) and attaches the renders as images;
 `audit/battlefield/index.json` lists the blocks on each image.
 
-- A block is one asset or one entity. Each row is one version of it: frames of one cycle on a
-  desktop field (`appearing`, `active`, `disappearing`), then the active frame on a phone field.
-  The caster stands on the left, the target on the right, and ground effects sit on the tile
-  between them, as combat places them.
-- On a player's screen, hexes are 74 px wide on desktop and 40 px on a phone. Animations are
-  always 50 px square and centred on their hex, so they cover about two thirds of a desktop hex
-  and spill over a phone hex; static assets are stretched to the hex's box. The renders draw
-  everything at twice these sizes.
+- A block is one asset or one entity. Each row is one version: projectile departure/arrival
+  when present, appearance, active and disappearance. Verification sheets include these
+  phases on both desktop and phone; catalogue galleries show the phone active frame.
+  Ground and coordinate footprints follow authored targeting, not necessarily one middle
+  tile. Read the snapshot's round counts: the short preview cycle compresses active time
+  and does not simulate round progression or prove combat mechanics.
+- Animations scale with the battlefield's hex geometry and authored controls; projectile
+  size is independent. Sheets magnify the actual desktop/phone rendering for inspection.
+  Do not assume a fixed 50 px square or stretch every asset to fill a tile.
 - Judge what a player notices: an effect meant to cover a tile (water, fire, smoke, ice, a trap)
   covers the hex instead of a corner of it; a hit reads at hex scale and stays centred on the
   fighter; nothing important is cut off, lost against the ground, blank or a broken frame.
-- On `animation` runs the most used animation and static assets come attached. Prefer
+- On `animation` and `sound` runs the most used relevant animation and static assets come attached. Prefer
   candidates that look right in their render, and cite a render when it shows the problem you
   fix.
 - After the audit, every suggestion that changes what an entity draws in battle is rendered as

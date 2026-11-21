@@ -127,18 +127,25 @@ export const buildAuditSnapshot = async (
           : [];
       }),
     ),
-    assets: assets.map((asset) => ({
-      id: asset.id,
-      name: asset.name,
-      type: asset.type,
-      image: asset.image,
-      url: asset.url,
-      frames: asset.frames,
-      speed: asset.speed,
-      folder: asset.folder,
-      v: contentVersion(editableOf("GAME_ASSET", asset)),
-      usedBy: assetUse.get(asset.id) ?? 0,
-    })),
+    // Keep this focus's candidate library and only referenced media from the other family.
+    assets: assets
+      .filter(
+        (asset) =>
+          (focus !== "sound" || asset.type === "SFX" || assetUse.has(asset.id)) &&
+          (focus !== "animation" || asset.type !== "SFX" || assetUse.has(asset.id)),
+      )
+      .map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        type: asset.type,
+        image: asset.image,
+        url: asset.url,
+        frames: asset.frames,
+        speed: asset.speed,
+        folder: asset.folder,
+        v: contentVersion(editableOf("GAME_ASSET", asset)),
+        usedBy: assetUse.get(asset.id) ?? 0,
+      })),
     ...recent,
     proposalSchema: auditJsonSchema(),
     visualCheckSchema: visualCheckJsonSchema(),
@@ -312,12 +319,7 @@ const effectsWith = (effects: unknown, keep: (key: string) => boolean) =>
 
 /** Effect keys that decide how an effect plays, leaving out media, text and battle state. */
 const isMechanicKey = (key: string) =>
-  !MEDIA_KEYS.includes(key) &&
-  key !== "animationScale" &&
-  key !== "projectileScale" &&
-  key !== "animationOffsetY" &&
-  key !== "description" &&
-  key !== "timeTracker";
+  !PRESENTATION_KEYS.includes(key) && key !== "description" && key !== "timeTracker";
 
 /** Text leaves of a quest's content; objects and list positions stay addressable. */
 const textOnly = (node: unknown): unknown => {
@@ -357,6 +359,51 @@ const MEDIA_KEYS = [
   "appearSfx",
   "disappearSfx",
 ];
+
+/** Cosmetic controls accompany their media in both sound and animation reviews. */
+const PRESENTATION_KEYS = [
+  ...MEDIA_KEYS,
+  "animationScale",
+  "projectileScale",
+  "animationOffsetY",
+  "groundStyle",
+  "groundOpacity",
+  "groundFeather",
+  "appearSfxPrimary",
+  "disappearSfxPrimary",
+];
+
+/** Preserve the purpose, lifetime and geometry needed to judge the complete cast. */
+const battlefieldFields = (entity: ContentEntity) => ({
+  ...pick(entity.editable, [
+    "name",
+    "description",
+    "battleDescription",
+    "jutsuRank",
+    "jutsuType",
+    "rarity",
+    "itemType",
+    "rank",
+    "target",
+    "method",
+    "methodSize",
+    "coordinateTargeting",
+    "range",
+  ]),
+  effects: effectsWith(
+    entity.editable.effects,
+    (key) =>
+      PRESENTATION_KEYS.includes(key) ||
+      [
+        "type",
+        "target",
+        "rounds",
+        "coordinateTargeting",
+        "elements",
+        "description",
+      ].includes(key),
+  ),
+});
 
 /** Fields the grammar focus reads per type: the texts players see, and what they describe. */
 const TEXT_FIELDS: Record<ContentProposalEntityType, string[]> = {
@@ -401,62 +448,16 @@ const VIEWS: Record<ContentAuditFocus, View> = {
   },
   sound: {
     types: ["JUTSU", "ITEM"],
-    fields: (entity) => ({
-      ...pick(entity.editable, [
-        "name",
-        "jutsuRank",
-        "jutsuType",
-        "rarity",
-        "itemType",
-      ]),
-      effects: effectsWith(entity.editable.effects, (key) =>
-        [
-          "type",
-          "appearSfx",
-          "disappearSfx",
-          "appearSfxPrimary",
-          "disappearSfxPrimary",
-          "elements",
-        ].includes(key),
-      ),
-    }),
+    fields: battlefieldFields,
     hasUsage: true,
-    assets: ["SFX"],
+    assets: ["SFX", "ANIMATION", "STATIC"],
   },
   // Targets decide where combat draws each effect, which the battlefield renders reproduce.
   animation: {
     types: ["JUTSU", "ITEM", "BLOODLINE"],
-    fields: (entity) => ({
-      ...pick(entity.editable, [
-        "name",
-        "jutsuRank",
-        "jutsuType",
-        "rarity",
-        "itemType",
-        "rank",
-        "target",
-      ]),
-      effects: effectsWith(entity.editable.effects, (key) =>
-        [
-          "type",
-          "target",
-          "appearAnimation",
-          "projectileAnimation",
-          "staticAnimation",
-          "animationScale",
-          "projectileScale",
-          "animationOffsetY",
-          "groundStyle",
-          "groundOpacity",
-          "groundFeather",
-          "disappearAnimation",
-          "staticAssetPath",
-          "elements",
-        ].includes(key),
-      ),
-    }),
+    fields: battlefieldFields,
     hasUsage: true,
-    assets: ["ANIMATION", "STATIC"],
+    assets: ["ANIMATION", "STATIC", "SFX"],
   },
   visual: {
     types: ["JUTSU", "ITEM", "BLOODLINE", "QUEST", "BADGE", "TITLE", "AI"],

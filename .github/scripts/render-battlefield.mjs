@@ -216,6 +216,7 @@ try {
     {
       requests: labels.requests,
       perSheet: mode === "gallery" ? 2 : 1,
+      captureAllPhases: mode === "verify",
       background: "ground",
     },
   );
