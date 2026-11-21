@@ -44,4 +44,17 @@ describe("Button", () => {
       "animate-cta-pulse",
     );
   });
+
+  it("sizes a decorated button's wrapper with its responsive width and alignment", () => {
+    const view = render(
+      <Button decoration="gold" className="w-full sm:w-auto self-start px-4">
+        Begin
+      </Button>,
+    );
+    const wrapper = view.getByRole("button", { name: "Begin" }).parentElement;
+    expect(wrapper?.className).toContain("w-full");
+    expect(wrapper?.className).toContain("sm:w-auto");
+    expect(wrapper?.className).toContain("self-start");
+    expect(wrapper?.className).not.toContain("px-4");
+  });
 });

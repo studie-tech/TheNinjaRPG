@@ -65,6 +65,7 @@ const playerCards = [
   "damage_calcs",
   "item",
   "jutsu",
+  "kessen",
   "logs",
   "opinions",
   "polls",
@@ -110,6 +111,7 @@ it("gives every role the minigames section, opening straight into play", () => {
     expect(minigames.map((tile) => tile.href)).toEqual([
       "/towerDefense",
       "/chakraStorm",
+      "/kessen",
     ]);
     expect(document.getElementById("minigames")).not.toBeNull();
     cleanup();
@@ -137,4 +139,5 @@ it("captions tiles with readable names instead of route slugs", () => {
   expect(label("/manual/damage_calcs")).toBe("Damage Calculator");
   expect(label("/manual/pvp_rank")).toBe("Ranked PvP");
   expect(label("/manual/crafting_recipes")).toBe("Crafting Recipes");
+  expect(label("/manual/kessen")).toBe("Kessen Rules");
 });

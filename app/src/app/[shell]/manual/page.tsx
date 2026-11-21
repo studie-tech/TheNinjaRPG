@@ -2,6 +2,7 @@
 
 import {
   CS_CARD_URL,
+  IMG_KESSEN_MINIGAME_TILE,
   IMG_MANUAL_ACTIVITY_STREAK,
   IMG_MANUAL_AI,
   IMG_MANUAL_ASSET,
@@ -90,6 +91,7 @@ export default function ManualMain() {
     { name: "pvp_rank", label: "Ranked PvP", img: IMG_MANUAL_RANKED },
     { name: "balance", label: "Balance Data", img: IMG_MANUAL_BALANCE },
     { name: "staff", label: "Staff", img: IMG_MANUAL_STAFF },
+    { name: "kessen", label: "Kessen Rules", img: IMG_KESSEN_MINIGAME_TILE },
     {
       name: "activityStreak",
       label: "Activity Streaks",
@@ -171,6 +173,12 @@ export default function ManualMain() {
       label: "Chakra Storm",
       img: CS_CARD_URL,
       href: "/chakraStorm",
+    },
+    {
+      name: "kessen",
+      label: "Kessen",
+      img: IMG_KESSEN_MINIGAME_TILE,
+      href: "/kessen",
     },
   ];
   const staffTiles = toTiles(entries.filter((page) => page.visible === true));

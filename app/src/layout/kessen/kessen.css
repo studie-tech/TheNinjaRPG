@@ -1,0 +1,1686 @@
+/*
+ * Kessen visual system: a lacquer-and-ink war table. Self-contained palette (it looks the
+ * same under every game layout), card faces and tiles sized by container queries, all
+ * text in px or cqw with an 11 px floor (the root font is 12 px, so rem sizes are too
+ * small). Animations run only under [data-motion="on"] and never under reduced motion.
+ */
+
+/* Marcellus draws its "1" like an "I" and its "0" like an "O" and has no lining figures,
+   so digits in display-face text ("Fist of 10,000 Volts") come from Newsreader. */
+@font-face {
+  font-family: "Kessen Display Digits";
+  src: url("/fonts/layouts/Newsreader[opsz,wght].woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+
+:root {
+  /* Lacquer and wood */
+  --kessen-lacquer: #6b1410;
+  --kessen-lacquer-deep: #2a0806;
+  --kessen-lacquer-hi: #9c2a1c;
+  --kessen-wood: #140c08;
+  --kessen-wood-2: #22150d;
+  --kessen-ink: #0b0b10;
+  /* Paper */
+  --kessen-paper: #f6ead0;
+  --kessen-parchment: #ead6a8;
+  --kessen-paper-ink: #2b120b;
+  --kessen-paper-muted: #6b4a2c;
+  /* Gold leaf */
+  --kessen-gold: #d9b45a;
+  --kessen-gold-hi: #f6dc8c;
+  --kessen-gold-lo: #8a6420;
+  --kessen-cream: #fbe9c0;
+  /* Accents */
+  --kessen-vermilion: #a02a1a;
+  --kessen-vermilion-bright: #ff6b55;
+  --kessen-lantern: #ffb45a;
+  --kessen-up: #7cf29c;
+  --kessen-down: #ff7b6b;
+  --kessen-frost: #cfe8ff;
+  /* Rarity: Common iron, Rare cobalt, Epic violet, Legendary gold, Forbidden crimson ink */
+  --kessen-common: #8b9099;
+  --kessen-rare: #3d6ae0;
+  --kessen-epic: #8d5cf0;
+  --kessen-legendary: #e2ad2b;
+  --kessen-forbidden: #d0271d;
+  /* Type */
+  --kessen-font-display: "Kessen Display Digits", "Marcellus", "Newsreader", Georgia,
+    "Times New Roman", serif;
+  --kessen-font-body: "Manrope", "Atkinson Hyperlegible", ui-sans-serif, system-ui,
+    sans-serif;
+  /* Standalone numerals (power, provision, counters) use Newsreader's lining figures. */
+  --kessen-font-num: "Newsreader", Georgia, "Times New Roman", serif;
+}
+
+/*
+ * Kessen scene scope: the lacquer-and-ink palette for the game's shared components.
+ * The scenes (the match table, the pack ceremony, lesson overlays) and every dialog,
+ * sheet or popover they open carry `.kessen-scene`, which restates
+ * the theme variables, so Button, Tabs, Badge, Select, Sheet and the rest draw in Kessen
+ * colours with the same contrast under every game layout, colour mode and reading palette.
+ * Tailwind's `--color-*` aliases resolve on <html>, so the scope restates them as well.
+ * The scope sets text colour and colour scheme only; each scope root paints its own surface.
+ */
+.kessen-scene {
+  --background: 18 48% 5.3%;
+  --foreground: 40 72% 87.5%;
+  --card: 22 44% 8.4%;
+  --card-foreground: 40 72% 87.5%;
+  --popover: 23 46% 10.2%;
+  --popover-foreground: 40 72% 87.5%;
+  --poppopover: 25 41% 16.1%;
+  --poppopover-foreground: 40 72% 87.5%;
+  --primary: 42 65% 60.8%;
+  --primary-foreground: 18 59% 7.6%;
+  --secondary: 9 61% 18%;
+  --secondary-foreground: 42 88% 86.9%;
+  --muted: 24 40% 12.4%;
+  --muted-foreground: 38 31% 61.6%;
+  --accent: 25 41% 16.1%;
+  --accent-foreground: 42 88% 86.9%;
+  --destructive: 8 78% 58.8%;
+  --destructive-foreground: 5 68% 7.3%;
+  --success: 136 58% 67.5%;
+  --warning: 33 100% 67.6%;
+  --link: 213 100% 80.6%;
+  --border: 34 38% 36.3%;
+  --input: 34 38% 36.3%;
+  --ring: 45 86% 75.7%;
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-poppopover: hsl(var(--poppopover));
+  --color-poppopover-foreground: hsl(var(--poppopover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+  --color-link: hsl(var(--link));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  /* The game layouts draw their keyboard focus ring in this accent. */
+  --theme-accent: var(--kessen-gold-hi);
+  color: hsl(var(--foreground));
+  color-scheme: dark;
+}
+/*
+ * Kessen type and touch scale, shared by the Card Hall (which draws in the game's theme)
+ * and the scenes: the hall root, the scene roots and every dialog, sheet or popover either
+ * opens carry `.kessen-ui` (scenes through `.kessen-scene`).
+ */
+/* Dialogs and sheets portal to <body>, whose text size differs per layout: they start
+   from reading size; scene stylesheets set their own. */
+:where(:is(.kessen-scene, .kessen-ui)[role="dialog"]) {
+  font-size: 13px;
+  line-height: 1.45;
+}
+/* The game's small type scale (12 px root) reads too small for Kessen's dense panels: the
+   shared components' xs and sm text sizes are raised to reading size. */
+:is(.kessen-scene, .kessen-ui) .text-xs {
+  font-size: 12px;
+  line-height: 16px;
+}
+:is(.kessen-scene, .kessen-ui) .text-sm {
+  font-size: 13px;
+  line-height: 18px;
+}
+/* Touch: the shared buttons, selects, radios and checkboxes get 44 px targets. */
+@media (pointer: coarse) {
+  :is(.kessen-scene, .kessen-ui)
+    :is(button, a, [role="combobox"]):is(.h-8, .h-9, .h-10):not(.w-8, .w-9, .w-10) {
+    min-height: 44px;
+  }
+  :is(.kessen-scene, .kessen-ui)
+    :is(button[role="radio"], button[role="checkbox"], button[role="switch"]) {
+    position: relative;
+  }
+  :is(.kessen-scene, .kessen-ui) :is(button[role="radio"], button[role="checkbox"])::after {
+    content: "";
+    position: absolute;
+    top: -14px;
+    right: -14px;
+    bottom: -14px;
+    left: -14px;
+  }
+}
+/* Primary actions are gold leaf; the lacquer rim keeps them from floating on dark wood. */
+.kessen-scene :where(.bg-primary) {
+  background-image: linear-gradient(180deg, rgb(255 236 170 / 0.35), transparent 55%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 240 190 / 0.35),
+    0 1px 0 rgb(0 0 0 / 0.5);
+}
+
+/* The built-in close cross of a Kessen dialog or sheet: a 44 px hit area around the icon. */
+:is(.kessen-scene, .kessen-ui)[role="dialog"] > button:has(> .lucide-x) {
+  opacity: 0.9;
+}
+:is(.kessen-scene, .kessen-ui)[role="dialog"] > button:has(> .lucide-x)::after {
+  content: "";
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  bottom: -14px;
+  left: -14px;
+}
+
+@property --kc-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* ------------------------------------------------------------------ shared pieces */
+
+.kessen-glyph {
+  display: block;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+.kessen-sigil {
+  display: inline-block;
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.6));
+}
+.kessen-sigil-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.kessen-text {
+  font-family: var(--kessen-font-body);
+}
+/* Keyword ink: vermilion on paper (the default, card faces and glossary slips), the bright
+   vermilion on the dark lacquer of a Kessen scene, and the surrounding text colour on the
+   game's own surfaces, whose light and dark themes no single vermilion reads on. */
+.kessen-ui {
+  --kessen-kw-ink: currentColor;
+}
+.kessen-scene {
+  --kessen-kw-ink: var(--kessen-vermilion-bright);
+}
+.kessen-card,
+.kessen-glossary {
+  --kessen-kw-ink: var(--kessen-vermilion);
+}
+.kessen-kw {
+  color: var(--kessen-kw-ink, var(--kessen-vermilion));
+  font-weight: 800;
+}
+.kessen-kw-button {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 800;
+  color: var(--kessen-kw-ink, var(--kessen-vermilion));
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+.kessen-kw-button:focus-visible {
+  outline: 2px solid var(--kessen-gold);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+/* Touch: vertical padding gives an inline keyword a 40 px tap target without moving the
+   text (inline padding leaves the line box alone); the focus ring stays on the word. */
+@media (pointer: coarse) {
+  .kessen-kw-button {
+    position: relative;
+    padding-block: calc(21px - 0.65em);
+  }
+  .kessen-kw-button:focus-visible {
+    outline: none;
+    background: rgb(217 180 90 / 0.35);
+    background-clip: content-box;
+    text-decoration-style: solid;
+  }
+  /* Room above the first line and below the last for the padded targets; the negative
+     margin keeps the text where it was. */
+  .kessen-card[data-interactive] .kc-body {
+    padding-top: max(10px, 2.4cqw);
+  }
+  .kessen-card[data-interactive] .kc-text {
+    padding-block: 10px;
+    margin-block: -10px;
+  }
+}
+.kessen-glossary {
+  border: 1px solid var(--kessen-gold-lo) !important;
+  background: linear-gradient(180deg, var(--kessen-paper), var(--kessen-parchment)) !important;
+  color: var(--kessen-paper-ink) !important;
+  font-family: var(--kessen-font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.25),
+    0 10px 24px rgb(0 0 0 / 0.45) !important;
+}
+.kessen-glossary-line .kessen-kw {
+  font-family: var(--kessen-font-display);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+/* --------------------------------------------------------------------- card face */
+
+.kessen-card {
+  --kc-gold: var(--kessen-gold);
+  --kc-b: max(2px, 2.8cqw);
+  --kc-gem: max(11px, 9.5cqw);
+  --kc-cut: 0px;
+  --kc-notch: 0px;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  container: kessen-card / inline-size;
+  isolation: isolate;
+  user-select: none;
+  -webkit-user-select: none;
+  color: var(--kessen-paper-ink);
+  font-family: var(--kessen-font-body);
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.55));
+  transition:
+    filter 160ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.kc-frame,
+.kc-inner {
+  position: absolute;
+  overflow: hidden;
+}
+.kc-frame {
+  inset: 0;
+  border-radius: 5cqw;
+  background: linear-gradient(
+    145deg,
+    #b3b7bf 0%,
+    #5d6068 22%,
+    #2b2d31 48%,
+    #70747d 74%,
+    #34363b 100%
+  );
+}
+.kc-inner {
+  inset: var(--kc-b);
+  border-radius: 3.6cqw;
+  background:
+    radial-gradient(120% 70% at 50% 0%, #3a2216 0%, transparent 70%),
+    var(--kessen-wood);
+}
+.kc-art {
+  position: absolute;
+  inset: 0;
+}
+.kc-art img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  pointer-events: none;
+}
+.kc-art-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(60% 50% at 50% 40%, rgb(255 180 90 / 0.18), transparent 70%),
+    repeating-linear-gradient(135deg, #1a100a 0 6px, #22150d 6px 12px);
+}
+.kc-art-empty .kessen-sigil {
+  width: 42%;
+  opacity: 0.55;
+}
+.kc-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgb(10 5 3 / 0.55) 0%, transparent 22%),
+    radial-gradient(130% 90% at 50% 40%, transparent 55%, rgb(10 5 3 / 0.55) 100%);
+}
+
+/* Shapes: Rare and Forbidden chamfer, Epic notches, Legendary rounds with gold caps. */
+.kessen-card[data-tier="RARE"] .kc-frame,
+.kessen-card[data-tier="FORBIDDEN"] .kc-frame {
+  --kc-cut: 8cqw;
+  border-radius: 0;
+  clip-path: polygon(
+    var(--kc-cut) 0,
+    calc(100% - var(--kc-cut)) 0,
+    100% var(--kc-cut),
+    100% calc(100% - var(--kc-cut)),
+    calc(100% - var(--kc-cut)) 100%,
+    var(--kc-cut) 100%,
+    0 calc(100% - var(--kc-cut)),
+    0 var(--kc-cut)
+  );
+}
+.kessen-card[data-tier="RARE"] .kc-inner,
+.kessen-card[data-tier="FORBIDDEN"] .kc-inner {
+  --kc-icut: calc(8cqw - var(--kc-b) * 0.41);
+  border-radius: 0;
+  clip-path: polygon(
+    var(--kc-icut) 0,
+    calc(100% - var(--kc-icut)) 0,
+    100% var(--kc-icut),
+    100% calc(100% - var(--kc-icut)),
+    calc(100% - var(--kc-icut)) 100%,
+    var(--kc-icut) 100%,
+    0 calc(100% - var(--kc-icut)),
+    0 var(--kc-icut)
+  );
+}
+/* Epic corners are concave quarter-circle notches cut into the art window and gilded on
+   the frame below (see the Epic material). The outer silhouette stays solid: a notch cut through
+   the whole card shows whatever lies behind it, which reads as four dark blobs on the
+   game's dark backdrops. Each corner circle masks one quadrant of the window. */
+.kessen-card[data-tier="EPIC"] .kc-frame {
+  --kc-notch: max(4px, 7cqw);
+  --kc-notch-line: max(1px, 0.7cqw);
+  border-radius: 2.6cqw;
+}
+.kessen-card[data-tier="EPIC"] .kc-inner {
+  border-radius: 0;
+  mask:
+    radial-gradient(
+        circle at 0 0,
+        transparent var(--kc-notch),
+        #000 calc(var(--kc-notch) + 0.5px)
+      )
+      top left / 51% 51% no-repeat,
+    radial-gradient(
+        circle at 100% 0,
+        transparent var(--kc-notch),
+        #000 calc(var(--kc-notch) + 0.5px)
+      )
+      top right / 51% 51% no-repeat,
+    radial-gradient(
+        circle at 0 100%,
+        transparent var(--kc-notch),
+        #000 calc(var(--kc-notch) + 0.5px)
+      )
+      bottom left / 51% 51% no-repeat,
+    radial-gradient(
+        circle at 100% 100%,
+        transparent var(--kc-notch),
+        #000 calc(var(--kc-notch) + 0.5px)
+      )
+      bottom right / 51% 51% no-repeat;
+}
+
+/* Materials */
+.kessen-card[data-tier="RARE"] .kc-frame {
+  background: linear-gradient(
+    150deg,
+    #e6edf9 0%,
+    #8391ad 14%,
+    #2a4fc4 34%,
+    #0f1f5c 58%,
+    #3f66d6 80%,
+    #c9d3e0 100%
+  );
+}
+/* Each Epic notch is gilded: a gold-leaf quarter disc edged by a deep-gold hairline, so
+   the corner reads as an ornament on art and parchment alike instead of exposing the
+   enamel, whose dark middle stop lands on the lower-left corner. */
+.kessen-card[data-tier="EPIC"] .kc-frame {
+  --kc-leaf: #fff3c4 0, #f2d684 calc(var(--kc-notch) * 0.5),
+    #c99a34 calc(var(--kc-notch) - var(--kc-notch-line)),
+    #8a5c16 calc(var(--kc-notch) - var(--kc-notch-line) + 0.5px), #8a5c16 var(--kc-notch),
+    transparent calc(var(--kc-notch) + 0.5px);
+  --kc-leaf-q: calc(50% - var(--kc-b)) calc(50% - var(--kc-b)) no-repeat;
+  background:
+    radial-gradient(circle at 0 0, var(--kc-leaf)) left var(--kc-b) top var(--kc-b) /
+      var(--kc-leaf-q),
+    radial-gradient(circle at 100% 0, var(--kc-leaf)) right var(--kc-b) top var(--kc-b) /
+      var(--kc-leaf-q),
+    radial-gradient(circle at 0 100%, var(--kc-leaf)) left var(--kc-b) bottom var(--kc-b) /
+      var(--kc-leaf-q),
+    radial-gradient(circle at 100% 100%, var(--kc-leaf)) right var(--kc-b) bottom
+      var(--kc-b) / var(--kc-leaf-q),
+    linear-gradient(
+      150deg,
+      #f3dc93 0%,
+      #a07cff 14%,
+      #5333b4 36%,
+      #3a2484 60%,
+      #8357ea 82%,
+      #d9b45a 100%
+    );
+}
+.kessen-card[data-tier="LEGENDARY"],
+.kessen-card[data-tier="FORBIDDEN"] {
+  --kc-b: max(2.5px, 3.2cqw);
+}
+.kessen-card[data-tier="LEGENDARY"] .kc-frame {
+  border-radius: 4.5cqw;
+  background: conic-gradient(
+    from var(--kc-angle) at 50% 50%,
+    #fff2b8,
+    #d29b1f 12%,
+    #6b4a0c 25%,
+    #f2cf6b 38%,
+    #8a6420 52%,
+    #ffe7a0 64%,
+    #b07d16 78%,
+    #fff2b8
+  );
+}
+.kessen-card[data-tier="LEGENDARY"] .kc-inner {
+  border-radius: 2.8cqw;
+}
+.kessen-card[data-tier="FORBIDDEN"] .kc-frame {
+  background: conic-gradient(
+    from var(--kc-angle) at 50% 50%,
+    #0b0b10,
+    #7e0f0c 8%,
+    #0b0b10 18%,
+    #1a0405 40%,
+    #c3201a 52%,
+    #0b0b10 62%,
+    #2a0606 84%,
+    #0b0b10
+  );
+}
+.kessen-card[data-tier="FORBIDDEN"] .kc-inner {
+  background: var(--kessen-ink);
+  box-shadow: inset 0 0 0 max(1px, 0.5cqw) rgb(208 39 29 / 0.7);
+}
+.kessen-card[data-token] .kc-frame {
+  background: repeating-linear-gradient(
+    135deg,
+    #8b9099 0 2.4cqw,
+    #3a3c42 2.4cqw 4.8cqw
+  );
+}
+.kessen-card[data-token] .kc-art img {
+  filter: saturate(0.55) contrast(1.05);
+}
+.kessen-card[data-token] .kc-vignette {
+  background:
+    radial-gradient(70% 40% at 30% 80%, rgb(230 230 240 / 0.22), transparent 70%),
+    radial-gradient(60% 40% at 75% 25%, rgb(230 230 240 / 0.18), transparent 70%),
+    linear-gradient(180deg, rgb(10 5 3 / 0.5) 0%, transparent 22%);
+}
+
+/* Decorations on top of the frame: common rivets, legendary corner caps. */
+.kc-deco {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.kessen-card[data-tier="COMMON"] .kc-deco {
+  --kc-r: max(1.5px, 1.3cqw);
+  background:
+    radial-gradient(circle at 35% 35%, #e5e7ea, #4b4e55 70%) 2.8cqw 2.8cqw / calc(var(--kc-r) * 2)
+      calc(var(--kc-r) * 2) no-repeat,
+    radial-gradient(circle at 35% 35%, #e5e7ea, #4b4e55 70%) calc(100% - 2.8cqw) 2.8cqw /
+      calc(var(--kc-r) * 2) calc(var(--kc-r) * 2) no-repeat,
+    radial-gradient(circle at 35% 35%, #e5e7ea, #4b4e55 70%) 2.8cqw calc(100% - 2.8cqw) /
+      calc(var(--kc-r) * 2) calc(var(--kc-r) * 2) no-repeat,
+    radial-gradient(circle at 35% 35%, #e5e7ea, #4b4e55 70%) calc(100% - 2.8cqw)
+      calc(100% - 2.8cqw) / calc(var(--kc-r) * 2) calc(var(--kc-r) * 2) no-repeat;
+  opacity: 0;
+}
+.kessen-card[data-tier="LEGENDARY"] .kc-deco::before,
+.kessen-card[data-tier="LEGENDARY"] .kc-deco::after {
+  content: "";
+  position: absolute;
+  inset: 1.2cqw;
+  border-radius: 3.4cqw;
+  --kc-len: 14cqw;
+  --kc-w: max(1.5px, 1.4cqw);
+  background:
+    linear-gradient(#fff3c4, #b5821a) top left / var(--kc-len) var(--kc-w) no-repeat,
+    linear-gradient(#fff3c4, #b5821a) top left / var(--kc-w) var(--kc-len) no-repeat,
+    linear-gradient(#fff3c4, #b5821a) top right / var(--kc-len) var(--kc-w) no-repeat,
+    linear-gradient(#fff3c4, #b5821a) top right / var(--kc-w) var(--kc-len) no-repeat,
+    linear-gradient(#fff3c4, #b5821a) bottom left / var(--kc-len) var(--kc-w) no-repeat,
+    linear-gradient(#fff3c4, #b5821a) bottom left / var(--kc-w) var(--kc-len) no-repeat,
+    linear-gradient(#fff3c4, #b5821a) bottom right / var(--kc-len) var(--kc-w) no-repeat,
+    linear-gradient(#fff3c4, #b5821a) bottom right / var(--kc-w) var(--kc-len) no-repeat;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.8));
+}
+.kessen-card[data-tier="LEGENDARY"] .kc-deco::after {
+  display: none;
+}
+
+/* Forbidden: torn paper seals across two corners, crimson ink stripe. */
+.kc-ofuda {
+  position: absolute;
+  z-index: 4;
+  width: 36cqw;
+  height: max(5px, 6.5cqw);
+  pointer-events: none;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 8%,
+      rgb(170 20 16 / 0.85) 8% 10%,
+      transparent 10% 90%,
+      rgb(170 20 16 / 0.85) 90% 92%,
+      transparent 92%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 0 38%,
+      rgb(150 14 12 / 0.9) 38% 62%,
+      transparent 62%
+    ),
+    linear-gradient(180deg, #f3ead6, #ddcfb0);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+  clip-path: polygon(
+    0 12%,
+    6% 0,
+    14% 10%,
+    24% 0,
+    36% 8%,
+    50% 0,
+    64% 10%,
+    78% 0,
+    90% 8%,
+    100% 0,
+    100% 88%,
+    92% 100%,
+    80% 90%,
+    66% 100%,
+    52% 90%,
+    40% 100%,
+    26% 90%,
+    12% 100%,
+    0 90%
+  );
+}
+.kc-ofuda[data-corner="tr"] {
+  top: 5cqw;
+  right: -9cqw;
+  transform: rotate(40deg);
+}
+.kc-ofuda[data-corner="tl"] {
+  top: 5cqw;
+  left: -9cqw;
+  transform: rotate(-40deg);
+}
+
+/* Power medallion and row glyph (top left) */
+.kc-power {
+  position: absolute;
+  z-index: 5;
+  top: max(3px, 2.8cqw);
+  left: max(3px, 2.8cqw);
+  width: max(22px, 21cqw);
+  height: max(22px, 21cqw);
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at 34% 28%,
+    #8a2318 0%,
+    var(--kessen-lacquer-deep) 58%,
+    #0e0303 100%
+  );
+  border: max(1.5px, 0.9cqw) solid var(--kc-gold);
+  box-shadow:
+    0 0 0 max(1px, 0.45cqw) #2a1a06,
+    inset 0 max(1px, 0.6cqw) max(2px, 1.4cqw) rgb(255 220 160 / 0.25),
+    0 max(1px, 0.8cqw) max(2px, 1.6cqw) rgb(0 0 0 / 0.6);
+  color: var(--kessen-cream);
+  font-family: var(--kessen-font-num);
+  font-size: max(13px, 12cqw);
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+  text-shadow:
+    0 1px 0 #000,
+    0 0 4px rgb(0 0 0 / 0.7);
+}
+.kc-power[data-len="3"] {
+  font-size: max(11px, 9.4cqw);
+  letter-spacing: -0.02em;
+}
+.kc-power .kessen-glyph {
+  width: 58%;
+  height: 58%;
+  color: var(--kessen-gold-hi);
+  filter: drop-shadow(0 1px 0 #000);
+}
+.kc-row {
+  position: absolute;
+  z-index: 5;
+  top: calc(max(3px, 2.8cqw) + max(22px, 21cqw) + max(2px, 1.2cqw));
+  left: calc(max(3px, 2.8cqw) + (max(22px, 21cqw) - max(15px, 13cqw)) / 2);
+  width: max(15px, 13cqw);
+  height: max(15px, 13cqw);
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #3b2516, #120a06 75%);
+  border: max(1px, 0.6cqw) solid var(--kessen-gold-lo);
+  color: var(--kessen-gold-hi);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+}
+.kc-row .kessen-glyph {
+  width: 64%;
+  height: 64%;
+}
+
+/* Faction sigil and provision (top right) */
+.kc-sigil {
+  position: absolute;
+  z-index: 5;
+  top: 2.6cqw;
+  right: 2.6cqw;
+  width: 17cqw;
+  display: none;
+}
+.kc-sigil .kessen-sigil {
+  width: 100%;
+}
+.kc-prov {
+  position: absolute;
+  z-index: 5;
+  top: calc(2.6cqw + 17cqw + 1.4cqw);
+  right: calc(2.6cqw + (17cqw - max(18px, 12cqw)) / 2);
+  width: max(18px, 12cqw);
+  height: max(16px, 10.5cqw);
+  display: none;
+  place-items: center;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  background: linear-gradient(180deg, var(--kessen-gold-hi), var(--kessen-gold-lo));
+  color: var(--kessen-paper-ink);
+  font-family: var(--kessen-font-num);
+  font-size: max(11px, 6.6cqw);
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.kc-prov > span {
+  display: grid;
+  place-items: center;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  clip-path: inherit;
+  background: linear-gradient(180deg, #f8ecd0, #e2cb98);
+}
+
+/* Bottom panel: name banner + parchment text */
+.kc-panel {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  flex-direction: column;
+  max-height: 64%;
+}
+.kc-name {
+  position: relative;
+  margin: 0 -1px;
+  padding: calc(var(--kc-gem) * 0.5 + 0.6cqw) 4cqw 1.4cqw;
+  background:
+    linear-gradient(
+      180deg,
+      var(--kc-gold) 0 max(1px, 0.5cqw),
+      transparent max(1px, 0.5cqw) calc(100% - max(1px, 0.5cqw)),
+      var(--kc-gold) calc(100% - max(1px, 0.5cqw))
+    ),
+    linear-gradient(180deg, #7a1a12 0%, var(--kessen-lacquer-deep) 100%);
+  color: #fbecc8;
+  font-family: var(--kessen-font-display);
+  font-size: max(11px, 7cqw);
+  line-height: 1.12;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-shadow: 0 1px 0 #000;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.kc-name[data-solo] {
+  border-radius: 0;
+}
+.kc-gem-slot {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  width: var(--kc-gem);
+  height: var(--kc-gem);
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.8));
+}
+.kc-gem-slot .kessen-gem {
+  width: 100%;
+  height: 100%;
+}
+.kc-gem-mini {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: max(3px, 3cqw);
+  transform: translateX(-50%);
+  width: max(11px, 14cqw);
+  height: max(11px, 14cqw);
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.9));
+}
+.kc-gem-mini .kessen-gem {
+  width: 100%;
+  height: 100%;
+}
+.kc-body {
+  display: none;
+  position: relative;
+  padding: 2.4cqw 4.4cqw 3cqw;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.22 0 0 0 0 0.1 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, var(--kessen-paper) 0%, var(--kessen-parchment) 100%);
+  color: var(--kessen-paper-ink);
+  overflow: hidden;
+}
+/* A number inside display-face text (headings, labels). */
+.kessen-num {
+  font-family: var(--kessen-font-num);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.kc-ability-name {
+  display: block;
+  margin-bottom: 0.8cqw;
+  color: var(--kessen-vermilion);
+  font-family: var(--kessen-font-display);
+  font-size: max(11px, 4.6cqw);
+  line-height: 1.15;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+/* Ability text and the NEW ribbon sit a half pixel above the 11 px floor, so keyword
+   runs and the ribbon stay at or above it after sub-pixel layout and card scaling. */
+.kc-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 8;
+  overflow: hidden;
+  font-size: max(11.5px, 5cqw);
+  font-weight: 600;
+  line-height: 1.32;
+  overflow-wrap: break-word;
+}
+.kessen-card[data-density="long"] .kc-text {
+  font-size: max(11.5px, 4.5cqw);
+}
+.kc-flavor {
+  display: none;
+  margin-top: 1.8cqw;
+  padding-top: 1.4cqw;
+  border-top: 1px solid rgb(107 74 44 / 0.35);
+  color: var(--kessen-paper-muted);
+  font-family: "Newsreader", Georgia, serif;
+  font-style: italic;
+  font-size: max(11px, 4.4cqw);
+  line-height: 1.25;
+}
+.kc-flavor[data-main] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+  font-size: max(11px, 4.8cqw);
+}
+/* Mid-size cards (builder pools, collection pages, rewards, pickers) up to 220 px: the
+   keywords, wrapping between whole keywords (each item keeps its trailing separator), so
+   no tile prints rules text cut short or flavor in place of rules. */
+.kc-kw-strip {
+  display: none;
+  padding: 1.2cqw 3cqw 1.6cqw;
+  background: linear-gradient(180deg, var(--kessen-paper) 0%, var(--kessen-parchment) 100%);
+  color: var(--kessen-vermilion);
+  font-family: var(--kessen-font-body);
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+}
+.kc-kw-item {
+  white-space: nowrap;
+}
+.kc-kw-row {
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  margin-left: 0.15em;
+  vertical-align: -0.17em;
+}
+.kessen-card[data-tier="FORBIDDEN"] .kc-kw-strip {
+  background: linear-gradient(180deg, #17080a 0%, #0b0b10 100%);
+  color: var(--kessen-vermilion-bright);
+}
+.kessen-card[data-tier="FORBIDDEN"] .kc-body {
+  background:
+    radial-gradient(90% 60% at 50% 0%, rgb(195 32 26 / 0.22), transparent 70%),
+    linear-gradient(180deg, #17080a 0%, #0b0b10 100%);
+  color: #efe6d2;
+}
+.kessen-card[data-tier="FORBIDDEN"] .kc-body .kessen-kw,
+.kessen-card[data-tier="FORBIDDEN"] .kc-body .kessen-kw-button {
+  color: var(--kessen-vermilion-bright);
+}
+.kessen-card[data-tier="FORBIDDEN"] .kc-flavor {
+  color: #b9a88f;
+  border-top-color: rgb(208 39 29 / 0.4);
+}
+.kessen-card[data-tier="FORBIDDEN"] .kc-name {
+  background:
+    linear-gradient(
+      180deg,
+      #d0271d 0 max(1px, 0.5cqw),
+      transparent max(1px, 0.5cqw) calc(100% - max(1px, 0.5cqw)),
+      #d0271d calc(100% - max(1px, 0.5cqw))
+    ),
+    linear-gradient(180deg, #1c0809 0%, #050304 100%);
+  color: #f1e6d2;
+}
+.kessen-card[data-tier="LEGENDARY"] .kc-name {
+  background:
+    linear-gradient(
+      180deg,
+      #fff0b0 0 max(1px, 0.6cqw),
+      transparent max(1px, 0.6cqw) calc(100% - max(1px, 0.6cqw)),
+      #b5821a calc(100% - max(1px, 0.6cqw))
+    ),
+    linear-gradient(180deg, #2a1a08 0%, #120a04 100%);
+  color: var(--kessen-gold-hi);
+}
+.kessen-card[data-kind="LEADER"] .kc-name {
+  background:
+    linear-gradient(
+      180deg,
+      var(--kessen-gold-hi) 0 max(1px, 0.5cqw),
+      transparent max(1px, 0.5cqw) calc(100% - max(1px, 0.5cqw)),
+      var(--kessen-gold-hi) calc(100% - max(1px, 0.5cqw))
+    ),
+    linear-gradient(180deg, #3a2410 0%, #150c05 100%);
+  color: var(--kessen-gold-hi);
+}
+.kessen-card[data-token] .kc-name {
+  background:
+    linear-gradient(
+      180deg,
+      #9aa0a8 0 max(1px, 0.5cqw),
+      transparent max(1px, 0.5cqw) calc(100% - max(1px, 0.5cqw)),
+      #9aa0a8 calc(100% - max(1px, 0.5cqw))
+    ),
+    linear-gradient(180deg, #2e3036 0%, #15161a 100%);
+}
+.kc-token-tag {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  padding: 0 2.6cqw;
+  border: 1px solid #9aa0a8;
+  border-radius: 9999px;
+  background: #15161a;
+  color: #e3e5ea;
+  font-family: var(--kessen-font-display);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Overlays: NEW ribbon, loan stamp, copy pips. The ribbon hangs from the top edge beside
+   the power medallion, so it never covers the power at any size: in the top-right corner
+   of a hand-size card, which shows no sigil there. */
+.kc-new {
+  --kc-power-right: calc(max(3px, 2.8cqw) + max(22px, 21cqw) + max(1.5px, 0.45cqw));
+  position: absolute;
+  z-index: 7;
+  top: 0;
+  right: max(1.5px, 1.5cqw);
+  padding: max(2px, 1cqw) max(2.5px, 2.4cqw) max(5px, 2.6cqw);
+  background: linear-gradient(180deg, #c2331f, #8a180c);
+  border: 1px solid var(--kessen-gold-hi);
+  border-top: 0;
+  color: #fff6e4;
+  font-family: var(--kessen-font-display);
+  font-size: max(11.5px, 6cqw);
+  letter-spacing: 0.08em;
+  text-indent: 0.08em;
+  line-height: 1;
+  white-space: nowrap;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.5);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.4);
+}
+.kc-stamp {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%) rotate(-14deg);
+  padding: max(2px, 1.4cqw) max(5px, 3.6cqw);
+  border: max(2px, 1.1cqw) double #c3201a;
+  border-radius: max(3px, 2cqw);
+  background: rgb(246 234 208 / 0.72);
+  color: #b0170f;
+  font-family: var(--kessen-font-display);
+  font-size: max(11px, 8.6cqw);
+  letter-spacing: 0.2em;
+  line-height: 1;
+  text-indent: 0.2em;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  mix-blend-mode: normal;
+}
+/* Copy pips: a row of dots on a dark plate astride the name banner's top edge, right of
+   the rarity gem. */
+.kc-pips {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  left: calc(50% + var(--kc-gem) * 0.5 + max(3px, 1.6cqw));
+  transform: translateY(-50%);
+  display: flex;
+  gap: max(2px, 1.2cqw);
+  padding: max(2px, 1cqw) max(3px, 1.6cqw);
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 9999px;
+  background: rgb(14 8 5 / 0.88);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+}
+.kc-pip {
+  width: max(9px, 5cqw);
+  height: max(9px, 5cqw);
+  border: 1px solid rgb(246 220 140 / 0.7);
+  border-radius: 9999px;
+  background: rgb(40 26 16);
+}
+.kc-pip[data-on] {
+  background: radial-gradient(circle at 35% 30%, #fff3c4, var(--kessen-gold-hi) 45%, var(--kessen-gold-lo));
+  border-color: #fff3c4;
+}
+
+/* Sheen sweep for Epic and above (pointer hover, motion only) */
+.kc-sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgb(255 255 255 / 0.22) 45%,
+    rgb(255 240 200 / 0.08) 52%,
+    transparent 64%
+  );
+  background-size: 260% 100%;
+  background-position: 120% 0;
+  mix-blend-mode: screen;
+}
+
+/* States */
+.kessen-card[data-selected] {
+  filter: drop-shadow(0 0 2px #ffe4a0) drop-shadow(0 0 7px rgb(255 190 90 / 0.85));
+}
+.kessen-card[data-disabled] .kc-frame {
+  filter: grayscale(0.85) brightness(0.55);
+}
+.kessen-card[data-disabled] {
+  cursor: not-allowed;
+}
+
+/* Size tiers. Hand (< 90 px): art, power, row, gem. Then the name, sigil and provision,
+   a keyword strip, a two-line ability preview, and the full text box with flavor at
+   inspect sizes. */
+@container kessen-card (min-width: 90px) {
+  .kc-panel {
+    display: flex;
+  }
+  .kc-gem-mini {
+    display: none;
+  }
+  .kc-sigil {
+    display: block;
+  }
+  .kc-prov {
+    display: grid;
+  }
+  .kessen-card[data-tier="COMMON"] .kc-deco {
+    opacity: 1;
+  }
+}
+@container kessen-card (min-width: 110px) {
+  .kc-kw-strip {
+    display: block;
+  }
+}
+/* From 90 px the NEW ribbon hangs centred in the gap between the power medallion and the
+   faction sigil. */
+@container kessen-card (min-width: 90px) {
+  .kc-new {
+    right: auto;
+    left: calc((var(--kc-power-right) + 80cqw) / 2);
+    transform: translateX(-50%);
+  }
+}
+@container kessen-card (min-width: 160px) {
+  .kc-name {
+    padding: calc(var(--kc-gem) * 0.5 + 0.8cqw) 5cqw 1.6cqw;
+  }
+}
+/* Inspect sizes: the full rules text (or a vanilla unit's flavor) replaces the strip. */
+@container kessen-card (min-width: 220px) {
+  .kc-kw-strip {
+    display: none;
+  }
+  .kc-body {
+    display: block;
+  }
+  .kc-name {
+    font-size: max(11px, 6.6cqw);
+  }
+}
+@container kessen-card (min-width: 250px) {
+  .kessen-card:not([data-density="long"]) .kc-flavor {
+    display: block;
+  }
+  .kc-text {
+    -webkit-line-clamp: 9;
+  }
+}
+
+/* ------------------------------------------------------------------------ tiles */
+
+.kessen-tile {
+  --kt-b: max(2px, 4.4cqw);
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  container: kessen-tile / inline-size;
+  isolation: isolate;
+  user-select: none;
+  -webkit-user-select: none;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+  transition: filter 160ms ease;
+}
+.kt-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 9cqw;
+  background: linear-gradient(145deg, #b3b7bf, #4a4d54 45%, #2b2d31 60%, #7a7e87);
+}
+.kt-inner {
+  position: absolute;
+  inset: var(--kt-b);
+  overflow: hidden;
+  border-radius: 6cqw;
+  background: var(--kessen-wood);
+}
+.kessen-tile[data-tier="RARE"] .kt-frame,
+.kessen-tile[data-tier="FORBIDDEN"] .kt-frame {
+  border-radius: 0;
+  clip-path: polygon(14cqw 0, 86cqw 0, 100% 14cqw, 100% 86cqw, 86cqw 100%, 14cqw 100%, 0 86cqw, 0 14cqw);
+}
+.kessen-tile[data-tier="RARE"] .kt-inner,
+.kessen-tile[data-tier="FORBIDDEN"] .kt-inner {
+  border-radius: 0;
+  clip-path: polygon(12cqw 0, calc(100% - 12cqw) 0, 100% 12cqw, 100% calc(100% - 12cqw), calc(100% - 12cqw) 100%, 12cqw 100%, 0 calc(100% - 12cqw), 0 12cqw);
+}
+/* Epic tiles share the card's notched art window inside a solid frame (see the card face). */
+.kessen-tile[data-tier="EPIC"] .kt-frame {
+  --kt-notch: max(3px, 11cqw);
+  border-radius: 5cqw;
+}
+.kessen-tile[data-tier="EPIC"] .kt-inner {
+  border-radius: 0;
+  mask:
+    radial-gradient(circle at 0 0, transparent var(--kt-notch), #000 calc(var(--kt-notch) + 0.5px))
+      top left / 51% 51% no-repeat,
+    radial-gradient(
+        circle at 100% 0,
+        transparent var(--kt-notch),
+        #000 calc(var(--kt-notch) + 0.5px)
+      )
+      top right / 51% 51% no-repeat,
+    radial-gradient(
+        circle at 0 100%,
+        transparent var(--kt-notch),
+        #000 calc(var(--kt-notch) + 0.5px)
+      )
+      bottom left / 51% 51% no-repeat,
+    radial-gradient(
+        circle at 100% 100%,
+        transparent var(--kt-notch),
+        #000 calc(var(--kt-notch) + 0.5px)
+      )
+      bottom right / 51% 51% no-repeat;
+}
+.kessen-tile[data-tier="RARE"] .kt-frame {
+  background: linear-gradient(150deg, #e6edf9, #3f66d6 30%, #0f1f5c 60%, #c9d3e0);
+}
+.kessen-tile[data-tier="EPIC"] .kt-frame {
+  --kt-leaf: #fff3c4 0, #f2d684 calc(var(--kt-notch) * 0.5),
+    #c99a34 calc(var(--kt-notch) - 1px), #8a5c16 calc(var(--kt-notch) - 0.5px),
+    #8a5c16 var(--kt-notch), transparent calc(var(--kt-notch) + 0.5px);
+  --kt-leaf-q: calc(50% - var(--kt-b)) calc(50% - var(--kt-b)) no-repeat;
+  background:
+    radial-gradient(circle at 0 0, var(--kt-leaf)) left var(--kt-b) top var(--kt-b) /
+      var(--kt-leaf-q),
+    radial-gradient(circle at 100% 0, var(--kt-leaf)) right var(--kt-b) top var(--kt-b) /
+      var(--kt-leaf-q),
+    radial-gradient(circle at 0 100%, var(--kt-leaf)) left var(--kt-b) bottom var(--kt-b) /
+      var(--kt-leaf-q),
+    radial-gradient(circle at 100% 100%, var(--kt-leaf)) right var(--kt-b) bottom
+      var(--kt-b) / var(--kt-leaf-q),
+    linear-gradient(150deg, #f3dc93, #8357ea 30%, #3a2484 62%, #d9b45a);
+}
+.kessen-tile[data-tier="LEGENDARY"] .kt-frame {
+  --kt-b: max(2.5px, 5.4cqw);
+  background: conic-gradient(
+    from var(--kc-angle),
+    #fff2b8,
+    #d29b1f 15%,
+    #6b4a0c 30%,
+    #f2cf6b 45%,
+    #8a6420 60%,
+    #ffe7a0 75%,
+    #fff2b8
+  );
+}
+.kessen-tile[data-tier="LEGENDARY"] .kt-inner {
+  inset: max(2.5px, 5.4cqw);
+}
+.kessen-tile[data-tier="FORBIDDEN"] .kt-frame {
+  background: conic-gradient(
+    from var(--kc-angle),
+    #0b0b10,
+    #c3201a 12%,
+    #0b0b10 26%,
+    #2a0606 50%,
+    #d0271d 62%,
+    #0b0b10 76%
+  );
+}
+.kessen-tile[data-token] .kt-frame {
+  background: repeating-linear-gradient(135deg, #8b9099 0 5cqw, #3a3c42 5cqw 10cqw);
+}
+.kt-art {
+  position: absolute;
+  inset: 0;
+}
+.kt-art img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  pointer-events: none;
+}
+.kt-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 45%, rgb(8 4 2 / 0.7) 100%);
+}
+.kt-power {
+  position: absolute;
+  z-index: 3;
+  left: max(1px, 2cqw);
+  bottom: max(1px, 2cqw);
+  min-width: max(18px, 40cqw);
+  height: max(16px, 34cqw);
+  padding: 0 max(2px, 4cqw);
+  display: grid;
+  place-items: center;
+  border-radius: max(4px, 9cqw);
+  background: linear-gradient(180deg, #3a1210, #12060a);
+  border: 1px solid var(--kessen-gold-lo);
+  color: var(--kessen-cream);
+  font-family: var(--kessen-font-num);
+  font-size: max(14px, 28cqw);
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+  text-shadow: 0 1px 0 #000;
+}
+.kessen-tile[data-delta="up"] .kt-power {
+  color: var(--kessen-up);
+  border-color: #2f8a52;
+}
+.kessen-tile[data-delta="down"] .kt-power {
+  color: var(--kessen-down);
+  border-color: #9c2a1c;
+}
+.kt-status {
+  position: absolute;
+  z-index: 3;
+  top: max(1px, 2cqw);
+  right: max(1px, 2cqw);
+  width: max(14px, 30cqw);
+  height: max(14px, 30cqw);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.85));
+}
+.kt-status .kessen-glyph {
+  width: 100%;
+  height: 100%;
+}
+.kt-meditate-text {
+  display: none;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.kt-gem {
+  position: absolute;
+  z-index: 3;
+  right: max(1px, 3cqw);
+  bottom: max(1px, 3cqw);
+  width: max(9px, 18cqw);
+  height: max(9px, 18cqw);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.9));
+}
+.kt-gem .kessen-gem {
+  width: 100%;
+  height: 100%;
+}
+.kt-terrain {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    radial-gradient(55% 35% at 18% 12%, rgb(255 255 255 / 0.7), transparent 70%),
+    radial-gradient(45% 30% at 88% 62%, rgb(255 255 255 / 0.45), transparent 70%),
+    repeating-linear-gradient(60deg, rgb(255 255 255 / 0.16) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, rgb(170 215 255 / 0.55), rgb(90 150 215 / 0.45));
+  box-shadow:
+    inset 0 0 0 max(1px, 2.5cqw) rgb(235 247 255 / 0.85),
+    inset 0 0 max(4px, 12cqw) rgb(200 230 255 / 0.9);
+}
+.kessen-tile[data-sealed] .kt-art img {
+  filter: saturate(0.4) brightness(0.8);
+}
+.kessen-tile[data-carried] {
+  filter: drop-shadow(0 0 2px #ffd08a) drop-shadow(0 0 6px rgb(255 170 70 / 0.8));
+}
+.kessen-tile[data-highlight="selected"] {
+  filter: drop-shadow(0 0 2px #fff0c0) drop-shadow(0 0 6px rgb(255 200 100 / 0.95));
+}
+.kessen-tile[data-highlight="target"] {
+  filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 6px rgb(120 200 255 / 0.95));
+}
+.kessen-tile[data-highlight="danger"] {
+  filter: drop-shadow(0 0 2px #ffd0c8) drop-shadow(0 0 6px rgb(255 70 50 / 0.95));
+}
+.kessen-tile[data-highlight="dim"] .kt-frame {
+  filter: grayscale(0.7) brightness(0.5);
+}
+@container kessen-tile (min-width: 72px) {
+  .kt-meditate-text {
+    display: block;
+    position: absolute;
+    z-index: 3;
+    top: calc(max(1px, 2cqw) + max(14px, 30cqw));
+    right: max(1px, 2cqw);
+    padding: 0 3px;
+    border-radius: 4px;
+    background: rgb(29 20 48 / 0.85);
+    color: #e3d8ff;
+    font-family: var(--kessen-font-num);
+    font-size: max(11px, 14cqw);
+    line-height: 1.3;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+}
+
+/* ------------------------------------------------------------------- card back */
+
+.kessen-back {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  border-radius: 5%/3.6%;
+  isolation: isolate;
+  user-select: none;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.55));
+}
+.kessen-back-img {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--kessen-ink);
+  box-shadow: inset 0 0 0 1px rgb(217 180 90 / 0.6);
+}
+.kessen-back-img img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: fill;
+}
+.kessen-back-glow {
+  position: absolute;
+  inset: -16%;
+  z-index: -1;
+  border-radius: 12%;
+  opacity: 0;
+  pointer-events: none;
+}
+.kessen-back[data-telegraph="RARE"] .kessen-back-glow {
+  opacity: 1;
+  background: radial-gradient(closest-side, rgb(90 140 255 / 0.95) 55%, rgb(61 106 224 / 0.5) 75%, transparent);
+}
+.kessen-back[data-telegraph="EPIC"] .kessen-back-glow {
+  opacity: 1;
+  background: radial-gradient(closest-side, rgb(170 120 255 / 0.95) 55%, rgb(141 92 240 / 0.5) 75%, transparent);
+}
+.kessen-back[data-telegraph="LEGENDARY"] .kessen-back-glow {
+  inset: -22%;
+  opacity: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, rgb(255 214 120 / 0.95), rgb(255 190 60 / 0.35) 60%, transparent),
+    repeating-conic-gradient(
+      from var(--kc-angle),
+      rgb(255 220 130 / 0.55) 0deg 6deg,
+      transparent 6deg 22deg
+    );
+  mask: radial-gradient(closest-side, #000 55%, transparent);
+}
+.kessen-back[data-telegraph="FORBIDDEN"] .kessen-back-glow {
+  inset: -18%;
+  opacity: 1;
+  border-radius: 46%;
+  background:
+    radial-gradient(closest-side, rgb(255 60 40 / 1) 45%, rgb(170 16 10 / 0.75) 70%, transparent),
+    radial-gradient(30% 25% at 20% 20%, rgb(11 11 16 / 0.9), transparent),
+    radial-gradient(28% 22% at 80% 75%, rgb(11 11 16 / 0.9), transparent);
+}
+
+/* --------------------------------------------------------- leader medallion/plate */
+
+.kessen-medallion {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 210deg,
+    #fff2b8,
+    #c8961e,
+    #6b4a0c,
+    #f2cf6b,
+    #8a6420,
+    #fff2b8
+  );
+  box-shadow:
+    0 0 0 1px #2a1a06,
+    0 2px 4px rgb(0 0 0 / 0.55);
+}
+.kessen-medallion-art {
+  position: absolute;
+  inset: max(2px, 7%);
+  display: block;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--kessen-lacquer-deep);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.6);
+}
+/* Placed by `kessenMedallionCrop` (inline box): the portrait zoomed onto the face. */
+.kessen-medallion-art img {
+  position: absolute;
+  display: block;
+  max-width: none;
+  object-fit: cover;
+}
+.kessen-medallion[data-used] {
+  background: conic-gradient(from 210deg, #b3a78f, #5a5246, #8f8572, #5a5246, #b3a78f);
+}
+.kessen-medallion[data-used] .kessen-medallion-art img {
+  filter: grayscale(0.5) brightness(0.85);
+}
+.kessen-medallion-spent {
+  position: absolute;
+  right: -10%;
+  bottom: -10%;
+  width: clamp(11px, 48%, 22px);
+  aspect-ratio: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.75));
+}
+.kessen-medallion-spent .kessen-glyph {
+  width: 100%;
+  height: 100%;
+}
+.kessen-medallion[data-ready] {
+  box-shadow:
+    0 0 0 1px #2a1a06,
+    0 0 6px rgb(255 190 90 / 0.75);
+}
+
+.kessen-plate {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 10px;
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgb(255 180 90 / 0.14), transparent 60%),
+    linear-gradient(180deg, #2a140c, #140a06);
+  color: var(--kessen-cream);
+  box-shadow:
+    inset 0 1px 0 rgb(246 220 140 / 0.25),
+    0 2px 6px rgb(0 0 0 / 0.5);
+  text-align: left;
+}
+.kessen-plate .kessen-medallion {
+  width: 56px;
+}
+.kessen-plate-name {
+  display: block;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 16px;
+  line-height: 1.15;
+}
+.kessen-plate-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: #cdb88d;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.kessen-plate-bonus {
+  padding: 0 6px;
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 9999px;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-num);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.kessen-plate-ability {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid rgb(217 180 90 / 0.6);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.32);
+  color: var(--kessen-cream);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.kessen-plate-ability-name {
+  display: block;
+  color: var(--kessen-lantern);
+  font-family: var(--kessen-font-display);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.kessen-plate-ability :is(.kessen-kw, .kessen-kw-button) {
+  color: var(--kessen-vermilion-bright);
+}
+/* A used ability dims its frame and keeps its words readable. */
+.kessen-plate[data-used] .kessen-plate-ability {
+  border-style: dashed;
+  border-color: rgb(217 180 90 / 0.28);
+  color: rgb(251 233 192 / 0.82);
+}
+.kessen-plate[data-used] .kessen-plate-ability-name {
+  color: rgb(251 233 192 / 0.72);
+}
+
+/* ------------------------------------------------------------------------ motion */
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-motion="on"].kessen-card[data-tier="LEGENDARY"] .kc-frame,
+  [data-motion="on"].kessen-card[data-tier="FORBIDDEN"] .kc-frame,
+  [data-motion="on"].kessen-tile[data-tier="LEGENDARY"] .kt-frame,
+  [data-motion="on"].kessen-tile[data-tier="FORBIDDEN"] .kt-frame {
+    animation: kessen-spin 9s linear infinite;
+  }
+  [data-motion="on"].kessen-card[data-tier="FORBIDDEN"] .kc-frame,
+  [data-motion="on"].kessen-tile[data-tier="FORBIDDEN"] .kt-frame {
+    animation-duration: 5.5s;
+  }
+  [data-motion="on"].kessen-card[data-tier="FORBIDDEN"] .kessen-gem circle {
+    animation: kessen-core-pulse 2.4s ease-in-out infinite;
+  }
+  [data-motion="on"].kessen-back[data-telegraph="LEGENDARY"] .kessen-back-glow {
+    animation: kessen-spin 7s linear infinite;
+  }
+  [data-motion="on"].kessen-back[data-telegraph] .kessen-back-glow {
+    animation-name: kessen-spin, kessen-breathe;
+    animation-duration: 7s, 1.8s;
+    animation-timing-function: linear, ease-in-out;
+    animation-iteration-count: infinite, infinite;
+  }
+  [data-motion="on"].kessen-tile[data-highlight="target"] {
+    animation: kessen-pulse 1.2s ease-in-out infinite;
+  }
+  [data-motion="on"].kessen-tile[data-highlight="danger"] {
+    animation: kessen-pulse-danger 1.2s ease-in-out infinite;
+  }
+  [data-motion="on"].kessen-card[data-selected] {
+    transform: translateY(-5%);
+  }
+  [data-motion="on"].kessen-medallion[data-ready] {
+    animation: kessen-lantern 2.6s ease-in-out infinite;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    [data-motion="on"].kessen-card:is(
+        [data-tier="EPIC"],
+        [data-tier="LEGENDARY"],
+        [data-tier="FORBIDDEN"]
+      ):hover
+      .kc-sheen {
+      opacity: 1;
+      transition:
+        background-position 900ms ease,
+        opacity 200ms ease;
+      background-position: -40% 0;
+    }
+  }
+}
+
+@keyframes kessen-spin {
+  to {
+    --kc-angle: 360deg;
+  }
+}
+@keyframes kessen-core-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@keyframes kessen-breathe {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes kessen-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px rgb(120 200 255 / 0.6));
+  }
+  50% {
+    filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 9px rgb(120 200 255 / 1));
+  }
+}
+@keyframes kessen-pulse-danger {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 1px #ffd0c8) drop-shadow(0 0 3px rgb(255 70 50 / 0.6));
+  }
+  50% {
+    filter: drop-shadow(0 0 2px #ffd0c8) drop-shadow(0 0 9px rgb(255 70 50 / 1));
+  }
+}
+@keyframes kessen-lantern {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px #2a1a06,
+      0 0 4px rgb(255 190 90 / 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px #2a1a06,
+      0 0 10px rgb(255 190 90 / 0.95);
+  }
+}

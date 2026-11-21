@@ -22,12 +22,20 @@ export function BagTabs({
     restore();
   }, [storageKey]);
 
+  // Empty bags stay out of the strip unless open or over their limit, so it fits one line.
+  const shown = bags.filter(
+    (bag) => bag.value === "all" || bag.count > 0 || bag.value === active || bag.over,
+  );
+  // The card collection has its own bag, so "all" names the rest when it is listed.
+  const hasCards = shown.some((bag) => bag.value === "cards");
+
   return (
     <fieldset
       aria-label="Bags"
-      className="flex min-w-0 max-w-full gap-0.5 overflow-x-auto rounded-lg bg-muted p-0.5"
+      // Bags wrap onto a second line rather than scroll, so every bag stays in view.
+      className="flex min-w-0 max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5"
     >
-      {bags.map((bag) => {
+      {shown.map((bag) => {
         const selected = bag.value === active;
         return (
           <button
@@ -40,14 +48,17 @@ export function BagTabs({
               onChange(bag.value);
             }}
             className={cn(
-              "h-8 shrink-0 rounded-md px-3 text-sm",
+              "h-8 shrink-0 rounded-md px-3 text-sm pointer-coarse:h-[40px] pointer-coarse:text-base",
               selected
                 ? "bg-background font-semibold text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
               bag.over && "text-destructive hover:text-destructive",
             )}
           >
-            {BAG_LABELS[bag.value] ?? bag.value} · {bag.count}
+            {bag.value === "all" && hasCards
+              ? "Items"
+              : (BAG_LABELS[bag.value] ?? bag.value)}{" "}
+            · {bag.count}
             {bag.over && <span className="sr-only"> (over limit)</span>}
           </button>
         );
@@ -58,10 +69,21 @@ export function BagTabs({
 
 /**
  * Used and total slots of the open bag. Only purchases, home withdrawals and crafting
- * check the limit, so rewards and drops can push a bag past it.
+ * check the limit, so rewards and drops can push a bag past it. A view spanning several
+ * bags names the bag whose figure it shows.
  */
-export function BagCapacity({ used, max }: { used: number; max: number }) {
+export function BagCapacity({
+  used,
+  max,
+  bag,
+}: {
+  used: number;
+  max: number;
+  /** The bag shown, when the open view spans several. */
+  bag?: string;
+}) {
   const over = used - max;
+  const name = bag ? (BAG_LABELS[bag] ?? bag) : undefined;
   return (
     <span
       title={
@@ -76,9 +98,11 @@ export function BagCapacity({ used, max }: { used: number; max: number }) {
       )}
     >
       <span aria-hidden="true">
+        {name && `${name} `}
         {used} / {max}
       </span>
       <span className="sr-only">
+        {name && `${name} bag: `}
         {over > 0
           ? `${used} of ${max} bag slots used, ${over} over the limit`
           : `${used} of ${max} bag slots used`}
@@ -96,6 +120,7 @@ const BAG_LABELS: Record<string, string> = {
   event: "Event",
   materials: "Materials",
   cooking: "Cooking",
+  cards: "Cards",
 };
 
 interface BagTabsProps {

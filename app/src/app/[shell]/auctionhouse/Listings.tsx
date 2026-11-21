@@ -29,6 +29,7 @@ import { useAvatarRenditionWidth } from "@/layout/Avatar";
 import { getRarityBackground } from "@/layout/ContentImage";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
+import { rarityLabel, rarityTextClass } from "@/layout/items/ItemCard";
 import Loader from "@/layout/Loader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
@@ -343,7 +344,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
             unoptimized
           />
           {item.image ? (
-            <div className="absolute inset-0 z-[1] flex items-center justify-center p-1">
+            <div className="absolute inset-0 flex items-center justify-center p-1">
               <Image
                 src={item.image}
                 alt={item.name}
@@ -357,6 +358,14 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
         </div>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <p className="line-clamp-2 font-semibold text-sm leading-snug">{item.name}</p>
+          {item.itemType === "CARD" && (
+            <p className={cn("font-semibold text-xs", rarityTextClass[item.rarity])}>
+              {rarityLabel[item.rarity]}{" "}
+              {item.cardData?.variant === "FORBIDDEN"
+                ? "Forbidden card"
+                : "Kessen card"}
+            </p>
+          )}
           {bidStanding ? (
             <div className="mt-1.5">
               {bidStanding === "winning" && (

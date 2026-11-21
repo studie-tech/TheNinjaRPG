@@ -14,6 +14,7 @@ import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as bulkSell from "@/hooks/useBulkSellItems";
 import * as homeMove from "@/hooks/useHomeStorageMove";
 import * as itemActions from "@/hooks/useItemActions";
+import * as splitBeforeSale from "@/hooks/useSplitBeforeSale";
 import * as contentImage from "@/layout/ContentImage";
 import * as equipmentPreview from "@/layout/EquipmentPreview";
 import * as hotkeyControls from "@/layout/HotkeyControls";
@@ -52,6 +53,11 @@ let cosmeticState: ReturnType<typeof mockCosmetics>;
 
 beforeEach(() => {
   cosmeticState = mockCosmetics();
+  vi.spyOn(splitBeforeSale, "useSplitBeforeSale").mockReturnValue({
+    keepOnStack: vi.fn(async () => ({ success: true, message: "" })),
+    isSplitting: false,
+    refreshInventory: vi.fn(async () => {}),
+  } as never);
   window.localStorage.clear();
   equip = vi.fn();
   inspectorEquip = vi.fn();

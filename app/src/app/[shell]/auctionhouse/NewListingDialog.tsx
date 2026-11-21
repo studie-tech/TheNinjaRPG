@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -48,10 +48,14 @@ import {
   AUCTION_LISTING_TYPES,
   AUCTION_SALES_TAX_PERCENT,
 } from "@/drizzle/constants";
+import { useKessenCardMoves } from "@/hooks/kessen/useKessenHubCache";
+import ContentImage from "@/layout/ContentImage";
+import { rarityLabel, rarityTextClass } from "@/layout/items/ItemCard";
 import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { isImbuing } from "@/libs/item";
-import { getAuctionSellerPayout } from "@/libs/itemEconomy";
+import { getAuctionSellerPayout, hasAuctionPriceBounds } from "@/libs/itemEconomy";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { useUserPicker } from "@/utils/search";
 import type { CreateAuctionListingSchema } from "@/validators/auction";
@@ -65,10 +69,19 @@ import { formatAuctionCurrency } from "./format";
 export const NewAuctionListingDialog: React.FC<{
   defaultListingType?: CreateAuctionListingSchema["listingType"];
   onCreated?: () => void;
-}> = ({ defaultListingType = "AUCTION", onCreated }) => {
-  const { data: userItems } = api.item.getUserItems.useQuery(undefined, {
-    refetchOnMount: "always",
-  });
+  /** A stack to open the dialog on, such as a card sent from the Items page. */
+  initialUserItemId?: string | null;
+  /** Called once the initial stack has been opened or found unlistable. */
+  onInitialHandled?: () => void;
+}> = ({
+  defaultListingType = "AUCTION",
+  onCreated,
+  initialUserItemId,
+  onInitialHandled,
+}) => {
+  const { data: userItems, isFetchedAfterMount: isInventoryFresh } =
+    api.item.getUserItems.useQuery(undefined, { refetchOnMount: "always" });
+  const { reconcileCardMoves } = useKessenCardMoves();
   const ignoreNextPopoverOpenRef = useRef(false);
   const itemSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,15 +155,21 @@ export const NewAuctionListingDialog: React.FC<{
       );
     }) || [];
 
-  const filteredItemsForDropdown = filteredItems.filter((userItem) => {
-    const name = (userItem.item?.name || "").trim().toLowerCase();
-    const search = itemSearchTerm.trim().toLowerCase();
-    return name.includes(search);
-  });
+  // Kessen cards list after other goods, Forbidden variants after their base cards.
+  const filteredItemsForDropdown = filteredItems
+    .filter((userItem) => {
+      const name = (userItem.item?.name || "").trim().toLowerCase();
+      const search = itemSearchTerm.trim().toLowerCase();
+      return name.includes(search);
+    })
+    .sort((a, b) => listingOrder(a.item) - listingOrder(b.item));
 
   const { mutate: createListing, isPending: isCreating } =
     api.auction.createAuctionListing.useMutation({
-      onSuccess: async (data) => {
+      onMutate: (input) => ({
+        itemType: userItems?.find((row) => row.id === input.userItemId)?.item.itemType,
+      }),
+      onSuccess: async (data, _input, context) => {
         showMutationToast(data);
         if (data.success) {
           setIsOpen(false);
@@ -160,6 +179,7 @@ export const NewAuctionListingDialog: React.FC<{
             utils.auction.getAuctionListings.invalidate(),
             utils.item.getUserItems.invalidate(),
             utils.auction.getAuctionListing.invalidate(),
+            reconcileCardMoves([context?.itemType]),
           ]);
         }
       },
@@ -192,7 +212,9 @@ export const NewAuctionListingDialog: React.FC<{
     watchedQuantity !== undefined && Number.isFinite(watchedQuantity)
       ? watchedQuantity
       : (selectedItem?.quantity ?? 1);
-  const hasRyoBounds = watchedListingType === "AUCTION";
+  const hasRyoBounds =
+    !!selectedItem &&
+    hasAuctionPriceBounds(selectedItem.item, watchedListingType, "MONEY");
   const minimum = hasRyoBounds ? selectedItem?.item.auctionMinPrice : null;
   const maximum = hasRyoBounds ? selectedItem?.item.auctionMaxPrice : null;
   const minimumTotal = Math.max(1, (minimum ?? 0) * listingQuantity);
@@ -204,6 +226,17 @@ export const NewAuctionListingDialog: React.FC<{
     }
   }, [watchedUserItemId, watchedQuantity, watchedListingType, createForm]);
   const showQuantityInput = selectedItem?.item?.canStack && selectedItem.quantity > 1;
+  // Listed cards leave the copies saved decks can use, so name the decks that hold one.
+  const isCardSelected = selectedItem?.item.itemType === "CARD";
+  const { data: kessenHub } = api.kessen.getHub.useQuery(undefined, {
+    enabled: isOpen && isCardSelected,
+  });
+  const affectedDecks = isCardSelected
+    ? (kessenHub?.decks ?? []).filter((deck) =>
+        deck.cards.some((card) => card.itemId === selectedItem.itemId),
+      )
+    : [];
+  const unit = isCardSelected ? "card" : "unit";
 
   // Start each selected stack at its full quantity so the amount sent is explicit.
   useEffect(() => {
@@ -219,6 +252,34 @@ export const NewAuctionListingDialog: React.FC<{
     selectedItem?.quantity,
     selectedItem?.item.canStack,
     createForm,
+  ]);
+
+  // Open on a stack sent from elsewhere once the inventory read on this visit says it
+  // can be listed; a cached inventory can predate the stack (a split or a new card).
+  const initialListable =
+    !!initialUserItemId && filteredItems.some((row) => row.id === initialUserItemId);
+  useEffect(() => {
+    if (!initialUserItemId || !userItems || !isInventoryFresh) return;
+    if (initialListable) {
+      setIsOpen(true);
+      ignoreNextPopoverOpenRef.current = true;
+      setDropdownOpen(false);
+      createForm.setValue("userItemId", initialUserItemId, { shouldValidate: true });
+    } else {
+      showMutationToast({
+        success: false,
+        message:
+          "That stack cannot be listed now: it may be listed already, equipped or no longer carried.",
+      });
+    }
+    onInitialHandled?.();
+  }, [
+    initialUserItemId,
+    initialListable,
+    userItems,
+    isInventoryFresh,
+    createForm,
+    onInitialHandled,
   ]);
 
   const onCreateSubmit = (data: CreateAuctionListingSchema) => {
@@ -288,10 +349,22 @@ export const NewAuctionListingDialog: React.FC<{
                           readOnly
                           onFocus={openDropdown}
                           onClick={openDropdown}
-                          className="mb-2 w-full cursor-text border border-input bg-background font-semibold text-foreground placeholder:font-bold placeholder:text-muted-foreground"
+                          className="mb-2 w-full cursor-text border border-input bg-background text-left font-semibold text-foreground placeholder:font-bold placeholder:text-muted-foreground"
                         />
                       </FormControl>
                     </PopoverTrigger>
+                    {selectedItem && (
+                      <div className="flex items-center gap-2 rounded-md border bg-card p-1.5">
+                        <ListingItemLabel userItem={selectedItem} />
+                      </div>
+                    )}
+                    {affectedDecks.length > 0 && (
+                      <p className="text-sm text-amber-800 dark:text-amber-300">
+                        Listed copies leave your decks:{" "}
+                        {affectedDecks.map((deck) => deck.name).join(", ")}{" "}
+                        {affectedDecks.length === 1 ? "uses" : "use"} this card.
+                      </p>
+                    )}
 
                     <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
                       <Command shouldFilter={false}>
@@ -339,13 +412,7 @@ export const NewAuctionListingDialog: React.FC<{
                                     setDropdownOpen(false);
                                   }}
                                 >
-                                  {userItem.item?.name}
-                                  {userItem.quantity > 1
-                                    ? ` (${userItem.quantity})`
-                                    : ""}
-                                  {userItem.imbuements && userItem.imbuements.length > 0
-                                    ? ` (${userItem.imbuements.length} imbuement(s))`
-                                    : ""}
+                                  <ListingItemLabel userItem={userItem} />
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -479,10 +546,11 @@ export const NewAuctionListingDialog: React.FC<{
               </div>
             )}
 
-            {selectedItem && watchedListingType === "AUCTION" && (
+            {selectedItem && hasRyoBounds && (
               <p className="text-muted-foreground text-sm">
-                {`Allowed per-unit range: ${minimum ?? "no minimum"} – ${maximum ?? "no maximum"} ryo. Bids may exceed the maximum.`}{" "}
-                Prices below are totals for {listingQuantity} units.
+                {priceBoundsLine(minimum, maximum, unit)}
+                {listingQuantity > 1 &&
+                  ` Prices below are totals for ${listingQuantity} ${unit}s.`}
               </p>
             )}
             <p className="text-muted-foreground text-sm">
@@ -490,7 +558,7 @@ export const NewAuctionListingDialog: React.FC<{
               when an auction or direct sale completes. Your payout is rounded down to a
               whole number. Unsold listings are not taxed.
             </p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={createForm.control}
                 name="startingPrice"
@@ -503,7 +571,7 @@ export const NewAuctionListingDialog: React.FC<{
                         step={1}
                         min={minimumTotal}
                         max={maximumTotal}
-                        placeholder="Whole numbers only (e.g. 100)"
+                        placeholder={`Whole number, e.g. ${minimumTotal.toLocaleString()}`}
                         value={field.value ?? ""}
                         name={field.name}
                         ref={field.ref}
@@ -540,7 +608,7 @@ export const NewAuctionListingDialog: React.FC<{
                         step={1}
                         min={Math.max(minimumTotal, (watchedStartingPrice ?? 0) + 1)}
                         max={maximumTotal}
-                        placeholder="Whole numbers only — leave empty for no buyout"
+                        placeholder="Leave empty for no buyout"
                         value={field.value ?? ""}
                         name={field.name}
                         ref={field.ref}
@@ -628,3 +696,55 @@ export const NewAuctionListingDialog: React.FC<{
     </Dialog>
   );
 };
+
+/** An inventory stack in the listing picker: art, name, rarity, kind and stack size. */
+function ListingItemLabel({ userItem }: { userItem: ListingPickerItem }) {
+  const { item } = userItem;
+  const isCard = item.itemType === "CARD";
+  const isForbidden = isCard && item.cardData?.variant === "FORBIDDEN";
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      <span className="relative h-8 w-8 shrink-0">
+        <ContentImage
+          image={item.image}
+          alt=""
+          rarity={item.rarity}
+          className="h-8 w-8"
+        />
+      </span>
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block truncate font-semibold">{item.name}</span>
+        <span className={cn("block text-xs", rarityTextClass[item.rarity])}>
+          {rarityLabel[item.rarity]}
+          {isCard ? (isForbidden ? " Forbidden card" : " Kessen card") : ""}
+          {userItem.quantity > 1 ? ` · ×${userItem.quantity}` : ""}
+          {userItem.imbuements.length > 0
+            ? ` · ${userItem.imbuements.length} imbuement${userItem.imbuements.length === 1 ? "" : "s"}`
+            : ""}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/** "Minimum 20,000 ryo per card.", with the maximum when the item has one. */
+const priceBoundsLine = (
+  minimum: number | null | undefined,
+  maximum: number | null | undefined,
+  unit: string,
+) => {
+  if (minimum != null && maximum != null) {
+    return `Allowed: ${minimum.toLocaleString()} – ${maximum.toLocaleString()} ryo per ${unit}. Bids may exceed the maximum.`;
+  }
+  if (minimum != null) return `Minimum ${minimum.toLocaleString()} ryo per ${unit}.`;
+  if (maximum != null) {
+    return `Maximum ${maximum.toLocaleString()} ryo per ${unit}. Bids may exceed it.`;
+  }
+  return "No price bounds for this item.";
+};
+
+/** Other goods first, then Kessen cards, then their Forbidden variants. */
+const listingOrder = (item: ListingPickerItem["item"]) =>
+  item.itemType !== "CARD" ? 0 : item.cardData?.variant === "FORBIDDEN" ? 2 : 1;
+
+type ListingPickerItem = NonNullable<RouterOutputs["item"]["getUserItems"]>[number];

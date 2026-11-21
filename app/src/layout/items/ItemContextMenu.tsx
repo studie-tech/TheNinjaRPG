@@ -13,9 +13,25 @@ import {
 import type { ItemSlot } from "@/drizzle/constants";
 import { NonActionItemTypes } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
+import Link from "@/layout/Link";
 import { hasFinePointer } from "@/libs/combat/hotkeys";
-import { applyActiveVariant, nonCombatConsume } from "@/libs/item";
+import {
+  applyActiveVariant,
+  isDropOnlyItem,
+  isUnsellableCard,
+  nonCombatConsume,
+} from "@/libs/item";
 import { fittingSlots, slotName } from "@/libs/itemsPage";
+import {
+  auctionListingHref,
+  canListAtAuction,
+  cardSale,
+  hasOtherStack,
+  isEarnedKessenPack,
+  isKessenGood,
+  surplusCopiesLabel,
+} from "@/libs/kessen/cardSale";
+import { isKessenPackId } from "@/libs/kessen/packs";
 import { needsInventoryRepair } from "@/libs/repair";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -61,6 +77,8 @@ export function ItemContextMenu({
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent
+        // Touch screens get finger-sized entries.
+        className="pointer-coarse:[&_[role=menuitem]]:min-h-[40px] pointer-coarse:[&_[role=menuitem]]:text-base"
         onCloseAutoFocus={(event) => {
           const action = pendingAction.current;
           if (!action) return;
@@ -152,7 +170,46 @@ function ItemMenuEntries({
   const canConsume = !isMeal && nonCombatConsume(item, userData);
   const hasVariants =
     ((userItem as UserItemWithVariants).item.variants?.length ?? 0) > 0;
-  const drops = item.isEventItem || !item.inShop;
+  const drops = isDropOnlyItem(item);
+  // Cards sell only surplus copies and keep their separated surplus stacks apart; packs
+  // merge only with another stack.
+  const sale = cardSale(userItem, allUserItems);
+  const isKessen = isKessenGood(item);
+  const canMerge =
+    item.canStack &&
+    item.itemType !== "CARD" &&
+    (!isKessen || hasOtherStack(userItem, allUserItems));
+  const canSplit = item.canStack && userItem.quantity > 1 && item.itemType !== "CARD";
+  const sellEntry =
+    sale?.kind === "unsellable" ? (
+      item.cardData?.kind === "LEADER" ? (
+        <ContextMenuItem disabled>Leaders are never sold</ContextMenuItem>
+      ) : canListAtAuction(userItem) ? (
+        <ContextMenuItem asChild>
+          <Link href={auctionListingHref(userItem.id)}>List at auction…</Link>
+        </ContextMenuItem>
+      ) : (
+        <ContextMenuItem disabled>Not sold to the shop · auction only</ContextMenuItem>
+      )
+    ) : isUnsellableCard(item) ? (
+      <ContextMenuItem disabled>Cannot be sold</ContextMenuItem>
+    ) : isEarnedKessenPack(item) ? (
+      <ContextMenuItem disabled>Earned pack · open it instead</ContextMenuItem>
+    ) : sale?.kind === "listed" ? (
+      <ContextMenuItem disabled>Listed at auction</ContextMenuItem>
+    ) : sale?.kind === "kept" ? (
+      <ContextMenuItem disabled>
+        {sale.surplusElsewhere ? "Deck copies · not for sale" : "No surplus to sell"}
+      </ContextMenuItem>
+    ) : (
+      <ContextMenuItem variant="destructive" onSelect={inspect}>
+        {sale
+          ? `Sell ${surplusCopiesLabel(sale.kind === "mixed" ? sale.surplus : sale.copies)}…`
+          : drops
+            ? "Drop…"
+            : "Sell…"}
+      </ContextMenuItem>
+    );
   return (
     <>
       <ContextMenuLabel>
@@ -183,24 +240,25 @@ function ItemMenuEntries({
       {hotkeyEntry}
       {(isMeal || canConsume) && (
         <ContextMenuItem onSelect={inspect}>
-          {isMeal ? "Eat meal…" : "Consume…"}
+          {isMeal ? "Eat meal…" : isKessenPackId(item.id) ? "Open pack…" : "Consume…"}
         </ContextMenuItem>
       )}
-      {(item.canStack || hasVariants || repairEntry) && <ContextMenuSeparator />}
-      {item.canStack && (
+      {(canMerge || canSplit || hasVariants || repairEntry) && <ContextMenuSeparator />}
+      {canMerge && (
         <ContextMenuItem onSelect={() => onMerge(userItem)}>
           Merge stacks
         </ContextMenuItem>
       )}
-      {item.canStack && userItem.quantity > 1 && (
-        <ContextMenuItem onSelect={inspect}>Split stack…</ContextMenuItem>
-      )}
+      {canSplit && <ContextMenuItem onSelect={inspect}>Split stack…</ContextMenuItem>}
       {hasVariants && <ContextMenuItem onSelect={inspect}>Variants…</ContextMenuItem>}
       {repairEntry}
       <ContextMenuSeparator />
-      <ContextMenuItem variant="destructive" onSelect={inspect}>
-        {drops ? "Drop…" : "Sell…"}
-      </ContextMenuItem>
+      {sellEntry}
+      {sale && sale.kind !== "unsellable" && canListAtAuction(userItem) && (
+        <ContextMenuItem asChild>
+          <Link href={auctionListingHref(userItem.id)}>List at auction…</Link>
+        </ContextMenuItem>
+      )}
     </>
   );
 }

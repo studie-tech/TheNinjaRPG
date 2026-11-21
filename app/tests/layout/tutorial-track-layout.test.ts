@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { trackLayout } from "@/layout/TutorialAssistant";
+import { trackLayout } from "@/layout/tutorial/Spotlight";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 let stop: (() => void) | undefined;

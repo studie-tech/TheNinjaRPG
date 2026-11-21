@@ -24,6 +24,7 @@ import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import type { ZodAllTags, ZodItemInput, ZodItemType } from "@/validators/combat";
 import { IncreaseStatTag, ItemValidator } from "@/validators/combat";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
+import { CARD_ITEM_DEFAULTS, DEFAULT_CARD_DATA } from "@/validators/itemCard";
 import {
   DEFAULT_FURNITURE_DATA,
   FURNITURE_ITEM_DEFAULTS,
@@ -53,6 +54,7 @@ export const useItemEditForm = (
     expireFromStoreAt: expireFromStoreAt,
     crystalTargetTypes: data.crystalTargetTypes || null,
     furnitureData: data.furnitureData || null,
+    cardData: data.cardData || null,
     craftingRequirements: data.craftingRequirements.map((req) => ({
       ids: [req.requirementItemId],
       number: req.quantity,
@@ -69,6 +71,7 @@ export const useItemEditForm = (
   });
   const targetingFields = useTargetingMethodFields(form);
   form.register("furnitureData");
+  form.register("cardData");
 
   // Mutation for updating item
   const { mutateAsync: updateItem, isPending: isUpdating } =
@@ -146,27 +149,41 @@ export const useItemEditForm = (
   });
   const previousItemType = useRef(itemType);
   const isFurniture = itemType === "FURNITURE";
+  const isCard = itemType === "CARD";
+  // Furniture and cards pin their combat columns; leaving either restores usable gear values.
   useEffect(() => {
-    if (previousItemType.current !== "FURNITURE" && isFurniture) {
-      for (const [field, value] of Object.entries(FURNITURE_ITEM_DEFAULTS)) {
+    const previous = previousItemType.current;
+    previousItemType.current = itemType;
+    if (previous === itemType) return;
+    if (previous === "FURNITURE")
+      form.setValue("furnitureData", null, { shouldDirty: true });
+    if (previous === "CARD") form.setValue("cardData", null, { shouldDirty: true });
+    const defaults = isFurniture
+      ? FURNITURE_ITEM_DEFAULTS
+      : isCard
+        ? CARD_ITEM_DEFAULTS
+        : null;
+    if (defaults) {
+      for (const [field, value] of Object.entries(defaults)) {
         form.setValue(field as keyof ZodItemInput, field === "effects" ? [] : value, {
           shouldDirty: true,
         });
       }
-      form.setValue(
-        "furnitureData",
-        { ...DEFAULT_FURNITURE_DATA },
-        { shouldDirty: true },
-      );
+      if (isFurniture)
+        form.setValue(
+          "furnitureData",
+          { ...DEFAULT_FURNITURE_DATA },
+          { shouldDirty: true },
+        );
+      if (isCard)
+        form.setValue("cardData", { ...DEFAULT_CARD_DATA }, { shouldDirty: true });
       form.clearErrors();
       void form.trigger();
-    } else if (previousItemType.current === "FURNITURE" && !isFurniture) {
-      form.setValue("furnitureData", null, { shouldDirty: true });
+    } else if (previous === "FURNITURE" || previous === "CARD") {
       form.setValue("maxImbueNumber", 1, { shouldDirty: true });
       form.setValue("maxDurability", 100, { shouldDirty: true });
     }
-    previousItemType.current = itemType;
-  }, [form, isFurniture, itemType]);
+  }, [form, isCard, isFurniture, itemType]);
 
   // Hidden combat fields must still satisfy meal validation when switching item types.
   const isMeal = itemType === "MEAL";
@@ -253,7 +270,7 @@ export const useItemEditForm = (
       id: "bloodlineId",
       type: "db_values",
       values: bloodlinesData,
-      label: "Required Bloodline",
+      label: isCard ? "Depicted Bloodline" : "Required Bloodline",
       resetButton: true,
     },
     { id: "xpToLevel", type: "number", label: "XP Per Level" },
@@ -428,7 +445,9 @@ export const useItemEditForm = (
     ? formData.filter((field) => MEAL_FORM_FIELDS.has(field.id))
     : isFurniture
       ? formData.filter((field) => FURNITURE_FORM_FIELDS.has(field.id))
-      : formData;
+      : isCard
+        ? formData.filter((field) => CARD_FORM_FIELDS.has(field.id))
+        : formData;
   if (isFurniture) {
     visibleFormData.splice(
       3,
@@ -496,6 +515,27 @@ const MEAL_FORM_FIELDS = new Set<Path<ZodItemType>>([
   "cookingOutputQuantity",
   "cookingExperience",
   "mealDurationSeconds",
+]);
+
+/** Item columns a card uses; its stats are edited in the card section. */
+const CARD_FORM_FIELDS = new Set<Path<ZodItemType>>([
+  "name",
+  "image",
+  "itemType",
+  "rarity",
+  "description",
+  "hidden",
+  "bloodlineId",
+  "cost",
+  "repsCost",
+  "seichiSilverCost",
+  "inShop",
+  "purchaseLimitPeriod",
+  "purchaseLimit",
+  "expireFromStoreAt",
+  "canBeTraded",
+  "auctionMinPrice",
+  "auctionMaxPrice",
 ]);
 
 const FURNITURE_FORM_FIELDS = new Set<Path<ZodItemType>>([

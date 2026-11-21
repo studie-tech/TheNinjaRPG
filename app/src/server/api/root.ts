@@ -33,6 +33,9 @@ import { huntingRouter } from "./routers/hunting";
 import { itemRouter } from "./routers/item";
 import { jutsuRouter } from "./routers/jutsu";
 import { kageRouter } from "./routers/kage";
+import { kessenRouter } from "./routers/kessen";
+import { kessenCollectionRouter } from "./routers/kessenCollection";
+import { kessenPvpRouter } from "./routers/kessenPvp";
 import { linkPromotionRouter } from "./routers/linkpromotion";
 import { logsRouter } from "./routers/logs";
 import { mapAssetRouter } from "./routers/mapAsset";
@@ -125,6 +128,8 @@ export const appRouter = createTRPCRouter({
   item: itemRouter,
   jutsu: jutsuRouter,
   kage: kageRouter,
+  kessenCollection: kessenCollectionRouter,
+  kessenPvp: kessenPvpRouter,
   logs: logsRouter,
   mapAsset: mapAssetRouter,
   mapTerrain: mapTerrainRouter,
@@ -172,6 +177,7 @@ export const appRouter = createTRPCRouter({
   applications: applicationsRouter,
   towerDefense: towerDefenseRouter,
   chakraStorm: chakraStormRouter,
+  kessen: kessenRouter,
   stealth: stealthRouter,
   overworldAi: overworldAiRouter,
   raids: raidsRouter,

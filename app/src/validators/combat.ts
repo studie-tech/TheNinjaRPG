@@ -22,6 +22,10 @@ import {
   ItemSlotTypes,
   ItemTypes,
   JutsuTypes,
+  KESSEN_AUCTION_FLOORS,
+  KESSEN_FORBIDDEN_AUCTION_FLOOR,
+  KESSEN_MAX_KEYWORDS,
+  KESSEN_TRADEABLE_RARITIES,
   LetterRanks,
   MAX_ACTIVITY_REDUCTION_PERCENT,
   MAX_COOKING_OUTPUT,
@@ -50,6 +54,7 @@ import {
   WeaponTypes,
 } from "@/drizzle/constants";
 import type { Item, UserData } from "@/drizzle/schema";
+import { cardKeywords } from "@/libs/kessen/text";
 import {
   CACHE_RESTRICTED_REWARD_MESSAGE,
   isRestrictedCacheReward,
@@ -62,6 +67,7 @@ import {
   type CoordinateTargeting,
   coordinateTargetingSchema,
 } from "@/validators/coordinateTargeting";
+import { CARD_ITEM_DEFAULTS, cardItemSchema } from "@/validators/itemCard";
 import { itemEconomySchema, refineItemEconomy } from "@/validators/itemEconomy";
 import {
   FURNITURE_ITEM_DEFAULTS,
@@ -1574,12 +1580,24 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
         message: "Scene configuration is only available for furniture",
       });
     }
+  }
+  if (data.itemType === "CARD") {
+    SuperRefineCardItem(data, ctx);
+  } else if (data.cardData) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["cardData"],
+      message: "Card stats are only available for cards",
+    });
+  }
+  if (data.itemType !== "FURNITURE" && data.itemType !== "CARD") {
     for (const field of ["maxImbueNumber", "maxDurability"] as const) {
       if (data[field] < 1) {
         ctx.addIssue({
           code: "custom",
           path: [field],
-          message: "Non-furniture items require a value of at least one",
+          message:
+            "Items other than furniture and cards require a value of at least one",
         });
       }
     }
@@ -1660,7 +1678,9 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
     { name: "seichi silver", value: data.seichiSilverCost },
   ].filter((cost) => cost.value > 0);
 
-  if (costTypes.length === 0 && (data.itemType !== "FURNITURE" || data.inShop)) {
+  // Furniture and cards can be granted for free; a shop listing still needs a price.
+  const isGrantOnlyType = data.itemType === "FURNITURE" || data.itemType === "CARD";
+  if (costTypes.length === 0 && (!isGrantOnlyType || data.inShop)) {
     ctx.addIssue({
       code: "custom",
       path: ["cost"],
@@ -1720,6 +1740,69 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
         "Items with unlockitemvariant must have preventBattleUsage enabled",
       );
     }
+  }
+};
+
+/**
+ * Cards exist only as Kessen collection pieces: they keep the CARD_ITEM_DEFAULTS combat
+ * columns, carry card stats, respect the keyword budget of their rarity and are tradeable
+ * only from epic upward.
+ */
+const SuperRefineCardItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
+  if (!data.cardData) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["cardData"],
+      message: "Cards require card stats",
+    });
+  }
+  for (const [field, expected] of Object.entries(CARD_ITEM_DEFAULTS)) {
+    const actual = data[field as keyof ItemValidatorType];
+    if (
+      (field === "effects" && data.effects.length > 0) ||
+      (field !== "effects" &&
+        actual !== expected &&
+        !(expected === null && (actual == null || actual === "")))
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message:
+          "Cards are played only in Kessen and cannot be equipped or used in battle",
+      });
+    }
+  }
+  const card = data.cardData;
+  if (!card) return;
+  const keywords = cardKeywords(card.abilities).length;
+  const maxKeywords = KESSEN_MAX_KEYWORDS[data.rarity];
+  if (card.kind !== "LEADER" && keywords > maxKeywords) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["cardData", "abilities"],
+      message: `A ${data.rarity.toLowerCase()} card may print at most ${maxKeywords} keyword${maxKeywords === 1 ? "" : "s"}`,
+    });
+  }
+  const isTradeableRarity = (KESSEN_TRADEABLE_RARITIES as readonly string[]).includes(
+    data.rarity,
+  );
+  if (data.canBeTraded && (card.kind === "LEADER" || !isTradeableRarity)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["canBeTraded"],
+      message: "Only epic and legendary deck cards can be traded",
+    });
+  }
+  const auctionFloor =
+    card.variant === "FORBIDDEN"
+      ? KESSEN_FORBIDDEN_AUCTION_FLOOR
+      : KESSEN_AUCTION_FLOORS[data.rarity];
+  if (data.canBeTraded && auctionFloor && (data.auctionMinPrice ?? 0) < auctionFloor) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["auctionMinPrice"],
+      message: `Tradeable ${data.rarity.toLowerCase()} cards need an auction minimum of at least ${auctionFloor} ryo`,
+    });
   }
 };
 
@@ -2034,6 +2117,7 @@ export const ItemValidatorRawSchema = z.object({
   ...lpcItemFields.shape,
   ...itemEconomySchema.shape,
   ...furnitureItemSchema.shape,
+  ...cardItemSchema.shape,
   name: z.string().trim(),
   image: z.string(),
   description: z.string(),

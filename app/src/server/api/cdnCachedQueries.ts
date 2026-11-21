@@ -6,6 +6,7 @@
  * router's procedure metadata.
  */
 export const CDN_CACHED_QUERY_PATHS: readonly string[] = [
+  "kessen.getCatalog",
   "profile.getStrongestUsers",
   "towerDefense.getLeaderboard",
   "towerDefense.getRoster",

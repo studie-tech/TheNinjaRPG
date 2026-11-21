@@ -1,0 +1,515 @@
+/*
+ * Card Hall (Kessen lobby): the hall frame, its header tabs, banner, panels and NPC
+ * sheet, plus the bar pieces the deck builder and the starter choice share (circuit.css,
+ * builder.css and packs.css hold their own sections). The hall draws in the game's theme
+ * tokens; the art (banner, cards, packs) keeps the Kessen palette of ../kessen.css. Text
+ * in px with an 11 px floor (the root font is 12 px); layouts switch on container width.
+ */
+
+/* ------------------------------------------------------------------ shared pieces */
+
+/* Fixed bars sit above the game's bottom navigation (0 when it is hidden) and, while the
+   navigation shows, above the Activity pill that floats just over it. The strip under a
+   bar is filled by an opaque backdrop that runs down behind the navigation (z-index 0
+   keeps it under the navigation, which follows the page), so content never scrolls
+   visibly under the bar. */
+.kh-builder {
+  --kh-bar-bottom: calc(
+    max(var(--game-bottom-nav-h, 0px), env(safe-area-inset-bottom, 0px)) + 8px +
+      min(var(--game-bottom-nav-h, 0px), 1px) * 30
+  );
+}
+.kh-bar-backdrop {
+  position: fixed;
+  bottom: 0;
+  z-index: 0;
+  display: block;
+  width: 100cqw;
+  height: calc(var(--kh-bar-bottom) + 24px);
+  background: hsl(var(--card));
+}
+
+/* -------------------------------------------------------------------- hall frame */
+
+/* The hall sits on the content box's own surface and draws in the game's theme tokens, so
+   it follows every colour mode, game layout and reading palette; the Kessen art (banner,
+   map, cards, packs) is its highlight. Scenes (`.kessen-scene`) keep the lacquer palette. */
+.kessen-hall {
+  container: kessen-hall / inline-size;
+  position: relative;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.kh-hall-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+@container kessen-hall (min-width: 600px) {
+  .kh-hall-inner {
+    gap: 14px;
+    padding: 14px 16px 16px;
+  }
+}
+
+/* A hall panel: the game's bordered section on the content box surface. */
+.kh-panel {
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+/* Panel and sheet titles in the Kessen display face (above the themed layouts' heading
+   font), in the surrounding text colour. */
+.kessen-ui .kh-heading.kh-heading {
+  margin: 0;
+  color: inherit;
+  font-family: var(--kessen-font-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+/* A highlighted block inside a panel: the next lesson, the recommended one, a live duel. */
+.kh-callout {
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.4);
+}
+
+/* The section tabs in the content box header: the game's count badge at reading size,
+   in an orange deep enough for its white figure. */
+.kh-hall-tabs span.absolute {
+  min-width: 18px;
+  height: 18px;
+  background: #c2410c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* The game's compact tables (the duel ladder) keep their headers at reading size. */
+.kessen-hall table thead {
+  font-size: 11px;
+}
+
+/* ------------------------------------------------------------------- hall banner */
+
+.kh-eyebrow {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+/* The banner is artwork: its text sits on the painted hall under a dark shade and keeps
+   the Kessen ink under every theme; only its frame follows the page. */
+.kh-hall {
+  container: kh-hall / inline-size;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: var(--kessen-wood);
+  color: var(--kessen-cream);
+  isolation: isolate;
+}
+.kh-hall-body > .kh-eyebrow {
+  color: var(--kessen-gold-hi);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.8);
+}
+.kh-hall-art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+.kh-hall-art img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  object-position: 50% 62%;
+}
+.kh-hall-shade {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgb(12 6 4 / 0.92) 0%, rgb(12 6 4 / 0.72) 45%, rgb(12 6 4 / 0.15) 85%),
+    linear-gradient(0deg, rgb(12 6 4 / 0.85), transparent 60%);
+}
+.kh-hall-body {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px 14px 14px;
+}
+.kh-hall-title {
+  margin: 0;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 30px;
+  line-height: 1.05;
+  text-shadow:
+    0 2px 0 rgb(0 0 0 / 0.6),
+    0 0 18px rgb(255 180 90 / 0.25);
+}
+/* Today's counters stay on one row at every width: phone banners set each label over its
+   figure, medium ones use compact chips and wide ones the spaced capitals; a label that
+   still does not fit ellipsises, never the figures. */
+.kh-today {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kh-today-item {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 7px;
+  border: 1px solid rgb(217 180 90 / 0.55);
+  border-radius: 9999px;
+  background: rgb(20 12 8 / 0.82);
+  backdrop-filter: blur(2px);
+  white-space: nowrap;
+}
+.kh-today-item[data-quiet] {
+  border-color: rgb(217 180 90 / 0.3);
+}
+.kh-today-label {
+  min-width: 0;
+  overflow: hidden;
+  color: #d9c69e;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+.kh-today-value {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-num);
+  font-size: 14px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.kh-today-item[data-done] .kh-today-value {
+  color: var(--kessen-up);
+}
+.kh-today-word {
+  gap: 3px;
+  font-family: var(--kessen-font-body);
+  font-size: 12px;
+  font-weight: 700;
+}
+/* Short wording on narrow banners where the chips stack, the full phrase once they sit on
+   one line, and the widest asides only on wide banners. */
+.kh-today-long,
+.kh-today-wide {
+  display: none;
+}
+@container kh-hall (min-width: 560px) {
+  .kh-today-short {
+    display: none;
+  }
+  .kh-today-long {
+    display: inline;
+  }
+}
+@container kh-hall (max-width: 559px) {
+  .kh-today-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    padding: 3px 9px 4px;
+    border-radius: 8px;
+    line-height: 1.15;
+  }
+}
+/* The narrowest phones keep all four chips on one line by trimming their padding. */
+@container kh-hall (max-width: 339px) {
+  .kh-today {
+    gap: 3px;
+  }
+  .kh-today-item {
+    padding-inline: 6px;
+  }
+}
+@container kh-hall (min-width: 720px) {
+  .kh-today {
+    gap: 6px;
+  }
+  .kh-today-item {
+    gap: 6px;
+    min-height: 30px;
+    padding: 0 10px;
+  }
+  .kh-today-label {
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .kh-today-value {
+    font-size: 15px;
+  }
+  .kh-today-word {
+    gap: 4px;
+    font-size: 13px;
+  }
+  .kh-today-wide {
+    display: inline;
+  }
+}
+.kh-hall-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+/* The ways back to the table sit at the row's end, after the deck chip. */
+.kh-hall-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+}
+/* A lacquer pill like the banner chips, with a gold seal for its icon. */
+.kh-hall-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 5px 16px 5px 6px;
+  border: 1px solid var(--kessen-gold);
+  border-radius: 9999px;
+  background: linear-gradient(180deg, var(--kessen-lacquer-hi), var(--kessen-lacquer-deep));
+  color: var(--kessen-cream);
+  white-space: normal;
+  text-align: left;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+.kh-hall-action:hover {
+  background: linear-gradient(180deg, var(--kessen-lacquer-hi), var(--kessen-lacquer));
+  border-color: var(--kessen-gold-hi);
+  color: var(--kessen-cream);
+}
+.kh-hall-action:focus-visible {
+  outline: 2px solid var(--kessen-gold-hi);
+  outline-offset: 2px;
+}
+.kh-hall-action-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, var(--kessen-gold-hi), var(--kessen-gold) 60%, var(--kessen-gold-lo));
+  color: var(--kessen-ink);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25);
+}
+.kh-hall-action-icon svg {
+  width: 15px;
+  height: 15px;
+}
+.kh-hall-action-play {
+  margin-left: 2px;
+  fill: currentColor;
+}
+.kh-hall-action-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+.kh-hall-action-label {
+  font-family: var(--kessen-font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--kessen-gold-hi);
+}
+.kh-hall-action-detail {
+  font-family: var(--kessen-font-body);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--kessen-cream);
+}
+/* The deck chip: a parchment pill on the art (a shared outline Button underneath). */
+.kh-deckchip {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 40px;
+  padding: 4px 14px 4px 7px;
+  border: 1px solid var(--kessen-gold);
+  border-radius: 9999px;
+  background: linear-gradient(180deg, rgb(246 234 208 / 0.97), rgb(234 214 168 / 0.97));
+  color: var(--kessen-paper-ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.45);
+}
+button.kh-deckchip:hover {
+  background: linear-gradient(180deg, #fff6e2, #f0dcb0);
+  color: var(--kessen-paper-ink);
+}
+button.kh-deckchip:focus-visible {
+  outline: 2px solid var(--kessen-gold-hi);
+  outline-offset: 2px;
+}
+.kh-deckchip-name {
+  min-width: 0;
+  max-width: 22em;
+  overflow: hidden;
+  font-family: var(--kessen-font-display);
+  font-size: 14px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kh-deckchip-tail {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.kh-deckchip-prov-label {
+  color: var(--kessen-paper-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.kh-deckchip-dot {
+  color: var(--kessen-paper-muted);
+}
+.kh-deckchip-prov {
+  font-variant-numeric: tabular-nums;
+}
+.kh-deckchip-prov[data-over],
+.kh-deckchip-state {
+  color: var(--kessen-vermilion);
+}
+.kh-deckchip-state[data-ready] {
+  color: #24602f;
+}
+@container kh-hall (max-width: 819px) {
+  .kh-deckchip-prov-label {
+    display: none;
+  }
+}
+@container kh-hall (max-width: 599px) {
+  .kh-hall-body {
+    min-height: 0;
+    gap: 8px;
+    padding: 72px 12px 12px;
+  }
+  .kh-hall-title {
+    font-size: 26px;
+  }
+}
+/* Wide: a slim strip of the art; counters, deck chip and actions share wrapping rows. */
+@container kh-hall (min-width: 600px) {
+  .kh-hall-body {
+    min-height: 0;
+    flex-flow: row wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px 10px;
+    padding: 18px 22px 16px;
+  }
+  .kh-hall-body > .kh-eyebrow,
+  .kh-hall-title,
+  .kh-today {
+    flex-basis: 100%;
+  }
+  .kh-hall-body > .kh-eyebrow {
+    margin-bottom: -6px;
+  }
+  .kh-hall-title {
+    font-size: 34px;
+  }
+  .kh-hall-art img {
+    object-position: 50% 58%;
+  }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .kh-hall-body {
+    min-height: 0;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+  .kh-hall-body > .kh-eyebrow {
+    display: none;
+  }
+  .kh-hall-title {
+    font-size: 22px;
+  }
+  .kh-today-item {
+    min-height: 26px;
+  }
+}
+
+/* ------------------------------------------------------------------- NPC sheet */
+
+.kh-reward-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  width: 96px;
+}
+
+.kh-reward-mystery {
+  position: relative;
+  display: block;
+  width: 96px;
+}
+.kh-reward-mystery-mark {
+  position: absolute;
+  inset: 0;
+  width: 44px;
+  height: 44px;
+  margin: auto;
+  color: var(--kessen-gold-hi);
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.8));
+}
+
+/* Both modes' rules stacked in one cell: the slot is as tall as the taller one. */
+.kh-rule-slot {
+  display: grid;
+}
+.kh-rule-slot-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  grid-area: 1 / 1;
+}
+.kh-rule-slot-mode:not([data-active]) {
+  visibility: hidden;
+}
+

@@ -71,6 +71,7 @@ import {
   IMG_BADGE_WIN_QUEST,
   isPetTaskQuestType,
   isSharedRunQuestType,
+  KessenTiers,
   LetterRanks,
   MAX_PLAYER_LEVEL,
   MasteryTypes,
@@ -315,6 +316,7 @@ export const TrackerObjectiveTasks = [
   "use_specific_jutsu_combat",
   "tag_usage_win",
   "damage_dealt",
+  "win_card_duel",
 ] as const;
 
 export const allObjectiveTasks = [
@@ -494,6 +496,7 @@ export const objectiveImageMap: Record<
   },
   tag_usage_win: { image: IMG_BADGE_TAG_USAGE_WIN, title: "Tag Usage (Win)" },
   damage_dealt: { image: IMG_BADGE_DAMAGE_DEALT, title: "Damage Dealt" },
+  win_card_duel: { image: IMG_BADGE_WIN_QUEST, title: "Win Kessen Duels" },
 };
 
 export const attackerFields = {
@@ -794,6 +797,19 @@ export const DamageDealt = z.object({
   ...questRewardFields,
 });
 
+/**
+ * Rewarded-eligible Kessen wins against NPCs (lessons excluded). `npcKey` (an NPC key
+ * such as "kazehiko"; empty for any) and `tier` ("ANY" for every tier) narrow the wins.
+ */
+export const WinCardDuel = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("win_card_duel"),
+  npcKey: z.string().trim().max(64).prefault(""),
+  tier: z.enum(["ANY", ...KessenTiers]).prefault("ANY"),
+  value: z.coerce.number().min(0).prefault(1),
+  ...questRewardFields,
+});
+
 export const BloodlineCollection = z.strictObject(
   {
     ...baseObjectiveFields,
@@ -835,6 +851,7 @@ export const AllObjectives = z.discriminatedUnion("task", [
   UseSpecificJutsuCombat,
   TagUsageWin,
   DamageDealt,
+  WinCardDuel,
   BloodlineCollection,
 ]);
 export type AllObjectivesType = z.infer<typeof AllObjectives>;

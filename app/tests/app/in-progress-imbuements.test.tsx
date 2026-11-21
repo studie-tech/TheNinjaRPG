@@ -82,6 +82,7 @@ const stubApi = (
     }),
     auction: router(auction),
     occupation: router(occupation),
+    kessen: router(),
     profile: router(),
     useUtils: () => router(),
   });

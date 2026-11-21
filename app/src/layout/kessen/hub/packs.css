@@ -1,0 +1,1284 @@
+/*
+ * Packs tab, starter choice and the pack-opening ceremony. The Packs tab and the starter
+ * choice draw in the game's theme tokens on the content box surface, with the Kessen art
+ * as their highlight; the ceremony is a scene in the lacquer palette of ../kessen.css.
+ * Text in px with an 11 px floor (the root font is 12 px), and every animation runs only
+ * under [data-motion="on"] without reduced motion.
+ */
+
+/* Rejection messages next to Open and the starter button, at a readable size. */
+.kh-feedback {
+  width: 100%;
+}
+.kh-feedback * {
+  font-size: 13px;
+}
+
+.kh-flip:focus-visible,
+.kh-pack-sealed:focus-visible {
+  outline: 2px solid var(--kessen-gold-hi);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------------ packs */
+
+/* The Packs tab: bordered sections like the rest of the game, pack tiles lit from inside
+   so the pack art stands out. */
+/* Secondary text: the theme's muted colour drawn toward the text colour, which keeps AA
+   on the tinted tiles of the light themes whose muted colour sits at the limit. */
+.kh-packs,
+.kh-starter {
+  --kh-quiet: color-mix(in oklab, hsl(var(--muted-foreground)) 70%, hsl(var(--card-foreground)));
+}
+.kh-packs {
+  container: kh-packs / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.kh-pack-shelf {
+  position: relative;
+  padding: 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+.kh-stall {
+  scroll-margin-top: 16px;
+}
+.kh-stall:focus {
+  outline: none;
+}
+.kh-stall:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+/* The stall (the shared shop) draws prices and its category tabs in theme colours that
+   do not reach AA on every theme's card: prices take the card text colour, a price out
+   of reach a red mixed toward it (darker on light themes, lighter on dark ones), and the
+   idle tabs the full text colour on their muted track. */
+.kh-stall .text-primary {
+  color: hsl(var(--card-foreground));
+}
+.kh-stall .text-destructive {
+  color: color-mix(in oklab, hsl(var(--destructive)) 60%, hsl(var(--card-foreground)));
+}
+.kh-stall [role="tab"][data-state="inactive"] {
+  color: hsl(var(--card-foreground));
+}
+.kh-pack-shelf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-bottom: 12px;
+}
+.kh-pack-shelf-title {
+  margin: 0;
+  font-family: var(--kessen-font-display);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+.kh-pity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.kh-pity > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.kh-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kh-pack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background:
+    radial-gradient(60% 45% at 50% 34%, rgb(255 180 90 / 0.2), transparent 70%),
+    hsl(var(--muted) / 0.4);
+  text-align: center;
+}
+/* The art keeps its own width (PackArt sizes it inline); the tile caps it. */
+.kh-pack .kh-pack-art {
+  max-width: 100%;
+}
+.kh-pack-art img {
+  mask-image: radial-gradient(closest-side, #000 72%, transparent 100%);
+}
+/* The stack size on the tile's corner. */
+.kh-pack .kh-pack-count {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 1px 8px;
+  font-family: var(--kessen-font-num);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+/* Two-line names keep every tile's actions on one baseline. */
+.kh-pack-name {
+  display: flex;
+  min-height: calc(2 * 1.2em);
+  align-items: center;
+  font-family: var(--kessen-font-display);
+  font-size: 16px;
+  line-height: 1.2;
+}
+.kh-pack-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+/* Narrow shelves and short landscape screens: each pack is a compact row, the art beside
+   its name and actions, so several packs and the stall below show at once. */
+@container kh-packs (max-width: 459px) {
+  .kh-pack-shelf {
+    padding: 12px;
+  }
+  .kh-pack-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .kh-pack {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    grid-template-areas:
+      "art name"
+      "art actions";
+    align-items: center;
+    gap: 6px 12px;
+    padding: 8px 12px 8px 8px;
+    text-align: left;
+  }
+  .kh-pack .kh-pack-art {
+    grid-area: art;
+    width: 84px !important;
+  }
+  .kh-pack-name {
+    grid-area: name;
+    min-height: 0;
+    padding-right: 52px;
+  }
+  .kh-pack-actions {
+    grid-area: actions;
+    margin-top: 0;
+  }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .kh-pack-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 8px;
+  }
+  .kh-pack {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    grid-template-areas:
+      "art name"
+      "art actions";
+    align-items: center;
+    gap: 6px 12px;
+    padding: 8px 12px 8px 8px;
+    text-align: left;
+  }
+  .kh-pack .kh-pack-art {
+    grid-area: art;
+    width: 84px !important;
+  }
+  .kh-pack-name {
+    grid-area: name;
+    min-height: 0;
+    padding-right: 52px;
+  }
+  .kh-pack-actions {
+    grid-area: actions;
+    margin-top: 0;
+  }
+}
+/* The empty shelf: a quiet tray that points to the stall. */
+.kh-packs .kh-pack-empty {
+  font-size: 13px;
+  line-height: 1.45;
+}
+.kh-packs .kh-pack-empty > p:first-of-type {
+  font-family: var(--kessen-font-display);
+  font-size: 18px;
+  font-weight: 400;
+}
+/* The auto-sell switch takes its own row under a hairline. */
+.kh-autosell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0 6px;
+  margin-top: 14px;
+  padding-top: 6px;
+  border-top: 1px solid hsl(var(--border));
+}
+.kh-autosell > button {
+  margin-left: -6px;
+}
+.kh-autosell-label {
+  display: block;
+  padding-top: 13px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.kh-autosell-help {
+  margin: 3px 0 0;
+  color: var(--kh-quiet);
+  font-size: 12px;
+  line-height: 1.4;
+}
+/* The odds popover: the game's popover with the pack name in the display face. Its
+   secondary lines keep the popover's text colour, which reads on every theme's popover. */
+.kh-odds-title {
+  margin: 0;
+  font-family: var(--kessen-font-display);
+  font-size: 17px;
+  line-height: 1.2;
+}
+.kh-odds-sub {
+  margin: 2px 0 8px;
+  font-size: 12px;
+}
+.kh-odds {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.kh-odds th,
+.kh-odds td {
+  padding: 4px;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  font-weight: 500;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.kh-odds tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.kh-odds thead th {
+  font-size: 12px;
+  font-weight: 700;
+}
+.kh-odds th:first-child {
+  text-align: left;
+}
+.kh-odds-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --------------------------------------------------------------- starter choice */
+
+.kh-starter {
+  container: kh-starter / inline-size;
+}
+.kh-starter-head {
+  max-width: 40em;
+  margin: 4px auto 16px;
+  text-align: center;
+}
+.kh-starter-eyebrow {
+  margin: 0 0 2px;
+  color: var(--kh-quiet);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.kh-starter-title {
+  margin: 0;
+  font-family: var(--kessen-font-display);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+.kh-starter-lede {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.kh-starter-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.kh-starter-tile {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "sigil name home"
+    "sigil region home"
+    "perk perk perk"
+    "leader leader leader";
+  column-gap: 10px;
+  align-content: start;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background:
+    radial-gradient(60% 70% at 0% 0%, var(--kh-faction-glow, rgb(255 180 90 / 0.15)), transparent 65%),
+    hsl(var(--muted) / 0.4);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+.kh-starter-tile[data-faction="SHIROHANA"] {
+  --kh-faction-glow: rgb(246 195 36 / 0.24);
+}
+.kh-starter-tile[data-faction="TSUKIMORI"] {
+  --kh-faction-glow: rgb(178 34 34 / 0.3);
+}
+.kh-starter-tile[data-faction="HYORIN"] {
+  --kh-faction-glow: rgb(220 235 245 / 0.2);
+}
+.kh-starter-tile[data-faction="AKASUMI"] {
+  --kh-faction-glow: rgb(143 188 143 / 0.24);
+}
+.kh-starter-tile[data-faction="AKIKAZE"] {
+  --kh-faction-glow: rgb(70 110 190 / 0.32);
+}
+.kh-starter-tile[data-faction="SYNDICATE"] {
+  --kh-faction-glow: rgb(183 51 31 / 0.3);
+}
+/* The radio spans its tile, so the tile is its touch target; taps pass through to the
+   label, which checks it. */
+.kh-starter-radio {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  appearance: none;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+}
+.kh-starter-tile:has(.kh-starter-radio:focus-visible) {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.kh-starter-tile[data-checked] {
+  border-color: hsl(var(--foreground));
+  box-shadow: 0 0 0 2px hsl(var(--foreground));
+}
+.kh-starter-sigil {
+  grid-area: sigil;
+}
+.kh-starter-name {
+  grid-area: name;
+  align-self: end;
+  font-family: var(--kessen-font-display);
+  font-size: 19px;
+  line-height: 1.1;
+}
+.kh-starter-region {
+  grid-area: region;
+  align-self: start;
+  color: var(--kh-quiet);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.kh-starter-home {
+  grid-area: home;
+  align-self: start;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: var(--kessen-vermilion);
+  color: #fff4e4;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+/* The perk runs the tile's full width under the header, so it reads in a line or two. */
+.kh-starter-perk {
+  grid-area: perk;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid hsl(var(--border) / 0.7);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.kh-starter-perk-name {
+  font-family: var(--kessen-font-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.kh-starter-leader {
+  grid-area: leader;
+  margin-top: 6px;
+  color: var(--kh-quiet);
+  font-size: 12px;
+}
+
+.kh-starter-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid hsl(var(--border));
+}
+.kh-starter-confirm-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+.kh-starter-confirm-perk {
+  flex: 1 1 12em;
+  margin: 0;
+  color: var(--kh-quiet);
+  font-family: var(--kessen-font-display);
+  font-size: 14px;
+}
+
+@container kh-starter (min-width: 520px) {
+  .kh-starter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container kh-starter (min-width: 820px) {
+  .kh-starter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* --------------------------------------------------------- pack-opening ceremony */
+
+/* The ceremony's frame, a size container (`kh-stage`), so the fan follows the frame. In
+   the Card Hall's content box it keeps a phone's proportions (a wide box gives it a row
+   of five and less height), no taller than the screen leaves under the box's title and
+   above the game's bottom navigation; in a dialog it is as tall as the window allows. */
+.kh-opening {
+  container: kh-stage / size;
+  overflow: hidden;
+  background: #0b0705 !important;
+  color: var(--kessen-cream);
+}
+.kh-opening[data-layout="inline"] {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 2;
+  min-height: 420px;
+  max-height: min(
+    900px,
+    calc(100dvh - var(--game-bottom-nav-h, 0px) - var(--kh-stage-chrome, 44px))
+  );
+}
+@container kessen-hall (min-width: 600px) {
+  .kh-opening[data-layout="inline"] {
+    aspect-ratio: auto;
+    height: min(640px, calc(100dvh - var(--game-bottom-nav-h, 0px) - 44px));
+  }
+}
+.kh-opening[data-layout="dialog"] {
+  height: min(780px, calc(100dvh - 2rem));
+}
+@media (min-width: 640px) {
+  .kh-opening[data-layout="dialog"] {
+    height: min(640px, calc(100dvh - 2rem));
+  }
+}
+/* The stage row grows to its cards and the ceremony scrolls, so the fan never runs under
+   the footer on a short screen. */
+.kh-ceremony {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100%;
+  height: 100%;
+  overflow: hidden auto;
+  background-color: #0b0705;
+  background-position: center;
+  background-size: cover;
+  font-family: var(--kessen-font-body);
+  isolation: isolate;
+}
+.kh-ceremony-dim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(70% 60% at 50% 50%, rgb(11 7 5 / 0.1), rgb(11 7 5 / 0.68)),
+    rgb(11 7 5 / 0.22);
+  transition: background-color 300ms ease;
+}
+.kh-ceremony[data-spotlight] .kh-ceremony-dim {
+  background:
+    radial-gradient(45% 45% at 50% 50%, rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.85)),
+    rgb(0 0 0 / 0.7);
+}
+.kh-lanterns {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.kh-lanterns span {
+  position: absolute;
+  top: -40px;
+  z-index: -1;
+  width: 260px;
+  height: 260px;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgb(255 180 90 / 0.35), transparent);
+  pointer-events: none;
+}
+.kh-lanterns span:first-child {
+  left: -60px;
+}
+.kh-lanterns span:last-child {
+  right: -60px;
+}
+.kh-ceremony-head {
+  padding: 18px 16px 6px;
+  text-align: center;
+}
+.kh-ceremony-title {
+  margin: 0;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 6px rgb(0 0 0 / 0.8);
+}
+.kh-ceremony-sub {
+  margin: 4px 0 0;
+  color: #f0e0bd;
+  font-size: 15px;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
+}
+/* The stage keeps the height of its cards; a frame too short for them and the footer
+   scrolls the ceremony instead of laying the fan over the footer. */
+.kh-ceremony-stage {
+  display: grid;
+  place-items: center;
+  padding: 8px;
+}
+.kh-ceremony-stage > * {
+  grid-area: 1 / 1;
+}
+.kh-ceremony-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 20px;
+}
+.kh-ceremony-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.kh-ceremony-pity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background: rgb(11 7 5 / 0.7);
+  color: #e8d6b0;
+  font-size: 13px;
+}
+.kh-ceremony-welcome {
+  margin: 0;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 18px;
+  text-align: center;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.9);
+}
+.kh-ceremony-note {
+  max-width: 36em;
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: rgb(11 7 5 / 0.62);
+  color: #e8d6b0;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.9);
+}
+
+.kh-pack-sealed {
+  position: relative;
+  z-index: 2;
+  width: min(68cqw, 320px, 46cqh);
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  filter: drop-shadow(0 18px 24px rgb(0 0 0 / 0.75));
+}
+.kh-pack-sealed:disabled {
+  cursor: default;
+}
+.kh-pack-half {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.kh-pack-paper {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.kh-pack-paper img {
+  mask-image: radial-gradient(closest-side, #000 74%, transparent 100%);
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+}
+/* A ragged tear line: uneven fibre teeth, lit from behind by the seal glow. */
+.kh-pack-half[data-half="top"] .kh-pack-paper {
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% 45.6%,
+    97.2% 42%,
+    96% 46.1%,
+    92.8% 42.2%,
+    90.3% 45.6%,
+    89.2% 42.6%,
+    87.1% 45.9%,
+    83.7% 43.8%,
+    81.3% 47.2%,
+    79.7% 41.8%,
+    77.2% 47%,
+    74.6% 42.6%,
+    72% 45.4%,
+    70.9% 43%,
+    69% 45.3%,
+    66.5% 42.2%,
+    64.3% 45.4%,
+    62.1% 42.1%,
+    59% 45.3%,
+    56.2% 42.2%,
+    54.5% 45.7%,
+    52.7% 43.6%,
+    49.6% 44.9%,
+    48.5% 42%,
+    45.1% 45.1%,
+    42.5% 42.9%,
+    40.9% 47%,
+    37.8% 43.9%,
+    36.2% 47.4%,
+    34.5% 43.4%,
+    31.4% 45.2%,
+    30.1% 42.3%,
+    26.9% 47.6%,
+    25% 42.5%,
+    23.3% 46.3%,
+    19.7% 42.9%,
+    17.5% 45.2%,
+    15.4% 43.9%,
+    14.4% 46.5%,
+    11.7% 44.3%,
+    8.8% 45.6%,
+    7% 41.9%,
+    4.7% 45.5%,
+    3% 43%,
+    0% 46.1%
+  );
+}
+.kh-pack-half[data-half="bottom"] .kh-pack-paper {
+  clip-path: polygon(
+    0% 46.1%,
+    3% 43%,
+    4.7% 45.5%,
+    7% 41.9%,
+    8.8% 45.6%,
+    11.7% 44.3%,
+    14.4% 46.5%,
+    15.4% 43.9%,
+    17.5% 45.2%,
+    19.7% 42.9%,
+    23.3% 46.3%,
+    25% 42.5%,
+    26.9% 47.6%,
+    30.1% 42.3%,
+    31.4% 45.2%,
+    34.5% 43.4%,
+    36.2% 47.4%,
+    37.8% 43.9%,
+    40.9% 47%,
+    42.5% 42.9%,
+    45.1% 45.1%,
+    48.5% 42%,
+    49.6% 44.9%,
+    52.7% 43.6%,
+    54.5% 45.7%,
+    56.2% 42.2%,
+    59% 45.3%,
+    62.1% 42.1%,
+    64.3% 45.4%,
+    66.5% 42.2%,
+    69% 45.3%,
+    70.9% 43%,
+    72% 45.4%,
+    74.6% 42.6%,
+    77.2% 47%,
+    79.7% 41.8%,
+    81.3% 47.2%,
+    83.7% 43.8%,
+    87.1% 45.9%,
+    89.2% 42.6%,
+    90.3% 45.6%,
+    92.8% 42.2%,
+    96% 46.1%,
+    97.2% 42%,
+    100% 45.6%,
+    100% 100%,
+    0 100%
+  );
+}
+/* Gold light at the seal; during the tear it fills the gap between the halves. */
+.kh-pack-glow {
+  position: absolute;
+  top: 22%;
+  right: 8%;
+  bottom: 22%;
+  left: 8%;
+  display: block;
+  border-radius: 9999px;
+  background:
+    radial-gradient(closest-side, rgb(255 236 190 / 0.95), rgb(255 196 110 / 0.55) 45%, transparent),
+    radial-gradient(60% 40% at 50% 50%, rgb(255 214 150 / 0.6), transparent);
+  filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Phones and tall tablets: three over two, the last two (the rarest pulls) larger,
+   together as wide as the screen and as tall as the stage allows. */
+.kh-fan {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px 6px;
+  width: min(calc(100cqw - 24px), 600px, calc((100cqh - 330px) / 1.17));
+  min-width: 288px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kh-fan-slot {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  grid-column: span 2;
+  transition: transform 300ms ease;
+}
+.kh-fan-slot:nth-child(n + 4) {
+  grid-column: span 3;
+}
+/* An epic's beat: it rises in its slot over its neighbours under a violet burst. */
+.kh-fan-slot[data-epic] {
+  z-index: 3;
+}
+.kh-epic-burst {
+  position: absolute;
+  inset: -32% -60%;
+  z-index: -1;
+  border-radius: 9999px;
+  background:
+    radial-gradient(closest-side, rgb(196 166 255 / 0.75), rgb(141 92 240 / 0.3) 70%, transparent),
+    repeating-conic-gradient(from 0deg, rgb(190 150 255 / 0.6) 0deg 5deg, transparent 5deg 18deg);
+  mask: radial-gradient(closest-side, #000 58%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+/* While a pull is lifted to the centre its slot stays empty, so it never shows twice. */
+.kh-fan-slot[data-spot] .kh-flip,
+.kh-fan-slot[data-spot] .kh-fan-note {
+  opacity: 0;
+}
+.kh-flip {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  perspective: 1000px;
+}
+.kh-flip[data-flipped] {
+  cursor: zoom-in;
+}
+.kh-flip-inner {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-style: preserve-3d;
+}
+.kh-flip[data-flipped] .kh-flip-inner {
+  transform: rotateY(180deg);
+}
+.kh-flip-face {
+  position: absolute;
+  inset: 0;
+  display: block;
+  backface-visibility: hidden;
+}
+.kh-flip-face[data-side="front"] {
+  transform: rotateY(180deg);
+}
+.kh-flip-face .kessen-card,
+.kh-flip-face .kessen-back {
+  width: 100%;
+}
+.kh-fan-note {
+  max-width: 100%;
+  min-height: 18px;
+  overflow: hidden;
+  color: #e8d6b0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.9);
+  opacity: 0;
+}
+.kh-fan-note[data-visible] {
+  opacity: 1;
+}
+.kh-note-tier {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.kh-note-tier[data-tier="COMMON"] {
+  color: #c9ccd2;
+}
+.kh-note-tier[data-tier="RARE"] {
+  color: #8fb0ff;
+}
+.kh-note-tier[data-tier="EPIC"] {
+  color: #c4a6ff;
+}
+.kh-note-tier[data-tier="LEGENDARY"] {
+  color: var(--kessen-gold-hi);
+}
+.kh-note-tier[data-tier="FORBIDDEN"] {
+  color: #ff7a66;
+}
+.kh-note-surplus {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 10px;
+  white-space: nowrap;
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 9999px;
+  background: rgb(11 7 5 / 0.92);
+  color: var(--kessen-gold-hi);
+  font-weight: 700;
+}
+.kh-note-sold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--kessen-gold-hi);
+  font-weight: 700;
+}
+.kh-rays {
+  position: absolute;
+  inset: -70%;
+  z-index: -1;
+  border-radius: 9999px;
+  background:
+    radial-gradient(closest-side, rgb(255 220 140 / 0.55), transparent 60%),
+    repeating-conic-gradient(from 0deg, rgb(255 222 140 / 0.42) 0deg 5deg, transparent 5deg 18deg);
+  mask: radial-gradient(closest-side, #000 35%, transparent);
+  pointer-events: none;
+}
+/* The spotlit pull, lifted to the centre of the stage over the fan. */
+.kh-spotlight {
+  position: relative;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: min(72cqw, 300px, calc((100cqh - 150px) * 5 / 7));
+  pointer-events: none;
+}
+
+.kh-spotlight > * {
+  grid-area: 1 / 1;
+}
+.kh-spotlight-card {
+  display: block;
+  width: 100%;
+  filter: drop-shadow(0 18px 30px rgb(0 0 0 / 0.8));
+}
+.kh-spotlight-card .kessen-card {
+  width: 100%;
+}
+.kh-spotlight[data-tier="FORBIDDEN"] .kh-rays {
+  background:
+    radial-gradient(closest-side, rgb(255 70 50 / 0.55), transparent 60%),
+    repeating-conic-gradient(from 0deg, rgb(255 60 40 / 0.4) 0deg 4deg, transparent 4deg 22deg);
+}
+.kh-smoke {
+  position: absolute;
+  inset: -40%;
+  z-index: -1;
+  pointer-events: none;
+}
+.kh-smoke span {
+  position: absolute;
+  width: 60%;
+  height: 60%;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgb(11 11 16 / 0.9), rgb(90 10 8 / 0.45) 60%, transparent);
+  filter: blur(6px);
+}
+.kh-smoke span:nth-child(1) {
+  top: 0;
+  left: 5%;
+}
+.kh-smoke span:nth-child(2) {
+  right: 0;
+  top: 30%;
+}
+.kh-smoke span:nth-child(3) {
+  bottom: 0;
+  left: 25%;
+}
+
+/* Wider than tall enough for one row: a fanned row of five, sized by the stage's width
+   and height alike. */
+@container kh-stage (min-width: 640px) and (min-aspect-ratio: 4 / 5) {
+  .kh-fan {
+    display: flex;
+    width: auto;
+    min-width: 0;
+    gap: 14px;
+    --kh-card: min(calc((100cqw - 96px) / 5), 32cqh, calc((100cqh - 330px) / 1.55));
+  }
+  .kh-fan-slot {
+    width: max(var(--kh-card), 92px);
+  }
+  .kh-fan-slot:nth-child(1) {
+    transform: translateY(14px) rotate(-5deg);
+  }
+  .kh-fan-slot:nth-child(2) {
+    transform: translateY(4px) rotate(-2.5deg);
+  }
+  .kh-fan-slot:nth-child(4) {
+    transform: translateY(4px) rotate(2.5deg);
+  }
+  .kh-fan-slot:nth-child(5) {
+    transform: translateY(14px) rotate(5deg);
+  }
+  .kh-fan-slot[data-spot] {
+    transform: translateY(-6px);
+  }
+}
+@container kh-stage (min-width: 640px) {
+  .kh-ceremony-title {
+    font-size: 30px;
+  }
+}
+/* Short landscape: a compact title and footer give the cards the height. */
+@container kh-stage (min-width: 640px) and (max-height: 500px) {
+  .kh-fan {
+    --kh-card: min(calc((100cqw - 96px) / 5), 236px, calc((100cqh - 212px) * 0.71));
+  }
+  .kh-ceremony-head {
+    padding: 8px 16px 0;
+  }
+  .kh-ceremony-title {
+    font-size: 20px;
+  }
+  .kh-ceremony-sub {
+    margin-top: 0;
+    font-size: 13px;
+  }
+  .kh-ceremony-foot {
+    gap: 4px;
+    padding: 2px 16px 8px;
+  }
+  .kh-ceremony-note {
+    max-width: 64em;
+  }
+  .kh-ceremony-pity {
+    padding: 2px 12px;
+  }
+}
+
+/* ------------------------------------------------------------------------ motion */
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-motion="on"] .kh-flip-inner {
+    transition: transform 520ms cubic-bezier(0.2, 0.75, 0.25, 1);
+  }
+  [data-motion="on"] .kh-fan-note {
+    transition: opacity 260ms ease 380ms;
+  }
+  [data-motion="on"][data-stage="sealed"] .kh-pack-sealed {
+    animation: kh-pack-idle 2.8s ease-in-out infinite;
+  }
+  [data-motion="on"][data-stage="opening"] .kh-pack-glow {
+    animation: kh-seal-glow 1100ms ease-out forwards;
+  }
+  [data-motion="on"][data-stage="opening"] .kh-pack-half[data-half="top"] {
+    animation: kh-tear-top 640ms cubic-bezier(0.3, 0.6, 0.3, 1) 420ms forwards;
+  }
+  [data-motion="on"][data-stage="opening"] .kh-pack-half[data-half="bottom"] {
+    animation: kh-tear-bottom 640ms cubic-bezier(0.3, 0.6, 0.3, 1) 420ms forwards;
+  }
+  [data-motion="on"] .kh-fan-slot .kh-flip {
+    transition: opacity 200ms ease;
+  }
+  /* Fill backwards only: a finished deal must not pin opacity, or a lifted pull's slot
+     would stay face up behind the spotlight. */
+  [data-motion="on"][data-stage="fanned"] .kh-flip {
+    animation: kh-deal 520ms cubic-bezier(0.2, 0.8, 0.25, 1) backwards;
+    animation-delay: calc(var(--i) * 90ms);
+  }
+  [data-motion="on"] .kh-rays {
+    animation:
+      kh-rays-spin 6s linear infinite,
+      kh-rays-in 420ms ease-out;
+  }
+  [data-motion="on"] .kh-smoke span {
+    animation: kh-smoke 1.4s ease-out both;
+  }
+  /* The lift waits for the flip, then holds and settles back into the fan. */
+  [data-motion="on"] .kh-spotlight {
+    animation: kh-spot-lift 1500ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  }
+  [data-motion="on"] .kh-flip[data-flipped][data-tier="EPIC"] {
+    animation: kh-epic-pulse 900ms ease-out 420ms 1;
+  }
+  /* The beat starts as the flip turns the face up (FLIP_MS + EPIC_BEAT_MS in all). */
+  [data-motion="on"] .kh-fan-slot[data-epic] {
+    animation: kh-epic-lift 700ms cubic-bezier(0.2, 0.8, 0.25, 1) 360ms both;
+  }
+  [data-motion="on"] .kh-epic-burst {
+    animation:
+      kh-epic-burst 860ms ease-out 300ms both,
+      kh-rays-spin 6s linear infinite;
+  }
+  [data-motion="on"][data-epic]:not([data-spotlight]) .kh-ceremony-dim {
+    background:
+      radial-gradient(55% 55% at 50% 50%, rgb(20 8 30 / 0.25), rgb(8 4 12 / 0.78)),
+      rgb(8 4 12 / 0.4);
+  }
+  [data-motion="on"] .kh-smoke span:nth-child(2) {
+    animation-delay: 120ms;
+  }
+  [data-motion="on"] .kh-smoke span:nth-child(3) {
+    animation-delay: 240ms;
+  }
+  [data-motion="on"][data-spotlight="FORBIDDEN"] .kh-lanterns span {
+    animation: kh-flicker 1.3s steps(1, end) 2;
+  }
+  [data-motion="on"] .kh-lanterns span {
+    animation: kessen-breathe 4.2s ease-in-out infinite;
+  }
+  [data-motion="on"] .kh-ceremony-dim {
+    transition: background 360ms ease;
+  }
+}
+
+@keyframes kh-pack-idle {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(1deg);
+  }
+}
+@keyframes kh-seal-glow {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  35% {
+    opacity: 0.85;
+    transform: scale(0.55);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+@keyframes kh-tear-top {
+  to {
+    opacity: 0;
+    transform: translate(-6%, -34%) rotate(-9deg);
+  }
+}
+@keyframes kh-tear-bottom {
+  to {
+    opacity: 0;
+    transform: translate(4%, 30%) rotate(6deg);
+  }
+}
+@keyframes kh-deal {
+  from {
+    opacity: 0;
+    transform: translateY(30%) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes kh-spot-lift {
+  0% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  30%,
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes kh-epic-lift {
+  0% {
+    scale: 1;
+    translate: 0 0;
+  }
+  35%,
+  70% {
+    scale: 1.1;
+    translate: 0 -6%;
+  }
+  100% {
+    scale: 1;
+    translate: 0 0;
+  }
+}
+@keyframes kh-epic-burst {
+  0% {
+    opacity: 0;
+    scale: 0.4;
+  }
+  35% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.25;
+  }
+}
+@keyframes kh-epic-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(141 92 240 / 0.8);
+  }
+  60% {
+    box-shadow: 0 0 22px 8px rgb(141 92 240 / 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(141 92 240 / 0);
+  }
+}
+@keyframes kh-rays-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes kh-rays-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes kh-smoke {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  40% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+@keyframes kh-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  20% {
+    opacity: 0.25;
+  }
+  35% {
+    opacity: 0.85;
+  }
+  55% {
+    opacity: 0.1;
+  }
+  70% {
+    opacity: 0.9;
+  }
+}

@@ -1,16 +1,7 @@
 "use client";
 
-import { useSetAtom } from "jotai";
-import {
-  ArrowRight,
-  Gift,
-  Loader2,
-  MapPin,
-  MousePointerClick,
-  Settings2,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { ArrowRight, Gift, Loader2, MapPin, Settings2, Sparkles } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/app/_trpc/client";
@@ -37,11 +28,21 @@ import { tutorialPageGuidanceAtom, useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { ActivityDock } from "@/layout/ActivityDock";
-import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { QuestObjectives, useCheckRewards } from "@/layout/Logbook";
+import { CoachCard } from "@/layout/tutorial/CoachCard";
+import {
+  type GuidedLessonStep,
+  guidedLessonAtom,
+} from "@/layout/tutorial/guidedLesson";
+import {
+  getUsableHighlightElement,
+  isSameBox,
+  Spotlight,
+  trackLayout,
+} from "@/layout/tutorial/Spotlight";
 import {
   getLemuImage,
   LEMU_EXPERIMENT,
@@ -128,11 +129,28 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
       tutorialStep: userData?.tutorialStep,
     };
   }, [userData?.userId, userData?.tutorialStep]);
+  // A guided lesson on screen (an Academy table) takes the tutorial tab while it is
+  // registered, whether or not the main tutorial is on: the player is doing that lesson
+  // now. The main tutorial's saved step is untouched and its assistant returns, leading
+  // the player back to its page as on any reopening, once the lesson clears.
+  const guidedLesson = useAtomValue(guidedLessonAtom);
   // Account-scoped presentation resets when the player changes; progress stays in the profile.
   if (!userData || isBrowserAuthPath(pathname)) return null;
   return (
-    <ActivityDock key={userData.userId} hiddenLesson={<TutorialCompletionSync />}>
-      <PlayerTutorialAssistant {...props} tutorialIdentityRef={tutorialIdentityRef} />
+    <ActivityDock
+      key={userData.userId}
+      hiddenLesson={<TutorialCompletionSync />}
+      guidedLesson={
+        guidedLesson
+          ? { id: guidedLesson.id, awaitsAnswer: guidedLesson.step.blocking === true }
+          : undefined
+      }
+    >
+      {guidedLesson ? (
+        <GuidedLessonAssistant step={guidedLesson.step} />
+      ) : (
+        <PlayerTutorialAssistant {...props} tutorialIdentityRef={tutorialIdentityRef} />
+      )}
     </ActivityDock>
   );
 };
@@ -369,13 +387,20 @@ const PlayerTutorialAssistant: React.FC<
     return () => clearTimeout(timer);
   }, [strandedBattleStepId, stepNumber]);
 
+  // The hospital step overrides every other step's target.
+  const placedStep =
+    userData?.status === "HOSPITALIZED" ? TUTORIAL_HOSPITALIZED_STEP : currentStep;
   const { highlight, panelDodgesHighlight } = useHighlightPlacement({
-    currentStep,
-    isAssistantVisible,
+    step: placedStep,
+    // A switched-off tutorial, a hidden lesson and a step on another page place nothing.
+    enabled:
+      userData?.tutorialOn !== false &&
+      isAssistantVisible &&
+      (!placedStep || isTutorialPageMatch(placedStep.page, pathname)),
+    find: (step) => findElementToHighlight(step, rightSideBarRef, rightSideBarOpen),
+    // In a fight the field and the action bar must stay in view together.
+    revealOnly: pathname === "/combat",
     pathname,
-    userData,
-    rightSideBarRef,
-    rightSideBarOpen,
   });
 
   // Update game menu highlight position when showing game menu tutorial
@@ -726,35 +751,19 @@ const PlayerTutorialAssistant: React.FC<
     if (gameMenuHighlight) {
       return (
         <>
-          {createPortal(
-            <div
-              data-battle-focus-layer
-              className="pointer-events-none fixed inset-0 z-[60]"
-            >
-              <HighlightDim box={gameMenuHighlight} />
-              <div
-                className="absolute rounded-lg"
-                style={highlightHoleStyle(gameMenuHighlight)}
-              >
-                <span className="absolute inset-0 animate-ping rounded-lg border-2 border-amber-300/70 motion-reduce:animate-none" />
-                <div className="absolute inset-0 z-[1] rounded-lg border-[3px] border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.8)]">
-                  <button
-                    type="button"
-                    className="pointer-events-auto absolute inset-0 z-[2] cursor-pointer disabled:cursor-wait"
-                    disabled={isDisablingTutorial}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (isDisablingTutorial) return;
-                      setRightSideBarOpen(true);
-                    }}
-                  />
-                </div>
-              </div>
-              <HandPointer box={gameMenuHighlight} />
-            </div>,
-            document.body,
-          )}
+          <Spotlight box={gameMenuHighlight}>
+            <button
+              type="button"
+              className="pointer-events-auto absolute inset-0 z-[2] cursor-pointer disabled:cursor-wait"
+              disabled={isDisablingTutorial}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (isDisablingTutorial) return;
+                setRightSideBarOpen(true);
+              }}
+            />
+          </Spotlight>
           <AssistantDialog
             title={currentStep?.title ?? "Game menu"}
             eyebrow={chapterEyebrow}
@@ -849,7 +858,7 @@ const PlayerTutorialAssistant: React.FC<
             : "Tutorial complete. Quest guidance will appear here when available."}
         </p>
         <Link
-          className="text-primary underline"
+          className="text-primary underline dark:text-amber-300"
           href={`${SETTINGS_HREF}&settings=help&setting=tutorial`}
         >
           Open tutorial settings
@@ -876,40 +885,28 @@ const PlayerTutorialAssistant: React.FC<
     <>
       {highlight &&
         highlight.stepId === currentTutorialStep.id &&
-        !showCancelConfirmDialog &&
-        createPortal(
+        !showCancelConfirmDialog && (
           // Only the highlighted control captures clicks; game controls stay reachable.
-          <div
-            data-battle-focus-layer
-            className="pointer-events-none fixed inset-0 z-[60]"
+          <Spotlight
+            box={highlight}
+            ping={showPointer}
+            pointer={showPointer}
+            holeClassName={cn("bg-transparent", pointerEvents)}
           >
-            <HighlightDim box={highlight} />
-            <div
-              className={cn("absolute rounded-lg bg-transparent", pointerEvents)}
-              style={highlightHoleStyle(highlight)}
-            >
-              {showPointer && (
-                <span className="pointer-events-none absolute inset-0 animate-ping rounded-lg border-2 border-amber-300/70 motion-reduce:animate-none" />
-              )}
-              <div className="absolute inset-0 z-[1] rounded-lg border-[3px] border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.8)]">
-                <button
-                  type="button"
-                  className={cn("absolute inset-0 z-[2] cursor-pointer", pointerEvents)}
-                  aria-label={currentTutorialStep.action ?? "Continue tutorial"}
-                  disabled={isDisablingTutorial}
-                  onClick={(e) => {
-                    if (currentTutorialStep.proceedOnHighlightClick) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (!isDisablingTutorial) handleNextStep();
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            {showPointer && <HandPointer box={highlight} />}
-          </div>,
-          document.body,
+            <button
+              type="button"
+              className={cn("absolute inset-0 z-[2] cursor-pointer", pointerEvents)}
+              aria-label={currentTutorialStep.action ?? "Continue tutorial"}
+              disabled={isDisablingTutorial}
+              onClick={(e) => {
+                if (currentTutorialStep.proceedOnHighlightClick) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!isDisablingTutorial) handleNextStep();
+                }
+              }}
+            />
+          </Spotlight>
         )}
 
       {/* Assistant panel */}
@@ -1135,6 +1132,71 @@ const PlayerTutorialAssistant: React.FC<
 };
 
 /**
+ * A guided lesson's step in the tutorial assistant: the same lesson panel, spotlight,
+ * hand pointer and placement as the main tutorial, with the step supplied by the scene
+ * that registered it. Its target is only revealed, never centred, so a game table stays
+ * in view around it, and taps fall through the ring to the real control. A blocking
+ * step dims the whole page behind the dock and waits for an answer in its footer.
+ */
+const GuidedLessonAssistant: React.FC<{ step: GuidedLessonStep }> = ({ step }) => {
+  const pathname = usePublicPathname();
+  // Keyed by the step's id and target, so a re-registered step with fresh footer
+  // handlers keeps its placement.
+  const placedTarget = React.useMemo(
+    () => (step.target ? { id: step.id, selector: step.target } : null),
+    [step.id, step.target],
+  );
+  const { highlight, panelDodgesHighlight } = useHighlightPlacement({
+    step: placedTarget,
+    enabled: true,
+    find: (target) => findGuidedTarget(target.selector),
+    revealOnly: true,
+    pathname,
+  });
+  // A blocking step takes the keyboard focus, so its answers are one Tab away.
+  React.useEffect(() => {
+    if (!step.blocking) return;
+    document
+      .getElementById(TUTORIAL_ASSISTANT_PANEL_ID)
+      ?.querySelector<HTMLElement>("[data-guided-footer] button:not(:disabled)")
+      ?.focus({ preventScroll: true });
+  }, [step.id, step.blocking]);
+  const box = highlight?.stepId === step.id ? highlight : null;
+  return (
+    <>
+      {box && !step.blocking ? (
+        <Spotlight box={box} holeClassName="pointer-events-none bg-transparent" />
+      ) : null}
+      {step.blocking
+        ? createPortal(
+            // Below the open lesson's dock (z-[61]), taking the page's taps.
+            <div
+              data-battle-focus-layer
+              data-guided-lesson-block=""
+              aria-hidden="true"
+              className="fixed inset-0 z-[60] bg-black/55"
+            />,
+            document.body,
+          )
+        : null}
+      <AssistantDialog
+        title={step.title}
+        eyebrow={step.eyebrow}
+        progress={step.progress}
+        stepId={step.id}
+        action={step.action}
+        lead={step.lead}
+        dodgeHighlight={panelDodgesHighlight}
+        avoidBox={box}
+        footer={
+          step.footer ? <div data-guided-footer="">{step.footer}</div> : undefined
+        }
+      />
+    </>
+  );
+};
+
+/**
  * Lemu standing on the dock's top edge, cropped at the waist independently of
  * lesson height. She is decorative and lets clicks through, but moves to the
  * other end of the dock, or leaves, rather than stand over the highlight.
@@ -1276,115 +1338,37 @@ const AssistantDialog: React.FC<{
         avoidBox={avoidBox}
         dodgeHighlight={dodgeHighlight}
       />
-      <div className="relative z-10 rounded-b-xl bg-card" aria-busy={isBusy}>
-        <header className="flex items-start gap-2 px-4 pt-3 md:px-5">
-          <div className="min-w-0 flex-1">
-            {eyebrow && (
-              <p className="truncate font-semibold text-muted-foreground text-xs uppercase tracking-wider">
-                {eyebrow}
-              </p>
-            )}
-            <h2 className="font-bold text-lg text-primary leading-tight">{title}</h2>
-          </div>
-          {onOpenDisableModal && (
+      <CoachCard
+        title={title}
+        eyebrow={eyebrow}
+        progress={progress}
+        action={action}
+        lead={lead}
+        footer={footer}
+        onDismiss={onOpenDisableModal}
+        isBusy={isBusy}
+        errorMessage={errorMessage}
+      >
+        {children}
+        {showOrderingButton && onOpenOrderingDialog && (
+          <div className="flex justify-end">
             <Button
               variant="ghost"
-              size="icon"
+              size="sm"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onOpenDisableModal();
+                onOpenOrderingDialog();
               }}
-              disabled={isBusy}
-              className="-mr-2 h-8 w-8 shrink-0 opacity-60 hover:opacity-100"
-              title={isBusy ? "Disabling" : "Skip tutorial"}
-              aria-label={isBusy ? "Disabling" : "Skip tutorial"}
+              className="opacity-60 hover:opacity-100"
+              title="Sort quest priorities"
             >
-              {isBusy ? (
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-              ) : (
-                <X className="h-5 w-5" aria-hidden="true" />
-              )}
+              <Settings2 className="mr-1 h-4 w-4" />
+              <span className="text-sm">Priority</span>
             </Button>
-          )}
-        </header>
-        {progress && (
-          <div
-            className="flex gap-1 px-4 pt-2 md:px-5"
-            role="progressbar"
-            aria-label="Chapter progress"
-            aria-valuemin={1}
-            aria-valuemax={progress.total}
-            aria-valuenow={progress.position}
-          >
-            {Array.from({ length: progress.total }, (_, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "h-1.5 flex-1 rounded-full",
-                  i < progress.position ? "bg-primary" : "bg-primary/20",
-                )}
-              />
-            ))}
           </div>
         )}
-        <div className="max-h-[min(40dvh,420px,calc(100dvh-var(--assistant-portrait-height)-22rem))] space-y-3 overflow-y-auto overscroll-contain px-4 py-3 md:px-5">
-          {isBusy && (
-            <div
-              role="status"
-              aria-live="polite"
-              className="flex items-center gap-2 font-medium text-base text-muted-foreground"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              Disabling
-            </div>
-          )}
-          {errorMessage && !isBusy && (
-            <p role="alert" className="text-base text-destructive">
-              {errorMessage}
-            </p>
-          )}
-          <fieldset disabled={isBusy} className="contents">
-            {lead}
-            {children}
-            {showOrderingButton && onOpenOrderingDialog && (
-              <div className="flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onOpenOrderingDialog();
-                  }}
-                  className="opacity-60 hover:opacity-100"
-                  title="Sort quest priorities"
-                >
-                  <Settings2 className="mr-1 h-4 w-4" />
-                  <span className="text-sm">Priority</span>
-                </Button>
-              </div>
-            )}
-          </fieldset>
-        </div>
-        {(action || footer) && (
-          <fieldset
-            disabled={isBusy}
-            className="space-y-3 rounded-b-xl border-border border-t bg-card px-4 py-3 md:px-5"
-          >
-            {action && (
-              <p className="flex items-start gap-2 rounded-lg border border-amber-500/70 bg-amber-500/15 px-3 py-2 font-semibold text-base">
-                <MousePointerClick
-                  className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
-                  aria-hidden="true"
-                />
-                <span>{action}</span>
-              </p>
-            )}
-            {footer}
-          </fieldset>
-        )}
-      </div>
+      </CoachCard>
     </section>
   );
 };
@@ -1509,71 +1493,6 @@ const PostTutorialQuestObjectives: React.FC<{
 );
 
 /**
- * Dims the page around a highlight. A mask cut-out rather than a huge
- * box-shadow spread: Chrome stops painting shadows that large on a
- * transformed layer, which left the page undimmed.
- */
-const HighlightDim: React.FC<{
-  box: { top: number; left: number; width: number; height: number };
-}> = ({ box }) => {
-  const maskId = React.useId();
-  return (
-    <svg
-      className="pointer-events-none absolute inset-0 h-full w-full"
-      aria-hidden="true"
-    >
-      <defs>
-        <mask id={maskId}>
-          <rect width="100%" height="100%" fill="white" />
-          <rect
-            x={box.left - 8}
-            y={box.top - 8}
-            width={box.width + 16}
-            height={box.height + 16}
-            rx={8}
-            fill="black"
-          />
-        </mask>
-      </defs>
-      <rect
-        width="100%"
-        height="100%"
-        fill="black"
-        fillOpacity={0.55}
-        mask={`url(#${maskId})`}
-      />
-    </svg>
-  );
-};
-
-/** Bouncing hand under a highlight, kept inside the viewport. */
-const HandPointer: React.FC<{
-  box: { top: number; left: number; width: number; height: number };
-}> = ({ box }) => {
-  const below = box.top + box.height + 64 < window.innerHeight;
-  return (
-    <Image
-      src={IMG_URL_HANDPOINTER}
-      alt=""
-      aria-hidden="true"
-      className={cn(
-        "pointer-events-none absolute h-14 w-14 animate-bounce drop-shadow-lg motion-reduce:animate-none",
-        !below && "rotate-180",
-      )}
-      width={80}
-      height={80}
-      style={{
-        top: below ? box.top + box.height + 8 : Math.max(0, box.top - 64),
-        left: Math.max(
-          4,
-          Math.min(window.innerWidth - 60, box.left + box.width / 2 - 20),
-        ),
-      }}
-    />
-  );
-};
-
-/**
  * Marks the lesson's own Claim button the way a page highlight marks its target:
  * the page dims behind the Activity dock, and the button gets the amber ring and
  * the hand. For claim steps with nothing to point at on the page, where the
@@ -1681,22 +1600,26 @@ const useDisableTutorial = (
 
 /**
  * Measures the current step's highlight and keeps it placed: scrolled into view clear of
- * the lesson, or with the lesson moved aside when scrolling cannot uncover it.
+ * the lesson, or with the lesson moved aside when scrolling cannot uncover it. The main
+ * tutorial and guided lessons share it; `find` locates a step's target on the page.
  */
-const useHighlightPlacement = ({
-  currentStep,
-  isAssistantVisible,
+const useHighlightPlacement = <Step extends { id: string }>({
+  step,
+  enabled,
+  find,
+  revealOnly,
   pathname,
-  userData,
-  rightSideBarRef,
-  rightSideBarOpen,
 }: {
-  currentStep: TutorialStepConfig | undefined;
-  isAssistantVisible: boolean;
+  step: Step | null | undefined;
+  /** Off while the lesson is hidden or on another page: the last placement is kept. */
+  enabled: boolean;
+  find: (step: Step) => HighlightTarget | null;
+  /**
+   * Scroll a target only as far as needed to uncover it, rather than to the middle of
+   * the screen, for scenes (a fight, a card table) that must stay in view around it.
+   */
+  revealOnly: boolean;
   pathname: string;
-  userData: { tutorialOn: boolean; status: string } | undefined;
-  rightSideBarRef: React.RefObject<HTMLDivElement | null>;
-  rightSideBarOpen: boolean;
 }) => {
   const [highlight, setHighlight] = useState<{
     stepId: string;
@@ -1722,12 +1645,8 @@ const useHighlightPlacement = ({
   const [panelDodgesHighlight, setPanelDodgesHighlight] = useState(false);
 
   // Helper function to update the highlight position
-  const updateHighlightPosition = (currentStepConfig: TutorialStepConfig) => {
-    const highlightInfo = findElementToHighlight(
-      currentStepConfig,
-      rightSideBarRef,
-      rightSideBarOpen,
-    );
+  const updateHighlightPosition = (currentStepConfig: Step) => {
+    const highlightInfo = find(currentStepConfig);
 
     if (highlightInfo) {
       // Put the highlight where the player can actually see and press it. Three
@@ -1777,30 +1696,29 @@ const useHighlightPlacement = ({
           before.right < 0 ||
           before.left > window.innerWidth;
         const isCovered = !!panel && rectsOverlap(before, panel);
-        // In a fight the field and the action bar must stay in view together,
-        // so there a visible, uncovered target is left where it is.
+        // A scene revealed only (a fight, a card table) must stay in view around
+        // the target, so there a visible, uncovered target is left where it is.
         const isMisplaced =
           isOffscreen ||
           isCovered ||
-          (pathname !== "/combat" && Math.abs(centre - preferredCentre) > 100);
+          (!revealOnly && Math.abs(centre - preferredCentre) > 100);
         if (!isMisplaced) {
           placement.settled = true;
           placement.settledScrollY = window.scrollY;
         } else {
           placement.attempts += 1;
           const scroller = highlightInfo.element.ownerDocument.scrollingElement;
-          // In a fight a target only moves far enough to come into view clear of
-          // the panel, so as much of the field as possible stays visible with it.
+          // There a target only moves far enough to come into view clear of the
+          // panel, so as much of the scene as possible stays visible with it.
           const floor =
             panel && before.left < panel.right && before.right > panel.left
               ? Math.min(panel.top, window.innerHeight)
               : window.innerHeight;
-          const offset =
-            pathname !== "/combat"
-              ? centre - preferredCentre
-              : before.top < 80
-                ? before.top - 80
-                : before.bottom + 16 - floor;
+          const offset = !revealOnly
+            ? centre - preferredCentre
+            : before.top < 80
+              ? before.top - 80
+              : before.bottom + 16 - floor;
           scroller?.scrollBy({ top: offset, behavior: "auto" });
           // Scrolling cannot always win: on a short page the document may already
           // be as far down as it goes, leaving the target stuck under the panel
@@ -1858,27 +1776,14 @@ const useHighlightPlacement = ({
 
   // Update highlight position based on current step and element
   useEffect(() => {
-    // Early exit if tutorial is disabled
-    if (userData && userData?.tutorialOn === false) return;
-    if (!isAssistantVisible) return;
-
-    // Determine which step to use - hospitalized overrides everything
-    const isHospitalized = userData?.status === "HOSPITALIZED";
-    const step = isHospitalized ? TUTORIAL_HOSPITALIZED_STEP : currentStep;
-
+    if (!enabled) return;
     // Guard against undefined step
     if (!step) {
       setHighlight(null);
       return;
     }
-
-    // If we're not on the correct page for this step, don't try to highlight
-    if (!isTutorialPageMatch(step.page, pathname)) {
-      return;
-    }
-
     return trackLayout(() => updateHighlightPosition(step));
-  }, [currentStep, isAssistantVisible, pathname, userData?.status]);
+  }, [step, enabled, pathname, revealOnly]);
 
   return { highlight, panelDodgesHighlight };
 };
@@ -2001,118 +1906,20 @@ const getPreferredHighlightCentre = (targetHeight: number) => {
   return (safeTop + safeBottom) / 2;
 };
 
-/**
- * The highlight is re-measured four times a second so it follows an element that moves. Almost
- * none of those measurements differ, and storing an equal box would re-render the whole assistant
- * overlay for nothing, so the position setters keep the previous object when it has not moved.
- */
-const isSameBox = (
-  a: { top: number; left: number; width: number; height: number },
-  b: { top: number; left: number; width: number; height: number },
-) =>
-  a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
-
-/**
- * Style for the hole cut around a highlighted element, padded by 8px. The hole follows its
- * element as the page scrolls; placed with top/left, every step of that is a layout shift of
- * a viewport-sized box, while a transform moves it without one.
- */
-const highlightHoleStyle = (box: {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-}): React.CSSProperties => ({
-  top: 0,
-  left: 0,
-  width: box.width + 16,
-  height: box.height + 16,
-  transform: `translate(${box.left - 8}px, ${box.top - 8}px)`,
-});
-
-/**
- * Run `update` now and whenever layout may have moved, returning the cleanup. `update`
- * returns the element it measured. Changes to the DOM tree, scrolling, resizing and the
- * element's own size schedule one measurement per frame. A 250 ms poll covers content
- * that shifts without any of these, such as images and canvases above the target; it
- * stops once the element has held still for a second and restarts on the next change.
- * A missing element keeps the poll running so a late-mounting target is still found.
- */
-export const trackLayout = (update: () => Element | null) => {
-  let frame: number | null = null;
-  let poll: ReturnType<typeof setInterval> | null = null;
-  let observed: Element | null = null;
-  let lastBox = "";
-  let stableRuns = 0;
-  const resizeObserver =
-    typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => schedule());
-  /** Measure the target, follow its resize events and stop polling once its bounds settle. */
-  const run = () => {
-    const element = update();
-    if (element !== observed) {
-      if (observed) resizeObserver?.unobserve(observed);
-      if (element) resizeObserver?.observe(element);
-      observed = element;
-    }
-    const rect = element?.getBoundingClientRect();
-    const box = rect ? `${rect.top},${rect.left},${rect.width},${rect.height}` : "";
-    stableRuns = box && box === lastBox ? stableRuns + 1 : 0;
-    lastBox = box;
-    if (stableRuns >= TRACK_LAYOUT_SETTLED_RUNS && poll !== null) {
-      clearInterval(poll);
-      poll = null;
-    }
-  };
-  /** Restart the settling window without creating overlapping poll timers. */
-  const startPoll = () => {
-    stableRuns = 0;
-    poll ??= setInterval(run, 250);
-  };
-  /** Coalesce layout changes into one animation-frame measurement and resume fallback polling. */
-  function schedule() {
-    startPoll();
-    frame ??= requestAnimationFrame(() => {
-      frame = null;
-      run();
-    });
-  }
-  run();
-  startPoll();
-  window.addEventListener("scroll", schedule, { passive: true });
-  window.addEventListener("resize", schedule, { passive: true });
-  const observer = new MutationObserver(schedule);
-  observer.observe(document.body, { childList: true, subtree: true });
-  return () => {
-    if (poll !== null) clearInterval(poll);
-    if (frame !== null) cancelAnimationFrame(frame);
-    window.removeEventListener("scroll", schedule);
-    window.removeEventListener("resize", schedule);
-    observer.disconnect();
-    resizeObserver?.disconnect();
-  };
-};
-
-/** Polls (250 ms each) a measured element must hold still before the poll stops. */
-const TRACK_LAYOUT_SETTLED_RUNS = 4;
-
-// Helper function to find element to highlight based on current tutorial step
-const getUsableHighlightElement = (id: string | undefined) => {
-  if (!id) return null;
-  const nodes = document.querySelectorAll<HTMLElement>(`[id="${CSS.escape(id)}"]`);
-  for (const element of Array.from(nodes)) {
-    if (element.closest("[data-content-box-actions] [inert]")) {
-      element.dispatchEvent(new Event(REVEAL_CONTENT_BOX_CONTROLS, { bubbles: true }));
-      continue;
-    }
+/** A guided step's target: the first visible match outside inert content. */
+const findGuidedTarget = (selector: string): HighlightTarget | null => {
+  for (const element of document.querySelectorAll<HTMLElement>(selector)) {
+    if (element.closest("[inert]")) continue;
     const style = window.getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden") continue;
-    const rect = element.getBoundingClientRect();
-    if (!isUsableHighlightRect(rect)) continue;
-    return element;
+    if (isUsableHighlightRect(element.getBoundingClientRect())) {
+      return { element, isPrimaryElement: true };
+    }
   }
   return null;
 };
 
+// Helper function to find element to highlight based on current tutorial step
 const findElementToHighlight = (
   step: TutorialStepConfig,
   rightSideBarRef: React.RefObject<HTMLDivElement | null>,
@@ -2191,6 +1998,9 @@ type TutorialIdentityRef = React.RefObject<{
   userId: string | undefined;
   tutorialStep: number | undefined;
 }>;
+
+/** The element a step points at; a fallback target is not the step's primary one. */
+type HighlightTarget = { element: HTMLElement; isPrimaryElement: boolean };
 
 /** A quest the assistant guides after the tutorial, with its live tracker. */
 type PostTutorialQuest = { userQuest: UserQuest; tracker: QuestTrackerType };

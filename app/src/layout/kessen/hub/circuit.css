@@ -1,0 +1,503 @@
+/*
+ * Card Hall Circuit map: the painted map, its opponent pins, the info strip and legend.
+ * Builds on the tokens of ../kessen.css.
+ */
+
+.kh-circuit {
+  --s: 1;
+  --ls: 1;
+  container: kh-circuit / inline-size;
+}
+
+/* The frame: the painted map fitted to the panel width at its own proportions. The map
+   layer inside is sized and moved by the view (CircuitMap.tsx); everything on it is drawn
+   at `--kh-pin-scale`, the map's width over its design width, so pins keep their place
+   and size relative to the paint at any width and zoom. */
+.kh-map {
+  --s: var(--kh-pin-scale, 1);
+  position: relative;
+  aspect-ratio: 3 / 2;
+  overflow: clip;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: #2a3a3c;
+  /* A fitted map leaves vertical swipes to the page; a zoomed one takes every gesture. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.kh-map[data-zoomed] {
+  cursor: grab;
+  touch-action: none;
+}
+.kh-map[data-dragging] {
+  cursor: grabbing;
+}
+.kh-map-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kh-map-layer[data-glide] {
+    transition:
+      width 220ms ease,
+      height 220ms ease,
+      transform 220ms ease;
+  }
+}
+.kh-map-art {
+  position: absolute;
+  inset: 0;
+}
+.kh-map-art img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+/* The paint's darkened rim, fixed to the frame. */
+.kh-map-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 95% at 50% 50%, transparent 60%, rgb(20 10 6 / 0.45)),
+    linear-gradient(180deg, rgb(20 10 6 / 0.12), transparent 30%);
+}
+.kh-map-pins {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kh-pin-slot {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.kh-pin-slot:has(.kh-pin:hover, .kh-pin:focus-visible, .kh-pin[data-selected]) {
+  z-index: 3;
+}
+.kh-pin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2px * var(--s));
+  width: calc(100px * var(--s));
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  transform: translate(-50%, calc(-36px * var(--s)));
+}
+.kh-pin-portrait {
+  position: relative;
+  display: block;
+  width: calc(66px * var(--s));
+  height: calc(66px * var(--s));
+}
+/* Small fitted pins still answer a 44 px tap around the portrait. */
+.kh-pin::before {
+  content: "";
+  position: absolute;
+  top: min(0px, calc((66px * var(--s) - 44px) / 2));
+  right: min(0px, calc((100px * var(--s) - 44px) / 2));
+  bottom: min(0px, calc((66px * var(--s) - 44px) / 2));
+  left: min(0px, calc((100px * var(--s) - 44px) / 2));
+}
+.kh-portrait {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 35%, #5a2a18, #1a0c06);
+  box-shadow:
+    0 0 0 2px #2a1a06,
+    0 0 0 4px var(--kessen-gold),
+    0 0 0 5px #2a1a06,
+    0 4px 10px rgb(0 0 0 / 0.6);
+}
+.kh-portrait img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  object-position: 50% 18%;
+  transform: scale(1.35);
+  transform-origin: 50% 12%;
+}
+/* Sprite portraits (no painted bust yet) are full-body pixel art: framed shoulders-up
+   like the busts and kept crisp. */
+.kh-portrait[data-kind="sprite"] img {
+  object-position: 50% 0%;
+  image-rendering: pixelated;
+  transform: scale(2.1);
+  transform-origin: 50% 16%;
+}
+/* Locked: a brown-black ink silhouette on lacquer inside the gold ring. */
+.kh-portrait[data-locked] img {
+  filter: brightness(0) opacity(0.62);
+}
+.kh-portrait[data-locked] {
+  background: radial-gradient(circle at 50% 30%, #6a3220, #2a1208 70%);
+  box-shadow:
+    0 0 0 2px #1a120c,
+    0 0 0 4px var(--kessen-gold-lo),
+    0 0 0 5px #1a120c,
+    0 4px 10px rgb(0 0 0 / 0.6);
+}
+/* On the map the rings scale with the pins. */
+.kh-map .kh-portrait {
+  box-shadow:
+    0 0 0 calc(2px * var(--s)) #2a1a06,
+    0 0 0 calc(4px * var(--s)) var(--kessen-gold),
+    0 0 0 calc(5px * var(--s)) #2a1a06,
+    0 calc(4px * var(--s)) calc(10px * var(--s)) rgb(0 0 0 / 0.6);
+}
+.kh-map .kh-portrait[data-locked] {
+  box-shadow:
+    0 0 0 calc(2px * var(--s)) #1a120c,
+    0 0 0 calc(4px * var(--s)) var(--kessen-gold-lo),
+    0 0 0 calc(5px * var(--s)) #1a120c,
+    0 calc(4px * var(--s)) calc(10px * var(--s)) rgb(0 0 0 / 0.6);
+}
+.kh-pin[data-boss] .kh-portrait:not([data-locked]) {
+  box-shadow:
+    0 0 0 calc(2px * var(--s)) #2a0604,
+    0 0 0 calc(4px * var(--s)) var(--kessen-forbidden),
+    0 0 0 calc(5px * var(--s)) #2a0604,
+    0 0 calc(14px * var(--s)) rgb(208 39 29 / 0.55);
+}
+.kh-pin-seal {
+  position: absolute;
+  right: calc(-8px * var(--s));
+  bottom: calc(-6px * var(--s));
+  width: calc(28px * var(--s));
+  height: calc(28px * var(--s));
+  font-size: calc(28px * var(--s));
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.6));
+}
+.kh-pin-lock {
+  position: absolute;
+  right: calc(-2px * var(--s));
+  bottom: calc(-2px * var(--s));
+  display: grid;
+  width: calc(20px * var(--s));
+  height: calc(20px * var(--s));
+  place-items: center;
+  border: 1px solid #6b5a44;
+  border-radius: 9999px;
+  background: #1a120c;
+  color: #e8d6b0;
+}
+.kh-pin-lock svg {
+  width: calc(11px * var(--s));
+  height: calc(11px * var(--s));
+}
+.kh-pin-sigil {
+  position: absolute;
+  left: calc(-6px * var(--s));
+  bottom: calc(-4px * var(--s));
+  display: block;
+  width: calc(20px * var(--s));
+}
+.kh-pin-live {
+  position: absolute;
+  top: calc(-3px * var(--s));
+  right: calc(-1px * var(--s));
+  width: calc(12px * var(--s));
+  height: calc(12px * var(--s));
+  border: max(1px, calc(2px * var(--s))) solid #1a0c06;
+  border-radius: 9999px;
+  background: var(--kessen-lantern);
+  box-shadow: 0 0 calc(8px * var(--s)) var(--kessen-lantern);
+}
+.kh-pin-reward {
+  position: absolute;
+  top: calc(-4px * var(--s));
+  left: calc(-5px * var(--s));
+  display: grid;
+  width: calc(22px * var(--s));
+  height: calc(22px * var(--s));
+  place-items: center;
+  border: 1px solid var(--kessen-gold-hi);
+  border-radius: 9999px;
+  background: linear-gradient(180deg, var(--kessen-lacquer-hi), var(--kessen-lacquer));
+  color: #fff3d6;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.55);
+}
+.kh-pin-reward svg {
+  width: calc(12px * var(--s));
+  height: calc(12px * var(--s));
+}
+
+/* The name plate on the paint: dark lacquer under cream ink, readable on sand, sea and
+   forest. Its text never prints under 11 px; the plate follows its label scale `--ls`. */
+.kh-pin-plate {
+  --ls: max(var(--s), 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2px * var(--ls));
+  max-width: calc(100px * var(--ls));
+  margin-top: calc(4px * var(--s));
+  padding: calc(4px * var(--ls)) calc(9px * var(--ls));
+  border: 1px solid rgb(217 180 90 / 0.7);
+  border-radius: calc(6px * var(--ls));
+  background: linear-gradient(180deg, rgb(42 20 12 / 0.95), rgb(20 10 6 / 0.95));
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.5);
+}
+.kh-pin-name {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--kessen-cream);
+  font-family: var(--kessen-font-display);
+  font-size: max(11px, calc(13px * var(--ls)));
+  line-height: 1.15;
+  text-align: center;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.kh-pin[data-state="locked"] .kh-pin-name {
+  color: #d4c29e;
+}
+/* The pill covers the whole text box (themed layouts' fonts run taller), so the ink
+   always sits on lantern orange. */
+.kh-pin-live-tag {
+  padding: 2px calc(7px * var(--ls));
+  border-radius: 9999px;
+  background: var(--kessen-lantern);
+  color: #2a1406;
+  font-family: var(--kessen-font-body);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 13px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.kh-pin[data-selected] .kh-pin-plate {
+  border-color: var(--kessen-gold-hi);
+  box-shadow:
+    0 0 0 1px var(--kessen-gold-hi),
+    0 0 12px rgb(255 190 90 / 0.6);
+}
+/* Fitted on a narrow frame the plates would print under 11 px: only the pin in hand
+   (selected, hovered or focused) shows its name until the player zooms in; the details
+   strip names it in full and describes the live match by default. */
+.kh-map[data-compact] .kh-pin:not([data-selected], :hover, :focus-visible) .kh-pin-plate {
+  display: none;
+}
+/* Keyboard focus: a dark and gold double ring that hugs the round portrait and reads on
+   sand, sea and forest alike. */
+.kh-pin:focus {
+  outline: none;
+}
+.kh-map .kh-pin:focus-visible .kh-portrait {
+  box-shadow:
+    0 0 0 2px #120a06,
+    0 0 0 5px var(--kessen-gold-hi),
+    0 0 0 8px #120a06,
+    0 4px 10px rgb(0 0 0 / 0.6);
+}
+.kh-pin:focus-visible .kh-pin-plate {
+  border-color: var(--kessen-gold-hi);
+}
+
+/* The details strip under the map: the pin in hand, the zoom buttons and the legend of
+   the marks shown, on the hall's own surface. */
+.kh-map-info {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "body body"
+    "legend zoom";
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 6px;
+  padding: 7px 8px 8px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.4);
+  color: hsl(var(--card-foreground));
+}
+.kh-map-info-body {
+  grid-area: body;
+  min-width: 0;
+}
+.kh-map-zoom {
+  display: flex;
+  grid-area: zoom;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.kh-map-zoom .kh-map-zoom-button {
+  width: 36px;
+  height: 36px;
+}
+.kh-map-zoom-button svg {
+  width: 18px;
+  height: 18px;
+}
+@media (pointer: coarse) {
+  .kh-map-zoom .kh-map-zoom-button {
+    width: 44px;
+    height: 44px;
+  }
+}
+.kh-map-info-title,
+.kh-map-info-line,
+.kh-map-info-hint {
+  margin: 0;
+}
+.kh-map-info-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.kh-map-info-name {
+  font-family: var(--kessen-font-display);
+  font-size: 16px;
+  font-weight: 400;
+}
+.kh-map-info-place,
+.kh-map-info-line,
+.kh-map-info-hint {
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  font-weight: 400;
+}
+.kh-map-info-line {
+  min-height: 1.35em;
+  line-height: 1.35;
+}
+.kh-map-info-line [data-reward],
+.kh-map-info-line [data-live] {
+  color: hsl(var(--card-foreground));
+  font-weight: 700;
+}
+.kh-map-info-line [data-lock] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Wide strips keep each line to one row, the legend beside the details. */
+@container kh-circuit (min-width: 820px) {
+  .kh-map-info {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "body legend zoom";
+  }
+  .kh-map-info-title,
+  .kh-map-info-line,
+  .kh-map-info-hint {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kh-map-legend {
+    max-width: 360px;
+    justify-content: flex-end;
+  }
+}
+.kh-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  grid-area: legend;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+.kh-map-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.kh-legend-seal {
+  position: static;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+/* The pin's badges, drawn in the legend at their own colours. */
+.kh-map-legend .kh-legend-mark {
+  position: static;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  box-shadow: none;
+}
+.kh-map-legend .kh-legend-mark svg {
+  width: 10px;
+  height: 10px;
+}
+.kh-map-legend .kh-pin-live.kh-legend-mark {
+  width: 11px;
+  height: 11px;
+}
+
+.kh-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(3px * var(--ls));
+}
+/* Empty pips keep an outline, so "two of four" reads on the dark plate and in the legend. */
+.kh-pip {
+  width: calc(6px * var(--ls));
+  height: calc(6px * var(--ls));
+  transform: rotate(45deg);
+  border: 1px solid #b08a45;
+  background: rgb(200 168 104 / 0.12);
+}
+.kh-pip[data-on] {
+  border-color: #8a6420;
+  background: var(--kessen-gold);
+}
+.kh-ascended {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: calc(16px * var(--ls));
+  height: calc(16px * var(--ls));
+  margin-left: calc(3px * var(--ls));
+  border: 1px solid var(--kessen-gold);
+  border-radius: 9999px;
+  background: linear-gradient(180deg, var(--kessen-lacquer-hi), var(--kessen-lacquer));
+  color: var(--kessen-gold-hi);
+}
+.kh-ascended svg {
+  width: calc(11px * var(--ls));
+  height: calc(11px * var(--ls));
+  fill: currentColor;
+}
+.kh-ascended[data-beaten] {
+  border-color: var(--kessen-gold-hi);
+  background: linear-gradient(180deg, var(--kessen-gold-hi), var(--kessen-gold));
+  color: #3a1608;
+}
+.kh-map-legend .kh-ascended {
+  margin-left: 0;
+}
+
+/* ------------------------------------------------------------------------ motion */
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-motion="on"] .kh-pin-live {
+    animation: kessen-breathe 1.6s ease-in-out infinite;
+  }
+}

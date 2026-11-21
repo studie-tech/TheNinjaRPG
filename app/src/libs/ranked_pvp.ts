@@ -189,6 +189,13 @@ export const validateItemLoadout = (items: Item[]) => {
       message: `${furnitureItem.name} belongs in your home and cannot be equipped in ranked PvP`,
     };
   }
+  const cardItem = items.find((item) => item.itemType === "CARD");
+  if (cardItem) {
+    return {
+      check: false,
+      message: `${cardItem.name} is a Kessen card and cannot be equipped in ranked PvP`,
+    };
+  }
   const skillGatedItem = items.find((item) => item.requiredSkillId);
   if (skillGatedItem) {
     return {
