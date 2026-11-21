@@ -30,7 +30,12 @@ const step = (version: number, users: object[] = []): CombatPlaybackStep =>
     addedEffectIds: [],
     removedEffectIds: [],
   }) as CombatPlaybackStep;
-const idle = { instant: false, moving: false, cue: () => 1 };
+const idle = {
+  instant: false,
+  moving: false,
+  cue: () => 1,
+  projectilesArrived: (now: number) => now >= 650,
+};
 
 describe("combat replay director", () => {
   it("lands a hook at the victim before revealing the resulting pull", () => {

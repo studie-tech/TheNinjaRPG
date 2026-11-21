@@ -471,6 +471,22 @@ export const createCombatEffects = (
     sync,
     animate,
     hit,
+    /** Pending artwork holds travel; unavailable artwork releases it once loading settles. */
+    projectilesArrived: (now: number) => {
+      const flights = [...records.values()].filter(
+        (record) => record.isProjectileOnly && record.displayed,
+      );
+      return (
+        flights.length > 0 &&
+        flights.every(
+          (record) =>
+            record.ready &&
+            (!record.projectile ||
+              (record.startedAt !== null &&
+                now - record.startedAt >= record.projectile.duration)),
+        )
+      );
+    },
     /** Arrival clips or held sounds were still playing in the last animate. */
     isPlaying: () => playing || flushAt !== null,
     /** Fastest looping clip frame rate in the last animate, 0 without loops. */

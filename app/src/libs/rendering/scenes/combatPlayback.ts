@@ -25,7 +25,7 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
         startedAt: number;
         landedAt: number;
         cueAt?: number;
-        travelAt?: number;
+        travelling: boolean;
       }
     | undefined;
   /** Log rows above this version belong to actions the field has not reached. */
@@ -47,7 +47,7 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
       landed: !frame.windup && !frame.travel,
       startedAt: now,
       landedAt: now,
-      travelAt: !frame.windup && frame.travel ? now : undefined,
+      travelling: !frame.windup && !!frame.travel,
     };
     presented = frame.windup ?? frame.travel ?? frame.battle;
     logVersion = current.landed ? frame.version : frame.version - 1;
@@ -98,6 +98,8 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
       instant: boolean;
       moving: boolean;
       cue: (actorId: string, cueId: string) => number;
+      /** Flights finish on the renderer clock, after their artwork is ready. */
+      projectilesArrived: (now: number) => boolean;
     }) => {
       const { now, moving } = input;
       if (input.instant) {
@@ -111,20 +113,17 @@ export const createCombatPlayback = (initial: ReturnedBattle) => {
       if (current) {
         const { frame } = current;
         const progress = frame.cueId ? input.cue(frame.actorId, frame.cueId) : 1;
-        if (!current.landed && !moving) {
+        if (!current.landed && !moving && current.travelling) {
+          if (input.projectilesArrived(now)) land(now);
+        } else if (!current.landed && !moving) {
           if (progress > 0) current.cueAt ??= now;
           const overdue =
             current.cueAt !== undefined && now - current.cueAt >= MAX_WINDUP_MS;
           if (progress >= frame.impact || overdue) {
-            if (frame.travel && current.travelAt === undefined) {
-              current.travelAt = now;
+            if (frame.travel) {
+              current.travelling = true;
               presented = frame.travel;
-            }
-            if (
-              !frame.travel ||
-              now - (current.travelAt ?? now) >= (frame.travelMs ?? 0)
-            )
-              land(now);
+            } else land(now);
           }
         }
         const held = !frame.cueId || now - current.landedAt >= IMPACT_HOLD_MS;

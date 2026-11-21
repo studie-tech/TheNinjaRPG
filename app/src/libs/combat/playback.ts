@@ -1,4 +1,3 @@
-import { projectileTravelMs } from "@/libs/combat/projectiles";
 import { isSummonTemplate } from "@/libs/combat/summon";
 import type {
   ActionEffect,
@@ -65,7 +64,6 @@ export type CombatPlaybackFrame = {
   windup?: ReturnedBattle;
   /** Casts travel while the pre-impact pools and log version remain on screen. */
   travel?: ReturnedBattle;
-  travelMs?: number;
   battle: ReturnedBattle;
   /** Health lines logged by the actions this frame lands, which its numbers show. */
   hits?: LoggedHealth[];
@@ -366,6 +364,5 @@ const withProjectileTravel = (
   return {
     ...frame,
     travel: { ...before, groundEffects: [...before.groundEffects, ...flights] },
-    travelMs: Math.max(...flights.map((effect) => projectileTravelMs(actor, effect))),
   };
 };

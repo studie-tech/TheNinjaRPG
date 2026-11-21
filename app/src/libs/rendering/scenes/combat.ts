@@ -528,6 +528,7 @@ export const createCombatScene = async (options: {
               instant,
               moving: wasMoving,
               cue: actors.cue,
+              projectilesArrived: effects.projectilesArrived,
             });
       const logVersion = playback.logVersion();
       let hits: CombatHit[] = NO_HITS;

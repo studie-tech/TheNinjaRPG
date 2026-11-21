@@ -7,6 +7,7 @@ import { getBattleGrid } from "@/libs/combat/util";
 import { groundDecalBoundaries } from "@/libs/rendering/primitives/groundDecal";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
+import { createCombatPlayback } from "@/libs/rendering/scenes/combatPlayback";
 import {
   makeBattleUser,
   makeCompleteBattle,
@@ -86,6 +87,71 @@ const setup = (hexWidth = 40) => {
   battle.groundEffects = [effect];
   const snapshot = { battle, assets, sound: true, volume: 0.4 };
   return { effects, snapshot, effect, play, owned, grid, stage };
+};
+
+const setupProjectileReplay = (strike = false) => {
+  const scene = setup();
+  Object.assign(scene.effect, {
+    creatorId: "caster",
+    longitude: 4,
+    latitude: 0,
+    projectileAnimation: "animation",
+    appearAnimation: "animation",
+    staticAnimation: "",
+  });
+  const caster = makeBattleUser("caster", {
+    curHealth: 100,
+    longitude: 0,
+    latitude: 0,
+  });
+  const previous = {
+    ...scene.snapshot.battle,
+    version: 1,
+    usersState: [caster],
+    groundEffects: [],
+  };
+  const changes = {
+    userId: "caster",
+    curHealth: 60,
+    ...(strike
+      ? {
+          spriteAction: {
+            id: "strike",
+            animation: "slash" as const,
+            longitude: 0,
+            latitude: 0,
+          },
+        }
+      : {}),
+  };
+  const next: ReturnedBattle = {
+    ...previous,
+    version: 2,
+    usersState: [{ ...caster, ...changes }],
+    groundEffects: [scene.effect],
+    playback: [
+      {
+        version: 2,
+        actorId: "caster",
+        userIds: ["caster"],
+        users: [changes],
+        addedEffectIds: [scene.effect.id],
+        removedEffectIds: [],
+        hits: [{ userId: "caster", amount: -40 }],
+      },
+    ],
+  };
+  const playback = createCombatPlayback(previous);
+  playback.receive(next);
+  const tick = (now: number, instant = false) =>
+    playback.tick({
+      now,
+      instant,
+      moving: false,
+      cue: () => 1,
+      projectilesArrived: scene.effects.projectilesArrived,
+    });
+  return { ...scene, playback, tick, next };
 };
 
 describe("Pixi combat effects", () => {
@@ -298,6 +364,96 @@ describe("Pixi combat effects", () => {
     await scene.effects.sync(scene.snapshot);
     scene.effects.animate(0, false, false, null);
     expect(scene.play.mock.calls).toEqual([["disappear.wav", 0.4]]);
+  });
+  it.each([false, true])(
+    "waits for a delayed projectile's visible flight before landing health, log and sound (strike: %s)",
+    async (strike) => {
+      const scene = setupProjectileReplay(strike);
+      const texture = new Texture({
+        source: new BufferImageSource({
+          resource: new Uint8Array(4 * 16 * 4),
+          width: 4,
+          height: 16,
+        }),
+      });
+      let resolveTexture!: (texture: Texture) => void;
+      const loading = new Promise<Texture>((resolve) => {
+        resolveTexture = resolve;
+      });
+      vi.spyOn(Assets, "load").mockImplementationOnce(() => loading);
+      scene.tick(0);
+      const travelling = scene.tick(1);
+      const pending = scene.effects.sync({ ...scene.snapshot, battle: travelling });
+      scene.effects.animate(1, false, false, null);
+      expect(scene.tick(650)).toBe(travelling);
+      expect(scene.effects.container.children[0]?.children).toHaveLength(0);
+      expect(scene.playback.logVersion()).toBe(1);
+      expect(scene.playback.takeHits()).toBeUndefined();
+      expect(scene.play).not.toHaveBeenCalled();
+
+      resolveTexture(texture);
+      await pending;
+      // Loading alone does not start a flight: its first rendered frame does.
+      expect(scene.tick(800)).toBe(travelling);
+      scene.effects.animate(800, false, false, null);
+      const projectile = scene.effects.container.children[0]!.children[0] as Sprite;
+      const origin = projectile.x;
+      expect(projectile.visible).toBe(true);
+      expect(scene.tick(1000)).toBe(travelling);
+      scene.effects.animate(1000, false, false, null);
+      expect(projectile.visible).toBe(true);
+      expect(projectile.x).not.toBe(origin);
+      expect(scene.tick(1339)).toBe(travelling);
+      expect(scene.tick(1340)).toBe(scene.next);
+      expect(scene.next.usersState[0]?.curHealth).toBe(60);
+      expect(scene.playback.takeHits()).toEqual([{ userId: "caster", amount: -40 }]);
+      expect(scene.playback.takeHits()).toBeUndefined();
+      await scene.effects.sync({ ...scene.snapshot, battle: scene.next });
+      scene.effects.animate(1340, false, false, null);
+      expect(projectile.destroyed).toBe(true);
+      expect(scene.play.mock.calls).toEqual([["appear.wav", 0.4]]);
+    },
+  );
+  it("lands a failed projectile load without waiting for the replay timeout", async () => {
+    const scene = setupProjectileReplay();
+    vi.spyOn(Assets, "load").mockRejectedValueOnce(new Error("Unavailable artwork"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const travelling = scene.tick(0);
+    await scene.effects.sync({ ...scene.snapshot, battle: travelling });
+    expect(warn).toHaveBeenCalled();
+    expect(scene.tick(1)).toBe(scene.next);
+    expect(scene.playback.takeHits()).toEqual([{ userId: "caster", amount: -40 }]);
+  });
+  it("bounds a stalled projectile load and discards artwork arriving after timeout", async () => {
+    const scene = setupProjectileReplay();
+    let resolveTexture!: (texture: Texture) => void;
+    const loading = new Promise<Texture>((resolve) => {
+      resolveTexture = resolve;
+    });
+    vi.spyOn(Assets, "load").mockImplementationOnce(() => loading);
+    const travelling = scene.tick(0);
+    const pending = scene.effects.sync({ ...scene.snapshot, battle: travelling });
+    expect(scene.tick(3999)).toBe(travelling);
+    expect(scene.tick(4000)).toBe(scene.next);
+    expect(scene.playback.isPlaying()).toBe(false);
+    expect(scene.playback.takeHits()).toEqual([{ userId: "caster", amount: -40 }]);
+    // Removing the expired flight must also cancel its pending sprite creation.
+    const root = scene.effects.container.children[0]!;
+    const impact = scene.effects.sync({ ...scene.snapshot, battle: scene.next });
+    resolveTexture(
+      new Texture({
+        source: new BufferImageSource({
+          resource: new Uint8Array(4 * 16 * 4),
+          width: 4,
+          height: 16,
+        }),
+      }),
+    );
+    await Promise.all([pending, impact]);
+    scene.effects.animate(4100, false, false, null);
+    expect(root.destroyed).toBe(true);
+    expect(scene.effects.projectilesArrived(4100)).toBe(false);
+    expect(scene.playback.presented()).toBe(scene.next);
   });
   it("moves a cast from its creator to its target, then replaces travel with impact once", async () => {
     const scene = setup();
