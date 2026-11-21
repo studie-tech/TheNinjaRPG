@@ -368,3 +368,6 @@ export type CaravanBattleState = {
   /** Village that takes a marker when the assault destroys its last control. */
   captureVillageId: string | null;
 };
+
+/** Views a caravan or trade route notice refreshes in the recipient's open tabs. */
+export type CaravanNoticeView = "caravans" | "routes" | "controls";

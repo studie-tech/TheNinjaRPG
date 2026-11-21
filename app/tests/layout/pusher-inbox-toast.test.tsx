@@ -663,6 +663,63 @@ it("refreshes a released escort's profile and caravan views with the notice", as
   expect(showToast.mock.calls[0]![0].message).toBe("Your caravan arrived.");
 });
 
+it("refreshes the caravan and trade route views a notice announces", async () => {
+  let receiveEvent!: (data: UserEvent) => Promise<void>;
+  vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({
+      bind: (_event: string, handler: typeof receiveEvent) => {
+        receiveEvent = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+  })) as never);
+  const showToast = vi
+    .spyOn(toast, "showMutationToast")
+    .mockImplementation(() => undefined);
+  showToast.mockClear();
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  queryClients.push(queryClient);
+  const routesKey = getQueryKey(testApi.tradeRoute.getRoutes, undefined, "query");
+  const caravansKey = getQueryKey(testApi.caravan.getCaravans, undefined, "query");
+  const controlsKey = getQueryKey(testApi.caravanOps.getControls, undefined, "query");
+  for (const key of [routesKey, caravansKey, controlsKey])
+    queryClient.setQueryData(key, {});
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      {children}
+    </TrpcTestProviders>
+  );
+  renderHook(() => usePusherHandler("player"), { wrapper });
+  await connectPusher();
+  await act(async () =>
+    receiveEvent({
+      type: "userMessage",
+      message: "A accepted your trade route.",
+      route: "/warehouse",
+      refresh: ["routes"],
+    }),
+  );
+  expect(queryClient.getQueryState(routesKey)?.isInvalidated).toBe(true);
+  expect(queryClient.getQueryState(caravansKey)?.isInvalidated).toBe(false);
+  expect(queryClient.getQueryState(controlsKey)?.isInvalidated).toBe(false);
+  await act(async () =>
+    receiveEvent({
+      type: "userMessage",
+      message: "Bandits ambush your caravan!",
+      route: "/warehouse",
+      refresh: ["caravans", "controls"],
+    }),
+  );
+  expect(queryClient.getQueryState(caravansKey)?.isInvalidated).toBe(true);
+  expect(queryClient.getQueryState(controlsKey)?.isInvalidated).toBe(true);
+  expect(showToast).toHaveBeenCalledTimes(2);
+});
+
 it.each(["confirmed", "confirmed-late", "failed", "acknowledged", "list-in-flight"])(
   "uses the confirmed service profile unless inbox ordering requires another read: %s",
   async (outcome) => {

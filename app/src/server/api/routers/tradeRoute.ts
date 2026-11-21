@@ -198,6 +198,7 @@ export const tradeRouteRouter = createTRPCRouter({
         title: "Trade route proposed",
         body: `${own.name} proposes a trade route to ${partner.name}.`,
         route: "/warehouse",
+        refresh: ["routes"],
       });
       return {
         success: true,
@@ -278,6 +279,7 @@ export const tradeRouteRouter = createTRPCRouter({
         title: "Trade route agreed",
         body: `${own.name} accepted your trade route.`,
         route: "/warehouse",
+        refresh: ["routes"],
       });
       return {
         success: true,
