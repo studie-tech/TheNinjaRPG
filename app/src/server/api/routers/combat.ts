@@ -647,6 +647,7 @@ export const combatRouter = createTRPCRouter({
       z.object({
         battleId: z.string(),
         actionId: z.string().optional(),
+        userItemId: z.string().optional(),
         longitude: z.number().optional(),
         latitude: z.number().optional(),
         version: z
@@ -756,7 +757,9 @@ export const combatRouter = createTRPCRouter({
           // that is the summon's own jutsu set; on the player's own turn actor.userId
           // equals suid, so behaviour is unchanged.
           const actions = availableUserActions(newBattle, actor.userId, true, true);
-          const action = actions.find((a) => a.id === input.actionId);
+          const action = actions.find(
+            (a) => a.id === input.actionId && a.userItemId === input.userItemId,
+          );
           if (!action)
             return { notification: `Action not valid anymore. Try something else` };
           performedActionId = action.id;

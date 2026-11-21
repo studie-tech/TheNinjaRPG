@@ -46,6 +46,7 @@ import {
   actionPointsAfterAction,
   availableUserActions,
   getActionPointCost,
+  getActionSelectionId,
 } from "@/libs/combat/actions";
 import { isBattleHotkeyBlocked, toHotkey } from "@/libs/combat/hotkeys";
 import { resolveControlledActorId } from "@/libs/combat/turn";
@@ -497,7 +498,7 @@ export default function CombatPage() {
   const combat = battleState && controlledActorId && (
     <Combat
       battleState={battleState}
-      action={actions.find((a) => a.id === actionId)}
+      action={actions.find((a) => getActionSelectionId(a) === actionId)}
       userId={controlledActorId}
       setBattleState={setBattleState}
       config={config}
@@ -542,9 +543,10 @@ export default function CombatPage() {
         availableActionPoints !== undefined &&
         cost !== undefined &&
         availableActionPoints < cost;
-      if (actionId !== boundId && (onCooldown || tooExpensive)) return;
+      const selectionId = getActionSelectionId(action);
+      if (actionId !== selectionId && (onCooldown || tooExpensive)) return;
       event.preventDefault();
-      setActionId(actionId === boundId ? undefined : boundId);
+      setActionId(actionId === selectionId ? undefined : selectionId);
     };
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => {
@@ -617,7 +619,7 @@ export default function CombatPage() {
           id="tutorial-combat-action-timer"
         >
           <ActionTimer
-            action={actions.find((a) => a.id === actionId)}
+            action={actions.find((a) => getActionSelectionId(a) === actionId)}
             user={{
               userId: controlledActorId,
               actionPoints: user.actionPoints,

@@ -568,7 +568,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     if (!startAction(input.battleId)) return;
     actionInFlightRef.current = true;
     const action = precomputedActionsRef.current.find(
-      ({ id }) => id === input.actionId,
+      ({ id, userItemId }) => id === input.actionId && userItemId === input.userItemId,
     );
     setPendingAction(
       action && input.version !== undefined
@@ -912,6 +912,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       battleId: battle.id,
       version: battle.version,
       actionId: action.id,
+      userItemId: action.userItemId,
       longitude: target.col,
       latitude: target.row,
     });

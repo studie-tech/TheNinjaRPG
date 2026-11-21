@@ -685,6 +685,8 @@ export type CombatResult = {
 
 export type CombatAction = {
   id: string;
+  /** Owned copy selected for item effects, consumption and durability. */
+  userItemId?: string;
   name: string;
   image: string;
   battleDescription: string;

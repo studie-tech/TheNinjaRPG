@@ -106,6 +106,10 @@ import {
 } from "@/validators/combat";
 import { stillInBattle } from "./inBattle";
 
+/** Distinguishes owned item copies in selection while retaining catalog action IDs. */
+export const getActionSelectionId = (action: Pick<CombatAction, "id" | "userItemId">) =>
+  action.userItemId ?? action.id;
+
 /**
  * Given a user, return a list of actions that the user can perform
  */
@@ -355,7 +359,7 @@ export const availableUserActions = (
           a.type === "jutsu"
             ? user?.jutsus?.find((j) => j.jutsuId === a.id)
             : a.type === "item"
-              ? user?.items?.find((i) => i.itemId === a.id)
+              ? user?.items?.find((i) => i.id === a.userItemId)
               : undefined;
         if (entry) {
           entry.originalCooldown = a.originalCooldown;
@@ -773,6 +777,7 @@ export const userItemToAction = (
   const level = getItemCombatLevel(useritem, user);
   return {
     id: item.id,
+    userItemId: useritem.id,
     name: useritem.variantName ?? item.name,
     image: useritem.variantImage ?? item.image,
     battleDescription: useritem.variantBattleDescription ?? item.battleDescription,
@@ -1271,7 +1276,7 @@ export const insertAction = (info: {
   }
   // If this was an item, check if we should destroy on use
   if (action.type === "item") {
-    const useritem = user.items.find((i) => i.itemId === action.id);
+    const useritem = user.items.find((i) => i.id === action.userItemId);
     const itemData = useritem ? getItem(battle, useritem.itemId) : undefined;
     if (
       useritem &&
@@ -1412,7 +1417,7 @@ export const performBattleAction = (props: {
 
   // Track weapon durability usage
   if (action.type === "item") {
-    const used = user.items.find((i) => i.itemId === action.id);
+    const used = user.items.find((i) => i.id === action.userItemId);
     const usedItem = used ? getItem(battle, used.itemId) : undefined;
     if (used && usedItem?.itemType === "WEAPON") {
       wearBattleItem(battle, used, usedItem, 3);
