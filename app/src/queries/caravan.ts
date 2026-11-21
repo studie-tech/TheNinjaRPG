@@ -117,26 +117,32 @@ export const listOpenVillageCaravans = (
     )
     .orderBy(desc(caravan.createdAt));
 
-/** The latest finished caravans a village sent or received. */
+/**
+ * The latest finished caravans a village sent or received. Each side walks its
+ * (village, resolvedAt) index newest first and stops at the limit.
+ */
 export const listFinishedVillageCaravans = (
   client: Pick<DrizzleClient, "select">,
   villageId: string,
   limit: number,
-) =>
-  client
-    .select()
-    .from(caravan)
-    .where(
-      and(
-        or(
-          eq(caravan.originVillageId, villageId),
-          eq(caravan.destinationVillageId, villageId),
+) => {
+  const side = (sent: boolean) =>
+    client
+      .select()
+      .from(caravan)
+      .where(
+        and(
+          eq(sent ? caravan.originVillageId : caravan.destinationVillageId, villageId),
+          inArray(caravan.status, ["DELIVERED", "CANCELLED"]),
         ),
-        inArray(caravan.status, ["DELIVERED", "CANCELLED"]),
-      ),
-    )
+      )
+      .orderBy(desc(caravan.resolvedAt))
+      .limit(limit);
+  return side(true)
+    .unionAll(side(false))
     .orderBy(desc(caravan.resolvedAt))
     .limit(limit);
+};
 
 /** Caravans that are preparing or travelling, optionally on given routes. */
 export const listOpenCaravans = (
