@@ -8461,16 +8461,22 @@ export type WarehouseDepositLedger = InferSelectModel<typeof warehouseDepositLed
  * A player's daily withdrawals, kept across village changes so rejoining grants no second
  * allowance, and their Kage approval, valid only in the approving village since joining it.
  */
-export const warehouseMember = mysqlTable("WarehouseMember", {
-  userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
-  allowanceDay: varchar("allowanceDay", { length: 10 }),
-  allowanceUsed: int("allowanceUsed", { unsigned: true }).default(0).notNull(),
-  approvedVillageId: varchar("approvedVillageId", { length: 191 }),
-  approvedAt: datetime("approvedAt", { mode: "date", fsp: 3 }),
-  /** Wartime approvals expire with this war. */
-  approvedWarId: varchar("approvedWarId", { length: 191 }),
-  approvedById: varchar("approvedById", { length: 191 }),
-});
+export const warehouseMember = mysqlTable(
+  "WarehouseMember",
+  {
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    allowanceDay: varchar("allowanceDay", { length: 10 }),
+    allowanceUsed: int("allowanceUsed", { unsigned: true }).default(0).notNull(),
+    approvedVillageId: varchar("approvedVillageId", { length: 191 }),
+    approvedAt: datetime("approvedAt", { mode: "date", fsp: 3 }),
+    /** Wartime approvals expire with this war. */
+    approvedWarId: varchar("approvedWarId", { length: 191 }),
+    approvedById: varchar("approvedById", { length: 191 }),
+  },
+  (table) => [
+    index("WarehouseMember_approvedVillageId_idx").on(table.approvedVillageId),
+  ],
+);
 export type WarehouseMember = InferSelectModel<typeof warehouseMember>;
 
 /** Append-only movement history of a village's Warehouse. */
