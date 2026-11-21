@@ -191,16 +191,15 @@ export const cancelCaravan = async (
 ) => {
   const departed = row.status === "TRAVELLING";
   const returned = departed ? getRemainingCargo(row.cargo, row.lossBp) : row.cargo;
-  const [participants] = await Promise.all([
-    listCaravanParticipants(client, [row.id]),
-    departed
-      ? ensureWarehouseStock(
-          client,
-          row.originVillageId,
-          returned.map((line) => line.itemId),
-        )
-      : undefined,
-  ]);
+  // Sequential, since disbanding runs this on a transaction; only a rare departed cancel
+  // pays the extra round trip.
+  const participants = await listCaravanParticipants(client, [row.id]);
+  if (departed)
+    await ensureWarehouseStock(
+      client,
+      row.originVillageId,
+      returned.map((line) => line.itemId),
+    );
   const cancelled = await closeCaravan(client, row, {
     status: "CANCELLED",
     resolvedAt: now,
@@ -238,10 +237,9 @@ export const closeVillageTrade = async (
   villageId: string,
   now = new Date(),
 ) => {
-  const [caravans] = await Promise.all([
-    listOpenVillageCaravans(client, villageId),
-    closeTradeRoutes(client, { villageId }, now),
-  ]);
+  // Sequential, since account deletion runs a disband on a transaction.
+  const caravans = await listOpenVillageCaravans(client, villageId);
+  await closeTradeRoutes(client, { villageId }, now);
   for (const row of caravans) await callOffCaravan(client, row, now);
 };
 
