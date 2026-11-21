@@ -117,7 +117,7 @@ export default function ChakraStormPage() {
       <ContentBox
         title="Chakra Storm"
         subtitle="Scout Seichi for your village"
-        defaultBackHref="/minigames"
+        defaultBackHref="/manual#minigames"
       >
         <ChakraStormLobby
           progress={progress}
@@ -156,7 +156,7 @@ export default function ChakraStormPage() {
     <ContentBox
       title="Chakra Storm"
       subtitle={run.hud ? CS_STAGE_INFO[run.hud.config.stage].name : "Scouting"}
-      defaultBackHref="/minigames"
+      defaultBackHref="/manual#minigames"
       onBack={run.leave}
       padding={false}
     >
