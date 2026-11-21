@@ -7,6 +7,7 @@ import {
   CARAVAN_GUARD_SLOTS,
   CARAVAN_MAX_CARGO_ITEMS,
   CARAVAN_MAX_CARGO_UNITS,
+  CARAVAN_MIN_CARGO_UNITS,
   CARAVANS_PER_TRADE_ROUTE,
 } from "@/drizzle/constants";
 import {
@@ -260,7 +261,12 @@ export const caravanRouter = createTRPCRouter({
         items.some((row) => !isWarehouseStorable(row))
       )
         return errorResponse("Caravans carry Warehouse goods only");
-      if (cargo.reduce((sum, line) => sum + line.quantity, 0) > CARAVAN_MAX_CARGO_UNITS)
+      const units = cargo.reduce((sum, line) => sum + line.quantity, 0);
+      if (units < CARAVAN_MIN_CARGO_UNITS)
+        return errorResponse(
+          `A caravan carries at least ${CARAVAN_MIN_CARGO_UNITS} units`,
+        );
+      if (units > CARAVAN_MAX_CARGO_UNITS)
         return errorResponse(
           `A caravan carries at most ${CARAVAN_MAX_CARGO_UNITS.toLocaleString()} units`,
         );

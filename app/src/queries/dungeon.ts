@@ -38,6 +38,7 @@ import {
   userPet,
 } from "@/drizzle/schema";
 import type { CompleteBattle } from "@/libs/combat/types";
+import { withoutCaravanEscort } from "@/queries/activityReservation";
 import type { DrizzleClient } from "@/server/db";
 import { activityCompletionExtras } from "@/server/utils/achievementObjectives";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
@@ -745,6 +746,7 @@ export const claimDungeonQueue = (
         readiness?.where ?? eq(userData.status, "AWAKE"),
         isNull(userData.battleId),
         eq(userData.isBanned, false),
+        withoutCaravanEscort(),
         sql`EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.runId} = ${runId} AND ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} IN ('LOBBY', 'BETWEEN', 'PAUSED') AND (${dungeonRun.expiresAt} IS NULL OR ${dungeonRun.expiresAt} > NOW(3)))`,
       ),
     );

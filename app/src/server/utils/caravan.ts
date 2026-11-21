@@ -11,11 +11,11 @@ import {
   CARAVAN_DISRUPTION_MINUTES,
   CARAVAN_ENCOUNTER_RATE_SETTING,
   CARAVAN_ENCOUNTER_STALE_MINUTES,
-  CARAVAN_MAX_DELAY_MINUTES,
   TRADE_ROUTE_MARKER_DISCOVERY_HOURS,
 } from "@/drizzle/constants";
 import type { Caravan, CaravanOperation, UserData } from "@/drizzle/schema";
 import {
+  getAllowedDelay,
   getAttackerRole,
   getCaravanSector,
   getGuardReward,
@@ -80,7 +80,8 @@ export const maintainCaravans = async (
   now = new Date(),
   scope?: { caravanIds?: string[]; userId?: string },
 ) => {
-  await resolveDueOperations(client, now, scope?.userId);
+  // A page read finishes only its viewer's operations; the job finishes everyone's.
+  if (!scope || scope.userId) await resolveDueOperations(client, now, scope?.userId);
   if (scope && !scope.caravanIds?.length) return;
   const caravans = scope?.caravanIds
     ? await listCaravansByIds(client, scope.caravanIds)
@@ -90,7 +91,7 @@ export const maintainCaravans = async (
     caravans.filter((row) => row.status === "TRAVELLING"),
     now,
   );
-  await settleDueEncounters(client, now);
+  await settleDueEncounters(client, now, scope?.caravanIds);
   await cancelBlockedCaravans(client, now, scope?.caravanIds);
   const arrived = scope?.caravanIds
     ? (await listCaravansByIds(client, scope.caravanIds)).filter(
@@ -297,19 +298,27 @@ const resolveDueOperations = async (
         await resolveOperation(client, operation.id, "RESOLVED", now);
         continue;
       }
+      const [target] = await listCaravansByIds(client, [operation.caravanId]);
+      // A caravan that arrived or was called off meanwhile cannot be sabotaged.
+      if (target?.status !== "TRAVELLING") {
+        await resolveOperation(client, operation.id, "RESOLVED", now);
+        continue;
+      }
+      // A delay that changed meanwhile leaves the operation for the next run's fresh read.
       await resolveSabotage(client, {
         operationId: operation.id,
-        caravanId: operation.caravanId,
+        caravanId: target.id,
         now,
-        delayMinutes: operation.type === "DELAY" ? CARAVAN_DELAY_MINUTES : 0,
-        maxDelayMinutes: CARAVAN_MAX_DELAY_MINUTES,
+        expectedDelayMinutes: target.delayMinutes,
+        addedMinutes:
+          operation.type === "DELAY"
+            ? getAllowedDelay(target.delayMinutes, CARAVAN_DELAY_MINUTES)
+            : 0,
         disruptedUntil:
           operation.type === "DISRUPT"
             ? new Date(now.getTime() + CARAVAN_DISRUPTION_MINUTES * MINUTE_MS)
             : null,
       });
-      // A caravan that arrived meanwhile cannot be sabotaged; finish the operation anyway.
-      await resolveOperation(client, operation.id, "RESOLVED", now);
       continue;
     }
     const claimed = await resolveOperation(client, operation.id, "RESOLVED", now);
@@ -448,11 +457,19 @@ const rollCheckpointAmbushes = async (
 };
 
 /** Resolve unanswered ambushes and release fights whose battle vanished unsettled. */
-const settleDueEncounters = async (client: DrizzleClient, now: Date) => {
-  const due = await listDueEncounters(
-    client,
-    now,
-    new Date(now.getTime() - CARAVAN_ENCOUNTER_STALE_MINUTES * MINUTE_MS),
+const settleDueEncounters = async (
+  client: DrizzleClient,
+  now: Date,
+  caravanIds?: string[],
+) => {
+  const due = (
+    await listDueEncounters(
+      client,
+      now,
+      new Date(now.getTime() - CARAVAN_ENCOUNTER_STALE_MINUTES * MINUTE_MS),
+    )
+  ).filter(
+    (row) => !caravanIds || (row.caravanId && caravanIds.includes(row.caravanId)),
   );
   if (due.length === 0) return;
   const running = new Set(
@@ -490,9 +507,16 @@ const cancelBlockedCaravans = async (
     client,
     blocked.map((row) => row.routeId),
   );
+  const scoped = caravans.filter((row) => !caravanIds || caravanIds.includes(row.id));
+  // A caravan still being fought over is called off once its fight settles.
+  const fighting = new Set(
+    (await listOpenEncounters(client, { caravanIds: scoped.map((row) => row.id) })).map(
+      (row) => row.caravanId,
+    ),
+  );
   await Promise.all(
-    caravans
-      .filter((row) => !caravanIds || caravanIds.includes(row.id))
+    scoped
+      .filter((row) => !fighting.has(row.id))
       .map((row) => cancelCaravan(client, row, now)),
   );
 };

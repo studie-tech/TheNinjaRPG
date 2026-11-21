@@ -29,6 +29,7 @@ import {
   getWithdrawalAllowance,
   isWarehouseStorable,
 } from "@/libs/warehouse";
+import { fetchClan } from "@/queries/clan";
 import { fetchUser } from "@/queries/profile";
 import { fetchVillage } from "@/queries/village";
 import {
@@ -49,6 +50,7 @@ import {
   listWarehouseItems,
   listWarehouseLogs,
   listWarehouseStock,
+  resetWarehouseAllowanceDay,
   revokeWarehouseMember,
   updateWarehouseProduction,
 } from "@/queries/warehouse";
@@ -89,7 +91,8 @@ export const warehouseRouter = createTRPCRouter({
         structure,
         now,
       );
-      const [stock, producible, approvals, selected] = await Promise.all([
+      const isFaction = isFactionVillage(villageData);
+      const [stock, producible, approvals, selected, clanData] = await Promise.all([
         listWarehouseStock(ctx.drizzle, villageData.id),
         isLeader
           ? listProducibleItems(ctx.drizzle, getProductionVillageId(villageData))
@@ -98,6 +101,7 @@ export const warehouseRouter = createTRPCRouter({
           ? listWarehouseApprovals(ctx.drizzle, villageData.id)
           : Promise.resolve([]),
         listWarehouseItems(ctx.drizzle, settings.productionItemIds),
+        isFaction && user.clanId ? fetchClan(ctx.drizzle, user.clanId) : undefined,
       ]);
       const level = getWarehouseLevel(structure, now);
       const multiplier = structure ? getRaidStructureMultiplier(structure, now) : 1;
@@ -123,7 +127,9 @@ export const warehouseRouter = createTRPCRouter({
           type: villageData.type,
           tokens: villageData.tokens,
           structureMaintenanceDue: villageData.structureMaintenanceDue,
-          usesClanPoints: isFactionVillage(villageData),
+          usesClanPoints: isFaction,
+          // Faction settlements build and upgrade with their clan's points.
+          funds: isFaction ? (clanData?.points ?? 0) : villageData.tokens,
         },
         structure: structure
           ? {
@@ -368,6 +374,7 @@ export const warehouseRouter = createTRPCRouter({
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
             await ensureWarehouseMember(tx, ctx.userId);
+            await resetWarehouseAllowanceDay(tx, ctx.userId, allowance.day);
             const claimed = await claimWithdrawal(tx, {
               villageId: villageData.id,
               itemId: input.itemId,

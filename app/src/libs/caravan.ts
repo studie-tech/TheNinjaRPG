@@ -12,6 +12,7 @@ import {
   CARAVAN_GUARD_DELIVERY_RYO,
   CARAVAN_GUARD_OBJECTIVE_RYO,
   CARAVAN_MAX_DELAY_MINUTES,
+  CARAVAN_MAX_GUARD_OBJECTIVES,
   CARAVAN_MAX_LOSS_BP,
   CARAVAN_SABOTAGE_MINUTES,
   CARAVAN_STEALTH_BASE_CHANCE,
@@ -204,10 +205,11 @@ export const splitLoot = (
   return loot;
 };
 
-/** Delivery pay of a guard; guards who completed no objective earn nothing. */
+/** Delivery pay of a guard, for a capped number of objectives; none earns nothing. */
 export const getGuardReward = (objectives: number) =>
   objectives > 0
-    ? CARAVAN_GUARD_DELIVERY_RYO + objectives * CARAVAN_GUARD_OBJECTIVE_RYO
+    ? CARAVAN_GUARD_DELIVERY_RYO +
+      Math.min(objectives, CARAVAN_MAX_GUARD_OBJECTIVES) * CARAVAN_GUARD_OBJECTIVE_RYO
     : 0;
 
 /** Bandit rank of an amount of bandit experience. */

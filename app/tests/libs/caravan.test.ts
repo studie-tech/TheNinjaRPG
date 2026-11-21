@@ -5,6 +5,7 @@ import {
   CARAVAN_GUARD_DELIVERY_RYO,
   CARAVAN_GUARD_OBJECTIVE_RYO,
   CARAVAN_MAX_DELAY_MINUTES,
+  CARAVAN_MAX_GUARD_OBJECTIVES,
   CARAVAN_MAX_LOSS_BP,
   CARAVAN_STEALTH_BASE_CHANCE,
   CARAVAN_STEALTH_MAX_CHANCE,
@@ -151,8 +152,12 @@ describe("cargo losses", () => {
 describe("roles and rewards", () => {
   const villager = { isOutlaw: false, isBandit: false, villageId: "a" };
 
-  it("pays escorts only for completed objectives", () => {
+  it("pays escorts only for completed objectives, up to a cap", () => {
     expect(getGuardReward(0)).toBe(0);
+    expect(getGuardReward(CARAVAN_MAX_GUARD_OBJECTIVES + 20)).toBe(
+      CARAVAN_GUARD_DELIVERY_RYO +
+        CARAVAN_MAX_GUARD_OBJECTIVES * CARAVAN_GUARD_OBJECTIVE_RYO,
+    );
     expect(getGuardReward(2)).toBe(
       CARAVAN_GUARD_DELIVERY_RYO + 2 * CARAVAN_GUARD_OBJECTIVE_RYO,
     );

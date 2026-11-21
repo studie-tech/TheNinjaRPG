@@ -1081,7 +1081,10 @@ function Travel() {
     { key: "war", node: <WarFieldActions />, priority: 10 },
     {
       key: "caravans",
-      node: isSectorTools && <CaravanControls className={mapToolClassName} />,
+      // Kept out of the tutorial's guided map lessons.
+      node: isSectorTools && !tutorialRunning && (
+        <CaravanControls className={mapToolClassName} />
+      ),
       priority: 8,
     },
     {

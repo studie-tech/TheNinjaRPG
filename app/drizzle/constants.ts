@@ -5109,6 +5109,7 @@ export type CaravanRole = (typeof CARAVAN_ROLES)[number];
 /** Escort slots of each caravan. */
 export const CARAVAN_GUARD_SLOTS = 3;
 /** Distinct items and units one caravan can carry. */
+export const CARAVAN_MIN_CARGO_UNITS = 100;
 export const CARAVAN_MAX_CARGO_ITEMS = 5;
 export const CARAVAN_MAX_CARGO_UNITS = 2_000;
 /** Escort checkpoints along every journey; each one can roll an NPC bandit ambush. */
@@ -5148,6 +5149,8 @@ export const CARAVAN_MAX_GROUP = 3;
 /** Rewards. Guards are paid on delivery for each completed objective. */
 export const CARAVAN_GUARD_DELIVERY_RYO = 5_000;
 export const CARAVAN_GUARD_OBJECTIVE_RYO = 2_500;
+/** Objectives a guard is paid for per journey: every checkpoint and a few defences. */
+export const CARAVAN_MAX_GUARD_OBJECTIVES = 7;
 export const CARAVAN_ENEMY_VICTORY_RYO = 5_000;
 /** An encounter whose battle vanished without settling is released after this long. */
 export const CARAVAN_ENCOUNTER_STALE_MINUTES = 30;
