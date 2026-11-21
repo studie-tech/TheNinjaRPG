@@ -2,7 +2,8 @@
 
 import { X } from "lucide-react";
 import { useRef, useState } from "react";
-import { api, type RouterOutputs } from "@/app/_trpc/client";
+import type { RouterOutputs } from "@/app/_trpc/client";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import type { Item } from "@/drizzle/schema";
@@ -26,7 +27,7 @@ import { useUserInfo } from "@/utils/UserContext";
 
 /**
  * Everything about one item for sale, laid out like the backpack's inspector: art and rarity,
- * the description, a box with price, quantity, limits, discounts and Buy, then the full
+ * a description, a box with price, quantity, limits, discounts and Buy, then the full
  * stats below. Buying asks for confirmation; a rejected purchase keeps the dialog open
  * with the server's message.
  */

@@ -1,8 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { useState } from "react";
+import * as client from "@/app/_trpc/client";
 import { TUTORIAL_ITEM_ID } from "@/drizzle/constants";
+import * as tutorial from "@/hooks/tutorial";
+import * as mediaQuery from "@/hooks/useMediaQuery";
+import * as ContentBox from "@/layout/ContentBox";
+import * as ContentImage from "@/layout/ContentImage";
+import * as Image from "@/layout/Image";
+import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
+import * as ItemWithEffects from "@/layout/ItemWithEffects";
+import * as Modal from "@/layout/Modal";
+import Shop from "@/layout/Shop";
+import * as pagination from "@/libs/pagination";
+import * as toast from "@/libs/toast";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import * as routing from "@/utils/routing";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Purchase = { itemId: string; stack: number; villageId?: string | null };
 type PurchaseResult = { success: boolean; message: string };
@@ -48,21 +62,6 @@ const catalogQuery = vi.fn(() => ({
 const purchase = vi.fn((input: Purchase) =>
   purchaseOptions.onSuccess(purchaseResult, input, undefined),
 );
-
-import * as client from "@/app/_trpc/client";
-import * as tutorial from "@/hooks/tutorial";
-import * as mediaQuery from "@/hooks/useMediaQuery";
-import * as ContentBox from "@/layout/ContentBox";
-import * as ContentImage from "@/layout/ContentImage";
-import * as Image from "@/layout/Image";
-import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
-import * as ItemWithEffects from "@/layout/ItemWithEffects";
-import * as Modal from "@/layout/Modal";
-import Shop from "@/layout/Shop";
-import * as pagination from "@/libs/pagination";
-import * as toast from "@/libs/toast";
-import * as routing from "@/utils/routing";
-import { mockUserContextValue } from "../setup/userContext";
 
 const user = {
   level: 50,

@@ -1,8 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { useState } from "react";
+import * as client from "@/app/_trpc/client";
+import * as sheet from "@/components/ui/sheet";
 import { TUTORIAL_ITEM_ID } from "@/drizzle/constants";
+import * as tutorial from "@/hooks/tutorial";
+import * as mediaQuery from "@/hooks/useMediaQuery";
+import * as ContentBox from "@/layout/ContentBox";
+import * as ContentImage from "@/layout/ContentImage";
+import * as Image from "@/layout/Image";
+import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
+import * as ItemWithEffects from "@/layout/ItemWithEffects";
+import * as Modal from "@/layout/Modal";
+import Shop from "@/layout/Shop";
+import { MobileShop } from "@/layout/shop/MobileShop";
+import * as pagination from "@/libs/pagination";
+import * as shop from "@/libs/shop";
+import * as toast from "@/libs/toast";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import * as routing from "@/utils/routing";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Purchase = { itemId: string; stack: number; villageId?: string | null };
 type PurchaseResult = { success: boolean; message: string };
@@ -72,24 +90,6 @@ const purchase = vi.fn((input: Purchase) => {
   purchaseOptions.onSettled?.();
 });
 
-import * as client from "@/app/_trpc/client";
-import * as sheet from "@/components/ui/sheet";
-import * as tutorial from "@/hooks/tutorial";
-import * as mediaQuery from "@/hooks/useMediaQuery";
-import * as ContentBox from "@/layout/ContentBox";
-import * as ContentImage from "@/layout/ContentImage";
-import * as Image from "@/layout/Image";
-import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
-import * as ItemWithEffects from "@/layout/ItemWithEffects";
-import * as Modal from "@/layout/Modal";
-import Shop from "@/layout/Shop";
-import { MobileShop } from "@/layout/shop/MobileShop";
-import * as pagination from "@/libs/pagination";
-import * as shop from "@/libs/shop";
-import * as toast from "@/libs/toast";
-import * as routing from "@/utils/routing";
-import { mockUserContextValue } from "../setup/userContext";
-
 const user = {
   userId: "player",
   level: 50,
@@ -109,27 +109,8 @@ const names = (view: ReturnType<typeof render>) =>
 const chip = (view: ReturnType<typeof render>, name: RegExp) =>
   view.getByRole("button", { name });
 
-const browserGlobals = [
-  "Event",
-  "CustomEvent",
-  "KeyboardEvent",
-  "MouseEvent",
-  "PointerEvent",
-  "FocusEvent",
-  "StorageEvent",
-] as const;
-const browserDescriptors = browserGlobals.map((key) =>
-  Object.getOwnPropertyDescriptor(globalThis, key),
-);
-
 beforeEach(() => {
-  for (const key of browserGlobals) {
-    if (key in window)
-      Object.defineProperty(globalThis, key, {
-        configurable: true,
-        value: window[key as keyof Window],
-      });
-  }
+  installBrowserGlobals();
   vi.clearAllMocks();
   purchaseResult = { success: true, message: "Purchased" };
   remaining = null;
@@ -214,12 +195,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  Reflect.deleteProperty(globalThis, "ResizeObserver");
-  browserGlobals.forEach((key, index) => {
-    const descriptor = browserDescriptors[index];
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  });
+  restoreBrowserGlobals();
 });
 
 describe("shop catalog", () => {
