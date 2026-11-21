@@ -88,6 +88,19 @@ const USER_FILTERING_SCHEMA = defineFilteringSchema({
         Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
     },
     {
+      id: "isCaravanAi",
+      label: "Caravan Status",
+      type: "tri-state",
+      defaultValue: undefined,
+      triStateLabels: {
+        labelActive: "Caravan Only",
+        labelInactive: "Non-Caravan Only",
+        labelAll: "All Caravans",
+      },
+      visibleIf: (ctx) =>
+        Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
+    },
+    {
       id: "isSummon",
       label: "Summon Status",
       type: "tri-state",

@@ -54,10 +54,13 @@ import {
   warKill,
 } from "@/drizzle/schema";
 import {
+  withoutActivityReservation,
+  withoutCaravanEscort,
+} from "@/queries/activityReservation";
+import {
   selectClaimedRankedQueueEntry,
   selectUnresolvedClanLobbyEntry,
 } from "@/queries/concurrency";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { userSummaryColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
@@ -278,9 +281,10 @@ export const insertVillageStructureForPurchaseHideout = (
     newStructures.map((s) => ({
       ...s,
       id: nanoid(),
-      level: 1,
+      // A new settlement constructs its own Warehouse; the Syndicate's starts built.
+      level: s.route === "/warehouse" ? 0 : 1,
       villageId: hideoutId,
-      allyAccess: 1,
+      allyAccess: s.route === "/warehouse" ? 0 : 1,
     })),
   );
 
@@ -698,6 +702,7 @@ export const updateUserDataForChallengeClan = (
       and(
         eq(userData.userId, user.userId),
         readiness?.where ?? eq(userData.status, "AWAKE"),
+        withoutCaravanEscort(),
         notExists(
           client
             .select({ id: mpvpBattleUser.id })
@@ -804,7 +809,7 @@ export const updateUserDataForInitiateClanBattle = (
         inArray(userData.userId, allIds),
         eq(userData.status, "QUEUED"),
         isNull(userData.battleId),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
         // Recheck membership and the reserved lobby at the write: deletion can
         // release surplus players into another queue after startup's final read.
         exists(
@@ -935,7 +940,7 @@ export const updateUserDataForUndoClanBattleJoin = (
         eq(userData.userId, userId),
         eq(userData.status, "QUEUED"),
         isNull(userData.battleId),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
         notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
         notExists(selectUnresolvedClanLobbyEntry(client, userId)),
       ),
@@ -954,7 +959,7 @@ export const updateUserDataForRemoveFromClan = (
       clanId: null,
       status:
         readiness?.set.status ??
-        sql`CASE WHEN ${userData.status} = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE ${userData.status} END`,
+        sql`CASE WHEN ${userData.status} = "QUEUED" AND ${withoutActivityReservation()} THEN "AWAKE" ELSE ${userData.status} END`,
       villageId: sql`CASE WHEN ${userData.isOutlaw} = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE ${userData.villageId} END`,
     })
     .where(and(eq(userData.userId, userId), readiness?.where));
@@ -1064,7 +1069,7 @@ export const updateUserDataForRemoveFromClan2 = (
     .update(userData)
     .set({
       clanId: null,
-      status: sql`CASE WHEN ${userData.status} = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE ${userData.status} END`,
+      status: sql`CASE WHEN ${userData.status} = "QUEUED" AND ${withoutActivityReservation()} THEN "AWAKE" ELSE ${userData.status} END`,
       villageId: sql`CASE WHEN ${userData.isOutlaw} = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE ${userData.villageId} END`,
     })
     // Exclude the leaver, whose row the primary-key update above already
@@ -1252,7 +1257,7 @@ export const updateUserDataForDeleteClanBattle = (
       and(
         eq(userData.status, "QUEUED"),
         isNull(userData.battleId),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
         inArray(
           userData.userId,
           client

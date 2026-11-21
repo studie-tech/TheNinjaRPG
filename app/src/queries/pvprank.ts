@@ -38,11 +38,14 @@ import {
   userData,
 } from "@/drizzle/schema";
 import {
+  withoutActivityReservation,
+  withoutCaravanEscort,
+} from "@/queries/activityReservation";
+import {
   nextSnapshotSql,
   selectClaimedRankedQueueEntry,
   selectUnresolvedClanLobbyEntry,
 } from "@/queries/concurrency";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { RankedLoadoutSchema } from "@/validators/pvpRank";
 
@@ -261,7 +264,7 @@ export const updateUserDataForGetRankedPvpQueue = (
       and(
         eq(userData.userId, ctx.userId),
         eq(userData.status, "QUEUED"),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
         // Independent reads may precede a ranked claim or belong to a clan lobby.
         notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
         notExists(selectUnresolvedClanLobbyEntry(client, userData.userId)),
@@ -346,6 +349,7 @@ export const executeResultForQueueForRankedPvp = (
             SET ${actionReadinessSqlSet(readiness)} ${userData.status} = 'QUEUED', ${rankedPvpQueue.hasClaimed} = true
             WHERE ${userData.userId} = ${user.userId}
               AND ${readiness?.where ?? eq(userData.status, "AWAKE")}
+              AND ${withoutCaravanEscort()}
               AND ${rankedPvpQueue.id} = ${queueId}
               AND ${rankedPvpQueue.hasClaimed} = false
           `);

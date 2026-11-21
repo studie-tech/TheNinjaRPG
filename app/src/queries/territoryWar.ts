@@ -35,7 +35,10 @@ import {
   village,
 } from "@/drizzle/schema";
 import { actionReadinessSqlSet } from "@/queries/actionReadiness";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import {
+  withoutActivityReservation,
+  withoutCaravanEscort,
+} from "@/queries/activityReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
@@ -253,7 +256,7 @@ export const executeRowsForCleanupTerritoryWarTeams = (
 ) =>
   client.execute(
     sql`UPDATE ${userData} INNER JOIN ${mpvpBattleUser} ON ${mpvpBattleUser.userId} = ${userData.userId} INNER JOIN ${mpvpBattleQueue} ON ${mpvpBattleQueue.id} = ${mpvpBattleUser.clanBattleId} INNER JOIN ${territoryWar} ON ${territoryWar.id} = ${mpvpBattleQueue.territoryWarId} LEFT JOIN ${battle} ON ${battle.id} = ${mpvpBattleQueue.battleId} SET ${userData.status} = 'AWAKE' WHERE ${expired} AND ${userData.status} = 'QUEUED'
-      AND ${withoutDungeonReservation()}`,
+      AND ${withoutActivityReservation()}`,
   );
 
 /** Execute the database statement for `cleanupTerritoryWarTeams`. */
@@ -458,7 +461,7 @@ export const executeClaimedForJoinTeam = (
       INNER JOIN TerritoryWar w ON w.id = q.territoryWarId
       SET ${actionReadinessSqlSet(readiness)} UserData.status = 'QUEUED', q.createdAt = q.createdAt
       WHERE UserData.userId = ${user.userId} AND m.id = ${memberId} AND q.battleId IS NULL
-        AND ${readiness?.where ?? eq(userData.status, "AWAKE")} AND UserData.isBanned = false AND UserData.sector = ${user.sector}
+        AND ${readiness?.where ?? eq(userData.status, "AWAKE")} AND ${withoutCaravanEscort()} AND UserData.isBanned = false AND UserData.sector = ${user.sector}
         AND UserData.isOutlaw = ${user.isOutlaw} AND UserData.clanId <=> ${user.clanId} AND UserData.villageId <=> ${user.villageId}
         AND w.resolvedAt IS NULL AND w.endsAt > NOW(3)
     `);

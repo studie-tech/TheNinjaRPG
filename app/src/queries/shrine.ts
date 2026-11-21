@@ -32,7 +32,7 @@ import {
   userData,
   village,
 } from "@/drizzle/schema";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { withoutActivityReservation } from "@/queries/activityReservation";
 import { userSummaryColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -218,7 +218,7 @@ export const updateUserDataForRunStaleShrineLobbyCleanup = (
       and(
         inArray(userData.userId, unclaimedUsersSubquery),
         eq(userData.status, "QUEUED"),
-        withoutDungeonReservation(),
+        withoutActivityReservation(),
       ),
     );
 

@@ -8,7 +8,11 @@ import { Button, type ButtonProps } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
-import { MAX_MASS_EXPERIENCE_AWARD } from "@/drizzle/constants";
+import {
+  CARAVAN_DEFAULT_ENCOUNTER_RATE,
+  CARAVAN_ENCOUNTER_RATE_SETTING,
+  MAX_MASS_EXPERIENCE_AWARD,
+} from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { cn } from "@/libs/shadui";
@@ -16,6 +20,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import {
   canAwardExperience,
+  canChangeContent,
   canClearSectors,
   canEnableGlobalTavern,
   canUnequipAllUsers,
@@ -261,6 +266,7 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
           </div>
         </Confirm>
       )}
+      {canChangeContent(user.role) && <CaravanEncounterRate />}
       {canEnableGlobalTavern(user.role) && (
         <div className="flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2">
           <Label htmlFor="globalTavernToggle" className="font-medium text-sm">
@@ -282,6 +288,54 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/** Content staff tune how often NPC bandits ambush caravans at their checkpoints. */
+const CaravanEncounterRate: React.FC = () => {
+  const setting = { name: CARAVAN_ENCOUNTER_RATE_SETTING };
+  const { data } = api.misc.getSetting.useQuery(setting);
+  const [rate, setRate] = useState<number>();
+  const utils = api.useUtils();
+  const { mutate, isPending } = api.caravan.setEncounterRate.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success) {
+        setRate(undefined);
+        await utils.misc.getSetting.invalidate(setting);
+      }
+    },
+  });
+  // Editing waits for the stored rate, so a draft never starts from a placeholder.
+  const isLoaded = data !== undefined;
+  const value = rate ?? data?.value ?? CARAVAN_DEFAULT_ENCOUNTER_RATE;
+  return (
+    <div className="col-span-3 flex items-center justify-between gap-2 rounded-md border bg-popover px-3 py-2 sm:col-span-2">
+      <Label htmlFor="caravanEncounterRate" className="font-medium text-sm">
+        Caravan ambush chance per checkpoint (%)
+      </Label>
+      <div className="flex items-center gap-2">
+        <NumberInput
+          id="caravanEncounterRate"
+          className="w-20"
+          min={0}
+          max={100}
+          value={value}
+          onValueChange={setRate}
+          disabled={isPending || !isLoaded}
+        />
+        <Button
+          size="sm"
+          disabled={
+            isPending || !isLoaded || rate === undefined || !(rate >= 0 && rate <= 100)
+          }
+          loading={isPending}
+          onClick={() => rate !== undefined && mutate({ rate })}
+        >
+          Save
+        </Button>
+      </div>
     </div>
   );
 };

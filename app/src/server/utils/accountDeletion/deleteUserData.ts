@@ -1,6 +1,9 @@
 import * as Sentry from "@sentry/nextjs";
 import {
   adClick,
+  caravanDiscovery,
+  caravanOperation,
+  caravanParticipant,
   huntingProgress,
   huntingReceipt,
   huntingSession,
@@ -8,6 +11,8 @@ import {
   metaTracking,
   userCosmetic,
   userCosmeticSlot,
+  warehouseDepositLedger,
+  warehouseMember,
 } from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
@@ -223,6 +228,11 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
       adClick,
       userCosmetic,
       userCosmeticSlot,
+      warehouseDepositLedger,
+      warehouseMember,
+      caravanDiscovery,
+      caravanOperation,
+      caravanParticipant,
     ].map((table) => deleteRowsForUser(client, table, userId)),
     deleteAiSpriteAnimationBindings(client, userId),
     deleteAiTransformationsFor(client, userId),

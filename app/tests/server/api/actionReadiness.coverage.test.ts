@@ -43,12 +43,17 @@ const participantLaunchers = [
   "pvpRank.checkRankedPvpMatches",
   "raids.startRaidBattle",
   "villageDuty.patrol",
+  "caravan.defend",
+  "caravan.intervene",
+  "caravanOps.attack",
+  "caravanOps.assaultMarker",
 ];
 const participantGuards = new Set([
   "server/api/routers/combat.ts#initiateBattle",
   "server/utils/villageDuty.ts#isVillageDutyIntruder",
   "libs/train.ts#trainingStartBlockMessage",
   "server/api/routers/tournamentEvents.ts#launchEventGame",
+  "server/utils/caravanBattle.ts#selectQueuedGuards",
 ]);
 const targetOnlyChecks = new Map([
   ["profile.updateUser", "target.status"],
@@ -70,6 +75,8 @@ const isParticipantGuard = (path: string, guard: Guard) =>
 /** Expected awake-only actions, audited against actor guards in every registered mutation. */
 const AWAKE_ACTIONS = new Set([
   "bloodline.roll",
+  "caravan.joinEscort",
+  "caravanOps.startOperation",
   "clan.leaveClan",
   "clan.fightLeader",
   "clan.challengeClan",

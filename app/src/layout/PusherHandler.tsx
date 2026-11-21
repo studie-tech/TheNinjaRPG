@@ -22,6 +22,7 @@ import { useCraftingServiceEvents } from "@/hooks/useCraftingServiceEvents";
 import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
 import Link from "@/layout/Link";
 import { getAudioPreference } from "@/libs/audioPreferences";
+import type { CaravanNoticeView } from "@/libs/caravan";
 import {
   chatMentionsAtom,
   chatPanelAtom,
@@ -70,6 +71,8 @@ export type UserEvent = {
   countedAt?: number;
   /** The message accompanies a committed crafting escrow, delivery or refund. */
   craftingService?: boolean;
+  /** Profile, caravan and trade route views the notice announces a change to. */
+  refresh?: CaravanNoticeView[];
 };
 
 /**
@@ -477,6 +480,16 @@ export const usePusherHandler = (
           } else if (data.type === "userMessage" || data.type === "homeInvitation") {
             if (data.type === "homeInvitation")
               await utils.home.getHomeRequests.invalidate();
+            // Caravan notices can be urgent, so they show without waiting for these reads. A
+            // shown caravan list reloads the Warehouse itself when the reread moved stock.
+            const refresh = data.refresh ?? [];
+            if (refresh.includes("profile")) void utils.profile.getUser.invalidate();
+            if (refresh.includes("caravans"))
+              void utils.caravan.getCaravans.invalidate();
+            if (refresh.includes("routes"))
+              void utils.tradeRoute.getRoutes.invalidate();
+            if (refresh.includes("controls"))
+              void utils.caravanOps.getControls.invalidate();
             showMutationToast({
               success: true,
               message: data.message ?? "You have a new message",

@@ -269,17 +269,24 @@ export const kageRouter = createTRPCRouter({
       if (isFactionVillage(userVillage) && !clanData)
         return errorResponse("Faction not found");
       if (userVillage.kageId !== user.userId) return errorResponse("Not the leader");
-      if (structure.level === 0) return errorResponse("Can't upgrade from lvl 0 yet");
+      // Only the Warehouse starts unbuilt; its first level is its construction.
+      const isWarehouse = structure.route === "/warehouse";
+      if (structure.level === 0 && !isWarehouse)
+        return errorResponse("Can't upgrade from lvl 0 yet");
       if (structure.level >= structure.maxLevel)
         return errorResponse("Structure is already at its maximum level");
       if (user.isBanned) return errorResponse("You are banned");
       if (userVillage.type === "VILLAGE" && userVillage.structureMaintenanceDue > 0)
         return errorResponse("Pay outstanding structure maintenance before upgrading");
       if (user.villageId !== structure.villageId) return errorResponse("Wrong village");
-      if (!["VILLAGE", "STRONGHOLD"].includes(userVillage.type)) {
+      if (
+        !["VILLAGE", "STRONGHOLD"].includes(userVillage.type) &&
+        !(isWarehouse && userVillage.type === "HIDEOUT")
+      ) {
         return errorResponse("Only for villages");
       }
       const isStronghold = userVillage.type === "STRONGHOLD";
+      const isFaction = isFactionVillage(userVillage);
       const lockout = isStronghold ? KAGE_DELAY_SECS : 0;
       if (clanData && clanData.id !== user.clanId) {
         return errorResponse("Not in faction");
@@ -292,13 +299,13 @@ export const kageRouter = createTRPCRouter({
       // Guard on cost & mutate
       const { total } = calcStructureUpgrade(structure, userVillage);
       if (
-        isStronghold && clanData ? clanData.points < total : userVillage.tokens < total
+        isFaction && clanData ? clanData.points < total : userVillage.tokens < total
       ) {
         return errorResponse(
-          isStronghold ? "Not enough clan points" : "Not enough tokens",
+          isFaction ? "Not enough clan points" : "Not enough tokens",
         );
       }
-      const fundingClan = isStronghold ? clanData : null;
+      const fundingClan = isFaction ? clanData : null;
       const balance = fundingClan ? clan.points : village.tokens;
       const guards = and(
         eq(villageStructure.id, input.structureId),
@@ -328,7 +335,13 @@ export const kageRouter = createTRPCRouter({
       if (result.rowsAffected === 0)
         return errorResponse("Structure or funds changed; refresh and try again");
 
-      return { success: true, message: "Structure upgraded" };
+      return {
+        success: true,
+        message:
+          isWarehouse && structure.level === 0
+            ? "Warehouse constructed"
+            : "Structure upgraded",
+      };
     }),
   payStructureMaintenance: protectedProcedure
     .input(
