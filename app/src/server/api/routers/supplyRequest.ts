@@ -20,6 +20,10 @@ import {
 } from "@/queries/supplyRequest";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { errorResponse, protectedProcedure } from "@/server/api/trpc";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { getNextUserSnapshotAt, nextUtcDayAt } from "@/utils/time";
 import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 import { dateInputSchema } from "@/validators/misc";
@@ -80,9 +84,12 @@ export const supplyRequestProcedures = {
         }),
         listSupplyRequestStacks(ctx.drizzle, ctx.userId),
       ]);
-      const user = updatedUser.user;
-      if (!user) return errorResponse("Character could not be loaded.");
+      const initialUser = updatedUser.user;
+      if (!initialUser) return errorResponse("Character could not be loaded.");
       const now = new Date();
+      const readiness = prepareActionReadiness(initialUser, updatedUser.settings, now);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const blocked = supplyRequestBlockMessage(user, now);
       if (blocked) return errorResponse(blocked);
       if (!user.occupation || user.occupation !== input.occupation)
@@ -139,31 +146,36 @@ export const supplyRequestProcedures = {
           updatedAt,
           questData: filterQuestTrackersForDbPersist(trackers, user),
         },
+        readiness,
       );
       if (result.rowsAffected !== 2)
         return errorResponse(
           "Your supplies or character changed. Refresh the request and try again.",
         );
       nextUser.questData = trackers;
-      return {
-        success: true,
-        message: `Submitted ${input.quantity}x ${stack.item.name} for ${reward.ryo.toLocaleString()} Ryo and ${reward.experience.toLocaleString()} ${user.occupation.toLowerCase()} EXP.`,
-        ...getSupplyRequestUserUpdate(
-          {
-            user: nextUser,
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Submitted ${input.quantity}x ${stack.item.name} for ${reward.ryo.toLocaleString()} Ryo and ${reward.experience.toLocaleString()} ${user.occupation.toLowerCase()} EXP.`,
+          ...getSupplyRequestUserUpdate(
+            {
+              user: nextUser,
+              updatedUser,
+              consequences,
+              questIdsUpdated,
+              allConsumptions: [{ userItemId: stack.id }],
+            },
+            reward.ryo,
+          ),
+          inventoryChanges: getSupplyRequestInventoryUpdate(
+            stack,
+            input.quantity,
+            updatedAt,
             updatedUser,
-            consequences,
-            questIdsUpdated,
-            allConsumptions: [{ userItemId: stack.id }],
-          },
-          reward.ryo,
-        ),
-        inventoryChanges: getSupplyRequestInventoryUpdate(
-          stack,
-          input.quantity,
-          updatedAt,
-          updatedUser,
-        ),
-      };
+          ),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 };

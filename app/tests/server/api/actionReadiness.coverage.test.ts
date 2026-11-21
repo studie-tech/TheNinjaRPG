@@ -109,6 +109,7 @@ const AWAKE_ACTIONS = new Set([
   "occupation.craftItem",
   "occupation.imbueItem",
   "occupation.submitServiceRequest",
+  "occupation.submitSupplyRequest",
   "overworldAi.interactWithOverworldAi",
   "pets.unlockSlot",
   "pets.activatePet",

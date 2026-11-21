@@ -12,6 +12,7 @@ import {
   userQueue,
   userVote,
 } from "@/drizzle/schema";
+import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { submitSupplyRequestAtomically } from "@/queries/supplyRequest";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { periodStart } from "@/utils/time";
@@ -266,6 +267,40 @@ describeWithDatabase("daily supply requests", () => {
     )?.goals;
     expect(goals?.find((goal) => goal.id === "xp")?.value).toBe(4000);
     expect(goals?.find((goal) => goal.id === "gathered")?.value).toBe(0);
+  });
+
+  it("commits automatic wake only together with an accepted supply payment", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ status: "ASLEEP", autoWakeUp: true })
+      .where(eq(userData.userId, owner));
+    const { caller, input } = await reviewed();
+    expect(
+      (await caller.submitSupplyRequest({ ...input, auctionMaxPrice: 999 })).success,
+    ).toBe(false);
+    expect((await requireUser(owner)).status).toBe("ASLEEP");
+    const result = await caller.submitSupplyRequest(input);
+    expect(result.success).toBe(true);
+    expect(result.actionNotice).toBe(AUTO_WAKE_MESSAGE);
+    const user = await requireUser(owner);
+    expect(user.status).toBe("AWAKE");
+    expect(user.money).toBe(2320);
+    expect((await readStack())?.quantity).toBe(50);
+  });
+
+  it("leaves a sleeping character untouched when automatic wake is disabled", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ status: "ASLEEP", autoWakeUp: false })
+      .where(eq(userData.userId, owner));
+    const { caller, input } = await reviewed();
+    expect((await caller.submitSupplyRequest(input)).success).toBe(false);
+    const user = await requireUser(owner);
+    expect(user.status).toBe("ASLEEP");
+    expect(user.money).toBe(1000);
+    expect(user.supplyRequestAt).toBeNull();
   });
 
   it("guards inventory, price, character location and profession again in the atomic write", async () => {

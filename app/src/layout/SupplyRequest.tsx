@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
 import {
   SUPPLY_REQUEST_BUNDLE_SIZE,
   SUPPLY_REQUEST_EXPERIENCE,
@@ -21,6 +21,7 @@ import { useRequiredUserInfo } from "@/utils/UserContext";
 export const SupplyRequest = () => {
   const { request, result, isSubmitting, submit } = useSupplyRequest();
   const { timeDiff } = useRequiredUserInfo();
+  const inputsRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState("");
   const [quantity, setQuantity] = useState(SUPPLY_REQUEST_BUNDLE_SIZE);
   const data = request.data;
@@ -79,7 +80,7 @@ export const SupplyRequest = () => {
                 </p>
               )}
               {data.stacks.length > 0 && (
-                <div className="space-y-3">
+                <div className="space-y-3" ref={inputsRef}>
                   <label className="block" htmlFor="supply-stack">
                     Supply stack
                   </label>
@@ -124,15 +125,15 @@ export const SupplyRequest = () => {
                         Quantity (multiples of {SUPPLY_REQUEST_BUNDLE_SIZE})
                       </label>
                       <div className="flex gap-2">
-                        <Input
+                        <NumberInput
                           id="supply-quantity"
-                          type="number"
+                          inputMode="numeric"
                           min={SUPPLY_REQUEST_BUNDLE_SIZE}
                           max={selected.quantity}
                           step={SUPPLY_REQUEST_BUNDLE_SIZE}
                           value={quantity}
                           disabled={isSubmitting}
-                          onChange={(event) => setQuantity(Number(event.target.value))}
+                          onValueChange={setQuantity}
                         />
                         <Button
                           variant="outline"
@@ -178,7 +179,11 @@ export const SupplyRequest = () => {
                         tone="destructive"
                         proceed_label="Submit supplies"
                         onAccept={() => {
-                          if (valid && data.occupation)
+                          if (
+                            valid &&
+                            data.occupation &&
+                            validateNumberInputs(inputsRef.current)
+                          )
                             submit({
                               userItemId: selected.id,
                               quantity,

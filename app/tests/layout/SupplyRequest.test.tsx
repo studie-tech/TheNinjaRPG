@@ -90,7 +90,7 @@ it("blocks incomplete bundles and quantities above the selected stack", () => {
     target: { value: "stock" },
   });
   for (const value of ["0", "99", "150", "300"]) {
-    fireEvent.change(screen.getByLabelText(/Quantity/), { target: { value } });
+    fireEvent.input(screen.getByLabelText(/Quantity/), { target: { value } });
     expect(
       (screen.getByRole("button", { name: "Submit supplies" }) as HTMLButtonElement)
         .disabled,

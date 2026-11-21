@@ -9,7 +9,9 @@ import {
   userItemImbuement,
 } from "@/drizzle/schema";
 import { supplyExperienceField } from "@/libs/supplyRequest";
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { hasNoHuntingBattle } from "@/server/utils/concurrency";
 import { periodStart } from "@/utils/time";
 import type { QuestTrackerType } from "@/validators/objectives";
@@ -49,6 +51,7 @@ export const submitSupplyRequestAtomically = (
     updatedAt: Date;
     questData: QuestTrackerType[];
   },
+  readiness?: ActionReadinessWrite,
 ) => {
   const experience = userData[supplyExperienceField(user.occupation)];
   const flag =
@@ -60,7 +63,7 @@ export const submitSupplyRequestAtomically = (
   return client.execute(sql`UPDATE ${userItem}
     INNER JOIN ${userData} ON ${eq(userData.userId, userItem.userId)}
     INNER JOIN ${item} ON ${eq(item.id, userItem.itemId)}
-    SET ${userItem.quantity} = ${userItem.quantity} - ${request.quantity},
+    SET ${actionReadinessSqlSet(readiness, ["updatedAt", "questData"])} ${userItem.quantity} = ${userItem.quantity} - ${request.quantity},
         ${userItem.updatedAt} = ${sql.param(request.updatedAt, userItem.updatedAt)},
         ${userData.money} = ${userData.money} + ${request.ryo},
         ${experience} = ${experience} + ${request.experience},
@@ -94,7 +97,7 @@ export const submitSupplyRequestAtomically = (
       eq(flag, true),
       eq(userData.updatedAt, user.updatedAt),
       eq(userData.occupation, user.occupation),
-      eq(userData.status, "AWAKE"),
+      readiness?.where ?? eq(userData.status, "AWAKE"),
       eq(userData.isBanned, false),
       eq(userData.sector, MAP_WAKE_ISLAND_SECTOR),
       or(
