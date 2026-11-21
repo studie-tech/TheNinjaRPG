@@ -6,6 +6,7 @@ import {
   and,
   desc,
   eq,
+  getTableColumns,
   gt,
   gte,
   inArray,
@@ -17,6 +18,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import {
   CARAVAN_GUARD_SLOTS,
   CARAVAN_MAX_LOSS_BP,
@@ -33,7 +35,10 @@ import {
   caravanEncounter,
   caravanOperation,
   caravanParticipant,
+  tradeRoute,
+  tradeRouteMarker,
   userData,
+  village,
   warehouseStock,
 } from "@/drizzle/schema";
 import type { CargoLine } from "@/libs/caravan";
@@ -55,6 +60,10 @@ export const claimOperatorReadiness = (
 const OPEN_STATUSES = ["PREPARING", "TRAVELLING"] as const;
 const OPEN_ENCOUNTER_STATUSES = ["PENDING", "STARTING", "FIGHTING"] as const;
 
+/** Table aliases for the two village joins of a caravan. */
+const originVillage = alias(village, "originVillage");
+const destinationVillage = alias(village, "destinationVillage");
+
 /** One caravan. */
 export const findCaravan = (client: Pick<DrizzleClient, "query">, caravanId: string) =>
   client.query.caravan.findFirst({ where: eq(caravan.id, caravanId) });
@@ -67,6 +76,27 @@ export const listCaravansByIds = (
   caravanIds.length === 0
     ? Promise.resolve([])
     : client.select().from(caravan).where(inArray(caravan.id, caravanIds));
+
+/** Caravans by id with the names of the villages they travel between. */
+export const listCaravansWithVillageNames = (
+  client: Pick<DrizzleClient, "select">,
+  caravanIds: string[],
+) =>
+  caravanIds.length === 0
+    ? Promise.resolve([])
+    : client
+        .select({
+          ...getTableColumns(caravan),
+          originName: originVillage.name,
+          destinationName: destinationVillage.name,
+        })
+        .from(caravan)
+        .leftJoin(originVillage, eq(originVillage.id, caravan.originVillageId))
+        .leftJoin(
+          destinationVillage,
+          eq(destinationVillage.id, caravan.destinationVillageId),
+        )
+        .where(inArray(caravan.id, caravanIds));
 
 /** Caravans a village is sending or expecting. */
 export const listOpenVillageCaravans = (
@@ -125,6 +155,39 @@ export const listOpenCaravans = (
           ),
         );
 
+/**
+ * Open caravans, optionally only some, on active routes where a village outside the route
+ * holds a marker.
+ */
+export const listBlockedCaravans = (
+  client: Pick<DrizzleClient, "select">,
+  caravanIds?: string[],
+) =>
+  caravanIds && caravanIds.length === 0
+    ? Promise.resolve([])
+    : client
+        .select()
+        .from(caravan)
+        .where(
+          and(
+            inArray(caravan.status, OPEN_STATUSES),
+            caravanIds ? inArray(caravan.id, caravanIds) : undefined,
+            inArray(
+              caravan.routeId,
+              client
+                .select({ routeId: tradeRouteMarker.routeId })
+                .from(tradeRouteMarker)
+                .innerJoin(tradeRoute, eq(tradeRoute.id, tradeRouteMarker.routeId))
+                .where(
+                  and(
+                    eq(tradeRoute.status, "ACTIVE"),
+                    isNotNull(tradeRouteMarker.controllerVillageId),
+                  ),
+                ),
+            ),
+          ),
+        );
+
 /** Open caravans a village sends, which count against its capacity. */
 export const countOutgoingCaravans = (
   client: Pick<DrizzleClient, "select">,
@@ -172,6 +235,23 @@ export const listCaravanParticipants = (
         .innerJoin(userData, eq(userData.userId, caravanParticipant.userId))
         .where(inArray(caravanParticipant.caravanId, caravanIds));
 
+/** What decides the side operators take against caravans. */
+export const listOperatorProfiles = (
+  client: Pick<DrizzleClient, "select">,
+  userIds: string[],
+) =>
+  userIds.length === 0
+    ? Promise.resolve([])
+    : client
+        .select({
+          userId: userData.userId,
+          villageId: userData.villageId,
+          isOutlaw: userData.isOutlaw,
+          isBandit: userData.isBandit,
+        })
+        .from(userData)
+        .where(inArray(userData.userId, userIds));
+
 /** A player's current caravan reservation and any robbery loot left to claim. */
 export const listUserParticipations = (
   client: Pick<DrizzleClient, "select">,
@@ -193,60 +273,82 @@ export const listUserParticipations = (
       ),
     );
 
-/** Reserve units of one cargo line from unreserved stock. */
+/**
+ * Reserve every cargo line from unreserved stock in one statement. Lines name distinct items;
+ * the caller requires one changed row per line, so a line short of stock fails them all.
+ */
 export const reserveCargo = (
   client: Pick<DrizzleClient, "update">,
   villageId: string,
-  line: CargoLine,
-) =>
-  client
+  lines: CargoLine[],
+) => {
+  const quantity = cargoLineQuantity(lines);
+  return client
     .update(warehouseStock)
-    .set({ reserved: sql`${warehouseStock.reserved} + ${line.quantity}` })
+    .set({ reserved: sql`${warehouseStock.reserved} + ${quantity}` })
     .where(
       and(
         eq(warehouseStock.villageId, villageId),
-        eq(warehouseStock.itemId, line.itemId),
-        sql`${warehouseStock.quantity} >= ${warehouseStock.reserved} + ${line.quantity}`,
+        inArray(
+          warehouseStock.itemId,
+          lines.map((line) => line.itemId),
+        ),
+        sql`${warehouseStock.quantity} >= ${warehouseStock.reserved} + ${quantity}`,
       ),
     );
+};
 
-/** Release a cargo line's reservation. */
+/** Release the reservation of cargo lines naming distinct items. */
 export const releaseCargo = (
   client: Pick<DrizzleClient, "update">,
   villageId: string,
-  line: CargoLine,
-) =>
-  client
+  lines: CargoLine[],
+) => {
+  if (lines.length === 0) return Promise.resolve();
+  const quantity = cargoLineQuantity(lines);
+  return client
     .update(warehouseStock)
-    .set({ reserved: sql`${warehouseStock.reserved} - ${line.quantity}` })
+    .set({ reserved: sql`${warehouseStock.reserved} - ${quantity}` })
     .where(
       and(
         eq(warehouseStock.villageId, villageId),
-        eq(warehouseStock.itemId, line.itemId),
-        sql`${warehouseStock.reserved} >= ${line.quantity}`,
+        inArray(
+          warehouseStock.itemId,
+          lines.map((line) => line.itemId),
+        ),
+        sql`${warehouseStock.reserved} >= ${quantity}`,
       ),
     );
+};
 
-/** Load a reserved cargo line onto a departing caravan. */
+/**
+ * Load reserved cargo lines naming distinct items onto a departing caravan in one statement;
+ * the caller requires one changed row per line.
+ */
 export const dispatchCargo = (
   client: Pick<DrizzleClient, "update">,
   villageId: string,
-  line: CargoLine,
-) =>
-  client
+  lines: CargoLine[],
+) => {
+  const quantity = cargoLineQuantity(lines);
+  return client
     .update(warehouseStock)
     .set({
-      quantity: sql`${warehouseStock.quantity} - ${line.quantity}`,
-      reserved: sql`${warehouseStock.reserved} - ${line.quantity}`,
+      quantity: sql`${warehouseStock.quantity} - ${quantity}`,
+      reserved: sql`${warehouseStock.reserved} - ${quantity}`,
     })
     .where(
       and(
         eq(warehouseStock.villageId, villageId),
-        eq(warehouseStock.itemId, line.itemId),
-        sql`${warehouseStock.reserved} >= ${line.quantity}`,
-        sql`${warehouseStock.quantity} >= ${line.quantity}`,
+        inArray(
+          warehouseStock.itemId,
+          lines.map((line) => line.itemId),
+        ),
+        sql`${warehouseStock.reserved} >= ${quantity}`,
+        sql`${warehouseStock.quantity} >= ${quantity}`,
       ),
     );
+};
 
 /** Create a prepared caravan. */
 export const insertCaravan = (
@@ -584,28 +686,37 @@ export const listOpenEncounters = (
         );
 };
 
-/** Unanswered ambushes past their deadline and fights whose battle never settled. */
+/**
+ * Unanswered ambushes past their deadline and fights whose battle never settled, optionally
+ * only those over some caravans.
+ */
 export const listDueEncounters = (
   client: Pick<DrizzleClient, "select">,
   now: Date,
   staleBefore: Date,
+  caravanIds?: string[],
 ) =>
-  client
-    .select()
-    .from(caravanEncounter)
-    .where(
-      or(
-        and(
-          eq(caravanEncounter.status, "PENDING"),
-          eq(caravanEncounter.type, "AMBUSH"),
-          lte(caravanEncounter.expiresAt, now),
-        ),
-        and(
-          inArray(caravanEncounter.status, ["STARTING", "FIGHTING"]),
-          lt(caravanEncounter.createdAt, staleBefore),
-        ),
-      ),
-    );
+  caravanIds && caravanIds.length === 0
+    ? Promise.resolve([])
+    : client
+        .select()
+        .from(caravanEncounter)
+        .where(
+          and(
+            caravanIds ? inArray(caravanEncounter.caravanId, caravanIds) : undefined,
+            or(
+              and(
+                eq(caravanEncounter.status, "PENDING"),
+                eq(caravanEncounter.type, "AMBUSH"),
+                lte(caravanEncounter.expiresAt, now),
+              ),
+              and(
+                inArray(caravanEncounter.status, ["STARTING", "FIGHTING"]),
+                lt(caravanEncounter.createdAt, staleBefore),
+              ),
+            ),
+          ),
+        );
 
 /** Open an encounter; the active keys allow one per caravan and per marker. */
 export const insertEncounter = (
@@ -1101,3 +1212,13 @@ export const renameCaravanUser = (
       .where(eq(caravanOperation.userId, input.userId)),
   ]);
 };
+
+/** A CASE yielding each cargo line's quantity for its item's stock row. */
+const cargoLineQuantity = (lines: CargoLine[]) =>
+  sql`CASE ${sql.join(
+    lines.map(
+      (line) =>
+        sql`WHEN ${warehouseStock.itemId} = ${line.itemId} THEN ${line.quantity}`,
+    ),
+    sql` `,
+  )} ELSE 0 END`;

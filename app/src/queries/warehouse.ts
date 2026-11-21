@@ -200,21 +200,15 @@ export const updateWarehouseProduction = (
       ),
     );
 
-/** A player's deposit ledgers for the given items. */
+/** A player's deposit ledgers. */
 export const listDepositLedgers = (
   client: Pick<DrizzleClient, "select">,
   userId: string,
-  itemIds?: string[],
 ) =>
   client
     .select()
     .from(warehouseDepositLedger)
-    .where(
-      and(
-        eq(warehouseDepositLedger.userId, userId),
-        itemIds ? inArray(warehouseDepositLedger.itemId, itemIds) : undefined,
-      ),
-    );
+    .where(eq(warehouseDepositLedger.userId, userId));
 
 /** Create a player's ledger for an item so a deposit can claim it with a guarded update. */
 export const ensureDepositLedger = (
@@ -271,19 +265,28 @@ export const addWithdrawnUnits = (
       },
     });
 
-/** Add stock to a Warehouse. */
+/** Add stock lines to a Warehouse in one statement; repeated items add up. */
 export const creditWarehouseStock = (
   client: Pick<DrizzleClient, "insert">,
   villageId: string,
-  itemId: string,
-  quantity: number,
+  lines: { itemId: string; quantity: number }[],
 ) =>
-  client
-    .insert(warehouseStock)
-    .values({ villageId, itemId, quantity })
-    .onDuplicateKeyUpdate({
-      set: { quantity: sql`${warehouseStock.quantity} + ${quantity}` },
-    });
+  lines.length === 0
+    ? Promise.resolve()
+    : client
+        .insert(warehouseStock)
+        .values(
+          lines.map((line) => ({
+            villageId,
+            itemId: line.itemId,
+            quantity: line.quantity,
+          })),
+        )
+        .onDuplicateKeyUpdate({
+          set: {
+            quantity: sql`${warehouseStock.quantity} + VALUES(${warehouseStock.quantity})`,
+          },
+        });
 
 /** A player's Warehouse membership row. */
 export const findWarehouseMember = (
@@ -292,38 +295,30 @@ export const findWarehouseMember = (
 ) =>
   client.query.warehouseMember.findFirst({ where: eq(warehouseMember.userId, userId) });
 
-/** Create a player's membership row so withdrawals can claim it with a guarded update. */
-export const ensureWarehouseMember = (
-  client: Pick<DrizzleClient, "insert">,
-  userId: string,
-) =>
-  client
-    .insert(warehouseMember)
-    .values({ userId })
-    .onDuplicateKeyUpdate({ set: { userId: sql`${warehouseMember.userId}` } });
-
 /**
- * Start a player's allowance on a new UTC day before a withdrawal counts against it; a request
- * still dated an earlier day never rewinds it, and its claim then fails on the day guard.
+ * Create a player's membership row or start their allowance on a new UTC day, before a
+ * withdrawal counts against it. A request still dated an earlier day never rewinds it, and
+ * its claim then fails on the day guard. The used count resets first, while the day it
+ * compares still holds the stored value.
  */
-export const resetWarehouseAllowanceDay = (
-  client: Pick<DrizzleClient, "update">,
+export const startWarehouseAllowanceDay = (
+  client: Pick<DrizzleClient, "execute">,
   userId: string,
   day: string,
-) =>
-  client
-    .update(warehouseMember)
-    .set({ allowanceDay: day, allowanceUsed: 0 })
-    .where(
-      and(
-        eq(warehouseMember.userId, userId),
-        or(isNull(warehouseMember.allowanceDay), lt(warehouseMember.allowanceDay, day)),
-      ),
-    );
+) => {
+  const isNewDay = sql`(${warehouseMember.allowanceDay} IS NULL OR ${warehouseMember.allowanceDay} < ${day})`;
+  return client.execute(sql`
+    INSERT INTO ${warehouseMember} (userId, allowanceDay, allowanceUsed)
+    VALUES (${userId}, ${day}, 0)
+    ON DUPLICATE KEY UPDATE
+      ${warehouseMember.allowanceUsed} = IF(${isNewDay}, 0, ${warehouseMember.allowanceUsed}),
+      ${warehouseMember.allowanceDay} = IF(${isNewDay}, ${day}, ${warehouseMember.allowanceDay})
+  `);
+};
 
 /**
  * Take unreserved stock and count it against the player's allowance for the UTC day in one
- * statement, so concurrent withdrawals cannot exceed either. The day is reset first.
+ * statement, so concurrent withdrawals cannot exceed either. The day is started first.
  */
 export const claimWithdrawal = (
   client: Pick<DrizzleClient, "execute">,

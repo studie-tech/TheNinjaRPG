@@ -32,12 +32,15 @@ import {
 import type { CaravanBattleState } from "@/libs/caravan";
 import {
   claimLoot,
+  dispatchCargo,
   expireAmbush,
   insertCheckpointAmbush,
   insertGuard,
   listActiveSabotage,
   queueGuard,
+  releaseCargo,
   releaseParticipants,
+  reserveCargo,
   resolveOperation,
   transitionCaravan,
   upsertAttacker,
@@ -46,8 +49,8 @@ import {
 import { updateUserDataForGET3 } from "@/queries/cleaner";
 import {
   claimWithdrawal,
-  ensureWarehouseMember,
-  resetWarehouseAllowanceDay,
+  creditWarehouseStock,
+  startWarehouseAllowanceDay,
 } from "@/queries/warehouse";
 import {
   cancelCaravan,
@@ -129,12 +132,12 @@ describeWithDatabase("village Warehouse and caravans", () => {
     await db
       .insert(warehouseStock)
       .values({ villageId: "leaf", itemId: "ore", quantity: 100, reserved: 60 });
-    await ensureWarehouseMember(db, "u");
+    await startWarehouseAllowanceDay(db, "u", "2026-06-14");
     await db
       .update(warehouseMember)
       .set({ allowanceDay: "2026-06-14", allowanceUsed: 30 })
       .where(eq(warehouseMember.userId, "u"));
-    await resetWarehouseAllowanceDay(db, "u", "2026-06-15");
+    await startWarehouseAllowanceDay(db, "u", "2026-06-15");
     const claim = (quantity: number) =>
       claimWithdrawal(db, {
         villageId: "leaf",
@@ -151,10 +154,71 @@ describeWithDatabase("village Warehouse and caravans", () => {
     const [stock] = await db.select().from(warehouseStock);
     expect(stock?.quantity).toBe(70);
     expect((await claim(1)).rowsAffected).toBe(0);
-    await resetWarehouseAllowanceDay(db, "u", "2026-06-14");
+    // Neither the same day nor a request still dated the day before rewinds the count.
+    await startWarehouseAllowanceDay(db, "u", "2026-06-15");
+    await startWarehouseAllowanceDay(db, "u", "2026-06-14");
     const [member] = await db.select().from(warehouseMember);
     expect(member?.allowanceDay).toBe("2026-06-15");
     expect(member?.allowanceUsed).toBe(30);
+  });
+
+  it("reserves, loads and releases every cargo line or, for reservations, none", async () => {
+    const db = await getTestDatabase();
+    await db.insert(warehouseStock).values([
+      { villageId: "leaf", itemId: "ore", quantity: 100, reserved: 20 },
+      { villageId: "leaf", itemId: "silk", quantity: 50, reserved: 40 },
+    ]);
+    const stockOf = async () =>
+      Object.fromEntries(
+        (await db.select().from(warehouseStock)).map((row) => [row.itemId, row]),
+      );
+    const short = await reserveCargo(db, "leaf", [
+      { itemId: "ore", quantity: 80 },
+      { itemId: "silk", quantity: 20 },
+    ]);
+    // Silk lacks unreserved stock, so the caller sees fewer rows than lines and rolls back.
+    expect(short.rowsAffected).toBe(1);
+    await db
+      .update(warehouseStock)
+      .set({ reserved: 20 })
+      .where(eq(warehouseStock.itemId, "ore"));
+    const cargo = [
+      { itemId: "ore", quantity: 80 },
+      { itemId: "silk", quantity: 10 },
+    ];
+    expect((await reserveCargo(db, "leaf", cargo)).rowsAffected).toBe(2);
+    expect(await stockOf()).toMatchObject({
+      ore: { quantity: 100, reserved: 100 },
+      silk: { quantity: 50, reserved: 50 },
+    });
+    await releaseCargo(db, "leaf", [{ itemId: "silk", quantity: 50 }]);
+    // Releasing more than is reserved changes nothing.
+    await releaseCargo(db, "leaf", [{ itemId: "silk", quantity: 10 }]);
+    // Silk is no longer reserved, so the caller sees fewer rows than lines and rolls back.
+    expect((await dispatchCargo(db, "leaf", cargo)).rowsAffected).toBe(1);
+    expect(await stockOf()).toMatchObject({
+      ore: { quantity: 20, reserved: 20 },
+      silk: { quantity: 50, reserved: 0 },
+    });
+  });
+
+  it("credits several stock lines at once, creating missing rows", async () => {
+    const db = await getTestDatabase();
+    await db
+      .insert(warehouseStock)
+      .values({ villageId: "sand", itemId: "ore", quantity: 5, reserved: 5 });
+    await creditWarehouseStock(db, "sand", [
+      { itemId: "ore", quantity: 10 },
+      { itemId: "silk", quantity: 7 },
+      { itemId: "silk", quantity: 3 },
+    ]);
+    const stock = Object.fromEntries(
+      (await db.select().from(warehouseStock)).map((row) => [row.itemId, row]),
+    );
+    expect(stock).toMatchObject({
+      ore: { villageId: "sand", quantity: 15, reserved: 5 },
+      silk: { villageId: "sand", quantity: 10, reserved: 0 },
+    });
   });
 
   it("seats a released attacker in the group they rejoin", async () => {

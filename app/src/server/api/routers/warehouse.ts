@@ -40,8 +40,8 @@ import {
   claimWithdrawal,
   creditWarehouseStock,
   ensureDepositLedger,
-  ensureWarehouseMember,
   ensureWarehouseStock,
+  findVillageWarehouse,
   findWarehouseMember,
   insertWarehouseLogs,
   listDepositLedgers,
@@ -51,8 +51,8 @@ import {
   listWarehouseItems,
   listWarehouseLogs,
   listWarehouseStock,
-  resetWarehouseAllowanceDay,
   revokeWarehouseMember,
+  startWarehouseAllowanceDay,
   updateWarehouseProduction,
 } from "@/queries/warehouse";
 import { fetchUserItems } from "@/server/api/routers/item";
@@ -75,35 +75,55 @@ export const warehouseRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.villageId) return null;
-      const [villageData, member, ledgers, wars, inventory] = await Promise.all([
-        fetchVillage(ctx.drizzle, user.villageId),
+      const villageId = user.villageId;
+      // Leader and faction reads follow the village read without waiting for the others.
+      const village = fetchVillage(ctx.drizzle, villageId);
+      const [
+        villageData,
+        member,
+        ledgers,
+        wars,
+        inventory,
+        current,
+        stocked,
+        [producible, approvals, clanData],
+      ] = await Promise.all([
+        village,
         findWarehouseMember(ctx.drizzle, ctx.userId),
         listDepositLedgers(ctx.drizzle, ctx.userId),
         listOpenWars(ctx.drizzle),
         fetchUserItems(ctx.drizzle, ctx.userId),
+        findVillageWarehouse(ctx.drizzle, villageId),
+        listWarehouseStock(ctx.drizzle, villageId),
+        village.then((row) => {
+          const leads = !!row && row.kageId === user.userId;
+          return Promise.all([
+            row && leads
+              ? listProducibleItems(ctx.drizzle, getProductionVillageId(row))
+              : [],
+            leads ? listWarehouseApprovals(ctx.drizzle, villageId) : [],
+            row && isFactionVillage(row) && user.clanId
+              ? fetchClan(ctx.drizzle, user.clanId)
+              : undefined,
+          ]);
+        }),
       ]);
       if (!villageData) return null;
       const now = new Date();
       const structure = findWarehouse(villageData.structures);
       const isLeader = villageData.kageId === user.userId;
+      const isFaction = isFactionVillage(villageData);
       const settings = await settleProduction(
         ctx.drizzle,
         villageData.id,
         structure,
         now,
+        current,
       );
-      const isFaction = isFactionVillage(villageData);
-      const [stock, producible, approvals, selected, clanData] = await Promise.all([
-        listWarehouseStock(ctx.drizzle, villageData.id),
-        isLeader
-          ? listProducibleItems(ctx.drizzle, getProductionVillageId(villageData))
-          : Promise.resolve([]),
-        isLeader
-          ? listWarehouseApprovals(ctx.drizzle, villageData.id)
-          : Promise.resolve([]),
-        listWarehouseItems(ctx.drizzle, settings.productionItemIds),
-        isFaction && user.clanId ? fetchClan(ctx.drizzle, user.clanId) : undefined,
-      ]);
+      // Settled production may have credited stock, here or in a competing reader.
+      const stock = settings.settled
+        ? await listWarehouseStock(ctx.drizzle, villageData.id)
+        : stocked;
       const level = getWarehouseLevel(structure, now);
       const multiplier = structure ? getRaidStructureMultiplier(structure, now) : 1;
       const villageWars = wars.filter(
@@ -149,8 +169,9 @@ export const warehouseRouter = createTRPCRouter({
         depositBonus: getDepositBonus(level, multiplier),
         cycleQuantity: getCycleQuantity(level, multiplier),
         nextCycleAt,
+        // Production items always have a stock row, which carries their name.
         production: settings.productionItemIds.flatMap((itemId) => {
-          const info = selected.find((row) => row.id === itemId);
+          const info = stock.find((row) => row.itemId === itemId);
           return info ? [{ itemId, name: info.name }] : [];
         }),
         producibleItems: producible
@@ -226,14 +247,13 @@ export const warehouseRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const [villageData, inventory] = await Promise.all([
+      const [villageData, inventory, ledgers] = await Promise.all([
         user.villageId ? fetchVillage(ctx.drizzle, user.villageId) : undefined,
         fetchUserItems(ctx.drizzle, ctx.userId),
+        listDepositLedgers(ctx.drizzle, ctx.userId),
       ]);
       const stack = inventory.find((row) => row.id === input.userItemId);
-      const ledger = stack
-        ? (await listDepositLedgers(ctx.drizzle, ctx.userId, [stack.itemId]))[0]
-        : undefined;
+      const ledger = ledgers.find((row) => row.itemId === stack?.itemId);
       const now = new Date();
       const structure = findWarehouse(villageData?.structures);
       const accessError = warehouseAccessError(user, villageData, structure);
@@ -302,12 +322,9 @@ export const warehouseRouter = createTRPCRouter({
               ],
             });
             if (!consumed) throw conflict;
-            await creditWarehouseStock(
-              tx,
-              villageData.id,
-              stack.itemId,
-              credit.credited,
-            );
+            await creditWarehouseStock(tx, villageData.id, [
+              { itemId: stack.itemId, quantity: credit.credited },
+            ]);
             await insertWarehouseLogs(
               tx,
               [
@@ -385,8 +402,7 @@ export const warehouseRouter = createTRPCRouter({
         // backpack has no room, so stock never leaves the Warehouse without arriving.
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
-            await ensureWarehouseMember(tx, ctx.userId);
-            await resetWarehouseAllowanceDay(tx, ctx.userId, allowance.day);
+            await startWarehouseAllowanceDay(tx, ctx.userId, allowance.day);
             const claimed = await claimWithdrawal(tx, {
               villageId: villageData.id,
               itemId: input.itemId,

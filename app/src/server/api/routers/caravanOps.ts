@@ -10,12 +10,7 @@ import {
   type CaravanRole,
   TRADE_ROUTE_MARKER_GUARDS,
 } from "@/drizzle/constants";
-import type {
-  Caravan,
-  CaravanDiscovery,
-  UserData,
-  VillageAlliance,
-} from "@/drizzle/schema";
+import type { CaravanDiscovery, UserData, VillageAlliance } from "@/drizzle/schema";
 import {
   getAttackerRole,
   getBanditRank,
@@ -39,8 +34,10 @@ import {
   claimLoot,
   claimOperatorReadiness,
   insertOperation,
+  listCaravanAi,
   listCaravanParticipants,
   listCaravansByIds,
+  listCaravansWithVillageNames,
   listOpenEncounters,
   listUserDiscoveries,
   listUserOperations,
@@ -54,7 +51,6 @@ import {
   findMarker,
   listMarkerDiscoveries,
   listSectorMarkers,
-  listTradeRoutes,
   listVillageRelationships,
 } from "@/queries/tradeRoute";
 import { listOpenWars, listWarehouseItems } from "@/queries/warehouse";
@@ -91,9 +87,8 @@ export const caravanOpsRouter = createTRPCRouter({
     })
     .query(async ({ ctx }) => {
       const now = new Date();
-      await maintainCaravans(ctx.drizzle, now, { userId: ctx.userId });
-      const [user, discoveries, participations, operations, relationships, wars] =
-        await Promise.all([
+      const readOperator = () =>
+        Promise.all([
           fetchUser(ctx.drizzle, ctx.userId),
           listUserDiscoveries(ctx.drizzle, ctx.userId, now),
           listUserParticipations(ctx.drizzle, ctx.userId),
@@ -101,38 +96,54 @@ export const caravanOpsRouter = createTRPCRouter({
           listVillageRelationships(ctx.drizzle),
           listOpenWars(ctx.drizzle),
         ]);
+      let [user, discoveries, participations, operations, relationships, wars] =
+        await readOperator();
+      // A player runs one operation at a time, the latest started, so a due one is listed.
+      if (operations.some((row) => row.status === "ACTIVE" && row.finishesAt <= now)) {
+        await maintainCaravans(ctx.drizzle, now, { userId: ctx.userId });
+        // A competing reader can win the work, so reread even when this one changed nothing.
+        [user, discoveries, participations, operations, relationships, wars] =
+          await readOperator();
+      }
       const caravanIds = [
         ...new Set([
           ...discoveries.map((row) => row.caravanId),
           ...participations.map((row) => row.caravanId),
         ]),
       ];
-      const [caravans, participants, encounters, markers, markerDiscoveries] =
-        await Promise.all([
-          listCaravansByIds(ctx.drizzle, caravanIds),
-          listCaravanParticipants(ctx.drizzle, caravanIds),
-          listOpenEncounters(ctx.drizzle, { caravanIds }),
-          listSectorMarkers(ctx.drizzle, user.sector),
-          user.villageId
-            ? listMarkerDiscoveries(ctx.drizzle, user.villageId, now)
-            : Promise.resolve([]),
-        ]);
-      const [routes, lootItems] = await Promise.all([
-        listTradeRoutes(ctx.drizzle, [
-          ...new Set([
-            ...caravans.map((row) => row.routeId),
-            ...markers.map((m) => m.routeId),
-          ]),
-        ]),
+      const [
+        caravans,
+        participants,
+        encounters,
+        markers,
+        markerDiscoveries,
+        lootItems,
+      ] = await Promise.all([
+        listCaravansWithVillageNames(ctx.drizzle, caravanIds),
+        listCaravanParticipants(ctx.drizzle, caravanIds),
+        listOpenEncounters(ctx.drizzle, { caravanIds }),
+        listSectorMarkers(ctx.drizzle, user.sector),
+        user.villageId
+          ? listMarkerDiscoveries(ctx.drizzle, user.villageId, now)
+          : Promise.resolve([]),
         listWarehouseItems(
           ctx.drizzle,
           participations.flatMap((row) => row.loot?.map((line) => line.itemId) ?? []),
         ),
       ]);
-      const villageName = (id: string) =>
-        routes
-          .flatMap((route) => [route.villageA, route.villageB])
-          .find((v) => v?.id === id)?.name ?? "Unknown village";
+      const villageNames = new Map<string, string>();
+      for (const row of caravans) {
+        if (row.originName) villageNames.set(row.originVillageId, row.originName);
+        if (row.destinationName)
+          villageNames.set(row.destinationVillageId, row.destinationName);
+      }
+      for (const marker of markers) {
+        if (marker.villageNameA)
+          villageNames.set(marker.villageIdA, marker.villageNameA);
+        if (marker.villageNameB)
+          villageNames.set(marker.villageIdB, marker.villageNameB);
+      }
+      const villageName = (id: string) => villageNames.get(id) ?? "Unknown village";
       const known = new Set(markerDiscoveries.map((row) => row.markerId));
       const committed = participations.find((row) => row.activeUserId);
       // A group join racing delivery can outlive the caravan; free it so the player can act again.
@@ -293,14 +304,25 @@ export const caravanOpsRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
-      const [updated, relationships, wars, discoveries, participations] =
-        await Promise.all([
-          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-          listVillageRelationships(ctx.drizzle),
-          listOpenWars(ctx.drizzle),
-          listUserDiscoveries(ctx.drizzle, ctx.userId, now),
-          listUserParticipations(ctx.drizzle, ctx.userId),
-        ]);
+      const isSabotage = input.type === "DISRUPT" || input.type === "DELAY";
+      const targetId = isSabotage ? input.caravanId : undefined;
+      const [
+        updated,
+        relationships,
+        wars,
+        discoveries,
+        participations,
+        [target],
+        targetParticipants,
+      ] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        listVillageRelationships(ctx.drizzle),
+        listOpenWars(ctx.drizzle),
+        listUserDiscoveries(ctx.drizzle, ctx.userId, now),
+        listUserParticipations(ctx.drizzle, ctx.userId),
+        listCaravansByIds(ctx.drizzle, targetId ? [targetId] : []),
+        listCaravanParticipants(ctx.drizzle, targetId ? [targetId] : []),
+      ]);
       if (!updated.user) return errorResponse("User not found");
       if (updated.user.isBanned) return errorResponse("You are banned");
       const readiness = prepareActionReadiness(updated.user, updated.settings);
@@ -308,17 +330,12 @@ export const caravanOpsRouter = createTRPCRouter({
       const user = readiness.user;
       if (participations.some((p) => p.activeUserId && p.role === "GUARD"))
         return errorResponse("Escorts cannot work against caravans");
-      const isSabotage = input.type === "DISRUPT" || input.type === "DELAY";
       let role: CaravanRole | null = user.isOutlaw
         ? user.isBandit
           ? "BANDIT"
           : null
         : "ENEMY";
-      let target: Caravan | undefined;
       if (isSabotage) {
-        [target] = input.caravanId
-          ? await listCaravansByIds(ctx.drizzle, [input.caravanId])
-          : [];
         if (target?.status !== "TRAVELLING")
           return errorResponse("Select a travelling caravan you have located");
         role = getAttackerRole(
@@ -364,11 +381,10 @@ export const caravanOpsRouter = createTRPCRouter({
           return errorResponse("Finish your current operation first");
         throw error;
       }
-      if (target) {
-        const participants = await listCaravanParticipants(ctx.drizzle, [target.id]);
+      if (target)
         notifyPlayers(
           ctx.drizzle,
-          participants
+          targetParticipants
             .filter((p) => p.role === "GUARD" && p.activeUserId)
             .map((p) => p.userId),
           {
@@ -377,7 +393,6 @@ export const caravanOpsRouter = createTRPCRouter({
             route: "/warehouse",
           },
         );
-      }
       return actionReadinessResponse(
         { success: true, message: `Operation started; it takes ${minutes} minutes` },
         readiness,
@@ -545,11 +560,12 @@ export const caravanOpsRouter = createTRPCRouter({
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
-      const [user, [target], participants, discoveries] = await Promise.all([
+      const [user, [target], participants, discoveries, pool] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         listCaravansByIds(ctx.drizzle, [input.caravanId]),
         listCaravanParticipants(ctx.drizzle, [input.caravanId]),
         listUserDiscoveries(ctx.drizzle, ctx.userId, now),
+        listCaravanAi(ctx.drizzle),
       ]);
       // Interceptions end at arrival, like ambushes and sabotage, before delivery runs.
       if (
@@ -584,7 +600,7 @@ export const caravanOpsRouter = createTRPCRouter({
       const level = Math.round(
         group.members.reduce((sum, m) => sum + m.level, 0) / group.members.length,
       );
-      const npcGuards = await pickCaravanAi(ctx.drizzle, npcCount, level);
+      const npcGuards = pickCaravanAi(pool, npcCount, level);
       if (guards.length + npcGuards.length === 0)
         return errorResponse("No caravan guards are configured");
       const attackerIds = [
@@ -696,11 +712,12 @@ export const caravanOpsRouter = createTRPCRouter({
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
-      const [user, marker, relationships, wars] = await Promise.all([
+      const [user, marker, relationships, wars, pool] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         findMarker(ctx.drizzle, input.markerId),
         listVillageRelationships(ctx.drizzle),
         listOpenWars(ctx.drizzle),
+        listCaravanAi(ctx.drizzle),
       ]);
       if (marker?.status !== "ACTIVE") return errorResponse("Marker not found");
       const discoveries = user.villageId
@@ -712,11 +729,7 @@ export const caravanOpsRouter = createTRPCRouter({
       const isRouteVillage = [marker.villageIdA, marker.villageIdB].includes(
         user.villageId ?? "",
       );
-      const guards = await pickCaravanAi(
-        ctx.drizzle,
-        TRADE_ROUTE_MARKER_GUARDS,
-        user.level,
-      );
+      const guards = pickCaravanAi(pool, TRADE_ROUTE_MARKER_GUARDS, user.level);
       if (guards.length === 0) return errorResponse("No marker guards are configured");
       return launchCaravanBattle(ctx.drizzle, {
         encounter: {

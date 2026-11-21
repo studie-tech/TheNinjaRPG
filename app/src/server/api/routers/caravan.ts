@@ -30,7 +30,9 @@ import {
   insertCaravanWithinCapacity,
   insertGuard,
   listActiveSabotage,
+  listCaravanAi,
   listCaravanParticipants,
+  listDueOperations,
   listFinishedVillageCaravans,
   listOpenEncounters,
   listOpenVillageCaravans,
@@ -53,6 +55,7 @@ import {
   insertWarehouseLogs,
   listOpenWars,
   listWarehouseItems,
+  listWarehouseStock,
 } from "@/queries/warehouse";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import {
@@ -61,6 +64,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import {
   actionReadinessResponse,
   prepareActionReadiness,
@@ -68,6 +72,7 @@ import {
 import {
   cancelCaravan,
   canManageTrade,
+  hasDueCaravanWork,
   isAtWar,
   maintainCaravans,
   notifyPlayers,
@@ -114,30 +119,32 @@ export const caravanRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.villageId) return null;
       const now = new Date();
-      const [villageData, open] = await Promise.all([
+      const [villageData, routes, loaded] = await Promise.all([
         fetchVillage(ctx.drizzle, user.villageId),
-        listOpenVillageCaravans(ctx.drizzle, user.villageId),
+        listVillageRoutes(ctx.drizzle, user.villageId),
+        loadVillageCaravans(ctx.drizzle, user.villageId, now),
       ]);
       if (!villageData) return null;
-      await maintainCaravans(ctx.drizzle, now, {
-        caravanIds: open.map((row) => row.id),
-      });
-      const [current, history, routes] = await Promise.all([
-        listOpenVillageCaravans(ctx.drizzle, villageData.id),
-        listFinishedVillageCaravans(ctx.drizzle, villageData.id, 10),
-        listVillageRoutes(ctx.drizzle, villageData.id),
-      ]);
-      const ids = current.map((row) => row.id);
-      const [participants, encounters, sabotage, items] = await Promise.all([
-        listCaravanParticipants(ctx.drizzle, ids),
-        listOpenEncounters(ctx.drizzle, { caravanIds: ids }),
-        listActiveSabotage(ctx.drizzle, ids, now),
-        listWarehouseItems(ctx.drizzle, [
-          ...new Set(
-            [...current, ...history].flatMap((row) => row.cargo.map((l) => l.itemId)),
-          ),
-        ]),
-      ]);
+      let view = loaded;
+      const blockedRouteIds = new Set(
+        routes
+          .filter(
+            (route) =>
+              route.status === "ACTIVE" &&
+              route.markers.some((marker) => marker.controllerVillageId),
+          )
+          .map((route) => route.id),
+      );
+      if (
+        hasDueCaravanWork({ ...view, caravans: view.current, blockedRouteIds }, now)
+      ) {
+        await maintainCaravans(ctx.drizzle, now, {
+          caravanIds: view.current.map((row) => row.id),
+        });
+        // A competing reader can win the work, so reread even when this one changed nothing.
+        view = await loadVillageCaravans(ctx.drizzle, villageData.id, now);
+      }
+      const { current, history, participants, encounters, sabotage, items } = view;
       const itemNames = new Map(items.map((row) => [row.id, row.name]));
       const partnerName = (row: (typeof current)[number]) => {
         const route = routes.find((r) => r.id === row.routeId);
@@ -244,17 +251,20 @@ export const caravanRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.villageId) return errorResponse("You have no village");
-      const [own, route, routes, items, relationships, wars] = await Promise.all([
-        fetchVillage(ctx.drizzle, user.villageId),
-        findTradeRoute(ctx.drizzle, input.routeId),
-        listVillageRoutes(ctx.drizzle, user.villageId),
-        listWarehouseItems(
-          ctx.drizzle,
-          input.cargo.map((line) => line.itemId),
-        ),
-        listVillageRelationships(ctx.drizzle),
-        listOpenWars(ctx.drizzle),
-      ]);
+      const [own, route, routes, items, stock, relationships, wars] = await Promise.all(
+        [
+          fetchVillage(ctx.drizzle, user.villageId),
+          findTradeRoute(ctx.drizzle, input.routeId),
+          listVillageRoutes(ctx.drizzle, user.villageId),
+          listWarehouseItems(
+            ctx.drizzle,
+            input.cargo.map((line) => line.itemId),
+          ),
+          listWarehouseStock(ctx.drizzle, user.villageId),
+          listVillageRelationships(ctx.drizzle),
+          listOpenWars(ctx.drizzle),
+        ],
+      );
       if (!own || !canManageTrade(user, own))
         return errorResponse("Only the Kage and Elders send caravans");
       if ((findWarehouse(own.structures)?.level ?? 0) <= 0)
@@ -283,6 +293,14 @@ export const caravanRouter = createTRPCRouter({
         return errorResponse(
           `A caravan carries at most ${CARAVAN_MAX_CARGO_UNITS.toLocaleString()} units`,
         );
+      const short = cargo.find((line) => {
+        const row = stock.find((entry) => entry.itemId === line.itemId);
+        return !row || row.quantity - row.reserved < line.quantity;
+      });
+      if (short)
+        return errorResponse(
+          `Not enough unreserved ${items.find((row) => row.id === short.itemId)?.name ?? "stock"}`,
+        );
       const toVillageA = route.villageIdA !== own.id;
       const id = nanoid();
       const capacity =
@@ -292,17 +310,15 @@ export const caravanRouter = createTRPCRouter({
         `Your ${capacity} trade route${capacity === 1 ? "" : "s"} allow${capacity === 1 ? "s" : ""} ${capacity} caravan${capacity === 1 ? "" : "s"} at a time`,
       );
       try {
-        // Reserving every cargo line and creating the caravan span several rows; the
-        // transaction releases earlier reservations when a later line or the capacity fails.
+        // Reserving the cargo and creating the caravan are separate statements; the
+        // transaction releases the reservation when a line falls short or capacity is full.
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
-            for (const line of cargo) {
-              const reserved = await reserveCargo(tx, own.id, line);
-              if (reserved.rowsAffected !== 1)
-                throw new CaravanConflict(
-                  `Not enough unreserved ${items.find((row) => row.id === line.itemId)?.name ?? "stock"}`,
-                );
-            }
+            const reserved = await reserveCargo(tx, own.id, cargo);
+            if (reserved.rowsAffected !== cargo.length)
+              throw new CaravanConflict(
+                "Your stock changed meanwhile. Refresh and try again",
+              );
             const inserted = await insertCaravanWithinCapacity(
               tx,
               {
@@ -367,11 +383,12 @@ export const caravanRouter = createTRPCRouter({
       ]);
       if (row?.status !== "PREPARING")
         return errorResponse("This caravan is not waiting to depart");
-      const [own, route, relationships, wars] = await Promise.all([
+      const [own, route, relationships, wars, participants] = await Promise.all([
         fetchVillage(ctx.drizzle, row.originVillageId),
         findTradeRoute(ctx.drizzle, row.routeId),
         listVillageRelationships(ctx.drizzle),
         listOpenWars(ctx.drizzle),
+        listCaravanParticipants(ctx.drizzle, [row.id]),
       ]);
       if (!own || !canManageTrade(user, own))
         return errorResponse("Only the Kage and Elders manage caravans");
@@ -397,10 +414,8 @@ export const caravanRouter = createTRPCRouter({
               arrivesAt: new Date(now.getTime() + travelMinutes * 60_000),
             });
             if (claimed.rowsAffected !== 1) throw conflict;
-            for (const line of row.cargo) {
-              const loaded = await dispatchCargo(tx, row.originVillageId, line);
-              if (loaded.rowsAffected !== 1) throw conflict;
-            }
+            const loaded = await dispatchCargo(tx, row.originVillageId, row.cargo);
+            if (loaded.rowsAffected !== row.cargo.length) throw conflict;
             await insertWarehouseLogs(
               tx,
               row.cargo.map((line) => ({
@@ -418,7 +433,6 @@ export const caravanRouter = createTRPCRouter({
         if (error instanceof CaravanConflict) return errorResponse(error.message);
         throw error;
       }
-      const participants = await listCaravanParticipants(ctx.drizzle, [row.id]);
       notifyPlayers(
         ctx.drizzle,
         participants
@@ -544,10 +558,11 @@ export const caravanRouter = createTRPCRouter({
     .input(z.object({ encounterId: z.string(), caravanId: z.string() }))
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const [row, participants, encounters] = await Promise.all([
+      const [row, participants, encounters, pool] = await Promise.all([
         findCaravan(ctx.drizzle, input.caravanId),
         listCaravanParticipants(ctx.drizzle, [input.caravanId]),
         listOpenEncounters(ctx.drizzle, { caravanIds: [input.caravanId] }),
+        listCaravanAi(ctx.drizzle),
       ]);
       const encounter = encounters.find((e) => e.id === input.encounterId);
       if (
@@ -565,7 +580,7 @@ export const caravanRouter = createTRPCRouter({
         self.userId,
         ...guards.filter((p) => p !== self).map((p) => p.userId),
       ];
-      const bandits = await pickCaravanAi(ctx.drizzle, userIds.length, self.level);
+      const bandits = pickCaravanAi(pool, userIds.length, self.level);
       if (bandits.length === 0)
         return errorResponse("No caravan bandits are configured");
       return launchCaravanBattle(ctx.drizzle, {
@@ -660,6 +675,34 @@ export const caravanRouter = createTRPCRouter({
       return result;
     }),
 });
+
+/**
+ * A village's open and latest finished caravans with their escorts, open fights, sabotage
+ * under way or due, and cargo item names.
+ */
+const loadVillageCaravans = async (
+  client: DrizzleClient,
+  villageId: string,
+  now: Date,
+) => {
+  const [current, history] = await Promise.all([
+    listOpenVillageCaravans(client, villageId),
+    listFinishedVillageCaravans(client, villageId, 10),
+  ]);
+  const ids = current.map((row) => row.id);
+  const [participants, encounters, sabotage, dueOperations, items] = await Promise.all([
+    listCaravanParticipants(client, ids),
+    listOpenEncounters(client, { caravanIds: ids }),
+    listActiveSabotage(client, ids, now),
+    ids.length > 0 ? listDueOperations(client, now, { caravanIds: ids }) : [],
+    listWarehouseItems(client, [
+      ...new Set(
+        [...current, ...history].flatMap((row) => row.cargo.map((l) => l.itemId)),
+      ),
+    ]),
+  ]);
+  return { current, history, participants, encounters, sabotage, dueOperations, items };
+};
 
 /** Why a route's villages may no longer trade, once they turned enemies or went to war. */
 const getRouteTradeBlock = (
