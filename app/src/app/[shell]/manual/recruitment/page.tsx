@@ -14,6 +14,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   RECRUITMENT_GOALS,
+  RECRUITMENT_STALLED_AFTER_DAYS,
   type RecruitmentMetric,
   RecruitmentMetrics,
 } from "@/drizzle/constants";
@@ -301,6 +302,21 @@ export default function ManualRecruitment() {
                         </Label>
                       </div>
                     }
+                  />
+                </div>
+              )}
+
+            {mainMetrics?.geninPathPlayers &&
+              mainMetrics.geninPathPlayers.length > 0 && (
+                <div className="col-span-2">
+                  <QuestFunnelBar
+                    stepsCompleted={mainMetrics.geninPathPlayers}
+                    title="Genin Path to Chunin (Tutorial Finished)"
+                    stepLabels={mainMetrics.geninPathSteps.map((step) => step.label)}
+                    stepDescriptions={mainMetrics.geninPathSteps.map(
+                      (step) => step.description,
+                    )}
+                    stalledAfterDays={RECRUITMENT_STALLED_AFTER_DAYS}
                   />
                 </div>
               )}

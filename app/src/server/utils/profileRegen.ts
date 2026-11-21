@@ -9,6 +9,9 @@ import type { UserData } from "@/drizzle/schema";
  *
  * The caller writes this through `claimUserSnapshot`, whose `updatedAt` CAS rejects a stale
  * snapshot, and removes `updatedAt` from the result so the claim timestamp is written instead.
+ *
+ * `userIp` is passed only for the requesting player's own session, so it also records
+ * `lastActiveAt`, the activity signal recruitment analytics use for drop-off.
  */
 export const buildDerivedUserRegenUpdate = (props: {
   user: Pick<
@@ -42,7 +45,7 @@ export const buildDerivedUserRegenUpdate = (props: {
     secondaryElement: user.secondaryElement,
     status: user.status,
     travelFinishAt: user.travelFinishAt,
-    ...(userIp ? { lastIp: userIp } : {}),
+    ...(userIp ? { lastIp: userIp, lastActiveAt: user.updatedAt } : {}),
   };
 
   return derivedUserUpdate;

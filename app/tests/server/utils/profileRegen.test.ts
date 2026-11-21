@@ -33,6 +33,8 @@ describe("buildDerivedUserRegenUpdate", () => {
       status: "AWAKE",
       lastIp: "127.0.0.1",
     });
+    // The player's own session also records their last activity.
+    expect(update.lastActiveAt).toEqual(regenUser.updatedAt);
     expect(update).not.toHaveProperty("money");
     expect(update).not.toHaveProperty("bank");
     expect(update).not.toHaveProperty("reputationPoints");
@@ -53,6 +55,8 @@ describe("buildDerivedUserRegenUpdate", () => {
     };
     const update = buildDerivedUserRegenUpdate({ user });
 
+    // Loads on behalf of another player leave their activity untouched.
+    expect(update).not.toHaveProperty("lastActiveAt");
     expect(update).not.toHaveProperty("villagePrestige");
     expect(update).not.toHaveProperty("villageId");
     expect(update).not.toHaveProperty("isOutlaw");

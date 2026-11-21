@@ -1,0 +1,1 @@
+ALTER TABLE `UserData` ADD `lastActiveAt` datetime(3);

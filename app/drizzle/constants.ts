@@ -1763,6 +1763,9 @@ export const RECRUITMENT_GOALS = {
   SIGNUP_VALUE_USD: 0.5,
 } as const;
 
+// Days without activity after which recruitment analytics count a player as stopped.
+export const RECRUITMENT_STALLED_AFTER_DAYS = 7;
+
 // Length of TUTORIAL_STEPS in hooks/tutorial.tsx; tests/libs/tutorial.test.ts enforces it.
 export const TUTORIAL_STEPS_COUNT = 48;
 

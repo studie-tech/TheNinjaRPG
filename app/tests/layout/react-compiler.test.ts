@@ -165,7 +165,6 @@ const compilerExceptions = [
   "layout/ShrineBattleLobby.tsx#ShrineBattleLobby",
   "layout/ShrineHall.tsx#BoostTemplateGrid",
   "layout/StrengthWeaknesses.tsx#GraphsTab",
-  "layout/UsageStatistics.tsx#QuestFunnelBar",
   "layout/clan/ClanBattles.tsx#ClanBattles",
   "layout/clan/ClanMembers.tsx#ClanMembers",
   "layout/profileEdit/AttributeChange.tsx#AttributeChange",
