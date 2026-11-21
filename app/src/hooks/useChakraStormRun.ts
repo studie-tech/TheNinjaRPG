@@ -107,6 +107,8 @@ export const useChakraStormRun = (userId: string | undefined) => {
     publishedAt: number;
     /** The region this run opens once it lasts long enough. */
     goal: CsUnlockGoal | null;
+    /** The region's longest run before this one, in seconds. */
+    record: number | null;
   } | null>(null);
   const [phase, setPhase] = useState<ChakraStormPhase>("lobby");
   const [runId, setRunId] = useState<string | null>(null);
@@ -115,6 +117,7 @@ export const useChakraStormRun = (userId: string | undefined) => {
   const [localProgress, setLocalProgress] = useState<CsProgress>(CS_EMPTY_PROGRESS);
   const [outcome, setOutcome] = useState<ChakraStormOutcome | null>(null);
   const [goal, setGoal] = useState<CsUnlockGoal | null>(null);
+  const [record, setRecord] = useState<number | null>(null);
   const [announcement, setAnnouncement] = useState<ChakraStormAnnouncement | null>(
     null,
   );
@@ -334,6 +337,7 @@ export const useChakraStormRun = (userId: string | undefined) => {
         training = { ...csNoTraining(), ...result.training };
       }
       const runGoal = csNextUnlock(progress, stage);
+      const runRecord = progress.stages[stage]?.seconds ?? null;
       session.current = {
         state: createCsRun(seed, { stage, training: { ...training } }),
         pending: 0,
@@ -342,8 +346,10 @@ export const useChakraStormRun = (userId: string | undefined) => {
         move: -1,
         publishedAt: 0,
         goal: runGoal,
+        record: runRecord,
       };
       setGoal(runGoal);
+      setRecord(runRecord);
       pausedRef.current = false;
       setPausedState(false);
       setOutcome(null);
@@ -445,6 +451,7 @@ export const useChakraStormRun = (userId: string | undefined) => {
       }
       if (state.events.length > seen) announceEvents(state.events.slice(seen));
       const after = csSeconds(state);
+      const endless = !!CS_STAGE_INFO[state.config.stage].endless;
       const reached = (seconds: number) => before < seconds && after >= seconds;
       if (current.goal && reached(current.goal.seconds))
         announce(
@@ -456,7 +463,27 @@ export const useChakraStormRun = (userId: string | undefined) => {
           },
           true,
         );
-      else if (!state.over && reached(CS_RUN_SECONDS - REINFORCEMENT_WARNING_SECONDS))
+      else if (
+        endless &&
+        current.record !== null &&
+        current.record > 0 &&
+        !state.over &&
+        reached(current.record)
+      )
+        announce(
+          {
+            title: "New personal best",
+            detail: "Every second from here beats your longest cover",
+            tone: "reward",
+            sound: "chime",
+          },
+          true,
+        );
+      else if (
+        !endless &&
+        !state.over &&
+        reached(CS_RUN_SECONDS - REINFORCEMENT_WARNING_SECONDS)
+      )
         announce(
           {
             title: "Reinforcements in one minute",
@@ -496,6 +523,7 @@ export const useChakraStormRun = (userId: string | undefined) => {
     isTraining,
     outcome,
     goal,
+    record,
     announcement,
     start,
     leave,

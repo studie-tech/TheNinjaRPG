@@ -1,5 +1,4 @@
 import {
-  CS_RUN_SECONDS,
   CS_STAGE_INFO,
   CS_STAGES,
   CS_TRAINING,
@@ -9,6 +8,7 @@ import {
   type CsTrainingLevels,
   csIntelFor,
   csNoTraining,
+  csRunSeconds,
   csTrainingCost,
 } from "@/libs/chakraStorm/content";
 
@@ -63,7 +63,7 @@ export const parseCsProgress = (raw: string | null): CsProgress => {
         if (!entry || typeof entry !== "object") continue;
         const record = entry as Record<string, unknown>;
         records[id] = {
-          seconds: Math.min(CS_RUN_SECONDS, whole(record.seconds)),
+          seconds: Math.min(csRunSeconds(id), whole(record.seconds)),
           kills: whole(record.kills),
           level: Math.max(1, whole(record.level)),
           won: record.won === true,

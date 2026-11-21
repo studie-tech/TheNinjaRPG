@@ -17,6 +17,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/battlelog/[battleid]",
   "/blackmarket",
   "/chakraStorm",
+  "/chakraStorm/leaderboard",
   "/clanhall",
   "/clanhall/[clanid]",
   "/colosseum",

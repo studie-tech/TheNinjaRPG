@@ -356,6 +356,12 @@ export const formatClockTime = (ms: number): string => {
 export const formatSoundLength = (lengthMs: number) =>
   lengthMs < 1000 ? "under 1 s" : `${(lengthMs / 1000).toFixed(1)} s`;
 
+/** The first day of the current month at midnight UTC, where monthly leaderboards begin. */
+export const getFirstOfThisMonth = (): Date => {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+};
+
 /**
  * Get the first day of the next month at midnight UTC
  * Used for monthly reset countdowns

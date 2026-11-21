@@ -4350,6 +4350,8 @@ export const CS_STAGE_IMAGE_URLS = {
   hyorin:
     "https://uploadthing.b-cdn.net/f/chakra-storm-stage-hyorin-f5903ec987fecbbc.webp",
   mei: "https://uploadthing.b-cdn.net/f/chakra-storm-stage-mei-9ff8ebbd1ab81f47.webp",
+  undercover:
+    "https://uploadthing.b-cdn.net/f/chakra-storm-stage-undercover-7f9753af73cc8d4c.webp",
 } as const;
 
 /** Chakra Storm pickups: chakra crystals by value, onigiri, scrolls and gust talismans. */

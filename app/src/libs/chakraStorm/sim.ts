@@ -18,7 +18,6 @@ import {
   CS_BOSS_DASH_SECONDS,
   CS_BOSS_DASH_SPEED,
   CS_BOSS_HP_PER_LEVEL,
-  CS_BOSS_MINUTES,
   CS_BOSS_WINDUP_SECONDS,
   CS_CASTER_RANGE,
   CS_CASTER_SECONDS,
@@ -44,7 +43,6 @@ import {
   CS_PASSIVE_INFO,
   CS_PASSIVES,
   CS_ROCK_RADIUS,
-  CS_RUN_SECONDS,
   CS_SCROLL_ODDS,
   CS_SHURIKEN_RANGE,
   CS_SHURIKEN_SPEED,
@@ -68,11 +66,16 @@ import {
   type CsPassive,
   type CsStage,
   type CsTrainingLevels,
-  csExperienceFor,
+  csBossSeconds,
+  csLevelCost,
   csNoTraining,
+  csPaced,
+  csPacedKills,
+  csRunSeconds,
   csSpawnPressure,
   csSpawnTable,
   csStageFactor,
+  csSwarmSeconds,
   csToughness,
 } from "@/libs/chakraStorm/content";
 import type { TdElement } from "@/libs/towerDefense/content";
@@ -382,7 +385,7 @@ export const createCsRun = (
       facing: 12,
       level: 1,
       experience: 0,
-      next: csExperienceFor(1),
+      next: csLevelCost(config.stage, 1),
       revives: config.training.revival,
       rerolls: CS_BASE_REROLLS + config.training.reroll,
     },
@@ -469,7 +472,7 @@ export const stepCs = (state: CsState) => {
   state.enemies = state.enemies.filter((enemy) => enemy.hp > 0);
   state.tick++;
   if (state.hero.hp <= 0) fall(state);
-  else if (state.tick >= CS_RUN_SECONDS * CS_TPS) endRun(state, true);
+  else if (state.tick >= csRunSeconds(state.config.stage) * CS_TPS) endRun(state, true);
   // A draft earned this tick opens at its end, so a pick recorded now replays against it.
   if (!state.over) openDraft(state);
 };
@@ -671,7 +674,7 @@ const hurtHero = (state: CsState, amount: number) => {
   const damage = Math.round(
     amount *
       csStageFactor(state.config.stage, "damage", csSeconds(state)) *
-      (1 + csSeconds(state) / 600),
+      (1 + csPaced(state.config.stage, csSeconds(state)) / 600),
   );
   state.hero.hp = Math.max(0, state.hero.hp - damage);
   state.events.push({ type: "hurt", amount: damage });
@@ -711,9 +714,9 @@ const spawnRaiders = (state: CsState) => {
   const seconds = csSeconds(state);
   const stage = CS_STAGE_INFO[state.config.stage];
   // Raid captains
-  const bossMinute = CS_BOSS_MINUTES[state.bossesDone];
-  if (bossMinute !== undefined && state.tick >= bossMinute * 60 * CS_TPS) {
-    const name = stage.bosses[state.bossesDone] ?? "Raid Captain";
+  const bossAt = csBossSeconds(state.config.stage, state.bossesDone);
+  if (bossAt !== null && state.tick >= bossAt * CS_TPS) {
+    const name = stage.bosses[state.bossesDone % stage.bosses.length] ?? "Raid Captain";
     state.bossesDone++;
     const boss = spawnEnemy(state, "boss", seconds, false);
     boss.name = name;
@@ -722,10 +725,10 @@ const spawnRaiders = (state: CsState) => {
     state.events.push({ type: "boss", id: boss.id, name });
   }
   // Swarms close in as a ring from every side at once.
-  const swarm = CS_SWARM_SECONDS[state.swarmsDone];
-  if (swarm !== undefined && state.tick >= swarm * CS_TPS) {
+  const swarm = csSwarmSeconds(state.config.stage, state.swarmsDone);
+  if (swarm !== null && state.tick >= swarm * CS_TPS) {
     state.swarmsDone++;
-    const count = 16 + 8 * state.swarmsDone;
+    const count = 16 + 8 * Math.min(state.swarmsDone, CS_SWARM_SECONDS.length);
     for (let i = 0; i < count; i++) {
       const enemy = spawnEnemy(state, "grunt", seconds, false);
       const step = ORBIT[Math.floor((i * ORBIT.length) / count)] ?? { x: 1, y: 0 };
@@ -735,7 +738,8 @@ const spawnRaiders = (state: CsState) => {
     state.events.push({ type: "swarm" });
   }
   // Elites
-  const table = csSpawnTable(seconds, state.config.stage);
+  const paced = csPaced(state.config.stage, seconds);
+  const table = csSpawnTable(paced, state.config.stage);
   if (state.tick >= state.nextEliteAt) {
     state.nextEliteAt += ticks(CS_ELITE_EVERY_SECONDS);
     const kind =
@@ -747,7 +751,7 @@ const spawnRaiders = (state: CsState) => {
     state.events.push({ type: "elite", id: elite.id });
   }
   // The field refills to the run's minimum at once, and a trickle comes on top.
-  const pressure = csSpawnPressure(seconds);
+  const pressure = csSpawnPressure(paced, state.config.stage);
   const minimum = Math.min(CS_MAX_ENEMIES, Math.round(pressure.minimum * stage.spawns));
   let owed = Math.min(REFILL_PER_TICK, minimum - state.enemies.length);
   state.spawnCarry += stage.spawns / (pressure.interval * CS_TPS);
@@ -781,7 +785,12 @@ const spawnEnemy = (
   const hp = Math.round(
     (kind === "boss"
       ? CS_BOSS_HP_PER_LEVEL * hero.level
-      : info.hp * csToughness(seconds, state.kills) * (elite ? CS_ELITE_HEALTH : 1)) *
+      : info.hp *
+        csToughness(
+          csPaced(state.config.stage, seconds),
+          csPacedKills(state.config.stage, seconds, state.kills),
+        ) *
+        (elite ? CS_ELITE_HEALTH : 1)) *
       csStageFactor(state.config.stage, "health", seconds),
   );
   const enemy: CsEnemy = {
@@ -1466,7 +1475,7 @@ const pickUp = (state: CsState, orb: CsOrb) => {
   while (hero.experience >= hero.next) {
     hero.experience -= hero.next;
     hero.level++;
-    hero.next = csExperienceFor(hero.level);
+    hero.next = csLevelCost(state.config.stage, hero.level);
     state.draftsQueued++;
     state.events.push({ type: "level", level: hero.level });
   }

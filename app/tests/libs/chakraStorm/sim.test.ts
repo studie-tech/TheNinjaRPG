@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  CS_ENDLESS_SECONDS,
   CS_JUTSU,
   CS_JUTSU_INFO,
   CS_KILLS_PER_TOUGHNESS,
@@ -13,8 +14,15 @@ import {
   CS_TRAINING,
   CS_TRAINING_INFO,
   CS_WADE_SPEED,
+  csBossSeconds,
+  csExperienceFor,
   csHealthScale,
+  csLevelCost,
   csNoTraining,
+  csPaced,
+  csRunSeconds,
+  csSpawnPressure,
+  csSwarmSeconds,
   csToughness,
   csTrainingCost,
   csUpgradeText,
@@ -317,7 +325,7 @@ describe("Chakra Storm progress", () => {
     }).progress;
     expect(csNextUnlock(opened, "horizon")).toBeNull();
     expect(csNextUnlock(opened, "akasumi")?.stage).toBe("akikaze");
-    expect(csNextUnlock(CS_EMPTY_PROGRESS, "mei")).toBeNull();
+    expect(csNextUnlock(CS_EMPTY_PROGRESS, "undercover")).toBeNull();
   });
 
   it("prices training so every level costs more and the hall grows dearer", () => {
@@ -361,6 +369,60 @@ describe("Chakra Storm progress", () => {
 
   it("names every stage in order", () => {
     expect(CS_STAGES[0]).toBe("horizon");
-    expect(CS_STAGES.at(-1)).toBe("mei");
+    expect(CS_STAGES.at(-2)).toBe("mei");
+    expect(CS_STAGES.at(-1)).toBe("undercover");
+  });
+});
+
+describe("Undercover", () => {
+  it("runs on past the scouting run's end", () => {
+    const state = createCsRun("cover", {
+      stage: "undercover",
+      training: csNoTraining(),
+    });
+    state.hero.hp = state.hero.maxHp = 1e9;
+    state.tick = CS_RUN_SECONDS * CS_TPS - 1;
+    stepCs(state);
+    expect(state.over).toBe(false);
+    expect(csRunSeconds("undercover")).toBe(CS_ENDLESS_SECONDS);
+    expect(csRunSeconds("horizon")).toBe(CS_RUN_SECONDS);
+  });
+
+  it("keeps sending hunters and ambushes only in Undercover", () => {
+    expect(csBossSeconds("horizon", 3)).toBeNull();
+    expect(csSwarmSeconds("horizon", 5)).toBeNull();
+    expect(csBossSeconds("undercover", 2)).toBe(csBossSeconds("horizon", 2));
+    const fourth = csBossSeconds("undercover", 3) ?? 0;
+    const fifth = csBossSeconds("undercover", 4) ?? 0;
+    expect(fourth).toBeGreaterThan(csBossSeconds("undercover", 2) ?? 0);
+    expect(fifth - fourth).toBe(fourth - (csBossSeconds("undercover", 2) ?? 0));
+    expect(csSwarmSeconds("undercover", 6)).toBeGreaterThan(
+      csSwarmSeconds("undercover", 5) ?? 0,
+    );
+  });
+
+  it("opens like Horizon, then slows its clock and its levels", () => {
+    expect(csPaced("undercover", 120)).toBe(120);
+    expect(csPaced("horizon", 3 * 3600)).toBe(3 * 3600);
+    // Three hours feel like half an hour.
+    expect(csPaced("undercover", 3 * 3600)).toBeCloseTo(1800);
+    expect(csLevelCost("undercover", 1)).toBe(csExperienceFor(1));
+    expect(csLevelCost("undercover", 30)).toBe(Math.round(csExperienceFor(30) * 3));
+  });
+
+  it("drops the refill for a steadily rising arrival rate", () => {
+    expect(csSpawnPressure(180, "undercover")).toEqual(csSpawnPressure(180, "horizon"));
+    const early = csSpawnPressure(600, "undercover");
+    const late = csSpawnPressure(1800, "undercover");
+    expect(late.minimum).toBe(early.minimum);
+    expect(late.interval).toBeLessThan(early.interval);
+  });
+
+  it("opens after ten minutes in the City of Mei", () => {
+    expect(csNextUnlock(CS_EMPTY_PROGRESS, "mei")).toEqual({
+      stage: "undercover",
+      seconds: 600,
+    });
+    expect(csNextUnlock(CS_EMPTY_PROGRESS, "undercover")).toBeNull();
   });
 });

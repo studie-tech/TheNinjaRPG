@@ -30,8 +30,8 @@ import type {
   ChakraStormOutcome,
 } from "@/hooks/useChakraStormRun";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import {
-  CS_BOSS_MINUTES,
   CS_JUTSU_INFO,
   CS_PASSIVE_INFO,
   CS_RUN_SECONDS,
@@ -41,6 +41,7 @@ import {
   type CsJutsu,
   type CsPassive,
   type CsStage,
+  csBossSeconds,
   csUpgradeText,
 } from "@/libs/chakraStorm/content";
 import type { CsUnlockGoal } from "@/libs/chakraStorm/progress";
@@ -50,10 +51,13 @@ import { cn } from "@/libs/shadui";
 /** Passive arts share one gold accent; jutsu carry their element's colour. */
 export const CS_PASSIVE_COLOR = "#d97706";
 
-/** mm:ss for a count of seconds. */
+/** mm:ss for a count of seconds, or h:mm:ss from an hour on. */
 export const formatClock = (seconds: number) => {
   const whole = Math.max(0, Math.floor(seconds));
-  return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const minutes = Math.floor(whole / 60);
+  if (minutes < 60) return `${pad(minutes)}:${pad(whole % 60)}`;
+  return `${Math.floor(minutes / 60)}:${pad(minutes % 60)}:${pad(whole % 60)}`;
 };
 
 /** A jutsu's or passive art's painted icon, framed in its colour. */
@@ -91,6 +95,8 @@ export const ChakraStormOverlay = (props: {
   announcement: ChakraStormAnnouncement | null;
   /** The region this run opens once it lasts long enough. */
   goal: CsUnlockGoal | null;
+  /** The region's longest run before this one, in seconds. */
+  record: number | null;
   onPause: (paused: boolean) => void;
   onSound?: (on: boolean) => void;
   onFullscreen?: () => void;
@@ -98,8 +104,8 @@ export const ChakraStormOverlay = (props: {
   const { hud } = props;
   const seconds = hud.tick / CS_TPS;
   const hpShare = Math.max(0, hud.hero.hp / hud.hero.maxHp);
-  const nextBoss = CS_BOSS_MINUTES.find((minute) => minute * 60 > seconds);
-  const bossIn = nextBoss === undefined ? null : nextBoss * 60 - seconds;
+  const nextBoss = nextBossSeconds(hud.config.stage, seconds);
+  const bossIn = nextBoss === null ? null : nextBoss - seconds;
   return (
     <>
       {/* Low health darkens the field's edge in red. */}
@@ -158,7 +164,11 @@ export const ChakraStormOverlay = (props: {
               <Timer className="h-5 w-5 shrink-0 text-white/85" />
               {formatClock(seconds)}
             </span>
-            <RunProgress seconds={seconds} goal={props.goal} />
+            {CS_STAGE_INFO[hud.config.stage].endless ? (
+              <CoverProgress seconds={seconds} record={props.record} />
+            ) : (
+              <RunProgress seconds={seconds} goal={props.goal} />
+            )}
             <span className="flex items-center gap-1 text-sm font-bold text-white/90 tabular-nums">
               <Skull className="h-3.5 w-3.5 shrink-0" />
               {hud.kills.toLocaleString()}
@@ -255,6 +265,39 @@ const RunProgress = (props: { seconds: number; goal: CsUnlockGoal | null }) => {
       )}
     </>
   );
+};
+
+/** Undercover has no end to count down to: the line measures the run against the best one. */
+const CoverProgress = (props: { seconds: number; record: number | null }) => {
+  const { seconds, record } = props;
+  if (!record)
+    return (
+      <span className="text-sm font-bold whitespace-nowrap text-white/85">
+        No reinforcements are coming
+      </span>
+    );
+  return seconds > record ? (
+    <span className="flex items-center gap-1 text-sm font-bold whitespace-nowrap text-emerald-300">
+      <Trophy className="h-3.5 w-3.5 shrink-0" />
+      New best
+    </span>
+  ) : (
+    <span
+      className="flex items-center gap-1 text-sm font-bold whitespace-nowrap text-amber-200 tabular-nums"
+      title="Your longest Undercover run"
+    >
+      <Trophy className="h-3.5 w-3.5 shrink-0" />
+      Best {formatClock(record)}
+    </span>
+  );
+};
+
+/** When the next hunter arrives after `seconds`, or null when none is left to come. */
+const nextBossSeconds = (stage: CsStage, seconds: number) => {
+  for (let index = 0; ; index++) {
+    const at = csBossSeconds(stage, index);
+    if (at === null || at > seconds) return at;
+  }
 };
 
 /** A banner across the field for captains, ambushes, awakenings and treasure. */
@@ -548,10 +591,12 @@ const EmptySlots = (props: { count: number; label: string }) =>
 export const ChakraStormPaused = (props: {
   hud: ChakraStormHud;
   goal: CsUnlockGoal | null;
+  record: number | null;
   onGiveUp: () => void;
   onResume: () => void;
 }) => {
   const seconds = props.hud.tick / CS_TPS;
+  const endless = !!CS_STAGE_INFO[props.hud.config.stage].endless;
   const pending = props.goal && seconds < props.goal.seconds ? props.goal : null;
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/70 p-4 text-center text-white">
@@ -564,11 +609,22 @@ export const ChakraStormPaused = (props: {
             {CS_STAGE_INFO[pending.stage].name}
           </p>
         )}
-        <p className="text-balance text-amber-200">
-          <Users className="mr-1.5 inline h-4 w-4 align-[-0.15em]" />
-          Reinforcements arrive in {formatClock(CS_RUN_SECONDS - seconds)} to bring your
-          report home
-        </p>
+        {endless ? (
+          props.record !== null &&
+          props.record > seconds && (
+            <p className="text-balance text-amber-200">
+              <Trophy className="mr-1.5 inline h-4 w-4 align-[-0.15em]" />
+              {formatClock(props.record - seconds)} more beats your best of{" "}
+              {formatClock(props.record)}
+            </p>
+          )
+        ) : (
+          <p className="text-balance text-amber-200">
+            <Users className="mr-1.5 inline h-4 w-4 align-[-0.15em]" />
+            Reinforcements arrive in {formatClock(CS_RUN_SECONDS - seconds)} to bring
+            your report home
+          </p>
+        )}
         <p className="text-sm font-normal text-white/75">
           Giving up ends the run and banks the intel scouted so far.
         </p>
@@ -609,9 +665,13 @@ export const ChakraStormResults = (props: {
             {stage.name}
           </p>
           <h3 className="text-2xl font-black">
-            {outcome.won
-              ? "Scouting complete: report delivered!"
-              : `Forced to retreat at ${formatClock(outcome.seconds)}`}
+            {stage.endless
+              ? outcome.won
+                ? `Extracted with your report after ${formatClock(outcome.seconds)}`
+                : `Cover blown at ${formatClock(outcome.seconds)}`
+              : outcome.won
+                ? "Scouting complete: report delivered!"
+                : `Forced to retreat at ${formatClock(outcome.seconds)}`}
           </h3>
         </div>
         <div className="grid grid-cols-3 gap-2">
@@ -682,7 +742,13 @@ export const ChakraStormResults = (props: {
               Scout {CS_STAGE_INFO[opened].name}
             </Button>
           )}
+          {stage.endless && <LeaderboardButton />}
         </div>
+        {stage.endless && outcome.claim === "local" && (
+          <p className="text-muted-foreground text-sm">
+            Sign in to rank your Undercover runs on the monthly leaderboard.
+          </p>
+        )}
         {props.footer}
       </div>
     </div>
@@ -751,3 +817,13 @@ const describeOption = (option: CsDraftOption, hud: ChakraStormHud) => {
         : null,
   };
 };
+
+/** The way to the monthly Undercover leaderboard. */
+export const LeaderboardButton = (props: { size?: "sm" | "default" }) => (
+  <Button asChild variant="outline" size={props.size}>
+    <Link href="/chakraStorm/leaderboard">
+      <Trophy className="mr-1.5 h-4 w-4" />
+      Leaderboard
+    </Link>
+  </Button>
+);

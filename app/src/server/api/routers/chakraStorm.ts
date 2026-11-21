@@ -4,6 +4,7 @@ import { getScoutingReportUserUpdate } from "@/deltas/chakraStorm";
 import { decodeCsActions } from "@/libs/chakraStorm/actionLog";
 import {
   CS_DAILY_SECONDS,
+  CS_LEADERBOARD_STAGE,
   CS_STAGE_INFO,
   CS_STAGES,
   CS_TRAINING,
@@ -23,6 +24,7 @@ import {
   findChakraStormClaimReceipt,
   findChakraStormProgress,
   insertChakraStormClaimReceipt,
+  listChakraStormReceiptForGetLeaderboard,
   updateChakraStormProgressForClaimRun,
   updateChakraStormProgressForTrain,
   updateUserDataForChakraStormDuty,
@@ -31,6 +33,7 @@ import {
 import { incrementVillageTokens } from "@/queries/village";
 import {
   baseServerResponse,
+  cdnCachedProcedure,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -46,7 +49,7 @@ import {
   verifyChakraStormRun,
 } from "@/server/utils/chakraStormClaims";
 import { signRunToken, verifyRunToken } from "@/server/utils/runTokens";
-import { periodStart } from "@/utils/time";
+import { getFirstOfThisMonth, periodStart } from "@/utils/time";
 import {
   type ChakraStormRunToken,
   CS_MAX_ACTIONS,
@@ -296,6 +299,18 @@ export const chakraStormRouter = createTRPCRouter({
         intelSpent: cost,
       };
     }),
+
+  /** This month's longest verified Undercover runs, one per player. */
+  getLeaderboard: cdnCachedProcedure
+    .meta({ mcp: { description: "Get the Chakra Storm Undercover leaderboard" } })
+    .input(z.object({ limit: z.number().min(1).max(100).prefault(50) }))
+    .query(async ({ ctx, input }) =>
+      listChakraStormReceiptForGetLeaderboard(ctx.drizzle, {
+        limit: input.limit,
+        stage: CS_LEADERBOARD_STAGE,
+        since: getFirstOfThisMonth(),
+      }),
+    ),
 });
 
 /** Why a run that is no longer the caller's active one cannot be claimed. */

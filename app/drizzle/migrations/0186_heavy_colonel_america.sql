@@ -1,0 +1,1 @@
+CREATE INDEX `ChakraStormClaimReceipt_stage_createdAt_idx` ON `ChakraStormClaimReceipt` (`stage`,`createdAt`);
