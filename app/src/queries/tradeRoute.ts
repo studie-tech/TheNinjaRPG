@@ -51,18 +51,6 @@ export const findTradeRoute = (client: Pick<DrizzleClient, "query">, routeId: st
     with: { villageA: villageColumns, villageB: villageColumns, markers: true },
   });
 
-/** Routes by id with their markers. */
-export const listTradeRoutes = (
-  client: Pick<DrizzleClient, "query">,
-  routeIds: string[],
-) =>
-  routeIds.length === 0
-    ? Promise.resolve([])
-    : client.query.tradeRoute.findMany({
-        where: inArray(tradeRoute.id, routeIds),
-        with: { villageA: villageColumns, villageB: villageColumns, markers: true },
-      });
-
 /** Villages and settlements with a built Warehouse, the possible trade partners. */
 export const listWarehouseVillages = (client: Pick<DrizzleClient, "select">) =>
   client

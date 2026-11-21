@@ -5029,7 +5029,6 @@ export const SUPPLY_REQUEST_PAYOUT_PERCENT = 60;
 export const WAREHOUSE_CONSTRUCTION_COST = 500_000;
 /** Funds for each Warehouse level above 1. */
 export const WAREHOUSE_UPGRADE_COST = 150_000;
-export const WAREHOUSE_MAX_LEVEL = 10;
 /** Production bonus per Warehouse level, in percent. */
 export const WAREHOUSE_PRODUCTION_BONUS_PER_LEVEL = 1;
 /** Bonus stock added to each deposit per Warehouse level, in percent. */
