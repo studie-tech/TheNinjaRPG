@@ -176,7 +176,8 @@ export const hasDueCaravanWork = (
 /**
  * Cancel a caravan and return everything it holds: a preparing caravan releases its
  * reservation, a travelling one brings its remaining cargo home. Escorts are freed unpaid.
- * `unfought` refuses the cancellation while a fight over the caravan is open.
+ * `unfought` refuses the cancellation while a fight over the caravan is open. Resolves to
+ * the escorts it released, or false when the caravan changed and stays open.
  */
 export const cancelCaravan = async (
   client: DrizzleClient,
@@ -217,14 +218,15 @@ export const cancelCaravan = async (
     }),
   );
   if (!cancelled) return false;
-  const guardIds = participants.filter((p) => p.role === "GUARD").map((p) => p.userId);
+  const guards = participants.filter((p) => p.role === "GUARD");
+  const guardIds = guards.map((p) => p.userId);
   await wakeReleasedGuards(client, guardIds);
   notifyPlayers(client, guardIds, {
     title: "Caravan cancelled",
     body: "Your escort duty ended; the caravan was cancelled.",
     route: "/warehouse",
   });
-  return true;
+  return guards.flatMap((p) => (p.activeUserId ? [p.userId] : []));
 };
 
 /**

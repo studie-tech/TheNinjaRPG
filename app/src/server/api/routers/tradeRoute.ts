@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getReleasedEscortUserUpdate } from "@/deltas/caravan";
 import { getPaidWarehouseChange } from "@/deltas/warehouse";
 import {
   CARAVANS_PER_TRADE_ROUTE,
@@ -45,6 +46,7 @@ import {
   notifyPlayers,
 } from "@/server/utils/caravan";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { warehouseResponseSchema } from "@/validators/warehouse";
 
 /** A proposal accepted into an active route with the markers planned along it. */
@@ -303,7 +305,7 @@ export const tradeRouteRouter = createTRPCRouter({
   close: protectedProcedure
     .meta({ mcp: { description: "Close one of your village's trade routes" } })
     .input(z.object({ routeId: z.string() }))
-    .output(baseServerResponse.extend({ removed: removedRouteSchema.optional() }))
+    .output(userDeltaResponseSchema.extend({ removed: removedRouteSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       // Relationships and wars decide whether the partner can be offered again.
       const [user, route, relationships, wars] = await Promise.all([
@@ -332,6 +334,10 @@ export const tradeRouteRouter = createTRPCRouter({
       return {
         success: true,
         message: "Trade route closed",
+        ...getReleasedEscortUserUpdate(
+          user,
+          cancelled.flatMap((released) => released || []),
+        ),
         removed: {
           routeId: route.id,
           partner: {

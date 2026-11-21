@@ -476,6 +476,18 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(await statusOf("guard")).toBe("AWAKE");
   });
 
+  it("wakes and reports the queued escorts a cancellation releases", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "guard", status: "AWAKE", villageId: "leaf" }]);
+    await db.insert(caravan).values(caravanRow({ status: "PREPARING" }));
+    expect((await insertGuard(db, "c1", "guard", new Date())).rowsAffected).toBe(1);
+    expect((await queueGuard(db, "c1", "guard")).rowsAffected).toBe(1);
+    const [row] = await db.select().from(caravan);
+    if (!row) throw new Error("caravan missing");
+    expect(await afterTasks.run([], () => cancelCaravan(db, row))).toEqual(["guard"]);
+    expect(await statusOf("guard")).toBe("AWAKE");
+  });
+
   it("settles a won robbery once, capping the loss and splitting the loot", async () => {
     const db = await getTestDatabase();
     await insertUsers([
@@ -690,7 +702,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(kept?.status).toBe("TRAVELLING");
     expect(await db.select().from(warehouseStock)).toHaveLength(0);
     await db.delete(caravanEncounter).where(eq(caravanEncounter.id, "e1"));
-    expect(await cancel()).toBe(true);
+    expect(await cancel()).toEqual([]);
     const [cancelled] = await db.select().from(caravan);
     expect(cancelled?.status).toBe("CANCELLED");
   });

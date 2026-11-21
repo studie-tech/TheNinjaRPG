@@ -14,6 +14,7 @@ import {
   getPreparedCaravans,
   getProposedTradeRoutes,
   getRejoinedEscortCaravans,
+  getReleasedEscortUserUpdate,
   getRemovedTradeRoutes,
   getStartedOperationControls,
   getStoppedSabotageCaravans,
@@ -194,6 +195,17 @@ describe("trade route deltas", () => {
 });
 
 describe("caravan deltas", () => {
+  it("wakes only a queued viewer among the escorts a cancellation released", () => {
+    const queued = { userId: "g1", status: "QUEUED" };
+    expect(getReleasedEscortUserUpdate(queued, ["g1", "g2"])).toEqual({
+      userPatch: { status: "AWAKE" },
+    });
+    expect(getReleasedEscortUserUpdate(queued, ["g2"])).toEqual({});
+    expect(
+      getReleasedEscortUserUpdate({ userId: "g1", status: "BATTLE" }, ["g1"]),
+    ).toEqual({});
+  });
+
   it("lists a prepared caravan first and moves a cancelled one into the history", () => {
     const prepared = getPreparedCaravans(caravans([]), {
       id: "k",

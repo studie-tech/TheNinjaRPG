@@ -384,8 +384,13 @@ export const caravanOpsRouter = createTRPCRouter({
           finishesAt,
         });
       } catch (error) {
+        // The readiness claim already woke a recovering player.
         if (isMysqlDuplicateKeyError(error))
-          return errorResponse("Finish your current operation first");
+          return actionReadinessResponse(
+            errorResponse("Finish your current operation first"),
+            readiness,
+            ctx.drizzle,
+          );
         throw error;
       }
       if (target)

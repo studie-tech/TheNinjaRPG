@@ -192,6 +192,37 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       if (snapshot) reload(snapshot, affected);
     },
   });
+  /**
+   * Bind a mutation that can also change the viewer's profile, such as waking them or
+   * releasing their escort: a response applies the profile change it confirms, and a lost
+   * response reloads the profile with the views.
+   */
+  const bindProfile = <Result extends UserDeltaResponse, Input>(
+    affected: (keyof typeof views)[],
+    patch: (result: Result, input: Input, snapshot: Snapshot) => void,
+  ) => {
+    const options = bind<Result, Input>(affected, patch);
+    return {
+      onMutate: () => ({ views: options.onMutate(), user: prepareUserUpdate() }),
+      onSuccess: async (
+        result: Result,
+        input: Input,
+        snapshot: { views: Snapshot; user: number | undefined },
+      ) => {
+        options.onSuccess(result, input, snapshot.views);
+        if (result.userPatch || result.userRecovery)
+          await updateUser(result, { revision: snapshot.user, refetch: false });
+      },
+      onError: async (
+        error: unknown,
+        input: Input,
+        snapshot: { views: Snapshot; user: number | undefined } | undefined,
+      ) => {
+        options.onError(error, input, snapshot?.views);
+        if (snapshot) await updateUser(undefined, { revision: snapshot.user });
+      },
+    };
+  };
   /** Escort changes also patch the profile; a rejection applies only confirmed recovery. */
   const bindEscort = <Result extends UserDeltaResponse, Input>(
     patch: (result: Result, input: Input, snapshot: Snapshot) => void,
@@ -367,7 +398,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       }),
     ),
     closeRoute: api.tradeRoute.close.useMutation(
-      bind(["routes"], (result, _input, snapshot) => {
+      bindProfile(["routes"], (result, _input, snapshot) => {
         const removed = result.removed;
         void views.routes.updateCache(
           removed && ((current) => getRemovedTradeRoutes(current, removed)),
@@ -403,7 +434,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       }),
     ),
     cancel: api.caravan.cancel.useMutation(
-      bind(["caravans"], (result, _input, snapshot) => {
+      bindProfile(["caravans"], (result, _input, snapshot) => {
         const cancelled = result.cancelled;
         void views.caravans.updateCache(
           cancelled && ((current) => getCancelledCaravans(current, cancelled)),
@@ -490,7 +521,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       }),
     ),
     startOperation: api.caravanOps.startOperation.useMutation(
-      bind(["controls"], (result, _input, snapshot) => {
+      bindProfile(["controls"], (result, _input, snapshot) => {
         const operation = result.operation;
         void views.controls.updateCache(
           operation && ((current) => getStartedOperationControls(current, operation)),
