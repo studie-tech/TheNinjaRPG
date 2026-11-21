@@ -13,7 +13,10 @@ import {
   userVote,
 } from "@/drizzle/schema";
 import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
-import { submitSupplyRequestAtomically } from "@/queries/supplyRequest";
+import {
+  listSupplyRequestStacks,
+  submitSupplyRequestAtomically,
+} from "@/queries/supplyRequest";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { periodStart } from "@/utils/time";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
@@ -120,6 +123,54 @@ describeWithDatabase("daily supply requests", () => {
     expect(user.huntingExperience).toBe(0);
     expect(user.craftingExperience).toBe(0);
     expect(user.supplyRequestAt).not.toBeNull();
+  });
+
+  it("loads only the selected carried stack for its owner", async () => {
+    const db = await getTestDatabase();
+    const stacks = await listSupplyRequestStacks(db, owner);
+    expect(stacks).toHaveLength(3);
+    expect(await listSupplyRequestStacks(db, owner, "stock")).toEqual(
+      stacks.filter((stack) => stack.id === "stock"),
+    );
+    expect(await listSupplyRequestStacks(db, "other", "stock")).toEqual([]);
+    expect(await listSupplyRequestStacks(db, owner, "missing")).toEqual([]);
+  });
+
+  it.each([
+    { userId: "other" },
+    { quantity: 0 },
+    { storedAtHome: true },
+    { equipped: "HAND_1" as const },
+    { isInAuction: true },
+    { craftingFinishedAt: new Date("2099-01-01") },
+    { activeVariantId: "variant" },
+    { level: 2 },
+    { experience: 1 },
+    { durability: 1 },
+  ])("rejects a selected stack that became unavailable: %j", async (patch) => {
+    const { caller, input } = await reviewed();
+    const db = await getTestDatabase();
+    await db.update(userItem).set(patch).where(eq(userItem.id, "stock"));
+    expect((await caller.getSupplyRequest()).stacks).toEqual([]);
+    expect((await caller.submitSupplyRequest(input)).success).toBe(false);
+    expect((await requireUser(owner)).money).toBe(1000);
+    expect((await requireUser(owner)).supplyRequestAt).toBeNull();
+  });
+
+  it("excludes imbued stacks from both review and selected submission", async () => {
+    const { caller, input } = await reviewed();
+    const db = await getTestDatabase();
+    await db.insert(userItemImbuement).values({
+      id: "imbued",
+      userItemId: "stock",
+      imbuementItemId: "craft",
+      craftingFinishedAt: new Date(0),
+    });
+    expect((await caller.getSupplyRequest()).stacks).toEqual([]);
+    expect((await caller.submitSupplyRequest(input)).success).toBe(false);
+    expect((await readStack())?.quantity).toBe(250);
+    expect((await requireUser(owner)).money).toBe(1000);
+    expect((await requireUser(owner)).supplyRequestAt).toBeNull();
   });
 
   it("rejects partial bundles, multiple stacks and excess stock", async () => {

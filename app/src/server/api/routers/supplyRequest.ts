@@ -82,7 +82,7 @@ export const supplyRequestProcedures = {
           userId: ctx.userId,
           rejectIsolatedPyramid: true,
         }),
-        listSupplyRequestStacks(ctx.drizzle, ctx.userId),
+        listSupplyRequestStacks(ctx.drizzle, ctx.userId, input.userItemId),
       ]);
       const initialUser = updatedUser.user;
       if (!initialUser) return errorResponse("Character could not be loaded.");

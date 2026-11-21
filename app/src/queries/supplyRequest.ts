@@ -16,19 +16,47 @@ import { hasNoHuntingBattle } from "@/server/utils/concurrency";
 import { periodStart } from "@/utils/time";
 import type { QuestTrackerType } from "@/validators/objectives";
 
-/** Load carried stacks and the relations needed to exclude modified or reserved copies. */
+/** Load carried supply snapshots, optionally restricted to the reviewed stack. */
 export const listSupplyRequestStacks = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
+  userItemId?: string,
 ) =>
   client.query.userItem.findMany({
     where: and(
       eq(userItem.userId, userId),
+      userItemId === undefined ? undefined : eq(userItem.id, userItemId),
       gt(userItem.quantity, 0),
       eq(userItem.equipped, "NONE"),
       eq(userItem.storedAtHome, false),
     ),
-    with: { item: true, imbuements: true },
+    columns: {
+      id: true,
+      itemId: true,
+      quantity: true,
+      updatedAt: true,
+      equipped: true,
+      storedAtHome: true,
+      isInAuction: true,
+      craftingFinishedAt: true,
+      activeVariantId: true,
+      level: true,
+      experience: true,
+      durability: true,
+    },
+    with: {
+      item: {
+        columns: {
+          name: true,
+          image: true,
+          auctionMaxPrice: true,
+          canBeCrafted: true,
+          canBeGathered: true,
+          canBeHunted: true,
+        },
+      },
+      imbuements: { columns: { id: true } },
+    },
   });
 
 /**
