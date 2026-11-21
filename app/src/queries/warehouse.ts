@@ -222,7 +222,7 @@ export const ensureDepositLedger = (
  * changes unless all three rows match, so the deposit lands once. A stack emptied to 0 is
  * left for `deleteEmptyUserItem`.
  */
-export const depositStackPart = (
+export const depositFromStack = (
   client: Pick<DrizzleClient, "execute">,
   input: DepositLedgerClaim & {
     villageId: string;

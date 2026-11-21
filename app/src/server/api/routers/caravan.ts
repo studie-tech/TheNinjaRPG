@@ -87,7 +87,6 @@ import {
   selectQueuedGuards,
 } from "@/server/utils/caravanBattle";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { WarehouseConflict } from "@/server/utils/warehouse";
 import { canChangeContent } from "@/utils/permissions";
 import { MINUTE_S, secondsFromDate } from "@/utils/time";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -737,3 +736,6 @@ const mergeCargo = (lines: CargoLine[]) => {
     totals.set(line.itemId, (totals.get(line.itemId) ?? 0) + line.quantity);
   return [...totals].map(([itemId, quantity]) => ({ itemId, quantity }));
 };
+
+/** Rolls back the caravan preparation transaction with a player-facing message. */
+class WarehouseConflict extends Error {}

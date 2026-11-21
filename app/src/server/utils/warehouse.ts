@@ -21,9 +21,6 @@ import type { DrizzleClient } from "@/server/db";
 import { userItemQuantityWhere } from "@/server/utils/concurrency";
 import { getRaidStructureMultiplier } from "@/utils/village";
 
-/** Rolls back a Warehouse or caravan transaction with a player-facing message. */
-export class WarehouseConflict extends Error {}
-
 /**
  * The guard on a deposited stack: it still holds what was read and is carried and unequipped,
  * and its owner is in no battle, whose settlement writes the stack's own quantity back.

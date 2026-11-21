@@ -43,7 +43,7 @@ import {
   addWithdrawnUnits,
   approveWarehouseMember,
   claimWithdrawal,
-  depositStackPart,
+  depositFromStack,
   ensureDepositLedger,
   ensureWarehouseStock,
   findVillageWarehouse,
@@ -63,7 +63,6 @@ import {
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { grantUserItems } from "@/server/utils/itemGrants";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { depositStackWhere, settleProduction } from "@/server/utils/warehouse";
 import { HOUR_S, secondsFromDate } from "@/utils/time";
 import { calcStructureUpgrade, getRaidStructureMultiplier } from "@/utils/village";
@@ -267,7 +266,7 @@ export const warehouseRouter = createTRPCRouter({
         ledger ? undefined : ensureDepositLedger(ctx.drizzle, ctx.userId, stack.itemId),
         ensureWarehouseStock(ctx.drizzle, villageData.id, [stack.itemId]),
       ]);
-      const deposited = await depositStackPart(ctx.drizzle, {
+      const deposited = await depositFromStack(ctx.drizzle, {
         userId: ctx.userId,
         itemId: stack.itemId,
         cooldownStart: secondsFromDate(-WAREHOUSE_DEPOSIT_COOLDOWN_HOURS * HOUR_S, now),
@@ -296,16 +295,16 @@ export const warehouseRouter = createTRPCRouter({
         // History follows the deposit: a failure here costs only a log row support can add.
         insertWarehouseLogs(ctx.drizzle, [log], now),
         remaining === 0
-          ? retryOnDeadlock(() =>
-              deleteEmptyUserItem(ctx.drizzle, stack.id, ctx.userId),
-            ).catch((error: unknown) => {
-              // The deposit already committed; inventory reads hide zero stacks and reclaim
-              // stale ones, so report success rather than invite a repeat.
-              Sentry.captureException(error, {
-                level: "warning",
-                tags: { source: "warehouseDeposit" },
-              });
-            })
+          ? deleteEmptyUserItem(ctx.drizzle, stack.id, ctx.userId).catch(
+              (error: unknown) => {
+                // The deposit already committed; inventory reads hide zero stacks and reclaim
+                // stale ones, so report success rather than invite a repeat.
+                Sentry.captureException(error, {
+                  level: "warning",
+                  tags: { source: "warehouseDeposit" },
+                });
+              },
+            )
           : undefined,
       ]);
       return {
