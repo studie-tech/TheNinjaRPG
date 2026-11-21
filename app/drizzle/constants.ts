@@ -1984,9 +1984,8 @@ export const DIAMOND_BLOODLINE_RANKS = [
   "A",
 ] as const satisfies readonly LetterRank[];
 /**
- * Days past the paid PayPal period that an ACTIVE Diamond subscription still protects its
- * Diamond bloodline, so a renewal the daily subscription check has not seen yet does not
- * revert it.
+ * Days past the end of a paid Diamond period (PayPal, Stripe or app store) that still
+ * protect the Diamond bloodline, so a renewal not yet confirmed does not revert it.
  */
 export const DIAMOND_RENEWAL_GRACE_DAYS = 2;
 

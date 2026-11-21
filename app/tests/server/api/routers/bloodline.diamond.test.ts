@@ -5,6 +5,8 @@ import {
   bloodline,
   bloodlineRolls,
   paypalSubscription,
+  storePurchase,
+  stripePayment,
   userData,
 } from "@/drizzle/schema";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
@@ -49,6 +51,8 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       actionLog,
       bloodlineRolls,
       paypalSubscription,
+      storePurchase,
+      stripePayment,
       userData,
       bloodline,
     );
@@ -290,4 +294,69 @@ describeWithDatabase("Diamond bloodline swaps", () => {
     });
     expect(await readUser()).toMatchObject({ bloodlineId: "owned-line" });
   });
+
+  it.each([
+    [
+      "Stripe period",
+      (expiresAt: Date) =>
+        getTestDatabase().then((db) =>
+          db.insert(stripePayment).values({
+            id: "diamond-invoice",
+            checkoutId: "diamond-checkout",
+            createdById: userId,
+            affectedUserId: userId,
+            amountCents: 2500,
+            federalStatus: "DIAMOND",
+            purchasedAt: new Date(expiresAt.getTime() - 30 * 24 * 3600 * 1000),
+            expiresAt,
+            grantedAt: new Date(expiresAt.getTime() - 30 * 24 * 3600 * 1000),
+          }),
+        ),
+    ],
+    [
+      "store receipt",
+      (expiresAt: Date) =>
+        getTestDatabase().then((db) =>
+          db.insert(storePurchase).values({
+            id: "diamond-receipt",
+            userId,
+            originalUserId: userId,
+            transactionId: "GPA.diamond",
+            productId: "tnr_federal_diamond:monthly",
+            store: "GOOGLE",
+            federalStatus: "DIAMOND",
+            purchasedAt: new Date(expiresAt.getTime() - 30 * 24 * 3600 * 1000),
+            expiresAt,
+            acceptedAt: new Date(expiresAt.getTime() - 30 * 24 * 3600 * 1000),
+            grantedAt: new Date(expiresAt.getTime() - 30 * 24 * 3600 * 1000),
+            rawData: {},
+          }),
+        ),
+    ],
+  ] as const)(
+    "waits for a just-expired Diamond %s's renewal before reverting",
+    async (_, insertPeriod) => {
+      expect((await swap("pick-a")).success).toBe(true);
+      const db = await getTestDatabase();
+      await db
+        .update(userData)
+        .set({ federalStatus: "NONE" })
+        .where(eq(userData.userId, userId));
+      // Expired an hour ago: the renewal may not have been confirmed yet.
+      await insertPeriod(new Date(Date.now() - 3600 * 1000));
+      expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+        reverted: 0,
+        cleared: 0,
+      });
+      expect(await readUser()).toMatchObject({ bloodlineId: "pick-a" });
+      // Expired beyond the grace: the revert goes ahead.
+      await resetTables(stripePayment, storePurchase);
+      await insertPeriod(new Date(Date.now() - 3 * 24 * 3600 * 1000));
+      expect(await revertLapsedDiamondBloodlines(db)).toEqual({
+        reverted: 1,
+        cleared: 0,
+      });
+      expect(await readUser()).toMatchObject({ bloodlineId: "owned-line" });
+    },
+  );
 });

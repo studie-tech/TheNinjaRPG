@@ -22,6 +22,8 @@ import {
   bloodlineReskin,
   bloodlineRolls,
   paypalSubscription,
+  storePurchase,
+  stripePayment,
   userItem,
   userSkill,
 } from "@/drizzle/schema";
@@ -749,16 +751,30 @@ export const diamondSwapUserUpdate = (info: {
 });
 
 /**
- * Whether an ACTIVE Diamond PayPal subscription paid recently enough that its renewal may
- * simply not have been confirmed yet.
+ * Whether a Diamond payment ended recently enough that its renewal may simply not have been
+ * confirmed yet: an ACTIVE PayPal subscription past its paid period, or a granted Stripe
+ * period or accepted, unrevoked store receipt that expired within the grace.
  */
-const pendingDiamondRenewal = () => sql`EXISTS (
+const pendingDiamondRenewal = () => sql`(EXISTS (
   SELECT 1 FROM ${paypalSubscription}
   WHERE ${paypalSubscription.affectedUserId} = ${userData.userId}
     AND ${paypalSubscription.status} = 'ACTIVE'
     AND ${paypalSubscription.federalStatus} = 'DIAMOND'
     AND ${paypalSubscription.updatedAt} >= CURRENT_TIMESTAMP(3) - INTERVAL ${PAYPAL_PAID_PERIOD_DAYS + DIAMOND_RENEWAL_GRACE_DAYS} DAY
-)`;
+) OR EXISTS (
+  SELECT 1 FROM ${stripePayment}
+  WHERE ${stripePayment.affectedUserId} = ${userData.userId}
+    AND ${stripePayment.grantedAt} IS NOT NULL
+    AND COALESCE(${stripePayment.federalStatusOverride}, ${stripePayment.federalStatus}) = 'DIAMOND'
+    AND ${stripePayment.expiresAt} >= CURRENT_TIMESTAMP(3) - INTERVAL ${DIAMOND_RENEWAL_GRACE_DAYS} DAY
+) OR EXISTS (
+  SELECT 1 FROM ${storePurchase}
+  WHERE ${storePurchase.userId} = ${userData.userId}
+    AND ${storePurchase.acceptedAt} IS NOT NULL
+    AND ${storePurchase.revokedAt} IS NULL
+    AND ${storePurchase.federalStatus} = 'DIAMOND'
+    AND ${storePurchase.expiresAt} >= CURRENT_TIMESTAMP(3) - INTERVAL ${DIAMOND_RENEWAL_GRACE_DAYS} DAY
+))`;
 
 /**
  * Lapsed Diamond supporters still holding a remembered pre-Diamond bloodline. A core select
