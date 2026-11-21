@@ -8721,20 +8721,6 @@ export const caravanEncounter = mysqlTable(
 );
 export type CaravanEncounter = InferSelectModel<typeof caravanEncounter>;
 
-export const caravanRelations = relations(caravan, ({ one, many }) => ({
-  route: one(tradeRoute, { fields: [caravan.routeId], references: [tradeRoute.id] }),
-  participants: many(caravanParticipant),
-}));
-export const caravanParticipantRelations = relations(caravanParticipant, ({ one }) => ({
-  caravan: one(caravan, {
-    fields: [caravanParticipant.caravanId],
-    references: [caravan.id],
-  }),
-  user: one(userData, {
-    fields: [caravanParticipant.userId],
-    references: [userData.userId],
-  }),
-}));
 export const tradeRouteRelations = relations(tradeRoute, ({ one, many }) => ({
   villageA: one(village, {
     fields: [tradeRoute.villageIdA],
@@ -8751,11 +8737,4 @@ export const tradeRouteMarkerRelations = relations(tradeRouteMarker, ({ one }) =
     fields: [tradeRouteMarker.routeId],
     references: [tradeRoute.id],
   }),
-}));
-export const warehouseStockRelations = relations(warehouseStock, ({ one }) => ({
-  item: one(item, { fields: [warehouseStock.itemId], references: [item.id] }),
-}));
-export const warehouseLogRelations = relations(warehouseLog, ({ one }) => ({
-  item: one(item, { fields: [warehouseLog.itemId], references: [item.id] }),
-  user: one(userData, { fields: [warehouseLog.userId], references: [userData.userId] }),
 }));

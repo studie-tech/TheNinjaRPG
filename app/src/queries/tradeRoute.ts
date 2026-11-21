@@ -154,7 +154,6 @@ export const listSectorMarkers = (
   client
     .select({
       id: tradeRouteMarker.id,
-      routeId: tradeRouteMarker.routeId,
       sector: tradeRouteMarker.sector,
       controllerVillageId: tradeRouteMarker.controllerVillageId,
       controllerName: village.name,
@@ -176,10 +175,8 @@ export const findMarker = (client: Pick<DrizzleClient, "select">, markerId: stri
   client
     .select({
       id: tradeRouteMarker.id,
-      routeId: tradeRouteMarker.routeId,
       sector: tradeRouteMarker.sector,
       controllerVillageId: tradeRouteMarker.controllerVillageId,
-      control: tradeRouteMarker.control,
       villageIdA: tradeRoute.villageIdA,
       villageIdB: tradeRoute.villageIdB,
       status: tradeRoute.status,
