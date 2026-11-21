@@ -801,33 +801,11 @@ export const resolveFoughtEncounter = (
     );
 
 /**
- * Resolve an unanswered ambush against its caravan in one statement: the bandits take a
- * capped share of the manifest of a caravan still on the road.
+ * Resolve an ambush left unanswered or abandoned in one statement with the capped share of
+ * the manifest the bandits take, so no delivery lands between the two. A caravan that
+ * already left the road keeps its loss.
  */
-export const expireAmbush = (
-  client: Pick<DrizzleClient, "execute">,
-  encounterId: string,
-  lossBp: number,
-  now: Date,
-) =>
-  client.execute(sql`
-    UPDATE ${caravanEncounter}
-    INNER JOIN ${caravan} ON ${caravan.id} = ${caravanEncounter.caravanId}
-    SET ${caravanEncounter.status} = 'RESOLVED', ${caravanEncounter.resolvedAt} = ${now},
-        ${caravanEncounter.activeCaravanId} = NULL,
-        ${caravan.lossBp} = IF(${caravan.status} = 'TRAVELLING', LEAST(${CARAVAN_MAX_LOSS_BP}, ${caravan.lossBp} + ${lossBp}), ${caravan.lossBp}),
-        ${caravan.version} = ${caravan.version} + 1
-    WHERE ${caravanEncounter.id} = ${encounterId}
-      AND ${caravanEncounter.status} = 'PENDING'
-      AND ${caravanEncounter.expiresAt} <= ${now}
-  `);
-
-/**
- * Release an abandoned defence against an ambush in one statement with the loss it costs,
- * the share an unanswered ambush takes, so no delivery lands between the two. A caravan
- * that already left the road keeps its loss.
- */
-export const releaseAbandonedAmbush = (
+export const chargeAmbushLoss = (
   client: Pick<DrizzleClient, "execute">,
   encounter: EncounterSnapshot,
   lossBp: number,

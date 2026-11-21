@@ -32,14 +32,13 @@ import {
 import { CARGO_MOVES, type CaravanBattleState } from "@/libs/caravan";
 import type { CompleteBattle } from "@/libs/combat/types";
 import {
+  chargeAmbushLoss,
   claimLoot,
-  expireAmbush,
   insertCheckpointAmbush,
   insertGuard,
   listActiveSabotage,
   moveCargo,
   queueGuard,
-  releaseAbandonedAmbush,
   releaseParticipants,
   renameCaravanUser,
   resolveOperation,
@@ -369,29 +368,15 @@ describeWithDatabase("village Warehouse and caravans", () => {
       .update(caravanEncounter)
       .set({ expiresAt: new Date(now.getTime() - 1000) })
       .where(eq(caravanEncounter.id, "e1"));
-    expect((await expireAmbush(db, "e1", 1000, now)).rowsAffected).toBeGreaterThan(0);
+    const expired = await chargeAmbushLoss(
+      db,
+      { id: "e1", status: "PENDING", battleId: null },
+      1000,
+      now,
+    );
+    expect(expired.rowsAffected).toBeGreaterThan(0);
     // The expired ambush took its share and bumped the version.
     expect((await deliver(1)).rowsAffected).toBe(1);
-  });
-
-  it("leaves a finished caravan's loss alone when its stray ambush expires", async () => {
-    const db = await getTestDatabase();
-    const now = new Date();
-    await db.insert(caravan).values(caravanRow({ status: "DELIVERED", lossBp: 500 }));
-    await db.insert(caravanEncounter).values({
-      id: "e1",
-      type: "AMBUSH",
-      status: "PENDING",
-      caravanId: "c1",
-      activeCaravanId: "c1",
-      expiresAt: new Date(now.getTime() - 1000),
-      createdAt: now,
-    });
-    await expireAmbush(db, "e1", 1000, now);
-    const [row] = await db.select().from(caravan);
-    expect(row?.lossBp).toBe(500);
-    const [encounter] = await db.select().from(caravanEncounter);
-    expect(encounter?.status).toBe("RESOLVED");
   });
 
   it("drops sabotage that finishes only once the caravan is due", async () => {
@@ -855,6 +840,27 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(losses).toEqual({ c1: 0, c2: 0, c3: CARAVAN_AMBUSH_LOSS_BP });
   });
 
+  it("charges an unanswered ambush once its deadline passes", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await db.insert(caravan).values(caravanRow({ checkpointsProcessed: 3 }));
+    await db.insert(caravanEncounter).values({
+      id: "e1",
+      type: "AMBUSH",
+      status: "PENDING",
+      caravanId: "c1",
+      activeCaravanId: "c1",
+      expiresAt: new Date(now.getTime() - 1000),
+      createdAt: new Date(now.getTime() - HOUR),
+    });
+    await afterTasks.run([], () => maintainCaravans(db, now, { caravanIds: ["c1"] }));
+    const [row] = await db.select().from(caravan);
+    expect(row?.lossBp).toBe(CARAVAN_AMBUSH_LOSS_BP);
+    const [encounter] = await db.select().from(caravanEncounter);
+    expect(encounter?.status).toBe("RESOLVED");
+    expect(encounter?.activeCaravanId).toBeNull();
+  });
+
   it("releases the group of a leader renamed during their interception", async () => {
     const db = await getTestDatabase();
     const hourAgo = new Date(Date.now() - HOUR);
@@ -923,7 +929,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
     // A snapshot of an earlier battle over the encounter releases nothing.
     expect(
       (
-        await releaseAbandonedAmbush(
+        await chargeAmbushLoss(
           db,
           { id: "e-road", status: "STARTING", battleId: "b-earlier" },
           CARAVAN_AMBUSH_LOSS_BP,
@@ -932,7 +938,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
       ).rowsAffected,
     ).toBe(0);
     for (const id of ["road", "done"])
-      await releaseAbandonedAmbush(
+      await chargeAmbushLoss(
         db,
         { id: `e-${id}`, status: "STARTING", battleId: `b-${id}` },
         CARAVAN_AMBUSH_LOSS_BP,
@@ -941,7 +947,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
     // A second pass finds nothing left to release.
     expect(
       (
-        await releaseAbandonedAmbush(
+        await chargeAmbushLoss(
           db,
           { id: "e-road", status: "STARTING", battleId: "b-road" },
           CARAVAN_AMBUSH_LOSS_BP,

@@ -34,7 +34,7 @@ import {
 import { getServerPusher } from "@/libs/pusher";
 import {
   advanceCaravanCheckpoints,
-  expireAmbush,
+  chargeAmbushLoss,
   grantCaravanRewards,
   insertCheckpointAmbush,
   listArrivedCaravans,
@@ -51,7 +51,6 @@ import {
   listTravellingCaravans,
   markGuardsRewarded,
   moveCargo,
-  releaseAbandonedAmbush,
   releaseParticipants,
   releaseStaleEncounter,
   resolveOperation,
@@ -659,15 +658,12 @@ const settleDueEncounters = async (
   // Each caravan and marker holds one open encounter, so these touch distinct rows.
   await Promise.all(
     due.map(async (encounter) => {
-      if (encounter.status === "PENDING") {
-        await expireAmbush(client, encounter.id, CARAVAN_AMBUSH_LOSS_BP, now);
-        return;
-      }
       if (encounter.battleId && running.has(encounter.battleId)) return;
-      // An abandoned defence costs what an unanswered ambush would.
+      // An abandoned defence costs what an unanswered ambush would; an unanswered one has
+      // no battle and no leader, so only its loss is charged.
       const released =
         encounter.type === "AMBUSH" && encounter.caravanId
-          ? await releaseAbandonedAmbush(client, encounter, CARAVAN_AMBUSH_LOSS_BP, now)
+          ? await chargeAmbushLoss(client, encounter, CARAVAN_AMBUSH_LOSS_BP, now)
           : await releaseStaleEncounter(client, encounter, now);
       if (released.rowsAffected === 0 || !encounter.caravanId || !encounter.leaderId)
         return;
