@@ -1,4 +1,4 @@
-import { eq, isNull, lte, or } from "drizzle-orm";
+import * as Sentry from "@sentry/nextjs";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -15,7 +15,7 @@ import {
   WAREHOUSE_MAX_PRODUCTION_ITEMS,
   WAREHOUSE_MIN_DEPOSIT,
 } from "@/drizzle/constants";
-import { type UserData, userItem, type Village } from "@/drizzle/schema";
+import type { UserData, Village } from "@/drizzle/schema";
 import { isCarriedUserItem } from "@/libs/item";
 import { isFactionVillage } from "@/libs/war";
 import {
@@ -36,14 +36,13 @@ import {
   isWarehouseStorable,
 } from "@/libs/warehouse";
 import { fetchClan } from "@/queries/clan";
+import { deleteEmptyUserItem } from "@/queries/item";
 import { fetchUser } from "@/queries/profile";
 import { fetchVillage } from "@/queries/village";
 import {
   addWithdrawnUnits,
   approveWarehouseMember,
-  claimDepositLedger,
   claimWithdrawal,
-  creditWarehouseStock,
   depositStackPart,
   ensureDepositLedger,
   ensureWarehouseStock,
@@ -63,13 +62,9 @@ import {
 } from "@/queries/warehouse";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
-import {
-  updateUserItemQuantityAtomically,
-  userItemQuantityWhere,
-} from "@/server/utils/concurrency";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { settleProduction, WarehouseConflict } from "@/server/utils/warehouse";
+import { depositStackWhere, settleProduction } from "@/server/utils/warehouse";
 import { HOUR_S, secondsFromDate } from "@/utils/time";
 import { calcStructureUpgrade, getRaidStructureMultiplier } from "@/utils/village";
 import { warehouseResponseSchema } from "@/validators/warehouse";
@@ -243,6 +238,7 @@ export const warehouseRouter = createTRPCRouter({
       if (!stack) return errorResponse("Select a stack from your backpack");
       if (!isWarehouseStorable(stack.item))
         return errorResponse("The Warehouse does not accept this item");
+      if (user.battleId) return errorResponse("Finish your battle first");
       if (!isCarriedUserItem(stack, now) || stack.equipped !== "NONE")
         return errorResponse("Unequip the stack and take it out of storage or auction");
       if (input.quantity > stack.quantity)
@@ -258,9 +254,6 @@ export const warehouseRouter = createTRPCRouter({
         getDepositBonus(level, getRaidStructureMultiplier(structure, now)),
         ledger,
       );
-      const conflict = new WarehouseConflict(
-        "Your stack or deposit cooldown changed. Refresh and try again",
-      );
       const log = {
         id: nanoid(),
         villageId: villageData.id,
@@ -269,7 +262,12 @@ export const warehouseRouter = createTRPCRouter({
         type: "DEPOSIT" as const,
         quantity: credit.credited,
       };
-      const claim = {
+      const remaining = stack.quantity - input.quantity;
+      await Promise.all([
+        ledger ? undefined : ensureDepositLedger(ctx.drizzle, ctx.userId, stack.itemId),
+        ensureWarehouseStock(ctx.drizzle, villageData.id, [stack.itemId]),
+      ]);
+      const deposited = await depositStackPart(ctx.drizzle, {
         userId: ctx.userId,
         itemId: stack.itemId,
         cooldownStart: secondsFromDate(-WAREHOUSE_DEPOSIT_COOLDOWN_HOURS * HOUR_S, now),
@@ -279,65 +277,37 @@ export const warehouseRouter = createTRPCRouter({
           bonusCarry: ledger?.bonusCarry ?? 0,
         },
         next: { withdrawnUnits: credit.withdrawnUnits, bonusCarry: credit.bonusCarry },
-      };
-      const remaining = stack.quantity - input.quantity;
-      // The stack must still be carried and unequipped, as it was when read.
-      const carried = [
-        eq(userItem.storedAtHome, false),
-        eq(userItem.isInAuction, false),
-        eq(userItem.equipped, "NONE"),
-        or(isNull(userItem.craftingFinishedAt), lte(userItem.craftingFinishedAt, now)),
-      ];
-      await Promise.all([
-        ledger ? undefined : ensureDepositLedger(ctx.drizzle, ctx.userId, stack.itemId),
-        ensureWarehouseStock(ctx.drizzle, villageData.id, [stack.itemId]),
-      ]);
-      if (remaining > 0) {
-        const deposited = await depositStackPart(ctx.drizzle, {
-          ...claim,
-          villageId: villageData.id,
-          credited: credit.credited,
+        villageId: villageData.id,
+        credited: credit.credited,
+        userItemId: stack.id,
+        nextQuantity: remaining,
+        stackWhere: depositStackWhere({
+          userId: ctx.userId,
           userItemId: stack.id,
-          nextQuantity: remaining,
-          stackWhere: userItemQuantityWhere({
-            userId: ctx.userId,
-            userItemId: stack.id,
-            expectedQuantity: stack.quantity,
-            where: carried,
-          }),
-        });
-        if (deposited.rowsAffected === 0) return errorResponse(conflict.message);
+          expectedQuantity: stack.quantity,
+          now,
+        }),
+      });
+      if (deposited.rowsAffected === 0)
+        return errorResponse(
+          "Your stack or deposit cooldown changed. Refresh and try again",
+        );
+      await Promise.all([
         // History follows the deposit: a failure here costs only a log row support can add.
-        await insertWarehouseLogs(ctx.drizzle, [log], now);
-      } else {
-        try {
-          // A whole stack is deleted, and no MySQL statement deletes one row while it updates
-          // others; committing the deletion with the cooldown claim and the credit keeps the
-          // donation from vanishing or doubling.
-          await retryOnDeadlock(() =>
-            ctx.drizzle.transaction(async (tx) => {
-              const claimed = await claimDepositLedger(tx, claim);
-              if (claimed.rowsAffected !== 1) throw conflict;
-              const consumed = await updateUserItemQuantityAtomically({
-                client: tx,
-                userId: ctx.userId,
-                userItemId: stack.id,
-                expectedQuantity: stack.quantity,
-                nextQuantity: 0,
-                where: carried,
+        insertWarehouseLogs(ctx.drizzle, [log], now),
+        remaining === 0
+          ? retryOnDeadlock(() =>
+              deleteEmptyUserItem(ctx.drizzle, stack.id, ctx.userId),
+            ).catch((error: unknown) => {
+              // The deposit already committed; inventory reads hide zero stacks and reclaim
+              // stale ones, so report success rather than invite a repeat.
+              Sentry.captureException(error, {
+                level: "warning",
+                tags: { source: "warehouseDeposit" },
               });
-              if (!consumed) throw conflict;
-              await creditWarehouseStock(tx, villageData.id, [
-                { itemId: stack.itemId, quantity: credit.credited },
-              ]);
-              await insertWarehouseLogs(tx, [log], now);
-            }),
-          );
-        } catch (error) {
-          if (error instanceof WarehouseConflict) return errorResponse(error.message);
-          throw error;
-        }
-      }
+            })
+          : undefined,
+      ]);
       return {
         success: true,
         message: credit.bonus

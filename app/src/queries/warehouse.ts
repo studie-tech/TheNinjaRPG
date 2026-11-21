@@ -215,21 +215,12 @@ export const ensureDepositLedger = (
     .values({ userId, itemId })
     .onDuplicateKeyUpdate({ set: { userId: sql`${warehouseDepositLedger.userId}` } });
 
-/** Claim the deposit cooldown and bonus state read for this deposit. */
-export const claimDepositLedger = (
-  client: Pick<DrizzleClient, "update">,
-  input: DepositLedgerClaim,
-) =>
-  client
-    .update(warehouseDepositLedger)
-    .set({ lastDepositAt: input.now, ...input.next })
-    .where(depositLedgerClaimWhere(input));
-
 /**
- * Deposit part of a stack in one statement: claim the deposit ledger as
- * {@link claimDepositLedger} does, shrink the stack to `nextQuantity` under `stackWhere`, and
- * credit the stock row `ensureWarehouseStock` created. Each assignment is a value or its own
- * column, and nothing changes unless all three rows match, so the deposit lands once.
+ * Deposit from a stack in one statement: claim the deposit cooldown and bonus state read for
+ * it, shrink the stack to `nextQuantity` under `stackWhere`, and credit the stock row
+ * `ensureWarehouseStock` created. Each assignment is a value or its own column, and nothing
+ * changes unless all three rows match, so the deposit lands once. A stack emptied to 0 is
+ * left for `deleteEmptyUserItem`.
  */
 export const depositStackPart = (
   client: Pick<DrizzleClient, "execute">,
@@ -269,29 +260,6 @@ export const addWithdrawnUnits = (
         withdrawnUnits: sql`${warehouseDepositLedger.withdrawnUnits} + ${quantity}`,
       },
     });
-
-/** Add stock lines to a Warehouse in one statement; repeated items add up. */
-export const creditWarehouseStock = (
-  client: Pick<DrizzleClient, "insert">,
-  villageId: string,
-  lines: { itemId: string; quantity: number }[],
-) =>
-  lines.length === 0
-    ? Promise.resolve()
-    : client
-        .insert(warehouseStock)
-        .values(
-          lines.map((line) => ({
-            villageId,
-            itemId: line.itemId,
-            quantity: line.quantity,
-          })),
-        )
-        .onDuplicateKeyUpdate({
-          set: {
-            quantity: sql`${warehouseStock.quantity} + VALUES(${warehouseStock.quantity})`,
-          },
-        });
 
 /** A player's Warehouse membership row. */
 export const findWarehouseMember = (

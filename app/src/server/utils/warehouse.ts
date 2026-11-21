@@ -1,9 +1,15 @@
-import type { VillageStructure, VillageWarehouse } from "@/drizzle/schema";
+import { eq, isNull, lte, or } from "drizzle-orm";
+import {
+  userItem,
+  type VillageStructure,
+  type VillageWarehouse,
+} from "@/drizzle/schema";
 import {
   getCycleQuantity,
   getDueProduction,
   getWarehouseLevel,
 } from "@/libs/warehouse";
+import { hasNoBattleWhere } from "@/queries/item";
 import {
   ensureWarehouseStock,
   findVillageWarehouse,
@@ -12,10 +18,35 @@ import {
   settleWarehouseProduction,
 } from "@/queries/warehouse";
 import type { DrizzleClient } from "@/server/db";
+import { userItemQuantityWhere } from "@/server/utils/concurrency";
 import { getRaidStructureMultiplier } from "@/utils/village";
 
 /** Rolls back a Warehouse or caravan transaction with a player-facing message. */
 export class WarehouseConflict extends Error {}
+
+/**
+ * The guard on a deposited stack: it still holds what was read and is carried and unequipped,
+ * and its owner is in no battle, whose settlement writes the stack's own quantity back.
+ */
+export const depositStackWhere = (input: {
+  userId: string;
+  userItemId: string;
+  expectedQuantity: number;
+  now: Date;
+}) =>
+  userItemQuantityWhere({
+    ...input,
+    where: [
+      eq(userItem.storedAtHome, false),
+      eq(userItem.isInAuction, false),
+      eq(userItem.equipped, "NONE"),
+      or(
+        isNull(userItem.craftingFinishedAt),
+        lte(userItem.craftingFinishedAt, input.now),
+      ),
+      hasNoBattleWhere(input.userId),
+    ],
+  });
 
 /**
  * Credit every production cycle due since the last settlement and return the settings, with

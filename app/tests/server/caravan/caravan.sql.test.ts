@@ -52,9 +52,9 @@ import {
 } from "@/queries/caravan";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
 import { updateUserDataForFinishBattle } from "@/queries/combat";
+import { deleteEmptyUserItem } from "@/queries/item";
 import {
   claimWithdrawal,
-  creditWarehouseStock,
   depositStackPart,
   ensureDepositLedger,
   ensureWarehouseStock,
@@ -67,8 +67,7 @@ import {
   maintainCaravans,
 } from "@/server/utils/caravan";
 import { settleCaravanCombat } from "@/server/utils/caravanSettlement";
-import { userItemQuantityWhere } from "@/server/utils/concurrency";
-import { settleProduction } from "@/server/utils/warehouse";
+import { depositStackWhere, settleProduction } from "@/server/utils/warehouse";
 import { afterTasks } from "../../setup/after";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
@@ -212,7 +211,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect((await approved()).rowsAffected).toBe(0);
   });
 
-  it("deposits part of a stack once, with its ledger claim and stock credit", async () => {
+  it("deposits from a stack once, with its ledger claim and stock credit", async () => {
     const db = await getTestDatabase();
     const now = new Date();
     await insertUsers([{ userId: "donor" }]);
@@ -225,26 +224,28 @@ describeWithDatabase("village Warehouse and caravans", () => {
     ]);
     const deposit = (
       expectedQuantity: number,
-      carried = [eq(userItem.storedAtHome, false)],
-    ) =>
-      depositStackPart(db, {
+      options: { take?: number; bonusCarry?: number; at?: Date } = {},
+    ) => {
+      const at = options.at ?? now;
+      return depositStackPart(db, {
         userId: "donor",
         itemId: "ore",
-        cooldownStart: new Date(now.getTime() - HOUR),
-        now,
-        expected: { withdrawnUnits: 0, bonusCarry: 0 },
+        cooldownStart: new Date(at.getTime() - HOUR),
+        now: at,
+        expected: { withdrawnUnits: 0, bonusCarry: options.bonusCarry ?? 0 },
         next: { withdrawnUnits: 0, bonusCarry: 250 },
         villageId: "leaf",
         credited: 21,
         userItemId: "pile",
-        nextQuantity: expectedQuantity - 20,
-        stackWhere: userItemQuantityWhere({
+        nextQuantity: expectedQuantity - (options.take ?? 20),
+        stackWhere: depositStackWhere({
           userId: "donor",
           userItemId: "pile",
           expectedQuantity,
-          where: carried,
+          now: at,
         }),
       });
+    };
     const state = async () => ({
       stack: (await db.select().from(userItem))[0]?.quantity,
       stock: (await db.select().from(warehouseStock))[0]?.quantity,
@@ -252,7 +253,9 @@ describeWithDatabase("village Warehouse and caravans", () => {
     });
     // A stack changed since it was read, or one no longer carried, changes nothing.
     expect((await deposit(49)).rowsAffected).toBe(0);
-    expect((await deposit(50, [eq(userItem.storedAtHome, true)])).rowsAffected).toBe(0);
+    await db.update(userItem).set({ storedAtHome: true });
+    expect((await deposit(50)).rowsAffected).toBe(0);
+    await db.update(userItem).set({ storedAtHome: false });
     // A hunt owns the inventory it preloaded.
     await db.insert(huntingSession).values({
       userId: "donor",
@@ -265,6 +268,10 @@ describeWithDatabase("village Warehouse and caravans", () => {
     });
     expect((await deposit(50)).rowsAffected).toBe(0);
     await db.delete(huntingSession);
+    // Any other battle writes the stack's quantity back when it settles.
+    await db.update(userData).set({ battleId: "b2" });
+    expect((await deposit(50)).rowsAffected).toBe(0);
+    await db.update(userData).set({ battleId: null });
     expect(await state()).toMatchObject({ stack: 50, stock: 0 });
     expect((await state()).ledger?.lastDepositAt).toBeNull();
     expect((await deposit(50)).rowsAffected).toBe(3);
@@ -275,6 +282,18 @@ describeWithDatabase("village Warehouse and caravans", () => {
     // The cooldown it claimed refuses a repeat of the same read.
     expect((await deposit(30)).rowsAffected).toBe(0);
     expect(await state()).toMatchObject({ stack: 30, stock: 21 });
+    // Once the cooldown passes, the whole stack goes, leaving an empty row to delete.
+    const later = new Date(now.getTime() + 25 * HOUR);
+    expect(
+      (await deposit(30, { take: 30, bonusCarry: 250, at: later })).rowsAffected,
+    ).toBe(3);
+    expect(await state()).toMatchObject({ stack: 0, stock: 42 });
+    expect(
+      (await deposit(30, { take: 30, bonusCarry: 250, at: later })).rowsAffected,
+    ).toBe(0);
+    await deleteEmptyUserItem(db, "pile", "donor");
+    expect(await db.select().from(userItem)).toHaveLength(0);
+    expect((await db.select().from(warehouseStock))[0]?.quantity).toBe(42);
   });
 
   it("reserves, loads and releases cargo only while stock covers its reservation", async () => {
@@ -409,25 +428,6 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(
       (await dispatchCaravan(db, prepared, { departedAt, arrivesAt })).rowsAffected,
     ).toBe(0);
-  });
-
-  it("credits several stock lines at once, creating missing rows", async () => {
-    const db = await getTestDatabase();
-    await db
-      .insert(warehouseStock)
-      .values({ villageId: "sand", itemId: "ore", quantity: 5, reserved: 5 });
-    await creditWarehouseStock(db, "sand", [
-      { itemId: "ore", quantity: 10 },
-      { itemId: "silk", quantity: 7 },
-      { itemId: "silk", quantity: 3 },
-    ]);
-    const stock = Object.fromEntries(
-      (await db.select().from(warehouseStock)).map((row) => [row.itemId, row]),
-    );
-    expect(stock).toMatchObject({
-      ore: { villageId: "sand", quantity: 15, reserved: 5 },
-      silk: { villageId: "sand", quantity: 10, reserved: 0 },
-    });
   });
 
   it("seats a released attacker in the group they rejoin", async () => {
