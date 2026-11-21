@@ -124,17 +124,18 @@ export const availableUserActions = (
   const isImmobilized = isUserImmobilized(userId, battle?.usersEffects);
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
-  // Keep one real jutsu candidate so costs, cooldowns, targeting and animation share
-  // its equipped record. Missing/deleted content keeps the standard fallback usable.
+  // Initiation distinguishes missing content from replacements removed by use gates.
+  // Older snapshots resolve existence from their equipped record and catalog.
   const replacesBasicAttack =
     !!user?.isAi &&
     !user.isVillageDutyCopy &&
     !!user.basicAttackJutsuId &&
-    !!battle &&
-    !!getJutsu(battle, user.basicAttackJutsuId) &&
-    user.jutsus?.some(
-      (jutsu) => jutsu.jutsuId === user.basicAttackJutsuId && jutsu.equipped,
-    );
+    (user.hasBasicAttackReplacement ??
+      (!!battle &&
+        !!getJutsu(battle, user.basicAttackJutsuId) &&
+        user.jutsus?.some(
+          (jutsu) => jutsu.jutsuId === user.basicAttackJutsuId && jutsu.equipped,
+        )));
   const isRankedBattle = !!battle && RankedBattleTypes.includes(battle.battleType);
   // Ranked and authored AI loadouts bypass mastery gates even when penalties or
   // level scaling lower their battle masteries below the requirements.

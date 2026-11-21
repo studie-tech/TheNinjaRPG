@@ -176,6 +176,7 @@ export const publicState = [
  */
 export const privateState = [
   "basicAttackJutsuId",
+  "hasBasicAttackReplacement",
   "activeSkillIds",
   "skillLockedJutsuIds",
   "anbuId",

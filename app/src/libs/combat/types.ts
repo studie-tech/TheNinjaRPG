@@ -148,6 +148,8 @@ export type CombatQueryUser = {
   ActivityCompletions & {
     /** An AI-controlled copy retains its owner's loadout gates throughout combat. */
     isVillageDutyCopy?: true;
+    /** Retained when an already frozen combatant is processed again. */
+    hasBasicAttackReplacement?: boolean;
     attributes?: { attribute: string }[];
     /** Retained when lobby/loadout processing receives an already frozen combatant. */
     spriteAnimations?: CharacterAnimations;
@@ -208,6 +210,8 @@ export type CombatUserFields = {
   cosmeticSlots?: SpriteUser["cosmeticSlots"];
   /** An AI-controlled village defender uses player loadout and action requirements. */
   isVillageDutyCopy?: true;
+  /** Replacement ownership captured before battle usage and loadout gates filter jutsu. */
+  hasBasicAttackReplacement?: boolean;
   /** Private creation/clothing snapshot captured at initiation and retained across loadout edits. */
   spriteBaseAppearance?: SpriteAppearance;
   /** Private item-instance lookup permits in-memory recomposition after consumption or breakage. */

@@ -3940,6 +3940,17 @@ export const processUsersForBattle = async (
     // Build the processing user object with all required fields
     const user: ProcessingBattleUser = {
       ...inputUser,
+      // Capture existence before use gates remove unavailable replacements. Reprocessing
+      // retains the snapshot even when its equipped record was filtered out.
+      hasBasicAttackReplacement:
+        inputUser.hasBasicAttackReplacement ??
+        (!!inputUser.basicAttackJutsuId &&
+          inputUser.jutsus.some(
+            (owned) =>
+              owned.jutsuId === inputUser.basicAttackJutsuId &&
+              owned.equipped &&
+              !!owned.jutsu,
+          )),
       // Freeze the choice before bloodline processing and later profile edits, including ranked battles.
       preferredDamageElement: getPreferredDamageElement(inputUser),
       spriteAnimations: inputUser.spriteAnimationBindings
