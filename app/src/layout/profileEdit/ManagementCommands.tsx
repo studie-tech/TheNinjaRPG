@@ -320,6 +320,7 @@ const CaravanEncounterRate: React.FC = () => {
         <Button
           size="sm"
           disabled={isPending || rate === undefined || !(rate >= 0 && rate <= 100)}
+          loading={isPending}
           onClick={() => rate !== undefined && mutate({ rate })}
         >
           Save

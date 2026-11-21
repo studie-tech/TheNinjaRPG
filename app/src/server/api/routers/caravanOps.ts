@@ -170,6 +170,7 @@ export const caravanOpsRouter = createTRPCRouter({
           type: row.type,
           status: row.status,
           succeeds: row.status === "ACTIVE" ? null : row.succeeds,
+          sector: row.sector,
           finishesAt: row.finishesAt,
         })),
         commitment: active

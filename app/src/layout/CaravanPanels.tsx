@@ -54,10 +54,11 @@ export const TradeRoutesPanel = ({
 }) => {
   const [partnerId, setPartnerId] = useState<string>();
   const partner = data.partners.find((row) => row.id === partnerId);
+  const responding = actions.respond.isPending ? actions.respond.variables : undefined;
   return (
     <ContentBox
       title="Trade Routes"
-      subtitle={`${data.capacity.used} of ${data.capacity.total} caravans on the road · every active route adds ${CARAVANS_PER_TRADE_ROUTE}`}
+      subtitle={`${data.capacity.used} of ${data.capacity.total} caravan ${data.capacity.total === 1 ? "slot" : "slots"} in use · every active route adds ${CARAVANS_PER_TRADE_ROUTE}`}
       initialBreak
     >
       <div className="@container">
@@ -149,7 +150,9 @@ export const TradeRoutesPanel = ({
                             <Button
                               size="sm"
                               disabled={actions.respond.isPending}
-                              loading={actions.respond.isPending}
+                              loading={
+                                responding?.routeId === route.id && responding.accept
+                              }
                               onClick={() =>
                                 actions.respond.mutate({
                                   routeId: route.id,
@@ -163,7 +166,9 @@ export const TradeRoutesPanel = ({
                               size="sm"
                               variant="outline"
                               disabled={actions.respond.isPending}
-                              loading={actions.respond.isPending}
+                              loading={
+                                responding?.routeId === route.id && !responding.accept
+                              }
                               onClick={() =>
                                 actions.respond.mutate({
                                   routeId: route.id,
@@ -188,7 +193,10 @@ export const TradeRoutesPanel = ({
                                   size="sm"
                                   variant="outline"
                                   disabled={actions.upgradeRoute.isPending}
-                                  loading={actions.upgradeRoute.isPending}
+                                  loading={
+                                    actions.upgradeRoute.isPending &&
+                                    actions.upgradeRoute.variables?.routeId === route.id
+                                  }
                                 >
                                   <CircleArrowUp className="mr-1 size-4" aria-hidden />
                                   Upgrade
@@ -209,6 +217,10 @@ export const TradeRoutesPanel = ({
                           proceed_label="Close"
                           onAccept={() =>
                             actions.closeRoute.mutate({ routeId: route.id })
+                          }
+                          isLoading={
+                            actions.closeRoute.isPending &&
+                            actions.closeRoute.variables?.routeId === route.id
                           }
                           button={
                             <Button
@@ -339,7 +351,10 @@ export const CaravansPanel = ({
                           disabled={
                             actions.defend.isPending || row.viewer?.status !== "QUEUED"
                           }
-                          loading={actions.defend.isPending}
+                          loading={
+                            actions.defend.isPending &&
+                            actions.defend.variables?.caravanId === row.id
+                          }
                           onClick={() =>
                             row.encounter &&
                             actions.defend.mutate({
@@ -402,7 +417,10 @@ export const CaravansPanel = ({
                           disabled={
                             actions.joinEscort.isPending || user?.status !== "AWAKE"
                           }
-                          loading={actions.joinEscort.isPending}
+                          loading={
+                            actions.joinEscort.isPending &&
+                            actions.joinEscort.variables?.caravanId === row.id
+                          }
                           onClick={() =>
                             actions.joinEscort.mutate({ caravanId: row.id })
                           }
@@ -416,7 +434,10 @@ export const CaravansPanel = ({
                         size="sm"
                         variant="outline"
                         disabled={actions.leaveEscort.isPending}
-                        loading={actions.leaveEscort.isPending}
+                        loading={
+                          actions.leaveEscort.isPending &&
+                          actions.leaveEscort.variables?.caravanId === row.id
+                        }
                         onClick={() =>
                           actions.leaveEscort.mutate({ caravanId: row.id })
                         }
@@ -428,7 +449,10 @@ export const CaravansPanel = ({
                       <Button
                         size="sm"
                         disabled={actions.checkIn.isPending}
-                        loading={actions.checkIn.isPending}
+                        loading={
+                          actions.checkIn.isPending &&
+                          actions.checkIn.variables?.caravanId === row.id
+                        }
                         onClick={() => actions.checkIn.mutate({ caravanId: row.id })}
                       >
                         <Flag className="mr-1 size-4" aria-hidden />
@@ -442,7 +466,10 @@ export const CaravansPanel = ({
                           size="sm"
                           variant="outline"
                           disabled={actions.rejoinEscort.isPending}
-                          loading={actions.rejoinEscort.isPending}
+                          loading={
+                            actions.rejoinEscort.isPending &&
+                            actions.rejoinEscort.variables?.caravanId === row.id
+                          }
                           onClick={() =>
                             actions.rejoinEscort.mutate({ caravanId: row.id })
                           }
@@ -456,6 +483,10 @@ export const CaravansPanel = ({
                           title="Cancel caravan"
                           proceed_label="Cancel caravan"
                           onAccept={() => actions.cancel.mutate({ caravanId: row.id })}
+                          isLoading={
+                            actions.cancel.isPending &&
+                            actions.cancel.variables?.caravanId === row.id
+                          }
                           button={
                             <Button
                               size="sm"
@@ -472,7 +503,10 @@ export const CaravansPanel = ({
                         <Button
                           size="sm"
                           disabled={actions.dispatch.isPending}
-                          loading={actions.dispatch.isPending}
+                          loading={
+                            actions.dispatch.isPending &&
+                            actions.dispatch.variables?.caravanId === row.id
+                          }
                           onClick={() => actions.dispatch.mutate({ caravanId: row.id })}
                         >
                           Dispatch
@@ -559,7 +593,7 @@ const PrepareCaravan = ({
       <p className="text-muted-foreground mb-3 text-sm">
         {active.length === 0
           ? "Agree an active trade route to send caravans."
-          : "Every trade route already has a caravan out."}
+          : "Every trade route already has a caravan preparing or on the road."}
       </p>
     );
   return (
