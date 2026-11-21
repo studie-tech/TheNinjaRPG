@@ -1,8 +1,7 @@
 import type { Quest } from "@/drizzle/schema";
 import type { questRevisionColumns } from "@/queries/questRevisions";
-import { selectQuestRevisionDefinitions } from "@/queries/questRevisions";
 import type { DrizzleClient } from "@/server/db";
-import { createDefinitionCache } from "@/server/utils/definitionCache";
+import { questDefinitions } from "@/server/utils/caches/questDefinitions";
 
 /**
  * Resolve quest revisions, read with `questRevisionRelation` or `questRevisionColumns`,
@@ -19,7 +18,7 @@ export const resolveQuestRevisions = async (
   client: DrizzleClient,
   revisions: (QuestRevision | null)[],
 ): Promise<((revision: QuestRevision) => Quest) | undefined> => {
-  const resolve = await questDefinitionCache.hydrate(client, revisions);
+  const resolve = await questDefinitions.hydrate(client, revisions);
   return resolve && ((revision) => resolve(revision) as Quest);
 };
 
@@ -47,13 +46,6 @@ export const withQuestDefinitions = async <
       )
     : undefined;
 };
-
-/** Shared revision-keyed quest definitions for profile, discovery and history reads. */
-export const questDefinitionCache = createDefinitionCache<Quest>({
-  name: "quest-definition",
-  memoryLimit: 1000,
-  select: (client, ids) => selectQuestRevisionDefinitions(client, ids),
-});
 
 /** The quest columns a revision read returns. */
 export type QuestRevision = Pick<

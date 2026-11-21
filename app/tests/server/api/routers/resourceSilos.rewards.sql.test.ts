@@ -26,7 +26,7 @@ import {
 import { resourceSilosRouter } from "@/server/api/routers/resourceSilos";
 import type { DrizzleClient } from "@/server/db";
 import { prepareActionReadiness } from "@/server/utils/actionReadiness";
-import { invalidatePvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { invalidatePvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import { updateRewards } from "@/server/utils/questRewards";
 import * as time from "@/utils/time";
 import {

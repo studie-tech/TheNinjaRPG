@@ -17,7 +17,6 @@ import {
   insertActionLogForDelete,
   insertActionLogForUpdate,
   insertGameAssetForCreate,
-  invalidateBattlefieldAssets,
   listGameAssetForGetAllNames,
   listGameAssetForGetNameTags,
   listGameAssetForGetSceneAssets,
@@ -36,7 +35,11 @@ import {
   publicProcedure,
   serverError,
 } from "@/server/api/trpc";
-import { fetchLpcSceneCatalog, invalidateLpcCatalog } from "@/server/utils/lpcCatalog";
+import { invalidateBattlefieldAssets } from "@/server/utils/caches/battlefieldAssets";
+import {
+  fetchLpcSceneCatalog,
+  invalidateLpcSceneCatalog,
+} from "@/server/utils/caches/lpcSceneCatalog";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { gameAssetValidator } from "@/validators/asset";
@@ -249,7 +252,7 @@ export const gameAssetRouter = createTRPCRouter({
           // Earlier snapshots cannot prove eligibility after overlapping staff writes.
           const caches = await Promise.allSettled([
             entry.type === "LPC" || input.data.type === "LPC"
-              ? invalidateLpcCatalog()
+              ? invalidateLpcSceneCatalog()
               : null,
             invalidateBattlefieldAssets(),
           ]);
@@ -280,7 +283,7 @@ export const gameAssetRouter = createTRPCRouter({
       }
       const id = nanoid();
       await insertGameAssetForCreate(ctx.drizzle, id, ctx, input ?? undefined);
-      if (input?.type === "LPC") await invalidateLpcCatalog();
+      if (input?.type === "LPC") await invalidateLpcSceneCatalog();
       return { success: true, message: id };
     }),
   delete: protectedProcedure
@@ -333,7 +336,7 @@ export const gameAssetRouter = createTRPCRouter({
           );
         // Finish shared invalidation before returning an independent log failure.
         const writes = await Promise.allSettled([
-          invalidateLpcCatalog(),
+          invalidateLpcSceneCatalog(),
           invalidateBattlefieldAssets(),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);

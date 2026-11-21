@@ -10,10 +10,10 @@ import { updateClanForDecayClansAndAnbu } from "@/queries/clan";
 import { updateGameSettingForDecayClansAndAnbu } from "@/queries/gamesettings";
 import { updateUserDataForDecayPlayerPvpExperience } from "@/queries/pvprank";
 import { drizzleDB } from "@/server/db";
+import { invalidatePvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import { updateUserDataCandidates } from "@/server/utils/cleaner";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { invalidatePvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { periodStart } from "@/utils/time";
 
 const ENDPOINT_NAME = "daily-pvp";

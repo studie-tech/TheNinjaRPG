@@ -25,7 +25,6 @@ import {
   shouldEndRaid,
 } from "@/libs/war";
 import { updateVillageElderVoteForRejectWarDeclaration } from "@/queries/elder";
-import { invalidateGameSettings } from "@/queries/gamesettings";
 import {
   incrementNotificationCounters,
   insertNotificationForSubmitNotification,
@@ -67,6 +66,7 @@ import {
 } from "@/queries/war";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import type { DrizzleClient } from "@/server/db";
+import { invalidateGameSettings } from "@/server/utils/caches/gameSettings";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchWarRules, settleObjectiveWarSchedule } from "@/server/utils/objectiveWar";
 import { notifyWarVillages } from "@/server/utils/push/war";

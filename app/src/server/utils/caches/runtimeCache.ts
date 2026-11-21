@@ -12,10 +12,17 @@ import superjson, { type SuperJSONResult } from "superjson";
  * the payload when its instance does not hold that version yet. Payload keys carry the
  * deployment, because entries outlive deployments and a new build may shape rows
  * differently. Outside Vercel, `getCache` falls back to a process-local store.
+ *
+ * Each cache built here lives in its own module in this directory, named after the cache,
+ * and loads through a statement from `@/queries`. Writes that a cache covers await its
+ * invalidation so the person who saved sees a failure; a write that has already committed
+ * in a cron or game flow instead ignores a failed invalidation and names the TTL that
+ * bounds the stale value.
  */
 
 const VERSION_TTL_SECONDS = 24 * 60 * 60;
 const deploymentKey = process.env.VERCEL_DEPLOYMENT_ID ?? "local";
+const environmentKey = process.env.VERCEL_ENV ?? "local";
 
 type StoredPayload = { at: number; data: SuperJSONResult };
 
@@ -238,17 +245,24 @@ export const createRuntimeCache = <Client, T>({
  * entry must carry the revision it was read at (for example an immutable row's id and
  * version), and callers serve it only when that matches a revision they have just read,
  * so a write needs no invalidation. Reads and writes that fail behave as misses.
+ * Keys carry the deployment or the environment, as `scope` names.
  * With `memoryLimit`, each instance also keeps up to that many recently used entries
  * in memory and reads the Runtime Cache only for the others.
  */
 export const createRuntimeEntryCache = <T>({
   name,
   ttlSeconds,
+  scope,
   memoryLimit = 0,
   store,
 }: {
   /** Key prefix and Runtime Cache tag: letters, digits and dashes. */
   name: string;
+  /**
+   * "deployment" when the build shapes the stored value, as it shapes rows; "environment"
+   * when entries stay valid across deployments that read the same database.
+   */
+  scope: "deployment" | "environment";
   /** Entries expire this long after they were written; reads do not extend them. */
   ttlSeconds: number;
   /** Entries this instance keeps in memory, least recently used evicted first. */
@@ -258,7 +272,8 @@ export const createRuntimeEntryCache = <T>({
 }) => {
   const cache = store ?? runtimeCache;
   const tag = `${name}:entries`;
-  const entryKey = (key: string) => `${name}:${key}`;
+  const scopeKey = scope === "deployment" ? deploymentKey : environmentKey;
+  const entryKey = (key: string) => `${name}:${scopeKey}:${key}`;
   const memory = new Map<string, { value: T; expiresAt: number }>();
   const remember = (
     key: string,

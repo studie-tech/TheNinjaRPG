@@ -14,12 +14,12 @@ import type { DmgConfig } from "@/libs/combat/constants";
 import {
   findGameSettingByName,
   insertGameSettings,
-  invalidateGameSettings,
   selectGameSettingForFetchDmgConfig,
   updateGameSettingForUpdate,
   updateGameSettingForUpdateGameSetting,
 } from "@/queries/gamesettings";
 import type { DrizzleClient } from "@/server/db";
+import { invalidateGameSettings } from "@/server/utils/caches/gameSettings";
 import { addDays, getTimeLeftStr, isDifferentDay, periodStart } from "@/utils/time";
 
 /**

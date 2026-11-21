@@ -17,12 +17,12 @@ import {
   userData,
   userVote,
 } from "@/drizzle/schema";
-import * as profileQueries from "@/queries/profile";
 import * as purchaseQueries from "@/queries/purchases";
 import { paypalRouter } from "@/server/api/routers/paypal";
 import * as profileApi from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
 import { purchasesRouter } from "@/server/api/routers/purchases";
+import * as achievementCatalogue from "@/server/utils/caches/achievementCatalogue";
 import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 import { grantStorePurchase } from "@/server/utils/purchases/grant";
 import { calcFedUgradeCost } from "@/utils/paypal";
@@ -114,7 +114,7 @@ const upgradeCallbacks = (cache: QueryClient, key: QueryKey) => {
   );
   const callbacks = source
     .slice(source.indexOf("api.paypal.upgradeSubscription.useMutation("))
-    .match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+    .match(/useMutation\((\{[\s\S]*?\n {4}\})\);/)?.[1];
   if (!callbacks) throw new Error("Subscription upgrade callbacks were not found");
   return new Function(
     "prepareUserUpdate",
@@ -328,9 +328,10 @@ describeWithDatabase("purchase reputation progression", () => {
           new Error("Purchase confirmation unavailable"),
         );
       else if (failure === "catalogue unavailable")
-        vi.spyOn(profileQueries, "fetchAchievementCatalogue").mockRejectedValueOnce(
-          new Error("Purchase catalogue unavailable"),
-        );
+        vi.spyOn(
+          achievementCatalogue,
+          "fetchAchievementCatalogue",
+        ).mockRejectedValueOnce(new Error("Purchase catalogue unavailable"));
       else
         vi.spyOn(profileApi, "fetchQuestBootstrap").mockRejectedValueOnce(
           new Error("Purchase bootstrap unavailable"),
@@ -690,9 +691,10 @@ describeWithDatabase("purchase reputation progression", () => {
       const callbacks = upgradeCallbacks(cache, key);
       const revision = callbacks.onMutate();
       if (failure === "catalogue")
-        vi.spyOn(profileQueries, "fetchAchievementCatalogue").mockRejectedValueOnce(
-          new Error("Catalogue unavailable"),
-        );
+        vi.spyOn(
+          achievementCatalogue,
+          "fetchAchievementCatalogue",
+        ).mockRejectedValueOnce(new Error("Catalogue unavailable"));
       else if (failure === "bootstrap")
         vi.spyOn(profileApi, "fetchQuestBootstrap").mockRejectedValueOnce(
           new Error("Bootstrap unavailable"),

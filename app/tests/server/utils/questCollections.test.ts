@@ -4,9 +4,9 @@ import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { fetchBloodlineCollectionRolls } from "@/queries/quests";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
+import { fetchBloodlineCollectionCatalogue } from "@/server/utils/caches/bloodlineCollectionCatalogue";
 import {
   fetchAchievementObjectiveJutsus,
-  fetchBloodlineCollectionCatalogue,
   hydrateQuestCollections,
 } from "@/server/utils/questCollections";
 

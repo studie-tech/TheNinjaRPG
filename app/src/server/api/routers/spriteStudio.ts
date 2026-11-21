@@ -7,7 +7,6 @@ import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate"
 import { animationActions } from "@/libs/spriteAnimationActions";
 import { finishSpriteSheet } from "@/libs/spriteSheetFinish";
 import { SpriteCharacterStyles } from "@/libs/spriteStudio";
-import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { fetchUser } from "@/queries/profile";
 import {
   fetchAnimationAi,
@@ -25,6 +24,7 @@ import {
 } from "@/queries/spriteStudio";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { invalidateOverworldSectorPlacements } from "@/server/utils/caches/overworldSectorPlacements";
 import {
   cancelSpriteAsset,
   createSpriteAsset,
@@ -299,7 +299,7 @@ export const spriteStudioRouter = createTRPCRouter({
             ],
           }),
         ]);
-        await invalidateSectorPlacements();
+        await invalidateOverworldSectorPlacements();
         await outdateProposalsFor(
           ctx.drizzle,
           "AI",

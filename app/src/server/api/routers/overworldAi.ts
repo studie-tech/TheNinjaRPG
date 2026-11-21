@@ -51,7 +51,6 @@ import {
   insertOverworldAiPlacementForUpsertPlacement,
   insertOverworldAiPlacementQuestForUpsertPlacement,
   insertUserQuestAttemptForInteractWithOverworldAi,
-  invalidateSectorPlacements,
   listOverworldAiPlacementForGetAllPlacementNames,
   listOverworldAiPlacementForGetPlacementsForAi,
   listQuestForUpsertPlacement,
@@ -81,6 +80,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { invalidateOverworldSectorPlacements } from "@/server/utils/caches/overworldSectorPlacements";
 import { claimActiveNpcQuest, claimUserSnapshot } from "@/server/utils/concurrency";
 import {
   assignQuestToUser,
@@ -360,7 +360,7 @@ export const overworldAiRouter = createTRPCRouter({
           id,
         );
       }
-      await invalidateSectorPlacements();
+      await invalidateOverworldSectorPlacements();
       // Return
       return { success: true, message: input.id ? "Placement updated" : id };
     }),
@@ -385,7 +385,7 @@ export const overworldAiRouter = createTRPCRouter({
         deleteOverworldAiPlacementQuests(ctx.drizzle, input.id),
         deleteOverworldAiPlacementForDeletePlacement(ctx.drizzle, input),
       ]);
-      await invalidateSectorPlacements();
+      await invalidateOverworldSectorPlacements();
       // Return
       return { success: true, message: "Placement deleted" };
     }),

@@ -3,7 +3,7 @@ import { DMG_SETTING_DEFAULTS } from "@/drizzle/constants";
 import { gameSetting } from "@/drizzle/schema";
 import { dmgConfig } from "@/libs/combat/constants";
 import { fetchDmgConfig, updateDmgConfig } from "@/libs/gamesettings";
-import { listCachedGameSettings } from "@/queries/gamesettings";
+import { fetchGameSettings } from "@/server/utils/caches/gameSettings";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -39,14 +39,14 @@ describeWithDatabase("fetchDmgConfig", () => {
   it("saves concurrent config values and refreshes the shared settings catalogue", async () => {
     const database = await getTestDatabase();
     await fetchDmgConfig(database);
-    await listCachedGameSettings(database);
+    await fetchGameSettings(database);
     const config = { ...dmgConfig, curve: 7 };
 
     await updateDmgConfig(database, config);
 
     expect(await fetchDmgConfig(database)).toEqual(config);
     expect(
-      (await listCachedGameSettings(database)).find((row) => row.name === "DMG_CURVE")
+      (await fetchGameSettings(database)).find((row) => row.name === "DMG_CURVE")
         ?.value,
     ).toBe(config.curve);
   });

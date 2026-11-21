@@ -40,9 +40,9 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
-import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
 import { missingUserMessage } from "@/server/utils/sentry";

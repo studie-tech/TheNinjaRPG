@@ -128,10 +128,10 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
+import { structureDefinitions } from "@/server/utils/caches/structureDefinitions";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { structureDefinitions } from "@/server/utils/profileDefinitions";
-import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { withQuestDefinitions } from "@/server/utils/questRevisions";
 import {
   fetchPublishedSectorMap,

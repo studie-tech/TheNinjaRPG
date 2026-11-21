@@ -6,7 +6,6 @@ import {
   animationActions,
   summarizeAnimationCoverage,
 } from "@/libs/spriteAnimationActions";
-import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import { fetchUser } from "@/queries/profile";
 import {
   countSpriteAnimations,
@@ -21,6 +20,7 @@ import {
   touchAnimationAi,
 } from "@/queries/spriteAnimation";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import { invalidateOverworldSectorPlacements } from "@/server/utils/caches/overworldSectorPlacements";
 import { offsetPage } from "@/server/utils/pagination";
 import { prepareSpriteSheetUrls } from "@/server/utils/spriteSheets";
 import { canChangeContent } from "@/utils/permissions";
@@ -190,7 +190,7 @@ export const spriteAnimationRouter = createTRPCRouter({
           ],
         }),
       ]);
-      await invalidateSectorPlacements();
+      await invalidateOverworldSectorPlacements();
       await outdateProposalsFor(
         ctx.drizzle,
         "AI",

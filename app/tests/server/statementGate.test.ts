@@ -7,7 +7,7 @@ import {
   runBehindStatementGate,
   runSharedReadBehindStatementGate,
 } from "@/server/statementGate";
-import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import { deferred } from "../setup/deferred";
 import { planetScaleFixture } from "../setup/planetscale";
 

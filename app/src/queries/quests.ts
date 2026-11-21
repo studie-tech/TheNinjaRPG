@@ -2119,6 +2119,13 @@ export const fetchOwnedObjectiveJutsus = (
     },
   });
 
+/** Build the listing of visible achievements, as complete quest rows. */
+export const selectAchievementCatalogue = (client: Pick<DrizzleClient, "select">) =>
+  client
+    .select()
+    .from(quest)
+    .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false)));
+
 /** Build the bloodline collection catalogue query for caller-owned collection progress calculation. */
 export const queryBloodlineCollectionCatalogue = (client: DrizzleClient) =>
   client.query.bloodline.findMany({

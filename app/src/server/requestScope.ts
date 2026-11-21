@@ -9,7 +9,7 @@ import { runSharedReadBehindStatementGate } from "@/server/statementGate";
  * batch, such as the wars, raids and shrine lobbies that `fetchUpdatedUser` needs.
  * Concurrent callers share a pending query, and later callers reuse its successful
  * result within the request. User-independent catalogues shared across requests use
- * `@/server/utils/runtimeCache` instead.
+ * the Runtime Cache modules in `@/server/utils/caches` instead.
  *
  * Only reads that satisfy all three of the following belong here:
  *

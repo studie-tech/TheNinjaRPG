@@ -216,7 +216,6 @@ import { getBiomeFromTileType } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiTransformations } from "@/queries/ai";
-import { listBattlefieldAssets } from "@/queries/asset";
 import {
   buildQueuedTrainingClaim,
   deleteBattleById,
@@ -266,7 +265,7 @@ import {
   fetchJutsuLoadouts,
   listJutsuByIds,
 } from "@/queries/jutsu";
-import { fetchAchievementCatalogue, fetchAllGameSettings } from "@/queries/profile";
+import { fetchAllGameSettings } from "@/queries/profile";
 import { fetchQuestEntryInventory, listVisibleRaidQuests } from "@/queries/quests";
 import { findSectorWithVillage } from "@/queries/shrine";
 import { fetchUserSkills } from "@/queries/skillTree";
@@ -300,6 +299,8 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { commitBattleAdmission } from "@/server/utils/battleAdmission";
+import { fetchAchievementCatalogue } from "@/server/utils/caches/achievementCatalogue";
+import { fetchBattlefieldAssets } from "@/server/utils/caches/battlefieldAssets";
 import { combatCompletionStore } from "@/server/utils/combatCompletion";
 import { settleCookingExperience } from "@/server/utils/cooking";
 import {
@@ -2196,7 +2197,7 @@ export const initiateBattle = async (
     // Essentials
     fetchBattleEssentials(client, info.jutsuEquipLimits),
     // Battlefield obstacle assets
-    listBattlefieldAssets(client),
+    fetchBattlefieldAssets(client),
     // Fetch achievements
     fetchAchievementCatalogue(client),
     // Fetch user data

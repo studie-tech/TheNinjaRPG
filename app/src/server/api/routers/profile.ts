@@ -163,7 +163,6 @@ import { listHuntingHabitats } from "@/queries/hunting";
 import { fetchJutsu } from "@/queries/jutsu";
 import { fetchKageReplacement } from "@/queries/kage";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
-import { invalidateSectorPlacements } from "@/queries/overworldAi";
 import {
   BOOTSTRAP_QUEST_TYPES,
   countUsersActiveInLastDay,
@@ -172,7 +171,6 @@ import {
   deleteUserItemForApplyUserContentChanges,
   deleteUserJutsuForApplyUserContentChanges,
   executeClaimVotes,
-  fetchAchievementCatalogue,
   fetchActiveRaids,
   fetchActiveShrineLobbies,
   fetchAllActiveWars,
@@ -296,6 +294,9 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { fetchAchievementCatalogue } from "@/server/utils/caches/achievementCatalogue";
+import { fetchBloodlineCollectionCatalogue } from "@/server/utils/caches/bloodlineCollectionCatalogue";
+import { invalidateOverworldSectorPlacements } from "@/server/utils/caches/overworldSectorPlacements";
 import {
   adjustSeichiSilverAtomically,
   claimUserSnapshot,
@@ -326,7 +327,6 @@ import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { insertNextQuest } from "@/server/utils/questAssignment";
 import {
   fetchAchievementObjectiveJutsus,
-  fetchBloodlineCollectionCatalogue,
   hydrateQuestCollections,
 } from "@/server/utils/questCollections";
 import { handleQuestConsequences } from "@/server/utils/questConsequences";
@@ -1358,7 +1358,7 @@ export const profileRouter = createTRPCRouter({
       if (ai.isAi) {
         const rejected = await deleteUser(ctx.drizzle, ai.userId);
         if (rejected) return rejected;
-        await invalidateSectorPlacements();
+        await invalidateOverworldSectorPlacements();
         await outdateProposalsFor(
           ctx.drizzle,
           "AI",
@@ -1550,7 +1550,7 @@ export const profileRouter = createTRPCRouter({
         ),
         insertActionLogForUpdateUser2(ctx.drizzle, ctx, diff, target, input),
       ]);
-      if (target.isAi) await invalidateSectorPlacements();
+      if (target.isAi) await invalidateOverworldSectorPlacements();
       if (rankChanged && target.recruiterId) {
         await awardRecruitRankMilestonesSafely({
           client: ctx.drizzle,
@@ -1669,7 +1669,7 @@ export const profileRouter = createTRPCRouter({
           updateUserItemForUpdateAi(ctx.drizzle, chance, ai, id),
         ),
       ]);
-      await invalidateSectorPlacements();
+      await invalidateOverworldSectorPlacements();
       await outdateProposalsFor(
         ctx.drizzle,
         "AI",

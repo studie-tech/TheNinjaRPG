@@ -65,10 +65,10 @@ import type { UserWithRelations } from "@/routers/profile";
 import { startQuestPartyEncounter } from "@/routers/questParty";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
+import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import {
   insertNextQuest,
   isRestrictedQuestType,

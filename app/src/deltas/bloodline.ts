@@ -6,8 +6,8 @@ import { calcActiveUserRegen, calcMaxEnergy } from "@/libs/profile";
 import { getUserQuests } from "@/libs/quest";
 import { mockAchievementHistoryEntries } from "@/libs/quest/projection";
 import type { fetchBloodlineProgressionUser } from "@/queries/bloodline";
-import type { fetchAchievementCatalogue } from "@/queries/profile";
 import type { fetchQuestBootstrap } from "@/routers/profile";
+import type { fetchAchievementCatalogue } from "@/server/utils/caches/achievementCatalogue";
 
 /**
  * Project a first bloodline acquisition and its passive values from loaded progression

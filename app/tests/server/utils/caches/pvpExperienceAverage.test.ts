@@ -6,7 +6,7 @@ import type { DrizzleClient } from "@/server/db";
 import {
   fetchPvpExperienceAverage,
   invalidatePvpExperienceAverage,
-} from "@/server/utils/pvpExperience";
+} from "@/server/utils/caches/pvpExperienceAverage";
 
 const start = new Date("2026-10-21T12:00:00Z");
 

@@ -33,7 +33,6 @@ import {
 } from "@/drizzle/schema";
 import { SECTOR_BATTLE_STALE_SECONDS, SECTOR_PRESENCE_STATUSES } from "@/libs/travel";
 import { spriteUserRelations } from "@/queries/lpc";
-import { listCachedSectorPlacements } from "@/queries/overworldAi";
 import { structureRevisionRelation } from "@/queries/profile";
 import type { questRevisionRelation } from "@/queries/questRevisions";
 import { fetchSector } from "@/queries/village";
@@ -45,6 +44,7 @@ import {
   userQuestHistoryRelation,
 } from "@/server/utils/achievementObjectives";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
+import { fetchOverworldSectorPlacements } from "@/server/utils/caches/overworldSectorPlacements";
 import { buildSectorWindowLayout } from "@/server/utils/sectorMap";
 import { secondsFromNow } from "@/utils/time";
 
@@ -110,7 +110,7 @@ export const fetchSectorWindowData = (
     // Structures arrive as revisions; the router resolves them from cached definitions.
     findSectorVillageWith(client, sector, structureRevisionRelation),
     fetchSector(client, sector),
-    listCachedSectorPlacements(client).then((placements) => {
+    fetchOverworldSectorPlacements(client).then((placements) => {
       const window = new Set(
         buildSectorWindowLayout(sector).map((entry) => entry.sector),
       );

@@ -337,6 +337,7 @@ import {
   commitCacheConsumption,
   readCacheReceipt,
 } from "@/server/utils/cacheConsumption";
+import { itemDefinitions } from "@/server/utils/caches/itemDefinitions";
 import {
   consumeUserItemAtomically,
   MERGE_STACK_CLAIM_TIMEOUT_MS,
@@ -347,7 +348,6 @@ import {
 } from "@/server/utils/concurrency";
 import { planConsumeEffects } from "@/server/utils/consumeEffects";
 import { consumeMeal } from "@/server/utils/cooking";
-import { itemDefinitions } from "@/server/utils/definitionCache";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { joinFinishedCrafts } from "@/server/utils/itemStacks";

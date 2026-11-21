@@ -87,7 +87,6 @@ import {
 } from "@/queries/bloodline";
 import { refundPityCredit } from "@/queries/concurrency";
 import {
-  fetchAchievementCatalogue,
   fetchAllGameSettings,
   fetchCanListHiddenContent,
   fetchUser,
@@ -106,6 +105,8 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { fetchAchievementCatalogue } from "@/server/utils/caches/achievementCatalogue";
+import { invalidateBloodlineCollectionCatalogue } from "@/server/utils/caches/bloodlineCollectionCatalogue";
 import {
   claimUserSnapshot,
   removeBloodlineFromPoolAtomically,
@@ -114,7 +115,6 @@ import {
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
-import { invalidateBloodlineCollectionCatalogue } from "@/server/utils/questCollections";
 import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";

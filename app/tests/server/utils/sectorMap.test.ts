@@ -4,7 +4,7 @@ import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { DrizzleClient } from "@/server/db";
-import { invalidateRuntimeCaches } from "@/server/utils/runtimeCache";
+import { invalidateRuntimeCaches } from "@/server/utils/caches/runtimeCache";
 import {
   fetchPublishedSectorMap,
   fetchPublishedSectorMaps,

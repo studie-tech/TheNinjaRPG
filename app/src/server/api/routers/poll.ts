@@ -20,7 +20,6 @@ import {
   insertPollForCreatePoll,
   insertPollOptions,
   insertUserPollVoteForVote,
-  invalidateOpenPolls,
   listPollForGetPolls,
   toPollOptionRow,
   updatePollForClosePoll,
@@ -28,7 +27,6 @@ import {
   updateUserPollVoteForVote,
 } from "@/queries/poll";
 import { fetchUser } from "@/queries/profile";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -36,6 +34,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
+import { invalidateOpenPolls } from "@/server/utils/caches/openPolls";
 import { offsetPage } from "@/server/utils/pagination";
 import {
   canAddNonCustomPollOptions,

@@ -33,12 +33,12 @@ import {
   warAlly,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
-import { listCachedGameSettings } from "@/queries/gamesettings";
 import { fetchActiveWar, fetchEndedWars } from "@/queries/war";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { villageRouter } from "@/server/api/routers/village";
 import { fetchActiveWars, warRouter } from "@/server/api/routers/war";
 import type { DrizzleClient } from "@/server/db";
+import { fetchGameSettings } from "@/server/utils/caches/gameSettings";
 import * as warPush from "@/server/utils/push/war";
 import { handleWarEnd, startDeclaredWar, startSectorWar } from "@/server/utils/war";
 import { acceptWarAllyOffer, withdrawWarAlly } from "@/server/utils/warAlly";
@@ -474,18 +474,16 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       return execute();
     });
     expect(
-      (await listCachedGameSettings(client)).find(
-        (row) => row.name === "war-attacker-regen",
-      )?.value,
+      (await fetchGameSettings(client)).find((row) => row.name === "war-attacker-regen")
+        ?.value,
     ).toBe(0);
     expect((await handleWarEnd(await snapshot(db), client)).status).toBe(
       "ATTACKER_VICTORY",
     );
     expect((await savedWar(db))?.settlement?.boostsDelivered).toBe(true);
     expect(
-      (await listCachedGameSettings(client)).find(
-        (row) => row.name === "war-attacker-regen",
-      )?.value,
+      (await fetchGameSettings(client)).find((row) => row.name === "war-attacker-regen")
+        ?.value,
     ).toBe(WAR_WINNING_BOOST_REGEN_PERC);
     expect(await savedWar(db)).toMatchObject({ settlementPending: true });
     expect(await fetchActiveWars(db, "attacker")).toHaveLength(0);

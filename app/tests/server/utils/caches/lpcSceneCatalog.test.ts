@@ -1,8 +1,11 @@
 import { afterEach, expect, it, vi } from "bun:test";
 import { buildLpcCatalog } from "@/libs/lpc/catalog";
 import type { DrizzleClient } from "@/server/db";
-import { fetchLpcSceneCatalog, invalidateLpcCatalog } from "@/server/utils/lpcCatalog";
-import { lpcAssets } from "../../setup/lpc";
+import {
+  fetchLpcSceneCatalog,
+  invalidateLpcSceneCatalog,
+} from "@/server/utils/caches/lpcSceneCatalog";
+import { lpcAssets } from "../../../setup/lpc";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -30,7 +33,7 @@ it("compiles saved artwork after an LPC write", async () => {
   await fetchLpcSceneCatalog(client);
   const edited = [{ ...lpcAssets[0]!, id: "saved-artwork" }];
   findMany.mockResolvedValue(edited);
-  await invalidateLpcCatalog();
+  await invalidateLpcSceneCatalog();
   expect(await fetchLpcSceneCatalog(client)).toEqual(buildLpcCatalog(edited));
   expect(findMany).toHaveBeenCalledTimes(2);
 });

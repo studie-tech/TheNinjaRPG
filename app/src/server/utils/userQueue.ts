@@ -80,9 +80,9 @@ import {
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
+import { fetchPvpExperienceAverage } from "@/server/utils/caches/pvpExperienceAverage";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { getQueueTotalCapacity } from "@/utils/paypal";
 import type {
   CraftingQueueMaterial,
