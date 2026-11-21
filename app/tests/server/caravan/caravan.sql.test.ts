@@ -34,6 +34,7 @@ import type { CompleteBattle } from "@/libs/combat/types";
 import {
   chargeAmbushLoss,
   claimLoot,
+  closeCaravan,
   dispatchCaravan,
   insertCheckpointAmbush,
   insertGuard,
@@ -43,7 +44,6 @@ import {
   releaseParticipants,
   renameCaravanUser,
   resolveOperation,
-  transitionCaravan,
   upsertAttacker,
   upsertDiscoveries,
 } from "@/queries/caravan";
@@ -429,12 +429,20 @@ describeWithDatabase("village Warehouse and caravans", () => {
       });
     expect((await ambush("late", "done")).rowsAffected).toBe(0);
     expect((await ambush("e1", "c1")).rowsAffected).toBe(1);
+    // A caravan with neither cargo lines to settle nor participants closes on its own row.
     const deliver = (version: number) =>
-      transitionCaravan(
+      closeCaravan(
         db,
         { id: "c1", version, status: "TRAVELLING" },
-        { status: "DELIVERED", resolvedAt: now },
-        { unfought: true },
+        {
+          status: "DELIVERED",
+          resolvedAt: now,
+          villageId: "sand",
+          lines: [],
+          stock: "credit",
+          pay: [],
+          unfought: true,
+        },
       );
     expect((await deliver(0)).rowsAffected).toBe(0);
     await db
@@ -450,6 +458,11 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(expired.rowsAffected).toBeGreaterThan(0);
     // The expired ambush took its share and bumped the version.
     expect((await deliver(1)).rowsAffected).toBe(1);
+    const [delivered] = await db.select().from(caravan).where(eq(caravan.id, "c1"));
+    expect(delivered?.status).toBe("DELIVERED");
+    expect(delivered?.version).toBe(2);
+    expect(delivered?.resolvedAt?.getTime()).toBe(now.getTime());
+    expect((await deliver(2)).rowsAffected).toBe(0);
   });
 
   it("drops sabotage that finishes only once the caravan is due", async () => {
@@ -582,16 +595,131 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(await statusOf("guard")).toBe("AWAKE");
   });
 
-  it("wakes and reports the queued escorts a cancellation releases", async () => {
+  it("cancels a preparing caravan once, releasing its reservation and waking queued escorts", async () => {
     const db = await getTestDatabase();
-    await insertUsers([{ userId: "guard", status: "AWAKE", villageId: "leaf" }]);
+    const now = new Date();
+    await insertUsers([
+      { userId: "guard", status: "AWAKE", villageId: "leaf" },
+      { userId: "fighter", status: "BATTLE", battleId: "arena", villageId: "leaf" },
+    ]);
+    await db
+      .insert(warehouseStock)
+      .values({ villageId: "leaf", itemId: "ore", quantity: 250, reserved: 200 });
     await db.insert(caravan).values(caravanRow({ status: "PREPARING" }));
-    expect((await insertGuard(db, "c1", "guard", new Date())).rowsAffected).toBe(1);
+    for (const userId of ["guard", "fighter"])
+      expect((await insertGuard(db, "c1", userId, now)).rowsAffected).toBe(1);
     expect((await queueGuard(db, "c1", "guard")).rowsAffected).toBe(1);
     const [row] = await db.select().from(caravan);
     if (!row) throw new Error("caravan missing");
-    expect(await afterTasks.run([], () => cancelCaravan(db, row))).toEqual(["guard"]);
+    const cancel = (read: typeof row) =>
+      afterTasks.run([], () => cancelCaravan(db, read, now));
+    // A caravan changed since it was read stays open.
+    expect(await cancel({ ...row, version: row.version + 1 })).toBe(false);
+    expect((await db.select().from(caravan))[0]?.status).toBe("PREPARING");
+    const released = await cancel(row);
+    expect(released && [...released].sort()).toEqual(["fighter", "guard"]);
+    const [cancelled] = await db.select().from(caravan);
+    expect(cancelled?.status).toBe("CANCELLED");
+    expect(cancelled?.version).toBe(row.version + 1);
+    expect(cancelled?.resolvedAt?.getTime()).toBe(now.getTime());
+    const [stock] = await db.select().from(warehouseStock);
+    expect(stock).toMatchObject({ quantity: 250, reserved: 0 });
     expect(await statusOf("guard")).toBe("AWAKE");
+    // An escort fighting elsewhere keeps their battle and rejoins nothing afterwards.
+    expect(await statusOf("fighter")).toBe("BATTLE");
+    const escorts = await db.select().from(caravanParticipant);
+    expect(escorts.every((p) => p.activeUserId === null)).toBe(true);
+    expect(escorts.every((p) => p.rewardedAt === null)).toBe(true);
+    const logs = await db.select().from(warehouseLog);
+    expect(
+      logs.map(({ villageId, type, quantity }) => ({ villageId, type, quantity })),
+    ).toEqual([{ villageId: "leaf", type: "RELEASE", quantity: 200 }]);
+    // A retry of the same read changes nothing and releases nothing twice.
+    expect(await cancel(row)).toBe(false);
+    expect((await db.select().from(warehouseStock))[0]?.reserved).toBe(0);
+    expect(await db.select().from(warehouseLog)).toHaveLength(1);
+  });
+
+  it("refuses to cancel a preparing caravan whose reservation its stock no longer covers", async () => {
+    const db = await getTestDatabase();
+    await db
+      .insert(warehouseStock)
+      .values({ villageId: "leaf", itemId: "ore", quantity: 250, reserved: 150 });
+    await db.insert(caravan).values(caravanRow({ status: "PREPARING" }));
+    const [row] = await db.select().from(caravan);
+    if (!row) throw new Error("caravan missing");
+    expect(await afterTasks.run([], () => cancelCaravan(db, row))).toBe(false);
+    expect((await db.select().from(caravan))[0]?.status).toBe("PREPARING");
+    expect((await db.select().from(warehouseStock))[0]?.reserved).toBe(150);
+  });
+
+  it("cancels a travelling caravan, bringing its remaining cargo home to new stock rows", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await insertUsers([
+      { userId: "guard", status: "QUEUED", villageId: "leaf", money: 0 },
+      { userId: "raider", status: "QUEUED", villageId: "sand" },
+    ]);
+    await db.insert(caravan).values(
+      caravanRow({
+        lossBp: 1000,
+        cargo: [
+          { itemId: "ore", quantity: 200 },
+          { itemId: "silk", quantity: 50 },
+        ],
+      }),
+    );
+    await db.insert(caravanParticipant).values([
+      {
+        caravanId: "c1",
+        userId: "guard",
+        role: "GUARD",
+        activeUserId: "guard",
+        guardSlot: 0,
+        objectives: 2,
+        joinedAt: now,
+      },
+      {
+        caravanId: "c1",
+        userId: "raider",
+        role: "BANDIT",
+        activeUserId: "raider",
+        groupLeaderId: "raider",
+        joinedAt: now,
+      },
+    ]);
+    const [row] = await db.select().from(caravan);
+    if (!row) throw new Error("caravan missing");
+    expect(
+      await afterTasks.run([], () => cancelCaravan(db, row, now, { unfought: true })),
+    ).toEqual(["guard"]);
+    expect((await db.select().from(caravan))[0]?.status).toBe("CANCELLED");
+    const stock = Object.fromEntries(
+      (await db.select().from(warehouseStock)).map((row) => [row.itemId, row]),
+    );
+    expect(stock).toMatchObject({
+      ore: { villageId: "leaf", quantity: 180, reserved: 0 },
+      silk: { villageId: "leaf", quantity: 45, reserved: 0 },
+    });
+    const participants = await db.select().from(caravanParticipant);
+    expect(
+      participants.every((p) => p.activeUserId === null && p.groupLeaderId === null),
+    ).toBe(true);
+    const users = Object.fromEntries(
+      (await db.select().from(userData)).map((u) => [u.userId, u]),
+    );
+    // Escorts leave unpaid; an attacker's status belongs to whatever queued them.
+    expect(users.guard).toMatchObject({ status: "AWAKE", money: 0 });
+    expect(users.raider?.status).toBe("QUEUED");
+    const logs = await db.select().from(warehouseLog);
+    expect(
+      logs
+        .map(({ itemId, type, quantity }) => ({ itemId, type, quantity }))
+        .sort((a, b) => (a.itemId ?? "").localeCompare(b.itemId ?? "")),
+    ).toEqual([
+      { itemId: "ore", type: "RELEASE", quantity: 180 },
+      { itemId: "silk", type: "RELEASE", quantity: 45 },
+    ]);
   });
 
   it("returns escorts to the queue only from their caravan's battles", async () => {
@@ -785,9 +913,11 @@ describeWithDatabase("village Warehouse and caravans", () => {
 
   it("delivers remaining cargo once and pays escorts who completed objectives", async () => {
     const db = await getTestDatabase();
+    const now = new Date();
     await insertUsers([
       { userId: "busy", status: "QUEUED", money: 0 },
       { userId: "idle", status: "QUEUED", money: 0 },
+      { userId: "fighter", status: "BATTLE", battleId: "arena", money: 10 },
     ]);
     const arrived = caravanRow({
       lossBp: 1000,
@@ -795,21 +925,27 @@ describeWithDatabase("village Warehouse and caravans", () => {
     });
     await db.insert(caravan).values(arrived);
     await db.insert(caravanParticipant).values(
-      ["busy", "idle"].map((userId, slot) => ({
+      ["busy", "idle", "fighter"].map((userId, slot) => ({
         caravanId: "c1",
         userId,
         role: "GUARD" as const,
         activeUserId: userId,
         guardSlot: slot,
-        objectives: userId === "busy" ? 2 : 0,
-        joinedAt: new Date(),
+        objectives: { busy: 2, idle: 0, fighter: 1 }[userId] ?? 0,
+        joinedAt: now,
       })),
     );
+    const [row] = await db.select().from(caravan);
+    if (!row) throw new Error("caravan missing");
     // Notifications are deferred response work; this direct call drops them.
-    const deliver = () =>
-      afterTasks.run([], () => deliverCaravan(db, { ...arrived, version: 0 } as never));
+    const deliver = () => afterTasks.run([], () => deliverCaravan(db, row, now));
     const [first, second] = await Promise.all([deliver(), deliver()]);
     expect([first, second].filter(Boolean)).toHaveLength(1);
+    const [delivered] = await db.select().from(caravan);
+    expect(delivered?.status).toBe("DELIVERED");
+    expect(delivered?.version).toBe(row.version + 1);
+    expect(delivered?.resolvedAt?.getTime()).toBe(now.getTime());
+    // The destination had no ore row; the delivery created and credited it.
     const [stock] = await db
       .select()
       .from(warehouseStock)
@@ -822,9 +958,82 @@ describeWithDatabase("village Warehouse and caravans", () => {
       CARAVAN_GUARD_DELIVERY_RYO + 2 * CARAVAN_GUARD_OBJECTIVE_RYO,
     );
     expect(users.idle?.money).toBe(0);
+    expect(users.fighter?.money).toBe(
+      10 + CARAVAN_GUARD_DELIVERY_RYO + CARAVAN_GUARD_OBJECTIVE_RYO,
+    );
     expect(users.busy?.status).toBe("AWAKE");
     expect(users.idle?.status).toBe("AWAKE");
+    // An escort fighting elsewhere keeps their battle.
+    expect(users.fighter?.status).toBe("BATTLE");
+    const escorts = await db.select().from(caravanParticipant);
+    expect(escorts.every((p) => p.activeUserId === null)).toBe(true);
+    expect(escorts.every((p) => p.rewardedAt?.getTime() === now.getTime())).toBe(true);
+    const logs = await db.select().from(warehouseLog);
+    expect(
+      logs.map(({ villageId, type, quantity }) => ({ villageId, type, quantity })),
+    ).toEqual([{ villageId: "sand", type: "DELIVERY", quantity: 180 }]);
+    // A later retry of the same read pays and credits nothing again.
+    expect(await deliver()).toBe(false);
+    const [kept] = await db
+      .select()
+      .from(warehouseStock)
+      .where(eq(warehouseStock.villageId, "sand"));
+    expect(kept?.quantity).toBe(180);
+    const [busy] = await db.select().from(userData).where(eq(userData.userId, "busy"));
+    expect(busy?.money).toBe(
+      CARAVAN_GUARD_DELIVERY_RYO + 2 * CARAVAN_GUARD_OBJECTIVE_RYO,
+    );
   });
+
+  it("keeps an arrived caravan on the road while a fight over it is open", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await insertUsers([{ userId: "guard", status: "QUEUED", money: 0 }]);
+    await db
+      .insert(caravan)
+      .values(caravanRow({ arrivesAt: new Date(Date.now() - 1000) }));
+    await db.insert(caravanParticipant).values({
+      caravanId: "c1",
+      userId: "guard",
+      role: "GUARD",
+      activeUserId: "guard",
+      guardSlot: 0,
+      objectives: 1,
+      joinedAt: now,
+    });
+    const [row] = await db.select().from(caravan);
+    if (!row) throw new Error("caravan missing");
+    // The fight opens after the delivery read its encounters.
+    const racing = aroundStatements(
+      db,
+      caravanEncounter,
+      async (run) => {
+        const rows = await run();
+        await db.insert(caravanEncounter).values({
+          id: "e1",
+          type: "INTERCEPTION",
+          status: "FIGHTING",
+          caravanId: "c1",
+          activeCaravanId: "c1",
+          battleId: "b1",
+          createdAt: now,
+        });
+        return rows;
+      },
+      { operations: ["select"] },
+    );
+    expect(await afterTasks.run([], () => deliverCaravan(racing, row, now))).toBe(
+      false,
+    );
+    expect((await db.select().from(caravan))[0]?.status).toBe("TRAVELLING");
+    expect((await db.select().from(warehouseStock))[0]?.quantity).toBe(0);
+    expect(await statusOf("guard")).toBe("QUEUED");
+    const [guard] = await db.select().from(caravanParticipant);
+    expect(guard?.activeUserId).toBe("guard");
+    expect(guard?.rewardedAt).toBeNull();
+    expect(await db.select().from(warehouseLog)).toHaveLength(0);
+  });
+
   it("calls off a caravan for a blocked route only while no fight over it is open", async () => {
     const db = await getTestDatabase();
     const now = new Date();
@@ -842,11 +1051,12 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(await cancel()).toBe(false);
     const [kept] = await db.select().from(caravan);
     expect(kept?.status).toBe("TRAVELLING");
-    expect(await db.select().from(warehouseStock)).toHaveLength(0);
+    expect((await db.select().from(warehouseStock))[0]?.quantity ?? 0).toBe(0);
     await db.delete(caravanEncounter).where(eq(caravanEncounter.id, "e1"));
     expect(await cancel()).toEqual([]);
     const [cancelled] = await db.select().from(caravan);
     expect(cancelled?.status).toBe("CANCELLED");
+    expect((await db.select().from(warehouseStock))[0]?.quantity).toBe(200);
   });
 
   it("releases a fight whose battle was abandoned and settles nothing when it ends", async () => {
@@ -1149,7 +1359,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
       ]);
     // Account deletion disbands the settlement inside its own transaction.
     await afterTasks.run([], () =>
-      db.transaction((tx) => closeVillageTrade(tx, "sand", now, true)),
+      db.transaction((tx) => closeVillageTrade(tx, "sand", now)),
     );
     const routes = Object.fromEntries(
       (await db.select().from(tradeRoute)).map((row) => [row.id, row]),

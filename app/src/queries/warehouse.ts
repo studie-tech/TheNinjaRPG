@@ -126,7 +126,10 @@ const warehouseItemColumns = {
   hidden: item.hidden,
 };
 
-/** Create empty stock rows so production and deliveries can add to them in place. */
+/**
+ * Create empty stock rows so the guarded statements of production, deposits and caravans
+ * delivering or bringing cargo home can add to them in place.
+ */
 export const ensureWarehouseStock = (
   client: Pick<DrizzleClient, "insert">,
   villageId: string,

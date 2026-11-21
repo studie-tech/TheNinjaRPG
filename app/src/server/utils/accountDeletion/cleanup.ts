@@ -62,14 +62,7 @@ export const removeAccountGameData = async (userId: string) => {
     if (user?.clanId) {
       const membership = await fetchClan(tx, user.clanId);
       if (membership)
-        await removeFromClan(
-          tx,
-          membership,
-          user,
-          ["Permanent account deletion"],
-          undefined,
-          true,
-        );
+        await removeFromClan(tx, membership, user, ["Permanent account deletion"]);
     }
   });
   // Only clear roles still owned by this identity. Repeated cleanup must never remove

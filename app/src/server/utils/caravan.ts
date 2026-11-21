@@ -21,7 +21,6 @@ import type {
 } from "@/drizzle/schema";
 import {
   activeGuards,
-  CARGO_MOVES,
   type CaravanNoticeView,
   getAllowedDelay,
   getAttackerRole,
@@ -35,6 +34,7 @@ import { getServerPusher } from "@/libs/pusher";
 import {
   advanceCaravanCheckpoints,
   chargeAmbushLoss,
+  closeCaravan,
   grantCaravanRewards,
   insertCheckpointAmbush,
   listArrivedCaravans,
@@ -49,15 +49,11 @@ import {
   listOpenVillageCaravans,
   listOperatorProfiles,
   listTravellingCaravans,
-  markGuardsRewarded,
-  moveCargo,
   releaseParticipants,
   releaseStaleEncounter,
   resolveOperation,
   resolveSabotage,
-  transitionCaravan,
   upsertDiscoveries,
-  wakeReleasedGuards,
 } from "@/queries/caravan";
 import { findGameSettingByName } from "@/queries/gamesettings";
 import {
@@ -68,13 +64,13 @@ import {
 } from "@/queries/tradeRoute";
 import {
   cargoLogs,
-  creditWarehouseStock,
+  ensureWarehouseStock,
   insertWarehouseLogs,
   listOpenWars,
 } from "@/queries/warehouse";
 import type { DrizzleClient } from "@/server/db";
 import { isServingElder } from "@/server/utils/kageGovernance";
-import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { caravanNotice } from "@/server/utils/push/messages";
 import { secureRandomInt } from "@/utils/math";
@@ -184,73 +180,69 @@ export const hasDueCaravanWork = (
 /**
  * Cancel a caravan and return everything it holds: a preparing caravan releases its
  * reservation, a travelling one brings its remaining cargo home. Escorts are freed unpaid.
- * `unfought` refuses the cancellation while a fight over the caravan is open;
- * `inTransaction` writes on the caller's transaction instead of opening another. Resolves
- * to the escorts it released, or false when the caravan changed and stays open.
+ * `unfought` refuses the cancellation while a fight over the caravan is open. Resolves to
+ * the escorts it released, or false when the caravan changed and stays open.
  */
 export const cancelCaravan = async (
   client: DrizzleClient,
   row: Caravan,
   now = new Date(),
-  options: { unfought?: boolean; inTransaction?: boolean } = {},
+  options: { unfought?: boolean } = {},
 ) => {
-  const participants = await listCaravanParticipants(client, [row.id]);
-  const returned =
-    row.status === "TRAVELLING" ? getRemainingCargo(row.cargo, row.lossBp) : row.cargo;
-  const guards = participants.filter((p) => p.role === "GUARD");
-  const guardIds = guards.map((p) => p.userId);
-  const cancel = async (database: DrizzleClient) => {
-    const claimed = await transitionCaravan(
-      database,
-      row,
-      { status: "CANCELLED", resolvedAt: now },
-      { unfought: options.unfought },
-    );
-    if (claimed.rowsAffected !== 1) return false;
-    if (row.status === "PREPARING")
-      await moveCargo(database, row.originVillageId, returned, CARGO_MOVES.RELEASE);
-    else await creditWarehouseStock(database, row.originVillageId, returned);
-    await releaseParticipants(database, row.id);
-    await wakeReleasedGuards(database, guardIds);
-    await insertWarehouseLogs(
-      database,
-      cargoLogs(row.originVillageId, "RELEASE", returned),
-      now,
-    );
-    return true;
-  };
-  // Returned cargo is an upsert of stock rows that may be missing, which cannot join the
-  // guarded caravan UPDATE; committing it with the claim and the escorts' release keeps a
-  // cancelled caravan from losing its goods or leaving escorts in its queue.
-  const cancelled = options.inTransaction
-    ? await cancel(client)
-    : await retryOnDeadlock(() => client.transaction(cancel));
-  if (!cancelled) return false;
-  notifyPlayers(client, guardIds, {
-    title: "Caravan cancelled",
-    body: "Your escort duty ended; the caravan was cancelled.",
-    refresh: ESCORT_RELEASE_VIEWS,
+  const departed = row.status === "TRAVELLING";
+  const returned = departed ? getRemainingCargo(row.cargo, row.lossBp) : row.cargo;
+  const [participants] = await Promise.all([
+    listCaravanParticipants(client, [row.id]),
+    departed
+      ? ensureWarehouseStock(
+          client,
+          row.originVillageId,
+          returned.map((line) => line.itemId),
+        )
+      : undefined,
+  ]);
+  const cancelled = await closeCaravan(client, row, {
+    status: "CANCELLED",
+    resolvedAt: now,
+    villageId: row.originVillageId,
+    lines: returned,
+    stock: departed ? "credit" : "release",
+    unfought: options.unfought,
   });
+  if (cancelled.rowsAffected === 0) return false;
+  // History follows the cancellation: a failure here costs only a log row support can add.
+  await insertWarehouseLogs(
+    client,
+    cargoLogs(row.originVillageId, "RELEASE", returned),
+    now,
+  );
+  notifyPlayers(
+    client,
+    participants.filter((p) => p.role === "GUARD").map((p) => p.userId),
+    {
+      title: "Caravan cancelled",
+      body: "Your escort duty ended; the caravan was cancelled.",
+      refresh: ESCORT_RELEASE_VIEWS,
+    },
+  );
   return activeGuards(participants).map((p) => p.userId);
 };
 
 /**
  * End the trade of a disbanded settlement: its routes close and every open caravan to or
  * from it is called off. One bound for it brings its cargo home; one it sent returns to the
- * settlement's own stock and is lost with it. `inTransaction` writes on the caller's
- * transaction.
+ * settlement's own stock and is lost with it.
  */
 export const closeVillageTrade = async (
   client: DrizzleClient,
   villageId: string,
   now = new Date(),
-  inTransaction = false,
 ) => {
   const [caravans] = await Promise.all([
     listOpenVillageCaravans(client, villageId),
     closeTradeRoutes(client, { villageId }, now),
   ]);
-  for (const row of caravans) await callOffCaravan(client, row, now, inTransaction);
+  for (const row of caravans) await callOffCaravan(client, row, now);
 };
 
 /** Deliver an arrived caravan once no fight over it is still open, and pay its escorts. */
@@ -259,47 +251,40 @@ export const deliverCaravan = async (
   row: Caravan,
   now = new Date(),
 ) => {
+  const remaining = getRemainingCargo(row.cargo, row.lossBp);
   const [encounters, participants] = await Promise.all([
     listOpenEncounters(client, [row.id]),
     listCaravanParticipants(client, [row.id]),
+    ensureWarehouseStock(
+      client,
+      row.destinationVillageId,
+      remaining.map((line) => line.itemId),
+    ),
   ]);
   if (encounters.length > 0) return false;
-  const remaining = getRemainingCargo(row.cargo, row.lossBp);
-  const guards = activeGuards(participants).filter((p) => !p.rewardedAt);
-  const rewards = guards.map((guard) => ({
-    userId: guard.userId,
-    money: getGuardReward(guard.objectives),
-  }));
-  // Delivered cargo is an upsert of stock rows that may be missing, which cannot join the
-  // guarded caravan UPDATE; committing it, the escort pay and the escorts' release with the
-  // DELIVERED claim keeps a retry from repeating or losing any of them.
-  const delivered = await retryOnDeadlock(() =>
-    client.transaction(async (tx) => {
-      // A fight opened since the read above keeps the caravan on the road until it settles.
-      const claimed = await transitionCaravan(
-        tx,
-        row,
-        { status: "DELIVERED", resolvedAt: now },
-        { unfought: true },
-      );
-      if (claimed.rowsAffected !== 1) return false;
-      await creditWarehouseStock(tx, row.destinationVillageId, remaining);
-      await grantCaravanRewards(tx, rewards);
-      await markGuardsRewarded(tx, row.id, now);
-      await releaseParticipants(tx, row.id);
-      await wakeReleasedGuards(
-        tx,
-        guards.map((guard) => guard.userId),
-      );
-      await insertWarehouseLogs(
-        tx,
-        cargoLogs(row.destinationVillageId, "DELIVERY", remaining),
-        now,
-      );
-      return true;
-    }),
+  const rewards = activeGuards(participants)
+    .filter((p) => !p.rewardedAt)
+    .map((guard) => ({
+      userId: guard.userId,
+      money: getGuardReward(guard.objectives),
+    }));
+  // A fight opened since the read above keeps the caravan on the road until it settles.
+  const delivered = await closeCaravan(client, row, {
+    status: "DELIVERED",
+    resolvedAt: now,
+    villageId: row.destinationVillageId,
+    lines: remaining,
+    stock: "credit",
+    pay: rewards,
+    unfought: true,
+  });
+  if (delivered.rowsAffected === 0) return false;
+  // History follows the delivery: a failure here costs only a log row support can add.
+  await insertWarehouseLogs(
+    client,
+    cargoLogs(row.destinationVillageId, "DELIVERY", remaining),
+    now,
   );
-  if (!delivered) return false;
   for (const reward of rewards)
     notifyPlayers(client, [reward.userId], {
       title: "Caravan delivered",
@@ -356,16 +341,11 @@ export const canManageTrade = (
  * fails and can be retried; inside an outer transaction the reread repeats its snapshot,
  * so a conflict there always ends in that throw and the caller's retry.
  */
-const callOffCaravan = async (
-  client: DrizzleClient,
-  row: Caravan,
-  now: Date,
-  inTransaction: boolean,
-) => {
+const callOffCaravan = async (client: DrizzleClient, row: Caravan, now: Date) => {
   let current: Caravan | undefined = row;
   for (let attempt = 0; attempt < CANCEL_ATTEMPTS; attempt++) {
     if (current?.status !== "PREPARING" && current?.status !== "TRAVELLING") return;
-    if (await cancelCaravan(client, current, now, { inTransaction })) return;
+    if (await cancelCaravan(client, current, now)) return;
     [current] = await listCaravansByIds(client, [current.id]);
   }
   if (current?.status === "PREPARING" || current?.status === "TRAVELLING")

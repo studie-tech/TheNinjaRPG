@@ -298,28 +298,94 @@ export const moveCargo = (
 };
 
 /**
- * Move a caravan between lifecycle states if it is still the version that was read. With
- * `unfought`, the move also requires that no fight over the caravan is open.
+ * Close an open caravan as `DELIVERED` or `CANCELLED` in one statement, if it is still the
+ * version that was read; with `unfought`, also only while no fight over it is open. Each
+ * cargo line joins its own stock row of `villageId`: `release` frees the line's reservation
+ * while the row covers it, `credit` adds the line to a row `ensureWarehouseStock` created, and
+ * a missing or short row closes nothing. Every active participant is released, and escorts
+ * waiting in the queue wake: the active-user key makes this row their only reservation.
+ * `pay`, given on delivery, adds each escort's ryo and marks the escorts paid. A closed
+ * caravan always changes its own row, so at least one row changed means it closed.
  */
-export const transitionCaravan = (
-  client: Pick<DrizzleClient, "update">,
-  current: { id: string; version: number; status: CaravanStatus },
-  set: Partial<typeof caravan.$inferInsert>,
-  options: { unfought?: boolean } = {},
-) =>
-  client
-    .update(caravan)
-    .set({ ...set, version: current.version + 1 })
-    .where(
-      and(
-        eq(caravan.id, current.id),
-        eq(caravan.version, current.version),
-        eq(caravan.status, current.status),
-        options.unfought
-          ? sql`NOT EXISTS (SELECT 1 FROM ${caravanEncounter} WHERE ${caravanEncounter.activeCaravanId} = ${current.id})`
-          : undefined,
+export const closeCaravan = (
+  client: Pick<DrizzleClient, "execute">,
+  current: Pick<Caravan, "id" | "version" | "status">,
+  close: {
+    status: Extract<CaravanStatus, "DELIVERED" | "CANCELLED">;
+    resolvedAt: Date;
+    villageId: string;
+    lines: CargoLine[];
+    stock: "release" | "credit";
+    pay?: { userId: string; money: number }[];
+    unfought?: boolean;
+  },
+) => {
+  const lines = close.lines.map((line, index) => ({
+    ...line,
+    stock: alias(warehouseStock, `line${index}`),
+  }));
+  const paid = close.pay?.filter((row) => row.money > 0) ?? [];
+  // MySQL leaves the order of a multi-table UPDATE's assignments open, so each one reads only
+  // the column it sets and unchanged keys; per-escort pay is a CASE on the escort's id. The
+  // participant joins come first: MySQL stops a row combination at the first single-row
+  // table it already holds for the update, so a table listed before them would leave every
+  // participant but the first unchanged. A one-row driver keeps a caravan without any.
+  return client.execute(sql`
+    UPDATE (SELECT 1 AS one) AS driver
+    LEFT JOIN ${caravanParticipant}
+      ON ${caravanParticipant.caravanId} = ${current.id} AND ${caravanParticipant.activeUserId} IS NOT NULL
+    LEFT JOIN ${userData}
+      ON ${userData.userId} = ${caravanParticipant.userId} AND ${caravanParticipant.role} = 'GUARD'
+    INNER JOIN ${caravan}
+      ON ${caravan.id} = ${current.id}
+      AND ${caravan.version} = ${current.version}
+      AND ${caravan.status} = ${current.status}
+      ${
+        close.unfought
+          ? sql`AND NOT EXISTS (SELECT 1 FROM ${caravanEncounter} WHERE ${caravanEncounter.activeCaravanId} = ${current.id})`
+          : sql``
+      }
+    ${sql.join(
+      lines.map(
+        ({ stock, itemId, quantity }) => sql`INNER JOIN ${warehouseStock} AS ${stock}
+      ON ${stock.villageId} = ${close.villageId} AND ${stock.itemId} = ${itemId}${
+        close.stock === "release"
+          ? sql` AND ${stock.reserved} >= ${quantity} AND ${stock.quantity} + ${quantity} >= ${stock.reserved}`
+          : sql``
+      }`,
       ),
-    );
+      sql` `,
+    )}
+    SET ${caravanParticipant.activeUserId} = NULL, ${caravanParticipant.groupLeaderId} = NULL,
+        ${userData.status} = CASE WHEN ${userData.status} = 'QUEUED' THEN 'AWAKE' ELSE ${userData.status} END,
+        ${caravan.status} = ${close.status}, ${caravan.version} = ${current.version + 1},
+        ${caravan.resolvedAt} = ${sql.param(close.resolvedAt, caravan.resolvedAt)}
+        ${
+          close.pay
+            ? sql`, ${caravanParticipant.rewardedAt} = CASE WHEN ${caravanParticipant.role} = 'GUARD' AND ${caravanParticipant.rewardedAt} IS NULL THEN ${sql.param(close.resolvedAt, caravanParticipant.rewardedAt)} ELSE ${caravanParticipant.rewardedAt} END`
+            : sql``
+        }
+        ${
+          paid.length > 0
+            ? sql`, ${userData.money} = ${userData.money} + CASE ${sql.join(
+                paid.map(
+                  (row) =>
+                    sql`WHEN ${userData.userId} = ${row.userId} THEN ${row.money}`,
+                ),
+                sql` `,
+              )} ELSE 0 END`
+            : sql``
+        }
+        ${sql.join(
+          lines.map(({ stock, quantity }) =>
+            close.stock === "release"
+              ? sql`, ${stock.reserved} = ${stock.reserved} - ${quantity}`
+              : sql`, ${stock.quantity} = ${stock.quantity} + ${quantity}`,
+          ),
+          sql``,
+        )}
+  `);
+};
 
 /**
  * Send a prepared caravan on its way with its cargo in one statement, as the `DISPATCH`
@@ -568,23 +634,6 @@ export const claimLoot = (
         eq(caravanParticipant.userId, userId),
         sql`${caravanParticipant.loot} = CAST(${JSON.stringify(loot)} AS JSON)`,
         isNull(caravanParticipant.lootClaimedAt),
-      ),
-    );
-
-/** Mark escorts as paid for a delivery so a retried delivery never pays twice. */
-export const markGuardsRewarded = (
-  client: Pick<DrizzleClient, "update">,
-  caravanId: string,
-  now: Date,
-) =>
-  client
-    .update(caravanParticipant)
-    .set({ rewardedAt: now, activeUserId: null })
-    .where(
-      and(
-        eq(caravanParticipant.caravanId, caravanId),
-        eq(caravanParticipant.role, "GUARD"),
-        isNull(caravanParticipant.rewardedAt),
       ),
     );
 
