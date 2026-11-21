@@ -1,6 +1,9 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getEscortStatusUserUpdate } from "@/deltas/caravan";
+import {
+  getEscortStatusUserUpdate,
+  getReleasedEscortUserUpdate,
+} from "@/deltas/caravan";
 import { getCargoWarehouseChange, getWarehouseLogEntries } from "@/deltas/warehouse";
 import {
   CARAVAN_DEFAULT_ENCOUNTER_RATE,
@@ -401,7 +404,8 @@ export const caravanRouter = createTRPCRouter({
     .meta({ mcp: { description: "Cancel a caravan that has not departed" } })
     .input(z.object({ caravanId: z.string() }))
     .output(
-      warehouseResponseSchema.extend({
+      userDeltaResponseSchema.extend({
+        ...warehouseResponseSchema.shape,
         cancelled: z.object({ caravanId: z.string(), resolvedAt: z.date() }).optional(),
       }),
     )
@@ -416,11 +420,13 @@ export const caravanRouter = createTRPCRouter({
       if (!own || !canManageTrade(user, own))
         return errorResponse("Only the Kage and Elders manage caravans");
       const now = new Date();
-      if (!(await cancelCaravan(ctx.drizzle, row, now)))
+      const released = await cancelCaravan(ctx.drizzle, row, now);
+      if (!released)
         return errorResponse("The caravan changed meanwhile. Refresh and try again");
       return {
         success: true,
         message: "Caravan cancelled; its cargo is released",
+        ...getReleasedEscortUserUpdate(user, released),
         cancelled: { caravanId: row.id, resolvedAt: now },
         warehouseChange: getCargoWarehouseChange(row.cargo, {
           quantity: 0,

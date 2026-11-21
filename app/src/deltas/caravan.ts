@@ -19,6 +19,18 @@ export const getEscortStatusUserUpdate = (status: "QUEUED" | "AWAKE") => ({
   userPatch: { status },
 });
 
+/**
+ * Profile patch of a viewer whose queued escort a cancellation released: they wake, as
+ * every released escort does. Other viewers' profiles are unchanged.
+ */
+export const getReleasedEscortUserUpdate = (
+  user: { userId: string; status: string },
+  releasedGuardIds: string[],
+) =>
+  user.status === "QUEUED" && releasedGuardIds.includes(user.userId)
+    ? getEscortStatusUserUpdate("AWAKE")
+    : {};
+
 /** List a route the viewer's village just proposed and drop its partner from the choices. */
 export const getProposedTradeRoutes = (
   current: RoutesView,
