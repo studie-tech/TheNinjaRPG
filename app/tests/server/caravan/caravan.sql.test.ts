@@ -3,6 +3,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   BANDIT_OPERATION_EXP,
+  CARAVAN_DELAY_MINUTES,
   CARAVAN_GUARD_DELIVERY_RYO,
   CARAVAN_GUARD_OBJECTIVE_RYO,
   WAREHOUSE_PRODUCTION_INTERVAL_HOURS,
@@ -287,6 +288,39 @@ describeWithDatabase("village Warehouse and caravans", () => {
     const [row] = await db.select().from(caravan);
     expect(row?.status).toBe("DELIVERED");
     expect(row?.delayMinutes).toBe(0);
+    const [operation] = await db.select().from(caravanOperation);
+    expect(operation?.status).toBe("RESOLVED");
+  });
+
+  it("lands sabotage that finished before arrival ahead of a page read's delivery", async () => {
+    const db = await getTestDatabase();
+    const now = Date.now();
+    await insertUsers([{ userId: "saboteur", status: "AWAKE" }]);
+    await db.insert(caravan).values(
+      caravanRow({
+        arrivesAt: new Date(now - 10_000),
+        checkpointsProcessed: 3,
+      }),
+    );
+    await db.insert(caravanOperation).values({
+      id: "op",
+      userId: "saboteur",
+      activeUserId: "saboteur",
+      role: "ENEMY",
+      type: "DELAY",
+      caravanId: "c1",
+      sector: 3,
+      succeeds: true,
+      status: "ACTIVE",
+      startedAt: new Date(now - 30 * 60_000),
+      finishesAt: new Date(now - 40_000),
+    });
+    await afterTasks.run([], () =>
+      maintainCaravans(db, new Date(now), { caravanIds: ["c1"] }),
+    );
+    const [row] = await db.select().from(caravan);
+    expect(row?.status).toBe("TRAVELLING");
+    expect(row?.delayMinutes).toBe(CARAVAN_DELAY_MINUTES);
     const [operation] = await db.select().from(caravanOperation);
     expect(operation?.status).toBe("RESOLVED");
   });

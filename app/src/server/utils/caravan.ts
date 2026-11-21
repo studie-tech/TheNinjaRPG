@@ -81,8 +81,10 @@ export const maintainCaravans = async (
   now = new Date(),
   scope?: { caravanIds?: string[]; userId?: string },
 ) => {
-  // A page read finishes only its viewer's operations; the job finishes everyone's.
-  if (!scope || scope.userId) await resolveDueOperations(client, now, scope?.userId);
+  // A page read finishes only its viewer's operations, or those against its caravans so a
+  // sabotage that finished first lands before delivery; the job finishes everyone's.
+  if (!scope || scope.userId || scope.caravanIds?.length)
+    await resolveDueOperations(client, now, scope);
   if (scope && !scope.caravanIds?.length) return;
   const caravans = scope?.caravanIds
     ? await listCaravansByIds(client, scope.caravanIds)
@@ -293,9 +295,9 @@ export const isAtWar = (
 const resolveDueOperations = async (
   client: DrizzleClient,
   now: Date,
-  userId?: string,
+  filter?: { userId?: string; caravanIds?: string[] },
 ) => {
-  const due = await listDueOperations(client, now, userId);
+  const due = await listDueOperations(client, now, filter);
   for (const operation of due) {
     if (!operation.succeeds) {
       await resolveOperation(client, operation.id, "RESOLVED", now);

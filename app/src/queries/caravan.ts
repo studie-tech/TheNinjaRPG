@@ -932,11 +932,11 @@ export const listActiveSabotage = (
           ),
         );
 
-/** Operations whose time is up. */
+/** Operations whose time is up, optionally only a player's or those against some caravans. */
 export const listDueOperations = (
   client: Pick<DrizzleClient, "select">,
   now: Date,
-  userId?: string,
+  filter: { userId?: string; caravanIds?: string[] } = {},
 ) =>
   client
     .select()
@@ -945,7 +945,10 @@ export const listDueOperations = (
       and(
         eq(caravanOperation.status, "ACTIVE"),
         lte(caravanOperation.finishesAt, now),
-        userId ? eq(caravanOperation.userId, userId) : undefined,
+        filter.userId ? eq(caravanOperation.userId, filter.userId) : undefined,
+        filter.caravanIds
+          ? inArray(caravanOperation.caravanId, filter.caravanIds)
+          : undefined,
       ),
     );
 
