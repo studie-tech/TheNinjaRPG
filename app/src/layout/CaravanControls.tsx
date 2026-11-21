@@ -79,6 +79,7 @@ const CaravanControlsPanel = () => {
   const starting = actions.startOperation.isPending
     ? actions.startOperation.variables
     : undefined;
+  const finished = data.operations.filter((op) => op.status !== "ACTIVE");
   return (
     <div className="@container grid gap-4 text-sm">
       <RoleSummary data={data} actions={actions} />
@@ -88,7 +89,7 @@ const CaravanControlsPanel = () => {
           <p className="flex items-center gap-2">
             <Hourglass className="size-4" aria-hidden />
             {OPERATION_LABELS[running.type]} finishes at{" "}
-            {new Date(new Date(running.finishesAt).getTime()).toLocaleTimeString()}
+            {running.finishesAt.toLocaleTimeString()}
           </p>
         ) : (
           <div className="grid gap-2 @md:grid-cols-2">
@@ -112,24 +113,22 @@ const CaravanControlsPanel = () => {
             </Button>
           </div>
         )}
-        {data.operations.filter((op) => op.status !== "ACTIVE").length > 0 && (
+        {finished.length > 0 && (
           <ul className="mt-2 flex flex-wrap gap-1">
-            {data.operations
-              .filter((op) => op.status !== "ACTIVE")
-              .map((op) => (
-                <li key={op.id}>
-                  <Badge variant={op.succeeds ? "default" : "outline"}>
-                    {OPERATION_LABELS[op.type]}
-                    {op.type === "SEARCH" ? ` ${op.sector}` : ""}:{" "}
-                    {op.status === "INTERRUPTED"
-                      ? "stopped by escorts"
-                      : op.succeeds
-                        ? "succeeded"
-                        : "failed"}{" "}
-                    · {formatDateTime(op.finishesAt)}
-                  </Badge>
-                </li>
-              ))}
+            {finished.map((op) => (
+              <li key={op.id}>
+                <Badge variant={op.succeeds ? "default" : "outline"}>
+                  {OPERATION_LABELS[op.type]}
+                  {op.type === "SEARCH" ? ` ${op.sector}` : ""}:{" "}
+                  {op.status === "INTERRUPTED"
+                    ? "stopped by escorts"
+                    : op.succeeds
+                      ? "succeeded"
+                      : "failed"}{" "}
+                  · {formatDateTime(op.finishesAt)}
+                </Badge>
+              </li>
+            ))}
           </ul>
         )}
       </section>
@@ -150,6 +149,7 @@ const CaravanControlsPanel = () => {
                 data={data}
                 actions={actions}
                 running={!!running}
+                starting={starting}
                 now={now}
               />
             ))}
@@ -283,12 +283,14 @@ const KnownCaravan = ({
   data,
   actions,
   running,
+  starting,
   now,
 }: {
   row: Controls["caravans"][number];
   data: Controls;
   actions: Actions;
   running: boolean;
+  starting: Actions["startOperation"]["variables"];
   now: number;
 }) => {
   const committedHere = data.commitment?.caravanId === row.id;
@@ -300,9 +302,6 @@ const KnownCaravan = ({
     new Date(row.arrivesAt).getTime() <= now + CARAVAN_SABOTAGE_MINUTES * 60_000;
   const canSabotage = row.inSector && !arrivesFirst && !running;
   const arrived = !row.arrivesAt || new Date(row.arrivesAt).getTime() <= now;
-  const starting = actions.startOperation.isPending
-    ? actions.startOperation.variables
-    : undefined;
   const grouping = actions.formGroup.isPending
     ? actions.formGroup.variables
     : undefined;
@@ -316,7 +315,7 @@ const KnownCaravan = ({
           ? `Departed ${row.departedAt ? new Date(row.departedAt).toLocaleTimeString() : ""}, arrives ${row.arrivesAt ? new Date(row.arrivesAt).toLocaleTimeString() : ""}`
           : "Preparing to depart"}
         {row.lastSector !== null
-          ? ` · seen in sector ${row.lastSector} ${row.seenAt ? `${Math.max(0, Math.round((now - new Date(row.seenAt).getTime()) / 60_000))} min ago` : ""}`
+          ? ` · seen in sector ${row.lastSector} ${row.seenAt ? `${Math.max(0, Math.round((now - row.seenAt.getTime()) / 60_000))} min ago` : ""}`
           : ""}
       </p>
       <div className="mt-1 flex flex-wrap gap-1">
@@ -349,44 +348,27 @@ const KnownCaravan = ({
             <Footprints className="mr-1 size-4" aria-hidden />
             Track
           </Button>
-          {row.role === "ENEMY" && (
-            <>
+          {row.role === "ENEMY" &&
+            SABOTAGE.map(({ type, label, effect, Icon }) => (
               <Button
+                key={type}
                 size="sm"
                 variant="outline"
                 title={
                   arrivesFirst
                     ? "The caravan arrives before sabotage could finish"
-                    : `Removes an NPC guard from fights for ${CARAVAN_DISRUPTION_MINUTES} minutes`
+                    : effect
                 }
                 disabled={!canSabotage || actions.startOperation.isPending}
-                loading={starting?.type === "DISRUPT" && starting.caravanId === row.id}
+                loading={starting?.type === type && starting.caravanId === row.id}
                 onClick={() =>
-                  actions.startOperation.mutate({ type: "DISRUPT", caravanId: row.id })
+                  actions.startOperation.mutate({ type, caravanId: row.id })
                 }
               >
-                <Zap className="mr-1 size-4" aria-hidden />
-                Disrupt
+                <Icon className="mr-1 size-4" aria-hidden />
+                {label}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                title={
-                  arrivesFirst
-                    ? "The caravan arrives before sabotage could finish"
-                    : `Adds ${CARAVAN_DELAY_MINUTES} minutes of travel`
-                }
-                disabled={!canSabotage || actions.startOperation.isPending}
-                loading={starting?.type === "DELAY" && starting.caravanId === row.id}
-                onClick={() =>
-                  actions.startOperation.mutate({ type: "DELAY", caravanId: row.id })
-                }
-              >
-                <Hourglass className="mr-1 size-4" aria-hidden />
-                Delay
-              </Button>
-            </>
-          )}
+            ))}
           {!committedHere && row.lastSector !== null && (
             <Button
               size="sm"
@@ -471,3 +453,18 @@ const OPERATION_LABELS = {
   DISRUPT: "Disruption",
   DELAY: "Delay",
 } as const;
+
+const SABOTAGE = [
+  {
+    type: "DISRUPT",
+    label: "Disrupt",
+    effect: `Removes an NPC guard from fights for ${CARAVAN_DISRUPTION_MINUTES} minutes`,
+    Icon: Zap,
+  },
+  {
+    type: "DELAY",
+    label: "Delay",
+    effect: `Adds ${CARAVAN_DELAY_MINUTES} minutes of travel`,
+    Icon: Hourglass,
+  },
+] as const;

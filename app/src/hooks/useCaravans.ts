@@ -37,7 +37,7 @@ import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { getCheckpointTimes } from "@/libs/caravan";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
-import { DAY_S } from "@/utils/time";
+import { DAY_S, MINUTE_S, secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -122,7 +122,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
         row.arrivesAt
           ? [
               row.arrivesAt,
-              new Date(row.arrivesAt).getTime() - CARAVAN_SABOTAGE_MINUTES * 60_000,
+              secondsFromDate(-CARAVAN_SABOTAGE_MINUTES * MINUTE_S, row.arrivesAt),
             ]
           : [],
       ) ?? []),
@@ -151,6 +151,11 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   };
   type Snapshot = {
     [View in keyof typeof views]: ReturnType<(typeof views)[View]["prepareUpdate"]>;
+  };
+  type UserSnapshot = { views: Snapshot; user: ReturnType<typeof prepareUserUpdate> };
+  type InventorySnapshot = {
+    views: Snapshot;
+    inventory: ReturnType<typeof inventory.prepareInventoryUpdate>;
   };
   /** Capture every view's revision when a mutation starts. */
   const prepareViews = (): Snapshot => ({
@@ -248,11 +253,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
     const options = bind<Result, Input>(affected, patch);
     return {
       onMutate: () => ({ views: options.onMutate(), user: prepareUserUpdate() }),
-      onSuccess: async (
-        result: Result,
-        input: Input,
-        snapshot: { views: Snapshot; user: number | undefined },
-      ) => {
+      onSuccess: async (result: Result, input: Input, snapshot: UserSnapshot) => {
         options.onSuccess(result, input, snapshot.views);
         if (result.userPatch || result.userRecovery)
           await updateUser(result, { revision: snapshot.user, refetch: false });
@@ -261,7 +262,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
         result: Result | undefined,
         error: unknown,
         input: Input,
-        snapshot: { views: Snapshot; user: number | undefined } | undefined,
+        snapshot: UserSnapshot | undefined,
       ) => {
         options.onSettled(result, error, input, snapshot?.views);
         if (error && snapshot) await updateUser(undefined, { revision: snapshot.user });
@@ -273,11 +274,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
     patch: (result: Result, input: Input, snapshot: Snapshot) => void,
   ) => ({
     onMutate: () => ({ views: prepareViews(), user: prepareUserUpdate() }),
-    onSuccess: async (
-      result: Result,
-      input: Input,
-      snapshot: { views: Snapshot; user: number | undefined },
-    ) => {
+    onSuccess: async (result: Result, input: Input, snapshot: UserSnapshot) => {
       showMutationToast(result);
       if (result.success) {
         patch(result, input, snapshot.views);
@@ -294,7 +291,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       _result: Result | undefined,
       error: unknown,
       _input: Input,
-      snapshot: { views: Snapshot; user: number | undefined } | undefined,
+      snapshot: UserSnapshot | undefined,
     ) => {
       if (!error || !snapshot) return;
       reload(snapshot.views, ["caravans", "controls"]);
@@ -313,18 +310,10 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       prepareCombatEntry();
       return { views: prepareViews(), user: prepareUserUpdate() };
     },
-    onSuccess: async (
-      result: Result,
-      input: Input,
-      snapshot: { views: Snapshot; user: number | undefined },
-    ) => {
+    onSuccess: async (result: Result, input: Input, snapshot: UserSnapshot) => {
       if (result.success && result.battleId) {
         loadBattle(result.battleId);
         await updateUser(result, { revision: snapshot.user, refetch: false });
-        void utils.caravan.getCaravans.invalidate(undefined, { refetchType: "none" });
-        void utils.caravanOps.getControls.invalidate(undefined, {
-          refetchType: "none",
-        });
         pushToCombat(router, result.battleId);
         return;
       }
@@ -338,7 +327,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
       _result: Result | undefined,
       error: unknown,
       _input: Input,
-      snapshot: { views: Snapshot; user: number | undefined } | undefined,
+      snapshot: UserSnapshot | undefined,
     ) => {
       if (!error || !snapshot) return;
       reload(snapshot.views, [affected]);
@@ -347,7 +336,11 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
   });
   /** Inventory movements patch known stack quantities and reload the views otherwise. */
   const bindInventory = <
-    Result extends { success: boolean; message: string; inventoryChanges?: unknown },
+    Result extends {
+      success: boolean;
+      message: string;
+      inventoryChanges?: Parameters<typeof getInventoryQuantities>[1];
+    },
     Input,
   >(
     affected: (keyof typeof views)[],
@@ -359,19 +352,10 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
         views: options.onMutate(),
         inventory: inventory.prepareInventoryUpdate(),
       }),
-      onSuccess: (
-        result: Result,
-        input: Input,
-        snapshot: {
-          views: Snapshot;
-          inventory: ReturnType<typeof inventory.prepareInventoryUpdate>;
-        },
-      ) => {
+      onSuccess: (result: Result, input: Input, snapshot: InventorySnapshot) => {
         options.onSuccess(result, input, snapshot.views);
         if (!result.success) return;
-        const changes = result.inventoryChanges as Parameters<
-          typeof getInventoryQuantities
-        >[1];
+        const changes = result.inventoryChanges;
         void inventory.updateInventory(
           changes && ((rows) => getInventoryQuantities(rows, changes)),
           snapshot.inventory,
@@ -381,12 +365,7 @@ export const useCaravans = ({ controls = false }: { controls?: boolean } = {}) =
         result: Result | undefined,
         error: unknown,
         input: Input,
-        snapshot:
-          | {
-              views: Snapshot;
-              inventory: ReturnType<typeof inventory.prepareInventoryUpdate>;
-            }
-          | undefined,
+        snapshot: InventorySnapshot | undefined,
       ) => {
         options.onSettled(result, error, input, snapshot?.views);
         if (error && snapshot)
