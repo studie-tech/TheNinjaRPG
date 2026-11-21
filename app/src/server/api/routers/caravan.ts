@@ -209,7 +209,6 @@ export const caravanRouter = createTRPCRouter({
             viewer: viewer
               ? {
                   status: viewer.status,
-                  objectives: viewer.objectives,
                   canCheckIn:
                     row.status === "TRAVELLING" && reached > viewer.lastCheckpoint,
                 }

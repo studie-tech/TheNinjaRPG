@@ -29,7 +29,6 @@ export const warehouseChangeSchema = z.object({
           userItemId: z.string(),
           itemId: z.string(),
           name: z.string(),
-          image: z.string(),
           quantity: z.number().int(),
           availableAt: z.date().nullable(),
         }),

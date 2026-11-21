@@ -150,7 +150,7 @@ export const getDepositCandidates = (
     | "isInAuction"
     | "craftingFinishedAt"
   > & {
-    item: Pick<Item, "name" | "image" | "warehouseItem" | "canStack" | "itemType">;
+    item: Pick<Item, "name" | "warehouseItem" | "canStack" | "itemType">;
   })[],
   ledgers: Pick<WarehouseDepositLedger, "itemId" | "lastDepositAt">[],
   now = new Date(),
@@ -167,7 +167,6 @@ export const getDepositCandidates = (
       userItemId: row.id,
       itemId: row.itemId,
       name: row.item.name,
-      image: row.item.image,
       quantity: row.quantity,
       availableAt: getDepositAvailableAt(
         ledgers.find((ledger) => ledger.itemId === row.itemId),

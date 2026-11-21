@@ -14,7 +14,6 @@ import {
   CARAVAN_TRACK_COOLDOWN_SECONDS,
   type CaravanRole,
   TRADE_ROUTE_MARKER_GUARDS,
-  UserStatuses,
 } from "@/drizzle/constants";
 import type { CaravanDiscovery, UserData, VillageAlliance } from "@/drizzle/schema";
 import {
@@ -473,18 +472,8 @@ export const caravanOpsRouter = createTRPCRouter({
               z.object({
                 leaderId: z.string(),
                 leaderName: z.string(),
-                role: z.enum(CARAVAN_ROLES).nullable(),
-                villageId: z.string().nullable(),
                 joinable: z.boolean(),
-                members: z.array(
-                  z.object({
-                    userId: z.string(),
-                    username: z.string(),
-                    status: z.enum(UserStatuses),
-                    sector: z.number().int(),
-                    level: z.number().int(),
-                  }),
-                ),
+                members: z.array(z.object({ userId: z.string() })),
               }),
             ),
           })
@@ -824,7 +813,9 @@ const describeGroups = (
   groupsOf(participants, caravanId)
     .filter((group) => group.role === role)
     .map((group) => ({
-      ...group,
+      leaderId: group.leaderId,
+      leaderName: group.leaderName,
+      members: group.members.map((member) => ({ userId: member.userId })),
       joinable:
         viewer.sighted &&
         group.members.length < CARAVAN_MAX_GROUP &&
@@ -837,7 +828,7 @@ const describeGroups = (
         ),
     }));
 
-/** Interception groups of a caravan by leader, with their members' details. */
+/** Interception groups of a caravan by leader, with each member's sector and level. */
 const groupsOf = (
   participants: Awaited<ReturnType<typeof listCaravanParticipants>>,
   caravanId: string,
@@ -858,8 +849,6 @@ const groupsOf = (
       villageId: leader?.villageId ?? null,
       members: members.map((p) => ({
         userId: p.userId,
-        username: p.username,
-        status: p.status,
         sector: p.sector,
         level: p.level,
       })),

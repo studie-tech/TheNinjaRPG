@@ -30,7 +30,7 @@ export const getDepositWarehouseChange = ({
   ledgers,
   now,
 }: {
-  stack: CandidateStack;
+  stack: CandidateStack & { item: StockItem };
   quantity: number;
   credited: number;
   inventory: CandidateStack[];

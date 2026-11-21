@@ -36,7 +36,6 @@ type Controls = RouterOutputs["caravanOps"]["getControls"];
 const now = new Date("2026-11-21T12:00:00Z");
 const routes = (): Routes =>
   ({
-    village: { id: "v", name: "V" },
     canManage: true,
     fundsLabel: "village tokens",
     routes: [
@@ -103,20 +102,8 @@ const controls = (): Controls =>
           {
             leaderId: "lead",
             leaderName: "Lead",
-            role: "BANDIT",
-            villageId: null,
             joinable: false,
-            members: [
-              {
-                userId: "lead",
-                username: "Lead",
-                status: "AWAKE",
-                sector: 3,
-                level: 1,
-              },
-              { userId: "x", username: "X", status: "AWAKE", sector: 3, level: 1 },
-              { userId: "me", username: "Me", status: "AWAKE", sector: 3, level: 1 },
-            ],
+            members: [{ userId: "lead" }, { userId: "x" }, { userId: "me" }],
           },
         ],
       },
@@ -255,11 +242,11 @@ describe("caravan deltas", () => {
     expect(joined?.caravans[0]).toMatchObject({
       guards: [{ ...guard, status: "QUEUED", objectives: 0 }],
       openSlots: CARAVAN_GUARD_SLOTS - 1,
-      viewer: { status: "QUEUED", objectives: 0, canCheckIn: false },
+      viewer: { status: "QUEUED", canCheckIn: false },
     });
     expect(getJoinedEscortCaravans(joined!, "k", guard)).toBeUndefined();
     const checked = getCheckedInCaravans(joined!, "k", "me");
-    expect(checked?.caravans[0]?.viewer?.objectives).toBe(1);
+    expect(checked?.caravans[0]?.viewer?.canCheckIn).toBe(false);
     expect(checked?.caravans[0]?.guards[0]?.objectives).toBe(1);
     const rejoined = getRejoinedEscortCaravans(checked!, "k", "me");
     expect(rejoined?.caravans[0]?.viewer?.status).toBe("QUEUED");

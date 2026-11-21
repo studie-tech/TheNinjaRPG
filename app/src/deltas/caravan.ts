@@ -251,7 +251,7 @@ export const getJoinedEscortCaravans = (
           ...row,
           guards: [...row.guards, { ...guard, status: "QUEUED", objectives: 0 }],
           openSlots: row.openSlots - 1,
-          viewer: { status: "QUEUED", objectives: 0, canCheckIn: false },
+          viewer: { status: "QUEUED", canCheckIn: false },
         },
   );
 
@@ -305,11 +305,7 @@ export const getCheckedInCaravans = (
               ? { ...entry, objectives: entry.objectives + 1 }
               : entry,
           ),
-          viewer: {
-            ...row.viewer,
-            objectives: row.viewer.objectives + 1,
-            canCheckIn: false,
-          },
+          viewer: { ...row.viewer, canCheckIn: false },
         }
       : undefined,
   );

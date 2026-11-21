@@ -82,7 +82,6 @@ export const tradeRouteRouter = createTRPCRouter({
         ),
       );
       return {
-        village: { id: villageId, name: villageData.name },
         canManage: canManageTrade(user, villageData),
         fundsLabel: isFactionVillage(villageData) ? "clan points" : "village tokens",
         routes: routes.map((route) => {
