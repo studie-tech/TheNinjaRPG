@@ -76,6 +76,7 @@ import { fetchUser } from "@/queries/profile";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { craftingServiceProcedures } from "@/server/api/routers/craftingServices";
 import { fetchUserItems } from "@/server/api/routers/item";
+import { supplyRequestProcedures } from "@/server/api/routers/supplyRequest";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -141,6 +142,7 @@ const cookItemInputSchema = z.object({
 
 export const occupationRouter = createTRPCRouter({
   ...craftingServiceProcedures,
+  ...supplyRequestProcedures,
   /** Visible crafting recipes; public for the crafting manual page. */
   getCraftableItems: publicProcedure
     .meta({ mcp: { description: "Get all craftable items" } })

@@ -3447,6 +3447,8 @@ export const userData = mysqlTable(
     towerDefenseDutyAt: datetime("towerDefenseDutyAt", { mode: "date", fsp: 3 }),
     occupation: mysqlEnum("occupation", consts.OCCUPATIONS),
     occupationSignupAt: datetime("occupationSignupAt", { mode: "date", fsp: 3 }),
+    /** Last paid supply request; shared across professions and guarded by the UTC reset. */
+    supplyRequestAt: datetime("supplyRequestAt", { mode: "date", fsp: 3 }),
     // Stealth & Sensory stats
     stealth: double("stealth").default(consts.STEALTH_SENSORY_DEFAULT).notNull(),
     sensory: double("sensory").default(consts.STEALTH_SENSORY_DEFAULT).notNull(),

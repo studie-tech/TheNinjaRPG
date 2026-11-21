@@ -228,6 +228,7 @@ const setup = (file: string, procedure: string) => {
     "prepareCombatEntry",
     "loadBattle",
     "props",
+    "invalidateStock",
     `${factory}\nreturn callbackOptions();`,
   )(
     utils,
@@ -270,6 +271,7 @@ const setup = (file: string, procedure: string) => {
     vi.fn(),
     vi.fn(),
     { refetch: vi.fn() },
+    invalidate,
   ) as {
     onMutate: () => unknown;
     onSuccess: (data: unknown, input: unknown, snapshot: unknown) => Promise<void>;

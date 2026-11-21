@@ -4806,3 +4806,8 @@ export type AdClickIdType = (typeof AdClickIdTypes)[number];
 /** Google Ads conversions the server reports for a linked ad click. */
 export const AdConversionActions = ["register", "tutorialComplete"] as const;
 export type AdConversionAction = (typeof AdConversionActions)[number];
+
+/** Supply requests accept one profession-matched inventory stack per UTC reset. */
+export const SUPPLY_REQUEST_BUNDLE_SIZE = 100;
+export const SUPPLY_REQUEST_EXPERIENCE = 2000;
+export const SUPPLY_REQUEST_PAYOUT_PERCENT = 60;

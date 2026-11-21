@@ -64,6 +64,7 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "activityStreak.claimStreakDay",
   "resourceSilos.claim",
   "bank.claimInterest",
+  "occupation.submitSupplyRequest",
   "raids.claimDamageReward",
   "quests.collectPetTask",
   "coop.dungeon.claim",
