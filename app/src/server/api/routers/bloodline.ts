@@ -573,6 +573,11 @@ export const bloodlineRouter = createTRPCRouter({
           "Cannot remove the player's equipped bloodline; change it first",
         );
       }
+      if (target.preDiamondBloodlineId === input.bloodlineId) {
+        return errorResponse(
+          "Cannot remove the bloodline the player returns to when Diamond Federal Support ends",
+        );
+      }
       // AI moderation of reason
       const change = `Removed bloodline ${poolBloodline.name} from pool`;
       const aiCheck = await validateUserUpdateReason(change, input.reason);

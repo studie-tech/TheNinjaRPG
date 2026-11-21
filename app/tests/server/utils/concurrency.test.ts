@@ -368,7 +368,13 @@ const poolClient = (deleteRows: number, updateRows: number) => {
   const updateWhere = vi.fn().mockResolvedValue({ rowsAffected: updateRows });
   const set = vi.fn().mockReturnValue({ where: updateWhere });
   const update = vi.fn().mockReturnValue({ set });
-  return { client: { delete: del, update } as never, del, update };
+  return {
+    client: { delete: del, update } as never,
+    del,
+    update,
+    deleteWhere,
+    updateWhere,
+  };
 };
 
 describe("removeBloodlineFromPoolAtomically", () => {
@@ -383,6 +389,26 @@ describe("removeBloodlineFromPoolAtomically", () => {
     expect(del).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledTimes(1);
     expect(ok).toBe(true);
+  });
+
+  it("treats the bloodline a Diamond supporter returns to as equipped", async () => {
+    const { client, deleteWhere, updateWhere } = poolClient(1, 0);
+    await removeBloodlineFromPoolAtomically({
+      client,
+      userId: "u1",
+      bloodlineId: "bl1",
+      now: new Date(0),
+    });
+    for (const where of [deleteWhere, updateWhere]) {
+      const rendered = new QueryBuilder()
+        .select()
+        .from(userData)
+        .where(where.mock.calls[0]?.[0] as SQL)
+        .toSQL();
+      expect(rendered.sql).toMatch(
+        /not exists.*bloodlineId.*or.*preDiamondBloodlineId/i,
+      );
+    }
   });
 
   it("fails when nothing changed (became equipped / not in pool)", async () => {

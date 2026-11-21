@@ -82,20 +82,23 @@ import {
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
+/** Waiting entries the largest tier allows; the mutations enforce each player's own limit. */
+const MAX_QUEUE_WAITING_SLOTS = Math.max(...Object.values(QUEUE_WAITING_SLOTS));
+
 const updateEnergyTrainingQueueInputSchema = z.object({
-  entries: z.array(energyTrainingQueueEntrySchema).max(1 + QUEUE_WAITING_SLOTS.GOLD),
+  entries: z.array(energyTrainingQueueEntrySchema).max(1 + MAX_QUEUE_WAITING_SLOTS),
   expectedEntries: z
     .array(energyTrainingQueueEntrySchema)
-    .max(1 + QUEUE_WAITING_SLOTS.GOLD),
+    .max(1 + MAX_QUEUE_WAITING_SLOTS),
   guess: z.string().optional(),
 });
 
 const updateMasteryTrainingQueueInputSchema = z.object({
   kind: z.enum(MasteryQueueKinds).default("MASTERY"),
-  entries: z.array(masteryTrainingQueueEntrySchema).max(QUEUE_WAITING_SLOTS.GOLD),
+  entries: z.array(masteryTrainingQueueEntrySchema).max(MAX_QUEUE_WAITING_SLOTS),
   expectedEntries: z
     .array(masteryTrainingQueueEntrySchema)
-    .max(QUEUE_WAITING_SLOTS.GOLD),
+    .max(MAX_QUEUE_WAITING_SLOTS),
 });
 
 const startMasteryTrainingInputSchema = z.object({
