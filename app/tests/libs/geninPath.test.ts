@@ -20,7 +20,11 @@ const exam: GeninPathQuest = {
   content: {
     objectives: [
       { id: "q1", task: "dialog", description: "<b>What tag</b>  heals?" },
-      { id: "q2", task: "win_quest" },
+      {
+        id: "q2",
+        task: "win_quest",
+        description: "<p>Use Fire &amp; Water&nbsp;styles.</p>",
+      },
     ] as never,
   },
 };
@@ -40,6 +44,9 @@ describe("buildGeninPath", () => {
     expect(steps[0]?.description).toBe("Graduated to Genin at level 5");
     expect(steps[4]?.description).toBe(
       "The Chunin Exams objective 1 (dialog): What tag heals?",
+    );
+    expect(steps[5]?.description).toBe(
+      "The Chunin Exams objective 2 (win_quest): Use Fire & Water styles.",
     );
   });
 

@@ -3,6 +3,8 @@ import {
   USER_CAPS,
   type UserRank,
 } from "@/drizzle/constants";
+import { htmlToPlainText } from "@/utils/sanitize";
+import { truncateString } from "@/utils/string";
 import type { QuestContentType } from "@/validators/objectives";
 
 /**
@@ -41,7 +43,11 @@ export const buildGeninPath = (quests: GeninPathQuest[], tutorialQuestId: string
   });
   const examObjectives = exam?.content.objectives ?? [];
   examObjectives.forEach((objective, i) => {
-    const detail = plainText(objective.description ?? "");
+    const detail = truncateString(
+      htmlToPlainText(objective.description ?? ""),
+      90,
+      "…",
+    );
     steps.push({
       label: `Exam ${i + 1}`,
       description: `${exam?.name} objective ${i + 1} (${objective.task})${detail ? `: ${detail}` : ""}`,
@@ -81,15 +87,6 @@ export const isStalledPlayer = (
 
 /** Ranks at or past the end of the Genin path. */
 const PROMOTED_RANKS: UserRank[] = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"];
-
-/** Quest description text without markup, trimmed for a tooltip line. */
-const plainText = (html: string) => {
-  const text = html
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text.length > 90 ? `${text.slice(0, 89)}…` : text;
-};
 
 /** A quest bounding the path: the tutorial's graduation quest or a quest awarding Chunin. */
 export type GeninPathQuest = {
