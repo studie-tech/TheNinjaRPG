@@ -1,5 +1,5 @@
 /** Cover the guarded Warehouse, escort, fight and delivery writes against real SQL. */
-import { beforeEach, expect, it } from "bun:test";
+import { beforeEach, expect, it, spyOn } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import {
   BANDIT_OPERATION_EXP,
@@ -35,6 +35,7 @@ import {
 } from "@/drizzle/schema";
 import { CARGO_MOVES, type CaravanBattleState } from "@/libs/caravan";
 import type { CompleteBattle } from "@/libs/combat/types";
+import { Pusher } from "@/libs/pusher";
 import {
   chargeAmbushLoss,
   claimLoot,
@@ -56,7 +57,7 @@ import { updateUserDataForFinishBattle } from "@/queries/combat";
 import { deleteEmptyUserItem } from "@/queries/item";
 import {
   claimWithdrawal,
-  depositStackPart,
+  depositFromStack,
   destroyRaidedWarehouseStock,
   ensureDepositLedger,
   ensureWarehouseStock,
@@ -300,7 +301,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
       options: { take?: number; bonusCarry?: number; at?: Date } = {},
     ) => {
       const at = options.at ?? now;
-      return depositStackPart(db, {
+      return depositFromStack(db, {
         userId: "donor",
         itemId: "ore",
         cooldownStart: new Date(at.getTime() - HOUR),
@@ -1555,6 +1556,42 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(row?.status).toBe("CANCELLED");
     const [stock] = await db.select().from(warehouseStock);
     expect(stock).toMatchObject({ villageId: "leaf", quantity: 180 });
+  });
+
+  it("alerts a disbanded settlement's escorts only once its transaction commits", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await insertUsers([{ userId: "guard", status: "AWAKE", villageId: "leaf" }]);
+    await db
+      .insert(warehouseStock)
+      .values({ villageId: "leaf", itemId: "ore", quantity: 250, reserved: 200 });
+    await db.insert(caravan).values(caravanRow({ status: "PREPARING" }));
+    expect((await insertGuard(db, "c1", "guard", now)).rowsAffected).toBe(1);
+    const trigger = spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    // Account deletion disbands on its own transaction; its deferred work runs afterwards.
+    const disband = (rollsBack: boolean) => {
+      const tasks: (() => unknown)[] = [];
+      return afterTasks.run(tasks, async () => {
+        await db
+          .transaction(async (tx) => {
+            await closeVillageTrade(tx, "sand", now);
+            if (rollsBack) throw new Error("deletion failed");
+          })
+          .catch(() => undefined);
+        for (const task of tasks) await task();
+      });
+    };
+    try {
+      await disband(true);
+      expect((await db.select().from(caravan))[0]?.status).toBe("PREPARING");
+      expect(trigger).not.toHaveBeenCalled();
+      await disband(false);
+      expect((await db.select().from(caravan))[0]?.status).toBe("CANCELLED");
+      expect(trigger).toHaveBeenCalledTimes(1);
+      expect(trigger.mock.calls[0]?.[0]).toEqual(["guard"]);
+    } finally {
+      trigger.mockRestore();
+    }
   });
 
   it("leaves a marker that changed hands since its assault started", async () => {

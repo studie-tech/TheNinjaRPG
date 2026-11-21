@@ -68,7 +68,7 @@ import {
   insertWarehouseLogs,
   listOpenWars,
 } from "@/queries/warehouse";
-import type { DrizzleClient } from "@/server/db";
+import { type DrizzleClient, drizzleDB } from "@/server/db";
 import { isServingElder } from "@/server/utils/kageGovernance";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
@@ -191,8 +191,6 @@ export const cancelCaravan = async (
 ) => {
   const departed = row.status === "TRAVELLING";
   const returned = departed ? getRemainingCargo(row.cargo, row.lossBp) : row.cargo;
-  // Sequential, since disbanding runs this on a transaction; only a rare departed cancel
-  // pays the extra round trip.
   const participants = await listCaravanParticipants(client, [row.id]);
   if (departed)
     await ensureWarehouseStock(
@@ -215,29 +213,34 @@ export const cancelCaravan = async (
     cargoLogs(row.originVillageId, "RELEASE", returned),
     now,
   );
-  notifyPlayers(
-    client,
-    participants.filter((p) => p.role === "GUARD").map((p) => p.userId),
-    {
-      title: "Caravan cancelled",
-      body: "Your escort duty ended; the caravan was cancelled.",
-      refresh: ESCORT_RELEASE_VIEWS,
-    },
-  );
+  const guards = participants.filter((p) => p.role === "GUARD").map((p) => p.userId);
+  // A disband cancels on its caller's transaction, so escorts hear of the cancellation only
+  // once it committed: the caravan holds the version this call wrote.
+  if (guards.length > 0)
+    after(async () => {
+      const [current] = await listCaravansByIds(drizzleDB, [row.id]);
+      if (current?.status !== "CANCELLED" || current.version !== row.version + 1)
+        return;
+      notifyPlayers(drizzleDB, guards, {
+        title: "Caravan cancelled",
+        body: "Your escort duty ended; the caravan was cancelled.",
+        refresh: ESCORT_RELEASE_VIEWS,
+      });
+    });
   return activeGuards(participants).map((p) => p.userId);
 };
 
 /**
  * End the trade of a disbanded settlement: its routes close and every open caravan to or
  * from it is called off. One bound for it brings its cargo home; one it sent returns to the
- * settlement's own stock and is lost with it.
+ * settlement's own stock and is lost with it. Account deletion disbands on a transaction,
+ * so this and the cancellations it runs issue their statements one at a time.
  */
 export const closeVillageTrade = async (
   client: DrizzleClient,
   villageId: string,
   now = new Date(),
 ) => {
-  // Sequential, since account deletion runs a disband on a transaction.
   const caravans = await listOpenVillageCaravans(client, villageId);
   await closeTradeRoutes(client, { villageId }, now);
   for (const row of caravans) await callOffCaravan(client, row, now);
