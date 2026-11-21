@@ -28,6 +28,8 @@ const VISUAL_FIELDS = [
   "appearAnimation",
   "projectileAnimation",
   "animationScale",
+  "projectileScale",
+  "animationOffsetY",
   "groundStyle",
   "groundOpacity",
   "groundFeather",

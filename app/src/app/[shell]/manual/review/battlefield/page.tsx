@@ -4,7 +4,11 @@ import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
 import { getDefaultBattleSizes } from "@/libs/combat/util";
-import { battlefieldSceneOf, sceneAssetIds } from "@/libs/contentReview/battlefield";
+import {
+  battlefieldSceneOf,
+  sceneAssetIds,
+  sceneSoundIds,
+} from "@/libs/contentReview/battlefield";
 import {
   captureBattlefieldSheets,
   createBattlefieldPreview,
@@ -37,7 +41,7 @@ export default function BattlefieldCapturePage() {
         );
         if (!scene) throw new Error("This content has no battlefield scene");
         const assets = await utils.misc.getAllGameAssetNames.fetch({
-          ids: sceneAssetIds(scene),
+          ids: [...new Set([...sceneAssetIds(scene), ...sceneSoundIds(scene)])],
         });
         return createBattlefieldPreview({
           scene,
