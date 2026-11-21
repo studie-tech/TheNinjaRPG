@@ -194,12 +194,12 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect((await approved()).rowsAffected).toBe(0);
     await db
       .update(warehouseMember)
-      .set({ approvedVillageId: "leaf", approvedAt, approvedById: "kage" })
+      .set({ approvedVillageId: "leaf", approvedAt })
       .where(eq(warehouseMember.userId, "u"));
     expect((await approved()).rowsAffected).toBeGreaterThan(0);
     await db
       .update(warehouseMember)
-      .set({ approvedVillageId: null, approvedAt: null, approvedById: null })
+      .set({ approvedVillageId: null, approvedAt: null })
       .where(eq(warehouseMember.userId, "u"));
     expect((await approved()).rowsAffected).toBe(0);
   });
@@ -1035,7 +1035,6 @@ describeWithDatabase("village Warehouse and caravans", () => {
       openPair: `leaf:${villageIdB}`,
       status,
       proposedByVillageId: "leaf",
-      proposedById: "kage",
       path: [1, 2, 3],
       createdAt: now,
     });
@@ -1158,7 +1157,6 @@ describeWithDatabase("village Warehouse and caravans", () => {
       openPair: "leaf:sand",
       status: "ACTIVE",
       proposedByVillageId: "leaf",
-      proposedById: "kage",
       path: [1, 2, 3],
       createdAt: new Date(),
     });
@@ -1216,7 +1214,6 @@ describeWithDatabase("village Warehouse and caravans", () => {
     const [marker] = await db.select().from(tradeRouteMarker);
     expect(marker?.controllerVillageId).toBe("mist");
     expect(marker?.control).toBe(100);
-    expect(marker?.capturedAt).not.toBeNull();
     await afterTasks.run([], () =>
       maintainCaravans(db, new Date(), {
         caravanIds: ["moving", "waiting", "arrived"],
@@ -1249,7 +1246,6 @@ const caravanRow = (overrides: Partial<typeof caravan.$inferInsert> = {}) => ({
   status: "TRAVELLING" as const,
   cargo: [{ itemId: "ore", quantity: 200 }],
   path: [1, 2, 3],
-  createdById: "kage",
   createdAt: new Date(),
   departedAt: new Date(Date.now() - 30 * 60_000),
   arrivesAt: new Date(Date.now() + 90 * 60_000),

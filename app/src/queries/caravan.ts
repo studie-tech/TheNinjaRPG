@@ -1172,16 +1172,14 @@ export const insertCaravanWithinCapacity = (
     destinationVillageId: string;
     cargo: CargoLine[];
     path: number[];
-    createdById: string;
     now: Date;
   },
   capacity: number,
 ) =>
   client.execute(sql`
-    INSERT INTO ${caravan} (id, routeId, originVillageId, destinationVillageId, status, cargo, path, createdById, createdAt)
+    INSERT INTO ${caravan} (id, routeId, originVillageId, destinationVillageId, status, cargo, path, createdAt)
     SELECT ${values.id}, ${values.routeId}, ${values.originVillageId}, ${values.destinationVillageId}, 'PREPARING',
-           CAST(${JSON.stringify(values.cargo)} AS JSON), CAST(${JSON.stringify(values.path)} AS JSON),
-           ${values.createdById}, ${values.now}
+           CAST(${JSON.stringify(values.cargo)} AS JSON), CAST(${JSON.stringify(values.path)} AS JSON), ${values.now}
     FROM DUAL
     WHERE (SELECT COUNT(*) FROM ${caravan} AS sent WHERE sent.originVillageId = ${values.originVillageId} AND sent.status IN ('PREPARING', 'TRAVELLING')) < ${capacity}
   `);

@@ -8471,7 +8471,6 @@ export const warehouseMember = mysqlTable(
     approvedAt: datetime("approvedAt", { mode: "date", fsp: 3 }),
     /** Wartime approvals expire with this war. */
     approvedWarId: varchar("approvedWarId", { length: 191 }),
-    approvedById: varchar("approvedById", { length: 191 }),
   },
   (table) => [
     index("WarehouseMember_approvedVillageId_idx").on(table.approvedVillageId),
@@ -8511,7 +8510,6 @@ export const tradeRoute = mysqlTable(
     openPair: varchar("openPair", { length: 383 }),
     status: mysqlEnum("status", consts.TRADE_ROUTE_STATUSES).notNull(),
     proposedByVillageId: varchar("proposedByVillageId", { length: 191 }).notNull(),
-    proposedById: varchar("proposedById", { length: 191 }).notNull(),
     level: tinyint("level", { unsigned: true }).default(1).notNull(),
     /** Sectors from village A's home sector to village B's. */
     path: json("path").$type<number[]>().notNull(),
@@ -8536,7 +8534,6 @@ export const tradeRouteMarker = mysqlTable(
     sector: smallint("sector").notNull(),
     controllerVillageId: varchar("controllerVillageId", { length: 191 }),
     control: int("control").default(consts.TRADE_ROUTE_MARKER_MAX_CONTROL).notNull(),
-    capturedAt: datetime("capturedAt", { mode: "date", fsp: 3 }),
   },
   (table) => [
     index("TradeRouteMarker_routeId_idx").on(table.routeId),
@@ -8578,7 +8575,6 @@ export const caravan = mysqlTable(
       .notNull(),
     /** Route sectors from origin to destination, frozen when the caravan is prepared. */
     path: json("path").$type<number[]>().notNull(),
-    createdById: varchar("createdById", { length: 191 }).notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
     departedAt: datetime("departedAt", { mode: "date", fsp: 3 }),
     arrivesAt: datetime("arrivesAt", { mode: "date", fsp: 3 }),

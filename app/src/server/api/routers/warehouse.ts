@@ -543,7 +543,6 @@ export const warehouseRouter = createTRPCRouter({
       await approveWarehouseMember(ctx.drizzle, {
         userId: target.userId,
         villageId: villageData.id,
-        approvedById: user.userId,
         warId: input.wartime && war ? war.id : null,
         now: new Date(),
       });

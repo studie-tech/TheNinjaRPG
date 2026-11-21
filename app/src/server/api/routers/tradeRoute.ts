@@ -163,7 +163,6 @@ export const tradeRouteRouter = createTRPCRouter({
           openPair: `${villageIdA}:${villageIdB}`,
           status: "PROPOSED",
           proposedByVillageId: own.id,
-          proposedById: user.userId,
           path,
           createdAt: new Date(),
         });

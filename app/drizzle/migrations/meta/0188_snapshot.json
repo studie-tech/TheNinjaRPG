@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "5101cfc8-7315-4965-b941-4956cdc976f1",
+  "id": "6edea128-2fc2-4d3a-9600-a62b6c72bb0c",
   "prevId": "9a212f58-39b6-4819-a46d-141f833f3cd0",
   "tables": {
     "AbEvent": {
@@ -3062,13 +3062,6 @@
         "path": {
           "name": "path",
           "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "createdById": {
-          "name": "createdById",
-          "type": "varchar(191)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -18569,13 +18562,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "proposedById": {
-          "name": "proposedById",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "level": {
           "name": "level",
           "type": "tinyint unsigned",
@@ -18725,13 +18711,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 100
-        },
-        "capturedAt": {
-          "name": "capturedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -26343,13 +26322,6 @@
         },
         "approvedWarId": {
           "name": "approvedWarId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "approvedById": {
-          "name": "approvedById",
           "type": "varchar(191)",
           "primaryKey": false,
           "notNull": false,

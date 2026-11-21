@@ -232,18 +232,16 @@ export const damageMarker = (
     damage: number;
     controllerVillageId: string | null;
     captureVillageId: string | null;
-    now: Date;
   },
 ) => {
-  const { markerId, damage, captureVillageId, now } = input;
+  const { markerId, damage, captureVillageId } = input;
   const captured = sql`${tradeRouteMarker.control} - ${damage} <= 0`;
   return client
     .update(tradeRouteMarker)
     .set({
+      // Assigned before control in column order, so `captured` reads the old control.
       controllerVillageId: sql`CASE WHEN ${captured} THEN ${captureVillageId} ELSE ${tradeRouteMarker.controllerVillageId} END`,
       control: sql`CASE WHEN ${captured} THEN ${TRADE_ROUTE_MARKER_MAX_CONTROL} ELSE ${tradeRouteMarker.control} - ${damage} END`,
-      // Assigned after control in column order, so it reads the new value, full only on capture.
-      capturedAt: sql`CASE WHEN ${tradeRouteMarker.control} = ${TRADE_ROUTE_MARKER_MAX_CONTROL} THEN ${now} ELSE ${tradeRouteMarker.capturedAt} END`,
     })
     .where(
       and(

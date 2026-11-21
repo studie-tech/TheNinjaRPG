@@ -337,7 +337,6 @@ export const caravanRouter = createTRPCRouter({
                 destinationVillageId: toVillageA ? route.villageIdA : route.villageIdB,
                 cargo,
                 path,
-                createdById: user.userId,
                 now,
               },
               capacity,

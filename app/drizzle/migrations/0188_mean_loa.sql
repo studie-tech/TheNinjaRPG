@@ -10,7 +10,6 @@ CREATE TABLE `Caravan` (
 	`disruptedUntil` datetime(3),
 	`checkpointsProcessed` tinyint unsigned NOT NULL DEFAULT 0,
 	`path` json NOT NULL,
-	`createdById` varchar(191) NOT NULL,
 	`createdAt` datetime(3) NOT NULL,
 	`departedAt` datetime(3),
 	`arrivesAt` datetime(3),
@@ -90,7 +89,6 @@ CREATE TABLE `TradeRoute` (
 	`openPair` varchar(383),
 	`status` enum('PROPOSED','ACTIVE','CLOSED') NOT NULL,
 	`proposedByVillageId` varchar(191) NOT NULL,
-	`proposedById` varchar(191) NOT NULL,
 	`level` tinyint unsigned NOT NULL DEFAULT 1,
 	`path` json NOT NULL,
 	`createdAt` datetime(3) NOT NULL,
@@ -113,7 +111,6 @@ CREATE TABLE `TradeRouteMarker` (
 	`sector` smallint NOT NULL,
 	`controllerVillageId` varchar(191),
 	`control` int NOT NULL DEFAULT 100,
-	`capturedAt` datetime(3),
 	CONSTRAINT `TradeRouteMarker_id` PRIMARY KEY(`id`)
 );
 
@@ -152,7 +149,6 @@ CREATE TABLE `WarehouseMember` (
 	`approvedVillageId` varchar(191),
 	`approvedAt` datetime(3),
 	`approvedWarId` varchar(191),
-	`approvedById` varchar(191),
 	CONSTRAINT `WarehouseMember_userId` PRIMARY KEY(`userId`)
 );
 

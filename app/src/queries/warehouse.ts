@@ -348,7 +348,6 @@ export const approveWarehouseMember = (
   input: {
     userId: string;
     villageId: string;
-    approvedById: string;
     warId: string | null;
     now: Date;
   },
@@ -357,7 +356,6 @@ export const approveWarehouseMember = (
     approvedVillageId: input.villageId,
     approvedAt: input.now,
     approvedWarId: input.warId,
-    approvedById: input.approvedById,
   };
   return client
     .insert(warehouseMember)
@@ -377,7 +375,6 @@ export const revokeWarehouseMember = (
       approvedVillageId: null,
       approvedAt: null,
       approvedWarId: null,
-      approvedById: null,
     })
     .where(
       and(

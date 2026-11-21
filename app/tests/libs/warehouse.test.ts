@@ -113,7 +113,6 @@ describe("withdrawal allowance", () => {
     approvedVillageId: null,
     approvedAt: null,
     approvedWarId: null,
-    approvedById: null,
     ...values,
   });
 

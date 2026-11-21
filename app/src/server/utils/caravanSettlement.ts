@@ -53,7 +53,6 @@ export const settleCaravanCombat = async (
         damage: TRADE_ROUTE_MARKER_ASSAULT_DAMAGE,
         controllerVillageId: state.markerControllerId,
         captureVillageId: state.captureVillageId,
-        now,
       });
     return;
   }
