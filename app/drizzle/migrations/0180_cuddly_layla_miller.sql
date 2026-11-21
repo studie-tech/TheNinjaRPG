@@ -827,7 +827,7 @@ WHERE `id` = 'Sx8RvLdwcrhod09Zg5jqT'
   AND EXISTS (SELECT 1 FROM `GameAsset` WHERE `GameAsset`.`id` = 'TnrBlueBoltAuditNov15' AND BINARY `image` = BINARY 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmIQVJXHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap' AND `frames` = 1 AND `speed` = 80)
   AND (SELECT COUNT(*) FROM `GameAsset` WHERE `GameAsset`.`id` IN ('TnrBlueBoltAuditNov15', 'epidemic-103923d1-a053-4e14-bf3c-7d7bc7484c30')) = 2;
 
--- Bizarre World 
+-- Bizarre World
 UPDATE `Jutsu` SET `effects` = JSON_SET(`effects`, '$[2].appearSfx', 'epidemic-103923d1-a053-4e14-bf3c-7d7bc7484c30'), `updatedAt` = CURRENT_TIMESTAMP(3)
 WHERE `id` = 'BLYX1TJEqZuVkRRO5oRfq'
   AND `updatedAt` = '2025-01-06 06:00:13.089'
@@ -2965,7 +2965,7 @@ WHERE `id` = 'sBc4_bIw5xCB-39X6FcJy'
   AND `effects` = CAST('[{"type":"damage","power":28,"rounds":0,"target":"INHERIT","elements":["Earth"],"appearSfx":"yGzPWg1cLQc6dYd1EpCsl","direction":"offence","calculation":"formula","description":"placeholder","dmgModifier":1,"disappearSfx":"","friendlyFire":"ENEMIES","generalTypes":["Speed","Strength"],"powerPerLevel":0.4,"appearAnimation":"laI3MzrP4QTU8VamzoKe7","staticAnimation":"","staticAssetPath":"","residualModifier":0,"disappearAnimation":"laI3MzrP4QTU8VamzoKe7","allowBloodlineDamageDecrease":true,"allowBloodlineDamageIncrease":true},{"type":"increasestat","power":20,"rounds":2,"target":"SELF","appearSfx":"","direction":"offence","calculation":"percentage","description":"placeholder","disappearSfx":"","friendlyFire":"ALL","generalTypes":["Strength","Speed"],"powerPerLevel":0.4,"appearAnimation":"","staticAnimation":"","staticAssetPath":"","disappearAnimation":""}]' AS JSON)
   AND (SELECT COUNT(*) FROM `GameAsset` WHERE `GameAsset`.`id` IN ('HAHQTQmk3PVvhaPIp8nj8', 'epidemic-07381e8f-01ad-41cf-8dd7-8a84a34e2976', 'epidemic-a5a3d70f-6d32-47b5-9de2-1283c35d29c0')) = 3;
 
--- Earthquake Phantasm 
+-- Earthquake Phantasm
 UPDATE `Jutsu` SET `effects` = JSON_SET(`effects`, '$[0].appearSfx', 'XBlRonNjvwAZx1_HFpHdM', '$[0].animationScale', 1.75, '$[0].animationOffsetY', 0.3), `updatedAt` = CURRENT_TIMESTAMP(3)
 WHERE `id` = 'bKUDFTQoeLDwTQeAKcduk'
   AND `updatedAt` = '2026-10-22 07:07:45.661'
@@ -7981,7 +7981,7 @@ WHERE `id` = '_wLE7LmkK889IeKev9O_d'
   AND `effects` = CAST('[{"type":"damage","power":30,"rounds":0,"target":"INHERIT","elements":[],"appearSfx":"epidemic-fc2ead45-3357-4bd3-9ed3-239aa6d94b71","direction":"offence","calculation":"formula","description":"<p>placeholder</p>","dmgModifier":0,"disappearSfx":"","friendlyFire":"ALL","generalTypes":["Intelligence","Willpower"],"powerPerLevel":0.4,"appearAnimation":"hu7lfFzR4pbijbheCj8iS","staticAnimation":"","staticAssetPath":"","residualModifier":0,"disappearAnimation":"","allowBloodlineDamageDecrease":true,"allowBloodlineDamageIncrease":true},{"type":"decreasedamagegiven","power":20,"rounds":2,"target":"INHERIT","appearSfx":"","direction":"offence","calculation":"percentage","description":"placeholder","disappearSfx":"","friendlyFire":"ALL","powerPerLevel":0.4,"appearAnimation":"","staticAnimation":"","staticAssetPath":"","disappearAnimation":""}]' AS JSON)
   AND (SELECT COUNT(*) FROM `GameAsset` WHERE `GameAsset`.`id` IN ('epidemic-239a7e92-b7a1-4c77-823d-d38aa245e3c2', 'sOqtVxVrorNTSA_M5F32L')) = 2;
 
--- Petrification Mirage 
+-- Petrification Mirage
 UPDATE `Jutsu` SET `effects` = JSON_SET(`effects`, '$[0].appearSfx', 'epidemic-a5a3d70f-6d32-47b5-9de2-1283c35d29c0'), `updatedAt` = CURRENT_TIMESTAMP(3)
 WHERE `id` = 'Yc5a95dPlR5CQleT0Qvxa'
   AND `updatedAt` = '2026-10-22 04:30:37.484'
@@ -8477,7 +8477,7 @@ WHERE `id` = 'FeYnH7BBw_usnc1K-TM-J'
   AND EXISTS (SELECT 1 FROM `GameAsset` WHERE `GameAsset`.`id` = 'TnrBurnLoopAuditNov19' AND BINARY `image` = BINARY 'https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnvGGocmojJ0EqeDCvBrNmZaXVdY97gSpOWiA' AND `frames` = 12 AND `speed` = 50)
   AND (SELECT COUNT(*) FROM `GameAsset` WHERE `GameAsset`.`id` IN ('TnrBurnLoopAuditNov19', '_JZWMLaZjRe6qOuS3M6ED', 'epidemic-239a7e92-b7a1-4c77-823d-d38aa245e3c2')) = 3;
 
--- Quicksand Illusion 
+-- Quicksand Illusion
 UPDATE `Jutsu` SET `effects` = JSON_SET(`effects`, '$[0].appearAnimation', 'laI3MzrP4QTU8VamzoKe7', '$[0].appearSfx', 'epidemic-a5a3d70f-6d32-47b5-9de2-1283c35d29c0', '$[0].animationScale', 1.5, '$[0].animationOffsetY', 0.1), `updatedAt` = CURRENT_TIMESTAMP(3)
 WHERE `id` = '0d9yZ_BrUTZO7BAm5qJAJ'
   AND `updatedAt` = '2026-10-22 04:08:20.093'
@@ -10507,7 +10507,7 @@ WHERE `id` = 'ixKFXfF3g16_kIj5AksTs'
   AND `effects` = CAST('[{"type":"damage","power":28,"rounds":0,"target":"INHERIT","elements":["Earth"],"appearSfx":"oDdj-mBmiWTswFi_NkOqc","direction":"offence","calculation":"formula","description":"placeholder","dmgModifier":1,"disappearSfx":"","friendlyFire":"ENEMIES","generalTypes":["Speed","Strength"],"powerPerLevel":0.4,"appearAnimation":"-_fu0Q9RRYpptqacazz5p","staticAnimation":"","staticAssetPath":"","residualModifier":0,"disappearAnimation":"-_fu0Q9RRYpptqacazz5p","allowBloodlineDamageDecrease":true,"allowBloodlineDamageIncrease":true},{"type":"decreasedamagetaken","power":15,"rounds":2,"target":"SELF","appearSfx":"","direction":"offence","calculation":"percentage","description":"placeholder","disappearSfx":"","friendlyFire":"ALL","powerPerLevel":0.4,"appearAnimation":"","staticAnimation":"","staticAssetPath":"","disappearAnimation":""}]' AS JSON)
   AND (SELECT COUNT(*) FROM `GameAsset` WHERE `GameAsset`.`id` IN ('3Oqg2QPzBNI7KqSRCTHLi', '6oXm1bbb_WxIsfT4SLn5O', 'ILYrsTwpOSSpp8rSUa1gG', '_JZWMLaZjRe6qOuS3M6ED', 'epidemic-239a7e92-b7a1-4c77-823d-d38aa245e3c2', 'oiZBXBgje1Mhde2HIbeck')) = 6;
 
--- Stone Labyrinth 
+-- Stone Labyrinth
 UPDATE `Jutsu` SET `effects` = JSON_SET(`effects`, '$[0].appearAnimation', 'yMKIGrIw9jlCKiiQHTN2K', '$[0].appearSfx', 'XBlRonNjvwAZx1_HFpHdM', '$[0].animationScale', 1.5, '$[0].animationOffsetY', 0.1), `updatedAt` = CURRENT_TIMESTAMP(3)
 WHERE `id` = 'T6MwC8Slly28AWYl8nm_K'
   AND `updatedAt` = '2024-07-26 02:04:00.008'
@@ -12084,7 +12084,7 @@ WHERE `id` = '_n6D2FiB97qiaa7rMRdbu'
   AND `effects` = CAST('[{"type":"damage","power":28,"rounds":0,"target":"INHERIT","elements":["Wind"],"appearSfx":"oDdj-mBmiWTswFi_NkOqc","direction":"offence","calculation":"formula","description":"Damage","dmgModifier":1,"disappearSfx":"","friendlyFire":"ENEMIES","generalTypes":["Intelligence","Speed"],"powerPerLevel":0.4,"appearAnimation":"A8HZchj2MSxV_X71oRovj","staticAnimation":"","staticAssetPath":"","residualModifier":1,"disappearAnimation":"","allowBloodlineDamageDecrease":true,"allowBloodlineDamageIncrease":true},{"type":"afterburn","power":10,"rounds":2,"target":"INHERIT","elements":[],"appearSfx":"","direction":"offence","calculation":"static","description":"Afterburn","disappearSfx":"","friendlyFire":"ENEMIES","generalTypes":[],"powerPerLevel":0.4,"appearAnimation":"","staticAnimation":"","staticAssetPath":"","disappearAnimation":""}]' AS JSON)
   AND (SELECT COUNT(*) FROM `GameAsset` WHERE `GameAsset`.`id` IN ('9sHx08bCI4_d_pfD7JEaZ')) = 1;
 
--- Torrent Blade 
+-- Torrent Blade
 UPDATE `Jutsu` SET `effects` = JSON_SET(`effects`, '$[0].appearAnimation', '4fHEJ76HpyeAa_2Jda0oz', '$[0].animationScale', 2, '$[0].animationOffsetY', 0.3, '$[1].appearAnimation', 'Ceo4dEys-92Mj70YCbHzw', '$[1].staticAnimation', 'xL0lSICCbVHVZsGHxtW-7', '$[1].animationScale', 1.2, '$[1].animationOffsetY', 0.3, '$[0].appearSfx', 'eJCEtS5_P_pW_VPc6ttRh', '$[1].appearSfx', 'eJCEtS5_P_pW_VPc6ttRh'), `updatedAt` = CURRENT_TIMESTAMP(3)
 WHERE `id` = 'SluJDSc03C8gUzlFzi53_'
   AND `updatedAt` = '2026-10-22 06:18:06.301'
@@ -13251,7 +13251,7 @@ WHERE `id` = 'X_5ssRed5Zu1ZIbQwROgd'
   AND `effects` = CAST('[{"type":"damage","power":20,"rounds":0,"target":"INHERIT","elements":["Wind"],"appearSfx":"oDdj-mBmiWTswFi_NkOqc","direction":"offence","calculation":"formula","description":"<p>Damage Target</p>","dmgModifier":0,"disappearSfx":"","friendlyFire":"ENEMIES","generalTypes":["Speed","Strength"],"powerPerLevel":0.4,"appearAnimation":"CNa_2z5ba57pnfhsDTHEz","staticAnimation":"","staticAssetPath":"","residualModifier":0,"disappearAnimation":"","allowBloodlineDamageDecrease":true,"allowBloodlineDamageIncrease":true},{"type":"wound","power":10,"rounds":2,"target":"INHERIT","appearSfx":"","direction":"offence","calculation":"percentage","description":"placeholder","disappearSfx":"","powerPerLevel":0.4,"appearAnimation":"","staticAnimation":"","staticAssetPath":"","disappearAnimation":""}]' AS JSON)
   AND (SELECT COUNT(*) FROM `GameAsset` WHERE `GameAsset`.`id` IN ('mOSkDnYv4hchkPbhdpTDd')) = 1;
 
--- Zephyrs Ward 
+-- Zephyrs Ward
 UPDATE `Jutsu` SET `effects` = JSON_SET(`effects`, '$[0].appearAnimation', 'DFlTOZ-fWcH5-89UTQaZq', '$[0].appearSfx', 'NThXOSKNDXPwNnGxDtH0Z', '$[0].staticAnimation', 'jnNrG_CHYVL1G30mbvoTn', '$[0].disappearAnimation', 'wWHKbyT8UlaoqxyV1dvmo', '$[0].animationScale', 2, '$[0].animationOffsetY', 0.5, '$[1].staticAnimation', '_SDoCZx8KcS2AhOE8M9ZK', '$[1].disappearSfx', '', '$[1].animationScale', 1.2, '$[1].animationOffsetY', 0.3, '$[0].disappearSfx', 'epidemic-239a7e92-b7a1-4c77-823d-d38aa245e3c2'), `updatedAt` = CURRENT_TIMESTAMP(3)
 WHERE `id` = 'CFW_DHGiw6hkojiEvGj4m'
   AND `updatedAt` = '2024-12-27 22:30:08.890'
@@ -13574,7 +13574,7 @@ WHERE `id` = 'h-mvWaKK5vNNOwS5Y9KQj'
   AND `effects` = CAST('[{"type":"heal","power":40,"rounds":0,"target":"INHERIT","appearSfx":"4iG_WpgEmPGUzHn8z129r","direction":"offence","calculation":"percentage","description":"placeholder","disappearSfx":"4iG_WpgEmPGUzHn8z129r","poolsAffected":["Chakra","Stamina"],"powerPerLevel":0,"appearAnimation":"I9aYhT5wMB","staticAnimation":"","staticAssetPath":"","disappearAnimation":"I9aYhT5wMB"}]' AS JSON)
   AND (SELECT COUNT(*) FROM `GameAsset` WHERE `GameAsset`.`id` IN ('epidemic-07381e8f-01ad-41cf-8dd7-8a84a34e2976', 'w0Pz0vwhSYGFop7bowdtI')) = 2;
 
--- Enkou Kunai 
+-- Enkou Kunai
 UPDATE `Item` SET `effects` = JSON_SET(`effects`, '$[0].staticAnimation', '', '$[0].disappearAnimation', '', '$[0].projectileAnimation', 'TnrKunaiAuditNov15', '$[0].groundStyle', 'DECAL', '$[0].groundOpacity', 0.78, '$[0].groundFeather', 0.15, '$[0].appearSfx', 'epidemic-0f59bf72-207b-4520-b726-ff9fdd819406', '$[0].appearAnimation', 'DhGSKeAKNkr3O8oVdpTgr', '$[0].staticAssetPath', '', '$[0].animationScale', 1.5, '$[0].animationOffsetY', 0.3, '$[0].projectileScale', 2.5), `updatedAt` = CURRENT_TIMESTAMP(3)
 WHERE `id` = 'wR2M9GgcFckOXCqLBcfzl'
   AND `updatedAt` = '2025-01-25 19:59:53.028'
