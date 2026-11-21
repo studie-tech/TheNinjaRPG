@@ -10,6 +10,7 @@ import {
   stripePayment,
   userData,
   userJutsu,
+  userQueue,
 } from "@/drizzle/schema";
 import { getDiamondRestoreBloodlineId } from "@/libs/bloodline";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
@@ -70,6 +71,7 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       storePurchase,
       stripePayment,
       userData,
+      userQueue,
       userJutsu,
       jutsu,
       bloodline,
@@ -128,6 +130,44 @@ describeWithDatabase("Diamond bloodline swaps", () => {
         })
       ).message,
     ).toMatch(/^You can swap again in/);
+  });
+
+  it("asks to cancel queued bloodline jutsu training, then unequips that jutsu on the swap", async () => {
+    const db = await getTestDatabase();
+    const finish = new Date(Date.now() + 3_600_000);
+    await insertJutsus([{ id: "owned-jutsu", bloodlineId: "owned-line" }]);
+    await db.insert(userJutsu).values({
+      id: "uj-owned",
+      userId,
+      jutsuId: "owned-jutsu",
+      level: 2,
+      equipped: true,
+      finishTraining: finish,
+    });
+    await db.insert(userQueue).values({
+      id: "queued-owned-jutsu",
+      userId,
+      kind: "JUTSU",
+      position: 1,
+      jutsuId: "owned-jutsu",
+      reservedRyo: 500,
+      durationSeconds: 60,
+      startsAt: finish,
+      finishesAt: new Date(finish.getTime() + 60_000),
+    });
+    expect(await swap("pick-a")).toMatchObject({
+      success: false,
+      message:
+        "Cancel queued training of your bloodline jutsu before changing bloodline",
+    });
+    expect(await readUser()).toMatchObject({ bloodlineId: "owned-line" });
+    await db.delete(userQueue);
+    expect((await swap("pick-a")).success).toBe(true);
+    expect(await db.query.userJutsu.findFirst()).toMatchObject({
+      level: 1,
+      equipped: false,
+      finishTraining: null,
+    });
   });
 
   it("never records Diamond picks as owned bloodlines", async () => {

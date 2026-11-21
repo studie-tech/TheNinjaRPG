@@ -73,6 +73,7 @@ import {
   listBloodlineForGetAllNames,
   listBloodlineReskinForGetReskinsForBloodline,
   listJutsuForDeleteReskin,
+  listJutsuForSwapDiamondBloodline,
   listJutsuForUpdateBloodline,
   listUserDataForDelete,
   selectBloodlineReskinForDeleteReskin,
@@ -376,11 +377,14 @@ export const bloodlineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [updatedUser, line, historicBloodlines] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        fetchBloodline(ctx.drizzle, input.bloodlineId),
-        fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId),
-      ]);
+      const [updatedUser, line, historicBloodlines, currentJutsus, queuedJutsuIds] =
+        await Promise.all([
+          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+          fetchBloodline(ctx.drizzle, input.bloodlineId),
+          fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId),
+          listJutsuForSwapDiamondBloodline(ctx.drizzle, ctx.userId),
+          fetchQueuedJutsuIds(ctx.drizzle, ctx.userId),
+        ]);
       const user = updatedUser.user;
       // Guards
       if (!user) return errorResponse("User does not exist");
@@ -411,6 +415,11 @@ export const bloodlineRouter = createTRPCRouter({
         0,
         `Diamond bloodline swap from ${user.bloodline?.name ?? "no bloodline"} to ${line.name}`,
         diamondSwapUserUpdate({ user, rememberCurrent }),
+        {
+          bloodlineId: currentJutsus[0]?.bloodlineId ?? null,
+          bloodlineJutsuIds: currentJutsus.flatMap((row) => row.jutsuId ?? []),
+          queuedJutsuIds,
+        },
       );
       if (!swap.granted) return errorResponse(swap.message);
       // The live Bloodright refund and hydrated passive sources require profile reconciliation.
@@ -1080,18 +1089,25 @@ export const updateBloodline = async (
   repCost: number,
   logMsg: string,
   extra?: Parameters<typeof updateUserDataForUpdateBloodline>[5],
+  preloaded?: {
+    bloodlineId: string | null;
+    bloodlineJutsuIds: string[];
+    queuedJutsuIds: Set<string>;
+  },
 ): Promise<
   { granted: true; updatedAt: Date } | { granted: false; message: string }
 > => {
-  // Get current bloodline jutsus
-  const [bloodlineJutsus, queued] = user.bloodlineId
-    ? await Promise.all([
-        listJutsuForUpdateBloodline(client, { bloodlineId: user.bloodlineId }).then(
-          (rows) => rows.map((j) => j.id),
-        ),
-        fetchQueuedJutsuIds(client, user.userId),
-      ])
-    : [[], new Set<string>()];
+  // Get current bloodline jutsus, unless the caller read them with the same bloodline
+  const [bloodlineJutsus, queued] = !user.bloodlineId
+    ? [[], new Set<string>()]
+    : preloaded?.bloodlineId === user.bloodlineId
+      ? [preloaded.bloodlineJutsuIds, preloaded.queuedJutsuIds]
+      : await Promise.all([
+          listJutsuForUpdateBloodline(client, { bloodlineId: user.bloodlineId }).then(
+            (rows) => rows.map((j) => j.id),
+          ),
+          fetchQueuedJutsuIds(client, user.userId),
+        ]);
   // Queued levels were bought for the current bloodline; the player cancels them for a
   // refund first. A level queued after this check is refunded when its turn comes.
   if (bloodlineJutsus.length > 0) {

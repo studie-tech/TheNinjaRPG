@@ -695,6 +695,20 @@ export const listJutsuForUpdateBloodline = (
   });
 
 /**
+ * The player's current bloodline with its jutsu ids, one row per jutsu (a single row with a
+ * null `jutsuId` when it has none), so a swap can prefetch what `updateBloodline` unequips.
+ */
+export const listJutsuForSwapDiamondBloodline = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+) =>
+  client
+    .select({ bloodlineId: userData.bloodlineId, jutsuId: jutsu.id })
+    .from(userData)
+    .leftJoin(jutsu, eq(jutsu.bloodlineId, userData.bloodlineId))
+    .where(eq(userData.userId, userId));
+
+/**
  * Build the `userData` update for `updateBloodline`, including predicates on `userId`,
  * `status`, `reputationPoints`. `extra` adds columns and guards that must change in the
  * same statement, such as Diamond swap bookkeeping.
