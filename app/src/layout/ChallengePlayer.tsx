@@ -3,7 +3,7 @@
 import { useSetAtom } from "jotai";
 import { Eye, Layers, Swords } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
@@ -34,7 +34,6 @@ export function ChallengeButton({
   className,
 }: ChallengePanelProps & { className?: string }) {
   const [open, setOpen] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -48,7 +47,6 @@ export function ChallengeButton({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        ref={panelRef}
         tabIndex={-1}
         align="end"
         collisionPadding={8}
@@ -57,7 +55,7 @@ export function ChallengeButton({
         // Focus the panel, not its first Send button, so an extra Enter sends nothing.
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          panelRef.current?.focus();
+          (event.currentTarget as HTMLElement | null)?.focus();
         }}
       >
         <ChallengePanel

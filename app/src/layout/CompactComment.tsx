@@ -273,10 +273,9 @@ function UserMenu({
   onMessage?: (user: ChatStartUser) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<"menu" | "challenge">("menu");
   // Both views share one PopoverContent, so swapping them removes the focused
-  // control; the challenge view focuses Back and returning focuses Challenge.
-  const [returnedFromChallenge, setReturnedFromChallenge] = useState(false);
+  // control; the challenge view focuses Back and returning ("back") focuses Challenge.
+  const [view, setView] = useState<"menu" | "challenge" | "back">("menu");
   const { userColor, titleColor } = getPostUserClasses(user, tavernStyling);
   const { refreshBlacklist } = useBlacklistCacheUpdate();
   const { mutate: toggleBlock, isPending } =
@@ -284,7 +283,7 @@ function UserMenu({
       onSuccess: async (result) => {
         showMutationToast(result);
         if (result.success) {
-          setOpen(false);
+          changeOpen(false);
           await refreshBlacklist();
         }
       },
@@ -292,10 +291,7 @@ function UserMenu({
 
   const changeOpen = (next: boolean) => {
     setOpen(next);
-    if (!next) {
-      setView("menu");
-      setReturnedFromChallenge(false);
-    }
+    if (!next) setView("menu");
   };
 
   return (
@@ -331,10 +327,7 @@ function UserMenu({
                 className="h-[24px] w-[24px] shrink-0"
                 aria-label="Back"
                 title="Back"
-                onClick={() => {
-                  setReturnedFromChallenge(true);
-                  setView("menu");
-                }}
+                onClick={() => setView("back")}
               >
                 <ChevronLeft className="h-[16px] w-[16px]" aria-hidden />
               </Button>
@@ -377,14 +370,14 @@ function UserMenu({
           <MenuItem
             asLink
             href={`/username/${user.username}`}
-            onSelect={() => setOpen(false)}
+            onSelect={() => changeOpen(false)}
           >
             <UserRound /> See profile
           </MenuItem>
           {!isSelf && onMessage && (
             <MenuItem
               onSelect={() => {
-                setOpen(false);
+                changeOpen(false);
                 onMessage(user);
               }}
             >
@@ -392,17 +385,14 @@ function UserMenu({
             </MenuItem>
           )}
           {!isSelf && challengeFrom && (
-            <MenuItem
-              autoFocus={returnedFromChallenge}
-              onSelect={() => setView("challenge")}
-            >
+            <MenuItem autoFocus={view === "back"} onSelect={() => setView("challenge")}>
               <Swords /> Challenge
             </MenuItem>
           )}
           {!isSelf && onMention && (
             <MenuItem
               onSelect={() => {
-                setOpen(false);
+                changeOpen(false);
                 onMention(user.username);
               }}
             >
