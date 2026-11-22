@@ -8,14 +8,14 @@ import {
 
 const cohort = {
   experiment: WALLPAPER_EXPERIMENT,
-  variant: "summer",
+  variant: "hyorin",
   userAgent: "Mozilla/5.0 (Windows NT 10.0) Chrome/129.0",
   loaded: 4,
   register: 2,
 };
 
 describe("experiment exposure cohorts", () => {
-  it("allocates each distinct village and seasonal image once", () => {
+  it("allocates each distinct village image once", () => {
     expect(new Set(Object.values(WALLPAPER_IMAGES)).size).toBe(
       WALLPAPER_VARIANTS.length,
     );
@@ -25,21 +25,21 @@ describe("experiment exposure cohorts", () => {
     const result = aggregateExperiments([
       cohort,
       { ...cohort, userAgent: "iPhone", loaded: 3, register: 1 },
-      { ...cohort, variant: "winter", loaded: 2, register: 0 },
+      { ...cohort, variant: "control", loaded: 2, register: 0 },
     ]);
     expect(result[0]?.variants).toHaveLength(WALLPAPER_VARIANTS.length);
-    expect(result[0]?.variants.find((arm) => arm.variant === "summer")).toEqual({
-      variant: "summer",
+    expect(result[0]?.variants.find((arm) => arm.variant === "hyorin")).toEqual({
+      variant: "hyorin",
       loaded: 7,
       register: 3,
     });
-    expect(result[0]?.variants.find((arm) => arm.variant === "winter")).toEqual({
-      variant: "winter",
+    expect(result[0]?.variants.find((arm) => arm.variant === "control")).toEqual({
+      variant: "control",
       loaded: 2,
       register: 0,
     });
-    expect(result[0]?.variants.find((arm) => arm.variant === "spring")).toEqual({
-      variant: "spring",
+    expect(result[0]?.variants.find((arm) => arm.variant === "tsukimori")).toEqual({
+      variant: "tsukimori",
       loaded: 0,
       register: 0,
     });
@@ -57,16 +57,16 @@ describe("experiment exposure cohorts", () => {
       { ...cohort, userAgent: "iPhone", loaded: 3, register: 1 },
       { ...cohort, userAgent: null, loaded: 2, register: 1 },
     ];
-    const summer = (devices?: ("desktop" | "mobile" | "unknown")[]) =>
+    const hyorin = (devices?: ("desktop" | "mobile" | "unknown")[]) =>
       aggregateExperiments(rows, devices)[0]?.variants.find(
-        (arm) => arm.variant === "summer",
+        (arm) => arm.variant === "hyorin",
       );
-    expect(summer(["desktop"])).toEqual({ variant: "summer", loaded: 9, register: 5 });
-    expect(summer(["mobile", "unknown"])).toEqual({
-      variant: "summer",
+    expect(hyorin(["desktop"])).toEqual({ variant: "hyorin", loaded: 9, register: 5 });
+    expect(hyorin(["mobile", "unknown"])).toEqual({
+      variant: "hyorin",
       loaded: 5,
       register: 2,
     });
-    expect(summer([])).toEqual({ variant: "summer", loaded: 14, register: 7 });
+    expect(hyorin([])).toEqual({ variant: "hyorin", loaded: 14, register: 7 });
   });
 });

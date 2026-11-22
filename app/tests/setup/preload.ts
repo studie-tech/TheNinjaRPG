@@ -7,7 +7,6 @@
  * tables and removes triggers so neither rows nor fault injections leak between serial runs.
  */
 import { afterAll, beforeAll, beforeEach } from "bun:test";
-import { useAbVariant } from "@/hooks/useAbVariant";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -29,7 +28,6 @@ export const actualContentBox = ContentBox;
 export const actualImage = Image;
 export const actualShowMutationToast = toast.showMutationToast;
 export const actualUserContext = { ...userContext };
-export const actualUseAbVariant = useAbVariant;
 
 // Suites seed their own players and content, so none may read another suite's cache.
 beforeEach(async () => {

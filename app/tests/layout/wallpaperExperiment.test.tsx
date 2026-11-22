@@ -22,7 +22,7 @@ describe("prerendered wallpaper", () => {
       const image = WALLPAPER_IMAGES[wallpaper];
       expect(html).toContain(bunnyImageUrl(image, 828).replaceAll("&", "&amp;"));
       expect(html).toContain(
-        bunnyImageUrl(image, wallpaper === "horizon" ? 1792 : 1600).replaceAll(
+        bunnyImageUrl(image, wallpaper === "control" ? 1792 : 1600).replaceAll(
           "&",
           "&amp;",
         ),

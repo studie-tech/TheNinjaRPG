@@ -7,7 +7,6 @@ import * as client from "@/app/_trpc/client";
 import * as sortableList from "@/components/ui/sortable-list";
 import { OrderedQuestTypesInTutorial, TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
 import type * as TutorialHooks from "@/hooks/tutorial";
-import * as abVariant from "@/hooks/useAbVariant";
 import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
 import Modal from "@/layout/Modal";
@@ -132,9 +131,6 @@ beforeEach(() => {
       .mockImplementation(
         () => ({ push: state.push, replace: state.replace }) as never,
       ),
-  );
-  spies.push(
-    vi.spyOn(abVariant, "useAbVariant").mockReturnValue({ variant: "A" } as never),
   );
   spies.push(vi.spyOn(image, "default").mockImplementation((() => null) as never));
   spies.push(

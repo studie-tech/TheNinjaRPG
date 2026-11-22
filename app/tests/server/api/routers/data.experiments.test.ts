@@ -43,12 +43,12 @@ describeWithDatabase("experiment analytics activity and first-visit cohorts", ()
         event: "success",
         createdAt: now,
       },
-      { ...visit, id: "old-summer", ipHash: "summer", variant: "summer" },
+      { ...visit, id: "old-hyorin", ipHash: "hyorin", variant: "hyorin" },
       {
         ...visit,
-        id: "old-summer-completion",
-        ipHash: "summer",
-        variant: "summer",
+        id: "old-hyorin-completion",
+        ipHash: "hyorin",
+        variant: "hyorin",
         event: "success",
       },
       { ...visit, id: "recent-control", ipHash: "recent", createdAt: now },
@@ -63,8 +63,8 @@ describeWithDatabase("experiment analytics activity and first-visit cohorts", ()
       loaded: 2,
       register: 1,
     });
-    expect(arms?.find((arm) => arm.variant === "summer")).toEqual({
-      variant: "summer",
+    expect(arms?.find((arm) => arm.variant === "hyorin")).toEqual({
+      variant: "hyorin",
       loaded: 1,
       register: 1,
     });
@@ -131,12 +131,12 @@ describeWithDatabase("experiment analytics activity and first-visit cohorts", ()
         source: "other",
         event: "success",
       },
-      { ...visit, id: "other-variant", ipHash: "mismatch", variant: "summer" },
+      { ...visit, id: "other-variant", ipHash: "mismatch", variant: "hyorin" },
       {
         ...visit,
         id: "wrong-variant-success",
         ipHash: "mismatch",
-        variant: "winter",
+        variant: "tsukimori",
         event: "success",
       },
     ]);
@@ -152,13 +152,13 @@ describeWithDatabase("experiment analytics activity and first-visit cohorts", ()
       loaded: 1,
       register: 1,
     });
-    expect(arms?.find((arm) => arm.variant === "summer")).toEqual({
-      variant: "summer",
+    expect(arms?.find((arm) => arm.variant === "hyorin")).toEqual({
+      variant: "hyorin",
       loaded: 1,
       register: 0,
     });
-    expect(arms?.find((arm) => arm.variant === "winter")).toEqual({
-      variant: "winter",
+    expect(arms?.find((arm) => arm.variant === "tsukimori")).toEqual({
+      variant: "tsukimori",
       loaded: 0,
       register: 0,
     });

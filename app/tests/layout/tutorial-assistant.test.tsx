@@ -137,7 +137,6 @@ vi.mock("@/hooks/tutorial", () => {
     }),
   };
 });
-vi.mock("@/hooks/useAbVariant", () => ({ useAbVariant: () => ({ variant: "A" }) }));
 vi.mock("@/layout/Image", () => ({ default: () => null }));
 const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}</div>;
 const dialogMocks = {

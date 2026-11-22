@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import {
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   IMG_SCENE_BACKGROUND,
+  IMG_URL_ASSISTANT,
 } from "@/drizzle/constants";
 import type { UserQuest } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
-import { useAbVariant } from "@/hooks/useAbVariant";
 import { useQuestRewardCacheUpdate } from "@/hooks/useQuestRewardCacheUpdate";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Accordion from "@/layout/Accordion";
@@ -27,7 +27,6 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { trackConversion } from "@/libs/conversionTracking";
-import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
   dialogChoiceContentId,
   getActiveObjective,
@@ -479,15 +478,11 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     if (abandonFlight.current()?.identity !== abandonIdentity) abandonFlight.release();
   }, [abandonIdentity]);
 
-  // A/B test for starter quest assistant image
-  const { variant } = useAbVariant(LEMU_EXPERIMENT);
-  const assistantImage = getLemuImage(variant);
-
   // Scene composition
   // - If not consecutive objectives, use background & scene from quest
   // - If consecutive objectives, use background & scene from active objective
   // - If no background or scene, use default background & scene from quest
-  // - For starter quests, use the A/B tested assistant image instead of quest characters
+  // - For starter quests, use the assistant image instead of quest characters
   const activeObjective = getActiveObjective(quest, tracker);
   // Explain hidden dialog choices or reward collection instead of showing no actions at all.
   const awaitsPlayerAction =
@@ -505,7 +500,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     } else if (quest.content.sceneBackground) {
       assetIds.push(quest.content.sceneBackground);
     }
-    // For starter quests, skip adding scene characters (we'll use assistantImage directly)
+    // For starter quests, skip adding scene characters (we'll use IMG_URL_ASSISTANT directly)
     if (!isStarterQuest) {
       if (
         activeObjective?.sceneCharacters &&
@@ -523,7 +518,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     if (quest.content.sceneBackground) {
       assetIds.push(quest.content.sceneBackground);
     }
-    // For starter quests, skip adding scene characters (we'll use assistantImage directly)
+    // For starter quests, skip adding scene characters (we'll use IMG_URL_ASSISTANT directly)
     if (!isStarterQuest) {
       assetIds.push(...(quest.content.sceneCharacters || []));
     }
@@ -541,7 +536,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     IMG_SCENE_BACKGROUND;
   // For starter quests, use the A/B tested assistant image instead of quest characters
   const characters = isStarterQuest
-    ? [assistantImage]
+    ? [IMG_URL_ASSISTANT]
     : gameAssets
         ?.filter((asset) => asset.type === "SCENE_CHARACTER")
         .map((asset) => asset.image) || [];

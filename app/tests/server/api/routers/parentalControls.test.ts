@@ -227,7 +227,6 @@ describeWithDatabase("parental controls", () => {
       userIp: "127.0.0.1",
       userAgent: undefined,
       userCountry: undefined,
-      abLemuReplacementVariant: undefined,
       wallpaperVariant: undefined,
     });
     try {

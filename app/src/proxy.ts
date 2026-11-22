@@ -1,7 +1,6 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { env } from "@/env/server.mjs";
-import { drawLemuVariant } from "@/libs/lemuExperiment";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { chooseShell, publicPathForShellPath, shellParam } from "@/libs/shell";
 import { drawWallpaperVariant } from "@/libs/wallpaperExperiment";
@@ -44,7 +43,6 @@ export default clerkMiddleware(
         !request.headers.has("rsc") &&
         !request.headers.has("next-router-prefetch") &&
         request.headers.get("purpose") !== "prefetch",
-      draw: drawLemuVariant,
       drawWallpaper: drawWallpaperVariant,
     });
     // The public URL and its query are untouched, so the router, every link and the
