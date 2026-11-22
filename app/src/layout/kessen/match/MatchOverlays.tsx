@@ -409,8 +409,12 @@ export const MatchEndScreen = ({
         }[outcome];
   const history = table.confirmed.view.history;
   const comeback = outcome === "won" && history[0]?.winner === them;
-  const bark =
-    outcome === "won"
+  // A quest duel pays nothing but its objective, whatever the reason the match ended,
+  // so the NPC's match lines, which speak of Circuit progress, stay unsaid.
+  const questDuel = !!confirmed?.challenge;
+  const bark = questDuel
+    ? null
+    : outcome === "won"
       ? table.npc?.barks.matchLost
       : outcome === "lost"
         ? table.npc?.barks.matchWon
@@ -480,8 +484,6 @@ export const MatchEndScreen = ({
   const readCard = reading ? table.cardDisplay(reading) : null;
   // Rewards worth a column of their own: cards to see or a pick to make.
   const split = rewards.length > 0 || pickPending;
-  // A quest duel pays nothing but its objective, whatever the reason the match ended.
-  const questDuel = !!confirmed?.challenge;
   const note = questDuel
     ? result?.winner === table.me
       ? "Quest duels pay nothing but the quest objective."

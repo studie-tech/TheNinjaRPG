@@ -531,7 +531,7 @@ function KessenHall() {
         }
         isStarting={isStarting}
         startError={startError}
-        onEditDeck={payload.mode === "lesson" ? undefined : editDeck}
+        onEditDeck={payload.mode === "lesson" || playedChallenge ? undefined : editDeck}
         onClaimChoice={match.claimChoice}
         onStartLesson={(lessonKey, replaceActive) =>
           void startLessonMatch(lessonKey, replaceActive)
@@ -689,10 +689,12 @@ function KessenHall() {
   );
 
   // A quest's Duel at the Table: its briefing takes the hall's place until a table opens.
+  // An unfinished match blocks a new start, so the briefing leads back to its table.
   if (challengeRequest && !scene) {
     const found = questUser
       ? findQuestChallenge(questUser, challengeRequest, "win_kessen_challenge")
       : null;
+    const resume = hallActions.find((action) => action.key === "resume");
     return (
       <HallBox subtitle="Duel at the Table" backHref={QUEST_LOGBOOK_HREF}>
         <KessenQuestChallenge
@@ -703,6 +705,8 @@ function KessenHall() {
           loanerFaction={hub.loanerFaction}
           isStarting={isStarting}
           error={startError}
+          resumeLabel={resume?.label}
+          onResume={resume ? () => openMatch(resume.matchId) : undefined}
           onStart={(deck) => {
             if (!found || isStarting) return;
             void startMatch({

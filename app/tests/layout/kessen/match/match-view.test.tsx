@@ -791,6 +791,39 @@ describe("KessenMatchView", () => {
     );
   });
 
+  it("keeps the NPC's Circuit victory line off a won quest duel", () => {
+    const state = practiceMatch();
+    render(
+      <KessenMatchView
+        payload={{
+          ...payloadOf(state),
+          status: "FINISHED",
+          challenge: { questId: "quest-1", objectiveId: "duel" },
+          result: {
+            winner: 0,
+            rewarded: false,
+            reason: null,
+            ryo: 0,
+            drops: [],
+            firstWin: null,
+            weeklyFirstWinPack: false,
+            lessonCompleted: false,
+            academy: null,
+          },
+        }}
+        catalog={catalog}
+        onAction={localServer(state).onAction}
+        onConcede={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    expect(document.querySelector(".km-match-end h2")?.textContent).toBe("You won");
+    expect(document.querySelector(".km-end-bark")).toBeNull();
+    expect(document.querySelector(".km-reward-note")?.textContent).toBe(
+      "Quest duels pay nothing but the quest objective.",
+    );
+  });
+
   it("reads Terrain as Permafrost for a Hyorin player and labels the hand sizes", () => {
     const state = practiceMatch();
     state.seats[0].faction = "HYORIN";

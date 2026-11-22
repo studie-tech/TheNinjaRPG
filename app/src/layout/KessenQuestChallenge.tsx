@@ -29,6 +29,7 @@ import { hasReward } from "@/validators/rewards";
  * The briefing of a quest's Duel at the Table challenge, shown in full only at the
  * objective's position: the opponent, the AI's tier, the deck to bring and the start.
  * Elsewhere it only points the way there. The match pays nothing but the objective.
+ * While another match is unfinished (`onResume`), the start gives way to its table.
  */
 export const KessenQuestChallenge = (props: {
   challenge: FoundChallenge | null;
@@ -39,6 +40,9 @@ export const KessenQuestChallenge = (props: {
   loanerFaction: DeckFaction;
   isStarting: boolean;
   error: string | null;
+  /** The unfinished match's resume button text, such as "Resume vs Kazehiko". */
+  resumeLabel?: string;
+  onResume?: () => void;
   onStart: (deck: KessenDeckSource) => void;
 }) => {
   const { challenge, opponent } = props;
@@ -110,7 +114,7 @@ export const KessenQuestChallenge = (props: {
         <ChallengeNotice icon={<ScrollText className="h-5 w-5 text-amber-500" />}>
           Finish the earlier objectives of {quest.name} first.
         </ChallengeNotice>
-      ) : (
+      ) : props.onResume ? null : (
         <DeckPicker decks={props.decks} idPrefix="quest-challenge" choice={deck} />
       )}
       {props.error ? (
@@ -123,6 +127,11 @@ export const KessenQuestChallenge = (props: {
               <ScrollText className="mr-2 h-5 w-5" />
               Open logbook
             </Link>
+          </Button>
+        ) : props.onResume ? (
+          <Button size="lg" className="w-full @md:w-auto" onClick={props.onResume}>
+            <Play className="mr-2 h-5 w-5" />
+            {props.resumeLabel ?? "Resume your match"}
           </Button>
         ) : (
           <Button
