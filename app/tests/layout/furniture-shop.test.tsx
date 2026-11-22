@@ -1,9 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
+import { useState } from "react";
+import * as client from "@/app/_trpc/client";
+import ItemShopPage from "@/app/[shell]/itemshop/page";
 import { TUTORIAL_ITEM_ID } from "@/drizzle/constants";
+import * as navigation from "@/hooks/navigation";
+import * as tutorial from "@/hooks/tutorial";
+import * as ContentBox from "@/layout/ContentBox";
+import * as ContentImage from "@/layout/ContentImage";
+import * as Image from "@/layout/Image";
+import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
+import * as ItemWithEffects from "@/layout/ItemWithEffects";
+import { ItemShopScreen } from "@/layout/itemshop/ItemShopScreen";
+import * as Modal from "@/layout/Modal";
+import Shop from "@/layout/Shop";
+import * as pagination from "@/libs/pagination";
+import * as toast from "@/libs/toast";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import * as routing from "@/utils/routing";
+import { ScreenNavigationProvider } from "@/utils/ScreenNavigationContext";
+import * as UserContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { actualContentBox } from "../setup/preload";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Purchase = { itemId: string; stack: number; villageId?: string | null };
 type PurchaseResult = { success: boolean; message: string };
@@ -50,20 +71,6 @@ const purchase = vi.fn((input: Purchase) =>
   purchaseOptions.onSuccess(purchaseResult, input, undefined),
 );
 
-import * as client from "@/app/_trpc/client";
-import * as tutorial from "@/hooks/tutorial";
-import * as ContentBox from "@/layout/ContentBox";
-import * as ContentImage from "@/layout/ContentImage";
-import * as Image from "@/layout/Image";
-import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
-import * as ItemWithEffects from "@/layout/ItemWithEffects";
-import * as Modal from "@/layout/Modal";
-import Shop from "@/layout/Shop";
-import * as pagination from "@/libs/pagination";
-import * as toast from "@/libs/toast";
-import * as routing from "@/utils/routing";
-import { mockUserContextValue } from "../setup/userContext";
-
 /** The Card Master's hub cache binding needs a query client; other shops ignore it. */
 const renderShop = (ui: ReactNode) => {
   const client = new QueryClient();
@@ -85,6 +92,11 @@ const user = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  installBrowserGlobals({ resizeObserver: true });
+  vi.spyOn(UserContext, "useRequireInVillage").mockReturnValue({
+    userData: user,
+    access: true,
+  } as never);
   purchaseResult = { success: true, message: "Purchased" };
   tutorialItem = undefined;
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -168,9 +180,45 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  restoreBrowserGlobals();
 });
 
 describe("furniture catalog integration", () => {
+  it.each([
+    ["route", ItemShopPage],
+    ["screen", ItemShopScreen],
+  ] as const)(
+    "hosts the item shop %s with its own back action and retains purchase state",
+    (_name, Screen) => {
+      vi.spyOn(ContentBox, "default").mockImplementation(actualContentBox);
+      const push = vi.fn();
+      vi.spyOn(navigation, "useNavigationRouter").mockReturnValue({ push } as never);
+      const close = vi.fn();
+      const nextClose = vi.fn();
+      const view = renderShop(
+        <ScreenNavigationProvider onBack={close}>
+          <Screen />
+        </ScreenNavigationProvider>,
+      );
+      expect(UserContext.useRequireInVillage).toHaveBeenCalledWith("/itemshop");
+      fireEvent.click(view.getByRole("button", { name: /Painted Cabinet/ }));
+      expect(view.getByRole("dialog")).toBeTruthy();
+      view.rerender(
+        <ScreenNavigationProvider onBack={nextClose}>
+          <Screen />
+        </ScreenNavigationProvider>,
+      );
+      expect(view.getByRole("dialog")).toBeTruthy();
+      fireEvent.click(view.getByRole("button", { name: "Buy for 100 ryo" }));
+      expect(view.queryByRole("dialog")).toBeNull();
+      expect(close).not.toHaveBeenCalled();
+      expect(nextClose).not.toHaveBeenCalled();
+      fireEvent.click(view.getByRole("button", { name: "Item Shop" }));
+      expect(nextClose).toHaveBeenCalledTimes(1);
+      expect(push).not.toHaveBeenCalled();
+    },
+  );
+
   it("offers Furniture alongside ordinary item categories", () => {
     const view = renderShop(<Shop userData={user} defaultType="WEAPON" />);
     expect(view.getByRole("tab", { name: "Weapon" })).toBeTruthy();

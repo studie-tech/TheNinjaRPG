@@ -921,6 +921,7 @@ const Shop: React.FC<ShopProps> = (props) => {
         "Browse categories, search the catalog, then open a card to buy."
       }
       defaultBackHref={props.defaultBackHref}
+      onBack={props.onBack}
       initialBreak={props.initialBreak}
       padding={false}
       topRightContent={headerControls}
@@ -1507,6 +1508,8 @@ interface ShopProps {
   image?: string;
   subtitle?: string;
   defaultBackHref?: string;
+  /** Page-level back action supplied by the screen host. */
+  onBack?: () => void;
   initialBreak?: boolean;
   minCost?: number;
   minRepsCost?: number;
