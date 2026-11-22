@@ -106,4 +106,41 @@ describe("Chakra Storm steering", () => {
     expect(setMove).toHaveBeenLastCalledWith(-1);
     expect(view.queryByTestId("stick")).toBeNull();
   });
+
+  /** Pointer capture on the field, which JSDOM does not track. */
+  const mockCapture = (field: HTMLElement) => {
+    const captured = new Set<number>();
+    Object.assign(field, {
+      setPointerCapture: (id: number) => captured.add(id),
+      releasePointerCapture: (id: number) => captured.delete(id),
+      hasPointerCapture: (id: number) => captured.has(id),
+    });
+    return captured;
+  };
+
+  it("keeps a live drag when a second finger touches the field", () => {
+    const view = render(<Field steering setMove={setMove} />);
+    const field = view.getByTestId("field");
+    mockCapture(field);
+    drag(field, 1, 60, 0);
+    drag(field, 2, 0, -60);
+    expect(setMove).toHaveBeenLastCalledWith(EAST);
+    fireEvent.pointerUp(field, pointer(2, 100, 40));
+    expect(setMove).toHaveBeenLastCalledWith(EAST);
+  });
+
+  it("lets a new drag replace one whose pointer capture is gone", () => {
+    const view = render(<Field steering setMove={setMove} />);
+    const field = view.getByTestId("field");
+    const captured = mockCapture(field);
+    drag(field, 1, 60, 0);
+    captured.delete(1);
+    drag(field, 2, 0, -60);
+    expect(setMove).toHaveBeenLastCalledWith(NORTH);
+    // Late events from the old pointer do not stop the new drag.
+    fireEvent.pointerMove(field, pointer(1, 200, 100));
+    fireEvent.pointerUp(field, pointer(1, 200, 100));
+    expect(setMove).toHaveBeenLastCalledWith(NORTH);
+    expect(view.getByTestId("stick")).toBeTruthy();
+  });
 });
