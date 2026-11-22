@@ -35,6 +35,7 @@ import type { DrizzleClient } from "@/server/db";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
 import { canModerateRoles, canSeeSecretData } from "@/utils/permissions";
 import sanitize from "@/utils/sanitize";
+import type { ChallengeMatch } from "@/validators/comments";
 
 /**
  * Fetches comments from the database.
@@ -296,6 +297,7 @@ const conversationCommentColumns = (poster: typeof posterUser | typeof userData)
   nRecruited: poster.nRecruited,
   tavernMessages: poster.tavernMessages,
   isStaffOnly: conversationComment.isStaffOnly,
+  challengeMatch: conversationComment.challengeMatch,
 });
 
 /** Build the `conversationComment` selection for `getConversationComments`, using the configured predicates. */
@@ -371,6 +373,7 @@ export const insertConversationComment = (
   userId: string,
   authorId: string,
   conversationId: string,
+  challengeMatch?: ChallengeMatch,
 ) =>
   client.insert(conversationComment).values({
     id: id,
@@ -378,6 +381,7 @@ export const insertConversationComment = (
     userId: userId,
     authorId: authorId,
     conversationId: conversationId,
+    challengeMatch: challengeMatch ?? null,
   });
 
 /** Build the `conversation` update for `createConversationComment`, setting `updatedAt`, using predicates on `id`. */
@@ -501,6 +505,16 @@ export const findConversationByTitle = (
     orderBy: [desc(conversation.isPublic), asc(conversation.id)],
     with: { users: true },
   });
+
+/** The id of a public conversation, such as a tavern, or nothing for any other id. */
+export const findPublicConversationId = (
+  client: Pick<DrizzleClient, "select">,
+  id: string,
+) =>
+  client
+    .select({ id: conversation.id })
+    .from(conversation)
+    .where(and(eq(conversation.id, id), eq(conversation.isPublic, true)));
 
 /** List public conversations by title, for following taverns by name. */
 export const listPublicConversationsByTitle = (

@@ -4,6 +4,7 @@ import { RANKED_PVP_STATS } from "@/drizzle/constants";
 import type { RankedLoadout, UserRequest } from "@/drizzle/schema";
 import { SPAR_EXPIRY_SECONDS } from "@/libs/combat/constants";
 import { getServerPusher } from "@/libs/pusher";
+import { findPublicConversationId } from "@/queries/comments";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
 import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
 import { findRankedLoadoutByUserId } from "@/queries/pvprank";
@@ -26,6 +27,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { announceChallengeMatch } from "@/server/utils/challengeMatch";
 import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { idSchema } from "@/validators/misc";
@@ -46,15 +48,20 @@ export const sparringRouter = createTRPCRouter({
         targetId: z.string(),
         useRankedRules: z.boolean().optional().prefault(false),
         spectatable: z.boolean().optional().prefault(false),
+        /** A public conversation, such as a tavern, that announces the spar it starts. */
+        conversationId: z.string().max(191).optional(),
       }),
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, target, recent] = await Promise.all([
+      const [user, target, recent, conversations] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.targetId),
         fetchRequests(ctx.drizzle, ["SPAR"], 10, ctx.userId),
+        input.conversationId
+          ? findPublicConversationId(ctx.drizzle, input.conversationId)
+          : [],
       ]);
       // Guard
       if (recent.length > 0) {
@@ -70,6 +77,7 @@ export const sparringRouter = createTRPCRouter({
         undefined,
         input.useRankedRules,
         input.spectatable,
+        conversations[0]?.id,
       );
       void pusher.trigger(input.targetId, "event", {
         type: "userMessage",
@@ -186,6 +194,18 @@ export const sparringRouter = createTRPCRouter({
             route: "/combat",
             routeText: "To Combat",
           }),
+          // Only a spar open to spectators is announced where it was challenged.
+          ...(result.battleId && challenge.spectatable
+            ? announceChallengeMatch(ctx.drizzle, {
+                conversationId: challenge.conversationId,
+                challengerId: challenge.senderId,
+                match: {
+                  type: "SPAR",
+                  matchId: result.battleId,
+                  opponentName: user.username,
+                },
+              })
+            : []),
         ]);
       }
       return result;

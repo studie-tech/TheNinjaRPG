@@ -401,7 +401,7 @@ const CenterBand = ({
   pulseBadge: boolean;
 }) => {
   const { view, me, them, opponentName } = table;
-  const badgeLabel = `Cards in hand: you ${view.seats[me].handCount}, ${opponentName} ${view.seats[them].handCount}`;
+  const badgeLabel = `Cards in hand: ${table.spectating ? table.selfName : "you"} ${view.seats[me].handCount}, ${opponentName} ${view.seats[them].handCount}`;
   return (
     <section
       className="km-center"
@@ -435,7 +435,13 @@ const CenterBand = ({
             the score. */}
         <CardBack className="km-edge-card" renderSize={24} aria-hidden />
         <span className="km-edge-label">Hand</span>
-        <span>You {view.seats[me].handCount} · </span>
+        {table.spectating ? (
+          <span className="km-edge-name">{table.selfName}</span>
+        ) : null}
+        <span>
+          {table.spectating ? "" : "You "}
+          {view.seats[me].handCount} ·{" "}
+        </span>
         {/* A long name gives way before either count does. */}
         <span className="km-edge-name">{opponentName}</span>
         <span> {view.seats[them].handCount}</span>

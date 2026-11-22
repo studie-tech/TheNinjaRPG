@@ -1,6 +1,6 @@
 "use client";
 
-import { Layers, Loader2, Swords } from "lucide-react";
+import { Eye, Layers, Loader2, Swords } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,6 +31,7 @@ import { SPAR_EXPIRY_SECONDS } from "@/libs/combat/constants";
 import { type DeckFaction, KESSEN_DECK_FACTIONS } from "@/libs/kessen/deck";
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
 import { cn } from "@/libs/shadui";
+import type { ChallengeMatch } from "@/validators/comments";
 
 /**
  * A swords icon that opens `ChallengePanel` for a player, so a spar or a duel is one
@@ -38,11 +39,9 @@ import { cn } from "@/libs/shadui";
  */
 export function ChallengeButton({
   opponent,
+  conversationId,
   className,
-}: {
-  opponent: ChallengeOpponent;
-  className?: string;
-}) {
+}: ChallengePanelProps & { className?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -61,7 +60,7 @@ export function ChallengeButton({
         collisionPadding={8}
         className="max-h-[var(--radix-popover-content-available-height)] w-[320px] overflow-y-auto p-[8px]"
       >
-        <ChallengePanel opponent={opponent} />
+        <ChallengePanel opponent={opponent} conversationId={conversationId} />
       </PopoverContent>
     </Popover>
   );
@@ -73,28 +72,88 @@ export function ChallengeButton({
  * challenged player accepts on the arena or Card Hall page as usual. Render it only while
  * shown, since the Kessen option reads the player's decks.
  */
-export function ChallengePanel({ opponent }: { opponent: ChallengeOpponent }) {
+export function ChallengePanel({ opponent, conversationId }: ChallengePanelProps) {
   return (
     <div className="flex flex-col gap-[8px]">
       <p className="px-[2px] text-[13px] font-bold">
         Challenge <span className="break-all">{opponent.username}</span>
       </p>
-      <SparOption opponent={opponent} />
-      <KessenOption opponent={opponent} />
+      <SparOption opponent={opponent} conversationId={conversationId} />
+      <KessenOption opponent={opponent} conversationId={conversationId} />
+    </div>
+  );
+}
+
+/**
+ * A conversation's one-line announcement that a challenge sent from it started a match,
+ * in place of a message card: who plays, what, when, and a link to watch it live.
+ */
+export function ChallengeMatchNotice({
+  challenger,
+  match,
+  createdAt,
+  compact = false,
+}: {
+  challenger: string;
+  match: ChallengeMatch;
+  createdAt: Date;
+  /** The chat panel's dense rows. */
+  compact?: boolean;
+}) {
+  const isSpar = match.type === "SPAR";
+  const Icon = isSpar ? Swords : Layers;
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-[8px] rounded-lg border border-dashed text-[13px]",
+        compact ? "px-[8px] py-[4px]" : "bg-popover mb-3 px-[12px] py-[8px]",
+      )}
+    >
+      <Icon className="h-[16px] w-[16px] shrink-0 text-orange-600" aria-hidden />
+      <p className="min-w-0 flex-1">
+        <b>{challenger}</b> and <b>{match.opponentName}</b> started{" "}
+        {isSpar ? "a spar" : "a Kessen duel"}
+        <span className="text-muted-foreground">
+          {" · "}
+          {/* Locale and timezone differ between server and browser. */}
+          <time dateTime={createdAt.toISOString()} suppressHydrationWarning>
+            {createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </time>
+        </span>
+      </p>
+      <Button
+        asChild
+        variant="outline"
+        className="h-[28px] shrink-0 px-[10px] text-[12px]"
+      >
+        <Link
+          href={
+            isSpar ? `/battlelog/${match.matchId}` : `/kessen/watch/${match.matchId}`
+          }
+        >
+          <Eye className="mr-[4px] h-[14px] w-[14px]" aria-hidden /> Watch
+        </Link>
+      </Button>
     </div>
   );
 }
 
 /** A spar with the arena's challenge options. */
-function SparOption({ opponent }: { opponent: ChallengeOpponent }) {
+function SparOption({ opponent, conversationId }: ChallengePanelProps) {
   const { mutate, isPending } = useCreateSparChallenge();
   const [useRankedRules, setUseRankedRules] = useState(false);
-  const [spectatable, setSpectatable] = useState(false);
+  // A spar challenged from a conversation is announced there only when it can be watched.
+  const [spectatable, setSpectatable] = useState(!!conversationId);
   const [feedback, setFeedback] = useState<MutationFeedback | null>(null);
   const send = () => {
     setFeedback(null);
     mutate(
-      { targetId: opponent.userId, useRankedRules, spectatable },
+      {
+        targetId: opponent.userId,
+        useRankedRules,
+        spectatable,
+        conversationId: conversationId ?? undefined,
+      },
       { onSuccess: (data) => setFeedback(data) },
     );
   };
@@ -130,7 +189,7 @@ function SparOption({ opponent }: { opponent: ChallengeOpponent }) {
  * A friendly Kessen duel with a deck from the player's Card Hall. Until the first
  * Academy lesson is done the option explains where Kessen is learned instead.
  */
-function KessenOption({ opponent }: { opponent: ChallengeOpponent }) {
+function KessenOption({ opponent, conversationId }: ChallengePanelProps) {
   const { hub, catalog } = useKessenHub();
   const props = {
     icon: <Layers className="h-[18px] w-[18px]" aria-hidden />,
@@ -184,6 +243,7 @@ function KessenOption({ opponent }: { opponent: ChallengeOpponent }) {
     <KessenChallenge
       {...props}
       opponent={opponent}
+      conversationId={conversationId}
       decks={decks}
       defaultDeckId={defaultDeck(decks)?.id ?? null}
       loanerFaction={hub.data.loanerFaction}
@@ -194,12 +254,14 @@ function KessenOption({ opponent }: { opponent: ChallengeOpponent }) {
 /** The Kessen option once the decks are known: a deck choice and the send button. */
 function KessenChallenge({
   opponent,
+  conversationId,
   decks,
   defaultDeckId,
   loanerFaction,
   ...props
 }: Pick<ChallengeOptionProps, "icon" | "title" | "description" | "sendLabel"> & {
   opponent: ChallengeOpponent;
+  conversationId?: string | null;
   decks: readonly KessenDeckSummary[];
   defaultDeckId: string | null;
   loanerFaction: DeckFaction;
@@ -213,6 +275,7 @@ function KessenChallenge({
     const outcome = await createChallenge({
       targetId: opponent.userId,
       deck: choice.source,
+      conversationId: conversationId ?? undefined,
     });
     setFeedback({ success: outcome.ok, message: outcome.message });
   };
@@ -383,6 +446,13 @@ function OptionCheckbox({
 
 /** Select values of the borrowed decks, followed by the faction. */
 const BORROWED = "borrowed:";
+
+/** Who a challenge goes to, and the public conversation it is sent from, if any. */
+interface ChallengePanelProps {
+  opponent: ChallengeOpponent;
+  /** Announces the match there when it starts. */
+  conversationId?: string | null;
+}
 
 /** The player a challenge goes to. */
 export interface ChallengeOpponent {

@@ -257,19 +257,24 @@ export const RoundEndOverlay = ({
       : event.winner === table.me
         ? table.npc?.barks.roundLost
         : null;
+  // A spectator reads who took the round and the match by name.
+  const winnerName = (seat: Seat | null) =>
+    seat === table.me ? table.selfName : table.opponentName;
   const roundTitle =
-    summary.outcome === "won"
-      ? `Round ${summary.round} won`
-      : summary.outcome === "lost"
-        ? `Round ${summary.round} lost`
-        : `Round ${summary.round} tied`;
+    summary.outcome === "tie"
+      ? `Round ${summary.round} tied`
+      : table.spectating
+        ? `Round ${summary.round} to ${winnerName(event.winner)}`
+        : `Round ${summary.round} ${summary.outcome}`;
   const matchWinner = table.confirmed.view.result?.winner ?? null;
   const matchTitle =
-    matchWinner === table.me
-      ? "Match won"
-      : matchWinner === table.them
-        ? "Match lost"
-        : "Match drawn";
+    matchWinner === null
+      ? "Match drawn"
+      : table.spectating
+        ? `${winnerName(matchWinner)} wins`
+        : matchWinner === table.me
+          ? "Match won"
+          : "Match lost";
   // The deciding round's banner scores the match in rounds; its points stay in the line below.
   const roundsWon = (side: Seat) =>
     table.confirmed.view.history.filter((entry) => entry.winner === side).length;
@@ -296,8 +301,11 @@ export const RoundEndOverlay = ({
         </p>
       </div>
       <div className="km-lantern-row">
-        <span>You</span>
-        <Lanterns count={event.lanterns[table.me]} label="Your lanterns" />
+        <span>{table.selfName}</span>
+        <Lanterns
+          count={event.lanterns[table.me]}
+          label={table.spectating ? `${table.selfName}'s lanterns` : "Your lanterns"}
+        />
         <Lanterns
           count={event.lanterns[table.them]}
           label={`${table.opponentName}'s lanterns`}
@@ -1030,7 +1038,11 @@ export const BigPlayStamp = ({ table }: { table: MatchTable }) => {
   const step = table.step;
   if (step?.event.t === "roundStart" && step.event.round > 1) {
     const opener =
-      step.event.opener === table.me ? "You open" : `${table.opponentName} opens`;
+      step.event.opener !== table.me
+        ? `${table.opponentName} opens`
+        : table.spectating
+          ? `${table.selfName} opens`
+          : "You open";
     const rule = houseRuleRoundNote(
       table.houseRule,
       step.before.rules,

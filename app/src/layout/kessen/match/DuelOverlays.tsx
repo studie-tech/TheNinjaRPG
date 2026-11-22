@@ -37,18 +37,23 @@ export const DuelClock = ({
 }) => {
   const { clock } = duel;
   const left = useSecondsLeft(duel);
-  const timeout = useLatestTimeout(duel);
+  const timeout = useLatestTimeout(duel, table.spectating);
+  const { spectating, selfName } = table;
   if (!clock.deadline || duel.status !== "ACTIVE") return null;
   const mine = clock.acting.includes(duel.seat);
   const theirs = clock.acting.includes(table.them);
   const mulligan = table.confirmed.view.phase === "mulligan";
   const total = mulligan ? clock.mulliganSeconds : clock.turnSeconds;
   const label = mulligan
-    ? mine
-      ? "Your mulligan"
-      : `${table.opponentName}'s mulligan`
+    ? spectating
+      ? "Mulligan"
+      : mine
+        ? "Your mulligan"
+        : `${table.opponentName}'s mulligan`
     : mine
-      ? "Your turn"
+      ? spectating
+        ? `${selfName}'s turn`
+        : "Your turn"
       : theirs
         ? `${table.opponentName}'s turn`
         : "Next turn";
@@ -57,7 +62,7 @@ export const DuelClock = ({
   return (
     <div
       className="km-duel-clock"
-      data-mine={mine ? "" : undefined}
+      data-mine={mine && !spectating ? "" : undefined}
       data-urgent={urgent ? "" : undefined}
       role="timer"
       aria-label={`${label}: ${left ?? 0} seconds left`}
@@ -76,7 +81,7 @@ export const DuelClock = ({
         <p className="km-duel-missed">
           {timeout ? <span className="font-semibold">{timeout} </span> : null}
           {missed
-            ? `Missed turns: you ${clock.timeouts[duel.seat]}/${clock.maxTimeouts} · ${table.opponentName} ${clock.timeouts[table.them]}/${clock.maxTimeouts}. ${clock.maxTimeouts} forfeits the duel.`
+            ? `Missed turns: ${spectating ? selfName : "you"} ${clock.timeouts[duel.seat]}/${clock.maxTimeouts} · ${table.opponentName} ${clock.timeouts[table.them]}/${clock.maxTimeouts}. ${clock.maxTimeouts} forfeits the duel.`
             : null}
         </p>
       ) : null}
@@ -89,7 +94,7 @@ export const DuelClock = ({
  * (play, concession, the clock, or no result), the rounds and, for a ranked duel, the
  * rating change of both players, the reward and why one was not paid. While the result
  * still settles it says so; the table refetches it. "Challenge again" or "Queue again"
- * and Leave table follow.
+ * and Leave table follow. A spectator sees the winner by name, with their portrait.
  */
 export const DuelEndScreen = ({
   table,
@@ -108,21 +113,28 @@ export const DuelEndScreen = ({
   isStarting?: boolean;
   startError?: string | null;
 }) => {
-  const { me, them } = table;
+  const { me, them, spectating } = table;
   const primaryRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     primaryRef.current?.focus({ preventScroll: true });
   }, []);
   const result = duel.result;
   const outcome = result?.outcome ?? "draw";
-  const title = {
-    win: "You won",
-    loss: "You lost",
-    draw: "You drew",
-    void: "No result",
-  }[outcome];
-  const how = endedByText(duel, table.opponentName);
-  const opponent = duel.players[them];
+  const winner = result?.winner ?? null;
+  const title =
+    spectating && outcome !== "void"
+      ? winner === null
+        ? "A draw"
+        : `${duel.players[winner].username} won`
+      : {
+          win: "You won",
+          loss: "You lost",
+          draw: "You drew",
+          void: "No result",
+        }[outcome];
+  const how = endedByText(duel, spectating);
+  // A spectator sees the winner's portrait, a seat its opponent's.
+  const opponent = duel.players[spectating && winner !== null ? winner : them];
   const history = table.confirmed.view.history;
   const rating = result?.rating ?? null;
   const reward = result?.reward ?? null;
@@ -156,12 +168,20 @@ export const DuelEndScreen = ({
               {how ? <p className="km-brush-line">{how}</p> : null}
             </div>
           </div>
-          <p className="km-bark km-end-bark">
-            {duel.kind === "RANKED" ? "Ranked duel" : "Friendly duel"} against{" "}
-            <span className="km-bark-name">{opponent.username}</span>
-            {opponent.villageName ? ` of ${opponent.villageName}` : ""}, level{" "}
-            {opponent.level}
-          </p>
+          {spectating ? (
+            <p className="km-bark km-end-bark">
+              {duel.kind === "RANKED" ? "Ranked duel" : "Friendly duel"} between{" "}
+              <span className="km-bark-name">{duel.players[0].username}</span> and{" "}
+              <span className="km-bark-name">{duel.players[1].username}</span>
+            </p>
+          ) : (
+            <p className="km-bark km-end-bark">
+              {duel.kind === "RANKED" ? "Ranked duel" : "Friendly duel"} against{" "}
+              <span className="km-bark-name">{opponent.username}</span>
+              {opponent.villageName ? ` of ${opponent.villageName}` : ""}, level{" "}
+              {opponent.level}
+            </p>
+          )}
           <EndRounds history={history} me={me} them={them} />
         </div>
         <div className="km-end-claim">
@@ -178,9 +198,16 @@ export const DuelEndScreen = ({
                 ) : null}
                 {rating ? (
                   <div className="grid gap-1">
-                    <RatingLine label="Your rating" change={rating.you} />
                     <RatingLine
-                      label={`${opponent.username}'s rating`}
+                      label={
+                        spectating
+                          ? `${duel.players[me].username}'s rating`
+                          : "Your rating"
+                      }
+                      change={rating.you}
+                    />
+                    <RatingLine
+                      label={`${duel.players[them].username}'s rating`}
                       change={rating.opponent}
                     />
                   </div>
@@ -269,19 +296,20 @@ const RatingLine = ({
 );
 
 /** The line under the banner: how the duel ended. */
-const endedByText = (duel: KessenPvpMatchPayload, opponent: string) => {
+const endedByText = (duel: KessenPvpMatchPayload, spectating: boolean) => {
   const result = duel.result;
   if (!result) return null;
-  const loserIsMe = result.loserBy === duel.seat;
+  const loserIsMe = result.loserBy === duel.seat && !spectating;
+  const loser = result.loserBy === null ? null : duel.players[result.loserBy].username;
   switch (result.endedBy) {
     case "concede":
-      return loserIsMe ? "You conceded" : `${opponent} conceded`;
+      return loserIsMe ? "You conceded" : `${loser} conceded`;
     case "timeout":
-      return result.loserBy === null
+      return loser === null
         ? "Both ran out of time"
         : loserIsMe
           ? "Your time ran out too often"
-          : `${opponent}'s time ran out too often`;
+          : `${loser}'s time ran out too often`;
     case "void":
       return "Ended without a result";
     default:
@@ -318,7 +346,7 @@ const useSecondsLeft = (duel: KessenPvpMatchPayload) => {
  * The turn just lost to the clock, from the missed-turn counts rising between two
  * payloads; cleared by the next payload without one.
  */
-const useLatestTimeout = (duel: KessenPvpMatchPayload) => {
+const useLatestTimeout = (duel: KessenPvpMatchPayload, spectating: boolean) => {
   const [seen, setSeen] = useState({
     version: duel.version,
     timeouts: duel.clock.timeouts,
@@ -333,7 +361,10 @@ const useLatestTimeout = (duel: KessenPvpMatchPayload) => {
       version: duel.version,
       timeouts: duel.clock.timeouts,
       phase: duel.view.phase,
-      text: rose.length > 0 ? timeoutText(duel, rose, seen.phase === "mulligan") : null,
+      text:
+        rose.length > 0
+          ? timeoutText(duel, rose, seen.phase === "mulligan", spectating)
+          : null,
     });
   }
   return seen.text;
@@ -344,11 +375,14 @@ const timeoutText = (
   duel: KessenPvpMatchPayload,
   seats: readonly Seat[],
   mulligan: boolean,
+  spectating: boolean,
 ) => {
   // The viewer's own missed turn is named first.
   const names = [...seats]
     .sort((a, b) => (a === duel.seat ? -1 : b === duel.seat ? 1 : 0))
-    .map((seat) => (seat === duel.seat ? "You" : duel.players[seat].username));
+    .map((seat) =>
+      seat === duel.seat && !spectating ? "You" : duel.players[seat].username,
+    );
   return `${names.join(" and ")} ran out of time and ${mulligan ? "kept the hand" : "passed the round"}.`;
 };
 

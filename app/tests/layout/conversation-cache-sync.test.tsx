@@ -154,6 +154,7 @@ const blacklistPanel = (success: boolean) => {
     isPinned: false,
     isReported: false,
     isStaffOnly: false,
+    challengeMatch: null,
   };
   const outcome = {
     success,

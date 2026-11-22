@@ -127,7 +127,7 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
     <BaseComment
       {...props}
       system="conversation_comment"
-      canChallenge
+      challengeFrom={{ conversationId: props.comment.conversationId }}
       editComment={props.canEdit === false ? undefined : editComment.mutate}
       isEditPending={editComment.isPending}
       deleteComment={handleDelete}
@@ -155,8 +155,8 @@ interface BaseCommentProps extends PostProps {
   isDeletePending?: boolean;
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
-  /** Offers the challenge shortcut on other players' messages. */
-  canChallenge?: boolean;
+  /** Offers the challenge shortcut on other players' messages sent in this conversation. */
+  challengeFrom?: { conversationId: string | null };
 }
 const BaseComment: React.FC<BaseCommentProps> = (props) => {
   const { data: userData } = useUserDataSelector((u) => ({
@@ -347,8 +347,12 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
                 />
               </Button>
             )}
-            {props.canChallenge && userData && !isAuthor && (
-              <ChallengeButton opponent={props.user} className={postActionClassName} />
+            {props.challengeFrom && userData && !isAuthor && (
+              <ChallengeButton
+                opponent={props.user}
+                conversationId={props.challengeFrom.conversationId}
+                className={postActionClassName}
+              />
             )}
             {userData && (isAuthor || canSeeSecretData(userData.role)) && (
               <ModerationSummary

@@ -117,10 +117,16 @@ export const PlayerBar = ({
   const zone = view.seats[me];
   const leader = zone.leader ? table.cardDisplay(zone.leader) : null;
   return (
-    <section className="km-bar km-bar-me" aria-label="Your side">
-      <Lanterns count={zone.lanterns} label="Your lanterns" />
+    <section
+      className="km-bar km-bar-me"
+      aria-label={table.spectating ? `${table.selfName}'s side` : "Your side"}
+    >
+      <Lanterns
+        count={zone.lanterns}
+        label={table.spectating ? `${table.selfName}'s lanterns` : "Your lanterns"}
+      />
       <span className="km-bar-name">
-        <span className="km-bar-title">You</span>
+        <span className="km-bar-title">{table.selfName}</span>
         {zone.banked > 0 ? (
           <Badge
             variant="outline"
@@ -131,18 +137,21 @@ export const PlayerBar = ({
           </Badge>
         ) : null}
       </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="km-hit h-6 gap-[3px] rounded-full px-[7px] text-[11px]"
-        onClick={onSort}
-        aria-label={`Sort hand by ${sort === "row" ? "power" : sort === "power" ? "play order" : "row"}`}
-        title="Sort hand"
-      >
-        <ArrowDownWideNarrow className="h-3 w-3" aria-hidden />
-        <span>{SORT_LABEL[sort]}</span>
-      </Button>
+      {/* A spectator sees no hand to sort. */}
+      {table.spectating ? null : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="km-hit h-6 gap-[3px] rounded-full px-[7px] text-[11px]"
+          onClick={onSort}
+          aria-label={`Sort hand by ${sort === "row" ? "power" : sort === "power" ? "play order" : "row"}`}
+          title="Sort hand"
+        >
+          <ArrowDownWideNarrow className="h-3 w-3" aria-hidden />
+          <span>{SORT_LABEL[sort]}</span>
+        </Button>
+      )}
       <DeckButton
         count={zone.deckCount}
         discard={zone.discard.length}

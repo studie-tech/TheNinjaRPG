@@ -79,6 +79,7 @@ export function CompactComment(props: CompactCommentProps) {
       <UserMenu
         user={user}
         isSelf={isAuthor}
+        conversationId={comment.conversationId}
         onMention={props.onMentionUser}
         onMessage={props.onMessageUser}
         tavernStyling={props.tavernStyling}
@@ -258,12 +259,14 @@ export function CompactComment(props: CompactCommentProps) {
 function UserMenu({
   user,
   isSelf,
+  conversationId,
   onMention,
   onMessage,
   tavernStyling,
 }: {
   user: CompactCommentProps["user"];
   isSelf: boolean;
+  conversationId: string | null;
   tavernStyling?: boolean;
   onMention?: (username: string) => void;
   onMessage?: (user: ChatStartUser) => void;
@@ -315,7 +318,7 @@ function UserMenu({
           >
             <ChevronLeft className="h-[14px] w-[14px]" aria-hidden /> Back
           </button>
-          <ChallengePanel opponent={user} />
+          <ChallengePanel opponent={user} conversationId={conversationId} />
         </PopoverContent>
       ) : (
         <PopoverContent

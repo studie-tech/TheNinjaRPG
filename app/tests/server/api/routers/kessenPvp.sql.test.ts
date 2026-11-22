@@ -12,6 +12,8 @@ import {
   KESSEN_RANKED_WIN_RYO,
 } from "@/drizzle/constants";
 import {
+  conversation,
+  conversationComment,
   gameSetting,
   item,
   kessenDeck,
@@ -241,6 +243,8 @@ describeWithDatabase("kessen duels", () => {
       },
     );
     await resetTables(
+      conversationComment,
+      conversation,
       kessenMatch,
       kessenProgress,
       kessenNpcProgress,
@@ -489,6 +493,68 @@ describeWithDatabase("kessen duels", () => {
     // The NPC endpoints never serve a duel.
     expect(await (await callerFor(kessenRouter, A)).getMatch({ matchId })).toEqual({
       match: null,
+    });
+  });
+
+  it("announces a duel challenged from a public conversation there, and only there", async () => {
+    await (await db()).insert(conversation).values([
+      { id: "tavern", title: "Tavern", isPublic: true },
+      { id: "private", title: "Private", isPublic: false },
+    ]);
+    const a = await pvp(A);
+    const b = await pvp(B);
+    await a.createChallenge({ targetId: B, deck: LOANER_A, conversationId: "tavern" });
+    await a.createChallenge({ targetId: C, deck: LOANER_A, conversationId: "private" });
+    const fromTavern = (await b.getLobby()).challenges[0];
+    if (!fromTavern) throw new Error("No challenge");
+    const accepted = await b.acceptChallenge({
+      requestId: fromTavern.id,
+      deck: LOANER_B,
+    });
+    if (!accepted.success || !("match" in accepted) || !accepted.match)
+      throw new Error(accepted.message);
+    const toC = (await (await pvp(C)).getLobby()).challenges[0];
+    if (!toC) throw new Error("No challenge");
+    await (await pvp(C)).acceptChallenge({ requestId: toC.id, deck: LOANER_B });
+    const announced = await (await db()).select().from(conversationComment);
+    expect(announced).toEqual([
+      expect.objectContaining({
+        conversationId: "tavern",
+        userId: A,
+        challengeMatch: {
+          type: "KESSEN",
+          matchId: accepted.match.id,
+          opponentName: "DuelistB",
+        },
+      }),
+    ]);
+  });
+
+  it("lets anyone watch a duel with both hands hidden, in one read and no write", async () => {
+    const started = await friendlyDuel();
+    const matchId = started.id;
+    await expireClock(matchId);
+    const before = await matchRow(matchId);
+    const stored = await storedOf(matchId);
+    // Every write to the duel fails, so watching must not make one.
+    const readOnly = aroundStatements(await db(), kessenMatch, () =>
+      Promise.reject(new Error("watching wrote to the duel")),
+    );
+    const watcher = callerForDatabase(kessenPvpRouter, C, readOnly);
+    const { match, log } = await watcher.watchMatch({ matchId });
+    if (!match || !log) throw new Error("Missing watched duel");
+    expect(match).toMatchObject({ seat: 0, version: before?.version, borrowed: [] });
+    expect(match.view.seats.map((zone) => zone.hand)).toEqual([null, null]);
+    expect(match.view.seats.map((zone) => zone.handCount)).toEqual(
+      stored.engine.seats.map((zone) => zone.hand.length),
+    );
+    expectHidden({ match, log }, stored, 0);
+    expectHidden({ match, log }, stored, 1);
+    // The clock that ran out stays for a seat to apply.
+    expect(await matchRow(matchId)).toEqual(before);
+    expect(await watcher.watchMatch({ matchId: "missing" })).toEqual({
+      match: null,
+      log: null,
     });
   });
 

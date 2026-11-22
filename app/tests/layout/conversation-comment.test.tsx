@@ -107,6 +107,7 @@ const comment = {
   isPinned: false,
   isReported: false,
   isStaffOnly: false,
+  challengeMatch: null,
 };
 const user: PostProps["user"] = {
   userId: "friend",

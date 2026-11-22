@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Maximize2, ScrollText, X } from "lucide-react";
+import { Crown, Eye, Maximize2, ScrollText, X } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/libs/shadui";
@@ -41,7 +41,12 @@ export const PromptStrip = ({ table }: { table: MatchTable }) => {
   } else if (table.holding) {
     body = <span>Round {table.view.round} is over.</span>;
   } else if (table.playing) {
-    body = <span>{table.opponentName} is at the table…</span>;
+    body = (
+      <span>
+        {table.spectating ? "The latest play" : `${table.opponentName} is at the table`}
+        …
+      </span>
+    );
     actions.push(
       <Button
         key="skip"
@@ -124,6 +129,15 @@ export const PromptStrip = ({ table }: { table: MatchTable }) => {
   } else if (table.myTurn) {
     tone = "facts";
     body = <span>{table.facts.line}</span>;
+  } else if (table.spectating) {
+    const turn = table.view.turn === table.me ? table.selfName : table.opponentName;
+    body = (
+      <span>
+        {table.view.phase === "mulligan"
+          ? "Both players are choosing their mulligan."
+          : `${turn} is choosing a play…`}
+      </span>
+    );
   } else if (table.view.seats[table.me].passed) {
     body = <span>You passed this round.</span>;
   } else if (table.view.phase === "mulligan") {
@@ -166,7 +180,8 @@ const IconAction = ({ label, onClick }: { label: string; onClick: () => void }) 
  * Pass, Leader, Hand and Log. Passing takes one tap, except when the opponent has passed
  * and passing loses or ties the round: then the button states what it keeps and needs a
  * second tap within three seconds, which the button itself counts down. A lesson asks
- * before a pass its coach advises against (`onPassRequest`).
+ * before a pass its coach advises against (`onPassRequest`). A spectator keeps only Log,
+ * beside a note that the hands stay hidden.
  */
 export const ActionBar = ({
   table,
@@ -194,8 +209,15 @@ export const ActionBar = ({
   });
   return (
     <div className="km-actions" role="toolbar" aria-label="Match actions">
-      <PassControl table={table} lesson={lesson} onPassRequest={onPassRequest} />
-      {zone.leader === null ? null : (
+      {table.spectating ? (
+        <p className="min-w-0 flex-1 text-[13px] font-semibold">
+          <Eye className="mr-1.5 inline h-4 w-4 align-[-3px]" aria-hidden />
+          Spectating: both hands stay hidden.
+        </p>
+      ) : (
+        <PassControl table={table} lesson={lesson} onPassRequest={onPassRequest} />
+      )}
+      {zone.leader === null || table.spectating ? null : (
         <Button
           type="button"
           variant={leaderActive ? "default" : "secondary"}
@@ -221,17 +243,19 @@ export const ActionBar = ({
           <span>Leader</span>
         </Button>
       )}
-      <Button
-        type="button"
-        variant="secondary"
-        className="km-action km-action-square gap-[5px]"
-        onClick={onOpenHand}
-        aria-label="Show the whole hand"
-        title="Show the whole hand"
-      >
-        <Maximize2 className="h-4 w-4" aria-hidden />
-        <span>Hand</span>
-      </Button>
+      {table.spectating ? null : (
+        <Button
+          type="button"
+          variant="secondary"
+          className="km-action km-action-square gap-[5px]"
+          onClick={onOpenHand}
+          aria-label="Show the whole hand"
+          title="Show the whole hand"
+        >
+          <Maximize2 className="h-4 w-4" aria-hidden />
+          <span>Hand</span>
+        </Button>
+      )}
       <Button
         type="button"
         variant="secondary"

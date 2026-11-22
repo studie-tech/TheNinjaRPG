@@ -391,7 +391,7 @@ export const TargetPicker = ({ table }: { table: MatchTable }) => {
   );
 };
 
-/** Quick play (not in the lesson, which walks every play) and concede. */
+/** Quick play (not in the lesson, which walks every play) and concede, unless spectating. */
 export const MatchOptions = ({ table }: { table: MatchTable }) => {
   const { lesson, duel } = table;
   const quickPlayId = useId();
@@ -414,7 +414,7 @@ export const MatchOptions = ({ table }: { table: MatchTable }) => {
           </Label>
         </div>
       )}
-      {table.over ? null : (
+      {table.over || table.spectating ? null : (
         <Confirm
           title={duel ? "Concede the duel?" : "Concede the match?"}
           className="kessen-scene km-dialog"

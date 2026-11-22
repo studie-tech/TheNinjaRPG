@@ -30,11 +30,13 @@ export const describeEvent = (
   after?: MatchView,
 ): string | null => {
   const me = before.me;
-  const who = (seat: Seat) => (seat === me ? "You" : names.opponent);
+  const { self } = names;
+  const second = (seat: Seat) => seat === me && self === undefined;
+  const who = (seat: Seat) => (seat === me ? (self ?? "You") : names.opponent);
   const verb = (seat: Seat, mine: string, theirs: string) =>
-    seat === me ? mine : theirs;
+    second(seat) ? mine : theirs;
   const unitName = (id: string) => names.card(before.inst[id] ?? "");
-  const sideName = (side: Seat) => (side === me ? "your" : `${names.opponent}'s`);
+  const sideName = (side: Seat) => (second(side) ? "your" : `${who(side)}'s`);
   switch (event.t) {
     case "roundStart": {
       const rule = houseRuleRoundNote(
@@ -52,9 +54,9 @@ export const describeEvent = (
           : null;
       const banked =
         event.banked > 0
-          ? event.seat === me
+          ? second(event.seat)
             ? `Your hand is full, so you may replace ${plural(event.banked, "extra card")} next round.`
-            : `${names.opponent}'s hand is full, so they may replace ${plural(event.banked, "extra card")} next round.`
+            : `${who(event.seat)}'s hand is full, so they may replace ${plural(event.banked, "extra card")} next round.`
           : null;
       return [drew, banked].filter(Boolean).join(" ") || null;
     }
@@ -127,12 +129,7 @@ export const describeEvent = (
         : `Terrain lifts from ${sideName(event.side)} ${ROW_LABELS[event.row]}.`;
     case "returned": {
       const name = event.id === "?" ? "A card" : unitName(event.id);
-      const place =
-        event.to === "hand"
-          ? event.seat === me
-            ? "your hand"
-            : `${names.opponent}'s hand`
-          : "the deck";
+      const place = event.to === "hand" ? `${sideName(event.seat)} hand` : "the deck";
       return `${name} returns to ${place}.`;
     }
     case "fizzled":
@@ -146,17 +143,17 @@ export const describeEvent = (
       const outcome =
         event.winner === null
           ? "a tie: both lose a lantern"
-          : event.winner === me
+          : second(event.winner)
             ? event.riggedOdds
               ? "you win the tie (Rigged Odds)"
               : "you win"
             : event.riggedOdds
-              ? `${names.opponent} wins the tie (Rigged Odds)`
-              : `${names.opponent} wins`;
-      return `Round ${event.round}: you ${mine} – ${theirs} ${names.opponent}, ${outcome}.`;
+              ? `${who(event.winner)} wins the tie (Rigged Odds)`
+              : `${who(event.winner)} wins`;
+      return `Round ${event.round}: ${self ?? "you"} ${mine} – ${theirs} ${names.opponent}, ${outcome}.`;
     }
     case "leaderRecharged":
-      return `${sideName(event.seat) === "your" ? "Your" : `${names.opponent}'s`} leader recharges.`;
+      return `${second(event.seat) ? "Your" : `${who(event.seat)}'s`} leader recharges.`;
     case "cleanup":
       return event.kept.length > 0
         ? `Carried into the next round: ${event.kept.map(unitName).join(", ")}.`
@@ -164,9 +161,9 @@ export const describeEvent = (
     case "matchEnd":
       return event.winner === null
         ? "The match is a draw."
-        : event.winner === me
+        : second(event.winner)
           ? "You win the match."
-          : `${names.opponent} wins the match.`;
+          : `${who(event.winner)} wins the match.`;
     default:
       return null;
   }
@@ -268,26 +265,32 @@ export const roundWinnerIfEnded = (view: MatchView): Seat | null => {
 
 /**
  * The centre-band line: who needs how many points to take the round, as a sentence for
- * screen readers and a short chip ("They need" and the number). Null when the trailing
- * opponent can no longer score.
+ * screen readers and a short chip ("They need" and the number), naming both sides for a
+ * spectator (`self`). Null when the trailing opponent can no longer score.
  */
-export const needLine = (view: MatchView, opponent: string): NeedLine | null => {
+export const needLine = (
+  view: MatchView,
+  opponent: string,
+  self?: string,
+): NeedLine | null => {
   const [mine, theirs] = mineTheirs(safeTotals(view), view.me);
   const lead = mine - theirs;
   if (lead > 0) {
     if (!canStillScore(view, other(view.me))) return null;
+    const need = self ? `${opponent} needs` : "They need";
     return {
       full: `${opponent} needs ${lead + 1} to win`,
-      short: `They need ${lead + 1}`,
-      lead: "They need",
+      short: `${need} ${lead + 1}`,
+      lead: need,
       count: lead + 1,
     };
   }
   if (lead < 0) {
+    const need = self ? `${self} needs` : "You need";
     return {
-      full: `You need ${-lead + 1} to win`,
-      short: `You need ${-lead + 1}`,
-      lead: "You need",
+      full: `${need} ${-lead + 1} to win`,
+      short: `${need} ${-lead + 1}`,
+      lead: need,
       count: -lead + 1,
     };
   }
@@ -537,7 +540,7 @@ export const roundSummary = (
     spentTheirs,
     kept,
     savedCards: won && spentMine < spentTheirs,
-    line: `Round ${event.round}: you ${mine} – ${theirs} ${names.opponent} · you spent ${plural(spentMine, "card")}, they spent ${spentTheirs}${kept.length > 0 ? ` · carried: ${kept.map((entry) => `${entry.name} (${entry.power})`).join(", ")}` : ""}`,
+    line: `Round ${event.round}: ${names.self ?? "you"} ${mine} – ${theirs} ${names.opponent} · ${names.self ?? "you"} spent ${plural(spentMine, "card")}, they spent ${spentTheirs}${kept.length > 0 ? ` · carried: ${kept.map((entry) => `${entry.name} (${entry.power})`).join(", ")}` : ""}`,
   };
 };
 
@@ -579,6 +582,8 @@ const ABILITY_LABELS: Partial<Record<KessenAbilityKind, string>> = {
 export interface MatchNames {
   card: (cardId: string) => string;
   opponent: string;
+  /** The seat seen from, named in the third person for a spectator; "you" otherwise. */
+  self?: string;
   kind?: (cardId: string) => string | undefined;
   houseRule?: KessenHouseRule | null;
 }

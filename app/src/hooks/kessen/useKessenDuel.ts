@@ -216,6 +216,36 @@ export const useKessenDuel = (matchId: string | null) => {
   };
 };
 
+/**
+ * A duel watched without a seat: the `kessenPvp.watchMatch` payload and play log, both
+ * hands hidden. Like a seat it reads the duel again when its channel pushes a newer
+ * version; the seats drive the clock, so watching never writes.
+ */
+export const useWatchedKessenDuel = (matchId: string, enabled = true) => {
+  const query = api.kessenPvp.watchMatch.useQuery(
+    { matchId },
+    { enabled, staleTime: 5_000 },
+  );
+  const utils = api.useUtils();
+  const { pusher } = useUserDataSelector(selectUserId);
+  useEffect(() => {
+    if (!enabled || !pusher) return;
+    const channel = pusher.subscribe(matchId);
+    const onUpdate = (data: { version?: number }) => {
+      if (typeof data.version !== "number") return;
+      const current = utils.kessenPvp.watchMatch.getData({ matchId });
+      if (isNewerKessenPvpVersion(current, { version: data.version }))
+        void utils.kessenPvp.watchMatch.invalidate({ matchId });
+    };
+    channel.bind("event", onUpdate);
+    return () => {
+      channel.unbind("event", onUpdate);
+      pusher.unsubscribe(matchId);
+    };
+  }, [matchId, pusher, enabled]);
+  return { ...query, match: query.data?.match ?? null, log: query.data?.log ?? null };
+};
+
 const selectUserId = (user: { userId: string }) => ({ userId: user.userId });
 
 /** Read the duel this long after its deadline, so the server's clock has passed it. */

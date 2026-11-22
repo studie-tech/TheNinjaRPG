@@ -2090,6 +2090,28 @@ describe("legal actions, views and previews", () => {
     }
   });
 
+  it("shows a spectator both hands as counts, from seat 0's side", () => {
+    const s = keepBoth(newMatch());
+    const view = viewFor(s, null);
+    expect(view.me).toBe(0);
+    for (const seat of [0, 1] as const) {
+      expect(view.seats[seat].hand).toBeNull();
+      expect(view.seats[seat].mull).toBeNull();
+      expect(view.seats[seat].handCount).toBe(s.seats[seat].hand.length);
+    }
+    for (const zone of s.seats)
+      for (const id of [...zone.hand, ...zone.deck])
+        expect(view.inst[id]).toBeUndefined();
+    // No card a hand or deck alone holds is listed.
+    const shown = new Set([
+      ...Object.values(view.inst),
+      ...s.seats.flatMap((zone) => (zone.leader ? [zone.leader] : [])),
+      TOKEN_CARD_ID,
+    ]);
+    for (const cardId of Object.keys(view.cards)) expect(shown.has(cardId)).toBe(true);
+    expect(JSON.stringify(view)).not.toContain(s.seed);
+  });
+
   it("previews exact ghost numbers on a view and flags hidden draws and pulls", () => {
     const s = scenario({
       p0: {
@@ -2170,6 +2192,17 @@ describe("legal actions, views and previews", () => {
       drawn: ["?", "?"],
     });
     expect(redactEvents(result.events, 1)).toEqual(result.events);
+  });
+
+  it("redacts both seats' draws and mulligan picks for a spectator", () => {
+    const s = newMatch();
+    const result = act(s, 1, { t: "mull", cards: s.seats[1].hand.slice(0, 2) });
+    expect(redactEvents(result.events, null)).toEqual(redactEvents(result.events, 0));
+    const draws = redactEvents(
+      [{ t: "drawn", seat: 0, cards: ["a", "b"], banked: 0 }],
+      null,
+    );
+    expect(draws).toEqual([{ t: "drawn", seat: 0, cards: ["?", "?"], banked: 0 }]);
   });
 
   it("rejects extra and malformed targets", () => {

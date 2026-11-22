@@ -4,7 +4,7 @@ import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import * as Hub from "@/hooks/kessen/useKessenHub";
 import * as Lobby from "@/hooks/kessen/useKessenPvpLobby";
-import { ChallengePanel } from "@/layout/ChallengePlayer";
+import { ChallengeMatchNotice, ChallengePanel } from "@/layout/ChallengePlayer";
 import type { KessenDeckSummary } from "@/layout/kessen/hub/hubData";
 import * as HubData from "@/layout/kessen/hub/hubData";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
@@ -86,6 +86,24 @@ describe("challenge panel", () => {
     expect(screen.getByRole("link", { name: "Open the arena" })).toBeTruthy();
   });
 
+  it("sends a challenge from a conversation open to spectators, to announce it there", () => {
+    duel.mockResolvedValue({ ok: true, message: "Challenge sent to Rival." });
+    render(<ChallengePanel opponent={opponent} conversationId="tavern" />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send Rival a sparring challenge" }),
+    );
+    expect(spar.mock.calls[0]?.[0]).toEqual({
+      targetId: "u-rival",
+      useRankedRules: false,
+      spectatable: true,
+      conversationId: "tavern",
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send Rival a Kessen challenge" }),
+    );
+    expect(duel.mock.calls[0]?.[0]).toMatchObject({ conversationId: "tavern" });
+  });
+
   it("duels with the player's ready deck and shows a refusal by the button", async () => {
     duel.mockResolvedValue({
       ok: false,
@@ -114,4 +132,26 @@ describe("challenge panel", () => {
     expect(screen.getByRole("link", { name: "Open the Card Hall" })).toBeTruthy();
     expect(duel).not.toHaveBeenCalled();
   });
+});
+
+describe("challenge match notice", () => {
+  it.each([
+    ["SPAR", "started a spar", "/battlelog/m-1"],
+    ["KESSEN", "started a Kessen duel", "/kessen/watch/m-1"],
+  ] as const)(
+    "announces a %s on one line with a link to watch it",
+    (type, text, href) => {
+      render(
+        <ChallengeMatchNotice
+          challenger="Hero"
+          match={{ type, matchId: "m-1", opponentName: "Rival" }}
+          createdAt={new Date()}
+        />,
+      );
+      expect(document.body.textContent).toContain(`Hero and Rival ${text}`);
+      expect(screen.getByRole("link", { name: "Watch" }).getAttribute("href")).toBe(
+        href,
+      );
+    },
+  );
 });

@@ -56,7 +56,8 @@ import {
  * board keeps the width. A frame short of height in landscape (a phone on its side) docks
  * the prompt, the whole hand and the actions beside the board, so the rows are sized from
  * the full height. A lesson adds Lemu's coach over the table; a duel adds the turn clock
- * and the other player's seat.
+ * and the other player's seat. A spectator (`spectating`) watches a duel read-only, from
+ * seat 0's side with both hands hidden.
  */
 export const KessenMatchView = ({
   payload,
@@ -73,6 +74,7 @@ export const KessenMatchView = ({
   onClaimChoice,
   onStartLesson,
   guestNote,
+  spectating = false,
 }: KessenMatchViewProps) => {
   const motion = useKessenMotion();
   const [frame, setFrame] = useState<HTMLElement | null>(null);
@@ -85,6 +87,7 @@ export const KessenMatchView = ({
     onAction,
     onConcede: () => onConcede() ?? undefined,
     motion,
+    spectating,
   });
   const [sheet, setSheet] = useState<Sheet>(null);
   const [logTab, setLogTab] = useState<LogTab>("log");
@@ -388,7 +391,7 @@ export const KessenMatchView = ({
     <section
       ref={setFrame}
       className="kessen-match kessen-scene"
-      aria-label={`Kessen against ${table.opponentName}, round ${table.view.round}`}
+      aria-label={`Kessen${table.spectating ? `: ${table.selfName}` : ""} against ${table.opponentName}, round ${table.view.round}`}
       data-motion={motion ? "on" : "off"}
       data-button-sfx="off"
       onKeyDown={(event) => {
@@ -566,4 +569,6 @@ export interface KessenMatchViewProps {
   onStartLesson?: (lessonKey: KessenAcademyLessonKey, replaceActive: boolean) => void;
   /** A guest's match: shown on the end screen in place of rewards. */
   guestNote?: React.ReactNode;
+  /** Watches a duel without a seat: nothing can be played, and both hands stay hidden. */
+  spectating?: boolean;
 }

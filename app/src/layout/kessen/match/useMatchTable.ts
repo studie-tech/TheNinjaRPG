@@ -50,7 +50,8 @@ import { buildPlayback, type PlaybackStep, safeTotals } from "./playback";
  * and targets, previewed with the local engine), the event playback after each
  * confirmed turn, and the play log. Nothing is sent before a play is complete. At a
  * duel the opponent's turns arrive as newer payloads; with the play log in step, their
- * events play back like the player's own.
+ * events play back like the player's own. A spectator (`spectating`) watches a duel from
+ * seat 0's side: both seats are named and nothing can be drafted or sent.
  */
 export const useMatchTable = ({
   payload,
@@ -59,6 +60,7 @@ export const useMatchTable = ({
   onAction,
   onConcede,
   motion,
+  spectating = false,
 }: {
   payload: KessenTablePayload;
   /** The confirmed play log; at a duel it plays back the opponent's turns. */
@@ -67,6 +69,7 @@ export const useMatchTable = ({
   onAction: (action: KessenAction) => Promise<KessenTableOutcome>;
   onConcede: () => Promise<KessenTableOutcome | undefined> | undefined;
   motion: boolean;
+  spectating?: boolean;
 }) => {
   const [local, setLocal] = useState<KessenTablePayload | null>(null);
   const confirmed =
@@ -107,9 +110,12 @@ export const useMatchTable = ({
   const lookup = useMemo(() => catalogLookup(catalog), [catalog]);
   const cardDisplay = (cardId: string): KessenCardDisplay | null =>
     lookup.get(cardId) ?? confirmed.view.cards[cardId] ?? null;
+  // The seat a spectator sees from, named where a seat reads "you".
+  const self = spectating && duel ? duel.players[duel.seat].username : undefined;
   const names: MatchNames = {
     card: (cardId) => cardDisplay(cardId)?.name ?? "A card",
     opponent: opponentName,
+    self,
     kind: (cardId) => cardDisplay(cardId)?.kind,
     houseRule,
   };
@@ -121,6 +127,7 @@ export const useMatchTable = ({
   const playing = playback !== null;
   const over = confirmed.status !== "ACTIVE" || confirmed.view.phase === "over";
   const myTurn =
+    !spectating &&
     !over &&
     view.phase === "play" &&
     view.turn === me &&
@@ -128,6 +135,7 @@ export const useMatchTable = ({
     view.result === null;
   const canAct = myTurn && !pending && !playing;
   const mulliganOpen =
+    !spectating &&
     !over &&
     !playing &&
     confirmed.view.phase === "mulligan" &&
@@ -525,7 +533,7 @@ export const useMatchTable = ({
   );
   const facts = passFacts(view, opponentName);
   const sideTotals = projectedTotals(view, powers, sentShown);
-  const needText = needLine(view, opponentName);
+  const needText = needLine(view, opponentName, self);
 
   return {
     motion,
@@ -539,6 +547,9 @@ export const useMatchTable = ({
     npc,
     opponent,
     opponentName,
+    spectating,
+    /** "You", or the watched seat's name for a spectator. */
+    selfName: self ?? "You",
     names,
     cardDisplay,
     instanceCard,

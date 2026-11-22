@@ -28,6 +28,7 @@ import { redactEvents } from "@/libs/kessen/engine";
 import { pickKessenOpponent } from "@/libs/kessen/pvp";
 import type { KessenEvent, Seat } from "@/libs/kessen/types";
 import { getServerPusher } from "@/libs/pusher";
+import { findPublicConversationId } from "@/queries/comments";
 import {
   findKessenDeck,
   listKessenCards,
@@ -39,6 +40,7 @@ import {
   deleteKessenRankedQueueForLeave,
   deleteKessenRankedQueueRows,
   findKessenPvpMatch,
+  findKessenPvpMatchById,
   findKessenRankedQueueRow,
   insertKessenRankedQueue,
   listActiveKessenMatchesForPlayers,
@@ -62,6 +64,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { announceChallengeMatch } from "@/server/utils/challengeMatch";
 import {
   advanceKessenDuel,
   createKessenDuel,
@@ -95,7 +98,8 @@ const idSchema = z.string().min(1).max(191);
 /**
  * Live Kessen duels between players: friendly challenges (no rewards, no rating) and the
  * ranked queue (Elo rating, modest ryo and a weekly pack). Every duel change runs through
- * `advanceKessenDuel`; each seat refetches its own redacted view with `getMatch`.
+ * `advanceKessenDuel`; each seat refetches its own redacted view with `getMatch`, and
+ * anyone may watch a duel with both hands hidden through `watchMatch`.
  */
 export const kessenPvpRouter = createTRPCRouter({
   getLobby: protectedProcedure
@@ -150,6 +154,17 @@ export const kessenPvpRouter = createTRPCRouter({
       return { match, log: kessenDuelLog(advanced.row, match) };
     }),
 
+  watchMatch: protectedProcedure
+    .meta({ mcp: { description: "Watch a Kessen duel between two other players" } })
+    .input(z.object({ matchId: idSchema }))
+    .query(async ({ ctx, input }): Promise<KessenPvpMatchQuery> => {
+      // One read and no write: the seats apply clocks that ran out and push the result.
+      const [row] = await findKessenPvpMatchById(ctx.drizzle, input.matchId);
+      if (!row) return { match: null, log: null };
+      const match = kessenDuelPayload(row, null, new Date());
+      return { match, log: kessenDuelLog(row, match, null) };
+    }),
+
   playTurn: protectedProcedure
     .meta({ mcp: { description: "Play one Kessen duel decision" } })
     .input(
@@ -181,7 +196,14 @@ export const kessenPvpRouter = createTRPCRouter({
     .meta({
       mcp: { description: "Challenge another player to a friendly Kessen duel" },
     })
-    .input(z.object({ targetId: idSchema, deck: kessenDeckSourceSchema }))
+    .input(
+      z.object({
+        targetId: idSchema,
+        deck: kessenDeckSourceSchema,
+        /** A public conversation, such as a tavern, that announces the duel it starts. */
+        conversationId: idSchema.optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.userId;
       const now = new Date();
@@ -197,6 +219,7 @@ export const kessenPvpRouter = createTRPCRouter({
         catalogRows,
         deckRows,
         ownedRows,
+        conversations,
       ] = await Promise.all([
         listKessenDuelists(ctx.drizzle, ids),
         listKessenBlacklistBetween(ctx.drizzle, userId, [input.targetId]),
@@ -206,6 +229,9 @@ export const kessenPvpRouter = createTRPCRouter({
         listKessenCards(ctx.drizzle),
         deckRowsFor(ctx.drizzle, userId, input.deck),
         listOwnedKessenCardCounts(ctx.drizzle, userId),
+        input.conversationId
+          ? findPublicConversationId(ctx.drizzle, input.conversationId)
+          : [],
         // Housekeeping: frees the pair slot of a challenge that expired unanswered.
         updateUserRequestForExpireKessenChallenges(
           ctx.drizzle,
@@ -265,6 +291,9 @@ export const kessenPvpRouter = createTRPCRouter({
           "KESSEN",
           undefined,
           encodeKessenDeckSource(input.deck),
+          undefined,
+          undefined,
+          conversations[0]?.id,
         );
       } catch (error) {
         if (isMysqlDuplicateKeyError(error))
@@ -402,6 +431,13 @@ export const kessenPvpRouter = createTRPCRouter({
         ],
       });
       if ("error" in created) return errorResponse(created.error);
+      await Promise.all(
+        announceChallengeMatch(ctx.drizzle, {
+          conversationId: request.conversationId,
+          challengerId: senderId,
+          match: { type: "KESSEN", matchId, opponentName: me.username },
+        }),
+      );
       return {
         success: true,
         message: "Challenge accepted. The duel begins.",

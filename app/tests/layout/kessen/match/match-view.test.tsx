@@ -25,7 +25,12 @@ import type {
   MatchState,
   MatchView,
 } from "@/libs/kessen/types";
-import type { KessenCatalogEntry, KessenMatchPayload } from "@/validators/kessen";
+import type {
+  KessenCatalogEntry,
+  KessenMatchPayload,
+  KessenPvpMatchPayload,
+  KessenPvpPlayer,
+} from "@/validators/kessen";
 import { KESSEN_SEED_CATALOG } from "../../../libs/kessen/fixtures/catalog";
 import {
   flushRadixFocus,
@@ -1022,5 +1027,110 @@ describe("KessenMatchView", () => {
       "1 –to 2 in rounds",
     );
     expect(document.querySelector(".km-summary-card")?.textContent).toContain("0 – 3");
+  });
+});
+
+describe("Spectating a duel", () => {
+  const player = (userId: string, username: string): KessenPvpPlayer => ({
+    userId,
+    username,
+    avatar: null,
+    level: 10,
+    villageName: null,
+    rating: null,
+  });
+  const watched = (
+    state: MatchState,
+    patch: Partial<KessenPvpMatchPayload> = {},
+  ): KessenPvpMatchPayload => ({
+    id: "duel-1",
+    kind: "FRIENDLY",
+    version: 4,
+    status: "ACTIVE",
+    startedAt: new Date(0),
+    finishedAt: null,
+    seat: 0,
+    players: [player("a", "Aiko"), player("b", "Botan")],
+    view: viewFor(state, null),
+    clock: {
+      deadline: new Date(Date.now() + 60_000),
+      acting: actingSeats(state),
+      serverNow: new Date(),
+      turnSeconds: 60,
+      mulliganSeconds: 30,
+      timeouts: [0, 0],
+      maxTimeouts: 3,
+    },
+    borrowed: [],
+    result: null,
+    ...patch,
+  });
+  const renderWatched = (payload: KessenPvpMatchPayload) => {
+    const onAction = mock(
+      async (): Promise<KessenTableOutcome> => ({ ok: false, message: "No." }),
+    );
+    const onConcede = mock(() => undefined);
+    render(
+      <KessenMatchView
+        payload={payload}
+        catalog={catalog}
+        onAction={onAction}
+        onConcede={onConcede}
+        onClose={() => undefined}
+        spectating
+      />,
+    );
+    return { onAction, onConcede };
+  };
+
+  it("names both players and offers no play, hand or concession", () => {
+    const state = practiceMatch();
+    const { onAction } = renderWatched(watched(state));
+    expect(document.querySelector(".km-hand-card")).toBeNull();
+    expect(document.querySelector(".km-hand-empty")?.textContent).toBe(
+      `Aiko holds ${state.seats[0].hand.length} cards, Botan ${state.seats[1].hand.length}.`,
+    );
+    expect(document.querySelector(".km-bar-me .km-bar-title")?.textContent).toBe(
+      "Aiko",
+    );
+    expect(document.querySelector(".km-prompt")?.textContent).toBe(
+      `${state.turn === 0 ? "Aiko" : "Botan"} is choosing a play…`,
+    );
+    expect(screen.getByText("Spectating: both hands stay hidden.")).toBeTruthy();
+    for (const name of ["Pass", "Show the whole hand", "Sort hand by power"])
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    for (const row of document.querySelectorAll<HTMLElement>(".km-row-hit"))
+      fireEvent.click(row);
+    expect(onAction).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Play log, discards and options" }),
+    );
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Options" }));
+    expect(screen.queryByRole("button", { name: /Concede/ })).toBeNull();
+  });
+
+  it("names the winner and how the duel ended", () => {
+    const state = practiceMatch();
+    renderWatched(
+      watched(state, {
+        status: "CONCEDED",
+        clock: { ...watched(state).clock, deadline: null, acting: [] },
+        result: {
+          winner: 1,
+          outcome: "loss",
+          endedBy: "concede",
+          loserBy: 0,
+          rating: null,
+          reward: null,
+          note: null,
+          settling: false,
+        },
+      }),
+    );
+    const end = document.querySelector(".km-match-end");
+    expect(end?.querySelector("h2")?.textContent).toBe("Botan won");
+    expect(end?.textContent).toContain("Aiko conceded");
+    expect(end?.textContent).toContain("Friendly duel between Aiko and Botan");
   });
 });

@@ -44,3 +44,14 @@ export const mutateContentSchema = z.strictObject({
 });
 
 export type MutateContentSchema = z.infer<typeof mutateContentSchema>;
+
+/**
+ * The match a conversation announcement links, started by a challenge sent from that
+ * conversation: a spar's battle or a Kessen duel. The announcement's poster is the
+ * challenger and `opponentName` the player who accepted.
+ */
+export type ChallengeMatch = {
+  type: "SPAR" | "KESSEN";
+  matchId: string;
+  opponentName: string;
+};

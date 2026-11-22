@@ -487,6 +487,7 @@ export const useConversation = (props: ConversationLogicProps) => {
       isPinned: false,
       isReported: false,
       isStaffOnly: false,
+      challengeMatch: null,
       villageName: author.village?.name ?? null,
       villageHexColor: author.village?.hexColor ?? null,
       villageKageId: author.village?.kageId ?? null,

@@ -108,6 +108,7 @@ export const insertRequest = async (
   relatedId?: string,
   useRankedRules?: boolean,
   spectatable?: boolean,
+  conversationId?: string | null,
 ) => {
   await client.insert(userRequest).values({
     id: nanoid(),
@@ -119,6 +120,7 @@ export const insertRequest = async (
     relatedId: relatedId || null,
     useRankedRules: useRankedRules || false,
     spectatable: spectatable || false,
+    conversationId: conversationId || null,
   });
 };
 

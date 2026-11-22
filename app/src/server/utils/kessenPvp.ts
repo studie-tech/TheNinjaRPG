@@ -506,12 +506,16 @@ export const createKessenDuel = async (
   return { row };
 };
 
-/** One seat's view of a duel row. */
+/**
+ * One seat's view of a duel row, or a spectator's (`viewer` null): both hands hidden,
+ * seen from seat 0, with nothing lent and no reward.
+ */
 export const kessenDuelPayload = (
   row: KessenMatch,
-  seat: Seat,
+  viewer: Seat | null,
   now: Date,
 ): KessenPvpMatchPayload => {
+  const seat = viewer ?? 0;
   const stored = storedDuelOf(row);
   const retired = row.status === "ACTIVE" && row.engineVersion !== CARD_ENGINE_VERSION;
   const active = row.status === "ACTIVE" && !retired;
@@ -524,7 +528,7 @@ export const kessenDuelPayload = (
     finishedAt: row.finishedAt,
     seat,
     players: stored.players,
-    view: viewFor(stored.engine, seat),
+    view: viewFor(stored.engine, viewer),
     clock: {
       deadline: active ? row.turnDeadline : null,
       acting: active ? actingSeats(stored.engine) : [],
@@ -534,17 +538,18 @@ export const kessenDuelPayload = (
       timeouts: stored.timeouts,
       maxTimeouts: KESSEN_PVP_MAX_TIMEOUTS,
     },
-    borrowed: stored.borrowed[seat],
-    result: active ? null : viewResult(stored.result, seat),
+    borrowed: viewer === null ? [] : stored.borrowed[viewer],
+    result: active ? null : viewResult(stored.result, viewer),
   };
 };
 
-/** One seat's play log of a duel: the stored events redacted for that seat. */
+/** One seat's play log of a duel, or a spectator's: the stored events redacted for it. */
 export const kessenDuelLog = (
   row: KessenMatch,
   payload: KessenPvpMatchPayload,
+  viewer: Seat | null = payload.seat,
 ): KessenMatchLog => {
-  const events = redactEvents(storedDuelOf(row).log, payload.seat);
+  const events = redactEvents(storedDuelOf(row).log, viewer);
   return getKessenMatchLog(
     events,
     kessenLogNames(events, payload.view.inst),
@@ -779,11 +784,15 @@ const unsettledResult = (planned: KessenPvpResult): KessenPvpResult => ({
 const borrowedIds = (seat: KessenDuelSeat) =>
   [...new Set(seat.deck.borrowed.map((entry) => entry.itemId))].sort();
 
-/** A stored result as `seat` sees it; a duel without one ended void. */
+/**
+ * A stored result as `viewer` sees it (seat 0's side for a spectator); a duel without one
+ * ended void.
+ */
 const viewResult = (
   result: KessenPvpResult | null,
-  seat: Seat,
+  viewer: Seat | null,
 ): KessenPvpViewResult => {
+  const seat = viewer ?? 0;
   const stored = result ?? voidResult();
   const outcome =
     stored.endedBy === "void"
@@ -802,7 +811,7 @@ const viewResult = (
       ? { you: stored.ratings[seat], opponent: stored.ratings[other(seat)] }
       : null,
     reward:
-      stored.reward && stored.reward.seat === seat
+      stored.reward && stored.reward.seat === viewer
         ? { ryo: stored.reward.ryo, packItemId: stored.reward.packItemId }
         : null,
     note: stored.note,

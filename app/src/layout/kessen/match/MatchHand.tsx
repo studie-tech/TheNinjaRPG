@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CardFace, kessenCardLabel } from "../CardFace";
 import type { HandSort } from "./MatchBars";
+import { plural } from "./matchText";
 import { useLongPress } from "./useLongPress";
 import type { MatchTable } from "./useMatchTable";
 
@@ -14,7 +15,8 @@ import type { MatchTable } from "./useMatchTable";
  * grid layout is the 5 × 2 hand sheet. Cards too narrow for their name banner carry
  * their short name below, wrapped only between words. A card that can do nothing now (no
  * open row, no target) is dimmed with the reason. Tap selects, long-press or hover
- * inspects. The strip (or the sheet's grid) and each card carry lesson targets.
+ * inspects. The strip (or the sheet's grid) and each card carry lesson targets. A
+ * spectator sees both hands' sizes in its place.
  */
 export const HandStrip = ({
   table,
@@ -63,9 +65,14 @@ export const HandStrip = ({
   }, [strip, count]);
 
   if (hand.length === 0) {
+    const { view, me, them } = table;
     return (
       <div className="km-hand" data-layout={layout} data-empty="">
-        <p className="km-hand-empty">No cards in hand.</p>
+        <p className="km-hand-empty">
+          {table.spectating
+            ? `${table.selfName} holds ${plural(view.seats[me].handCount, "card")}, ${table.opponentName} ${view.seats[them].handCount}.`
+            : "No cards in hand."}
+        </p>
       </div>
     );
   }

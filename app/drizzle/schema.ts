@@ -36,6 +36,7 @@ import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { VillageDutyPatrol } from "@/libs/villageDuty";
 import type { AiRuleType } from "@/validators/ai";
 import type { ZodAllTags } from "@/validators/combat";
+import type { ChallengeMatch } from "@/validators/comments";
 import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
 import type { DashboardContentGroup } from "@/validators/dashboard";
 import type {
@@ -1542,6 +1543,8 @@ export const conversationComment = mysqlTable(
     isPinned: boolean("isPinned").default(false).notNull(),
     isReported: boolean("isReported").default(false).notNull(),
     isStaffOnly: boolean("isStaffOnly").default(false).notNull(),
+    /** Set on the server's announcement that a challenge sent from here started a match. */
+    challengeMatch: json("challengeMatch").$type<ChallengeMatch>(),
   },
   (table) => {
     return {
@@ -5810,6 +5813,8 @@ export const userRequest = mysqlTable(
     ),
     useRankedRules: boolean("useRankedRules").default(false),
     spectatable: boolean("spectatable").default(false),
+    /** The public conversation a challenge was sent from, which announces its match. */
+    conversationId: varchar("conversationId", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
