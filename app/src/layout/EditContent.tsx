@@ -1620,9 +1620,18 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       !Object.is(watchAll.groundOpacity, tag.groundOpacity) ||
       !Object.is(watchAll.groundFeather, tag.groundFeather);
     const leftCoordinateTarget = tag.target === "COORDINATES" && !hasCoordinateDraft;
-    const draft = leftCoordinateTarget
+    let draft = leftCoordinateTarget
       ? { ...watchAll, coordinateTargeting: null }
       : watchAll;
+    // Assign identity once when staff enables Fortify; later edits retain owned progress.
+    if (
+      props.type === "item" &&
+      props.allowFortify &&
+      draft.fortifyEnabled &&
+      !draft.fortifyId
+    ) {
+      draft = { ...draft, fortifyId: crypto.randomUUID() };
+    }
     const parsedTag = tagSchema.safeParse(draft);
     const shownTag = parsedTag.success
       ? parsedTag.data
@@ -1655,18 +1664,14 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   const attributes = Object.keys(tagSchema.shape) as Attribute[];
 
   // Parse how to present the tag form
-  const ignore = [
-    "timeTracker",
-    "type",
-    "weightedCache",
-    "rewardMode",
-    "fortifyId",
-    "fortifyEnabled",
-  ];
+  const ignore = ["timeTracker", "type", "weightedCache", "rewardMode", "fortifyId"];
+  if (props.type !== "item" || !props.allowFortify) ignore.push("fortifyEnabled");
   if (props.type !== "jutsu") ignore.push("instant");
   if (isActivityBonus(tag) || tag.type === "increasejutsuslots")
     ignore.push(
-      ...attributes.filter((key) => key !== "power" && key !== "description"),
+      ...attributes.filter(
+        (key) => key !== "power" && key !== "description" && key !== "fortifyEnabled",
+      ),
     );
   if (watchAll.rewardMode === "weightedCache") {
     ignore.push(
@@ -2145,6 +2150,7 @@ export const rewardCatalogFormEntry = <K extends string | number | symbol>(
 
 // Form labels for different tag names
 export const FORM_LABEL_MAP: Record<string, string> = {
+  fortifyEnabled: "Fortify eligible",
   instant: "Instant (active on cast; casting round counts toward duration)",
   appearSfxPrimary: "Primary appearance sound for this cast",
   disappearSfxPrimary: "Primary disappearance sound for this cast",
@@ -2415,6 +2421,8 @@ interface EditContentProps<T, K, S extends FieldValues> {
 }
 
 interface EffectFormWrapperProps {
+  /** Show per-tag eligibility for items that support Fortify. */
+  allowFortify?: boolean;
   /** Offer permanent slot grants only for noncombat consumables. */
   allowJutsuSlotGrants?: boolean;
   /** Opt in only for sources that the runtime includes in passive activity aggregation. */
