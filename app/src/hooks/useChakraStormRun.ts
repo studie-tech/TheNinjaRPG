@@ -478,8 +478,10 @@ export const useChakraStormRun = (userId: string | undefined) => {
       if (current.goal && reached(current.goal.seconds))
         announce(
           {
-            title: `${CS_STAGE_INFO[current.goal.stage].name} is open`,
-            detail: "Hold out until the reinforcements arrive",
+            // The region opens with the run's result, so a run that is not claimed
+            // opens nothing.
+            title: `${CS_STAGE_INFO[current.goal.stage].name} earned`,
+            detail: "It opens when this run ends",
             tone: "reward",
             sound: "chime",
           },

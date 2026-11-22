@@ -700,7 +700,9 @@ export const ChakraStormResults = (props: {
               : outcome.won
                 ? outcome.challenge
                   ? "You survived the storm!"
-                  : "Scouting complete: report delivered!"
+                  : outcome.claim === "failed"
+                    ? "Scouting complete"
+                    : "Scouting complete: report delivered!"
                 : `Forced to retreat at ${formatClock(outcome.seconds)}`}
           </h3>
         </div>
@@ -715,8 +717,20 @@ export const ChakraStormResults = (props: {
             Verifying your report...
           </div>
         ) : outcome.claim === "failed" ? (
-          <div className="space-y-2 rounded-lg border border-red-400/60 bg-red-500/10 p-2 text-base">
-            <p className="font-semibold">{outcome.message}</p>
+          <div className="space-y-1.5 rounded-lg border border-red-400/60 bg-red-500/10 p-2 text-base text-balance">
+            <p className="font-bold">
+              {outcome.challenge
+                ? "This run was not recorded"
+                : "No intel or region progress saved"}
+            </p>
+            <p>{outcome.message}</p>
+            <p className="text-muted-foreground text-sm">
+              {outcome.retryable
+                ? "This run is kept until you start another one, so try again first."
+                : outcome.challenge
+                  ? "Only a run the server verifies completes the objective."
+                  : "Only runs the server verifies earn intel, records and new regions."}
+            </p>
             {outcome.retryable && (
               <Button size="sm" variant="outline" onClick={props.onRetry}>
                 <RotateCcw className="mr-1.5 h-4 w-4" />
