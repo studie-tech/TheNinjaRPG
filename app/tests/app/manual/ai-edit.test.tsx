@@ -94,9 +94,10 @@ beforeEach(() => {
     clan: { getAllNames: names },
     anbu: { getAllNames: names },
     gameAsset: {
+      getAllFolders: { useQuery: () => ({ data: [], isPending: false }) },
       getNameTags: names,
       getSceneAssets: names,
-      getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },
+      getAll: { useQuery: () => ({ data: { data: [] } }) },
     },
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);

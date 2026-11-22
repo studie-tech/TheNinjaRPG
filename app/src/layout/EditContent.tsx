@@ -1,10 +1,20 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, ChevronsUpDown, Loader2, Plus, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  Folder,
+  Loader2,
+  Plus,
+  X,
+} from "lucide-react";
 import { nanoid } from "nanoid";
 import type React from "react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
 import { useForm, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -120,39 +130,94 @@ export const EditContent = <
   >("ANIMATION");
   const [assetPickerField, setAssetPickerField] = useState<string | null>(null);
   const [assetTokens, setAssetTokens] = useState<string[]>([]);
+  const [assetPage, setAssetPage] = useState(0);
+  const assetPickerContentRef = useRef<HTMLDivElement>(null);
+  // Null lists the folders, undefined searches every folder and an empty string
+  // selects Unfiled exactly.
+  const [assetFolder, setAssetFolder] = useState<string | null | undefined>(null);
+  const [assetFolderSearch, setAssetFolderSearch] = useState("");
+
+  // Modal owns the scroll container; cached pages must also start at the top.
+  useEffect(() => {
+    const body = assetPickerContentRef.current?.parentElement;
+    if (body) body.scrollTop = 0;
+  }, [assetPage, assetFolder, assetTokens]);
 
   // Asset picker data
+  const { data: assetFolders, isPending: loadingAssetFolders } =
+    api.gameAsset.getAllFolders.useQuery(
+      { type: assetPickerType },
+      { enabled: assetPickerOpen },
+    );
+  // Types without folders open straight on their assets.
+  const browsingAssetFolders =
+    assetFolder === null && (loadingAssetFolders || (assetFolders?.length ?? 0) > 0);
+  const pickerFolder = assetFolder ?? undefined;
+  const showPickerAssets = assetPickerOpen && !browsingAssetFolders;
+  const normalizedFolderSearch = assetFolderSearch.trim().toLowerCase();
+  const pickerFolderMatches = (assetFolders ?? []).filter(
+    (entry) =>
+      entry.folder.toLowerCase().includes(normalizedFolderSearch) ||
+      humanizeIdentifier(entry.folder).toLowerCase().includes(normalizedFolderSearch),
+  );
   const { data: animationTagResp, isFetching: loadingAnimTags } =
     api.gameAsset.getNameTags.useQuery(
-      { type: "ANIMATION", selected: assetTokens },
-      { enabled: assetPickerOpen && assetPickerType === "ANIMATION" },
+      { type: "ANIMATION", selected: assetTokens, exactFolder: pickerFolder },
+      { enabled: showPickerAssets && assetPickerType === "ANIMATION" },
     );
   const { data: generalTagResp, isFetching: loadingGeneralTags } =
     api.gameAsset.getNameTags.useQuery(
-      { type: assetPickerType, selected: assetTokens },
-      { enabled: assetPickerOpen && assetPickerType !== "ANIMATION" },
+      { type: assetPickerType, selected: assetTokens, exactFolder: pickerFolder },
+      { enabled: showPickerAssets && assetPickerType !== "ANIMATION" },
     );
-  const { data: assetPages } = api.gameAsset.getAll.useInfiniteQuery(
-    { limit: 50, type: assetPickerType, nameTokens: assetTokens },
+  // Page-specific keys retain cached results while mounting at most 50 previews.
+  const {
+    data: assetPageData,
+    isPending: loadingPickerAssets,
+    isFetching: fetchingPickerAssets,
+    isError: pickerAssetsFailed,
+    refetch: retryPickerAssets,
+  } = api.gameAsset.getAll.useQuery(
     {
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
-      placeholderData: (previousData) => previousData,
-      enabled: assetPickerOpen,
+      limit: 50,
+      type: assetPickerType,
+      nameTokens: assetTokens,
+      exactFolder: pickerFolder,
+      cursor: assetPage,
+    },
+    {
+      enabled: showPickerAssets,
     },
   );
-  const allPickerAssets = useMemo(
-    () => (assetPages?.pages.flatMap((p) => p.data) || []).filter((a) => !a.hidden),
-    [assetPages],
+  const pickerAssets = useMemo(
+    () => (assetPageData?.data ?? []).filter((a) => !a.hidden),
+    [assetPageData],
   );
   const pickerTags =
     assetPickerType === "ANIMATION" ? animationTagResp?.tags : generalTagResp?.tags;
 
   const openAssetPicker = (fieldId: string, type: "ANIMATION" | "STATIC" | "SFX") => {
+    setAssetPage(0);
     setAssetPickerField(fieldId);
     setAssetPickerType(type);
     setAssetTokens([]);
+    setAssetFolder(null);
+    setAssetFolderSearch("");
     setAssetPickerOpen(true);
   };
+
+  /** Open a folder, Unfiled ("") or every asset (undefined) with no word filters. */
+  const openAssetFolder = (folder: string | null | undefined) => {
+    setAssetPage(0);
+    setAssetFolder(folder);
+    setAssetTokens([]);
+  };
+  const pickerFolderLabel =
+    assetFolder === undefined
+      ? "All"
+      : assetFolder === ""
+        ? "Unfiled"
+        : humanizeIdentifier(assetFolder ?? "");
 
   // Watch selected asset ids for preview
   const watchAppearSel = useWatch({
@@ -307,113 +372,239 @@ export const EditContent = <
             isValid={false}
             className="max-h-[99%] w-[800px] max-w-[99%]"
           >
-            <div className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {(loadingAnimTags || loadingGeneralTags) && (
-                  <span className="text-sm opacity-70">Loading tags…</span>
-                )}
-                {pickerTags?.map((t) => (
-                  <button
-                    type="button"
-                    key={t}
-                    className={`rounded border px-2 py-1 text-xs ${assetTokens.includes(String(t)) ? "border-foreground bg-foreground text-background" : "border-muted-foreground/30 bg-background"}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setAssetTokens((prev) =>
-                        prev.includes(String(t))
-                          ? prev.filter((x) => x !== String(t))
-                          : [...prev, String(t)],
-                      );
-                    }}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-
-              {assetPickerType === "SFX" ? (
-                <>
-                  <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
-                    {allPickerAssets
-                      .filter((a) => a.type === "SFX")
-                      .map((a) => {
-                        const selected =
-                          String(form.getValues(assetPickerField as Path<S>) ?? "") ===
-                          a.id;
-                        return (
-                          <div
-                            key={a.id}
-                            className={cn(
-                              "space-y-2 rounded border p-2",
-                              selected ? "border-green-500 bg-green-50" : "",
-                            )}
-                          >
-                            <Label>{a.name}</Label>
-                            {/* biome-ignore lint/a11y/useMediaCaption: Audio asset preview - no captions for music/sfx */}
-                            <audio
-                              src={a.url ?? undefined}
-                              controls
-                              className="w-full"
-                            />
-                            <Button
-                              type="button"
-                              variant={selected ? "default" : "secondary"}
-                              className="w-full"
-                              onClick={() => {
-                                if (assetPickerField) {
-                                  form.setValue(
-                                    assetPickerField as unknown as Path<S>,
-                                    a.id as PathValue<S, K>,
-                                    { shouldDirty: true },
-                                  );
-                                  setAssetPickerOpen(false);
-                                }
-                              }}
-                            >
-                              {selected ? "Selected" : "Use this"}
-                            </Button>
-                          </div>
-                        );
-                      })}
+            <div ref={assetPickerContentRef} className="space-y-3">
+              {browsingAssetFolders ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => openAssetFolder(undefined)}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => openAssetFolder("")}
+                    >
+                      Unfiled
+                    </Button>
                   </div>
-                  <EpidemicSfxSearch
-                    onImported={(assetId) => {
-                      if (assetPickerField) {
-                        form.setValue(
-                          assetPickerField as unknown as Path<S>,
-                          assetId as PathValue<S, K>,
-                          { shouldDirty: true },
-                        );
-                        setAssetPickerOpen(false);
-                      }
-                    }}
+                  <Input
+                    aria-label="Find a folder"
+                    placeholder="Find a folder…"
+                    value={assetFolderSearch}
+                    onChange={(e) => setAssetFolderSearch(e.target.value)}
                   />
-                </>
+                  {loadingAssetFolders && (
+                    <span className="text-sm opacity-70">Loading folders…</span>
+                  )}
+                  <div className="grid max-h-96 grid-cols-2 gap-2 overflow-auto p-0.5 md:grid-cols-3">
+                    {pickerFolderMatches.map((entry) => (
+                      <button
+                        type="button"
+                        key={entry.folder}
+                        title={entry.folder}
+                        className="border-border bg-background hover:border-primary/50 hover:bg-accent flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm"
+                        onClick={() => openAssetFolder(entry.folder)}
+                      >
+                        <Folder className="text-primary/70 size-4 shrink-0" />
+                        <span className="min-w-0 flex-1 break-words">
+                          {humanizeIdentifier(entry.folder)}
+                        </span>
+                        <span className="text-muted-foreground text-xs tabular-nums">
+                          {entry.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {!loadingAssetFolders && pickerFolderMatches.length === 0 && (
+                    <p className="text-muted-foreground text-sm">
+                      No folders match this name.
+                    </p>
+                  )}
+                </div>
               ) : (
-                <ActionSelector
-                  items={allPickerAssets.map((a) => ({
-                    ...a,
-                    type: "asset" as const,
-                  }))}
-                  labelSingles={true}
-                  onClick={(pickedId) => {
-                    if (assetPickerField) {
-                      // Directly set the form value for the field we opened the picker for
-                      form.setValue(
-                        assetPickerField as unknown as Path<S>,
-                        pickedId as PathValue<S, K>,
-                        { shouldDirty: true },
-                      );
-                      setAssetPickerOpen(false);
-                    }
-                  }}
-                  showBgColor={false}
-                  roundFull={true}
-                  hideBorder={true}
-                  showLabels={true}
-                  gridClassNameOverwrite="grid grid-cols-3 md:grid-cols-4"
-                  emptyText="No assets match the selected tags."
-                />
+                <>
+                  {(assetFolders?.length ?? 0) > 0 && (
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => openAssetFolder(null)}
+                      >
+                        <ArrowLeft className="size-4" />
+                        Folders
+                      </Button>
+                      <span className="min-w-0 truncate text-sm font-medium">
+                        {pickerFolderLabel}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {(loadingAnimTags || loadingGeneralTags) && (
+                      <span className="text-sm opacity-70">Loading tags…</span>
+                    )}
+                    {pickerTags?.map((t) => (
+                      <button
+                        type="button"
+                        key={t}
+                        className={`rounded border px-2 py-1 text-xs ${assetTokens.includes(String(t)) ? "border-foreground bg-foreground text-background" : "border-muted-foreground/30 bg-background"}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setAssetPage(0);
+                          setAssetTokens((prev) =>
+                            prev.includes(String(t))
+                              ? prev.filter((x) => x !== String(t))
+                              : [...prev, String(t)],
+                          );
+                        }}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+
+                  {loadingPickerAssets ? (
+                    <p role="status" className="text-muted-foreground text-sm">
+                      Loading assets…
+                    </p>
+                  ) : pickerAssetsFailed ? (
+                    <div role="alert" className="space-y-3 rounded-md border p-4">
+                      <p>Assets could not be loaded. Please try again.</p>
+                      <Button
+                        type="button"
+                        disabled={fetchingPickerAssets}
+                        onClick={() => void retryPickerAssets()}
+                      >
+                        {fetchingPickerAssets ? "Retrying…" : "Retry"}
+                      </Button>
+                    </div>
+                  ) : assetPickerType === "SFX" ? (
+                    <>
+                      <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
+                        {pickerAssets
+                          .filter((a) => a.type === "SFX")
+                          .map((a) => {
+                            const selected =
+                              String(
+                                form.getValues(assetPickerField as Path<S>) ?? "",
+                              ) === a.id;
+                            return (
+                              <div
+                                key={a.id}
+                                className={cn(
+                                  "space-y-2 rounded border p-2",
+                                  selected ? "border-green-500 bg-green-50" : "",
+                                )}
+                              >
+                                <Label>{a.name}</Label>
+                                {/* biome-ignore lint/a11y/useMediaCaption: Audio asset preview - no captions for music/sfx */}
+                                <audio
+                                  src={a.url ?? undefined}
+                                  controls
+                                  className="w-full"
+                                />
+                                <Button
+                                  type="button"
+                                  variant={selected ? "default" : "secondary"}
+                                  className="w-full"
+                                  onClick={() => {
+                                    if (assetPickerField) {
+                                      form.setValue(
+                                        assetPickerField as unknown as Path<S>,
+                                        a.id as PathValue<S, K>,
+                                        { shouldDirty: true },
+                                      );
+                                      setAssetPickerOpen(false);
+                                    }
+                                  }}
+                                >
+                                  {selected ? "Selected" : "Use this"}
+                                </Button>
+                              </div>
+                            );
+                          })}
+                      </div>
+                      <EpidemicSfxSearch
+                        onImported={(assetId) => {
+                          if (assetPickerField) {
+                            form.setValue(
+                              assetPickerField as unknown as Path<S>,
+                              assetId as PathValue<S, K>,
+                              { shouldDirty: true },
+                            );
+                            setAssetPickerOpen(false);
+                          }
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <ActionSelector
+                      items={pickerAssets.map((a) => ({
+                        ...a,
+                        type: "asset" as const,
+                      }))}
+                      labelSingles={true}
+                      onClick={(pickedId) => {
+                        if (assetPickerField) {
+                          // Directly set the form value for the field we opened the picker for
+                          form.setValue(
+                            assetPickerField as unknown as Path<S>,
+                            pickedId as PathValue<S, K>,
+                            { shouldDirty: true },
+                          );
+                          setAssetPickerOpen(false);
+                        }
+                      }}
+                      showBgColor={false}
+                      roundFull={true}
+                      hideBorder={true}
+                      showLabels={true}
+                      gridClassNameOverwrite="grid grid-cols-3 md:grid-cols-4"
+                      emptyText="No assets match the selected tags."
+                    />
+                  )}
+                  {!loadingPickerAssets &&
+                    (assetPage > 0 || assetPageData?.nextCursor != null) && (
+                      <nav
+                        aria-label="Asset pages"
+                        className="flex w-full items-center justify-between gap-2"
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-[44px] sm:min-h-9"
+                          disabled={assetPage === 0}
+                          onClick={() => setAssetPage(assetPage - 1)}
+                        >
+                          <ChevronLeft aria-hidden="true" className="mr-1 h-4 w-4" />
+                          Previous
+                        </Button>
+                        <span
+                          role="status"
+                          className="text-muted-foreground text-sm tabular-nums"
+                        >
+                          Page {assetPage + 1}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-[44px] sm:min-h-9"
+                          disabled={assetPageData?.nextCursor == null}
+                          onClick={() => setAssetPage(assetPage + 1)}
+                        >
+                          Next
+                          <ChevronRight aria-hidden="true" className="ml-1 h-4 w-4" />
+                        </Button>
+                      </nav>
+                    )}
+                </>
               )}
             </div>
           </Modal>
