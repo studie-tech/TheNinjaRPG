@@ -198,19 +198,13 @@ describe("challenge panel", () => {
 
   it("points a player without the first Academy lesson to the Card Hall", async () => {
     needsLesson = true;
-    await renderPanel(<ChallengePanel opponent={opponent} />);
-    const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
-    expect(send.hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("link", { name: "Open the Card Hall" })).toBeTruthy();
-    expect(duel).not.toHaveBeenCalled();
-  });
-
-  it("lets its holder close when one of its links opens a page", async () => {
-    needsLesson = true;
     const onNavigate = vi.fn();
     await renderPanel(<ChallengePanel opponent={opponent} onNavigate={onNavigate} />);
+    const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
+    expect(send.hasAttribute("disabled")).toBe(true);
     fireEvent.click(screen.getByRole("link", { name: "Open the Card Hall" }));
     expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(duel).not.toHaveBeenCalled();
   });
 });
 
