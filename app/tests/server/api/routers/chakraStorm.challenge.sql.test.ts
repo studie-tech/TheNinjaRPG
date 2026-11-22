@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import * as ids from "nanoid";
 import {
   chakraStormClaimReceipt,
   chakraStormProgress,
@@ -168,7 +169,11 @@ describeWithDatabase("chakra storm quest challenges", () => {
     await assignChallenge({ stage: "horizon", surviveMinutes: 1 });
     await moveTo(spot);
     const api = await callerFor(chakraStormRouter, userId);
+    // Fix the storm to one the test bot survives; the run nonce stays generated.
+    const seed = vi.spyOn(ids, "nanoid").mockReturnValueOnce("cs-challenge-0");
     const started = await api.startRun({ stage: "horizon", challenge: request });
+    seed.mockRestore();
+    expect(started.seed).toBe("cs-challenge-0");
     const { run, claim } = await playAndClaim(api, started);
     expect(run.state.won).toBe(true);
     const first = await claim();
