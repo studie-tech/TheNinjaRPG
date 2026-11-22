@@ -772,8 +772,9 @@ describeWithDatabase("parental controls", () => {
       expect(row?.userId).toBe("ai");
       expect(row?.authorId).toBe("staff");
       if (isPublic) {
-        // Moderation and the conversation's realtime events both follow the response.
-        expect(deferred).toHaveLength(2);
+        // Moderation, the conversation's realtime events and the story-task count all
+        // follow the response.
+        expect(deferred).toHaveLength(3);
         for (const task of deferred) await task();
       }
       if (!isPublic) {

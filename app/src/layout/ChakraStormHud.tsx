@@ -751,6 +751,8 @@ export const ChakraStormResults = (props: {
             <ScrollText className="h-5 w-5 shrink-0 text-amber-600" />
             Daily report delivered: +{outcome.dailyReward.ryo.toLocaleString()} ryo, +
             {outcome.dailyReward.prestige} prestige
+            {outcome.dailyReward.experience > 0 &&
+              `, +${outcome.dailyReward.experience.toLocaleString()} experience`}
           </div>
         )}
         {opened && (

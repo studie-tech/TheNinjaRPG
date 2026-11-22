@@ -886,7 +886,7 @@ export function CombatScreen() {
     return (
       <ContentBox title="Combat">
         <p>You are not in an active battle.</p>
-        <Button asChild className="mt-3">
+        <Button asChild id="return" className="mt-3">
           <Link href="/profile">Return to Profile</Link>
         </Button>
       </ContentBox>

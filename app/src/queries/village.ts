@@ -236,6 +236,17 @@ export const fetchVillages = async (client: DrizzleClient) => {
   });
 };
 
+/** Build the count of players active since `since`, per village. */
+export const countActivePlayersByVillage = (
+  client: Pick<DrizzleClient, "select">,
+  since: Date,
+) =>
+  client
+    .select({ villageId: userData.villageId, players: count() })
+    .from(userData)
+    .where(and(eq(userData.isAi, false), gte(userData.lastActiveAt, since)))
+    .groupBy(userData.villageId);
+
 /**
  * Fetches structures for a given village.
  * @param client - The DrizzleClient instance used for querying.

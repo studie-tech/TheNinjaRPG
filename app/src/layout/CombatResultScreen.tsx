@@ -40,8 +40,17 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
     userQuests: u.userQuests,
   }));
 
-  const showShrineAgain = result?.outcome === "Won" && battleType === "SHRINE_WAR";
-  const showTravelBtn = battleType === "QUEST" && !getIsolatedPyramid(userData);
+  // A fight the tutorial teaches ends with one way forward: the tutorial picks the page.
+  // The battle carries that identity from initiation (isTutorialGuidedBattle), so an
+  // ordinary fight during the tutorial keeps its usual follow-ups.
+  const isTutorialFight =
+    !!currentStep &&
+    !!userData?.tutorialOn &&
+    !!battleRef.current?.extraState?.tutorialGuided;
+  const showShrineAgain =
+    !isTutorialFight && result?.outcome === "Won" && battleType === "SHRINE_WAR";
+  const showTravelBtn =
+    !isTutorialFight && battleType === "QUEST" && !getIsolatedPyramid(userData);
   const toHospital =
     !!battleRef.current &&
     !!result &&
@@ -104,6 +113,8 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
           <Button
             asChild
             id="return"
+            size={isTutorialFight ? "xl" : undefined}
+            decoration={isTutorialFight ? "gold" : undefined}
             className={cn("w-full", isReturningFromTutorial && returningClassName)}
           >
             <Link
@@ -128,8 +139,8 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
                 ? "Returning..."
                 : getIsolatedPyramid(userData)
                   ? "Continue Pyramid"
-                  : currentStep && userData?.tutorialOn
-                    ? "Continue tutorial"
+                  : isTutorialFight
+                    ? "Continue"
                     : `Return to ${toHospital ? "Hospital" : "Profile"}`}
             </Link>
           </Button>
@@ -138,7 +149,7 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
               <Link href="/shrine">Back to Shrine</Link>
             </Button>
           )}
-          {props.arenaActions}
+          {!isTutorialFight && props.arenaActions}
           {battleType === "RANKED_PVP" && (
             <Button asChild id="toPvpRank" className="w-full">
               <Link href="/battlearena#PVP%20Rank">Back to PvP Queue</Link>
@@ -150,21 +161,8 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
             </Button>
           )}
           {showTravelBtn && (
-            <Button
-              asChild
-              id="toTravel"
-              className={cn("w-full", isReturningFromTutorial && returningClassName)}
-            >
-              <Link
-                href="/travel"
-                aria-disabled={isReturningFromTutorial || undefined}
-                aria-busy={isReturningFromTutorial || undefined}
-                onClick={(event) => {
-                  void handleTutorialBattleReturn(event, "/travel");
-                }}
-              >
-                {isReturningFromTutorial ? "Returning..." : "To Map"}
-              </Link>
+            <Button asChild id="toTravel" className="w-full">
+              <Link href="/travel">To Map</Link>
             </Button>
           )}
         </div>

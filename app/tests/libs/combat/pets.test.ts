@@ -94,6 +94,7 @@ const petFixture = (patch: Partial<BattlePet> = {}): BattlePet => ({
   generationStartedAt: null,
   generationAttempts: 0,
   artRank: 1,
+  isSanctuaryPup: false,
   revision: 0,
   createdAt: new Date(),
   updatedAt: new Date(),

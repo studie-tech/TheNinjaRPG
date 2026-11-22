@@ -26,9 +26,10 @@ import { actionStatusMessage } from "@/libs/actionReadiness";
 import { calcMedninRank } from "@/libs/hospital";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { availableQuestLetterRanks } from "@/libs/rank";
+import { isLeadQuest } from "@/libs/storyGuidance";
 import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
-import { capitalizeFirstLetter } from "@/utils/string";
+import { capitalizeFirstLetter, formatAmount } from "@/utils/string";
 import { canAccessStructure, type SectorVillage } from "@/utils/village";
 
 /** Build mission-hall categories and copy for village missions or outlaw crimes. */
@@ -126,6 +127,33 @@ export const getMissionHallTileQuests = <
           ["mission", "crime"].includes(q.questType) &&
           !!q.requiredVillage)),
   );
+};
+
+/**
+ * Base experience and ryo a Mission Hall tile pays, as the range over the quests it can
+ * hand out, so a player sees what a random pick is worth before accepting it. Boosts,
+ * loyalty and the daily reduced-reward factor apply on top when the quest pays out.
+ */
+export const getMissionHallRewardPreview = (
+  quests: readonly {
+    content: { reward?: { reward_exp?: number; reward_money?: number } | null };
+  }[],
+) => {
+  if (quests.length === 0) return undefined;
+  const exp = quests.map((q) => Math.floor(q.content.reward?.reward_exp ?? 0));
+  const money = quests.map((q) => Math.floor(q.content.reward?.reward_money ?? 0));
+  const range = (values: number[], unit: string) => {
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    if (max <= 0) return undefined;
+    return min === max
+      ? `${formatAmount(max)} ${unit}`
+      : `${formatAmount(min)}–${formatAmount(max)} ${unit}`;
+  };
+  const parts = [range(exp, "XP"), range(money, "ryo")].filter(
+    (part): part is string => !!part,
+  );
+  return parts.length > 0 ? parts.join(" · ") : undefined;
 };
 
 /**
@@ -279,18 +307,22 @@ export const missionHallStartBlockedMessage = (
  * Returns a rejection message, or null to allow proceeding.
  */
 export const questUiAccessBlockMessage = (
-  quest: Pick<Quest, "questType" | "questRank">,
+  quest: Pick<Quest, "id" | "questType" | "questRank">,
   user: NonNullable<UserWithRelations>,
   sectorVillage: SectorVillage | null,
 ): string | null => {
+  // Blacksteel leads are story quests offered at the Academy, not the Global Anbu HQ.
+  const isLead = isLeadQuest(quest.id);
   const hasStructureAccess = canAccessStructure(
     user,
-    questStructureRoute(quest.questType),
+    isLead ? "/academy" : questStructureRoute(quest.questType),
     sectorVillage,
   );
   if (quest.questType === "story") {
     if (!hasStructureAccess) {
-      return "Must be in the Global Anbu HQ to start story quests";
+      return isLead
+        ? "Must be at the Academy to start leads"
+        : "Must be in the Global Anbu HQ to start story quests";
     }
   } else if (quest.questType === "hunting") {
     if (user.occupation !== "HUNTER") {

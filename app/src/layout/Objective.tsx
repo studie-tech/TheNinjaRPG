@@ -6,16 +6,17 @@ import {
   Gift,
   Hourglass,
   Loader2,
+  MapPin,
   RotateCcw,
   Sprout,
   Swords,
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { CHAKRA_STORM_STAGE_NAMES, KESSEN_NPC_NAMES } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
+import { useRetryQuestBattle } from "@/hooks/quest";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -32,7 +33,6 @@ import {
 } from "@/libs/objectives";
 import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
 import { collapseRewards } from "@/libs/rewards";
-import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { getCollectDeadline, hasEndDatePassed } from "@/utils/time";
 import { useRequiredUserDataSelector, useUserDataSelector } from "@/utils/UserContext";
@@ -60,14 +60,8 @@ interface ObjectiveProps {
   hideIfNoRewards?: boolean | null;
 }
 export const Objective: React.FC<ObjectiveProps> = (props) => {
-  const utils = api.useUtils();
   const [modalOpen, setModalOpen] = useState(false);
-  const {
-    data: userData,
-    timeDiff,
-    prepareUserUpdate,
-    updateUser,
-  } = useRequiredUserDataSelector((u) => ({
+  const { data: userData, timeDiff } = useRequiredUserDataSelector((u) => ({
     role: u.role,
     status: u.status,
     autoWakeUp: u.autoWakeUp,
@@ -98,22 +92,16 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
           latitude: status?.latitude ?? parsed.latitude,
         }
       : null;
+  const travelHref = located
+    ? `/travel?sector=${located.sector}${located.longitude !== undefined && located.latitude !== undefined ? `&longitude=${located.longitude}&latitude=${located.latitude}` : ""}`
+    : "/travel";
   const goalTarget = status?.target ?? ("value" in parsed ? parsed.value : undefined);
   const canRetryBattle =
     objective.task === "start_battle" &&
     canRetryQuestBattle(status) &&
     !props.grayedOut;
 
-  // Retry battle mutation
-  const { mutate: retryBattle, isPending: isRetrying } =
-    api.quests.retryBattle.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) await updateUser(data, { revision });
-        else await utils.profile.getUser.invalidate();
-      },
-    });
+  const { retryBattle, isRetrying } = useRetryQuestBattle();
 
   // Extract collect_time_minutes safely for countdown
   const collectTimeMinutes =
@@ -156,10 +144,16 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
             (canAttemptAwakeAction(userData) ||
               (isBetweenPyramidBattles(userData) &&
                 getIsolatedPyramid(userData)?.questId === tracker.id)) ? (
-              <Gift
-                className="h-7 w-7 cursor-pointer hover:text-orange-500"
+              <button
+                type="button"
+                id="tutorial-objective-claim"
+                aria-label="Claim reward"
+                title="Claim reward"
+                className="rounded-md hover:text-orange-500"
                 onClick={checkRewards}
-              />
+              >
+                <Gift className="h-7 w-7" aria-hidden="true" />
+              </button>
             ) : (
               <Gift className="h-7 w-7 fill-slate-500" />
             ))}
@@ -252,7 +246,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                       <b>Sector: </b>{" "}
                       <Link
                         className="text-orange-600 underline dark:text-orange-400"
-                        href={`/travel?sector=${located.sector}${located.longitude !== undefined && located.latitude !== undefined ? `&longitude=${located.longitude}&latitude=${located.latitude}` : ""}`}
+                        href={travelHref}
                         aria-label={
                           located.longitude !== undefined &&
                           located.latitude !== undefined
@@ -266,6 +260,14 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                     <div>
                       <b>Position:</b> [{located.longitude}, {located.latitude}]
                     </div>
+                    {!done && !props.grayedOut && (
+                      <Button asChild size="sm" className="my-1">
+                        <Link href={travelHref}>
+                          <MapPin className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Take me there
+                        </Link>
+                      </Button>
+                    )}
                   </>
                 )}
                 {"hideLocation" in parsed && parsed.hideLocation && (

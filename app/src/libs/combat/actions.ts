@@ -1724,8 +1724,14 @@ export const calcActiveUser = (
   const inBattleuserIds = usersInBattle.map((u) => u.userId);
   let activeUserId = battle.activeUserId ? battle.activeUserId : userId;
   let progressRound = false;
-  // Check 1: We have an active user, but the round is up
-  const check1 = battle.activeUserId && secondsLeft <= 0;
+  // Check 1: We have an active user, but the round is up. A player learning to fight in
+  // the tutorial takes as long as they need; their opponent's turns still time out.
+  const isUntimedFor = (actor?: { isAi: boolean }) =>
+    !!battle.extraState?.tutorialGuided && !!actor && !actor.isAi;
+  const check1 =
+    battle.activeUserId &&
+    secondsLeft <= 0 &&
+    !isUntimedFor(battle.usersState.find((u) => u.userId === battle.activeUserId));
   // Check 2: We have an active user, but he/she does not have any more action points
   const check2 =
     activeUserId &&
@@ -1767,8 +1773,9 @@ export const calcActiveUser = (
   }
   // Check if we have a new active user
   const changedActor = actor.userId !== battle.activeUserId;
-  // Return info
-  return { actor, changedActor, progressRound, mseconds, secondsLeft };
+  // Return info; the untimed flag describes the returned actor's turn
+  const isUntimedTurn = isUntimedFor(actor);
+  return { actor, changedActor, progressRound, mseconds, secondsLeft, isUntimedTurn };
 };
 
 /** Masked users carry catalog availability instead of their private skill build. */

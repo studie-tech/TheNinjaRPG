@@ -24,6 +24,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ClansOverview } from "@/layout/clan/ClansOverview";
 import Loader from "@/layout/Loader";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import { hasRequiredRank } from "@/libs/rank";
 import { showMutationToast } from "@/libs/toast";
 import { useRequireInVillage } from "@/utils/UserContext";
@@ -146,6 +147,7 @@ export function ClansScreen() {
           )
         }
       >
+        <SystemIntroBanner system="clan" className="m-3" />
         <ClansOverview />
       </ContentBox>
     );

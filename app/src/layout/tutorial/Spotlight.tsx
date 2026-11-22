@@ -6,7 +6,12 @@ import { IMG_URL_HANDPOINTER } from "@/drizzle/constants";
 import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
 import Image from "@/layout/Image";
 import { cn } from "@/libs/shadui";
-import { isUsableHighlightRect, type TutorialScreenBox } from "@/libs/tutorial";
+import {
+  getHighlightScrollDirection,
+  isUsableHighlightRect,
+  TUTORIAL_LAYOUT_EVENT,
+  type TutorialScreenBox,
+} from "@/libs/tutorial";
 
 /**
  * The tutorial's spotlight over the viewport: the page dims around one control, an amber
@@ -133,7 +138,7 @@ const SpotlightMarkRing = ({ mark }: { mark: SpotlightMark }) => {
   const { box, label } = mark;
   return (
     <div
-      className="absolute rounded-md border-2 border-sky-300 border-dashed shadow-[0_0_12px_rgba(125,211,252,0.6)]"
+      className="absolute rounded-md border-2 border-dashed border-sky-300 shadow-[0_0_12px_rgba(125,211,252,0.6)]"
       style={{
         top: 0,
         left: 0,
@@ -149,8 +154,50 @@ const SpotlightMarkRing = ({ mark }: { mark: SpotlightMark }) => {
   );
 };
 
-/** Bouncing hand under a highlight, kept inside the viewport. */
+/**
+ * Bouncing hand under a highlight, kept inside the viewport. While the highlight is
+ * scrolled out of view, the hand waits at that edge of the screen, above the Activity
+ * dock, pointing the way; tapping it scrolls the highlight into view.
+ */
 export const SpotlightPointer = ({ box }: { box: SpotlightBox }) => {
+  const direction = getHighlightScrollDirection(box, window.innerHeight);
+  if (direction) {
+    const x = Math.max(48, Math.min(window.innerWidth - 48, box.left + box.width / 2));
+    const dock = document
+      .querySelector("[data-activity-dock]")
+      ?.getBoundingClientRect();
+    const dockBelow =
+      dock && dock.left <= x + 48 && dock.right >= x - 48 && dock.height > 0;
+    const bottom =
+      window.innerHeight - (dockBelow ? dock.top : window.innerHeight) + 12;
+    return (
+      <button
+        type="button"
+        aria-label={`Scroll ${direction} to the highlighted control`}
+        className="bg-card pointer-events-auto fixed z-[62] flex -translate-x-1/2 items-center gap-1.5 rounded-xl border-2 border-amber-400 px-3 py-1.5 text-sm font-semibold shadow-[0_0_18px_rgba(245,158,11,0.8)]"
+        style={direction === "up" ? { left: x, top: 12 } : { left: x, bottom }}
+        onClick={() =>
+          window.scrollBy({
+            top: box.top - window.innerHeight * 0.35,
+            behavior: "smooth",
+          })
+        }
+      >
+        <Image
+          src={IMG_URL_HANDPOINTER}
+          alt=""
+          aria-hidden="true"
+          className={cn(
+            "h-9 w-9 animate-bounce motion-reduce:animate-none",
+            direction === "down" && "rotate-180",
+          )}
+          width={80}
+          height={80}
+        />
+        {direction === "up" ? "Scroll up" : "Scroll down"}
+      </button>
+    );
+  }
   const below = box.top + box.height + 64 < window.innerHeight;
   return (
     <Image
@@ -199,7 +246,8 @@ export const spotlightHoleStyle = (box: SpotlightBox): CSSProperties => ({
 /**
  * Run `update` now and whenever layout may have moved, returning the cleanup. `update`
  * returns the element it measured. Changes to the DOM tree, scrolling, resizing and the
- * element's own size schedule one measurement per frame; with `animations`, so does the
+ * element's own size, and a `TUTORIAL_LAYOUT_EVENT` from a target that moves on its own
+ * (a marker on a turning globe), schedule one measurement per frame; with `animations`, so does the
  * end of any CSS animation or transition, for targets inside animated scenes that move
  * without any of those. A 250 ms poll covers content that shifts without any of these,
  * such as images and canvases above the target; it stops once the element has held
@@ -251,6 +299,7 @@ export const trackLayout = (
   startPoll();
   window.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", schedule, { passive: true });
+  window.addEventListener(TUTORIAL_LAYOUT_EVENT, schedule);
   if (animations) {
     document.addEventListener("animationend", schedule, true);
     document.addEventListener("transitionend", schedule, true);
@@ -262,6 +311,7 @@ export const trackLayout = (
     if (frame !== null) cancelAnimationFrame(frame);
     window.removeEventListener("scroll", schedule);
     window.removeEventListener("resize", schedule);
+    window.removeEventListener(TUTORIAL_LAYOUT_EVENT, schedule);
     document.removeEventListener("animationend", schedule, true);
     document.removeEventListener("transitionend", schedule, true);
     observer.disconnect();

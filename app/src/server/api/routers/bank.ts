@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getBankTransferUserUpdate, getTransferRyoUserUpdate } from "@/deltas/bank";
+import { withOnboardingQuestPatch } from "@/deltas/quests";
 import { RYO_CAP } from "@/drizzle/constants";
 
 import { bankAccessBlockMessage, clampToRyoCap } from "@/libs/bank";
@@ -25,6 +26,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { recordOnboardingTask } from "@/server/utils/onboardingTasks";
 import { offsetPage } from "@/server/utils/pagination";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -186,13 +188,25 @@ const transferRyo = async (
       fromPocket ? "Not enough money in pocket" : "Not enough money in bank",
     );
   }
-  return {
-    success: true,
-    message: fromPocket
-      ? `Successfully deposited ${value} ryo`
-      : `Successfully withdrew ${value} ryo`,
-    ...getTransferRyoUserUpdate({ fromPocket, value }),
-  };
+  const questData =
+    fromPocket && value > 0
+      ? await recordOnboardingTask({
+          client,
+          userId,
+          task: "bank_deposit",
+          questData: user.questData,
+        })
+      : undefined;
+  return withOnboardingQuestPatch(
+    {
+      success: true,
+      message: fromPocket
+        ? `Successfully deposited ${value} ryo`
+        : `Successfully withdrew ${value} ryo`,
+      ...getTransferRyoUserUpdate({ fromPocket, value }),
+    },
+    questData,
+  );
 };
 
 export const claimBankInterest = (client: DrizzleClient, userId: string) =>

@@ -16,6 +16,7 @@ import { SparringMode } from "@/layout/battlearena/SparringMode";
 import { TrainingMode } from "@/layout/battlearena/TrainingMode";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import { useRequireInVillage } from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
 
@@ -58,6 +59,7 @@ export function ArenaScreen() {
       onBack={view && !isTutorialArena ? openOverview : () => router.push("/village")}
       padding={false}
     >
+      <SystemIntroBanner system="battlepyramid" className="m-3" />
       {view === null ? (
         <ArenaOverview onOpen={openMode} />
       ) : (

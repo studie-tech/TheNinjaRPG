@@ -216,7 +216,13 @@ describeWithDatabase("recruitment main metrics", () => {
 
   it("reports every metric across all devices", async () => {
     const result = await metrics({ utmSource: "discord" });
-    const { tutorialSteps, geninPathSteps, geninPathPlayers, ...scalars } = result;
+    const {
+      tutorialSteps,
+      geninPathSteps,
+      geninPathPlayers,
+      storyChapters,
+      ...scalars
+    } = result;
     expect(scalars).toEqual({
       signupRate: 3 / 6,
       visitors: 6,
@@ -231,13 +237,14 @@ describeWithDatabase("recruitment main metrics", () => {
       tutorialFinishedByDevice: { mobile: 1, desktop: 0, unknown: 0 },
       signupValueUsd: 0,
       totalRevenueUsd: 0,
-      nonStudentSignups: 3,
-      nonStudentGeninSignups: 2,
+      geninPlusSignups: 3,
+      chuninPlusSignups: 2,
       tierQuestCompletions: [
         { completedTiers: 2, deviceType: "mobile", username: "MobileRecruit" },
       ],
       tierQuestDescriptions: ["Tier one: First", "Tier two: Second"],
     });
+    expect(storyChapters.every((entry) => entry.started === 0)).toBe(true);
     expect(geninPathPlayers).toEqual([
       {
         steps: geninPathSteps.length - 1,
@@ -274,8 +281,8 @@ describeWithDatabase("recruitment main metrics", () => {
       pvpSignups: 0,
       tutorialFinishedSignups: 0,
       tutorialFinishedByDevice: { mobile: 0, desktop: 0, unknown: 0 },
-      nonStudentSignups: 1,
-      nonStudentGeninSignups: 0,
+      geninPlusSignups: 1,
+      chuninPlusSignups: 0,
       tierQuestCompletions: [],
     });
     expect(result.signupRate).toBe(1);

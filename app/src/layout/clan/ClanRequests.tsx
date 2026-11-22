@@ -20,7 +20,11 @@ interface ClanRequestsProps {
 /** Manage clan or faction invitations and applications using the viewer's membership role. */
 export const ClanRequests: React.FC<ClanRequestsProps> = (props) => {
   // Destructure
-  const { data: userData } = useRequiredUserDataSelector((u) => ({
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
     clanId: u.clanId,
     isOutlaw: u.isOutlaw,
     rank: u.rank,
@@ -52,8 +56,13 @@ export const ClanRequests: React.FC<ClanRequestsProps> = (props) => {
   };
 
   // Mutation
+  // A join request can tick the story's clan objective, which its profile patch carries.
   const { mutate: create, isPending: isCreating } = api.clan.createRequest.useMutation({
-    onSuccess,
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      await onSuccess(data);
+      if (data.success) await updateUser(data, { revision });
+    },
   });
   const { mutate: accept, isPending: isAccepting } = api.clan.acceptRequest.useMutation(
     { onSuccess },

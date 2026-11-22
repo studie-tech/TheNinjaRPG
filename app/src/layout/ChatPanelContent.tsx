@@ -92,7 +92,7 @@ export default function ChatPanelBody({
   const mentions = useAtomValue(chatMentionsAtom);
   const tavernActivity = useAtomValue(chatTavernActivityAtom);
   const mutes = useChatMutes();
-  const { swapSides, setSwapSides } = useActivityDock();
+  const { swapSides, isSideFixed, setSwapSides } = useActivityDock();
   // Phones show a list of chats first, then one conversation with a back button.
   const [phoneChat, setPhoneChat] = useState<PhoneChat | null>(null);
 
@@ -173,7 +173,7 @@ export default function ChatPanelBody({
           </TabsList>
         )}
         <div className="ml-auto flex items-center">
-          {!isPhone && (
+          {!isPhone && !isSideFixed && (
             <Button
               variant="ghost"
               size="icon"

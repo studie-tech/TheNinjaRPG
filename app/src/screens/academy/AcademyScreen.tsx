@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import {
+  CHUNIN_EXAM_QUEST_ID,
   getUserCaps,
   IMG_BUILDING_ACADEMY,
   MAX_PLAYER_LEVEL,
 } from "@/drizzle/constants";
+import { useStoryGuidance } from "@/hooks/useStoryGuidance";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import QuestPicker from "@/layout/QuestPicker";
 import { eliteJoninExamBlockMessage } from "@/libs/profile";
+import { hasLeadsToShow, isLeadQuest, STORY_SO_FAR } from "@/libs/storyGuidance";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Render the academy screen independently of its route adapter. */
@@ -34,6 +37,15 @@ export function AcademyScreen() {
     : "Learning the ropes";
   // State
   const [activeElement, setActiveElement] = useState<string>("");
+  const [activeLead, setActiveLead] = useState<string>("");
+  // The story chapter is pinned first, so "new story starts at the Academy" holds.
+  const { story, item } = useStoryGuidance();
+  const pinnedQuestIds = [
+    ...(item?.kind === "exam" || item?.kind === "examActive"
+      ? [CHUNIN_EXAM_QUEST_ID]
+      : []),
+    ...(story?.currentQuestId ? [story.currentQuestId] : []),
+  ];
 
   // Show board
   return (
@@ -88,7 +100,45 @@ export function AcademyScreen() {
         activeQuestId={activeElement}
         setActiveQuestId={setActiveElement}
         defaultBackHref={activeElement === "" ? undefined : "/village"}
+        pinnedQuestIds={pinnedQuestIds}
       />
+      {story && hasLeadsToShow(story) && (
+        <QuestPicker
+          questType="story"
+          title="Leads"
+          subtitle="Side cases from Archivist Sora"
+          initialBreak
+          filterQuest={(quest) => isLeadQuest(quest.id)}
+          activeQuestId={activeLead}
+          setActiveQuestId={setActiveLead}
+          hideWhenEmpty
+          // Leads sit under the pinned chapter, so they stay folded until picked.
+          autoOpenFirst={false}
+        />
+      )}
+      {story && story.finishedChapters.length > 0 && (
+        <ContentBox
+          title="Story so far"
+          subtitle="The Blacksteel case file"
+          initialBreak
+        >
+          <ol className="space-y-3">
+            {story.finishedChapters.map((chapter) => (
+              <li key={chapter.chapter} className="flex gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 font-bold text-amber-600 text-sm dark:text-amber-300">
+                  {chapter.chapter}
+                </span>
+                <div>
+                  <p className="font-semibold">{chapter.title}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {STORY_SO_FAR[chapter.chapter]}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </ContentBox>
+      )}
     </>
   );
 }

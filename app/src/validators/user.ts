@@ -4,6 +4,7 @@ import {
   BasicElementName,
   ELEMENTAL_MASTERY_CAP,
   GeneralTypes,
+  GuidanceLevels,
   MAX_MASTERY_CAP,
   MAX_MUTED_CONVERSATIONS,
   OCCUPATIONS,
@@ -145,6 +146,8 @@ export const updateUserPreferencesSchema = z
     defaultAutoCombat: z.boolean().optional(),
     showPvpRecord: z.boolean().optional(),
     playsAsPlayer: z.boolean().optional(),
+    // How much the story dock points at the next chapter and at new systems
+    guidanceLevel: z.enum(GuidanceLevels).optional(),
   })
   .refine(
     (data) =>

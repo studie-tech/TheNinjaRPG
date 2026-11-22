@@ -70,7 +70,12 @@ export interface ChakraStormOutcome extends CsRunResult {
   claim: "local" | "pending" | "paid" | "failed";
   message?: string;
   retryable?: boolean;
-  dailyReward?: { ryo: number; prestige: number; villageTokens: number };
+  dailyReward?: {
+    ryo: number;
+    prestige: number;
+    villageTokens: number;
+    experience: number;
+  };
   /** The quest objective this run was a challenge for. */
   challenge?: QuestChallengeRequest;
 }

@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
-import { MobileGameNav } from "@/components/layout/shared/MobileGameNav";
+import * as storyGuidanceHook from "@/hooks/useStoryGuidance";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { ActivityDockButton } from "@/layout/ActivityDockButton";
 import * as logbook from "@/layout/Logbook";
 import { chatPanelAtom } from "@/libs/chatPanel";
-import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
+import { questsTabLessonAtom } from "@/libs/questsTabLesson";
+import * as storyGuidance from "@/libs/storyGuidance";
+import * as routing from "@/utils/routing";
 import * as context from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 let user: {
   userId: string;
+  rank?: string;
   tutorialOn: boolean;
   tutorialStep: number;
   userQuests: unknown[];
@@ -83,6 +86,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  getDefaultStore().set(questsTabLessonAtom, null);
   restoreBrowserGlobals();
   document.documentElement.removeAttribute("data-mobile-activity-nav");
 });
@@ -134,6 +138,28 @@ it("persists the chosen side and collapsed state without disabling the tutorial"
   );
   fireEvent.click(reopened.getByRole("button", { name: "Open Activity" }));
   expect(reopened.getByText("Saved lesson")).toBeTruthy();
+});
+
+it("sits on the right in a tutorial fight, beside the free end of the action bar", () => {
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/combat");
+  const view = render(<ActivityDock>Fight lesson</ActivityDock>);
+  const dock = view.getByRole("complementary", { name: "Activity" });
+  expect(dock.className).toContain("right-4");
+  expect(dock.className).not.toContain("left-4");
+  expect(
+    view.queryByRole("button", { name: "Swap Chat and Activity sides" }),
+  ).toBeNull();
+});
+
+it("keeps the player's own side in a fight outside the tutorial", () => {
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/combat");
+  user.tutorialOn = false;
+  const view = render(<ActivityDock>Fight lesson</ActivityDock>);
+  const dock = view.getByRole("complementary", { name: "Activity" });
+  expect(dock.className).toContain("left-4");
+  fireEvent.click(view.getByRole("button", { name: "Open Activity" }));
+  fireEvent.click(view.getByRole("button", { name: "Swap Chat and Activity sides" }));
+  expect(dock.className).toContain("right-4");
 });
 
 it("keeps a reachable Activity launcher while chatting and can return to the lesson", () => {
@@ -240,6 +266,19 @@ it("opens a guided lesson on the tutorial tab without changing the stored dock s
   expect(view.getByRole("button", { name: "Open Activity" })).toBeTruthy();
 });
 
+it("raises no story news for a Genin who turned the tutorial off", () => {
+  user = { ...user, rank: "GENIN", tutorialOn: false };
+  vi.spyOn(storyGuidanceHook, "useStoryGuidance").mockReturnValue({
+    item: {},
+  } as never);
+  vi.spyOn(storyGuidance, "getDockAttentionKey").mockReturnValue("chapter-8");
+  const view = render(<ActivityDock>Saved lesson</ActivityDock>);
+  expect(view.getByRole("button", { name: "Open Activity" }).textContent).toBe(
+    "Activity",
+  );
+  expect(view.queryByText("Story news")).toBeNull();
+});
+
 it("pins active quest attempts, restores pins, and removes completed attempts from the list", () => {
   const quest = (id: string, name: string) => ({
     id: `attempt-${id}`,
@@ -282,4 +321,37 @@ it("pins active quest attempts, restores pins, and removes completed attempts fr
   ];
   reopened.rerender(<ActivityDock>Lesson</ActivityDock>);
   expect(reopened.queryByRole("button", { name: "Unpin Second mission" })).toBeNull();
+});
+
+it("leads a lesson's answer or claim through the Quests tab and hands back after it", () => {
+  const quest = (id: string, name: string) => ({
+    id: `attempt-${id}`,
+    questId: id,
+    endAt: null,
+    quest: { id, name, questType: "starter" },
+  });
+  user.userQuests = [quest("other", "Other mission"), quest("trials", "The Trials")];
+  user.questData = [
+    { id: "other", goals: [] },
+    { id: "trials", goals: [{ id: "a", done: true, collected: false }] },
+  ];
+  getDefaultStore().set(questsTabLessonAtom, {
+    questId: "trials",
+    prompt: "Tap the gift to claim your reward.",
+  });
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  const questsTab = view.getByRole("tab", { name: "Quests" });
+  expect(questsTab.className).toContain("ring-amber-500");
+  fireEvent.mouseDown(questsTab, { button: 0, ctrlKey: false });
+  expect(view.getByText("Tap the gift to claim your reward.")).toBeTruthy();
+  // The lesson's quest comes first, already open.
+  expect(view.container.querySelector("article")?.textContent).toContain("The Trials");
+  expect(view.getByText("Progress for The Trials")).toBeTruthy();
+  // Claiming moves the quest on, and the dock returns to the lesson.
+  user.questData = [
+    { id: "other", goals: [] },
+    { id: "trials", goals: [{ id: "a", done: true, collected: true }] },
+  ];
+  view.rerender(<ActivityDock>Lesson</ActivityDock>);
+  expect(view.getByText("Lesson")).toBeTruthy();
 });

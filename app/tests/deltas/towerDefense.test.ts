@@ -35,7 +35,7 @@ describe("tower defense progress deltas", () => {
 });
 
 describe("tower defense daily duty delta", () => {
-  const reward = { ryo: 15_000, prestige: 150, villageTokens: 200 };
+  const reward = { ryo: 15_000, prestige: 150, villageTokens: 200, experience: 0 };
 
   const paidAt = new Date("2026-11-17T09:00:00Z");
 
@@ -52,6 +52,16 @@ describe("tower defense daily duty delta", () => {
       userDelta: { money: 15_000, villagePrestige: 150 },
       userPatch: { towerDefenseDutyAt: paidAt },
     });
+  });
+
+  it("adds the experience a Genin's duty pays", () => {
+    expect(
+      getDailyDutyUserUpdate({
+        reward: { ...reward, experience: 500 },
+        villageId: null,
+        paidAt,
+      }).userDelta,
+    ).toEqual({ money: 15_000, villagePrestige: 150, earnedExperience: 500 });
   });
 
   it("leaves the profile alone when the claim paid no duty", () => {

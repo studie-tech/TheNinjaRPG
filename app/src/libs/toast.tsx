@@ -21,6 +21,7 @@ import { registerParticlePlugins } from "@/libs/particlePlugins";
 import { getSessionErrorToastId } from "@/libs/trpcSession";
 import { countNames } from "@/utils/array";
 import { playPreloadedAudio, savedSfxVolume } from "@/utils/audio";
+import { formatAmount } from "@/utils/string";
 import type { PostProcessedRewards } from "@/validators/rewards";
 import type { CacheRewardDisplay } from "@/validators/weightedCache";
 
@@ -315,7 +316,7 @@ export const showRewardToast = (
             <div
               key={`objective-success-${notificationIndex}-${description.slice(0, 20)}`}
             >
-              <b>Objective {notificationIndex + 1}:</b>
+              <b>Objective complete</b>
               <br />
               <i>
                 <LazyParsedHtml html={description} />
@@ -337,72 +338,76 @@ export const showRewardToast = (
         <div className="flex basis-2/3 flex-col">
           {rewards.reward_money > 0 && (
             <span className="whitespace-nowrap">
-              <b>Money:</b> {rewards.reward_money} ryo
+              <b>Money:</b> {formatAmount(rewards.reward_money)} ryo
             </span>
           )}
           {rewards.reward_seichi_silver > 0 && (
             <span className="whitespace-nowrap">
-              <b>Seichi Silver:</b> {rewards.reward_seichi_silver}
+              <b>Seichi Silver:</b> {formatAmount(rewards.reward_seichi_silver)}
             </span>
           )}
           {rewards.reward_clanpoints > 0 && (
             <span className="whitespace-nowrap">
-              <b>Clan points:</b> {rewards.reward_clanpoints}
+              <b>Clan points:</b> {formatAmount(rewards.reward_clanpoints)}
             </span>
           )}
           {rewards.reward_anbupoints > 0 && (
             <span className="whitespace-nowrap">
-              <b>Anbu points:</b> {rewards.reward_anbupoints}
+              <b>Anbu points:</b> {formatAmount(rewards.reward_anbupoints)}
             </span>
           )}
           {(rewards.reward_pet_experience ?? 0) > 0 && (
             <p>
-              <b>Pet experience:</b> {rewards.reward_pet_experience}
+              <b>Pet experience:</b> {formatAmount(rewards.reward_pet_experience ?? 0)}
             </p>
           )}
           {rewards.reward_exp > 0 && (
             <span className="whitespace-nowrap">
-              <b>Experience:</b> {rewards.reward_exp}
+              <b>Experience:</b> {formatAmount(rewards.reward_exp)}
             </span>
           )}
           {rewards.reward_tokens > 0 && (
             <span className="whitespace-nowrap">
-              <b>Village tokens:</b> {rewards.reward_tokens}
+              <b>Village tokens:</b> {formatAmount(rewards.reward_tokens)}
             </span>
           )}
           {rewards.reward_prestige > 0 && (
             <span className="whitespace-nowrap">
-              <b>Village prestige:</b> {rewards.reward_prestige}
+              <b>Village prestige:</b> {formatAmount(rewards.reward_prestige)}
             </span>
           )}
           {rewards.reward_reputation > 0 && (
             <span className="whitespace-nowrap">
-              <b>Reputation points:</b> {rewards.reward_reputation}
+              <b>Reputation points:</b> {formatAmount(rewards.reward_reputation)}
             </span>
           )}
           {rewards.reward_skillpoints > 0 && (
             <span className="whitespace-nowrap">
-              <b>Skill points:</b> {rewards.reward_skillpoints}
+              <b>Skill points:</b> {formatAmount(rewards.reward_skillpoints)}
             </span>
           )}
           {rewards.reward_medical_experience > 0 && (
             <span className="whitespace-nowrap">
-              <b>Medical experience:</b> {rewards.reward_medical_experience}
+              <b>Medical experience:</b>{" "}
+              {formatAmount(rewards.reward_medical_experience)}
             </span>
           )}
           {rewards.reward_hunting_experience > 0 && (
             <span className="whitespace-nowrap">
-              <b>Hunting experience:</b> {rewards.reward_hunting_experience}
+              <b>Hunting experience:</b>{" "}
+              {formatAmount(rewards.reward_hunting_experience)}
             </span>
           )}
           {rewards.reward_crafting_experience > 0 && (
             <span className="whitespace-nowrap">
-              <b>Crafting experience:</b> {rewards.reward_crafting_experience}
+              <b>Crafting experience:</b>{" "}
+              {formatAmount(rewards.reward_crafting_experience)}
             </span>
           )}
           {rewards.reward_gathering_experience > 0 && (
             <span className="whitespace-nowrap">
-              <b>Gathering experience:</b> {rewards.reward_gathering_experience}
+              <b>Gathering experience:</b>{" "}
+              {formatAmount(rewards.reward_gathering_experience)}
             </span>
           )}
           {masteryRewardLabels(rewards).map((label) => (
@@ -438,7 +443,8 @@ export const showRewardToast = (
           )}
           {rewards.reward_sage_mastery_experience > 0 && (
             <span className="whitespace-nowrap">
-              <b>Sage mode experience:</b> {rewards.reward_sage_mastery_experience}
+              <b>Sage mode experience:</b>{" "}
+              {formatAmount(rewards.reward_sage_mastery_experience)}
             </span>
           )}
           {rewards.reward_items.length > 0 && (
@@ -459,12 +465,12 @@ export const showRewardToast = (
           ))}
           {rewards.reward_war_damage > 0 && (
             <span className="whitespace-nowrap">
-              <b>War damage to enemy:</b> {rewards.reward_war_damage}
+              <b>War damage to enemy:</b> {formatAmount(rewards.reward_war_damage)}
             </span>
           )}
           {rewards.reward_war_healing > 0 && (
             <span className="whitespace-nowrap">
-              <b>War health restored:</b> {rewards.reward_war_healing}
+              <b>War health restored:</b> {formatAmount(rewards.reward_war_healing)}
             </span>
           )}
         </div>

@@ -2,12 +2,15 @@
  * Database access for email reminder; authorization and transaction scopes stay in callers.
  */
 
-import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
-import { EMAIL_REMINDER_EXPERIENCE_REWARD } from "@/drizzle/constants";
+import { and, asc, eq, gte, isNull, lt, lte, or, sql } from "drizzle-orm";
+import {
+  EMAIL_REMINDER_EXPERIENCE_REWARD,
+  TUTORIAL_STEPS_COUNT,
+} from "@/drizzle/constants";
 import { emailReminder, userData } from "@/drizzle/schema";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import type { DrizzleClient } from "@/server/db";
-import { MONTH_S, secondsFromNow } from "@/utils/time";
+import { DAY_S, MONTH_S, secondsFromNow, WEEK_S } from "@/utils/time";
 
 /** Build the existing reminder-user ID listing for daily Clerk email synchronization; retain its userId-only projection. */
 export const listEmailReminderForDailySync = (client: Pick<DrizzleClient, "query">) =>
@@ -52,6 +55,41 @@ export const listEmailReminderForGET = (client: Pick<DrizzleClient, "query">) =>
     orderBy: [asc(emailReminder.lastActivity)],
     limit: 10,
   });
+
+/**
+ * Players who stopped partway through the Academy Trials a day to two weeks ago and
+ * have never been sent a reminder. Sending one sets `latestRejoinRequest` past their
+ * last activity, so the monthly "we miss you" email waits until they return.
+ */
+export const listTutorialLapsedReminders = (client: Pick<DrizzleClient, "select">) => {
+  const lastSeen = sql`COALESCE(${userData.lastActiveAt}, ${userData.updatedAt})`;
+  return client
+    .select({
+      id: emailReminder.id,
+      userId: emailReminder.userId,
+      callName: emailReminder.callName,
+      email: emailReminder.email,
+      secret: emailReminder.secret,
+      latestRejoinRequest: emailReminder.latestRejoinRequest,
+      tutorialStep: userData.tutorialStep,
+    })
+    .from(emailReminder)
+    .innerJoin(userData, eq(userData.userId, emailReminder.userId))
+    .where(
+      and(
+        eq(emailReminder.validated, true),
+        eq(emailReminder.disabled, false),
+        isNull(emailReminder.latestRejoinRequest),
+        eq(userData.isAi, false),
+        eq(userData.tutorialOn, true),
+        lt(userData.tutorialStep, TUTORIAL_STEPS_COUNT),
+        lte(lastSeen, secondsFromNow(-DAY_S)),
+        gte(lastSeen, secondsFromNow(-2 * WEEK_S)),
+      ),
+    )
+    .orderBy(asc(emailReminder.id))
+    .limit(25);
+};
 
 /**
  * Build the `emailReminder` update for `GET`, setting `latestRejoinRequest`, guarded on

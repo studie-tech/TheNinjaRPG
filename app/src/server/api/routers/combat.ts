@@ -129,6 +129,7 @@ import {
 } from "@/libs/combat/summon";
 import { realizePassiveEffect } from "@/libs/combat/tags";
 import { alignBattle, getTurnControl } from "@/libs/combat/turn";
+import { placeTutorialOpponentsNearby } from "@/libs/combat/tutorialPlacement";
 import type {
   ActionEffect,
   BattleUserItem,
@@ -3223,6 +3224,16 @@ export const initiateBattle = async (
       }),
     )
     .map((u) => u.userId);
+  if (tutorialGuidedUserIds.length > 0) {
+    extraState.tutorialGuided = true;
+    // The first fights open within reach, so the lesson is one move and a strike.
+    placeTutorialOpponentsNearby(
+      usersState,
+      tutorialGuidedUserIds,
+      gridSize.width,
+      gridSize.height,
+    );
+  }
   const autoCombatUserIds = [
     ...(info.autoCombatUserIds ?? []),
     ...(info.autoCombatFromDefaults

@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { z } from "zod";
 import { getAcceptRequestUserUpdate, getLeaveSenseiUserUpdate } from "@/deltas/sensei";
 import { SENSEI_MAX_ACTIVE_STUDENTS, SENSEI_REQUIRED_RANK } from "@/drizzle/constants";
@@ -17,6 +18,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import { recordOnboardingTask } from "@/server/utils/onboardingTasks";
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -66,6 +68,17 @@ export const senseiRouter = createTRPCRouter({
       // Mutate
       await insertRequest(ctx.drizzle, user.userId, target.userId, "SENSEI");
       notifySenseiUpdate(input.targetId);
+      // Asking for a sensei is the story step; whether a Jonin accepts is up to them.
+      if (user.rank === "GENIN") {
+        after(() =>
+          recordOnboardingTask({
+            client: ctx.drizzle,
+            userId: user.userId,
+            task: "get_sensei",
+            questData: user.questData,
+          }),
+        );
+      }
       return { success: true, message: "Request created" };
     }),
   rejectRequest: protectedProcedure

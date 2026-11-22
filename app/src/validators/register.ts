@@ -186,6 +186,8 @@ export const registrationSchema = z
     musicOn: z.boolean().optional(),
     sfxOn: z.boolean().optional(),
     buttonSfxOn: z.boolean().optional(),
+    /** Returning players start with hints only and are offered Express Trials. */
+    playedBefore: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     const fields = ["attribute_1", "attribute_2", "attribute_3"] as const;

@@ -35,6 +35,7 @@ import {
 import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
 import { VISUAL_EFFECT_KEYS } from "@/libs/visualEffects";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
+import * as userContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const LAYOUT_STYLESHEETS = ["layout-themes.css", "layout-directions.css"];
@@ -105,6 +106,9 @@ const mockFrameChrome = () => {
   vi.spyOn(LayoutSidebars, "StrongestUsersBanner").mockImplementation(() => (
     <div>Strongest users</div>
   ));
+  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
+    data: undefined,
+  } as never);
 };
 
 const renderProps = (
@@ -279,6 +283,9 @@ describe("game settings categories", () => {
   const renderSettings = (withCombat = false, supportsBattleFocus = true) => {
     vi.spyOn(clerk, "useUser").mockReturnValue({ isSignedIn: false } as never);
     vi.spyOn(navigation, "useRouter").mockReturnValue({ refresh: vi.fn() } as never);
+    vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
+      data: undefined,
+    } as never);
     Object.assign(vi.spyOn(client, "api" as never), {
       profile: {
         getUser: { useQuery: () => ({ data: undefined }) },

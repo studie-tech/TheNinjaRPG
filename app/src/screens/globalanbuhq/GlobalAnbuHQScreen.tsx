@@ -1,8 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { IMG_BUILDING_GLOBALANBU } from "@/drizzle/constants";
 import { FancyForumThreads } from "@/layout/FancyForumThreads";
-import QuestPicker from "@/layout/QuestPicker";
 import RaidBrowser from "@/layout/RaidBrowser";
+import { StoryMissionPicker } from "@/layout/StoryMissionPicker";
 import { fetchForumPageData } from "@/libs/forum";
 import { drizzleDB } from "@/server/db";
 
@@ -35,13 +35,7 @@ export async function GlobalAnbuHQScreen() {
             initialBreak={true}
             viewOnly={true}
           />
-          <QuestPicker
-            questType="story"
-            title="Story Missions"
-            subtitle="Global Anbu HQ"
-            introduction="Story missions are special assignments that advance the game's narrative. They can only be started here at the Global Anbu HQ."
-            initialBreak={true}
-          />
+          <StoryMissionPicker />
         </>
       )}
     </>

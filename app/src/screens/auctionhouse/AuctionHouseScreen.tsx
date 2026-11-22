@@ -28,6 +28,7 @@ import {
 import { useNavigationRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import { AuctionListing, type BrowseTab } from "@/screens/auctionhouse/Listings";
 import { NewAuctionListingDialog } from "@/screens/auctionhouse/NewListingDialog";
 import { AuctionOffers, NewOfferDialog } from "@/screens/auctionhouse/Offers";
@@ -121,6 +122,7 @@ function AuctionHouse() {
         </div>
       }
     >
+      <SystemIntroBanner system="auction" />
       {belowAuctionMinLevel && (
         <p className="border-b px-4 py-3 text-center text-muted-foreground text-sm">
           {auctionHouseLevelMessage}

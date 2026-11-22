@@ -105,6 +105,11 @@ function mockApi() {
       },
     },
     gameAsset: { getSceneAssets: { useQuery: () => ({ data: [] }) } },
+    quests: {
+      retryBattle: {
+        useMutation: () => ({ mutate: () => undefined, isPending: false }),
+      },
+    },
   });
 }
 vi.mock("next/navigation", () => ({
@@ -541,7 +546,8 @@ it("shows a completed tutorial state and still presents available quest guidance
   mocks.client.setQueryData(key, completed);
   const view = renderAssistant();
   fireEvent.click(view.getByRole("button", { name: "Open Activity" }));
-  fireEvent.mouseDown(view.getByRole("tab", { name: "Tutorial" }), { button: 0 });
+  // Once the trials are over the lesson tab carries the story.
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Story" }), { button: 0 });
   expect(
     view.getByText(
       "Tutorial complete. Quest guidance will appear here when available.",

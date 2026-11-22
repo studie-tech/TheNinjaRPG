@@ -3471,6 +3471,14 @@ export const userData = mysqlTable(
     unmutedTavernIds: json("unmutedTavernIds").$type<string[]>().default([]).notNull(),
     tutorialStep: tinyint("tutorialStep", { unsigned: true }).default(0).notNull(),
     tutorialOn: boolean("tutorialOn").default(true).notNull(),
+    /** How much the story dock points at the next chapter and at new systems. */
+    guidanceLevel: mysqlEnum("guidanceLevel", consts.GuidanceLevels)
+      .default("FULL")
+      .notNull(),
+    /** Systems whose one-time introduction the player has already seen. */
+    seenIntros: json("seenIntros").$type<string[]>().default([]).notNull(),
+    /** Ticked at character creation; starts guidance at hints and offers Express Trials. */
+    playedBefore: boolean("playedBefore").default(false).notNull(),
     homeType: mysqlEnum("homeType", consts.HomeTypes).default("NONE").notNull(),
     homeFurnitureRevision: int("homeFurnitureRevision", { unsigned: true })
       .default(0)
@@ -3705,6 +3713,8 @@ export const userPet = mysqlTable(
       .notNull(),
     // Evolution keeps the previous accepted image until artRank catches up to rank.
     artRank: tinyint("artRank", { unsigned: true }).default(0).notNull(),
+    /** The Sanctuary pup the player rescued in the Academy Trials, adopted as this companion. */
+    isSanctuaryPup: boolean("isSanctuaryPup").default(false).notNull(),
     revision: int("revision", { unsigned: true }).default(0).notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)

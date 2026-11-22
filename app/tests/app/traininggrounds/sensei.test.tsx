@@ -82,6 +82,8 @@ beforeEach(() => {
     }),
     profile: routerOf({}),
     stealth: routerOf({}),
+    misc: routerOf({}),
+    train: routerOf({}),
     sensei: routerOf({
       getRequests: { useQuery: () => ({ data: [] }) },
       createRequest: capture("createRequest"),
@@ -116,4 +118,20 @@ it("refreshes sensei requests after each request change", async () => {
   expect(invalidateRequests).toHaveBeenCalledTimes(3);
   expect(invalidateStudents).not.toHaveBeenCalled();
   expect(toast.showMutationToast).toHaveBeenCalledTimes(6);
+});
+
+it("keeps the Stats panel open through the Energy queue lesson", () => {
+  localStorage.setItem("trainingTab:viewer", "Jutsu");
+  vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
+    currentStep: { advanceOn: "queueEnergy" },
+  } as never);
+  render(
+    <AppRouterContext.Provider value={{} as never}>
+      <Training />
+    </AppRouterContext.Provider>,
+  );
+  const selected = screen
+    .getAllByRole("tab")
+    .find((tab) => tab.getAttribute("aria-selected") === "true");
+  expect(selected?.textContent).toContain("Stats");
 });

@@ -21,6 +21,7 @@ import {
   getUnchangedClanUserUpdate,
   getUpgradeHideoutToStrongholdUserUpdate,
 } from "@/deltas/clan";
+import { withOnboardingQuestPatch } from "@/deltas/quests";
 import {
   ASSASSIN_MAX_PER_FACTION,
   CLAN_ASSASSIN_SLOTS,
@@ -145,6 +146,7 @@ import { closeVillageTrade } from "@/server/utils/caravan";
 import { clearClanCombat, deleteClanBattle } from "@/server/utils/clanBattle";
 import { syncStrongholdMembership } from "@/server/utils/faction";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { recordOnboardingTask } from "@/server/utils/onboardingTasks";
 import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { membershipUpdate } from "@/server/utils/push/messages";
@@ -551,7 +553,7 @@ export const clanRouter = createTRPCRouter({
   createRequest: protectedProcedure
     .meta({ mcp: { description: "Request to join clan/faction" } })
     .input(z.object({ clanId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -577,6 +579,13 @@ export const clanRouter = createTRPCRouter({
       }
       // Mutate
       await insertRequest(ctx.drizzle, user.userId, fetchedClan.leaderId, "CLAN");
+      // Asking to join is the story step; the leader decides when to accept.
+      const questData = await recordOnboardingTask({
+        client: ctx.drizzle,
+        userId: user.userId,
+        task: "join_clan",
+        questData: user.questData,
+      });
       deferPushToUsers(ctx.drizzle, [fetchedClan.leaderId], membershipUpdate("clan"));
       void pusher.trigger(fetchedClan.id, "event", {
         type: "userMessage",
@@ -584,11 +593,13 @@ export const clanRouter = createTRPCRouter({
         route: `/clanhall`,
         routeText: `To ${user.isOutlaw ? "faction" : "clan"}`,
       });
-      // Create
-      return {
-        success: true,
-        message: `User requested to join ${user.isOutlaw ? "faction" : "clan"}`,
-      };
+      return withOnboardingQuestPatch(
+        {
+          success: true,
+          message: `User requested to join ${user.isOutlaw ? "faction" : "clan"}`,
+        },
+        questData,
+      );
     }),
   rejectRequest: protectedProcedure
     .meta({ mcp: { description: "Reject clan join request" } })

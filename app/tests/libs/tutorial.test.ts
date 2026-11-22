@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  BLACKSTEEL_PROCTOR_AI_ID,
   TUTORIAL_ARENA_DUMMY_ID,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
   TUTORIAL_STARTER_QUEST_ID,
@@ -12,13 +13,14 @@ import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import {
   canPositionTutorialHighlight,
   GENIN_QUEST_OBJECTIVES,
+  getHighlightScrollDirection,
   getStarterQuestProgress,
   getTutorialBattleReturnPage,
   getTutorialCatchUpStepIndex,
   getTutorialChapterProgress,
+  getTutorialCombatCoaching,
   getTutorialCombatGuidance,
   getTutorialHighlightedQuestId,
-  getTutorialPortraitSide,
   getTutorialRewindStepIndex,
   getTutorialStepPath,
   getTutorialStrandedBattleStepId,
@@ -33,6 +35,7 @@ import {
   isTutorialPageMatch,
   isUsableHighlightRect,
   STARTER_QUEST_OBJECTIVES,
+  TUTORIAL_ANY_PAGE,
   TUTORIAL_CAPTURE_STEP_ID,
   TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
   TUTORIAL_HOME_SECTOR,
@@ -71,6 +74,20 @@ const stepBlock = (stepId: string) => {
   expect(start).toBeGreaterThan(-1);
   return source.slice(start, source.indexOf("\n  },", start));
 };
+
+describe("getHighlightScrollDirection", () => {
+  it("points the way to a highlight scrolled out of view", () => {
+    expect(getHighlightScrollDirection({ top: -200, height: 100 }, 800)).toBe("up");
+    expect(getHighlightScrollDirection({ top: 900, height: 100 }, 800)).toBe("down");
+  });
+
+  it("stays quiet while enough of the highlight shows", () => {
+    expect(getHighlightScrollDirection({ top: 300, height: 100 }, 800)).toBeNull();
+    // Mostly above the screen, but its lower edge is still in view.
+    expect(getHighlightScrollDirection({ top: -60, height: 100 }, 800)).toBeNull();
+    expect(getHighlightScrollDirection({ top: 760, height: 100 }, 800)).toBeNull();
+  });
+});
 
 describe("getTutorialStepPath", () => {
   it("strips in-page hashes", () => {
@@ -275,39 +292,8 @@ describe("tutorial highlight placement", () => {
   });
 });
 
-describe("getTutorialPortraitSide", () => {
-  // The strip above a 420px dock at the bottom-left of a 1280x800 window.
-  const frame = { top: 330, left: 20, width: 420, height: 180 };
-  const portrait = { frame, portraitWidth: 170, inset: 16 };
-
-  it("stands at the dock's right end when nothing is highlighted", () => {
-    expect(getTutorialPortraitSide({ ...portrait, avoid: null })).toBe("right");
-  });
-
-  it("stays at the right end when the highlight is elsewhere", () => {
-    const avoid = { top: 120, left: 700, width: 200, height: 40 };
-    expect(getTutorialPortraitSide({ ...portrait, avoid })).toBe("right");
-  });
-
-  it("steps to the left end when the highlight is under her", () => {
-    const avoid = { top: 400, left: 330, width: 90, height: 40 };
-    expect(getTutorialPortraitSide({ ...portrait, avoid })).toBe("left");
-  });
-
-  it("keeps clear of the hand pointer bouncing below the highlight", () => {
-    // The highlight ends 60px above the strip; the hand hangs into it.
-    const avoid = { top: 230, left: 300, width: 100, height: 40 };
-    expect(getTutorialPortraitSide({ ...portrait, avoid })).toBe("left");
-  });
-
-  it("leaves when the highlight spans the whole dock", () => {
-    const avoid = { top: 380, left: 0, width: 600, height: 60 };
-    expect(getTutorialPortraitSide({ ...portrait, avoid })).toBeNull();
-  });
-});
-
 describe("TUTORIAL_STEPS", () => {
-  it("sends travel steps through the lesson's travel button, then its confirmation and arrival", () => {
+  it("teaches travel on the globe, pointing at less the second time", () => {
     // Travel steps share one element list defined above the step array.
     const source = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../../src/libs/tutorialSteps.tsx"),
@@ -318,23 +304,20 @@ describe("TUTORIAL_STEPS", () => {
     const ids = [
       ...source.slice(start, source.indexOf("];", start)).matchAll(/"([^"]+)"/g),
     ].map((match) => match[1]);
-    // One tap on the lesson opens the trip's confirmation, whose Travel button
-    // then wins the highlight, and the arrival timer after that. The globe and
-    // its tab stay unmarked so the lesson's button is the one thing to press.
+    // The trip's confirmation and arrival timer win over what leads to them.
     expect(ids).toEqual([
       "tutorial-auto-travel-proceed",
       "tutorial-global-travel-proceed",
       "tutorial-travel-arrival",
     ]);
-    expect(
-      readTutorialStepsSource().match(/elementIds: globalTravelElements/g),
-    ).toHaveLength(2);
-    for (const stepId of [
-      TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
-      TUTORIAL_WAKE_TRAVEL_STEP_ID,
-    ]) {
-      const block = stepBlock(stepId);
-      expect(block).toContain("elementIds: globalTravelElements");
+    const first = stepBlock(TUTORIAL_CAPTURE_TRAVEL_STEP_ID);
+    expect(first).toContain('"tutorial-globe-target", "tutorial-Global"');
+    // The second trip leaves finding the Global tab to the player.
+    const second = stepBlock(TUTORIAL_WAKE_TRAVEL_STEP_ID);
+    expect(second).toContain('"tutorial-globe-target"');
+    expect(second).not.toContain('"tutorial-Global"');
+    for (const block of [first, second]) {
+      expect(block).toContain("teachOnPage: true");
       expect(block).toMatch(/autoTravelLabel: "[^"]+"/);
     }
   });
@@ -422,9 +405,10 @@ describe("TUTORIAL_STEPS", () => {
     for (const stepId of [
       TUTORIAL_ITEM_BUY_STEP_ID,
       "tools-train-stat",
-      "tools-buy-ramen",
+      "tools-queue-energy",
+      "mission-ramen",
       "bond-adopt",
-      "exam-farewell",
+      "exam-dashboard",
     ]) {
       expect(stepBlock(stepId)).toContain("showNextButton: true");
     }
@@ -467,9 +451,24 @@ describe("isTutorialGuidedBattle", () => {
     ).toBe(true);
   });
 
+  it("guides the Genin exam's practical test", () => {
+    expect(
+      isTutorialGuidedBattle(learner, { questId: TUTORIAL_GENIN_EXAM_QUEST_ID }),
+    ).toBe(true);
+    expect(
+      isTutorialGuidedBattle(learner, { opponentIds: [BLACKSTEEL_PROCTOR_AI_ID] }),
+    ).toBe(true);
+  });
+
   it("leaves other fights, and players past the tutorial, on their own preference", () => {
     expect(isTutorialGuidedBattle(learner, { opponentIds: ["someone"] })).toBe(false);
     expect(isTutorialGuidedBattle(learner, { questId: "another-quest" })).toBe(false);
+    expect(
+      isTutorialGuidedBattle(
+        { isAi: true, tutorialOn: true, tutorialStep: 0 },
+        { opponentIds: [TUTORIAL_ARENA_DUMMY_ID] },
+      ),
+    ).toBe(false);
     expect(
       isTutorialGuidedBattle(
         { tutorialOn: false, tutorialStep: 4 },
@@ -899,6 +898,122 @@ describe("getTutorialCombatGuidance", () => {
   });
 });
 
+describe("getTutorialCombatCoaching", () => {
+  const options = (overrides: Partial<Record<string, boolean>> = {}) => [
+    {
+      id: "basicAttack",
+      name: "Basic Attack",
+      type: "basic" as const,
+      range: 1,
+      isUsable: overrides.basicAttack ?? true,
+    },
+    {
+      id: "move",
+      name: "Move",
+      type: "basic" as const,
+      range: 1,
+      isUsable: overrides.move ?? true,
+    },
+    {
+      id: "meditate",
+      name: "Meditate",
+      type: "basic" as const,
+      range: 0,
+      isUsable: true,
+    },
+    { id: "wait", name: "End Turn", type: "basic" as const, range: 0, isUsable: true },
+    {
+      id: "slash",
+      name: "Sonic Slash",
+      type: "jutsu" as const,
+      range: 3,
+      isUsable: overrides.slash ?? true,
+    },
+  ];
+  const coach = (
+    distanceToEnemy: number,
+    selectedActionId?: string,
+    overrides?: Partial<Record<string, boolean>>,
+  ) =>
+    getTutorialCombatCoaching({
+      isPlayersTurn: true,
+      distanceToEnemy,
+      actionPoints: 60,
+      selectedActionId,
+      options: options(overrides),
+    });
+
+  it("waits while it is the opponent's turn", () => {
+    expect(
+      getTutorialCombatCoaching({
+        isPlayersTurn: false,
+        distanceToEnemy: 2,
+        actionPoints: 100,
+        options: options(),
+      }),
+    ).toEqual({ kind: "wait" });
+  });
+
+  it("names what reaches the opponent and leaves the choice to the player", () => {
+    expect(coach(2)).toEqual({
+      kind: "coach",
+      situation: "choose",
+      distanceToEnemy: 2,
+      actionPoints: 60,
+      inReach: ["Sonic Slash"],
+    });
+    expect(coach(1)).toMatchObject({ inReach: ["Sonic Slash", "Basic Attack"] });
+    expect(coach(5)).toMatchObject({ situation: "choose", inReach: [] });
+  });
+
+  it("explains a choice that cannot work instead of picking another", () => {
+    expect(coach(2, "basicAttack")).toMatchObject({
+      situation: "outOfReach",
+      actionName: "Basic Attack",
+      actionRange: 1,
+    });
+    expect(coach(1, "slash", { slash: false })).toMatchObject({
+      situation: "unavailable",
+      actionName: "Sonic Slash",
+    });
+  });
+
+  it("follows the player's own choice of action", () => {
+    expect(coach(2, "slash")).toMatchObject({ situation: "target" });
+    expect(coach(3, "move")).toMatchObject({ situation: "move" });
+    // End Turn left selected from the last turn is no sign the player is done.
+    expect(coach(3, "wait")).toMatchObject({ situation: "endEarly" });
+    expect(
+      coach(1, "wait", { basicAttack: false, move: false, slash: false }),
+    ).toMatchObject({ situation: "end" });
+  });
+
+  it("says the turn is spent once nothing but ending it is affordable", () => {
+    expect(
+      coach(1, undefined, { basicAttack: false, move: false, slash: false }),
+    ).toMatchObject({ situation: "spent" });
+  });
+});
+
+describe("practice steps on any page", () => {
+  it("match every page and never become a page to return to", () => {
+    expect(isTutorialPageMatch(TUTORIAL_ANY_PAGE, "/travel")).toBe(true);
+    expect(isTutorialPageMatch(TUTORIAL_ANY_PAGE, "/profile/experience")).toBe(true);
+    const steps = [
+      { id: "fight", page: "/combat", onCombatWin: "practice" },
+      { id: "practice", page: TUTORIAL_ANY_PAGE },
+    ];
+    expect(
+      getTutorialBattleReturnPage(
+        steps,
+        { tutorialOn: true, tutorialStep: 0, status: "AWAKE" },
+        "Won",
+        "/profile",
+      ),
+    ).toBe("/profile");
+  });
+});
+
 describe("getTutorialCatchUpStepIndex on Road to Genin", () => {
   const G = GENIN_QUEST_OBJECTIVES;
   const steps = [
@@ -1044,6 +1159,42 @@ describe("getTutorialStrandedBattleStepId", () => {
     expect(
       getTutorialStrandedBattleStepId(steps, battleIndex, loading, "/profile"),
     ).toBeUndefined();
+  });
+
+  it("judges the proctor fight by the Genin exam, not the finished starter quest", () => {
+    const G = GENIN_QUEST_OBJECTIVES;
+    const examSteps = [
+      {
+        id: "exam-proctor",
+        page: "/combat",
+        objectiveId: G.proctor,
+        onCombatWin: "exam-tour",
+        onCombatLoss: "exam-proctor-retry",
+      },
+      { id: "exam-proctor-retry", page: "/travel", objectiveId: G.proctor },
+      { id: "exam-tour", page: "/travel", objectiveId: G.tour },
+    ];
+    const onExam = (proctorDone: boolean) => ({
+      status: "AWAKE",
+      battleId: null,
+      rank: "STUDENT",
+      userQuests: [
+        { questId: TUTORIAL_STARTER_QUEST_ID, completed: 1, endAt: new Date() },
+        { questId: TUTORIAL_GENIN_EXAM_QUEST_ID, completed: 0, endAt: null },
+      ],
+      questData: [
+        {
+          id: TUTORIAL_GENIN_EXAM_QUEST_ID,
+          goals: [{ id: G.proctor, done: proctorDone }],
+        },
+      ],
+    });
+    expect(
+      getTutorialStrandedBattleStepId(examSteps, 0, onExam(false), "/travel"),
+    ).toBe("exam-proctor-retry");
+    expect(getTutorialStrandedBattleStepId(examSteps, 0, onExam(true), "/travel")).toBe(
+      "exam-tour",
+    );
   });
 
   it("only applies to lessons that live on the battle page", () => {

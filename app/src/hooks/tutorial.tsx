@@ -14,8 +14,12 @@ import {
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getDistanceToClosestEnemy } from "@/libs/combat/util";
 import {
+  getTutorialCombatCoaching,
   getTutorialCombatGuidance,
+  getTutorialStepPath,
   isTutorialActive,
+  TUTORIAL_ANY_PAGE,
+  type TutorialCombatCoaching,
   type TutorialCombatGuidance,
   type TutorialTrigger,
 } from "@/libs/tutorial";
@@ -29,6 +33,8 @@ import {
 
 /** Steps the hands-on combat lesson replaces with live guidance once the fight is on. */
 const GUIDED_COMBAT_STEP_IDS = ["combat-fight", "mission-find-pup"];
+/** Title of a lost lesson's rematch, whose advice stays on screen beside the fight. */
+export const TUTORIAL_REMATCH_TITLE = "Rematch";
 const noBattleAtom = atom<ReturnedBattle | undefined>(undefined);
 const noSelectedActionAtom = atom<string | undefined>(undefined);
 
@@ -81,20 +87,24 @@ export const useTutorialStep = () => {
     isGuidedCombat ? combatActionIdAtom : noSelectedActionAtom,
   );
 
+  // Whose turn it is in the guided battle; a snapshot without an acting combatant
+  // (between rounds) has no answer rather than breaking the battle page.
+  const isPlayersTurn = (() => {
+    if (!battle || !userId || !isGuidedCombat) return undefined;
+    try {
+      return calcActiveUser(battle, userId, timeDiff).actor.userId === userId;
+    } catch {
+      return undefined;
+    }
+  })();
+
   // Live guidance for the hands-on combat lesson
   const combatGuidance = (() => {
     if (!battle || !userId || !isGuidedCombat) return undefined;
     const self = battle.usersState.find((u) => u.userId === userId);
     if (!self) return undefined;
     if (self.isAutoCombat) return { kind: "auto" } as const;
-    // A snapshot without an acting combatant (between rounds) gives no
-    // instruction rather than breaking the battle page.
-    let actorId: string;
-    try {
-      actorId = calcActiveUser(battle, userId, timeDiff).actor.userId;
-    } catch {
-      return undefined;
-    }
+    if (isPlayersTurn === undefined) return undefined;
     const actions = availableUserActions(battle, userId);
     const options = actions.map((action) => ({
       id: action.id,
@@ -107,26 +117,53 @@ export const useTutorialStep = () => {
           !action.lastUsedRound ||
           battle.round - action.lastUsedRound >= action.cooldown),
     }));
-    return getTutorialCombatGuidance({
-      isPlayersTurn: actorId === userId,
-      distanceToEnemy: getDistanceToClosestEnemy(battle, userId),
-      selectedActionId: actions.find(
-        (action) => getActionSelectionId(action) === selectedActionId,
-      )?.id,
-      options,
-    });
+    const distanceToEnemy = getDistanceToClosestEnemy(battle, userId);
+    const selectedId = actions.find(
+      (action) => getActionSelectionId(action) === selectedActionId,
+    )?.id;
+    // Everyone acts once a round, so from round 2 the player has played a turn under
+    // instruction; from then on they choose and are only coached.
+    if (battle.round > 1) {
+      const coaching = getTutorialCombatCoaching({
+        isPlayersTurn,
+        distanceToEnemy,
+        actionPoints: Math.floor(self.actionPoints),
+        selectedActionId: selectedId,
+        options,
+      });
+      if (coaching.kind === "coach") return coaching;
+    }
+    return {
+      ...getTutorialCombatGuidance({
+        isPlayersTurn,
+        distanceToEnemy,
+        selectedActionId: selectedId,
+        options,
+      }),
+      distanceToEnemy,
+    };
   })();
   // Primitive fields, so the step below keeps its identity between renders
   // until the instruction itself changes.
-  const guidanceKind = combatGuidance?.kind;
+  const guidanceKind =
+    combatGuidance?.kind === "coach" ? undefined : combatGuidance?.kind;
   const guidanceActionId =
     combatGuidance && "actionId" in combatGuidance
       ? combatGuidance.actionId
       : undefined;
   const guidanceActionName =
-    combatGuidance && "actionName" in combatGuidance ? combatGuidance.actionName : "";
+    combatGuidance && combatGuidance.kind !== "coach" && "actionName" in combatGuidance
+      ? combatGuidance.actionName
+      : "";
   const guidanceReason =
     combatGuidance && "reason" in combatGuidance ? combatGuidance.reason : "attack";
+  const guidanceDistance =
+    combatGuidance && "distanceToEnemy" in combatGuidance
+      ? combatGuidance.distanceToEnemy
+      : null;
+  // The coaching as one value, so the step below changes only when its words do.
+  const coachingKey =
+    combatGuidance?.kind === "coach" ? JSON.stringify(combatGuidance) : undefined;
 
   // The step to show, with the combat lesson's live instruction in place of a
   // static one while the player is fighting a guided battle.
@@ -141,7 +178,7 @@ export const useTutorialStep = () => {
         ...staticStep,
         title: "Battle over",
         description: "That's the fight done. Let's carry on where we left off.",
-        action: "Tap Continue tutorial.",
+        action: "Tap the highlighted button.",
         elementIds: ["return"],
         page: "/combat",
         // One call to action on the result screen; the next step does the rest.
@@ -151,9 +188,29 @@ export const useTutorialStep = () => {
         proceedOnHighlightClick: false,
       };
     }
-    if (!GUIDED_COMBAT_STEP_IDS.includes(staticStep.id) || !guidanceKind) {
+    if (!GUIDED_COMBAT_STEP_IDS.includes(staticStep.id)) {
+      // A rematch started from another page keeps its lesson's advice on screen.
+      if (inBattle && getTutorialStepPath(staticStep.page) !== "/combat") {
+        return {
+          ...staticStep,
+          title: TUTORIAL_REMATCH_TITLE,
+          action: "Win the fight.",
+          elementIds: [],
+          page: "/combat",
+          advanceOn: undefined,
+          showNextButton: false,
+          proceedOnHighlightClick: false,
+        };
+      }
       return staticStep;
     }
+    if (coachingKey) {
+      return getCoachedCombatStep(
+        staticStep,
+        JSON.parse(coachingKey) as Extract<TutorialCombatCoaching, { kind: "coach" }>,
+      );
+    }
+    if (!guidanceKind) return staticStep;
     const guidance: TutorialCombatGuidance | { kind: "auto" } =
       guidanceKind === "auto" || guidanceKind === "wait" || !guidanceActionId
         ? { kind: guidanceKind === "auto" ? "auto" : "wait" }
@@ -163,7 +220,7 @@ export const useTutorialStep = () => {
             actionName: guidanceActionName,
             reason: guidanceReason,
           };
-    return getGuidedCombatStep(staticStep, guidance);
+    return getGuidedCombatStep(staticStep, guidance, guidanceDistance);
   }, [
     staticStep,
     pathname,
@@ -172,6 +229,8 @@ export const useTutorialStep = () => {
     guidanceActionId,
     guidanceActionName,
     guidanceReason,
+    guidanceDistance,
+    coachingKey,
   ]);
 
   /**
@@ -181,6 +240,7 @@ export const useTutorialStep = () => {
   const navigateToStep = (step: number) => {
     if (store.get(tutorialPageGuidanceAtom)) return;
     const stepPage = TUTORIAL_STEPS[step]?.page;
+    if (stepPage === TUTORIAL_ANY_PAGE) return;
     const involvesBattle = pathname === "/combat" || stepPage === "/combat";
     if (stepPage && !involvesBattle && !isSamePage(stepPage, pathname)) {
       const previousPage = window.location.href;
@@ -289,7 +349,10 @@ const isSamePage = (stepPage: string, pathname: string) =>
 const getGuidedCombatStep = (
   step: TutorialStepConfig,
   guidance: TutorialCombatGuidance | { kind: "auto" },
+  distanceToEnemy: number | null,
 ): TutorialStepConfig => {
+  // A move ends next to the opponent once only one tile separates them.
+  const isOneTileAway = distanceToEnemy === 2;
   const base = {
     ...step,
     page: "/combat",
@@ -320,8 +383,10 @@ const getGuidedCombatStep = (
     if (guidance.reason === "move") {
       return {
         ...base,
-        title: "Close the distance",
-        description: "Your opponent is out of reach. Moving one tile costs 10 AP.",
+        title: isOneTileAway ? "One more tile" : "Close the distance",
+        description: isOneTileAway
+          ? "One step and your opponent is in reach. Moving one tile costs 10 AP."
+          : "Your opponent is out of reach. Moving one tile costs 10 AP.",
         action: `Select ${name}.`,
         elementIds: [`tutorial-combat-action-${guidance.actionId}`],
       };
@@ -338,7 +403,7 @@ const getGuidedCombatStep = (
     }
     return {
       ...base,
-      title: "Strike!",
+      title: "In reach: attack!",
       description:
         guidance.actionId === "basicAttack"
           ? "Your opponent is within reach of a basic attack: 20 AP and a little stamina."
@@ -355,22 +420,115 @@ const getGuidedCombatStep = (
     ...base,
     title:
       guidance.reason === "move"
-        ? "Pick a tile"
+        ? isOneTileAway
+          ? "One more tile"
+          : "Pick a tile"
         : guidance.reason === "end"
           ? "End your turn"
           : "Pick your target",
     description:
       guidance.reason === "move"
-        ? "Highlighted tiles are within reach. Step towards your opponent."
+        ? "Highlighted tiles are within reach. Step onto a tile next to your opponent."
         : guidance.reason === "end"
           ? "End Turn targets yourself. Shortcut: press W."
           : "Tap your opponent on the battlefield to attack.",
     action:
       guidance.reason === "move"
-        ? "Tap a highlighted tile next to you."
+        ? "Tap a highlighted tile next to your opponent."
         : guidance.reason === "end"
           ? "Tap your own character."
           : "Tap your opponent.",
     elementIds: ["tutorial-combat-field"],
   };
+};
+
+/**
+ * The combat lesson once the player has played a turn under instruction: Lemu describes
+ * the situation and explains a choice that cannot work, and the player picks every action.
+ * Phones show only the title and action during a fight, so each action line carries the
+ * facts the player needs on its own.
+ */
+const getCoachedCombatStep = (
+  step: TutorialStepConfig,
+  coaching: Extract<TutorialCombatCoaching, { kind: "coach" }>,
+): TutorialStepConfig => {
+  const { distanceToEnemy: distance, actionPoints, inReach } = coaching;
+  const name = coaching.actionName ?? "";
+  const base = {
+    ...step,
+    page: "/combat",
+    showNextButton: false,
+    proceedOnHighlightClick: false,
+    // Nothing is spotlit: the whole battlefield and action bar are the player's to read.
+    elementIds: [],
+  };
+  const away = `${distance} ${distance === 1 ? "tile" : "tiles"}`;
+  switch (coaching.situation) {
+    case "outOfReach":
+      return {
+        ...base,
+        title: "Out of reach",
+        description: `${name} reaches ${coaching.actionRange} ${coaching.actionRange === 1 ? "tile" : "tiles"}, but your opponent is ${away} away. Move closer first, or pick something with more range.`,
+        action: `${name} reaches ${coaching.actionRange}; your opponent is ${away} away.`,
+      };
+    case "unavailable":
+      return {
+        ...base,
+        title: "Not available",
+        description: `${name} needs more Action Points than you have left (${actionPoints} AP), or it is still recharging from its last use. Its button tells you which.`,
+        action: "Too few AP, or still recharging: pick another action.",
+      };
+    case "move":
+      return {
+        ...base,
+        title: "Pick a tile",
+        description: `Highlighted tiles are within reach, and each tile costs 10 AP. You have ${actionPoints} AP left.`,
+        action: `Tap a highlighted tile: 10 AP each, ${actionPoints} AP left.`,
+      };
+    case "end":
+      return {
+        ...base,
+        title: "End your turn",
+        description:
+          "Ending your turn hands it to your opponent and refills your Action Points for the next round.",
+        action: "Tap yourself to end the turn, or press W.",
+      };
+    case "endEarly":
+      return {
+        ...base,
+        title: "Your call",
+        description:
+          inReach.length > 0
+            ? `End Turn is selected, but you still have ${actionPoints} AP, and your opponent is ${away} away. In reach right now: ${inReach.join(", ")}.`
+            : `End Turn is selected, but you still have ${actionPoints} AP. Your opponent is ${away} away, so you could still close the distance.`,
+        action: `${actionPoints} AP left: choose an action, or tap yourself to end early.`,
+      };
+    case "target":
+      return {
+        ...base,
+        title: "Pick your target",
+        description: `${name} reaches your opponent from here.`,
+        action: "Tap your opponent.",
+      };
+    case "spent":
+      return {
+        ...base,
+        title: "Turn spent",
+        description: `With ${actionPoints} AP left there is nothing more you can do this turn.`,
+        action: `${actionPoints} AP left: end your turn with End Turn, or press W.`,
+      };
+    default:
+      return {
+        ...base,
+        title: "Your call",
+        description:
+          inReach.length > 0
+            ? `You have ${actionPoints} AP, and your opponent is ${away} away. In reach right now: ${inReach.join(", ")}. Watch your chakra and stamina too: jutsu spend chakra, basic attacks stamina.`
+            : `You have ${actionPoints} AP, and your opponent is ${away} away, out of reach of everything you have. Close the distance first.`,
+        action:
+          inReach.length > 0
+            ? `${actionPoints} AP · in reach: ${inReach.join(", ")}`
+            : `${actionPoints} AP · nothing reaches yet: move closer`,
+      };
+  }
 };

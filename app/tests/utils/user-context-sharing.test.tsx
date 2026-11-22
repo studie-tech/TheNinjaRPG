@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as trpc from "@trpc/react-query";
+import * as navigation from "next/navigation";
 import { type ContextType, Profiler, type ReactNode, useContext } from "react";
 import * as client from "@/app/_trpc/client";
 import { clearInboxNotifications } from "@/deltas/chat";
@@ -54,6 +55,11 @@ type Snapshot = ReturnType<typeof snapshot>;
 const clients: QueryClient[] = [];
 
 beforeEach(() => {
+  // A streak claim reports to the tutorial, which reads the app router.
+  vi.spyOn(navigation, "useRouter").mockReturnValue({
+    push: vi.fn(),
+    replace: vi.fn(),
+  } as never);
   now = BASE;
   vi.spyOn(Date, "now").mockImplementation(() => now);
   vi.spyOn(trpc, "getQueryKey").mockReturnValue(key);
@@ -98,6 +104,14 @@ const mount = (
             ...useQuery({ ...options, queryKey: key, queryFn: async () => response }),
           };
         },
+      },
+      // A streak claim reports to the tutorial, which saves its step through this.
+      updateTutorialStep: {
+        useMutation: () => ({
+          mutate: vi.fn(),
+          mutateAsync: vi.fn(),
+          isPending: false,
+        }),
       },
     },
     ...extraApi,

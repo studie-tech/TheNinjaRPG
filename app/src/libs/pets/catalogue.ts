@@ -101,6 +101,32 @@ export const PET_AURAS = options([
   ["Spirit", "A few faint pearl-coloured spirit motes"],
 ] as const);
 
+/**
+ * The tracking hound the player rescues in the Academy Trials: the Bondkeepers offer
+ * it, ready-made, as the first companion. Its traits are fixed so the rescued pup looks
+ * the same for everyone; violet sparks echo the shard it carried.
+ */
+export const SANCTUARY_PUP = {
+  speciesId: "pet-species-2",
+  paletteIndex: 9,
+  characteristicIndex: 14,
+  auraIndex: 4,
+  name: "Kuro",
+  gender: "MALE",
+} as const;
+
+/** Whether an adoption asks for exactly the Sanctuary pup's preset appearance. */
+export const isSanctuaryPupPreset = (input: {
+  speciesId: string;
+  paletteIndex: number;
+  characteristicIndex: number;
+  auraIndex: number;
+}) =>
+  input.speciesId === SANCTUARY_PUP.speciesId &&
+  input.paletteIndex === SANCTUARY_PUP.paletteIndex &&
+  input.characteristicIndex === SANCTUARY_PUP.characteristicIndex &&
+  input.auraIndex === SANCTUARY_PUP.auraIndex;
+
 /** Stable ordering keeps a subscriber's additional choices from replacing their free choices. */
 const dailyOptions = (
   catalogue: readonly PetAppearanceOption[],

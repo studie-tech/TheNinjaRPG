@@ -23,6 +23,7 @@ import {
   WAR_VILLAGE_MAX_SECTORS,
 } from "@/drizzle/constants";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useNewSystemBadges, useStoryGuidance } from "@/hooks/useStoryGuidance";
 import Building, { structureRewardEntries } from "@/layout/Building";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -40,6 +41,11 @@ export function VillageOverviewScreen() {
   const { userData, sectorVillage } = useRequireInVillage();
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const { currentStep } = useTutorialStep();
+  // Newly unlocked systems, and a chapter waiting at the Academy, are marked "New".
+  const newSystems = useNewSystemBadges();
+  const { item: storyItem } = useStoryGuidance();
+  const newRoutes = new Set<string>(newSystems.map((system) => system.route));
+  if (storyItem?.kind === "chapterReady") newRoutes.add("/academy");
 
   // Queries
   // Background refetches keep showing the loaded village; only the first load shows a loader.
@@ -214,9 +220,14 @@ export function VillageOverviewScreen() {
           {shownStructures?.map((structure, index) => (
             <div
               key={structure.id}
-              className="p-2"
+              className="relative p-2"
               id={`tutorial-${structure.route.replace("/", "")}`}
             >
+              {newRoutes.has(structure.route) && (
+                <span className="pointer-events-none absolute top-1 right-1 z-20 rounded-full bg-amber-500 px-2 py-0.5 font-bold text-[0.7rem] text-black uppercase shadow">
+                  New
+                </span>
+              )}
               <Building
                 structure={structure}
                 village={villageData}

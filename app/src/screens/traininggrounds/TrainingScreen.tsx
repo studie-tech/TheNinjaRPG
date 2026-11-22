@@ -150,7 +150,11 @@ import {
   trainEfficiency,
   trainingEnergyMessage,
 } from "@/libs/train";
-import { isTutorialJutsuPickStep } from "@/libs/tutorial";
+import {
+  isTutorialJutsuPickStep,
+  TUTORIAL_TRAIN_STAT_STEP_ID,
+  TUTORIAL_TRAINING_ENERGY,
+} from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
@@ -170,6 +174,11 @@ export function TrainingScreen() {
   const focusJutsuTraining = isTutorialJutsuPickStep(currentStep);
   // Null until NavTabs restores the last visited section (or falls back to the first).
   const [section, setSection] = useState<string | null>(null);
+  // Links such as a story objective's "Find a sensei" open a section by name.
+  useEffect(() => {
+    const linked = new URLSearchParams(window.location.search).get("section");
+    if (linked) setSection(linked);
+  }, []);
   const { data: sidebarTimers } = api.profile.getSidebarTimers.useQuery(undefined, {
     enabled: !!userData && access,
   });
@@ -187,7 +196,8 @@ export function TrainingScreen() {
   // Tutorial steps select the panel containing their highlighted action.
   const activeSection = focusJutsuTraining
     ? "Jutsu"
-    : currentStep?.advanceOn === "trainStats"
+    : currentStep?.advanceOn === "trainStats" ||
+        currentStep?.advanceOn === "queueEnergy"
       ? "Stats"
       : section;
 
@@ -543,7 +553,20 @@ const StatsTraining: React.FC<
   const needsCaptcha = showCaptcha && captcha?.svg !== null;
 
   // Tutorial management hook
-  const { completeTutorialAction } = useTutorialStep();
+  const { currentStep, completeTutorialAction } = useTutorialStep();
+  // The first lesson trains a small, previewed amount; the next one queues the rest.
+  const isEnergyLesson = currentStep?.id === TUTORIAL_TRAIN_STAT_STEP_ID;
+  const isQueueLesson = currentStep?.advanceOn === "queueEnergy";
+  const lessonMode = isEnergyLesson ? "Custom" : isQueueLesson ? "Queue" : null;
+  useEffect(() => {
+    if (lessonMode === "Custom") {
+      setStatTrainingMode("Custom");
+      setEnergy(Math.max(1, Math.min(TUTORIAL_TRAINING_ENERGY, userData.maxEnergy)));
+    } else if (lessonMode === "Queue") {
+      setStatTrainingMode("Queue");
+      setEnergy(userData.maxEnergy);
+    }
+  }, [lessonMode, userData.maxEnergy]);
 
   // Mutations
   const { mutate: startTraining, isPending: isStarting } =
@@ -575,9 +598,12 @@ const StatsTraining: React.FC<
     saveQueue: queueStatTraining,
     isPending: isQueueingEnergy,
     error: energyQueueError,
-  } = useEnergyTrainingQueue(async () => {
-    await utils.misc.getCaptcha.invalidate();
-  });
+  } = useEnergyTrainingQueue(
+    async () => {
+      await utils.misc.getCaptcha.invalidate();
+    },
+    () => void completeTutorialAction("queueEnergy"),
+  );
 
   const { mutate: startMasteryTraining, isPending: isStartingMastery } =
     api.train.startMasteryTraining.useMutation({
@@ -779,6 +805,16 @@ const StatsTraining: React.FC<
             )
           }
         >
+          {(isEnergyLesson || isQueueLesson) && (
+            <p
+              id="tutorial-training-preview"
+              className="mb-4 rounded-md border border-violet-500/40 bg-violet-500/10 p-2 text-center text-sm"
+            >
+              {isEnergyLesson
+                ? `Spend ${trainingEnergy} Energy for about +${formatTrainingGain(trainingEnergy)} in the stat you pick.`
+                : `Queue ${trainingEnergy} Energy: training continues on its own while you're offline, as your Energy refills.`}
+            </p>
+          )}
           {userData.status === "ASLEEP" && (
             <p className="mb-4 text-muted-foreground text-sm">
               Actions can wake you up when automatic waking is enabled. Existing queues
@@ -1391,7 +1427,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     } else if (isQueueFull) {
       proceed_label = `Training queue full`;
     } else if (trainTimeLabel && cost) {
-      proceed_label = `${isQueueing ? "Queue" : "Train"}${count > 1 ? ` ${count} levels` : ""} [${trainTimeLabel}, ${cost} ryo]`;
+      proceed_label = `${isQueueing ? "Queue" : level === 0 ? "Learn" : "Train"}${count > 1 ? ` ${count} levels` : ""} [${trainTimeLabel}, ${cost} ryo]`;
     }
   }
 
@@ -1506,7 +1542,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           {isOpen && jutsu && (
             <Modal
               id="tutorial-traininggrounds-trainJutsu"
-              title="Confirm Purchase"
+              title={level === 0 ? `Learn ${jutsu.name}` : `Train ${jutsu.name}`}
               proceed_label={proceed_label}
               proceedDisabled={!Number.isFinite(levelCount)}
               isOpen={isOpen}
@@ -2069,3 +2105,7 @@ const buildTrainableJutsuTiles = (input: {
 
   return { alljutsus, userJutsuCounts };
 };
+
+/** Stats gained from an Energy amount before training bonuses, rounded for a preview. */
+const formatTrainingGain = (energy: number) =>
+  Math.max(1, Math.round(energy * STATS_PER_ENERGY)).toLocaleString();

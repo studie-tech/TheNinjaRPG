@@ -24,6 +24,7 @@ import {
 } from "@/libs/rendering/scenes/globe";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { calcGlobalTravelTime } from "@/libs/travel";
+import { TUTORIAL_LAYOUT_EVENT } from "@/libs/tutorial";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { selectUserWithoutPosition, useUserDataSelector } from "@/utils/UserContext";
 import type { GlobeJourney } from "@/validators/travel";
@@ -60,6 +61,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   // Hover lives outside React state here so only the hover cards re-render per sector.
   const [hover] = useState(createHoverStore);
   const mountRef = useRef<HTMLDivElement | null>(null);
+  // The target sector a tutorial travel step points at, kept on it as the globe turns.
+  const focusMarkerRef = useRef<HTMLDivElement | null>(null);
   const [layers, setLayers] = useLocalStorage<GlobeLayers>("globeLayers", {
     labels: true,
     quests: true,
@@ -157,6 +160,16 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         state: current.current.state,
         onHover: hover.set,
         onClick: (sector) => current.current.props.onTileClick?.(sector),
+        onFocusPoint: (at) => {
+          const marker = focusMarkerRef.current;
+          if (!marker) return;
+          marker.style.display = at ? "" : "none";
+          if (at) {
+            marker.style.left = `${(at.x / at.width) * 100}%`;
+            marker.style.top = `${(at.y / at.height) * 100}%`;
+          }
+          window.dispatchEvent(new Event(TUTORIAL_LAYOUT_EVENT));
+        },
       });
       if (!signal.aborted) instance.updateState(current.current.state);
       return instance;
@@ -175,6 +188,17 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     // on the globe no matter what page embeds the component
     <div className="relative h-full w-full" style={GLOBE_SKY_STYLE}>
       <div ref={mountRef} id={"tutorial-global-map"}></div>
+      {isTravelStep &&
+        props.focusSector !== null &&
+        props.focusSector !== undefined && (
+          <div
+            ref={focusMarkerRef}
+            id="tutorial-globe-target"
+            aria-hidden="true"
+            className="pointer-events-none absolute h-10 w-10 -translate-x-1/2 -translate-y-1/2"
+            style={{ display: "none" }}
+          />
+        )}
       {error && <WebGlError />}
       <div className="pointer-events-none absolute top-0 left-0 m-5 text-white [text-shadow:0_1px_2px_rgb(0_0_0)]">
         <ul>

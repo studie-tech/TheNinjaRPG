@@ -239,11 +239,17 @@ export const selectUserPetForWhere = (
 export const selectPetSpeciesForWhere = (
   client: Pick<DrizzleClient, "select">,
   input: { speciesId: string },
+  { includeRetired = false }: { includeRetired?: boolean } = {},
 ) =>
   client
     .select({ id: petSpecies.id })
     .from(petSpecies)
-    .where(and(eq(petSpecies.id, input.speciesId), eq(petSpecies.isActive, true)));
+    .where(
+      and(
+        eq(petSpecies.id, input.speciesId),
+        includeRetired ? undefined : eq(petSpecies.isActive, true),
+      ),
+    );
 
 /** Build the `userPet` insert. */
 export const insertUserPet = (

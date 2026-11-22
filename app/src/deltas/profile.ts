@@ -657,3 +657,36 @@ export const getTavernColorPatch = (
 
 /** Loaded energy queue pointers used to decide whether a profile delta needs reconciliation. */
 export type UserQueueState = Pick<UserData, "energyQueueHead" | "energyQueueTail">;
+
+/**
+ * Add a system to the player's seen introductions, optimistically before the server
+ * records it; already-seen intros need no patch.
+ */
+export const getSeenIntroPatch = (current: Pick<User, "seenIntros">, intro: string) =>
+  current.seenIntros.includes(intro)
+    ? undefined
+    : { seenIntros: [...current.seenIntros, intro] };
+
+/**
+ * Project what Express Trials saved: the player's progression with the Road to Genin it
+ * handed out and the experience granted to spend at graduation, plus the graduation step
+ * the tutorial resumes at, the Wake Island sector and guidance at hints only. Without a
+ * confirmed `progression` the update is withheld, so the profile is read again instead of
+ * resuming the tutorial without the exam quest.
+ */
+export const getExpressTrialsUserUpdate = (input: {
+  step: number;
+  sector: number;
+  progression: ReturnType<typeof getUserProgressionUpdate> | undefined;
+}) =>
+  input.progression
+    ? {
+        achievementProgress: input.progression.achievementProgress,
+        userPatch: {
+          ...input.progression.userPatch,
+          tutorialStep: input.step,
+          sector: input.sector,
+          guidanceLevel: "HINTS" as const,
+        },
+      }
+    : {};

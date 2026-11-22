@@ -14,6 +14,7 @@ import {
   getUnchangedPetUserUpdate,
   getUnlockSlotUserUpdate,
 } from "@/deltas/pets";
+import { withOnboardingQuestPatch } from "@/deltas/quests";
 import {
   CombatStatNames,
   MAP_WAKE_ISLAND_SECTOR,
@@ -47,7 +48,11 @@ import {
   validatePetAbilities,
 } from "@/libs/pets/abilities";
 import { generatePetAppearance } from "@/libs/pets/appearance";
-import { getDailyPetOptions, isAvailablePetAppearance } from "@/libs/pets/catalogue";
+import {
+  getDailyPetOptions,
+  isAvailablePetAppearance,
+  isSanctuaryPupPreset,
+} from "@/libs/pets/catalogue";
 import { createPetFromSpecies } from "@/libs/pets/creation";
 import { getPetGenderUpdateError } from "@/libs/pets/gender";
 import {
@@ -104,6 +109,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { recordOnboardingTask } from "@/server/utils/onboardingTasks";
 import { logError } from "@/server/utils/sentry";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { canEditPetPotential } from "@/utils/permissions";
@@ -582,16 +588,25 @@ export const petsRouter = createTRPCRouter({
           });
         }
       }
+      const questData = await recordOnboardingTask({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        task: "feed_pet",
+        questData: user.questData,
+      });
       return actionReadinessResponse(
         {
           success: true,
-          ...getFeedPetUserUpdate({
-            userUpdatedAt: user.updatedAt,
-            now,
-            isActive,
-            experience,
-            meal,
-          }),
+          ...withOnboardingQuestPatch(
+            getFeedPetUserUpdate({
+              userUpdatedAt: user.updatedAt,
+              now,
+              isActive,
+              experience,
+              meal,
+            }),
+            questData,
+          ),
           message: `${pet.name} enjoyed its meal and gained ${experience.toLocaleString("en-US")} companion experience.`,
         },
         readiness,
@@ -639,6 +654,12 @@ export const petsRouter = createTRPCRouter({
           : capacity.slots <= pets.length
             ? "Unlock another collection slot or release a companion before adopting another."
             : acquisitionBlockMessage(prerequisiteUser);
+      // The rescued pup is offered outside the daily choices, so it stays available to a
+      // first adopter while no species is on offer.
+      const canAdoptSanctuaryPup =
+        user.petAcquisitions === 0 &&
+        capacity.slots > pets.length &&
+        !acquisitionBlockMessage(prerequisiteUser);
       const rankUpReason = pet
         ? (petMutationBlockMessage(prerequisiteUser, pet) ??
           petRankUpBlockMessage(pet, user))
@@ -677,6 +698,7 @@ export const petsRouter = createTRPCRouter({
         replacementCost: user.petAcquisitions === 0 ? 0 : PET_REPLACEMENT_COST,
         replacementSilverCost: user.petAcquisitions === 0 ? 0 : PET_SEICHI_SILVER_COST,
         canAcquire: !acquisitionRestriction,
+        canAdoptSanctuaryPup,
         unavailableReason: acquisitionRestriction,
         unusedExperience:
           pet?.id === user.activePetId
@@ -730,11 +752,16 @@ export const petsRouter = createTRPCRouter({
         );
       const claimedSpecies =
         user.petDailyClaims?.dayKey === dayKey ? user.petDailyClaims.speciesIds : [];
-      if (claimedSpecies.includes(input.speciesId))
+      // The rescued pup is offered outside the daily choices, only as the first bond.
+      const isSanctuaryPup = !!input.isSanctuaryPup;
+      if (isSanctuaryPup && (user.petAcquisitions > 0 || !isSanctuaryPupPreset(input)))
+        return errorResponse("The Sanctuary pup can only be your first companion.");
+      if (!isSanctuaryPup && claimedSpecies.includes(input.speciesId))
         return errorResponse(
           "You have already adopted this species today. New choices arrive at midnight UTC.",
         );
       if (
+        !isSanctuaryPup &&
         !isAvailablePetAppearance(
           input,
           getDailyPetOptions(
@@ -767,6 +794,7 @@ export const petsRouter = createTRPCRouter({
         gender: input.gender,
         appearance: input,
       });
+      created.isSanctuaryPup = isSanctuaryPup;
       const petId = created.id;
       try {
         // MySQL cannot insert the pet and update its owner's debit/counters/first
@@ -788,8 +816,13 @@ export const petsRouter = createTRPCRouter({
                 eq(userData.petSlots, user.petSlots),
                 lt(selectUserPetForWhere(tx, user), capacity.slots),
                 gte(payment.column, payment.cost),
-                // Retirement must win before a claim charges either balance or grants a pet.
-                exists(selectPetSpeciesForWhere(tx, input)),
+                // Retirement must win before a claim charges either balance or grants a pet,
+                // except for the rescued pup, whose species is fixed by the story.
+                exists(
+                  selectPetSpeciesForWhere(tx, input, {
+                    includeRetired: isSanctuaryPup,
+                  }),
+                ),
               ],
               set: {
                 ...(!user.activePetId ? { activePetId: petId, petExperience: 0 } : {}),

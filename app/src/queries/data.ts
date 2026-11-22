@@ -28,6 +28,7 @@ import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
   type BattleType,
+  BLACKSTEEL_CHAPTERS,
   type QuestType,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
   TUTORIAL_STEPS_COUNT,
@@ -152,6 +153,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics2 = (
       and(
         ...visitorWhere,
         eq(userData.isAi, false),
+        eq(userData.playedBefore, false),
         lt(userData.tutorialStep, 100),
         gte(userData.createdAt, visitorLog.createdAt),
         ...(input.utmSource ? [eq(referralSource.source, input.utmSource)] : []),
@@ -176,6 +178,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics3 = (
       and(
         ...visitorWhere,
         eq(userData.isAi, false),
+        eq(userData.playedBefore, false),
         gte(userData.createdAt, visitorLog.createdAt),
         ne(userData.rank, "STUDENT"),
       ),
@@ -199,6 +202,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics4 = (
       and(
         ...visitorWhere,
         eq(userData.isAi, false),
+        eq(userData.playedBefore, false),
         gte(userData.createdAt, visitorLog.createdAt),
         ne(userData.rank, "STUDENT"),
         ne(userData.rank, "GENIN"),
@@ -225,6 +229,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics5 = (
       and(
         ...visitorWhere,
         eq(userData.isAi, false),
+        eq(userData.playedBefore, false),
         gte(userData.createdAt, visitorLog.createdAt),
         gt(userData.pvpFights, 0),
       ),
@@ -250,6 +255,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics6 = (
       and(
         ...visitorWhere,
         eq(userData.isAi, false),
+        eq(userData.playedBefore, false),
         gte(userData.createdAt, visitorLog.createdAt),
         gte(userData.tutorialStep, TUTORIAL_STEPS_COUNT),
         lt(userData.tutorialStep, 100),
@@ -389,6 +395,7 @@ export const selectVisitorLogForGeninPath = (
       and(
         ...visitorWhere,
         eq(userData.isAi, false),
+        eq(userData.playedBefore, false),
         gte(userData.createdAt, visitorLog.createdAt),
         gte(userData.tutorialStep, TUTORIAL_STEPS_COUNT),
         lt(userData.tutorialStep, 100),
@@ -444,6 +451,7 @@ export const selectQuestHistoryForGetRecruitmentMainMetrics2 = (
       and(
         ...visitorWhere,
         eq(userData.isAi, false),
+        eq(userData.playedBefore, false),
         lt(userData.tutorialStep, 100),
         gte(userData.createdAt, visitorLog.createdAt),
         gte(userData.tutorialStep, TUTORIAL_STEPS_COUNT),
@@ -452,6 +460,47 @@ export const selectQuestHistoryForGetRecruitmentMainMetrics2 = (
         ...(input.utmSource ? [eq(referralSource.source, input.utmSource)] : []),
         eq(quest.questType, "tier"),
         eq(questHistory.completed, 1),
+      ),
+    );
+
+/**
+ * Story chapter starts and finishes of the tutorial graduates in the visitor cohort,
+ * one row per player and chapter quest, follow-ups included (the visit join can repeat
+ * a player).
+ */
+export const selectQuestHistoryForStoryChapters = (
+  client: Pick<DrizzleClient, "selectDistinct">,
+  visitorWhere: QueryCondition[],
+  input: { utmSource?: undefined | string },
+) =>
+  client
+    .selectDistinct({
+      userId: userData.userId,
+      userAgent: visitorLog.userAgent,
+      questId: questHistory.questId,
+      completed: questHistory.completed,
+    })
+    .from(questHistory)
+    .innerJoin(userData, eq(userData.userId, questHistory.userId))
+    .innerJoin(historicalIp, eq(historicalIp.userId, userData.userId))
+    .innerJoin(visitorLog, eq(visitorLog.ipHash, historicalIp.ipHash))
+    .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
+    .where(
+      and(
+        ...visitorWhere,
+        eq(userData.isAi, false),
+        eq(userData.playedBefore, false),
+        gte(userData.createdAt, visitorLog.createdAt),
+        gte(userData.tutorialStep, TUTORIAL_STEPS_COUNT),
+        lt(userData.tutorialStep, 100),
+        ...(input.utmSource ? [eq(referralSource.source, input.utmSource)] : []),
+        inArray(
+          questHistory.questId,
+          BLACKSTEEL_CHAPTERS.flatMap((chapter) => [
+            chapter.questId,
+            ...("followUpQuestIds" in chapter ? chapter.followUpQuestIds : []),
+          ]),
+        ),
       ),
     );
 

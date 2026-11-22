@@ -27,7 +27,11 @@ import Loader from "@/layout/Loader";
 import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
 import { QueryError } from "@/layout/QueryError";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
-import type { PetAppearanceOption, PetSpeciesOption } from "@/libs/pets/catalogue";
+import {
+  type PetAppearanceOption,
+  type PetSpeciesOption,
+  SANCTUARY_PUP,
+} from "@/libs/pets/catalogue";
 import { getPetPotentialOdds } from "@/libs/pets/potential";
 import {
   getPetPaymentOption,
@@ -203,15 +207,31 @@ export function PetAcquisition() {
       );
       return;
     }
+    await adopt(parsed.data);
+  };
+  /** Adopt the Sanctuary pup the player rescued, with its fixed look and suggested name. */
+  const adoptPup = async () => {
+    if (inFlight.current || !data?.canAdoptSanctuaryPup || isBusy) return;
+    await adopt({
+      ...SANCTUARY_PUP,
+      name: name.trim() || SANCTUARY_PUP.name,
+      dayKey: data.dayKey,
+      currency,
+      isSanctuaryPup: true,
+    });
+  };
+  /** Claim once, then generate art for that committed pet. */
+  const adopt = async (input: RouterInputs["pets"]["acquirePet"]) => {
+    if (!data) return;
     inFlight.current = true;
     setIsAcquiring(true);
     setMessage(null);
     adoptionAttempt.current = {
       previousIds: new Set(data.pets.map((entry) => entry.id)),
-      input: parsed.data,
+      input,
     };
     try {
-      const result = await acquire.mutateAsync(parsed.data);
+      const result = await acquire.mutateAsync(input);
       if (result.success && result.petId) {
         adoptionAttempt.current = null;
         setAcquiredPetId(result.petId);
@@ -337,6 +357,17 @@ export function PetAcquisition() {
           )}
         </div>
       )}
+      {!acquiredPetId &&
+        !isReplacement &&
+        data.pets.length === 0 &&
+        data.canAdoptSanctuaryPup && (
+          <SanctuaryPupOffer
+            name={name}
+            onNameChange={setName}
+            isBusy={isBusy}
+            onAdopt={() => void adoptPup()}
+          />
+        )}
       {!acquiredPetId && unavailableReason && (
         <p className="text-muted-foreground mb-4 text-sm" role="status">
           {unavailableReason}
@@ -809,3 +840,51 @@ const traitStages = [
   },
   { title: "Aura", field: "auraIndex", options: "auras" },
 ] as const;
+
+/** The rescued pup, offered ready-made as the first companion; the designer stays below. */
+const SanctuaryPupOffer: React.FC<{
+  name: string;
+  onNameChange: (name: string) => void;
+  isBusy: boolean;
+  onAdopt: () => void;
+}> = ({ name, onNameChange, isBusy, onAdopt }) => (
+  <section
+    id="tutorial-sanctuary-pup"
+    aria-labelledby="sanctuary-pup-title"
+    className="@container mb-4 flex flex-col gap-3 rounded-lg border-2 border-violet-500/50 bg-violet-500/10 p-4"
+  >
+    <div>
+      <h3 id="sanctuary-pup-title" className="font-bold text-lg">
+        The Sanctuary pup
+      </h3>
+      <p className="text-sm">
+        The hound you rescued won&apos;t leave your side. Its collar still carries a
+        faint violet scorch. Give it a name, or keep the one the Bondkeepers chose.
+      </p>
+    </div>
+    <div className="flex flex-col gap-2 @lg:flex-row @lg:items-center">
+      <label htmlFor="sanctuary-pup-name" className="sr-only">
+        Name your pup
+      </label>
+      <Input
+        id="sanctuary-pup-name"
+        value={name}
+        placeholder={SANCTUARY_PUP.name}
+        maxLength={PET_NAME_MAX_LENGTH}
+        onChange={(event) => onNameChange(event.target.value)}
+        className="@lg:max-w-60"
+      />
+      <Button
+        decoration="gold"
+        disabled={isBusy}
+        onClick={onAdopt}
+        className="w-full @lg:flex-1"
+      >
+        {isBusy ? "Adopting..." : "Adopt the pup"}
+      </Button>
+    </div>
+    <p className="text-muted-foreground text-xs">
+      Prefer a different companion? Design your own below instead.
+    </p>
+  </section>
+);

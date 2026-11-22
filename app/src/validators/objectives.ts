@@ -74,6 +74,8 @@ import {
   IMG_BADGE_WIN_QUEST,
   IMG_KESSEN_MINIGAME_TILE,
   IMG_MANUAL_TOWER_UPGRADES,
+  IMG_OCCUPATION_GATHERING,
+  IMG_OCCUPATION_HUNTER,
   isPetTaskQuestType,
   isSharedRunQuestType,
   KESSEN_NPC_KEYS,
@@ -145,9 +147,42 @@ export const CompletionTasks = [
   "raids_completed",
 ] as const;
 
+/**
+ * Story-onboarding counters, incremented where the action happens: each teaches one
+ * system the first time a chapter asks for it.
+ */
+export const OnboardingEventTasks = [
+  "bank_deposit",
+  "queue_energy",
+  "claim_streak",
+  "tower_defense_duty",
+  "chakra_storm_scout",
+  "send_message",
+  "cook_meal",
+  "feed_pet",
+] as const;
+/** A story-onboarding goal counted when the player does the action. */
+export type OnboardingEventTask = (typeof OnboardingEventTasks)[number];
+
+/**
+ * Story-onboarding goals read from the player's state, so a player who already did the
+ * thing completes them the moment the quest starts.
+ */
+export const OnboardingStateTasks = [
+  "roll_element",
+  "equip_item",
+  "get_sensei",
+  "choose_occupation",
+  "join_clan",
+  "job_contract_completed",
+] as const;
+/** A story-onboarding goal read from the player's current state. */
+export type OnboardingStateTask = (typeof OnboardingStateTasks)[number];
+
 /** Tasks overwritten from the user's state, which team progress merges by maximum. */
 export const PassiveSnapshotTasks = [
   ...CompletionTasks,
+  ...OnboardingStateTasks,
   "user_level",
   "farming_level",
   "farming_collection_log",
@@ -174,6 +209,8 @@ export const PassiveSnapshotTasks = [
 export const SimpleTasks = [
   ...CombatActivityTasks,
   ...CompletionTasks,
+  ...OnboardingEventTasks,
+  ...OnboardingStateTasks,
   "espionage",
   "sabotage",
   "siege_operation",
@@ -476,6 +513,20 @@ export const objectiveImageMap: Record<
     title: "Farming Collection",
   },
   farming_level: { image: IMG_BADGE_FARMING_LEVEL, title: "Farming Level" },
+  bank_deposit: { image: IMG_BADGE_REPUTATION_POINTS, title: "Bank Deposit" },
+  queue_energy: { image: IMG_BADGE_STATS_TRAINED, title: "Queue Training" },
+  claim_streak: { image: IMG_BADGE_DAYS_IN_VILLAGE, title: "Claim Daily Streak" },
+  tower_defense_duty: { image: IMG_MANUAL_TOWER_UPGRADES, title: "Guard Hall Duty" },
+  chakra_storm_scout: { image: CS_CARD_URL, title: "Chakra Storm Scouting" },
+  send_message: { image: IMG_BADGE_DIALOG, title: "Send a Message" },
+  cook_meal: { image: IMG_BADGE_ITEMS_CRAFTED, title: "Cook a Meal" },
+  feed_pet: { image: IMG_BADGE_COLLECT_ITEM, title: "Feed Companion" },
+  roll_element: { image: IMG_BADGE_TRAIN_SPECIFIC_JUTSU, title: "Primary Element" },
+  equip_item: { image: IMG_BADGE_COLLECT_ITEM, title: "Equip Gear" },
+  get_sensei: { image: IMG_BADGE_SPARS_PARTICIPATED, title: "Find a Sensei" },
+  choose_occupation: { image: IMG_OCCUPATION_HUNTER, title: "Choose a Job" },
+  join_clan: { image: IMG_BADGE_PVP_PARTICIPATED, title: "Join a Clan" },
+  job_contract_completed: { image: IMG_OCCUPATION_GATHERING, title: "Job Contract" },
   bloodline_collection: {
     image: IMG_BADGE_BLOODLINE_COLLECTION,
     title: "Bloodline Collection",

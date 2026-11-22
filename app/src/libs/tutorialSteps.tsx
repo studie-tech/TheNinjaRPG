@@ -8,6 +8,7 @@ import {
 import {
   GENIN_QUEST_OBJECTIVES,
   STARTER_QUEST_OBJECTIVES,
+  TUTORIAL_ANY_PAGE,
   TUTORIAL_CAPTURE_SECTOR,
   TUTORIAL_JUTSU_PICK_STEP_ID,
   TUTORIAL_WAKE_SECTOR,
@@ -50,10 +51,19 @@ export interface TutorialStepConfig {
    * or, on a travel step, travels to the step's sector.
    */
   autoTravelLabel?: string;
+  /**
+   * The step teaches the game's own control on the page (the globe, the map, the quest
+   * log's answers or reward). The lesson's own trip, answer or claim button stays
+   * hidden until the player has been stuck on the step for a while.
+   */
+  teachOnPage?: boolean;
+  /**
+   * What to do on the Activity dock's Quests tab, for a step whose answer or reward is
+   * given there. The lesson marks that tab and its own buttons wait as with `teachOnPage`.
+   */
+  questsTabPrompt?: string;
   /** Game action that completes the step. */
   advanceOn?: TutorialTrigger;
-  /** Claims the step's reward on its own once it is ready; the Claim button stays as a fallback. */
-  autoClaim?: boolean;
   /** Skipped while the player has no unassigned experience to spend. */
   needsUnassignedExperience?: boolean;
   showNextButton?: boolean;
@@ -62,7 +72,12 @@ export interface TutorialStepConfig {
   requiresGameMenu?: boolean;
   onCombatWin?: string;
   onCombatLoss?: string;
+  /** A full-screen moment shown in place of the dock, with one Continue button. */
+  screen?: TutorialScreenKind;
 }
+
+/** Full-screen moments of the Academy Trials: the promotion and the evening's close. */
+export type TutorialScreenKind = "rankUp" | "tomorrow";
 
 /** Shown in place of any step while the player is in the hospital. */
 export const TUTORIAL_HOSPITALIZED_STEP: TutorialStepConfig = {
@@ -77,7 +92,7 @@ export const TUTORIAL_HOSPITALIZED_STEP: TutorialStepConfig = {
 };
 
 const starterLogbookEntry = `logbook-entry-${TUTORIAL_STARTER_QUEST_ID}`;
-// Before the trip the lesson's own travel button is the target, so the globe stays unmarked.
+// The trip's confirmation and arrival timer, ahead of the controls that lead to them.
 const globalTravelElements = [
   "tutorial-auto-travel-proceed",
   "tutorial-global-travel-proceed",
@@ -99,29 +114,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "student",
     title: "Welcome to Horizon",
     description:
-      "Welcome to Horizon, the academy town where every shinobi begins. I'm <b>Lemu</b>, your instructor. This is your profile, where everything you achieve is recorded. Before you can earn your Genin headband you must pass the <b>Academy Trials</b>, and I'll guide you through every one of them.",
-    page: "/profile",
-    showNextButton: true,
-    nextLabel: "Let's begin",
-  },
-  {
-    id: "student-open-village",
-    chapter: "student",
-    title: "Into the village",
-    description:
-      "The <b>location menu</b> always shows where you are standing. Tap it any time to see what the place has to offer.",
-    action: "Tap Horizon Village in the location menu.",
-    elementIds: ["tutorial-village"],
-    page: "/profile",
-    proceedOnHighlightClick: true,
-    requiresGameMenu: true,
-  },
-  {
-    id: "student-academy-building",
-    chapter: "student",
-    title: "The Academy",
-    description:
-      "Every building in the village offers something different. The academy is where I teach, and where the trials begin.",
+      "Welcome to Horizon, the academy town where every shinobi begins. I'm <b>Lemu</b>, your instructor. This is the village: every building offers something different, and the <b>location menu</b> always shows what the place you stand in has to offer. Before you earn your Genin headband you must pass the <b>Academy Trials</b>, and they begin at the academy.",
     action: "Tap Academy.",
     elementIds: ["tutorial-academy"],
     page: "/village",
@@ -133,8 +126,9 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Your quest log",
     description:
       "Quests are how you progress. Each is a chain of objectives with rewards along the way, and your active quests always live in this log. Your first one is the Academy Trials.",
-    action: "Accept the trials by answering me below.",
-    elementIds: [starterLogbookEntry],
+    action: "Answer me in the quest log to accept the trials.",
+    elementIds: ["tutorial-dialog-options", starterLogbookEntry],
+    teachOnPage: true,
     page: "/academy",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.accept,
@@ -168,7 +162,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "combat",
     title: "The battlefield",
     description:
-      "Fights play out on a grid of hexagonal tiles. Find yourself and the dummy. You act by choosing an action below the field and then tapping a tile on it.",
+      "Fights play out on a grid of hexagonal tiles. The dummy stands just two tiles away. You act by choosing an action below the field and then tapping a tile on it.",
     elementIds: ["tutorial-combat-field"],
     page: "/combat",
     showNextButton: true,
@@ -180,7 +174,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "combat",
     title: "Turns and Action Points",
     description:
-      "You and your opponent take turns. Each turn gives you <b>60 seconds</b> and <b>100 Action Points (AP)</b>. Moving costs 10 AP, a basic attack 20, and this bar shows what you have left.",
+      "Each turn you get <b>100 Action Points (AP)</b>, shown on this bar: moving costs 10 AP and a basic attack 20. While you train with me there is no time limit, and I'll guide your first turn.",
     elementIds: ["tutorial-combat-action-timer"],
     page: "/combat",
     showNextButton: true,
@@ -203,20 +197,20 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Victory!",
     description:
       "Well fought! Winning completed your first objective. Objective rewards wait in your quest log until you claim them.",
-    // Collect the earned reward without requiring another player action.
-    action: "Collecting your reward. Tap Claim below if it does not arrive.",
+    action: "Tap the gift in your quest log to collect your reward.",
+    elementIds: ["tutorial-objective-claim"],
+    teachOnPage: true,
     page: "/profile",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.arena,
     advanceOn: "questReward",
-    autoClaim: true,
   },
   {
     id: "combat-assign-notice",
     chapter: "combat",
     title: "Unassigned experience",
     description:
-      "Experience from quests is not spent for you: you decide which stats it strengthens. New experience always shows up here.",
+      "Experience from quests goes into the stats you choose. New experience always shows up here.",
     action: "Tap Assign XP.",
     elementIds: ["tutorial-unassigned-stats"],
     page: "/profile",
@@ -264,11 +258,23 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "tools",
     title: "Train with Energy",
     description:
-      "Training spends <b>Energy</b> to raise a stat instantly. Energy refills over time, even while you are offline, and the Energy queue can spend it for you.",
+      "Training spends <b>Energy</b> to raise a stat instantly. I've set aside a small amount so you can see what it buys.",
     action: "Tap Offence to train it.",
     elementIds: ["tutorial-traininggrounds-offence"],
     page: "/traininggrounds",
     advanceOn: "trainStats",
+    showNextButton: true,
+  },
+  {
+    id: "tools-queue-energy",
+    chapter: "tools",
+    title: "The Energy queue",
+    description:
+      "Energy refills over time, even while you are offline. The <b>Energy queue</b> spends it for you as it comes back, so your training never stops.",
+    action: "Tap Defence to queue the rest of your Energy.",
+    elementIds: ["tutorial-traininggrounds-defence"],
+    page: "/traininggrounds",
+    advanceOn: "queueEnergy",
     showNextButton: true,
   },
   {
@@ -277,7 +283,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Your first jutsu",
     description:
       "Jutsu are your signature techniques. <b>Sonic Slash</b> is a piercing blade strike that hits from a few tiles away. The first level takes about a minute and costs a little ryo, and a new jutsu is equipped automatically.",
-    action: "Tap Sonic Slash, then Train.",
+    action: "Tap Sonic Slash, then Learn.",
     elementIds: [
       "tutorial-traininggrounds-trainJutsu-proceed",
       `tutorial-combat-action-${TUTORIAL_JUTSU_ID}`,
@@ -292,13 +298,35 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Objective complete",
     description:
       "Learning a jutsu completed your next trial. You can use Sonic Slash in battle right away, even while it finishes training.",
-    action: "Collecting your reward. Tap Claim below if it does not arrive.",
+    action: "Open Quests and claim your reward there.",
+    questsTabPrompt: "Claim your reward here.",
     page: "/traininggrounds",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.jutsu,
     objectiveStepId: TUTORIAL_JUTSU_PICK_STEP_ID,
     advanceOn: "questReward",
-    autoClaim: true,
+  },
+  {
+    id: "tools-assign",
+    chapter: "tools",
+    title: "Grow stronger",
+    description:
+      "Your jutsu trial earned you more experience. New experience always waits under <b>Assign XP</b> in the game menu. This time the choice is yours: use a style again, or open <b>Advanced</b> and place each point where you want it.",
+    action: "Open Assign XP and spend your experience.",
+    elementIds: ["tutorial-unassigned-stats"],
+    page: TUTORIAL_ANY_PAGE,
+    advanceOn: "assignStats",
+    needsUnassignedExperience: true,
+  },
+  {
+    id: "tools-level-up",
+    chapter: "tools",
+    title: "Level 3",
+    description:
+      "That covers another level. A <b>Level up</b> button shows on your profile and on the experience page whenever you have earned one.",
+    action: "Take level 3.",
+    page: TUTORIAL_ANY_PAGE,
+    advanceOn: "levelUp",
   },
   {
     id: "tools-itemshop-building",
@@ -327,80 +355,16 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     advanceOn: "buyItem",
     showNextButton: true,
   },
-  {
-    id: "tools-ramen-building",
-    chapter: "tools",
-    title: "Ramen Shop",
-    description:
-      "Basic attacks cost <b>Stamina</b> and jutsu cost <b>Chakra</b>. Both refill slowly on their own, or instantly with a bowl of ramen.",
-    action: "Tap Ramen Shop.",
-    elementIds: ["tutorial-ramenshop"],
-    page: "/village",
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "tools-buy-ramen",
-    chapter: "tools",
-    title: "Refuel",
-    description:
-      "A small bowl costs only a few ryo. Top up before you head out. Health comes back by resting, or at the hospital.",
-    action: "Order a bowl of ramen.",
-    elementIds: ["tutorial-ramen-menu"],
-    page: "/ramenshop",
-    advanceOn: "buyRamen",
-    showNextButton: true,
-  },
-  {
-    id: "tools-mission-hall",
-    chapter: "tools",
-    title: "Mission Hall",
-    description:
-      "The <b>Mission Hall</b> is where you will earn ryo and experience every day: errands for the village now, and real missions as you climb the ranks.",
-    elementIds: ["tutorial-missionhall"],
-    page: "/village",
-    showNextButton: true,
-  },
-  {
-    id: "tools-home",
-    chapter: "tools",
-    title: "Home",
-    description:
-      "At <b>Home</b> you can sleep to regenerate faster, safe from attacks, and cook meals in your kitchen. Actions that need you awake wake you automatically by default; you can change this in your profile settings.",
-    elementIds: ["tutorial-home"],
-    page: "/village",
-    showNextButton: true,
-  },
-  {
-    id: "tools-assign",
-    chapter: "tools",
-    title: "Grow stronger",
-    description:
-      "Your jutsu trial earned you 1,000 experience. Spend it the same way as before.",
-    action: "Tap a style, then confirm.",
-    elementIds: assignElements,
-    page: "/profile/experience",
-    advanceOn: "assignStats",
-    needsUnassignedExperience: true,
-  },
-  {
-    id: "tools-level-up",
-    chapter: "tools",
-    title: "Level 3",
-    description: "Another level, earned the hard way.",
-    action: "Tap Level up!, then Awesome!",
-    elementIds: levelUpElements,
-    page: "/profile/experience",
-    advanceOn: "levelUp",
-  },
   // Chapter 4: The Missing Pup
   {
     id: "mission-brief",
     chapter: "mission",
     title: "A real mission",
     description:
-      "Last night a violet flash lit up the eastern ridge, and a pup from the <b>Bondkeeper Sanctuary</b> bolted in fright. It is out there alone and scared. Your final trial: bring it back safely.",
-    action: "Accept the mission below.",
-    elementIds: [starterLogbookEntry],
+      "Last night a violet flash lit up the eastern ridge, and a pup from the <b>Bondkeeper Sanctuary</b> bolted in fright. Scouts saw someone in a mask following its tracks. Your final trial: bring the pup back safely.",
+    action: "Accept the mission in your quest log.",
+    elementIds: ["tutorial-dialog-options", starterLogbookEntry],
+    teachOnPage: true,
     page: "/academy",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.brief,
@@ -411,7 +375,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "Beyond the walls",
     description:
-      "Missions take you out into the world of Seichi. The travel map shows both the sector you stand in and the whole globe.",
+      "Missions take you out into the world of Seichi. The travel map shows both the sector you stand in and the whole globe. The buttons along its top are labelled while you learn them.",
     action: "Tap Travel in the main menu.",
     elementIds: ["tutorial-travel"],
     page: "/academy",
@@ -424,9 +388,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "The world map",
     description:
-      "The pup fled beyond the village walls, to the sector marked on your quest. Journeys between sectors take a little time: follow your character along the route as the arrival timer counts down. Don't worry, I'm coming with you.",
-    action: "Tap Take me there, then Travel.",
-    elementIds: globalTravelElements,
+      "The pup fled beyond the village walls, to the sector marked on your quest. The <b>Global</b> map shows the whole world: tap a sector on it to travel there. Journeys between sectors take a little time: follow your character along the route as the arrival timer counts down. Don't worry, I'm coming with you.",
+    action: "Open the Global map, tap the marked sector, then Travel.",
+    elementIds: [...globalTravelElements, "tutorial-globe-target", "tutorial-Global"],
+    teachOnPage: true,
     page: "/travel",
     relatedValue: TUTORIAL_CAPTURE_SECTOR,
     autoTravelLabel: "Take me there",
@@ -439,9 +404,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Find the pup",
     description: (
       <>
-        The pup is hiding at the{" "}
-        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker. It is
-        frightened and may lash out, so be ready to use Sonic Slash and your shuriken.
+        The pup is cornered at the{" "}
+        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker, and the masked
+        figure is with it. Whoever it is, they won&apos;t hand it over. On your first
+        turn I&apos;ll show you Sonic Slash and your shuriken; then the fight is yours.
       </>
     ),
     action: "Tap the ground next to the marker to walk there.",
@@ -457,32 +423,34 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "Safe and sound",
     description:
-      "The pup calms the moment the fight is over. Caught in its collar is a sliver of <b>dark metal</b>, threaded with faint violet veins. Strange... Let's get it home first.",
-    action: "Tap Claim below to collect your reward.",
+      "The masked courier breaks off and vanishes into the trees, and something falls from their belt: a sliver of <b>dark metal</b>, threaded with faint violet veins. The pup's collar is scorched the same violet. Strange... Let's get it home first.",
+    action: "Open Quests and claim your reward there.",
+    questsTabPrompt: "Claim your reward here.",
     page: "/travel",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.pup,
     advanceOn: "questReward",
   },
   {
-    id: "mission-assign",
+    id: "mission-ramen",
     chapter: "mission",
-    title: "Grow stronger",
-    description: "Your first field mission earned you 1,500 experience.",
-    action: "Tap a style, then confirm.",
-    elementIds: assignElements,
-    page: "/profile/experience",
-    advanceOn: "assignStats",
-    needsUnassignedExperience: true,
+    title: "Refuel",
+    description:
+      "That fight cost you <b>Stamina</b> (basic attacks) and <b>Chakra</b> (jutsu). Both refill slowly on their own, or at once with a bowl of ramen. The Horizon ramen shop delivers to Academy patrols, and a small bowl costs only a few ryo.",
+    action: "Order a bowl of ramen.",
+    elementIds: ["tutorial-ramen-menu"],
+    page: "/ramenshop",
+    advanceOn: "buyRamen",
+    showNextButton: true,
   },
   {
     id: "mission-level-up",
     chapter: "mission",
     title: "Level 4",
-    description: "Level 4. One more and you are ready for the Genin exam.",
-    action: "Tap Level up!, then Awesome!",
-    elementIds: levelUpElements,
-    page: "/profile/experience",
+    description:
+      "Your first field mission paid well. No pointers from me this time: spend the experience the way you think best, then take level 4. One more level after that and you are ready for the Genin exam.",
+    action: "Assign your experience, then level up.",
+    page: TUTORIAL_ANY_PAGE,
     advanceOn: "levelUp",
   },
   // Chapter 5: Bondkeepers
@@ -492,8 +460,9 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Bring it home",
     description:
       "The pup wears a Bondkeeper tag: it belongs to the sanctuary on <b>Wake Island</b>, a short trip from here. Wake Island is neutral ground, and it is where you will take your Genin exam.",
-    action: "Tap Take me to Wake Island, then Travel.",
-    elementIds: globalTravelElements,
+    action: "Travel to Wake Island on the Global map.",
+    elementIds: [...globalTravelElements, "tutorial-globe-target"],
+    teachOnPage: true,
     page: "/travel",
     relatedValue: TUTORIAL_WAKE_SECTOR,
     autoTravelLabel: "Take me to Wake Island",
@@ -529,7 +498,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Home at last",
     description:
       "The Bondkeepers rush out to meet you, and the pup bounds straight into their arms.",
-    action: "Hand over the pup below.",
+    action: "Open Quests and hand over the pup there.",
+    questsTabPrompt: "Answer to hand over the pup.",
     page: "/pets",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.sanctuary,
@@ -538,58 +508,37 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   {
     id: "bond-adopt",
     chapter: "bond",
-    title: "A companion of your own",
+    title: "It won't leave your side",
     description:
-      "To thank you, the Bondkeepers offer you a companion of your own, and your <b>first bond is free</b>. Choose a species, its colours, a defining trait and an aura, then give it a name.",
-    action: "Finish the steps, then tap Meet my first companion.",
-    elementIds: ["tutorial-pet-acquisition"],
+      "The pup refuses to let you out of sight, so the Bondkeepers offer it to you as your companion, and your <b>first bond is free</b>. Take the pup, or design a companion of your own instead. We'll teach you how to care for it later.",
+    action: "Tap Adopt the pup, or design your own.",
+    elementIds: ["tutorial-sanctuary-pup", "tutorial-pet-acquisition"],
     page: "/pets",
     advanceOn: "petAdopt",
     showNextButton: true,
   },
-  {
-    id: "bond-pet-profile",
-    chapter: "bond",
-    title: "Your companion",
-    description:
-      "Companions grow alongside you: they share the experience you earn and fight at your side in quests and dungeons. Feed them meals from your home kitchen to help them grow, and manage everything from this tab.",
-    elementIds: ["tutorial-pet-profile"],
-    page: "/profile?tab=pet",
-    showNextButton: true,
-  },
-  // Chapter 6: Road to Genin
+  // Chapter 6: Graduation
   {
     id: "genin-debrief",
     chapter: "genin",
     title: "Graduation",
     description:
-      "You did well out there, better than most graduates. That metal in the pup's collar... show it to no one; I'll take it to the academy archives myself. Now, you have earned your graduation.",
-    action: "Answer me below to complete the Academy Trials.",
-    page: "/profile?tab=pet",
+      "You did well out there, better than most graduates. That metal the courier dropped... show it to no one; I'll take it to the academy archives myself. Now, you have earned your graduation.",
+    action: "Open Quests and answer me there to complete the Academy Trials.",
+    questsTabPrompt: "Answer Lemu to complete the Academy Trials.",
+    page: "/pets",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.debrief,
     advanceOn: "questDialog",
   },
   {
-    id: "genin-assign",
-    chapter: "genin",
-    title: "Graduation rewards",
-    description:
-      "The Academy Trials paid out ryo, a badge and 2,000 experience. Assign it to reach level 5, the level the Genin exam requires.",
-    action: "Tap a style, then confirm.",
-    elementIds: assignElements,
-    page: "/profile/experience",
-    advanceOn: "assignStats",
-    needsUnassignedExperience: true,
-  },
-  {
     id: "genin-level-up",
     chapter: "genin",
     title: "Level 5",
-    description: "Level 5. You are ready.",
-    action: "Tap Level up!, then Awesome!",
-    elementIds: levelUpElements,
-    page: "/profile/experience",
+    description:
+      "The Academy Trials paid out experience and ryo. The Genin exam asks for level 5, and you know how to get there by now.",
+    action: "Assign your experience and reach level 5.",
+    page: TUTORIAL_ANY_PAGE,
     advanceOn: "levelUp",
   },
   // Chapter 7: The Genin Exam
@@ -601,24 +550,53 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       <>
         Your <b>Road to Genin</b> has begun, and the exam is held right here on Wake
         Island, in the Administration Building at the{" "}
-        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker. Any quest
-        location works the same way: open it from your quest and you will walk there on
-        your own.
+        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker. Tap the ground
+        next to it and you will walk there.
       </>
     ),
-    action: "Tap Walk to the exam, then Travel.",
+    action: "Tap the ground next to the marker to walk there.",
+    elementIds: ["tutorial-travel-sector"],
+    teachOnPage: true,
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.exam,
     autoTravelLabel: "Walk to the exam",
   },
   {
+    id: "exam-proctor",
+    chapter: "exam",
+    title: "The practical test",
+    description:
+      "The proctor sends a clone to test you, and you must beat it to pass. No more pointers from me: win with what you have learned, jutsu, ninja tools and basic attacks alike. There is no time limit, so take your time.",
+    action: "Defeat the proctor's clone.",
+    elementIds: ["tutorial-combat-field"],
+    page: "/combat",
+    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    objectiveId: GENIN_QUEST_OBJECTIVES.proctor,
+    onCombatWin: "exam-tour",
+    onCombatLoss: "exam-proctor-retry",
+  },
+  {
+    id: "exam-proctor-retry",
+    chapter: "exam",
+    title: "Not this time",
+    description:
+      "The clone won this round. Every Genin has lost a fight, and every loss teaches something. Did you spend all your Action Points each turn? Did you use your jutsu whenever they were ready, and your ninja tools while they recharged? Fill your chakra and stamina with ramen if they ran low, then face the clone again.",
+    action: "Tap Retry battle when you are ready.",
+    page: "/travel",
+    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    objectiveId: GENIN_QUEST_OBJECTIVES.proctor,
+    onCombatWin: "exam-tour",
+    onCombatLoss: "exam-proctor-retry",
+  },
+  {
     id: "exam-tour",
     chapter: "exam",
     title: "Wake Island",
     description:
-      "The proctor is waiting. Wake Island belongs to no village, so every shinobi meets here.",
-    action: "Answer the proctor below.",
+      "You passed, and the proctor has one question left. Wake Island belongs to no village, so every shinobi meets there.",
+    action: "Open Quests and answer the proctor there.",
+    questsTabPrompt: "Answer the proctor.",
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.tour,
@@ -631,19 +609,19 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Choose your village",
     description:
       "This is the biggest choice of your career: your village is your home for good. It decides who fights beside you, the missions you are given and the village bloodline you can earn.",
-    action: "Pick the village you want to join.",
+    action: "Pick the village you want to join, then confirm.",
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.choose,
     advanceOn: "questDialog",
-    quoteObjective: true,
   },
   {
     id: "exam-joined",
     chapter: "exam",
     title: "A new home",
     description: "Your new village is expecting you.",
-    action: "Answer the proctor below.",
+    action: "Open Quests and answer the proctor there.",
+    questsTabPrompt: "Answer the proctor.",
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.join,
@@ -656,12 +634,14 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Report for duty",
     description: (
       <>
-        Every new Genin reports to their village's mission hall, at the{" "}
-        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker. The journey
+        Every new Genin reports to their village&apos;s mission hall, at the{" "}
+        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker. Find your
+        village on the Global map and travel there, then walk to the marker. The journey
         takes only a few seconds.
       </>
     ),
-    action: "Tap Travel home, then Travel.",
+    action: "Travel home, then walk to the marker.",
+    teachOnPage: true,
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.report,
@@ -673,19 +653,39 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Your headband",
     description:
       "You made it. Claim your reward to receive the Genin rank and your headband.",
-    action: "Tap the claim button below.",
+    action: "Open Quests and claim your reward there.",
+    questsTabPrompt: "Collect your reward to become a Genin.",
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.win,
     advanceOn: "questReward",
   },
   {
-    id: "exam-farewell",
+    id: "exam-rank-up",
     chapter: "exam",
     title: "Genin",
-    description:
-      "Congratulations, Genin! This is your village. Its mission hall hands out daily missions, the tavern is where your villagers talk, and the <b>Guide</b> explains every system. Remember to assign the experience you earned on your profile. From here on I'll show your active quest in this panel, and once fighting feels natural you can switch auto combat on in the arena. Good luck, shinobi!",
+    description: "Congratulations, Genin!",
     page: "/village",
+    screen: "rankUp",
+  },
+  {
+    id: "exam-tomorrow",
+    chapter: "exam",
+    title: "Tomorrow",
+    description: "Here's what tomorrow brings.",
+    page: "/village",
+    screen: "tomorrow",
+  },
+  {
+    id: "exam-dashboard",
+    chapter: "exam",
+    title: "Your Dashboard",
+    description:
+      "This Dashboard is home base: everything waiting for you today is listed under <b>Right now</b>. Start with the first day of your daily streak. Then settle in, and when you're ready, come find me at the <b>Academy</b>: someone wants to see that shard.",
+    action: "Claim day 1 of your streak.",
+    elementIds: ["tutorial-dashboard-streak", "tutorial-dashboard-now"],
+    page: "/profile?tab=dashboard",
+    advanceOn: "claimStreak",
     showNextButton: true,
     nextLabel: "Finish",
   },

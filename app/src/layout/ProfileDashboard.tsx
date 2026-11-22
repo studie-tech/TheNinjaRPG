@@ -42,8 +42,9 @@ import {
   MASTERY_QUEUE_KIND_LABELS,
   MasteryQueueKinds,
 } from "@/drizzle/constants";
-import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
+import { useActivityStreaks } from "@/hooks/useActivityStreaks";
 import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
+import { useClaimStreakDay } from "@/hooks/useClaimStreakDay";
 import { useHuntingSession } from "@/hooks/useHuntingSession";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
@@ -76,6 +77,7 @@ import {
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
 import { cn } from "@/libs/shadui";
+import { isSystemUnlocked } from "@/libs/storyGuidance";
 import { tdDailyDutyDone, tdDailyReward } from "@/libs/towerDefense/balance";
 import { getMasteryTrainingState, masteryTrainingEndsAt } from "@/libs/train";
 import { moveItem } from "@/utils/array";
@@ -289,6 +291,18 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
       : "Raid rewards";
   const pendingInterestDays = interest.data?.records.length ?? 0;
   const dailyDuty = tdDailyReward(userData.level);
+  // Daily minigame rows appear once the story (or the player’s level) opens them, until
+  // that day's duty is done.
+  const now = new Date(Date.now() - timeDiff);
+  const showGuardHall =
+    isSystemUnlocked(userData, "towerDefense") &&
+    !tdDailyDutyDone(userData.towerDefenseDutyAt, now);
+  const showScoutPost =
+    isSystemUnlocked(userData, "chakraStorm") &&
+    !tdDailyDutyDone(userData.chakraStormDutyAt, now);
+  const hasEnergyQueue = (userData.queue ?? []).some(
+    (entry) => entry.kind === "ENERGY",
+  );
 
   const sections = {
     now: {
@@ -298,7 +312,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
       ),
       content: (
         <>
-          <div className="rounded-md border bg-card px-4">
+          <div id="tutorial-dashboard-now" className="rounded-md border bg-card px-4">
             {streaks.isError && (
               <div className="border-t py-3 first:border-t-0">
                 <QueryError
@@ -388,6 +402,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             )}
             {!catchUpStreak && claimableStreak && (
               <StatusRow
+                id="tutorial-dashboard-streak"
                 label="Streak"
                 title={`Day ${claimableStreak.nextDayNumber}`}
                 detail={
@@ -417,6 +432,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             )}
             {!catchUpStreak && !claimableStreak && recurringStreak && (
               <StatusRow
+                id="tutorial-dashboard-streak"
                 label="Streak"
                 title="Day 1"
                 detail={recurringReward || "Claim today’s activity reward."}
@@ -478,10 +494,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                 }
               />
             )}
-            {!tdDailyDutyDone(
-              userData.towerDefenseDutyAt,
-              new Date(Date.now() - timeDiff),
-            ) && (
+            {showGuardHall && (
               <StatusRow
                 label="Guard Hall"
                 title="Daily village defense"
@@ -493,10 +506,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                 }
               />
             )}
-            {!tdDailyDutyDone(
-              userData.chakraStormDutyAt,
-              new Date(Date.now() - timeDiff),
-            ) && (
+            {showScoutPost && (
               <StatusRow
                 label="Scout Post"
                 title="Daily scouting report"
@@ -548,6 +558,11 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
               <StatusRow
                 label="Training"
                 title="Training grounds"
+                detail={
+                  !hasEnergyQueue && !isMilestoneProgression
+                    ? "Queue energy training and it keeps running while you are away."
+                    : null
+                }
                 action={
                   <RowAction
                     restriction={isLoadingSector ? null : trainingAction.reason}
@@ -1134,6 +1149,7 @@ const compactRestrictionLabel = (message: string) => {
 };
 
 function StatusRow({
+  id,
   label,
   title,
   detail,
@@ -1142,6 +1158,8 @@ function StatusRow({
   note,
   action,
 }: {
+  /** Lets a tutorial step point at this row. */
+  id?: string;
   label: string;
   title: string;
   detail?: React.ReactNode;
@@ -1151,7 +1169,10 @@ function StatusRow({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-2 border-t py-3 first:border-t-0 sm:grid-cols-[7.5rem_minmax(0,1fr)_10rem] sm:items-center sm:gap-3">
+    <div
+      id={id}
+      className="grid gap-2 border-t py-3 first:border-t-0 sm:grid-cols-[7.5rem_minmax(0,1fr)_10rem] sm:items-center sm:gap-3"
+    >
       <div className="text-muted-foreground text-sm">{label}</div>
       <div className="min-w-0">
         <p className="font-semibold">{title}</p>

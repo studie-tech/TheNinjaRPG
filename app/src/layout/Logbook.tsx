@@ -1,3 +1,4 @@
+import { useSetAtom } from "jotai";
 import { Loader2, Sparkles, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -12,6 +13,7 @@ import type { UserQuest } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useQuestRewardCacheUpdate } from "@/hooks/useQuestRewardCacheUpdate";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
+import { storyDockPulseAtom } from "@/hooks/useStoryGuidance";
 import Accordion from "@/layout/Accordion";
 import { BattleHistoryTable } from "@/layout/BattleHistoryTable";
 import ContentBox from "@/layout/ContentBox";
@@ -45,9 +47,11 @@ import {
   isManagedQuestRun,
   isQuestAttemptPaused,
 } from "@/libs/questRun";
+import { sceneCharactersAtom } from "@/libs/questScene";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { getRewardPickCount, isRewardChoiceQuest } from "@/libs/rewardChoice";
 import { cn } from "@/libs/shadui";
+import { getChapterForQuest, isLeadQuest } from "@/libs/storyGuidance";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
@@ -382,38 +386,48 @@ export const QuestDialogScene: React.FC<QuestDialogSceneProps> = ({
   background,
   characters,
   description,
-}) => (
-  <div className="relative aspect-3/2 w-full overflow-hidden">
-    <Image
-      src={background}
-      alt="SceneBackground"
-      className="relative aspect-3/2 w-full"
-      width={512}
-      height={341}
-    />
-    {characters.map((character, index) => (
-      <div key={`${character}-${index}`} className="absolute bottom-0 w-2/5">
-        <Image
-          src={character}
-          alt="Character"
-          className="max-h-full w-auto object-contain"
-          width={341}
-          height={512}
-        />
-      </div>
-    ))}
-    {description && (
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex max-h-1/3 flex-col items-center">
-        <div
-          data-reading-text
-          className="pointer-events-auto mb-2 max-h-32 min-h-10 w-full max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border-2 bg-poppopover p-2"
-        >
-          {parseHtml(description)}
+}) => {
+  const setSceneCharacters = useSetAtom(sceneCharactersAtom);
+  const characterKey = characters.join("\n");
+  useEffect(() => {
+    const shown = characterKey ? characterKey.split("\n") : [];
+    setSceneCharacters((scenes) => [...scenes, shown]);
+    return () =>
+      setSceneCharacters((scenes) => scenes.filter((entry) => entry !== shown));
+  }, [characterKey, setSceneCharacters]);
+  return (
+    <div className="relative aspect-3/2 w-full overflow-hidden">
+      <Image
+        src={background}
+        alt="SceneBackground"
+        className="relative aspect-3/2 w-full"
+        width={512}
+        height={341}
+      />
+      {characters.map((character, index) => (
+        <div key={`${character}-${index}`} className="absolute bottom-0 w-2/5">
+          <Image
+            src={character}
+            alt="Character"
+            className="max-h-full w-auto object-contain"
+            width={341}
+            height={512}
+          />
         </div>
-      </div>
-    )}
-  </div>
-);
+      ))}
+      {description && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex max-h-1/3 flex-col items-center">
+          <div
+            data-reading-text
+            className="pointer-events-auto mb-2 max-h-32 min-h-10 w-full max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg border-2 bg-poppopover p-2"
+          >
+            {parseHtml(description)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /**
  * Represents a logbook entry component.
@@ -778,7 +792,10 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                   />
                 )}
               </h2>
-              <div className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1">
+              <div
+                id="tutorial-dialog-options"
+                className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1"
+              >
                 {!isCheckingRewards &&
                   activeObjective.nextObjectiveId.map((entry, index) => (
                     <Button
@@ -975,9 +992,18 @@ export const QuestUpdateModal: React.FC<{
   onClose: () => void;
 }> = ({ questId, onClose }) => {
   const { data: userData } = useRequiredUserDataSelector(selectQuestProgress);
+  const pulseDock = useSetAtom(storyDockPulseAtom);
   const userQuest = userData?.userQuests?.find((q) => q.questId === questId);
   const tracker = userData?.questData?.find((q) => q.id === questId);
-  if (!userQuest || !tracker) return null;
+  // Story progress pulses the dock, which already shows the objective, instead of
+  // stopping play with a dialog.
+  const isStory = !!getChapterForQuest(questId) || isLeadQuest(questId);
+  useEffect(() => {
+    if (!isStory) return;
+    pulseDock((count) => count + 1);
+    onClose();
+  }, [isStory, questId]);
+  if (!userQuest || !tracker || isStory) return null;
   return (
     <Modal
       isOpen
@@ -997,11 +1023,10 @@ export const QuestUpdateModal: React.FC<{
 };
 
 /**
- * Checks rewards and reconciles their caches. Automatic callers keep transport
- * failures quiet; their visible Claim button remains available for recovery.
+ * Checks rewards and reconciles their caches.
  * @returns The checkRewards mutation.
  */
-export const useCheckRewards = (options?: { automatic?: boolean }) => {
+export const useCheckRewards = () => {
   const { prepareUserUpdate, updateUser } = useUserInfo();
   const openRewardChoice = useOpenRewardChoice();
   const { prepareQuestRewardUpdate, updateQuestRewards } = useQuestRewardCacheUpdate();
@@ -1012,7 +1037,6 @@ export const useCheckRewards = (options?: { automatic?: boolean }) => {
   // Mutations
   const { mutate: checkRewards, isPending: isCheckingRewards } =
     api.quests.checkRewards.useMutation({
-      meta: { handlesTransportError: options?.automatic === true },
       onMutate: () => ({
         userRevision: prepareUserUpdate(),
         quests: prepareQuestRewardUpdate(),

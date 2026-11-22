@@ -1,4 +1,5 @@
 import {
+  BLACKSTEEL_PROCTOR_AI_ID,
   MAP_WAKE_ISLAND_SECTOR,
   TUTORIAL_ARENA_DUMMY_ID,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
@@ -39,8 +40,19 @@ export const TutorialTriggers = [
   "buyRamen",
   "travelArrive",
   "petAdopt",
+  "queueEnergy",
+  "claimStreak",
 ] as const;
 export type TutorialTrigger = (typeof TutorialTriggers)[number];
+
+/** Step that has the player train a stat with a small, previewed amount of Energy. */
+export const TUTORIAL_TRAIN_STAT_STEP_ID = "tools-train-stat";
+
+/** Energy the first training lesson spends, so its gain can be previewed. */
+export const TUTORIAL_TRAINING_ENERGY = 25;
+
+/** Step where the player picks their village on the full-page chooser. */
+export const TUTORIAL_VILLAGE_CHOICE_STEP_ID = "exam-choose";
 
 /** Step that asks the player to learn Sonic Slash at the training grounds. */
 export const TUTORIAL_JUTSU_PICK_STEP_ID = "tools-train-jutsu";
@@ -105,6 +117,7 @@ export const GENIN_QUEST_OBJECTIVES = {
   level: "lG3__",
   exam: "mKVnH",
   tour: "tFTYj",
+  proctor: "tProc",
   choose: "mgzw_",
   join: ["x1IVl", "WmDyh", "xAiqy", "8Eksk", "VAYLT"],
   report: ["pBq1F", "k3Joa", "lhFP_", "dHuAY", "IhGF0"],
@@ -116,8 +129,15 @@ const GENIN_QUEST_IDS: ReadonlySet<string> = new Set(
 
 /** A step's objective: one id, or a group where any one of them counts. */
 export type TutorialObjectiveRef = string | readonly string[];
-const toObjectiveIds = (ref: TutorialObjectiveRef): readonly string[] =>
+/** The objective ids a step refers to, whether one id or a group. */
+export const toObjectiveIds = (ref: TutorialObjectiveRef): readonly string[] =>
   typeof ref === "string" ? [ref] : ref;
+
+/**
+ * Page of a practice step the player carries out wherever they choose: the lesson shows on
+ * every page and neither leads to nor holds the player on one.
+ */
+export const TUTORIAL_ANY_PAGE = "*";
 
 /** Pathname of a tutorial step, without the hash or query used to pick a tab. */
 export const getTutorialStepPath = (page?: string | null) =>
@@ -128,6 +148,7 @@ export const getTutorialStepPath = (page?: string | null) =>
  * Exact path match only — `/profile/experience` must not match `/profile`.
  */
 export const isTutorialPageMatch = (stepPage: string | undefined, pathname: string) => {
+  if (stepPage === TUTORIAL_ANY_PAGE) return true;
   const stepPath = getTutorialStepPath(stepPage);
   return stepPath !== "" && stepPath === pathname;
 };
@@ -154,21 +175,33 @@ export const getTutorialBattleReturnPage = (
   const outcomeStepId =
     outcome === "Won" ? step.onCombatWin : outcome ? step.onCombatLoss : undefined;
   const next = steps.find((candidate) => candidate.id === outcomeStepId) ?? step;
-  return getTutorialStepPath(next.page) === "/combat" ? fallback : next.page;
+  const nextPath = getTutorialStepPath(next.page);
+  return nextPath === "/combat" || next.page === TUTORIAL_ANY_PAGE
+    ? fallback
+    : next.page;
 };
 
 /**
- * Whether a battle is one the tutorial teaches by hand: the arena dummy and
- * the starter quest's fights while the tutorial runs. These always start under
- * manual control, whatever the player's stored auto-combat default says.
+ * Whether a battle is one the tutorial teaches by hand: the arena dummy, the
+ * starter quest's fights and the Genin exam's practical test while the tutorial
+ * runs. These always start under manual control, whatever the player's stored
+ * auto-combat default says, and the player's turns have no time limit.
  */
 export const isTutorialGuidedBattle = (
-  user: { tutorialOn?: boolean | null; tutorialStep?: number | null },
+  user: {
+    isAi?: boolean | null;
+    tutorialOn?: boolean | null;
+    tutorialStep?: number | null;
+  },
   battle: { opponentIds?: readonly string[]; questId?: string | null },
 ) =>
+  // AI rows keep the tutorial columns' defaults, so only a human is guided.
+  !user.isAi &&
   isTutorialActive(user) &&
   (battle.questId === TUTORIAL_STARTER_QUEST_ID ||
-    !!battle.opponentIds?.includes(TUTORIAL_ARENA_DUMMY_ID));
+    battle.questId === TUTORIAL_GENIN_EXAM_QUEST_ID ||
+    !!battle.opponentIds?.includes(TUTORIAL_ARENA_DUMMY_ID) ||
+    !!battle.opponentIds?.includes(BLACKSTEEL_PROCTOR_AI_ID));
 
 export const isTutorialJutsuPickStep = (step?: { id?: string } | null) =>
   step?.id === TUTORIAL_JUTSU_PICK_STEP_ID;
@@ -207,6 +240,22 @@ const MIN_HIGHLIGHT_PX = 4;
 export const isUsableHighlightRect = (rect: { width: number; height: number }) =>
   rect.width > MIN_HIGHLIGHT_PX && rect.height > MIN_HIGHLIGHT_PX;
 
+/** Pixels of a highlight that must be on screen for the player to see it. */
+const HIGHLIGHT_VISIBLE_PX = 24;
+
+/**
+ * Which way the player has to scroll to see a highlight (a box in viewport
+ * coordinates), or null while enough of it is on screen.
+ */
+export const getHighlightScrollDirection = (
+  box: { top: number; height: number },
+  viewportHeight: number,
+): "up" | "down" | null => {
+  if (box.top + box.height < HIGHLIGHT_VISIBLE_PX) return "up";
+  if (box.top > viewportHeight - HIGHLIGHT_VISIBLE_PX) return "down";
+  return null;
+};
+
 /** Reposition compact controls and maps that fit above the assistant; leave oversized maps scrollable. */
 export const canPositionTutorialHighlight = (
   targetHeight: number,
@@ -216,53 +265,17 @@ export const canPositionTutorialHighlight = (
   targetHeight < viewportHeight * 0.55 ||
   targetHeight + 80 < (assistantTop ?? viewportHeight);
 
+/**
+ * Fired on `window` when something a tutorial step may point at moves without any
+ * DOM, scroll or resize change, such as a marker kept on a turning globe.
+ */
+export const TUTORIAL_LAYOUT_EVENT = "tutorial-layout-change";
+
 export type TutorialScreenBox = {
   top: number;
   left: number;
   width: number;
   height: number;
-};
-
-export type TutorialPortraitSide = "right" | "left";
-
-/**
- * Which end of the Activity dock Lemu stands at, given the strip above the dock
- * she is drawn in. She prefers the right end, steps to the left end when the
- * highlight or the hand pointing at it is under her, and leaves (null) rather
- * than hide what the player has to press.
- */
-export const getTutorialPortraitSide = ({
-  frame,
-  portraitWidth,
-  inset,
-  avoid,
-}: {
-  frame: TutorialScreenBox;
-  portraitWidth: number;
-  /** Gap between her and the end of the dock. */
-  inset: number;
-  avoid: TutorialScreenBox | null;
-}): TutorialPortraitSide | null => {
-  if (!avoid) return "right";
-  // The hand pointer bounces just above or below the highlight.
-  const blocked = {
-    top: avoid.top - 72,
-    bottom: avoid.top + avoid.height + 80,
-    left: avoid.left - 16,
-    right: avoid.left + avoid.width + 16,
-  };
-  const candidates: [TutorialPortraitSide, number][] = [
-    ["right", frame.left + frame.width - inset - portraitWidth],
-    ["left", frame.left + inset],
-  ];
-  const clear = candidates.find(
-    ([, left]) =>
-      left + portraitWidth <= blocked.left ||
-      left >= blocked.right ||
-      frame.top + frame.height <= blocked.top ||
-      frame.top >= blocked.bottom,
-  );
-  return clear?.[0] ?? null;
 };
 
 /** Chapter progress shown in the assistant header. */
@@ -384,6 +397,20 @@ export const isGeninObjectiveSatisfied = (
   );
 };
 
+/** Whether a step's objective, on the starter quest or the Road to Genin, is behind the player. */
+const isObjectiveSatisfied = (
+  objectiveId: TutorialObjectiveRef,
+  user: StarterQuestTutorialUser,
+  starter: ReturnType<typeof getStarterQuestProgress>,
+  requireCollected = false,
+) =>
+  toObjectiveIds(objectiveId).some((id) => GENIN_QUEST_IDS.has(id))
+    ? isGeninObjectiveSatisfied(objectiveId, user, requireCollected)
+    : !!starter &&
+      toObjectiveIds(objectiveId).some((id) =>
+        isStarterObjectiveSatisfied(id, starter, requireCollected),
+      );
+
 /**
  * Whether a running tutorial has nothing left to teach: the player graduated
  * while its panel was out of view, so no step ever saw them do it.
@@ -426,20 +453,8 @@ export const getTutorialCatchUpStepIndex = (
 ) => {
   if (!user?.userQuests) return undefined;
   const starter = getStarterQuestProgress(user);
-  const isSatisfied = (
-    objectiveId: TutorialObjectiveRef,
-    requireCollected: boolean,
-  ) => {
-    const isGeninStep = toObjectiveIds(objectiveId).some((id) =>
-      GENIN_QUEST_IDS.has(id),
-    );
-    return isGeninStep
-      ? isGeninObjectiveSatisfied(objectiveId, user, requireCollected)
-      : !!starter &&
-          toObjectiveIds(objectiveId).some((id) =>
-            isStarterObjectiveSatisfied(id, starter, requireCollected),
-          );
-  };
+  const isSatisfied = (objectiveId: TutorialObjectiveRef, requireCollected: boolean) =>
+    isObjectiveSatisfied(objectiveId, user, starter, requireCollected);
   const isOnOpeningLessons = !steps
     .slice(0, stepIndex)
     .some((step) => step.objectiveId);
@@ -521,14 +536,13 @@ export const getTutorialStrandedBattleStepId = (
   if (user.status === "BATTLE" && user.battleId) return;
   // The hospital lesson takes over until the player is discharged.
   if (user.status === "HOSPITALIZED") return;
-  const winStep = steps.find((candidate) => candidate.id === step.onCombatWin);
-  const progress = getStarterQuestProgress(user);
+  // The fight's own objective, else the one its win step pays out.
+  const objectiveId =
+    step.objectiveId ??
+    steps.find((candidate) => candidate.id === step.onCombatWin)?.objectiveId;
   const won =
-    !!winStep?.objectiveId &&
-    !!progress &&
-    toObjectiveIds(winStep.objectiveId).some((id) =>
-      isStarterObjectiveSatisfied(id, progress),
-    );
+    !!objectiveId &&
+    isObjectiveSatisfied(objectiveId, user, getStarterQuestProgress(user));
   return won ? step.onCombatWin : step.onCombatLoss;
 };
 
@@ -598,6 +612,72 @@ export const getTutorialCombatGuidance = (info: {
   const end = byId("wait");
   if (end) return choose(end, "end");
   return { kind: "wait" };
+};
+
+/** How the combat lesson coaches a player who already played one turn under instruction. */
+export type TutorialCombatCoaching =
+  | { kind: "wait" }
+  | {
+      kind: "coach";
+      situation:
+        | "choose"
+        | "outOfReach"
+        | "unavailable"
+        | "target"
+        | "move"
+        | "end"
+        | "endEarly"
+        | "spent";
+      distanceToEnemy: number;
+      actionPoints: number;
+      /** The selected action, for the situations about it. */
+      actionName?: string;
+      actionRange?: number;
+      /** Usable attacks that reach the opponent from where the player stands. */
+      inReach: string[];
+    };
+
+/**
+ * The combat lesson after its first, fully instructed turn: the player chooses every
+ * action, and the lesson only describes the situation and explains a choice that cannot
+ * work (out of range, too few Action Points, still recharging).
+ */
+export const getTutorialCombatCoaching = (info: {
+  isPlayersTurn: boolean;
+  distanceToEnemy: number | null;
+  actionPoints: number;
+  selectedActionId?: string;
+  options: readonly TutorialCombatOption[];
+}): TutorialCombatCoaching => {
+  const { isPlayersTurn, distanceToEnemy, actionPoints, selectedActionId, options } =
+    info;
+  if (!isPlayersTurn || distanceToEnemy === null) return { kind: "wait" };
+  const attacks = options.filter(
+    (option) => !["move", "wait", "meditate"].includes(option.id),
+  );
+  const inReach = attacks
+    .filter((option) => option.isUsable && option.range >= distanceToEnemy)
+    .sort((a, b) => typeRank(a.type) - typeRank(b.type))
+    .map((option) => option.name);
+  const base = { kind: "coach" as const, distanceToEnemy, actionPoints, inReach };
+  const canStillAct = options.some(
+    (option) => option.isUsable && option.id !== "wait" && option.id !== "meditate",
+  );
+  const selected = options.find((option) => option.id === selectedActionId);
+  if (selected) {
+    const about = { actionName: selected.name, actionRange: selected.range };
+    // End Turn stays selected into the next turn, so it is no sign the player is done.
+    if (selected.id === "wait") {
+      return { ...base, ...about, situation: canStillAct ? "endEarly" : "end" };
+    }
+    if (!selected.isUsable) return { ...base, ...about, situation: "unavailable" };
+    if (selected.id === "move") return { ...base, ...about, situation: "move" };
+    if (selected.range < distanceToEnemy) {
+      return { ...base, ...about, situation: "outOfReach" };
+    }
+    return { ...base, ...about, situation: "target" };
+  }
+  return { ...base, situation: canStillAct ? "choose" : "spent" };
 };
 
 /** Jutsu first, then thrown tools, then the basic attack. */

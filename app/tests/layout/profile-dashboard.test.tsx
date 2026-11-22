@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as activityStreaks from "@/hooks/useActivityStreaks";
 import * as bankInterest from "@/hooks/useBankInterest";
+import * as claimStreakDay from "@/hooks/useClaimStreakDay";
 import * as sectorVillage from "@/hooks/useSectorVillage";
 import * as LevelUpBtn from "@/layout/LevelUpBtn";
 import * as Logbook from "@/layout/Logbook";
@@ -47,7 +48,7 @@ beforeEach(() => {
   vi.spyOn(activityStreaks, "useActivityStreaks").mockReturnValue(
     query({ streaks: [] }) as never,
   );
-  vi.spyOn(activityStreaks, "useClaimStreakDay").mockReturnValue({} as never);
+  vi.spyOn(claimStreakDay, "useClaimStreakDay").mockReturnValue({} as never);
   vi.spyOn(bankInterest, "usePendingBankInterest").mockReturnValue(
     query({ totalPending: 0, records: [] }) as never,
   );

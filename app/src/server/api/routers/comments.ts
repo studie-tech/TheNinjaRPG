@@ -72,6 +72,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { recordOnboardingTask } from "@/server/utils/onboardingTasks";
 import { offsetPage } from "@/server/utils/pagination";
 import {
   notifyConversationMentions,
@@ -620,6 +621,16 @@ export const commentsRouter = createTRPCRouter({
           isStaff: isStaffRole(user.role),
         });
       }
+
+      // Saying hello is a story objective.
+      after(() =>
+        recordOnboardingTask({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          task: "send_message",
+          questData: user.questData,
+        }),
+      );
 
       // Pusher notifications (fire after DB commit, don't await)
       notifyPrivateConversation(ctx.drizzle, {

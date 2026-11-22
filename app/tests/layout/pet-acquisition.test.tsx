@@ -1009,6 +1009,7 @@ function renderAcquisition(
     replacementCost: 0,
     replacementSilverCost: 0,
     canAcquire: true,
+    canAdoptSanctuaryPup: true,
     generationLimit: 3,
     remainingGenerations: 3,
     generationRetryAt: null,

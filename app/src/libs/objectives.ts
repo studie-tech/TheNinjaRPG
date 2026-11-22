@@ -61,6 +61,76 @@ const objectiveActionGuides: Partial<Record<string, ObjectiveActionGuide>> = {
     label: "Open your farm",
     hint: `Go to Home and press Farm, then press Harvest all once crops are ready. ${FARM_HINT}`,
   },
+  bank_deposit: {
+    href: "/bank",
+    label: "Go to the bank",
+    hint: "Deposit ryo at your village bank. Banked ryo is safe from robbers and earns interest every day.",
+  },
+  queue_energy: {
+    href: "/traininggrounds",
+    label: "Open the training grounds",
+    hint: "Pick the Queue mode when training a stat. Queued energy keeps training while you are offline.",
+  },
+  claim_streak: {
+    href: "/profile?tab=dashboard",
+    label: "Open your dashboard",
+    hint: "Claim today's activity streak reward under Right now on your profile dashboard.",
+  },
+  tower_defense_duty: {
+    href: "/towerDefense",
+    label: "Go to the Guard Hall",
+    hint: "Defend the village once in Shuriken Siege at the Guard Hall. The daily duty pays out once per day.",
+  },
+  chakra_storm_scout: {
+    href: "/chakraStorm",
+    label: "Go to the Scout Post",
+    hint: "Survive a Chakra Storm scouting run long enough to file today's report.",
+  },
+  send_message: {
+    href: "/tavern",
+    label: "Open the tavern",
+    hint: "Say hello to your villagers in the tavern.",
+  },
+  cook_meal: {
+    href: "/home",
+    label: "Go to your kitchen",
+    hint: "Cook any meal in your home kitchen.",
+  },
+  feed_pet: {
+    href: "/profile?tab=pet",
+    label: "Open your companion",
+    hint: "Feed your companion a meal from its profile tab.",
+  },
+  roll_element: {
+    href: "/blackmarket",
+    label: "Go to the black market",
+    hint: "Roll your primary element at the black market. Elements decide which elemental jutsu you can train.",
+  },
+  equip_item: {
+    href: "/items",
+    label: "Open your items",
+    hint: "Equip a piece of armor or a weapon from your inventory.",
+  },
+  get_sensei: {
+    href: "/traininggrounds?section=Covert%20%26%20Sensei",
+    label: "Find a sensei",
+    hint: "Request a Jonin as your sensei at the training grounds. Students with a sensei gain extra training experience.",
+  },
+  choose_occupation: {
+    href: "/occupation",
+    label: "Choose a job",
+    hint: "Pick a job: gathering, hunting or crafting.",
+  },
+  join_clan: {
+    href: "/clanhall",
+    label: "Visit the clan hall",
+    hint: "Send a join request to a clan, or found one of your own.",
+  },
+  job_contract_completed: {
+    href: "/occupation",
+    label: "Open your job",
+    hint: "Finish one contract of your job: a hunting or gathering contract, or a crafted item.",
+  },
 };
 
 /** The page an objective is progressed on, or null when the objective card needs no pointer. */

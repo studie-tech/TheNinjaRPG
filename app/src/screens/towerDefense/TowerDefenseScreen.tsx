@@ -18,6 +18,7 @@ import { useGameSettings } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { QUEST_LOGBOOK_HREF, QuestChallengeRoute } from "@/layout/QuestChallenge";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import { TowerDefenseChallenge } from "@/layout/TowerDefenseChallenge";
 import { TowerDefenseLobby } from "@/layout/TowerDefenseLobby";
 import { TowerDefensePlayfield } from "@/layout/TowerDefensePlayfield";
@@ -142,6 +143,7 @@ export function TowerDefenseScreen() {
         defaultBackHref="/minigames"
         topRightContent={<LeaderboardLink />}
       >
+        <SystemIntroBanner system="towerDefense" />
         <TowerDefenseLobby
           isGuest={!userId}
           level={user?.level ?? 1}

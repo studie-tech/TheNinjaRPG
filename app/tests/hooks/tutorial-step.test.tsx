@@ -142,7 +142,11 @@ describe("useTutorialStep combat subscriptions", () => {
 });
 
 describe("useTutorialStep step saving", () => {
-  const stepIndex = (id: string) => TUTORIAL_STEPS.findIndex((step) => step.id === id);
+  const stepIndex = (id: string) => {
+    const index = TUTORIAL_STEPS.findIndex((step) => step.id === id);
+    if (index === -1) throw new Error(`No tutorial step ${id}`);
+    return index;
+  };
   const saveStep = async (step: number) => {
     window.history.replaceState({}, "", pathname);
     renderHook(() => useTutorialStep());
@@ -153,7 +157,7 @@ describe("useTutorialStep step saving", () => {
   };
 
   it("leads a collapsed lesson to the next step's page before the save returns", async () => {
-    tutorialStep = stepIndex("tools-home");
+    tutorialStep = stepIndex("tools-itemshop-building");
     pathname = "/village";
     const next = tutorialStep + 1;
     const { context } = await saveStep(next);
@@ -164,7 +168,7 @@ describe("useTutorialStep step saving", () => {
   });
 
   it("leaves navigation to an open lesson, which follows the saved step", async () => {
-    tutorialStep = stepIndex("tools-home");
+    tutorialStep = stepIndex("tools-itemshop-building");
     pathname = "/village";
     act(() => store.set(tutorialPageGuidanceAtom, true));
     await saveStep(tutorialStep + 1);
@@ -179,14 +183,14 @@ describe("useTutorialStep step saving", () => {
     tutorialStep = stepIndex("combat-turns");
     pathname = "/combat";
     await saveStep(tutorialStep + 1);
-    tutorialStep = stepIndex("tools-mission-hall");
-    pathname = "/village";
+    tutorialStep = stepIndex("mission-brief");
+    pathname = "/academy";
     await saveStep(tutorialStep + 1);
     expect(push).not.toHaveBeenCalled();
   });
 
   it("puts the step back when the save fails, and keeps a confirmed one", async () => {
-    tutorialStep = stepIndex("tools-home");
+    tutorialStep = stepIndex("tools-itemshop-building");
     pathname = "/village";
     const { options, context } = await saveStep(tutorialStep + 1);
     updateUser.mockClear();

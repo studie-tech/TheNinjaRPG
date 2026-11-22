@@ -72,7 +72,7 @@ export function CombatRewards({
     <RewardSummary title="Battle rewards" label="Combat rewards">
       {rewards.map(([label, value]) => (
         <p key={label}>
-          {label}: <strong>{value.toFixed(2)}</strong>
+          {label}: <strong>{formatGain(value)}</strong>
         </p>
       ))}
       {result.lpDiff !== 0 && (
@@ -201,3 +201,15 @@ function RewardSummary({
     </section>
   );
 }
+
+/**
+ * Rewards read as whole numbers ("+40", not "39.99"). Small stat gains keep one decimal,
+ * or their first significant digit when one would round to zero, since showing a 0.04
+ * Offence gain as zero would hide that the fight paid anything.
+ */
+const formatGain = (value: number) =>
+  Math.abs(value) >= 10 || Number.isInteger(value)
+    ? Math.round(value).toLocaleString()
+    : Math.abs(value) < 0.05
+      ? String(Number(value.toPrecision(1)))
+      : value.toFixed(1);

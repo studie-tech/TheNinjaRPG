@@ -39,6 +39,7 @@ import { PvpWinLocations } from "@/layout/PvpWinLocations";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   filterMissionHallQuests,
+  getMissionHallRewardPreview,
   getMissionHallSettings,
   getMissionHallTileQuests,
   missionHallStartBlockedMessage,
@@ -292,6 +293,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
               availableUserRanks,
             );
             const count = available.length;
+            const rewardPreview = getMissionHallRewardPreview(available);
             const quota = questDailyQuota(setting.type, userData);
             const capped = !!quota && quota.current >= quota.limit;
             // Checks
@@ -429,6 +431,11 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           {rankInfo && (
                             <span className="text-yellow-500"> {rankInfo}</span>
                           )}
+                          {rewardPreview && (
+                            <span className="text-muted-foreground text-xs not-italic">
+                              {rewardPreview}
+                            </span>
+                          )}
                         </p>
                         {isReducedRewards &&
                           userData.dailyMissions < MISSIONS_PER_DAY && (
@@ -452,6 +459,15 @@ export default function MissionHall({ userData }: MissionHallProps) {
                               Are you sure you want to accept a random{" "}
                               {`${setting.rank}-rank ${setting.type}`}? You can only
                               have one active {classifier} at a time.
+                              {rewardPreview && (
+                                <>
+                                  <br />
+                                  <br />
+                                  <span className="font-semibold">
+                                    Base reward: {rewardPreview}
+                                  </span>
+                                </>
+                              )}
                               {isReducedRewards && (
                                 <>
                                   <br />

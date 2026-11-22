@@ -34,6 +34,14 @@ interface QuestPickerProps {
   initialBreak?: boolean;
   activeQuestId?: string;
   setActiveQuestId?: React.Dispatch<React.SetStateAction<string>>;
+  /** Keep only quests this accepts, e.g. the Academy's Leads or ANBU HQ without them. */
+  filterQuest?: (quest: { id: string }) => boolean;
+  /** Quests listed first, in this order, such as the current story chapter. */
+  pinnedQuestIds?: readonly string[];
+  /** Render nothing when no quest is available instead of the unavailable text. */
+  hideWhenEmpty?: boolean;
+  /** Open the first quest when none is in progress; defaults to true. */
+  autoOpenFirst?: boolean;
 }
 
 /** Start a selected quest and reconcile its profile, entry costs and discovery lists. */
@@ -56,7 +64,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
   const setActiveElement = props.setActiveQuestId || setLocalActiveElement;
 
   // Query
-  const { data: quests } = api.quests.specificQuests.useQuery(
+  const { data: fetchedQuests } = api.quests.specificQuests.useQuery(
     {
       level: userData?.level ?? 0,
       questType: props.questType,
@@ -64,6 +72,13 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
     // Owned counts gate the button, and inventory changes elsewhere leave this list cached.
     { enabled: !!userData, refetchOnMount: "always" },
   );
+
+  const pinned = props.pinnedQuestIds ?? [];
+  const pinRank = (id: string) =>
+    pinned.includes(id) ? pinned.indexOf(id) : Number.MAX_SAFE_INTEGER;
+  const quests = fetchedQuests
+    ?.filter((quest) => props.filterQuest?.(quest) ?? true)
+    .sort((a, b) => pinRank(a.id) - pinRank(b.id));
 
   const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {
     enabled: quests?.some((quest) => quest.entryRequirements.length > 0) ?? false,
@@ -122,17 +137,28 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
     if (!activeQuest && quests) setActiveElement("");
     if (userData && !activeElement) {
       const currentQuest = userData.userQuests?.find(
-        (uq) => uq.quest.questType === props.questType && !uq.endAt,
+        (uq) =>
+          uq.quest.questType === props.questType &&
+          !uq.endAt &&
+          quests?.some((q) => q.id === uq.questId),
       );
       if (currentQuest) {
         setActiveElement(currentQuest.quest.name);
         return;
       }
-      if (quests?.[0]) {
+      if (props.autoOpenFirst !== false && quests?.[0]) {
         setActiveElement(quests[0].name);
       }
     }
-  }, [userData, activeElement, props.questType, quests, currentStep, setActiveElement]);
+  }, [
+    userData,
+    activeElement,
+    props.questType,
+    props.autoOpenFirst,
+    quests,
+    currentStep,
+    setActiveElement,
+  ]);
 
   const availableQuests = quests ?? [];
 
@@ -156,6 +182,8 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
         ?.scrollIntoView({ behavior: "smooth", block: "start" }),
     );
   };
+
+  if (props.hideWhenEmpty && availableQuests.length === 0) return null;
 
   return (
     <ContentBox

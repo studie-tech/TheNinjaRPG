@@ -36,6 +36,7 @@ import {
   getCraftTrackerTasks,
   getJutsuLearnedTrackerTasks,
   getNewTrackers,
+  hasOpenTask,
 } from "@/libs/quest";
 import {
   getNextQueueSchedule,
@@ -855,6 +856,12 @@ const startQueuedCraft = async (
   // Rollback retains the queue receipt and its reserved materials on insert failure.
   await insertUserItems(client, outputs);
   if (entry.item.itemType === "MEAL") {
+    // Most players have no quest asking for meals, and their questData stays untouched.
+    if (hasOpenTask(user, "cook_meal")) {
+      await updateQueueOwner(client, user, {
+        trackers: [{ task: "cook_meal", increment: 1 }],
+      });
+    }
     await insertUserCookingJobForStartQueuedCraft(
       client,
       {

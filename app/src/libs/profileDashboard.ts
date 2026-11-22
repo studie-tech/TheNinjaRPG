@@ -28,6 +28,7 @@ import {
   questStructureRoute,
   questTypeConcurrentBlockMessage,
 } from "@/libs/quest/missionHall";
+import { isLeadQuest } from "@/libs/storyGuidance";
 import { canStartStatTraining, statTrainingBlockMessage } from "@/libs/train";
 import type { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -644,9 +645,12 @@ export const resolveDashboardContent = (
           : candidate.questType === "battlepyramid"
             ? ("battlePyramids" as const)
             : ("missions" as const);
-    const destination = questStructureRoute(candidate.questType);
-    const location =
-      category === "events"
+    // Leads are story quests started at the home Academy, not the Global ANBU HQ.
+    const isLead = isLeadQuest(candidate.id);
+    const destination = isLead ? "/academy" : questStructureRoute(candidate.questType);
+    const location = isLead
+      ? `${user.village?.name ?? "Village"} Academy`
+      : category === "events"
         ? "Administration Building"
         : category === "story"
           ? "Global ANBU HQ"
@@ -655,11 +659,10 @@ export const resolveDashboardContent = (
             : user.isOutlaw
               ? "Crimes Board"
               : `${user.village?.name ?? "Village"} Mission Hall`;
-    const requiresVillageTravel = questRequiresTravel(
-      candidate.questType,
-      user,
-      sectorVillage ?? getOwnSectorVillage(user),
-    );
+    const currentVillage = sectorVillage ?? getOwnSectorVillage(user);
+    const requiresVillageTravel = isLead
+      ? !canAccessStructure(user, destination, currentVillage)
+      : questRequiresTravel(candidate.questType, user, currentVillage);
 
     return [
       {
@@ -673,7 +676,7 @@ export const resolveDashboardContent = (
         destination,
         // Travel targets the board where the quest can be started.
         travelSector:
-          category === "events" || category === "story"
+          !isLead && (category === "events" || category === "story")
             ? MAP_WAKE_ISLAND_SECTOR
             : user.village?.sector,
         availability: requiresVillageTravel

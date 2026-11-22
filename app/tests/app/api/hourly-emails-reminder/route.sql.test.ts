@@ -80,4 +80,68 @@ describeWithDatabase("hourly email reminders", () => {
     const [user] = await db.select().from(userData);
     expect(user?.earnedExperience).toBe(0);
   });
+
+  it("sends one story email to a player who stopped mid-tutorial a day ago", async () => {
+    const db = await getTestDatabase();
+    await resetTables(emailReminder, userData);
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    await insertUsers([
+      {
+        userId: "student",
+        username: "Student",
+        tutorialOn: true,
+        tutorialStep: 3,
+        lastActiveAt: twoDaysAgo,
+      },
+    ]);
+    await db.insert(emailReminder).values({
+      userId: "student",
+      callName: "Student",
+      email,
+      secret: "secret",
+      lastActivity: twoDaysAgo,
+    });
+    const send = vi.spyOn(sgMail, "send").mockResolvedValue([] as never);
+    expect((await GET(request())).status).toBe(200);
+    expect(send).toHaveBeenCalledTimes(1);
+    const [message] = send.mock.calls[0] ?? [];
+    const sent = Array.isArray(message) ? message[0] : message;
+    expect(sent?.subject).toContain("Lemu");
+    expect(sent?.html).toContain("Continue the Academy Trials");
+
+    const [reminder] = await db.select().from(emailReminder);
+    expect(reminder?.latestRejoinRequest).not.toBeNull();
+
+    // Claimed: the next hour sends nothing more.
+    send.mockClear();
+    expect((await GET(request())).status).toBe(200);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("sends only the monthly email to a reminder that is also mid-tutorial", async () => {
+    const db = await getTestDatabase();
+    await resetTables(emailReminder, userData);
+    await insertUsers([
+      {
+        userId: "student",
+        username: "Student",
+        tutorialOn: true,
+        tutorialStep: 3,
+        lastActiveAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      },
+    ]);
+    await db.insert(emailReminder).values({
+      userId: "student",
+      callName: "Student",
+      email,
+      secret: "secret",
+      lastActivity: new Date("2020-01-01T00:00:00Z"),
+    });
+    const send = vi.spyOn(sgMail, "send").mockResolvedValue([] as never);
+    expect((await GET(request())).status).toBe(200);
+    expect(send).toHaveBeenCalledTimes(1);
+    const [message] = send.mock.calls[0] ?? [];
+    const sent = Array.isArray(message) ? message[0] : message;
+    expect(sent?.subject).toBe("We miss you at TheNinja-RPG");
+  });
 });

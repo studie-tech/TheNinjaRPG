@@ -5,15 +5,24 @@ import * as navigation from "next/navigation";
 import { type ReactNode, useMemo } from "react";
 import * as client from "@/app/_trpc/client";
 import * as sortableList from "@/components/ui/sortable-list";
-import { OrderedQuestTypesInTutorial, TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
+import {
+  IMG_URL_ASSISTANT,
+  OrderedQuestTypesInTutorial,
+  TUTORIAL_STEPS_COUNT,
+} from "@/drizzle/constants";
 import type * as TutorialHooks from "@/hooks/tutorial";
 import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
-import Modal from "@/layout/Modal";
+import type { StoryDockCard } from "@/layout/StoryDock";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { dialogChoiceContentId } from "@/libs/objectives";
-import * as tutorialPlacement from "@/libs/tutorial";
-import { getTutorialChapterProgress } from "@/libs/tutorial";
+import { sceneCharactersAtom } from "@/libs/questScene";
+import { questsTabLessonAtom } from "@/libs/questsTabLesson";
+import * as toast from "@/libs/toast";
+import {
+  getTutorialChapterProgress,
+  TUTORIAL_VILLAGE_CHOICE_STEP_ID,
+} from "@/libs/tutorial";
 import type * as TutorialSteps from "@/libs/tutorialSteps";
 import { parseHtml } from "@/utils/parse";
 import * as routing from "@/utils/routing";
@@ -29,6 +38,12 @@ mock.module("@/libs/tutorialSteps", () => steps);
 const realTutorialPath = "../../src/hooks/tutorial.tsx?real";
 const tutorial = (await import(realTutorialPath)) as typeof TutorialHooks;
 mock.module("@/hooks/tutorial", () => tutorial);
+// The story card is driven here directly; its rules are covered by storyGuidance.test.ts.
+const storyDock: { card: StoryDockCard | null } = { card: null };
+mock.module("@/layout/StoryDock", () => ({
+  useStoryDockCard: () => storyDock.card,
+  StorySpotlight: () => null,
+}));
 const { TUTORIAL_CHAPTERS, TUTORIAL_HOSPITALIZED_STEP, TUTORIAL_STEPS } = steps;
 const { default: TutorialAssistant } = await import("@/layout/TutorialAssistant");
 
@@ -63,7 +78,7 @@ const state = {
   disable: vi.fn(async () => ({ success: true, message: "Saved" })),
   sceneAssets: vi.fn(),
   checkRewards: vi.fn(),
-  autoClaimRewards: vi.fn(),
+  retryBattle: vi.fn(),
   setRightSideBarOpen: vi.fn(),
 };
 
@@ -93,6 +108,7 @@ beforeEach(() => {
   localStorage.clear();
   installBrowserGlobals({ resizeObserver: true, animationFrame: () => 0 });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  getDefaultStore().set(sceneCharactersAtom, []);
   for (const fn of [
     state.push,
     state.replace,
@@ -102,7 +118,6 @@ beforeEach(() => {
     state.disable,
     state.sceneAssets,
     state.checkRewards,
-    state.autoClaimRewards,
     state.setRightSideBarOpen,
   ])
     fn.mockClear();
@@ -133,6 +148,8 @@ beforeEach(() => {
       ),
   );
   spies.push(vi.spyOn(image, "default").mockImplementation((() => null) as never));
+  // The graduation screen celebrates with canvas confetti, which the test DOM cannot draw.
+  spies.push(vi.spyOn(toast, "triggerConfetti").mockResolvedValue(undefined));
   spies.push(
     vi
       .spyOn(logbook, "QuestObjectives")
@@ -141,15 +158,11 @@ beforeEach(() => {
       )) as never),
   );
   spies.push(
-    vi.spyOn(logbook, "useCheckRewards").mockImplementation(
-      (options) =>
-        ({
-          checkRewards: options?.automatic
-            ? state.autoClaimRewards
-            : state.checkRewards,
-          isCheckingRewards: false,
-        }) as never,
-    ),
+    vi
+      .spyOn(logbook, "useCheckRewards")
+      .mockImplementation(
+        () => ({ checkRewards: state.checkRewards, isCheckingRewards: false }) as never,
+      ),
   );
   spies.push(
     vi.spyOn(sortableList, "SortableList").mockImplementation((({
@@ -182,6 +195,16 @@ beforeEach(() => {
         }),
       },
     },
+    quests: {
+      retryBattle: {
+        useMutation: () => ({ mutate: state.retryBattle, isPending: false }),
+      },
+    },
+    village: {
+      getVillageChoices: { useQuery: () => ({ data: [], isPending: false }) },
+    },
+    // The "Tomorrow" screen previews day 2 of the daily streak.
+    activityStreak: { getUserStreaks: { useQuery: () => ({ data: undefined }) } },
     gameAsset: {
       getSceneAssets: {
         useQuery: (input: unknown, options: unknown) => {
@@ -200,6 +223,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  storyDock.card = null;
   cleanup();
   vi.useRealTimers();
   for (const spy of spies.splice(0)) spy.mockRestore();
@@ -251,6 +275,15 @@ const show = (
       {assistant(breakpoint)}
     </>,
   );
+};
+
+/** Renders a step and waits out the idle delay before the lesson offers its own buttons. */
+const showAfterIdle = (...args: Parameters<typeof show>) => {
+  vi.useFakeTimers();
+  const view = show(...args);
+  act(() => vi.advanceTimersByTime(10_000));
+  vi.useRealTimers();
+  return view;
 };
 
 const textOf = (node: ReactNode) =>
@@ -369,7 +402,65 @@ describe("each tutorial step", () => {
   );
 });
 
+describe("collapsed graduation", () => {
+  it("moves a graduate whose lesson is collapsed onto the full-screen promotion", async () => {
+    localStorage.setItem("activityDockOpen:actor", "false");
+    const rankUp = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-rank-up");
+    show(5, { rank: "GENIN", userQuests: [] });
+    await waitFor(() =>
+      expect(state.updateStep).toHaveBeenCalledWith({ step: rankUp }),
+    );
+    expect(state.updateStep).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("step overrides", () => {
+  it("leaves Lemu out of the card while the page's quest scene shows her", () => {
+    const store = getDefaultStore();
+    store.set(sceneCharactersAtom, [[IMG_URL_ASSISTANT]]);
+    const view = show(0);
+    const region = lesson(view, TUTORIAL_STEPS[0]!.title);
+    expect(region.querySelector("[data-tutorial-portrait]")).toBeNull();
+    act(() => store.set(sceneCharactersAtom, []));
+    expect(region.querySelector("[data-tutorial-portrait]")).toBeTruthy();
+  });
+
+  it("shows Lemu inside the lesson card, practice steps included", () => {
+    const practice = TUTORIAL_STEPS.findIndex((step) => step.page === "*");
+    for (const index of [0, practice]) {
+      const drawn = image.default as unknown as ReturnType<typeof vi.fn>;
+      drawn.mockClear();
+      const view = show(index);
+      const region = lesson(view, TUTORIAL_STEPS[index]!.title);
+      expect(region.querySelector("[data-tutorial-portrait]")).toBeTruthy();
+      expect(drawn.mock.calls.some(([props]) => props?.src === IMG_URL_ASSISTANT)).toBe(
+        true,
+      );
+      cleanup();
+    }
+  });
+
+  it("points to a highlight scrolled out of view and scrolls to it on a tap", () => {
+    const scrollBy = vi.fn();
+    const original = window.scrollBy;
+    window.scrollBy = scrollBy as never;
+    const below = window.innerHeight + 400;
+    const view = show(
+      0,
+      {},
+      undefined,
+      <Target id="tutorial-academy" box={new DOMRect(40, below, 160, 48)} />,
+    );
+    fireEvent.click(
+      view.getByRole("button", { name: "Scroll down to the highlighted control" }),
+    );
+    expect(scrollBy).toHaveBeenCalledWith({
+      top: below - window.innerHeight * 0.35,
+      behavior: "smooth",
+    });
+    window.scrollBy = original;
+  });
+
   it("shows the hospital lesson over any step while hospitalized", () => {
     const view = show(
       5,
@@ -507,9 +598,7 @@ describe("routing", () => {
 });
 
 describe("highlight placement", () => {
-  const index = TUTORIAL_STEPS.findIndex(
-    (step) => step.id === "student-academy-building",
-  );
+  const index = TUTORIAL_STEPS.findIndex((step) => step.id === "student-welcome");
   const target = () => TUTORIAL_STEPS[index]!.elementIds![0]!;
 
   it("scrolls an off-screen target towards the middle, a bounded number of times", async () => {
@@ -579,6 +668,165 @@ describe("highlight placement", () => {
         ).toBe("true"),
       { timeout: 3000 },
     );
+  });
+});
+
+describe("fight placement", () => {
+  const fight = TUTORIAL_STEPS.findIndex((step) => step.id === "combat-battlefield");
+  const placeFight = async (
+    timerTop: number,
+    expectedTop: number,
+    { fieldHeight = 300, dockTop = 350, tile = null as DOMRect | null } = {},
+  ) => {
+    const scrollBy = vi.fn();
+    Object.defineProperty(document, "scrollingElement", {
+      configurable: true,
+      value: { scrollBy },
+    });
+    try {
+      const view = show(
+        fight,
+        {},
+        "/combat",
+        <>
+          <Target
+            id="tutorial-combat-action-timer"
+            box={new DOMRect(40, timerTop, 600, 48)}
+          />
+          <Target
+            id="tutorial-combat-field"
+            box={new DOMRect(40, 92, 600, fieldHeight)}
+          />
+          {tile && <Target id="tutorial-combat-action-basicAttack" box={tile} />}
+        </>,
+      );
+      const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+      dock.getBoundingClientRect = () => new DOMRect(0, dockTop, 420, 300);
+      await waitFor(
+        () =>
+          expect(scrollBy).toHaveBeenCalledWith({ top: expectedTop, behavior: "auto" }),
+        { timeout: 3000 },
+      );
+      expect(scrollBy.mock.calls.every(([call]) => call.top <= expectedTop)).toBe(true);
+    } finally {
+      Reflect.deleteProperty(document, "scrollingElement");
+    }
+  };
+
+  it("uncovers a target only as far as the AP bar stays on screen", async () => {
+    // Clearing the field would scroll 58px; the AP bar 40px from the top allows 24.
+    await placeFight(40, 24);
+  });
+
+  it("brings an AP bar above the screen back into view", async () => {
+    await placeFight(-30, -46);
+  });
+
+  it("places a field taller than the screen as far as the AP bar allows", async () => {
+    await placeFight(40, 24, { fieldHeight: 2 * window.innerHeight });
+  });
+
+  it("scrolls the action tiles under an uncovered field clear of the lesson", async () => {
+    // The field ends above the dock at 450; the tile below it needs 500 + 16 - 450.
+    await placeFight(200, 66, { dockTop: 450, tile: new DOMRect(40, 400, 90, 100) });
+  });
+
+  it("places the fight again when action tiles land below the screen after it settled", async () => {
+    const scrollBy = vi.fn();
+    Object.defineProperty(document, "scrollingElement", {
+      configurable: true,
+      value: { scrollBy },
+    });
+    let tileBox = new DOMRect(40, 400, 90, 100);
+    try {
+      const view = show(
+        fight,
+        {},
+        "/combat",
+        <>
+          <Target
+            id="tutorial-combat-action-timer"
+            box={new DOMRect(40, 200, 600, 48)}
+          />
+          <Target id="tutorial-combat-field" box={new DOMRect(40, 92, 600, 300)} />
+          <div
+            id="tutorial-combat-action-basicAttack"
+            ref={(element) => {
+              if (element) element.getBoundingClientRect = () => tileBox;
+            }}
+          />
+        </>,
+      );
+      const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+      dock.getBoundingClientRect = () => new DOMRect(700, 0, 300, 300);
+      // Placed in view and clear of the lesson, so it latches without scrolling.
+      await new Promise((done) => setTimeout(done, 600));
+      expect(scrollBy).not.toHaveBeenCalled();
+      // Tiles rendering later run past the foot of the screen.
+      tileBox = new DOMRect(40, window.innerHeight - 50, 90, 100);
+      const expectedTop = tileBox.bottom + 16 - window.innerHeight;
+      await waitFor(
+        () =>
+          expect(scrollBy).toHaveBeenCalledWith({ top: expectedTop, behavior: "auto" }),
+        { timeout: 3000 },
+      );
+    } finally {
+      Reflect.deleteProperty(document, "scrollingElement");
+    }
+  });
+
+  it("narrows the lesson to the space beside the field and restores it after", async () => {
+    const root = document.documentElement;
+    const view = show(
+      fight,
+      {},
+      "/combat",
+      <Target id="tutorial-combat-field" box={new DOMRect(40, 92, 600, 300)} />,
+    );
+    const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
+    // The dock ends at 1020 and the field at 640; 16px stay between them.
+    dock.getBoundingClientRect = () => new DOMRect(600, 350, 420, 300);
+    await waitFor(
+      () => expect(root.style.getPropertyValue("--activity-dock-width")).toBe("364px"),
+      { timeout: 3000 },
+    );
+    view.unmount();
+    expect(root.style.getPropertyValue("--activity-dock-width")).toBe("");
+  });
+
+  it("keeps the lesson text on a phone unless the step has an instruction to show", () => {
+    const explained = show(fight, {}, "/combat");
+    const battlefield = TUTORIAL_STEPS[fight]!;
+    expect(
+      explained
+        .getByText(battlefield.description as string)
+        .className.includes("max-md:hidden"),
+    ).toBe(false);
+    cleanup();
+    const exam = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-proctor");
+    const instructed = show(exam, {}, "/combat");
+    expect(
+      instructed
+        .getByText(TUTORIAL_STEPS[exam]!.description as string)
+        .className.includes("max-md:hidden"),
+    ).toBe(true);
+  });
+
+  it("keeps a rematch's advice on a phone beside its generic instruction", () => {
+    const rematch = TUTORIAL_STEPS.findIndex(
+      (step) =>
+        !!(step.onCombatWin || step.onCombatLoss) &&
+        typeof step.description === "string" &&
+        !["combat-fight", "mission-find-pup"].includes(step.id) &&
+        !step.page.startsWith("/combat"),
+    );
+    expect(rematch).toBeGreaterThan(-1);
+    const view = show(rematch, { status: "BATTLE" }, "/combat");
+    expect(
+      view
+        .getByText(TUTORIAL_STEPS[rematch]!.description as string)
+        .className.includes("max-md:hidden"),
+    ).toBe(false);
   });
 });
 
@@ -683,9 +931,11 @@ describe("quest steps", () => {
   });
 
   it("answers the related quest's dialog from the lesson", () => {
-    const index = TUTORIAL_STEPS.findIndex((step) => step.advanceOn === "questDialog");
+    const index = TUTORIAL_STEPS.findIndex(
+      (step) => step.advanceOn === "questDialog" && !step.teachOnPage,
+    );
     const step = TUTORIAL_STEPS[index]!;
-    const view = show(
+    const view = showAfterIdle(
       index,
       dialogQuest(String(step.relatedValue), String(step.objectiveId)),
     );
@@ -702,10 +952,26 @@ describe("quest steps", () => {
     });
   });
 
+  it("returns focus to the reopen button when the village chooser hides", () => {
+    const index = TUTORIAL_STEPS.findIndex(
+      (step) => step.id === TUTORIAL_VILLAGE_CHOICE_STEP_ID,
+    );
+    const step = TUTORIAL_STEPS[index]!;
+    const view = show(
+      index,
+      dialogQuest(String(step.relatedValue), String(step.objectiveId)),
+    );
+    fireEvent.click(view.getByRole("button", { name: "Not yet, let me look around" }));
+    const reopen = view.getByRole("button", { name: "Choose your village" });
+    expect(document.activeElement).toBe(reopen);
+  });
+
   it("claims a finished objective's reward from the lesson", () => {
     const index = TUTORIAL_STEPS.findIndex(
       (step) =>
-        step.advanceOn === "questReward" && typeof step.objectiveId === "string",
+        step.advanceOn === "questReward" &&
+        typeof step.objectiveId === "string" &&
+        !step.teachOnPage,
     );
     const step = TUTORIAL_STEPS[index]!;
     const questId = String(step.relatedValue);
@@ -741,7 +1007,7 @@ describe("quest steps", () => {
         { id: questId, goals: [{ id: objectiveId, done, collected: false }] },
       ],
     });
-    const view = show(index, quest("train_jutsu", true));
+    const view = showAfterIdle(index, quest("train_jutsu", true));
     fireEvent.click(
       view.getByRole("button", { name: "Claim Genin rank + 1,200 XP + 300 ryo" }),
     );
@@ -749,13 +1015,13 @@ describe("quest steps", () => {
     cleanup();
     // Winning pays the quest's own reward, here nothing beyond the finished quest.
     fireEvent.click(
-      show(index, quest("win_quest", true)).getByRole("button", {
+      showAfterIdle(index, quest("win_quest", true)).getByRole("button", {
         name: "Claim reward",
       }),
     );
     expect(state.checkRewards).toHaveBeenLastCalledWith({ questId });
     cleanup();
-    const pending = show(index, quest("train_jutsu", false));
+    const pending = showAfterIdle(index, quest("train_jutsu", false));
     expect(pending.getByText("Objective:", { exact: false }).textContent).toBe(
       "Objective: Train a jutsu",
     );
@@ -804,7 +1070,7 @@ describe("quest steps", () => {
       (step) => step.id === "tools-claim-jutsu",
     );
     expect(TUTORIAL_STEPS[jutsuClaim]?.elementIds ?? []).toEqual([]);
-    const view = show(jutsuClaim, starterQuest(jutsuClaim, true));
+    const view = showAfterIdle(jutsuClaim, starterQuest(jutsuClaim, true));
     const claim = view.getByRole("button", { name: "Claim 1,000 XP" });
     expect(claim.closest("[data-tutorial-claim-highlight]")).toBeTruthy();
     expect(overlay()).toBeTruthy();
@@ -818,29 +1084,101 @@ describe("quest steps", () => {
     expect(document.querySelector("[data-tutorial-claim-highlight]")).toBeNull();
     expect(overlay()).toBeNull();
     cleanup();
-    // The first fight's reward: the logbook entry on the profile only has a gift icon.
+    // The first fight's reward is claimed from the quest log's gift: the lesson keeps its
+    // own Claim back until the player is stuck.
+    vi.useFakeTimers();
     const fightClaim = TUTORIAL_STEPS.findIndex(
       (step) => step.id === "combat-claim-reward",
     );
     const fight = show(fightClaim, starterQuest(fightClaim, true));
-    const fightButton = fight.getByRole("button", { name: "Claim 1,000 XP" });
-    expect(fightButton.closest("[data-tutorial-claim-highlight]")).toBeTruthy();
-    expect(overlay()).toBeTruthy();
-    fireEvent.click(fightButton);
+    expect(fight.queryByRole("button", { name: "Claim 1,000 XP" })).toBeNull();
+    act(() => vi.advanceTimersByTime(60_000));
+    fireEvent.click(fight.getByRole("button", { name: "Claim 1,000 XP" }));
     expect(state.checkRewards).toHaveBeenLastCalledWith({
       questId: String(TUTORIAL_STEPS[fightClaim]?.relatedValue),
     });
+    vi.useRealTimers();
   });
 
-  it("sends every claim step to the lesson's Claim button", () => {
+  it("teaches the first claim on the quest log and sends the rest to the lesson's Claim", () => {
     const claimSteps = TUTORIAL_STEPS.filter(
       (step) => step.advanceOn === "questReward",
     );
-    expect(claimSteps.map((step) => step.id)).toContain("combat-claim-reward");
-    for (const step of claimSteps) expect(step.elementIds ?? []).toEqual([]);
+    const [first, ...rest] = claimSteps;
+    expect(first?.id).toBe("combat-claim-reward");
+    expect(first?.teachOnPage).toBe(true);
+    expect(first?.elementIds).toEqual(["tutorial-objective-claim"]);
+    for (const step of rest) expect(step.elementIds ?? []).toEqual([]);
   });
 
-  it("collects the first fight's and first jutsu's rewards without a tap", () => {
+  it("practises assigning experience and levelling up with fewer pointers each time", () => {
+    const levelSteps = TUTORIAL_STEPS.filter((step) => step.advanceOn === "levelUp");
+    expect(levelSteps.map((step) => step.id)).toEqual([
+      "combat-level-up",
+      "tools-level-up",
+      "mission-level-up",
+      "genin-level-up",
+    ]);
+    // The first round is led page by page; later rounds run wherever the player is.
+    expect(levelSteps[0]?.page).toBe("/profile/experience");
+    for (const step of levelSteps.slice(1)) expect(step.page).toBe("*");
+    // Only the first level-up is pointed at.
+    expect(levelSteps.slice(1).every((step) => !step.elementIds?.length)).toBe(true);
+  });
+
+  it("asks for a rematch after the proctor's clone wins", () => {
+    const proctor = TUTORIAL_STEPS.find((step) => step.id === "exam-proctor");
+    const retry = TUTORIAL_STEPS.find((step) => step.id === proctor?.onCombatLoss);
+    expect(proctor?.onCombatWin).toBe("exam-tour");
+    expect(retry?.id).toBe("exam-proctor-retry");
+    expect(retry?.objectiveId).toBe(proctor?.objectiveId);
+    expect(retry?.onCombatWin).toBe("exam-tour");
+    expect(retry?.onCombatLoss).toBe("exam-proctor-retry");
+  });
+
+  it("offers a rematch from the lesson after the proctor's clone wins", () => {
+    const index = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-proctor-retry");
+    const step = TUTORIAL_STEPS[index]!;
+    const questId = String(step.relatedValue);
+    const objectiveId = String(step.objectiveId);
+    const lostTo = (recentlyDied: boolean) => ({
+      userQuests: [
+        {
+          id: "attempt",
+          questId,
+          endAt: null,
+          quest: {
+            id: questId,
+            name: "Road to Genin",
+            questType: "starter",
+            consecutiveObjectives: true,
+            content: {
+              reward: { reward_rank: "NONE", reward_exp: 0, reward_money: 0 },
+              objectives: [
+                { id: objectiveId, task: "start_battle", description: "Fight" },
+              ],
+            },
+          },
+        },
+      ],
+      questData: [
+        { id: questId, goals: [{ id: objectiveId, done: false, recentlyDied }] },
+      ],
+    });
+    state.retryBattle.mockClear();
+    const view = show(index, lostTo(true) as never);
+    fireEvent.click(view.getByRole("button", { name: "Retry battle" }));
+    expect(state.retryBattle).toHaveBeenCalledWith({ questId });
+    cleanup();
+    // Nothing to retry before a loss.
+    expect(
+      show(index, lostTo(false) as never).queryByRole("button", {
+        name: "Retry battle",
+      }),
+    ).toBeNull();
+  });
+
+  it("leaves every reward for the player to claim", () => {
     const readyQuest = (stepIndex: number, done = true) => {
       const step = TUTORIAL_STEPS[stepIndex]!;
       const questId = String(step.relatedValue);
@@ -877,85 +1215,27 @@ describe("quest steps", () => {
         ],
       };
     };
-    const auto = TUTORIAL_STEPS.filter((step) => step.autoClaim).map((step) => step.id);
-    expect(auto).toEqual(["combat-claim-reward", "tools-claim-jutsu"]);
+    const claimSteps = ["tools-claim-jutsu", "mission-claim-pup"];
     vi.useFakeTimers();
-    for (const stepId of auto) {
+    for (const stepId of claimSteps) {
       const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
       const questId = String(TUTORIAL_STEPS[index]?.relatedValue);
-      state.autoClaimRewards.mockClear();
-      const view = show(index, readyQuest(index));
-      // A beat to read the victory first, then exactly one claim.
-      act(() => vi.advanceTimersByTime(1000));
-      expect(state.autoClaimRewards).not.toHaveBeenCalled();
-      act(() => vi.advanceTimersByTime(500));
-      expect(state.autoClaimRewards).toHaveBeenCalledTimes(1);
-      expect(state.autoClaimRewards).toHaveBeenCalledWith({ questId });
-      // Re-renders do not claim again; the button stays for a failed attempt.
-      view.rerender(<>{assistant()}</>);
-      act(() => vi.advanceTimersByTime(5000));
-      expect(state.autoClaimRewards).toHaveBeenCalledTimes(1);
-      const claim = view.getByRole("button", { name: "Claim 1,000 XP" });
-      expect(state.checkRewards).not.toHaveBeenCalled();
-      fireEvent.click(claim);
-      expect(state.checkRewards).toHaveBeenLastCalledWith({ questId });
       state.checkRewards.mockClear();
-      cleanup();
-      // Nothing is claimed before the objective is done.
-      show(index, readyQuest(index, false));
+      const view = show(index, readyQuest(index));
+      // Nothing is claimed while the player only reads the lesson, and the lesson's
+      // own Claim waits until they have been idle for a while.
       act(() => vi.advanceTimersByTime(5000));
-      expect(state.autoClaimRewards).toHaveBeenCalledTimes(1);
+      expect(state.checkRewards).not.toHaveBeenCalled();
+      expect(view.queryByRole("button", { name: /^Claim / })).toBeNull();
+      act(() => vi.advanceTimersByTime(5000));
+      fireEvent.click(view.getByRole("button", { name: /^Claim / }));
+      expect(state.checkRewards).toHaveBeenLastCalledWith({ questId });
       cleanup();
     }
-    // The pup's reward closes a story beat, so the player still claims it.
-    const pup = TUTORIAL_STEPS.findIndex((step) => step.id === "mission-claim-pup");
-    state.autoClaimRewards.mockClear();
-    show(pup, readyQuest(pup));
-    act(() => vi.advanceTimersByTime(5000));
-    expect(state.autoClaimRewards).not.toHaveBeenCalled();
   });
 
-  it("keeps the portrait clear of the whole Auto Travel confirmation", async () => {
-    const placement = vi.spyOn(tutorialPlacement, "getTutorialPortraitSide");
-    spies.push(placement);
-    const modalBox = new DOMRect(350, 250, 500, 220);
-    const getBox = Element.prototype.getBoundingClientRect;
-    spies.push(
-      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
-        this: HTMLElement,
-      ) {
-        if (this.id === "tutorial-auto-travel-content") return modalBox;
-        if (this.id === "tutorial-auto-travel-proceed")
-          return new DOMRect(650, 400, 120, 40);
-        return getBox.call(this);
-      }),
-    );
-    const index = TUTORIAL_STEPS.findIndex(
-      (step) => step.id === "mission-travel-to-pup",
-    );
-    show(
-      index,
-      { sector: 301, level: 3 },
-      undefined,
-      <Modal
-        id="tutorial-auto-travel"
-        title="Auto Travel"
-        isOpen
-        setIsOpen={() => {}}
-        proceed_label="Travel"
-        onAccept={() => {}}
-      >
-        Travel to the destination sector?
-      </Modal>,
-    );
-    await waitFor(() =>
-      expect(placement.mock.calls.some(([input]) => input.avoid === modalBox)).toBe(
-        true,
-      ),
-    );
-  });
-
-  it("starts a tutorial trip from the lesson in one tap", () => {
+  it("teaches the trip on the page and offers the lesson's trip only once stuck", () => {
+    vi.useFakeTimers();
     for (const [stepId, label] of [
       ["mission-travel-to-pup", "Take me there"],
       ["bond-travel-wake", "Take me to Wake Island"],
@@ -965,33 +1245,61 @@ describe("quest steps", () => {
       expect(typeof sector).toBe("number");
       state.push.mockClear();
       const view = show(index, { sector: 301, level: 3 });
-      const button = view.getByRole("button", { name: label });
-      // With no trip confirmation on screen, the lesson's button is the marked action.
-      expect(button.closest("[data-tutorial-claim-highlight]")).toBeTruthy();
-      fireEvent.click(button);
+      expect(view.queryByRole("button", { name: label })).toBeNull();
+      act(() => vi.advanceTimersByTime(60_000));
+      fireEvent.click(view.getByRole("button", { name: label }));
       expect(state.push).toHaveBeenCalledWith(`/travel?sector=${sector}`);
       cleanup();
-      // Once the confirmation opens, its Travel button takes the highlight.
-      const confirm = show(
-        index,
-        { sector: 301, level: 3 },
-        undefined,
-        <Target id="tutorial-auto-travel-proceed" />,
-      );
-      expect(
-        confirm
-          .getByRole("button", { name: label })
-          .closest("[data-tutorial-claim-highlight]"),
-      ).toBeNull();
-      cleanup();
-      // On the way there is nothing to start.
-      expect(
-        show(index, { sector: 301, status: "TRAVEL" }).queryByRole("button", {
-          name: label,
-        }),
-      ).toBeNull();
+    }
+    vi.useRealTimers();
+  });
+
+  it("restarts the wait for the lesson's own button whenever the player acts", () => {
+    vi.useFakeTimers();
+    const index = TUTORIAL_STEPS.findIndex(
+      (step) => step.id === "mission-travel-to-pup",
+    );
+    const view = show(index, { sector: 301, level: 3 });
+    act(() => vi.advanceTimersByTime(8000));
+    fireEvent.pointerDown(window);
+    act(() => vi.advanceTimersByTime(8000));
+    expect(view.queryByRole("button", { name: "Take me there" })).toBeNull();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(view.getByRole("button", { name: "Take me there" })).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it("sends later answers and claims to the Quests tab", () => {
+    const store = getDefaultStore();
+    for (const stepId of ["tools-claim-jutsu", "bond-return-pup", "exam-claim"]) {
+      const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
+      const step = TUTORIAL_STEPS[index]!;
+      expect(step.action).toContain("Open Quests");
+      show(index);
+      expect(store.get(questsTabLessonAtom)).toEqual({
+        questId: String(step.relatedValue),
+        prompt: step.questsTabPrompt!,
+      });
       cleanup();
     }
+    show(0);
+    expect(store.get(questsTabLessonAtom)).toBeNull();
+  });
+
+  it("answers on the quest log before the lesson offers its own answers", () => {
+    vi.useFakeTimers();
+    const answer = TUTORIAL_STEPS.findIndex(
+      (step) => step.advanceOn === "questDialog" && step.teachOnPage,
+    );
+    const step = TUTORIAL_STEPS[answer]!;
+    const view = show(
+      answer,
+      dialogQuest(String(step.relatedValue), String(step.objectiveId)),
+    );
+    expect(view.queryByRole("button", { name: "Yes" })).toBeNull();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(view.getByRole("button", { name: "Yes" })).toBeTruthy();
+    vi.useRealTimers();
   });
 
   describe("after the tutorial", () => {
@@ -999,6 +1307,42 @@ describe("quest steps", () => {
       localStorage.setItem("activityDockOpen:actor", "true");
       localStorage.setItem("activityDockTab:actor", JSON.stringify("tutorial"));
     };
+
+    it("leads with the story card when it outranks the quest on show", async () => {
+      openLesson();
+      const quest = dialogQuest(
+        "high",
+        "high-objective",
+        OrderedQuestTypesInTutorial[0],
+      );
+      storyDock.card = {
+        id: "story-ready-8",
+        title: "Lemu is waiting",
+        eyebrow: "Chapter 8 · The Ledger",
+        lead: <p>Someone at the Academy archives wants to see you.</p>,
+      };
+      const view = show(
+        TUTORIAL_STEPS_COUNT,
+        { rank: "GENIN", userQuests: quest.userQuests, questData: quest.questData },
+        "/profile",
+      );
+      const region = await waitFor(() => lesson(view, "Lemu is waiting"));
+      expect(region.textContent).toContain("Chapter 8 · The Ledger");
+      expect(region.textContent).not.toContain("Say yes to high");
+    });
+
+    it("fills an otherwise empty dock with the story card", async () => {
+      openLesson();
+      storyDock.card = {
+        id: "story-next-9",
+        title: "Chapter 9 at level 7",
+        eyebrow: "Next · Watchtowers",
+        lead: <p>1,200 experience to go.</p>,
+      };
+      const view = show(TUTORIAL_STEPS_COUNT, { rank: "GENIN" }, "/profile");
+      const region = await waitFor(() => lesson(view, "Chapter 9 at level 7"));
+      expect(region.textContent).toContain("1,200 experience to go.");
+    });
 
     it("guides the highest-priority active quest and loads its characters", async () => {
       openLesson();
@@ -1036,7 +1380,7 @@ describe("quest steps", () => {
       fireEvent.click(view.getByRole("button", { name: "Done" }));
       expect(lesson(view, "Quest high")).toBeTruthy();
 
-      fireEvent.click(view.getByRole("button", { name: "Skip tutorial" }));
+      fireEvent.click(view.getByRole("button", { name: "Hide story guidance" }));
       await waitFor(() => expect(state.disable).toHaveBeenCalledTimes(1));
     });
 

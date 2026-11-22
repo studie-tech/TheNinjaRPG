@@ -32,7 +32,7 @@ import { expandAiCopies } from "@/libs/quest";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canAwardReputation } from "@/utils/permissions";
 import { objectKeys } from "@/utils/typeutils";
-import { useUserDataSelector } from "@/utils/UserContext";
+import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
 import type {
   AllObjectivesType,
   QuestNodePositions,
@@ -42,6 +42,29 @@ import type {
 import { objectiveImageMap, QuestFormSchema } from "@/validators/objectives";
 import { type QuestRewardType, questRewardFields } from "@/validators/rewardPackages";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
+
+/**
+ * Starts a quest's lost battle again, wherever the player is: the quest log's objective
+ * and the tutorial's lost-exam lesson offer the same retry.
+ */
+export const useRetryQuestBattle = () => {
+  const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useUserInfo();
+  const { mutate, isPending } = api.quests.retryBattle.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      showMutationToast(data);
+      if (data.success) await updateUser(data, { revision });
+      else await utils.profile.getUser.invalidate();
+    },
+    // A lost response leaves the retry's outcome unknown. Settled rather than onError,
+    // which would replace the shared transport-failure feedback.
+    onSettled: async (_data, error) => {
+      if (error) await utils.profile.getUser.invalidate();
+    },
+  });
+  return { retryBattle: mutate, isRetrying: isPending };
+};
 
 /** Manage quest fields, objective layouts and validated content saves in one form. */
 export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) => {

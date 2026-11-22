@@ -1,4 +1,5 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
+import type { DailyDutyReward } from "@/libs/dailyDutyExperience";
 import type { TdDojoUpgrade } from "@/libs/towerDefense/content";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
@@ -29,7 +30,7 @@ export const getRunClaimUpdate =
  * leaves the profile as it was.
  */
 export const getDailyDutyUserUpdate = (duty: {
-  reward: { ryo: number; prestige: number; villageTokens: number } | null;
+  reward: DailyDutyReward | null;
   villageId: string | null;
   paidAt: Date;
 }): { userDelta: UserDelta; userPatch?: UserCachePatch } =>
@@ -38,6 +39,9 @@ export const getDailyDutyUserUpdate = (duty: {
         userDelta: {
           money: duty.reward.ryo,
           villagePrestige: duty.reward.prestige,
+          ...(duty.reward.experience > 0
+            ? { earnedExperience: duty.reward.experience }
+            : {}),
           ...(duty.villageId
             ? { village: { id: duty.villageId, tokens: duty.reward.villageTokens } }
             : {}),

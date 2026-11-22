@@ -57,6 +57,8 @@ export const acquirePetSchema = petPaymentSchema.extend({
     .int()
     .min(0)
     .max(PET_AURAS.length - 1),
+  /** Adopt the pup rescued in the Academy Trials with its preset look, as a first bond. */
+  isSanctuaryPup: z.boolean().optional(),
 });
 
 /** Partial settings update that must supply at least one field besides the companion ID. */

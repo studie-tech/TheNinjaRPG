@@ -54,6 +54,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal from "@/layout/Modal";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getHomeRooms } from "@/libs/homeProperty";
 import {
@@ -340,6 +341,7 @@ function Residence() {
           )
         }
       >
+        <SystemIntroBanner system="kitchen" className="m-3" />
         {isHomeLoading ? (
           <Loader explanation="Loading your home" />
         ) : (

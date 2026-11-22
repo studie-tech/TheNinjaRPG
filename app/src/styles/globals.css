@@ -1033,7 +1033,21 @@ html[data-reading-palette] .tnr-pixel-game [data-content-box] :where(h1, h2, h3,
   pointer-events: auto;
 }
 
-/* The shared mobile bar owns Activity; keep its open panel clear of the raised center. */
-html[data-mobile-activity-nav="true"] [data-activity-dock]:not(:has([data-dodge-highlight="true"])) {
-  bottom: calc(var(--game-bottom-nav-h, 0px) + 1rem);
+/* The Academy tile pulses a few times when the story dock points at a new chapter. */
+@keyframes story-pulse-once {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(251 191 36 / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgb(251 191 36 / 0.6);
+  }
+}
+.story-pulse-once {
+  animation: story-pulse-once 1.2s ease-in-out 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-pulse-once {
+    animation: none;
+  }
 }

@@ -11,6 +11,7 @@ import Loader from "@/layout/Loader";
 import Welcome from "@/layout/Welcome";
 import { readCampaignSource, storeLandingAttribution } from "@/libs/campaignSource";
 import { nativeHomeRedirectAtom } from "@/libs/native/homeRedirect";
+import { isTutorialActive } from "@/libs/tutorial";
 import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
@@ -28,7 +29,11 @@ export const HomeLanding: React.FC = () => {
     userId,
     isSignedIn,
     isClerkLoaded,
-  } = useUserDataSelector((u) => u.userId);
+  } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    tutorialOn: u.tutorialOn,
+    tutorialStep: u.tutorialStep,
+  }));
   const setReferral = api.register.setReferralSource.useMutation({
     meta: { handlesTransportError: true },
   });
@@ -44,6 +49,7 @@ export const HomeLanding: React.FC = () => {
   useEffect(() => {
     if (!isSignedIn) return;
     router.prefetch("/profile");
+    router.prefetch("/village");
     router.prefetch("/register");
   }, [isSignedIn, router]);
 
@@ -65,7 +71,9 @@ export const HomeLanding: React.FC = () => {
       // NativeBridge already issued this destination. Even one duplicate navigation can
       // restart a slow route; character refreshes must leave it alone entirely.
       if (store.get(nativeHomeRedirectAtom)) return;
-      void router.replace("/profile");
+      // A brand-new character starts in the village, where the Academy Trials begin.
+      const isNewStudent = isTutorialActive(userData) && userData.tutorialStep === 0;
+      void router.replace(isNewStudent ? "/village" : "/profile");
     }
   }, [
     clerk,

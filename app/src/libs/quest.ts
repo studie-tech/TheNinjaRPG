@@ -52,6 +52,8 @@ import {
   isQuestChallengeTask,
   ObjectiveTracker,
   type ObjectiveTrackerType,
+  type OnboardingStateTask,
+  OnboardingStateTasks,
   QuestCompletionTasks,
   QuestTracker,
   type QuestTrackerType,
@@ -73,6 +75,21 @@ export const getUserQuests = (
       .map((uq) => ({ ...uq, ...uq.quest })) ?? [];
   return userQuests;
 };
+
+/** Whether an active quest has an unfinished objective with this task. */
+export const hasOpenTask = (
+  user: Parameters<typeof getUserQuests>[0],
+  task: AllObjectivesType["task"],
+) =>
+  getUserQuests(user).some((quest) =>
+    quest.content.objectives.some(
+      (objective) =>
+        objective.task === task &&
+        !user.questData
+          ?.find((tracker) => tracker.id === quest.id)
+          ?.goals.find((goal) => goal.id === objective.id)?.done,
+    ),
+  );
 
 /**
  * Project a user's active quests into the `{ questId, objectives }` shape consumed by
@@ -1431,6 +1448,56 @@ const evaluatePassiveGoalValue = (
     status.value = user.huntingExperience;
   } else if (task === "gathering_experience") {
     status.value = user.gatheringExperience;
+  } else if (isInArray(task, OnboardingStateTasks)) {
+    const value = onboardingStateValue(user, task);
+    // A loader without the state (e.g. no equipped items) must not undo progress.
+    if (value !== undefined && value > status.value) status.value = value;
+  }
+};
+
+/** Equipment slots that hold armor or a weapon, as opposed to tools and keystones. */
+const GEAR_SLOTS: readonly string[] = [
+  "HEAD",
+  "CHEST",
+  "LEGS",
+  "FEET",
+  "HAND_1",
+  "HAND_2",
+  "WAIST",
+];
+
+/**
+ * Progress of a story-onboarding goal read from the player's own state, or undefined
+ * when the loaded user does not carry that state.
+ */
+const onboardingStateValue = (user: TrackerUser, task: OnboardingStateTask) => {
+  switch (task) {
+    case "roll_element":
+      return user.primaryElement ? 1 : 0;
+    case "get_sensei":
+      return user.senseiId ? 1 : 0;
+    case "choose_occupation":
+      return user.occupation ? 1 : 0;
+    case "join_clan":
+      return user.clanId ? 1 : 0;
+    case "equip_item":
+      return user.items?.some((entry) => GEAR_SLOTS.includes(entry.equipped))
+        ? 1
+        : user.items
+          ? 0
+          : undefined;
+    case "job_contract_completed": {
+      // Hunting and gathering jobs work through contract quests; a crafter's job is
+      // crafting itself, so any crafting experience counts as a finished contract.
+      const contracts = user.completedQuests.reduce(
+        (total, history) =>
+          history.questType === "hunting" || history.questType === "gathering"
+            ? total + Math.max(history.completed, history.previousCompletes ?? 0)
+            : total,
+        0,
+      );
+      return contracts + (user.craftingExperience > 0 ? 1 : 0);
+    }
   }
 };
 

@@ -13,6 +13,7 @@ import ContentBox from "@/layout/ContentBox";
 import { useGameSettings } from "@/layout/GameSettings";
 import Loader from "@/layout/Loader";
 import { QUEST_LOGBOOK_HREF, QuestChallengeRoute } from "@/layout/QuestChallenge";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import { CS_STAGE_INFO, CS_STAGES, type CsStage } from "@/libs/chakraStorm/content";
 import { csStageUnlocked } from "@/libs/chakraStorm/progress";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
@@ -122,6 +123,7 @@ export function ChakraStormScreen() {
         defaultBackHref="/minigames"
         topRightContent={<LeaderboardButton size="sm" variant="default" />}
       >
+        <SystemIntroBanner system="chakraStorm" />
         <ChakraStormLobby
           progress={progress}
           stage={stage}

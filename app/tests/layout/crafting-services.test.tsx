@@ -21,6 +21,7 @@ import * as serviceCache from "@/hooks/useCraftingServices";
 import * as contentBox from "@/layout/ContentBox";
 import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
 import { CraftForMe, CraftingServices } from "@/layout/CraftingServices";
+import * as SystemIntroBanner from "@/layout/SystemIntroBanner";
 import * as userContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { deferred } from "../setup/deferred";
@@ -62,6 +63,8 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
   } as never);
+  // The page is under test, not its one-time intro banner and its profile mutation.
+  vi.spyOn(SystemIntroBanner, "SystemIntroBanner").mockImplementation(() => null);
   vi.spyOn(serviceCache, "useCraftingServiceCache").mockReturnValue({
     prepareServiceUpdate: vi.fn(),
     updateService: vi.fn(async () => {}),

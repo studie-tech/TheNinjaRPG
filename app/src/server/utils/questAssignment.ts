@@ -14,7 +14,7 @@ import {
   getQuestTargetSectorsToCheck,
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
-import { isAvailableUserQuests } from "@/libs/quest/availability";
+import { isAvailableUserQuests, isTierQuestUnlocked } from "@/libs/quest/availability";
 import {
   isQuestRankAllowed,
   isWarMissionAvailable,
@@ -895,6 +895,8 @@ export const insertNextQuest = async (
   user: NonNullable<UserWithRelations>,
   type: BootstrapQuestType,
 ) => {
+  // Every tier-quest assignment passes here, so this one check holds them back.
+  if (type === "tier" && !isTierQuestUnlocked(user)) return undefined;
   const history = await fetchUncompletedQuests(client, user, type);
   const nextQuest = history[0];
   if (nextQuest) {

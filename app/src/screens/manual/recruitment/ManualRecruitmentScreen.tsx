@@ -36,6 +36,7 @@ import VisitorFiltering, {
   getFilter as getVisitorFilter,
   useFiltering as useVisitorFiltering,
 } from "@/layout/VisitorFiltering";
+import type { StoryChapterFunnelEntry } from "@/libs/storyFunnel";
 import { TUTORIAL_STEPS } from "@/libs/tutorialSteps";
 import {
   canViewRecruitmentAnalytics,
@@ -173,28 +174,25 @@ export function ManualRecruitmentScreen() {
               }
             />
             <RateCard
-              title="Student+"
-              explanation="Loading student progress"
+              title="Genin+"
+              explanation="Loading Genin progress"
               isFetching={isFetchingMain}
-              ratePct={percentOf(mainMetrics?.nonStudentSignups, mainMetrics?.signups)}
-              goalPct={RECRUITMENT_GOALS.RANK_RATE_PERCENT}
+              ratePct={percentOf(mainMetrics?.geninPlusSignups, mainMetrics?.signups)}
+              goalPct={RECRUITMENT_GOALS.GENIN_RATE_PERCENT}
               counts={
                 mainMetrics &&
-                `${mainMetrics.nonStudentSignups} / ${mainMetrics.signups} signups`
+                `${mainMetrics.geninPlusSignups} / ${mainMetrics.signups} signups`
               }
             />
             <RateCard
-              title="Genin+"
-              explanation="Loading rank progress"
+              title="Chunin+"
+              explanation="Loading Chunin progress"
               isFetching={isFetchingMain}
-              ratePct={percentOf(
-                mainMetrics?.nonStudentGeninSignups,
-                mainMetrics?.signups,
-              )}
-              goalPct={RECRUITMENT_GOALS.RANK_RATE_PERCENT}
+              ratePct={percentOf(mainMetrics?.chuninPlusSignups, mainMetrics?.signups)}
+              goalPct={RECRUITMENT_GOALS.CHUNIN_RATE_PERCENT}
               counts={
                 mainMetrics &&
-                `${mainMetrics.nonStudentGeninSignups} / ${mainMetrics.signups} signups`
+                `${mainMetrics.chuninPlusSignups} / ${mainMetrics.signups} signups`
               }
             />
 
@@ -306,6 +304,12 @@ export function ManualRecruitmentScreen() {
                   />
                 </div>
               )}
+
+            {mainMetrics?.storyChapters && (
+              <div className="col-span-2">
+                <StoryChapterFunnel chapters={mainMetrics.storyChapters} />
+              </div>
+            )}
 
             {mainMetrics?.geninPathPlayers &&
               mainMetrics.geninPathPlayers.length > 0 && (
@@ -462,6 +466,55 @@ const RateCard: React.FC<RateCardProps> = (props) => {
             )}
           </>
         )}
+      </CardContent>
+    </Card>
+  );
+};
+
+/**
+ * Starts and finishes of each story chapter among tutorial graduates, each bar
+ * scaled to the most-started chapter so drop-off between chapters reads at a glance.
+ */
+const StoryChapterFunnel: React.FC<{ chapters: StoryChapterFunnelEntry[] }> = ({
+  chapters,
+}) => {
+  const widest = Math.max(1, ...chapters.map((entry) => entry.started));
+  return (
+    <Card>
+      <CardHeader className="pt-2 pb-0">
+        <CardTitle className="font-medium text-sm">
+          Story Chapters (Tutorial Finished)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-1 py-2">
+        {chapters.map((entry) => (
+          <div
+            key={entry.chapter}
+            className="grid grid-cols-[minmax(0,11rem)_1fr_auto] items-center gap-2 text-xs"
+          >
+            <span className="truncate" title={entry.title}>
+              Ch {entry.chapter} · {entry.title}
+              {entry.optional ? " (optional)" : ""}
+            </span>
+            <div className="relative h-3 rounded bg-muted">
+              <div
+                className="absolute inset-y-0 left-0 rounded bg-primary/40"
+                style={{ width: `${(entry.started / widest) * 100}%` }}
+              />
+              <div
+                className="absolute inset-y-0 left-0 rounded bg-primary"
+                style={{ width: `${(entry.finished / widest) * 100}%` }}
+              />
+            </div>
+            <span className="text-muted-foreground whitespace-nowrap tabular-nums">
+              Lv {entry.level} · {entry.finished}/{entry.started} (
+              {percentOf(entry.finished, entry.started).toFixed(0)}%)
+            </span>
+          </div>
+        ))}
+        <div className="text-muted-foreground text-xs">
+          Light bar: started · dark bar: finished · excludes returning players
+        </div>
       </CardContent>
     </Card>
   );

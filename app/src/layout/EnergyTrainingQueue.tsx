@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Progress } from "@/components/ui/progress";
 import { useEnergyQueueRefresh } from "@/hooks/useEnergyQueueRefresh";
 import ContentBox from "@/layout/ContentBox";
+import { TrainingPushPrompt } from "@/layout/TrainingPushPrompt";
 import { getEnergyQueue } from "@/libs/queue";
 import { showMutationToast } from "@/libs/toast";
 import { statTrainingBlockMessage } from "@/libs/train";
@@ -125,6 +126,7 @@ export const EnergyTrainingQueue = ({
         {block && (
           <p className="text-muted-foreground text-xs">Queue paused: {block}</p>
         )}
+        {entries.length > 0 && <TrainingPushPrompt />}
         {error && (
           <p role="alert" className="text-destructive text-sm">
             {error}
@@ -136,7 +138,10 @@ export const EnergyTrainingQueue = ({
 };
 
 /** Keep account and captcha state in sync after any Energy queue edit. */
-export const useEnergyTrainingQueue = (refreshCaptcha: () => Promise<void>) => {
+export const useEnergyTrainingQueue = (
+  refreshCaptcha: () => Promise<void>,
+  onSaved?: () => void,
+) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const [error, setError] = useState<string | null>(null);
   const { mutate: saveQueue, isPending } =
@@ -145,6 +150,7 @@ export const useEnergyTrainingQueue = (refreshCaptcha: () => Promise<void>) => {
       onSuccess: (result) => {
         showMutationToast(result);
         setError(result.success ? null : result.message);
+        if (result.success) onSaved?.();
       },
       onError: (cause) => setError(cause.message),
       onSettled: async (result, _error, variables, context) => {

@@ -48,19 +48,19 @@ it("preserves ordinary rewards, mastery names, signed territory changes, bountie
   );
   const summary = view.getByRole("region", { name: "Combat rewards" });
   for (const reward of [
-    "Experience Points: 10.13",
-    "Unassigned Experience: 20.00",
-    "Offence: 1.00",
-    "Defence: 2.00",
-    "Strength: 3.00",
-    "Intelligence: 4.00",
-    "Willpower: 5.00",
-    "Speed: 6.00",
-    "Ninjutsu Mastery: 7.00",
-    "Village Prestige: 8.00",
-    "Village Tokens: -9.00",
-    "Clan points: 10.00",
-    "Money gained: 11.00",
+    "Experience Points: 10",
+    "Unassigned Experience: 20",
+    "Offence: 1",
+    "Defence: 2",
+    "Strength: 3",
+    "Intelligence: 4",
+    "Willpower: 5",
+    "Speed: 6",
+    "Ninjutsu Mastery: 7",
+    "Village Prestige: 8",
+    "Village Tokens: -9",
+    "Clan points: 10",
+    "Money gained: 11",
     "Seichi Silver: 12",
     "Ranked PvP LP: +13.00",
     "PvP Experience: +14.00",
@@ -84,6 +84,20 @@ it("preserves ordinary rewards, mastery names, signed territory changes, bountie
     expect(summary.textContent).not.toContain(hidden);
 });
 
+it("keeps small stat gains readable instead of rounding them to zero", () => {
+  const view = render(
+    <CombatRewards
+      result={combatResult({ offence: 0.04, defence: 0.4 })}
+      isOutlaw={false}
+      showPvpEnergy={false}
+      isQuest={false}
+    />,
+  );
+  const text = view.getByRole("region", { name: "Combat rewards" }).textContent;
+  expect(text).toContain("Offence: 0.04");
+  expect(text).toContain("Defence: 0.4");
+});
+
 it("preserves losses and outlaw notoriety while hiding nonpositive stat gains", () => {
   const view = render(
     <CombatRewards
@@ -101,11 +115,7 @@ it("preserves losses and outlaw notoriety while hiding nonpositive stat gains", 
     />,
   );
   const text = view.getByRole("region", { name: "Combat rewards" }).textContent;
-  for (const reward of [
-    "Money lost: -25.00",
-    "Notoriety: -2.00",
-    "Ranked PvP LP: -3.00",
-  ])
+  for (const reward of ["Money lost: -25", "Notoriety: -2", "Ranked PvP LP: -3.00"])
     expect(text).toContain(reward);
   for (const hidden of [
     "Experience Points",
@@ -186,7 +196,7 @@ it("renders a persisted hunting receipt once and retains additional combat rewar
     </>,
   );
   expect(view.getByRole("region", { name: "Combat rewards" }).textContent).toContain(
-    "Money gained: 5.00",
+    "Money gained: 5",
   );
 });
 

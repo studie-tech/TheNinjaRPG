@@ -9,6 +9,7 @@ import * as bankInterest from "@/hooks/useBankInterest";
 import type { ContentBoxProps } from "@/layout/ContentBox";
 import * as ContentBox from "@/layout/ContentBox";
 import * as GraphBankLedger from "@/layout/GraphBankLedger";
+import * as SystemIntroBanner from "@/layout/SystemIntroBanner";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
@@ -60,6 +61,8 @@ beforeEach(() => {
     updateUser,
   };
   mockUserContextValue(userApi as never);
+  // The page is under test, not its one-time intro banner and its profile mutation.
+  vi.spyOn(SystemIntroBanner, "SystemIntroBanner").mockImplementation(() => null);
   vi.spyOn(UserContext, "useRequireInVillage").mockReturnValue(userApi as never);
   vi.spyOn(bankInterest, "usePendingBankInterest").mockReturnValue({
     data: undefined,

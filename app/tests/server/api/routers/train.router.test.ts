@@ -20,6 +20,7 @@ import {
   userQueue,
   userVote,
 } from "@/drizzle/schema";
+import * as questLib from "@/libs/quest";
 import { getEnergyQueue } from "@/libs/queue";
 import { appRouter } from "@/server/api/root";
 import {
@@ -27,8 +28,10 @@ import {
   refreshCaptcha,
   validateCaptcha,
 } from "@/server/api/routers/misc";
+import * as profileApi from "@/server/api/routers/profile";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
+import * as onboardingTasks from "@/server/utils/onboardingTasks";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import type { EnergyTrainingQueueEntry } from "@/validators/train";
@@ -478,6 +481,29 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     });
     expect(await readEnergyQueue(USER_ID)).toEqual(entries);
     expect((await readUser()).status).toBe("AWAKE");
+  });
+
+  it("leaves a withheld Energy queue patch for the profile read, story progress included", async () => {
+    await trainee({ curEnergy: 100 });
+    const trackers = [
+      { id: "story", goals: [{ id: "queue_energy", done: true, value: 1 }] },
+    ];
+    vi.spyOn(questLib, "hasOpenTask").mockReturnValue(true);
+    const record = vi
+      .spyOn(onboardingTasks, "recordOnboardingTask")
+      .mockResolvedValue(trackers as never);
+    const fetchUser = profileApi.fetchUpdatedUser;
+    vi.spyOn(profileApi, "fetchUpdatedUser").mockImplementation(async (props) => ({
+      ...(await fetchUser(props)),
+      requiresProgressionRefresh: true,
+    }));
+    const result = await (await caller()).updateEnergyTrainingQueue({
+      expectedEntries: [],
+      entries: [{ stat: "offence", energy: 40 }],
+    });
+    expect(result.success).toBe(true);
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(result.userPatch).toBeUndefined();
   });
 
   it("allows removing and clearing Energy entries while asleep", async () => {

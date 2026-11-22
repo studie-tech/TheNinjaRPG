@@ -55,6 +55,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { fetchVillageActivity } from "@/server/utils/caches/villageActivity";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
@@ -77,6 +78,26 @@ export const villageRouter = createTRPCRouter({
     .meta({ mcp: { description: "Get all villages with kage info" } })
     .query(async ({ ctx }) => {
       return await fetchVillages(ctx.drizzle);
+    }),
+  // Villages a new Genin can join, with this week's active players for the chooser
+  getVillageChoices: protectedProcedure
+    .meta({
+      mcp: { description: "Joinable villages with their active players this week" },
+    })
+    .query(async ({ ctx }) => {
+      const [villages, activity] = await Promise.all([
+        fetchVillages(ctx.drizzle),
+        fetchVillageActivity(ctx.drizzle),
+      ]);
+      return villages
+        .filter((entry) => entry.type === "VILLAGE" && entry.joinable)
+        .map((entry) => ({
+          name: entry.name,
+          villageGraphic: entry.villageGraphic,
+          hexColor: entry.hexColor,
+          activeThisWeek:
+            activity.find((row) => row.villageId === entry.id)?.players ?? 0,
+        }));
     }),
   // Restore village structure points
   restoreStructurePoints: protectedProcedure

@@ -38,6 +38,7 @@ import {
   type GlobeCamera,
   globeCameraBasis,
   globeDistanceLimits,
+  globeProject,
   globeSectorAt,
 } from "@/libs/rendering/scenes/globeProjection";
 import {
@@ -64,6 +65,11 @@ export const createGlobeScene = async (options: {
   /** Hovered sector, with the pointer and canvas size in CSS pixels when there is one. */
   onHover: (sector: number | null, at: GlobeHoverPoint | null) => void;
   onClick: (sector: number) => void;
+  /**
+   * Where the focused sector sits while a tutorial travel step points at it, in the
+   * same units as `onHover`, or null while it faces away. Called when it moves.
+   */
+  onFocusPoint?: (at: GlobeHoverPoint | null) => void;
 }) => {
   const game = await createGameRenderer({
     ...options,
@@ -267,6 +273,37 @@ export const createGlobeScene = async (options: {
         if (sector !== null) options.onClick(sector);
       },
     );
+    let focusPointKey = "";
+    const reportFocusPoint = (basis: ReturnType<typeof globeCameraBasis>) => {
+      const point =
+        state.isTravelStep &&
+        state.focusSector !== null &&
+        state.focusSector !== undefined
+          ? surfacePoint(map, state.focusSector)
+          : null;
+      const facing =
+        point &&
+        point.x * basis.forward.x +
+          point.y * basis.forward.y +
+          point.z * basis.forward.z >
+          0;
+      const projected = point && facing ? globeProject(point, camera) : null;
+      const key = projected
+        ? `${Math.round(projected.x)}:${Math.round(projected.y)}:${camera.width}:${camera.height}`
+        : "";
+      if (key === focusPointKey) return;
+      focusPointKey = key;
+      options.onFocusPoint?.(
+        projected
+          ? {
+              x: projected.x,
+              y: projected.y,
+              width: camera.width,
+              height: camera.height,
+            }
+          : null,
+      );
+    };
     const updateState = (next: GlobeSceneState) => {
       if (!next.journey && next.focusSector !== state.focusSector)
         aimAt(next.focusSector);
@@ -588,6 +625,7 @@ export const createGlobeScene = async (options: {
         : (1 - Math.cos(((Date.now() % 2000) / 2000) * Math.PI * 2)) / 2;
       uniforms.uniforms.uPhase = phase;
       uniforms.update();
+      reportFocusPoint(basis);
       // Without rotation, travel or input only water, clouds and marker pulses move; reduced
       // motion freezes those too, leaving the slow sky colour and artwork that loads late.
       game.setAnimating(

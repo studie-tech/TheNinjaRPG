@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getUserCaps } from "@/drizzle/constants";
+import { BLACKSTEEL_LEAD_QUEST_IDS, getUserCaps } from "@/drizzle/constants";
 import { bankAccessBlockMessage } from "@/libs/bank";
 import { calcLevelRequirements, levelUpBlockMessage } from "@/libs/profile";
 import {
@@ -85,7 +85,7 @@ describe("shared profile system contracts", () => {
     expect(questRequiresTravel("event", visitor, village)).toBe(false);
     expect(
       questUiAccessBlockMessage(
-        { questType: "event", questRank: "D" },
+        { id: "event", questType: "event", questRank: "D" },
         visitor,
         village,
       ),
@@ -100,9 +100,32 @@ describe("shared profile system contracts", () => {
     expect(questRequiresTravel("mission", visitor, closed)).toBe(true);
     expect(
       questUiAccessBlockMessage(
-        { questType: "event", questRank: "D" },
+        { id: "event", questType: "event", questRank: "D" },
         visitor,
         closed,
+      ),
+    ).not.toBeNull();
+  });
+
+  it("starts Blacksteel leads at the Academy rather than the Global Anbu HQ", () => {
+    const home = { ...user, sector: 1 };
+    const academy = {
+      ...village,
+      sector: 1,
+      structures: [{ route: "/academy", allyAccess: 1 }],
+    } as unknown as SectorVillage;
+    const lead = {
+      id: BLACKSTEEL_LEAD_QUEST_IDS[0] ?? "",
+      questType: "story" as const,
+    };
+    expect(
+      questUiAccessBlockMessage({ ...lead, questRank: "D" }, home, academy),
+    ).toBeNull();
+    expect(
+      questUiAccessBlockMessage(
+        { id: "story", questType: "story", questRank: "D" },
+        home,
+        academy,
       ),
     ).not.toBeNull();
   });

@@ -456,7 +456,9 @@ export const occupationRouter = createTRPCRouter({
         ? { trackers: user.questData ?? [], consequences: [], questIdsUpdated: [] }
         : getNewTrackers(
             { ...user, craftingExperience: user.craftingExperience + expGain },
-            isMeal ? [] : getCraftTrackerTasks(expGain, outputQuantity, input.itemId),
+            isMeal
+              ? [{ task: "cook_meal", increment: 1 }]
+              : getCraftTrackerTasks(expGain, outputQuantity, input.itemId),
           );
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const materials: CraftingQueueMaterial[] = allConsumptions.flatMap(

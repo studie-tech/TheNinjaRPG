@@ -266,7 +266,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
   };
 
   const handleLayoutChange = useSelectGameLayout();
-  const { swapSides, setSwapSides } = useActivityDock();
+  const { prefersSwapSides: swapSides, setSwapSides } = useActivityDock();
 
   const sections = {
     audio: (

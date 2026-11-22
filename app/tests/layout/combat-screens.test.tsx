@@ -251,6 +251,12 @@ const makeBattle = (values: Partial<ReturnedBattle> = {}, lobby = false) => {
   return { ...maskBattle(battle, "player"), ...values } as ReturnedBattle;
 };
 
+/** A battle the tutorial teaches, as initiateBattle marks it. */
+const makeGuidedBattle = (values: Partial<ReturnedBattle> = {}) => {
+  const battle = makeBattle(values);
+  return { ...battle, extraState: { ...battle.extraState, tutorialGuided: true } };
+};
+
 const result = (values: Partial<CombatResult> = {}) =>
   ({
     outcome: "Won",
@@ -577,12 +583,12 @@ describe("combat result screen", () => {
   });
 
   it.each([
-    ["Continue tutorial", "/profile", "Won", 50],
-    ["Continue tutorial", "/hospital", "Lost", 0],
-    ["To Map", "/travel", "Won", 50],
+    ["/profile", "Won", 50],
+    ["/hospital", "Lost", 0],
   ] as const)(
-    "waits for the confirmed profile before %s to the next lesson (%s)",
-    async (name, destination, outcome, curHealth) => {
+    "waits for the confirmed profile before continuing to the next lesson (%s)",
+    async (destination, outcome, curHealth) => {
+      const name = "Continue";
       state.profile = { ...state.profile, tutorialOn: true, tutorialStep: 8 };
       state.currentStep = {
         id: "combat-fight",
@@ -603,22 +609,22 @@ describe("combat result screen", () => {
           }),
       );
       const { view } = mount({
-        battle: makeBattle({ battleType: "QUEST" }),
+        battle: makeGuidedBattle({ battleType: "QUEST" }),
         result: result({ outcome, curHealth } as never),
         isPending: false,
       });
+      // The tutorial picks the page, so its fight ends with a single way forward.
+      expect(view.getAllByRole("link").map((link) => link.textContent)).toEqual([name]);
       const button = view.getByRole("link", { name });
       const link = button.closest("a")!;
-      expect(link.getAttribute("href")).toBe(
-        destination === "/travel" ? "/travel" : destination,
-      );
+      expect(link.getAttribute("href")).toBe(destination);
       const click = new MouseEvent("click", { bubbles: true, cancelable: true });
       act(() => {
         link.dispatchEvent(click);
       });
       expect(click.defaultPrevented).toBe(true);
       await waitFor(() =>
-        expect(view.getAllByRole("link", { name: "Returning..." }).length).toBe(2),
+        expect(view.getAllByRole("link", { name: "Returning..." }).length).toBe(1),
       );
       expect(state.fetchProfile).toHaveBeenCalledWith(undefined, { staleTime: 0 });
       // A second press while the profile loads does not fetch again.
@@ -643,6 +649,23 @@ describe("combat result screen", () => {
     },
   );
 
+  it("keeps the shrine follow-up for an ordinary shrine war during the tutorial", () => {
+    state.profile = { ...state.profile, tutorialOn: true, tutorialStep: 8 };
+    state.currentStep = {
+      id: "combat-fight",
+      chapter: "combat",
+      title: "Fight!",
+      description: "",
+      page: "/combat",
+    };
+    const { view } = mount({
+      battle: makeBattle({ battleType: "SHRINE_WAR" }),
+      result: result(),
+      isPending: false,
+    });
+    expect(buttonTexts(view)).toEqual(["Return to Profile", "Back to Shrine"]);
+  });
+
   it("keeps the player on the result screen when the profile cannot load", async () => {
     state.profile = { ...state.profile, tutorialOn: true };
     state.currentStep = {
@@ -654,11 +677,11 @@ describe("combat result screen", () => {
     };
     state.fetchProfile.mockRejectedValueOnce(new Error("offline"));
     const { view } = mount({
-      battle: makeBattle(),
+      battle: makeGuidedBattle(),
       result: result(),
       isPending: false,
     });
-    fireEvent.click(view.getByRole("link", { name: "Continue tutorial" }));
+    fireEvent.click(view.getByRole("link", { name: "Continue" }));
     await waitFor(() =>
       expect(toasts).toHaveBeenCalledWith({
         success: false,
@@ -667,9 +690,7 @@ describe("combat result screen", () => {
     );
     expect(state.push).not.toHaveBeenCalled();
     expect(
-      view
-        .getByRole("link", { name: "Continue tutorial" })
-        .hasAttribute("aria-disabled"),
+      view.getByRole("link", { name: "Continue" }).hasAttribute("aria-disabled"),
     ).toBe(false);
   });
 });

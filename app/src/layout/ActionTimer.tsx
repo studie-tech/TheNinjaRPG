@@ -63,6 +63,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
         actor,
         mseconds,
         secondsLeft: left,
+        isUntimedTurn,
       } = calcActiveUser(battle, user.userId, timeDiff, {
         precomputedUserId: user.userId,
         precomputedActions,
@@ -76,7 +77,11 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
           : self && areBattleAllies(actor, self)
             ? "Ally"
             : "Opponent";
-        const info = left > 0 ? `${inform}: ${formatSecondsLeft(left)}s` : "Finished!";
+        const info = isUntimedTurn
+          ? `${inform}: no time limit`
+          : left > 0
+            ? `${inform}: ${formatSecondsLeft(left)}s`
+            : "Finished!";
         return { label: info, canAct, waiting };
       }
       return { label: "Lobby", canAct, waiting };

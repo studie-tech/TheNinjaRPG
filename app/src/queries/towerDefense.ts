@@ -70,7 +70,9 @@ export const findTowerDefenseClaimant = (
     columns: {
       towerDefenseActiveRun: true,
       level: true,
+      rank: true,
       villageId: true,
+      questData: true,
     },
     where: eq(userData.userId, ctx.userId),
   });
@@ -156,13 +158,20 @@ export const updateUserDataForClaimTowerDefenseRun = (
 export const updateUserDataForTowerDefenseDuty = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
-  duty: { ryo: number; prestige: number; paidAt: Date; dayStart: Date },
+  duty: {
+    ryo: number;
+    prestige: number;
+    experience: number;
+    paidAt: Date;
+    dayStart: Date;
+  },
 ) =>
   client
     .update(userData)
     .set({
       money: sql`${userData.money} + ${duty.ryo}`,
       villagePrestige: sql`${userData.villagePrestige} + ${duty.prestige}`,
+      earnedExperience: sql`${userData.earnedExperience} + ${duty.experience}`,
       towerDefenseDutyAt: duty.paidAt,
     })
     .where(

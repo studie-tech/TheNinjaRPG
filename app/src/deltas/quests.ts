@@ -9,6 +9,7 @@ import type { GetRewardResult, postProcessRewards } from "@/libs/quest/rewards";
 import { hasEnergyQueue } from "@/libs/queue";
 import { getNextUserSnapshotAt, periodStart } from "@/utils/time";
 import type { InventoryQuantityChange } from "@/validators/inventory";
+import type { QuestTrackerType } from "@/validators/objectives";
 import type { PetTask } from "@/validators/petTasks";
 import { hasPromotionRank, MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
@@ -483,3 +484,16 @@ type QuestStartDiscoveryRow = {
 
 /** A profile completion entry. */
 type CompletedQuestEntry = { questId: string; completed?: number };
+
+/**
+ * Add the trackers a story-onboarding action advanced to the action's own profile
+ * update, so the objective ticks without another profile read. Leaves the update
+ * untouched when the action advanced no objective.
+ */
+export const withOnboardingQuestPatch = <
+  T extends { userPatch?: Record<string, unknown> } & Record<string, unknown>,
+>(
+  update: T,
+  questData: QuestTrackerType[] | null | undefined,
+): T =>
+  questData ? { ...update, userPatch: { ...update.userPatch, questData } } : update;

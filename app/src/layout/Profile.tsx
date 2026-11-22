@@ -103,10 +103,12 @@ export function Profile() {
   if (!userData) return <Loader explanation="Loading profile page..." />;
 
   const tutorialActive = isTutorialActive(userData);
+  // The Dashboard opens at graduation: the trials end on it once the player is a Genin.
+  const hidesDashboard = tutorialActive && userData.rank === "STUDENT";
   const selectedTab = urlTab ?? tab ?? "Dashboard";
   const activeTab =
-    tutorialActive && selectedTab === "Dashboard" ? "Character" : selectedTab;
-  const visibleTabs = tutorialActive ? tutorialProfileTabs : profileTabs;
+    hidesDashboard && selectedTab === "Dashboard" ? "Character" : selectedTab;
+  const visibleTabs = hidesDashboard ? tutorialProfileTabs : profileTabs;
   const newInRecruit =
     notifications?.find((n) => n.href.includes("/profile/recruit"))
       ?.notificationCount || 0;
@@ -138,7 +140,7 @@ export function Profile() {
       (option) => option === value || profileTabValues[option] === value,
     );
     if (!next) return;
-    const allowed = tutorialActive && next === "Dashboard" ? "Character" : next;
+    const allowed = hidesDashboard && next === "Dashboard" ? "Character" : next;
     if (userData.rememberProfileTab) {
       safeLocalStorageSetItem(`profileTab:${userData.userId}`, allowed);
     }

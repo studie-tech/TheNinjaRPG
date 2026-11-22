@@ -48,12 +48,24 @@ describeWithDatabase("Authored species in companion flows", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it("offers a first adopter the Sanctuary pup while no species is on offer", async () => {
+    const database = await getTestDatabase();
+    await database
+      .update(userData)
+      .set({ petAcquisitions: 0 })
+      .where(eq(userData.userId, ownerId));
+    const view = await callerForDatabase(petsRouter, ownerId, database).getPet();
+    expect(view.canAcquire).toBe(false);
+    expect(view.canAdoptSanctuaryPup).toBe(true);
+  });
+
   it("keeps an empty catalogue readable and explains why adoption is unavailable", async () => {
     const database = await getTestDatabase();
     const caller = callerForDatabase(petsRouter, ownerId, database);
     const view = await caller.getPet();
     expect(view.options.species).toEqual([]);
     expect(view.canAcquire).toBe(false);
+    expect(view.canAdoptSanctuaryPup).toBe(false);
     expect(view.unavailableReason).toContain("not offering new companions");
     const owner = await database.query.userData.findFirst();
     expect(
