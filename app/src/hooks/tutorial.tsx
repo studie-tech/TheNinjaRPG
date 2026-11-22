@@ -9,6 +9,7 @@ import {
   actionPointsAfterAction,
   availableUserActions,
   calcActiveUser,
+  getActionSelectionId,
 } from "@/libs/combat/actions";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getDistanceToClosestEnemy } from "@/libs/combat/util";
@@ -94,7 +95,8 @@ export const useTutorialStep = () => {
     } catch {
       return undefined;
     }
-    const options = availableUserActions(battle, userId).map((action) => ({
+    const actions = availableUserActions(battle, userId);
+    const options = actions.map((action) => ({
       id: action.id,
       name: action.name,
       type: action.type,
@@ -108,7 +110,9 @@ export const useTutorialStep = () => {
     return getTutorialCombatGuidance({
       isPlayersTurn: actorId === userId,
       distanceToEnemy: getDistanceToClosestEnemy(battle, userId),
-      selectedActionId,
+      selectedActionId: actions.find(
+        (action) => getActionSelectionId(action) === selectedActionId,
+      )?.id,
       options,
     });
   })();

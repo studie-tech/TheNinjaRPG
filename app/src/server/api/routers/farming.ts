@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -16,7 +16,7 @@ import {
   FARM_WATER_EXPERIENCE,
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
-import { type Item, userData } from "@/drizzle/schema";
+import { type Item, userData, userItem } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getTotalItemQuantity } from "@/libs/crafting";
@@ -39,6 +39,7 @@ import {
   isPlotReady,
   mapPlotToState,
 } from "@/libs/farming";
+import { hasFortification } from "@/libs/fortify";
 import {
   countInventoryBucketSlots,
   countsTowardInventoryStorage,
@@ -731,7 +732,10 @@ export const farmingRouter = createTRPCRouter({
 
       const now = new Date();
       const fertilizerStack = userItems.find(
-        (stack) => stack.id === input.userItemId && isEquippableUserItem(stack, now),
+        (stack) =>
+          stack.id === input.userItemId &&
+          !hasFortification(stack) &&
+          isEquippableUserItem(stack, now),
       );
       if (!fertilizerStack?.item.isFarmFertilizer) {
         return errorResponse("Fertilizer not found");
@@ -971,6 +975,9 @@ export const farmingRouter = createTRPCRouter({
 
       const cropStack = userItems.find((ui) => ui.id === input.userItemId);
       if (!cropStack) return errorResponse("Item not found");
+      if (hasFortification(cropStack)) {
+        return errorResponse("Fortified crops cannot be used here");
+      }
       if (!isEquippableUserItem(cropStack)) {
         return errorResponse("Crop is not available in inventory");
       }
@@ -1215,6 +1222,9 @@ export const farmingRouter = createTRPCRouter({
       if (!cropStack || cropStack.quantity < input.quantity) {
         return errorResponse("Crop not found");
       }
+      if (hasFortification(cropStack)) {
+        return errorResponse("Fortified crops cannot be used here");
+      }
       if (!isEquippableUserItem(cropStack)) {
         return errorResponse("Crop is not available in inventory");
       }
@@ -1292,6 +1302,7 @@ export const farmingRouter = createTRPCRouter({
         userItemId: cropStack.id,
         expectedQuantity: cropStack.quantity,
         nextQuantity: cropStack.quantity - input.quantity,
+        where: [isNull(userItem.fortification)],
       });
       if (!consumed) {
         await deleteFarmExtractionForExtractSeeds(ctx.drizzle, extractionId, ctx);
@@ -1358,7 +1369,10 @@ const getAvailableFarmItemStacks = (
 ) =>
   userItems.filter(
     (stack) =>
-      stack.itemId === itemId && stack.quantity > 0 && isEquippableUserItem(stack, now),
+      stack.itemId === itemId &&
+      stack.quantity > 0 &&
+      !hasFortification(stack) &&
+      isEquippableUserItem(stack, now),
   );
 
 const consumeFarmItemQuantity = async (
@@ -1378,6 +1392,7 @@ const consumeFarmItemQuantity = async (
       userItemId: stack.id,
       expectedQuantity: stack.quantity,
       nextQuantity: stack.quantity - stackQuantity,
+      where: [isNull(userItem.fortification)],
     });
     if (!success) {
       await Promise.all(
@@ -1532,6 +1547,7 @@ const fertilizeFarmPlots = async (
     userItemId: stack.id,
     expectedQuantity: stack.quantity,
     nextQuantity: stack.quantity - plots.length,
+    where: [isNull(userItem.fortification)],
   });
   if (!consumed) {
     await rollbackBulkFertilizer(client, userId, plots, now);
@@ -1865,7 +1881,9 @@ const buildFarmState = async (
   const levelInfo = getFarmingLevelProgress(user.farmingExperience);
   const farmingLevel = levelInfo.level;
 
-  const eligibleItems = userItems.filter((ui) => isEquippableUserItem(ui, now));
+  const eligibleItems = userItems.filter(
+    (ui) => !hasFortification(ui) && isEquippableUserItem(ui, now),
+  );
 
   const availableSeedsByItemId = new Map<
     string,
@@ -2192,6 +2210,7 @@ const findTopUpStack = (userItems: FarmUserItems, item: Item, now: Date) =>
           ui.itemId === item.id &&
           ui.equipped === "NONE" &&
           ui.item.canStack &&
+          !hasFortification(ui) &&
           isEquippableUserItem(ui, now),
       )
     : undefined;

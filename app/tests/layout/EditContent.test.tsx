@@ -1969,6 +1969,8 @@ const EffectTypeDraftForm = () => {
       groundFeather: 0.1,
       appearSfxPrimary: true,
       disappearSfxPrimary: true,
+      fortifyId: "damage-upgrade",
+      fortifyEnabled: true,
     }),
   ]);
   return (
@@ -1991,8 +1993,100 @@ const EffectTypeDraftForm = () => {
   );
 };
 
+/** Exercise per-tag Fortify authoring through the shared effect form. */
+const FortifyEffectForm = ({
+  type = "item",
+  allowFortify = true,
+  initial = DamageTag.parse({}),
+}: {
+  type?: "item" | "jutsu";
+  allowFortify?: boolean;
+  initial?: ZodAllTags;
+}) => {
+  const [effects, setEffects] = useState<ZodAllTags[]>([initial]);
+  return (
+    <>
+      <EffectFormWrapper
+        type={type}
+        allowFortify={allowFortify}
+        allowActivityBonuses
+        idx={0}
+        tag={effects[0]!}
+        effects={effects}
+        setEffects={setEffects}
+        availableTags={[initial.type]}
+      />
+      <output data-testid="fortify-effect">{JSON.stringify(effects[0])}</output>
+    </>
+  );
+};
+
+describe("per-tag Fortify authoring", () => {
+  withRadixBrowserGlobals();
+
+  it("creates an identity on enable and retains it across disable and re-enable", async () => {
+    const view = render(<FortifyEffectForm />);
+    await act(async () => {});
+    const toggle = view.getByRole("switch", { name: "Fortify eligible" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+    const saved = () => JSON.parse(view.getByTestId("fortify-effect").textContent!);
+    await waitFor(() => expect(saved().fortifyEnabled).toBe(true));
+    const id = saved().fortifyId;
+    expect(id).toEqual(expect.any(String));
+    expect(id.length).toBeGreaterThan(0);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(saved().fortifyEnabled).toBe(false));
+    expect(saved().fortifyId).toBe(id);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(saved().fortifyEnabled).toBe(true));
+    expect(saved().fortifyId).toBe(id);
+    expect(view.queryByLabelText(/Fortify id/i)).toBeNull();
+  });
+
+  it("offers eligibility on passive activity tags", async () => {
+    const view = render(
+      <FortifyEffectForm initial={getTagSchema("decreasefarmingtime").parse({})} />,
+    );
+    await act(async () => {});
+    fireEvent.click(view.getByRole("switch", { name: "Fortify eligible" }));
+    await waitFor(() =>
+      expect(JSON.parse(view.getByTestId("fortify-effect").textContent!)).toMatchObject(
+        {
+          type: "decreasefarmingtime",
+          fortifyEnabled: true,
+          fortifyId: expect.any(String),
+        },
+      ),
+    );
+  });
+
+  it("hides eligibility for items without Fortify and for non-item effects", () => {
+    const view = render(<FortifyEffectForm allowFortify={false} />);
+    expect(view.queryByRole("switch", { name: "Fortify eligible" })).toBeNull();
+    view.rerender(<FortifyEffectForm type="jutsu" allowFortify />);
+    expect(view.queryByRole("switch", { name: "Fortify eligible" })).toBeNull();
+  });
+});
+
 describe("combat effect type changes", () => {
   withRadixBrowserGlobals();
+  it("keeps the fortification identity when editing the existing effect's power", async () => {
+    const view = render(<EffectTypeDraftForm />);
+    await act(async () => {});
+    await act(async () => {
+      fireEvent.input(view.getByRole("spinbutton", { name: "Power" }), {
+        target: { value: "42" },
+      });
+    });
+    fireEvent.click(view.getByRole("button", { name: "Save effect type" }));
+    expect(save.mock.lastCall?.[0].data.effects[0]).toMatchObject({
+      type: "damage",
+      power: 42,
+      fortifyId: "damage-upgrade",
+      fortifyEnabled: true,
+    });
+  });
   it("preserves optional artwork and primary cues when switching to a compatible tag", async () => {
     const view = render(<EffectTypeDraftForm />);
     fireEvent.click(view.getByRole("combobox", { name: "Type" }));
@@ -2009,6 +2103,8 @@ describe("combat effect type changes", () => {
       appearSfxPrimary: true,
       disappearSfxPrimary: true,
     });
+    expect(save.mock.calls[0]?.[0].data.effects[0]?.fortifyId).toBeUndefined();
+    expect(save.mock.calls[0]?.[0].data.effects[0]?.fortifyEnabled).toBeUndefined();
   });
 });
 

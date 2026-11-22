@@ -237,6 +237,7 @@ const spendFarmItemOnPlot = (
     plotWhere,
     eq(userItem.id, stack.id),
     eq(userItem.quantity, stack.quantity),
+    isNull(userItem.fortification),
     hasNoHuntingBattle(userId),
   )}
 `);
@@ -429,6 +430,7 @@ export const sellFarmCrop = (
     readiness.where,
     eq(userItem.id, cropStack.id),
     eq(userItem.quantity, cropStack.quantity),
+    isNull(userItem.fortification),
     hasNoHuntingBattle(userId),
   )}
 `);
@@ -734,6 +736,7 @@ export const updateUserItemForAwardItemToUser = (
       and(
         eq(userItem.id, existing.id),
         eq(userItem.quantity, quantityOnRecord),
+        isNull(userItem.fortification),
         sql`${userItem.quantity} + ${toAdd} <= ${stackSize}`,
       ),
     );
@@ -744,7 +747,7 @@ export const findUserItemForAwardItemToUser = (
   existing: { id: string },
 ) =>
   client.query.userItem.findFirst({
-    where: eq(userItem.id, existing.id),
+    where: and(eq(userItem.id, existing.id), isNull(userItem.fortification)),
     columns: { quantity: true },
   });
 

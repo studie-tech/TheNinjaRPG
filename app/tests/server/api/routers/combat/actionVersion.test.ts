@@ -4,13 +4,22 @@ import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import type { z } from "zod";
 import { type Battle, type BattleAction, battle, battleAction } from "@/drizzle/schema";
+import { availableUserActions } from "@/libs/combat/actions";
 import type { CompleteBattle } from "@/libs/combat/types";
+import { checkEquipConstraints } from "@/libs/item";
 import { extractToolsFromProcedures } from "@/libs/mcp/tools";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { withAfterTasks } from "../../../../setup/after";
-import { makeBattleUser, makeCompleteBattle } from "../../../../setup/combat";
+import {
+  makeBattleUser,
+  makeBattleUserItem,
+  makeCompleteBattle,
+  makeEffect,
+  makeTag,
+  makeWeapon,
+} from "../../../../setup/combat";
 import { resolverOf } from "../../../../setup/testDatabase";
 
 type ActionInput = inferProcedureInput<typeof combatRouter.performAction>;
@@ -72,6 +81,67 @@ describe("manual combat snapshot versions", () => {
     expect(fixture.write).toHaveBeenCalledTimes(1);
     expect(fixture.logs).toHaveLength(1);
   });
+
+  it("executes the selected owned copy's Fortify and imbuement effects", async () => {
+    const fixture = makeItemFight();
+    const equipment = {
+      itemId: "weapon-1",
+      bloodlineId: null,
+      itemType: "WEAPON",
+      slot: "HAND",
+      maxEquips: 2,
+    };
+    expect(
+      checkEquipConstraints(equipment, [{ slot: "HAND_1", info: equipment }]),
+    ).toBeNull();
+    const actions = availableUserActions(fixture.saved, "player").filter(
+      (action) => action.type === "item",
+    );
+    expect(actions.map((action) => action.userItemId)).toEqual(["first", "second"]);
+    expect(actions.map((action) => action.effects[0]?.power)).toEqual([21, 25]);
+    const selected = actions[1]!;
+    const response = await act(fixture.client, {
+      ...manual,
+      version: fixture.saved.version,
+      actionId: selected.id,
+      userItemId: selected.userItemId,
+    });
+    expect(response.notification).toBeUndefined();
+    const user = fixture.saved.usersState[0]!;
+    expect(user.curHealth).toBe(1250);
+    expect(user.curChakra).toBe(1070);
+    expect(user.items.map((owned) => owned.quantity)).toEqual([2, 1]);
+    expect(user.items.map((owned) => owned.durability)).toEqual([100, 97]);
+    // Template cooldowns and usage tracking remain shared across owned copies.
+    expect(user.items.map((owned) => owned.lastUsedRound)).toEqual([1, 1]);
+    expect(user.usedActions).toContainEqual({ id: selected.id, type: "item" });
+    expect(fixture.logs[0]?.actionId).toBe(selected.id);
+    expect(fixture.read).toHaveBeenCalledTimes(1);
+    expect(fixture.write).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([undefined, "missing", "other-player", "second"])(
+    "rejects a missing or unavailable owned copy %s without using the first copy",
+    async (userItemId) => {
+      const fixture = makeItemFight();
+      if (userItemId === "second")
+        fixture.saved.usersState[0]!.items[1]!.equipped = "NONE";
+      fixture.saved.usersState[1]!.items = [makeBattleUserItem({ id: "other-player" })];
+      const response = await act(fixture.client, {
+        ...manual,
+        version: fixture.saved.version,
+        actionId: "weapon-1",
+        userItemId,
+      });
+      expect(response.notification).toBe(
+        "Action not valid anymore. Try something else",
+      );
+      expect(fixture.saved.usersState[0]!.curHealth).toBe(1000);
+      expect(fixture.read).toHaveBeenCalledTimes(1);
+      expect(fixture.write).not.toHaveBeenCalled();
+      expect(fixture.logs).toHaveLength(0);
+    },
+  );
 
   it("does not replay a manual action after another request wins its version claim", async () => {
     const fixture = makeFight();
@@ -234,7 +304,19 @@ const makeFight = (auto = false) => {
     const { params } = new MySqlDialect().sqlToQuery(where);
     expect(params).toEqual([manual.battleId, 3]);
     if (saved.version !== params[1]) return { rowsAffected: 0 };
-    Object.assign(saved, structuredClone(values));
+    const { extraState, ...columns } = values;
+    Object.assign(saved, structuredClone(columns));
+    if (extraState) {
+      const { params: changes } = new MySqlDialect().sqlToQuery(
+        extraState as unknown as SQL,
+      );
+      for (let index = 0; index < changes.length; index += 2) {
+        const key = String(changes[index]).slice(2);
+        Object.assign(saved.extraState, {
+          [key]: JSON.parse(String(changes[index + 1])),
+        });
+      }
+    }
     return { rowsAffected: 1 };
   });
   const client = {
@@ -259,4 +341,47 @@ const makeFight = (auto = false) => {
     },
   } as unknown as DrizzleClient;
   return { saved: saved as CompleteBattle, logs, read, write, client };
+};
+
+/** Two legal hand-slot copies retain independent upgrades in the loaded battle state. */
+const makeItemFight = () => {
+  const fixture = makeFight();
+  const player = fixture.saved.usersState[0]!;
+  player.curHealth = 1000;
+  player.curChakra = 1000;
+  player.items = [1, 5].map((level, index) =>
+    makeBattleUserItem({
+      id: index === 0 ? "first" : "second",
+      equipped: index === 0 ? "HAND_1" : "HAND_2",
+      quantity: 2,
+      originalCooldown: 2,
+      fortification: { heal: { type: "heal", level, failures: 0 } },
+      imbuementEffects: [
+        makeEffect("heal", {
+          power: index === 0 ? 2 : 7,
+          calculation: "static",
+          poolsAffected: ["Chakra"],
+        }),
+      ],
+    }),
+  );
+  fixture.saved.extraState.items = {
+    "weapon-1": makeWeapon({
+      target: "SELF",
+      maxEquips: 2,
+      battleUsageType: "BOTH",
+      actionCostPerc: 100,
+      cooldown: 2,
+      destroyOnUse: true,
+      effects: [
+        makeTag("heal", {
+          power: 20,
+          calculation: "static",
+          fortifyId: "heal",
+          fortifyEnabled: true,
+        }),
+      ],
+    }),
+  };
+  return fixture;
 };

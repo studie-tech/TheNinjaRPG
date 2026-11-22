@@ -13,6 +13,7 @@ import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as itemActions from "@/hooks/useItemActions";
 import * as contentImage from "@/layout/ContentImage";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
+import * as itemFortify from "@/layout/items/ItemFortify";
 import { ItemInspector } from "@/layout/items/ItemInspector";
 import * as itemLib from "@/libs/item";
 import {
@@ -142,6 +143,34 @@ const renderInspector = (props: Partial<Parameters<typeof ItemInspector>[0]> = {
   );
   return { onClose };
 };
+
+it.each([
+  { status: "AWAKE", autoWakeUp: false, blocked: false },
+  { status: "ASLEEP", autoWakeUp: true, blocked: false },
+  { status: "HOSPITALIZED", autoWakeUp: false, blocked: false },
+  { status: "ASLEEP", autoWakeUp: false, blocked: true },
+  { status: "TRAVEL", blocked: true },
+  { status: "BATTLE", blocked: true },
+  { status: "QUEUED", blocked: true },
+  { status: "AWAKE", battleId: "battle", blocked: true },
+  { status: "AWAKE", isEquipping: true, blocked: true },
+])("uses action readiness for Fortify: %j", ({ blocked, isEquipping, ...user }) => {
+  const fortify = vi.spyOn(itemFortify, "ItemFortify").mockImplementation(() => null);
+  const owned = userItem();
+  owned.item.canBeEnhanced = true;
+  renderInspector({
+    userItem: owned,
+    userData: {
+      userId: "user-1",
+      battleId: null,
+      level: 30,
+      village: null,
+      ...user,
+    } as never,
+    isEquipping,
+  });
+  expect(fortify.mock.lastCall?.[0].blocked).toBe(blocked);
+});
 
 it("names the inspector and its art with the active variant's displayed heading", () => {
   const base = userItem();

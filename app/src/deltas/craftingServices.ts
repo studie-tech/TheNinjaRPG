@@ -1,6 +1,8 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
+import { incrementInboxNotifications } from "@/deltas/chat";
 import { getInventoryQuantities, getInventoryQuantityChanges } from "@/deltas/item";
 import type { CraftingServiceRequest, UserData, UserItem } from "@/drizzle/schema";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import type { fetchUpdatedUser } from "@/server/api/routers/profile";
 
 type Hydration = Pick<
@@ -15,21 +17,23 @@ type InventoryBaseline = Pick<
   "id" | "itemId" | "userId" | "quantity" | "updatedAt" | "equipped"
 >;
 
-/** Describe only fee, escrow and receipt changes when neither participant's hydration changed other views. */
+/** Describe confirmed fees, escrow, fortification and receipts when participant hydration leaves other views unchanged. */
 export const getServiceSubmissionCacheUpdate = ({
   requester,
   requesterResult,
   crafterResult,
   request,
+  completion,
   consumptions,
   equipment,
   crafterName,
   crystalName,
 }: {
-  requester: Pick<UserData, "userId" | "status" | "money" | "username">;
+  requester: Pick<UserData, "userId" | "status" | "money" | "username" | "inboxNews">;
   requesterResult: Hydration;
   crafterResult: Hydration;
   request: CraftingServiceRequest;
+  completion?: { updatedAt: Date; countedAt: number };
   consumptions: { row: InventoryBaseline; quantity: number }[];
   equipment?: InventoryBaseline;
   crafterName: string;
@@ -38,6 +42,11 @@ export const getServiceSubmissionCacheUpdate = ({
   if (
     requester.status !== "AWAKE" ||
     request.service === "REPAIR" ||
+    (request.service === "FORTIFY" &&
+      (!completion ||
+        request.status !== "COMPLETED" ||
+        !request.fortify ||
+        !equipment)) ||
     [requesterResult, crafterResult].some(
       (result) =>
         result.requiresUserRefresh !== false ||
@@ -52,7 +61,9 @@ export const getServiceSubmissionCacheUpdate = ({
       row,
       quantity: row.quantity - quantity,
     })),
-    ...(equipment ? [{ row: equipment, quantity: 0 }] : []),
+    ...(equipment
+      ? [{ row: equipment, quantity: request.service === "FORTIFY" ? 1 : 0 }]
+      : []),
   ];
   // Escrow and materials must never be part of the profile's equipped-item projection.
   if (
@@ -64,11 +75,16 @@ export const getServiceSubmissionCacheUpdate = ({
   return {
     requesterId: requester.userId,
     beforeMoney: requester.money,
-    userDelta: { money: -request.fee },
+    beforeInboxNews: requester.inboxNews,
+    fortify:
+      request.service === "FORTIFY" && completion && request.fortify
+        ? { ...completion, state: request.fortify.state }
+        : undefined,
+    userDelta: { money: -request.fee - (request.fortify?.cost ?? 0) },
     inventoryChanges: getInventoryQuantityChanges(
       removals.map(({ row }) => row),
       removals.map(({ row, quantity }) => ({ id: row.id, quantity })),
-      request.createdAt,
+      completion?.updatedAt ?? request.createdAt,
     ).map((change, index) => ({
       ...change,
       beforeUpdatedAt: removals[index]!.row.updatedAt,
@@ -89,20 +105,25 @@ type ServiceSubmissionUpdate = NonNullable<
 
 /** Validate the captured requester's fee baseline and preserve all unrelated profile fields. */
 export const getServiceRequesterPatch = (
-  current: Pick<UserData, "userId" | "money" | "status"> & { items: { id: string }[] },
+  current: Pick<UserData, "userId" | "money" | "status" | "inboxNews"> & {
+    items: { id: string }[];
+  },
   update: ServiceSubmissionUpdate | undefined,
 ) =>
   update &&
   current.userId === update.requesterId &&
   current.status === "AWAKE" &&
   current.money === update.beforeMoney &&
+  (!update.fortify || current.inboxNews === update.beforeInboxNews) &&
   !current.items.some((row) =>
     update.inventoryChanges.some((change) => change.id === row.id),
   )
-    ? {}
+    ? update.fortify
+      ? { inboxNews: current.inboxNews + 1 }
+      : {}
     : undefined;
 
-/** Remove escrow and consume materials in either inventory view only against the exact loaded row identities/revisions. */
+/** Apply delivered fortification, escrow and materials only against the exact loaded row identities/revisions. */
 export const getServiceSubmittedInventory = <T extends InventoryBaseline>(
   current: T[],
   update: ServiceSubmissionUpdate | undefined,
@@ -121,10 +142,18 @@ export const getServiceSubmittedInventory = <T extends InventoryBaseline>(
     )
   )
     return;
-  return getInventoryQuantities(current, update.inventoryChanges);
+  const rows = getInventoryQuantities(current, update.inventoryChanges);
+  const fortify = update.fortify;
+  return fortify
+    ? rows?.map((row) =>
+        row.id === update.receipt.targetUserItemId
+          ? { ...row, fortification: fortify.state }
+          : row,
+      )
+    : rows;
 };
 
-/** Add the known pending receipt without duplicating one already observed through another response. */
+/** Add the confirmed receipt without duplicating one already observed through another response. */
 export const getSubmittedServiceRequests = (
   current: RouterOutputs["occupation"]["getServiceRequests"],
   update: ServiceSubmissionUpdate | undefined,
@@ -138,3 +167,30 @@ export const getServiceSubmissionUnchanged = <T>(
   current: T,
   update: ServiceSubmissionUpdate | undefined,
 ): T | undefined => (update ? current : undefined);
+
+/** Count the completed service's inbox receipt after its profile and inbox-read guards pass. */
+export const getServiceSubmissionNotifications = (
+  current: NavBarDropdownLink[] | undefined,
+  update: ServiceSubmissionUpdate | undefined,
+) => (update?.fortify ? incrementInboxNotifications(current) : current);
+
+/** Identify receipt phases whose profile and dependent views have already been reconciled. */
+export const getServiceReconciliationSignature = (
+  data: RouterOutputs["occupation"]["getServiceRequests"],
+  userId: string | undefined,
+  generation: number,
+) => {
+  const terminal = data
+    .filter((row) => row.status === "COMPLETED" || row.status === "REFUNDED")
+    .map((row) => `${row.id}:${row.status}`)
+    .sort()
+    .join("|");
+  const active = data
+    .filter((row) => row.status === "ACTIVE" && row.crafterId === userId)
+    .map((row) => row.id)
+    .sort()
+    .join("|");
+  return terminal || active || generation
+    ? `${terminal}|${active}|${generation}`
+    : undefined;
+};

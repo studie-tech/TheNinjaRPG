@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import {
@@ -16,6 +17,7 @@ import {
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { buildFortifyEquipmentPatch } from "@/deltas/fortify";
 import {
   getAutoEquippedChanges,
   getBuyUserUpdate,
@@ -40,6 +42,8 @@ import {
   CACHE_MAX_GRANTED_ITEMS,
   DURABILITY_MAX_DEFAULT,
   EVOLUTION_MAX_CHILDREN,
+  FORTIFY_FAILURE_BONUS,
+  FORTIFY_MAX_LEVEL,
   HomeTypeDetails,
   ITEM_LEVEL_CAP,
   type ItemSlot,
@@ -82,6 +86,12 @@ import {
   validateEvolutionGraph,
 } from "@/libs/evolution";
 import { canDropFarmSeed } from "@/libs/farming";
+import {
+  fortifyTags,
+  getFortifyQuote,
+  hasFortification,
+  rollFortify,
+} from "@/libs/fortify";
 import {
   FURNITURE_IMAGE_MAX_BYTES,
   measureFurnitureImage,
@@ -167,6 +177,7 @@ import {
 import { updateUserForActionReadiness } from "@/queries/actionReadiness";
 import { fetchItemBloodlineRolls, fetchRollableBloodlines } from "@/queries/bloodline";
 import { clearCosmeticVariant, deleteItemCosmetics } from "@/queries/cosmetic";
+import { attemptFortify, findFortifyEvolutions } from "@/queries/fortify";
 import { listHuntingHabitats } from "@/queries/hunting";
 import type { UserItemMergeBucketRow } from "@/queries/item";
 import {
@@ -998,6 +1009,126 @@ export const itemRouter = createTRPCRouter({
         listItemForGetEvolutions(ctx.drizzle, input),
       ]);
       return filterVisibleEvolutions(evolutions, canChangeContent(viewerRole));
+    }),
+
+  getFortifyEligibility: protectedProcedure.query(async ({ ctx }) => {
+    const children = await findFortifyEvolutions(ctx.drizzle);
+    return [...new Set(children.map((child) => child.parentItemId!))];
+  }),
+
+  fortify: protectedProcedure
+    .input(
+      z.object({
+        userItemId: z.string(),
+        tagId: z.string(),
+        expectedLevel: z
+          .number()
+          .int()
+          .min(0)
+          .max(FORTIFY_MAX_LEVEL - 1),
+        expectedFailures: z
+          .number()
+          .int()
+          .min(0)
+          .max(Math.ceil(100 / FORTIFY_FAILURE_BONUS)),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [updated, inventory, children, equipment] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+        findFortifyEvolutions(ctx.drizzle),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
+      ]);
+      if (!updated.user) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(updated.user, updated.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
+      if (!user || user.status !== "AWAKE" || user.battleId)
+        return errorResponse("You must be awake and outside battle to fortify");
+      const owned = inventory.find((row) => row.id === input.userItemId);
+      if (
+        !owned ||
+        owned.isInAuction ||
+        owned.quantity !== 1 ||
+        (owned.craftingFinishedAt && owned.craftingFinishedAt > new Date()) ||
+        owned.imbuements.some((im) => im.craftingFinishedAt > new Date())
+      )
+        return errorResponse(
+          "Select an available single item with no work in progress",
+        );
+      if (children.some((child) => child.parentItemId === owned.itemId))
+        return errorResponse(
+          "Only the final evolution can be fortified (including hidden evolutions)",
+        );
+      const tag = fortifyTags(owned.item).find((tag) => tag.fortifyId === input.tagId);
+      if (!tag) return errorResponse("This base tag cannot be fortified");
+      const quote = getFortifyQuote(
+        owned.fortification,
+        tag,
+        user.occupation === "CRAFTING",
+      );
+      if (
+        quote.level !== input.expectedLevel ||
+        quote.failures !== input.expectedFailures ||
+        !quote.chance
+      )
+        return errorResponse(
+          "Fortification changed or reached its maximum. Refresh the item",
+        );
+      if (user.money < quote.cost) return errorResponse("You do not have enough ryo");
+      const result = rollFortify(
+        owned.fortification,
+        tag,
+        user.occupation === "CRAFTING",
+        randomInt(1_000_000) / 1_000_000,
+      );
+      const updatedAt = getNextUserSnapshotAt(owned.updatedAt);
+      const write = await attemptFortify(
+        ctx.drizzle,
+        user,
+        owned,
+        result,
+        updatedAt,
+        readiness,
+      );
+      if (write.rowsAffected !== 2)
+        return errorResponse(
+          "Your item, balance or content changed. Refresh and try again",
+        );
+      const userPatch = buildFortifyEquipmentPatch(
+        equipment,
+        owned.id,
+        result.state,
+        updatedAt,
+      );
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: result.succeeded
+            ? `Fortify succeeded: ${tag.type} +${quote.level + 1}`
+            : `Fortify failed. The cost was consumed; this tag's next attempt gains ${FORTIFY_FAILURE_BONUS} percentage points`,
+          fortifyUpdate: {
+            userId: ctx.userId,
+            beforeMoney: user.money,
+            cost: quote.cost,
+            id: owned.id,
+            beforeUpdatedAt: owned.updatedAt,
+            updatedAt,
+            fortification: result.state,
+            userPatch,
+            requiresRefresh:
+              !!readiness.notice ||
+              !equipment ||
+              equipment.updatedAt.getTime() !== user.updatedAt.getTime() ||
+              updated.requiresUserRefresh !== false ||
+              updated.requiresProgressionRefresh !== false ||
+              updated.craftingItemsChanged !== false,
+          },
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   evolveItem: protectedProcedure
@@ -3533,6 +3664,7 @@ export const itemRouter = createTRPCRouter({
         isInAuction: false,
         craftingFinishedAt: null,
         activeVariantId: null,
+        fortification: null,
         dropChancePerc: 0,
       };
       const quotaConflict = new Error("Purchase quota changed");
@@ -4448,6 +4580,8 @@ export const splitItemStack = async (
   }
 
   // Check if item has imbuements (can't split items with imbuements)
+  if (hasFortification(currentUserItem))
+    return { success: false, message: "Fortified copies cannot be split" };
   if (currentUserItem.imbuements.length > 0) {
     return { success: false, message: "Cannot split items with imbuements" };
   }
@@ -4798,6 +4932,7 @@ export async function executeMergeStacksForItem(
   const filteredUserItems = userItems.filter(
     (i) =>
       i.imbuements.length === 0 &&
+      !hasFortification(i) &&
       (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()),
   );
   if (!info || filteredUserItems.length === 0) {

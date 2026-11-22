@@ -54,7 +54,7 @@ const masteryTag = (power: number) =>
 const powersOf = (effects: { power?: number }[]) =>
   effects.map((effect) => effect.power).sort((a, b) => (a ?? 0) - (b ?? 0));
 
-const seedBattle = async () => {
+const seedBattle = async (fortified = false) => {
   const db = await getTestDatabase();
   await insertUsers(USERS.map((userId) => ({ userId, username: userId, level: 20 })));
   await insertDefaultAiProfile();
@@ -68,7 +68,7 @@ const seedBattle = async () => {
       canBeImbued: true,
       maxImbueNumber: 1,
       maxDurability: 100,
-      effects: [masteryTag(BASE_POWER)],
+      effects: [{ ...masteryTag(BASE_POWER), fortifyId: "base" }],
     },
     {
       id: "shared-weapon",
@@ -78,7 +78,7 @@ const seedBattle = async () => {
       canBeImbued: true,
       maxImbueNumber: 1,
       maxDurability: 100,
-      effects: [masteryTag(BASE_POWER)],
+      effects: [{ ...masteryTag(BASE_POWER), fortifyId: "base" }],
     },
     ...USERS.map((userId) => ({
       id: `crystal-${userId}`,
@@ -105,6 +105,15 @@ const seedBattle = async () => {
         itemId: "shared-armor",
         equipped: "CHEST",
         durability: 100,
+        fortification: fortified
+          ? {
+              base: {
+                type: "increasemastery",
+                level: userId === USERS[0] ? 3 : 1,
+                failures: 0,
+              },
+            }
+          : null,
       },
       {
         id: `weapon-${userId}`,
@@ -112,6 +121,15 @@ const seedBattle = async () => {
         itemId: "shared-weapon",
         equipped: "HAND_1",
         durability: 100,
+        fortification: fortified
+          ? {
+              base: {
+                type: "increasemastery",
+                level: userId === USERS[0] ? 3 : 1,
+                failures: 0,
+              },
+            }
+          : null,
       },
     ]);
     await db.insert(userItemImbuement).values(
@@ -168,6 +186,33 @@ describeWithDatabase("combat imbuements on a shared item template", () => {
     );
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it("keeps different Fortify levels per copy through preload and loadout changes, without enhancing crystals", async () => {
+    await seedBattle(true);
+    for (const changer of USERS) {
+      const caller = await callerFor(combatRouter, changer);
+      expect(
+        (
+          await caller.updateCombatLoadout({
+            battleId: BATTLE,
+            jutsuLoadoutId: `loadout-${changer}`,
+          })
+        ).success,
+      ).toBe(true);
+      const stored = await loadBattle();
+      for (const userId of USERS) {
+        const level = userId === USERS[0] ? 3 : 1;
+        expect(armorPowers(stored.usersEffects, userId)).toEqual([
+          BASE_POWER + level,
+          POWER[userId],
+        ]);
+        expect(await weaponPowers(userId)).toEqual([BASE_POWER + level, POWER[userId]]);
+      }
+      expect(powersOf(stored.extraState.items["shared-armor"]!.effects)).toEqual([
+        BASE_POWER,
+      ]);
+    }
+  });
 
   it("keeps each player's own armor and weapon imbuements", async () => {
     await seedBattle();

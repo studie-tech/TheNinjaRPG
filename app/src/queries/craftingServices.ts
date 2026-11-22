@@ -10,6 +10,7 @@ import {
   ne,
   notExists,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -60,6 +61,11 @@ export const findOpenServiceRequests = (db: DrizzleClient, userId: string) =>
       ),
       inArray(craftingServiceRequest.status, ["PENDING", "ACTIVE"]),
     ),
+  });
+/** Read the durable outcome when another request wins immediate service settlement. */
+export const findServiceRequest = (db: DrizzleClient, requestId: string) =>
+  db.query.craftingServiceRequest.findFirst({
+    where: eq(craftingServiceRequest.id, requestId),
   });
 /** Paginate recent request history without omitting pending work. */
 export const findServiceHistory = (db: DrizzleClient, userId: string) =>
@@ -141,6 +147,7 @@ export const consumeServiceMaterial = (
         eq(userItem.userId, row.userId),
         eq(userItem.quantity, row.quantity),
         gte(userItem.quantity, quantity),
+        isNull(userItem.fortification),
         eq(userItem.updatedAt, row.updatedAt),
         eq(userItem.equipped, "NONE"),
         eq(userItem.isInAuction, false),
@@ -156,6 +163,7 @@ export const escrowServiceEquipment = (
   db: DrizzleClient,
   row: UserItem,
   requestId: string,
+  definitionGuard?: SQL,
 ) =>
   db
     .update(userItem)
@@ -166,6 +174,7 @@ export const escrowServiceEquipment = (
         eq(userItem.userId, row.userId),
         eq(userItem.updatedAt, row.updatedAt),
         eq(userItem.durability, row.durability),
+        definitionGuard,
         eq(userItem.quantity, 1),
         eq(userItem.equipped, "NONE"),
         eq(userItem.isInAuction, false),
@@ -181,19 +190,23 @@ export const deliverServiceEquipment = (
   db: DrizzleClient,
   request: CraftingServiceRequest,
   durability?: number,
+  fortify?: { state: NonNullable<UserItem["fortification"]>; beforeUpdatedAt: Date },
+  updatedAt = new Date(),
 ) =>
   db
     .update(userItem)
     .set({
       userId: request.requesterId,
-      updatedAt: new Date(),
+      updatedAt,
       ...(durability === undefined ? {} : { durability }),
+      ...(fortify ? { fortification: fortify.state } : {}),
     })
     .where(
       and(
         eq(userItem.id, request.targetUserItemId ?? ""),
         eq(userItem.userId, request.id),
         gt(userItem.quantity, 0),
+        fortify ? eq(userItem.updatedAt, fortify.beforeUpdatedAt) : undefined,
       ),
     );
 /** Read escrow only for a known receipt ID. */

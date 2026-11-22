@@ -12,6 +12,7 @@ import {
 import type { Item, UserData, UserItem } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getClanBoost } from "@/libs/clanBoost";
+import { hasFortification } from "@/libs/fortify";
 import { getRankForExperience, getRankProgress } from "@/libs/occupationRank";
 import { boostPvpGain } from "@/libs/pvpExperience";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -135,6 +136,7 @@ const isUsableStack = (itemId: string) => (item: UserItem) =>
   item.itemId === itemId &&
   item.quantity !== 0 &&
   !item.isInAuction &&
+  !hasFortification(item) &&
   (!item.craftingFinishedAt || item.craftingFinishedAt < new Date());
 
 /**

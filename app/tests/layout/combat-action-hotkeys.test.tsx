@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { ActionSelector } from "@/layout/CombatActions";
-import * as userContext from "@/utils/UserContext";
 import { mockUserContextValue } from "../setup/userContext";
 
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
@@ -75,4 +74,48 @@ it("leaves a touch long press alone on hybrid devices with a mouse or trackpad",
   expect(onAssignHotkey).not.toHaveBeenCalled();
   expect(openContextMenu("mouse").defaultPrevented).toBe(true);
   expect(onAssignHotkey).toHaveBeenCalledTimes(1);
+});
+
+it("selects owned copies independently while assigning hotkeys to their template", () => {
+  setFinePointer(true);
+  const onClick = vi.fn();
+  const onAssignHotkey = vi.fn();
+  const view = render(
+    <ActionSelector
+      items={[
+        {
+          id: "weapon",
+          userItemId: "first",
+          name: "First copy",
+          image: "",
+          type: "item",
+        },
+        {
+          id: "weapon",
+          userItemId: "second",
+          name: "Second copy",
+          image: "",
+          type: "item",
+        },
+      ]}
+      combatMode
+      selectedId="second"
+      showBgColor={false}
+      showLabels={false}
+      hotkeys={{ weapon: "w" }}
+      onAssignHotkey={onAssignHotkey}
+      onClick={onClick}
+    />,
+  );
+  const first = view.getByRole("button", { name: /^First copy$/ });
+  const second = view.getByRole("button", { name: /^Second copy$/ });
+  expect(first.getAttribute("aria-pressed")).toBe("false");
+  expect(second.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(second);
+  expect(onClick).toHaveBeenCalledWith("second");
+  fireEvent.contextMenu(second);
+  expect(onAssignHotkey).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "weapon", userItemId: "second" }),
+  );
+  expect(view.getAllByText("W")).toHaveLength(2);
 });

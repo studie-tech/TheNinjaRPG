@@ -159,6 +159,7 @@ import {
 import type { CoopEncounter } from "@/libs/coop";
 import { dungeonBattleOutcome, dungeonRequirements } from "@/libs/dungeon";
 import { activeTrainedElement } from "@/libs/elementalMastery";
+import { fortifiedEffects } from "@/libs/fortify";
 import {
   buildJutsuEquipCaps,
   compareByLoadoutOrder,
@@ -646,6 +647,7 @@ export const combatRouter = createTRPCRouter({
       z.object({
         battleId: z.string(),
         actionId: z.string().optional(),
+        userItemId: z.string().optional(),
         longitude: z.number().optional(),
         latitude: z.number().optional(),
         version: z
@@ -755,7 +757,9 @@ export const combatRouter = createTRPCRouter({
           // that is the summon's own jutsu set; on the player's own turn actor.userId
           // equals suid, so behaviour is unchanged.
           const actions = availableUserActions(newBattle, actor.userId, true, true);
-          const action = actions.find((a) => a.id === input.actionId);
+          const action = actions.find(
+            (a) => a.id === input.actionId && a.userItemId === input.userItemId,
+          );
           if (!action)
             return { notification: `Action not valid anymore. Try something else` };
           performedActionId = action.id;
@@ -1980,6 +1984,7 @@ const hydrateBattleItems = (battle: CompleteBattle, user: BattleUserState, now: 
         item,
         imbuements: [],
         imbuementEffects: ref.imbuementEffects ?? [],
+        fortification: ref.fortification ?? null,
         activeVariantId: ref.activeVariantId ?? null,
         variantBattleDescription: ref.variantBattleDescription ?? null,
         variantImage: ref.variantImage ?? null,
@@ -4439,7 +4444,7 @@ export const processUsersForBattle = async (
         ui.imbuements = []; // Reset to avoid storing in battle table
         // Parse item
         const effects = [
-          ...(ui.item.effects as UserEffect[]),
+          ...(fortifiedEffects(ui.item.effects, ui.fortification) as UserEffect[]),
           ...imbuementEffects,
         ].filter((effect) => !isActivityBonus(effect));
         const itemType = ui.item.itemType;
@@ -4779,6 +4784,7 @@ export const processUsersForBattle = async (
         originalCooldown: ui.originalCooldown,
         dropChancePerc: ui.dropChancePerc,
         imbuementEffects: ui.imbuementEffects ?? [],
+        fortification: ui.fortification ?? null,
         activeVariantId: ui.activeVariantId ?? null,
         variantBattleDescription,
         variantImage,

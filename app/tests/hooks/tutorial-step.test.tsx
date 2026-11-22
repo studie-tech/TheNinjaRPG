@@ -3,10 +3,17 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
+import { TUTORIAL_ITEM_ID } from "@/drizzle/constants";
 import type * as TutorialHooks from "@/hooks/tutorial";
 import type * as TutorialSteps from "@/libs/tutorialSteps";
 import * as routing from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
+import {
+  makeBattleUser,
+  makeBattleUserItem,
+  makeCompleteBattle,
+  makeWeapon,
+} from "../setup/combat";
 
 // An assistant suite replaces these modules with one synthetic step, and Bun keeps
 // module mocks across files. Query-suffixed imports load the real definitions again.
@@ -94,6 +101,43 @@ describe("useTutorialStep combat subscriptions", () => {
     const before = renders();
     act(() => store.set(UserContext.combatActionIdAtom, "attack"));
     expect(renders()).toBeGreaterThan(before);
+  });
+
+  it("guides an owned shuriken selection to its target while retaining catalog highlights", () => {
+    tutorialStep = TUTORIAL_STEPS.findIndex((step) => step.id === "combat-fight");
+    pathname = "/combat";
+    const battle = makeCompleteBattle({
+      activeUserId: "u1",
+      roundStartAt: new Date(),
+      usersState: [
+        makeBattleUser("u1", {
+          direction: "left",
+          longitude: 0,
+          items: [
+            makeBattleUserItem({ id: "owned-shuriken", itemId: TUTORIAL_ITEM_ID }),
+          ],
+        }),
+        makeBattleUser("enemy", { longitude: 2, direction: "right" }),
+      ],
+      extraState: {
+        items: {
+          [TUTORIAL_ITEM_ID]: makeWeapon({
+            id: TUTORIAL_ITEM_ID,
+            name: "Shuriken",
+            range: 3,
+            battleUsageType: "BOTH",
+          }),
+        },
+      },
+    });
+    act(() => store.set(UserContext.userBattleAtom, battle));
+    const { result } = renderHook(() => useTutorialStep());
+    expect(result.current.currentStep?.elementIds).toEqual([
+      `tutorial-combat-action-${TUTORIAL_ITEM_ID}`,
+    ]);
+    act(() => store.set(UserContext.combatActionIdAtom, "owned-shuriken"));
+    expect(result.current.currentStep?.title).toBe("Pick your target");
+    expect(result.current.currentStep?.elementIds).toEqual(["tutorial-combat-field"]);
   });
 });
 

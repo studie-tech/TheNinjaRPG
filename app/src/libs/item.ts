@@ -29,6 +29,7 @@ import type {
   UserItemWithRelations,
   VillageStructure,
 } from "@/drizzle/schema";
+import { type Fortification, fortifiedEffects, hasFortification } from "@/libs/fortify";
 import type {
   MasteryBuffUser,
   MasteryRequirementFields,
@@ -39,6 +40,7 @@ import { healItemDiscountPerc } from "@/libs/shop";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { getStrucBoost } from "@/utils/village";
+import type { ZodAllTags } from "@/validators/combat";
 import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
 
 /**
@@ -155,6 +157,7 @@ export const countInventorySlots = (
       stackSize > 1 &&
       row.quantity > 0 &&
       row.imbuements.length === 0 &&
+      !hasFortification(row) &&
       !(row.craftingFinishedAt && row.craftingFinishedAt >= now);
     if (!row.item || !sharesStacks) {
       slots += 1;
@@ -194,6 +197,7 @@ export type InventorySlotRow = Pick<
   | "activeVariantId"
   | "level"
 > & {
+  fortification?: Fortification;
   imbuements: readonly unknown[];
   item?:
     | (Pick<Item, "itemType" | "canStack" | "stackSize"> &
@@ -485,6 +489,7 @@ export const finishedImbuementItems = <T>(
  */
 export const userItemDisplay = <T, I>(
   ui: {
+    fortification?: Fortification;
     item: T;
     durability: number;
     level: number;
@@ -495,6 +500,15 @@ export const userItemDisplay = <T, I>(
   now: Date = new Date(),
 ) => ({
   ...base,
+  ...((base as { effects?: ZodAllTags[] }).effects
+    ? {
+        effects: fortifiedEffects(
+          (base as { effects: ZodAllTags[] }).effects,
+          ui.fortification,
+        ),
+      }
+    : {}),
+  ...(ui.fortification ? { fortification: ui.fortification } : {}),
   imbuements: finishedImbuementItems(ui, now),
   curDurability: ui.durability,
   level: ui.level,
@@ -1011,6 +1025,7 @@ export const countMergeableStackTypes = (
   > & {
     item?: Pick<Item, "itemType" | "stackSize"> | null;
     imbuements: readonly unknown[];
+    fortification?: Fortification;
   })[],
   storedAtHome: boolean,
   now: Date,
@@ -1028,6 +1043,7 @@ export const countMergeableStackTypes = (
       row.storedAtHome !== storedAtHome ||
       row.isInAuction ||
       row.imbuements.length > 0 ||
+      hasFortification(row) ||
       (row.craftingFinishedAt && row.craftingFinishedAt >= now)
     ) {
       continue;

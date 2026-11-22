@@ -25,9 +25,10 @@ import { getFarmGrowTimeSeconds } from "@/libs/farming";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { itemRouter } from "@/server/api/routers/item";
 import { fetchActionUser } from "@/server/utils/profileDefinitions";
-import { DecreaseFarmingTime } from "@/validators/combat";
+import { DamageTag, DecreaseFarmingTime, ItemValidator } from "@/validators/combat";
 import { deferred } from "../../../setup/deferred";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import { validItemInput } from "../../../setup/items";
 import { queueEnergy } from "../../../setup/queues";
 import {
   beforeStatements,
@@ -1336,6 +1337,288 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       .where(eq(userItem.itemId, "crop-1"));
     expect(crops.reduce((sum, row) => sum + row.quantity, 0)).toBe(1);
   });
+
+  const prepareFortifiableSeed = async () => {
+    await farmer({ money: 20_000_000, level: 50, rank: "JONIN" });
+    const tag = DamageTag.parse({
+      power: 20,
+      fortifyId: "damage",
+      fortifyEnabled: true,
+    });
+    const fields = {
+      itemType: "WEAPON" as const,
+      canBeEnhanced: true,
+      effects: [tag],
+      isFarmSeed: true,
+      farmGrowTimeSeconds: 60,
+      farmYieldItemId: "crop-1",
+    };
+    expect(ItemValidator.safeParse(validItemInput(fields)).success).toBe(true);
+    const database = await getTestDatabase();
+    await database.update(item).set(fields).where(eq(item.id, "seed-1"));
+    await database.insert(farmPlot).values(
+      [0, 1].map((slotIndex) => ({
+        id: `fortify-plot-${slotIndex}`,
+        userId: "farm-user",
+        slotIndex,
+      })),
+    );
+    return database;
+  };
+
+  it.each(["single", "bulk"] as const)(
+    "%s planting spends only plain copies of a fortifiable seed",
+    async (mode) => {
+      const database = await prepareFortifiableSeed();
+      const fortification = { damage: { type: "damage", level: 1, failures: 0 } };
+      await insertUserItems([
+        { id: "a-fortified", userId: "farm-user", itemId: "seed-1", fortification },
+        { id: "b-plain", userId: "farm-user", itemId: "seed-1" },
+      ]);
+      const ordered = overrideQuery(database, "userItem", {
+        findMany: async (read, ...args) =>
+          (await read(...args)).sort((a, b) => a.id.localeCompare(b.id)),
+      });
+      const api = callerForDatabase(farmingRouter, "farm-user", ordered);
+      expect((await api.getFarmState()).availableSeeds).toMatchObject([
+        { itemId: "seed-1", quantity: 1 },
+      ]);
+      const result =
+        mode === "single"
+          ? await api.plantSeed({ plotId: "fortify-plot-0", seedItemId: "seed-1" })
+          : await api.plantAllEmpty({ seedItemId: "seed-1" });
+      expect(result.success, result.message).toBe(true);
+      expect(
+        await database.query.userItem.findFirst({
+          where: eq(userItem.id, "a-fortified"),
+        }),
+      ).toMatchObject({ quantity: 1, fortification });
+      expect(
+        (await database.query.userItem.findFirst({ where: eq(userItem.id, "b-plain") }))
+          ?.quantity ?? 0,
+      ).toBe(0);
+      expect(
+        (await database.query.farmPlot.findMany()).filter((plot) => plot.seedItemId),
+      ).toHaveLength(1);
+      expect(
+        (
+          await database.query.userData.findFirst({
+            where: eq(userData.userId, "farm-user"),
+          })
+        )?.money,
+      ).toBe(20_000_000);
+    },
+  );
+
+  it("refunds seeds and clears bulk plots when a later copy receives a paid upgrade before debit", async () => {
+    const database = await prepareFortifiableSeed();
+    await insertUserItems([
+      { id: "a-plain", userId: "farm-user", itemId: "seed-1" },
+      { id: "b-upgraded", userId: "farm-user", itemId: "seed-1" },
+    ]);
+    const fortifier = await callerFor(itemRouter, "farm-user");
+    const raced = overrideQuery(
+      beforeStatements(
+        database,
+        userItem,
+        [
+          () => {},
+          async () =>
+            expect(
+              (
+                await fortifier.fortify({
+                  userItemId: "b-upgraded",
+                  tagId: "damage",
+                  expectedLevel: 0,
+                  expectedFailures: 0,
+                })
+              ).success,
+            ).toBe(true),
+        ],
+        { operations: ["delete"] },
+      ),
+      "userItem",
+      {
+        findMany: async (read, ...args) =>
+          (await read(...args)).sort((a, b) => a.id.localeCompare(b.id)),
+      },
+    );
+    const result = await callerForDatabase(
+      farmingRouter,
+      "farm-user",
+      raced,
+    ).plantAllEmpty({ seedItemId: "seed-1" });
+    expect(result.success).toBe(false);
+    expect(result.message).toBe("Could not consume seeds — please try again");
+    expect(result.inventoryDeltas).toBeUndefined();
+    const rows = await database.query.userItem.findMany({ orderBy: userItem.id });
+    expect(rows).toHaveLength(2);
+    expect(rows).toMatchObject([
+      { id: "a-plain", quantity: 1, fortification: null },
+      {
+        id: "b-upgraded",
+        quantity: 1,
+        fortification: { damage: { level: 1, failures: 0 } },
+      },
+    ]);
+    expect(
+      (await database.query.farmPlot.findMany()).every(
+        (plot) => !plot.seedItemId && !plot.plantedAt && !plot.finishAt,
+      ),
+    ).toBe(true);
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, "farm-user"),
+      }),
+    ).toMatchObject({ money: 19_000_000, farmingExperience: 0 });
+  });
+
+  for (const action of ["extract", "fertilize", "sell"] as const) {
+    it.each(["plain", "fortified", "race"] as const)(
+      `${action} preserves Fortify state for a %s crop`,
+      async (mode) => {
+        await farmer({
+          money: 20_000_000,
+          level: 50,
+          rank: "JONIN",
+          farmExtractorsOwned: 1,
+        });
+        const database = await getTestDatabase();
+        const fields = {
+          itemType: "WEAPON" as const,
+          canBeEnhanced: true,
+          canStack: true,
+          effects: [
+            DamageTag.parse({ power: 20, fortifyId: "damage", fortifyEnabled: true }),
+          ],
+          farmSellValue: 40,
+          farmExtractSeedItemId: "seed-1",
+          farmExtractSeedCount: 1,
+          isFarmFertilizer: action === "fertilize",
+          farmTimeReductionSeconds: 10,
+        };
+        expect(ItemValidator.safeParse(validItemInput(fields)).success).toBe(true);
+        await database.update(item).set(fields).where(eq(item.id, "crop-1"));
+        await giveItem("paid-copy", "crop-1", 1);
+        const finishAt = new Date(Date.now() + 120_000);
+        await database.insert(farmPlot).values({
+          id: "paid-plot",
+          userId: "farm-user",
+          slotIndex: 0,
+          seedItemId: "seed-1",
+          plantedAt: new Date(),
+          finishAt,
+        });
+        const fortifier = await callerFor(itemRouter, "farm-user");
+        const fortify = async () =>
+          expect(
+            (
+              await fortifier.fortify({
+                userItemId: "paid-copy",
+                tagId: "damage",
+                expectedLevel: 0,
+                expectedFailures: 0,
+              })
+            ).success,
+          ).toBe(true);
+        if (mode === "fortified") await fortify();
+        const client =
+          mode === "race"
+            ? beforeStatements(database, userItem, [fortify], {
+                operations: action === "sell" ? ["execute"] : ["delete"],
+              })
+            : database;
+        const api = callerForDatabase(farmingRouter, "farm-user", client);
+        const result =
+          action === "extract"
+            ? await api.extractSeeds({
+                extractorSlot: 0,
+                userItemId: "paid-copy",
+                quantity: 1,
+              })
+            : action === "fertilize"
+              ? await api.fertilizeAll({ userItemId: "paid-copy" })
+              : await api.sellCrop({ userItemId: "paid-copy", quantity: 1 });
+        expect(result.success, result.message).toBe(mode === "plain");
+        const owned = await database.query.userItem.findFirst({
+          where: eq(userItem.id, "paid-copy"),
+        });
+        const user = await database.query.userData.findFirst({
+          where: eq(userData.userId, "farm-user"),
+        });
+        const plot = await database.query.farmPlot.findFirst({
+          where: eq(farmPlot.id, "paid-plot"),
+        });
+        expect(user).toMatchObject({
+          money: mode === "plain" ? 20_000_000 : 19_000_000,
+          farmCurrency: mode === "plain" && action === "sell" ? 1040 : 1000,
+          farmingExperience: 0,
+        });
+        expect(await database.query.farmExtraction.findMany()).toHaveLength(
+          mode === "plain" && action === "extract" ? 1 : 0,
+        );
+        expect(plot?.fertilizerApplied).toBe(
+          mode === "plain" && action === "fertilize",
+        );
+        if (mode !== "plain") {
+          expect(owned).toMatchObject({
+            userId: "farm-user",
+            quantity: 1,
+            fortification: { damage: { level: 1, failures: 0 } },
+          });
+          expect(plot?.finishAt).toEqual(finishAt);
+          expect(result.inventoryDeltas).toBeUndefined();
+        } else expect(owned?.quantity ?? 0).toBe(0);
+      },
+    );
+  }
+
+  it.each(["plain", "fortified", "race"] as const)(
+    "awards plain seeds separately from a %s Fortify copy",
+    async (mode) => {
+      const database = await prepareFortifiableSeed();
+      await giveItem("paid-seed", "seed-1", 1);
+      const fortifier = await callerFor(itemRouter, "farm-user");
+      const fortify = async () =>
+        expect(
+          (
+            await fortifier.fortify({
+              userItemId: "paid-seed",
+              tagId: "damage",
+              expectedLevel: 0,
+              expectedFailures: 0,
+            })
+          ).success,
+        ).toBe(true);
+      if (mode === "fortified") await fortify();
+      await insertFinishedExtraction({ seedQuantity: 1 });
+      const client =
+        mode === "race"
+          ? beforeStatements(database, userItem, [fortify], { operations: ["update"] })
+          : database;
+      await callerForDatabase(farmingRouter, "farm-user", client).getFarmState();
+      const rows = await database.query.userItem.findMany({
+        where: eq(userItem.itemId, "seed-1"),
+      });
+      expect(rows).toHaveLength(mode === "plain" ? 1 : 2);
+      expect(rows.reduce((sum, row) => sum + row.quantity, 0)).toBe(2);
+      const paid = rows.find((row) => row.id === "paid-seed");
+      expect(paid).toMatchObject(
+        mode === "plain"
+          ? { quantity: 2, fortification: null }
+          : {
+              quantity: 1,
+              fortification: { damage: { level: 1, failures: 0 } },
+            },
+      );
+      expect(
+        rows
+          .filter((row) => !row.fortification)
+          .reduce((sum, row) => sum + row.quantity, 0),
+      ).toBe(mode === "plain" ? 2 : 1);
+      expect(await database.query.farmExtraction.findMany()).toHaveLength(0);
+    },
+  );
 
   it("plants the first empty plots the seed stack covers when it cannot cover all", async () => {
     await farmer();

@@ -15,7 +15,11 @@ import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import { getActionPointCost, getRemainingCooldown } from "@/libs/combat/actions";
+import {
+  getActionPointCost,
+  getActionSelectionId,
+  getRemainingCooldown,
+} from "@/libs/combat/actions";
 import { canSetHotkeys } from "@/libs/combat/hotkeys";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { isActionRangeLimited } from "@/libs/hexgrid";
@@ -29,6 +33,7 @@ interface ActionItemProps
     Pick<CombatAction, "target" | "range" | "method" | "coordinateTargeting">
   > {
   id: string;
+  userItemId?: string;
   name: string;
   image: string;
   warning?: string;
@@ -149,7 +154,9 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
     if (prevRoundRef.current !== undefined && prevRoundRef.current !== currentRound) {
       if (selectedId) {
         // Don't deselect basic actions
-        const selectedItem = filtered?.find((i) => i.id === selectedId);
+        const selectedItem = filtered?.find(
+          (i) => getActionSelectionId(i) === selectedId,
+        );
         if (selectedItem?.type !== "basic") {
           onClick(selectedId);
         }
@@ -161,7 +168,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
   // Auto-deselect action in combat mode if it can't be repeated
   useEffect(() => {
     if (!combatMode || !selectedId || !filtered) return;
-    const selectedItem = filtered.find((i) => i.id === selectedId);
+    const selectedItem = filtered.find((i) => getActionSelectionId(i) === selectedId);
     if (!selectedItem) return;
 
     if (
@@ -209,7 +216,8 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
             bgColor = "bg-orange-200";
           }
           const isGreyed =
-            (props.selectedId !== undefined && props.selectedId !== item.id) ||
+            (props.selectedId !== undefined &&
+              props.selectedId !== getActionSelectionId(item)) ||
             (props.greyedIds?.includes(item.id) ?? false);
           const isHighlight = item.highlight ?? false;
 
@@ -217,7 +225,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
             // biome-ignore lint/a11y/noStaticElementInteractions: right-click is a shortcut; keys can also be set on the jutsu and items pages.
             <div
               id={`tutorial-combat-action-${item.id}`}
-              key={item.id}
+              key={getActionSelectionId(item)}
               ref={i === filtered.length - 1 ? setLastElement : null}
               className="relative flex items-start justify-center"
               onContextMenu={
@@ -302,7 +310,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   // Keep unavailable actions unselectable for both pointer and keyboard activation.
   const handleClick = () => {
     if (insufficientAP || (settings.combatMode && cooldownPerc > 0)) return;
-    settings.onClick(item.id);
+    settings.onClick(getActionSelectionId(item));
   };
 
   const art = (
@@ -363,7 +371,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
                   className="block w-full rounded-xl focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed"
                   aria-label={name}
                   aria-disabled={insufficientAP || cooldownPerc > 0}
-                  aria-pressed={settings.selectedId === item.id}
+                  aria-pressed={settings.selectedId === getActionSelectionId(item)}
                   onClick={handleClick}
                 >
                   {art}

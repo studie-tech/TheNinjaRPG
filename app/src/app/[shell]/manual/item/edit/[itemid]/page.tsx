@@ -107,6 +107,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
     useItemEditForm(props.item, props.refetch);
 
   const itemType = useWatch({ control: form.control, name: "itemType" });
+  const canBeEnhanced = useWatch({ control: form.control, name: "canBeEnhanced" });
   const isFurniture = itemType === "FURNITURE";
   const furnitureImage = useWatch({ control: form.control, name: "image" });
   const furnitureData = useWatch({ control: form.control, name: "furnitureData" });
@@ -237,6 +238,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
 
       {!isFurniture && (
         <EffectTagListEditor
+          allowFortify={!!canBeEnhanced}
           allowJutsuSlotGrants={itemType === "CONSUMABLE"}
           allowActivityBonuses={["ARMOR", "ACCESSORY", "KEYSTONE", "CRYSTAL"].includes(
             itemType,

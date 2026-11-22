@@ -861,6 +861,7 @@ export const listUserItemForInitiateBattle = (
       level: true,
       experience: true,
       activeVariantId: true,
+      fortification: true,
       equipped: true,
     },
     with: {

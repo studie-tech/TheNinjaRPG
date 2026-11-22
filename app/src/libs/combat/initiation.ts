@@ -248,6 +248,7 @@ export const applyForcedLoadouts = (
             equipped: "ITEM_1" as const,
             item: { ...item, variants: owned?.item?.variants ?? [] },
             activeVariantId: owned?.activeVariantId ?? null,
+            fortification: owned?.fortification ?? null,
             imbuements: [],
             dropChancePerc: 0,
             durability: 100,

@@ -2303,7 +2303,13 @@ export const MAX_COOKING_OUTPUT = 100;
 export const MAX_MEAL_DURATION_SECONDS = 604800;
 
 // Crafting config
-export const CRAFTING_SERVICES = ["CRAFT", "IMBUE", "DISIMBUE", "REPAIR"] as const;
+export const CRAFTING_SERVICES = [
+  "CRAFT",
+  "IMBUE",
+  "DISIMBUE",
+  "REPAIR",
+  "FORTIFY",
+] as const;
 export const CRAFTING_SERVICE_MAX_FEE = 1_000_000_000;
 export const CRAFTING_REPAIR_BONUS = {
   NOVICE: 0.05,
@@ -5197,3 +5203,12 @@ export const BANDIT_STEAL_BP: Record<BanditRank, number> = {
 };
 /** Bandit experience of every successful operation and robbery. */
 export const BANDIT_OPERATION_EXP = 500;
+
+/** Per-tag Fortify progression and per-attempt prices. */
+export const FORTIFY_MAX_LEVEL = 5;
+export const FORTIFY_BASE_COST = 1_000_000;
+export const FORTIFY_LEVEL_COST = 200_000;
+export const FORTIFY_FAILURE_BONUS = 3;
+export const FORTIFY_CHANCES = [100, 70, 40, 20, 12] as const;
+export const FORTIFY_CRAFTER_CHANCES = [100, 75, 50, 35, 20] as const;
+export const FORTIFY_ITEM_TYPES = ["WEAPON", "ARMOR", "ACCESSORY", "KEYSTONE"] as const;

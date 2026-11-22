@@ -26,6 +26,7 @@ import {
 import {
   CRAFTING_SERVICE_MAX_FEE,
   CRAFTING_SERVICES,
+  FORTIFY_MAX_LEVEL,
   ItemRarities,
 } from "@/drizzle/constants";
 import {
@@ -45,6 +46,7 @@ import {
   isServiceEquipmentAvailable,
   serviceImbueCompatibilityError,
 } from "@/libs/craftingServices";
+import { fortifyTags, getFortifyQuote } from "@/libs/fortify";
 import { needsInventoryRepair } from "@/libs/repair";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -219,6 +221,15 @@ export function CraftingServices({ navigation }: { navigation?: React.ReactNode 
                                 </>
                               )}
                             </p>
+                            {row.status === "COMPLETED" && row.fortify && (
+                              <p className="text-sm">
+                                Fortify {row.fortify.succeeded ? "succeeded" : "failed"}
+                                ; attempt cost {row.fortify.cost.toLocaleString()} ryo.{" "}
+                                {row.fortify.succeeded
+                                  ? "The selected tag gained +1 power."
+                                  : "The selected tag gained a failure bonus."}
+                              </p>
+                            )}
                             {row.crystal && (
                               <p className="text-sm">
                                 Crystal: {row.crystal.name}
@@ -349,25 +360,37 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
   const [itemId, setItemId] = useState("");
   const [crystalId, setCrystalId] = useState("");
   const [imbuementId, setImbuementId] = useState("");
+  const [fortifyTagId, setFortifyTagId] = useState("");
+  const fortifyEligibility = api.item.getFortifyEligibility.useQuery(undefined, {
+    enabled: service === "FORTIFY",
+  });
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState<"idle" | "pending" | "failed">(
+    "idle",
+  );
   const offers = api.occupation.getServicePrices.useQuery(
     { crafterId },
     { staleTime: 0 },
   );
   const recipes = api.occupation.getCraftableItems.useQuery();
   const inventory = api.item.getUserItems.useQuery();
-  const { prepareServiceUpdate, updateService } = useCraftingServiceCache();
+  const { prepareServiceUpdate, updateService, refreshServiceOffer } =
+    useCraftingServiceCache();
   const submit = api.occupation.submitServiceRequest.useMutation({
     onMutate: prepareServiceUpdate,
     onSuccess: async (result, _input, snapshot) => {
       setMessage(result.message);
       setSubmitted(result.success);
+      if (!result.success && service === "FORTIFY") setRefreshStatus("failed");
       showMutationToast(result);
       await updateService(result, snapshot);
     },
     onSettled: (_result, error) => {
-      if (error) setMessage(error.message);
+      if (error) {
+        setMessage(error.message);
+        if (service === "FORTIFY") setRefreshStatus("failed");
+      }
     },
   });
   const rank = offers.data?.crafter.rank ?? "NOVICE";
@@ -380,11 +403,14 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
   const eligibleEquipment = (inventory.data ?? []).filter(
     (row) =>
       isServiceEquipmentAvailable(row) &&
-      (service === "REPAIR"
-        ? needsInventoryRepair(row)
-        : service === "DISIMBUE"
-          ? row.imbuements.length > 0
-          : row.item.canBeImbued),
+      (service === "FORTIFY"
+        ? fortifyTags(row.item).length > 0 &&
+          !fortifyEligibility.data?.includes(row.itemId)
+        : service === "REPAIR"
+          ? needsInventoryRepair(row)
+          : service === "DISIMBUE"
+            ? row.imbuements.length > 0
+            : row.item.canBeImbued),
   );
   const selectedRecipe = eligibleRecipes.find((row) => row.id === itemId);
   const target = eligibleEquipment.find((row) => row.id === itemId);
@@ -399,6 +425,10 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
   );
   const crystal = eligibleCrystals.find((row) => row.id === crystalId);
   const imbuement = target?.imbuements.find((row) => row.id === imbuementId);
+  const fortifyTag =
+    target && fortifyTags(target.item).find((tag) => tag.fortifyId === fortifyTagId);
+  const fortifyQuote =
+    fortifyTag && getFortifyQuote(target?.fortification, fortifyTag, true);
   const info = service === "CRAFT" ? selectedRecipe : target?.item;
   const rarity =
     service === "IMBUE"
@@ -420,7 +450,11 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           label: `${row.item.name} (${row.item.rarity}, ${row.durability}/${row.item.maxDurability} durability)`,
         }));
   if (offers.isLoading || inventory.isLoading || recipes.isLoading) return <Loader />;
-  if (offers.isError || inventory.isError || recipes.isError)
+  if (
+    (offers.isError && !offers.data) ||
+    (inventory.isError && !inventory.data) ||
+    recipes.isError
+  )
     return (
       <p role="alert">
         Could not load crafting services. Close this dialog and try again.
@@ -437,23 +471,26 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
         </Badge>
       </div>
       <fieldset
-        className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+        className="grid grid-cols-5 gap-1 sm:gap-2"
         aria-label="Crafting service"
       >
         {CRAFTING_SERVICES.map((value) => (
           <Button
             key={value}
+            className="min-w-0 px-1"
             variant={service === value ? "default" : "outline"}
             aria-pressed={service === value}
-            disabled={submit.isPending}
+            disabled={submit.isPending || refreshStatus === "pending"}
             onClick={() => {
               if (value === service) return;
               setService(value);
               setItemId("");
               setCrystalId("");
               setImbuementId("");
+              setFortifyTagId("");
               setMessage("");
               setSubmitted(false);
+              setRefreshStatus("idle");
             }}
           >
             {SERVICE_SHORT_LABELS[value]}
@@ -481,6 +518,7 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           onChange={(value) => {
             setItemId(value);
             setImbuementId("");
+            setFortifyTagId("");
             const nextTarget = eligibleEquipment.find((row) => row.id === value);
             if (
               crystal &&
@@ -491,6 +529,41 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           }}
         />
       </div>
+      {service === "FORTIFY" && (
+        <div className="space-y-2">
+          <Label htmlFor="service-fortify-tag">Base tag to fortify</Label>
+          <SearchSelect
+            id="service-fortify-tag"
+            label="Base tag"
+            value={fortifyTagId}
+            options={
+              target
+                ? fortifyTags(target.item).map((tag, index) => ({
+                    value: tag.fortifyId!,
+                    label: `${index + 1}. ${tag.type} (+${getFortifyQuote(target.fortification, tag, true).level})`,
+                  }))
+                : []
+            }
+            onChange={setFortifyTagId}
+            disabled={submit.isPending || submitted}
+            placeholder="Select an eligible tag"
+          />
+          {fortifyEligibility.isError && (
+            <p role="alert">Could not check evolutions. Close and retry.</p>
+          )}
+          {fortifyQuote &&
+            (fortifyQuote.level >= FORTIFY_MAX_LEVEL ? (
+              <p>This tag is at the maximum Fortify level (+{FORTIFY_MAX_LEVEL}).</p>
+            ) : (
+              <p>
+                Fortify +{fortifyQuote.level} → +{fortifyQuote.level + 1}:{" "}
+                {fortifyQuote.chance}% success chance (crafter rates). Attempt cost:{" "}
+                {fortifyQuote.cost.toLocaleString()} ryo plus the service fee. Both are
+                consumed on failure. Failure bonuses reset on success.
+              </p>
+            ))}
+        </div>
+      )}
       {service === "IMBUE" && (
         <div className="space-y-2">
           <Label htmlFor="service-crystal">Crystal</Label>
@@ -559,9 +632,11 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           </p>
         )}
         <p className="text-muted-foreground text-sm">
-          {service === "REPAIR"
-            ? "Repair completes instantly. The crafter receives your fee and a notification."
-            : "Your fee and submitted items are reserved immediately. The crafter must accept before work starts. Delivery is automatic, with inventory overflow when full."}
+          {service === "FORTIFY"
+            ? "Fortify resolves instantly and returns your item. The crafter receives the service fee; the attempt cost is consumed."
+            : service === "REPAIR"
+              ? "Repair completes instantly. The crafter receives your fee and a notification."
+              : "Your fee and submitted items are reserved immediately. The crafter must accept before work starts. Delivery is automatic, with inventory overflow when full."}
         </p>
       </div>
       {message && (
@@ -570,9 +645,17 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
           {!submitted && (
             <Button
               variant="outline"
+              disabled={submit.isPending || refreshStatus === "pending"}
               onClick={async () => {
-                await offers.refetch();
-                setMessage("");
+                setRefreshStatus("pending");
+                try {
+                  await refreshServiceOffer(crafterId, service === "FORTIFY");
+                  setRefreshStatus("idle");
+                  setMessage("");
+                } catch {
+                  setRefreshStatus("failed");
+                  setMessage("Could not refresh the offer and items. Please retry.");
+                }
               }}
             >
               Refresh offer
@@ -588,7 +671,13 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
             !info ||
             submit.isPending ||
             submitted ||
-            (service === "DISIMBUE" && !imbuement)
+            refreshStatus !== "idle" ||
+            (service === "DISIMBUE" && !imbuement) ||
+            (service === "FORTIFY" &&
+              (!fortifyQuote?.chance ||
+                !fortifyEligibility.data ||
+                fortifyEligibility.isError ||
+                fortifyEligibility.isFetching))
           }
           onClick={() =>
             submit.mutate({
@@ -598,6 +687,13 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
               ...(service === "CRAFT" ? { itemId } : { userItemId: itemId }),
               ...(service === "IMBUE" ? { userCrystalItemId: crystalId } : {}),
               ...(service === "DISIMBUE" ? { imbuementId } : {}),
+              ...(service === "FORTIFY"
+                ? {
+                    fortifyTagId,
+                    expectedFortifyLevel: fortifyQuote?.level,
+                    expectedFortifyFailures: fortifyQuote?.failures,
+                  }
+                : {}),
             })
           }
         >
@@ -605,9 +701,11 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
             ? "Submitting…"
             : submitted
               ? "Submitted"
-              : service === "REPAIR"
-                ? "Repair now"
-                : "Submit request"}
+              : service === "FORTIFY"
+                ? "Fortify now"
+                : service === "REPAIR"
+                  ? "Repair now"
+                  : "Submit request"}
         </Button>
         {submitted && (
           <Link
@@ -796,6 +894,7 @@ const SERVICE_LABELS = {
   IMBUE: "Imbue an Item",
   DISIMBUE: "Disimbue an Item",
   REPAIR: "Repair my Items",
+  FORTIFY: "Fortify an Item",
 } as const;
 
 const SERVICE_SHORT_LABELS = {
@@ -803,4 +902,5 @@ const SERVICE_SHORT_LABELS = {
   IMBUE: "Imbue",
   DISIMBUE: "Disimbue",
   REPAIR: "Repair",
+  FORTIFY: "Fortify",
 } as const;
