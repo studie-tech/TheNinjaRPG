@@ -166,15 +166,16 @@ export const KessenMatchView = ({
   }, [busy]);
 
   // An opened table brings the content box to the top of the screen, where the frame
-  // fits, and its leave button takes the focus unless an overlay (the mulligan) or the
-  // lesson guide in the activity dock has it.
+  // fits, and its title's way back to the hall takes the focus unless an overlay (the
+  // mulligan) or the lesson guide in the activity dock has it.
   useEffect(() => {
     if (!frame) return;
-    frame.closest("[data-content-box]")?.scrollIntoView({ block: "start" });
+    const box = frame.closest("[data-content-box]");
+    box?.scrollIntoView({ block: "start" });
     const focused = document.activeElement;
     if (!frame.contains(focused) && !focused?.closest("[data-activity-dock]"))
-      frame
-        .querySelector<HTMLElement>("[data-km-leave]")
+      box
+        ?.querySelector<HTMLElement>("[data-content-box-back]")
         ?.focus({ preventScroll: true });
   }, [frame]);
 
@@ -221,7 +222,6 @@ export const KessenMatchView = ({
       <div className="km-stage" inert={covered || undefined}>
         <OpponentBar
           table={table}
-          onClose={onClose}
           onOpenDiscards={openDiscards}
           onOpenRules={openRules}
         />

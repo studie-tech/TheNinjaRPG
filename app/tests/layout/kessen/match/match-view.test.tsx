@@ -369,7 +369,9 @@ describe("KessenMatchView", () => {
         onClose={onClose}
       />,
     );
-    fireEvent.click(document.querySelector(".km-hand-card") as Element);
+    const card = document.querySelector(".km-hand-card") as HTMLElement;
+    card.focus();
+    fireEvent.click(card);
     expect(document.querySelector('.km-row[data-state="legal"]')).toBeTruthy();
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     expect(document.querySelector('.km-row[data-state="legal"]')).toBeNull();
@@ -378,25 +380,30 @@ describe("KessenMatchView", () => {
     expect(document.querySelector(".kessen-match")).toBeTruthy();
   });
 
-  it("sits in the page as a region, its way back to the hall focused", () => {
+  it("sits in the page as a region, its content box's way back focused", () => {
     const state = practiceMatch();
-    const onClose = mock(() => undefined);
     render(
-      <KessenMatchView
-        payload={payloadOf(state)}
-        catalog={catalog}
-        onAction={localServer(state).onAction}
-        onConcede={() => undefined}
-        onClose={onClose}
-      />,
+      <div data-content-box="">
+        <button type="button" data-content-box-back="">
+          Card Hall
+        </button>
+        <KessenMatchView
+          payload={payloadOf(state)}
+          catalog={catalog}
+          onAction={localServer(state).onAction}
+          onConcede={() => undefined}
+          onClose={() => undefined}
+        />
+      </div>,
     );
     expect(screen.queryByRole("dialog")).toBeNull();
     const table = screen.getByRole("region", { name: /^Kessen against .+, round 1$/ });
-    const back = screen.getByRole("button", { name: /^Back to the Card Hall/ });
-    expect(table.contains(back)).toBe(true);
-    expect(document.activeElement).toBe(back);
-    fireEvent.click(back);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(
+      table.querySelector("button[aria-label^='Back to the Card Hall']"),
+    ).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Card Hall" }),
+    );
   });
 
   it("opens a card over the sheet it was read from and closes it first on Escape", () => {

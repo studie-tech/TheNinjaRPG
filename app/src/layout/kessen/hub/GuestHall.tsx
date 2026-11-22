@@ -155,13 +155,17 @@ export const KessenGuestHall = ({ ready }: { ready: boolean }) => {
             </>
           }
         />
-        {catalogQuery.isError && !catalog ? (
+        {/* The failure shows from the first failed attempt, which the retries that
+            follow would otherwise hide; until then the disabled starts say why. */}
+        {!catalog && (catalogQuery.isError || catalogQuery.failureCount > 0) ? (
           <QueryError
             layout="panel"
             message="The cards could not be laid out."
             onRetry={() => void catalogQuery.refetch()}
             isRetrying={catalogQuery.isFetching}
           />
+        ) : !canStart ? (
+          <Loader explanation="Laying out the cards" />
         ) : null}
         <div className="kg-columns">
           <GuestAcademy

@@ -1223,6 +1223,9 @@ const GuidedLessonAssistant: React.FC<{ step: GuidedLessonStep }> = ({ step }) =
         lead={step.lead}
         dodgeHighlight={panelDodgesHighlight}
         avoidBox={box}
+        // A phone's dock spans the screen under the table, so she would stand on the
+        // hand whichever end she took.
+        portraitHiddenOnPhones
         footer={
           step.footer ? <div data-guided-footer="">{step.footer}</div> : undefined
         }
@@ -1240,7 +1243,8 @@ const AssistantPortrait: React.FC<{
   characterImage?: string;
   avoidBox: TutorialScreenBox | null;
   dodgeHighlight?: boolean;
-}> = ({ characterImage, avoidBox, dodgeHighlight }) => {
+  hiddenOnPhones?: boolean;
+}> = ({ characterImage, avoidBox, dodgeHighlight, hiddenOnPhones }) => {
   const { swapSides } = useActivityDock();
   const image = characterImage || IMG_URL_ASSISTANT;
   const waist = image === IMG_URL_ASSISTANT ? ASSISTANT_PORTRAIT_WAIST : 0.5;
@@ -1275,7 +1279,10 @@ const AssistantPortrait: React.FC<{
   return (
     <div
       ref={stripRef}
-      className="pointer-events-none absolute inset-x-0 bottom-full overflow-hidden"
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-full overflow-hidden",
+        hiddenOnPhones && "max-md:hidden",
+      )}
       style={{ height: `calc(var(--assistant-portrait-height) * ${waist})` }}
     >
       <Image
@@ -1319,6 +1326,8 @@ const AssistantDialog: React.FC<{
   dodgeHighlight?: boolean;
   /** The highlighted control or its confirmation, kept clear of Lemu's portrait. */
   avoidBox?: TutorialScreenBox | null;
+  /** Leave Lemu's portrait out below the `md` breakpoint. */
+  portraitHiddenOnPhones?: boolean;
   isBusy?: boolean;
   errorMessage?: string;
 }> = ({
@@ -1336,6 +1345,7 @@ const AssistantDialog: React.FC<{
   showOrderingButton,
   dodgeHighlight,
   avoidBox = null,
+  portraitHiddenOnPhones,
   isBusy = false,
   errorMessage,
 }) => {
@@ -1371,6 +1381,7 @@ const AssistantDialog: React.FC<{
         characterImage={characterImage}
         avoidBox={avoidBox}
         dodgeHighlight={dodgeHighlight}
+        hiddenOnPhones={portraitHiddenOnPhones}
       />
       <CoachCard
         title={title}

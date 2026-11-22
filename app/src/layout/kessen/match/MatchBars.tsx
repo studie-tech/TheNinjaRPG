@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownWideNarrow, ChevronsLeft, Layers } from "lucide-react";
+import { ArrowDownWideNarrow, Layers } from "lucide-react";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import AvatarImage from "@/layout/Avatar";
@@ -15,17 +15,15 @@ import type { MatchTable } from "./useMatchTable";
 import { useTweenedNumber } from "./useTweenedNumber";
 
 /**
- * Opponent bar: leave, portrait, name (with the match's house rule under it), lanterns,
- * hand, deck, leader and total (stamped once they pass).
+ * Opponent bar: portrait, name (with the match's house rule under it), lanterns, hand,
+ * deck, leader and total (stamped once they pass).
  */
 export const OpponentBar = ({
   table,
-  onClose,
   onOpenDiscards,
   onOpenRules,
 }: {
   table: MatchTable;
-  onClose: () => void;
   onOpenDiscards: () => void;
   /** Opens the rules, where the house rule is spelled out. */
   onOpenRules: () => void;
@@ -40,26 +38,6 @@ export const OpponentBar = ({
       aria-label={`${opponentName}'s side`}
       data-lesson-target="opponent"
     >
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="km-hit h-8 w-8"
-        onClick={onClose}
-        data-km-leave=""
-        aria-label={
-          table.duel
-            ? "Back to the Card Hall (the duel goes on and your clock keeps running)"
-            : "Back to the Card Hall (the match stays open)"
-        }
-        title={
-          table.duel
-            ? "Back to the Card Hall; the duel goes on and your clock keeps running"
-            : "Back to the Card Hall; the match stays open"
-        }
-      >
-        <ChevronsLeft className="h-5 w-5" aria-hidden />
-      </Button>
       <span className="km-portrait" aria-hidden>
         {table.opponent ? (
           <AvatarImage href={table.opponent.avatar} alt="" size={56} className="m-0" />
