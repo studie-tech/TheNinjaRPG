@@ -9,6 +9,7 @@ import {
   generateSpriteGPT,
   removeBackgroundReplicate,
   removeBackgroundToBuffer,
+  toReplicateFile,
   txt2imgNanoBanana,
 } from "@/libs/replicate";
 import { restoreEnvAfterEach } from "../setup/env";
@@ -304,6 +305,157 @@ describe("removeBackgroundToBuffer", () => {
     expect(run.mock.calls[0]![1]).toEqual({
       input: { image: source, threshold: 0.5, background_type: "rgba", format: "png" },
       signal: controller.signal,
+    });
+  });
+});
+
+describe("toReplicateFile", () => {
+  const bytes = Buffer.from("image-bytes");
+  const readBytes = async (blob: Blob) => Buffer.from(await blob.arrayBuffer());
+
+  it("reads a FileOutput through its own blob and url without refetching", async () => {
+    const fetching = vi.spyOn(globalThis, "fetch");
+    const file = toReplicateFile({
+      url: () => new URL("https://replicate.delivery/out.webp"),
+      blob: async () => new Blob([bytes as BlobPart]),
+    });
+    expect(file?.url()).toBe("https://replicate.delivery/out.webp");
+    expect(await readBytes(await file!.blob())).toEqual(bytes);
+    expect(fetching).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a URL string", "https://replicate.delivery/out.webp"],
+    ["a URL object", new URL("https://replicate.delivery/out.webp")],
+    [
+      "an array of URL strings",
+      ["https://replicate.delivery/out.webp", "https://x.y/z"],
+    ],
+    ["an object of URL strings", { image: "https://replicate.delivery/out.webp" }],
+  ])("downloads %s under the caller's signal", async (_label, output) => {
+    const fetching = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(bytes as BodyInit));
+    const controller = new AbortController();
+    const file = toReplicateFile(output, controller.signal);
+    expect(file?.url()).toBe("https://replicate.delivery/out.webp");
+    expect(await readBytes(await file!.blob())).toEqual(bytes);
+    expect(fetching).toHaveBeenCalledWith("https://replicate.delivery/out.webp", {
+      signal: controller.signal,
+    });
+  });
+
+  it("takes the first file of an array of FileOutputs", async () => {
+    const first = {
+      url: () => new URL("https://a.test/1.png"),
+      blob: async () => new Blob(),
+    };
+    const second = {
+      url: () => new URL("https://a.test/2.png"),
+      blob: async () => new Blob(),
+    };
+    expect(toReplicateFile([null, first, second])?.url()).toBe("https://a.test/1.png");
+  });
+
+  it("returns undefined for outputs without a file", () => {
+    for (const output of [null, undefined, [], "", "not a url", 42, {}, [null, "x"]]) {
+      expect(toReplicateFile(output)).toBeUndefined();
+    }
+  });
+
+  it("rejects when a plain URL output cannot be downloaded", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("gone", { status: 404 }),
+    );
+    await expect(
+      toReplicateFile("https://replicate.delivery/gone.webp")!.blob(),
+    ).rejects.toThrow("Failed to download Replicate output (404)");
+  });
+});
+
+describe("Replicate outputs that are not FileOutputs", () => {
+  const webp = () =>
+    sharp({ create: { width: 64, height: 64, channels: 3, background: "white" } })
+      .webp()
+      .toBuffer();
+
+  it.each([
+    ["a URL string", "https://replicate.delivery/nano.webp"],
+    ["an array of URL strings", ["https://replicate.delivery/nano.webp"]],
+  ])("uploads a Nano Banana image returned as %s", async (_label, output) => {
+    const buffer = await webp();
+    const fetching = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(buffer as BodyInit));
+    vi.spyOn(Replicate.prototype, "run").mockResolvedValue(output as never);
+    const uploading = vi
+      .spyOn(UTApi.prototype, "uploadFiles")
+      .mockResolvedValue(upload as never);
+    expect(
+      await txt2imgNanoBanana({
+        preprompt: "Pixel art",
+        prompt: "A forest",
+        removeBg: false,
+        userId: "owner",
+        width: 512,
+        height: 512,
+        size: "square",
+      }),
+    ).toEqual([upload.data.ufsUrl]);
+    expect(fetching.mock.calls[0]![0]).toBe("https://replicate.delivery/nano.webp");
+    expect(uploading).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes a URL-string Nano Banana output to background removal and reads its array result", async () => {
+    const buffer = await webp();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(buffer as BodyInit));
+    const run = vi
+      .spyOn(Replicate.prototype, "run")
+      .mockResolvedValueOnce("https://replicate.delivery/nano.webp" as never)
+      .mockResolvedValueOnce(["https://replicate.delivery/cutout.png"] as never);
+    vi.spyOn(UTApi.prototype, "uploadFiles").mockResolvedValue(upload as never);
+    expect(
+      await txt2imgNanoBanana({
+        preprompt: "Pixel art",
+        prompt: "A fox",
+        removeBg: true,
+        userId: "owner",
+        width: 512,
+        height: 512,
+        size: "square",
+      }),
+    ).toEqual([upload.data.ufsUrl]);
+    expect(run.mock.calls[1]![1].input).toEqual({
+      image: "https://replicate.delivery/nano.webp",
+    });
+  });
+
+  it("cuts out sprite bytes when 851-labs returns a URL string", async () => {
+    const result = Buffer.from("cutout");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(result as BodyInit));
+    vi.spyOn(Replicate.prototype, "run").mockResolvedValue(
+      "https://replicate.delivery/cutout.png" as never,
+    );
+    expect(await removeBackgroundToBuffer(Buffer.from("source"))).toEqual(result);
+  });
+
+  it("rejects background removal without any file output", async () => {
+    vi.spyOn(Replicate.prototype, "run").mockResolvedValue([] as never);
+    await expect(removeBackgroundToBuffer(Buffer.from("source"))).rejects.toThrow(
+      "No output from remove-bg model",
+    );
+  });
+
+  it("uploads a fast preview from a URL-string fallback output", async () => {
+    vi.spyOn(Replicate.prototype, "run")
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce("https://replicate.delivery/p-image.webp" as never);
+    const uploading = vi
+      .spyOn(UTApi.prototype, "uploadFilesFromUrl")
+      .mockResolvedValue(upload as never);
+    await fastTxt2imgReplicate({ prompt: "A fox" });
+    expect(uploading.mock.calls[0]![0]).toMatchObject({
+      url: "https://replicate.delivery/p-image.webp",
     });
   });
 });

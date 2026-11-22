@@ -1,7 +1,6 @@
 import { nanoid } from "nanoid";
 import type OpenAI from "openai";
 import type Replicate from "replicate";
-import type { FileOutput } from "replicate";
 import type { IMG_ORIENTATION } from "@/drizzle/constants";
 import type { UserData, UserRank } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
@@ -18,6 +17,73 @@ const getReplicateInstance = async () => {
     replicateInstance ??= new Replicate({ auth: env.REPLICATE_API_TOKEN });
   }
   return replicateInstance;
+};
+
+/** A single file produced by a Replicate model, whatever shape the SDK returned it in. */
+export type ReplicateFile = {
+  /** The file's URL on Replicate's delivery host (or a data: URI). */
+  url: () => string;
+  /** Download the file's bytes. */
+  blob: () => Promise<Blob>;
+};
+
+const isFileUrl = (value: string) => /^(https?:|data:)/.test(value);
+
+const fetchBlob = async (url: string, signal?: AbortSignal) => {
+  const response = await fetch(url, signal ? { signal } : undefined);
+  if (!response.ok) {
+    throw new Error(`Failed to download Replicate output (${response.status})`);
+  }
+  return response.blob();
+};
+
+/**
+ * Normalise a Replicate run output to its first file. The SDK returns a `FileOutput`
+ * (a stream with `blob()`/`url()`) for URL outputs, but models may instead yield a plain
+ * URL string (e.g. a non-https URL the SDK leaves untouched), a `URL`, or a list or
+ * object of these, so callers must not assume `FileOutput`.
+ * @param output - The value `replicate.run` resolved with
+ * @param signal - Bounds downloading a plain URL output
+ * @returns The first file found, or undefined when the output holds none
+ */
+export const toReplicateFile = (
+  output: unknown,
+  signal?: AbortSignal,
+): ReplicateFile | undefined => {
+  if (output === null || output === undefined) return undefined;
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      const file = toReplicateFile(item, signal);
+      if (file) return file;
+    }
+    return undefined;
+  }
+  if (typeof output === "string") {
+    const url = output.trim();
+    return isFileUrl(url)
+      ? { url: () => url, blob: () => fetchBlob(url, signal) }
+      : undefined;
+  }
+  if (output instanceof URL) return toReplicateFile(output.href, signal);
+  if (typeof output !== "object") return undefined;
+  const candidate = output as { blob?: unknown; url?: unknown };
+  if (typeof candidate.blob === "function" || typeof candidate.url === "function") {
+    const readUrl = () => {
+      const url = typeof candidate.url === "function" ? candidate.url() : undefined;
+      return String(url ?? output);
+    };
+    return {
+      url: readUrl,
+      blob: () =>
+        typeof candidate.blob === "function"
+          ? (candidate.blob() as Promise<Blob>)
+          : fetchBlob(readUrl(), signal),
+    };
+  }
+  if (Object.getPrototypeOf(output) === Object.prototype) {
+    return toReplicateFile(Object.values(output), signal);
+  }
+  return undefined;
 };
 
 /**
@@ -83,7 +149,7 @@ export const fastTxt2imgReplicate = async (config: {
   const replicate = await getReplicateInstance();
 
   // Try flux-schnell first
-  let output: FileOutput | undefined;
+  let output: ReplicateFile | undefined;
   try {
     const fluxInput = {
       prompt: prompt,
@@ -96,15 +162,15 @@ export const fastTxt2imgReplicate = async (config: {
       num_inference_steps: 4,
       disable_safety_checker: disable_safety_checker,
     };
-    const outputs = (await runAbortable(
+    const outputs = await runAbortable(
       () =>
         replicate.run("black-forest-labs/flux-schnell", {
           input: fluxInput,
           ...(signal ? { signal } : {}),
         }),
       signal,
-    )) as FileOutput[];
-    output = outputs?.[0];
+    );
+    output = toReplicateFile(outputs, signal);
   } catch (fluxError) {
     signal?.throwIfAborted();
     if (
@@ -123,14 +189,17 @@ export const fastTxt2imgReplicate = async (config: {
       aspect_ratio: aspect_ratio,
       disable_safety_checker: disable_safety_checker,
     };
-    output = (await runAbortable(
-      () =>
-        replicate.run("prunaai/p-image", {
-          input: pImageInput,
-          ...(signal ? { signal } : {}),
-        }),
+    output = toReplicateFile(
+      await runAbortable(
+        () =>
+          replicate.run("prunaai/p-image", {
+            input: pImageInput,
+            ...(signal ? { signal } : {}),
+          }),
+        signal,
+      ),
       signal,
-    )) as FileOutput;
+    );
   }
 
   if (!output) throw new Error("No output from AI model");
@@ -311,16 +380,17 @@ export const generateNanoBananaImage = async (
   // log the full context (exact prompt, aspect ratio, error message + stack)
   // server-side before re-throwing — otherwise it surfaces only as "[object Error]"
   // in the client tRPC logger and is impossible to diagnose.
-  let file: FileOutput;
+  let file: ReplicateFile | undefined;
   try {
-    file = (await runAbortable(
+    const output = await runAbortable(
       () =>
         replicate.run("google/nano-banana", {
           input: inputs,
           ...(config.signal ? { signal: config.signal } : {}),
         }),
       config.signal,
-    )) as FileOutput;
+    );
+    file = toReplicateFile(output, config.signal);
   } catch (cause) {
     console.error("[txt2imgNanoBanana] Replicate generation failed", {
       model: "google/nano-banana",
@@ -336,15 +406,15 @@ export const generateNanoBananaImage = async (
   if (!file) throw new Error("No output from AI model");
 
   // If transparent background requested, post-process with remove-bg
-  if (config.removeBg) {
-    file = await removeBackgroundReplicate(
-      String(file.url()),
-      config.signal,
-      config.backgroundRemovalModel,
-    );
-  }
+  const result = config.removeBg
+    ? await removeBackgroundReplicate(
+        file.url(),
+        config.signal,
+        config.backgroundRemovalModel,
+      )
+    : file;
 
-  const blob = await runAbortable(() => file.blob(), config.signal);
+  const blob = await runAbortable(() => result.blob(), config.signal);
   return Buffer.from(await blob.arrayBuffer());
 };
 
@@ -415,7 +485,7 @@ export const removeBackgroundReplicate = async (
   model: BackgroundRemovalModel = "lucataco",
 ) => {
   const replicate = await getReplicateInstance();
-  const output = (await runAbortable(
+  const output = await runAbortable(
     () =>
       replicate.run(
         model === "851-labs"
@@ -432,8 +502,8 @@ export const removeBackgroundReplicate = async (
         },
       ),
     signal,
-  )) as FileOutput | FileOutput[];
-  const file = Array.isArray(output) ? output[0] : output;
+  );
+  const file = toReplicateFile(output, signal);
   if (!file) throw new Error("No output from remove-bg model");
   return file;
 };
@@ -580,7 +650,7 @@ export const generateSoundEffectReplicate = async (config: {
   secondsTotal: number;
 }) => {
   const replicate = await getReplicateInstance();
-  const output = (await replicate.run(
+  const output = await replicate.run(
     "sepal/audiogen:154b3e5141493cb1b8cec976d9aa90f2b691137e39ad906d2421b74c2a8c52b8",
     {
       input: {
@@ -590,8 +660,8 @@ export const generateSoundEffectReplicate = async (config: {
         format: "mp3",
       },
     },
-  )) as FileOutput;
-  const url = output.url();
+  );
+  const url = toReplicateFile(output)?.url();
   if (!url) throw new Error("No output from audio model");
   return { url } as const;
 };
