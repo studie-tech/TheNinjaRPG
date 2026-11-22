@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import { getKessenPayoutUserUpdate } from "@/deltas/kessen";
 import {
@@ -266,13 +267,15 @@ export const kessenPvpRouter = createTRPCRouter({
           );
         throw error;
       }
-      await getServerPusher().trigger(input.targetId, "event", {
-        type: "userMessage",
-        message: `${me.username} challenged you to a Kessen duel.`,
-        route: "/kessen?tab=duels",
-        routeText: "Answer",
-        kessen: { event: "challengeReceived" },
-      });
+      after(() =>
+        getServerPusher().trigger(input.targetId, "event", {
+          type: "userMessage",
+          message: `${me.username} challenged you to a Kessen duel.`,
+          route: "/kessen?tab=duels",
+          routeText: "Answer",
+          kessen: { event: "challengeReceived" },
+        }),
+      );
       notifyKessenChallenge(ctx.drizzle, input.targetId);
       return { success: true, message: `Challenge sent to ${target.username}.` };
     }),
@@ -790,11 +793,13 @@ const answerChallenge = async (
   );
   if (!result.success) return errorResponse("This challenge is no longer pending.");
   const notified = status === "REJECTED" ? request.senderId : request.receiverId;
-  await getServerPusher().trigger(notified, "event", {
-    type: "kessenChallenge",
-    event: status === "REJECTED" ? "rejected" : "cancelled",
-    requestId: request.id,
-  });
+  after(() =>
+    getServerPusher().trigger(notified, "event", {
+      type: "kessenChallenge",
+      event: status === "REJECTED" ? "rejected" : "cancelled",
+      requestId: request.id,
+    }),
+  );
   return { success: true, message };
 };
 

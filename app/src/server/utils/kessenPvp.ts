@@ -432,7 +432,8 @@ export const settleKessenDuel = async (
  * Creates a duel between two players whose decks are already built, after the request
  * or queue claim that decided it. Keeps the one-active-match rule: when either player
  * has another ACTIVE match once the duel is written (a concurrent start), the duel is
- * voided. Pushes both players and notifies the one who did not start it.
+ * voided. Pushes both players once the response is sent and notifies the one who did
+ * not start it.
  */
 export const createKessenDuel = async (
   client: DrizzleClient,
@@ -492,21 +493,23 @@ export const createKessenDuel = async (
     insertKessenPvpMatch(client, { ...row, state }),
     insertKessenProgressRowsIfMissing(client, userIds),
   ]);
-  const after = await listActiveKessenMatchesForPlayers(client, userIds);
-  if (after.some((entry) => entry.id !== row.id)) {
+  const active = await listActiveKessenMatchesForPlayers(client, userIds);
+  if (active.some((entry) => entry.id !== row.id)) {
     await updateKessenPvpMatchesForVoid(client, [row.id], now);
     return { error: "Another match is starting; try again in a moment." };
   }
   const kindLabel = input.kind === "RANKED" ? "ranked duel" : "duel";
-  await Promise.all(
-    seats.map((seat, index) =>
-      getServerPusher().trigger(seat.player.userId, "event", {
-        type: "userMessage",
-        message: `Your Kessen ${kindLabel} against ${seats[index === 0 ? 1 : 0].player.username} has begun.`,
-        route: "/kessen",
-        routeText: "To the table",
-        kessen: { event: "matchStarted", matchId: row.id, kind: input.kind },
-      }),
+  after(() =>
+    Promise.all(
+      seats.map((seat, index) =>
+        getServerPusher().trigger(seat.player.userId, "event", {
+          type: "userMessage",
+          message: `Your Kessen ${kindLabel} against ${seats[index === 0 ? 1 : 0].player.username} has begun.`,
+          route: "/kessen",
+          routeText: "To the table",
+          kessen: { event: "matchStarted", matchId: row.id, kind: input.kind },
+        }),
+      ),
     ),
   );
   notifyKessenDuelStarted(client, {
