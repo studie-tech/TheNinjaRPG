@@ -10,6 +10,7 @@ import {
   SHIELD_MAX_HEALTH,
 } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
+import { hasInstantPotency, resolvePotencyTags } from "@/libs/combat/potency";
 import {
   getActiveSageLevel,
   getSageDailyCap,
@@ -130,6 +131,7 @@ import {
   getItem,
   isEffectActive,
   isEffectEnabled,
+  isInstantJutsuEffect,
   recordUsedTag,
   resolveDamageCreditUser,
   sealCheck,
@@ -376,6 +378,11 @@ export const applyEffects = (
   const newUsersEffects: UserEffect[] = [];
   const actionEffects: ActionEffect[] = [];
 
+  const freshGroundIds = new Set(
+    action && hasInstantPotency(action)
+      ? battle.groundEffects.filter((effect) => effect.isNew).map((effect) => effect.id)
+      : [],
+  );
   applyGroundEffects({
     battle,
     actor,
@@ -449,8 +456,75 @@ export const applyEffects = (
     (e) => e.type === "increaseheal" || e.type === "decreaseheal",
   );
 
-  // Apply non-damage-modifier effects first
-  nonDamageModifierEffects.sort(sortEffects).forEach(resolve);
+  // Potency tags precede all power consumers. Resolve their normal Clear/prevention
+  // interactions before taking one combined snapshot of existing and instant potency.
+  const delayedCastPotency = new Set(
+    usersEffects
+      .filter(
+        (effect) =>
+          effect.isNew &&
+          effect.creatorId === actorId &&
+          effect.actionId === action?.id &&
+          !isInstantJutsuEffect(effect) &&
+          (effect.type === "increasepotency" || effect.type === "decreasepotency"),
+      )
+      .map((effect) => effect.id),
+  );
+  const pendingPotency = new Set(
+    action?.type === "jutsu"
+      ? usersEffects
+          .filter(
+            (effect) =>
+              effect.isNew &&
+              effect.creatorId === actorId &&
+              effect.actionId === action.id &&
+              isInstantJutsuEffect(effect) &&
+              (effect.type === "increasepotency" || effect.type === "decreasepotency"),
+          )
+          .map((effect) => effect.id)
+      : [],
+  );
+  let needsPotencySnapshot = !!action && hasInstantPotency(action);
+  const snapshotPotency = () => {
+    if (!needsPotencySnapshot || pendingPotency.size > 0 || !action) return;
+    needsPotencySnapshot = false;
+    const castEffects = [
+      ...usersEffects.filter(
+        (candidate) =>
+          candidate.isNew &&
+          candidate.creatorId === actorId &&
+          candidate.actionId === action.id,
+      ),
+      // Ground tags retain the cast snapshot for every later occupant.
+      ...newGroundEffects.filter(
+        (candidate) =>
+          candidate.creatorId === actorId &&
+          candidate.actionId === action.id &&
+          freshGroundIds.has(candidate.id),
+      ),
+    ];
+    const potencyEffects = usersEffects.filter(
+      (candidate) => !delayedCastPotency.has(candidate.id),
+    );
+    const resolved = resolvePotencyTags(
+      { ...action, effects: castEffects },
+      potencyEffects,
+      actorId,
+    );
+    castEffects.forEach((candidate, i) => {
+      const tag = resolved[i];
+      if (!tag) return;
+      candidate.power = tag.power;
+      candidate.powerPerLevel = tag.powerPerLevel;
+    });
+  };
+  // Friendly-fire or targeting may leave no incoming potency instance to resolve.
+  snapshotPotency();
+  nonDamageModifierEffects.sort(sortEffects).forEach((effect) => {
+    resolve(effect);
+    pendingPotency.delete(effect.id);
+    snapshotPotency();
+  });
 
   // Instant kills precede Curse activation and seals; account only their resolved HP loss.
   for (const [id, consequence] of consequences) {

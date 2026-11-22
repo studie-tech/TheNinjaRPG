@@ -137,6 +137,7 @@ const BaseAttributes = {
   appearSfxPrimary: z.boolean().optional(),
   disappearSfxPrimary: z.boolean().optional(),
   // Timing controls
+  instant: z.boolean().optional(),
   rounds: z.coerce.number().int().min(0).max(100).optional(),
   timeTracker: z.record(z.string(), z.coerce.number()).optional(),
   // Power controls. Power's meaning depends on calculation:

@@ -58,15 +58,30 @@ export const getPotencyDescription = (
         .map((element) => (element === "None" ? "None (non-elemental)" : element))
         .join(", ")}.`
     : "";
-  return `The power of ${affected} on ${owner} subsequent jutsu is ${change} by ${units} for ${effect.rounds} rounds.${elements}`;
+  const timing = effect.instant ? "current and subsequent" : "subsequent";
+  return `The power of ${affected} on ${owner} ${timing} jutsu is ${change} by ${units} for ${effect.rounds} rounds.${elements}`;
 };
 
 const supportedTags: ReadonlySet<string> = new Set(PotencyTagTypes);
 
+/** Casts with instant potency defer their snapshot until those tags resolve normally. */
+export const hasInstantPotency = (
+  action: Pick<CombatAction, "type" | "effects" | "target">,
+) =>
+  action.type === "jutsu" &&
+  action.effects.some(
+    (tag) =>
+      tag.instant &&
+      tag.target !== "COORDINATES" &&
+      (tag.target === "SELF" ||
+        (action.target !== "GROUND" && action.target !== "EMPTY_GROUND")) &&
+      (tag.type === "increasepotency" || tag.type === "decreasepotency"),
+  );
+
 /**
- * Snapshot potency once, before any effects from this cast are inserted. Bake
- * level scaling into the cloned tags so later ticks and transfers retain the
- * cast's power, without modifying the jutsu definition or applying potency twice.
+ * Snapshot eligible potency once per cast. Instant potency resolves its normal
+ * prevention before this snapshot. Bake level scaling into cloned tags so later
+ * ticks and transfers retain the cast's power, without modifying the jutsu definition or applying potency twice.
  */
 export const resolvePotencyTags = (
   action: Pick<CombatAction, "type" | "effects" | "level" | "data">,

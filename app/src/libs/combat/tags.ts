@@ -51,8 +51,10 @@ import {
   getEffectStackKey,
   getPoolsAffected,
   getPreventTypeName,
+  hasEffectActivated,
   isEffectActive,
   isEffectEnabled,
+  isInstantJutsuEffect,
   sealCheck,
   selectTransferEffects,
   sortEffects,
@@ -183,8 +185,8 @@ export const absorb = (
   // Pools that are going to be restored
   const pools = getTagPools(effect);
   const nPools = pools.length;
-  // Apply the absorb effect the round after the effect is applied
-  if (!effect.isNew && !effect.castThisRound) {
+  // Active absorption converts each incoming damage packet.
+  if (hasEffectActivated(effect)) {
     consequences.forEach((consequence, effectId) => {
       const incomingDamage = consequence.diffuseImmediateDamage ?? consequence.damage;
       if (
@@ -715,7 +717,7 @@ const applyStatChange = (
 export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
   const { power, adverb, qualifier } = getPower(effect);
   const affected = getAffected(effect);
-  if (!effect.isNew && !effect.castThisRound) {
+  if (hasEffectActivated(effect)) {
     if (effect.type === "increasestat" || effect.type === "decreasestat") {
       if (effect.direction === "offence" || effect.direction === "both") {
         applyStatChange(target, "offence", power, effect.calculation);
@@ -796,7 +798,7 @@ const adjustBasicAction = (
   );
 };
 
-/** Activate a potency buff/debuff; its power is consumed by subsequent casts. */
+/** Activate potency before eligible casts take their power snapshot. */
 export const potency = (
   effect: Extract<UserEffect, { type: "increasepotency" | "decreasepotency" }>,
   usersEffects: UserEffect[],
@@ -871,7 +873,7 @@ const adjustMasteries = (effect: UserEffect, target: BattleUserState) => {
   const { power, adverb, qualifier } = getPower(effect);
   const affected = getAffected(effect);
   if ("masteryTypes" in effect && effect.masteryTypes) {
-    if (!effect.isNew && !effect.castThisRound) {
+    if (hasEffectActivated(effect)) {
       storeMasteryBases(target);
       effect.masteryTypes.forEach((mastery: MasteryType) => {
         applyStatChange(
@@ -913,7 +915,7 @@ const adjustDamage = (
 ) => {
   const { power, adverb, qualifier } = getPower(effect);
   const affected = getAffected(effect);
-  if (!effect.isNew && !effect.castThisRound) {
+  if (hasEffectActivated(effect)) {
     consequences.forEach((consequence, effectId) => {
       const damageKey =
         consequence.damage !== undefined
@@ -1039,7 +1041,7 @@ export const adjustHealGiven = (
   target: BattleUserState,
 ) => {
   const { power, adverb, qualifier } = getPower(effect);
-  if (!effect.isNew && !effect.castThisRound) {
+  if (hasEffectActivated(effect)) {
     const change = (value: number) =>
       effect.calculation === "percentage" ? (power / 100) * value : power;
     consequences.forEach((consequence, effectId) => {
@@ -1445,7 +1447,7 @@ export const damageUser = (
 
   // Calculate the final damage with modifiers
   const thisRound = effect.castThisRound;
-  const instant = thisRound && effect.rounds === 0;
+  const instant = thisRound && (effect.rounds === 0 || isInstantJutsuEffect(effect));
   const residual = !thisRound && (effect.rounds === undefined || effect.rounds > 0);
 
   // Only apply barrier absorption to instant damage, not residual damage
@@ -1497,7 +1499,7 @@ export const damageBarrier = (
 
   // Apply damage for both instant and residual effects
   const thisRound = effect.castThisRound;
-  const instant = thisRound && effect.rounds === 0;
+  const instant = thisRound && (effect.rounds === 0 || isInstantJutsuEffect(effect));
   const residual = !thisRound && (effect.rounds === undefined || effect.rounds > 0);
 
   // Only apply damage if this is an instant effect or residual effect
@@ -1587,9 +1589,9 @@ export const heal = (
       ? target[POOL_FIELDS[pool].max] * (power / 100) * applyTimes
       : power * applyTimes * 10;
   };
-  // If rounds=0 apply immidiately, otherwise only on following rounds
+  // One-shot heals and opted-in Jutsu heal on cast; other healing starts later.
   if (
-    (effect.castThisRound && effect.rounds === 0) ||
+    (effect.castThisRound && (effect.rounds === 0 || isInstantJutsuEffect(effect))) ||
     (!effect.castThisRound && (effect.rounds === undefined || effect.rounds > 0))
   ) {
     consequences.set(effect.id, {
@@ -1653,7 +1655,7 @@ export const increasepoolcost = (effect: UserEffect, target: BattleUserState) =>
 export const decreasepoolcost = (effect: UserEffect, target: BattleUserState) =>
   pooladjust(invertPower(effect), target);
 
-/** Activate a Curse instance without granting healing on the casting action. */
+/** Activate Curse, including casting-round accumulation for instant Jutsu. */
 export const curse = (
   effect: UserEffect,
   usersEffects: UserEffect[],
@@ -1666,6 +1668,7 @@ export const curse = (
   effect.curseState = {
     storedHealing: 0,
     activatedRound: effect.isNew ? round : effect.createdRound,
+    ready: isInstantJutsuEffect(effect),
   };
   return getInfo(
     target,
@@ -1734,7 +1737,7 @@ export const parry = (
   target: BattleUserState,
 ) => {
   const { power, qualifier } = getPower(effect);
-  if (!effect.isNew && !effect.castThisRound) {
+  if (hasEffectActivated(effect)) {
     consequences.forEach((consequence, effectId) => {
       if (
         consequence.targetId !== effect.targetId ||
@@ -1764,7 +1767,7 @@ export const reflect = (
   const prevented = olderPreventResponse(effect, usersEffects, "buffprevent", target);
   if (prevented) return prevented;
   const { power, qualifier } = getPower(effect);
-  if (!effect.isNew && !effect.castThisRound) {
+  if (hasEffectActivated(effect)) {
     consequences.forEach((consequence, effectId) => {
       if (consequence.targetId === effect.targetId && consequence.damage) {
         const damageEffect = usersEffects.find((e) => e.id === effectId);
@@ -1807,8 +1810,7 @@ export const wound = (
     }
   }
 
-  const shouldApply =
-    !effect.isNew && !effect.castThisRound && (effect.rounds ?? 0) > 0;
+  const shouldApply = hasEffectActivated(effect) && (effect.rounds ?? 0) > 0;
 
   // Calculate wound damage amount for display purposes
   const originalDamage = effect.timeTracker?.originalDamage || 0;
@@ -1842,7 +1844,7 @@ export const wound = (
   }
 
   // Only show the message when the effect is first applied
-  if (effect.isNew && effect.castThisRound) {
+  if (effect.isNew && effect.castThisRound && !isInstantJutsuEffect(effect)) {
     return getInfo(target, effect, `will take ${woundDamage.toFixed(2)} wound damage`);
   }
 
@@ -1865,7 +1867,7 @@ export const recoil = (
   );
   if (prevented) return prevented;
   const { power, qualifier } = getPower(effect);
-  if (!effect.isNew && !effect.castThisRound) {
+  if (hasEffectActivated(effect)) {
     consequences.forEach((consequence, effectId) => {
       if (consequence.userId === effect.targetId && consequence.damage) {
         // Skip if the damage is from a pierce effect
@@ -1892,7 +1894,7 @@ export const afterburn = (
   target: BattleUserState,
 ) => {
   const { power, qualifier } = getPower(effect);
-  if (!effect.isNew && !effect.castThisRound) {
+  if (hasEffectActivated(effect)) {
     consequences.forEach((consequence, effectId) => {
       // Look for damage that the afterburn target is receiving
       if (consequence.targetId === effect.targetId && consequence.damage) {
@@ -1935,7 +1937,7 @@ export const lifesteal = (
   if (!pass) return preventResponse(effect, target, "cannot steal health");
   // Calculate life steal
   const { power, qualifier } = getPower(effect);
-  if (!effect.isNew && !effect.castThisRound) {
+  if (hasEffectActivated(effect)) {
     consequences.forEach((consequence, effectId) => {
       if (consequence.userId === effect.targetId && consequence.damage) {
         const damageEffect = usersEffects.find((e) => e.id === effectId);
@@ -1961,7 +1963,8 @@ export const vamp = (
 ) => {
   // Check healprevent on the caster directly (not the damage target)
   const casterHealPrevented =
-    getActiveTargetEffects(usersEffects, effect.creatorId, "healprevent").length > 0;
+    getActiveTargetEffects(usersEffects, effect.creatorId, "healprevent", false)
+      .length > 0;
   if (casterHealPrevented) return preventResponse(effect, target, "cannot vamp");
   const { power, qualifier } = getPower(effect);
   // Store vampRatio on each outgoing damage consequence so the application phase
@@ -2047,8 +2050,7 @@ export const drain = (
 
   // Apply drain effect each round
   if (
-    !effect.isNew &&
-    !effect.castThisRound &&
+    hasEffectActivated(effect) &&
     (effect.rounds === undefined || effect.rounds > 0)
   ) {
     // Preserve the caster until damage conversions have resolved.
@@ -2150,7 +2152,7 @@ export const poison = (
   const { power, qualifier } = getPower(effect);
 
   // If the effect is new and is being cast this round, just return an info message.
-  if (effect.isNew && effect.castThisRound) {
+  if (effect.isNew && effect.castThisRound && !isInstantJutsuEffect(effect)) {
     return getInfo(
       target,
       effect,
@@ -2158,7 +2160,10 @@ export const poison = (
     );
   }
 
-  if (!effect.castThisRound && actorId === target.userId) {
+  if (
+    (!effect.castThisRound || isInstantJutsuEffect(effect)) &&
+    actorId === target.userId
+  ) {
     const { cpCost, spCost } = calcPoolCost(action, usersEffects, target);
     const dmg = Math.floor((cpCost + spCost) * (power / 100));
 
@@ -2357,7 +2362,7 @@ export const rob = (
   if (!pass) return preventResponse(effect, target, "resisted being robbed");
   // Convenience. if rounds=0, it's an instant rob, otherwise chance every active round
   const thisRound = effect.castThisRound;
-  const instant = thisRound && effect.rounds === 0;
+  const instant = thisRound && (effect.rounds === 0 || isInstantJutsuEffect(effect));
   const residual = !thisRound && (effect.rounds === undefined || effect.rounds > 0);
   // Attempt robbing
   const { power } = getPower(effect);
@@ -2565,8 +2570,14 @@ export const redirection = (
   const { power } = getPower(effect);
   const direction = effect.direction || "pull";
 
-  // Only apply redirection if it's 0 rounds (instant)
-  if (!(effect.rounds === 0 && effect.isNew && effect.castThisRound)) {
+  // Redirection moves once on cast, including duration-bearing instant Jutsu.
+  if (
+    !(
+      (effect.rounds === 0 || isInstantJutsuEffect(effect)) &&
+      effect.isNew &&
+      effect.castThisRound
+    )
+  ) {
     return;
   }
 
@@ -2890,7 +2901,9 @@ const getInfo = (
         ? "purple"
         : "blue";
     return {
-      txt: `${target.username} ${msg} for the next ${e.rounds} rounds`,
+      txt: isInstantJutsuEffect(e)
+        ? `${target.username} ${msg} for ${e.rounds} round${e.rounds === 1 ? "" : "s"}, starting this round`
+        : `${target.username} ${msg} for the next ${e.rounds} rounds`,
       color: infoColor,
     };
   }
@@ -2994,7 +3007,12 @@ const preventCheck = (
   target: BattleUserState,
   effect?: UserEffect,
 ) => {
-  const preventTag = getActiveTargetEffects(usersEffects, target.userId, type)[0];
+  const preventTag = getActiveTargetEffects(
+    usersEffects,
+    target.userId,
+    type,
+    false,
+  )[0];
 
   if (!preventTag) return { pass: true };
   // Only prevent if the effect being checked was created after the prevent effect

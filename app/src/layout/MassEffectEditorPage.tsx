@@ -41,6 +41,7 @@ export const MassEffectEditorPage = ({
           <div className="flex items-center gap-2">
             {renderFilter(isSavingEffects)}
             <EffectFieldSelector
+              allowInstant={editorProps.kind === "jutsu"}
               selected={fields}
               setSelected={setFields}
               disabled={isSavingEffects}

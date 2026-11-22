@@ -29,6 +29,7 @@ import {
   getActiveSealEffects,
   getEffectStage,
   isEffectActive,
+  isInstantJutsuEffect,
   sealCheck,
   sortEffects,
 } from "./util";
@@ -168,7 +169,8 @@ export const buildDamageModifierEligibilityById = (
     // Same condition as adjustDamageGiven / adjustDamageTaken after applySingleEffect
     // assigns `effect.castThisRound = (startRound === curRound)`.
     const { startRound, curRound } = calcEffectRoundInfo(effect, roundCtx);
-    const passesTiming = !effect.isNew && startRound !== curRound;
+    const passesTiming =
+      (!effect.isNew && startRound !== curRound) || isInstantJutsuEffect(effect);
 
     const targetUser = usersStateById?.get(effect.targetId);
     const preventState = targetUser

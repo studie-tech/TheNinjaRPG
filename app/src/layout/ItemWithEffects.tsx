@@ -1153,6 +1153,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                         <i>{getEffectDescription()}</i>
                       </div>
                       <div className="grid grid-cols-2">
+                        {isJutsuItem && (
+                          <span>
+                            <b>Instant: </b> {parsedEffect.instant ? "Yes" : "No"}
+                          </span>
+                        )}
                         {"rounds" in parsedEffect &&
                           parsedEffect.rounds !== undefined &&
                           !("shieldRounds" in parsedEffect) && (

@@ -674,20 +674,34 @@ export const findBarrier = (
   );
 };
 
+/** Jutsu timing opt-in; ground projections keep their own activation rules. */
+export const isInstantJutsuEffect = (effect: UserEffect | GroundEffect) =>
+  effect.instant === true &&
+  effect.fromType === "jutsu" &&
+  "targetId" in effect &&
+  !effect.fromGround;
+
+/** Activation is separate from newness, which owns resistance rolls and presentation. */
+export const hasEffectActivated = (effect: UserEffect | GroundEffect) =>
+  (!effect.isNew && !effect.castThisRound) || isInstantJutsuEffect(effect);
+
 /**
- * Effects of a type on the target that were not cast this round and are still enabled.
+ * Enabled effects on the target whose activation delay has passed.
+ * Instant statuses must resolve their success roll before later actions see them.
+ * Prevention callers can retain their casting-round exclusion.
  * Effects without a duration count, unlike in findActiveEffectOfType.
  */
 export const getActiveTargetEffects = <T extends UserEffect["type"]>(
   effects: UserEffect[] | undefined,
   targetId: string | null | undefined,
   type: T,
+  includeInstant = true,
 ) =>
   effects?.filter(
     (e): e is Extract<UserEffect, { type: T }> =>
       e.type === type &&
       e.targetId === targetId &&
-      !e.castThisRound &&
+      (!e.castThisRound || (includeInstant && !e.isNew && isInstantJutsuEffect(e))) &&
       isEffectEnabled(e, effects),
   ) ?? [];
 
@@ -703,7 +717,7 @@ const findActiveEffectOfType = <T extends UserEffect["type"]>(
 
 /**
  * Whether the user currently has an active effect of the given type.
- * Active = targeting the user, not cast this round, and still has rounds remaining.
+ * Active = targeting the user, activated, and still has rounds remaining.
  */
 export const hasActiveEffectOfType = (
   userId: string | undefined,

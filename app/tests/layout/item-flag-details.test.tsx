@@ -106,3 +106,22 @@ it("shows the hidden flag to content staff only and names targets in plain words
   const staff = render(<ItemWithEffects item={item} hideImage />);
   expect(rowText(staff, "Hidden")).toBe("Hidden: no");
 });
+
+it("shows instant timing per Jutsu effect and omits it for other content", () => {
+  const effects = [
+    { type: "damage", power: 10, rounds: 3, instant: true },
+    { type: "heal", power: 10, rounds: 3 },
+  ];
+  const view = render(
+    <ItemWithEffects item={content({ jutsuType: "NORMAL", effects })} hideImage />,
+  );
+  expect(
+    view
+      .getAllByText("Instant:")
+      .map((label) => label.parentElement?.textContent?.replace(/\s+/g, " ")),
+  ).toEqual(["Instant: Yes", "Instant: No"]);
+  view.rerender(
+    <ItemWithEffects item={content({ itemType: "WEAPON", effects })} hideImage />,
+  );
+  expect(view.queryByText("Instant:")).toBeNull();
+});
