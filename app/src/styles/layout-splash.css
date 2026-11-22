@@ -1,9 +1,18 @@
 /* The dispatch uses the game's illustrated parchment and gold announcement language. */
-.splash-dialog {
-  --dispatch-ink: #291c31;
-  --dispatch-plum: #321347;
+.splash-dialog,
+.splash-board {
+  --dispatch-accent: var(--color-primary);
+  --dispatch-on-accent: var(--color-primary-foreground);
+  --dispatch-shade: color-mix(in srgb, var(--dispatch-accent) 40%, #171310);
+  --dispatch-surface: color-mix(in srgb, var(--dispatch-accent) 18%, #171310);
   --dispatch-gold: #edbe55;
   --dispatch-paper: #fff0cc;
+}
+/* Classic's illustrated navigation uses deep red; other layouts inherit their button palette. */
+html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
+  --dispatch-accent: var(--color-red-900);
+}
+.splash-dialog {
   display: flex;
   width: min(1120px, calc(100vw - 2rem));
   max-width: none;
@@ -14,10 +23,10 @@
   padding: 0;
   border: 3px solid var(--dispatch-gold);
   border-radius: 6px;
-  background: #1d1028;
+  background: var(--dispatch-surface);
   color: var(--dispatch-paper);
   box-shadow:
-    0 0 0 2px #5c2c64,
+    0 0 0 2px var(--dispatch-accent),
     0 0 0 5px #a97632,
     0 25px 100px #000b;
 }
@@ -51,8 +60,12 @@
   z-index: -1;
   inset: 0;
   background:
-    linear-gradient(90deg, #130d2826, #130d281a 50%, #130d2826),
-    linear-gradient(0deg, #1d1028b3, transparent 55%);
+    linear-gradient(90deg, #00000026, #0000001a 50%, #00000026),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--dispatch-surface) 70%, transparent),
+      transparent 55%
+    );
   content: "";
 }
 .splash-masthead-title {
@@ -70,7 +83,7 @@
   font-size: 1.1rem;
   font-weight: 700;
   color: #fff2cd;
-  text-shadow: 0 2px 3px #150b24;
+  text-shadow: 0 2px 3px #171310;
 }
 .splash-brand::before,
 .splash-brand::after {
@@ -80,7 +93,13 @@
 .splash-title {
   margin: 0;
   padding: 0.3rem 2.4rem 0.6rem;
-  background: linear-gradient(100deg, #2b0a1c00, #400d21 7%, #260d31 88%, #2b0a1c00);
+  background: linear-gradient(
+    100deg,
+    transparent,
+    var(--dispatch-shade) 7%,
+    var(--dispatch-shade) 88%,
+    transparent
+  );
   clip-path: polygon(
     3% 8%,
     18% 2%,
@@ -115,13 +134,13 @@
   line-height: 1.08;
   letter-spacing: 0.015em;
   text-transform: uppercase;
-  text-shadow: 2px 3px 0 #170b24;
+  text-shadow: 2px 3px 0 #171310;
 }
 .splash-subtitle {
   margin: 0;
   padding: 0.3rem 1.4rem;
   border-block: 1px solid #e7bb59;
-  background: #291139e8;
+  background: var(--dispatch-shade);
   color: #fff4d8;
   font-family: Georgia, serif;
   font-size: 1.2rem;
@@ -130,7 +149,9 @@
 }
 .splash-body {
   padding: 1.15rem;
-  background: radial-gradient(ellipse at top, #4f2551 0, transparent 65%), #1d1028;
+  background:
+    radial-gradient(ellipse at top, var(--dispatch-shade) 0, transparent 65%),
+    var(--dispatch-surface);
 }
 .splash-board {
   container: splashBoard / inline-size;
@@ -150,11 +171,11 @@
   background:
     radial-gradient(ellipse at top left, #fff8e8 0, transparent 75%),
     repeating-linear-gradient(15deg, #bc8b3a05 0 1px, transparent 1px 4px), #f9e7bf;
-  color: #291c31;
+  color: #30241b;
   box-shadow:
     inset 0 0 0 2px #7e4d26,
     inset 0 0 0 4px #ffe1a0,
-    0 3px 0 #08040e;
+    0 3px 0 #171310;
 }
 .splash-story-heading {
   position: relative;
@@ -165,7 +186,7 @@
   gap: 0.85rem;
   margin: 0.5rem 0.75rem 0 0.45rem;
   padding: 0.3rem 1.3rem 0.3rem 0.3rem;
-  color: #fff1cb;
+  color: var(--dispatch-on-accent);
   font-family: Georgia, serif;
   font-size: 1.65rem;
   font-style: italic;
@@ -177,7 +198,12 @@
   position: absolute;
   z-index: -1;
   inset: 0.2rem 0 0.2rem 1.8rem;
-  background: linear-gradient(90deg, #381146, #58265d 78%, #58265d00);
+  background: linear-gradient(
+    90deg,
+    var(--dispatch-accent),
+    var(--dispatch-accent) 78%,
+    transparent
+  );
   clip-path: polygon(
     0 6%,
     87% 0,
@@ -202,11 +228,11 @@
   flex-shrink: 0;
   place-items: center;
   border: 2px solid #ffe18b;
-  background: #3e174d;
-  color: #ffdb72;
+  background: var(--dispatch-accent);
+  color: var(--dispatch-on-accent);
   box-shadow:
     0 0 0 1px #76492c,
-    inset 0 0 0 2px #8c5b66;
+    inset 0 0 0 2px color-mix(in srgb, var(--dispatch-on-accent) 35%, transparent);
   clip-path: polygon(
     25% 0,
     75% 0,
@@ -260,24 +286,24 @@
   border: 1px solid #f4ca72;
   border-radius: 2px;
   padding: 0.55rem 0.9rem;
-  background: linear-gradient(#54235e, #32133f);
-  color: #fff0c6;
+  background: var(--dispatch-accent);
+  color: var(--dispatch-on-accent);
   font-size: 1.06rem;
   font-weight: 700;
   line-height: 1.3;
   text-decoration: none;
   box-shadow:
-    0 0 0 1px #5b2e40,
+    0 0 0 1px var(--dispatch-shade),
     inset 0 0 0 2px #ffffff0b;
   overflow-wrap: anywhere;
 }
 .splash-story-link:hover {
-  background: #632c6c;
+  background: color-mix(in srgb, var(--dispatch-accent) 88%, #000);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .splash-story-link:focus-visible {
-  outline: 3px solid #251232;
+  outline: 3px solid #30241b;
   outline-offset: 3px;
 }
 .splash-story-link svg {
@@ -310,8 +336,8 @@
   margin-bottom: 1.1rem;
   border: 1px solid #d7a54d;
   border-radius: 3px;
-  background: #2c153a;
-  color: #fff0cc;
+  background: var(--dispatch-accent);
+  color: var(--dispatch-on-accent);
 }
 .splash-rewards-summary {
   display: flex;
@@ -329,7 +355,7 @@
   width: 1.6rem;
   height: 1.6rem;
   flex-shrink: 0;
-  color: #edbe55;
+  color: currentColor;
 }
 .splash-rewards-summary strong {
   font-family: Georgia, serif;
@@ -337,7 +363,7 @@
 }
 .splash-rewards-summary span {
   margin-left: auto;
-  color: #f4d690;
+  color: currentColor;
   font-size: 1.08rem;
 }
 .splash-rewards-summary .splash-rewards-chevron {
@@ -366,18 +392,18 @@
   gap: 1rem;
   border-top: 1px solid #b07c3d;
   padding: 0.8rem 1.2rem;
-  background: #24112f;
+  background: var(--dispatch-surface);
 }
 .splash-dialog-footer button {
   font-size: 1.1rem;
   min-height: 3.5rem;
   border-color: #ae7d42;
-  background: #3c1c48;
-  color: #fff0cc;
+  background: var(--dispatch-accent);
+  color: var(--dispatch-on-accent);
 }
 .splash-dialog-footer button:hover {
-  background: #55285f;
-  color: #fff0cc;
+  background: color-mix(in srgb, var(--dispatch-accent) 88%, #000);
+  color: var(--dispatch-on-accent);
 }
 .splash-dialog-footer button:focus-visible {
   outline: 2px solid #ffe18b;

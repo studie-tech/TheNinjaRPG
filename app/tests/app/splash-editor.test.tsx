@@ -93,7 +93,7 @@ it("keeps generated draft artwork and its history identity when creating an anno
   fireEvent.click(view.getByRole("button", { name: "Create announcement" }));
   const id = selector.id;
   expect(id).toHaveLength(21);
-  expect(selector).toMatchObject({ type: "splash", size: "portrait", maxDim: 512 });
+  expect(selector).toMatchObject({ type: "splash", size: "portrait", maxDim: 1024 });
   expect(REMOVE_BG_TYPES).not.toContain("splash");
   expect(getPrePrompts("splash")).toContain("scene background");
   fireEvent.change(view.getByLabelText("Title"), { target: { value: "Scouting" } });

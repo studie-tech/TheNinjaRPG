@@ -321,7 +321,7 @@ function AnnouncementEditor({
                         emptyImageLabel="Generate or upload announcement artwork"
                         type="splash"
                         size="portrait"
-                        maxDim={512}
+                        maxDim={1024}
                         disabled={pending}
                         onUploadComplete={imageField.onChange}
                       />

@@ -39,7 +39,7 @@ export const furnitureViewPrompt = (
  */
 export const getPrePrompts = (type?: ContentType) => {
   if (type === "splash") {
-    return `Create original richly illustrated ninja-fantasy artwork for a TheNinja-RPG welcome announcement. Use detailed hand-painted game key art, dramatic lighting, saturated jewel colors, warm gold highlights and deep plum shadows. Compose a strong, readable focal subject in a complete scene background, suitable for a portrait announcement panel. No text, logos, watermarks, recognizable franchise characters or emblems.`;
+    return `Create original richly illustrated ninja-fantasy artwork for a TheNinja-RPG welcome announcement. Use detailed hand-painted anime game key art, smooth clean contours, finely painted materials, cinematic lighting, saturated natural colors and warm gold highlights. Compose a strong, readable focal subject in a complete scene background that fills the entire portrait canvas. No pixel art, retro sprites, dithering, mosaic blocks, borders, text, logos, watermarks, forehead plates, recognizable franchise characters or emblems`;
   }
   if (type === "mapAsset") {
     return `
