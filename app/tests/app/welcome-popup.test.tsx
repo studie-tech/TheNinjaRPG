@@ -64,6 +64,7 @@ it("puts announcements and daily rewards in one profile dialog and dismisses the
   const view = render(<ActivityStreakPopup />);
   const dialog = await view.findByRole("dialog", { name: "Village dispatch" });
   expect(view.getAllByRole("dialog")).toHaveLength(1);
+  fireEvent.click(view.getByText("Daily activity rewards"));
   expect(await view.findByRole("button", { name: "Claim daily reward" })).toBeTruthy();
   expect(dialog.textContent).toContain("Daily activity rewards");
   expect(dialog.textContent).toContain("Defend the village");
@@ -84,12 +85,13 @@ it("keeps the daily claim when announcements are disabled", async () => {
   ).toBeTruthy();
   expect(await view.findByRole("button", { name: "Claim daily reward" })).toBeTruthy();
 });
-it.each(["tutorial", "auth", "merch"])(
+it.each(["tutorial", "auth", "merch", "editor"])(
   "suppresses the welcome flow for %s",
   (reason) => {
     if (reason === "tutorial") tutorialOn = true;
     if (reason === "auth") pathname = "/native-sign-in";
     if (reason === "merch") pathname = "/merch";
+    if (reason === "editor") pathname = "/manual/splash";
     const view = render(<ActivityStreakPopup />);
     expect(view.queryByRole("dialog")).toBeNull();
   },

@@ -1,0 +1,501 @@
+/* The dispatch uses the game's illustrated parchment and gold announcement language. */
+.splash-dialog,
+.splash-board {
+  --dispatch-accent: var(--color-primary);
+  --dispatch-on-accent: var(--color-primary-foreground);
+  --dispatch-shade: color-mix(in srgb, var(--dispatch-accent) 40%, #171310);
+  --dispatch-surface: color-mix(in srgb, var(--dispatch-accent) 18%, #171310);
+  --dispatch-gold: #edbe55;
+  --dispatch-paper: #fff0cc;
+}
+/* Classic's illustrated navigation uses deep red; other layouts inherit their button palette. */
+html[data-game-layout="default"] :is(.splash-dialog, .splash-board) {
+  --dispatch-accent: var(--color-red-900);
+}
+.splash-dialog {
+  display: flex;
+  width: min(1120px, calc(100vw - 2rem));
+  max-width: none;
+  max-height: calc(100dvh - 2rem);
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 3px solid var(--dispatch-gold);
+  border-radius: 6px;
+  background: var(--dispatch-surface);
+  color: var(--dispatch-paper);
+  box-shadow:
+    0 0 0 2px var(--dispatch-accent),
+    0 0 0 5px #a97632,
+    0 25px 100px #000b;
+}
+.splash-dialog-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.splash-masthead {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 17rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-bottom: 3px solid var(--dispatch-gold);
+  padding: 2rem 1.5rem 1.7rem;
+  text-align: center;
+}
+.splash-masthead-art {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.splash-masthead::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(90deg, #00000026, #0000001a 50%, #00000026),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--dispatch-surface) 70%, transparent),
+      transparent 55%
+    );
+  content: "";
+}
+.splash-masthead-title {
+  display: flex;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+}
+.splash-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-family: Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff2cd;
+  text-shadow: 0 2px 3px #171310;
+}
+.splash-brand::before,
+.splash-brand::after {
+  content: "✦";
+  color: #ffd968;
+}
+.splash-title {
+  margin: 0;
+  padding: 0.3rem 2.4rem 0.6rem;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    var(--dispatch-shade) 7%,
+    var(--dispatch-shade) 88%,
+    transparent
+  );
+  clip-path: polygon(
+    3% 8%,
+    18% 2%,
+    32% 6%,
+    45% 0,
+    63% 5%,
+    98% 0,
+    95% 14%,
+    100% 21%,
+    96% 33%,
+    99% 45%,
+    96% 58%,
+    99% 69%,
+    95% 83%,
+    97% 96%,
+    79% 92%,
+    62% 100%,
+    44% 95%,
+    23% 99%,
+    1% 92%,
+    4% 76%,
+    0 66%,
+    4% 50%,
+    1% 32%,
+    5% 22%
+  );
+  color: #ffe7a3;
+  font-family: Impact, "Arial Narrow", sans-serif;
+  font-size: clamp(2.8rem, 6vw, 5.4rem);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.08;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+  text-shadow: 2px 3px 0 #171310;
+}
+.splash-subtitle {
+  margin: 0;
+  padding: 0.3rem 1.4rem;
+  border-block: 1px solid #e7bb59;
+  background: var(--dispatch-shade);
+  color: #fff4d8;
+  font-family: Georgia, serif;
+  font-size: 1.2rem;
+  font-style: italic;
+  line-height: 1.5;
+}
+.splash-body {
+  padding: 1.15rem;
+  background:
+    radial-gradient(ellipse at top, var(--dispatch-shade) 0, transparent 65%),
+    var(--dispatch-surface);
+}
+.splash-board {
+  container: splashBoard / inline-size;
+  min-width: 0;
+}
+.splash-stories {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.1rem;
+}
+.splash-story {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 2px solid #f0c768;
+  border-radius: 3px 16px 3px 16px;
+  background:
+    radial-gradient(ellipse at top left, #fff8e8 0, transparent 75%),
+    repeating-linear-gradient(15deg, #bc8b3a05 0 1px, transparent 1px 4px), #f9e7bf;
+  color: #30241b;
+  box-shadow:
+    inset 0 0 0 2px #7e4d26,
+    inset 0 0 0 4px #ffe1a0,
+    0 3px 0 #171310;
+}
+.splash-story-heading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 4.2rem;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0.5rem 0.75rem 0 0.45rem;
+  padding: 0.3rem 1.3rem 0.3rem 0.3rem;
+  color: var(--dispatch-on-accent);
+  font-family: Georgia, serif;
+  font-size: 1.65rem;
+  font-style: italic;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.splash-story-heading::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0.2rem 0 0.2rem 1.8rem;
+  background: linear-gradient(
+    90deg,
+    var(--dispatch-accent),
+    var(--dispatch-accent) 78%,
+    transparent
+  );
+  clip-path: polygon(
+    0 6%,
+    87% 0,
+    96% 7%,
+    90% 14%,
+    100% 24%,
+    93% 34%,
+    97% 43%,
+    91% 54%,
+    98% 66%,
+    90% 72%,
+    96% 90%,
+    75% 96%,
+    0 100%
+  );
+  content: "";
+}
+.splash-story-seal {
+  display: grid;
+  width: 3.6rem;
+  height: 3.6rem;
+  flex-shrink: 0;
+  place-items: center;
+  border: 2px solid #ffe18b;
+  background: var(--dispatch-accent);
+  color: var(--dispatch-on-accent);
+  box-shadow:
+    0 0 0 1px #76492c,
+    inset 0 0 0 2px color-mix(in srgb, var(--dispatch-on-accent) 35%, transparent);
+  clip-path: polygon(
+    25% 0,
+    75% 0,
+    100% 25%,
+    100% 75%,
+    75% 100%,
+    25% 100%,
+    0 75%,
+    0 25%
+  );
+}
+.splash-story-seal svg {
+  width: 1.95rem;
+  height: 1.95rem;
+  stroke-width: 1.7;
+}
+.splash-story-body {
+  display: grid;
+  min-height: 16.5rem;
+  grid-template-columns: minmax(0, 1fr) 36%;
+}
+.splash-story-without-art {
+  grid-template-columns: minmax(0, 1fr);
+}
+.splash-story-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1.2rem;
+  padding: 1rem 1.4rem 1.5rem;
+}
+.splash-story-copy p {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.splash-story-link {
+  display: inline-flex;
+  min-height: 3.5rem;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  border: 1px solid #f4ca72;
+  border-radius: 2px;
+  padding: 0.55rem 0.9rem;
+  background: var(--dispatch-accent);
+  color: var(--dispatch-on-accent);
+  font-size: 1.06rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: none;
+  box-shadow:
+    0 0 0 1px var(--dispatch-shade),
+    inset 0 0 0 2px #ffffff0b;
+  overflow-wrap: anywhere;
+}
+.splash-story-link:hover {
+  background: color-mix(in srgb, var(--dispatch-accent) 88%, #000);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.splash-story-link:focus-visible {
+  outline: 3px solid #30241b;
+  outline-offset: 3px;
+}
+.splash-story-link svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex-shrink: 0;
+}
+.splash-story-art {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  align-self: stretch;
+  margin: -0.5rem 0 0;
+}
+.splash-story-art::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #f9e7bf 0, transparent 28%);
+  content: "";
+}
+.splash-story-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+}
+.splash-rewards {
+  margin-bottom: 1.1rem;
+  border: 1px solid #d7a54d;
+  border-radius: 3px;
+  background: var(--dispatch-accent);
+  color: var(--dispatch-on-accent);
+}
+.splash-rewards-summary {
+  display: flex;
+  min-height: 4rem;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.8rem 1.2rem;
+  cursor: pointer;
+  list-style: none;
+}
+.splash-rewards-summary::-webkit-details-marker {
+  display: none;
+}
+.splash-rewards-summary > svg {
+  width: 1.6rem;
+  height: 1.6rem;
+  flex-shrink: 0;
+  color: currentColor;
+}
+.splash-rewards-summary strong {
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+}
+.splash-rewards-summary span {
+  margin-left: auto;
+  color: currentColor;
+  font-size: 1.08rem;
+}
+.splash-rewards-summary .splash-rewards-chevron {
+  width: 1.3rem;
+  height: 1.3rem;
+  transition: transform 0.15s;
+}
+.splash-rewards[open] .splash-rewards-chevron {
+  transform: rotate(180deg);
+}
+.splash-rewards-summary:focus-visible {
+  outline: 2px solid #ffe18b;
+  outline-offset: 2px;
+}
+.splash-rewards-panel {
+  border-top: 1px solid #986936;
+  padding: 1.25rem;
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+.splash-dialog-footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid #b07c3d;
+  padding: 0.8rem 1.2rem;
+  background: var(--dispatch-surface);
+}
+.splash-dialog-footer button {
+  font-size: 1.1rem;
+  min-height: 3.5rem;
+  border-color: #ae7d42;
+  background: var(--dispatch-accent);
+  color: var(--dispatch-on-accent);
+}
+.splash-dialog-footer button:hover {
+  background: color-mix(in srgb, var(--dispatch-accent) 88%, #000);
+  color: var(--dispatch-on-accent);
+}
+.splash-dialog-footer button:focus-visible {
+  outline: 2px solid #ffe18b;
+  outline-offset: 2px;
+}
+/* Two panels need at least 384px each at the game's 12px root font size. */
+@container splashBoard (min-width: 64rem) {
+  .splash-stories {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .splash-story-featured {
+    grid-column: 1 / -1;
+  }
+  .splash-story-featured .splash-story-body {
+    min-height: 20rem;
+    grid-template-columns: minmax(0, 1fr) 45%;
+  }
+  .splash-story-featured .splash-story-without-art {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .splash-story-featured .splash-story-heading {
+    font-size: 2.3rem;
+  }
+  .splash-story-featured .splash-story-copy {
+    padding: 1.5rem 2rem 2rem;
+  }
+  .splash-story-featured .splash-story-copy p {
+    max-width: 56ch;
+    font-size: 1.4rem;
+  }
+  .splash-story-featured .splash-story-art {
+    max-height: 23rem;
+  }
+  .splash-story-featured .splash-story-art img {
+    object-position: 50% 58%;
+  }
+}
+@media (max-width: 480px) {
+  .splash-dialog {
+    width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 1rem);
+  }
+  .splash-masthead-art {
+    transform: scale(1.5);
+  }
+  .splash-masthead {
+    min-height: 14rem;
+    padding-inline: 0.5rem;
+  }
+  .splash-title {
+    padding-inline: 1rem;
+    font-size: clamp(2.2rem, 9vw, 3.5rem);
+  }
+  .splash-subtitle {
+    max-width: 95%;
+    padding-inline: 0.6rem;
+    font-size: 1.05rem;
+  }
+  .splash-body {
+    padding: 0.65rem;
+  }
+  .splash-story-heading {
+    gap: 0.6rem;
+    margin-right: 0.1rem;
+    font-size: 1.55rem;
+  }
+  .splash-story-copy {
+    padding: 0.8rem 1rem 1.2rem;
+  }
+  .splash-story-copy p {
+    font-size: 1.16rem;
+  }
+  .splash-rewards-summary {
+    gap: 0.55rem;
+    padding-inline: 0.8rem;
+  }
+  .splash-rewards-summary strong {
+    font-size: 1.15rem;
+  }
+  .splash-rewards-summary span {
+    font-size: 1rem;
+  }
+  .splash-dialog-footer {
+    gap: 0.6rem;
+    padding: 0.7rem;
+  }
+  .splash-dialog-footer button {
+    padding-inline: 0.8rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-rewards-summary .splash-rewards-chevron {
+    transition: none;
+  }
+}

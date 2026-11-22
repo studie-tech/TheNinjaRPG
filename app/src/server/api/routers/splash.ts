@@ -63,7 +63,7 @@ export const splashRouter = createTRPCRouter({
         : entries;
     }),
   create: protectedProcedure
-    .input(z.object({ data: splashSchema }))
+    .input(z.object({ id: z.nanoid().optional(), data: splashSchema }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, topic] = await Promise.all([
@@ -76,12 +76,15 @@ export const splashRouter = createTRPCRouter({
         return errorResponse(
           "This topic already exists, including disabled announcements. Edit its existing entry.",
         );
-      const id = nanoid();
+      // Drafts keep their image-history relation when the announcement is first saved.
+      const id = input.id ?? nanoid();
       try {
         await insertSplashEntry(ctx.drizzle, id, input.data);
       } catch (error) {
         if (isMysqlDuplicateKeyError(error))
-          return errorResponse("This topic already exists. Reload the announcements.");
+          return errorResponse(
+            "This announcement or topic already exists. Reload the announcements.",
+          );
         throw error;
       }
       try {
