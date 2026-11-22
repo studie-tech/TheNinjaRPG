@@ -37,7 +37,7 @@ const readSector = new Function(
   `with (scope) { ${transpiler.transformSync(source.slice(start, end) + source.slice(dungeonStart, dungeonEnd))}; return data; }`,
 );
 const parentSource = readFileSync(
-  new URL("../../src/app/[shell]/travel/page.tsx", import.meta.url),
+  new URL("../../src/hooks/useTravelSession.ts", import.meta.url),
   "utf8",
 );
 const parentStart = parentSource.indexOf("  const { data: sectorVillageName }");
