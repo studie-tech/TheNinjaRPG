@@ -31,7 +31,7 @@ import type {
   KessenLeaderboardEntry,
   KessenPvpLobby,
 } from "@/validators/kessen";
-import { DeckPicker, useDeckChoice } from "./DeckPicker";
+import { type DeckChoice, DeckPicker, useDeckChoice } from "./DeckPicker";
 import type { KessenDeckSummary } from "./hubData";
 
 /**
@@ -99,6 +99,8 @@ export const DuelsView = ({
   actions,
   renderFinder,
 }: DuelsViewProps) => {
+  // One deck for the ranked queue and new challenges; accepting a challenge picks its own.
+  const deck = useDeckChoice(decks, defaultDeckId, loanerFaction);
   if (!lobby.lessonCompleted) {
     return (
       <EmptyState
@@ -152,13 +154,14 @@ export const DuelsView = ({
           </Button>
         </section>
       ) : null}
+      <section className={SECTION} aria-label="Duel deck">
+        <DeckPicker decks={decks} idPrefix="duel" choice={deck} />
+      </section>
       <div className="grid gap-3 @min-[640px]/kessen-hall:grid-cols-2">
         <RatingCard ranked={lobby.ranked} />
         <RankedQueue
           lobby={lobby}
-          decks={decks}
-          defaultDeckId={defaultDeckId}
-          loanerFaction={loanerFaction}
+          deck={deck}
           blocked={blocked}
           queueMessage={queueMessage}
           onOpenDuel={onOpenDuel}
@@ -176,9 +179,7 @@ export const DuelsView = ({
       />
       <ChallengePlayer
         challenges={lobby.challenges}
-        decks={decks}
-        defaultDeckId={defaultDeckId}
-        loanerFaction={loanerFaction}
+        deck={deck}
         blocked={blocked}
         actions={actions}
         renderFinder={renderFinder}
@@ -208,24 +209,24 @@ const RatingCard = ({ ranked }: { ranked: KessenPvpLobby["ranked"] }) => (
       </span>
     </p>
     <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
-      <dt>Rewarded wins today</dt>
+      <dt>Ranked wins today</dt>
       <dd className="font-semibold tabular-nums">
         {ranked.rewardedToday}/{ranked.rewardedCap}
       </dd>
       <dt className="col-span-2">
         <Progress
           value={percent(ranked.rewardedToday, ranked.rewardedCap)}
-          aria-label="Rewarded wins today"
+          aria-label="Ranked wins today"
         />
       </dt>
-      <dt>Weekly pack</dt>
+      <dt>Weekly ranked pack</dt>
       <dd className="font-semibold tabular-nums">
         {Math.min(ranked.weeklyWins, ranked.weeklyPackWins)}/{ranked.weeklyPackWins}
       </dd>
       <dt className="col-span-2">
         <Progress
           value={percent(ranked.weeklyWins, ranked.weeklyPackWins)}
-          aria-label="Wins towards the weekly pack"
+          aria-label="Wins towards the weekly ranked pack"
         />
       </dt>
     </dl>
@@ -239,24 +240,19 @@ const RatingCard = ({ ranked }: { ranked: KessenPvpLobby["ranked"] }) => (
 /** Joining the ranked queue with a deck, or the wait while it searches. */
 const RankedQueue = ({
   lobby,
-  decks,
-  defaultDeckId,
-  loanerFaction,
+  deck,
   blocked,
   queueMessage,
   onOpenDuel,
   actions,
 }: {
   lobby: KessenPvpLobby;
-  decks: readonly KessenDeckSummary[];
-  defaultDeckId: string | null;
-  loanerFaction: DeckFaction;
+  deck: DeckChoice;
   blocked: boolean;
   queueMessage: string | null;
   onOpenDuel: (matchId: string) => void;
   actions: DuelActions;
 }) => {
-  const deck = useDeckChoice(decks, defaultDeckId, loanerFaction);
   const [error, setError] = useState<string | null>(null);
   const queue = lobby.queue;
 
@@ -313,7 +309,6 @@ const RankedQueue = ({
             Matched by rating against a player of similar strength. Each turn has a
             clock; a player who keeps running out of time forfeits.
           </p>
-          <DeckPicker decks={decks} idPrefix="ranked" choice={deck} />
           <Button
             decoration="gold"
             className="self-start"
@@ -515,25 +510,20 @@ const AcceptChallenge = ({
   );
 };
 
-/** The deck to challenge with, then the player finder; refusals show under the deck. */
+/** The player finder, challenging with the chosen deck; refusals show above it. */
 const ChallengePlayer = ({
   challenges,
-  decks,
-  defaultDeckId,
-  loanerFaction,
+  deck,
   blocked,
   actions,
   renderFinder,
 }: {
   challenges: readonly KessenChallenge[];
-  decks: readonly KessenDeckSummary[];
-  defaultDeckId: string | null;
-  loanerFaction: DeckFaction;
+  deck: DeckChoice;
   blocked: boolean;
   actions: DuelActions;
   renderFinder: DuelsViewProps["renderFinder"];
 }) => {
-  const deck = useDeckChoice(decks, defaultDeckId, loanerFaction);
   const [error, setError] = useState<string | null>(null);
   const challengedIds = new Set(
     challenges
@@ -555,7 +545,6 @@ const ChallengePlayer = ({
         A friendly duel for practice: no rating or rewards. Challenges expire after a
         few minutes.
       </p>
-      <DeckPicker decks={decks} idPrefix="challenge" choice={deck} />
       {error ? (
         <FeedbackAlert feedback={{ success: false, message: error }} foreground />
       ) : null}

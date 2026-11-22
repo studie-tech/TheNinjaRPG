@@ -79,7 +79,8 @@ export const DeckPicker = ({
           </Label>
         );
       })}
-      <div className={DECK_OPTION}>
+      {/* The faction drops below the label in a narrow column rather than squeeze it. */}
+      <div className={cn(DECK_OPTION, "flex-wrap")}>
         <RadioGroupItem id={`deck-${idPrefix}-borrow`} value={BORROW} />
         <FactionSigil
           faction={choice.borrowFaction}
@@ -89,11 +90,11 @@ export const DeckPicker = ({
         />
         <Label
           htmlFor={`deck-${idPrefix}-borrow`}
-          className="min-w-0 flex-1 cursor-pointer"
+          className="min-w-[9rem] flex-1 cursor-pointer"
         >
           <span className="block font-semibold">Borrow a deck</span>
           <span className="block font-normal text-muted-foreground text-[12px]">
-            A ready-made deck for today, with the same rewards as your own.
+            A ready-made deck for today.
           </span>
         </Label>
         <Select
@@ -104,7 +105,7 @@ export const DeckPicker = ({
           }}
         >
           <SelectTrigger
-            className="h-8 w-[130px] shrink-0"
+            className="ml-auto h-8 w-[130px] shrink-0"
             aria-label="Faction of the borrowed deck"
           >
             <SelectValue />

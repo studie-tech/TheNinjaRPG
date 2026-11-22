@@ -241,14 +241,16 @@
 }
 
 /* The name plate on the paint: dark lacquer under cream ink, readable on sand, sea and
-   forest. Its text never prints under 11 px; the plate follows its label scale `--ls`. */
+   forest. Its text never prints under 11 px; the plate follows its label scale `--ls`.
+   It may outgrow the pin, centred under it, so two-word names keep to two lines. */
 .kh-pin-plate {
   --ls: max(var(--s), 0.85);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: calc(2px * var(--ls));
-  max-width: calc(100px * var(--ls));
+  width: max-content;
+  max-width: calc(120px * var(--ls));
   margin-top: calc(4px * var(--s));
   padding: calc(4px * var(--ls)) calc(9px * var(--ls));
   border: 1px solid rgb(217 180 90 / 0.7);

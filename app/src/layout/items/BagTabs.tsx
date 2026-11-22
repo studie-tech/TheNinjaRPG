@@ -12,8 +12,14 @@ export function BagTabs({
   storageKey = BAG_STORAGE_KEY,
 }: BagTabsProps) {
   // Restore after mount or an inventory switch, preserving the server's first tab during hydration.
+  // With no bag remembered, an empty first bag gives way to a card collection that has cards.
   const restore = useEffectEvent(() => {
-    const stored = safeLocalStorageGetItem(storageKey);
+    const stored =
+      safeLocalStorageGetItem(storageKey) ??
+      (bags.find((bag) => bag.value === active)?.count === 0 &&
+      bags.find((bag) => bag.value === "cards")?.count
+        ? "cards"
+        : null);
     if (stored && stored !== active && bags.some((bag) => bag.value === stored)) {
       onChange(stored);
     }

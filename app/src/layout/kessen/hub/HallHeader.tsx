@@ -124,7 +124,7 @@ const WeeklyPackChip = ({ firstWinPack }: { firstWinPack: boolean }) => (
         : "This week's Paper Bundle is claimed. The next one opens Monday 00:00 UTC."
     }
   >
-    <span className="kh-today-label">Weekly pack</span>
+    <span className="kh-today-label">Paper Bundle</span>
     <span className="kh-today-value kh-today-word">
       {firstWinPack ? (
         <>

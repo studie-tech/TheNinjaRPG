@@ -1032,7 +1032,7 @@ describe("HallHeader", () => {
       />,
     );
     expect(screen.getByText("win 1 match")).toBeTruthy();
-    expect(screen.getByText("Weekly pack")).toBeTruthy();
+    expect(screen.getByText("Paper Bundle")).toBeTruthy();
     const chip = screen.getByRole("button", { name: /^Deck Kirigakure/ });
     expect(chip.textContent).toContain("Provision 132/161");
     expect(chip.querySelector("[data-deck-name]")?.getAttribute("title")).toBe(
@@ -1048,7 +1048,7 @@ describe("HallHeader", () => {
         deck={null}
       />,
     );
-    const weekly = screen.getByText("Weekly pack").closest("li");
+    const weekly = screen.getByText("Paper Bundle").closest("li");
     expect(weekly?.hasAttribute("data-done")).toBe(true);
     expect(weekly?.textContent).toContain("claimed");
     expect(weekly?.textContent).toMatch(/next in\s*\d+(d|h|m)/);

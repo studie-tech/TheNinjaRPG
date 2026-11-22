@@ -123,13 +123,13 @@ export const SpotlightMarks = ({ marks }: { marks: SpotlightMark[] }) => (
 );
 
 /**
- * A dashed sky ring around an element the step refers to, with its name on a tab above
- * it (below it when there is no room). Sky sets it apart from the amber ring of the
+ * A dashed sky ring around an element the step refers to, with its name on a tab hung
+ * from the ring's top edge, so it covers only the marked card's art and never the
+ * counters or rows packed around it. Sky sets it apart from the amber ring of the
  * control to press.
  */
 const SpotlightMarkRing = ({ mark }: { mark: SpotlightMark }) => {
   const { box, label } = mark;
-  const above = box.top - MARK_PADDING_PX > 24;
   return (
     <div
       className="absolute rounded-md border-2 border-sky-300 border-dashed shadow-[0_0_12px_rgba(125,211,252,0.6)]"
@@ -141,12 +141,7 @@ const SpotlightMarkRing = ({ mark }: { mark: SpotlightMark }) => {
         transform: `translate(${box.left - MARK_PADDING_PX}px, ${box.top - MARK_PADDING_PX}px)`,
       }}
     >
-      <span
-        className={cn(
-          "absolute left-1/2 max-w-[160px] -translate-x-1/2 truncate whitespace-nowrap rounded-sm bg-sky-300 px-1.5 py-0.5 font-semibold text-[11px] text-sky-950 leading-tight shadow",
-          above ? "-top-[22px]" : "-bottom-[22px]",
-        )}
-      >
+      <span className="absolute -top-2 left-1/2 max-w-[160px] -translate-x-1/2 truncate rounded-sm bg-sky-300 px-1.5 py-0.5 text-[11px] leading-tight font-semibold whitespace-nowrap text-sky-950 shadow">
         {label}
       </span>
     </div>

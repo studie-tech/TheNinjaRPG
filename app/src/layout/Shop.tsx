@@ -1295,7 +1295,7 @@ function StallPurchaseSummary({
 
 /** Card Hall classes of the Card Master stall; tokens come from the Kessen stylesheet. */
 const STALL = {
-  surface: "overflow-hidden rounded-lg border bg-card text-base text-card-foreground",
+  surface: "bg-card text-base text-card-foreground",
   rule: "border-border",
   muted: "text-muted-foreground",
   tabList: "grid h-auto grid-cols-2 gap-1 rounded-lg bg-muted p-1",

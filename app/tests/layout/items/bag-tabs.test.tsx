@@ -53,6 +53,41 @@ it("reopens the remembered bag after mount", () => {
   expect(onChange).toHaveBeenCalledWith("cooking");
 });
 
+it("opens the card collection when nothing is remembered and the first bag is empty", () => {
+  const onChange = vi.fn();
+  act(() => {
+    render(
+      <BagTabs
+        bags={[
+          { value: "all", count: 0 },
+          { value: "cards", count: 18 },
+        ]}
+        active="all"
+        onChange={onChange}
+      />,
+    );
+  });
+  expect(onChange).toHaveBeenCalledWith("cards");
+  expect(window.localStorage.getItem("backpackSelection")).toBeNull();
+});
+
+it("keeps an empty first bag open when there are no cards either", () => {
+  const onChange = vi.fn();
+  act(() => {
+    render(
+      <BagTabs
+        bags={[
+          { value: "all", count: 0 },
+          { value: "cards", count: 0 },
+        ]}
+        active="all"
+        onChange={onChange}
+      />,
+    );
+  });
+  expect(onChange).not.toHaveBeenCalled();
+});
+
 it("restores the home bag when the reused switcher changes inventories", () => {
   window.localStorage.setItem("homeStorageSelection", "materials");
   const onHomeChange = vi.fn();
