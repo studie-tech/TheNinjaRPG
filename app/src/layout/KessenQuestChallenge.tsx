@@ -22,6 +22,7 @@ import {
 import { TowerDefenseStat } from "@/layout/TowerDefenseLobby";
 import type { DeckFaction } from "@/libs/kessen/deck";
 import type { findQuestChallenge } from "@/libs/quest/challenge";
+import { cn } from "@/libs/shadui";
 import { parseHtml } from "@/utils/parse";
 import type { KessenCircuitEntry, KessenDeckSource } from "@/validators/kessen";
 import { hasReward } from "@/validators/rewards";
@@ -75,6 +76,7 @@ export const KessenQuestChallenge = (props: {
   const name = KESSEN_NPC_NAMES[objective.npcKey];
   const { resume } = props;
   const concedable = resume && !resume.isThisDuel && !resume.isPlayerDuel;
+  const offersConcede = concedable && challenge.available;
   // "Your match against Lemu" as the object of "Concede …".
   const unfinishedObject = resume
     ? resume.unfinished.charAt(0).toLowerCase() + resume.unfinished.slice(1)
@@ -156,7 +158,9 @@ export const KessenQuestChallenge = (props: {
       {props.error ? (
         <FeedbackAlert feedback={{ success: false, message: props.error }} foreground />
       ) : null}
-      <div className="flex flex-col gap-2 @md:flex-row @md:justify-end">
+      {/* The Resume and Concede pair needs about 400-500px, more than the row gets on
+          phones (@2xl is 504px), so there the pair wraps and each button fills its line. */}
+      <div className="flex flex-col gap-2 @md:flex-row @md:flex-wrap @md:justify-end">
         {challenge.done ? (
           <Button asChild size="lg">
             <Link href={QUEST_LOGBOOK_HREF}>
@@ -166,11 +170,18 @@ export const KessenQuestChallenge = (props: {
           </Button>
         ) : resume ? (
           <>
-            <Button size="lg" className="w-full @md:w-auto" onClick={resume.onOpen}>
+            <Button
+              size="lg"
+              className={cn(
+                "w-full @md:w-auto",
+                offersConcede && "@md:grow @2xl:grow-0",
+              )}
+              onClick={resume.onOpen}
+            >
               <Play className="mr-2 h-5 w-5" />
               {resume.isThisDuel ? "Return to the table" : resume.label}
             </Button>
-            {concedable && challenge.available ? (
+            {offersConcede ? (
               <Confirm
                 title={`Concede ${unfinishedObject}?`}
                 tone="destructive"
@@ -182,7 +193,7 @@ export const KessenQuestChallenge = (props: {
                     size="lg"
                     variant="outline"
                     disabled={props.isStarting}
-                    className="w-full @md:w-auto"
+                    className="w-full @md:w-auto @md:grow @2xl:grow-0"
                   >
                     Concede it and take a seat…
                   </Button>
