@@ -56,6 +56,7 @@ export const TradeRoutesPanel = ({
   actions: CaravanActions;
 }) => {
   const [partnerId, setPartnerId] = useState<string>();
+  // A partner proposed to or otherwise gone from the choices has to be chosen again.
   const partner = data.partners.find((row) => row.id === partnerId);
   const responding = actions.respond.isPending ? actions.respond.variables : undefined;
   const capacity = getCaravanCapacity(data.routes, caravans?.caravans);
@@ -67,36 +68,41 @@ export const TradeRoutesPanel = ({
       initialBreak
     >
       <div className="@container">
-        {data.canManage && (
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Select value={partnerId} onValueChange={setPartnerId}>
-              <SelectTrigger
-                className="min-w-48 grow basis-48"
-                aria-label="Trade partner"
+        {data.canManage &&
+          (data.partners.length === 0 ? (
+            <p className="text-muted-foreground mb-3 text-sm">
+              No other village with a Warehouse is free for a new route.
+            </p>
+          ) : (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Select value={partner?.id ?? ""} onValueChange={setPartnerId}>
+                <SelectTrigger
+                  className="min-w-48 grow basis-48"
+                  aria-label="Trade partner"
+                >
+                  <SelectValue placeholder="Propose a route to…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {data.partners.map((row) => (
+                    <SelectItem key={row.id} value={row.id} disabled={!!row.block}>
+                      {row.name}
+                      {row.block ? ` · ${row.block}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                disabled={!partner || !!partner.block || actions.propose.isPending}
+                loading={actions.propose.isPending}
+                onClick={() =>
+                  partner && actions.propose.mutate({ villageId: partner.id })
+                }
               >
-                <SelectValue placeholder="Propose a route to…" />
-              </SelectTrigger>
-              <SelectContent>
-                {data.partners.map((row) => (
-                  <SelectItem key={row.id} value={row.id} disabled={!!row.block}>
-                    {row.name}
-                    {row.block ? ` · ${row.block}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              disabled={!partner || !!partner.block || actions.propose.isPending}
-              loading={actions.propose.isPending}
-              onClick={() =>
-                partner && actions.propose.mutate({ villageId: partner.id })
-              }
-            >
-              <Handshake className="mr-2 size-4" aria-hidden />
-              Propose
-            </Button>
-          </div>
-        )}
+                <Handshake className="mr-2 size-4" aria-hidden />
+                Propose
+              </Button>
+            </div>
+          ))}
         {data.routes.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No trade routes yet. Allied and neutral villages with a Warehouse can agree

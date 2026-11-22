@@ -528,6 +528,7 @@ const DepositForm = ({
 }) => {
   const [stackId, setStackId] = useState<string>();
   const [quantity, setQuantity] = useState<number>(WAREHOUSE_MIN_DEPOSIT);
+  // A stack deposited whole or otherwise gone from the choices has to be chosen again.
   const stack = data.depositCandidates.find((row) => row.userItemId === stackId);
   return (
     <div className="mt-4 border-t pt-3">
@@ -545,7 +546,7 @@ const DepositForm = ({
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <Select
-            value={stackId}
+            value={stack?.userItemId ?? ""}
             onValueChange={(value) => {
               setStackId(value);
               const next = data.depositCandidates.find(
@@ -580,7 +581,7 @@ const DepositForm = ({
             className="w-24"
             min={WAREHOUSE_MIN_DEPOSIT}
             max={stack?.quantity ?? WAREHOUSE_MIN_DEPOSIT}
-            value={quantity}
+            value={stack ? quantity : WAREHOUSE_MIN_DEPOSIT}
             onValueChange={setQuantity}
             disabled={!stack}
           />
@@ -594,7 +595,16 @@ const DepositForm = ({
             loading={actions.deposit.isPending}
             onClick={() =>
               stack &&
-              actions.deposit.mutate({ userItemId: stack.userItemId, quantity })
+              actions.deposit.mutate(
+                { userItemId: stack.userItemId, quantity },
+                {
+                  onSuccess: (result) => {
+                    if (!result.success) return;
+                    setStackId(undefined);
+                    setQuantity(WAREHOUSE_MIN_DEPOSIT);
+                  },
+                },
+              )
             }
           >
             <ArrowDownToLine className="mr-2 size-4" aria-hidden />
