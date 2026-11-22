@@ -1,7 +1,6 @@
 "use client";
 
-import { Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,17 +17,28 @@ export type VillageChoiceOption = { text: string; nextObjectiveId?: string | nul
  * bloodline, how many shinobi played there this week, and a "Needs shinobi" tag on the
  * quietest one. Picking a village asks for confirmation first, since it is for good. It
  * stacks above the Activity dock, so the confirmation is part of the page rather than
- * a modal that would open underneath it.
+ * a modal that would open underneath it, and the lesson's words are shown here instead.
  */
 export const VillageChooser: React.FC<{
   options: readonly VillageChoiceOption[];
   isPending: boolean;
   onChoose: (option: VillageChoiceOption) => void;
   onHide: () => void;
-}> = ({ options, isPending, onChoose, onHide }) => {
+  /** Lemu's words on the choice, which the covered dock cannot show. */
+  guide?: React.ReactNode;
+}> = ({ options, isPending, onChoose, onHide, guide }) => {
   const [selected, setSelected] = useState<VillageChoiceOption>();
+  const cardList = useRef<HTMLUListElement>(null);
   const { data: villages, isPending: isLoading } =
     api.village.getVillageChoices.useQuery(undefined, { staleTime: 60_000 });
+  // While the villages load, "Not yet" is the dialog's only control and takes its opening
+  // focus, so a stray Enter would close the choice. Focus moves to the first village once
+  // the cards are in; choosing one still asks for confirmation.
+  useEffect(() => {
+    const list = cardList.current;
+    if (isLoading || !list || list.contains(document.activeElement)) return;
+    list.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [isLoading]);
   const choices = options.map((option) => ({
     option,
     village: villages?.find((entry) => entry.name === option.text),
@@ -51,13 +61,21 @@ export const VillageChooser: React.FC<{
             Your village is your home for good. It decides who fights beside you, the
             missions you are given and the village bloodline you can earn.
           </p>
+          {guide && (
+            <p className="border-primary/40 bg-primary/5 mx-auto mt-1 max-w-2xl rounded-lg border px-4 py-2 text-base">
+              <b>Lemu:</b> {guide}
+            </p>
+          )}
         </header>
         {isLoading ? (
           <Loader explanation="Gathering the villages" />
         ) : (
           // Two cards side by side from @2xl (504px), three from @5xl (768px) and all
           // five villages in one row from @7xl (960px).
-          <ul className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3 @7xl:grid-cols-5">
+          <ul
+            ref={cardList}
+            className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3 @7xl:grid-cols-5"
+          >
             {choices.map(({ option, village, lore }) => (
               <li key={option.text}>
                 <button
@@ -68,7 +86,7 @@ export const VillageChooser: React.FC<{
                   onClick={() => setSelected(option)}
                   className={cn(
                     // A single column lays each village out sideways, so a phone sees most of them at once.
-                    "group flex h-full w-full flex-row overflow-hidden rounded-xl border-2 bg-card text-left shadow-sm transition hover:border-primary focus-visible:border-primary @2xl:flex-col",
+                    "group bg-card hover:border-primary focus-visible:border-primary focus-visible:ring-ring focus-visible:ring-offset-background flex h-full w-full flex-row overflow-hidden rounded-xl border-2 text-left shadow-sm transition focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none @2xl:flex-col",
                     selected?.text === option.text &&
                       "border-primary ring-2 ring-primary",
                   )}
@@ -107,12 +125,6 @@ export const VillageChooser: React.FC<{
                           Village bloodline: <b>{lore.bloodline}</b>
                         </span>
                       </>
-                    )}
-                    {village && (
-                      <span className="mt-auto flex items-center gap-1 pt-1 text-muted-foreground text-sm">
-                        <Users className="h-4 w-4" aria-hidden="true" />
-                        {village.activeThisWeek.toLocaleString()} active this week
-                      </span>
                     )}
                   </div>
                 </button>

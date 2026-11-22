@@ -6,11 +6,11 @@ import { secondsFromNow, WEEK_S } from "@/utils/time";
 /** The window the village chooser reports activity for. */
 const ACTIVITY_WINDOW_SECONDS = WEEK_S;
 
-// The village chooser shows each joinable village's players active this week. Counting
-// them scans every human UserData row (lastActiveAt is not indexed), while the result is
-// a handful of { villageId, players } rows, one 8 KB Runtime Cache unit per read. A
-// week-long count moves by a fraction of a percent per hour, so an hour of staleness is
-// invisible on the chooser and nothing needs to invalidate it.
+// The village chooser marks the joinable village with the fewest players active this
+// week. Counting them scans every human UserData row (lastActiveAt is not indexed), while
+// the result is a handful of { villageId, players } rows, one 8 KB Runtime Cache unit per
+// read. A week-long count moves by a fraction of a percent per hour, so an hour of
+// staleness is invisible on the chooser, and nothing needs to invalidate it.
 const villageActivity = createRuntimeCache({
   name: "village-activity",
   ttlSeconds: 60 * 60,
