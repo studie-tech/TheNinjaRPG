@@ -36,6 +36,7 @@ import { mockUserContextValue } from "../setup/userContext";
 
 const actualEmojiPicker = EmojiPicker.EmojiPicker;
 const edit = vi.fn();
+const remove = vi.fn();
 const api = {
   useUtils: () => ({ comments: { getConversationComments: { invalidate: vi.fn() } } }),
   profile: {
@@ -48,7 +49,7 @@ const api = {
       useMutation: () => ({ mutate: edit, isPending: false }),
     },
     deleteConversationComment: {
-      useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+      useMutation: () => ({ mutate: remove, isPending: false }),
     },
   },
 };
@@ -183,6 +184,53 @@ describe("challenge shortcut", () => {
   it("does not offer to challenge yourself", () => {
     const view = render(message());
     expect(view.queryByRole("button", { name: "Challenge Friend" })).toBeNull();
+  });
+});
+
+describe("match announcement", () => {
+  const announcement = {
+    ...comment,
+    content: "<p>Started a spar with Rival.</p>",
+    challengeMatch: { type: "SPAR", matchId: "m-1", opponentName: "Rival" } as const,
+  };
+  const notice = (compact?: boolean) => (
+    <CommentOnConversation comment={announcement} user={user} compact={compact}>
+      {announcement.content}
+    </CommentOnConversation>
+  );
+  beforeEach(() => {
+    vi.spyOn(Confirm, "default").mockImplementation(({ triggerLabel, onAccept }) => (
+      <button
+        type="button"
+        aria-label={triggerLabel}
+        onClick={(e) => onAccept?.(e, { close: vi.fn() })}
+      />
+    ));
+  });
+
+  it.each([false, true])(
+    "lets its author and moderators delete it (compact: %p)",
+    (compact) => {
+      for (const viewer of [
+        { userId: "friend", role: "USER" },
+        { userId: "mod", role: "MODERATOR" },
+      ]) {
+        mockUserContextValue({ data: viewer } as never);
+        const view = render(notice(compact));
+        expect(view.getByRole("link", { name: "Watch" })).toBeTruthy();
+        fireEvent.click(view.getByRole("button", { name: "Delete comment" }));
+        expect(remove).toHaveBeenLastCalledWith({ id: announcement.id });
+        view.unmount();
+      }
+      expect(remove).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("offers other players no delete action", () => {
+    mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
+    const view = render(notice());
+    expect(view.getByText("Rival")).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Delete comment" })).toBeNull();
   });
 });
 

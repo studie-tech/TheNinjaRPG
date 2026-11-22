@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment, UserReportComment } from "@/drizzle/schema";
-import { ChallengeButton } from "@/layout/ChallengePlayer";
+import { ChallengeButton, ChallengeMatchNotice } from "@/layout/ChallengePlayer";
 import { CompactComment } from "@/layout/CompactComment";
 import Confirm from "@/layout/Confirm";
 import { EmojiPicker } from "@/layout/EmojiPicker";
@@ -64,6 +64,10 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
   const [editing, setEditing] = useState(false);
   const utils = api.useUtils();
   const deleteInFlightRef = useRef(false);
+  const { data: userData } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
 
   const editComment = api.comments.editConversationComment.useMutation({
     onSuccess: async (data) => {
@@ -100,6 +104,29 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
     deleteInFlightRef.current = true;
     deleteComment.mutate(data);
   };
+
+  // A match announcement holds no player-written text to report, only its delete action.
+  if (props.comment.challengeMatch && props.user) {
+    return (
+      <ChallengeMatchNotice
+        challenger={props.user.username}
+        match={props.comment.challengeMatch}
+        createdAt={props.comment.createdAt}
+        compact={props.compact}
+        action={
+          userData &&
+          canDeleteComment(userData, props.comment.userId) && (
+            <DeleteCommentConfirm
+              comment={props.comment}
+              author={props.user.username}
+              isPending={deleteComment.isPending}
+              onDelete={handleDelete}
+            />
+          )
+        }
+      />
+    );
+  }
 
   if (props.compact && props.user) {
     return (
@@ -242,34 +269,12 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
           userData &&
           canDeleteComment(userData, props.user.userId) &&
           props.deleteComment && (
-            <Confirm
-              id={`delete-comment-${props.comment.id}`}
-              title="Confirm Deletion"
-              triggerLabel="Delete comment"
-              triggerClassName={cn(postActionClassName, "justify-center")}
-              button={<Trash2 className="h-6 w-6 hover:text-orange-500" />}
-              disabled={props.isDeletePending}
-              confirmClassName="bg-red-600 text-white hover:bg-red-700"
-              proceed_label="Delete comment"
-              proceed_loading_label="Deleting"
-              isLoading={props.isDeletePending}
-              keepOpenOnAccept={true}
-              onAccept={(e) => {
-                e.preventDefault();
-                if (props.deleteComment && !props.isDeletePending) {
-                  props.deleteComment({ id: props.comment.id });
-                }
-              }}
-            >
-              <div className="space-y-2">
-                <p>
-                  Delete this comment by {props.user.username}? This cannot be undone.
-                </p>
-                <blockquote className="line-clamp-3 border-muted-foreground/40 border-l-4 pl-3 text-muted-foreground text-sm italic">
-                  “{stripHtmlPreview(props.comment.content)}”
-                </blockquote>
-              </div>
-            </Confirm>
+            <DeleteCommentConfirm
+              comment={props.comment}
+              author={props.user.username}
+              isPending={props.isDeletePending}
+              onDelete={props.deleteComment}
+            />
           )}
       </div>
     </div>
@@ -400,6 +405,46 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
     </Post>
   );
 };
+
+/** The trash action that confirms before deleting a comment. */
+function DeleteCommentConfirm({
+  comment,
+  author,
+  isPending,
+  onDelete,
+}: {
+  comment: { id: string; content: string };
+  author: string;
+  isPending?: boolean;
+  onDelete: (data: DeleteCommentSchema) => void;
+}) {
+  return (
+    <Confirm
+      id={`delete-comment-${comment.id}`}
+      title="Confirm Deletion"
+      triggerLabel="Delete comment"
+      triggerClassName={cn(postActionClassName, "justify-center")}
+      button={<Trash2 className="h-6 w-6 hover:text-orange-500" />}
+      disabled={isPending}
+      confirmClassName="bg-red-600 text-white hover:bg-red-700"
+      proceed_label="Delete comment"
+      proceed_loading_label="Deleting"
+      isLoading={isPending}
+      keepOpenOnAccept={true}
+      onAccept={(e) => {
+        e.preventDefault();
+        if (!isPending) onDelete({ id: comment.id });
+      }}
+    >
+      <div className="space-y-2">
+        <p>Delete this comment by {author}? This cannot be undone.</p>
+        <blockquote className="line-clamp-3 border-muted-foreground/40 border-l-4 pl-3 text-muted-foreground text-sm italic">
+          “{stripHtmlPreview(comment.content)}”
+        </blockquote>
+      </div>
+    </Confirm>
+  );
+}
 
 /** An icon action in a post's header or footer row, sized to its icon. */
 const postActionClassName = "size-auto shrink-0 rounded-md p-0.5 hover:bg-accent";

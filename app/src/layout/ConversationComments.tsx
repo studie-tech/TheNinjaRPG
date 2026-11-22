@@ -1,6 +1,5 @@
 import { memo, useMemo } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { ChallengeMatchNotice } from "@/layout/ChallengePlayer";
 import { CommentOnConversation } from "@/layout/Comment";
 import type { ChatStartUser } from "@/libs/chatPanel";
 import { parseHtml } from "@/utils/parse";
@@ -88,16 +87,6 @@ const ConversationCommentRow = memo(function ConversationCommentRow({
 }: ConversationCommentRowProps) {
   const content = useMemo(() => parseHtml(comment.content), [comment.content]);
 
-  if (comment.challengeMatch) {
-    return (
-      <ChallengeMatchNotice
-        challenger={comment.username}
-        match={comment.challengeMatch}
-        createdAt={comment.createdAt}
-        compact={compact}
-      />
-    );
-  }
   return (
     <CommentOnConversation
       user={comment}

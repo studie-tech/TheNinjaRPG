@@ -93,12 +93,15 @@ export function ChallengeMatchNotice({
   match,
   createdAt,
   compact = false,
+  action,
 }: {
   challenger: string;
   match: ChallengeMatch;
   createdAt: Date;
   /** The chat panel's dense rows. */
   compact?: boolean;
+  /** A moderation control shown after the watch link. */
+  action?: ReactNode;
 }) {
   const isSpar = match.type === "SPAR";
   const Icon = isSpar ? Swords : Layers;
@@ -134,6 +137,7 @@ export function ChallengeMatchNotice({
           <Eye className="mr-[4px] h-[14px] w-[14px]" aria-hidden /> Watch
         </Link>
       </Button>
+      {action}
     </div>
   );
 }
