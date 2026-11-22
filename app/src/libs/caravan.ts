@@ -16,6 +16,7 @@ import {
   CARAVAN_STEALTH_BASE_CHANCE,
   CARAVAN_STEALTH_CHANCE_PER_1000,
   CARAVAN_STEALTH_MAX_CHANCE,
+  CARAVAN_TRACK_COOLDOWN_SECONDS,
   CARAVANS_PER_TRADE_ROUTE,
   type CaravanEncounterType,
   type CaravanOperationType,
@@ -35,6 +36,7 @@ import { sectorGridNeighbors } from "@/libs/sector-map/world-grid";
 import { findRelationship, isVillagePair } from "@/utils/alliance";
 import { shuffle } from "@/utils/array";
 import { clamp, secureRandomInt } from "@/utils/math";
+import { secondsFromDate } from "@/utils/time";
 
 /** A shipment's manifest line. */
 export type CargoLine = { itemId: string; quantity: number };
@@ -197,6 +199,10 @@ export const getJourneyProgress = (
   if (total <= 0) return 1;
   return clamp((now.getTime() - caravan.departedAt.getTime()) / total, 0, 1);
 };
+
+/** When a caravan last sighted at `seenAt` can be tracked again. */
+export const getTrackableAt = (seenAt: Date) =>
+  secondsFromDate(CARAVAN_TRACK_COOLDOWN_SECONDS, seenAt);
 
 /** Sector a caravan is passing through; its origin until it departs. */
 export const getCaravanSector = (

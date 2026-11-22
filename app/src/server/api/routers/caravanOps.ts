@@ -26,6 +26,7 @@ import {
   getOperationMinutes,
   getStealBp,
   getStealthChance,
+  getTrackableAt,
   rollChance,
 } from "@/libs/caravan";
 import { getBackpackBlock } from "@/libs/warehouse";
@@ -74,7 +75,7 @@ import {
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { groupBy } from "@/utils/grouping";
-import { MINUTE_S, secondsFromDate } from "@/utils/time";
+import { getTimeLeftStr, MINUTE_S, secondsFromDate } from "@/utils/time";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const caravanOpsRouter = createTRPCRouter({
@@ -411,9 +412,18 @@ export const caravanOpsRouter = createTRPCRouter({
       if (target?.status !== "TRAVELLING")
         return errorResponse("The caravan is not on the road");
       // Tracking follows a sighting; route intelligence alone needs a sector search first.
-      if (!hasSighting(discoveries, target.id))
+      const sighting = discoveries.find(
+        (row) => row.caravanId === target.id && row.kind === "LOCATION",
+      );
+      if (!sighting)
         return errorResponse(
           "Search the caravan's sector to sight it before tracking it",
+        );
+      // Any sighting, from a search or an earlier track, starts the wait.
+      const trackableAt = getTrackableAt(sighting.seenAt);
+      if (trackableAt > now)
+        return errorResponse(
+          `The caravan was sighted moments ago; you can track it again in ${getTimeLeftStr(trackableAt.getTime() - now.getTime())}`,
         );
       const sector = getCaravanSector(target, now);
       const tracked = await trackDiscovery(ctx.drizzle, {
@@ -426,7 +436,7 @@ export const caravanOpsRouter = createTRPCRouter({
       });
       if (tracked.rowsAffected !== 1)
         return errorResponse(
-          `You can track a caravan once every ${CARAVAN_TRACK_COOLDOWN_SECONDS / 60} minutes`,
+          "The caravan was sighted moments ago; try tracking it again shortly",
         );
       return {
         success: true,

@@ -27,9 +27,11 @@ import {
   TRADE_ROUTE_MARKER_MAX_CONTROL,
 } from "@/drizzle/constants";
 import { useCaravans } from "@/hooks/useCaravans";
+import { useNow } from "@/hooks/useNow";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { QueryError } from "@/layout/QueryError";
+import { getTrackableAt } from "@/libs/caravan";
 import { cn } from "@/libs/shadui";
 import { formatDateTime } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -70,6 +72,8 @@ export const CaravanControls = ({ className }: { className: string }) => {
 const CaravanControlsPanel = () => {
   const actions = useCaravans({ controls: true });
   const { data: userData, timeDiff } = useRequiredUserData();
+  // Ticks so tracking waits and sighting ages run out while the controls stay open.
+  const clock = useNow(5_000);
   const data = actions.operations.data;
   if (!data && actions.operations.isError)
     return (
@@ -83,7 +87,7 @@ const CaravanControlsPanel = () => {
       />
     );
   if (!data) return <Loader explanation="Loading caravan intelligence" />;
-  const now = Date.now() - timeDiff;
+  const now = clock - timeDiff;
   const running = data.operations.find((op) => op.status === "ACTIVE");
   const canScout = !data.isOutlaw || data.bandit.enabled;
   const starting = actions.startOperation.isPending
@@ -315,6 +319,8 @@ const KnownCaravan = ({
     new Date(row.arrivesAt).getTime() <= now + CARAVAN_SABOTAGE_MINUTES * 60_000;
   const canSabotage = row.inSector && !arrivesFirst && !running;
   const arrived = !row.arrivesAt || new Date(row.arrivesAt).getTime() <= now;
+  const trackableAt = row.seenAt ? getTrackableAt(row.seenAt) : undefined;
+  const awaitingTrack = !!trackableAt && trackableAt.getTime() > now;
   const grouping = actions.formGroup.isPending
     ? actions.formGroup.variables
     : undefined;
@@ -350,16 +356,20 @@ const KnownCaravan = ({
             title={
               row.lastSector === null
                 ? "Search the caravan's sector to sight it first"
-                : undefined
+                : awaitingTrack
+                  ? `Sighted moments ago; track it again at ${trackableAt.toLocaleTimeString()}`
+                  : undefined
             }
-            disabled={row.lastSector === null || actions.track.isPending}
+            disabled={
+              row.lastSector === null || awaitingTrack || actions.track.isPending
+            }
             loading={
               actions.track.isPending && actions.track.variables?.caravanId === row.id
             }
             onClick={() => actions.track.mutate({ caravanId: row.id })}
           >
             <Footprints className="mr-1 size-4" aria-hidden />
-            Track
+            {awaitingTrack ? `Track at ${trackableAt.toLocaleTimeString()}` : "Track"}
           </Button>
           {row.role === "ENEMY" &&
             SABOTAGE.map(({ type, label, effect, Icon }) => (
