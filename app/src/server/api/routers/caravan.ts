@@ -143,16 +143,10 @@ export const caravanRouter = createTRPCRouter({
       }
       const { current, history, participants, encounters, sabotage, items } = view;
       const itemNames = new Map(items.map((row) => [row.id, row.name]));
-      const partnerName = (row: (typeof current)[number]) => {
-        const route = routes.find((r) => r.id === row.routeId);
-        const otherId =
-          row.originVillageId === villageData.id
-            ? row.destinationVillageId
-            : row.originVillageId;
-        const partner =
-          route?.villageIdA === otherId ? route.villageA : route?.villageB;
-        return partner?.name ?? "Former partner";
-      };
+      const partnerName = (row: (typeof current)[number]) =>
+        (row.originVillageId === villageData.id
+          ? row.destinationName
+          : row.originName) ?? "Former partner";
       const describeCargo = (cargo: CargoLine[]) =>
         cargo.map((line) => ({
           itemId: line.itemId,

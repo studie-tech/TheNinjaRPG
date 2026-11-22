@@ -76,6 +76,21 @@ export const listCaravansByIds = (
     ? Promise.resolve([])
     : client.select().from(caravan).where(inArray(caravan.id, caravanIds));
 
+/** Caravans with the names of the villages they travel between, null for a removed one. */
+const selectCaravansWithVillageNames = (client: Pick<DrizzleClient, "select">) =>
+  client
+    .select({
+      ...getTableColumns(caravan),
+      originName: originVillage.name,
+      destinationName: destinationVillage.name,
+    })
+    .from(caravan)
+    .leftJoin(originVillage, eq(originVillage.id, caravan.originVillageId))
+    .leftJoin(
+      destinationVillage,
+      eq(destinationVillage.id, caravan.destinationVillageId),
+    );
+
 /** Caravans by id with the names of the villages they travel between. */
 export const listCaravansWithVillageNames = (
   client: Pick<DrizzleClient, "select">,
@@ -83,28 +98,14 @@ export const listCaravansWithVillageNames = (
 ) =>
   caravanIds.length === 0
     ? Promise.resolve([])
-    : client
-        .select({
-          ...getTableColumns(caravan),
-          originName: originVillage.name,
-          destinationName: destinationVillage.name,
-        })
-        .from(caravan)
-        .leftJoin(originVillage, eq(originVillage.id, caravan.originVillageId))
-        .leftJoin(
-          destinationVillage,
-          eq(destinationVillage.id, caravan.destinationVillageId),
-        )
-        .where(inArray(caravan.id, caravanIds));
+    : selectCaravansWithVillageNames(client).where(inArray(caravan.id, caravanIds));
 
-/** Caravans a village is sending or expecting. */
+/** Caravans a village is sending or expecting, with both villages' names. */
 export const listOpenVillageCaravans = (
   client: Pick<DrizzleClient, "select">,
   villageId: string,
 ) =>
-  client
-    .select()
-    .from(caravan)
+  selectCaravansWithVillageNames(client)
     .where(
       and(
         or(
@@ -117,8 +118,8 @@ export const listOpenVillageCaravans = (
     .orderBy(desc(caravan.createdAt));
 
 /**
- * The latest finished caravans a village sent or received. Each side walks its
- * (village, resolvedAt) index newest first and stops at the limit.
+ * The latest finished caravans a village sent or received, with both villages' names.
+ * Each side walks its (village, resolvedAt) index newest first and stops at the limit.
  */
 export const listFinishedVillageCaravans = (
   client: Pick<DrizzleClient, "select">,
@@ -126,9 +127,7 @@ export const listFinishedVillageCaravans = (
   limit: number,
 ) => {
   const side = (sent: boolean) =>
-    client
-      .select()
-      .from(caravan)
+    selectCaravansWithVillageNames(client)
       .where(
         and(
           eq(sent ? caravan.originVillageId : caravan.destinationVillageId, villageId),

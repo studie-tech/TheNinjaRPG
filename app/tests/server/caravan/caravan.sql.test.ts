@@ -26,6 +26,7 @@ import {
   tradeRouteMarker,
   userData,
   userItem,
+  village,
   villageWarehouse,
   war,
   warehouseDepositLedger,
@@ -44,6 +45,8 @@ import {
   insertCheckpointAmbush,
   insertGuard,
   listActiveSabotage,
+  listFinishedVillageCaravans,
+  listOpenVillageCaravans,
   moveCargo,
   queueGuard,
   releaseParticipants,
@@ -102,6 +105,7 @@ describeWithDatabase("village Warehouse and caravans", () => {
       tradeRouteMarker,
       userData,
       userItem,
+      village,
       villageWarehouse,
       war,
       warehouseDepositLedger,
@@ -1481,6 +1485,44 @@ describeWithDatabase("village Warehouse and caravans", () => {
     expect(guard?.objectives).toBe(0);
     const [row] = await db.select().from(caravan);
     expect(row?.lossBp).toBe(0);
+  });
+
+  it("names the villages of open and finished caravans apart from their route", async () => {
+    const db = await getTestDatabase();
+    const now = new Date();
+    await db.insert(village).values([
+      { id: "leaf", name: "Leaf", kageId: "leaf-kage", sector: 1 },
+      { id: "sand", name: "Sand", kageId: "sand-kage", sector: 2 },
+    ]);
+    // The finished caravans' route is closed, and one partner village no longer exists.
+    await db.insert(caravan).values([
+      caravanRow({ id: "open" }),
+      caravanRow({
+        id: "delivered",
+        routeId: "closed",
+        status: "DELIVERED",
+        originVillageId: "sand",
+        destinationVillageId: "leaf",
+        resolvedAt: new Date(now.getTime() - HOUR),
+      }),
+      caravanRow({
+        id: "cancelled",
+        routeId: "closed",
+        status: "CANCELLED",
+        destinationVillageId: "removed",
+        resolvedAt: now,
+      }),
+    ]);
+    const names = (
+      rows: { id: string; originName: string | null; destinationName: string | null }[],
+    ) => rows.map((row) => [row.id, row.originName, row.destinationName]);
+    expect(names(await listOpenVillageCaravans(db, "leaf"))).toEqual([
+      ["open", "Leaf", "Sand"],
+    ]);
+    expect(names(await listFinishedVillageCaravans(db, "leaf", 5))).toEqual([
+      ["cancelled", "Leaf", null],
+      ["delivered", "Sand", "Leaf"],
+    ]);
   });
 
   it("closes a disbanded settlement's routes and calls off its caravans", async () => {
