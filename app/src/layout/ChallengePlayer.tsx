@@ -70,7 +70,11 @@ export function ChallengeButton({
           panelRef.current?.focus();
         }}
       >
-        <ChallengePanel opponent={opponent} conversationId={conversationId} />
+        <ChallengePanel
+          opponent={opponent}
+          conversationId={conversationId}
+          onNavigate={() => setOpen(false)}
+        />
       </PopoverContent>
     </Popover>
   );
@@ -86,10 +90,12 @@ export function ChallengePanel({
   opponent,
   conversationId,
   leading,
-}: ChallengePanelProps & {
-  /** A control before the title, such as a way back to the menu that opened it. */
-  leading?: ReactNode;
-}) {
+  onNavigate,
+}: ChallengePanelProps &
+  ChallengeNavigation & {
+    /** A control before the title, such as a way back to the menu that opened it. */
+    leading?: ReactNode;
+  }) {
   return (
     <div className="flex flex-col gap-[8px]">
       <div className="flex items-center gap-[4px]">
@@ -98,8 +104,16 @@ export function ChallengePanel({
           Challenge <span className="break-all">{opponent.username}</span>
         </p>
       </div>
-      <SparOption opponent={opponent} conversationId={conversationId} />
-      <KessenOption opponent={opponent} conversationId={conversationId} />
+      <SparOption
+        opponent={opponent}
+        conversationId={conversationId}
+        onNavigate={onNavigate}
+      />
+      <KessenOption
+        opponent={opponent}
+        conversationId={conversationId}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 }
@@ -114,7 +128,8 @@ export function ChallengeMatchNotice({
   createdAt,
   compact = false,
   action,
-}: {
+  onNavigate,
+}: ChallengeNavigation & {
   challenger: string;
   match: ChallengeMatch;
   createdAt: Date;
@@ -158,6 +173,7 @@ export function ChallengeMatchNotice({
           href={
             isSpar ? `/battlelog/${match.matchId}` : `/kessen/watch/${match.matchId}`
           }
+          onNavigate={onNavigate}
         >
           <Eye className="mr-[4px] h-[14px] w-[14px]" aria-hidden /> Watch
         </Link>
@@ -168,7 +184,11 @@ export function ChallengeMatchNotice({
 }
 
 /** A spar with the arena's challenge options. */
-function SparOption({ opponent, conversationId }: ChallengePanelProps) {
+function SparOption({
+  opponent,
+  conversationId,
+  onNavigate,
+}: ChallengePanelProps & ChallengeNavigation) {
   const { mutate, isPending } = useCreateSparChallenge();
   const [useRankedRules, setUseRankedRules] = useState(false);
   // A spar challenged from a conversation is announced there only when it can be watched.
@@ -196,6 +216,7 @@ function SparOption({ opponent, conversationId }: ChallengePanelProps) {
       onSend={send}
       feedback={feedback}
       followUp={{ href: "/battlearena#Sparring", label: "Open the arena" }}
+      onNavigate={onNavigate}
     >
       <div className="flex flex-col gap-[6px]">
         <OptionCheckbox
@@ -221,7 +242,11 @@ function SparOption({ opponent, conversationId }: ChallengePanelProps) {
  * A friendly Kessen duel with a deck from the player's Card Hall. Until the first
  * Academy lesson is done the option explains where Kessen is learned instead.
  */
-function KessenOption({ opponent, conversationId }: ChallengePanelProps) {
+function KessenOption({
+  opponent,
+  conversationId,
+  onNavigate,
+}: ChallengePanelProps & ChallengeNavigation) {
   const { hub, catalog } = useKessenHub();
   const props = {
     icon: <Layers className="h-[18px] w-[18px]" aria-hidden />,
@@ -261,6 +286,7 @@ function KessenOption({ opponent, conversationId }: ChallengePanelProps) {
           <Link
             href="/kessen"
             className="font-semibold text-orange-600 hover:underline"
+            onNavigate={onNavigate}
           >
             Open the Card Hall
           </Link>
@@ -280,6 +306,7 @@ function KessenOption({ opponent, conversationId }: ChallengePanelProps) {
       decks={decks}
       defaultDeckId={defaultDeck(decks)?.id ?? null}
       loanerFaction={hub.data.loanerFaction}
+      onNavigate={onNavigate}
     />
   );
 }
@@ -292,7 +319,10 @@ function KessenChallenge({
   defaultDeckId,
   loanerFaction,
   ...props
-}: Pick<ChallengeOptionProps, "icon" | "title" | "description" | "sendLabel"> & {
+}: Pick<
+  ChallengeOptionProps,
+  "icon" | "title" | "description" | "sendLabel" | "onNavigate"
+> & {
   opponent: ChallengeOpponent;
   conversationId?: string | null;
   decks: readonly KessenDeckSummary[];
@@ -393,6 +423,7 @@ function ChallengeOption({
   onSend,
   feedback,
   followUp,
+  onNavigate,
   children,
 }: ChallengeOptionProps) {
   // A sent challenge stays sent: another tap would only duplicate or refuse it.
@@ -443,6 +474,7 @@ function ChallengeOption({
             <Link
               href={followUp.href}
               className="font-semibold text-orange-600 hover:underline"
+              onNavigate={onNavigate}
             >
               {followUp.label}
             </Link>
@@ -466,6 +498,12 @@ interface ChallengePanelProps {
   conversationId?: string | null;
 }
 
+/** Lets the surface holding a challenge control close when one of its links opens a page. */
+interface ChallengeNavigation {
+  /** Called as a link here opens another page, e.g. to close a popover or the chat panel. */
+  onNavigate?: () => void;
+}
+
 /** Where a challenge shortcut is offered: the public conversation that announces its match, if any. */
 export interface ChallengeFrom {
   conversationId: string | null;
@@ -477,7 +515,7 @@ export interface ChallengeOpponent {
   username: string;
 }
 
-interface ChallengeOptionProps {
+interface ChallengeOptionProps extends ChallengeNavigation {
   icon: ReactNode;
   title: string;
   description: string;

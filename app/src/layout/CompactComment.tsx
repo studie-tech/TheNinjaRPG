@@ -83,6 +83,7 @@ export function CompactComment(props: CompactCommentProps) {
         challengeFrom={props.challengeFrom}
         onMention={props.onMentionUser}
         onMessage={props.onMessageUser}
+        onNavigate={props.onNavigate}
         tavernStyling={props.tavernStyling}
       />
       <div className="min-w-0 flex-1">
@@ -263,6 +264,7 @@ function UserMenu({
   challengeFrom,
   onMention,
   onMessage,
+  onNavigate,
   tavernStyling,
 }: {
   user: CompactCommentProps["user"];
@@ -271,6 +273,7 @@ function UserMenu({
   tavernStyling?: boolean;
   onMention?: (username: string) => void;
   onMessage?: (user: ChatStartUser) => void;
+  onNavigate?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "challenge">("menu");
@@ -290,17 +293,16 @@ function UserMenu({
       },
     });
 
+  const changeOpen = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
+      setView("menu");
+      setReturnedFromChallenge(false);
+    }
+  };
+
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) {
-          setView("menu");
-          setReturnedFromChallenge(false);
-        }
-      }}
-    >
+    <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger
         className="focus-visible:ring-ring h-[36px] w-[36px] shrink-0 overflow-hidden rounded-lg focus-visible:ring-2"
         aria-label={`Actions for ${user.username}`}
@@ -322,6 +324,10 @@ function UserMenu({
           <ChallengePanel
             opponent={user}
             conversationId={challengeFrom?.conversationId ?? null}
+            onNavigate={() => {
+              changeOpen(false);
+              onNavigate?.();
+            }}
             leading={
               <Button
                 variant="ghost"
@@ -576,4 +582,6 @@ export interface CompactCommentProps {
   setQuoteId?: (id: string) => void;
   onMentionUser?: (username: string) => void;
   onMessageUser?: (user: ChatStartUser) => void;
+  /** Called as a challenge link opens another page, e.g. to close the chat panel. */
+  onNavigate?: () => void;
 }

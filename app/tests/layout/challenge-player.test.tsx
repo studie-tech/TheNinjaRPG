@@ -11,6 +11,7 @@ import {
 } from "@/layout/ChallengePlayer";
 import type { KessenDeckSummary } from "@/layout/kessen/hub/hubData";
 import * as HubData from "@/layout/kessen/hub/hubData";
+import * as Link from "@/layout/Link";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const DECK: KessenDeckSummary = {
@@ -36,6 +37,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   needsLesson = false;
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
+  // An unmodified click on a Link navigates in the app, as Next's Link does.
+  vi.spyOn(Link, "default").mockImplementation(
+    ({ href, children, onNavigate, prefetch: _prefetch, ...props }) => (
+      <a
+        {...props}
+        href={String(href)}
+        onClick={(event) => {
+          event.preventDefault();
+          onNavigate?.({ preventDefault() {} });
+        }}
+      >
+        {children}
+      </a>
+    ),
+  );
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ sparring: { getUserChallenges: { invalidate: vi.fn() } } }),
     sparring: {
@@ -194,6 +210,14 @@ describe("challenge panel", () => {
     expect(screen.getByRole("link", { name: "Open the Card Hall" })).toBeTruthy();
     expect(duel).not.toHaveBeenCalled();
   });
+
+  it("lets its holder close when one of its links opens a page", () => {
+    needsLesson = true;
+    const onNavigate = vi.fn();
+    render(<ChallengePanel opponent={opponent} onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByRole("link", { name: "Open the Card Hall" }));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("challenge button", () => {
@@ -206,6 +230,21 @@ describe("challenge button", () => {
     const panel = screen.getByRole("dialog", { name: "Challenge Rival" });
     await waitFor(() => expect(document.activeElement).toBe(panel));
     expect(panel.contains(send)).toBe(true);
+  });
+
+  it("closes the panel when its follow-up link opens a page", async () => {
+    spar.mockImplementation((_input, options) =>
+      options.onSuccess({ success: true, message: "Challenge sent to Rival." }),
+    );
+    render(<ChallengeButton opponent={opponent} />);
+    fireEvent.click(screen.getByRole("button", { name: "Challenge Rival" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Send Rival a sparring challenge" }),
+    );
+    fireEvent.click(await screen.findByRole("link", { name: "Open the arena" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Challenge Rival" })).toBeNull(),
+    );
   });
 });
 
@@ -229,4 +268,19 @@ describe("challenge match notice", () => {
       );
     },
   );
+
+  it("lets the chat panel close when Watch opens the match", () => {
+    const onNavigate = vi.fn();
+    render(
+      <ChallengeMatchNotice
+        challenger="Hero"
+        match={{ type: "SPAR", matchId: "m-1", opponentName: "Rival" }}
+        createdAt={new Date()}
+        compact
+        onNavigate={onNavigate}
+      />,
+    );
+    fireEvent.click(screen.getByRole("link", { name: "Watch" }));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
 });

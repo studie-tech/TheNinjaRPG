@@ -63,6 +63,8 @@ interface ConversationCommentProps extends PostProps {
   compact?: boolean;
   onMentionUser?: (username: string) => void;
   onMessageUser?: (user: ChatStartUser) => void;
+  /** Called as a challenge link opens another page, e.g. to close the chat panel. */
+  onNavigate?: () => void;
 }
 export const CommentOnConversation: React.FC<ConversationCommentProps> = (props) => {
   const [editing, setEditing] = useState(false);
@@ -117,6 +119,7 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
         match={props.comment.challengeMatch}
         createdAt={props.comment.createdAt}
         compact={props.compact}
+        onNavigate={props.onNavigate}
         action={
           userData &&
           canDeleteComment(userData, props.comment.userId) && (
@@ -151,6 +154,7 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
         setEditing={setEditing}
         onMentionUser={props.onMentionUser}
         onMessageUser={props.onMessageUser}
+        onNavigate={props.onNavigate}
       >
         {props.children}
       </CompactComment>
