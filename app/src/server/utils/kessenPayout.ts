@@ -238,8 +238,10 @@ export const kessenTrackerUser = (
 
 /**
  * The payout of a finished match from one snapshot: eligibility, caps, ryo, the seeded
- * drop roll, first-win rewards and the keywords it revealed. Pure; the claims in
- * `settleKessenPayout` decide which parts are paid.
+ * drop roll, first-win rewards and the keywords it revealed. A quest challenge match
+ * plans no reward, first win, Circuit record or `win_card_duel` event: its win pays only
+ * the objective it was started for. Pure; the claims in `settleKessenPayout` decide
+ * which parts are paid.
  */
 export const planKessenFinish = (input: PlanInput): KessenFinishPlan => {
   const { stored, npc, now } = input;
@@ -247,6 +249,7 @@ export const planKessenFinish = (input: PlanInput): KessenFinishPlan => {
   const winner = engine.result?.winner ?? null;
   const outcome = outcomeFor(winner);
   const lesson = stored.mode === "lesson";
+  const challenge = !!stored.challenge;
   const win = outcome === "win";
   const dayKey = getUtcDayKey(now);
   const weekKey = getUtcDayKey(periodStart("weekly", now));
@@ -273,6 +276,7 @@ export const planKessenFinish = (input: PlanInput): KessenFinishPlan => {
     eligibility,
     weeklyWins: weeklyWinsFor(progress ?? null, weekKey),
     lesson,
+    challenge,
   });
 
   const pool = stored.pool;
@@ -339,7 +343,7 @@ export const planKessenFinish = (input: PlanInput): KessenFinishPlan => {
     if (first && key === KESSEN_ACADEMY_FIRST_LESSON) {
       firstWin = { itemIds: [], choice: { kind: "starterFaction" } };
     }
-  } else if (variant && firstWinEarned(outcome, "play")) {
+  } else if (variant && !challenge && firstWinEarned(outcome, "play")) {
     const claimed =
       stored.mode === "ascended"
         ? input.npcProgress?.ascendedFirstWinAt
@@ -370,6 +374,7 @@ export const planKessenFinish = (input: PlanInput): KessenFinishPlan => {
 
   return {
     lesson,
+    challenge,
     academy,
     mode: stored.mode,
     win,
@@ -383,7 +388,7 @@ export const planKessenFinish = (input: PlanInput): KessenFinishPlan => {
     firstWinTitle,
     seenKeywords: [...seen].sort(),
     objective:
-      win && eligibility.eligible && !lesson
+      win && eligibility.eligible && !lesson && !challenge
         ? { npcKey: npc.key, tier: input.tier }
         : null,
     result: {
@@ -477,12 +482,12 @@ const claimKessenPayout = async (
             seenKeywords: plan.seenKeywords,
           })
         : updateKessenProgressSeenKeywords(client, userId, plan.seenKeywords),
-    !plan.win || plan.lesson
+    !plan.win || plan.lesson || plan.challenge
       ? null
       : plan.mode === "ascended"
         ? updateKessenNpcProgressForAscendedFirstWin(client, userId, npcKey, finishedAt)
         : upsertKessenNpcProgressForStandardWin(client, userId, npcKey, finishedAt),
-    plan.win && plan.mode === "ascended"
+    plan.win && plan.mode === "ascended" && !plan.challenge
       ? updateKessenNpcProgressForWin(client, userId, npcKey, finishedAt)
       : null,
   ]);

@@ -5269,6 +5269,29 @@ export const KESSEN_RYO_SCALE = 5;
 export const KessenTiers = ["GENIN", "CHUNIN", "JONIN", "KAGE"] as const;
 export type KessenTier = (typeof KessenTiers)[number];
 
+/**
+ * The Kessen Circuit's NPC opponents, by key, with the names players see. Their decks,
+ * rules and rewards live in `libs/kessen/npcs.ts`; quest objectives name them from here.
+ */
+export const KESSEN_NPC_NAMES = {
+  lemu: "Lemu",
+  kazehiko: "Kazehiko",
+  hisame: "Hisame",
+  junko: "Junko",
+  kimiko: "Kimiko",
+  "crowned-captain": "The Crowned Captain",
+  "kaze-no-seirei": "Kaze no Seirei",
+  ravena: "Ravena Bloodsilk",
+  "anbu-chief": "Anbu Chief",
+  momo: "Momo",
+  shishi: "Shishi",
+  unmeishi: "Unmeishi",
+} as const;
+export const KESSEN_NPC_KEYS = Object.keys(KESSEN_NPC_NAMES) as [
+  keyof typeof KESSEN_NPC_NAMES,
+  ...(keyof typeof KESSEN_NPC_NAMES)[],
+];
+
 /** Lifecycle of a Kessen match; only ACTIVE matches accept actions. */
 export const KessenMatchStatuses = [
   "ACTIVE",

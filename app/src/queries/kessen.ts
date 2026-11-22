@@ -7,6 +7,7 @@ import {
   count,
   desc,
   eq,
+  exists,
   inArray,
   isNull,
   like,
@@ -469,6 +470,28 @@ export const updateKessenMatchesForConcede = (
         eq(kessenMatch.status, "ACTIVE"),
       ),
     );
+
+/**
+ * The condition that a match is still ACTIVE at `version`, for writes that must land only
+ * before the turn that ends the match does, such as a quest challenge's objective.
+ */
+export const kessenMatchIsActive = (
+  client: Pick<DrizzleClient, "select">,
+  match: { id: string; userId: string; version: number },
+) =>
+  exists(
+    client
+      .select({ id: kessenMatch.id })
+      .from(kessenMatch)
+      .where(
+        and(
+          eq(kessenMatch.id, match.id),
+          eq(kessenMatch.userId, match.userId),
+          eq(kessenMatch.version, match.version),
+          eq(kessenMatch.status, "ACTIVE"),
+        ),
+      ),
+  );
 
 /**
  * The one write of a turn: a CAS on `version` of an ACTIVE match. A finishing turn sets

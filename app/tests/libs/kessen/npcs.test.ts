@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { KESSEN_NPC_NAMES } from "@/drizzle/constants";
 import {
   catalogById,
   expandDeckCards,
@@ -73,6 +74,12 @@ const unlocked = (...args: Parameters<typeof npcLockReason>) =>
   npcLockReason(...args) === null;
 
 describe("NPC roster", () => {
+  it("names every NPC as quest objectives show it", () => {
+    expect(
+      Object.fromEntries(KESSEN_NPCS.map((entry) => [entry.key, entry.name])),
+    ).toEqual(KESSEN_NPC_NAMES);
+  });
+
   it("lists the twelve NPCs in unlock order", () => {
     expect(KESSEN_NPCS.map((entry) => [entry.key, entry.standard.tier])).toEqual([
       ["lemu", "GENIN"],

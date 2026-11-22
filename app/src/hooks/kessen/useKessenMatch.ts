@@ -15,6 +15,7 @@ import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { useUserInfo } from "@/utils/UserContext";
 import type { KessenEvent, KessenMatchPayload } from "@/validators/kessen";
+import type { UserCachePatch } from "@/validators/userCache";
 
 /** What a match action resolves with; `message` explains a rejection next to the action. */
 export type KessenActionOutcome = {
@@ -32,7 +33,8 @@ type KessenActionInput = RouterInputs["kessen"]["playTurn"]["action"];
  * `claimChoice`, each resolving with the confirmed payload. Confirmed responses patch the
  * match query (a stale version returns the fresh match, which replaces the cache) and the
  * hub: the active match's standing while it goes on; once it ended, the counters, cards
- * and open picks, with paid ryo credited to the profile. The inventory (and the hub after
+ * and open picks, with paid ryo (or a quest challenge's finished objective) applied to
+ * the profile. The inventory (and the hub after
  * a first win) refreshes in the background so playback starts at once. A transport or server failure resolves at once with a rejection the table shows
  * next to the action; the outcome is unknown, so the match, hub, profile and inventory
  * are read again in the background.
@@ -69,6 +71,7 @@ export const useKessenMatch = (matchId: string | null) => {
       match?: KessenMatchPayload;
       granted?: { itemId: string; quantity: number }[];
       userDelta?: { money?: number };
+      userPatch?: UserCachePatch;
     },
   ) => {
     const confirmed = data.match;
@@ -97,7 +100,9 @@ export const useKessenMatch = (matchId: string | null) => {
             : getKessenHubAfterTurn(current, confirmed),
         snapshot.hub,
       ),
-      data.userDelta ? updateUser(data, { revision: snapshot.user }) : null,
+      data.userDelta || data.userPatch
+        ? updateUser(data, { revision: snapshot.user })
+        : null,
     ]);
   };
 

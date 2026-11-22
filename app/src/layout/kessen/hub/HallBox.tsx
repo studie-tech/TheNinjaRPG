@@ -20,6 +20,7 @@ export const HallBox = ({
   title = KESSEN_GAME_NAME,
   subtitle = KESSEN_HALL_SUBTITLE,
   scene = null,
+  backHref = "/manual#minigames",
 }: {
   children: React.ReactNode;
   /** The section tabs, in the frame's header. */
@@ -27,13 +28,15 @@ export const HallBox = ({
   title?: string;
   subtitle?: string;
   scene?: HallScene | null;
+  /** Where the frame's back control leads while no scene is open. */
+  backHref?: string;
 }) => (
   <ContentBox
     title={scene ? "Card Hall" : title}
     subtitle={
       <span className="block whitespace-normal">{scene?.label ?? subtitle}</span>
     }
-    defaultBackHref="/manual#minigames"
+    defaultBackHref={backHref}
     onBack={scene?.onLeave}
     padding={false}
     topRightContent={scene ? undefined : tabs}

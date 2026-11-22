@@ -3,7 +3,7 @@
  * unlock order, first-win rewards, drop tables and barks. Lemu's Academy lessons live
  * in `academy.ts`. Code data, versioned with the engine.
  */
-import type { KessenTier } from "@/drizzle/constants";
+import { KESSEN_NPC_KEYS, type KessenTier } from "@/drizzle/constants";
 import type { KessenDeckCard } from "@/drizzle/schema";
 import type { KessenAiProfile } from "./ai";
 import {
@@ -22,20 +22,7 @@ import type { KessenCard, MatchRules } from "./types";
 
 /** Power a unit kept on the board gains under Junko's Ascended Blood Moon. */
 const BLOOD_MOON_CARRY = 2;
-export const KessenNpcKeys = [
-  "lemu",
-  "kazehiko",
-  "hisame",
-  "junko",
-  "kimiko",
-  "crowned-captain",
-  "kaze-no-seirei",
-  "ravena",
-  "anbu-chief",
-  "momo",
-  "shishi",
-  "unmeishi",
-] as const;
+export const KessenNpcKeys = KESSEN_NPC_KEYS;
 export type KessenNpcKey = (typeof KessenNpcKeys)[number];
 
 /** The Circuit's matches: the standard match, or a champion's Ascended rematch. */

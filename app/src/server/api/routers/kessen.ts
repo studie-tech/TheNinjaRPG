@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getKessenMatchLog, getKessenPayoutUserUpdate } from "@/deltas/kessen";
+import { getQuestChallengeUserUpdate } from "@/deltas/questChallenge";
 import {
   KESSEN_DAILY_DROP_ROLLS,
   KESSEN_DAILY_REWARDED_MATCHES,
@@ -56,6 +57,7 @@ import { runNpcReplies, tierOfMode } from "@/libs/kessen/npcTurns";
 import { countPlays, weeklyWinsFor } from "@/libs/kessen/rewards";
 import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import type { KessenEvent, SeatSetup } from "@/libs/kessen/types";
+import { findQuestChallenge } from "@/libs/quest/challenge";
 import {
   findKessenDeck,
   findKessenMatch,
@@ -64,6 +66,7 @@ import {
   findKessenProgress,
   insertKessenMatch,
   insertKessenProgressIfMissing,
+  kessenMatchIsActive,
   listActiveKessenMatches,
   listKessenCards,
   listKessenDecks,
@@ -78,6 +81,7 @@ import {
 import { listActiveKessenMatchesForPlayers } from "@/queries/kessenPvp";
 import { fetchUser } from "@/queries/profile";
 import { fetchQuestTrackerState } from "@/queries/quests";
+import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
 import {
   cdnCachedProcedure,
   createTRPCRouter,
@@ -99,6 +103,7 @@ import {
   settleKessenPayout,
   unsettledKessenResult,
 } from "@/server/utils/kessenPayout";
+import { recordQuestChallengeWin } from "@/server/utils/questChallenge";
 import { getUtcDayKey, periodStart } from "@/utils/time";
 import {
   type KessenCatalog,
@@ -115,6 +120,10 @@ import {
   kessenActionSchema,
   kessenDeckSourceSchema,
 } from "@/validators/kessen";
+import {
+  type QuestChallengeRequest,
+  questChallengeRequestSchema,
+} from "@/validators/questChallenge";
 
 const matchIdSchema = z.string().min(1).max(191);
 
@@ -174,6 +183,12 @@ export const kessenRouter = createTRPCRouter({
       return { match: toPayload(row), log: matchLog(row) };
     }),
 
+  /**
+   * Start a Circuit match, or a quest challenge match for an active
+   * `win_kessen_challenge` objective whose location the caller stands on. A challenge
+   * takes its opponent and AI tier from the objective, never from the request, plays the
+   * opponent's signature deck and needs no Circuit unlock.
+   */
   startMatch: protectedProcedure
     .meta({ mcp: { description: "Start a Kessen match against a Circuit NPC" } })
     .input(
@@ -182,13 +197,13 @@ export const kessenRouter = createTRPCRouter({
         mode: z.enum(KESSEN_CIRCUIT_MODES),
         deck: kessenDeckSourceSchema,
         replaceActive: z.boolean().optional(),
+        challenge: questChallengeRequestSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }): Promise<KessenStartResult> => {
       const userId = ctx.userId;
       const now = new Date();
       const dayKey = getUtcDayKey(now);
-      const npc = kessenNpc(input.npcKey) as KessenNpc;
       const deckId = input.deck.source === "loaner" ? null : input.deck.deckId;
       const [
         catalogRows,
@@ -199,6 +214,7 @@ export const kessenRouter = createTRPCRouter({
         ownedRows,
         deckRows,
         playerRows,
+        questUser,
       ] = await Promise.all([
         listKessenCards(ctx.drizzle),
         listActiveKessenMatches(ctx.drizzle, userId),
@@ -208,7 +224,20 @@ export const kessenRouter = createTRPCRouter({
         listOwnedKessenCards(ctx.drizzle, userId),
         deckId ? findKessenDeck(ctx.drizzle, userId, deckId) : Promise.resolve([]),
         findKessenPlayer(ctx.drizzle, userId),
+        input.challenge
+          ? fetchUpdatedUser({
+              client: ctx.drizzle,
+              userId,
+              rejectIsolatedPyramid: true,
+            })
+          : undefined,
       ]);
+      const quest = input.challenge
+        ? findTableChallenge(questUser?.user, input.challenge)
+        : null;
+      if (quest && "message" in quest) return errorResponse(quest.message);
+      const mode = quest ? "standard" : input.mode;
+      const npc = kessenNpc(quest?.npcKey ?? input.npcKey) as KessenNpc;
       const progress = progressRows[0] ?? null;
       const player = playerRows[0] ?? null;
       const home = homeFaction(
@@ -216,17 +245,15 @@ export const kessenRouter = createTRPCRouter({
         player?.isOutlaw ?? false,
         progress?.starterFaction,
       );
-      const lock = npcLockReason(
-        npc,
-        input.mode,
-        circuitProgress(progress, npcRows, home),
-      );
+      const lock = quest
+        ? null
+        : npcLockReason(npc, mode, circuitProgress(progress, npcRows, home));
       if (lock) return errorResponse(lock);
       const busy = activeMatchRejection(anyActive, active, input.replaceActive);
       if (busy) return busy;
 
       const pool = snapshotCatalog(kessenCatalogCards(catalogRows));
-      const variant = npcVariant(npc, input.mode);
+      const variant = npcVariant(npc, mode);
       if (!variant) return errorResponse("This opponent has no such match.");
       const deck = buildPlayerDeck({
         source: input.deck,
@@ -254,15 +281,16 @@ export const kessenRouter = createTRPCRouter({
       return openNpcMatch(ctx.drizzle, {
         userId,
         npc,
-        tier: tierOfMode(npc, input.mode),
+        tier: quest?.tier ?? tierOfMode(npc, mode),
         deckId,
         now,
         active,
         progressMissing: !progress,
         opening: {
           engine: createMatch(setup),
-          mode: input.mode,
+          mode,
           lesson: null,
+          challenge: quest ? input.challenge : null,
           pool,
           aiDeck,
           borrowed: [...new Set(deck.borrowed.map((entry) => entry.itemId))].sort(),
@@ -393,16 +421,40 @@ export const kessenRouter = createTRPCRouter({
       }
 
       // The match ended through play: read what the payout needs, then claim the match.
+      // A quest challenge win records its objective first, while the match is still
+      // ACTIVE at this version, so a failed recording leaves the turn unplayed and the
+      // player plays it again in full.
       const winner = ai.engine.result?.winner ?? null;
-      const objectivePossible = winner === 0 && stored.mode !== "lesson";
-      const [progressRows, npcRows, ownedRows, questUser, questState] =
+      const challenge = stored.challenge ?? null;
+      const objectivePossible = winner === 0 && stored.mode !== "lesson" && !challenge;
+      const [progressRows, npcRows, ownedRows, questUser, questState, recorded] =
         await Promise.all([
           findKessenProgress(ctx.drizzle, userId),
           findKessenNpcProgressRows(ctx.drizzle, userId, npc.key),
           listOwnedKessenCards(ctx.drizzle, userId),
           objectivePossible ? fetchUser(ctx.drizzle, userId) : null,
           objectivePossible ? fetchQuestTrackerState(ctx.drizzle, userId) : null,
+          challenge && winner === 0
+            ? recordQuestChallengeWin({
+                client: ctx.drizzle,
+                userId,
+                challenge,
+                task: "win_kessen_challenge",
+                runIsActive: kessenMatchIsActive(ctx.drizzle, {
+                  id: match.id,
+                  userId,
+                  version: match.version,
+                }),
+              })
+            : null,
         ]);
+      if (recorded && !recorded.ok) {
+        return {
+          ...errorResponse(recorded.message),
+          match: toPayload(match),
+          events: [] as KessenEvent[],
+        };
+      }
       const plan = planKessenFinish({
         dropSeed: match.seed,
         npc,
@@ -448,9 +500,12 @@ export const kessenRouter = createTRPCRouter({
         now,
       });
       if (!settled) return staleTurn(ctx.drizzle, userId, match.id);
+      const completedFor = recorded?.ok ? recorded.completedFor : undefined;
       return {
         success: true,
-        message: resultMessage(settled.result),
+        message: challenge
+          ? challengeResultMessage(winner, !!completedFor)
+          : resultMessage(settled.result),
         match: toPayload({
           ...match,
           status: "FINISHED",
@@ -461,7 +516,12 @@ export const kessenRouter = createTRPCRouter({
         }),
         events: redacted,
         granted: settled.grants,
-        ...getKessenPayoutUserUpdate(settled.ryo),
+        ...(challenge
+          ? getQuestChallengeUserUpdate(
+              completedFor,
+              recorded?.ok ? recorded.battle : undefined,
+            )
+          : getKessenPayoutUserUpdate(settled.ryo)),
       };
     }),
 
@@ -738,6 +798,7 @@ const toPayload = (row: KessenMatch): KessenMatchPayload => {
     lesson: stored.lesson ?? null,
     tier: row.tier as KessenTier,
     startedAt: row.startedAt,
+    challenge: stored.challenge ?? null,
     view: viewFor(stored.engine, 0),
     borrowed: stored.borrowed ?? [],
     result: stored.result ?? null,
@@ -778,6 +839,37 @@ const resultMessage = (result: KessenMatchResult) => {
   if (result.academy) return outcome;
   if (!result.rewarded) return result.reason ? `${outcome} ${result.reason}` : outcome;
   return result.ryo > 0 ? `${outcome} +${result.ryo} ryo.` : outcome;
+};
+
+/** The outcome of a quest challenge match, pointing on to the logbook or another try. */
+const challengeResultMessage = (winner: number | null, objectiveDone: boolean) =>
+  winner !== 0
+    ? `${winner === 1 ? "You lost." : "A draw."} Take your seat again when you are ready.`
+    : objectiveDone
+      ? "You won! Continue the quest in your logbook."
+      : "You won, but this quest objective is no longer open.";
+
+/**
+ * The opponent and AI tier of an active `win_kessen_challenge` objective the player
+ * stands on, or why its match cannot start. The objective's location is the one rolled
+ * for this player.
+ */
+const findTableChallenge = (
+  user: UserWithRelations | undefined,
+  request: QuestChallengeRequest,
+): { npcKey: KessenNpcKey; tier: KessenTier } | { message: string } => {
+  if (!user) return { message: "User not found." };
+  const found = findQuestChallenge(user, request, "win_kessen_challenge");
+  if (!found || found.done || !found.available)
+    return { message: "This duel is not an open objective of your active quests." };
+  const { objective } = found;
+  if (!found.atLocation)
+    return {
+      message: objective.hideLocation
+        ? "You are not at this position."
+        : `Travel to sector ${objective.sector} at [${objective.longitude}, ${objective.latitude}] to take your seat there.`,
+    };
+  return { npcKey: objective.npcKey, tier: objective.tier };
 };
 
 const circuitProgress = (

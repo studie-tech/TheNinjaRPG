@@ -37,6 +37,7 @@ import {
 import { useNavigationRouter } from "@/hooks/navigation";
 import { EmptyState } from "@/layout/EmptyState";
 import { FeedbackAlert } from "@/layout/FeedbackAlert";
+import { KessenQuestChallenge } from "@/layout/KessenQuestChallenge";
 import { CardInspectDialog } from "@/layout/kessen/CardInspectDialog";
 import { AcademyPanel } from "@/layout/kessen/hub/AcademyPanel";
 import { CircuitMap } from "@/layout/kessen/hub/CircuitMap";
@@ -65,6 +66,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import { QueryError } from "@/layout/QueryError";
+import { QUEST_LOGBOOK_HREF } from "@/layout/QuestChallenge";
 import Shop from "@/layout/Shop";
 import {
   KESSEN_ACADEMY,
@@ -74,7 +76,9 @@ import {
 import type { DeckFaction } from "@/libs/kessen/deck";
 import type { KessenNpcKey } from "@/libs/kessen/npcs";
 import { isKessenPackId, KESSEN_PACK_IDS } from "@/libs/kessen/packs";
+import { findQuestChallenge } from "@/libs/quest/challenge";
 import { showMutationToast } from "@/libs/toast";
+import type { UserWithRelations } from "@/routers/profile";
 import { formatTrpcErrorMessage } from "@/utils/error";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { getUtcDayKey } from "@/utils/time";
@@ -155,6 +159,14 @@ function KessenHall() {
   const router = useNavigationRouter();
   const searchParams = useSearchParams();
   const linkedTab = tabOfParam(searchParams.get("tab"));
+  // A quest's Duel at the Table opens from the logbook as `?quest=&objective=`.
+  const challengeQuest = searchParams.get("quest");
+  const challengeObjective = searchParams.get("objective");
+  const challengeRequest =
+    challengeQuest && challengeObjective
+      ? { questId: challengeQuest, objectiveId: challengeObjective }
+      : null;
+  const { data: questUser } = useUserDataSelector(selectChallengeUser);
   const [tab, setTab] = useState<KessenTab>(() => linkedTab ?? storedTab());
   // A section link that arrives while the hall is open switches to its section.
   const [appliedLink, setAppliedLink] = useState(linkedTab);
@@ -421,11 +433,25 @@ function KessenHall() {
   };
   // The failure shows next to Rematch on the end screen; the pending start disables it.
   // A lesson leads on with its own buttons (Next lesson, Try again).
+  const playedChallenge = payload?.challenge ?? null;
+  const challengeWon = !!playedChallenge && payload?.result?.winner === 0;
   const rematch =
     payload && payload.mode !== "lesson"
       ? () => {
+          if (challengeWon) return router.push(QUEST_LOGBOOK_HREF);
           if (isStarting) return;
-          void startMatch(rematchRequest(payload, lastStart, playDeck, hub));
+          void startMatch(
+            playedChallenge
+              ? {
+                  npcKey: payload.npcKey,
+                  mode: "standard",
+                  deck: lastStart?.challenge
+                    ? lastStart.deck
+                    : deckSourceOf(playDeck, hub),
+                  challenge: playedChallenge,
+                }
+              : rematchRequest(payload, lastStart, playDeck, hub),
+          );
         }
       : undefined;
 
@@ -500,6 +526,9 @@ function KessenHall() {
         onConcede={match.concede}
         onClose={closeTable}
         onRematch={rematch}
+        rematchLabel={
+          playedChallenge ? (challengeWon ? "Open logbook" : "Try again") : undefined
+        }
         isStarting={isStarting}
         startError={startError}
         onEditDeck={payload.mode === "lesson" ? undefined : editDeck}
@@ -658,6 +687,35 @@ function KessenHall() {
       ))}
     />
   );
+
+  // A quest's Duel at the Table: its briefing takes the hall's place until a table opens.
+  if (challengeRequest && !scene) {
+    const found = questUser
+      ? findQuestChallenge(questUser, challengeRequest, "win_kessen_challenge")
+      : null;
+    return (
+      <HallBox subtitle="Duel at the Table" backHref={QUEST_LOGBOOK_HREF}>
+        <KessenQuestChallenge
+          challenge={found}
+          opponent={hub.circuit.find((entry) => entry.key === found?.objective.npcKey)}
+          decks={summaries}
+          defaultDeckId={playDeck?.id}
+          loanerFaction={hub.loanerFaction}
+          isStarting={isStarting}
+          error={startError}
+          onStart={(deck) => {
+            if (!found || isStarting) return;
+            void startMatch({
+              npcKey: found.objective.npcKey,
+              mode: "standard",
+              deck,
+              challenge: challengeRequest,
+            });
+          }}
+        />
+      </HallBox>
+    );
+  }
 
   // First visit: one button, Lemu's first lesson.
   const firstLesson = hub.academy.lessons[0] ?? null;
@@ -1295,6 +1353,15 @@ const failure = (error: unknown, fallback: string) => ({
 });
 
 const selectPlayer = (profile: { userId: string }) => ({ userId: profile.userId });
+
+/** What a quest challenge's briefing reads: the player's quests and position. */
+const selectChallengeUser = (profile: NonNullable<UserWithRelations>) => ({
+  userQuests: profile.userQuests,
+  questData: profile.questData,
+  sector: profile.sector,
+  longitude: profile.longitude,
+  latitude: profile.latitude,
+});
 
 /** Card copies listed in the auction house per item id, from the inventory rows. */
 const listedCardCounts = (

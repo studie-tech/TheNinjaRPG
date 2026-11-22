@@ -14,7 +14,7 @@ import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { CHAKRA_STORM_STAGE_NAMES } from "@/drizzle/constants";
+import { CHAKRA_STORM_STAGE_NAMES, KESSEN_NPC_NAMES } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
@@ -39,6 +39,7 @@ import type {
   AllObjectivesType,
   QuestTrackerType,
   WinChakraStormType,
+  WinKessenChallengeType,
   WinTowerDefenseType,
 } from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
@@ -319,6 +320,17 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
               in {CHAKRA_STORM_STAGE_NAMES[parsed.stage]}.
             </QuestChallengeAction>
           )}
+          {parsed.task === "win_kessen_challenge" && !done && !props.grayedOut && (
+            <QuestChallengeAction
+              questId={tracker.id}
+              objective={{ ...parsed, ...located }}
+              page="/kessen"
+              label="Take a seat"
+            >
+              Win a Kessen match against {KESSEN_NPC_NAMES[parsed.npcKey]}, played at{" "}
+              {parsed.tier.charAt(0) + parsed.tier.slice(1).toLowerCase()} difficulty.
+            </QuestChallengeAction>
+          )}
           {/* Retry button for lost start_battle objectives that are still open */}
           {canRetryBattle && (
             <div className="mt-2 flex flex-row items-center justify-end">
@@ -341,18 +353,18 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
 };
 
 /**
- * What a tower defense challenge asks for, and the way into it once the player stands on
+ * What a minigame challenge asks for, and the way into it once the player stands on
  * its location. A hidden location cannot be checked here, so the server decides.
  * Subscribes to a single boolean so movement re-renders it only when arriving or leaving.
  */
 const QuestChallengeAction = (props: {
   questId: string;
   objective: Pick<
-    WinTowerDefenseType | WinChakraStormType,
+    WinTowerDefenseType | WinChakraStormType | WinKessenChallengeType,
     "id" | "sector" | "longitude" | "latitude" | "hideLocation"
   >;
   /** The minigame page the challenge is played on. */
-  page: "/towerDefense" | "/chakraStorm";
+  page: "/towerDefense" | "/chakraStorm" | "/kessen";
   label: string;
   children: React.ReactNode;
 }) => {

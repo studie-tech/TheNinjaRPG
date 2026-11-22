@@ -22,6 +22,7 @@ import type {
   Seat,
 } from "@/libs/kessen/types";
 import { KessenRows } from "@/validators/itemCard";
+import type { QuestChallengeRequest } from "@/validators/questChallenge";
 
 /** Factions a deck is built around (every faction but Neutral). */
 export const kessenDeckFactionSchema = z.enum(KESSEN_DECK_FACTIONS);
@@ -136,6 +137,8 @@ export interface KessenMatchPayload {
   lesson: KessenAcademyLessonKey | null;
   tier: KessenTier;
   startedAt: Date;
+  /** The quest objective a challenge match is played for; absent for every other match. */
+  challenge?: QuestChallengeRequest | null;
   view: MatchView;
   /** Card item ids that were lent for this match (loaner or fill). */
   borrowed: string[];
@@ -293,6 +296,11 @@ export interface KessenStoredMatch {
   mode: KessenMode;
   /** The Academy lesson of a lesson match; null for every other match. */
   lesson: KessenAcademyLessonKey | null;
+  /**
+   * The `win_kessen_challenge` objective a quest challenge match is played for: its win
+   * records the objective and the match pays nothing else. Absent for every other match.
+   */
+  challenge?: QuestChallengeRequest | null;
   pool: KessenCard[];
   aiDeck: string[];
   borrowed: string[];
@@ -312,6 +320,8 @@ export interface KessenStoredMatch {
 /** The payout planned when a match ends through play, before its claims run. */
 export interface KessenSettlement {
   lesson: boolean;
+  /** A quest challenge match, which claims no reward, first win or Circuit record. */
+  challenge?: boolean;
   /** A lesson match's Academy claim: its first completion, ryo and the series pack. */
   academy: {
     lesson: KessenAcademyLessonKey;

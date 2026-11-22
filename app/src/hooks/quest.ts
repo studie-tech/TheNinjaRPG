@@ -149,7 +149,8 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
         objective.image = IMG_BADGE_DIALOG;
       } else if (
         objective.task === "win_tower_defense" ||
-        objective.task === "win_chakra_storm"
+        objective.task === "win_chakra_storm" ||
+        objective.task === "win_kessen_challenge"
       ) {
         objective.image = objectiveImageMap[objective.task].image;
       }

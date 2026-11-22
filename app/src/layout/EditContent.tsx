@@ -2393,6 +2393,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   waves: "Waves to clear (counting the start wave)",
   stage: "Chakra Storm region (sets the difficulty)",
   surviveMinutes: "Minutes to survive",
+  npcKey: "Kessen opponent",
   enemyHealth: "Enemy health (% of a normal run)",
   enemyDamage: "Enemy damage (% of a normal run)",
   nextObjectiveId: "Next Objective ID",

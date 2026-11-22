@@ -302,6 +302,7 @@ export const KessenMatchView = ({
           onEditDeck={onEditDeck}
           onClaimChoice={onClaimChoice}
           guestNote={guestNote}
+          rematchLabel={rematchLabel}
         />
       ) : null}
       {heading && lessonInfo && !introDone && !showEnd ? (

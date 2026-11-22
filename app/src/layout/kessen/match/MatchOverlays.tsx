@@ -9,6 +9,7 @@ import {
   Lightbulb,
   Package,
   RotateCcw,
+  ScrollText,
   SquarePen,
   X,
 } from "lucide-react";
@@ -354,6 +355,7 @@ export const MatchEndScreen = ({
   onEditDeck,
   onClaimChoice,
   guestNote,
+  rematchLabel = "Rematch",
 }: {
   table: MatchTable;
   lesson: boolean;
@@ -369,6 +371,8 @@ export const MatchEndScreen = ({
   onClaimChoice?: (itemId: string) => Promise<KessenTableOutcome>;
   /** A guest's match settles nothing; this says so in the rewards' place. */
   guestNote?: ReactNode;
+  /** The rematch button's words, such as "Try again" for a quest duel. */
+  rematchLabel?: string;
 }) => {
   const { me, them, setInspected } = table;
   const confirmed = table.npcMatch;
@@ -476,8 +480,13 @@ export const MatchEndScreen = ({
   const readCard = reading ? table.cardDisplay(reading) : null;
   // Rewards worth a column of their own: cards to see or a pick to make.
   const split = rewards.length > 0 || pickPending;
-  const note =
-    result && !result.rewarded && result.reason && !lesson
+  // A quest duel pays nothing but its objective, whatever the reason the match ended.
+  const questDuel = !!confirmed?.challenge;
+  const note = questDuel
+    ? result?.winner === table.me
+      ? "Quest duels pay nothing but the quest objective."
+      : "Quest duels pay nothing; win one to complete the objective."
+    : result && !result.rewarded && result.reason && !lesson
       ? unrewardedNote(result.reason, firstWinPaid)
       : null;
   const hasLines =
@@ -562,7 +571,11 @@ export const MatchEndScreen = ({
               {hasLines || note || replayNote ? (
                 <div className="km-reward-box">
                   <h3 className="km-reward-title">
-                    {lesson ? "Lesson reward" : "Match rewards"}
+                    {lesson
+                      ? "Lesson reward"
+                      : questDuel
+                        ? "Quest duel"
+                        : "Match rewards"}
                   </h3>
                   {hasLines ? (
                     <div className="km-reward-lines">
@@ -714,8 +727,12 @@ export const MatchEndScreen = ({
                 loading={isStarting}
                 onClick={onRematch}
               >
-                <RotateCcw className="h-4 w-4" aria-hidden />
-                <span>Rematch</span>
+                {rematchLabel === "Open logbook" ? (
+                  <ScrollText className="h-4 w-4" aria-hidden />
+                ) : (
+                  <RotateCcw className="h-4 w-4" aria-hidden />
+                )}
+                <span>{rematchLabel}</span>
               </Button>
             ) : null}
             {onEditDeck && !chooseFaction ? (

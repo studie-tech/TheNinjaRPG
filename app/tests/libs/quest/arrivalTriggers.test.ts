@@ -52,7 +52,7 @@ describe("getArrivalQuestTriggers", () => {
     expect(getArrivalQuestTriggers(empty, elsewhere).shouldCheckQuest).toBe(false);
   });
 
-  it.each(["win_tower_defense", "win_chakra_storm"])(
+  it.each(["win_tower_defense", "win_chakra_storm", "win_kessen_challenge"])(
     "leaves %s challenges to their run's claim, except ambushes",
     (task) => {
       const challenge = (extra: object = {}) =>

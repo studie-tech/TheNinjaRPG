@@ -290,7 +290,13 @@ export interface PayoutInput {
   weeklyWins: number;
   /** Academy lessons pay only their own reward. */
   lesson?: boolean;
+  /** Quest challenge matches pay only their quest objective. */
+  challenge?: boolean;
 }
+
+/** Why a quest challenge match pays no Circuit reward. */
+export const KESSEN_CHALLENGE_UNREWARDED =
+  "Quest challenges pay only their quest objective.";
 
 export interface PayoutPlan {
   rewarded: boolean;
@@ -320,6 +326,7 @@ export const planMatchPayout = (input: PayoutInput): PayoutPlan => {
     counters,
   });
   if (input.lesson) return unrewarded("Lessons pay only their Academy reward.");
+  if (input.challenge) return unrewarded(KESSEN_CHALLENGE_UNREWARDED);
   if (!input.eligibility.eligible) return unrewarded(input.eligibility.reason);
   if (counters.rewarded >= KESSEN_DAILY_REWARDED_MATCHES) {
     return unrewarded("Daily reward limit reached; this match was practice.");

@@ -41,7 +41,12 @@ import { buildKessenPackEffects, KESSEN_PACKS } from "@/server/utils/kessenPacks
 import { getUtcDayKey, periodStart } from "@/utils/time";
 import { CARD_ITEM_DEFAULTS } from "@/validators/itemCard";
 import type { KessenMatchPayload, KessenStoredMatch } from "@/validators/kessen";
-import { QuestValidatorRawSchema } from "@/validators/objectives";
+import {
+  type QuestTrackerType,
+  QuestValidatorRawSchema,
+  WinKessenChallenge,
+} from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
 import { KESSEN_SEED_CATALOG } from "../../../libs/kessen/fixtures/catalog";
 import { restoreEnvAfterEach } from "../../../setup/env";
 import {
@@ -213,6 +218,53 @@ const winAgainstLemu = async (
       return { match, responses, before, attempts: attempt + 1 };
   }
   throw new Error("No seed produced a win");
+};
+
+/** Where the quest challenge objective sits; the player starts elsewhere. */
+const TABLE_SPOT = { sector: 12, longitude: 4, latitude: 6 };
+const TABLE_REQUEST = { questId: "table-quest", objectiveId: "table-goal" };
+
+const moveTo = async (location: {
+  sector: number;
+  longitude: number;
+  latitude: number;
+}) => (await db()).update(userData).set(location).where(eq(userData.userId, PLAYER));
+
+/** An active mission whose one objective is a Duel at the Table at `TABLE_SPOT`. */
+const assignTableChallenge = async (rules: object) => {
+  await insertQuests([
+    {
+      id: TABLE_REQUEST.questId,
+      questType: "mission",
+      content: {
+        objectives: [
+          WinKessenChallenge.parse({
+            id: TABLE_REQUEST.objectiveId,
+            task: "win_kessen_challenge",
+            ...TABLE_SPOT,
+            ...rules,
+          }),
+        ],
+        reward: ObjectiveReward.parse({}),
+        sceneBackground: "",
+        sceneCharacters: [],
+      },
+    },
+  ]);
+  await insertQuestHistory([
+    { userId: PLAYER, questId: TABLE_REQUEST.questId, questType: "mission" },
+  ]);
+};
+
+/** The stored tracker goal of the challenge objective. */
+const tableGoal = async () => {
+  const [row] = await (await db())
+    .select({ questData: userData.questData })
+    .from(userData)
+    .where(eq(userData.userId, PLAYER));
+  return (row?.questData as QuestTrackerType[] | null)
+    ?.find((tracker) => tracker.id === TABLE_REQUEST.questId)
+    ?.goals.find((entry) => entry.id === TABLE_REQUEST.objectiveId);
 };
 
 /** Plays a lesson match to its end along the coach's advice. */
@@ -1307,5 +1359,122 @@ describeWithDatabase("kessen router", () => {
       expect(response.success).toBe(true);
     }
     expect(turns).toBeGreaterThan(0);
+  });
+
+  it("starts a quest challenge only at its position, against the objective's opponent", async () => {
+    await assignTableChallenge({ npcKey: "shishi", tier: "JONIN" });
+    await moveTo({ sector: 3, longitude: 1, latitude: 1 });
+    const caller = await api();
+    const start = () =>
+      caller.startMatch({
+        npcKey: "lemu",
+        mode: "ascended",
+        deck: { source: "loaner", faction: "AKASUMI" },
+        challenge: TABLE_REQUEST,
+      });
+    const away = await start();
+    expect(away.success).toBe(false);
+    expect(away.message).toContain("sector 12");
+    await moveTo(TABLE_SPOT);
+    // The objective names the opponent and tier; no Circuit unlock is needed.
+    const started = await start();
+    expect(started).toMatchObject({
+      success: true,
+      match: {
+        npcKey: "shishi",
+        mode: "standard",
+        tier: "JONIN",
+        challenge: TABLE_REQUEST,
+      },
+    });
+    // The same opponent outside the quest is still locked.
+    const locked = await caller.startMatch({
+      npcKey: "shishi",
+      mode: "standard",
+      deck: { source: "loaner", faction: "AKASUMI" },
+      replaceActive: true,
+    });
+    expect(locked.success).toBe(false);
+  });
+
+  it("completes the challenge objective on a win and pays nothing else", async () => {
+    await assignTableChallenge({ npcKey: "lemu", tier: "GENIN" });
+    await insertQuests([
+      {
+        id: "duel-quest",
+        content: QuestValidatorRawSchema.shape.content.parse({
+          objectives: [{ id: "any", task: "win_card_duel", value: 1 }],
+          reward: {},
+          sceneBackground: "",
+          sceneCharacters: [],
+        }),
+      },
+    ]);
+    await insertQuestHistory([
+      { id: "duel-history", userId: PLAYER, questId: "duel-quest", completed: 0 },
+    ]);
+    await moveTo(TABLE_SPOT);
+    const caller = await api();
+    let won: Awaited<ReturnType<typeof playOut>> | null = null;
+    for (const seed of SEEDS) {
+      const started = await caller.startMatch({
+        npcKey: "lemu",
+        mode: "standard",
+        deck: { source: "loaner", faction: "AKASUMI" },
+        challenge: TABLE_REQUEST,
+        replaceActive: true,
+      });
+      if (!started.success || !("match" in started) || !started.match)
+        throw new Error(started.message);
+      await reseed(started.match.id, seed);
+      await backdate(started.match.id);
+      const played = await playOut(started.match.id, { caller });
+      if (played.match?.result?.winner === 0) {
+        won = played;
+        break;
+      }
+      // A lost challenge leaves the objective open for another try.
+      expect((await tableGoal())?.done).toBeFalsy();
+    }
+    if (!won?.match) throw new Error("No seed produced a win");
+    const last = won.responses.at(-1);
+    expect(last?.message).toBe("You won! Continue the quest in your logbook.");
+    const patched = (
+      (last && "userPatch" in last ? last.userPatch?.questData : undefined) as
+        | QuestTrackerType[]
+        | undefined
+    )
+      ?.find((tracker) => tracker.id === TABLE_REQUEST.questId)
+      ?.goals.find((entry) => entry.id === TABLE_REQUEST.objectiveId);
+    expect(patched?.done).toBe(true);
+    expect((await tableGoal())?.done).toBe(true);
+    expect(won.match.result).toMatchObject({
+      winner: 0,
+      rewarded: false,
+      ryo: 0,
+      drops: [],
+      firstWin: null,
+      weeklyFirstWinPack: false,
+    });
+    expect(await money()).toBe(START_MONEY);
+    expect(await owned(KESSEN_PACK_IDS.paper)).toBe(0);
+    expect(await (await db()).select().from(kessenNpcProgress)).toEqual([]);
+    expect(await progress()).toMatchObject({ rewardedToday: 0, weeklyWins: 0 });
+    const [user] = await (await db())
+      .select()
+      .from(userData)
+      .where(eq(userData.userId, PLAYER));
+    const duelGoal = user?.questData
+      ?.find((tracker) => tracker.id === "duel-quest")
+      ?.goals.find((goal) => goal.id === "any");
+    expect(duelGoal?.value ?? 0).toBe(0);
+    // A completed challenge cannot be started again.
+    const again = await caller.startMatch({
+      npcKey: "lemu",
+      mode: "standard",
+      deck: { source: "loaner", faction: "AKASUMI" },
+      challenge: TABLE_REQUEST,
+    });
+    expect(again.success).toBe(false);
   });
 });

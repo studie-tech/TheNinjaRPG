@@ -21,6 +21,7 @@ const validObjectives = [
   { id: "o11", task: "win_encounter_at_location" }, // EncountersAtLocation
   { id: "o13", task: "win_tower_defense" }, // WinTowerDefense
   { id: "o14", task: "win_chakra_storm" }, // WinChakraStorm
+  { id: "o15", task: "win_kessen_challenge" }, // WinKessenChallenge
   { id: "collection", task: "bloodline_collection", bloodlineRanks: ["A"] },
   {
     id: "o12",

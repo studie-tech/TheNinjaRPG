@@ -4,6 +4,7 @@ import {
   trackerGoal as goal,
   trackerUser as makeUser,
   trackerChallengeObjective,
+  trackerKessenObjective,
   trackerQuest,
   trackerStormObjective,
 } from "../../setup/quest";
@@ -17,6 +18,7 @@ const at = (sector: number, longitude: number, latitude: number) => ({
 describe.each([
   ["win_tower_defense", trackerChallengeObjective],
   ["win_chakra_storm", trackerStormObjective],
+  ["win_kessen_challenge", trackerKessenObjective],
 ] as const)("%s objectives", (task, challengeObjective) => {
   it("completes only from the verified win naming it", () => {
     const quest = trackerQuest("q1", [challengeObjective("td")], "mission");
