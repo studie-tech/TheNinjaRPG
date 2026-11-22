@@ -98,7 +98,7 @@ export default function ManualKessen() {
         </p>
         <Button asChild className="mt-3">
           <Link href="/kessen">
-            <Swords className="h-5 w-5" aria-hidden />
+            <Swords className="mr-2 h-5 w-5" aria-hidden />
             Open the Card Hall
           </Link>
         </Button>
@@ -273,7 +273,7 @@ export default function ManualKessen() {
         initialBreak
       >
         <CatalogPart catalog={catalog}>
-          {(data) => <PackOdds packs={data.packs} />}
+          {(data) => <PackOdds packs={samePackOdds(data.packs)} />}
         </CatalogPart>
         <p className="mt-2">
           The fifth slot is raised to Epic after {KESSEN_EPIC_PITY_PACKS} packs without
@@ -841,6 +841,30 @@ const RARITY_COLUMNS = [
   ["LEGENDARY", "Legendary"],
   ["FORBIDDEN", "Forbidden"],
 ] as const satisfies readonly (readonly [keyof KessenPackOdds, string])[];
+
+/** Packs with identical slots and odds (the Village Bundles) as one entry naming each. */
+const samePackOdds = <
+  T extends { id: string; name: string; odds: object; slots: object },
+>(
+  packs: readonly T[],
+): T[] => {
+  const groups = new Map<string, T>();
+  for (const pack of packs) {
+    const key = JSON.stringify([pack.odds, pack.slots]);
+    const group = groups.get(key);
+    groups.set(
+      key,
+      group
+        ? {
+            ...group,
+            id: `${group.id}+${pack.id}`,
+            name: `${group.name}, ${pack.name}`,
+          }
+        : pack,
+    );
+  }
+  return [...groups.values()];
+};
 
 /** A pack's slot kinds with their labels; a pack without a rare slot lists one. */
 const packSlotsOf = (slots: KessenPackSlots): (readonly [PackSlot, string])[] => {

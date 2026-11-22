@@ -80,7 +80,7 @@ export function CardDataEditor({ form, disabled }: CardDataEditorProps) {
       <h3 id="card-data-heading" className="mb-2 text-lg font-semibold">
         Card
       </h3>
-      <div className="grid grid-cols-1 items-start gap-x-3 gap-y-3 @min-[560px]:grid-cols-2 @min-[900px]:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-x-3 gap-y-3 @min-[440px]:grid-cols-2 @min-[900px]:grid-cols-3">
         <EnumField
           id="card-kind"
           label="Kind"
@@ -157,7 +157,7 @@ export function CardDataEditor({ form, disabled }: CardDataEditorProps) {
         <Field
           id="card-collectible"
           label="Collectible"
-          className="@min-[560px]:col-span-2 @min-[900px]:col-span-1"
+          className="@min-[440px]:col-span-2 @min-[900px]:col-span-1"
         >
           <label
             htmlFor="card-collectible"
@@ -183,7 +183,7 @@ export function CardDataEditor({ form, disabled }: CardDataEditorProps) {
           id="card-art"
           label="Portrait URL"
           help="5:7 portrait art served from the CDN."
-          className="@min-[560px]:col-span-2"
+          className="@min-[440px]:col-span-2"
         >
           <Input
             id="card-art"
@@ -194,7 +194,7 @@ export function CardDataEditor({ form, disabled }: CardDataEditorProps) {
             onChange={(event) => update({ artUrl: event.target.value.trim() })}
           />
         </Field>
-        <div className="grid grid-cols-2 gap-x-3 @min-[560px]:col-span-2 @min-[900px]:col-span-1">
+        <div className="grid grid-cols-2 gap-x-3 @min-[440px]:col-span-2 @min-[900px]:col-span-1">
           <NumberField
             id="card-focal-x"
             label="Focal X (%)"

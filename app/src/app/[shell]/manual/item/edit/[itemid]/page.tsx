@@ -226,15 +226,15 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
               beside the form where the editor is wide, above it where it is not. */}
           {isCard && (
             <div className="@container col-span-full">
-              <div className="grid gap-3 @min-[1100px]:grid-cols-[minmax(0,1fr)_200px]">
+              <div className="grid gap-3 @min-[560px]:grid-cols-[minmax(0,1fr)_160px]">
                 <CardDataEditor form={form} disabled={isUpdating || !props.canSave} />
-                <div className="order-first @min-[1100px]:sticky @min-[1100px]:top-2 @min-[1100px]:order-none @min-[1100px]:self-start">
+                <div className="order-first @min-[560px]:sticky @min-[560px]:top-2 @min-[560px]:order-none @min-[560px]:self-start">
                   <p className="mb-1 font-semibold text-sm">Card face preview</p>
                   {cardPreview ? (
-                    <span className="block aspect-[5/7] w-[200px] max-w-full">
+                    <span className="block aspect-[5/7] w-[160px] max-w-full">
                       <CardFace
                         card={cardPreview}
-                        renderSize={200}
+                        renderSize={160}
                         className="w-full"
                       />
                     </span>

@@ -264,9 +264,13 @@ describe("Academy series", () => {
     ).toBe(false);
   });
 
-  it("recommends the unfinished lesson that teaches an opponent's keywords", () => {
-    expect(academyLessonFor(["Terrain", "Meditate"], [])).toBe("spread-out");
-    expect(academyLessonFor(["Terrain", "Meditate"], ["spread-out"])).toBe(
+  it("recommends the open, unfinished lesson that teaches an opponent's keywords", () => {
+    const opened = ["first-blood", "enough", "cut-the-root"];
+    expect(academyLessonFor(["Terrain", "Meditate"], [])).toBeNull();
+    expect(academyLessonFor(["Seal"], ["first-blood"])).toBeNull();
+    expect(academyLessonFor(["Seal"], ["first-blood", "enough"])).toBe("cut-the-root");
+    expect(academyLessonFor(["Terrain", "Meditate"], opened)).toBe("spread-out");
+    expect(academyLessonFor(["Terrain", "Meditate"], [...opened, "spread-out"])).toBe(
       "grow-early",
     );
     expect(academyLessonFor(["Infiltrator"], [])).toBeNull();

@@ -144,8 +144,8 @@ export const nextAcademyLesson = (completed: readonly string[]) =>
   KESSEN_ACADEMY_LESSON_KEYS.find((key) => !completed.includes(key)) ?? null;
 
 /**
- * The lesson to recommend before a Circuit match: the first unfinished lesson that
- * teaches one of the opponent's keywords; null when none is left.
+ * The lesson to recommend before a Circuit match: the first open, unfinished lesson
+ * that teaches one of the opponent's keywords; null when none is.
  */
 export const academyLessonFor = (
   keywords: readonly string[],
@@ -154,6 +154,7 @@ export const academyLessonFor = (
   KESSEN_ACADEMY.find(
     (lesson) =>
       !completed.includes(lesson.key) &&
+      !academyLessonLockReason(lesson.key, completed) &&
       lesson.keywords.some((keyword) => keywords.includes(keyword)),
   )?.key ?? null;
 

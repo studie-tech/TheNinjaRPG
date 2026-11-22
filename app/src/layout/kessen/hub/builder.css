@@ -1696,8 +1696,8 @@ div.kh-book-inspect {
   .kh-book-tabs {
     grid-template-columns: repeat(7, minmax(0, 1fr));
   }
-  /* Wide pages wrap the niches in rows instead of scrolling. */
-  .kh-shelf-row {
+  /* Wide pages wrap the niches in rows instead of scrolling, once one is filled. */
+  .kh-shelf-row:not([data-empty]) {
     grid-auto-flow: row;
     grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
     overflow-x: visible;

@@ -382,7 +382,11 @@ export const CollectionBook = ({
             {forbidden.filter(isOwned).length}/{forbidden.length}
           </span>
         </div>
-        <ul ref={shelfRef} className="kh-shelf-row">
+        <ul
+          ref={shelfRef}
+          className="kh-shelf-row"
+          data-empty={forbidden.some(isOwned) ? undefined : ""}
+        >
           {forbidden.map((card) =>
             isOwned(card) ? (
               <li key={card.id} className="kh-niche" data-filled>
