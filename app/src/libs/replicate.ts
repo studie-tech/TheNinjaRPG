@@ -205,7 +205,7 @@ export const fastTxt2imgReplicate = async (config: {
   if (!output) throw new Error("No output from AI model");
 
   // Use URL-based upload - UploadThing fetches directly from Replicate
-  // A URL object (not a string) so UploadThing also accepts data: URI outputs, as before.
+  // Use a URL object so UploadThing accepts data URI outputs.
   const replicateUrl = new URL(output.url());
   const { UTApi } = await import("uploadthing/server");
   const utapi = new UTApi();
@@ -664,7 +664,7 @@ export const generateSoundEffectReplicate = async (config: {
   );
   const fileUrl = toReplicateFile(output)?.url();
   if (!fileUrl) throw new Error("No output from audio model");
-  // A URL object (not a string) so UploadThing also accepts data: URI outputs, as before.
+  // Use a URL object so UploadThing accepts data URI outputs.
   const url = new URL(fileUrl);
   return { url } as const;
 };
