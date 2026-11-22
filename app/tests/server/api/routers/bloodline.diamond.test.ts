@@ -241,14 +241,15 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       message: "Diamond bloodline swaps require Diamond Federal Support",
     });
     expect(await caller.getDiamondSwapBloodlines()).toEqual([]);
-    // Staff count as Gold, whatever tier is stored.
-    await patch({ federalStatus: "DIAMOND", staffAccount: true });
-    expect((await swap("pick-a")).success).toBe(false);
-    await patch({ federalStatus: "GOLD", staffAccount: false });
     expect(await readUser()).toMatchObject({
       bloodlineId: "owned-line",
       diamondBloodlineActive: false,
     });
+  });
+
+  it("grants staff Diamond swaps without a paid tier", async () => {
+    await patch({ federalStatus: "NONE", staffAccount: true });
+    expect((await swap("pick-a")).success).toBe(true);
   });
 
   it("restores the pre-Diamond bloodline once Diamond support ends", async () => {

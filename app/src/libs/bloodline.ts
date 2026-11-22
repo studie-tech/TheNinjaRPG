@@ -175,7 +175,7 @@ export const resolveDiamondBloodlineRevert = (info: {
   };
 };
 
-/** Diamond swaps follow the effective tier, so staff (who count as Gold) never get them. */
+/** Diamond swaps follow the effective tier, including staff benefits. */
 export const hasDiamondBloodlineSwaps = (
   user: Pick<UserData, "staffAccount" | "federalStatus">,
 ) => getUserFederalStatus(user) === "DIAMOND";

@@ -1132,7 +1132,8 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     { federalStatus: "NORMAL" as const, staffAccount: false, bonus: 1 },
     { federalStatus: "SILVER" as const, staffAccount: false, bonus: 2 },
     { federalStatus: "GOLD" as const, staffAccount: false, bonus: 3 },
-    { federalStatus: "NONE" as const, staffAccount: true, bonus: 3 },
+    { federalStatus: "DIAMOND" as const, staffAccount: false, bonus: 4 },
+    { federalStatus: "NONE" as const, staffAccount: true, bonus: 4 },
   ])(
     "reports effective supporter capacity without writing bonus slots: %j",
     async ({ federalStatus, staffAccount, bonus }) => {

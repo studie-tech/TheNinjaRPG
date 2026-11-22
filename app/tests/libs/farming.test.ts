@@ -124,7 +124,7 @@ describe("farming", () => {
     }
   });
 
-  it("applies effective Gold benefits to staff accounts", () => {
+  it("applies effective Diamond benefits to staff accounts", () => {
     expect(
       getFarmGrowTimeSeconds(100, {
         staffAccount: true,

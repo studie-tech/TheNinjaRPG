@@ -20,7 +20,7 @@ export const getUserFederalStatus = (
   user: Pick<UserData, "staffAccount" | "federalStatus">,
 ) => {
   if (user.staffAccount) {
-    return "GOLD";
+    return "DIAMOND";
   } else {
     return user.federalStatus;
   }

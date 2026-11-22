@@ -72,9 +72,9 @@ describe("showTrainingCapcha", () => {
     expect(perTier("GOLD")).toBe(12);
   });
 
-  it("uses the GOLD cadence for staff accounts", () => {
-    expect(showTrainingCapcha(user("NONE", 12, true))).toBe(false);
-    expect(showTrainingCapcha(user("NONE", 15, true))).toBe(true);
+  it("uses the DIAMOND cadence for staff accounts", () => {
+    expect(showTrainingCapcha(user("NONE", 12, true))).toBe(true);
+    expect(showTrainingCapcha(user("NONE", 15, true))).toBe(false);
   });
 });
 
