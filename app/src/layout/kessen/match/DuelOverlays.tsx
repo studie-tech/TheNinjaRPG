@@ -51,9 +51,7 @@ export const DuelClock = ({
         ? "Your mulligan"
         : `${table.opponentName}'s mulligan`
     : mine
-      ? spectating
-        ? `${selfName}'s turn`
-        : "Your turn"
+      ? `${table.selfPossessive} turn`
       : theirs
         ? `${table.opponentName}'s turn`
         : "Next turn";
@@ -199,11 +197,7 @@ export const DuelEndScreen = ({
                 {rating ? (
                   <div className="grid gap-1">
                     <RatingLine
-                      label={
-                        spectating
-                          ? `${duel.players[me].username}'s rating`
-                          : "Your rating"
-                      }
+                      label={`${table.selfPossessive} rating`}
                       change={rating.you}
                     />
                     <RatingLine
