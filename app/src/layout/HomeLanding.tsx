@@ -21,7 +21,7 @@ import { useUserDataSelector } from "@/utils/UserContext";
  */
 export const HomeLanding: React.FC = () => {
   // Fetch data
-  const { signOut } = useClerk();
+  const clerk = useClerk();
   const {
     data: userData,
     status: userStatus,
@@ -29,7 +29,9 @@ export const HomeLanding: React.FC = () => {
     isSignedIn,
     isClerkLoaded,
   } = useUserDataSelector((u) => u.userId);
-  const setReferral = api.register.setReferralSource.useMutation();
+  const setReferral = api.register.setReferralSource.useMutation({
+    meta: { handlesTransportError: true },
+  });
   const utils = api.useUtils();
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -48,8 +50,9 @@ export const HomeLanding: React.FC = () => {
   // Redirect based on user status. Replace, not push: "/" must not stay in history, or
   // Back would land here and forward the player again.
   useEffect(() => {
-    // Character data may outlive the session for a render during sign-out.
-    if (!isClerkLoaded || !isSignedIn || !userId) return;
+    // Clerk can sign out between render and this effect. Read its live state before
+    // saving attribution or forwarding a rendered account snapshot.
+    if (!clerk.isSignedIn || !isClerkLoaded || !isSignedIn || !userId) return;
     // When user is signed in (Clerk) but has not created a character yet, set referral immediately
     if (userStatus === "success" && !userData) {
       storeLandingAttribution(new URLSearchParams(window.location.search));
@@ -64,7 +67,16 @@ export const HomeLanding: React.FC = () => {
       if (store.get(nativeHomeRedirectAtom)) return;
       void router.replace("/profile");
     }
-  }, [isClerkLoaded, isSignedIn, userData, userId, userStatus, store, nativeRedirect]);
+  }, [
+    clerk,
+    isClerkLoaded,
+    isSignedIn,
+    userData,
+    userId,
+    userStatus,
+    store,
+    nativeRedirect,
+  ]);
 
   // A signed-in session can expire before the character query completes. Keep both
   // retry and sign-in available instead of trapping the player in the error boundary.
@@ -95,7 +107,7 @@ export const HomeLanding: React.FC = () => {
             <Button
               className="min-h-12"
               variant="outline"
-              onClick={() => void signOut({ redirectUrl: "/login" })}
+              onClick={() => void clerk.signOut({ redirectUrl: "/login" })}
             >
               Sign in again
             </Button>

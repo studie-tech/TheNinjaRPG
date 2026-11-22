@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { adClick, visitorLog } from "@/drizzle/schema";
+import { abEvent, adClick, visitorLog } from "@/drizzle/schema";
+import { WALLPAPER_EXPERIMENT } from "@/libs/wallpaperExperiment";
 import { miscRouter } from "@/server/api/routers/misc";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
@@ -11,13 +12,18 @@ import {
 const CLICK_ID = "Cj0KCQiA-landing-click";
 
 /** A signed-out landing visitor from the given country. */
-const visitor = async (userCountry: string | undefined, userId: string | null = null) =>
+const visitor = async (
+  userCountry: string | undefined,
+  userId: string | null = null,
+  wallpaperVariant?: string,
+) =>
   miscRouter.createCaller({
     drizzle: await getTestDatabase(),
     userId,
     userIp: "203.0.113.20",
     userAgent: "test",
     userCountry,
+    wallpaperVariant,
   } as never);
 
 const storedClicks = async () =>
@@ -30,9 +36,47 @@ describeWithDatabase("ad click reports", () => {
     stubRateLimitTransport({
       unexpectedRequestMessage: "Unexpected HTTP request in ad click tests",
     });
-    await resetTables(adClick, visitorLog);
+    await resetTables(adClick, visitorLog, abEvent);
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each(["winter", "spring", "unknown", null, undefined])(
+    "records a visit with retired or absent wallpaper %s without attributing an exposure",
+    async (wallpaperVariant) => {
+      const result = await (await visitor("US", null, "hyorin")).trackVisitor({
+        wallpaperVariant,
+      });
+      expect(result.success).toBe(true);
+      const db = await getTestDatabase();
+      expect(await db.select().from(visitorLog)).toHaveLength(1);
+      expect(await db.select().from(abEvent)).toHaveLength(0);
+    },
+  );
+
+  it.each(["hyorin", "tsukimori", "control"])(
+    "attributes the matching current %s wallpaper",
+    async (wallpaperVariant) => {
+      const result = await (await visitor("US", null, wallpaperVariant)).trackVisitor({
+        wallpaperVariant,
+      });
+      expect(result.success).toBe(true);
+      const rows = await (await getTestDatabase()).select().from(abEvent);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        experiment: WALLPAPER_EXPERIMENT,
+        variant: wallpaperVariant,
+      });
+    },
+  );
+
+  it("does not attribute an assignment that differs from the request cookie", async () => {
+    expect(
+      await (await visitor("US", null, "hyorin")).trackVisitor({
+        wallpaperVariant: "tsukimori",
+      }),
+    ).toMatchObject({ success: true });
+    expect(await (await getTestDatabase()).select().from(abEvent)).toHaveLength(0);
+  });
 
   it("keeps a granted click anywhere and an unanswered one only outside the EEA", async () => {
     const unanswered = {
