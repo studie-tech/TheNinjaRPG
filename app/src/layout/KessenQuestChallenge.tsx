@@ -3,6 +3,7 @@
 import { CheckCircle2, Gauge, Hourglass, Play, ScrollText, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { KESSEN_NPC_NAMES } from "@/drizzle/constants";
+import Confirm from "@/layout/Confirm";
 import { FeedbackAlert } from "@/layout/FeedbackAlert";
 import { NpcPortrait } from "@/layout/kessen/hub/CircuitMap";
 import { DeckPicker, useDeckChoice } from "@/layout/kessen/hub/DeckPicker";
@@ -31,6 +32,8 @@ import { hasReward } from "@/validators/rewards";
  * Elsewhere it only points the way there. The match pays nothing but the objective.
  * While a match or duel is unfinished (`resume`), the start gives way to its table: this
  * duel's own when the player left it for the hall, otherwise the one blocking the seat.
+ * Another NPC match or lesson may be conceded to take the seat, as on the Circuit; a
+ * duel against a player only resumes.
  */
 export const KessenQuestChallenge = (props: {
   challenge: FoundChallenge | null;
@@ -43,16 +46,18 @@ export const KessenQuestChallenge = (props: {
   error: string | null;
   /**
    * The unfinished match or duel: its resume button text ("Resume vs Kazehiko"), the
-   * match as a sentence's subject ("Your match against Kazehiko") and whether it is
-   * this briefing's own duel.
+   * match as a sentence's subject ("Your match against Kazehiko"), whether it is this
+   * briefing's own duel and whether it is a duel against another player.
    */
   resume?: {
     label: string;
     unfinished: string;
     isThisDuel: boolean;
+    isPlayerDuel: boolean;
     onOpen: () => void;
   };
-  onStart: (deck: KessenDeckSource) => void;
+  /** Starts the duel; `replaceActive` concedes the unfinished NPC match first. */
+  onStart: (deck: KessenDeckSource, replaceActive?: boolean) => void;
 }) => {
   const { challenge, opponent } = props;
   const deck = useDeckChoice(props.decks, props.defaultDeckId, props.loanerFaction);
@@ -68,6 +73,12 @@ export const KessenQuestChallenge = (props: {
       />
     );
   const name = KESSEN_NPC_NAMES[objective.npcKey];
+  const { resume } = props;
+  const concedable = resume && !resume.isThisDuel && !resume.isPlayerDuel;
+  // "Your match against Lemu" as the object of "Concede …".
+  const unfinishedObject = resume
+    ? resume.unfinished.charAt(0).toLowerCase() + resume.unfinished.slice(1)
+    : "";
   return (
     <div className="@container space-y-4 p-3">
       <div className="flex items-start gap-3">
@@ -123,14 +134,21 @@ export const KessenQuestChallenge = (props: {
         <ChallengeNotice icon={<ScrollText className="h-5 w-5 text-amber-500" />}>
           Finish the earlier objectives of {quest.name} first.
         </ChallengeNotice>
-      ) : props.resume?.isThisDuel ? (
+      ) : resume?.isThisDuel ? (
         <ChallengeNotice icon={<Hourglass className="h-5 w-5 text-amber-500" />}>
           This duel is under way.
         </ChallengeNotice>
-      ) : props.resume ? (
+      ) : concedable ? (
+        <>
+          <ChallengeNotice icon={<Hourglass className="h-5 w-5 text-amber-500" />}>
+            {resume.unfinished} is unfinished. Resume it, or concede it to take a seat.
+          </ChallengeNotice>
+          <DeckPicker decks={props.decks} idPrefix="quest-challenge" choice={deck} />
+        </>
+      ) : resume ? (
         <ChallengeNotice icon={<Hourglass className="h-5 w-5 text-amber-500" />}>
-          {props.resume.unfinished} is unfinished. Finish or concede it before you take
-          a seat.
+          {resume.unfinished} is unfinished. Finish or concede it before you take a
+          seat.
         </ChallengeNotice>
       ) : (
         <DeckPicker decks={props.decks} idPrefix="quest-challenge" choice={deck} />
@@ -146,11 +164,39 @@ export const KessenQuestChallenge = (props: {
               Open logbook
             </Link>
           </Button>
-        ) : props.resume ? (
-          <Button size="lg" className="w-full @md:w-auto" onClick={props.resume.onOpen}>
-            <Play className="mr-2 h-5 w-5" />
-            {props.resume.isThisDuel ? "Return to the table" : props.resume.label}
-          </Button>
+        ) : resume ? (
+          <>
+            <Button size="lg" className="w-full @md:w-auto" onClick={resume.onOpen}>
+              <Play className="mr-2 h-5 w-5" />
+              {resume.isThisDuel ? "Return to the table" : resume.label}
+            </Button>
+            {concedable && challenge.available ? (
+              <Confirm
+                title={`Concede ${unfinishedObject}?`}
+                tone="destructive"
+                proceed_label={`Concede and challenge ${name}`}
+                proceed_loading_label="Shuffling..."
+                isLoading={props.isStarting}
+                button={
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    disabled={props.isStarting}
+                    className="w-full @md:w-auto"
+                  >
+                    Concede it and take a seat…
+                  </Button>
+                }
+                onAccept={() => props.onStart(deck.source, true)}
+              >
+                <p>
+                  {resume.unfinished} ends as a loss with no rewards, and the duel
+                  against {name} starts.
+                </p>
+                <p className="text-muted-foreground">Then: {deck.label}</p>
+              </Confirm>
+            ) : null}
+          </>
         ) : (
           <Button
             size="lg"

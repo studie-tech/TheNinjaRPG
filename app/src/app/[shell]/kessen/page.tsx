@@ -726,17 +726,19 @@ function KessenHall() {
                   label: resume.label,
                   unfinished: resume.unfinished,
                   isThisDuel: resumesThisDuel,
+                  isPlayerDuel: resume.duel === true,
                   onOpen: () => openHallAction(resume),
                 }
               : undefined
           }
-          onStart={(deck) => {
+          onStart={(deck, replaceActive) => {
             if (!found || isStarting) return;
             void startMatch({
               npcKey: found.objective.npcKey,
               mode: "standard",
               deck,
               challenge: challengeRequest,
+              ...(replaceActive ? { replaceActive: true } : {}),
             });
           }}
         />

@@ -83,6 +83,7 @@ describe("KessenQuestChallenge", () => {
         label: "Resume your duel vs Rival",
         unfinished: "Your duel against Rival",
         isThisDuel: false,
+        isPlayerDuel: true,
         onOpen,
       },
     });
@@ -92,9 +93,36 @@ describe("KessenQuestChallenge", () => {
       ),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Take a seat/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Concede/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Resume your duel vs Rival/ }));
     expect(onOpen).toHaveBeenCalled();
     expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it("offers to concede another NPC match and take the seat in its place", () => {
+    const onOpen = vi.fn();
+    const { onStart } = renderBriefing({
+      resume: {
+        label: "Resume vs Lemu",
+        unfinished: "Your match against Lemu",
+        isThisDuel: false,
+        isPlayerDuel: false,
+        onOpen,
+      },
+    });
+    expect(
+      screen.getByText(
+        "Your match against Lemu is unfinished. Resume it, or concede it to take a seat.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Take a seat/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Resume vs Lemu/ }));
+    expect(onOpen).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Concede it and take a seat/ }));
+    expect(screen.getByText("Concede your match against Lemu?")).toBeTruthy();
+    expect(onStart).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Concede and challenge/ }));
+    expect(onStart).toHaveBeenCalledWith({ source: "saved", deckId: DECK.id }, true);
   });
 
   it("leads back to its own duel left for the hall without asking to concede it", () => {
@@ -104,12 +132,14 @@ describe("KessenQuestChallenge", () => {
         label: "Resume vs Kazehiko",
         unfinished: "Your match against Kazehiko",
         isThisDuel: true,
+        isPlayerDuel: false,
         onOpen,
       },
     });
     expect(screen.getByText("This duel is under way.")).toBeTruthy();
     expect(screen.queryByText(/Finish or concede/)).toBeNull();
     expect(screen.queryByRole("button", { name: /Take a seat/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Concede/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Return to the table/ }));
     expect(onOpen).toHaveBeenCalled();
   });
