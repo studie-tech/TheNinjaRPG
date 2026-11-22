@@ -36,6 +36,7 @@ const STATIC_ROUTES: {
   { path: "/chakraStorm", priority: 0.8, changeFrequency: "weekly" },
   { path: "/chakraStorm/leaderboard", priority: 0.4, changeFrequency: "daily" },
   { path: "/kessen", priority: 0.8, changeFrequency: "weekly" },
+  { path: "/kessen/leaderboard", priority: 0.4, changeFrequency: "daily" },
   { path: "/manual/bloodline", priority: 0.7, changeFrequency: "weekly" },
   { path: "/manual/jutsu", priority: 0.7, changeFrequency: "weekly" },
   { path: "/manual/item", priority: 0.7, changeFrequency: "weekly" },

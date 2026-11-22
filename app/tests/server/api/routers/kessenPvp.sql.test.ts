@@ -37,6 +37,7 @@ import { KESSEN_SEED_CATALOG } from "../../../libs/kessen/fixtures/catalog";
 import { withAfterTasks } from "../../../setup/after";
 import { restoreEnvAfterEach } from "../../../setup/env";
 import { insertItems, insertUsers } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { aroundStatements, interceptExecute, sqlText } from "../../../setup/statements";
 import {
   callerFor,
@@ -551,6 +552,40 @@ describeWithDatabase("kessen duels", () => {
     expect(await moneyOf(A)).toBe(START_MONEY);
     expect(await moneyOf(B)).toBe(START_MONEY);
     expect((await progressOf(A))?.rankedPlayed).toBe(0);
+  });
+
+  it("shows the ranked ladder signed out and each rated player their own place", async () => {
+    // The ladder is public, so the shared limiter runs; its Redis transport is stubbed.
+    const limiter = stubRateLimitTransport();
+    const rated = { A: [1200, 3, 0], B: [1100, 1, 1] } as const;
+    for (const [userId, [rating, wins, losses]] of [
+      [A, rated.A],
+      [B, rated.B],
+    ] as const) {
+      await (await db())
+        .update(kessenProgress)
+        .set({
+          rating,
+          rankedPlayed: wins + losses,
+          rankedWins: wins,
+          rankedLosses: losses,
+        })
+        .where(eq(kessenProgress.userId, userId));
+    }
+    const guest = kessenPvpRouter.createCaller({
+      drizzle: await db(),
+      userId: null,
+      userIp: "203.0.113.7",
+    } as never);
+    const [ladder, own] = await Promise.all([
+      guest.getLeaderboard({ limit: 1 }),
+      pvp(B).then((caller) => caller.getLeaderboard({ limit: 1 })),
+    ]).finally(() => limiter.mockRestore());
+    expect(ladder.entries.map((entry) => entry.userId)).toEqual([A]);
+    expect(ladder.you).toBeNull();
+    expect(own.you).toEqual(
+      expect.objectContaining({ userId: B, rank: 2, rating: 1100, wins: 1, losses: 1 }),
+    );
   });
 
   it("matches the ranked queue, rates the finished duel once and pays the winner", async () => {

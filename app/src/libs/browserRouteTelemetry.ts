@@ -49,6 +49,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/itemshop",
   "/jutsus",
   "/kessen",
+  "/kessen/leaderboard",
   "/layouts",
   "/login/[[...rest]]",
   "/manual",
