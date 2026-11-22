@@ -20,10 +20,17 @@ import type { AppRouter } from "@/api/root";
 import * as clientModule from "@/app/_trpc/client";
 import TrpcClientProvider from "@/app/_trpc/Provider";
 import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
+import * as native from "@/hooks/useNativeShell";
+import { MetaTrackingConsent } from "@/layout/MetaTrackingConsent";
 import { BOTID_BLOCKED_MESSAGE, BOTID_RELOAD_REQUIRED_MESSAGE } from "@/libs/botid";
+import { CONSENT_COOKIE, CONSENT_REVISION } from "@/libs/consentConfig";
 import { QUERY_METRICS_HEADER } from "@/libs/queryTelemetry";
 import * as toast from "@/libs/toast";
-import { SESSION_CHANGED_MESSAGE, SESSION_EXPIRED_MESSAGE } from "@/libs/trpcSession";
+import {
+  SESSION_CHANGED_MESSAGE,
+  SESSION_EXPIRED_MESSAGE,
+  TRPC_ANONYMOUS_HEADER,
+} from "@/libs/trpcSession";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { shareUserCache } from "@/utils/userCacheSharing";
 import { actualShowMutationToast } from "../setup/preload";
@@ -40,13 +47,10 @@ const session = (id: string, getToken = async (): Promise<string | null> => id) 
   ({ id, getToken }) as NonNullable<Clerk["session"]>;
 
 /** Mount the real provider with independent hooks despite persistent module mocks. */
-const mountProvider = (
-  activeSession: NonNullable<Clerk["session"]>,
-  children?: React.ReactNode,
-) => {
+const mountProvider = (activeSession: Clerk["session"], children?: React.ReactNode) => {
   const auth = {
     session: activeSession,
-    isSignedIn: true,
+    isSignedIn: Boolean(activeSession),
     addListener: () => () => {},
   };
   vi.spyOn(clerk, "useClerk").mockReturnValue(
@@ -57,6 +61,7 @@ const mountProvider = (
     Provider: testApi.Provider,
     createClient: testApi.createClient,
     profile: testApi.profile,
+    meta: testApi.meta,
   });
   let trpc!: TRPCClient<AppRouter>;
   const Probe = () => {
@@ -107,7 +112,69 @@ afterEach(() => {
   for (const unsubscribe of profileObservers.splice(0)) unsubscribe();
   queryClient?.clear();
   sonnerToast.dismiss();
+  delete window.tnrConsent;
+  // biome-ignore lint/suspicious/noDocumentCookie: reset the consent cookie consumed by the real component.
+  document.cookie = `${CONSENT_COOKIE}=; Max-Age=0; path=/`;
   vi.restoreAllMocks();
+});
+
+it.each([false, true])(
+  "synchronizes saved marketing consent while signed out without an error toast (granted: %s)",
+  async (granted) => {
+    const consentId = crypto.randomUUID();
+    const decidedAt = new Date(Date.now() - 1000).toISOString();
+    window.tnrConsent = { consent: { marketing: granted }, hasResponse: true };
+    // biome-ignore lint/suspicious/noDocumentCookie: the stored consent cookie is the input under test.
+    document.cookie = `${CONSENT_COOKIE}=${encodeURIComponent(
+      JSON.stringify({
+        consentId,
+        revision: CONSENT_REVISION,
+        categories: granted ? ["necessary", "marketing"] : ["necessary"],
+        consentTimestamp: decidedAt,
+      }),
+    )}; path=/`;
+    vi.spyOn(clerk, "useUser").mockReturnValue({
+      isLoaded: true,
+      isSignedIn: false,
+      user: null,
+    } as ReturnType<typeof clerk.useUser>);
+    vi.spyOn(native, "useNativeShell").mockReturnValue(false);
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        Response.json([{ result: { data: superjson.serialize([]) } }]),
+      );
+    mountProvider(null, <MetaTrackingConsent pixelId="12345" />);
+
+    await waitFor(() => {
+      expect(queryClient.getMutationCache().getAll()[0]?.state.status).toBe("success");
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, request] = fetch.mock.calls[0]!;
+    expect(String(url)).toContain("/api/trpc/meta.synchronizeConsent");
+    expect(new Headers(request?.headers).get(TRPC_ANONYMOUS_HEADER)).toBe("1");
+    expect(request?.body).toContain(consentId);
+    expect(request?.body).toContain(`"granted":${granted}`);
+    expect(toastMessages()).toEqual([]);
+  },
+);
+
+it("rejects signed-out game mutations before dispatch or optimistic updates", async () => {
+  const fetch = vi.spyOn(globalThis, "fetch");
+  const onMutate = vi.fn();
+  const { trpc } = mountProvider(null);
+  const mutation = queryClient.getMutationCache().build(queryClient, {
+    mutationKey: [["home", "toggleSleep"]],
+    mutationFn: () => trpc.home.toggleSleep.mutate(),
+    onMutate,
+  });
+  await expect(mutation.execute(undefined)).rejects.toThrow(
+    clientModule.SIGN_IN_REQUIRED_MUTATION_MESSAGE,
+  );
+  expect(fetch).not.toHaveBeenCalled();
+  expect(onMutate).not.toHaveBeenCalled();
+  expect(mutation.state.status).toBe("error");
+  expect(toastMessages()).toEqual([clientModule.SIGN_IN_REQUIRED_MUTATION_MESSAGE]);
 });
 
 const recoveryFlows = [
