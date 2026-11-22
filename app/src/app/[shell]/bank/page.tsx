@@ -1,4 +1,4 @@
-import { BankScreen } from "@/layout/bank/BankScreen";
+import { BankScreen } from "@/screens/bank/BankScreen";
 
 export default function BankPage() {
   return <BankScreen />;

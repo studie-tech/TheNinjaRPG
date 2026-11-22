@@ -3,11 +3,11 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { useState } from "react";
 import * as navigation from "@/hooks/navigation";
 import ContentBox, * as contentBox from "@/layout/ContentBox";
-import * as routing from "@/utils/routing";
 import {
   ScreenNavigationProvider,
   useScreenNavigation,
-} from "@/utils/ScreenNavigationContext";
+} from "@/screens/ScreenNavigationContext";
+import * as routing from "@/utils/routing";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { actualContentBox } from "../setup/preload";
 

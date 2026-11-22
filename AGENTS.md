@@ -97,7 +97,8 @@ Next.js 16 App Router / React 19 / strict TypeScript; Tailwind, Shadcn/Radix; Dr
 | `app/src/queries/` | Application database statements and reusable query helpers, grouped by feature; imported through `@/queries/*` |
 | `app/src/deltas/` | Pure feature-specific cache patch and delta calculations; no database access or side effects. `app/src/utils/queryCache.ts` reconciles query revisions; `app/src/hooks/useQueryCacheUpdate.ts` binds confirmed mutations to an exact query key |
 | `app/src/validators/` | Shared Zod schemas and schemas consumed outside routers; router-only contracts stay inline |
-| `app/src/layout/` | Reusable game UI; prefer existing components |
+| `app/src/screens/` | Route-independent game screens grouped by feature, with shared screen-host navigation; compose these from routes or dialog hosts |
+| `app/src/layout/` | Reusable game UI components composed by screens and routes; prefer existing components |
 | `app/drizzle/` | `schema.ts`, `constants.ts`, `migrations/` |
 | `app/src/utils/permissions.ts` | Centralized permissions |
 | `app/src/utils/time.ts` | All new time utilities; check for existing helpers first |
