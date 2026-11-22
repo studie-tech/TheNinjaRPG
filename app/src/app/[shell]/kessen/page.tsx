@@ -50,6 +50,7 @@ import {
   activeMatchStateText,
   catalogLookup,
   copyLimitOf,
+  defaultDeck,
   type KessenDeckSummary,
   type KessenFindContext,
   kessenItemName,
@@ -1299,21 +1300,6 @@ const InspectStatus = ({
         <p className="mt-[6px]">No source is open right now.</p>
       )}
     </section>
-  );
-};
-
-/**
- * The deck matches start with: the newest ready deck, else the newest one a borrowed fill
- * completes, else the newest saved one. Decks are listed oldest first, so the search runs
- * from the end.
- */
-const defaultDeck = (summaries: KessenDeckSummary[]) => {
-  const newestFirst = [...summaries].reverse();
-  return (
-    newestFirst.find((deck) => deck.ready) ??
-    newestFirst.find((deck) => deck.fillable) ??
-    newestFirst[0] ??
-    null
   );
 };
 

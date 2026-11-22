@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { MAX_PLAYER_LEVEL } from "@/drizzle/constants";
 import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { useCreateSparChallenge } from "@/hooks/useSparChallenge";
 import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
 import { OpponentFinder } from "@/layout/battlearena/OpponentFinder";
 import { sparExamProgress } from "@/libs/battleArena";
@@ -39,13 +40,7 @@ export function SparringMode() {
     enabled: !!userData,
   });
 
-  const { mutate: create, isPending: isCreating } =
-    api.sparring.createChallenge.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) await utils.sparring.getUserChallenges.invalidate();
-      },
-    });
+  const { mutate: create, isPending: isCreating } = useCreateSparChallenge();
 
   const { mutate: accept, isPending: isAccepting } =
     api.sparring.acceptChallenge.useMutation({
@@ -203,7 +198,12 @@ export function SparringMode() {
         <OpponentFinder
           challengedIds={challengedIds}
           isChallenging={isCreating}
-          onChallenge={(targetId) => create({ targetId, useRankedRules, spectatable })}
+          onChallenge={(targetId) =>
+            create(
+              { targetId, useRankedRules, spectatable },
+              { onSuccess: showMutationToast },
+            )
+          }
         />
       </div>
       <BattleSetupPanel action={null}>

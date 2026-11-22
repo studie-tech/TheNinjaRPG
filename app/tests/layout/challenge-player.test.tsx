@@ -1,0 +1,117 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import * as navigation from "next/navigation";
+import * as client from "@/app/_trpc/client";
+import * as Hub from "@/hooks/kessen/useKessenHub";
+import * as Lobby from "@/hooks/kessen/useKessenPvpLobby";
+import { ChallengePanel } from "@/layout/ChallengePlayer";
+import type { KessenDeckSummary } from "@/layout/kessen/hub/hubData";
+import * as HubData from "@/layout/kessen/hub/hubData";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+
+const DECK: KessenDeckSummary = {
+  id: "deck-1",
+  name: "Frost Wall",
+  faction: "HYORIN",
+  leaderName: "Hisame",
+  provision: 150,
+  budget: 160,
+  cards: 25,
+  ready: true,
+  fillable: true,
+  problem: null,
+};
+
+const opponent = { userId: "u-rival", username: "Rival" };
+const spar = vi.fn();
+const duel = vi.fn();
+let needsLesson = false;
+
+beforeEach(() => {
+  installBrowserGlobals();
+  vi.clearAllMocks();
+  needsLesson = false;
+  vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
+  Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({ sparring: { getUserChallenges: { invalidate: vi.fn() } } }),
+    sparring: {
+      createChallenge: { useMutation: () => ({ mutate: spar, isPending: false }) },
+    },
+  });
+  vi.spyOn(Hub, "useKessenHub").mockImplementation(
+    () =>
+      ({
+        hub: {
+          data: {
+            needsLesson,
+            decks: [{ id: DECK.id }],
+            owned: {},
+            loanerFaction: "AKASUMI",
+          },
+          isError: false,
+        },
+        catalog: { data: { cards: [] }, isError: false },
+      }) as never,
+  );
+  vi.spyOn(HubData, "summarizeDeck").mockReturnValue(DECK);
+  vi.spyOn(Lobby, "useKessenPvpLobby").mockReturnValue({
+    createChallenge: duel,
+    isChallenging: false,
+  } as never);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  restoreBrowserGlobals();
+});
+
+describe("challenge panel", () => {
+  it("sends a spar with the chosen rules and answers next to it", async () => {
+    spar.mockImplementation((_input, options) =>
+      options.onSuccess({ success: true, message: "Challenge sent to Rival." }),
+    );
+    render(<ChallengePanel opponent={opponent} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Allow spectators/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send Rival a sparring challenge" }),
+    );
+    expect(spar.mock.calls[0]?.[0]).toEqual({
+      targetId: "u-rival",
+      useRankedRules: false,
+      spectatable: true,
+    });
+    const sent = await screen.findByRole("status");
+    expect(sent.textContent).toContain("Challenge sent to Rival.");
+    expect(screen.getByRole("link", { name: "Open the arena" })).toBeTruthy();
+  });
+
+  it("duels with the player's ready deck and shows a refusal by the button", async () => {
+    duel.mockResolvedValue({
+      ok: false,
+      message: "That player has not learned Kessen yet.",
+    });
+    render(<ChallengePanel opponent={opponent} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send Rival a Kessen challenge" }),
+    );
+    expect(duel).toHaveBeenCalledWith({
+      targetId: "u-rival",
+      deck: { source: "saved", deckId: "deck-1" },
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain(
+        "That player has not learned Kessen yet.",
+      ),
+    );
+  });
+
+  it("points a player without the first Academy lesson to the Card Hall", () => {
+    needsLesson = true;
+    render(<ChallengePanel opponent={opponent} />);
+    const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
+    expect(send.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("link", { name: "Open the Card Hall" })).toBeTruthy();
+    expect(duel).not.toHaveBeenCalled();
+  });
+});

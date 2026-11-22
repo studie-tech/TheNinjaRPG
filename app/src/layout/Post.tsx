@@ -26,6 +26,8 @@ export interface PostProps {
   color?: "default" | "green" | "red" | "blue" | "orange" | "poppopover";
   children: any;
   options?: React.ReactNode;
+  /** Pinned to the bottom of the card, below the content however tall the avatar is. */
+  footer?: React.ReactNode;
   align_middle?: boolean;
   hover_effect?: boolean;
   href?: string;
@@ -107,8 +109,8 @@ const Post: React.FC<PostProps> = (props) => {
 
   const content = (
     <>
-      <div className="grow basis-1/2">
-        <div className="flex h-full flex-col justify-center">
+      <div className="flex grow basis-1/2 flex-col">
+        <div className="flex flex-col">
           {props.title && (
             <h3 className="basis-1/5 font-bold text-2xl tracking-tight">
               {props.title}
@@ -117,6 +119,7 @@ const Post: React.FC<PostProps> = (props) => {
           {UsernameBlock}
           <div className="relative basis-3/4 font-normal">{props.children}</div>
         </div>
+        {props.footer && <div className="mt-auto pt-2">{props.footer}</div>}
       </div>
       {props.options && <div className="absolute top-3 right-3">{props.options}</div>}
     </>

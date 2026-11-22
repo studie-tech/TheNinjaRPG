@@ -5,11 +5,13 @@ import {
   AtSign,
   Ban,
   BarChart2,
+  ChevronLeft,
   Flag,
   Mail,
   Reply,
   SmilePlus,
   SquarePen,
+  Swords,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -21,6 +23,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment } from "@/drizzle/schema";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
+import { ChallengePanel } from "@/layout/ChallengePlayer";
 import Confirm from "@/layout/Confirm";
 import { EmojiPicker } from "@/layout/EmojiPicker";
 import Link from "@/layout/Link";
@@ -266,6 +269,7 @@ function UserMenu({
   onMessage?: (user: ChatStartUser) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"menu" | "challenge">("menu");
   const { userColor, titleColor } = getPostUserClasses(user, tavernStyling);
   const { refreshBlacklist } = useBlacklistCacheUpdate();
   const { mutate: toggleBlock, isPending } =
@@ -280,7 +284,13 @@ function UserMenu({
     });
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setView("menu");
+      }}
+    >
       <PopoverTrigger
         className="focus-visible:ring-ring h-[36px] w-[36px] shrink-0 overflow-hidden rounded-lg focus-visible:ring-2"
         aria-label={`Actions for ${user.username}`}
@@ -292,78 +302,100 @@ function UserMenu({
           className="w-full rounded-lg"
         />
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        collisionPadding={8}
-        className="w-[208px] p-[4px]"
-        role="menu"
-        aria-label={`Actions for ${user.username}`}
-      >
-        <div className="mb-[4px] border-b px-[8px] pt-[4px] pb-[8px]">
-          <AvatarImage
-            href={user.avatar}
-            alt={user.username}
-            size={160}
-            className="mb-2 w-full rounded-lg"
-          />
-          <p className={cn("truncate text-[13px] font-bold", userColor)}>
-            {user.username}
-          </p>
-          {user.displayTitle && (
-            <span
-              className={cn(
-                "mt-1 inline-block rounded-md px-2 py-0.5 text-xs",
-                titleColor,
-              )}
-            >
-              {user.displayTitle}
-            </span>
-          )}
-          <p className="text-muted-foreground text-[12px]">
-            Lv {user.level} {showUserRank(user)}
-            {user.villageName ? ` · ${user.villageName}` : ""}
-          </p>
-        </div>
-        <MenuItem
-          asLink
-          href={`/username/${user.username}`}
-          onSelect={() => setOpen(false)}
+      {view === "challenge" ? (
+        <PopoverContent
+          align="start"
+          collisionPadding={8}
+          className="max-h-[var(--radix-popover-content-available-height)] w-[320px] overflow-y-auto p-[8px]"
         >
-          <UserRound /> See profile
-        </MenuItem>
-        {!isSelf && onMessage && (
-          <MenuItem
-            onSelect={() => {
-              setOpen(false);
-              onMessage(user);
-            }}
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground mb-[4px] inline-flex items-center gap-[4px] text-[12px]"
+            onClick={() => setView("menu")}
           >
-            <Mail /> Send private message
-          </MenuItem>
-        )}
-        {!isSelf && onMention && (
+            <ChevronLeft className="h-[14px] w-[14px]" aria-hidden /> Back
+          </button>
+          <ChallengePanel opponent={user} />
+        </PopoverContent>
+      ) : (
+        <PopoverContent
+          align="start"
+          collisionPadding={8}
+          className="w-[208px] p-[4px]"
+          role="menu"
+          aria-label={`Actions for ${user.username}`}
+        >
+          <div className="mb-[4px] border-b px-[8px] pt-[4px] pb-[8px]">
+            <AvatarImage
+              href={user.avatar}
+              alt={user.username}
+              size={160}
+              className="mb-2 w-full rounded-lg"
+            />
+            <p className={cn("truncate text-[13px] font-bold", userColor)}>
+              {user.username}
+            </p>
+            {user.displayTitle && (
+              <span
+                className={cn(
+                  "mt-1 inline-block rounded-md px-2 py-0.5 text-xs",
+                  titleColor,
+                )}
+              >
+                {user.displayTitle}
+              </span>
+            )}
+            <p className="text-muted-foreground text-[12px]">
+              Lv {user.level} {showUserRank(user)}
+              {user.villageName ? ` · ${user.villageName}` : ""}
+            </p>
+          </div>
           <MenuItem
-            onSelect={() => {
-              setOpen(false);
-              onMention(user.username);
-            }}
+            asLink
+            href={`/username/${user.username}`}
+            onSelect={() => setOpen(false)}
           >
-            <AtSign /> Mention in chat
+            <UserRound /> See profile
           </MenuItem>
-        )}
-        {!isSelf && (
-          <>
-            <div className="my-[4px] border-t" />
+          {!isSelf && onMessage && (
             <MenuItem
-              destructive
-              disabled={isPending}
-              onSelect={() => toggleBlock({ userId: user.userId, active: true })}
+              onSelect={() => {
+                setOpen(false);
+                onMessage(user);
+              }}
             >
-              <Ban /> Block user
+              <Mail /> Send private message
             </MenuItem>
-          </>
-        )}
-      </PopoverContent>
+          )}
+          {!isSelf && (
+            <MenuItem onSelect={() => setView("challenge")}>
+              <Swords /> Challenge
+            </MenuItem>
+          )}
+          {!isSelf && onMention && (
+            <MenuItem
+              onSelect={() => {
+                setOpen(false);
+                onMention(user.username);
+              }}
+            >
+              <AtSign /> Mention in chat
+            </MenuItem>
+          )}
+          {!isSelf && (
+            <>
+              <div className="my-[4px] border-t" />
+              <MenuItem
+                destructive
+                disabled={isPending}
+                onSelect={() => toggleBlock({ userId: user.userId, active: true })}
+              >
+                <Ban /> Block user
+              </MenuItem>
+            </>
+          )}
+        </PopoverContent>
+      )}
     </Popover>
   );
 }

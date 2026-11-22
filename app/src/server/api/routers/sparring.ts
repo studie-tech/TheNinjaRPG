@@ -78,7 +78,7 @@ export const sparringRouter = createTRPCRouter({
         route: "/battlearena#Sparring",
         routeText: "To Arena",
       });
-      return { success: true, message: "Challenge created" };
+      return { success: true, message: `Challenge sent to ${target.username}.` };
     }),
   acceptChallenge: protectedProcedure
     .meta({ mcp: { description: "Accept a sparring challenge" } })

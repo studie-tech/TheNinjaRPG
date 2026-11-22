@@ -80,12 +80,15 @@ beforeEach(() => {
   vi.spyOn(ModerationSummary, "ModerationSummary").mockImplementation(() => null);
   vi.spyOn(Report, "default").mockImplementation(() => null);
   vi.spyOn(EmojiPicker, "EmojiPicker").mockImplementation(() => null);
-  vi.spyOn(PostModule, "default").mockImplementation(({ children, options }) => (
-    <div>
-      {options}
-      {children}
-    </div>
-  ));
+  vi.spyOn(PostModule, "default").mockImplementation(
+    ({ children, options, footer }) => (
+      <div>
+        {options}
+        {children}
+        {footer}
+      </div>
+    ),
+  );
   vi.spyOn(Confirm, "default").mockImplementation(() => null);
 });
 afterEach(() => {
@@ -165,6 +168,19 @@ describe("conversation comment editing permissions", () => {
       quoteIds: null,
       senderId: null,
     });
+  });
+});
+
+describe("challenge shortcut", () => {
+  it("offers to challenge the author of another player's message", () => {
+    mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
+    const view = render(message());
+    expect(view.getByRole("button", { name: "Challenge Friend" })).toBeTruthy();
+  });
+
+  it("does not offer to challenge yourself", () => {
+    const view = render(message());
+    expect(view.queryByRole("button", { name: "Challenge Friend" })).toBeNull();
   });
 });
 
