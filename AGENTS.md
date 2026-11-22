@@ -119,6 +119,17 @@ Combat logic lives in `app/src/libs/combat/`: `actions.ts` (actions), `bossFight
 - Build a query with `cdnCachedProcedure` (`app/src/server/api/trpc.ts`) only when its result reads nothing from `ctx` but `drizzle` and no client code invalidates or refetches it after an action; the client sends those queries to `/api/trpc/cdn`, which answers with `s-maxage`, so a refetch would get the CDN's copy of before the action. List such a query in `CDN_CACHED_QUERY_PATHS` (`app/src/server/api/cdnCachedQueries.ts`), which the shell layout reads without loading the router; `tests/server/api/cdnCachedQueries.test.ts` checks the list against the router's metadata and fails on a cache call against a listed query.
 - Federal status is derived from PayPal, Stripe and store receipts, and each provider confirms a renewal only after the paid period ends: PayPal through `updatedAt` plus `PAYPAL_PAID_PERIOD_DAYS`, Stripe at `invoice.paid` after `expiresAt`, stores at RENEWAL. Side effects that undo a tier perk when the status drops, such as the Diamond bloodline revert (`pendingDiamondRenewal` in `app/src/queries/bloodline.ts`), must apply the same bounded grace to every provider, never only PayPal, and must let a confirmed store EXPIRATION (`revokedAt`) through.
 
+## A/B tests
+
+Signed-out experiments measure tutorial completion per visitor and are reported at `/recruitment` (`app/src/layout/AbTestResults.tsx`). Reuse the wallpaper experiment's pattern rather than building another:
+
+- One module per experiment in `app/src/libs/` (see `wallpaperExperiment.ts`) owns the versioned cookie/experiment name, the variant tuple with a `control` arm (the results page infers the baseline from that name), assets, labels, `parse…` and `draw…`. Version the name (`ab_x_2`) whenever the arm set changes, so earlier assignments are not attributed to the new run.
+- `chooseShell` (`app/src/libs/shell.ts`) draws the assignment on a document landing visit and `app/src/proxy.ts` sets the cookie. An arm that changes what the cached page renders becomes part of the prerendered shell variant; otherwise the client reads the cookie after mount.
+- `createAppTRPCContext` (`app/src/server/api/trpc.ts`) parses the cookie into the context (every hand-built context must list the field), `getExperimentAssignments` (`app/src/libs/experimentAnalytics.ts`) turns it into assignments, `misc.trackVisitor` records the exposure and `profile.updateTutorialStep` records completion. Register labels and the description in `AbTestResults.tsx`.
+- Closing a test removes all of the above and promotes the winning asset into its constant; past rows in `AbEvent` stay for reporting.
+
+References: [#1711](https://github.com/studie-tech/TheNinjaRPG/pull/1711) adds a prerendered multi-arm test, [#1716](https://github.com/studie-tech/TheNinjaRPG/pull/1716) a client-read one, and [#2635](https://github.com/studie-tech/TheNinjaRPG/pull/2635) promotes a winner, closes that test and narrows another to a new run.
+
 ## Native apps
 
 Capacitor shells and dependencies live in `mobile/`, with their own `package.json`; see `mobile/README.md` for setup.
