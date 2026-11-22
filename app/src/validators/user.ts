@@ -105,6 +105,7 @@ export const getPublicUsersSchema = z.object({
   inArena: z.boolean().optional(),
   isEvent: z.boolean().optional(),
   isWarCamp: z.boolean().optional(),
+  isCaravanAi: z.boolean().optional(),
   isSummon: z.boolean().optional(),
   inShrines: z.boolean().optional(),
   minLevel: z.number().int().optional(),

@@ -74,6 +74,7 @@ import {
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getReskinnedBloodline } from "@/libs/bloodline";
+import type { CaravanBattleState } from "@/libs/caravan";
 import {
   availableUserActions,
   getDefaultBasicActions,
@@ -2054,6 +2055,8 @@ export const initiateBattle = async (
     warCamp?: WarCamp;
     /** Guardian lobby's event; preload political identities and guard its live window at admission. */
     territoryWar?: TerritoryWar;
+    /** Caravan or marker fight; escorts are claimed from their caravan's queue. */
+    caravan?: CaravanBattleState;
     raidQuestId?: string;
     /** Live raid roster reservation checked when combat claims the participants. */
     raidQueueClaim?: { teamId: string; claimId: string };
@@ -2065,7 +2068,8 @@ export const initiateBattle = async (
     /**
      * Start every initiating human whose stored defaultAutoCombat is on with auto
      * combat, read from the user rows initiateBattle already loads. For group
-     * battles whose callers do not hold the members' settings.
+     * battles whose callers do not hold the members' settings. Caravan fights apply
+     * it to defending humans too, since escorts may be away when attacked.
      */
     autoCombatFromDefaults?: boolean;
     /** Stable event launch identity; participant claims require its WAITING recovery token. */
@@ -2962,16 +2966,19 @@ export const initiateBattle = async (
       // For other battles, check if user status is appropriate (skip AI users)
       const isOk = dungeonEncounter
         ? user.status === "QUEUED"
-        : isQueuedBattle
-          ? user.status === "QUEUED"
-          : isShrineBattle
-            ? ["AWAKE", "QUEUED"].includes(user.status)
-            : user.status === "AWAKE" ||
-              (battleType === "QUEST" &&
-                isBetweenPyramidBattles(user) &&
-                info.questAttempt?.isolated &&
-                getIsolatedPyramid(user)?.id === info.questAttempt.id &&
-                info.questBattleSource?.questId === info.questAttempt.questId);
+        : info.caravan
+          ? user.status ===
+            (info.caravan.guardIds.includes(user.userId) ? "QUEUED" : "AWAKE")
+          : isQueuedBattle
+            ? user.status === "QUEUED"
+            : isShrineBattle
+              ? ["AWAKE", "QUEUED"].includes(user.status)
+              : user.status === "AWAKE" ||
+                (battleType === "QUEST" &&
+                  isBetweenPyramidBattles(user) &&
+                  info.questAttempt?.isolated &&
+                  getIsolatedPyramid(user)?.id === info.questAttempt.id &&
+                  info.questBattleSource?.questId === info.questAttempt.questId);
       if (!isOk) {
         return errorResponse(
           actionStatusMessage(
@@ -3165,6 +3172,7 @@ export const initiateBattle = async (
   }
 
   if (info.kageMatch) extraState.kageMatch = info.kageMatch;
+  if (info.caravan) extraState.caravan = info.caravan;
   if (info.villageDuty) {
     const { villageId, userId, actorId, startedAt, slot } = info.villageDuty;
     extraState.villageDuty = { villageId, userId, actorId, startedAt, slot };
@@ -3191,7 +3199,13 @@ export const initiateBattle = async (
     ...(info.autoCombatUserIds ?? []),
     ...(info.autoCombatFromDefaults
       ? users
-          .filter((u) => !u.isAi && u.defaultAutoCombat && userIds.includes(u.userId))
+          .filter(
+            (u) =>
+              !u.isAi &&
+              u.defaultAutoCombat &&
+              (userIds.includes(u.userId) ||
+                (!!info.caravan && info.targetIds.includes(u.userId))),
+          )
           .map((u) => u.userId)
       : []),
   ].filter((userId) => !tutorialGuidedUserIds.includes(userId));
@@ -3303,6 +3317,7 @@ export const initiateBattle = async (
     info.tournamentGame?.battleId ??
     info.kageMatch?.battleId ??
     info.villageDuty?.battleId ??
+    info.caravan?.battleId ??
     nanoid();
 
   // Rows the status update below is expected to claim, used as the CAS guard

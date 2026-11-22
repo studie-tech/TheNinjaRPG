@@ -37,6 +37,7 @@ import {
   userSkill,
   userTitle,
   village,
+  warehouseLog,
   warKill,
 } from "@/drizzle/schema";
 import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
@@ -141,6 +142,7 @@ describeWithDatabase("staff user-id rename", () => {
       paypalSubscription,
       userData,
       village,
+      warehouseLog,
     );
     await insertPetSpecies(initialPetSpecies);
     await insertUsers([
@@ -184,6 +186,38 @@ describeWithDatabase("staff user-id rename", () => {
       );
       expect(await selectPlayerTurnOrder(database, "opponent")).toHaveLength(2);
       expect(await database.query.dataBattleTurnOrder.findMany()).toHaveLength(2);
+    },
+  );
+
+  it.each(["rename", "delete"] as const)(
+    "keeps village Warehouse history while unlinking the old ID on %s",
+    async (operation) => {
+      const database = await getTestDatabase();
+      await database.insert(warehouseLog).values(
+        [OLD_USER_ID, "neighbour"].map((userId) => ({
+          id: `log-${userId}`,
+          villageId: "leaf",
+          userId,
+          itemId: "ore",
+          type: "DEPOSIT" as const,
+          quantity: 5,
+          createdAt: new Date(),
+        })),
+      );
+      if (operation === "rename") {
+        const caller = await callerFor(staffRouter, STAFF);
+        expect(
+          (await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }))
+            .success,
+        ).toBe(true);
+      } else await deleteUser(database, OLD_USER_ID);
+      const owners = Object.fromEntries(
+        (await database.select().from(warehouseLog)).map((row) => [row.id, row.userId]),
+      );
+      expect(owners).toEqual({
+        [`log-${OLD_USER_ID}`]: operation === "rename" ? NEW_USER_ID : null,
+        "log-neighbour": "neighbour",
+      });
     },
   );
 

@@ -84,6 +84,25 @@ export const hasNoHuntingBattle = (userId: string) =>
       AND ${huntingSession.battleId} IS NOT NULL)`;
 
 /**
+ * The guard of an atomic stack write: the player's stack still holds `expectedQuantity`, no
+ * hunt owns their inventory, and the caller's conditions hold. Statements that shrink a stack
+ * together with other rows reuse it.
+ */
+export const userItemQuantityWhere = ({
+  userId,
+  userItemId,
+  expectedQuantity,
+  where: conditions = [],
+}: Omit<UpdateUserItemQuantityAtomicallyParams, "client" | "nextQuantity">) =>
+  and(
+    eq(userItem.id, userItemId),
+    eq(userItem.userId, userId),
+    eq(userItem.quantity, expectedQuantity),
+    hasNoHuntingBattle(userId),
+    ...conditions,
+  );
+
+/**
  * Sets quantity when the row still matches `expectedQuantity`, or deletes the row when
  * `nextQuantity` is 0. Hunting owns its preloaded inventory until settlement; other battle
  * types can still consume entry items. Returns false if the row changed or a hunt owns it.
@@ -100,13 +119,12 @@ export const updateUserItemQuantityAtomically = async ({
     return false;
   }
 
-  const where = and(
-    eq(userItem.id, userItemId),
-    eq(userItem.userId, userId),
-    eq(userItem.quantity, expectedQuantity),
-    hasNoHuntingBattle(userId),
-    ...conditions,
-  );
+  const where = userItemQuantityWhere({
+    userId,
+    userItemId,
+    expectedQuantity,
+    where: conditions,
+  });
 
   const result =
     nextQuantity > 0

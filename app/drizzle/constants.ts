@@ -261,6 +261,7 @@ export const VILLAGE_MAINTAINED_STRUCTURE_ROUTES = [
   "/ramenshop",
   "/townhall",
   "/traininggrounds",
+  "/warehouse",
 ] as const;
 /** Shared-progress objectives only a village mission can carry. */
 export const VILLAGE_MISSION_ONLY_TASKS = [
@@ -503,6 +504,7 @@ export const StructureRoutes = [
   "/traininggrounds",
   "/occupation",
   "/auctionhouse",
+  "/warehouse",
 ] as const;
 export type StructureRoute = (typeof StructureRoutes)[number];
 
@@ -1117,6 +1119,7 @@ export const BattleTypes = [
   "RAID",
   "OVERWORLD",
   "HUNTING",
+  "CARAVAN",
 ] as const;
 export type BattleType = (typeof BattleTypes)[number];
 
@@ -1141,6 +1144,7 @@ export const BattleTypeLabels: Record<BattleType, string> = {
   RANDOM_ENCOUNTER: "Random Encounter",
   RAID: "Raid",
   OVERWORLD: "Overworld",
+  CARAVAN: "Caravan",
 };
 
 export const PvpBattleTypes: BattleType[] = [
@@ -2688,6 +2692,7 @@ export const FACTION_RAID_STRUCTURE_ROUTES = [
   "/traininggrounds",
   "/itemshop",
   "/battlearena",
+  "/warehouse",
 ] as const;
 export const STRONGHOLD_MEMBER_GRACE_HOURS = 72;
 
@@ -3800,6 +3805,8 @@ export const IMG_BUILDING_BANK =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEHFjuQLfKL5D7TAFe29bymSaPCIQ846MdzGg.webp";
 export const IMG_BUILDING_ARCHIVE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXk8AUJqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv.webp";
+export const IMG_BUILDING_WAREHOUSE =
+  "https://ui0arpl8sm.ufs.sh/f/warehouse-banner-588cb0985c9eb3fd0ba576dc.webp";
 export const IMG_BUILDING_ADMINBUILDING =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMyfWBKtsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
 
@@ -5014,3 +5021,206 @@ export type AdConversionAction = (typeof AdConversionActions)[number];
 export const SUPPLY_REQUEST_BUNDLE_SIZE = 100;
 export const SUPPLY_REQUEST_EXPERIENCE = 2000;
 export const SUPPLY_REQUEST_PAYOUT_PERCENT = 60;
+
+// ============================================
+// Village Warehouse, trade routes and caravans
+// ============================================
+/** Village tokens (clan points in faction settlements) to construct the Warehouse at level 1. */
+export const WAREHOUSE_CONSTRUCTION_COST = 500_000;
+/** Funds for each Warehouse level above 1. */
+export const WAREHOUSE_UPGRADE_COST = 150_000;
+/** Production bonus per Warehouse level, in percent. */
+export const WAREHOUSE_PRODUCTION_BONUS_PER_LEVEL = 1;
+/** Bonus stock added to each deposit per Warehouse level, in percent. */
+export const WAREHOUSE_DEPOSIT_BONUS_PER_LEVEL = 2;
+/** Items the Kage can select for production at once. */
+export const WAREHOUSE_MAX_PRODUCTION_ITEMS = 5;
+/** Shared production cycle of every selected item. */
+export const WAREHOUSE_PRODUCTION_INTERVAL_HOURS = 6;
+/** Units of each selected item produced per cycle before the level bonus. */
+export const WAREHOUSE_PRODUCTION_BASE_QUANTITY = 100;
+/** Cycles that accumulate while nobody settles production; older cycles are forfeited. */
+export const WAREHOUSE_PRODUCTION_MAX_CYCLES = 4;
+/** Fewest units a single deposit can contain. */
+export const WAREHOUSE_MIN_DEPOSIT = 50;
+/** A player cannot deposit the same item again within this period. */
+export const WAREHOUSE_DEPOSIT_COOLDOWN_HOURS = 2;
+/** Item types players can store in a Warehouse; only stackable copies are accepted. */
+export const WAREHOUSE_ITEM_TYPES = [
+  "MATERIAL",
+  "COOKING",
+  "MEAL",
+  "CONSUMABLE",
+] as const;
+/** Daily withdrawal allowance (UTC day), shared by every item and Warehouse. */
+export const WAREHOUSE_DAILY_ALLOWANCE = 30;
+export const WAREHOUSE_ANBU_DAILY_ALLOWANCE = 40;
+export const WAREHOUSE_APPROVED_DAILY_ALLOWANCE = 50;
+/** Extra daily allowance after this many continuous days in the village. */
+export const WAREHOUSE_LOYALTY_DAYS = 60;
+export const WAREHOUSE_LOYALTY_BONUS = 5;
+/** Percent of unreserved stock destroyed when a faction raid on the Warehouse succeeds. */
+export const WAREHOUSE_RAID_STOCK_LOSS_PERCENT = 25;
+/** History rows shown per page. */
+export const WAREHOUSE_HISTORY_PAGE_SIZE = 20;
+export const WAREHOUSE_LOG_TYPES = [
+  "DEPOSIT",
+  "WITHDRAW",
+  "PRODUCTION",
+  "RESERVE",
+  "RELEASE",
+  "DISPATCH",
+  "DELIVERY",
+] as const;
+export type WarehouseLogType = (typeof WAREHOUSE_LOG_TYPES)[number];
+
+export const TRADE_ROUTE_STATUSES = ["PROPOSED", "ACTIVE", "CLOSED"] as const;
+export type TradeRouteStatus = (typeof TRADE_ROUTE_STATUSES)[number];
+/** Caravan travel time on a level 1 trade route. */
+export const TRADE_ROUTE_BASE_TRAVEL_MINUTES = 120;
+/** Travel time removed by each trade route level above 1, in percent. */
+export const TRADE_ROUTE_TRAVEL_REDUCTION_PER_LEVEL = 5;
+export const TRADE_ROUTE_MAX_LEVEL = 10;
+/** Village tokens for each trade route upgrade. */
+export const TRADE_ROUTE_UPGRADE_COST = 100_000;
+/** Concurrent outgoing caravans each active trade route allows its villages. */
+export const CARAVANS_PER_TRADE_ROUTE = 1;
+/** Hidden markers placed on the sectors a route passes through. */
+export const TRADE_ROUTE_MIN_MARKERS = 1;
+export const TRADE_ROUTE_MAX_MARKERS = 4;
+/** One marker per this many sectors of a route's path. */
+export const TRADE_ROUTE_SECTORS_PER_MARKER = 6;
+/** Control a marker has; every won assault removes TRADE_ROUTE_MARKER_ASSAULT_DAMAGE. */
+export const TRADE_ROUTE_MARKER_MAX_CONTROL = 100;
+export const TRADE_ROUTE_MARKER_ASSAULT_DAMAGE = 25;
+/** NPC guards defending a trade route marker against an assault. */
+export const TRADE_ROUTE_MARKER_GUARDS = 2;
+/** How long a sector search keeps the found markers revealed to the searcher's village. */
+export const TRADE_ROUTE_MARKER_DISCOVERY_HOURS = 24;
+
+export const CARAVAN_STATUSES = [
+  "PREPARING",
+  "TRAVELLING",
+  "DELIVERED",
+  "CANCELLED",
+] as const;
+export type CaravanStatus = (typeof CARAVAN_STATUSES)[number];
+export const CARAVAN_ROLES = ["GUARD", "ENEMY", "BANDIT"] as const;
+export type CaravanRole = (typeof CARAVAN_ROLES)[number];
+/** Escort slots of each caravan. */
+export const CARAVAN_GUARD_SLOTS = 3;
+/** Distinct items and units one caravan can carry. */
+export const CARAVAN_MIN_CARGO_UNITS = 100;
+export const CARAVAN_MAX_CARGO_ITEMS = 5;
+export const CARAVAN_MAX_CARGO_UNITS = 2_000;
+/** Escort checkpoints along every journey; each one can roll an NPC bandit ambush. */
+export const CARAVAN_CHECKPOINTS = 4;
+/** Finished caravans a village's caravan list shows. */
+export const CARAVAN_HISTORY_SIZE = 10;
+/** Default chance per checkpoint of an NPC bandit ambush; staff tune it in game settings. */
+export const CARAVAN_DEFAULT_ENCOUNTER_RATE = 25;
+/** Game setting holding the staff-tuned ambush chance, in percent. */
+export const CARAVAN_ENCOUNTER_RATE_SETTING = "caravanEncounterRate";
+/** Time guards have to answer an NPC ambush before it resolves against the caravan. */
+export const CARAVAN_AMBUSH_RESPONSE_MINUTES = 10;
+/** Shares of the original cargo, in basis points. */
+export const CARAVAN_AMBUSH_LOSS_BP = 500;
+export const CARAVAN_ENEMY_ATTACK_LOSS_BP = 1_000;
+/** Total cargo a journey can lose to every ambush, attack and robbery together. */
+export const CARAVAN_MAX_LOSS_BP = 5_000;
+/** Extra travel time of one successful delay and the journey's total cap. */
+export const CARAVAN_DELAY_MINUTES = 10;
+export const CARAVAN_MAX_DELAY_MINUTES = 30;
+/** A successful disruption removes one NPC guard from encounters for this long. */
+export const CARAVAN_DISRUPTION_MINUTES = 30;
+/** Duration of disrupt and delay operations, during which guards can intervene. */
+export const CARAVAN_SABOTAGE_MINUTES = 5;
+/** Duration of an enemy shinobi's investigation and sector search. */
+export const CARAVAN_ENEMY_SCOUT_MINUTES = 5;
+/** How long an investigation or a sighting stays known. */
+export const CARAVAN_DISCOVERY_MINUTES = 30;
+/** Wait between two tracking refreshes of the same caravan. */
+export const CARAVAN_TRACK_COOLDOWN_SECONDS = 120;
+/** Covert success chance of enemy shinobi: base plus a bonus per 1000 stealth, capped. */
+export const CARAVAN_STEALTH_BASE_CHANCE = 20;
+export const CARAVAN_STEALTH_CHANCE_PER_1000 = 2;
+export const CARAVAN_STEALTH_MAX_CHANCE = 60;
+/** Interception group sizes. Bandits ride in groups; enemy shinobi may strike alone. */
+export const CARAVAN_BANDIT_MIN_GROUP = 2;
+export const CARAVAN_ENEMY_MIN_GROUP = 1;
+export const CARAVAN_MAX_GROUP = 3;
+/** Rewards. Guards are paid on delivery for each completed objective. */
+export const CARAVAN_GUARD_DELIVERY_RYO = 5_000;
+export const CARAVAN_GUARD_OBJECTIVE_RYO = 2_500;
+/** Objectives a guard is paid for per journey: every checkpoint and a few defences. */
+export const CARAVAN_MAX_GUARD_OBJECTIVES = 7;
+export const CARAVAN_ENEMY_VICTORY_RYO = 5_000;
+/**
+ * An encounter whose battle vanished, or sat untouched this long, is released. Idle turns
+ * time out every COMBAT_SECONDS while anyone has the battle open, so only an abandoned
+ * battle goes this long without an update.
+ */
+export const CARAVAN_ENCOUNTER_STALE_MINUTES = 30;
+export const CARAVAN_ENCOUNTER_TYPES = [
+  "AMBUSH",
+  "INTERCEPTION",
+  "INTERVENTION",
+  "MARKER_ASSAULT",
+] as const;
+export type CaravanEncounterType = (typeof CARAVAN_ENCOUNTER_TYPES)[number];
+export const CARAVAN_ENCOUNTER_STATUSES = [
+  "PENDING",
+  "STARTING",
+  "FIGHTING",
+  "RESOLVED",
+] as const;
+export const CARAVAN_OPERATION_TYPES = [
+  "INVESTIGATE",
+  "SEARCH",
+  "DISRUPT",
+  "DELAY",
+] as const;
+export type CaravanOperationType = (typeof CARAVAN_OPERATION_TYPES)[number];
+export const CARAVAN_OPERATION_STATUSES = [
+  "ACTIVE",
+  "RESOLVED",
+  "INTERRUPTED",
+] as const;
+/** A player's latest operations the caravan controls list. */
+export const CARAVAN_OPERATION_HISTORY_SIZE = 5;
+export const CARAVAN_DISCOVERY_KINDS = ["ROUTE", "LOCATION"] as const;
+export type CaravanDiscoveryKind = (typeof CARAVAN_DISCOVERY_KINDS)[number];
+
+/** Outlaw-only profession held alongside the regular occupation. */
+export const BANDIT_RANKS = ["HIGHWAYMAN", "MARAUDER", "BANDIT CHIEF"] as const;
+export type BanditRank = (typeof BANDIT_RANKS)[number];
+export const BANDIT_REQUIRED_EXP: Record<BanditRank, number> = {
+  HIGHWAYMAN: 0,
+  MARAUDER: 100_000,
+  "BANDIT CHIEF": 600_000,
+};
+export const BANDIT_RANK_LABELS: Record<BanditRank, string> = {
+  HIGHWAYMAN: "Highwayman",
+  MARAUDER: "Marauder",
+  "BANDIT CHIEF": "Bandit Chief",
+};
+/** Success chance of every bandit operation, in percent. */
+export const BANDIT_SUCCESS_CHANCE: Record<BanditRank, number> = {
+  HIGHWAYMAN: 20,
+  MARAUDER: 30,
+  "BANDIT CHIEF": 40,
+};
+/** Minutes an investigation or sector search takes. */
+export const BANDIT_SCOUT_MINUTES: Record<BanditRank, number> = {
+  HIGHWAYMAN: 10,
+  MARAUDER: 5,
+  "BANDIT CHIEF": 3,
+};
+/** Share of the original cargo a successful robbery steals, in basis points. */
+export const BANDIT_STEAL_BP: Record<BanditRank, number> = {
+  HIGHWAYMAN: 500,
+  MARAUDER: 1_000,
+  "BANDIT CHIEF": 2_000,
+};
+/** Bandit experience of every successful operation and robbery. */
+export const BANDIT_OPERATION_EXP = 500;

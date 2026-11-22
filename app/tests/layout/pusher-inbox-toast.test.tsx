@@ -11,6 +11,7 @@ import * as client from "@/app/_trpc/client";
 import type { UserCache } from "@/deltas/profile";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
+import type { CaravanNoticeView } from "@/libs/caravan";
 import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as toast from "@/libs/toast";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -613,6 +614,61 @@ it("refreshes cached inventory and service views when an inbox event delivers co
   for (const key of keys)
     expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   expect(refreshProfile).toHaveBeenCalledTimes(1);
+});
+
+it.each<[CaravanNoticeView[]]>([
+  [["routes"]],
+  [["caravans", "controls"]],
+  [["profile", "caravans", "controls"]],
+])("refreshes only the views a caravan notice names: %p", async (refresh) => {
+  let receiveEvent!: (data: UserEvent) => Promise<void>;
+  vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({
+      bind: (_event: string, handler: typeof receiveEvent) => {
+        receiveEvent = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+  })) as never);
+  const showToast = vi
+    .spyOn(toast, "showMutationToast")
+    .mockImplementation(() => undefined);
+  showToast.mockClear();
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  queryClients.push(queryClient);
+  const keys = {
+    profile: getQueryKey(testApi.profile.getUser, undefined, "query"),
+    routes: getQueryKey(testApi.tradeRoute.getRoutes, undefined, "query"),
+    caravans: getQueryKey(testApi.caravan.getCaravans, undefined, "query"),
+    controls: getQueryKey(testApi.caravanOps.getControls, undefined, "query"),
+  };
+  for (const key of Object.values(keys)) queryClient.setQueryData(key, {});
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      {children}
+    </TrpcTestProviders>
+  );
+  renderHook(() => usePusherHandler("player"), { wrapper });
+  await connectPusher();
+  await act(async () =>
+    receiveEvent({
+      type: "userMessage",
+      message: "Your caravan arrived.",
+      route: "/warehouse",
+      refresh,
+    }),
+  );
+  for (const [view, key] of Object.entries(keys))
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(
+      refresh.includes(view as CaravanNoticeView),
+    );
+  expect(showToast).toHaveBeenCalledTimes(1);
+  expect(showToast.mock.calls[0]![0].message).toBe("Your caravan arrived.");
 });
 
 it.each(["confirmed", "confirmed-late", "failed", "acknowledged", "list-in-flight"])(

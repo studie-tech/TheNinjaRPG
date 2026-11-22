@@ -1,6 +1,7 @@
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   COOKING_BASE_SLOTS,
+  DURABILITY_MAX_DEFAULT,
   DURABILITY_POINT_PRICE_PERCENT,
   FED_COOKING_SLOTS,
   FED_EVENT_ITEMS,
@@ -383,6 +384,35 @@ export const getEquipBlockReason = (
 /** Largest quantity one inventory row of this item holds. */
 export const getEffectiveStackSize = (item: Pick<Item, "canStack" | "stackSize">) =>
   item.canStack ? Math.max(1, item.stackSize) : 1;
+
+/**
+ * Units of an item the carried stacks a grant may top up still hold room for: the stacks
+ * `listItemForGrantUserItems` lists, unequipped and outside auctions and crafts, without a
+ * variant or imbuement, at full durability and at level 1 unless consumable. The listing
+ * holds none while the player is in a battle; callers check that.
+ */
+export const getJoinableStackRoom = (
+  rows: readonly (InventorySlotRow & Pick<UserItem, "durability">)[],
+  itemId: string,
+  now: Date = new Date(),
+) =>
+  rows.reduce(
+    (room, row) =>
+      row.item &&
+      row.itemId === itemId &&
+      !row.storedAtHome &&
+      row.equipped === "NONE" &&
+      !row.isInAuction &&
+      !row.activeVariantId &&
+      row.quantity > 0 &&
+      row.durability === DURABILITY_MAX_DEFAULT &&
+      !(row.craftingFinishedAt && row.craftingFinishedAt > now) &&
+      (row.level === 1 || row.item.itemType === "CONSUMABLE") &&
+      row.imbuements.length === 0
+        ? room + Math.max(0, getEffectiveStackSize(row.item) - row.quantity)
+        : room,
+    0,
+  );
 
 /** Row quantities that hold `quantity` items at `stackSize` per row. */
 export const splitIntoStacks = (quantity: number, stackSize: number) => {

@@ -136,6 +136,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { closeVillageTrade } from "@/server/utils/caravan";
 import { clearClanCombat, deleteClanBattle } from "@/server/utils/clanBattle";
 import { syncStrongholdMembership } from "@/server/utils/faction";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
@@ -1907,6 +1908,7 @@ const undoClanBattleJoin = async (
  * @param clanData - The clan from which the user will be removed.
  * @param user - The user to be removed from the clan.
  * @param reasons - The departure reasons recorded in the action log.
+ * @param readiness - The departing account's readiness claim, committed before cleanup.
  * @returns Surviving succession fields, undefined for a deleted clan, or null when recovery lost its claim.
  */
 export const removeFromClan = async (
@@ -1947,13 +1949,17 @@ export const removeFromClan = async (
     const saved = await updateUserDataForRemoveFromClan(client, userId, readiness);
     if (!saved.rowsAffected) return null;
   }
+  const disbands =
+    !otherUser && ["HIDEOUT", "STRONGHOLD"].includes(clanData.village?.type);
   const cleanup = async () => {
+    // Trade ends first, so a settlement whose caravans could not be called off is not deleted.
+    if (disbands) await closeVillageTrade(client, clanData.villageId);
     await Promise.all([
       ...(readiness?.where ? [] : [updateUserDataForRemoveFromClan(client, userId)]),
       deleteUserRequestForRemoveFromClan(client, userId),
       deleteBattleQueueMembersForUser(client, userId),
       insertActionLogForRemoveFromClan(client, userId, reasons, clanData, user),
-      ...(!otherUser && ["HIDEOUT", "STRONGHOLD"].includes(clanData.village?.type)
+      ...(disbands
         ? [
             deleteVillageForRemoveFromClan(client, clanData),
             deleteVillageStructureForRemoveFromClan(client, clanData),

@@ -11,6 +11,7 @@ import {
 import type { UserStatus } from "@/drizzle/constants";
 import {
   adClick,
+  caravanDiscovery,
   chakraStormClaimReceipt,
   chakraStormProgress,
   farmCollectionLog,
@@ -29,12 +30,16 @@ import {
   userQuestAttempt,
   userSkill,
   userTowerDefenseUpgrade,
+  warehouseDepositLedger,
+  warehouseLog,
+  warehouseMember,
 } from "@/drizzle/schema";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { isBattleClaimId } from "@/libs/raids";
 import { incrementAnbuMemberCount } from "@/queries/anbu";
 import { fetchBadge } from "@/queries/badge";
 import { updateBalanceTurnOrderUserId } from "@/queries/balance";
+import { renameCaravanUser } from "@/queries/caravan";
 import { deleteBattleQueueMembersForUser } from "@/queries/clan";
 import { deleteBattleById } from "@/queries/combat";
 import { renameCosmetics } from "@/queries/cosmetic";
@@ -918,7 +923,12 @@ export const staffRouter = createTRPCRouter({
           towerDefenseClaimReceipt,
           chakraStormProgress,
           chakraStormClaimReceipt,
+          warehouseDepositLedger,
+          warehouseLog,
+          warehouseMember,
+          caravanDiscovery,
         ].map((table) => updateTableForUpdateUserId(ctx.drizzle, table, input)),
+        ...renameCaravanUser(ctx.drizzle, input),
         updateStaffApplicationForUpdateUserId(ctx.drizzle, input),
         updateWarKillForUpdateUserId(ctx.drizzle, input),
         updateWarKillForUpdateUserId2(ctx.drizzle, input),

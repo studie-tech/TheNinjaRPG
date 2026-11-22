@@ -12,6 +12,7 @@
     { "path": "/api/meta-conversions", "schedule": "*/5 * * * *" },
     { "path": "/api/dungeon-maintenance", "schedule": "* * * * *" },
     { "path": "/api/territory-war-maintenance", "schedule": "* * * * *" },
+    { "path": "/api/caravan-maintenance", "schedule": "* * * * *" },
     { "path": "/api/push-timers", "schedule": "* * * * *" },
     { "path": "/api/tournament-maintenance", "schedule": "* * * * *" },
     {

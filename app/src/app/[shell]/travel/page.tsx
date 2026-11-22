@@ -66,6 +66,7 @@ import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import { useMapAssetLibrary } from "@/hooks/useMapAssetLibrary";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import AutoAttackModal from "@/layout/AutoAttackModal";
+import { CaravanControls } from "@/layout/CaravanControls";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -1078,6 +1079,14 @@ function Travel() {
   const isSectorTools = !isGlobal && activeTab !== "";
   const travelTools: HeaderActionItem[] = [
     { key: "war", node: <WarFieldActions />, priority: 10 },
+    {
+      key: "caravans",
+      // Kept out of the tutorial's guided map lessons.
+      node: isSectorTools && !tutorialRunning && (
+        <CaravanControls className={mapToolClassName} />
+      ),
+      priority: 8,
+    },
     {
       key: "auto-attack",
       node:

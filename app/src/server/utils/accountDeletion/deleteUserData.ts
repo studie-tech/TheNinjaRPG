@@ -1,6 +1,9 @@
 import * as Sentry from "@sentry/nextjs";
 import {
   adClick,
+  caravanDiscovery,
+  caravanOperation,
+  caravanParticipant,
   huntingProgress,
   huntingReceipt,
   huntingSession,
@@ -8,6 +11,8 @@ import {
   metaTracking,
   userCosmetic,
   userCosmeticSlot,
+  warehouseDepositLedger,
+  warehouseMember,
 } from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
@@ -99,6 +104,7 @@ import {
   updateUserDataForDeleteUserInternal,
   updateWebStoreOrderForDeleteUserInternal,
 } from "@/queries/staff";
+import { unlinkWarehouseLogUser } from "@/queries/warehouse";
 import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { retireCraftingServices } from "@/server/utils/craftingServices";
@@ -223,6 +229,11 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
       adClick,
       userCosmetic,
       userCosmeticSlot,
+      warehouseDepositLedger,
+      warehouseMember,
+      caravanDiscovery,
+      caravanOperation,
+      caravanParticipant,
     ].map((table) => deleteRowsForUser(client, table, userId)),
     deleteAiSpriteAnimationBindings(client, userId),
     deleteAiTransformationsFor(client, userId),
@@ -251,6 +262,8 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     deleteUserActivityEventForDeleteUserInternal(client, userId),
     deleteActionLogForDeleteUserInternal(client, userId),
     deleteTrainingLogForDeleteUserInternal(client, userId),
+    // Village Warehouse history stays, unlinked from a recreated character.
+    unlinkWarehouseLogUser(client, userId),
     deleteAiProfileForDeleteUserInternal(client, userId),
     ...(aiPlacementIds.length > 0
       ? [

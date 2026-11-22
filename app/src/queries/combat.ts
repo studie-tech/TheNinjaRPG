@@ -65,6 +65,7 @@ import {
   battleAction,
   battleHistory,
   bounty,
+  caravanEncounter,
   clan,
   conversation,
   dataBattleAction,
@@ -99,6 +100,7 @@ import {
   warKill,
 } from "@/drizzle/schema";
 import { matchBloodrightSnapshot } from "@/libs/bloodright";
+import type { CaravanBattleState } from "@/libs/caravan";
 import { compactBattleCatalogs } from "@/libs/combat/catalog";
 import type { QueuedBattleTraining } from "@/libs/combat/initiation";
 import { petsAllowedInBattle } from "@/libs/combat/pets";
@@ -112,9 +114,14 @@ import { petExperienceGainSql } from "@/libs/pets/experience";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
+import {
+  leaveCombatStatus,
+  withoutCaravanEscort,
+  withoutDungeonReservation,
+  withoutQueuedEscort,
+} from "@/queries/activityReservation";
 import { fetchAiProfileById } from "@/queries/ai";
 import { nextSnapshotSql, selectClaimedRankedQueueEntry } from "@/queries/concurrency";
-import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
 import { fetchSharedCooldowns } from "@/queries/sharedCooldown";
 import { userCardColumns } from "@/queries/userColumns";
@@ -1122,6 +1129,7 @@ export const updateUserDataForCreateBattle = (
     clanBattle?: undefined | { queueId: string; battleId: string };
     raidQueueClaim?: { teamId: string; claimId: string };
     questBattleSource?: { questId: undefined | string } | undefined;
+    caravan?: CaravanBattleState;
   },
   battleType: BattleType,
   userIds: string[],
@@ -1567,7 +1575,29 @@ export const updateUserDataForCreateBattle = (
               ),
             ]
           : []),
-        ...(!dungeonEncounter ? [withoutDungeonReservation()] : []),
+        // Escorts fight their caravan's battles from its queue; no other battle claims them.
+        ...(info.caravan
+          ? [
+              withoutDungeonReservation(),
+              sql`EXISTS (SELECT 1 FROM ${caravanEncounter} WHERE ${caravanEncounter.id} = ${info.caravan.encounterId} AND ${caravanEncounter.battleId} = ${battleId} AND ${caravanEncounter.status} = 'STARTING')`,
+              info.caravan.guardIds.length > 0
+                ? or(
+                    and(
+                      inArray(userData.userId, info.caravan.guardIds),
+                      eq(userData.status, "QUEUED"),
+                      sql`NOT ${withoutCaravanEscort()}`,
+                    ),
+                    and(
+                      notInArray(userData.userId, info.caravan.guardIds),
+                      eq(userData.status, "AWAKE"),
+                      withoutCaravanEscort(),
+                    ),
+                  )
+                : and(eq(userData.status, "AWAKE"), withoutCaravanEscort()),
+            ]
+          : !dungeonEncounter
+            ? [withoutDungeonReservation(), withoutQueuedEscort()]
+            : []),
         // Team members must still occupy the original launch tile after combat preload.
         ...(battleType === "COMBAT" ||
         battleType === "VILLAGE_PROTECTOR" ||
@@ -2010,7 +2040,7 @@ export const updateUserDataForFinishBattle = (
       stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
       ...(sendToHospital
         ? hospitalPlacement(newBattle, teammate)
-        : { status: "AWAKE" }),
+        : { status: leaveCombatStatus(newBattle.battleType) }),
     })
     .where(
       and(eq(userData.userId, teammate.userId), eq(userData.battleId, newBattle.id)),
@@ -2708,7 +2738,7 @@ export const updateUserDataForUpdateUser2 = (
               ? { immunityUntil: sql`NOW() + INTERVAL 1 MINUTE` }
               : {}),
           }
-        : { status: isIsolated ? "BATTLE" : "AWAKE" }),
+        : { status: isIsolated ? "BATTLE" : leaveCombatStatus(curBattle.battleType) }),
       // Deactivate stealth and set cooldown after leaving combat (20 seconds)
       stealthActive: false,
       stealthActivatedAt: null,

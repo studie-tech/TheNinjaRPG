@@ -185,6 +185,19 @@ describeWithDatabase("granted items join compatible backpack stacks", () => {
     expect(await stacks()).toEqual([5, 97]);
   });
 
+  it("reports each topped-up stack with the quantity it now holds", async () => {
+    await insertUserItems([{ id: "ores", userId: PLAYER, itemId: "ore", quantity: 5 }]);
+    const db = await getTestDatabase();
+    const preloaded = await listItemForGrantUserItems(db, PLAYER, ["ore"], new Date());
+    await db.update(userItem).set({ quantity: 7 }).where(eq(userItem.id, "ores"));
+    // A stack that changed since its listing is skipped rather than misreported.
+    const result = await grant([{ itemId: "ore", quantity: 3 }], { preloaded });
+    expect(await stacks()).toEqual([3, 7]);
+    expect(result.stacks).not.toContainEqual(expect.objectContaining({ id: "ores" }));
+    const fresh = await grant([{ itemId: "ore", quantity: 3 }]);
+    expect(fresh.stacks).toEqual([{ id: "ores", itemId: "ore", quantity: 10 }]);
+  });
+
   it("keeps grants out of a preloaded stack whose item changed", async () => {
     await insertUserItems([
       { id: "evolving", userId: PLAYER, itemId: "ore", quantity: 10 },
