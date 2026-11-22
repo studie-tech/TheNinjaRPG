@@ -6,7 +6,6 @@ import {
   getClaimStreakDayUserUpdate,
   getPurchaseEventPassUserUpdate,
 } from "@/deltas/activityStreak";
-
 import { ActivityStreakTypes, COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { activityStreakConfig } from "@/drizzle/schema";
 import {
@@ -19,6 +18,7 @@ import {
 } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest/rewards";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 
 import {
   createRewardsForConfig,
@@ -679,6 +679,8 @@ export const activityStreakRouter = createTRPCRouter({
         );
       }
 
+      const reservedError = reservedContentDeletionError("activityStreak", input.id);
+      if (reservedError) return errorResponse(reservedError);
       // Delete rewards and progress first, then config
       await Promise.all([
         deleteActivityStreakRewardForUpdateConfig(ctx.drizzle, input),

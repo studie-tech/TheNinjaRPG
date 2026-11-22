@@ -14,6 +14,7 @@ import {
   lt,
   ne,
   notExists,
+  notInArray,
   or,
   type SQL,
   sum,
@@ -43,6 +44,7 @@ import {
   userItem,
   userJutsu,
 } from "@/drizzle/schema";
+import { RESERVED_CONTENT_IDS } from "@/libs/reservedContent";
 import { balanceConditions } from "@/queries/balance";
 import type { DrizzleClient } from "@/server/db";
 import { getUtcDayWindowStart, secondsFromNow } from "@/utils/time";
@@ -302,15 +304,18 @@ export const updateContentProposalMediaForApplyProposal = (
     .set({ chosen: true })
     .where(inArray(contentProposalMedia.id, chosenMedia));
 
-/** Build the `gameAsset` deletion for `rollback`, using predicates on `id`. */
+/** Remove imported rollback assets while retaining definitions referenced by game code. */
 export const deleteGameAssetForRollback = (
   client: Pick<DrizzleClient, "delete">,
   assets: (typeof gameAsset.$inferInsert)[],
 ) =>
   client.delete(gameAsset).where(
-    inArray(
-      gameAsset.id,
-      assets.map((asset) => asset.id),
+    and(
+      inArray(
+        gameAsset.id,
+        assets.map((asset) => asset.id),
+      ),
+      notInArray(gameAsset.id, [...RESERVED_CONTENT_IDS.asset]),
     ),
   );
 

@@ -136,6 +136,7 @@ import {
 } from "@/libs/raids";
 import { hasRequiredRank } from "@/libs/rank";
 import { createThumbnail } from "@/libs/replicate";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { callDiscordContent } from "@/libs/socials";
 import { getTerritoryWarBoost, getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import {
@@ -1350,6 +1351,8 @@ export const profileRouter = createTRPCRouter({
       if (!canChangeContent(user.role))
         return errorResponse("Not allowed to delete AI");
       if (!ai) return errorResponse("AI not found");
+      const reservedError = reservedContentDeletionError("ai", ai.userId);
+      if (reservedError) return errorResponse(reservedError);
       if (habitats.some((h) => h.content.contracts.some((c) => c.aiId === input.id)))
         return errorResponse(
           "This AI is used by a hunting contract. Remove the target first.",

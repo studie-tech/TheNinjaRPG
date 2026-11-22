@@ -6,6 +6,7 @@ import {
   editedReason,
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { callDiscordContent } from "@/libs/socials";
 import {
   countBadgeAchievers,
@@ -154,6 +155,8 @@ export const badgeRouter = createTRPCRouter({
       if (!entry || !canChangeContent(user.role)) {
         return errorResponse(`Not allowed to delete badge`);
       }
+      const reservedError = reservedContentDeletionError("badge", entry.id);
+      if (reservedError) return errorResponse(reservedError);
       await Promise.all([
         deleteBadgeForDelete(ctx.drizzle, input),
         deleteUserBadgeForDelete(ctx.drizzle, input),

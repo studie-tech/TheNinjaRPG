@@ -169,6 +169,7 @@ import {
   getRepairKits,
   needsInventoryRepair,
 } from "@/libs/repair";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { collapseRewards } from "@/libs/rewards";
 import { filterRollableSageModes } from "@/libs/sageMode";
 import {
@@ -761,6 +762,8 @@ export const itemRouter = createTRPCRouter({
           listHuntingHabitats(ctx.drizzle),
           listItemVariantRequiringItemForDelete(ctx.drizzle, input),
         ]);
+      const reservedError = reservedContentDeletionError("item", entry?.id ?? input.id);
+      if (reservedError) return errorResponse(reservedError);
       if (
         huntingReferences.some((h) =>
           h.content.contracts.some((c) => c.rewards.some((r) => r.itemId === input.id)),
@@ -782,8 +785,6 @@ export const itemRouter = createTRPCRouter({
         return errorResponse(
           "This material is used by an active hunting session. Wait for it to finish.",
         );
-      if (input.id === TUTORIAL_ITEM_ID)
-        return errorResponse("Cannot delete tutorial item");
       if (childEvolutions.length > 0) {
         return errorResponse(
           `Cannot delete item with evolutions: ${childEvolutions.map((e) => e.name).join(", ")}`,
@@ -1599,6 +1600,11 @@ export const itemRouter = createTRPCRouter({
       ]);
       if (user.isBanned) return errorResponse("You are banned");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      const reservedError = reservedContentDeletionError(
+        "item_variant",
+        input.variantId,
+      );
+      if (reservedError) return errorResponse(reservedError);
       // Step 1: remove user unlock records and clear active variant references in parallel
       await Promise.all([
         deleteUserItemVariantForDeleteItemVariant(ctx.drizzle, input),

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getRemoveSageModeUserUpdate } from "@/deltas/sageMode";
 import { REMOVAL_COST, SAGE_MODE_MAX_LEVEL } from "@/drizzle/constants";
 import { sageMode } from "@/drizzle/schema";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 
 import { callDiscordContent } from "@/libs/socials";
 import {
@@ -147,6 +148,8 @@ export const sageModeRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to delete sage mode");
       }
+      const reservedError = reservedContentDeletionError("sageMode", entry.id);
+      if (reservedError) return errorResponse(reservedError);
       if (usersWithSageMode.length > 0) {
         return errorResponse(`Sage Mode used by users: ${usernames}, cannot delete`);
       }

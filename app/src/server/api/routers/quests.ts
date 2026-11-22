@@ -90,6 +90,7 @@ import {
   questAttemptBlockMessage,
 } from "@/libs/questRun";
 import { availableRanks } from "@/libs/rank";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import {
   buildRewardChoiceCards,
   getUnavailableRewardCards,
@@ -1106,10 +1107,10 @@ export const questsRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Quest not found");
-      if ([TUTORIAL_STARTER_QUEST_ID, TUTORIAL_GENIN_EXAM_QUEST_ID].includes(entry.id))
-        return errorResponse("Cannot delete tutorial quest");
       // Permission check
       if (canChangeContent(user.role)) {
+        const reservedError = reservedContentDeletionError("quest", entry.id);
+        if (reservedError) return errorResponse(reservedError);
         // Shared invalidation must finish even when independent cleanup fails.
         const writes = await Promise.allSettled([
           deleteQuestForDelete(ctx.drizzle, input).then(invalidateAchievementCatalogue),

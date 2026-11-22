@@ -5,6 +5,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import * as nextServer from "next/server";
 import superjson from "superjson";
 import type { z } from "zod";
+import { RESERVED_CONTENT_IDS } from "@/libs/reservedContent";
 import { accountDeletionRouter } from "@/server/api/routers/accountDeletion";
 import { drizzleDB } from "@/server/db";
 import * as apple from "@/server/utils/accountDeletion/apple";
@@ -107,6 +108,21 @@ describe("native account deletion authorization", () => {
       success: false,
       message: "Use the native app to request account deletion.",
     });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
+  it("rejects reserved characters before accepting or resuming permanent deletion", async () => {
+    for (const userId of RESERVED_CONTENT_IDS.ai) {
+      mocks.auth.mockResolvedValue({ userId, has: () => true });
+      expect(
+        await request({ ...body, expectedUserId: userId }, undefined, userId),
+      ).toMatchObject({
+        success: false,
+        message: expect.stringContaining("reserved content"),
+      });
+    }
+    expect(mocks.find).not.toHaveBeenCalled();
+    expect(mocks.prepare).not.toHaveBeenCalled();
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.after).not.toHaveBeenCalled();
   });

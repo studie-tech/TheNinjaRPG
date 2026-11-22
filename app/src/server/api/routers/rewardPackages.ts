@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { fetchUser } from "@/queries/profile";
 import {
   deleteRewardNodeForDeleteNode,
@@ -116,6 +117,8 @@ export const rewardPackagesRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (user.isBanned || !canManageRewards(user.role))
         return errorResponse("Not allowed to delete reward packages");
+      const reservedError = reservedContentDeletionError("rewardPackage", input.id);
+      if (reservedError) return errorResponse(reservedError);
       // Snapshots retain their payload even if a hidden quest is saved concurrently with deletion.
       const result = await deleteRewardPackageForDeletePackage(ctx.drizzle, input);
       if (result.rowsAffected === 0)
@@ -133,6 +136,8 @@ export const rewardPackagesRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (user.isBanned || !canManageRewards(user.role))
         return errorResponse("Not allowed to delete reward nodes");
+      const reservedError = reservedContentDeletionError("rewardNode", input.id);
+      if (reservedError) return errorResponse(reservedError);
       await deleteRewardNodeForDeleteNode(ctx.drizzle, input);
       await insertActionLogForDeleteNode(ctx.drizzle, ctx, input);
       return { success: true, message: "Reward node deleted" };

@@ -103,6 +103,7 @@ import {
 import { getPublicQuestUser } from "@/libs/quest/projection";
 import { liveQueueRows } from "@/libs/queue";
 import { hasRequiredLevel, hasRequiredRank } from "@/libs/rank";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
 import {
@@ -822,9 +823,9 @@ export const jutsuRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Jutsu not found");
-      if (entry.id === TUTORIAL_JUTSU_ID)
-        return errorResponse("Cannot delete tutorial jutsu");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
+      const reservedError = reservedContentDeletionError("jutsu", entry.id);
+      if (reservedError) return errorResponse(reservedError);
       const blockers = describeJutsuRelations(relations);
       if (blockers.length > 0) {
         return errorResponse(
