@@ -471,12 +471,13 @@ function ServiceRequestForm({ crafterId }: { crafterId: string }) {
         </Badge>
       </div>
       <fieldset
-        className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+        className="grid grid-cols-5 gap-1 sm:gap-2"
         aria-label="Crafting service"
       >
         {CRAFTING_SERVICES.map((value) => (
           <Button
             key={value}
+            className="min-w-0 px-1"
             variant={service === value ? "default" : "outline"}
             aria-pressed={service === value}
             disabled={submit.isPending || refreshStatus === "pending"}
