@@ -10,6 +10,7 @@ import {
   equipLimitReason,
   filterBackpack,
   fittingSlots,
+  isInBag,
   rankSlotCandidates,
   slotName,
   sortBackpack,
@@ -287,6 +288,14 @@ describe("slot rules", () => {
     expect(fittingSlots({ slot: "NONE", itemType: "MATERIAL" } as never)).toEqual([]);
     expect(fittingSlots({ slot: "ITEM", itemType: "MEAL" } as never)).toEqual([]);
     expect(fittingSlots({ slot: "ITEM", itemType: "FURNITURE" } as never)).toEqual([]);
+    expect(fittingSlots({ slot: "NONE", itemType: "CARD" } as never)).toEqual([]);
+  });
+
+  it("lists cards only in their own bag, not in All", () => {
+    expect(isInBag("cards", "all")).toBe(false);
+    expect(isInBag("cards", "cards")).toBe(true);
+    expect(isInBag("normal", "all")).toBe(true);
+    expect(isInBag("normal", "cards")).toBe(false);
   });
 
   it("ranks candidates with mastery-blocked last and marks items equipped elsewhere", () => {

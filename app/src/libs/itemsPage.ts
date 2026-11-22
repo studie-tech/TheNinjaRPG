@@ -29,6 +29,8 @@ import {
   getInventoryBucketFullMessage,
   type InventoryBucket,
   type InventorySlotRow,
+  isUnsellableCard,
+  UNSELLABLE_CARD_REASON,
 } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -55,6 +57,7 @@ const TYPE_LABELS: Record<ItemType, string> = {
   CRYSTAL: "Crystals",
   FURNITURE: "Furniture",
   COSMETIC: "Cosmetics",
+  CARD: "Cards",
   OTHER: "Other",
 };
 
@@ -135,6 +138,10 @@ export const backpackFilterChips = (
       : []),
   ];
 };
+
+/** Whether a backpack bag tab lists `bucket`; "All" leaves the card collection to its own tab. */
+export const isInBag = (bucket: InventoryBucket, bag: string) =>
+  bag === "all" ? bucket !== "cards" : bucket === bag;
 
 /** Slots available for ordinary equipment; dedicated cosmetics use the wardrobe. */
 export const fittingSlots = (item: Pick<Item, "slot" | "itemType">): ItemSlot[] =>
@@ -232,10 +239,22 @@ export const bulkSellBlockReason = (
   userItem: Pick<
     UserItemWithRelations,
     "equipped" | "storedAtHome" | "isInAuction" | "craftingFinishedAt"
-  > & { item: Pick<Item, "isFarmSeed" | "inShop" | "hidden" | "farmSellValue"> },
+  > & {
+    item: Pick<
+      Item,
+      | "id"
+      | "itemType"
+      | "cardData"
+      | "isFarmSeed"
+      | "inShop"
+      | "hidden"
+      | "farmSellValue"
+    >;
+  },
   farmCurrency: number,
   now: Date = new Date(),
 ): string | null => {
+  if (isUnsellableCard(userItem.item)) return UNSELLABLE_CARD_REASON;
   if (userItem.equipped !== "NONE") return "is equipped";
   const blocked = getEquipBlockReason(userItem, now);
   if (blocked) return blocked;
@@ -382,6 +401,9 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
       if (!ui) return "is not in your inventory";
       if (ui.item.itemType === "FURNITURE") {
         return "is furniture; manage it from your home";
+      }
+      if (toHome && ui.item.itemType === "CARD") {
+        return "is a card; it stays in your card collection";
       }
       if (ui.equipped !== "NONE") return "is equipped";
       if (ui.storedAtHome === toHome) {

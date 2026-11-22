@@ -394,6 +394,71 @@ for (const hasMissingInventory of [false, true]) {
   }, 20_000);
 }
 
+it("leaves carried cards out of the home inventory it offers to store", async () => {
+  const carried = (id: string, name: string, itemType: string) => ({
+    id,
+    itemId: `${id}-item`,
+    quantity: 1,
+    level: 1,
+    storedAtHome: false,
+    equipped: "NONE",
+    item: {
+      id: `${id}-item`,
+      name,
+      image: `/${id}.webp`,
+      itemType,
+      slot: "NONE",
+      rarity: "COMMON",
+      hidden: false,
+    },
+  });
+  const inventory = [
+    ...ownedItems,
+    carried("carried-scroll", "Travel Scroll", "CONSUMABLE"),
+    carried("carried-card", "Moonprowler", "CARD"),
+  ] as unknown as RouterOutputs["item"]["getUserItems"];
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  const data: Record<string, unknown> = {
+    "home.getHomeRequests": [],
+    "home.getUserHome": essentialHome,
+    "item.getUserItems": inventory,
+    "home.getAvailableUpgrades": [],
+    "pets.getCollection": emptyPetCollection,
+  };
+  const trpcClient = testApi.createClient({
+    links: [
+      () =>
+        ({ op }) =>
+          observable((observer) => {
+            if (!(op.path in data)) throw new Error(`Unexpected procedure ${op.path}`);
+            observer.next({ result: { data: data[op.path] } });
+            observer.complete();
+          }),
+    ],
+  });
+  try {
+    const view = render(
+      <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+        <HomePage />
+      </TrpcTestProviders>,
+    );
+    fireEvent.click(
+      await view.findByRole("button", { name: "Storage Box: Open home storage" }),
+    );
+    const dialog = within(view.getByRole("dialog"));
+    const inventoryTab = await dialog.findByRole("tab", { name: "Inventory" });
+    await act(async () => {
+      fireEvent.mouseDown(inventoryTab, { button: 0 });
+    });
+    expect(dialog.getAllByAltText("Travel Scroll").length).toBeGreaterThan(0);
+    expect(dialog.queryAllByAltText("Moonprowler")).toHaveLength(0);
+  } finally {
+    queryClient.clear();
+  }
+}, 20_000);
+
 it("links every owned companion image to its selected profile and identifies only the active pet", async () => {
   const collection = {
     pets: [

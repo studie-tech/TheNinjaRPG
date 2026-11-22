@@ -117,17 +117,30 @@ import {
   getItemStackMergeBucketKey,
   isCompatibleEquipSlot,
   isImbuing,
+  isUnsellableCard,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
   readItemListFilterSlot,
+  UNSELLABLE_CARD_REASON,
 } from "@/libs/item";
-import { getItemPurchaseAllowance, itemPurchaseLimitMessage } from "@/libs/itemEconomy";
+import {
+  getItemPurchaseAllowance,
+  itemPurchaseLimitKey,
+  itemPurchaseLimitMessage,
+} from "@/libs/itemEconomy";
 import {
   bulkSellBlockReason,
   bulkSellMessage,
   countHeldInventorySlots,
 } from "@/libs/itemsPage";
 import { getJutsuSlotIncreaseError } from "@/libs/jutsuSlots";
+import {
+  DECK_COPIES_SALE_REASON,
+  deckCopySaleRefusals,
+  EARNED_PACK_BLOCK_REASON,
+  isEarnedKessenPack,
+  isKessenGood,
+} from "@/libs/kessen/cardSale";
 import {
   buildMissingLoadouts,
   decideRename,
@@ -232,6 +245,7 @@ import {
   insertUserItemForSplitItemStack,
   insertUserItems,
   insertUserItemVariantForPurchaseVariant,
+  kessenGoodsCondition,
   listItemForDelete,
   listItemForGetAll,
   listItemForGetAllNames,
@@ -239,11 +253,13 @@ import {
   listItemForGetEvolutions,
   listItemForUpdate,
   listItemForUpdate2,
+  listItemPurchaseLimits,
   listItemVariantForDelete,
   listItemVariantForGetItemVariants,
   listItemVariantForUpsertItemVariant,
   listItemVariantRequiringItemForDelete,
   listPetSpeciesForFetchRewardPetSpecies,
+  listPurchaseCounters,
   listQuestForGetItemRelations,
   listUserItemForExecuteMergeStacksForItem,
   listUserItemForFetchUserItems,
@@ -302,6 +318,7 @@ import {
   userItemAvailableAt,
 } from "@/queries/item";
 import { fetchJutsuLoadouts } from "@/queries/jutsu";
+import { listOwnedKessenCardCounts } from "@/queries/kessen";
 import { findActionLogById } from "@/queries/logs";
 import { findLpcDesignForSelection } from "@/queries/lpc";
 import { insertUserPet, listVisiblePetJutsu } from "@/queries/pets";
@@ -360,6 +377,10 @@ import { consumeMeal } from "@/server/utils/cooking";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { grantUserItems } from "@/server/utils/itemGrants";
 import { joinFinishedCrafts } from "@/server/utils/itemStacks";
+import {
+  KessenPackRaceError,
+  prepareKessenPackOpening,
+} from "@/server/utils/kessenPacks";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
@@ -1350,18 +1371,20 @@ export const itemRouter = createTRPCRouter({
       const counts = await selectUserItemForGetUserItemCounts(ctx.drizzle, ctx);
       return counts.map((c) => ({ id: c.itemId, quantity: c.quantity ?? 0 }));
     }),
-  // Get user items
+  // Get user items. Kessen cards are left out of this shared backpack read; the views
+  // that show them (Items page, auction listing picker) read getUserItemsWithVariants.
   getUserItems: protectedProcedure
-    .meta({ mcp: { description: "Get all user items" } })
+    .meta({ mcp: { description: "Get all user items except Kessen cards" } })
     .query(async ({ ctx }) => {
       const useritems = await fetchUserItems(ctx.drizzle, ctx.userId, {
         waitForActiveMergeClaims: true,
       });
-      return (await joinFinishedCrafts(ctx.drizzle, ctx.userId, useritems))
+      const rows = (await joinFinishedCrafts(ctx.drizzle, ctx.userId, useritems))
         ? await fetchUserItems(ctx.drizzle, ctx.userId, {
             waitForActiveMergeClaims: true,
           })
         : useritems;
+      return rows.filter((row) => row.item.itemType !== "CARD");
     }),
   getUserItemsWithVariants: protectedProcedure
     .meta({
@@ -1969,8 +1992,11 @@ export const itemRouter = createTRPCRouter({
         storedAtHome,
       );
       // The item relation has no foreign key, so an orphaned stack can have no item.
+      // Card stacks stay apart: a player separates surplus copies from deck copies to sell them.
       const stacksByItemId = groupBy(
-        userItemsAll.filter((r) => r.item && r.item.stackSize > 1),
+        userItemsAll.filter(
+          (r) => r.item && r.item.stackSize > 1 && r.item.itemType !== "CARD",
+        ),
         "itemId",
       );
       const [results, recovery] = await Promise.all([
@@ -2059,13 +2085,28 @@ export const itemRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, useritem, structures] = await Promise.all([
+      // Owned card copies, grouped per card, are read with the stack: an indexed join
+      // that saves a card sale a second round trip.
+      const [user, useritem, structures, ownedCards] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
         selectVillageStructureForSellUserItem(ctx.drizzle, ctx),
+        listOwnedKessenCardCounts(ctx.drizzle, ctx.userId),
       ]);
       // Guard
       if (!useritem) return errorResponse("User item not found");
+      if (isUnsellableCard(useritem.item)) {
+        return errorResponse(`${useritem.item.name} ${UNSELLABLE_CARD_REASON}`);
+      }
+      if (isEarnedKessenPack(useritem.item)) {
+        return errorResponse(`${useritem.item.name} ${EARNED_PACK_BLOCK_REASON}`);
+      }
+      // Deck copies are counted across every stack. Two tabs selling different stacks of
+      // one card can both pass this check. The cost is one player's deck copies sold below
+      // the limit, which support can restore, so the guard stays a readable check-then-write.
+      if (deckCopySaleRefusals([useritem], ownedCards).size > 0) {
+        return errorResponse(`${useritem.item.name} ${DECK_COPIES_SALE_REASON}`);
+      }
       if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
         return errorResponse("Cannot sell crafting item");
       }
@@ -2130,20 +2171,22 @@ export const itemRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, useritems, structures] = await Promise.all([
+      const [user, useritems, structures, ownedCards] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         listUserItemsForSellUserItems(ctx.drizzle, ctx, input.userItemIds),
         selectVillageStructureForSellUserItem(ctx.drizzle, ctx),
+        listOwnedKessenCardCounts(ctx.drizzle, ctx.userId),
       ]);
       // Guard each stack: a single sale's rules, limited to the backpack's unequipped stacks
       const refused: { userItemId: string; name: string; reason: string }[] = [];
-      const sellable: typeof useritems = [];
+      const candidates: typeof useritems = [];
       for (const userItemId of input.userItemIds) {
         const useritem = useritems.find((row) => row.id === userItemId);
         const reason = useritem
-          ? bulkSellBlockReason(useritem, user.farmCurrency)
+          ? (bulkSellBlockReason(useritem, user.farmCurrency) ??
+            (isEarnedKessenPack(useritem.item) ? EARNED_PACK_BLOCK_REASON : null))
           : "is not in your inventory";
-        if (useritem && !reason) sellable.push(useritem);
+        if (useritem && !reason) candidates.push(useritem);
         else {
           refused.push({
             userItemId,
@@ -2152,6 +2195,18 @@ export const itemRouter = createTRPCRouter({
           });
         }
       }
+      // Deck copies are counted across every stack. The same two-tab race as in
+      // sellUserItem applies and is accepted for the same reason.
+      const takesDeckCopies = deckCopySaleRefusals(candidates, ownedCards);
+      const sellable = candidates.filter((useritem) => {
+        if (!takesDeckCopies.has(useritem.id)) return true;
+        refused.push({
+          userItemId: useritem.id,
+          name: useritem.item.name,
+          reason: DECK_COPIES_SALE_REASON,
+        });
+        return false;
+      });
       const salePrices = sellable.map((useritem) =>
         calcItemSellingPrice(user, useritem, structures),
       );
@@ -2374,6 +2429,7 @@ export const itemRouter = createTRPCRouter({
         rewards: PostProcessedRewardSchema.nullish(),
         cacheRewards: cacheConsumptionResponseSchema.shape.cacheRewards.optional(),
         petRewards: cacheConsumptionResponseSchema.shape.petRewards,
+        kessenReveal: cacheConsumptionResponseSchema.shape.kessenReveal,
         inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
         bloodlineRollsChanged: z.boolean().optional(),
         raidBuffsChanged: z.boolean().optional(),
@@ -2609,10 +2665,18 @@ export const itemRouter = createTRPCRouter({
         isRestrictedCacheReward({ effects: useritem.item.effects })
       )
         return errorResponse(CACHE_RESTRICTED_REWARD_MESSAGE);
-      const cacheReferences =
+      // Kessen card packs also load pity counters and owned cards for their card hooks.
+      const [cacheReferences, kessenPack] = await Promise.all([
         caches.length > 0
-          ? await fetchCacheReferencedItems(ctx.drizzle, useritem.item)
-          : { items: [], missing: [], restricted: [] };
+          ? fetchCacheReferencedItems(ctx.drizzle, useritem.item)
+          : { items: [], missing: [], restricted: [] },
+        prepareKessenPackOpening({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          item: useritem.item,
+          caches,
+        }),
+      ]);
       if (cacheReferences.missing.length > 0)
         return errorResponse(
           "This cache references unavailable rewards. Please contact staff.",
@@ -2626,7 +2690,10 @@ export const itemRouter = createTRPCRouter({
         return errorResponse(
           "This cache exceeds the reward limit. Please contact staff.",
         );
-      const cacheResults = caches.map((cache) => resolveWeightedCache(cache));
+      if (kessenPack && !kessenPack.success) return kessenPack;
+      const kessenOpening = kessenPack?.open();
+      const cacheResults =
+        kessenOpening?.results ?? caches.map((cache) => resolveWeightedCache(cache));
       const cacheRewards: CacheRewardDisplay[] = caches.map((cache, index) => ({
         displayName: cache.displayName,
         items: (cacheResults[index]?.items ?? []).map((reward) => ({
@@ -2703,6 +2770,7 @@ export const itemRouter = createTRPCRouter({
         messages.unshift(
           `${petReward.name} joined your companion collection. Generate its appearance from your companion profile.`,
         );
+      if (kessenOpening) messages.push(...kessenOpening.notifications);
       // Parse rewards
       let processedRewards: PostProcessedRewards | null = null;
       if (rewards.length > 0) {
@@ -2779,6 +2847,8 @@ export const itemRouter = createTRPCRouter({
             throw questRejected;
           }
         }
+        // Card packs reserve their pity counters after the debit, inside the receipt transaction.
+        if (kessenOpening) await kessenOpening.commit(client);
         // Mutate
         const rewardTask = () =>
           grantedRewards
@@ -2852,6 +2922,7 @@ export const itemRouter = createTRPCRouter({
             notifications: messages,
             rewards: grantedRewards,
             cacheRewards,
+            ...(kessenOpening ? { kessenReveal: kessenOpening.reveal } : {}),
             bloodlineRollsChanged: useritem.item.effects.some(
               (effect) => effect.type === "rollbloodline",
             ),
@@ -2916,6 +2987,7 @@ export const itemRouter = createTRPCRouter({
           },
         }).catch((error: unknown) => {
           if (error === questRejected) return errorResponse(questRejectionMessage);
+          if (error instanceof KessenPackRaceError) return errorResponse(error.message);
           throw error;
         });
       }
@@ -3472,10 +3544,41 @@ export const itemRouter = createTRPCRouter({
       const now = new Date();
       const [info, counters] = await Promise.all([
         fetchItem(ctx.drizzle, input.id),
-        fetchPurchaseCounters(ctx.drizzle, ctx.userId, input.id, now),
+        fetchPurchaseCounters(
+          ctx.drizzle,
+          ctx.userId,
+          itemPurchaseLimitKey(input.id),
+          now,
+        ),
       ]);
       if (!info) return null;
       return getItemPurchaseAllowance(info, counters, now);
+    }),
+  // The allowances of a shop page's limited listings in one read; uncached like the above.
+  getPurchaseAllowances: protectedProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(200) }))
+    .query(async ({ ctx, input }) => {
+      const now = new Date();
+      const [items, counters] = await Promise.all([
+        listItemPurchaseLimits(ctx.drizzle, input.ids),
+        listPurchaseCounters(
+          ctx.drizzle,
+          ctx.userId,
+          [...new Set(input.ids.map(itemPurchaseLimitKey))],
+          now,
+        ),
+      ]);
+      return items.map((info) => {
+        const limitKey = itemPurchaseLimitKey(info.id);
+        return {
+          itemId: info.id,
+          ...getItemPurchaseAllowance(
+            info,
+            counters.filter((row) => row.itemId === limitKey),
+            now,
+          ),
+        };
+      });
     }),
   buy: protectedProcedure
     .meta({ mcp: { description: "Buy an item from shop" } })
@@ -3485,6 +3588,8 @@ export const itemRouter = createTRPCRouter({
       // Query
       const iid = input.itemId;
       const uid = ctx.userId;
+      // Items sharing a purchase limit count against one counter row under the group key.
+      const limitKey = itemPurchaseLimitKey(iid);
       const purchaseTime = new Date();
       // Read userData before inventory so the transactional updatedAt CAS below
       // detects any capacity mutation that commits between these snapshots.
@@ -3496,15 +3601,18 @@ export const itemRouter = createTRPCRouter({
           fetchUserItems(ctx.drizzle, uid),
           fetchStructures(ctx.drizzle, input.villageId),
           fetchQuestTrackerState(ctx.drizzle, ctx.userId),
-          fetchPurchaseCounters(ctx.drizzle, uid, iid, purchaseTime),
+          fetchPurchaseCounters(ctx.drizzle, uid, limitKey, purchaseTime),
         ]);
       // Guard
       if (user.villageId !== input.villageId) return errorResponse("Wrong village");
       if (!info) return errorResponse("Item not found");
-      const factor = shopItemDiscountFactor(getShopDiscounts(user, structures, info));
+      // Kessen goods keep their listed prices, as the shop displays them.
+      const factor = isKessenGood(info)
+        ? 1
+        : shopItemDiscountFactor(getShopDiscounts(user, structures, info));
       const allowance = getItemPurchaseAllowance(info, purchaseCounters, purchaseTime);
       if (allowance.remaining != null && input.stack > allowance.remaining) {
-        return errorResponse(itemPurchaseLimitMessage(allowance));
+        return errorResponse(itemPurchaseLimitMessage(allowance, iid));
       }
       if (input.stack > 1 && !info.canStack) return errorResponse("Item cannot stack");
       if (input.stack > 1 && input.stack > info.stackSize)
@@ -3685,15 +3793,21 @@ export const itemRouter = createTRPCRouter({
           if (allowance.periodStart && allowance.limit != null) {
             // A duplicate leaves the existing count intact. The guarded increment below
             // is authoritative even when another purchase read the same allowance.
-            await insertItemPurchaseCounterForBuy(tx, uid, iid, {
+            await insertItemPurchaseCounterForBuy(tx, uid, limitKey, {
               period: allowance.period,
               periodStart: allowance.periodStart,
             });
-            const claimed = await updateItemPurchaseCounterForBuy(tx, input, uid, iid, {
-              period: allowance.period,
-              periodStart: allowance.periodStart,
-              limit: allowance.limit,
-            });
+            const claimed = await updateItemPurchaseCounterForBuy(
+              tx,
+              input,
+              uid,
+              limitKey,
+              {
+                period: allowance.period,
+                periodStart: allowance.periodStart,
+                limit: allowance.limit,
+              },
+            );
             // Throw to roll back payment, quest progress, and a newly inserted counter.
             if (claimed.rowsAffected !== 1) throw quotaConflict;
           }
@@ -3728,7 +3842,7 @@ export const itemRouter = createTRPCRouter({
         const counters = await fetchPurchaseCounters(
           ctx.drizzle,
           uid,
-          iid,
+          limitKey,
           purchaseTime,
         );
         const currentAllowance = getItemPurchaseAllowance(info, counters, purchaseTime);
@@ -3736,7 +3850,7 @@ export const itemRouter = createTRPCRouter({
           purchaseCommitted === "QUOTA" ||
           input.stack > (currentAllowance.remaining ?? 0)
         ) {
-          return errorResponse(itemPurchaseLimitMessage(currentAllowance));
+          return errorResponse(itemPurchaseLimitMessage(currentAllowance, iid));
         }
       }
       if (purchaseCommitted !== true) {
@@ -4467,6 +4581,7 @@ export const itemDatabaseFilter = (
 
     // Shop filter
     ...(input?.onlyInShop !== undefined ? [eq(item.inShop, input.onlyInShop)] : []),
+    ...(input?.kessenGoods ? [kessenGoodsCondition(input.kessenGoods)] : []),
 
     // Timed store listings: match Shop's client hide so paged catalogs do not
     // fill a page with expired rows and stall the infinite-scroll sentinel.

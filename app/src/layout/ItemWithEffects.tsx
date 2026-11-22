@@ -3,7 +3,12 @@
 import { BarChartBig, MessageSquarePlus, SquarePen, Trash2 } from "lucide-react";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
-import { QUEST_LIMIT_UNLIMITED } from "@/drizzle/constants";
+import { Button } from "@/components/ui/button";
+import {
+  KESSEN_EPIC_PITY_PACKS,
+  KESSEN_LEGENDARY_PITY_PACKS,
+  QUEST_LIMIT_UNLIMITED,
+} from "@/drizzle/constants";
 import type {
   Bloodline,
   GameAsset,
@@ -29,6 +34,8 @@ import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFarmPlantExperience } from "@/libs/farming";
 import { type Fortification, getFortifyProgress } from "@/libs/fortify";
+import { isKessenPackId, KESSEN_PACK_IDS } from "@/libs/kessen/packs";
+import { cardTextPlain, type KESSEN_TERMS, ROW_LABELS } from "@/libs/kessen/text";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
 import { getQuestRewardSummary } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
@@ -49,6 +56,7 @@ import {
   isActivityBonus,
   type ZodAllTags,
 } from "@/validators/combat";
+import { cardDataSchema } from "@/validators/itemCard";
 
 export type GenericObject = {
   id: string;
@@ -291,12 +299,20 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   // Elemental damage resolves to the caster's element in battle; show the viewer's own.
   const { data: viewerDamageElement } = useUserDataSelector(getPreferredDamageElement);
   const isFurniture = "itemType" in item && item.itemType === "FURNITURE";
+  const isCard = "itemType" in item && item.itemType === "CARD";
+  const isCardPack = "itemType" in item && isKessenPackId(item.id);
+  // Furniture, cards and card packs never enter combat, so their combat stats and effects
+  // are hidden.
+  const isNonCombatItem = isFurniture || isCard || isCardPack;
+  // Without a title or header controls, Kessen goods skip the empty header strip.
+  const showHeader =
+    !hideTitle || !!showStatistic || !!showEdit || !(isCard || isCardPack);
 
   // Get bloodline / sage-mode names for requirement labels
   const { data: bloodlinesData } = api.bloodline.getAllNames.useQuery();
   const { data: sageModesData } = api.sageMode.getAllNames.useQuery();
   const requiredSkillId =
-    !isFurniture && "requiredSkillId" in item ? item.requiredSkillId : null;
+    !isNonCombatItem && "requiredSkillId" in item ? item.requiredSkillId : null;
   const { data: skillNames } = api.skillTree.getAllNames.useQuery(undefined, {
     enabled: !!requiredSkillId,
   });
@@ -305,7 +321,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   // in list views. Pass showEvolutions={true} for single-item detail views (e.g.
   // the jutsus/traininggrounds/items modals) where the evolution chain is meaningful.
   const isJutsuItem = "jutsuType" in item;
-  const isGameItem = "itemType" in item && !("jutsuType" in item) && !isFurniture;
+  const isGameItem = "itemType" in item && !("jutsuType" in item) && !isNonCombatItem;
   const farmYieldItemId = "farmYieldItemId" in item ? item.farmYieldItemId : null;
   const farmExtractSeedItemId =
     "farmExtractSeedItemId" in item ? item.farmExtractSeedItemId : null;
@@ -389,7 +405,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             className=""
           />
           {/* Durability bar */}
-          {!isFurniture &&
+          {!isNonCombatItem &&
             "maxDurability" in item &&
             "curDurability" in item &&
             item.maxDurability !== undefined &&
@@ -424,96 +440,98 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
 
           <div className="relative flex min-w-0 basis-full flex-col pl-5 md:pl-0">
             {imageExtra && <div className="flex flex-row">{imageExtra}</div>}
-            <div className="flex items-start justify-between gap-2">
-              {!hideTitle ? (
-                <h3 className="wrap-break-word min-w-0 flex-1 font-bold text-popover-foreground text-xl tracking-tight">
-                  {detailHref ? (
-                    <Link className="hover:text-orange-500" href={detailHref}>
-                      {item.name}
-                    </Link>
-                  ) : (
-                    item.name
-                  )}
-                </h3>
-              ) : (
-                <br />
-              )}
-              <div className="flex max-w-[50%] shrink-0 flex-wrap justify-end">
-                {showStatistic && (
-                  <Link
-                    href={`/manual/${showStatistic}/statistics/${item.id}`}
-                    className="mr-1"
-                  >
-                    <BarChartBig className="h-6 w-6 hover:text-popover-foreground/50" />
-                  </Link>
+            {showHeader && (
+              <div className="flex items-start justify-between gap-2">
+                {!hideTitle ? (
+                  <h3 className="wrap-break-word min-w-0 flex-1 font-bold text-popover-foreground text-xl tracking-tight">
+                    {detailHref ? (
+                      <Link className="hover:text-orange-500" href={detailHref}>
+                        {item.name}
+                      </Link>
+                    ) : (
+                      item.name
+                    )}
+                  </h3>
+                ) : (
+                  <br />
                 )}
-                {showEdit && role && canChangeContent(role) && (
-                  <>
-                    {showCopy === "quest" && (
-                      <QuestCloneControl
-                        key={item.id}
-                        source={{ id: item.id, name: item.name }}
-                      />
-                    )}
-                    {showCopy === "ai" && (
-                      <AiCloneControl
-                        key={item.id}
-                        source={{ id: item.id, name: item.name }}
-                      />
-                    )}
-                    {showCopy === "item" && (
-                      <ItemCloneControl
-                        key={item.id}
-                        source={{ id: item.id, name: item.name }}
-                      />
-                    )}
-                    {showCopy === "jutsu" && (
-                      <JutsuCloneControl
-                        key={item.id}
-                        source={{ id: item.id, name: item.name }}
-                      />
-                    )}
+                <div className="flex max-w-[50%] shrink-0 flex-wrap justify-end">
+                  {showStatistic && (
                     <Link
-                      href={`/manual/${showEdit}/edit/${item.id}`}
-                      aria-label={`Edit ${item.name}`}
+                      href={`/manual/${showStatistic}/statistics/${item.id}`}
+                      className="mr-1"
                     >
-                      <SquarePen className="h-6 w-6 hover:text-popover-foreground/50" />
+                      <BarChartBig className="h-6 w-6 hover:text-popover-foreground/50" />
                     </Link>
-                    {onDelete && (
-                      <Confirm
-                        title={`Delete ${item.name}?`}
-                        triggerLabel={`Delete ${item.name}`}
-                        button={
-                          <Trash2 className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
-                        }
-                        tone="destructive"
-                        proceed_label="Delete for all players"
-                        onAccept={(e) => {
-                          e.preventDefault();
-                          onDelete(item.id);
-                        }}
+                  )}
+                  {showEdit && role && canChangeContent(role) && (
+                    <>
+                      {showCopy === "quest" && (
+                        <QuestCloneControl
+                          key={item.id}
+                          source={{ id: item.id, name: item.name }}
+                        />
+                      )}
+                      {showCopy === "ai" && (
+                        <AiCloneControl
+                          key={item.id}
+                          source={{ id: item.id, name: item.name }}
+                        />
+                      )}
+                      {showCopy === "item" && (
+                        <ItemCloneControl
+                          key={item.id}
+                          source={{ id: item.id, name: item.name }}
+                        />
+                      )}
+                      {showCopy === "jutsu" && (
+                        <JutsuCloneControl
+                          key={item.id}
+                          source={{ id: item.id, name: item.name }}
+                        />
+                      )}
+                      <Link
+                        href={`/manual/${showEdit}/edit/${item.id}`}
+                        aria-label={`Edit ${item.name}`}
                       >
-                        Delete {item.name} from the game? Every player who has it loses
-                        it. This cannot be undone.
-                      </Confirm>
-                    )}
-                  </>
-                )}
-                {showEdit &&
-                  SUGGESTABLE_CONTENT.includes(showEdit) &&
-                  role &&
-                  isStaffRole(role) &&
-                  !canChangeContent(role) && (
-                    <Link
-                      href={`/manual/${showEdit}/edit/${item.id}`}
-                      aria-label="Suggest a change"
-                      title="Suggest a change"
-                    >
-                      <MessageSquarePlus className="h-6 w-6 hover:text-popover-foreground/50" />
-                    </Link>
+                        <SquarePen className="h-6 w-6 hover:text-popover-foreground/50" />
+                      </Link>
+                      {onDelete && (
+                        <Confirm
+                          title={`Delete ${item.name}?`}
+                          triggerLabel={`Delete ${item.name}`}
+                          button={
+                            <Trash2 className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
+                          }
+                          tone="destructive"
+                          proceed_label="Delete for all players"
+                          onAccept={(e) => {
+                            e.preventDefault();
+                            onDelete(item.id);
+                          }}
+                        >
+                          Delete {item.name} from the game? Every player who has it
+                          loses it. This cannot be undone.
+                        </Confirm>
+                      )}
+                    </>
                   )}
+                  {showEdit &&
+                    SUGGESTABLE_CONTENT.includes(showEdit) &&
+                    role &&
+                    isStaffRole(role) &&
+                    !canChangeContent(role) && (
+                      <Link
+                        href={`/manual/${showEdit}/edit/${item.id}`}
+                        aria-label="Suggest a change"
+                        title="Suggest a change"
+                      >
+                        <MessageSquarePlus className="h-6 w-6 hover:text-popover-foreground/50" />
+                      </Link>
+                    )}
+                </div>
               </div>
-            </div>
+            )}
             {props.notice && <div className="my-1">{props.notice}</div>}
             {!hideDetails && !hideDates && !playerView && (
               <div className="flex flex-row flex-wrap gap-2">
@@ -548,7 +566,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               </div>
             )}
 
-            <hr className="py-1" />
+            {showHeader && <hr className="py-1" />}
             {!hideDetails && "description" in item && item.description && (
               <div data-reading-text>{parseHtml(item.description)}</div>
             )}
@@ -573,7 +591,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               showHidden={!!role && canChangeContent(role)}
             />
           )}
-          {!hideData && !isFurniture && (
+          {!hideData && isCardPack && <KessenPackRules packItemId={item.id} />}
+          {!hideData && isCard && (
+            <CardDetails
+              item={item as Item}
+              showHidden={!!role && canChangeContent(role)}
+            />
+          )}
+          {!hideData && !isNonCombatItem && (
             <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
               {"bloodline" in item && item.bloodline !== null && (
                 <p className="col-span-2">
@@ -1101,7 +1126,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               ))}
             </div>
           )}
-          {!isFurniture &&
+          {!isNonCombatItem &&
             !hideEffects &&
             effects?.map((effect, i) => {
               // Get schema for parsing effect
@@ -1553,6 +1578,128 @@ const RankRequirement = ({ label, rank }: { label: string; rank: string | null }
       </p>
     </div>
   ) : null;
+
+/** Kessen stats of a card item in plain words; the full card face lives in the Card Hall. */
+const CardDetails = ({ item, showHidden }: { item: Item; showHidden: boolean }) => {
+  const card = cardDataSchema.safeParse(item.cardData).data;
+  if (!card) {
+    return (
+      <p className="my-2 rounded-lg bg-poppopover p-2 text-[11px] md:text-base">
+        Card stats are not available.
+      </p>
+    );
+  }
+  return (
+    <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-[11px] md:text-base">
+      <p>
+        <b>Card</b>: {capitalizeFirstLetter(card.kind)}
+        {card.variant === "FORBIDDEN" ? " (Forbidden)" : ""}
+      </p>
+      <p>
+        <b>Rarity</b>: {capitalizeFirstLetter(item.rarity)}
+      </p>
+      <p>
+        <b>Faction</b>: {capitalizeFirstLetter(card.faction)}
+      </p>
+      {card.row && (
+        <p>
+          <b>Row</b>:{" "}
+          {card.row === "ANY"
+            ? ("Any row" satisfies keyof typeof KESSEN_TERMS)
+            : ROW_LABELS[card.row]}
+        </p>
+      )}
+      {card.kind === "LEADER" ? (
+        <p>
+          <b>Provision bonus</b>: +{card.leaderBonus}
+        </p>
+      ) : (
+        <>
+          {card.kind === "UNIT" && (
+            <p>
+              <b>Power</b>: {card.power}
+            </p>
+          )}
+          <p>
+            <b>Provision</b>: {card.provision}
+          </p>
+        </>
+      )}
+      <p>
+        <b>Can be Traded</b>: {item.canBeTraded ? "yes" : "no"}
+      </p>
+      {showHidden && (
+        <p>
+          <b>Hidden</b>: {item.hidden ? "yes" : "no"}
+        </p>
+      )}
+      {/* A leader's description already names and explains its ability. */}
+      {card.abilities.length > 0 && card.kind !== "LEADER" && (
+        <p className="col-span-2 mt-1">{cardTextPlain(card)}</p>
+      )}
+      {card.flavor && card.flavor.trim() !== item.description.trim() && (
+        <p className="col-span-2 mt-1 italic">{card.flavor}</p>
+      )}
+    </div>
+  );
+};
+
+/**
+ * The guarantees shared by every Kessen card pack; what the pack holds is its description.
+ * Packs whose fifth card is already Epic or better skip the Epic pity. Inside the Card
+ * Master stall the odds sit on the same Packs tab, so no link is needed.
+ */
+export const KessenPackRules = ({
+  packItemId,
+  inStall = false,
+  className,
+}: {
+  packItemId: string;
+  inStall?: boolean;
+  className?: string;
+}) => {
+  const hasEpicFloor = EPIC_FLOOR_PACK_IDS.has(packItemId);
+  return (
+    <div
+      className={cn(
+        inStall
+          ? "space-y-1"
+          : "my-2 space-y-1 rounded-lg bg-poppopover p-2 text-[11px] md:text-base",
+        className,
+      )}
+    >
+      <p>
+        <b>Pity</b>:{" "}
+        {hasEpicFloor
+          ? `the ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings one you do not own.`
+          : `after ${KESSEN_EPIC_PITY_PACKS} packs without an Epic, the next fifth card is Epic. The ${KESSEN_LEGENDARY_PITY_PACKS}th pack without a Legendary brings one you do not own.`}
+      </p>
+      <p>
+        <b>Duplicates</b>: copies beyond a card&apos;s copy limit are swapped for cards
+        you still need. Once every card of that rarity is maxed, the copy is kept as
+        surplus to sell.
+        {inStall &&
+          " Each pack's odds and your pity progress are listed on this Packs tab."}
+      </p>
+      {!inStall && (
+        <Button asChild variant="outline" className="mt-1 min-h-[40px]">
+          <Link href={KESSEN_PACKS_TAB_HREF}>
+            Odds and pity on the Kessen Packs tab
+          </Link>
+        </Button>
+      )}
+    </div>
+  );
+};
+
+/** Packs whose fifth card is Epic or better, so the Epic pity never applies to them. */
+const EPIC_FLOOR_PACK_IDS = new Set<string>([
+  KESSEN_PACK_IDS.lacquer,
+  KESSEN_PACK_IDS.first,
+]);
+
+/** The Card Hall opened on its Packs tab. */
+const KESSEN_PACKS_TAB_HREF = "/kessen?tab=packs";
 
 const FurnitureDetails = ({
   item,

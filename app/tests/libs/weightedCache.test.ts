@@ -89,6 +89,44 @@ describe("weighted cache selection", () => {
     );
     expect(entries).toEqual([0, 0, 1, 1]);
   });
+  it("lets hooks replace the drawn tier and entry without extra random draws", () => {
+    const calls: [string, number, number][] = [];
+    const result = resolveWeightedCache(cache(), sequence(0.5, 0, 0, 0, 0.5), {
+      tier: (drawn, roll) => {
+        calls.push(["tier", drawn, roll]);
+        return roll === 1 ? 2 : drawn;
+      },
+      entry: (tierIndex, drawn, roll) => {
+        calls.push(["entry", tierIndex, drawn]);
+        return roll === 0 ? 1 : drawn;
+      },
+    });
+    expect(
+      result.selections.map((selection) => [selection.tierName, selection.entryIndex]),
+    ).toEqual([
+      ["Common", 1],
+      ["Rare", 0],
+    ]);
+    expect(calls).toEqual([
+      ["tier", 1, 0],
+      ["entry", 1, 0],
+      ["tier", 1, 1],
+      ["entry", 2, 0],
+    ]);
+    expect(result.items).toEqual([
+      { itemId: "ore", quantity: 1 },
+      { itemId: "pill", quantity: 4 },
+      { itemId: "gem", quantity: 2 },
+    ]);
+  });
+  it("rejects hooks that pick an unselectable tier or a missing entry", () => {
+    expect(() =>
+      resolveWeightedCache(cache(), sequence(0, 0, 0), { tier: () => 0 }),
+    ).toThrow("selectable tier");
+    expect(() =>
+      resolveWeightedCache(cache(), sequence(0, 0, 0), { entry: () => 5 }),
+    ).toThrow();
+  });
   it("calculates the chance of at least one item over the roll-count distribution", () => {
     // Pill: 75% × 1/2 + 25% = 62.5% per roll; average of one and two rolls.
     expect(cacheItemChance(cache(), "pill")).toBeCloseTo(74.21875);

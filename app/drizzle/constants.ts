@@ -927,6 +927,7 @@ export const ItemTypes = [
   "CRYSTAL",
   "FURNITURE",
   "COSMETIC",
+  "CARD",
   "OTHER",
 ] as const;
 export type ItemType = (typeof ItemTypes)[number];
@@ -938,6 +939,7 @@ export const NonBattleItemTypes = [
   "CRYSTAL",
   "FURNITURE",
   "COSMETIC",
+  "CARD",
 ] as const satisfies readonly ItemType[];
 /** Description of a newly created item until staff replace it. */
 export const DEFAULT_ITEM_DESCRIPTION = "New item description";
@@ -953,6 +955,7 @@ export const NonActionItemTypes: ItemType[] = [
   "KEYSTONE",
   "FURNITURE",
   "COSMETIC",
+  "CARD",
 ];
 
 export const BanStates = [
@@ -1499,6 +1502,7 @@ export const UserRequestTypes = [
   "KAGE",
   "WAR_ALLY",
   "HOME",
+  "KESSEN",
 ] as const;
 export type UserRequestType = (typeof UserRequestTypes)[number];
 
@@ -3256,6 +3260,42 @@ export const IMG_MERCH_ARTWORK = {
   tsukimori: "https://uploadthing.b-cdn.net/f/jQR3qzAuImY5zChRLCgRa.webp",
 } as const;
 
+// Kessen card game artwork. Card illustrations live on each card item (`cardData.artUrl`).
+export const IMG_KESSEN_BOARD =
+  "https://uploadthing.b-cdn.net/f/kessen-ASGtfBcVOi.webp";
+export const IMG_KESSEN_CARD_BACK =
+  "https://uploadthing.b-cdn.net/f/kessen-eFEoi3E6Ci.webp";
+export const IMG_KESSEN_HALL_HERO =
+  "https://uploadthing.b-cdn.net/f/kessen-SjmMr-x1Mf.webp";
+export const IMG_KESSEN_CIRCUIT_MAP =
+  "https://uploadthing.b-cdn.net/f/kessen-pCfiLTiQHD.webp";
+export const IMG_KESSEN_LESSON_BG =
+  "https://uploadthing.b-cdn.net/f/kessen-q2QMx3_sRg.webp";
+export const IMG_KESSEN_MINIGAME_TILE =
+  "https://uploadthing.b-cdn.net/f/kessen-D5lzabWt4Y.webp";
+/** Gold faction roundels with transparent backgrounds, keyed by lowercase faction. */
+export const IMG_KESSEN_EMBLEMS = {
+  shirohana: "https://uploadthing.b-cdn.net/f/kessen-h-Qk3s7aVB.webp",
+  tsukimori: "https://uploadthing.b-cdn.net/f/kessen-QAqZ-GfMYC.webp",
+  hyorin: "https://uploadthing.b-cdn.net/f/kessen-G5glckg9YV.webp",
+  akasumi: "https://uploadthing.b-cdn.net/f/kessen-P0CYSuopOf.webp",
+  akikaze: "https://uploadthing.b-cdn.net/f/kessen-OiS1hvC_xB.webp",
+  syndicate: "https://uploadthing.b-cdn.net/f/kessen-LYcNEZ3529.webp",
+  neutral: "https://uploadthing.b-cdn.net/f/kessen-6eSBtwUcfV.webp",
+} as const;
+/** Pack artwork; every Village bundle shares one illustration. */
+export const IMG_KESSEN_PACKS = {
+  paper: "https://uploadthing.b-cdn.net/f/kessen-orAyrM1sZm.webp",
+  village: "https://uploadthing.b-cdn.net/f/kessen-Icpipx_-mT.webp",
+  lacquer: "https://uploadthing.b-cdn.net/f/kessen-lUt57NGpKM.webp",
+  forbidden: "https://uploadthing.b-cdn.net/f/kessen-GwYicRsqn1.webp",
+} as const;
+/** Portraits of circuit opponents that have no AI sprite of their own. */
+export const IMG_KESSEN_NPC_PORTRAITS = {
+  momo: "https://uploadthing.b-cdn.net/f/kessen-PFA8NSPEOj.webp",
+  unmeishi: "https://uploadthing.b-cdn.net/f/kessen-24Wo9mDQFx.webp",
+} as const;
+
 // Marketing constants
 export const TOTAL_PLAYERS_MILESTONE = 1000000;
 
@@ -4181,6 +4221,9 @@ export const FED_MATERIALS_SLOTS: Record<FederalStatus, number> = {
   GOLD: 15,
   DIAMOND: 20,
 };
+
+// Kessen card collection: one stack per card, so this bounds distinct cards owned
+export const CARDS_BASE_SLOTS = 200;
 
 // Cooking inventory config (mirrors materials)
 export const COOKING_BASE_SLOTS = 25;
@@ -5216,3 +5259,211 @@ export const FORTIFY_FAILURE_BONUS = 3;
 export const FORTIFY_CHANCES = [100, 70, 40, 20, 12] as const;
 export const FORTIFY_CRAFTER_CHANCES = [100, 75, 50, 35, 20] as const;
 export const FORTIFY_ITEM_TYPES = ["WEAPON", "ARMOR", "ACCESSORY", "KEYSTONE"] as const;
+
+// Kessen card game economy. Every ryo amount is multiplied by KESSEN_RYO_SCALE, the one
+// calibration knob that keeps card prices and payouts in proportion to the ryo players hold
+// and to the income of daily quests and errands.
+export const KESSEN_RYO_SCALE = 5;
+
+/** Opponent difficulty tiers of Kessen NPC matches. */
+export const KessenTiers = ["GENIN", "CHUNIN", "JONIN", "KAGE"] as const;
+export type KessenTier = (typeof KessenTiers)[number];
+
+/**
+ * The Kessen Circuit's NPC opponents, by key, with the names players see. Their decks,
+ * rules and rewards live in `libs/kessen/npcs.ts`; quest objectives name them from here.
+ */
+export const KESSEN_NPC_NAMES = {
+  lemu: "Lemu",
+  kazehiko: "Kazehiko",
+  hisame: "Hisame",
+  junko: "Junko",
+  kimiko: "Kimiko",
+  "crowned-captain": "The Crowned Captain",
+  "kaze-no-seirei": "Kaze no Seirei",
+  ravena: "Ravena Bloodsilk",
+  "anbu-chief": "Anbu Chief",
+  momo: "Momo",
+  shishi: "Shishi",
+  unmeishi: "Unmeishi",
+} as const;
+export const KESSEN_NPC_KEYS = Object.keys(KESSEN_NPC_NAMES) as [
+  keyof typeof KESSEN_NPC_NAMES,
+  ...(keyof typeof KESSEN_NPC_NAMES)[],
+];
+
+/** Lifecycle of a Kessen match; only ACTIVE matches accept actions. */
+export const KessenMatchStatuses = [
+  "ACTIVE",
+  "FINISHED",
+  "EXPIRED",
+  "CONCEDED",
+] as const;
+export type KessenMatchStatus = (typeof KessenMatchStatuses)[number];
+
+/** Who sits in seat 1 of a Kessen match: a Circuit NPC, or a player in a friendly or ranked duel. */
+export const KessenMatchKinds = ["NPC", "FRIENDLY", "RANKED"] as const;
+export type KessenMatchKind = (typeof KessenMatchKinds)[number];
+
+/** Copies of one card a single inventory stack holds. */
+export const KESSEN_CARD_STACK_SIZE = 99;
+/** Saved decks per player. */
+export const KESSEN_MAX_DECKS = 5;
+export const KESSEN_DECK_NAME_MAX_LENGTH = 40;
+/** Copies of one card a deck may hold, and the copies beyond which owned cards count as surplus. */
+export const KESSEN_COPY_LIMITS: Record<ItemRarity, number> = {
+  COMMON: 3,
+  RARE: 2,
+  EPIC: 1,
+  LEGENDARY: 1,
+};
+/** Keyword abilities a deck card may print; leaders are exempt. */
+export const KESSEN_MAX_KEYWORDS: Record<ItemRarity, number> = {
+  COMMON: 1,
+  RARE: 1,
+  EPIC: 2,
+  LEGENDARY: 2,
+};
+
+/** Ryo paid for a finished rewarded match, before diminishing returns. */
+export const KESSEN_MATCH_WIN_RYO: Record<KessenTier, number> = {
+  GENIN: 400 * KESSEN_RYO_SCALE,
+  CHUNIN: 800 * KESSEN_RYO_SCALE,
+  JONIN: 1_500 * KESSEN_RYO_SCALE,
+  KAGE: 2_500 * KESSEN_RYO_SCALE,
+};
+export const KESSEN_MATCH_LOSS_RYO: Record<KessenTier, number> = {
+  GENIN: 100 * KESSEN_RYO_SCALE,
+  CHUNIN: 200 * KESSEN_RYO_SCALE,
+  JONIN: 375 * KESSEN_RYO_SCALE,
+  KAGE: 625 * KESSEN_RYO_SCALE,
+};
+/** Rewarded matches per server day; later matches are unrewarded practice. */
+export const KESSEN_DAILY_REWARDED_MATCHES = 12;
+/** Rewarded wins per server day that roll the opponent's drop table. */
+export const KESSEN_DAILY_DROP_ROLLS = 5;
+/** Wins against one NPC per day that pay full ryo, then half ryo, then none. */
+export const KESSEN_NPC_FULL_PAY_WINS = 4;
+export const KESSEN_NPC_HALF_PAY_WINS = 6;
+/** Eligibility of a match for any reward. */
+export const KESSEN_MIN_MATCH_SECONDS = 90;
+export const KESSEN_MIN_TOTAL_PLAYS = 8;
+export const KESSEN_MIN_LOSER_PLAYS = 4;
+/** An NPC match left idle this long expires without a reward; duels end by their clock. */
+export const KESSEN_MATCH_IDLE_EXPIRY_HOURS = 24;
+
+/**
+ * Live player-versus-player duels. Every decision has a turn clock; a seat whose clock runs
+ * out keeps its hand (mulligan) or passes the round (play), and the seat that times out
+ * `KESSEN_PVP_MAX_TIMEOUTS` times in one match forfeits it.
+ */
+export const KESSEN_PVP_TURN_SECONDS = 60;
+export const KESSEN_PVP_MULLIGAN_SECONDS = 45;
+export const KESSEN_PVP_MAX_TIMEOUTS = 3;
+/** The hourly sweep resolves only clocks this long overdue; live clients resolve the rest. */
+export const KESSEN_PVP_SWEEP_GRACE_SECONDS = 120;
+/** Overdue duels one sweep resolves, and pending settlements it resumes. */
+export const KESSEN_PVP_SWEEP_BATCH = 100;
+/** The sweep resumes pending settlements of duels that ended within this many hours. */
+export const KESSEN_PVP_SETTLEMENT_SWEEP_HOURS = 24;
+/** A friendly challenge waits this long for an answer. */
+export const KESSEN_CHALLENGE_EXPIRY_SECONDS = 5 * 60;
+/** Pending challenges one player may have sent at a time. */
+export const KESSEN_CHALLENGE_MAX_PENDING = 3;
+/** Challenges one player may send per hour. */
+export const KESSEN_CHALLENGE_HOURLY_LIMIT = 15;
+/** Elo rating of the ranked Kessen ladder. */
+export const KESSEN_RANKED_START_RATING = 1_000;
+export const KESSEN_RANKED_RATING_FLOOR = 100;
+export const KESSEN_RANKED_K_FACTOR = 24;
+/** K-factor of a player's first `KESSEN_RANKED_PROVISIONAL_MATCHES` rated matches. */
+export const KESSEN_RANKED_PROVISIONAL_K_FACTOR = 40;
+export const KESSEN_RANKED_PROVISIONAL_MATCHES = 10;
+/** Rated matches between the same two players per server day; later ones are unrated. */
+export const KESSEN_RANKED_PAIR_DAILY_RATED = 3;
+/** Ryo for a rewarded ranked win, and the rewarded wins per server day. */
+export const KESSEN_RANKED_WIN_RYO = 800 * KESSEN_RYO_SCALE;
+export const KESSEN_RANKED_DAILY_REWARDED_WINS = 5;
+/** The rewarded ranked win that reaches this count in a week also grants a Paper Bundle. */
+export const KESSEN_RANKED_WEEKLY_PACK_WINS = 5;
+/** Matchmaking: the rating radius grows by a step every few seconds, then anyone matches. */
+export const KESSEN_RANKED_RADIUS_STEP = 50;
+export const KESSEN_RANKED_RADIUS_STEP_SECONDS = 10;
+export const KESSEN_RANKED_RADIUS_MAX = 400;
+export const KESSEN_RANKED_QUEUE_MAX_WAIT_SECONDS = 120;
+/** A queued player who stops polling for this long is not matched and is dropped. */
+export const KESSEN_RANKED_QUEUE_HEARTBEAT_SECONDS = 30;
+/** A queue claim whose match never appeared is released after this long. */
+export const KESSEN_RANKED_CLAIM_TIMEOUT_SECONDS = 30;
+export const KESSEN_RANKED_LEADERBOARD_SIZE = 50;
+
+/** Pity counters shared by every card pack. */
+export const KESSEN_EPIC_PITY_PACKS = 6;
+export const KESSEN_LEGENDARY_PITY_PACKS = 80;
+
+/** Card Master stall bundle prices and purchase limits. */
+export const KESSEN_PAPER_BUNDLE_PRICE = 4_000 * KESSEN_RYO_SCALE;
+export const KESSEN_PAPER_BUNDLE_DAILY_LIMIT = 1;
+export const KESSEN_VILLAGE_BUNDLE_PRICE = 6_500 * KESSEN_RYO_SCALE;
+export const KESSEN_VILLAGE_BUNDLE_WEEKLY_LIMIT = 1;
+
+/** Item id prefix of every Kessen card pack; packs are sold only at the Card Master stall. */
+export const KESSEN_PACK_ID_PREFIX = "kessen-pack-";
+/** The untradeable, unsellable pack granted with the starter deck. */
+export const KESSEN_FIRST_BUNDLE_ITEM_ID = `${KESSEN_PACK_ID_PREFIX}first`;
+/** Ryo paid once per Kessen Academy lesson, on its first completion. */
+export const KESSEN_ACADEMY_LESSON_RYO = 250 * KESSEN_RYO_SCALE;
+/** The pack granted once, when the last Academy lesson is completed. */
+export const KESSEN_ACADEMY_GRADUATION_PACK_ID = `${KESSEN_PACK_ID_PREFIX}lacquer`;
+
+/**
+ * Ryo a surplus copy sells for through the normal sell flow, independent of `Item.cost`
+ * (the stall price) and of shop discounts. Leaders and Forbidden variants never sell.
+ */
+export const KESSEN_CARD_SELL_VALUES: Record<ItemRarity, number> = {
+  COMMON: 50 * KESSEN_RYO_SCALE,
+  RARE: 200 * KESSEN_RYO_SCALE,
+  EPIC: 1_000 * KESSEN_RYO_SCALE,
+  LEGENDARY: 5_000 * KESSEN_RYO_SCALE,
+};
+/**
+ * Auction floors of tradeable cards, set near the ryo a player spends on packs to pull one;
+ * commons, rares and leaders cannot be traded.
+ */
+export const KESSEN_AUCTION_FLOORS: Partial<Record<ItemRarity, number>> = {
+  EPIC: 12_000 * KESSEN_RYO_SCALE,
+  LEGENDARY: 80_000 * KESSEN_RYO_SCALE,
+};
+export const KESSEN_FORBIDDEN_AUCTION_FLOOR = 600_000 * KESSEN_RYO_SCALE;
+/** Rarities whose cards may carry `canBeTraded`. */
+export const KESSEN_TRADEABLE_RARITIES = [
+  "EPIC",
+  "LEGENDARY",
+] as const satisfies readonly ItemRarity[];
+
+/** Tiers a card pack slot rolls, in basis points of CACHE_PROBABILITY_TOTAL. */
+export type KessenPackTier = ItemRarity | "FORBIDDEN";
+export const KESSEN_PACK_SLOT_WEIGHTS: Record<KessenPackTier, number> = {
+  COMMON: 7_644,
+  RARE: 1_940,
+  EPIC: 400,
+  LEGENDARY: 15,
+  FORBIDDEN: 1,
+};
+/** The fifth (Rare+) slot of Paper and Village Bundles. */
+export const KESSEN_PACK_RARE_SLOT_WEIGHTS: Record<KessenPackTier, number> = {
+  COMMON: 0,
+  RARE: 8_447,
+  EPIC: 1_500,
+  LEGENDARY: 49,
+  FORBIDDEN: 4,
+};
+/** The fifth slot of the earned-only Lacquer Case. */
+export const KESSEN_LACQUER_RARE_SLOT_WEIGHTS: Record<KessenPackTier, number> = {
+  COMMON: 0,
+  RARE: 0,
+  EPIC: 9_700,
+  LEGENDARY: 290,
+  FORBIDDEN: 10,
+};
+export const KESSEN_PACK_NORMAL_SLOTS = 4;

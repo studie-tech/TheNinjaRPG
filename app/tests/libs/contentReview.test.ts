@@ -25,6 +25,7 @@ import {
 } from "@/libs/contentReview/rules";
 import {
   auditJsonSchema,
+  grammarFields,
   leadingRowsWithin,
   resolveFocus,
 } from "@/libs/contentReview/snapshot";
@@ -263,6 +264,23 @@ describe("audit snapshot helpers", () => {
       ReturnType<typeof resolveFocus> | undefined
     >(runs[0]);
     expect(resolveFocus("sound")).toBe("sound");
+  });
+
+  it("reads a card's flavor text for grammar, without its rules data", () => {
+    const fields = grammarFields("ITEM", {
+      name: "Moonprowler",
+      description: "A night hunter.",
+      effects: [],
+      cardData: { kind: "UNIT", power: 4, abilities: [], flavor: "It hunts by night." },
+    });
+    expect(fields).toEqual({
+      name: "Moonprowler",
+      description: "A night hunter.",
+      cardData: { flavor: "It hunts by night." },
+    });
+    expect(grammarFields("ITEM", { name: "Kunai", cardData: null })).toEqual({
+      name: "Kunai",
+    });
   });
 
   it("emits a schema in the strict structured-output subset", () => {

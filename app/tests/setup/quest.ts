@@ -1,7 +1,11 @@
 import type { QuestType } from "@/drizzle/constants";
 import type { getNewTrackers } from "@/libs/quest";
 import type { RewardChoiceOwnership } from "@/libs/rewardChoice";
-import { WinChakraStorm, WinTowerDefense } from "@/validators/objectives";
+import {
+  WinChakraStorm,
+  WinKessenChallenge,
+  WinTowerDefense,
+} from "@/validators/objectives";
 
 /**
  * In-memory quest definition. `overrides` replaces quest columns; its `content` is merged into
@@ -110,6 +114,18 @@ export const trackerStormObjective = (id: string) =>
     latitude: 4,
     stage: "akasumi",
     surviveMinutes: 3,
+  });
+
+/** A Kessen Duel at the Table objective at sector 5, position [3, 4]. */
+export const trackerKessenObjective = (id: string) =>
+  WinKessenChallenge.parse({
+    id,
+    task: "win_kessen_challenge",
+    sector: 5,
+    longitude: 3,
+    latitude: 4,
+    npcKey: "kimiko",
+    tier: "CHUNIN",
   });
 
 /** Player holding one repeatable quest, for the reward calculators. */

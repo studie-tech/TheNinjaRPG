@@ -4,6 +4,7 @@ import {
   item,
   quest,
   questHistory,
+  sectorMap,
   userData,
   userItem,
   userVote,
@@ -34,7 +35,16 @@ const playerId = "collecting-player";
 
 describeWithDatabase("collected quest items", () => {
   beforeEach(async () => {
-    await resetTables(userItem, item, questHistory, quest, userVote, userData);
+    // A map another suite published for sector 0 would move the objectives' positions.
+    await resetTables(
+      userItem,
+      item,
+      questHistory,
+      quest,
+      sectorMap,
+      userVote,
+      userData,
+    );
     invalidatePublishedMapCache();
     await insertUsers([
       {

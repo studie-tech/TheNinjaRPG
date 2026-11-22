@@ -7,6 +7,7 @@
  */
 export const CDN_CACHED_QUERY_PATHS: readonly string[] = [
   "chakraStorm.getLeaderboard",
+  "kessen.getCatalog",
   "profile.getStrongestUsers",
   "towerDefense.getLeaderboard",
   "towerDefense.getRoster",

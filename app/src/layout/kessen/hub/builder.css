@@ -1,0 +1,1834 @@
+/*
+ * Deck builder and collection book: bordered panels on the content box surface around the
+ * game's components, all in the game's theme tokens, so they follow every colour mode,
+ * game layout and reading palette; the card faces keep their own paper and lacquer. Text
+ * in px with an 11 px floor (the root font is 12 px); layouts switch on container width;
+ * coarse pointers get 44 px targets (end of file).
+ */
+
+/* ------------------------------------------------------------------ deck builder */
+
+.kh-builder {
+  container: kh-builder / inline-size;
+  position: relative;
+}
+.kh-builder-tabs {
+  margin-bottom: 10px;
+}
+/* Collection | Deck: the game's tabs, at reading size. */
+.kh-builder-tabs > [role="tablist"] {
+  height: auto;
+  gap: 4px;
+  padding: 4px;
+}
+.kh-builder-tabs [role="tab"] {
+  min-height: 36px;
+  color: hsl(var(--card-foreground));
+  font-size: 14px;
+}
+.kh-builder-grid {
+  display: grid;
+  gap: 14px;
+}
+.kh-builder[data-tab="collection"] .kh-builder-deck {
+  display: none;
+}
+.kh-builder[data-tab="deck"] .kh-builder-pool,
+.kh-builder[data-tab="deck"] .kh-deckbar-dock {
+  display: none;
+}
+/* The pool and the deck: the game's bordered sections on the content box surface. */
+.kh-panel-chrome {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+.kh-filterbar {
+  margin-bottom: 12px;
+}
+/* Hidden until it takes keyboard focus. */
+.kh-skip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  font-size: 13px;
+  clip-path: inset(50%);
+}
+.kh-skip:focus-visible {
+  clip-path: none;
+}
+.kh-filters {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.kh-filters-more {
+  display: contents;
+}
+.kh-filters-toggle {
+  display: none;
+}
+/* Selects, chips and buttons of the filter bar share one height and a 12-13 px label. */
+.kh-filterbar :is(button, [role="combobox"]) {
+  font-size: 13px;
+}
+.kh-filter-select {
+  height: 34px;
+}
+.kh-filter-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  font-size: 16px;
+}
+/* Pressed: filled in the primary colour, distinct from the focus ring. */
+.kh-filter-chip[aria-pressed="true"] {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.kh-owned-only {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.kh-filter-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.kh-bgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 12px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kh-bcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* The tile measures the card, so its badges follow the card's own corner marks. */
+.kh-bcard-add {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  container-type: inline-size;
+}
+.kh-bcard-add[aria-disabled="true"] {
+  cursor: default;
+}
+.kh-bcard-add:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.kh-bcard[data-in-deck] .kessen-card {
+  filter: drop-shadow(0 0 6px rgb(255 190 90 / 0.55));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kh-bcard-add {
+    transition: transform 140ms ease;
+  }
+  .kh-bcard-add:hover:not([aria-disabled="true"]) {
+    transform: translateY(-2px);
+  }
+}
+.kh-bcard-foot {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.kh-bcard-count {
+  min-width: 32px;
+  font-family: var(--kessen-font-num);
+  font-size: 15px;
+  font-variant-numeric: lining-nums tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+.kh-bcard-count[data-zero],
+.kh-copy-limit {
+  color: hsl(var(--muted-foreground));
+}
+.kh-copy-limit {
+  font-size: 11px;
+}
+/* Owned and listed copies on the art's top-right, under the sigil and provision marks,
+   clear of the name banner and the rarity gem. */
+.kh-bcard-marks {
+  position: absolute;
+  top: calc(2.6cqw + 17cqw + 1.4cqw + max(18px, 12cqw) + 2cqw);
+  right: 2cqw;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  pointer-events: none;
+}
+/* Small rounded tags rather than pills: the label's line box stays clear of the corners,
+   so it never sits over the art around them. */
+.kh-bcard-mark {
+  padding: 3px 6px;
+  border: 1px solid rgb(217 180 90 / 0.75);
+  border-radius: 6px;
+  background: rgb(20 12 8 / 0.92);
+  color: var(--kessen-gold-hi);
+  font-size: 12px;
+  line-height: 1.2;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.kh-bcard-mark[data-listed] {
+  border-color: rgb(138 100 32 / 0.9);
+  color: #e8d6b0;
+  font-size: 11px;
+}
+.kh-bcard-caption {
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: center;
+}
+.kh-bcard-caption a {
+  color: hsl(var(--link));
+  text-decoration: underline;
+}
+/* Why a tap did nothing, laid over the tile's art, so the grid never reflows. */
+.kh-bcard-blocked {
+  position: absolute;
+  top: 34%;
+  right: 4px;
+  left: 4px;
+  z-index: 2;
+  padding: 6px 8px;
+  border: 1px solid rgb(255 123 107 / 0.7);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2a110b, #170a06);
+  color: #ffe2d6;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.6);
+  pointer-events: none;
+}
+.kh-dirty-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 9999px;
+  background: var(--kessen-lantern);
+  box-shadow: 0 0 6px var(--kessen-lantern);
+  vertical-align: middle;
+}
+.kh-dirty {
+  color: hsl(var(--warning));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Saved decks: outline pills, the open one filled. */
+.kh-decktabs {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+}
+.kh-decktab {
+  max-width: min(100%, 220px);
+  height: auto;
+  min-height: 32px;
+  gap: 6px;
+  padding: 0 12px 0 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+}
+.kh-decktab[aria-pressed="true"] {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.kh-decktab[data-new]:not([aria-pressed="true"]) {
+  border-style: dashed;
+  padding-left: 10px;
+}
+.kh-builder-leader {
+  margin-bottom: 10px;
+}
+.kh-leader-toggle {
+  display: none;
+  font-size: 12px;
+}
+.kh-field-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.kh-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.kh-field-label {
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.kh-field-input {
+  height: 36px;
+  font-size: 14px;
+}
+/* The provision meter: gold leaf poured into a muted channel, hatched red when over. */
+.kh-prov-meter {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.kh-prov-meter-track {
+  height: 10px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+}
+.kh-prov-meter-fill {
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--kessen-gold-lo), var(--kessen-gold), var(--kessen-gold-hi));
+}
+.kh-prov-meter[data-over] .kh-prov-meter-track {
+  border-color: hsl(var(--destructive));
+}
+.kh-prov-meter[data-over] .kh-prov-meter-fill {
+  background: repeating-linear-gradient(
+    -45deg,
+    #8f1d12 0 6px,
+    #b8321f 6px 12px
+  );
+}
+.kh-prov-meter-value {
+  font-family: var(--kessen-font-num);
+  font-size: 19px;
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+.kh-prov-meter[data-over] .kh-prov-meter-value {
+  color: hsl(var(--warning));
+}
+.kh-prov-meter-over {
+  grid-column: 1 / -1;
+  justify-self: end;
+  margin-top: -4px;
+  color: hsl(var(--warning));
+  font-size: 12px;
+  font-weight: 700;
+}
+.kh-counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 0;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.kh-counters span:not(:last-child)::after {
+  content: "·";
+  margin: 0 6px;
+}
+.kh-counters [data-bad] {
+  color: hsl(var(--warning));
+  font-weight: 700;
+}
+.kh-split {
+  margin: 4px 0 10px;
+}
+.kh-split-bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  gap: 2px;
+  border-radius: 9999px;
+  background: hsl(var(--muted));
+}
+.kh-split-seg {
+  min-width: 4px;
+  border-radius: 2px;
+}
+/* Row colours: mid tones that keep 3:1 against both light and dark surfaces. */
+.kh-split-seg[data-row="CLOSE"],
+.kh-split-legend [data-row="CLOSE"] .kessen-glyph {
+  background: #c8583c;
+  color: #c8583c;
+}
+.kh-split-seg[data-row="RANGED"],
+.kh-split-legend [data-row="RANGED"] .kessen-glyph {
+  background: #b08a2e;
+  color: #b08a2e;
+}
+.kh-split-seg[data-row="JUTSU"],
+.kh-split-legend [data-row="JUTSU"] .kessen-glyph {
+  background: #5b84d6;
+  color: #5b84d6;
+}
+.kh-split-seg[data-row="ANY"],
+.kh-split-legend [data-row="ANY"] .kessen-glyph {
+  background: #4e9a64;
+  color: #4e9a64;
+}
+.kh-split-seg[data-row="TACTIC"],
+.kh-split-legend [data-row="TACTIC"] .kessen-glyph {
+  background: #9a7ad0;
+  color: #9a7ad0;
+}
+.kh-split-seg[data-row="EMPTY"] {
+  background: transparent;
+}
+.kh-split-legend .kessen-glyph {
+  background: none !important;
+}
+.kh-split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 12px;
+  list-style: none;
+}
+.kh-split-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Validation: a success note when ready, a red-rimmed slip listing what to fix. */
+.kh-valid-ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid hsl(var(--success) / 0.5);
+  border-radius: 8px;
+  background: hsl(var(--success) / 0.08);
+  color: hsl(var(--success));
+  font-size: 13px;
+  font-weight: 700;
+}
+.kh-valid-ok[data-state="unsaveable"] {
+  border-style: dashed;
+  border-color: hsl(var(--border));
+  background: hsl(var(--muted) / 0.4);
+  color: inherit;
+  font-weight: 500;
+}
+.kh-valid-bad {
+  padding: 8px 10px;
+  border-color: hsl(var(--destructive) / 0.7);
+  background: hsl(var(--destructive) / 0.08);
+}
+.kh-valid-bad,
+.kh-valid-bad :is(div, ul, li) {
+  color: hsl(var(--card-foreground));
+}
+.kh-valid-bad > svg {
+  color: hsl(var(--warning));
+}
+.kh-valid-bad li::marker {
+  color: hsl(var(--warning));
+}
+.kh-deck-note {
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border-left: 2px solid hsl(var(--border));
+  border-radius: 0 6px 6px 0;
+  background: hsl(var(--muted) / 0.4);
+  font-size: 12px;
+  line-height: 1.4;
+}
+/* Rows size to their content, so a list shorter than its rows scrolls instead of
+   squeezing them under their steppers. */
+.kh-decklist {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 3px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.kh-decklist-empty {
+  padding: 14px 10px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  text-align: center;
+}
+.kh-dl-row {
+  display: grid;
+  grid-template-columns: 26px 16px minmax(0, 1fr) auto auto 26px 26px;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 2px 4px 2px 2px;
+  border: 1px solid hsl(var(--border) / 0.5);
+  border-left-width: 3px;
+  border-left-color: var(--kessen-common);
+  border-radius: 6px;
+  background: hsl(var(--muted) / 0.4);
+  font-size: 13px;
+}
+.kh-dl-row[data-tier="RARE"] {
+  border-left-color: var(--kessen-rare);
+}
+.kh-dl-row[data-tier="EPIC"] {
+  border-color: rgb(141 92 240 / 0.45);
+  border-left-color: var(--kessen-epic);
+}
+.kh-dl-row[data-tier="LEGENDARY"] {
+  border-color: rgb(226 173 43 / 0.6);
+  border-left-color: var(--kessen-legendary);
+  background: rgb(226 173 43 / 0.12);
+}
+.kh-dl-row[data-tier="FORBIDDEN"] {
+  border-color: rgb(208 39 29 / 0.6);
+  border-left-color: var(--kessen-forbidden);
+  background: rgb(208 39 29 / 0.1);
+}
+/* The provision hex is the card's own mark. */
+.kh-dl-prov {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%);
+  background: linear-gradient(180deg, var(--kessen-paper), var(--kessen-parchment));
+  color: var(--kessen-paper-ink);
+  font-family: var(--kessen-font-num);
+  font-size: 13px;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+}
+.kh-dl-glyph {
+  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+}
+.kh-dl-name {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.kh-dl-loan {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+}
+.kh-dl-count {
+  font-family: var(--kessen-font-num);
+  font-size: 15px;
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+.kh-dl-count[data-max] .kh-copy-limit {
+  color: inherit;
+}
+/* Copy steppers: small outline buttons. */
+.kh-step {
+  width: 26px;
+  height: 26px;
+}
+.kh-step svg {
+  width: 13px;
+  height: 13px;
+}
+.kh-bcard-foot .kh-step {
+  width: 30px;
+  height: 30px;
+}
+/* Auto-build and Fill share a row and keep their labels on one line; Clear follows,
+   compact, and wraps under them when the panel is narrow. */
+.kh-deck-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.kh-deck-actions > button {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 34px;
+  font-size: 13px;
+}
+.kh-deck-actions > .kh-deck-clear {
+  flex: 0 0 auto;
+}
+.kh-builder-savebar {
+  margin-top: 12px;
+  border-top: 1px solid hsl(var(--border));
+}
+/* Save, its status and Delete keep one row at every width. */
+.kh-builder-save {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+}
+.kh-save-button {
+  flex-shrink: 0;
+  height: auto;
+  min-height: 38px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.kh-builder-save .kh-dirty {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kh-builder-save .kh-dirty .kh-dirty-dot {
+  margin: 0 5px 0 0;
+}
+.kh-deck-delete {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.kh-delete-button {
+  height: auto;
+  min-height: 34px;
+  border-color: hsl(var(--destructive) / 0.7);
+  font-size: 13px;
+}
+.kh-delete-button:hover:not(:disabled) {
+  border-color: hsl(var(--destructive));
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+}
+.kh-save-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.kh-save-error {
+  margin-top: 8px;
+}
+/* One line: the figures keep their width, the status shrinks first. A fade above the bar
+   takes the cards that scroll under it, so no half-hidden label meets the bar's rim. Every
+   fade starts with a clear band about half a label tall: a label still readable above it
+   never has its lower half darkened. */
+.kh-deckbar-dock {
+  display: block;
+}
+.kh-deckbar-fade {
+  display: block;
+  height: 22px;
+  background: linear-gradient(180deg, transparent 9px, hsl(var(--card)));
+}
+.kh-deckbar {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 -2px 10px rgb(0 0 0 / 0.18);
+}
+.kh-deckbar:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.kh-deckbar-prov {
+  font-family: var(--kessen-font-num);
+  font-size: 15px;
+  font-weight: 400;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.kh-deckbar-prov[data-over] {
+  color: hsl(var(--warning));
+}
+.kh-deckbar-count,
+.kh-deckbar-prov,
+.kh-deckbar-go {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.kh-deckbar-state {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: hsl(var(--warning));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kh-deckbar-state[data-state="ready"] {
+  color: hsl(var(--success));
+}
+.kh-deckbar-state[data-state="unsaveable"] {
+  color: hsl(var(--muted-foreground));
+}
+.kh-deckbar-go {
+  margin-left: auto;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The builder's backdrop paints only inside the open panel's border, above its rounded
+   bottom edge, in the panel's own colour: a clip-path clips fixed descendants too. */
+.kh-bar-clip {
+  position: absolute;
+  inset: 0 1px 12px;
+  z-index: 0;
+  clip-path: inset(0);
+  pointer-events: none;
+}
+.kh-builder[data-tab="collection"] .kh-bar-clip {
+  bottom: 100px;
+}
+.kh-bar-clip > .kh-bar-backdrop {
+  background: hsl(var(--card));
+  pointer-events: auto;
+}
+
+/* Shown only where a column scrolls on its own (side by side). */
+.kh-scroll-fade {
+  display: none;
+}
+
+/* Tabs, the base layout: the deck bar and the Save bar stay on screen. Sticky cannot work
+   because an ancestor of the hall clips overflow, so both are fixed to the viewport
+   bottom and keep their container's width (100cqw) at their static horizontal position.
+   Narrow builders and short landscape screens (where two columns would show no full card
+   row) keep it. */
+.kh-deckbar-dock {
+  position: fixed;
+  bottom: var(--kh-bar-bottom);
+  z-index: 20;
+  width: 100cqw;
+}
+.kh-builder[data-tab="collection"] .kh-builder-grid {
+  padding-bottom: 96px;
+}
+.kh-builder[data-tab="deck"] .kh-builder-deck {
+  padding-bottom: 160px;
+}
+.kh-builder[data-tab="deck"] .kh-builder-savebar {
+  position: fixed;
+  bottom: var(--kh-bar-bottom);
+  z-index: 20;
+  width: 100cqw;
+  margin-top: 0;
+  padding: 0 12px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card));
+  box-shadow: 0 -2px 10px rgb(0 0 0 / 0.18);
+}
+/* The same fade over the deck list that scrolls under the Save bar. */
+.kh-builder[data-tab="deck"] .kh-builder-savebar::before {
+  position: absolute;
+  right: -1px;
+  bottom: 100%;
+  left: -1px;
+  height: 22px;
+  background: linear-gradient(180deg, transparent 9px, hsl(var(--card)));
+  content: "";
+}
+.kh-builder[data-tab="deck"] .kh-builder-save {
+  padding-top: 10px;
+}
+/* In a dialog (it scrolls itself and holds fixed elements) the bars stick to the bottom
+   of its scrollport instead. Dialogs host the builder only where it is wide, so there the
+   tabs show on short screens alone. */
+@media (max-height: 520px) {
+  .kh-builder[data-host="dialog"] .kh-deckbar-dock,
+  .kh-builder[data-host="dialog"][data-tab="deck"] .kh-builder-savebar {
+    position: sticky;
+    bottom: 8px;
+    width: 100%;
+  }
+  .kh-builder[data-host="dialog"][data-tab="deck"] .kh-builder-savebar {
+    margin-top: 12px;
+  }
+  .kh-builder[data-host="dialog"][data-tab] .kh-builder-grid {
+    padding-bottom: 0;
+  }
+  .kh-builder[data-host="dialog"][data-tab] .kh-builder-deck {
+    padding-bottom: 12px;
+  }
+  .kh-builder[data-host="dialog"] .kh-bar-backdrop {
+    display: none;
+  }
+  .kh-builder[data-host="dialog"] .kh-builder-pool,
+  .kh-builder[data-host="dialog"] .kh-builder-deck {
+    max-height: none;
+  }
+}
+/* Narrow builders and short screens fold the filters behind their toggle, so the cards
+   start high. */
+@container kh-builder (max-width: 559px) {
+  .kh-filters-toggle {
+    display: inline-flex;
+  }
+  .kh-filters-more:not([data-open]) {
+    display: none;
+  }
+  .kh-filters-more[data-open] {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding-top: 8px;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  /* The faction select takes its own row, so its value never hides under the chevron. */
+  .kh-filter-faction {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
+@media (max-height: 520px) {
+  .kh-filters-toggle {
+    display: inline-flex;
+  }
+  .kh-filters-more:not([data-open]) {
+    display: none;
+  }
+  .kh-filters-more[data-open] {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+  }
+}
+/* Side by side from 620 px on screens tall enough for a card row under the controls: the
+   pool, and the deck panel with its own scroll. */
+@media (min-height: 521px) {
+  @container kh-builder (min-width: 620px) {
+    .kh-builder-tabs,
+    .kh-deckbar-dock,
+    .kh-bar-backdrop {
+      display: none;
+    }
+    .kh-builder-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+      align-items: start;
+    }
+    .kh-builder[data-tab] .kh-builder-grid {
+      padding-bottom: 0;
+    }
+    .kh-builder[data-tab] .kh-builder-pool,
+    .kh-builder[data-tab] .kh-builder-deck {
+      display: block;
+    }
+    /* Each column scrolls within the screen left under the content box's header (its
+       title and the hall's section tabs), so with the box at the top of the screen the deck panel and its
+       Save stay in view beside the pool however far the pool is browsed. A layout
+       ancestor is a scroll container that never scrolls, so a sticky panel would not
+       hold. Each column is the containing block of its own visually hidden labels, so
+       they never stretch the page. */
+    .kh-builder-pool,
+    .kh-builder-deck {
+      position: relative;
+      max-height: max(
+        420px,
+        calc(100dvh - var(--game-bottom-nav-h, 0px) - 110px)
+      );
+      overflow-y: auto;
+      scrollbar-color: hsl(var(--border)) transparent;
+      scrollbar-width: thin;
+    }
+    /* The deck's cards scroll in their own region under a compact head, so several rows
+       show on the first screen. */
+    .kh-builder[data-tab] .kh-builder-deck {
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 12px;
+      overscroll-behavior: contain;
+    }
+    .kh-builder-deck > * {
+      flex: none;
+    }
+    .kh-builder-deck > .kh-decklist {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 148px;
+      margin-top: 10px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-color: hsl(var(--border)) transparent;
+      scrollbar-width: thin;
+    }
+    /* A fade stuck to the lower edge of each scrolling column: a card or row passing
+       under it fades out instead of being cut mid-label. */
+    .kh-scroll-fade {
+      position: sticky;
+      bottom: -12px;
+      z-index: 1;
+      display: block;
+      height: 24px;
+      margin: 0 -12px -24px;
+      background: linear-gradient(180deg, transparent 10px, hsl(var(--card)) 90%);
+    }
+    .kh-decklist > .kh-scroll-fade {
+      bottom: 0;
+      height: 20px;
+      margin: -3px 0 0;
+      background: linear-gradient(180deg, transparent 8px, hsl(var(--card)) 90%);
+      list-style: none;
+    }
+    .kh-builder[data-tab] .kh-builder-savebar {
+      position: sticky;
+      bottom: -12px;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      column-gap: 10px;
+      width: auto;
+      margin: 12px -12px -12px;
+      padding: 0 12px 12px;
+      border: 0;
+      border-top: 1px solid hsl(var(--border));
+      border-radius: 0 0 8px 8px;
+      background: hsl(var(--card));
+      box-shadow: none;
+    }
+    .kh-builder[data-tab] .kh-builder-savebar > * {
+      flex: 1 1 100%;
+    }
+    /* When the panel itself scrolls, rows pass under the stuck Save bar through a fade. */
+    .kh-builder[data-tab] .kh-builder-savebar::before {
+      position: absolute;
+      right: 0;
+      bottom: 100%;
+      left: 0;
+      height: 22px;
+      background: linear-gradient(180deg, transparent 9px, hsl(var(--card)));
+      content: "";
+      pointer-events: auto;
+    }
+    .kh-builder[data-tab] .kh-builder-savebar > .kh-builder-save {
+      padding-top: 12px;
+    }
+    .kh-builder-leader {
+      margin-bottom: 8px;
+    }
+    .kh-field-row {
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .kh-field {
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+    .kh-field > .kh-field-label {
+      flex: 0 0 52px;
+    }
+    .kh-field > :not(.kh-field-label) {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .kh-counters {
+      margin: 6px 0;
+    }
+    .kh-split {
+      margin: 2px 0 8px;
+    }
+    .kh-valid-ok {
+      padding: 4px 10px;
+    }
+    .kh-deck-actions {
+      flex-wrap: nowrap;
+      margin-top: 8px;
+    }
+    .kh-deck-actions > button {
+      min-width: 0;
+      padding: 0 8px;
+    }
+    .kh-deck-clear-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+  @container kh-builder (min-width: 1000px) {
+    .kh-builder-grid {
+      grid-template-columns: minmax(0, 1fr) 360px;
+    }
+  }
+  @container kh-builder (min-width: 1500px) {
+    .kh-builder-grid {
+      grid-template-columns: minmax(0, 1fr) 400px;
+    }
+  }
+}
+/* Short side-by-side panels (laptop and tablet landscape): the leader ability folds to
+   its name under the leader, so the deck's cards show on the first screen. */
+@media (min-height: 521px) and (max-height: 860px) {
+  @container kh-builder (min-width: 620px) {
+    .kh-builder-leaderbox {
+      position: relative;
+      margin-bottom: 6px;
+    }
+    .kh-builder-deck .kh-split {
+      margin-bottom: 4px;
+    }
+    .kh-builder-deck > .kh-decklist {
+      margin-top: 6px;
+    }
+    .kh-builder-leaderbox > .kh-builder-leader {
+      margin-bottom: 0;
+      padding-bottom: 42px;
+    }
+    .kh-builder-leaderbox:not([data-open]) .kessen-plate-ability {
+      display: none;
+    }
+    .kh-leader-toggle {
+      position: absolute;
+      right: 12px;
+      bottom: 10px;
+      left: 12px;
+      display: flex;
+      height: auto;
+      min-height: 28px;
+      gap: 6px;
+    }
+  }
+}
+@media (pointer: coarse) and (min-height: 521px) and (max-height: 860px) {
+  @container kh-builder (min-width: 620px) {
+    .kh-builder-leaderbox > .kh-builder-leader {
+      padding-bottom: 54px;
+    }
+    .kh-leader-toggle {
+      min-height: 40px;
+    }
+  }
+}
+
+/* The deck panel answers its own width: rows and fields follow the panel, not the page. */
+.kh-builder-deck {
+  container: kh-deck / inline-size;
+}
+@container kh-deck (max-width: 419px) {
+  .kh-dl-row {
+    grid-template-columns: 26px minmax(0, 1fr) auto auto 26px 26px;
+    gap: 5px;
+  }
+  .kh-dl-glyph {
+    display: none;
+  }
+  /* A narrow Save bar keeps one row: a short status and an icon-only Delete. */
+  .kh-dirty-long,
+  .kh-deck-delete-label {
+    display: none;
+  }
+}
+@container kh-deck (min-width: 420px) {
+  .kh-field-row {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+}
+
+/* The pool answers its own width too: three compact tiles a row when narrow. */
+.kh-builder-pool {
+  container: kh-pool / inline-size;
+}
+@container kh-pool (max-width: 459px) {
+  .kh-bgrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 6px;
+  }
+  .kh-bcard-foot {
+    gap: 2px;
+  }
+  .kh-bcard-count {
+    min-width: 30px;
+    font-size: 14px;
+  }
+}
+/* Pools too narrow for three named tiles (the card face drops its name below about 90 px)
+   show two. */
+@container kh-pool (max-width: 299px) {
+  .kh-bgrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 10px;
+  }
+}
+@container kh-pool (min-width: 700px) {
+  .kh-bgrid {
+    grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
+  }
+}
+
+/* Short landscape screens: slim tabs and smaller tiles, so a whole row of cards shows
+   under the controls on the first screen. */
+@media (max-height: 520px) {
+  .kh-builder .kh-builder-tabs,
+  .kh-builder .kh-filterbar {
+    margin-bottom: 6px;
+  }
+  .kh-builder .kh-builder-pool {
+    padding: 8px 10px;
+  }
+  .kh-builder .kh-bgrid {
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 8px 6px;
+  }
+  .kh-builder .kh-bcard-foot {
+    gap: 2px;
+  }
+  .kh-builder .kh-bcard-count {
+    min-width: 28px;
+    font-size: 13px;
+  }
+  /* The deck tab: the leader on one row (its ability is on the card and in the select's
+     list), and Save with its reason on one line. */
+  .kh-builder-leader .kessen-plate-ability {
+    display: none;
+  }
+  .kh-builder .kh-builder-savebar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 12px;
+  }
+  .kh-builder .kh-builder-savebar > .kh-save-error {
+    flex: 1 1 100%;
+  }
+  .kh-builder .kh-builder-savebar > .kh-builder-save {
+    flex: 1 1 auto;
+    padding-top: 8px;
+  }
+  .kh-builder .kh-builder-savebar > .kh-save-hint {
+    flex: 1 1 240px;
+    margin-top: 8px;
+  }
+}
+
+/* --------------------------------------------------------------- collection book */
+
+/* The book: the keyword chips, the faction tabs with their completion rings, a page per
+   faction and the Forbidden shelf. */
+.kh-book {
+  container: kh-book / inline-size;
+}
+.kh-book-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kh-book-eyebrow {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.kh-book-title {
+  margin: 0;
+  font-family: var(--kessen-font-display);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+.kh-book-total {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+.kh-book-total-n {
+  color: hsl(var(--card-foreground));
+  font-family: var(--kessen-font-num);
+  font-size: 26px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.kh-kwchips {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+/* Keywords met in a match: solid outline chips. Unmet ones are dashed and quiet; the
+   pressed one is filled in the primary colour with a check. */
+.kh-kwchip {
+  height: auto;
+  min-height: 32px;
+  padding: 0 12px;
+  border-style: dashed;
+  border-radius: 9999px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+}
+.kh-kwchip[data-seen] {
+  border-style: solid;
+  color: hsl(var(--card-foreground));
+}
+.kh-kwchip[aria-pressed="true"] {
+  border-style: solid;
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+/* Narrow books fold the chips behind this toggle; wide books show them all. */
+.kh-kw-toggle {
+  display: none;
+  height: auto;
+  min-height: 36px;
+  align-self: flex-start;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.kh-kw-toggle-count {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 500;
+}
+.kh-kw-toggle-icon {
+  width: 14px;
+  height: 14px;
+}
+.kh-kw-toggle[aria-expanded="true"] .kh-kw-toggle-icon {
+  transform: rotate(180deg);
+}
+/* The glossary line of the pressed keyword. */
+.kh-kwline {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.4);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.kh-kwline p {
+  flex: 1;
+  margin: 0;
+}
+.kh-kwline-term {
+  font-weight: 800;
+}
+.kh-kwline-unseen {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+.kh-kwline-close {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid hsl(var(--border));
+}
+.kh-book-tabs {
+  display: grid;
+  height: auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0;
+  background: none;
+}
+.kh-book-tab {
+  position: relative;
+  display: grid;
+  height: auto;
+  min-width: 0;
+  grid-template-rows: 60px auto auto;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--card-foreground));
+  white-space: normal;
+}
+.kh-book-tab:hover {
+  border-color: hsl(var(--border));
+  background: hsl(var(--muted) / 0.4);
+}
+/* The open faction: a muted fill and a heavier rim in the text colour. */
+.kh-book-tab[data-state="active"] {
+  border-color: hsl(var(--card-foreground));
+  background: hsl(var(--muted) / 0.6);
+  color: hsl(var(--card-foreground));
+  box-shadow: inset 0 0 0 1px hsl(var(--card-foreground));
+}
+.kh-book-tab-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--kessen-font-display);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kh-book-tab-count {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.kh-book-tab-new {
+  margin-left: 4px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.kh-ring {
+  grid-row: 1;
+  grid-column: 1;
+  width: 60px;
+  height: 60px;
+}
+.kh-book-tab-sigil {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: center;
+}
+/* The completion ring: a muted track, gold leaf filling it. */
+.kh-ring-track {
+  fill: none;
+  stroke: hsl(var(--muted-foreground) / 0.35);
+  stroke-width: 3;
+}
+.kh-ring-fill {
+  fill: none;
+  stroke: var(--kessen-gold);
+  stroke-linecap: round;
+  stroke-width: 3.5;
+}
+.kh-ring-fill[data-full] {
+  stroke: var(--kessen-legendary);
+}
+/* A page of the book: the game's bordered section. */
+.kh-page {
+  position: relative;
+  padding: 14px 12px 16px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+.kh-page:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.kh-page-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.kh-page-title {
+  margin: 0;
+  font-family: var(--kessen-font-display);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+.kh-page-sub {
+  margin: 2px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+.kh-page-count {
+  margin: 0;
+  font-family: var(--kessen-font-num);
+  font-size: 20px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.kh-page-h4 {
+  margin: 12px 0 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.kh-book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 14px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kh-book-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+.kh-book-inspect {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+.kh-book-inspect:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+div.kh-book-inspect {
+  cursor: default;
+}
+/* Copy stamps under a card. */
+.kh-book-stamps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+.kh-book-stamp {
+  padding: 3px 7px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--muted));
+  color: hsl(var(--card-foreground));
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.kh-book-stamp[data-listed] {
+  border-style: dashed;
+  background: transparent;
+}
+/* Where to find: an outline pill under the card. */
+.kh-book-find {
+  width: 100%;
+  height: auto;
+  min-height: 30px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+}
+.kh-book-find[aria-expanded="true"] {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.kh-book-find-pop {
+  width: min(260px, calc(100vw - 24px));
+  padding: 12px;
+}
+.kh-book-find-title {
+  margin: 0 0 6px;
+  font-family: var(--kessen-font-display);
+  font-size: 16px;
+  line-height: 1.2;
+}
+.kh-book-find-pop ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.4;
+  list-style: disc;
+}
+.kh-book-find-none {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+.kh-silhouette {
+  position: relative;
+  display: block;
+}
+.kh-silhouette .kessen-card {
+  filter: none !important;
+  opacity: 1 !important;
+}
+.kh-silhouette .kc-art img {
+  filter: grayscale(1) contrast(2.4) brightness(1.25);
+  mix-blend-mode: multiply;
+  opacity: 0.8;
+}
+.kh-silhouette .kc-art {
+  background: radial-gradient(circle at 50% 40%, #f3e6c6, #c9ad7a);
+  isolation: isolate;
+}
+.kh-silhouette .kc-vignette {
+  opacity: 0.4;
+}
+/* Brighter than a disabled face, so the name plate inside the frame stays legible. */
+.kh-silhouette .kessen-card[data-disabled] .kc-frame {
+  filter: grayscale(1) brightness(0.85);
+}
+.kh-silhouette .kc-body {
+  opacity: 0.75;
+}
+/* The name stays fully legible on the greyed face. */
+.kh-silhouette .kc-name {
+  opacity: 1;
+}
+/* The Forbidden shelf: a crimson-rimmed section whose niches are dark card slots. */
+.kh-shelf {
+  padding: 12px;
+  border: 1px solid rgb(208 39 29 / 0.6);
+  border-radius: 8px;
+  background: rgb(208 39 29 / 0.06);
+}
+.kh-shelf-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.kh-shelf-title,
+.kh-shelf-count {
+  margin: 0;
+  font-family: var(--kessen-font-display);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+}
+.kh-shelf-count {
+  font-family: var(--kessen-font-num);
+  font-size: 17px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+/* One shelf that scrolls sideways on narrow pages, rows of large niches when wide. */
+.kh-shelf-row {
+  display: grid;
+  /* The next niche always peeks in, so the row reads as scrollable. */
+  grid-auto-columns: min(140px, calc((100% - 20px) / 2.4));
+  grid-auto-flow: column;
+  align-items: start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 6px 14px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  list-style: none;
+  scrollbar-color: rgb(208 39 29 / 0.6) transparent;
+  scrollbar-width: thin;
+}
+.kh-niche {
+  display: grid;
+  aspect-ratio: 5 / 7;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #0b0b10, #1a0a0a);
+  box-shadow:
+    inset 0 0 0 1px rgb(208 39 29 / 0.35),
+    inset 0 6px 14px rgb(0 0 0 / 0.8);
+  scroll-snap-align: start;
+}
+.kh-niche[data-filled] {
+  display: flex;
+  aspect-ratio: auto;
+  flex-direction: column;
+  gap: 4px;
+  background: none;
+  box-shadow: none;
+}
+/* Shown only while the card face clamps the name that carries it. */
+.kh-niche-epithet {
+  display: none;
+  font-family: var(--kessen-font-display);
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: center;
+}
+.kh-niche[data-name-clipped] .kh-niche-epithet {
+  display: block;
+}
+/* A locked niche: an embossed card-back outline around a wax lock. */
+.kh-niche-empty {
+  display: flex;
+  width: calc(100% - 16px);
+  height: calc(100% - 16px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgb(208 39 29 / 0.28);
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(45deg, rgb(255 120 100 / 0.04) 0 2px, transparent 2px 9px),
+    radial-gradient(70% 50% at 50% 45%, rgb(90 16 12 / 0.5), transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 140 120 / 0.12),
+    inset 0 -1px 0 rgb(0 0 0 / 0.6);
+}
+.kh-niche-lock {
+  position: relative;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  font-size: 36px;
+  filter: saturate(0.7) brightness(0.85) drop-shadow(0 2px 3px rgb(0 0 0 / 0.7));
+}
+.kh-niche-lock > * {
+  grid-area: 1 / 1;
+}
+.kh-niche-lock-icon {
+  width: 14px;
+  height: 14px;
+  color: #ffe2c8;
+}
+.kh-niche-label {
+  color: #efb6aa;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Narrow books: the keyword chips fold behind their toggle, and the seven faction tabs
+   share one row as sigils in their rings with the count beneath (the open page names its
+   faction in its title), so every faction stays in view and the page's cards start in
+   the first screen. */
+@container kh-book (max-width: 559px) {
+  .kh-kw-toggle {
+    display: inline-flex;
+  }
+  .kh-kwchips:not([data-open]) {
+    display: none;
+  }
+  .kh-book-tabs {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .kh-book-tab {
+    grid-template-rows: 40px auto;
+    min-height: 64px;
+    padding: 5px 0 4px;
+    border-radius: 8px;
+  }
+  .kh-book-tab .kh-ring {
+    width: 40px;
+    height: 40px;
+  }
+  .kh-book-tab .kh-book-tab-sigil {
+    width: 24px !important;
+  }
+  .kh-book-tab .kh-book-tab-name {
+    display: none;
+  }
+  .kh-book-tab .kh-book-tab-count {
+    font-size: 11px;
+    letter-spacing: -0.02em;
+  }
+  /* New cards: the badge rides the tab's top corner, so every tab keeps one height. */
+  .kh-book-tab .kh-book-tab-new {
+    position: absolute;
+    top: -5px;
+    right: -3px;
+    margin: 0;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+  }
+}
+@container kh-book (min-width: 560px) {
+  .kh-book-tabs {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  /* Wide pages wrap the niches in rows instead of scrolling, once one is filled. */
+  .kh-shelf-row:not([data-empty]) {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    overflow-x: visible;
+    padding-bottom: 6px;
+  }
+  .kh-page {
+    padding: 18px 20px 20px;
+  }
+  .kh-book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  }
+}
+
+/* --------------------------------------------------------------------- dialogs */
+
+/* The builder's dialogs and lists (portalled under <body>, so they carry `.kessen-ui`
+   themselves): the game's dialogs with Kessen titles. */
+.kh-builder-dialog :is(h2, [role="heading"]) {
+  font-family: var(--kessen-font-display);
+  font-size: 20px;
+  font-weight: 400;
+}
+.kh-builder-dialog [class*="flex-row"] > button {
+  font-size: 13px;
+}
+.kh-builder-dialog-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.kh-builder-listbox {
+  max-height: min(var(--radix-select-content-available-height, 384px), 480px);
+}
+.kh-builder-option {
+  font-size: 13px;
+}
+
+/* ------------------------------------------------------------ touch hit areas */
+
+/* Coarse pointers get 44 px targets; fine pointers keep the denser layout. A control
+   drawn smaller takes an invisible hit area around it (::before), sized so neighbouring
+   areas do not overlap. */
+@media (pointer: coarse) {
+  .kh-builder-tabs [role="tab"] {
+    min-height: 44px;
+  }
+  .kh-skip,
+  .kh-decktab,
+  .kh-filter-select,
+  .kh-filters-toggle,
+  .kh-filter-summary button,
+  .kh-field-input,
+  .kh-deck-actions > button,
+  .kh-save-button,
+  .kh-owned-only {
+    min-height: 44px;
+  }
+  .kh-filter-select,
+  .kh-field-input {
+    height: 44px;
+  }
+  .kh-filter-chip {
+    width: 44px;
+    height: 44px;
+  }
+  .kh-delete-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .kh-dl-row {
+    grid-template-columns: 26px 16px minmax(0, 1fr) auto auto 44px 44px;
+    gap: 4px;
+  }
+  .kh-dl-row .kh-step {
+    width: 44px;
+    height: 44px;
+  }
+  /* Pool steppers draw 30 px inside a 44 px hit area whose sides overlap the count, so
+     three tiles still fit a row; the count gives way before the steppers do. */
+  .kh-bcard-foot {
+    min-height: 44px;
+  }
+  .kh-bcard-foot .kh-step {
+    flex-shrink: 0;
+  }
+  .kh-bcard-foot .kh-bcard-count {
+    min-width: 0;
+  }
+  .kh-bcard-foot .kh-step::before {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    bottom: -7px;
+    left: -7px;
+    content: "";
+  }
+  /* Narrow faction tabs reach into the gaps beside them. */
+  .kh-book-tab::before {
+    position: absolute;
+    top: 0;
+    right: -2px;
+    bottom: 0;
+    left: -2px;
+    content: "";
+  }
+  .kh-kwchips {
+    gap: 8px;
+  }
+  .kh-kwchip {
+    min-height: 44px;
+    padding: 0 14px;
+  }
+  .kh-kwline-close {
+    width: 44px;
+    height: 44px;
+  }
+  .kh-kw-toggle {
+    min-height: 44px;
+  }
+  .kh-book-find {
+    min-height: 44px;
+  }
+  .kh-builder-option {
+    min-height: 44px;
+  }
+  .kh-builder-dialog [class*="flex-row"] > button {
+    min-height: 44px;
+  }
+  @container kh-deck (max-width: 419px) {
+    .kh-dl-row {
+      grid-template-columns: 26px minmax(0, 1fr) auto auto 44px 44px;
+    }
+  }
+}

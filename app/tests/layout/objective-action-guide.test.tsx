@@ -145,4 +145,37 @@ describe("objective action guide", () => {
       view.getByRole("link", { name: /enter the storm/i }).getAttribute("href"),
     ).toBe("/chakraStorm?quest=quest&objective=goal");
   });
+
+  it("seats a Kessen challenge at its position, naming the opponent and tier", () => {
+    mockUserContextValue({
+      data: {
+        userId: "duelist",
+        role: "USER",
+        status: "AWAKE",
+        sector: 5,
+        longitude: 3,
+        latitude: 4,
+      },
+      timeDiff: 0,
+    } as never);
+    const view = render(
+      <Objective
+        objective={AllObjectives.parse({
+          id: "goal",
+          task: "win_kessen_challenge",
+          sector: 5,
+          longitude: 3,
+          latitude: 4,
+          npcKey: "kimiko",
+          tier: "JONIN",
+        })}
+        tracker={QuestTracker.parse({ id: "quest", goals: [] })}
+        checkRewards={vi.fn()}
+      />,
+    );
+    expect(view.getByText(/against Kimiko, played at Jonin difficulty/)).toBeTruthy();
+    expect(view.getByRole("link", { name: /take a seat/i }).getAttribute("href")).toBe(
+      "/kessen?quest=quest&objective=goal",
+    );
+  });
 });

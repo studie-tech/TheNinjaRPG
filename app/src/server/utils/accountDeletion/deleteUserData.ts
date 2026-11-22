@@ -7,6 +7,11 @@ import {
   huntingProgress,
   huntingReceipt,
   huntingSession,
+  kessenDeck,
+  kessenMatch,
+  kessenNpcProgress,
+  kessenProgress,
+  kessenRankedQueue,
   metaConsent,
   metaTracking,
   userCosmetic,
@@ -15,7 +20,10 @@ import {
   warehouseMember,
 } from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
-import { deleteRowsForUser } from "@/queries/accountDeletion";
+import {
+  deleteKessenMatchForDeleteUserInternal,
+  deleteRowsForUser,
+} from "@/queries/accountDeletion";
 import { deleteAiTransformationsFor } from "@/queries/ai";
 import { updateBalanceTurnOrderUserId } from "@/queries/balance";
 import { deleteBattleQueueMembersForUser } from "@/queries/clan";
@@ -234,7 +242,13 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
       caravanDiscovery,
       caravanOperation,
       caravanParticipant,
+      kessenDeck,
+      kessenMatch,
+      kessenProgress,
+      kessenNpcProgress,
+      kessenRankedQueue,
     ].map((table) => deleteRowsForUser(client, table, userId)),
+    deleteKessenMatchForDeleteUserInternal(client, userId),
     deleteAiSpriteAnimationBindings(client, userId),
     deleteAiTransformationsFor(client, userId),
     deleteUserItems(client, userId),

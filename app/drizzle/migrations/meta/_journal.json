@@ -1324,6 +1324,13 @@
       "when": 1795322124850,
       "tag": "0189_optimal_maggott",
       "breakpoints": false
+    },
+    {
+      "idx": 190,
+      "version": "5",
+      "when": 1795345466517,
+      "tag": "0190_wakeful_dreadnoughts",
+      "breakpoints": false
     }
   ]
 }

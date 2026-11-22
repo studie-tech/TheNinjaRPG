@@ -11,6 +11,7 @@ import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as bulkSell from "@/hooks/useBulkSellItems";
 import * as homeMove from "@/hooks/useHomeStorageMove";
 import * as itemActions from "@/hooks/useItemActions";
+import * as splitBeforeSale from "@/hooks/useSplitBeforeSale";
 import * as contentImage from "@/layout/ContentImage";
 import * as equipmentPreview from "@/layout/EquipmentPreview";
 import * as hotkeyControls from "@/layout/HotkeyControls";
@@ -19,6 +20,7 @@ import * as inspector from "@/layout/items/ItemInspector";
 import { type ItemsPlace, ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import * as mastery from "@/libs/mastery";
 import * as skills from "@/libs/skillRequirements";
+import { DEFAULT_CARD_DATA } from "@/validators/itemCard";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
@@ -35,6 +37,11 @@ let inspectorProps: Parameters<typeof inspector.ItemInspector>[0] | undefined;
 
 beforeEach(() => {
   mockCosmetics();
+  vi.spyOn(splitBeforeSale, "useSplitBeforeSale").mockReturnValue({
+    keepOnStack: vi.fn(async () => ({ success: true, message: "" })),
+    isSplitting: false,
+    refreshInventory: vi.fn(async () => {}),
+  } as never);
   window.localStorage.clear();
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -235,7 +242,7 @@ it("takes several selected stacks out of home storage at once", () => {
   startSelecting();
   act(() => fireEvent.click(card("Iron Ore")));
   act(() => fireEvent.click(card("Dried Herb")));
-  expect(within(bar()).queryByRole("button", { name: "Sell / drop…" })).toBeNull();
+  expect(within(bar()).queryByRole("button", { name: SELL_OPENER })).toBeNull();
   act(() => fireEvent.click(within(bar()).getByRole("button", { name: "Take out" })));
   expect(moveItems).toHaveBeenCalledWith(["Iron Ore", "Dried Herb"], false);
 });
@@ -297,9 +304,7 @@ it("stores farm-market seeds without replacement coins while keeping sale restri
   expect(card("Market Seed").hasAttribute("disabled")).toBe(false);
   act(() => fireEvent.click(card("Market Seed")));
   expect(
-    within(bar())
-      .getByRole("button", { name: "Sell / drop…" })
-      .hasAttribute("disabled"),
+    within(bar()).getByRole("button", { name: SELL_OPENER }).hasAttribute("disabled"),
   ).toBe(true);
   act(() =>
     fireEvent.click(within(bar()).getByRole("button", { name: "Store at home" })),
@@ -308,9 +313,7 @@ it("stores farm-market seeds without replacement coins while keeping sale restri
   act(() => fireEvent.click(card("Chakra Pill")));
   act(() => fireEvent.click(card("Market Seed")));
   expect(
-    within(bar())
-      .getByRole("button", { name: "Sell / drop…" })
-      .hasAttribute("disabled"),
+    within(bar()).getByRole("button", { name: SELL_OPENER }).hasAttribute("disabled"),
   ).toBe(false);
 });
 
@@ -368,3 +371,34 @@ it("inspects a carried candidate at home and closes it when stored", () => {
   act(() => rerender([], [ore, herb, { ...sword, storedAtHome: true }]));
   expect(screen.queryByRole("region", { name: "Inspecting Spare Sword" })).toBeNull();
 });
+
+it("offers only the sale of surplus card stacks, never storing them at home", () => {
+  const cardStack = (id: string, quantity: number) =>
+    ({
+      ...stack(id),
+      itemId: "kessen-moonprowler",
+      quantity,
+      item: {
+        ...stack(id).item,
+        id: "kessen-moonprowler",
+        name: id,
+        itemType: "CARD",
+        slot: "NONE",
+        cardData: DEFAULT_CARD_DATA,
+      },
+    }) as unknown as UserItemWithRelations;
+  const kept = cardStack("Moonprowler kept", 3);
+  const surplus = cardStack("Moonprowler surplus", 2);
+  renderWorkspace({ carried: [kept, surplus] });
+  startSelecting();
+  expect(card("Moonprowler kept").textContent).toContain("Deck copies");
+  act(() => fireEvent.click(card("Moonprowler surplus")));
+  expect(card("Moonprowler surplus").getAttribute("aria-pressed")).toBe("true");
+  expect(within(bar()).queryByRole("button", { name: "Store at home" })).toBeNull();
+  expect(
+    within(bar()).getByRole("button", { name: SELL_OPENER }).hasAttribute("disabled"),
+  ).toBe(false);
+});
+
+/** The bulk sale opener says "drop" only when a ticked stack drops. */
+const SELL_OPENER = /^Sell( \/ drop)?…$/;

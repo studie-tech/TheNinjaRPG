@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronsUpDown, Plus, Search } from "lucide-react";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, type ReactNode, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
@@ -43,11 +43,14 @@ import {
   type AuctionListingState,
   MAX_ITEM_STACK_SIZE,
 } from "@/drizzle/constants";
+import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
+import { useKessenCardMoves } from "@/hooks/kessen/useKessenHubCache";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { isEquippableUserItem, isImbuing, userItemDisplay } from "@/libs/item";
+import { isOfferTradeableItem } from "@/libs/itemEconomy";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -163,15 +166,45 @@ export function AuctionOffers({
 export function NewOfferDialog({
   offerType,
   onCreated,
+  onShowAuctions,
 }: {
   offerType: OfferType;
   onCreated: () => void;
+  /** Switches the page to its Auctions tab, where Kessen cards are traded. */
+  onShowAuctions?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState("");
   const catalog = api.auction.getAuctionOfferItems.useQuery(undefined, {
     enabled: isOpen,
   });
+  // Card names, to explain why a searched card is not among the wanted items.
+  const kessenCatalog = useKessenCatalog(isOpen);
+  const cardNames = kessenCatalog.data?.cards.map((card) => card.name.toLowerCase());
+  const wantedEmpty = (query: string) => {
+    const search = query.trim().toLowerCase();
+    if (!search || !cardNames?.some((name) => name.includes(search))) {
+      return "No items found.";
+    }
+    return (
+      <span className="flex flex-col items-center gap-2 px-2">
+        <span>Kessen cards are not traded here; they trade through auctions.</span>
+        {onShowAuctions && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setIsOpen(false);
+              onShowAuctions();
+            }}
+          >
+            Browse auctions
+          </Button>
+        )}
+      </span>
+    );
+  };
   const inventory = api.item.getUserItems.useQuery(undefined, { enabled: isOpen });
   const utils = api.useUtils();
   const form = useForm<z.infer<typeof createAuctionOfferSchema>>({
@@ -190,9 +223,17 @@ export function NewOfferDialog({
   const requestedId = useWatch({ control: form.control, name: "requestedItemId" });
   const offeredId = useWatch({ control: form.control, name: "offeredUserItemId" });
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
+  const { reconcileCardMoves } = useKessenCardMoves();
   const create = api.auction.createAuctionOffer.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (result, _variables, revision) => {
+    onMutate: (input) => ({
+      revision: prepareUserUpdate(),
+      itemType:
+        input.offerType === "TRADE"
+          ? inventory.data?.find((row) => row.id === input.offeredUserItemId)?.item
+              ?.itemType
+          : undefined,
+    }),
+    onSuccess: async (result, _variables, context) => {
       showMutationToast(result);
       if (result.success) {
         setIsOpen(false);
@@ -202,7 +243,8 @@ export function NewOfferDialog({
         await Promise.all([
           utils.auction.getAuctionOffers.invalidate(),
           utils.item.getUserItems.invalidate(),
-          updateUser(result, { revision, delta: result.userDelta }),
+          updateUser(result, { revision: context.revision, delta: result.userDelta }),
+          reconcileCardMoves([context.itemType]),
         ]);
       } else setError(result.message);
     },
@@ -286,6 +328,7 @@ export function NewOfferDialog({
                         value={field.value}
                         onChange={field.onChange}
                         options={requestedOptions}
+                        emptyText={wantedEmpty}
                       />
                     </FormControl>
                     <FormMessage aria-live="polite" />
@@ -351,6 +394,7 @@ export function NewOfferDialog({
                             value={field.value}
                             onChange={field.onChange}
                             options={offeredOptions}
+                            emptyText="No tradeable items found. Kessen cards trade through auctions."
                           />
                         </FormControl>
                         <FormMessage aria-live="polite" />
@@ -426,10 +470,12 @@ function OfferCard({
   const [suppliedId, setSuppliedId] = useState("");
   const [error, setError] = useState("");
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
+  const { reconcileCardMoves } = useKessenCardMoves();
   const refresh = async () => {
     await Promise.all([
       utils.auction.getAuctionOffers.invalidate(),
       utils.item.getUserItems.invalidate(),
+      reconcileCardMoves([offer.requestedItem?.itemType, offer.offeredItem?.itemType]),
     ]);
   };
   const accept = api.auction.acceptAuctionOffer.useMutation({
@@ -595,6 +641,7 @@ function OfferCard({
                       label="Choose your item"
                       value={suppliedId}
                       onChange={setSuppliedId}
+                      emptyText="No matching items found. Kessen cards trade through auctions."
                       options={available.map((row) => ({
                         value: row.id,
                         label: inventoryLabel(row),
@@ -635,14 +682,18 @@ function OfferItemPicker({
   value,
   onChange,
   options,
+  emptyText = "No items found.",
   ...props
 }: Omit<ComponentProps<typeof Button>, "value" | "onChange"> & {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
+  /** Shown when nothing matches the search, e.g. where cards are excluded. */
+  emptyText?: string | ((query: string) => ReactNode);
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
@@ -663,9 +714,15 @@ function OfferItemPicker({
       </PopoverTrigger>
       <PopoverContent className="w-[min(24rem,85vw)] p-0">
         <Command>
-          <CommandInput placeholder="Search items…" />
+          <CommandInput
+            placeholder="Search items…"
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList>
-            <CommandEmpty>No items found.</CommandEmpty>
+            <CommandEmpty>
+              {typeof emptyText === "function" ? emptyText(query) : emptyText}
+            </CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem
@@ -694,7 +751,7 @@ function OfferItemPicker({
 const inventoryLabel = (row: InventoryItem) =>
   `${row.item.name} × ${row.quantity.toLocaleString()} · level ${row.level} · durability ${row.durability} · ${row.id.slice(-5)}`;
 const isOfferInventoryAvailable = (row: InventoryItem) =>
-  row.item.canBeTraded &&
+  isOfferTradeableItem(row.item) &&
   row.quantity > 0 &&
   row.equipped === "NONE" &&
   isEquippableUserItem(row) &&

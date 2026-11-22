@@ -26,14 +26,26 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserDataSelector } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 
-/** A collapsible home for lessons and active quests, opposite the chat launcher. */
+/**
+ * A collapsible home for lessons and active quests, opposite the chat launcher. A
+ * visitor without a character sees it only during a guided lesson, with the lesson's
+ * tab alone.
+ */
 export function ActivityDock({
   children,
   hiddenLesson,
+  guidedLesson,
 }: {
   children: ReactNode;
-  /** Rendered in place of `children` while the lesson is out of view. */
+  /** Rendered while the main tutorial's lesson is out of view. */
   hiddenLesson?: ReactNode;
+  /**
+   * A guided lesson (see `guidedLessonAtom`) is in `children`. It opens on the tutorial
+   * tab, even with the main tutorial off, and the player's collapse or tab choice holds
+   * for that lesson only; the stored dock state is left as it was. A step that awaits
+   * an answer is always shown, over the chat panel too, since the page waits for it.
+   */
+  guidedLesson?: { id: string; awaitsAnswer: boolean };
 }) {
   const { data: user } = useUserDataSelector(selectActivityUser);
   const [chat, setChat] = useAtom(chatPanelAtom);
@@ -46,8 +58,33 @@ export function ActivityDock({
     `activityDockTab:${user?.userId}`,
     isTutorialActive(user) ? "tutorial" : "quests",
   );
-  const tab = storedTab === "tutorial" ? "tutorial" : "quests";
-  const open = storedOpen === true && chat.owner === null;
+  const [guidedView, setGuidedView] = useState<GuidedView | null>(null);
+  const guided = guidedLesson
+    ? guidedView?.lessonId === guidedLesson.id
+      ? guidedView
+      : { lessonId: guidedLesson.id, open: true, tab: "tutorial" as const }
+    : null;
+  const awaitsAnswer = guidedLesson?.awaitsAnswer === true;
+  const tab = awaitsAnswer
+    ? "tutorial"
+    : guided
+      ? guided.tab
+      : storedTab === "tutorial"
+        ? "tutorial"
+        : "quests";
+  const open =
+    awaitsAnswer ||
+    ((guided ? guided.open : storedOpen === true) && chat.owner === null);
+  const changeOpen = (next: boolean) =>
+    guided ? setGuidedView({ ...guided, open: next }) : setOpen(next);
+  const changeTab = (next: string) => {
+    const value = next === "tutorial" ? "tutorial" : "quests";
+    if (guided) setGuidedView({ ...guided, tab: value });
+    else setTab(value);
+  };
+  // The lesson panel is on screen: the main tutorial's, or a guided lesson's.
+  const lessonShown =
+    open && tab === "tutorial" && (!!guided || user?.tutorialOn !== false);
   const panelId = useId();
   const previousTutorialOn = useRef(user?.tutorialOn);
   useEffect(() => {
@@ -58,27 +95,25 @@ export function ActivityDock({
     }
     previousTutorialOn.current = user?.tutorialOn;
   }, [user?.tutorialOn, setOpen, setTab]);
-  if (!user) return null;
+  if (!user && !guided) return null;
 
   return (
     <aside
       data-activity-dock
-      data-battle-focus-layer={
-        open && tab === "tutorial" && user.tutorialOn !== false ? "" : undefined
-      }
+      data-battle-focus-layer={lessonShown ? "" : undefined}
       aria-label="Activity"
       className={cn(
         // The lesson's scroll height leaves room for the portrait above the dock. A dock
         // dodging a highlight rises to just below the top bar, and its portrait steps aside.
         "pointer-events-none fixed bottom-24 z-40 max-w-[calc(100vw-2rem)] [--assistant-portrait-height:min(16rem,24dvh)] md:bottom-5 md:[--assistant-portrait-height:min(24rem,32dvh)] has-[[data-dodge-highlight=true]]:top-20 has-[[data-dodge-highlight=true]]:bottom-auto",
-        open && tab === "tutorial" && user.tutorialOn !== false && "z-[61]",
+        lessonShown && "z-[61]",
         swapSides ? "right-4 md:right-5" : "left-4 md:left-5",
       )}
     >
       {open ? (
         <Tabs
           value={tab}
-          onValueChange={setTab}
+          onValueChange={changeTab}
           id={panelId}
           className="pointer-events-auto relative w-[420px] max-w-[calc(100vw-2rem)] rounded-xl border-2 border-primary/60 bg-card text-card-foreground shadow-xl"
         >
@@ -87,7 +122,7 @@ export function ActivityDock({
               aria-label="Activity"
               className="h-auto w-auto flex-1 justify-start bg-transparent p-0"
             >
-              {(["tutorial", "quests"] as const).map((value) => (
+              {(user ? DOCK_TABS : GUEST_TABS).map((value) => (
                 <TabsTrigger
                   key={value}
                   value={value}
@@ -117,23 +152,25 @@ export function ActivityDock({
               size="icon"
               className="h-9 w-9"
               aria-label="Collapse Activity"
-              onClick={() => setOpen(false)}
+              onClick={() => changeOpen(false)}
             >
               <ChevronDown className="h-4 w-4" />
             </Button>
           </header>
-          <TabsContent
-            value="quests"
-            className="mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain rounded-b-xl"
-          >
-            <ActivityQuests key={user.userId} user={user} />
-          </TabsContent>
+          {user ? (
+            <TabsContent
+              value="quests"
+              className="mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain rounded-b-xl"
+            >
+              <ActivityQuests key={user.userId} user={user} />
+            </TabsContent>
+          ) : null}
           <TabsContent value="tutorial" className="mt-0">
-            {user.tutorialOn === false ? (
+            {user?.tutorialOn === false && !guided ? (
               <p className="p-4 text-sm text-muted-foreground">
                 Tutorial is off.{" "}
                 <Link
-                  className="text-primary underline"
+                  className="text-primary underline dark:text-amber-300"
                   href={`${SETTINGS_HREF}&settings=help&setting=tutorial`}
                 >
                   Open tutorial settings
@@ -154,14 +191,14 @@ export function ActivityDock({
           aria-label="Open Activity"
           onClick={() => {
             setChat((current) => ({ ...current, owner: null, openRequested: false }));
-            setOpen(true);
+            changeOpen(true);
           }}
         >
           <ListChecks className="h-4 w-4" />
           Activity
         </Button>
       )}
-      {!(open && tab === "tutorial") && hiddenLesson}
+      {!(open && tab === "tutorial" && !guided) && hiddenLesson}
     </aside>
   );
 }
@@ -216,7 +253,7 @@ function ActivityQuests({ user }: { user: ActivityUser }) {
       )}
       <Link
         href="/profile"
-        className="inline-block py-2 text-primary text-xs underline"
+        className="inline-block py-2 text-primary text-xs underline dark:text-amber-300"
       >
         Profile &amp; logbook
       </Link>
@@ -281,6 +318,10 @@ function ActivityQuest({
   );
 }
 
+const DOCK_TABS = ["tutorial", "quests"] as const;
+/** A visitor has no quests; the dock holds the guided lesson alone. */
+const GUEST_TABS = ["tutorial"] as const;
+
 /** The dock follows lessons and quests, not money, pools or movement. */
 const selectActivityUser = (user: NonNullable<UserWithRelations>) => ({
   userId: user.userId,
@@ -291,3 +332,6 @@ const selectActivityUser = (user: NonNullable<UserWithRelations>) => ({
 });
 
 type ActivityUser = ReturnType<typeof selectActivityUser>;
+
+/** The dock's open state and tab during one guided lesson. */
+type GuidedView = { lessonId: string; open: boolean; tab: "tutorial" | "quests" };

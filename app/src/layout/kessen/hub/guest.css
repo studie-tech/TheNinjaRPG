@@ -1,0 +1,402 @@
+/*
+ * The guest Card Hall: the banner's pitch, the Academy, Circuit practice and the locked
+ * sections an account opens. It draws in the hall's theme tokens like the rest of the
+ * hall; each section lays itself out against its own width.
+ */
+
+/* The banner's pitch under its title. */
+.kh-hall-lead {
+  max-width: 560px;
+  margin: 0;
+  color: var(--kessen-cream);
+  font-size: 14px;
+  line-height: 1.45;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
+}
+@container kh-hall (min-width: 600px) {
+  .kh-hall-lead {
+    flex-basis: 100%;
+    margin-top: -2px;
+  }
+}
+
+/* The Academy and the Circuit sit side by side once both have room. */
+.kg-columns {
+  display: grid;
+  gap: 12px;
+}
+@container kessen-hall (min-width: 1040px) {
+  .kg-columns {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: start;
+  }
+}
+
+.kg-section {
+  container: kg-section / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+.kg-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.kg-section-icon {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.kg-section-lead {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+.kg-label {
+  margin: 0 0 6px;
+  padding: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ Academy */
+
+.kg-lessons {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@container kg-section (min-width: 560px) {
+  .kg-lessons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container kg-section (min-width: 900px) {
+  .kg-lessons {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.kg-lesson {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.kg-lesson[data-next] {
+  border-color: hsl(var(--primary) / 0.7);
+  background: hsl(var(--muted) / 0.4);
+}
+.kg-lesson-number {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.kg-lesson-number[data-won] {
+  border-color: hsl(var(--success));
+  background: hsl(var(--success));
+  color: hsl(var(--background));
+}
+.kg-lesson-number svg {
+  width: 14px;
+  height: 14px;
+}
+.kg-lesson-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.kg-lesson-idea {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.kg-lesson-start,
+.kg-npc-play {
+  height: 36px;
+  flex-shrink: 0;
+  align-self: center;
+  font-size: 13px;
+}
+@media (pointer: coarse) {
+  .kg-lesson-start,
+  .kg-npc-play {
+    min-height: 44px;
+  }
+}
+
+/* --------------------------------------------------------------- practice */
+
+.kg-factions-wrap {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kg-factions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+@container kg-section (min-width: 640px) {
+  .kg-factions {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.kg-faction {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card));
+  padding: 4px 6px;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.kg-faction:hover {
+  background: hsl(var(--muted) / 0.5);
+}
+.kg-faction:has(input:checked) {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.12);
+  box-shadow: inset 0 0 0 1px hsl(var(--primary));
+}
+.kg-faction:has(input:focus-visible) {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.kg-faction-name {
+  min-width: 0;
+  line-height: 1.15;
+}
+/* Narrow sections set the sigil over the name, so no faction name breaks. */
+@container kg-section (max-width: 479px) {
+  .kg-faction {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 4px;
+    font-size: 12px;
+    text-align: center;
+  }
+}
+.kg-faction-info {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.kg-npcs {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@container kg-section (min-width: 520px) {
+  .kg-npcs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container kg-section (min-width: 860px) {
+  .kg-npcs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.kg-npc {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 8px 10px 8px 12px;
+}
+/* Scoped under the row so it outranks circuit.css's full-size .kh-portrait in either
+   load order. */
+.kg-npc .kg-npc-portrait {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+.kg-npc[data-boss] .kg-npc-portrait {
+  box-shadow:
+    0 0 0 2px #2a0604,
+    0 0 0 4px var(--kessen-forbidden),
+    0 0 0 5px #2a0604,
+    0 0 14px rgb(208 39 29 / 0.55);
+}
+.kg-npc-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.kg-npc-title {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.25;
+}
+.kg-npc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.kg-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+}
+.kg-tier-pips {
+  display: inline-flex;
+  gap: 2px;
+}
+.kg-tier-pips span {
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  border-radius: 9999px;
+  opacity: 0.45;
+}
+.kg-tier-pips span[data-on] {
+  background: currentColor;
+  opacity: 1;
+}
+/* The bosses' tier in the theme's warning red, legible in every colour mode. */
+.kg-tier[data-tier="KAGE"] {
+  color: hsl(var(--destructive));
+}
+.kg-npc-rule {
+  border: 1px solid hsl(var(--border));
+  border-radius: 9999px;
+  padding: 0 7px;
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------- locked */
+
+.kg-locked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kg-locked > li {
+  display: flex;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.kg-locked-tile {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  gap: 10px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.35);
+  padding: 8px 12px;
+  color: inherit;
+  text-decoration: none;
+}
+.kg-locked-tile:hover {
+  border-style: solid;
+  background: hsl(var(--muted) / 0.6);
+}
+.kg-locked-tile:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.kg-locked-icon {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  color: hsl(var(--muted-foreground));
+}
+.kg-locked-icon > svg:first-child {
+  width: 24px;
+  height: 24px;
+}
+.kg-locked-lock {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  width: 13px;
+  height: 13px;
+  border-radius: 9999px;
+  background: hsl(var(--card));
+  padding: 1px;
+  color: hsl(var(--foreground));
+}
+.kg-locked-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.kg-locked-cta {
+  display: block;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.3;
+}
+.kg-locked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The guest note's buttons on the match-end screen. */
+.kg-end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The guest banner's two calls to action lead its row and share it evenly. */
+.kg-hall .kh-hall-actions {
+  flex: 1 1 100%;
+  justify-content: flex-start;
+  margin-left: 0;
+}
+.kg-hall .kh-hall-action {
+  flex: 0 1 auto;
+}
+@container kh-hall (max-width: 599px) {
+  .kg-hall .kh-hall-action {
+    flex: 1 1 100%;
+  }
+}

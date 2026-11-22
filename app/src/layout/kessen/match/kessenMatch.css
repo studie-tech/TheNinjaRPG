@@ -1,0 +1,3566 @@
+/*
+ * Kessen match table: the lacquer war table around the card components, in a frame inside
+ * the page's content box. The table is a `.kessen-scene`, so the game's shared controls
+ * inside it (buttons, tabs, switches, badges, dialogs) draw in the lacquer palette under
+ * every theme. One column at every width (bars, 3 + 3 rows, prompt, hand, actions); the
+ * board sizes its tiles from the space it has and its rows absorb spare height. The frame
+ * is a size container (`km-frame`), so its layouts follow the frame rather than the
+ * window: a frame short of height in landscape puts the hand and actions in a dock beside
+ * the board. All text is px with an 11 px floor. Animations run only under
+ * data-motion="on" and without reduced motion; otherwise state changes are plain fades
+ * or instant. Touch screens get at least 40 px hit areas.
+ */
+
+.kessen-match {
+  /* Room kept free in the bottom-right corner of the docked layouts' edge. */
+  --km-corner: 0px;
+  /* A phone's proportions at the content box's width, no taller than the screen leaves
+     under the content box's title and above the game's bottom navigation, so the whole
+     table is in view once the page scrolls to it. */
+  container: km-frame / size;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 2;
+  min-height: 320px;
+  max-height: min(
+    1000px,
+    calc(100dvh - var(--game-bottom-nav-h, 0px) - var(--km-frame-chrome, 44px))
+  );
+  overflow: hidden;
+  --km-line: rgb(217 180 90 / 0.28);
+  --km-line-strong: rgb(217 180 90 / 0.6);
+  --km-panel: rgb(22 13 8 / 0.92);
+  --km-text-dim: rgb(251 233 192 / 0.72);
+  --km-kw: var(--kessen-vermilion-bright);
+  /* Scores use a serif with unambiguous figures (the display face draws 0 like O). */
+  --km-font-num: var(--kessen-font-num);
+  color: var(--kessen-cream);
+  font-family: var(--kessen-font-body);
+  font-size: 12px;
+  line-height: 1.35;
+  background: var(--kessen-wood);
+  box-shadow: inset 0 0 0 1px var(--kessen-gold-lo);
+}
+:where(.kessen-match) :where(svg) {
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------- layouts */
+
+.km-layout {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+.km-panel-title {
+  margin: 0 0 6px;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.km-panel-hint {
+  margin: 4px 0;
+  color: var(--km-text-dim);
+  font-size: 12px;
+}
+
+.km-main {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  container: km-main / inline-size;
+  background:
+    radial-gradient(90% 60% at 50% 50%, transparent 40%, rgb(6 3 2 / 0.55) 100%),
+    linear-gradient(180deg, rgb(10 6 4 / 0.25), rgb(10 6 4 / 0.45)),
+    var(--km-board-art) center / cover no-repeat,
+    var(--kessen-wood);
+}
+/* The stage (bars and board) and the dock (prompt, hand, actions) only group the table
+   for the short landscape layout; elsewhere their children join the main column. */
+.km-stage,
+.km-dock {
+  display: contents;
+}
+
+/* --------------------------------------------------------------------- bars */
+
+.km-bar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  background:
+    linear-gradient(180deg, rgb(156 42 28 / 0.95), rgb(74 14 10 / 0.97)),
+    var(--kessen-lacquer);
+  box-shadow:
+    inset 0 -1px 0 var(--km-line-strong),
+    inset 0 1px 0 rgb(255 210 150 / 0.18),
+    0 2px 6px rgb(0 0 0 / 0.45);
+}
+.km-bar-them {
+  height: 36px;
+}
+.km-bar-me {
+  height: 30px;
+  background:
+    linear-gradient(180deg, rgb(58 26 14 / 0.96), rgb(26 13 8 / 0.97)),
+    var(--kessen-wood);
+  box-shadow:
+    inset 0 1px 0 var(--km-line-strong),
+    inset 0 -1px 0 rgb(0 0 0 / 0.5);
+}
+.km-bar-name {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 5px;
+}
+.km-bar-title {
+  overflow: hidden;
+  font-family: var(--kessen-font-display);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.km-banked {
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+/* A side that has passed: a stamp hanging from its total, below the number, so it takes
+   no room from the name and the house rule. */
+.km-side-total {
+  position: relative;
+}
+.km-passed {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  z-index: 4;
+  border: 1px solid #f6dc8c;
+  border-radius: 3px;
+  background: var(--kessen-paper);
+  padding: 0 3px;
+  color: var(--kessen-vermilion);
+  font-family: var(--kessen-font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%) rotate(-4deg);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.5);
+}
+.km-bar-them .km-bar-name {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+.km-bar-them .km-bar-title {
+  max-width: 100%;
+  line-height: 1.15;
+}
+/* Under the opponent's name: the house rule in force, a badge. */
+.km-house-chip {
+  max-width: 100%;
+  min-width: 0;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.km-house-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.km-house-line {
+  margin: 0 0 8px;
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.3);
+  padding: 6px 9px;
+  color: var(--kessen-cream);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+.km-house-name {
+  color: var(--kessen-gold-hi);
+  font-weight: 800;
+}
+.km-overlay-head .km-house-line {
+  margin: 8px 0 0;
+}
+.km-portrait {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--kessen-wood-2);
+  box-shadow:
+    0 0 0 1.5px var(--kessen-gold),
+    0 0 6px rgb(255 180 90 / 0.35);
+}
+.km-portrait img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  object-position: 50% 12%;
+}
+.km-lanterns {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 1px;
+}
+.km-lantern {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  transition: filter 400ms ease;
+}
+.km-lantern:not([data-lit]) {
+  filter: grayscale(1) brightness(0.7);
+}
+.km-lantern .kessen-glyph {
+  width: 100%;
+  height: 100%;
+}
+.km-lantern[data-lit] {
+  filter: drop-shadow(0 0 3px rgb(255 180 90 / 0.8));
+}
+.km-count {
+  flex-shrink: 0;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.km-count svg {
+  width: 13px;
+  height: 13px;
+}
+.km-count-back {
+  width: 11px;
+  border-radius: 2px;
+}
+.km-bar-medallion {
+  width: 26px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.km-bar-me .km-bar-medallion {
+  width: 24px;
+}
+.km-side-total {
+  display: inline-grid;
+  min-width: 36px;
+  height: 26px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid var(--kessen-gold);
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 30%, #3a1210, #12060a);
+  padding: 0 6px;
+  color: var(--kessen-gold-hi);
+  font-family: var(--km-font-num);
+  font-weight: 600;
+  font-size: 17px;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+  box-shadow: 0 0 8px rgb(217 180 90 / 0.25);
+}
+.km-bar-me .km-side-total {
+  height: 24px;
+  font-size: 16px;
+}
+
+/* -------------------------------------------------------------------- board */
+
+.km-board {
+  position: relative;
+  display: flex;
+  min-height: 336px;
+  flex: 1 1 0;
+  justify-content: center;
+  padding: 8px 0 4px;
+  container: km-board / size;
+}
+/* Tiles take the smaller of the width and height budgets; a row holding five units
+   shrinks them to fit. The rows then share any spare height, up to a quarter more than a
+   tile, so no empty band opens above or below the board. */
+.km-board-inner {
+  --tile: clamp(34px, min((100cqw - 16px) / 5.7, (100cqh - 78px) / 6.1), 110px);
+  --gap: max(3px, calc(var(--tile) * 0.08));
+  position: relative;
+  display: flex;
+  width: min(100%, max(calc(var(--tile) * 6.42 + 16px), 900px));
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 4px;
+}
+.km-board-note {
+  margin: 4px 0 0;
+  color: var(--km-text-dim);
+  font-size: 12px;
+  text-align: center;
+}
+
+.km-row {
+  position: relative;
+  display: grid;
+  min-height: calc(var(--tile) + 6px);
+  max-height: calc(var(--tile) * 1.25 + 6px);
+  flex: 1 1 0;
+  grid-template-columns: calc(var(--tile) * 0.34) minmax(0, 1fr) calc(var(--tile) * 0.74);
+  align-items: center;
+  border-radius: 7px;
+  padding: 0 3px;
+  /* Dark edges under the glyph rail and the total, the painted board in the middle. */
+  /* The painted table shows through: dark ends under the glyph rail and the total, a
+     light warm tint for the player's side over a shade that keeps the tiles legible. */
+  background:
+    linear-gradient(
+      90deg,
+      rgb(16 8 4 / 0.72),
+      rgb(150 60 24 / 0.12) 16%,
+      rgb(150 60 24 / 0.08) 50%,
+      rgb(150 60 24 / 0.12) 84%,
+      rgb(16 8 4 / 0.72)
+    ),
+    rgb(12 7 4 / 0.3);
+  box-shadow:
+    inset 0 0 0 1px rgb(217 180 90 / 0.24),
+    inset 0 1px 0 rgb(255 230 170 / 0.08),
+    inset 0 -6px 12px rgb(0 0 0 / 0.18);
+  transition:
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.km-row[data-side="them"] {
+  background:
+    linear-gradient(
+      90deg,
+      rgb(8 8 18 / 0.74),
+      rgb(70 80 160 / 0.12) 16%,
+      rgb(70 80 160 / 0.08) 50%,
+      rgb(70 80 160 / 0.12) 84%,
+      rgb(8 8 18 / 0.74)
+    ),
+    rgb(8 8 14 / 0.3);
+  box-shadow:
+    inset 0 0 0 1px rgb(160 170 235 / 0.22),
+    inset 0 1px 0 rgb(210 215 255 / 0.06);
+}
+.km-row::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+  /* Terrain frosts the row's floor and rim; the units on it keep their art. */
+  background:
+    repeating-linear-gradient(60deg, rgb(255 255 255 / 0.07) 0 1px, transparent 1px 9px),
+    repeating-linear-gradient(-60deg, rgb(255 255 255 / 0.05) 0 1px, transparent 1px 11px),
+    linear-gradient(90deg, rgb(150 205 255 / 0.22), rgb(207 232 255 / 0.07), rgb(150 205 255 / 0.22));
+  box-shadow:
+    inset 0 0 0 1.5px rgb(220 240 255 / 0.75),
+    inset 0 0 8px rgb(200 230 255 / 0.4);
+}
+.km-row[data-terrain]::before {
+  opacity: 1;
+}
+.km-row-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  padding: 0;
+  cursor: default;
+}
+.km-row:is([data-state="legal"], [data-state="chosen"], [data-state="target"]) .km-row-hit {
+  cursor: pointer;
+}
+.km-row-hit:focus-visible {
+  outline: 2px solid var(--kessen-gold-hi);
+  outline-offset: 1px;
+}
+.km-rail {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  height: 70%;
+  place-items: center;
+  border-right: 1px solid var(--km-line);
+  color: var(--kessen-gold);
+  font-size: max(12px, calc(var(--tile) * 0.28));
+  pointer-events: none;
+}
+.km-row[data-terrain] .km-rail {
+  color: var(--kessen-frost);
+}
+.km-units {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap);
+  pointer-events: none;
+}
+.km-unit {
+  position: relative;
+  display: block;
+  width: var(--tile);
+  min-width: 0;
+  flex: 0 1 var(--tile);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+.km-unit .kessen-tile {
+  width: 100%;
+}
+/* A unit under Terrain keeps its art, slightly cooled, with a frost badge and rim. */
+.km-unit .kt-terrain {
+  background: none;
+  box-shadow: inset 0 0 0 max(1px, 2cqw) rgb(200 232 255 / 0.7);
+}
+.km-unit[data-frost] .kessen-tile:not([data-sealed]) .kt-art img {
+  filter: saturate(0.75) brightness(0.96);
+}
+/* Inset in the tile's top-left corner, so it never meets the row's edge. */
+.km-unit[data-frost]::before {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  z-index: 4;
+  display: grid;
+  width: clamp(13px, calc(var(--tile) * 0.26), 16px);
+  height: clamp(13px, calc(var(--tile) * 0.26), 16px);
+  place-items: center;
+  border: 1px solid rgb(200 232 255 / 0.9);
+  border-radius: 999px;
+  background: rgb(14 30 52 / 0.94);
+  color: #e3f2ff;
+  content: "\2744";
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+}
+.km-unit:focus-visible {
+  outline: 2px solid var(--kessen-gold-hi);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.km-board-inner[data-picking] .km-unit {
+  pointer-events: none;
+}
+.km-total {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  min-width: calc(var(--tile) * 0.64);
+  height: calc(var(--tile) * 0.48);
+  justify-self: end;
+  place-items: center;
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 30%, #3a1210, #14070a);
+  padding: 0 4px;
+  color: var(--kessen-cream);
+  font-family: var(--km-font-num);
+  font-weight: 600;
+  font-size: max(14px, calc(var(--tile) * 0.3));
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+  pointer-events: none;
+}
+.km-total[data-ghost] {
+  border-color: #2f8a52;
+  color: var(--kessen-up);
+  box-shadow: 0 0 8px rgb(124 242 156 / 0.35);
+}
+.km-total[data-ghost="down"] {
+  border-color: rgb(255 123 107 / 0.7);
+  color: var(--kessen-down);
+  box-shadow: 0 0 8px rgb(255 123 107 / 0.35);
+}
+
+/* Row states while a play is drafted. */
+.km-row[data-state="legal"] {
+  box-shadow:
+    inset 0 0 0 1.5px rgb(246 220 140 / 0.75),
+    0 0 10px rgb(255 190 90 / 0.25);
+}
+.km-row[data-state="chosen"] {
+  box-shadow:
+    inset 0 0 0 2px var(--kessen-gold-hi),
+    0 0 14px rgb(255 190 90 / 0.5);
+}
+.km-row[data-state="target"] {
+  box-shadow:
+    inset 0 0 0 1.5px rgb(150 210 255 / 0.9),
+    0 0 12px rgb(120 200 255 / 0.4);
+}
+/* A row the play changes on its own, such as an automatic Terrain. */
+.km-row[data-state="effect"] {
+  box-shadow: inset 0 0 0 1.5px rgb(150 210 255 / 0.55);
+}
+.km-row[data-state="illegal"] .km-units,
+.km-row[data-state="illegal"] .km-rail,
+.km-row[data-state="illegal"] .km-total {
+  opacity: 0.45;
+}
+.km-row[data-state="illegal"]::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  background: rgb(6 3 2 / 0.32);
+  content: "";
+  pointer-events: none;
+}
+/* The ghost slot stays inside its tile: one short number and one short line. */
+.km-ghost-slot {
+  display: grid;
+  width: var(--tile);
+  min-width: 0;
+  aspect-ratio: 1;
+  flex: 0 1 var(--tile);
+  place-content: center;
+  overflow: hidden;
+  border: 1.5px dashed rgb(246 220 140 / 0.85);
+  border-radius: 8px;
+  background: rgb(246 220 140 / 0.1);
+  padding: 0 2px;
+  text-align: center;
+}
+.km-ghost-slot > span {
+  min-width: 0;
+  max-width: calc(var(--tile) - 6px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.km-ghost-main {
+  color: var(--kessen-up);
+  font-family: var(--km-font-num);
+  font-weight: 600;
+  font-size: clamp(13px, calc(var(--tile) * 0.32), 32px);
+  line-height: 1.05;
+  text-shadow: 0 1px 2px #000;
+}
+.km-ghost-sub {
+  color: var(--km-text-dim);
+  font-size: 11px;
+  line-height: 1.15;
+}
+/* An ability the play cannot use ("Strike: no target") reads as a warning. */
+.km-ghost-slot[data-fizzle] .km-ghost-sub {
+  color: #ffb4a6;
+}
+/* A change to the opponent's total (an Infiltrator) is drawn in their colour. */
+.km-ghost-slot[data-them] {
+  border-color: rgb(255 123 107 / 0.85);
+  background: rgb(255 123 107 / 0.1);
+}
+.km-ghost-slot[data-them] .km-ghost-main {
+  color: var(--kessen-down);
+}
+.km-ghost-slot[data-them] .km-ghost-sub {
+  color: #ffc2b6;
+}
+.km-chosen {
+  display: block;
+  width: var(--tile);
+  min-width: 0;
+  flex: 0 1 var(--tile);
+  border-radius: 9px;
+  opacity: 0.92;
+  outline: 1.5px dashed var(--kessen-gold-hi);
+  outline-offset: 2px;
+}
+/* The sent card stands in its row until the playback places it. */
+.km-chosen[data-sending] {
+  opacity: 1;
+  outline-style: solid;
+  outline-color: rgb(246 220 140 / 0.55);
+}
+/* Inside the chosen row, beside its total, clear of the centre band. */
+.km-row-confirm {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--tile) * 0.74 + 8px);
+  z-index: 4;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  transform: translateY(-50%);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.5);
+}
+/* The lesson's row names sit on a plate over the row's top edge, above the tiles, so a
+   full row never hides the name the coach marks refer to. */
+.km-row-name {
+  position: absolute;
+  top: -5px;
+  left: calc(var(--tile) * 0.34 + 6px);
+  z-index: 4;
+  border: 1px solid var(--km-line);
+  border-radius: 4px;
+  background: rgb(14 8 5 / 0.92);
+  padding: 0 5px;
+  color: var(--kessen-gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 13px;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+/* Row chips sit in the gutter beside the row total, clear of the unit art. */
+.km-row-reason,
+.km-row-outcome {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--tile) * 0.74 + 6px);
+  z-index: 3;
+  max-width: 48%;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.km-row-reason {
+  border: 1px solid rgb(255 123 107 / 0.6);
+  background: rgb(20 8 6 / 0.92);
+  color: var(--kessen-down);
+}
+.km-row-outcome {
+  border: 1px solid rgb(150 210 255 / 0.8);
+  background: rgb(10 20 36 / 0.9);
+  color: #cfe8ff;
+}
+
+/* Labels on tiles: target outcomes, ghost deltas, playback numbers. */
+.km-outcome,
+.km-delta {
+  position: absolute;
+  z-index: 4;
+  border-radius: 999px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.km-outcome {
+  top: -7px;
+  left: 50%;
+  border: 1px solid rgb(150 210 255 / 0.9);
+  background: rgb(10 22 40 / 0.95);
+  color: #e3f2ff;
+  transform: translateX(-50%);
+}
+.km-outcome[data-danger] {
+  border-color: rgb(255 120 100 / 0.9);
+  background: rgb(60 8 6 / 0.95);
+  color: #ffd0c8;
+}
+.km-delta {
+  top: -6px;
+  right: -4px;
+  border: 1px solid currentColor;
+  background: rgb(12 8 6 / 0.92);
+}
+.km-delta[data-sign="up"] {
+  color: var(--kessen-up);
+}
+.km-delta[data-sign="down"] {
+  color: var(--kessen-down);
+}
+.km-float {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  z-index: 5;
+  font-family: var(--km-font-num);
+  font-weight: 600;
+  font-size: max(16px, calc(var(--tile) * 0.36));
+  line-height: 1;
+  pointer-events: none;
+  text-shadow:
+    0 1px 0 #000,
+    0 0 6px rgb(0 0 0 / 0.8);
+  transform: translateX(-50%);
+}
+.km-float[data-kind="damage"] {
+  color: var(--kessen-down);
+}
+.km-float[data-kind="boost"] {
+  color: var(--kessen-up);
+}
+.km-unit[data-fx="destroy"],
+.km-unit[data-fx="purge"],
+.km-unit[data-fx="sweep"],
+.km-unit[data-fx="return"] {
+  opacity: 0.35;
+  transition: opacity 300ms ease;
+}
+
+/* ---------------------------------------------------------------- centre band */
+
+.km-center {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  height: max(28px, calc(var(--tile) * 0.5));
+  margin-block: 3px;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+}
+/* The seam between the two sides: a lacquer strip between two gold lines. */
+.km-center::before {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 8px;
+  border-block: 1px solid rgb(217 180 90 / 0.6);
+  content: "";
+  background: linear-gradient(180deg, var(--kessen-lacquer), var(--kessen-lacquer-deep));
+  box-shadow: 0 0 10px rgb(0 0 0 / 0.55);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  transform: translateY(-50%);
+}
+.km-rounds {
+  position: relative;
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  background: rgb(14 8 5 / 0.9);
+  padding: 4px 7px;
+  box-shadow: 0 0 0 1px var(--km-line);
+}
+.km-round-dot {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--kessen-gold-lo);
+  border-radius: 999px;
+  background: transparent;
+}
+.km-round-dot[data-state="now"] {
+  border-color: var(--kessen-gold-hi);
+  box-shadow: 0 0 6px rgb(255 190 90 / 0.8);
+}
+.km-round-dot[data-state="won"] {
+  border-color: var(--kessen-gold-hi);
+  background: radial-gradient(circle at 35% 35%, #fff2b8, #d9b45a 60%, #8a6420);
+}
+.km-round-dot[data-state="lost"] {
+  border-color: #ff8b78;
+  background: radial-gradient(circle at 35% 35%, #ff9a85, #b7331f 60%, #5a0f08);
+}
+.km-round-dot[data-state="tie"] {
+  border-color: #b6bac2;
+  background: #5a5e66;
+}
+/* Hand sizes, a dark lacquer chip in body type with a "Hand" label, so it never reads
+   as the score or competes with the paper "need" chip beside it. */
+.km-edge-badge {
+  position: relative;
+  display: inline-flex;
+  justify-self: center;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  background: rgb(14 8 5 / 0.9);
+  padding: 3px 9px;
+  color: var(--kessen-cream);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1px var(--km-line);
+}
+.km-edge-label {
+  color: var(--kessen-gold);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.km-edge-card {
+  width: 10px;
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+.km-edge-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* What the round needs, as a smaller paper chip beside the edge badge: the words in ink,
+   the number in score figures. */
+.km-need {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: baseline;
+  justify-self: end;
+  gap: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #fbf1d9, #e9d3a1);
+  padding: 3px 8px 4px;
+  color: var(--kessen-paper-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+  box-shadow:
+    0 1px 0 #c9ab6d,
+    0 2px 0 #b8975a,
+    0 3px 5px rgb(0 0 0 / 0.45);
+}
+.km-need-lead {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.km-need-count {
+  flex-shrink: 0;
+  color: var(--kessen-lacquer);
+  font-family: var(--km-font-num);
+  font-size: 14px;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 700;
+}
+/* Narrow boards give the centre band side gutters, so the chip ends inside the table's
+   edge. */
+@container km-board (max-width: 559px) {
+  .km-center {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding-inline: 12px;
+  }
+  .km-edge-badge {
+    max-width: 100%;
+    min-width: 0;
+  }
+  /* The "Hand" label carries the meaning here; the glyph gives its room to the name. */
+  .km-edge-card {
+    display: none;
+  }
+}
+
+/* ----------------------------------------------------------- prompt and hand */
+
+.km-prompt {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-height: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background:
+    linear-gradient(180deg, rgb(255 220 160 / 0.06), transparent 40%),
+    linear-gradient(180deg, #2a140c, #160a06);
+  color: var(--kessen-cream);
+  font-size: 13px;
+  box-shadow:
+    inset 0 1px 0 var(--km-line-strong),
+    inset 0 -1px 0 rgb(0 0 0 / 0.55);
+}
+.km-prompt[data-tone="facts"] {
+  justify-content: center;
+  color: var(--kessen-gold-hi);
+  font-weight: 600;
+  text-align: center;
+}
+.km-prompt[data-tone="error"] {
+  box-shadow:
+    inset 3px 0 0 var(--kessen-vermilion-bright),
+    inset 0 1px 0 var(--km-line-strong);
+  color: #ffc2b6;
+  font-weight: 600;
+}
+.km-prompt-body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.km-prompt-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+.km-prompt-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 6px;
+  align-items: baseline;
+}
+.km-prompt-name {
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 15px;
+  white-space: nowrap;
+}
+.km-prompt-instruction {
+  overflow: hidden;
+  color: var(--km-text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.km-prompt-text {
+  grid-column: 1 / -1;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.km-prompt .kessen-kw {
+  color: var(--km-kw);
+  font-weight: 700;
+}
+/* The narrowest phones keep Hand and Log as icons, so Pass keeps room for its label. */
+@container km-main (max-width: 400px) {
+  .km-action-square span {
+    display: none;
+  }
+  .km-pass-wrap {
+    min-width: 96px;
+  }
+}
+/* Narrow strips give the instruction its own line instead of cutting it off. */
+@container km-main (max-width: 559px) {
+  .km-prompt-instruction {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+  .km-prompt-text {
+    -webkit-line-clamp: 1;
+  }
+}
+
+/* The hand's card size and overlap are lengths resolved once on the list, so the slots
+   and name lines inside it read the same numbers. */
+@property --hand-card {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 60px;
+}
+@property --hand-overlap {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+@property --hand-gap {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 14px;
+}
+.km-hand-wrap {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, rgb(20 12 8 / 0.94), rgb(12 7 5 / 0.97));
+  container: km-handwrap / inline-size;
+}
+.km-hand {
+  --hand-card: 60px;
+  --hand-overlap: 0px;
+  /* Height of the two name lines under cards too narrow for their name banner. */
+  --name-line: 26px;
+  display: flex;
+  margin: 0;
+  list-style: none;
+}
+.km-hand[data-layout="strip"] {
+  position: relative;
+  height: calc(var(--hand-card) * 1.4 + 18px + var(--name-line));
+  align-items: flex-start;
+  justify-content: safe center;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  padding: 8px 8px 4px;
+  scroll-padding-inline: 8px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+.km-hand[data-layout="grid"] {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px 12px;
+  padding: 4px 2px 8px;
+}
+.km-hand[data-empty] {
+  display: grid;
+  place-items: center;
+}
+.km-hand-empty {
+  margin: 0;
+  color: var(--km-text-dim);
+  font-size: 12px;
+}
+.km-hand-slot {
+  position: relative;
+  flex: 0 0 var(--hand-card);
+  scroll-snap-align: start;
+  container: km-slot / inline-size;
+}
+/* A card past the strip's edge peeks out under a fade. */
+.km-hand-scroll {
+  position: relative;
+}
+.km-hand-scroll[data-more-end] .km-hand {
+  mask-image: linear-gradient(90deg, #000 calc(100% - 36px), rgb(0 0 0 / 0.25));
+}
+.km-hand-scroll[data-more-start] .km-hand {
+  mask-image: linear-gradient(90deg, transparent, #000 24px);
+}
+.km-hand-scroll[data-more-start][data-more-end] .km-hand {
+  mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 36px), rgb(0 0 0 / 0.25));
+}
+/* Two balanced lines that break only between words, reaching 1 px into the 12 px gap on
+   each side, so neighbouring names keep 10 px clear; a word too long even so ends in an
+   ellipsis instead of splitting. */
+.km-card-name {
+  display: -webkit-box;
+  max-height: 24px;
+  overflow: hidden;
+  margin: 2px -1px 0;
+  color: var(--kessen-cream);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 12px;
+  text-align: center;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+/* Where the next card overlaps, the name wraps inside the part left in view. */
+.km-hand-slot .km-card-name {
+  margin-right: calc(var(--hand-overlap) - 1px);
+}
+@container km-slot (min-width: 90px) {
+  .km-card-name {
+    display: none;
+  }
+}
+.km-hand[data-layout="grid"] .km-hand-slot {
+  min-width: 0;
+}
+.km-hand-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  transition: transform 160ms ease;
+}
+.km-hand-card[data-selected] {
+  transform: translateY(-5px);
+}
+.km-hand-card[data-selected] .kessen-card {
+  filter: drop-shadow(0 0 3px #fff0c0) drop-shadow(0 0 8px rgb(255 190 90 / 0.95));
+}
+.km-hand-card[data-target] .kessen-card {
+  filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 7px rgb(120 200 255 / 0.95));
+}
+.km-hand-card[data-pending] {
+  opacity: 0.55;
+}
+/* A card that can do nothing now stays selectable (its reason shows in the prompt) but
+   steps back, with the gist of the reason stamped across it. */
+.km-hand-card[data-blocked]:not([data-selected]) .kessen-card {
+  filter: grayscale(0.55) brightness(0.62);
+}
+.km-hand-block {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  z-index: 2;
+  max-width: calc(100% + 6px);
+  overflow: hidden;
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 3px;
+  background: rgb(20 10 6 / 0.92);
+  padding: 1px 3px;
+  letter-spacing: -0.02em;
+  color: var(--kessen-cream);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%) rotate(-8deg);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.6);
+}
+.km-hand-card:focus-visible {
+  outline: 2px solid var(--kessen-gold-hi);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.km-hand-face {
+  width: 100%;
+}
+
+/* ------------------------------------------------------------------ actions */
+
+.km-actions {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 6px max(8px, var(--km-corner)) calc(6px + env(safe-area-inset-bottom, 0px)) 8px;
+  background: linear-gradient(180deg, #1c0f0a, #0d0705);
+  box-shadow: inset 0 1px 0 var(--km-line);
+}
+/* Leader, Hand, Log and Rules: dark lacquer keys in a gold-brown rim. */
+.kessen-match .km-action {
+  flex-shrink: 0;
+  height: 36px;
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #3d1c11, #1d0e09);
+  color: var(--kessen-cream);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgb(255 220 160 / 0.12);
+}
+.kessen-match .km-action:hover:not(:disabled) {
+  border-color: var(--kessen-gold-hi);
+  background: linear-gradient(180deg, #4a2214, #22100a);
+}
+.kessen-match .km-action[aria-pressed="true"] {
+  border-color: var(--kessen-gold-hi);
+  box-shadow:
+    0 0 0 1px var(--kessen-gold-hi),
+    0 0 10px rgb(255 190 90 / 0.6);
+}
+.km-action-square {
+  min-width: 40px;
+  padding-inline: 9px;
+}
+/* Behind a round result the dock's buttons step away; the result carries Continue. */
+.km-main[data-covered] .km-actions > *,
+.km-main[data-covered] .km-prompt > * {
+  visibility: hidden;
+}
+.km-pass-wrap {
+  position: relative;
+  display: flex;
+  min-width: 112px;
+  flex: 1 1 auto;
+  margin-right: 4px;
+}
+/* Pass: the table's primary control. Its long label ("End round, keep 6 cards") wraps
+   to two lines instead of being cut off. */
+.km-btn-pass {
+  position: relative;
+  min-width: 0;
+  height: auto;
+  min-height: 36px;
+  flex-wrap: wrap;
+  column-gap: 0.3em;
+  row-gap: 0;
+  overflow: hidden;
+  padding: 3px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+}
+/* Pass is the table's primary control: dark lacquer inside a gold rim, in the display
+   face; the armed second tap lights it and counts down along its foot. */
+.kessen-match .km-btn-pass {
+  border: 1px solid var(--kessen-gold);
+  background:
+    linear-gradient(180deg, rgb(255 220 160 / 0.1), transparent 45%),
+    linear-gradient(180deg, #5a1d12, #230c07 78%);
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.6);
+  box-shadow:
+    inset 0 1px 0 rgb(255 220 160 / 0.2),
+    0 0 0 1px rgb(20 8 4 / 0.8),
+    0 0 0 2px rgb(217 180 90 / 0.3),
+    0 2px 5px rgb(0 0 0 / 0.5);
+}
+.kessen-match .km-btn-pass:hover:not(:disabled) {
+  border-color: var(--kessen-gold-hi);
+  background:
+    linear-gradient(180deg, rgb(255 220 160 / 0.14), transparent 45%),
+    linear-gradient(180deg, #6c2415, #2c0f08 78%);
+}
+.kessen-match .km-btn-pass[data-armed] {
+  border-color: var(--kessen-gold-hi);
+  background:
+    linear-gradient(180deg, rgb(255 220 160 / 0.16), transparent 50%),
+    linear-gradient(180deg, #8a2a18, #3a1009 80%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 220 160 / 0.3),
+    0 0 0 2px var(--kessen-gold-hi),
+    0 0 14px rgb(255 190 90 / 0.55);
+}
+.kessen-match .km-btn-pass[data-long] {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+.km-pass-main,
+.km-pass-sub {
+  white-space: nowrap;
+}
+.km-pass-count {
+  font-family: var(--km-font-num);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.km-pass-timer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--kessen-gold-hi);
+  transform-origin: left center;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------ sheets, panels */
+
+/* Sheets cover the whole table: the table dims behind them and a tap on the dimmed
+   table closes the top sheet. They stack in one cell, centred, as wide as the table
+   allows up to a reading width, and as tall as their content needs. */
+.km-sheet-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+}
+.km-sheet-scrim {
+  grid-area: 1 / 1;
+  align-self: stretch;
+  justify-self: stretch;
+  margin: -10px;
+  border: 0;
+  background: rgb(6 3 2 / 0.62);
+  backdrop-filter: blur(1.5px);
+  cursor: default;
+}
+.km-sheet {
+  position: relative;
+  grid-area: 1 / 1;
+  z-index: 1;
+  display: flex;
+  width: min(100%, 680px);
+  max-height: 100%;
+  flex-direction: column;
+  border: 1px solid rgb(138 100 32 / 0.85);
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 70% at 0% 0%, rgb(255 180 90 / 0.08), transparent 55%),
+    radial-gradient(90% 60% at 100% 100%, rgb(156 42 28 / 0.14), transparent 60%),
+    linear-gradient(180deg, #24150d, #120a06);
+  padding: 8px 10px 10px;
+  box-shadow:
+    0 12px 30px rgb(0 0 0 / 0.7),
+    inset 0 1px 0 rgb(246 220 140 / 0.18),
+    inset 0 0 0 1px rgb(0 0 0 / 0.5);
+}
+.km-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.km-sheet-head .km-panel-title {
+  margin: 0;
+}
+.km-sheet-body {
+  margin-top: 8px;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.km-inspect {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.km-inspect-face {
+  width: clamp(150px, min(56cqw, 40cqh), 260px);
+  flex-shrink: 0;
+}
+/* The inspect sheet sets the card beside its facts, so the whole card reads without
+   scrolling; only the narrowest frames stack them. */
+@container km-frame (min-width: 340px) {
+  .km-sheet .km-inspect:has(> .km-inspect-face) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    justify-items: start;
+    gap: 8px clamp(10px, 3cqw, 18px);
+  }
+  .km-sheet .km-inspect > .km-inspect-face {
+    width: clamp(120px, min(38cqw, (100cqh - 120px) / 1.42), 250px);
+  }
+}
+.km-inspect-leader {
+  width: 100%;
+}
+.km-facts {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+.km-facts p {
+  margin: 0;
+}
+.km-facts-meta {
+  color: var(--kessen-gold);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.km-facts-part {
+  white-space: nowrap;
+}
+.km-facts-place {
+  color: var(--km-text-dim);
+  font-size: 12px;
+}
+.km-facts-power {
+  font-size: 13px;
+  font-weight: 600;
+}
+.km-facts-now {
+  color: var(--kessen-gold-hi);
+  font-family: var(--km-font-num);
+  font-size: 20px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.km-facts-base {
+  color: var(--km-text-dim);
+  font-size: 12px;
+  font-weight: 500;
+}
+.km-facts-rules {
+  border-left: 2px solid var(--kessen-gold-lo);
+  padding-left: 8px;
+  font-size: 13px;
+}
+.km-facts-rules .kessen-kw {
+  color: var(--km-kw);
+  font-weight: 700;
+}
+.km-facts-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.km-facts-chips li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+.km-chip-text {
+  color: var(--km-text-dim);
+}
+.km-glossary-list {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.km-glossary-list .kessen-kw {
+  color: var(--km-kw);
+  font-weight: 700;
+}
+/* How the opponent's Terrain reaches when it differs from the player's. */
+.km-glossary-aside {
+  display: block;
+  margin-top: 2px;
+  color: var(--km-text-dim);
+}
+
+.km-log {
+  font-size: 12px;
+}
+.km-log-rounds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.km-log-rounds li {
+  border: 1px solid var(--km-line);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.km-log-rounds li[data-outcome="won"] {
+  border-color: var(--kessen-gold);
+  color: var(--kessen-gold-hi);
+}
+.km-log-rounds li[data-outcome="lost"] {
+  border-color: rgb(255 123 107 / 0.6);
+  color: var(--kessen-down);
+}
+.km-log-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+  padding: 14px 8px;
+  border: 1px dashed var(--km-line);
+  border-radius: 10px;
+  color: var(--km-text-dim);
+  font-size: 12px;
+  text-align: center;
+}
+.km-log-empty svg {
+  width: 26px;
+  height: 26px;
+  color: var(--kessen-gold);
+}
+.km-log-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.km-log-lines li {
+  border-bottom: 1px solid rgb(217 180 90 / 0.12);
+  padding: 2px 0 3px;
+  color: rgb(251 233 192 / 0.9);
+}
+.km-log-lines li:last-child {
+  color: var(--kessen-cream);
+  font-weight: 600;
+}
+
+.km-discards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.km-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.km-grid-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.km-grid-card .kessen-card {
+  width: 100%;
+}
+.km-grid-card:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.km-grid-card .km-outcome {
+  top: auto;
+  bottom: -6px;
+}
+.km-picker {
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 6px;
+}
+
+.km-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* -------------------------------------------------------------- overlays */
+
+.km-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 12px max(16px, var(--km-corner));
+  background:
+    radial-gradient(80% 60% at 50% 40%, rgb(107 20 16 / 0.35), transparent 70%),
+    #0a0604;
+  text-align: center;
+}
+/* The round result dims and softens the whole table behind it, the bars, hand and
+   actions as much as the rows. */
+.km-round-end {
+  z-index: 25;
+  background:
+    radial-gradient(80% 50% at 50% 45%, rgb(8 4 3 / 0.7), rgb(8 4 3 / 0.84));
+  backdrop-filter: blur(2px) brightness(0.6);
+}
+.km-overlay-head {
+  max-width: 520px;
+}
+.km-eyebrow {
+  margin: 0;
+  color: var(--kessen-gold);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.km-overlay-title {
+  margin: 2px 0 4px;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 26px;
+}
+.km-overlay-sub {
+  margin: 0;
+  color: var(--km-text-dim);
+  font-size: 12px;
+}
+.km-overlay-hint {
+  margin: 4px 0 0;
+  color: var(--kessen-gold);
+  font-size: 11px;
+  font-weight: 700;
+}
+.km-overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.km-overlay-error {
+  margin: 0;
+  border-radius: 6px;
+  background: rgb(60 8 6 / 0.9);
+  padding: 4px 10px;
+  color: #ffd0c8;
+  font-size: 12px;
+}
+.km-mulligan {
+  justify-content: flex-start;
+}
+/* Five to a line; a short last line is centred under the others. */
+.km-mull-grid {
+  --mull-cols: 5;
+  --mull-gap: 6px;
+  display: flex;
+  width: min(100%, 700px);
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--mull-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.km-mull-slot {
+  min-width: 0;
+  flex: 0 0 calc((100% - var(--mull-gap) * (var(--mull-cols) - 1)) / var(--mull-cols));
+  container: km-slot / inline-size;
+}
+.km-mull-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+.km-mull-card .kessen-card {
+  width: 100%;
+  transition:
+    filter 160ms ease,
+    opacity 160ms ease;
+}
+.km-mull-card[data-focus] .kessen-card {
+  filter: drop-shadow(0 0 4px rgb(255 220 150 / 0.9));
+}
+.km-mull-card[data-replace] .kessen-card {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+.km-mull-mark {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  border: 1px solid #ffd0c8;
+  border-radius: 3px;
+  background: var(--kessen-vermilion);
+  padding: 1px 5px;
+  color: #fff4ec;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transform: translateX(-50%) rotate(-10deg);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.6);
+}
+.km-mull-detail {
+  width: min(100%, 520px);
+  height: 84px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--km-line);
+  border-radius: 8px;
+  background: var(--km-panel);
+  padding: 6px 10px;
+  color: var(--kessen-cream);
+  font-size: 12px;
+  text-align: left;
+}
+.km-mull-detail p {
+  margin: 0;
+}
+.km-mull-gloss {
+  margin-top: 3px !important;
+  color: var(--km-text-dim);
+  font-size: 12px;
+}
+.km-mull-limit {
+  margin-bottom: 3px !important;
+  color: #ffc2b6;
+  font-weight: 700;
+}
+.km-mull-detail .kessen-kw {
+  color: var(--kessen-vermilion-bright);
+  font-weight: 700;
+}
+/* Keep and Replace sit directly under the reading area and stick to the bottom edge
+   only while the hand is taller than the screen. */
+.km-mull-actions {
+  position: sticky;
+  bottom: calc(-1 * max(16px, var(--km-corner)));
+  z-index: 2;
+  width: calc(100% + 24px);
+  margin: 0 -12px calc(-1 * max(16px, var(--km-corner)));
+  padding: 6px 12px max(12px, var(--km-corner));
+  background: linear-gradient(180deg, rgb(10 6 4 / 0), #0a0604 14px);
+}
+
+/* Wider tables centre the mulligan and keep Keep and Replace directly under the reading
+   area, at full button size. */
+@container km-main (min-width: 560px) {
+  .km-mulligan {
+    justify-content: safe center;
+  }
+  .km-mull-detail {
+    height: auto;
+    min-height: 84px;
+    max-height: 132px;
+    font-size: 13px;
+  }
+  .km-mull-actions {
+    position: static;
+    width: auto;
+    margin: 2px 0 0;
+    padding: 0;
+    background: none;
+  }
+}
+
+/* Tall, narrow frames give the ten mulligan cards four larger columns. */
+@container km-frame (max-width: 559px) and (min-height: 700px) {
+  .km-mull-grid {
+    --mull-cols: 4;
+    width: min(100%, 420px);
+    row-gap: 8px;
+  }
+}
+
+/* Brush banner of round and match ends: gold for a win, crimson ink for a loss, wood
+   for a tie or an unfinished match. */
+.km-brush-banner {
+  position: relative;
+  width: min(100%, 460px);
+  padding: 14px 26px 12px;
+  background:
+    radial-gradient(120% 140% at 50% 50%, transparent 55%, rgb(80 50 10 / 0.35)),
+    linear-gradient(180deg, #f6dc8c, #d9b45a 55%, #8a6420);
+  clip-path: polygon(
+    2% 18%, 8% 6%, 22% 10%, 38% 2%, 55% 8%, 72% 1%, 88% 9%, 98% 4%, 100% 30%,
+    97% 52%, 100% 76%, 95% 96%, 80% 90%, 62% 99%, 45% 92%, 28% 100%, 12% 92%, 1% 97%,
+    3% 72%, 0 48%
+  );
+  color: #2a1208;
+}
+.km-brush-banner h2 {
+  text-shadow: 0 1px 0 rgb(255 240 200 / 0.55);
+}
+.km-overlay[data-outcome="lost"] .km-brush-banner {
+  background:
+    radial-gradient(120% 140% at 50% 50%, transparent 55%, rgb(0 0 0 / 0.45)),
+    linear-gradient(180deg, var(--kessen-lacquer-hi), var(--kessen-lacquer-deep) 70%, var(--kessen-ink));
+  color: var(--kessen-cream);
+}
+.km-overlay:is([data-outcome="tie"], [data-outcome="draw"], [data-outcome="expired"], [data-outcome="conceded"])
+  .km-brush-banner {
+  background:
+    radial-gradient(120% 140% at 50% 50%, transparent 55%, rgb(0 0 0 / 0.4)),
+    linear-gradient(180deg, #5a3520, var(--kessen-wood-2));
+  color: var(--kessen-cream);
+}
+.km-overlay:is([data-outcome="lost"], [data-outcome="tie"], [data-outcome="draw"], [data-outcome="expired"], [data-outcome="conceded"])
+  .km-brush-banner
+  h2 {
+  text-shadow: 0 2px 0 rgb(0 0 0 / 0.45);
+}
+.km-brush-banner h2 {
+  margin: 0;
+  font-family: var(--kessen-font-display);
+  font-size: 28px;
+  letter-spacing: 0.04em;
+}
+.km-brush-banner[data-size="large"] h2 {
+  font-size: 38px;
+}
+/* The deciding round's banner adds the match result on its own line. */
+.km-brush-match {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.62em;
+  letter-spacing: 0.06em;
+}
+.km-brush-score {
+  margin: 2px 0 0;
+  font-family: var(--km-font-num);
+  font-weight: 600;
+  font-size: 22px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.km-brush-unit {
+  font-family: var(--kessen-font-body);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.km-brush-line {
+  margin: 6px 0 0;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.km-badge-comeback {
+  display: inline-block;
+  margin: 6px 0 0;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 2px 12px;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.km-lantern-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  background: rgb(14 8 5 / 0.92);
+  padding: 4px 14px;
+  color: var(--km-text-dim);
+  font-size: 12px;
+  box-shadow: 0 0 0 1px var(--km-line);
+}
+.km-lantern-row .km-lantern {
+  width: 26px;
+  height: 26px;
+}
+/* The paper of the bark and glossary: a gold hairline and a soft shadow. */
+.km-summary-card {
+  width: min(100%, 440px);
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--kessen-paper), var(--kessen-parchment));
+  padding: 10px 12px;
+  color: var(--kessen-paper-ink);
+  font-size: 14px;
+  text-align: left;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.55);
+}
+.km-summary-card p {
+  margin: 0 0 4px;
+}
+.km-summary-card p:last-child {
+  margin-bottom: 0;
+}
+.km-summary-verdict {
+  color: var(--kessen-paper-ink);
+  font-family: var(--kessen-font-display);
+  font-size: 15px;
+}
+.km-bark {
+  max-width: 440px;
+  margin: 0;
+  color: inherit;
+  font-size: 13px;
+  font-style: italic;
+}
+.km-bark-name {
+  font-style: normal;
+  font-weight: 800;
+}
+.km-overlay > .km-bark {
+  color: var(--km-text-dim);
+}
+
+/* Match end over the dimmed board: one stack on one centre axis (the opponent's round
+   medallion, the banner overlapping it, their line, the rounds, the rewards, then the
+   actions directly below), centred in the table and clear of the bottom safe area. */
+.km-match-end {
+  justify-content: safe center;
+  gap: 0;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px), var(--km-corner));
+  background:
+    radial-gradient(90% 70% at 50% 40%, rgb(10 6 4 / 0.55), rgb(10 6 4 / 0.9) 80%),
+    rgb(10 6 4 / 0.35);
+  backdrop-filter: blur(3px) saturate(0.85);
+}
+.km-end-stack {
+  display: flex;
+  width: min(100%, 640px);
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.km-end-story,
+.km-end-claim {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.km-end-hero {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+/* The round painted portrait of the Circuit and the opponent sheet. */
+.km-end-medallion {
+  position: relative;
+  z-index: 0;
+  display: block;
+  width: 104px;
+  height: 104px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 35%, #5a2a18, #1a0c06);
+  box-shadow:
+    0 0 0 2px #2a1a06,
+    0 0 0 4px var(--kessen-gold),
+    0 0 0 5px #2a1a06,
+    0 6px 16px rgb(0 0 0 / 0.65);
+}
+.km-end-medallion img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  object-position: 50% 18%;
+  transform: scale(1.35);
+  transform-origin: 50% 12%;
+}
+.km-match-end[data-outcome="won"] .km-end-medallion img {
+  filter: saturate(0.75) brightness(0.88);
+}
+.km-end-hero .km-brush-banner {
+  position: relative;
+  z-index: 1;
+  margin-top: -12px;
+}
+.km-end-bark {
+  max-width: 420px;
+  border: 1px solid var(--km-line);
+  border-radius: 10px;
+  background: rgb(14 8 5 / 0.88);
+  padding: 6px 12px;
+  color: var(--kessen-cream);
+  font-size: 13px;
+}
+.km-end-actions {
+  width: 100%;
+  margin-top: 2px;
+}
+.km-end-rounds {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.km-end-rounds li {
+  display: flex;
+  min-width: 82px;
+  flex-direction: column;
+  border: 1px solid var(--km-line);
+  border-radius: 8px;
+  background: rgb(14 8 5 / 0.88);
+  padding: 5px 8px;
+}
+.km-end-rounds li[data-outcome="won"] {
+  border-color: var(--kessen-gold);
+}
+.km-end-rounds li[data-outcome="lost"] {
+  border-color: rgb(255 123 107 / 0.55);
+}
+.km-end-score {
+  font-family: var(--km-font-num);
+  font-weight: 600;
+  font-size: 18px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.km-rewards {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+/* The result's rewards on the lacquer panel of the side columns. */
+.km-reward-box {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid rgb(138 100 32 / 0.85);
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 70% at 0% 0%, rgb(255 180 90 / 0.1), transparent 55%),
+    radial-gradient(90% 60% at 100% 100%, rgb(156 42 28 / 0.18), transparent 60%),
+    linear-gradient(180deg, #24150d, #120a06);
+  padding: 10px 14px;
+  text-align: left;
+  box-shadow:
+    inset 0 1px 0 rgb(246 220 140 / 0.22),
+    0 6px 18px rgb(0 0 0 / 0.45);
+}
+.km-reward-title {
+  margin: 0;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.km-reward-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+.km-reward-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--kessen-cream);
+  font-size: 14px;
+}
+.km-reward-line strong {
+  color: var(--kessen-gold-hi);
+}
+.km-reward-line svg {
+  width: 18px;
+  height: 18px;
+  color: var(--kessen-gold);
+}
+/* A rating change's arrow: green when the rating rose, red when it fell. */
+.km-reward-line svg[data-trend="up"] {
+  color: var(--kessen-up);
+}
+.km-reward-line svg[data-trend="down"] {
+  color: var(--kessen-down);
+}
+/* Why the match paid no ryo or drops: a bordered note, never fine print. */
+.km-reward-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--km-line-strong);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.3);
+  padding: 8px 12px;
+  color: var(--kessen-cream);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+}
+.km-reward-note svg {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--kessen-gold);
+}
+.km-reward-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.km-reward-card,
+.km-reward-pack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  perspective: 900px;
+}
+.km-reward-card figcaption,
+.km-reward-pack figcaption {
+  color: var(--km-text-dim);
+  font-size: 12px;
+}
+.km-reward-pack img {
+  width: 90px !important;
+  height: auto !important;
+  border-radius: 6px;
+}
+.km-reward-hit {
+  display: block;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  padding: 0;
+}
+.km-reward-hit,
+.km-choice-card {
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  transition: transform 160ms ease;
+}
+.km-reward-hit:focus-visible,
+.km-choice-card:focus-visible {
+  outline: 2px solid var(--kessen-gold-hi);
+  outline-offset: 3px;
+}
+.km-reward-hit[data-reading] .kessen-card,
+.km-choice-card[data-reading]:not([data-selected]) .kessen-card {
+  filter: drop-shadow(0 0 4px rgb(255 220 150 / 0.8));
+}
+.km-flip {
+  display: grid;
+  width: 120px;
+  transform: rotateY(180deg);
+  transform-style: preserve-3d;
+}
+.km-flip > * {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+}
+.km-flip-front {
+  transform: rotateY(180deg);
+}
+/* A first-win pick: a tap selects (lifted, gold glow), "Take <card>" claims. */
+.km-choice {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.km-choice-title {
+  margin: 0;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 18px;
+}
+.km-choice-hint {
+  margin: 2px 0 0;
+  color: var(--km-text-dim);
+  font-size: 12px;
+}
+/* An option: a lacquer frame that lights gold once selected. */
+.km-choice-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 2px solid var(--km-line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #24150d, #120a06);
+  padding: 6px;
+  color: var(--km-text-dim);
+  font-size: 12px;
+}
+.km-choice-card:hover:not(:disabled) {
+  border-color: var(--kessen-gold);
+}
+.km-choice-card[data-selected] {
+  border-color: var(--kessen-gold-hi);
+  color: var(--kessen-gold-hi);
+  font-weight: 700;
+  box-shadow: 0 0 12px rgb(255 190 90 / 0.55);
+}
+.km-choice-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.km-choice-mark > span {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+.km-choice-card[data-selected] .km-choice-mark > span {
+  background: var(--kessen-gold-hi);
+  color: var(--kessen-paper-ink);
+}
+/* The top padding clears the selected card's lift from the heading. */
+.km-choice-grid {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 10px 0 0;
+}
+.km-choice-grid > .km-choice-card {
+  width: 140px;
+}
+.km-choice-card .kessen-card {
+  width: 100%;
+  transition: filter 160ms ease;
+}
+.km-choice-card[data-selected] {
+  transform: translateY(-6px);
+}
+.km-choice-card[data-selected] .kessen-card {
+  filter: drop-shadow(0 0 3px #fff0c0) drop-shadow(0 0 10px rgb(255 190 90 / 0.95));
+}
+.km-choice-card:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.km-choice-take {
+  min-width: 200px;
+  height: 44px;
+  padding: 0 18px;
+  font-size: 15px;
+}
+.km-end-hint {
+  margin: 0;
+  color: var(--km-text-dim);
+  font-size: 12px;
+}
+/* The card being read on the end screen. */
+.km-end-detail {
+  width: min(100%, 520px);
+  border: 1px solid var(--km-line);
+  border-radius: 8px;
+  background: var(--km-panel);
+  padding: 8px 12px;
+  color: var(--kessen-cream);
+  font-size: 13px;
+  text-align: left;
+}
+.km-end-detail p {
+  margin: 0;
+}
+.km-end-detail .kessen-kw {
+  color: var(--km-kw);
+  font-weight: 700;
+}
+
+.km-bigplay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 15;
+  border: 3px double #ffe2d8;
+  border-radius: 6px;
+  background: rgb(183 51 31 / 0.92);
+  padding: 4px 14px;
+  color: #fff4ec;
+  font-family: var(--kessen-font-display);
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  text-transform: uppercase;
+  transform: translate(-50%, -50%) rotate(-8deg);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.6);
+}
+.km-bigplay[data-side="them"] {
+  background: rgb(11 11 16 / 0.92);
+}
+.km-bigplay-swing {
+  font-size: 18px;
+}
+.km-bigplay[data-kind="round"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-color: var(--kessen-gold-hi);
+  background: linear-gradient(180deg, rgb(156 42 28 / 0.95), rgb(74 14 10 / 0.95));
+  color: var(--kessen-gold-hi);
+  transform: translate(-50%, -50%);
+}
+.km-bigplay-sub {
+  color: var(--kessen-cream);
+  font-family: var(--kessen-font-body);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.km-bigplay-rule {
+  max-width: min(260px, 70cqw);
+  margin-top: 4px;
+  border-top: 1px solid var(--km-line-strong);
+  padding-top: 4px;
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-body);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-align: center;
+  text-transform: none;
+  white-space: normal;
+}
+
+/* ------------------------------------------------------- larger tables */
+
+@container km-main (min-width: 560px) {
+  .km-hand {
+    --hand-max: 92px;
+    --hand-min: 64px;
+  }
+  .km-bar-them {
+    height: 44px;
+  }
+  .km-bar-me {
+    height: 36px;
+  }
+  .km-portrait {
+    width: 34px;
+    height: 34px;
+  }
+  .km-bar-medallion {
+    width: 32px;
+  }
+  .km-bar-me .km-bar-medallion {
+    width: 28px;
+  }
+  .km-lantern {
+    width: 18px;
+    height: 18px;
+  }
+  .km-bar-title {
+    font-size: 16px;
+  }
+  .km-side-total {
+    min-width: 44px;
+    height: 30px;
+    font-size: 20px;
+  }
+  .km-prompt {
+    padding-inline: 14px;
+  }
+  .km-prompt-text {
+    -webkit-line-clamp: 1;
+  }
+  .km-actions {
+    justify-content: center;
+  }
+  .km-pass-wrap {
+    max-width: 320px;
+  }
+  .km-edge-badge {
+    font-size: 13px;
+  }
+  .km-need {
+    font-size: 12px;
+  }
+  .km-flip {
+    width: 140px;
+  }
+  .km-end-medallion {
+    width: 128px;
+    height: 128px;
+  }
+  .km-choice-grid > .km-choice-card {
+    width: 160px;
+  }
+}
+@container km-main (min-width: 720px) {
+  .km-end-stack {
+    gap: 16px;
+  }
+  .km-match-end .km-brush-banner {
+    width: min(100%, 520px);
+    padding: 18px 34px 16px;
+  }
+  .km-brush-banner[data-size="large"] h2 {
+    font-size: 52px;
+  }
+  .km-end-bark {
+    font-size: 14px;
+  }
+  .km-end-rounds li {
+    min-width: 110px;
+    padding: 8px 12px;
+  }
+  .km-end-score {
+    font-size: 24px;
+  }
+  .km-match-end .km-flip {
+    width: 160px;
+  }
+}
+@container km-main (min-width: 1100px) {
+  .km-end-medallion {
+    width: 156px;
+    height: 156px;
+  }
+  .km-match-end .km-brush-banner {
+    width: min(100%, 600px);
+    padding: 22px 40px 18px;
+  }
+  .km-brush-banner[data-size="large"] h2 {
+    font-size: 64px;
+  }
+  .km-match-end .km-brush-line {
+    font-size: 16px;
+  }
+  .km-end-bark {
+    max-width: 520px;
+    padding: 8px 14px;
+    font-size: 16px;
+  }
+  .km-end-rounds {
+    gap: 12px;
+  }
+  .km-end-rounds li {
+    min-width: 130px;
+    padding: 9px 14px;
+  }
+  .km-end-rounds .km-eyebrow {
+    font-size: 12px;
+  }
+  .km-end-score {
+    font-size: 28px;
+  }
+  .km-match-end .km-reward-line {
+    font-size: 17px;
+  }
+}
+@container km-main (min-width: 760px) {
+  .km-hand {
+    --hand-max: 100px;
+  }
+}
+/* Tablet and desktop tables fit the whole hand. The cards first shrink to the width
+   they share; below the 90 px name-banner size they drop to at most 76 px and carry
+   their name underneath, inside the strip's fixed height. Only past --hand-min do they
+   overlap, the next card covering art while each name wraps in the part left in view.
+   The hovered, focused or selected card rises above its neighbours. */
+@container km-main (min-width: 560px) {
+  .km-hand[data-layout="strip"] {
+    --hand-fit: calc((100cqw - 16px - 12px * (var(--hand-count) - 1)) / var(--hand-count));
+    --hand-card: clamp(
+      var(--hand-min),
+      max(min(var(--hand-fit), 76px), min(var(--hand-fit), (var(--hand-fit) - 89.5px) * 1000)),
+      var(--hand-max)
+    );
+    --hand-overlap: max(
+      0px,
+      (var(--hand-card) * var(--hand-count) + 12px * (var(--hand-count) - 1) - (100cqw - 16px)) /
+        max(1, var(--hand-count) - 1)
+    );
+    height: calc(var(--hand-max) * 1.4 + 18px);
+    gap: 12px;
+    justify-content: center;
+    scroll-snap-type: none;
+  }
+  .km-hand[data-layout="strip"] .km-hand-slot + .km-hand-slot {
+    margin-left: calc(-1 * var(--hand-overlap));
+  }
+  .km-hand[data-layout="strip"] .km-hand-slot:has([data-selected]) {
+    z-index: 2;
+  }
+  .km-hand[data-layout="strip"] .km-hand-slot:hover,
+  .km-hand[data-layout="strip"] .km-hand-slot:focus-within {
+    z-index: 3;
+  }
+}
+@media (hover: hover) {
+  .km-hand[data-layout="strip"] .km-hand-card:not([data-selected]):hover {
+    transform: translateY(-4px);
+  }
+}
+
+/* Shorter frames tighten the end screen so a pick and the actions stay in view. */
+@container km-frame (min-height: 501px) and (max-height: 920px) {
+  .km-match-end {
+    padding-top: 8px;
+  }
+  .km-end-stack,
+  .km-end-story,
+  .km-end-claim,
+  .km-rewards {
+    gap: 8px;
+  }
+  .km-end-medallion {
+    width: 84px;
+    height: 84px;
+  }
+  .km-match-end .km-brush-banner {
+    padding: 12px 28px 10px;
+  }
+  .km-brush-banner[data-size="large"] h2 {
+    font-size: min(44px, 11cqw);
+  }
+  .km-match-end .km-flip {
+    width: 128px;
+  }
+  .km-choice-grid > .km-choice-card {
+    width: 140px;
+  }
+}
+
+/* Tables with the width for it set the result, with its actions under it, beside a
+   column of rewards (the cards, a pick and the card being read), so the pick, Take and
+   every action stay in view. Without cards or a pick the stack stays centred. */
+@container km-main (min-width: 540px) {
+  .km-match-end[data-split] .km-end-stack {
+    display: grid;
+    width: min(100%, 900px);
+    align-items: start;
+    gap: 10px 24px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto auto 1fr;
+  }
+  .km-match-end[data-split] .km-end-claim {
+    display: contents;
+  }
+  .km-match-end[data-split] .km-end-story,
+  .km-match-end[data-split] .km-end-claim > * {
+    grid-column: 1;
+  }
+  .km-match-end[data-split] .km-end-story {
+    grid-row: 1;
+  }
+  .km-match-end[data-split] .km-end-claim > .km-rewards {
+    grid-column: 2;
+    grid-row: 1 / -1;
+  }
+}
+
+/* One column fits three reward cards to a line. While a pick waits the drops shrink so
+   the pick leads, and Take stays at the bottom edge until its cards are in view. */
+@container km-main (max-width: 539px) {
+  .km-match-end .km-reward-cards {
+    gap: 10px;
+  }
+  .km-match-end .km-reward-cards .km-flip {
+    width: min(128px, (100cqw - 56px) / 3);
+  }
+  .km-match-end[data-pick] .km-reward-cards .km-flip {
+    width: 76px;
+  }
+  .km-match-end[data-pick] .km-reward-card figcaption {
+    font-size: 11px;
+  }
+  .km-match-end[data-pick] .km-choice-grid > .km-choice-card {
+    width: min(132px, 38cqw);
+  }
+  .km-match-end[data-pick] .km-choice-take {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    box-shadow:
+      0 0 0 6px rgb(10 6 4 / 0.92),
+      0 -10px 18px 6px rgb(10 6 4 / 0.85);
+  }
+}
+
+/* ------------------------------------------------------- focus and touch */
+
+.km-mull-card:focus-visible,
+.km-grid-card:focus-visible {
+  outline: 2px solid var(--kessen-gold-hi);
+  outline-offset: 2px;
+}
+.km-mull-card:focus-visible,
+.km-grid-card:focus-visible {
+  border-radius: 8px;
+}
+.km-mull-card:focus-visible .kessen-card {
+  filter: drop-shadow(0 0 4px rgb(255 220 150 / 0.9));
+}
+
+/* Small controls keep their look and get an invisible 44 px hit box on touch screens;
+   the action bar and overlay buttons grow to 44 px. */
+@media (pointer: coarse) {
+  .km-hit,
+  .kessen-match .kessen-kw-button {
+    position: relative;
+  }
+  .km-hit::after,
+  .km-row-confirm::after,
+  .kessen-match .kessen-kw-button::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+  /* The bars' hit boxes reach past their edges, over the prompt strip and the rows. */
+  .km-bar {
+    z-index: 4;
+  }
+  .km-actions .km-btn-pass,
+  .km-overlay-actions > button,
+  .km-end-actions > button {
+    height: auto;
+    min-height: 44px;
+  }
+}
+
+/* ------------------------------------------------------------- docked tables */
+
+/* Frames short of height in landscape (a phone on its side) dock the prompt, the whole
+   hand and the actions beside the board, so the rows are sized from the full height.
+   MatchView's useDockedFrame mirrors this. */
+@container km-frame (max-height: 500px) and (orientation: landscape) {
+  .km-main {
+    flex-direction: row;
+    overflow: hidden;
+  }
+  .km-stage,
+  .km-dock {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .km-stage {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+  .km-dock {
+    width: clamp(250px, 38%, 380px);
+    flex-shrink: 0;
+    background: linear-gradient(180deg, rgb(20 12 8 / 0.96), rgb(12 7 5 / 0.98));
+    box-shadow: inset 1px 0 0 var(--km-line-strong);
+  }
+  .km-board {
+    min-height: 0;
+    padding: 4px 0 2px;
+  }
+  .km-board-inner {
+    gap: 2px;
+  }
+  .km-center {
+    height: max(24px, calc(var(--tile) * 0.5));
+  }
+  .km-prompt-instruction {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+  .km-prompt-text {
+    -webkit-line-clamp: 2;
+  }
+  .km-hand-wrap {
+    min-height: 0;
+    flex: 1 1 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: transparent;
+  }
+  /* Three cards to a line, wrapping, never overlapping. The columns sit 14 px apart and
+     each name reaches only 2 px past its card, so neighbouring names keep 10 px clear. */
+  .km-hand[data-layout="strip"] {
+    --hand-card: clamp(52px, (100cqw - 40px) / 3, 96px);
+    --hand-overlap: 0px;
+    height: auto;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    justify-content: center;
+    gap: 8px 14px;
+    overflow: visible;
+    padding: 10px 6px;
+    scroll-snap-type: none;
+  }
+  /* Nothing overlaps here, so no card rises or lifts: the glow marks the selection, and
+     the names stay above the glow of a selected card on the line below. */
+  .km-hand[data-layout="strip"] .km-hand-slot:is(:hover, :focus-within, :has([data-selected])) {
+    z-index: auto;
+  }
+  .km-hand[data-layout="strip"] .km-hand-card:is([data-selected], :hover),
+  .km-hand[data-layout="strip"] .km-hand-card .kessen-card {
+    transform: none;
+  }
+  .km-hand[data-layout="strip"] .km-hand-slot .km-card-name {
+    position: relative;
+    z-index: 1;
+    margin-inline: -2px;
+  }
+  .km-hand-scroll .km-hand {
+    mask-image: none;
+  }
+  /* The inspect sheet puts the card face beside its facts. */
+  .km-sheet .km-inspect:has(> .km-inspect-face) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    justify-items: start;
+    gap: 6px 14px;
+  }
+  .km-sheet .km-inspect > .km-inspect-face {
+    width: clamp(110px, calc((100cqh - 104px) / 1.42), 40cqw);
+  }
+  .km-actions {
+    flex-wrap: wrap;
+    padding-top: 4px;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+  }
+  .km-pass-wrap {
+    max-width: none;
+  }
+}
+
+/* Phones on their side: smaller cards, icon-only buttons and compact overlays. The
+   board takes the whole height; both bars join the prompt, hand and actions in the
+   column beside it, so the tiles grow past a fingertip. */
+@container km-frame (max-height: 500px) and (orientation: landscape) {
+  .km-main {
+    display: grid;
+    grid-template-areas:
+      "board them"
+      "board prompt"
+      "board hand"
+      "board me"
+      "board actions";
+    grid-template-columns: minmax(0, 1fr) clamp(260px, 40%, 360px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  }
+  .km-main::before {
+    grid-area: 1 / 2 / -1 / 3;
+    background: linear-gradient(180deg, rgb(20 12 8 / 0.96), rgb(12 7 5 / 0.98));
+    box-shadow: inset 1px 0 0 var(--km-line-strong);
+    content: "";
+  }
+  .km-stage,
+  .km-dock {
+    display: contents;
+  }
+  /* The column is narrower than a phone held upright, so the bars drop the opponent's
+     portrait and the sort label, keeping room for both names. */
+  .km-bar-them {
+    grid-area: them;
+  }
+  .km-bar-them .km-portrait {
+    display: none;
+  }
+  .km-pass-wrap {
+    min-width: 92px;
+  }
+  .km-board {
+    grid-area: board;
+  }
+  .km-bar-me {
+    grid-area: me;
+    padding-right: max(8px, var(--km-corner));
+  }
+  .km-prompt {
+    grid-area: prompt;
+  }
+  .km-hand-wrap {
+    grid-area: hand;
+  }
+  .km-actions {
+    grid-area: actions;
+  }
+  /* Five cards to a line, shrunk until every line of the hand and its names fits the
+     column's height above the player bar. The columns spread across the spare width and
+     each name reaches into the gaps beside its card, short of 10 px from its neighbour. */
+  .km-hand-wrap {
+    container: km-handwrap / size;
+  }
+  .km-hand[data-layout="strip"] {
+    --hand-card: 52px;
+    --hand-gap: max(14px, (100cqw - 13px - 5 * var(--hand-card)) / 4);
+    gap: 6px var(--hand-gap);
+    padding: 8px 6px;
+  }
+  .km-hand[data-layout="strip"] .km-hand-slot .km-card-name {
+    margin-inline: calc((10px - var(--hand-gap)) / 2);
+  }
+  @supports (line-height: round(up, 1.5, 1)) {
+    .km-hand[data-layout="strip"] {
+      --rows-5: round(up, var(--hand-count) / 5, 1);
+      --hand-card: clamp(
+        40px,
+        min(
+          (100cqw - 68px) / 5,
+          ((100cqh - 16px - 6px * (var(--rows-5) - 1)) / var(--rows-5) - 26px) / 1.4
+        ),
+        52px
+      );
+    }
+  }
+  /* Touch screens keep board tiles at a 40 px target; the rows give up their padding. */
+  @media (pointer: coarse) {
+    .km-board-inner {
+      --tile: clamp(40px, min((100cqw - 16px) / 5.7, (100cqh - 56px) / 6.1), 110px);
+    }
+    .km-row {
+      min-height: calc(var(--tile) + 2px);
+    }
+  }
+  .km-overlay {
+    gap: 6px;
+    padding: 8px 12px;
+  }
+  .km-mulligan .km-overlay-head .km-eyebrow {
+    display: none;
+  }
+  .km-overlay-title {
+    margin: 0;
+    font-size: 20px;
+  }
+  .km-mull-grid {
+    width: 100%;
+    max-width: calc((100cqh - 190px) / 1.4 * 10 + 54px);
+    flex-wrap: nowrap;
+  }
+  .km-mull-slot {
+    flex: 1 1 0;
+  }
+  .km-mull-actions {
+    bottom: -8px;
+    margin-bottom: -8px;
+    padding: 6px 12px 8px;
+  }
+  /* The intro and a house rule take one line each and the reading area three, so
+     Keep and Replace stay in view under a house rule too. */
+  .km-mulligan .km-overlay-head {
+    max-width: min(100%, 760px);
+  }
+  .km-mulligan .km-overlay-head .km-house-line {
+    margin-top: 4px;
+    padding: 3px 9px;
+  }
+  .km-mull-detail {
+    height: 60px;
+    min-height: 0;
+  }
+  /* The end screen keeps its actions on one line; the right edge stays clear of the
+     site's floating help button. */
+  .km-match-end {
+    padding: 10px max(16px, var(--km-corner)) max(8px, env(safe-area-inset-bottom, 0px)) 16px;
+  }
+  .km-match-end[data-split] {
+    justify-content: flex-start;
+  }
+  .km-match-end .km-end-actions {
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .km-end-story {
+    gap: 8px;
+  }
+  .km-end-hero {
+    flex-direction: row;
+    justify-content: center;
+  }
+  .km-end-medallion {
+    width: 68px;
+    height: 68px;
+  }
+  .km-end-hero .km-brush-banner {
+    width: auto;
+    min-width: 0;
+    margin: 0 0 0 -12px;
+    padding: 10px 22px 9px 26px;
+  }
+  .km-brush-banner[data-size="large"] h2 {
+    font-size: 28px;
+  }
+  .km-end-bark {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  .km-end-rounds li {
+    min-width: 64px;
+    padding: 3px 8px;
+  }
+  .km-end-score {
+    font-size: 15px;
+  }
+  .km-rewards {
+    gap: 6px;
+  }
+  .km-flip,
+  .km-match-end .km-flip {
+    width: 80px;
+  }
+  .km-match-end[data-pick] .km-reward-cards .km-flip {
+    width: 56px;
+  }
+  .km-choice-grid > .km-choice-card {
+    width: 92px;
+  }
+  .km-reward-note {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .km-end-detail {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
+/* ----------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: no-preference) {
+  .kessen-match[data-motion="on"] .km-row[data-state="legal"] {
+    animation: km-row-breathe 1.6s ease-in-out infinite;
+  }
+  .kessen-match[data-motion="on"] .km-row[data-state="target"] {
+    animation: km-row-target 1.2s ease-in-out infinite;
+  }
+  .kessen-match[data-motion="on"] .km-ghost-slot {
+    animation: kessen-breathe 1.6s ease-in-out infinite;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="settle"] .kessen-tile {
+    animation: km-settle 420ms ease-out both;
+  }
+  .kessen-match[data-motion="on"] .km-edge-badge[data-pulse] {
+    animation: km-badge-pulse 1.4s ease-in-out infinite;
+  }
+  .kessen-match[data-motion="on"] .km-btn-pass[data-armed] {
+    animation: km-armed 900ms ease-in-out infinite;
+  }
+  .kessen-match[data-motion="on"] .km-btn-pass[data-armed] .km-pass-timer {
+    animation: km-pass-timer 3s linear both;
+  }
+  .kessen-match[data-motion="on"] .km-row[data-fx="terrain"]::before {
+    animation: km-frost 520ms ease-out both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="placed"] .kessen-tile {
+    animation: km-drop 440ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="summon"]::after,
+  .kessen-match[data-motion="on"] .km-unit[data-fx="tide"]::after,
+  .kessen-match[data-motion="on"] .km-unit[data-fx="revive"]::after {
+    position: absolute;
+    inset: -6px;
+    z-index: 0;
+    border: 2px solid rgb(255 214 140 / 0.9);
+    border-radius: 50%;
+    content: "";
+    animation: km-ripple 560ms ease-out both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="tide"]::after {
+    border-color: rgb(143 230 200 / 0.9);
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="summon"] .kessen-tile,
+  .kessen-match[data-motion="on"] .km-unit[data-fx="tide"] .kessen-tile,
+  .kessen-match[data-motion="on"] .km-unit[data-fx="revive"] .kessen-tile {
+    animation: km-rise 520ms ease-out both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="infiltrate"]::after {
+    position: absolute;
+    inset: -30%;
+    z-index: 5;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgb(190 190 200 / 0.85), rgb(90 90 100 / 0.4) 45%, transparent 70%);
+    content: "";
+    pointer-events: none;
+    animation: km-smoke 560ms ease-out both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="damage"] .kessen-tile {
+    animation: km-shake 360ms ease-in-out both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="boost"] .kessen-tile {
+    animation: km-lift 360ms ease-out both;
+  }
+  .kessen-match[data-motion="on"] .km-float {
+    animation: km-float 420ms ease-out both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="destroy"],
+  .kessen-match[data-motion="on"] .km-unit[data-fx="sweep"] {
+    opacity: 1;
+    animation: km-ink 600ms ease-in both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="purge"] {
+    opacity: 1;
+    animation: km-crack 620ms ease-in both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="return"] {
+    opacity: 1;
+    animation: km-return 420ms ease-in both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="seal"] .kessen-tile {
+    animation: km-seal 400ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+  .kessen-match[data-motion="on"] .km-unit[data-fx="kept"] .kessen-tile {
+    animation: kessen-lantern 1s ease-in-out 2;
+  }
+  .kessen-match[data-motion="on"] .km-brush-banner {
+    animation: km-brush 620ms cubic-bezier(0.3, 0.9, 0.3, 1) both;
+  }
+  .kessen-match[data-motion="on"] .km-summary-card,
+  .kessen-match[data-motion="on"] .km-rewards {
+    animation: km-fade-up 420ms ease-out 360ms both;
+  }
+  .kessen-match[data-motion="on"] .km-round-end[data-outcome="won"] .km-lantern-row .km-lantern:not([data-lit]),
+  .kessen-match[data-motion="on"] .km-round-end .km-lantern:not([data-lit]) {
+    animation: km-snuff 900ms ease-in 300ms both;
+  }
+  .kessen-match[data-motion="on"] .km-bigplay {
+    animation: km-stamp-big 520ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  }
+  .kessen-match[data-motion="on"] .km-bigplay[data-kind="round"] {
+    animation: km-fade-up 360ms ease-out both;
+  }
+  .kessen-match[data-motion="on"] .km-flip {
+    animation: km-flip 700ms cubic-bezier(0.3, 0.8, 0.3, 1) both;
+  }
+  .kessen-match[data-motion="on"] .km-sheet {
+    animation: km-fade-up 200ms ease-out both;
+  }
+}
+
+@keyframes km-row-breathe {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1.5px rgb(246 220 140 / 0.55),
+      0 0 6px rgb(255 190 90 / 0.15);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1.5px rgb(246 220 140 / 0.95),
+      0 0 14px rgb(255 190 90 / 0.45);
+  }
+}
+@keyframes km-row-target {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1.5px rgb(150 210 255 / 0.6),
+      0 0 6px rgb(120 200 255 / 0.2);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 2px rgb(190 230 255 / 1),
+      0 0 16px rgb(120 200 255 / 0.6);
+  }
+}
+@keyframes km-settle {
+  from {
+    filter: drop-shadow(0 0 3px #fff0c0) drop-shadow(0 0 8px rgb(255 190 90 / 0.95));
+  }
+  to {
+    filter: none;
+  }
+}
+@keyframes km-badge-pulse {
+  0%,
+  100% {
+    filter: none;
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgb(255 190 90 / 0.95));
+  }
+}
+@keyframes km-pass-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes km-armed {
+  0%,
+  100% {
+    filter: none;
+  }
+  50% {
+    filter: brightness(1.2);
+  }
+}
+@keyframes km-frost {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes km-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-30%) scale(1.25);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes km-rise {
+  from {
+    opacity: 0;
+    transform: translateY(35%) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes km-ripple {
+  from {
+    opacity: 1;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+@keyframes km-smoke {
+  from {
+    opacity: 0.95;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+@keyframes km-shake {
+  0%,
+  100% {
+    transform: none;
+    filter: none;
+  }
+  20% {
+    transform: translateX(-8%);
+    filter: brightness(1.6) saturate(1.4) hue-rotate(-20deg);
+  }
+  45% {
+    transform: translateX(7%);
+  }
+  70% {
+    transform: translateX(-4%);
+  }
+}
+@keyframes km-lift {
+  0% {
+    transform: none;
+    filter: none;
+  }
+  45% {
+    transform: translateY(-10%);
+    filter: drop-shadow(0 0 8px rgb(124 242 156 / 0.9));
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes km-float {
+  from {
+    opacity: 0;
+    translate: 0 30%;
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    translate: 0 -60%;
+  }
+}
+@keyframes km-ink {
+  0% {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    filter: grayscale(1) contrast(1.6) blur(3px);
+    transform: scale(0.8);
+  }
+}
+@keyframes km-crack {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  25% {
+    transform: rotate(-4deg) scale(1.05);
+    filter: brightness(1.4);
+  }
+  45% {
+    transform: rotate(3deg);
+    clip-path: polygon(0 0, 100% 0, 100% 45%, 55% 52%, 48% 100%, 0 100%);
+  }
+  100% {
+    opacity: 0;
+    filter: grayscale(1) blur(4px);
+    transform: translateY(20%) scale(0.85);
+  }
+}
+@keyframes km-return {
+  to {
+    opacity: 0;
+    transform: translateY(60%) scale(0.8);
+  }
+}
+@keyframes km-seal {
+  from {
+    filter: brightness(1.6);
+    transform: scale(1.12);
+  }
+  to {
+    filter: none;
+    transform: none;
+  }
+}
+@keyframes km-brush {
+  from {
+    opacity: 0.2;
+    clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes km-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes km-snuff {
+  0% {
+    filter: drop-shadow(0 0 6px rgb(255 180 90 / 1)) brightness(1.3);
+  }
+  60% {
+    filter: brightness(1.6) drop-shadow(0 0 10px rgb(255 180 90 / 1));
+  }
+  100% {
+    filter: grayscale(1) brightness(0.7);
+  }
+}
+@keyframes km-stamp-big {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-8deg) scale(2.2);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-8deg) scale(1);
+  }
+}
+@keyframes km-flip {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(180deg);
+  }
+}
+
+.km-ghost-main,
+.km-float,
+.km-brush-score,
+.km-end-score {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* ------------------------------------------------------------- duel clock */
+
+/* The clock and the prompt join the dock's column as one group; only the phone's
+   landscape grid places the group as a whole. */
+.km-prompt-group {
+  display: contents;
+}
+@container km-frame (max-height: 500px) and (orientation: landscape) {
+  .km-prompt-group {
+    display: flex;
+    grid-area: prompt;
+    min-width: 0;
+    flex-direction: column;
+  }
+}
+.km-duel-clock {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 10px;
+  background:
+    linear-gradient(180deg, rgb(255 220 160 / 0.05), transparent 50%),
+    linear-gradient(180deg, #24120b, #120906);
+  color: var(--kessen-cream);
+  font-size: 13px;
+  text-align: left;
+  box-shadow: inset 0 1px 0 var(--km-line);
+}
+.km-duel-clock[data-mine] {
+  color: var(--kessen-gold-hi);
+  box-shadow:
+    inset 3px 0 0 var(--kessen-lantern),
+    inset 0 1px 0 var(--km-line);
+}
+.km-duel-clock[data-urgent] {
+  color: var(--kessen-down);
+  box-shadow:
+    inset 3px 0 0 var(--kessen-down),
+    inset 0 1px 0 var(--km-line);
+}
+.km-duel-seconds {
+  font-family: var(--km-font-num);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+/* The draining bar: lantern gold, vermilion in the last ten seconds. */
+.km-duel-bar {
+  background: rgb(0 0 0 / 0.45);
+}
+.km-duel-bar > div {
+  background: var(--kessen-lantern);
+}
+.km-duel-clock[data-urgent] .km-duel-bar > div {
+  background: var(--kessen-down);
+}
+.km-duel-missed {
+  margin: 0;
+  color: var(--kessen-cream);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* ---------------------------------------------------------- lesson debrief */
+
+.km-end-lesson {
+  display: flex;
+  max-width: 440px;
+  flex-direction: column;
+  gap: 8px;
+}
+.km-end-idea {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--kessen-paper), var(--kessen-parchment));
+  padding: 8px 12px;
+  color: var(--kessen-paper-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+}
+.km-end-idea svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--kessen-vermilion);
+}
+.km-end-idea .km-eyebrow {
+  color: var(--kessen-paper-muted);
+}
+.km-faction-perks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.km-mull-clock {
+  width: min(100%, 420px);
+}
+.km-mull-clock .km-duel-clock {
+  border: 1px solid var(--km-line);
+  border-radius: 8px;
+}
+
+/* ------------------------------------------------------------ faction perks */
+
+.km-perk-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@container km-main (min-width: 560px) {
+  .km-perk-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.km-perk-list li {
+  border: 1px solid var(--km-line);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.3);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.km-perk-name {
+  display: block;
+  color: var(--kessen-gold-hi);
+  font-weight: 700;
+}
+.km-perk-text {
+  color: var(--km-text-dim);
+}
+
+
+/* ------------------------------------------------------------------ dialogs */
+
+/* The table's confirmations (the shared Confirm, portalled with `.kessen-scene`) on a
+   lacquer panel with a gold rim. */
+.km-dialog {
+  border: 1px solid rgb(138 100 32 / 0.85);
+  background:
+    radial-gradient(120% 70% at 0% 0%, rgb(255 180 90 / 0.1), transparent 55%),
+    radial-gradient(90% 60% at 100% 100%, rgb(156 42 28 / 0.18), transparent 60%),
+    linear-gradient(180deg, #24150d, #120a06);
+  color: var(--kessen-cream);
+  font-family: var(--kessen-font-body);
+  font-size: 14px;
+  box-shadow:
+    inset 0 1px 0 rgb(246 220 140 / 0.22),
+    0 18px 48px rgb(0 0 0 / 0.7);
+}
+.km-dialog h2 {
+  color: var(--kessen-gold-hi);
+  font-family: var(--kessen-font-display);
+  font-size: 20px;
+  font-weight: 400;
+}
+.km-dialog button {
+  font-size: 13px;
+}
+/* Concede is a quiet, deliberate control: vermilion ink in a lacquer frame. */
+.kessen-match .km-concede {
+  border-color: rgb(255 123 107 / 0.55);
+  background: rgb(0 0 0 / 0.3);
+  color: var(--kessen-down);
+}
+.kessen-match .km-concede:hover:not(:disabled) {
+  border-color: var(--kessen-down);
+  background: rgb(156 42 28 / 0.35);
+  color: #ffd0c8;
+}
+
+/* --------------------------------------------------- shared controls at the table */
+
+/* The sheet's tabs: segmented lacquer, the open tab in lit lacquer. */
+.kessen-match .km-tabs {
+  gap: 4px;
+  border: 1px solid var(--kessen-gold-lo);
+  border-radius: 10px;
+  background: #140c08;
+  padding: 4px;
+}
+.kessen-match .km-tab {
+  min-height: 34px;
+  border-radius: 7px;
+  padding: 4px 8px;
+  color: #d9c7a0;
+  font-family: var(--kessen-font-display);
+  font-size: 15px;
+  font-weight: 400;
+}
+.kessen-match .km-tab:hover:not([data-state="active"]) {
+  color: var(--kessen-gold-hi);
+}
+.kessen-match .km-tab[data-state="active"] {
+  background: linear-gradient(180deg, var(--kessen-lacquer-hi), var(--kessen-lacquer));
+  color: #fff3d6;
+  box-shadow: inset 0 1px 0 rgb(255 220 160 / 0.35);
+}
+/* The overlays' answers (Keep, Replace, Continue, Rematch, Leave table, Claim) at
+   reading size; the card buttons inside the overlays keep their own sizing. */
+.kessen-match .km-overlay button:not(.km-mull-card, .km-reward-hit, .km-choice-card) {
+  min-height: 36px;
+  font-size: 14px;
+}
+/* Secondary answers: dark lacquer keys in a gold-brown rim, as in the action bar. */
+.kessen-match .km-overlay button.bg-secondary {
+  border: 1px solid var(--kessen-gold-lo);
+  background: linear-gradient(180deg, #3d1c11, #1d0e09);
+  color: var(--kessen-cream);
+}
+.kessen-match .km-overlay button.bg-secondary:hover:not(:disabled) {
+  border-color: var(--kessen-gold-hi);
+}
+/* Confirm and Skip in the prompt strip. */
+.kessen-match .km-prompt-btn {
+  min-height: 32px;
+}
+
+@media (pointer: coarse) {
+  .kessen-match .km-action {
+    height: 44px;
+  }
+  .kessen-match .km-action-square {
+    min-width: 44px;
+  }
+  .kessen-match .km-tab {
+    min-height: 40px;
+  }
+  .kessen-match .km-prompt-btn {
+    min-height: 40px;
+  }
+  .kessen-match .km-overlay button:not(.km-mull-card, .km-reward-hit, .km-choice-card),
+  .kessen-match .km-concede {
+    min-height: 44px;
+  }
+}
+@media (pointer: coarse) {
+  .km-dialog > div > button {
+    min-height: 44px;
+  }
+  /* The dialog's corner close keeps its look and gets a 44 px hit box. */
+  .km-dialog > button::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+}
+.kessen-match .km-mull-actions > button {
+  min-width: 132px;
+}

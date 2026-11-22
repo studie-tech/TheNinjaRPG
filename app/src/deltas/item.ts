@@ -9,6 +9,7 @@ import type {
   UserItem,
   UserItemWithRelations,
 } from "@/drizzle/schema";
+import { itemPurchaseLimitKey } from "@/libs/itemEconomy";
 import { effectiveMasteries, type MasteryBuffUser } from "@/libs/mastery";
 import { calcMaxEnergy } from "@/libs/profile";
 import { hasEnergyQueue } from "@/libs/queue";
@@ -382,6 +383,31 @@ export const getBuyUserUpdate = ({
         })
       : undefined,
 });
+
+/**
+ * A shop page's purchase allowances after a confirmed purchase of `quantity` units of
+ * `itemId`: each limited listing counted against the same limit and period uses them up.
+ */
+export const getPurchasedAllowances = (
+  allowances: RouterOutputs["item"]["getPurchaseAllowances"],
+  itemId: string,
+  quantity: number,
+) => {
+  const limitKey = itemPurchaseLimitKey(itemId);
+  const bought = allowances.find((entry) => entry.itemId === itemId);
+  if (!bought) return allowances;
+  return allowances.map((entry) =>
+    entry.limit != null &&
+    entry.period === bought.period &&
+    itemPurchaseLimitKey(entry.itemId) === limitKey
+      ? {
+          ...entry,
+          purchased: entry.purchased + quantity,
+          remaining: Math.max(0, entry.limit - entry.purchased - quantity),
+        }
+      : entry,
+  );
+};
 
 /**
  * Project the selected loadout and derived values from confirmed equipped items only when the

@@ -72,9 +72,12 @@ import {
   IMG_BADGE_USE_JUTSU_COMBAT,
   IMG_BADGE_USER_LEVEL,
   IMG_BADGE_WIN_QUEST,
+  IMG_KESSEN_MINIGAME_TILE,
   IMG_MANUAL_TOWER_UPGRADES,
   isPetTaskQuestType,
   isSharedRunQuestType,
+  KESSEN_NPC_KEYS,
+  KessenTiers,
   LetterRanks,
   MAX_PLAYER_LEVEL,
   MasteryTypes,
@@ -314,10 +317,15 @@ export const LocationTasks = [
   "defeat_opponents",
   "win_tower_defense",
   "win_chakra_storm",
+  "win_kessen_challenge",
 ] as const;
 
 /** Objectives completed only by a verified minigame win naming them, never on arrival. */
-export const QuestChallengeTasks = ["win_tower_defense", "win_chakra_storm"] as const;
+export const QuestChallengeTasks = [
+  "win_tower_defense",
+  "win_chakra_storm",
+  "win_kessen_challenge",
+] as const;
 export type QuestChallengeTask = (typeof QuestChallengeTasks)[number];
 export const isQuestChallengeTask = (task: string): task is QuestChallengeTask =>
   (QuestChallengeTasks as readonly string[]).includes(task);
@@ -331,6 +339,7 @@ export const TrackerObjectiveTasks = [
   "use_specific_jutsu_combat",
   "tag_usage_win",
   "damage_dealt",
+  "win_card_duel",
 ] as const;
 
 export const allObjectiveTasks = [
@@ -481,6 +490,7 @@ export const objectiveImageMap: Record<
   defeat_opponents: { image: IMG_BADGE_DEFEAT_OPPONENTS, title: "Defeat" },
   win_tower_defense: { image: IMG_MANUAL_TOWER_UPGRADES, title: "Hold Your Ground" },
   win_chakra_storm: { image: CS_CARD_URL, title: "Survive the Storm" },
+  win_kessen_challenge: { image: IMG_KESSEN_MINIGAME_TILE, title: "Duel at the Table" },
   fail_quest: { image: IMG_BADGE_FAIL_QUEST, title: "Fail Quest" },
   win_quest: { image: IMG_BADGE_WIN_QUEST, title: "Win Quest" },
   new_quest: { image: IMG_BADGE_NEW_QUEST, title: "New Quest" },
@@ -512,6 +522,7 @@ export const objectiveImageMap: Record<
   },
   tag_usage_win: { image: IMG_BADGE_TAG_USAGE_WIN, title: "Tag Usage (Win)" },
   damage_dealt: { image: IMG_BADGE_DAMAGE_DEALT, title: "Damage Dealt" },
+  win_card_duel: { image: IMG_BADGE_WIN_QUEST, title: "Win Kessen Duels" },
 };
 
 export const attackerFields = {
@@ -765,6 +776,20 @@ export const WinChakraStorm = z.object({
 });
 export type WinChakraStormType = z.infer<typeof WinChakraStorm>;
 
+/**
+ * Win a Kessen match at the objective's location against `npcKey`'s signature deck,
+ * played by the AI at `tier`. The player brings any deck they could take to the Circuit,
+ * and the opponent does not need to be unlocked there.
+ */
+export const WinKessenChallenge = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("win_kessen_challenge"),
+  npcKey: z.enum(KESSEN_NPC_KEYS).prefault("kazehiko"),
+  tier: z.enum(KessenTiers).prefault("GENIN"),
+  ...complexObjectiveFields,
+});
+export type WinKessenChallengeType = z.infer<typeof WinKessenChallenge>;
+
 export const RaidObjective = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
@@ -862,6 +887,20 @@ export const DamageDealt = z.object({
   ...questRewardFields,
 });
 
+/**
+ * Reward-eligible Kessen wins against Circuit NPCs or in ranked duels (lessons and quest
+ * challenge matches excluded). `npcKey` (an NPC key such as "kazehiko", or "ranked";
+ * empty for any) and `tier` ("ANY" for every tier; ranked wins have none) narrow them.
+ */
+export const WinCardDuel = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("win_card_duel"),
+  npcKey: z.string().trim().max(64).prefault(""),
+  tier: z.enum(["ANY", ...KessenTiers]).prefault("ANY"),
+  value: z.coerce.number().min(0).prefault(1),
+  ...questRewardFields,
+});
+
 export const BloodlineCollection = z.strictObject(
   {
     ...baseObjectiveFields,
@@ -894,6 +933,7 @@ export const AllObjectives = z.discriminatedUnion("task", [
   DefeatOpponents,
   WinTowerDefense,
   WinChakraStorm,
+  WinKessenChallenge,
   DialogObjective,
   EncountersAtLocation,
   RaidObjective,
@@ -905,6 +945,7 @@ export const AllObjectives = z.discriminatedUnion("task", [
   UseSpecificJutsuCombat,
   TagUsageWin,
   DamageDealt,
+  WinCardDuel,
   BloodlineCollection,
 ]);
 export type AllObjectivesType = z.infer<typeof AllObjectives>;

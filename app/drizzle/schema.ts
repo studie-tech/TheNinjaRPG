@@ -51,6 +51,7 @@ import type {
   HuntingReceipt,
   HuntingSessionContent,
 } from "@/validators/hunting";
+import type { CardData, KessenFaction } from "@/validators/itemCard";
 import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
 import type { MethodSize } from "@/validators/methodSize";
 import type { QuestContentType, QuestTrackerType } from "@/validators/objectives";
@@ -1927,6 +1928,7 @@ export const item = mysqlTable(
     effects: json("effects").$type<ZodAllTags[]>().notNull(),
     itemType: mysqlEnum("itemType", consts.ItemTypes).notNull(),
     furnitureData: json("furnitureData").$type<FurnitureData>(),
+    cardData: json("cardData").$type<CardData>(),
     rarity: mysqlEnum("rarity", consts.ItemRarities).notNull(),
     slot: mysqlEnum("slot", consts.ItemSlotTypes).notNull(),
     cooldown: int("cooldown").default(0).notNull(),
@@ -2061,6 +2063,7 @@ export const itemPurchaseCounter = mysqlTable(
   "ItemPurchaseCounter",
   {
     userId: varchar("userId", { length: 191 }).notNull(),
+    /** The item, or the shared key of items with one joint limit (`itemPurchaseLimitKey`). */
     itemId: varchar("itemId", { length: 191 }).notNull(),
     period: mysqlEnum("period", consts.ItemPurchaseLimitPeriods).notNull(),
     periodStart: datetime("periodStart", { mode: "date", fsp: 3 }).notNull(),
@@ -5798,6 +5801,13 @@ export const userRequest = mysqlTable(
       sql`CASE WHEN \`type\` = 'ANBU' AND \`status\` = 'PENDING' THEN \`senderId\` ELSE NULL END`,
       { mode: "stored" },
     ),
+    // One pending Kessen challenge per pair of players, whoever sent it.
+    pendingKessenPair: varchar("pendingKessenPair", {
+      length: 383,
+    }).generatedAlwaysAs(
+      sql`CASE WHEN \`type\` = 'KESSEN' AND \`status\` = 'PENDING' THEN CONCAT(LEAST(\`senderId\`, \`receiverId\`), ':', GREATEST(\`senderId\`, \`receiverId\`)) ELSE NULL END`,
+      { mode: "stored" },
+    ),
     useRankedRules: boolean("useRankedRules").default(false),
     spectatable: boolean("spectatable").default(false),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
@@ -5820,6 +5830,9 @@ export const userRequest = mysqlTable(
       activeHomePairUnique: unique("UserRequest_active_home_pair_unique").on(
         table.senderId,
         table.activeHomeReceiverId,
+      ),
+      pendingKessenPairUnique: unique("UserRequest_pending_kessen_pair_unique").on(
+        table.pendingKessenPair,
       ),
     };
   },
@@ -7142,6 +7155,221 @@ export const chakraStormClaimReceiptRelations = relations(
     }),
   }),
 );
+
+/** A saved Kessen deck: a leader card plus deck cards with copy counts, all Item ids. */
+export const kessenDeck = mysqlTable(
+  "KessenDeck",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    name: varchar("name", { length: 64 }).notNull(),
+    leaderItemId: varchar("leaderItemId", { length: 191 }).notNull(),
+    cards: json("cards").$type<KessenDeckCard[]>().notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("KessenDeck_userId_idx").on(table.userId),
+    };
+  },
+);
+export type KessenDeck = InferSelectModel<typeof kessenDeck>;
+export type KessenDeckCard = { itemId: string; count: number };
+
+export const kessenDeckRelations = relations(kessenDeck, ({ one }) => ({
+  user: one(userData, {
+    fields: [kessenDeck.userId],
+    references: [userData.userId],
+  }),
+}));
+
+/**
+ * One Kessen match. `userId` sits in seat 0; seat 1 is the Circuit NPC `npcKey` (kind NPC)
+ * or the player `opponentId` (FRIENDLY and RANKED duels, which have no NPC or tier).
+ * `state` is the engine's serialised match; every write moves `version` on, and turns
+ * and settlements are a compare-and-set on it. A duel's `turnDeadline` is when the
+ * acting seat's clock runs out; `rated` is the ranked rating claim.
+ */
+export const kessenMatch = mysqlTable(
+  "KessenMatch",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    kind: mysqlEnum("kind", consts.KessenMatchKinds).default("NPC").notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    opponentId: varchar("opponentId", { length: 191 }),
+    npcKey: varchar("npcKey", { length: 64 }),
+    tier: mysqlEnum("tier", consts.KessenTiers),
+    deckId: varchar("deckId", { length: 191 }),
+    status: mysqlEnum("status", consts.KessenMatchStatuses).default("ACTIVE").notNull(),
+    version: int("version").default(1).notNull(),
+    engineVersion: int("engineVersion").notNull(),
+    seed: varchar("seed", { length: 191 }).notNull(),
+    state: json("state").$type<Record<string, unknown>>().notNull(),
+    rewarded: boolean("rewarded").default(false).notNull(),
+    rated: boolean("rated").default(false).notNull(),
+    turnDeadline: datetime("turnDeadline", { mode: "date", fsp: 3 }),
+    startedAt: datetime("startedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    finishedAt: datetime("finishedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => {
+    return {
+      userStatusIdx: index("KessenMatch_userId_status_idx").on(
+        table.userId,
+        table.status,
+      ),
+      opponentStatusIdx: index("KessenMatch_opponentId_status_idx").on(
+        table.opponentId,
+        table.status,
+      ),
+      // First-win matches per NPC record; with a null `npcKey`, the player's duels.
+      userNpcFinishedIdx: index("KessenMatch_userId_npcKey_finishedAt_idx").on(
+        table.userId,
+        table.npcKey,
+        table.finishedAt,
+      ),
+      statusUpdatedAtIdx: index("KessenMatch_status_updatedAt_idx").on(
+        table.status,
+        table.updatedAt,
+      ),
+      statusDeadlineIdx: index("KessenMatch_status_turnDeadline_idx").on(
+        table.status,
+        table.turnDeadline,
+      ),
+    };
+  },
+);
+export type KessenMatch = InferSelectModel<typeof kessenMatch>;
+
+export const kessenMatchRelations = relations(kessenMatch, ({ one }) => ({
+  user: one(userData, {
+    fields: [kessenMatch.userId],
+    references: [userData.userId],
+  }),
+}));
+
+/**
+ * Per-player Kessen progress: pack pity counters, the one-time starter grant, Academy
+ * lessons and the day/week counters behind the reward caps. Day and week keys are UTC
+ * dates (`YYYY-MM-DD`, weeks keyed by their Monday) that guard the counter increments.
+ */
+export const kessenProgress = mysqlTable("KessenProgress", {
+  userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+  packsSinceEpic: int("packsSinceEpic").default(0).notNull(),
+  packsSinceLegendary: int("packsSinceLegendary").default(0).notNull(),
+  firstBundleOpened: boolean("firstBundleOpened").default(false).notNull(),
+  starterFaction: varchar("starterFaction", { length: 32 }).$type<KessenFaction>(),
+  starterGranted: boolean("starterGranted").default(false).notNull(),
+  /**
+   * Completed Academy lessons: lesson key to the match that completed it first, which
+   * claimed the lesson's reward. The first lesson unlocks the starter, Circuit and duels.
+   */
+  academy: json("academy").$type<Record<string, string>>().notNull(),
+  /** The match whose lesson completed the whole Academy and claimed its pack. */
+  academyGraduatedMatchId: varchar("academyGraduatedMatchId", { length: 191 }),
+  seenKeywords: json("seenKeywords").$type<string[]>().notNull(),
+  dayKey: varchar("dayKey", { length: 10 }).default("").notNull(),
+  rewardedToday: int("rewardedToday").default(0).notNull(),
+  dropsToday: int("dropsToday").default(0).notNull(),
+  npcWinsToday: json("npcWinsToday").$type<Record<string, number>>().notNull(),
+  weekKey: varchar("weekKey", { length: 10 }).default("").notNull(),
+  weeklyWins: int("weeklyWins").default(0).notNull(),
+  /** The match whose reward claimed the counters last, so its settlement can resume. */
+  rewardedMatchId: varchar("rewardedMatchId", { length: 191 }),
+  autoSellSurplus: boolean("autoSellSurplus").default(false).notNull(),
+  /** Ranked ladder: Elo rating and the record of rated matches. */
+  rating: int("rating").default(consts.KESSEN_RANKED_START_RATING).notNull(),
+  rankedPlayed: int("rankedPlayed").default(0).notNull(),
+  rankedWins: int("rankedWins").default(0).notNull(),
+  rankedLosses: int("rankedLosses").default(0).notNull(),
+  rankedDraws: int("rankedDraws").default(0).notNull(),
+  /** Rewarded ranked wins today and this week, keyed like the NPC counters. */
+  rankedRewardDay: varchar("rankedRewardDay", { length: 10 }).default("").notNull(),
+  rankedRewardsToday: int("rankedRewardsToday").default(0).notNull(),
+  rankedWeekKey: varchar("rankedWeekKey", { length: 10 }).default("").notNull(),
+  rankedWeeklyWins: int("rankedWeeklyWins").default(0).notNull(),
+  /** The ranked match whose reward claimed the counters last, so its settlement can resume. */
+  rankedRewardMatchId: varchar("rankedRewardMatchId", { length: 191 }),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+});
+export type KessenProgress = InferSelectModel<typeof kessenProgress>;
+
+/**
+ * Players waiting for a ranked Kessen duel, with the rating and deck they queued with.
+ * `seenAt` is the last poll; matchmaking claims two rows by writing the new match's id
+ * into both `matchId`s in one guarded statement.
+ */
+export const kessenRankedQueue = mysqlTable(
+  "KessenRankedQueue",
+  {
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    rating: int("rating").notNull(),
+    deck: json("deck").$type<Record<string, unknown>>().notNull(),
+    queuedAt: datetime("queuedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    seenAt: datetime("seenAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    matchId: varchar("matchId", { length: 191 }),
+    matchedAt: datetime("matchedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => {
+    return {
+      matchIdIdx: index("KessenRankedQueue_matchId_idx").on(table.matchId),
+    };
+  },
+);
+export type KessenRankedQueue = InferSelectModel<typeof kessenRankedQueue>;
+
+export const kessenProgressRelations = relations(kessenProgress, ({ one }) => ({
+  user: one(userData, {
+    fields: [kessenProgress.userId],
+    references: [userData.userId],
+  }),
+}));
+
+/** Lifetime Kessen record of one player against one NPC (keyed by the NPC's code key). */
+export const kessenNpcProgress = mysqlTable(
+  "KessenNpcProgress",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    npcKey: varchar("npcKey", { length: 64 }).notNull(),
+    wins: int("wins").default(0).notNull(),
+    firstWinAt: datetime("firstWinAt", { mode: "date", fsp: 3 }),
+    ascendedFirstWinAt: datetime("ascendedFirstWinAt", { mode: "date", fsp: 3 }),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      pk: primaryKey({ columns: [table.userId, table.npcKey] }),
+    };
+  },
+);
+export type KessenNpcProgress = InferSelectModel<typeof kessenNpcProgress>;
+
+export const kessenNpcProgressRelations = relations(kessenNpcProgress, ({ one }) => ({
+  user: one(userData, {
+    fields: [kessenNpcProgress.userId],
+    references: [userData.userId],
+  }),
+}));
 
 // Activity Streak System Tables
 export const activityStreakConfig = mysqlTable("ActivityStreakConfig", {

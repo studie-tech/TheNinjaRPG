@@ -112,6 +112,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/kessen-match-expiry",
+      "schedule": "15 * * * *"
+    },
+    {
       "path": "/api/monthly-elder-rotation",
       "schedule": "0 0 25,28 * *"
     },

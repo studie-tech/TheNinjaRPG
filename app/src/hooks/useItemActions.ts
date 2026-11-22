@@ -18,25 +18,33 @@ import {
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useRequiredUserInfo, useUserDataSelector } from "@/utils/UserContext";
+import type { CardPackReveal } from "@/validators/weightedCache";
 
 /**
  * Binds per-item tRPC mutations to the shared inventory and profile cache controllers.
  * Each action owns when onDone dismisses its initiating view; repairs dismiss only after
  * confirmed success, while actions with settlement handlers also dismiss after rejection.
  * Inventory reconciliation after confirmed writes runs in the background, so the pressed
- * control is released as soon as the server answers.
+ * control is released as soon as the server answers. `onPackReveal` receives the reveal
+ * of an opened Kessen card pack in place of the reward toast.
  */
 export const useItemActions = ({
   useritem,
   onDone,
+  onPackReveal,
 }: {
   useritem: UserItemWithRelations | undefined;
   onDone: () => void;
+  onPackReveal?: (reveal: CardPackReveal) => void;
 }) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const utils = api.useUtils();
-  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
-    useInventoryCacheUpdate();
+  const {
+    prepareInventoryUpdate,
+    updateInventory,
+    invalidateInventory,
+    reconcileCardMoves,
+  } = useInventoryCacheUpdate();
 
   // Dismiss the initiating view for actions that finish on settlement.
   const onSettled = () => {
@@ -47,24 +55,32 @@ export const useItemActions = ({
     onMutate: () => ({
       inventory: prepareInventoryUpdate(),
       user: prepareUserUpdate(),
+      itemType: useritem?.item.itemType,
     }),
     onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
       if (data.userRecovery) await updateUser(data, { revision: snapshot.user });
-      await updateInventory(
-        data.success
-          ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
-          : undefined,
-        snapshot.inventory,
-      );
+      await Promise.all([
+        updateInventory(
+          data.success
+            ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
+            : undefined,
+          snapshot.inventory,
+        ),
+        // The Card Hall lists pack stacks by id, so merged-away packs leave it.
+        data.success ? reconcileCardMoves([snapshot.itemType]) : undefined,
+      ]);
     },
-    onError: async (error) => {
+    onError: async (error, _input, snapshot) => {
       showMutationToast({
         success: false,
         message: error.message,
         variant: "destructive",
       });
-      await invalidateInventory();
+      await Promise.all([
+        invalidateInventory(),
+        reconcileCardMoves([snapshot?.itemType]),
+      ]);
     },
     onSettled,
   });
@@ -73,12 +89,14 @@ export const useItemActions = ({
     useritem,
     inventoryQuery: "getUserItemsWithVariants",
     onSettled,
+    onPackReveal,
   });
 
   const { mutate: sell, isPending: isSelling } = api.item.sellUserItem.useMutation({
     onMutate: () => ({
       inventory: prepareInventoryUpdate(),
       user: prepareUserUpdate(),
+      itemType: useritem?.item.itemType,
     }),
     onSuccess: async (data, input, context) => {
       showMutationToast(data);
@@ -89,10 +107,11 @@ export const useItemActions = ({
             context.inventory,
           ),
           updateUser(data, { revision: context.user }),
+          reconcileCardMoves([context.itemType]),
         ]);
       }
     },
-    onError: async (error) => {
+    onError: async (error, _input, context) => {
       // A local handler replaces the provider's default toast; report before recovery reads.
       showMutationToast({
         success: false,
@@ -103,6 +122,7 @@ export const useItemActions = ({
       await Promise.all([
         invalidateInventory(),
         updateUser(undefined, { revision: undefined }),
+        reconcileCardMoves([context?.itemType]),
       ]);
     },
     onSettled,
@@ -133,10 +153,14 @@ export const useItemActions = ({
 
   const { mutate: splitStack, isPending: isSplitting } =
     api.item.splitStack.useMutation({
-      onSuccess: async (data) => {
+      onMutate: () => ({ itemType: useritem?.item.itemType }),
+      onSuccess: async (data, _input, context) => {
         showMutationToast(data);
         // The source may have moved or changed cosmetics in another tab before splitting.
-        if (data.success) void invalidateInventory();
+        if (data.success) {
+          void invalidateInventory();
+          void reconcileCardMoves([context.itemType]);
+        }
       },
       onSettled,
     });
@@ -258,16 +282,20 @@ const repairWithKitProcedure = api.item?.useRepairItem;
 
 /**
  * Consume one stack and reconcile profile, inventory and effect caches. `useritem` is the
- * selected stack and `inventoryQuery` the inventory view the caller shows.
+ * selected stack and `inventoryQuery` the inventory view the caller shows. A caller that
+ * can show the Kessen pack ceremony passes `onPackReveal`, which then replaces the reward
+ * toast of a card pack.
  */
 export const useConsumeItem = ({
   useritem,
   inventoryQuery,
   onSettled,
+  onPackReveal,
 }: {
   useritem: { item: Pick<Item, "itemType" | "effects"> } | undefined;
   inventoryQuery: "getUserItems" | "getUserItemsWithVariants";
   onSettled: () => void;
+  onPackReveal?: (reveal: CardPackReveal) => void;
 }) => {
   // Selecting the id alone keeps the travel map from rendering on every move.
   const {
@@ -280,13 +308,16 @@ export const useConsumeItem = ({
     useItemConsumptionCacheUpdate();
 
   const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
-    onMutate: () => ({
+    onMutate: (variables) => ({
       userRevision: prepareUserUpdate(),
-      consumption: prepareConsumptionUpdate(),
+      consumption: prepareConsumptionUpdate(variables.userItemId),
     }),
     onSuccess: async (data, variables, context) => {
       finishItemConsumeRequest(userId ?? "", variables.userItemId);
-      if (data.success && "rewards" in data && data.rewards) {
+      const packReveal = data.success ? data.kessenReveal : undefined;
+      if (packReveal && onPackReveal) {
+        onPackReveal(packReveal);
+      } else if (data.success && "rewards" in data && data.rewards) {
         showRewardToast(
           data.notifications ?? [],
           data.rewards,

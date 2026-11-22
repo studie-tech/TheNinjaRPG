@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { TUTORIAL_ITEM_ID } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
@@ -63,6 +64,16 @@ import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import { mockUserContextValue } from "../setup/userContext";
 
+/** The Card Master's hub cache binding needs a query client; other shops ignore it. */
+const renderShop = (ui: ReactNode) => {
+  const client = new QueryClient();
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+};
+
 const user = {
   level: 50,
   money: 1_000,
@@ -84,6 +95,12 @@ beforeEach(() => {
       },
       home: { getUserHome: { invalidate: homeInvalidation } },
     }),
+    kessen: {
+      getHub: {
+        useQuery: () => ({ data: undefined }),
+        _def: () => ({ path: ["kessen", "getHub"] }),
+      },
+    },
     item: {
       get: { useQuery: () => ({ data: tutorialItem }) },
       getAll: { useInfiniteQuery: catalogQuery },
@@ -91,6 +108,7 @@ beforeEach(() => {
       getPurchaseAllowance: {
         useQuery: () => ({ data: { remaining: null, limit: null }, refetch: vi.fn() }),
       },
+      getPurchaseAllowances: { useQuery: () => ({ data: undefined }) },
       buy: {
         useMutation: (options: PurchaseOptions) => {
           purchaseOptions = options;
@@ -154,7 +172,7 @@ afterEach(() => {
 
 describe("furniture catalog integration", () => {
   it("offers Furniture alongside ordinary item categories", () => {
-    const view = render(<Shop userData={user} defaultType="WEAPON" />);
+    const view = renderShop(<Shop userData={user} defaultType="WEAPON" />);
     expect(view.getByRole("tab", { name: "Weapon" })).toBeTruthy();
     fireEvent.mouseDown(view.getByRole("tab", { name: "Furniture" }), {
       button: 0,
@@ -163,9 +181,31 @@ describe("furniture catalog integration", () => {
     expect(setItemType).toHaveBeenCalledWith("FURNITURE");
   });
 
+  it("leaves Kessen cards and packs to the Card Master stall", () => {
+    const view = renderShop(<Shop userData={user} defaultType="CONSUMABLE" />);
+    expect(view.queryByRole("tab", { name: "Cards" })).toBeNull();
+    expect(catalogQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ onlyInShop: true, kessenGoods: "exclude" }),
+      expect.anything(),
+    );
+    cleanup();
+    renderShop(
+      <Shop
+        userData={user}
+        defaultType="CARD"
+        restrictTypes={["CARD", "CONSUMABLE"]}
+        cardStall
+      />,
+    );
+    expect(catalogQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kessenGoods: "only" }),
+      expect.anything(),
+    );
+  });
+
   it("keeps search filters and clears the purchase dialog when changing categories", async () => {
     purchaseResult = { success: false, message: "Inventory is full" };
-    const view = render(<Shop userData={user} defaultType="WEAPON" />);
+    const view = renderShop(<Shop userData={user} defaultType="WEAPON" />);
     fireEvent.change(view.getByRole("textbox"), { target: { value: "Painted" } });
     fireEvent.click(view.getByRole("button", { name: /Painted Cabinet/ }));
     await act(async () =>
@@ -201,7 +241,7 @@ describe("furniture catalog integration", () => {
       currentStep: { id: "tools-buy-shuriken", page: "/itemshop" },
       completeTutorialAction,
     } as never);
-    const view = render(<Shop userData={user} defaultType="WEAPON" />);
+    const view = renderShop(<Shop userData={user} defaultType="WEAPON" />);
     fireEvent.mouseDown(view.getByRole("tab", { name: "Furniture" }), {
       button: 0,
       ctrlKey: false,
@@ -215,7 +255,7 @@ describe("furniture catalog integration", () => {
   });
 
   it("purchases through item.buy and refreshes the residence after delivery", async () => {
-    const view = render(<Shop userData={user} defaultType="FURNITURE" />);
+    const view = renderShop(<Shop userData={user} defaultType="FURNITURE" />);
     expect(catalogQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         itemType: "FURNITURE",
@@ -242,7 +282,7 @@ describe("furniture catalog integration", () => {
 
   it("retains a rejected purchase with an inline message and does not refresh ownership", async () => {
     purchaseResult = { success: false, message: "Inventory is full" };
-    const view = render(<Shop userData={user} defaultType="FURNITURE" />);
+    const view = renderShop(<Shop userData={user} defaultType="FURNITURE" />);
     fireEvent.click(view.getByRole("button", { name: /Painted Cabinet/ }));
     await act(async () =>
       fireEvent.click(view.getByRole("button", { name: "Buy for 100 ryo" })),

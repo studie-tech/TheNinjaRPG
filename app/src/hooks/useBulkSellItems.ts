@@ -22,13 +22,19 @@ export const useBulkSellItems = ({
   onSettled: () => void;
 }) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
-  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
-    useInventoryCacheUpdate();
+  const {
+    prepareInventoryUpdate,
+    updateInventory,
+    invalidateInventory,
+    cachedItemTypes,
+    reconcileCardMoves,
+  } = useInventoryCacheUpdate();
 
   const { mutate, isPending } = api.item.sellUserItems.useMutation({
-    onMutate: () => ({
+    onMutate: (input) => ({
       inventory: prepareInventoryUpdate(),
       userRevision: prepareUserUpdate(),
+      itemTypes: cachedItemTypes(input.userItemIds),
     }),
     onSuccess: async (data, _input, context) => {
       showMutationToast(data);
@@ -46,16 +52,21 @@ export const useBulkSellItems = ({
           : sold.length > 0
             ? updateUser(data, { revision: context.userRevision })
             : undefined,
+        sold.length > 0 ? reconcileCardMoves(context.itemTypes) : undefined,
       ]);
     },
-    onError: async (error) => {
+    onError: async (error, _input, context) => {
       // Stacks may have been removed before the error; read inventory and ryo again.
       showMutationToast({
         success: false,
         message: error.message,
         variant: "destructive",
       });
-      await Promise.all([invalidateInventory(), updateUser(undefined)]);
+      await Promise.all([
+        invalidateInventory(),
+        updateUser(undefined),
+        reconcileCardMoves(context?.itemTypes ?? []),
+      ]);
     },
     onSettled,
   });

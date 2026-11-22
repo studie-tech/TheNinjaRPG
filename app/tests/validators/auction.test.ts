@@ -15,6 +15,7 @@ describe("listing quantity validation", () => {
   const item = {
     canStack: true,
     canBeTraded: true,
+    itemType: "WEAPON" as const,
     auctionMinPrice: null,
     auctionMaxPrice: null,
   };
@@ -50,7 +51,12 @@ describe("listing quantity validation", () => {
 });
 
 describe("auction form per-unit price validation", () => {
-  const item = { canBeTraded: true, auctionMinPrice: 10, auctionMaxPrice: 20 };
+  const item = {
+    canBeTraded: true,
+    itemType: "WEAPON" as const,
+    auctionMinPrice: 10,
+    auctionMaxPrice: 20,
+  };
   const listing = {
     userItemId: "owned",
     listingType: "AUCTION",
@@ -113,5 +119,19 @@ describe("auction form per-unit price validation", () => {
     expect(
       createAuctionListingSchema.safeParse({ ...listing, durationHours: 73 }).success,
     ).toBe(false);
+  });
+  it("holds a direct card sale to the card's auction floor", () => {
+    const card = { ...item, itemType: "CARD" as const, auctionMaxPrice: null };
+    const direct = { ...listing, listingType: "DIRECT", targetUserId: "alt" };
+    const below = auctionListingSchemaForItem(card).safeParse({
+      ...direct,
+      startingPrice: 1,
+    });
+    expect(below.success).toBe(false);
+    if (!below.success) expect(below.error.issues[0]?.path).toEqual(["startingPrice"]);
+    expect(
+      auctionListingSchemaForItem(card).safeParse({ ...direct, startingPrice: 10 })
+        .success,
+    ).toBe(true);
   });
 });

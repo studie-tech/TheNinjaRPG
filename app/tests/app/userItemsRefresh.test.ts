@@ -66,7 +66,10 @@ const staleTime = new Function(`return (${staleTimeExpression});`)() as number;
  */
 const inventoryQueries = [
   { file: "app/[shell]/items/page.tsx", procedure: "getUserItemsWithVariants" },
-  { file: "app/[shell]/auctionhouse/NewListingDialog.tsx", procedure: "getUserItems" },
+  {
+    file: "app/[shell]/auctionhouse/NewListingDialog.tsx",
+    procedure: "getUserItemsWithVariants",
+  },
   { file: "app/[shell]/auctionhouse/Offers.tsx", procedure: "getUserItems" },
 ];
 
@@ -107,10 +110,10 @@ describe("inventory pages", () => {
     const toast = vi.fn();
     const backpack = read("hooks/useItemActions.ts");
     const settled = backpack.match(
-      /const onSettled = (\(\) => \{[\s\S]*?\n  \});/,
+      /const onSettled = (\(\) => \{[\s\S]*?\n {2}\});/,
     )?.[1];
     const callbacks = backpack.match(
-      /api\.item\.consume\.useMutation\((\{[\s\S]*?\n  \})\);/,
+      /api\.item\.consume\.useMutation\((\{[\s\S]*?\n {2}\})\);/,
     )?.[1];
     if (!settled || !callbacks)
       throw new Error("Item action consume callbacks were not found");
@@ -220,7 +223,7 @@ describe("inventory pages", () => {
       async ({ message, cache, expected, pet = false }) => {
         const source = read(file);
         const callbacks = source.match(
-          /api\.item\.consume\.useMutation\((\{[\s\S]*?\n  \})\);/,
+          /api\.item\.consume\.useMutation\((\{[\s\S]*?\n {2}\})\);/,
         )?.[1];
         if (!callbacks) throw new Error("Consume callbacks were not found");
         const toast = vi.fn();
@@ -247,7 +250,7 @@ describe("inventory pages", () => {
           selected = value;
         };
         const settled = source.match(
-          /const onSettled = (\(\) => \{[\s\S]*?\n  \});/,
+          /const onSettled = (\(\) => \{[\s\S]*?\n {2}\});/,
         )?.[1];
         const onDone = () => {
           setIsOpen(false);
@@ -313,7 +316,7 @@ describe("inventory pages", () => {
   for (const file of ["hooks/useItemActions.ts"]) {
     it(`${file} refreshes the companion collection and forwards its generation link after a pet reward`, async () => {
       const callbacks = read(file).match(
-        /api\.item\.consume\.useMutation\((\{[\s\S]*?\n  \})\);/,
+        /api\.item\.consume\.useMutation\((\{[\s\S]*?\n {2}\})\);/,
       )?.[1];
       if (!callbacks) throw new Error("Consume callbacks were not found");
       const refreshPets = vi.fn(async () => undefined);
@@ -352,7 +355,7 @@ describe("inventory pages", () => {
         prepareConsumptionUpdate,
         consumptionController(utils),
       ) as {
-        onMutate: () => unknown;
+        onMutate: (variables: { userItemId: string }) => unknown;
         onSuccess: (
           data: unknown,
           variables: { userItemId: string },
@@ -370,7 +373,7 @@ describe("inventory pages", () => {
           petRewards,
         },
         { userItemId: "contract" },
-        options.onMutate(),
+        options.onMutate({ userItemId: "contract" }),
       );
       await waitFor(() => expect(refreshPets).toHaveBeenCalledTimes(1));
       expect(refreshPets).toHaveBeenCalledTimes(1);
@@ -381,7 +384,7 @@ describe("inventory pages", () => {
   for (const file of ["hooks/useItemActions.ts"]) {
     it(`${file} applies confirmed user changes instead of invalidating the profile`, async () => {
       const callbacks = read(file).match(
-        /api\.item\.consume\.useMutation\((\{[\s\S]*?\n  \})\);/,
+        /api\.item\.consume\.useMutation\((\{[\s\S]*?\n {2}\})\);/,
       )?.[1];
       if (!callbacks) throw new Error("Consume callbacks were not found");
       const invalidate = vi.fn(async () => undefined);
@@ -421,7 +424,7 @@ describe("inventory pages", () => {
         prepareConsumptionUpdate,
         consumptionController(utils),
       ) as {
-        onMutate: () => number;
+        onMutate: (variables: { userItemId: string }) => number;
         onSuccess: (
           data: unknown,
           variables: { userItemId: string },
@@ -433,7 +436,7 @@ describe("inventory pages", () => {
       await options.onSuccess(
         { success: true, message: "Healed", userPatch, userDelta },
         { userItemId: "potion" },
-        options.onMutate(),
+        options.onMutate({ userItemId: "potion" }),
       );
       expect(updateUser).toHaveBeenCalledWith(
         { success: true, message: "Healed", userPatch, userDelta },
@@ -494,7 +497,7 @@ describe("item-granting flows", () => {
     "location checks refresh observed inventory only when itemsChanged is %s",
     async (itemsChanged) => {
       const callbacks = read("layout/Sector.tsx").match(
-        /api\.quests\.checkLocationQuest\.useMutation\((\{[\s\S]*?\n  \})\);/,
+        /api\.quests\.checkLocationQuest\.useMutation\((\{[\s\S]*?\n {2}\})\);/,
       )?.[1];
       if (!callbacks) throw new Error("Location quest callbacks were not found");
       const client = new QueryClient({

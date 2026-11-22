@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import dynamic from "next/dynamic";
 import React, { use, useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -23,8 +24,10 @@ import {
 } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
+import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
 import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
+import { CardDataEditor } from "@/layout/CardDataEditor";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ItemHelper } from "@/layout/ContentHelp";
@@ -34,9 +37,12 @@ import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
 import { EffectTagListEditor } from "@/layout/EffectTagListEditor";
 import { FurnitureViewsEditor } from "@/layout/FurnitureViewsEditor";
 import Image from "@/layout/Image";
+import { itemCardDisplay } from "@/layout/items/cardDisplay";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { LpcEquipmentFields } from "@/layout/LpcEquipmentFields";
 import { SuggestChange } from "@/layout/SuggestChange";
+import { isKessenPackId } from "@/libs/kessen/packs";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
@@ -44,6 +50,7 @@ import type { ZodItemType } from "@/validators/combat";
 import { DamageTag, ItemValidatorRawSchema } from "@/validators/combat";
 import type { ZodItemVariantType } from "@/validators/item";
 import { displayCostType, ItemVariantValidator } from "@/validators/item";
+import type { CardData } from "@/validators/itemCard";
 import {
   DEFAULT_FURNITURE_DATA,
   type FurnitureData,
@@ -51,6 +58,13 @@ import {
   type FurnitureViews,
   furnitureGeometrySchema,
 } from "@/validators/itemFurniture";
+import { weightedCacheDraftSchema } from "@/validators/weightedCache";
+
+// The Kessen card face and its stylesheet load only for card items.
+const CardFace = dynamic(
+  () => import("@/layout/kessen/CardFace").then((mod) => mod.CardFace),
+  { ssr: false },
+);
 
 /** Staff item editor with type-specific configuration and validated effects. */
 export default function ItemEdit(props: { params: Promise<{ itemid: string }> }) {
@@ -109,6 +123,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   const itemType = useWatch({ control: form.control, name: "itemType" });
   const canBeEnhanced = useWatch({ control: form.control, name: "canBeEnhanced" });
   const isFurniture = itemType === "FURNITURE";
+  const isCard = itemType === "CARD";
   const furnitureImage = useWatch({ control: form.control, name: "image" });
   const furnitureData = useWatch({ control: form.control, name: "furnitureData" });
   const [isFurnitureMeasuring, setIsFurnitureMeasuring] = React.useState(false);
@@ -118,6 +133,50 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   const itemSlot = useWatch({ control: form.control, name: "slot" });
   const itemWeaponType = useWatch({ control: form.control, name: "weaponType" });
   const itemLpcProfile = useWatch({ control: form.control, name: "lpcProfile" });
+  const itemRarity = useWatch({ control: form.control, name: "rarity" });
+  const itemCardData = useWatch({ control: form.control, name: "cardData" });
+  // Card packs are consumables that never enter combat: only their pack fields show.
+  const isPack = isKessenPackId(item.id);
+  const shownFormData = isPack
+    ? formData.filter((field) => PACK_FORM_FIELDS.has(field.id))
+    : formData;
+  const cardPreview = isCard
+    ? itemCardDisplay({
+        id: item.id,
+        name: itemName,
+        rarity: itemRarity,
+        image: furnitureImage ?? "",
+        cardData: (itemCardData ?? null) as CardData | null,
+      })
+    : null;
+
+  const tagEditor = (
+    <EffectTagListEditor
+      allowFortify={!!canBeEnhanced}
+      allowJutsuSlotGrants={itemType === "CONSUMABLE"}
+      allowActivityBonuses={["ARMOR", "ACCESSORY", "KEYSTONE", "CRYSTAL"].includes(
+        itemType,
+      )}
+      type="item"
+      allowCoordinateTargeting={
+        !NonActionItemTypes.includes(itemType as (typeof NonActionItemTypes)[number])
+      }
+      effects={effects}
+      setEffects={setEffects}
+      newTag={() =>
+        DamageTag.parse({
+          description: "placeholder",
+          rounds: 0,
+          residualModifier: 0,
+        })
+      }
+      tagTitle="Item Tag"
+      emptyTitle="Item Tags"
+      emptyText="Please add effects to this item"
+      disabled={isUpdating}
+      submitLoading={isUpdating}
+    />
+  );
 
   // Show panel controls
   return (
@@ -134,7 +193,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
           guardUnsavedChanges
           schema={ItemValidatorRawSchema}
           form={form as unknown as UseFormReturn<ZodItemType, any>}
-          formData={formData}
+          formData={shownFormData}
           showSubmit={props.canSave}
           buttonTxt="Save to Database"
           type="item"
@@ -164,6 +223,32 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
               />
             </details>
           )}
+          {/* The card section sits above Save with a live face to check the art crop:
+              beside the form where the editor is wide, above it where it is not. */}
+          {isCard && (
+            <div className="@container col-span-full">
+              <div className="grid gap-3 @min-[560px]:grid-cols-[minmax(0,1fr)_160px]">
+                <CardDataEditor form={form} disabled={isUpdating || !props.canSave} />
+                <div className="order-first @min-[560px]:sticky @min-[560px]:top-2 @min-[560px]:order-none @min-[560px]:self-start">
+                  <p className="mb-1 font-semibold text-sm">Card face preview</p>
+                  {cardPreview ? (
+                    <span className="block aspect-[5/7] w-[160px] max-w-full">
+                      <CardFace
+                        card={cardPreview}
+                        renderSize={160}
+                        className="w-full"
+                      />
+                    </span>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      The preview appears once the card data is valid.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {isPack && <PackSummary effects={effects} />}
         </EditContent>
         {isFurniture && (
           <Controller
@@ -216,7 +301,8 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
             label={props.canSave ? "Suggest instead" : "Suggest a change"}
           />
         </div>
-        {props.canSave && (
+        {/* Cards and packs have one look, set by their art. */}
+        {props.canSave && !isCard && !isPack && (
           <ItemVariantsEditor
             item={item}
             furnitureData={
@@ -236,38 +322,113 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         )}
       </ContentBox>
 
-      {!isFurniture && (
-        <EffectTagListEditor
-          allowFortify={!!canBeEnhanced}
-          allowJutsuSlotGrants={itemType === "CONSUMABLE"}
-          allowActivityBonuses={["ARMOR", "ACCESSORY", "KEYSTONE", "CRYSTAL"].includes(
-            itemType,
-          )}
-          type="item"
-          allowCoordinateTargeting={
-            !NonActionItemTypes.includes(
-              itemType as (typeof NonActionItemTypes)[number],
-            )
-          }
-          effects={effects}
-          setEffects={setEffects}
-          newTag={() =>
-            DamageTag.parse({
-              description: "placeholder",
-              rounds: 0,
-              residualModifier: 0,
-            })
-          }
-          tagTitle="Item Tag"
-          emptyTitle="Item Tags"
-          emptyText="Please add effects to this item"
-          disabled={isUpdating}
-          submitLoading={isUpdating}
-        />
+      {isPack ? (
+        // A pack's slots and odds are summarised above; its raw Weighted Cache tags stay
+        // available for the changes the summary cannot make.
+        <details className="mt-3 rounded-md border bg-card p-2">
+          <summary className="flex min-h-[40px] cursor-pointer items-center font-semibold text-lg">
+            Advanced: raw pack tags
+          </summary>
+          {tagEditor}
+        </details>
+      ) : (
+        !isFurniture && !isCard && tagEditor
       )}
     </>
   );
 };
+
+/**
+ * What a Kessen card pack opens: its slots, each tier's odds and the cards by name, with
+ * the pity rules and the Kessen manual for the rest.
+ */
+function PackSummary({ effects }: { effects: readonly unknown[] }) {
+  const { data: catalog } = useKessenCatalog();
+  const names = new Map(catalog?.cards.map((card) => [card.id, card.name]));
+  const caches = effects.flatMap((effect) => {
+    const tag = effect as { rewardMode?: unknown; weightedCache?: unknown } | null;
+    if (tag?.rewardMode !== "weightedCache") return [];
+    const cache = weightedCacheDraftSchema.safeParse(tag.weightedCache);
+    return cache.success ? [cache.data] : [];
+  });
+  return (
+    <section
+      aria-label="Pack contents"
+      className="col-span-full rounded-md border bg-card p-3 text-sm"
+    >
+      <h3 className="font-semibold text-lg">Pack contents</h3>
+      <p className="text-muted-foreground">
+        Each Weighted Cache tag below is one group of slots. Copies beyond a card&apos;s
+        copy limit are re-rolled among cards the player still needs; Epic and Legendary
+        pity override the last slot. Rules and live odds:{" "}
+        <Link href="/manual/kessen" className="font-semibold underline">
+          Kessen manual
+        </Link>
+        .
+      </p>
+      {caches.map((cache, index) => {
+        const slots = cache.rolls
+          .map(
+            (roll) =>
+              `${roll.count} slot${roll.count === 1 ? "" : "s"} (${roll.probability / 100}%)`,
+          )
+          .join(" or ");
+        return (
+          // Tags have no stable id; their order is the pack's slot order.
+          <div key={index} className="mt-3">
+            <p className="font-semibold">
+              Group {index + 1}: {slots}
+            </p>
+            <ul className="mt-1 space-y-1">
+              {cache.tiers
+                .filter((tier) => tier.probability > 0)
+                .map((tier) => (
+                  <li key={tier.name}>
+                    <b>
+                      {tier.name} · {tier.probability / 100}%
+                    </b>{" "}
+                    <span className="text-muted-foreground">
+                      ({tier.entries.length} cards)
+                    </span>
+                    <p className="text-muted-foreground">
+                      {tier.entries
+                        .flatMap((entry) =>
+                          entry.items.map((row) => names.get(row.itemId) ?? row.itemId),
+                        )
+                        .join(", ")}
+                    </p>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+/** Editor fields of a Kessen card pack: identity, shop and trade. */
+const PACK_FORM_FIELDS = new Set<string>([
+  "name",
+  "image",
+  "itemType",
+  "rarity",
+  "description",
+  "hidden",
+  "isEventItem",
+  "cost",
+  "repsCost",
+  "seichiSilverCost",
+  "stackSize",
+  "canStack",
+  "inShop",
+  "purchaseLimitPeriod",
+  "purchaseLimit",
+  "expireFromStoreAt",
+  "canBeTraded",
+  "auctionMinPrice",
+  "auctionMaxPrice",
+]);
 
 interface ItemVariantsEditorProps {
   item: Item;

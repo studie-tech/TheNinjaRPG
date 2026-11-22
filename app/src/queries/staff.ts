@@ -33,6 +33,7 @@ import {
   itemLoadout,
   jutsuLoadout,
   kageDefendedChallenges,
+  kessenMatch,
   linkPromotion,
   moderationScan,
   mpvpBattleQueue,
@@ -1111,6 +1112,16 @@ export const updateUserHomeForUpdateUserId = (
     .update(userHome)
     .set({ userId: input.newUserId })
     .where(eq(userHome.userId, input.userId));
+
+/** Build the `kessenMatch` update for `updateUserId`, setting `opponentId` (seat 1 of duels). */
+export const updateKessenMatchForUpdateUserId = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(kessenMatch)
+    .set({ opponentId: input.newUserId })
+    .where(eq(kessenMatch.opponentId, input.userId));
 
 /** Build the `table` update for `updateUserId`, setting `userId`, using the configured predicates. */
 export const updateTableForUpdateUserId = (

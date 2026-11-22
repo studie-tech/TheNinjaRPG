@@ -341,6 +341,15 @@ export const formatHoursMinutes = (totalSeconds: number): string => {
   return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
+/** Compact length that counts days from one day up ("3d 4h"), else as `formatHoursMinutes`. */
+export const formatDaysHours = (totalSeconds: number): string => {
+  if (totalSeconds < DAY_S) return formatHoursMinutes(totalSeconds);
+  const totalHours = Math.ceil(totalSeconds / HOUR_S);
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return hours ? `${days}d ${hours}h` : `${days}d`;
+};
+
 /** Clock-style time left: "MM:SS", "HH:MM:SS" from one hour up, "1d HH:MM:SS" from one day. */
 export const formatClockTime = (ms: number): string => {
   const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(ms);
@@ -444,6 +453,10 @@ export const getBankInterestDateRange = (now = new Date()) => {
 /** Next UTC daily reset, used to refresh calendar-based eligibility. */
 export const nextUtcDayAt = (now = new Date()) =>
   new Date(periodStart("daily", now).getTime() + DAY_S * 1000);
+
+/** Next UTC weekly reset (Monday 00:00 UTC), used to refresh weekly eligibility. */
+export const nextUtcWeekAt = (now = new Date()) =>
+  new Date(periodStart("weekly", now).getTime() + WEEK_S * 1000);
 
 /** UTC key shared by monthly Skills and Bloodright reset claims. */
 export const getUtcMonthKey = (now = new Date()) => now.toISOString().slice(0, 7);

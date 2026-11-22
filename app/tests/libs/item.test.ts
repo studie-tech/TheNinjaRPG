@@ -1,17 +1,24 @@
 import { describe, expect, it } from "bun:test";
 import type { ItemSlot, MasteryName } from "@/drizzle/constants";
 import {
+  CARDS_BASE_SLOTS,
   COOKING_BASE_SLOTS,
   DURABILITY_POINT_PRICE_PERCENT,
   FED_COOKING_SLOTS,
   FED_INVENTORY_SLOTS,
   ItemSlots,
   ItemTypes,
+  KESSEN_CARD_SELL_VALUES,
+  KESSEN_FIRST_BUNDLE_ITEM_ID,
   MATERIALS_BASE_SLOTS,
   MasteryNames,
   NonActionItemTypes,
 } from "@/drizzle/constants";
-import type { UserData, UserItemWithRelations } from "@/drizzle/schema";
+import type {
+  UserData,
+  UserItemWithRelations,
+  VillageStructure,
+} from "@/drizzle/schema";
 import {
   buildItemLoadoutData,
   calcItemRepairCost,
@@ -40,14 +47,17 @@ import {
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
   getItemStackMergeBucketKey,
+  isDropOnlyItem,
   isEquippableUserItem,
   isImbuing,
+  isUnsellableCard,
   showsItemLevelBadge,
   userItemActionBadges,
   userItemDisplay,
 } from "@/libs/item";
 import type { MasteryRequirementFields } from "@/libs/mastery";
 import type { ZodAllTags } from "@/validators/combat";
+import { DEFAULT_CARD_DATA } from "@/validators/itemCard";
 
 const NOW = new Date("2026-06-17T00:00:00Z");
 const PAST = new Date("2026-06-16T00:00:00Z");
@@ -162,6 +172,12 @@ const equipped = (over: Partial<EquippedConstraintState>): EquippedConstraintSta
 });
 
 describe("canEquipAdditional", () => {
+  it("refuses cards, which belong to the card collection", () => {
+    expect(
+      canEquipAdditional({ itemType: "CARD", slot: "NONE", bloodlineId: null }, []),
+    ).toMatch(/card collection/);
+  });
+
   it("allows an item when nothing is equipped", () => {
     expect(canEquipAdditional(info({}), [])).toBeNull();
   });
@@ -1135,6 +1151,11 @@ describe("inventory and home storage buckets", () => {
     expect(getHomeStorageBucket({ itemType: "CONSUMABLE" })).toBe("normal");
   });
 
+  it("keeps cards in their own capped bucket, event flag or not", () => {
+    expect(getInventoryBucket({ itemType: "CARD", isEventItem: true })).toBe("cards");
+    expect(getInventoryBucketCapacity("cards", {} as never)).toBe(CARDS_BASE_SLOTS);
+  });
+
   it("keeps cooking out of normal and materials buckets", () => {
     const cooking = { itemType: "COOKING", isEventItem: false };
     expect(getInventoryBucket(cooking)).not.toBe("normal");
@@ -1433,5 +1454,101 @@ describe("item economy values", () => {
     expect(calcItemRepairCost(owned({ rarity }))).toBe(
       Math.ceil(base * 10 * DURABILITY_POINT_PRICE_PERCENT),
     );
+  });
+});
+
+describe("card sale values", () => {
+  const anbu = { anbuId: "anbu-squad" } as unknown as UserData;
+  const plain = { anbuId: null } as unknown as UserData;
+  const discountHall = [
+    {
+      level: 5,
+      temporaryLevelBonus: 0,
+      temporaryLevelBonusExpiresAt: null,
+      raidBoostExpiresAt: null,
+      itemDiscountPerLvl: 2,
+    },
+  ] as unknown as VillageStructure[];
+  const ownedCard = (
+    rarity: string,
+    cardData: Record<string, unknown> = {},
+    quantity = 1,
+  ) =>
+    ({
+      quantity,
+      item: {
+        id: `card-${rarity}`,
+        itemType: "CARD",
+        rarity,
+        cost: 1500,
+        isEventItem: false,
+        inShop: true,
+        effects: [],
+        cardData: { ...DEFAULT_CARD_DATA, ...cardData },
+      },
+    }) as unknown as Parameters<typeof calcItemSellingPrice>[1];
+
+  it.each([
+    ["COMMON", plain, undefined],
+    ["RARE", anbu, undefined],
+    ["EPIC", plain, discountHall],
+    ["LEGENDARY", anbu, discountHall],
+  ] as const)(
+    "pays the fixed %s value whatever the stall price, ANBU or village discounts",
+    (rarity, user, structures) => {
+      expect(calcItemSellingPrice(user, ownedCard(rarity, {}, 3), structures)).toBe(
+        KESSEN_CARD_SELL_VALUES[rarity] * 3,
+      );
+    },
+  );
+
+  it("pays nothing for leaders, Forbidden variants or an unknown rarity", () => {
+    const leader = ownedCard("COMMON", { kind: "LEADER", row: null });
+    const forbidden = ownedCard("LEGENDARY", {
+      variant: "FORBIDDEN",
+      baseCardId: "kessen-moonprowler",
+    });
+    expect(calcItemSellingPrice(plain, leader, undefined)).toBe(0);
+    expect(calcItemSellingPrice(plain, forbidden, undefined)).toBe(0);
+    expect(calcItemSellingPrice(plain, ownedCard("constructor"), undefined)).toBe(0);
+  });
+
+  it("marks leaders, Forbidden variants and the First Bundle unsellable", () => {
+    const item = (patch: Record<string, unknown>) => ({
+      id: "kessen-moonprowler",
+      itemType: "CARD" as const,
+      cardData: DEFAULT_CARD_DATA,
+      ...patch,
+    });
+    expect(isUnsellableCard(item({}))).toBe(false);
+    expect(
+      isUnsellableCard(item({ cardData: { ...DEFAULT_CARD_DATA, kind: "LEADER" } })),
+    ).toBe(true);
+    expect(
+      isUnsellableCard(
+        item({ cardData: { ...DEFAULT_CARD_DATA, variant: "FORBIDDEN" } }),
+      ),
+    ).toBe(true);
+    expect(
+      isUnsellableCard(
+        item({
+          id: KESSEN_FIRST_BUNDLE_ITEM_ID,
+          itemType: "CONSUMABLE",
+          cardData: null,
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isUnsellableCard(item({ id: "kessen-pack-paper", itemType: "CONSUMABLE" })),
+    ).toBe(false);
+  });
+
+  it("sells cards for ryo even when no shop lists them", () => {
+    expect(
+      isDropOnlyItem({ itemType: "CARD", isEventItem: false, inShop: false }),
+    ).toBe(false);
+    expect(
+      isDropOnlyItem({ itemType: "CONSUMABLE", isEventItem: false, inShop: false }),
+    ).toBe(true);
   });
 });
