@@ -999,6 +999,36 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(after.curEnergy).toBe(0);
   });
 
+  it("lets staff train and queue Energy without solving a pending captcha", async () => {
+    await trainee({
+      curEnergy: 100,
+      regeneration: 0,
+      dailyTrainings: 12,
+      staffAccount: true,
+    });
+    const database = await getTestDatabase();
+    await database.insert(captcha).values({ userId: USER_ID, value: "ACDEF" });
+    const api = await caller();
+    expect((await api.startTraining({ stat: "offence", energy: 10 })).success).toBe(
+      true,
+    );
+    expect((await readUser()).curEnergy).toBe(90);
+    expect(
+      (
+        await api.updateEnergyTrainingQueue({
+          expectedEntries: [],
+          entries: [{ stat: "defence", energy: 10 }],
+        })
+      ).success,
+    ).toBe(true);
+    expect(await readEnergyQueue(USER_ID)).toMatchObject([
+      { stat: "defence", energy: 10 },
+    ]);
+    expect(
+      await database.select().from(captcha).where(eq(captcha.userId, USER_ID)),
+    ).toMatchObject([{ value: "ACDEF", used: false }]);
+  });
+
   it("asks once at a captcha count instead of on every Energy action", async () => {
     // 12 daily trainings is a captcha count for NONE; Energy actions never advance it.
     await trainee({ curEnergy: 100, regeneration: 0, dailyTrainings: 12 });

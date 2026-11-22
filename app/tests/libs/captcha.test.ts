@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { FederalStatus } from "@/drizzle/constants";
+import { MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import {
   CAPTCHA_ALPHABET,
   CAPTCHA_LENGTH,
@@ -72,10 +73,14 @@ describe("showTrainingCapcha", () => {
     expect(perTier("GOLD")).toBe(12);
   });
 
-  it("uses the DIAMOND cadence for staff accounts", () => {
-    expect(showTrainingCapcha(user("NONE", 12, true))).toBe(true);
-    expect(showTrainingCapcha(user("NONE", 15, true))).toBe(false);
-  });
+  it.each(["NONE", "NORMAL", "SILVER", "GOLD", "DIAMOND"] as const)(
+    "exempts staff accounts with %s support at every daily training count",
+    (status) => {
+      for (let count = 0; count <= MAX_DAILY_TRAININGS; count++) {
+        expect(showTrainingCapcha(user(status, count, true))).toBe(false);
+      }
+    },
+  );
 });
 
 describe("captchaAnswerMatches", () => {

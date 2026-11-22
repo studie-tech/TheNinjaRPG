@@ -2121,11 +2121,16 @@ export const profileRouter = createTRPCRouter({
       // Null (not omit) so the public payload shape stays stable for clients.
       const canSeePvpRecord =
         isSelf || user.showPvpRecord || canSeeSecretData(viewerRole);
+      const { staffAccount, ...publicUser } = user;
+      const profile = {
+        ...publicUser,
+        ...(canEditStaffAccountFlag(viewerRole) ? { staffAccount } : {}),
+      };
       if (!canSeePvpRecord) {
-        return { ...user, pvpWins: null, pvpLosses: null };
+        return { ...profile, pvpWins: null, pvpLosses: null };
       }
       // Return
-      return user;
+      return profile;
     }),
   countOnlineUsers: publicProcedure
     .meta({
