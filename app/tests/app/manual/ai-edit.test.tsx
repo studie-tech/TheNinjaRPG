@@ -94,6 +94,7 @@ beforeEach(() => {
     clan: { getAllNames: names },
     anbu: { getAllNames: names },
     gameAsset: {
+      getAllFolders: { useQuery: () => ({ data: [], isPending: false }) },
       getNameTags: names,
       getSceneAssets: names,
       getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },

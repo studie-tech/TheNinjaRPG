@@ -85,17 +85,22 @@ export const gameAssetRouter = createTRPCRouter({
         );
       }
     }),
+  /** Name pieces of matching assets; an empty `exactFolder` selects Unfiled exactly. */
   getNameTags: publicProcedure
     .meta({ mcp: { description: "Get game asset name tags" } })
     .input(
       z.object({
         type: z.enum(GameAssetTypes).optional(),
         selected: z.array(z.string()).optional(),
+        exactFolder: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const whereClauses = [
         ...(input.type ? [eq(gameAsset.type, input.type)] : []),
+        ...(input.exactFolder !== undefined
+          ? [eq(gameAsset.folder, input.exactFolder)]
+          : []),
         ...(input.selected
           ? input.selected.map((t) => like(gameAsset.name, `%${t}%`))
           : []),

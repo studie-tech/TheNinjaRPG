@@ -119,6 +119,7 @@ const api = {
   },
   gameAsset: {
     getAllNames: names,
+    getAllFolders: { useQuery: () => ({ data: [], isPending: false }) },
     getNameTags: names,
     getSceneAssets: names,
     getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },
@@ -2350,6 +2351,48 @@ describe("schema-derived field visibility", () => {
           name: "Projectile animation: Pick from dialog",
         }),
       ).toBe(picker),
+    );
+  });
+
+  it("opens the animation picker on its folders, with Unfiled still reachable", async () => {
+    vi.spyOn(api.gameAsset.getAllFolders, "useQuery").mockReturnValue({
+      data: [{ folder: "SkyglassBossFX", count: 25 }],
+      isPending: false,
+    } as never);
+    const listing = vi.spyOn(api.gameAsset.getAll, "useInfiniteQuery");
+    const tag = DamageTag.parse({});
+    const view = render(
+      <EffectFormWrapper
+        type="jutsu"
+        idx={0}
+        tag={tag}
+        effects={[tag]}
+        setEffects={vi.fn()}
+        availableTags={["damage"]}
+        hideTagType
+      />,
+    );
+    const lastListing = () =>
+      listing.mock.calls.at(-1) as unknown as [
+        { exactFolder?: string },
+        { enabled: boolean },
+      ];
+    fireEvent.click(
+      view.getByRole("button", { name: "Projectile animation: Pick from dialog" }),
+    );
+    const folder = await view.findByRole("button", { name: /^Skyglass boss fx/ });
+    expect(lastListing()[1].enabled).toBe(false);
+    fireEvent.click(folder);
+    await waitFor(() =>
+      expect(lastListing()).toEqual([
+        expect.objectContaining({ exactFolder: "SkyglassBossFX" }),
+        expect.objectContaining({ enabled: true }),
+      ]),
+    );
+    fireEvent.click(view.getByRole("button", { name: "Folders" }));
+    fireEvent.click(await view.findByRole("button", { name: "Unfiled" }));
+    await waitFor(() =>
+      expect(lastListing()[0]).toEqual(expect.objectContaining({ exactFolder: "" })),
     );
   });
 

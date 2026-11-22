@@ -166,6 +166,7 @@ it("keeps a pending activity-streak image when the same config changes streak ty
       updateConfig: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     gameAsset: {
+      getAllFolders: { useQuery: () => ({ data: [], isPending: false }) },
       getNameTags: { useQuery: () => ({ data: [] }) },
       getSceneAssets: { useQuery: () => ({ data: [] }) },
       getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },
