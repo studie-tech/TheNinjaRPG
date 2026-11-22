@@ -310,7 +310,7 @@ export const useMatchTable = ({
     );
   };
 
-  /** Jumps to the confirmed board. */
+  /** Ends the playback; a newer version waiting for it then plays. */
   const skipPlayback = () => {
     if (playback) finishPlayback(playback);
   };
