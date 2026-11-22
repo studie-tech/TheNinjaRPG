@@ -3,8 +3,10 @@
 import { Crown, Maximize2, ScrollText, X } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/libs/shadui";
 import { KeywordText } from "../KeywordText";
 import { targetPrompt } from "./matchText";
+import { useLongPress } from "./useLongPress";
 import { type MatchTable, placementSide } from "./useMatchTable";
 
 /**
@@ -184,6 +186,12 @@ export const ActionBar = ({
   const zone = view.seats[me];
   const leaderReady = table.canAct && zone.leader !== null && !zone.leaderUsed;
   const leaderActive = table.draft.action?.t === "leader";
+  // Right-click or a long press reads the leader like any card; so does a tap while the
+  // ability cannot be used.
+  const readLeader = () => table.inspect(`leader:${me}`);
+  const { consumeLongPress, ...leaderPress } = useLongPress({
+    onLongPress: readLeader,
+  });
   return (
     <div className="km-actions" role="toolbar" aria-label="Match actions">
       <PassControl table={table} lesson={lesson} onPassRequest={onPassRequest} />
@@ -191,15 +199,23 @@ export const ActionBar = ({
         <Button
           type="button"
           variant={leaderActive ? "default" : "secondary"}
-          className="km-action gap-[5px]"
+          className={cn("km-action gap-[5px]", !leaderReady && "opacity-60")}
           data-lesson-target="leader"
-          disabled={!leaderReady}
-          onClick={table.startLeader}
-          aria-pressed={leaderActive}
+          onClick={() => {
+            if (consumeLongPress()) return;
+            if (leaderReady) table.startLeader();
+            else readLeader();
+          }}
+          aria-pressed={leaderReady ? leaderActive : undefined}
           title={
-            zone.leaderUsed ? "Leader ability used" : "Use your leader (once per match)"
+            leaderReady
+              ? "Use your leader (once per match). Right-click or hold to read it."
+              : zone.leaderUsed
+                ? "Leader ability used. Tap to read it."
+                : "Tap to read your leader."
           }
           data-button-sfx="off"
+          {...leaderPress}
         >
           <Crown className="h-4 w-4" aria-hidden />
           <span>Leader</span>

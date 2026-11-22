@@ -1287,15 +1287,34 @@
 
 /* ------------------------------------------------------------ sheets, panels */
 
-/* Sheets over the board take the height their content needs, up to the board's. */
-.km-sheet {
+/* Sheets cover the whole table: the table dims behind them and a tap on the dimmed
+   table closes the top sheet. They stack in one cell, centred, as wide as the table
+   allows up to a reading width, and as tall as their content needs. */
+.km-sheet-layer {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  left: 6px;
-  z-index: 20;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+}
+.km-sheet-scrim {
+  grid-area: 1 / 1;
+  align-self: stretch;
+  justify-self: stretch;
+  margin: -10px;
+  border: 0;
+  background: rgb(6 3 2 / 0.62);
+  backdrop-filter: blur(1.5px);
+  cursor: default;
+}
+.km-sheet {
+  position: relative;
+  grid-area: 1 / 1;
+  z-index: 1;
   display: flex;
-  max-height: calc(100% - 12px);
+  width: min(100%, 680px);
+  max-height: 100%;
   flex-direction: column;
   border: 1px solid rgb(138 100 32 / 0.85);
   border-radius: 12px;
@@ -1308,9 +1327,6 @@
     0 12px 30px rgb(0 0 0 / 0.7),
     inset 0 1px 0 rgb(246 220 140 / 0.18),
     inset 0 0 0 1px rgb(0 0 0 / 0.5);
-}
-.km-sheet[data-tall] {
-  bottom: 6px;
 }
 .km-sheet-head {
   display: flex;
@@ -1339,6 +1355,20 @@
 .km-inspect-face {
   width: clamp(150px, min(56cqw, 40cqh), 260px);
   flex-shrink: 0;
+}
+/* The inspect sheet sets the card beside its facts, so the whole card reads without
+   scrolling; only the narrowest frames stack them. */
+@container km-frame (min-width: 340px) {
+  .km-sheet .km-inspect:has(> .km-inspect-face) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    justify-items: start;
+    gap: 8px clamp(10px, 3cqw, 18px);
+  }
+  .km-sheet .km-inspect > .km-inspect-face {
+    width: clamp(120px, min(38cqw, (100cqh - 120px) / 1.42), 250px);
+  }
 }
 .km-inspect-leader {
   width: 100%;

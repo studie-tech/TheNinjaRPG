@@ -16,12 +16,15 @@ import { isUsableHighlightRect, type TutorialScreenBox } from "@/libs/tutorial";
  */
 export const Spotlight = ({
   box,
+  marks = [],
   ping = true,
   pointer = true,
   holeClassName,
   children,
 }: {
   box: SpotlightBox;
+  /** Further elements the step refers to: uncovered and marked with a dashed ring. */
+  marks?: SpotlightMark[];
   /** The expanding ring that draws the eye to the hole. */
   ping?: boolean;
   /** The bouncing hand, for a control the player should press. */
@@ -33,7 +36,10 @@ export const Spotlight = ({
 }) =>
   createPortal(
     <div data-battle-focus-layer className="pointer-events-none fixed inset-0 z-[60]">
-      <SpotlightDim box={box} />
+      <SpotlightDim box={box} extra={marks.map((mark) => mark.box)} />
+      {marks.map((mark) => (
+        <SpotlightMarkRing key={mark.key} mark={mark} />
+      ))}
       <div
         className={cn("absolute rounded-lg", holeClassName)}
         style={spotlightHoleStyle(box)}
@@ -55,7 +61,14 @@ export const Spotlight = ({
  * box-shadow spread: Chrome stops painting shadows that large on a
  * transformed layer, which left the page undimmed.
  */
-export const SpotlightDim = ({ box }: { box: SpotlightBox }) => {
+export const SpotlightDim = ({
+  box,
+  extra = [],
+}: {
+  box?: SpotlightBox;
+  /** Further holes, for marked elements. */
+  extra?: SpotlightBox[];
+}) => {
   const maskId = useId();
   return (
     <svg
@@ -65,14 +78,27 @@ export const SpotlightDim = ({ box }: { box: SpotlightBox }) => {
       <defs>
         <mask id={maskId}>
           <rect width="100%" height="100%" fill="white" />
-          <rect
-            x={box.left - HOLE_PADDING_PX}
-            y={box.top - HOLE_PADDING_PX}
-            width={box.width + HOLE_PADDING_PX * 2}
-            height={box.height + HOLE_PADDING_PX * 2}
-            rx={8}
-            fill="black"
-          />
+          {box ? (
+            <rect
+              x={box.left - HOLE_PADDING_PX}
+              y={box.top - HOLE_PADDING_PX}
+              width={box.width + HOLE_PADDING_PX * 2}
+              height={box.height + HOLE_PADDING_PX * 2}
+              rx={8}
+              fill="black"
+            />
+          ) : null}
+          {extra.map((hole) => (
+            <rect
+              key={`${hole.left},${hole.top}`}
+              x={hole.left - MARK_PADDING_PX}
+              y={hole.top - MARK_PADDING_PX}
+              width={hole.width + MARK_PADDING_PX * 2}
+              height={hole.height + MARK_PADDING_PX * 2}
+              rx={6}
+              fill="black"
+            />
+          ))}
         </mask>
       </defs>
       <rect
@@ -83,6 +109,47 @@ export const SpotlightDim = ({ box }: { box: SpotlightBox }) => {
         mask={`url(#${maskId})`}
       />
     </svg>
+  );
+};
+
+/** Marked elements alone, uncovered in a dimmed page: for a step that rings no control. */
+export const SpotlightMarks = ({ marks }: { marks: SpotlightMark[] }) => (
+  <div className="pointer-events-none absolute inset-0">
+    <SpotlightDim extra={marks.map((mark) => mark.box)} />
+    {marks.map((mark) => (
+      <SpotlightMarkRing key={mark.key} mark={mark} />
+    ))}
+  </div>
+);
+
+/**
+ * A dashed sky ring around an element the step refers to, with its name on a tab above
+ * it (below it when there is no room). Sky sets it apart from the amber ring of the
+ * control to press.
+ */
+const SpotlightMarkRing = ({ mark }: { mark: SpotlightMark }) => {
+  const { box, label } = mark;
+  const above = box.top - MARK_PADDING_PX > 24;
+  return (
+    <div
+      className="absolute rounded-md border-2 border-sky-300 border-dashed shadow-[0_0_12px_rgba(125,211,252,0.6)]"
+      style={{
+        top: 0,
+        left: 0,
+        width: box.width + MARK_PADDING_PX * 2,
+        height: box.height + MARK_PADDING_PX * 2,
+        transform: `translate(${box.left - MARK_PADDING_PX}px, ${box.top - MARK_PADDING_PX}px)`,
+      }}
+    >
+      <span
+        className={cn(
+          "absolute left-1/2 max-w-[160px] -translate-x-1/2 truncate whitespace-nowrap rounded-sm bg-sky-300 px-1.5 py-0.5 font-semibold text-[11px] text-sky-950 leading-tight shadow",
+          above ? "-top-[22px]" : "-bottom-[22px]",
+        )}
+      >
+        {label}
+      </span>
+    </div>
   );
 };
 
@@ -231,5 +298,14 @@ const TRACK_LAYOUT_SETTLED_RUNS = 4;
 
 /** Space between a highlighted element and the edge of its hole. */
 const HOLE_PADDING_PX = 8;
+/** Space between a marked element and its dashed ring. */
+const MARK_PADDING_PX = 3;
 
 export type SpotlightBox = TutorialScreenBox;
+
+/** A marked element's box and name; `key` tells marks apart across measurements. */
+export interface SpotlightMark {
+  key: string;
+  box: SpotlightBox;
+  label: string;
+}

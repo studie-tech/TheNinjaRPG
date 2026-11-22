@@ -20,6 +20,7 @@ import { KESSEN_IMAGES, kessenLandscapeUrl } from "../kessenArt";
 import { useKessenMotion } from "../useKessenMotion";
 import { DuelClock, DuelEndScreen } from "./DuelOverlays";
 import { LessonNotice, LessonSpotlight, RetryRow } from "./LessonSpotlight";
+import { lessonMarks } from "./lesson";
 import { type HandSort, OpponentBar, PlayerBar } from "./MatchBars";
 import { MatchBoard } from "./MatchBoard";
 import { ActionBar, PromptStrip } from "./MatchControls";
@@ -185,6 +186,14 @@ export const KessenMatchView = ({
     else if (table.draft.card || table.draft.action) table.cancel();
   };
 
+  const handSheetOpen = sheet === "hand" && !docked;
+  const sheetOpen = picker || handSheetOpen || sheet === "log" || inspectSheetOpen;
+  const closeTopSheet = () => {
+    if (table.inspectOpen) table.closeInspect();
+    else if (picker) table.cancel();
+    else setSheet(null);
+  };
+
   const openSheet = (next: Sheet) => {
     table.closeInspect();
     setSheet(next);
@@ -223,66 +232,6 @@ export const KessenMatchView = ({
             lesson={lesson}
           />
           <BigPlayStamp table={table} />
-          {picker ? (
-            <div className="km-sheet" data-place="top">
-              <SheetHead title="Choose a card" onClose={table.cancel} />
-              <TargetPicker table={table} />
-            </div>
-          ) : null}
-          {sheet === "hand" && !docked ? (
-            <div className="km-sheet" data-place="top">
-              <SheetHead title="Your hand" onClose={() => setSheet(null)} />
-              <div className="km-sheet-body">
-                <HandStrip
-                  table={table}
-                  sort={sort}
-                  layout="grid"
-                  onPicked={() => setSheet(null)}
-                />
-              </div>
-            </div>
-          ) : null}
-          {sheet === "log" ? (
-            <div className="km-sheet" data-place="top">
-              <SheetHead title="Table" onClose={() => setSheet(null)} />
-              <Tabs
-                value={logTab}
-                onValueChange={(value) => setLogTab(value as LogTab)}
-                className="flex min-h-0 flex-1 flex-col"
-              >
-                <TabsList
-                  aria-label="Table sheet"
-                  className="km-tabs grid shrink-0 grid-cols-4"
-                >
-                  {LOG_TABS.map((tab) => (
-                    <TabsTrigger key={tab.id} value={tab.id} className="km-tab">
-                      {tab.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                <TabsContent value="log" className="km-sheet-body">
-                  <PlayLog table={table} />
-                </TabsContent>
-                <TabsContent value="discards" className="km-sheet-body">
-                  <Discards table={table} />
-                </TabsContent>
-                <TabsContent value="rules" className="km-sheet-body">
-                  <RulesGlossary table={table} />
-                </TabsContent>
-                <TabsContent value="options" className="km-sheet-body">
-                  <MatchOptions table={table} />
-                </TabsContent>
-              </Tabs>
-            </div>
-          ) : null}
-          {inspectSheetOpen ? (
-            <div className="km-sheet km-sheet-inspect" data-place="top">
-              <SheetHead title="Card" onClose={table.closeInspect} />
-              <div className="km-sheet-body">
-                <InspectPanel table={table} />
-              </div>
-            </div>
-          ) : null}
         </div>
         <PlayerBar
           table={table}
@@ -373,6 +322,7 @@ export const KessenMatchView = ({
           title="Pass now?"
           tone="mistake"
           lead={passWarning}
+          marks={lessonMarks(table.view, [passWarning])}
         >
           <Button
             type="button"
@@ -402,6 +352,7 @@ export const KessenMatchView = ({
           tone="mistake"
           lead={coach.text}
           why={coach.why}
+          marks={lessonMarks(table.view, [coach.title, coach.text, coach.why])}
         >
           {retryLesson ? (
             <RetryRow onRetry={retryLesson} retrying={isStarting} error={startError} />
@@ -421,6 +372,7 @@ export const KessenMatchView = ({
         <LessonSpotlight
           step={coach}
           lesson={heading}
+          marks={lessonMarks(table.view, [coach.title, coach.text, coach.why])}
           onRetry={retryLesson}
           retrying={isStarting}
           retryError={startError}
@@ -450,7 +402,82 @@ export const KessenMatchView = ({
         closeAll();
       }}
     >
-      <div className="km-layout">{main}</div>
+      <div className="km-layout" inert={sheetOpen || undefined}>
+        {main}
+      </div>
+      {sheetOpen ? (
+        // Sheets cover the whole table over a dimmed backdrop; a tap on it closes the top one.
+        <div className="km-sheet-layer">
+          <button
+            type="button"
+            className="km-sheet-scrim"
+            aria-label="Close"
+            tabIndex={-1}
+            onClick={closeTopSheet}
+            data-button-sfx="off"
+          />
+          {picker ? (
+            <div className="km-sheet">
+              <SheetHead title="Choose a card" onClose={table.cancel} />
+              <TargetPicker table={table} />
+            </div>
+          ) : null}
+          {handSheetOpen ? (
+            <div className="km-sheet">
+              <SheetHead title="Your hand" onClose={() => setSheet(null)} />
+              <div className="km-sheet-body">
+                <HandStrip
+                  table={table}
+                  sort={sort}
+                  layout="grid"
+                  onPicked={() => setSheet(null)}
+                />
+              </div>
+            </div>
+          ) : null}
+          {sheet === "log" ? (
+            <div className="km-sheet">
+              <SheetHead title="Table" onClose={() => setSheet(null)} />
+              <Tabs
+                value={logTab}
+                onValueChange={(value) => setLogTab(value as LogTab)}
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                <TabsList
+                  aria-label="Table sheet"
+                  className="km-tabs grid shrink-0 grid-cols-4"
+                >
+                  {LOG_TABS.map((tab) => (
+                    <TabsTrigger key={tab.id} value={tab.id} className="km-tab">
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                <TabsContent value="log" className="km-sheet-body">
+                  <PlayLog table={table} />
+                </TabsContent>
+                <TabsContent value="discards" className="km-sheet-body">
+                  <Discards table={table} />
+                </TabsContent>
+                <TabsContent value="rules" className="km-sheet-body">
+                  <RulesGlossary table={table} />
+                </TabsContent>
+                <TabsContent value="options" className="km-sheet-body">
+                  <MatchOptions table={table} />
+                </TabsContent>
+              </Tabs>
+            </div>
+          ) : null}
+          {inspectSheetOpen ? (
+            <div className="km-sheet km-sheet-inspect">
+              <SheetHead title="Card" onClose={table.closeInspect} />
+              <div className="km-sheet-body">
+                <InspectPanel table={table} />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 };

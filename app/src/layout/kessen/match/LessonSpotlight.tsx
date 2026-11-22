@@ -6,11 +6,12 @@ import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   type GuidedLesson,
+  type GuidedLessonMark,
   type GuidedLessonStep,
   guidedLessonAtom,
 } from "@/layout/tutorial/guidedLesson";
 import type { AcademyCoachStep } from "@/libs/kessen/academy";
-import { lessonTargetSelector } from "./lesson";
+import { escapeRegExp, lessonTargetSelector, markedNames } from "./lesson";
 
 /**
  * Lemu's coach step over a lesson table, shown by the game's tutorial assistant: the
@@ -21,26 +22,39 @@ import { lessonTargetSelector } from "./lesson";
 export const LessonSpotlight = ({
   step,
   lesson,
+  marks = [],
   onRetry,
   retrying = false,
   retryError = null,
 }: {
   step: AcademyCoachStep;
   lesson: LessonHeading;
+  /** The cards Lemu's words name, marked on the table (`lessonMarks`). */
+  marks?: GuidedLessonMark[];
   onRetry?: () => void;
   retrying?: boolean;
   retryError?: string | null;
 }) => {
   const target = lessonTargetSelector(step);
+  const names = markedNames(marks);
   return (
     <LessonGuide
       lesson={lesson}
       step={{
         id: `${target}|${step.title}|${step.text}`,
         title: step.title,
-        lead: step.why ? <p className={LEAD_CLASS}>{step.why}</p> : undefined,
+        lead:
+          step.why || names.length > 0 ? (
+            <>
+              {step.why ? (
+                <p className={LEAD_CLASS}>{withCardNames(step.why, names)}</p>
+              ) : null}
+              <ReadCardsHint names={names} />
+            </>
+          ) : undefined,
         action: step.text,
         target,
+        marks,
         footer:
           step.retry && onRetry ? (
             <RetryRow
@@ -67,6 +81,7 @@ export const LessonNotice = ({
   tone = "guide",
   lead,
   why,
+  marks = [],
   children,
 }: {
   lesson: LessonHeading;
@@ -76,27 +91,72 @@ export const LessonNotice = ({
   lead: string;
   /** The reason behind it, set apart. */
   why?: string;
+  /** The cards Lemu's words name, marked on the table (`lessonMarks`). */
+  marks?: GuidedLessonMark[];
   /** The answers, primary first. */
   children: ReactNode;
-}) => (
-  <LessonGuide
-    lesson={lesson}
-    step={{
-      id: `notice|${title}|${lead}`,
-      title,
-      blocking: true,
-      lead: (
-        <>
-          <p className={LEAD_CLASS}>{lead}</p>
-          {why ? (
-            <p className={tone === "mistake" ? WHY_CLASS : ASIDE_CLASS}>{why}</p>
-          ) : null}
-        </>
-      ),
-      footer: <div className="flex flex-col gap-2 sm:flex-row-reverse">{children}</div>,
-    }}
-  />
-);
+}) => {
+  const names = markedNames(marks);
+  return (
+    <LessonGuide
+      lesson={lesson}
+      step={{
+        id: `notice|${title}|${lead}`,
+        title,
+        blocking: true,
+        marks,
+        lead: (
+          <>
+            <p className={LEAD_CLASS}>{withCardNames(lead, names)}</p>
+            {why ? (
+              <p className={tone === "mistake" ? WHY_CLASS : ASIDE_CLASS}>
+                {withCardNames(why, names)}
+              </p>
+            ) : null}
+          </>
+        ),
+        footer: (
+          <div className="flex flex-col gap-2 sm:flex-row-reverse">{children}</div>
+        ),
+      }}
+    />
+  );
+};
+
+/**
+ * How to read the cards Lemu names, under a coach step's words while any are marked on
+ * the table: hover or right-click with a mouse, press and hold on touch. Notices block
+ * the table until answered, so they mark the cards without it.
+ */
+const ReadCardsHint = ({ names }: { names: readonly string[] }) => {
+  if (names.length === 0) return null;
+  const touch =
+    typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  return (
+    <p className={ASIDE_CLASS}>
+      The cards Lemu names are <span className={NAME_CLASS}>marked</span> on the table.{" "}
+      {touch
+        ? "Press and hold one to read what it does."
+        : "Hover one to read what it does, or right-click it for the whole card."}
+    </p>
+  );
+};
+
+/** `text` with every marked card name set in the marks' sky colour. */
+const withCardNames = (text: string, names: readonly string[]): ReactNode => {
+  if (names.length === 0) return text;
+  const pattern = new RegExp(`(${names.map(escapeRegExp).join("|")})`, "gu");
+  return text.split(pattern).map((part, index) =>
+    index % 2 === 1 ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: the split's order is the text's
+      <span key={index} className={NAME_CLASS}>
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
+};
 
 /** "Try again" (restart the lesson) with its pending state and refusal. */
 export const RetryRow = ({
@@ -234,6 +294,9 @@ const LEAD_CLASS = "text-base leading-relaxed";
 const WHY_CLASS =
   "border-amber-500 border-l-4 bg-muted/40 py-2 pr-3 pl-3 text-base leading-relaxed";
 const ASIDE_CLASS = "text-muted-foreground text-sm leading-relaxed";
+/** A card name in Lemu's words, in the colour of its mark on the table. */
+const NAME_CLASS =
+  "rounded-sm bg-sky-300/25 px-0.5 font-semibold text-sky-800 dark:text-sky-200";
 
 /** The lesson a coach step belongs to. */
 export interface LessonHeading {

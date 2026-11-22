@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { lessonTargetSelector } from "@/layout/kessen/match/lesson";
+import { lessonMarks, lessonTargetSelector } from "@/layout/kessen/match/lesson";
 import {
   describeEvent,
   ghostOf,
@@ -366,6 +366,30 @@ describe("Lemu's coach marks", () => {
     expect(lessonTargetSelector({ target: "unit", key: "s1-2" })).toBe(
       '[data-lesson-target="unit"][data-lesson-key="s1-2"]',
     );
+  });
+
+  it("marks the board units and hand cards Lemu's words name, whole names only", () => {
+    const view = viewFor(lessonStart(), 0);
+    const unitId = Object.values(view.board[1]).flat()[0]?.id as string;
+    const unitName = names.card(view.inst[unitId] as string);
+    const handId = view.seats[0].hand?.[0] as string;
+    const handName = names.card(view.inst[handId] as string);
+    const marks = lessonMarks(view, [
+      `${unitName}'s power is high.`,
+      `Play ${handName}.`,
+    ]);
+    expect(marks).toContainEqual({
+      selector: lessonTargetSelector({ target: "unit", key: unitId }),
+      label: unitName,
+    });
+    expect(marks).toContainEqual({
+      selector: lessonTargetSelector({ target: "hand-card", key: handId }),
+      label: handName,
+    });
+    expect(lessonMarks(view, [`${unitName}s are everywhere.`])).not.toContainEqual(
+      expect.objectContaining({ label: unitName }),
+    );
+    expect(lessonMarks(view, [undefined, ""])).toEqual([]);
   });
 });
 

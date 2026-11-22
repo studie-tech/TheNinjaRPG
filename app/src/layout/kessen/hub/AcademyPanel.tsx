@@ -41,92 +41,124 @@ export const AcademyPanel = ({
   // A player with lessons left sees the next one; a graduate sees the list folded.
   const [listOpen, setListOpen] = useState(false);
   const packName = kessenPackName(academy.graduationPackId) ?? "a card pack";
+  const toggle = (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-9 shrink-0 text-[13px] pointer-coarse:min-h-11"
+      aria-expanded={listOpen}
+      aria-controls="kessen-academy-lessons"
+      onClick={() => setListOpen(!listOpen)}
+    >
+      <ChevronDown
+        className={cn("mr-1 h-4 w-4 transition-transform", listOpen && "rotate-180")}
+        aria-hidden
+      />
+      {academy.graduated
+        ? listOpen
+          ? "Hide"
+          : "Replay a lesson"
+        : listOpen
+          ? "Hide the lessons"
+          : "All lessons"}
+    </Button>
+  );
   return (
     <section
-      className="kh-panel flex flex-col gap-3 p-3"
+      className={cn(
+        "kh-panel flex flex-col p-3",
+        academy.graduated ? "gap-2" : "gap-3",
+      )}
       aria-labelledby="kessen-academy-title"
       data-academy=""
     >
-      <div className="flex items-start gap-3">
-        <GraduationCap className="mt-0.5 h-6 w-6 shrink-0" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <h2
-            id="kessen-academy-title"
-            className="kh-heading text-[20px] leading-tight"
-          >
-            Lemu's Academy
-          </h2>
-          <p className="text-muted-foreground text-[13px]">
-            Six short lessons, one strategic idea each.
-          </p>
+      {academy.graduated ? (
+        // A graduate keeps one row: the earned pack and the lessons to replay on request.
+        <div className="flex items-center gap-3">
+          <Image
+            src={kessenPackArt(academy.graduationPackId)}
+            alt=""
+            width={48}
+            height={72}
+            className="h-[40px] w-auto shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <h2
+              id="kessen-academy-title"
+              className="kh-heading flex items-center gap-1.5 text-[17px] leading-tight"
+            >
+              <GraduationCap className="h-4.5 w-4.5 shrink-0" aria-hidden />
+              Lemu's Academy
+            </h2>
+            <p className="m-0 text-muted-foreground text-[13px]">
+              <Check className="mr-1 inline h-3.5 w-3.5 text-success" aria-hidden />
+              All {academy.total} lessons done · <strong>{packName}</strong> earned
+            </p>
+          </div>
+          {toggle}
         </div>
-        <Badge
-          variant={academy.graduated ? "default" : "secondary"}
-          className="shrink-0 text-[12px] tabular-nums"
-        >
-          {academy.completed}/{academy.total}
-        </Badge>
-      </div>
-      <Progress
-        value={(academy.completed / academy.total) * 100}
-        className="h-2"
-        aria-label={`Academy progress: ${academy.completed} of ${academy.total} lessons`}
-      />
-      {next ? (
-        <div className="flex flex-col gap-2 kh-callout p-3">
-          <p className="m-0">
-            <span className="block font-semibold text-[12px] uppercase tracking-wider text-muted-foreground">
-              Next · Lesson {next.order}
-            </span>
-            <span className="block font-bold text-base">{next.title}</span>
-            <span className="block text-[13px]">{next.summary}</span>
-          </p>
-          <Button
-            className="self-start"
-            loading={pending && startingKey === next.key}
-            disabled={pending}
-            onClick={() => onStart(next.key)}
-          >
-            <Play className="mr-2 h-4 w-4" aria-hidden />
-            Start lesson {next.order}
-          </Button>
-        </div>
-      ) : null}
-      <p className="m-0 flex items-center gap-2 text-[13px]">
-        <Image
-          src={kessenPackArt(academy.graduationPackId)}
-          alt=""
-          width={48}
-          height={72}
-          className="h-[36px] w-auto shrink-0"
-        />
-        <span>
-          {academy.graduated ? (
-            <>
-              Graduated: <strong>{packName}</strong> earned.
-            </>
-          ) : (
-            <>
-              Each first completion pays ryo; finishing all six adds{" "}
-              <strong>{packName}</strong>.
-            </>
-          )}
-        </span>
-      </p>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="self-start h-9 text-[13px] pointer-coarse:min-h-11"
-        aria-expanded={listOpen}
-        aria-controls="kessen-academy-lessons"
-        onClick={() => setListOpen(!listOpen)}
-      >
-        <ChevronDown
-          className={cn("mr-1 h-4 w-4 transition-transform", listOpen && "rotate-180")}
-          aria-hidden
-        />
-        {listOpen ? "Hide the lessons" : "All lessons"}
-      </Button>
+      ) : (
+        <>
+          <div className="flex items-start gap-3">
+            <GraduationCap className="mt-0.5 h-6 w-6 shrink-0" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <h2
+                id="kessen-academy-title"
+                className="kh-heading text-[20px] leading-tight"
+              >
+                Lemu's Academy
+              </h2>
+              <p className="text-muted-foreground text-[13px]">
+                Six short lessons, one strategic idea each.
+              </p>
+            </div>
+            <Badge variant="secondary" className="shrink-0 text-[12px] tabular-nums">
+              {academy.completed}/{academy.total}
+            </Badge>
+          </div>
+          <Progress
+            value={(academy.completed / academy.total) * 100}
+            className="h-2"
+            aria-label={`Academy progress: ${academy.completed} of ${academy.total} lessons`}
+          />
+          {next ? (
+            <div className="flex flex-col gap-2 kh-callout p-3">
+              <p className="m-0">
+                <span className="block font-semibold text-[12px] uppercase tracking-wider text-muted-foreground">
+                  Next · Lesson {next.order}
+                </span>
+                <span className="block font-bold text-base">{next.title}</span>
+                <span className="block text-[13px]">{next.summary}</span>
+              </p>
+              <Button
+                className="self-start"
+                loading={pending && startingKey === next.key}
+                disabled={pending}
+                onClick={() => onStart(next.key)}
+              >
+                <Play className="mr-2 h-4 w-4" aria-hidden />
+                Start lesson {next.order}
+              </Button>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="m-0 flex items-center gap-2 text-[13px]">
+              <Image
+                src={kessenPackArt(academy.graduationPackId)}
+                alt=""
+                width={48}
+                height={72}
+                className="h-[36px] w-auto shrink-0"
+              />
+              <span>
+                Each first completion pays ryo; finishing all six adds{" "}
+                <strong>{packName}</strong>.
+              </span>
+            </p>
+            {toggle}
+          </div>
+        </>
+      )}
       {listOpen ? (
         <ol id="kessen-academy-lessons" className="flex flex-col gap-2">
           {academy.lessons.map((lesson) => (

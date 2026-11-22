@@ -616,6 +616,16 @@ function KessenHall() {
 
   // The lesson and the starter choice show no tabs, counters or deck to manage yet.
   const onboarding = hub.needsLesson || hub.needsStarter;
+  // A graduate's Academy folds to one row below the Circuit; until then it leads the tab.
+  const academyPanel = (
+    <AcademyPanel
+      academy={hub.academy}
+      pending={isStarting}
+      startingKey={startingLesson}
+      error={startingLesson ? startError : null}
+      onStart={(lessonKey) => void startLessonMatch(lessonKey)}
+    />
+  );
   const header = (
     <HallHeader
       today={onboarding ? null : hub.today}
@@ -760,13 +770,7 @@ function KessenHall() {
         {tab === "Play" ? (
           <>
             {header}
-            <AcademyPanel
-              academy={hub.academy}
-              pending={isStarting}
-              startingKey={startingLesson}
-              error={startingLesson ? startError : null}
-              onStart={(lessonKey) => void startLessonMatch(lessonKey)}
-            />
+            {hub.academy.graduated ? null : academyPanel}
             <CircuitMap
               circuit={hub.circuit}
               cards={catalog.cards}
@@ -805,6 +809,7 @@ function KessenHall() {
               }
               onResume={(id) => openMatch(id)}
             />
+            {hub.academy.graduated ? academyPanel : null}
           </>
         ) : null}
         {tab === "Duels" ? (

@@ -34,6 +34,7 @@ import Link from "@/layout/Link";
 import { QuestObjectives, useCheckRewards } from "@/layout/Logbook";
 import { CoachCard } from "@/layout/tutorial/CoachCard";
 import {
+  type GuidedLessonMark,
   type GuidedLessonStep,
   guidedLessonAtom,
 } from "@/layout/tutorial/guidedLesson";
@@ -41,6 +42,8 @@ import {
   getUsableHighlightElement,
   isSameBox,
   Spotlight,
+  type SpotlightMark,
+  SpotlightMarks,
   trackLayout,
 } from "@/layout/tutorial/Spotlight";
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
@@ -1183,20 +1186,31 @@ const GuidedLessonAssistant: React.FC<{ step: GuidedLessonStep }> = ({ step }) =
       ?.focus({ preventScroll: true });
   }, [step.id, step.blocking]);
   const box = highlight?.stepId === step.id ? highlight : null;
+  const marks = useGuidedMarks(step);
   return (
     <>
       {box && !step.blocking ? (
-        <Spotlight box={box} holeClassName="pointer-events-none bg-transparent" />
+        <Spotlight
+          box={box}
+          marks={marks}
+          holeClassName="pointer-events-none bg-transparent"
+        />
       ) : null}
       {step.blocking
         ? createPortal(
-            // Below the open lesson's dock (z-[61]), taking the page's taps.
+            // Below the open lesson's dock (z-[61]), taking the page's taps; the cards
+            // the notice names stay uncovered and marked.
             <div
               data-battle-focus-layer
               data-guided-lesson-block=""
               aria-hidden="true"
-              className="fixed inset-0 z-[60] bg-black/55"
-            />,
+              className={cn(
+                "fixed inset-0 z-[60]",
+                marks.length === 0 && "bg-black/55",
+              )}
+            >
+              {marks.length > 0 ? <SpotlightMarks marks={marks} /> : null}
+            </div>,
             document.body,
           )
         : null}
@@ -1923,6 +1937,61 @@ const getPreferredHighlightCentre = (targetHeight: number) => {
   const safeBottom =
     panel && panel.top > safeTop + targetHeight ? panel.top : window.innerHeight;
   return (safeTop + safeBottom) / 2;
+};
+
+/**
+ * The boxes of the elements a guided step refers to (`step.marks`): every visible match
+ * outside inert or modal-hidden content except the ringed target, kept placed as the
+ * page moves.
+ */
+const useGuidedMarks = (step: GuidedLessonStep): SpotlightMark[] => {
+  const [marks, setMarks] = useState<SpotlightMark[]>([]);
+  // Scenes re-register their step on every render; the marks' content keys the tracking.
+  const wantedKey = JSON.stringify(step.marks ?? []);
+  const { target } = step;
+  useEffect(() => {
+    const wanted = JSON.parse(wantedKey) as GuidedLessonMark[];
+    if (wanted.length === 0) {
+      setMarks([]);
+      return;
+    }
+    return trackLayout(() => {
+      const ringed = target ? (findGuidedTarget(target)?.element ?? null) : null;
+      const next: SpotlightMark[] = [];
+      let first: HTMLElement | null = null;
+      for (const mark of wanted) {
+        for (const element of document.querySelectorAll<HTMLElement>(mark.selector)) {
+          // Content a modal dialog hides (aria-hidden) stays unmarked under it.
+          if (element === ringed || element.closest('[inert], [aria-hidden="true"]'))
+            continue;
+          const rect = element.getBoundingClientRect();
+          if (!isUsableHighlightRect(rect)) continue;
+          if (!first) first = element;
+          next.push({
+            key: `${mark.selector}#${next.length}`,
+            label: mark.label,
+            box: {
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height,
+            },
+          });
+        }
+      }
+      setMarks((prev) =>
+        prev.length === next.length &&
+        prev.every((mark, index) => {
+          const other = next[index];
+          return other?.key === mark.key && isSameBox(mark.box, other.box);
+        })
+          ? prev
+          : next,
+      );
+      return first;
+    });
+  }, [wantedKey, target]);
+  return marks;
 };
 
 /** A guided step's target: the first visible match outside inert content. */

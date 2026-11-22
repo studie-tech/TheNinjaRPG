@@ -33,8 +33,20 @@ export interface GuidedLessonStep {
   action?: string;
   /** CSS selector of the control to ring; the first visible, non-inert match is used. */
   target?: string;
+  /**
+   * Elements the step's words refer to, such as the cards Lemu names: each visible,
+   * non-inert match is uncovered and marked with a dashed ring and its label, apart
+   * from the ringed target.
+   */
+  marks?: GuidedLessonMark[];
   /** Answers to the step, kept in view under the text. */
   footer?: ReactNode;
   /** The page waits for an answer in the footer: it dims behind the dock and takes no taps. */
   blocking?: boolean;
+}
+
+/** An element a step refers to, and the name shown on its mark. */
+export interface GuidedLessonMark {
+  selector: string;
+  label: string;
 }
