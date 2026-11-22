@@ -109,8 +109,8 @@ const Post: React.FC<PostProps> = (props) => {
 
   const content = (
     <>
-      <div className="flex grow basis-1/2 flex-col">
-        <div className="flex flex-col">
+      <div className={cn("grow basis-1/2", props.footer && "flex flex-col")}>
+        <div className={cn("flex flex-col", !props.footer && "h-full justify-center")}>
           {props.title && (
             <h3 className="basis-1/5 font-bold text-2xl tracking-tight">
               {props.title}

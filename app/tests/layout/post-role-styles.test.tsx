@@ -166,6 +166,29 @@ describe("post username and role styling", () => {
     }
   });
 
+  it("centres the content column unless a footer is pinned below it", () => {
+    vi.spyOn(Avatar, "default").mockImplementation(() => null);
+    const plain = render(<Post user={poster("USER")}>Body</Post>);
+    const plainBody = plain.getByText("Body").parentElement;
+    expect(classSet(plainBody)).toEqual(
+      classSet("flex h-full flex-col justify-center"),
+    );
+    expect(classSet(plainBody?.parentElement)).toEqual(classSet("grow basis-1/2"));
+    cleanup();
+    const pinned = render(
+      <Post user={poster("USER")} footer="Footer">
+        Body
+      </Post>,
+    );
+    const pinnedBody = pinned.getByText("Body").parentElement;
+    expect(classSet(pinnedBody)).toEqual(classSet("flex flex-col"));
+    expect(classSet(pinnedBody?.parentElement)).toEqual(
+      classSet("flex grow basis-1/2 flex-col"),
+    );
+    expect(pinned.getByText("Footer").className).toBe("mt-auto pt-2");
+    cleanup();
+  });
+
   it("labels a village leader as Kage or Daimyo", () => {
     vi.spyOn(Avatar, "default").mockImplementation(() => null);
     const leader = { ...poster("USER"), villageKageId: "poster" };
@@ -182,3 +205,11 @@ describe("post username and role styling", () => {
     expect(daimyo.queryByText("Kage")).toBeNull();
   });
 });
+
+/** Class tokens of an element (or a class string), independent of their order. */
+const classSet = (source: Element | string | null | undefined) =>
+  new Set(
+    (typeof source === "string" ? source : (source?.className ?? ""))
+      .split(/\s+/)
+      .filter(Boolean),
+  );
