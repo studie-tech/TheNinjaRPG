@@ -734,6 +734,8 @@ const SetReferal = () => {
     meta: { handlesTransportError: true },
   });
   const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation({
+    // Reporting is automatic; a transport failure resets the markers for a later visit.
+    meta: { handlesTransportError: true },
     onSettled: (result, _error, input) => {
       // The device remembers a kept click until the visitor registers, unless the visitor
       // declined marketing cookies while the report was on its way.

@@ -24,7 +24,7 @@ import {
   updateDmgConfig,
   updateGameSetting,
 } from "@/libs/gamesettings";
-import { WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
+import { parseWallpaperVariant } from "@/libs/wallpaperExperiment";
 import {
   deleteLinkedAdClicksForWithdrawnConsent,
   deleteUnlinkedAdClickForWithdrawnConsent,
@@ -116,7 +116,9 @@ const awardsFilteringSchema = z.object({
 const trackVisitorSchema = z.object({
   ref: z.string().max(191).optional(),
   utmSource: z.string().max(191).optional(),
-  wallpaperVariant: z.enum(WALLPAPER_VARIANTS).optional(),
+  // Long-lived tabs can report artwork from a completed experiment. Keep the visit
+  // while discarding assignments that cannot belong to the current experiment.
+  wallpaperVariant: z.string().max(191).nullish().transform(parseWallpaperVariant),
   // Validated in the procedure, so a malformed click ID never drops the visit itself.
   adClick: z
     .object({

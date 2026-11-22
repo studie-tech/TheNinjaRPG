@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import { cleanup, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
+import { useLayoutEffect } from "react";
 import * as client from "@/app/_trpc/client";
 import HomeLanding from "@/layout/HomeLanding";
 import * as Loader from "@/layout/Loader";
@@ -26,7 +27,10 @@ beforeEach(() => {
     status: "success",
   } as typeof session;
   mockUserContextValue(() => session);
-  vi.spyOn(clerk, "useClerk").mockReturnValue({ signOut: vi.fn() } as never);
+  vi.spyOn(clerk, "useClerk").mockReturnValue({
+    signOut: vi.fn(),
+    isSignedIn: true,
+  } as never);
   vi.spyOn(navigation, "useRouter").mockReturnValue({
     replace,
     prefetch: vi.fn(),
@@ -50,6 +54,29 @@ afterEach(() => {
 });
 
 describe("landing page session navigation", () => {
+  it.each([undefined, character])(
+    "does not save attribution or forward cached account %j after Clerk signs out",
+    (cached) => {
+      session = {
+        ...session,
+        isSignedIn: true,
+        userId: "player",
+        data: cached,
+      };
+      const auth = { signOut: vi.fn(), isSignedIn: true };
+      vi.spyOn(clerk, "useClerk").mockReturnValue(auth as never);
+      const SignOutBeforeEffects = () => {
+        useLayoutEffect(() => {
+          auth.isSignedIn = false;
+        }, []);
+        return <HomeLanding />;
+      };
+      render(<SignOutBeforeEffects />);
+      expect(referral).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([undefined, character])(
     "leaves a signed-out visitor on the welcome page with cached character %j",
     (cached) => {

@@ -42,7 +42,10 @@ beforeEach(() => {
     status: "pending",
   } as typeof session;
   vi.spyOn(UserContext, "useUserData").mockImplementation(() => session);
-  vi.spyOn(clerk, "useClerk").mockReturnValue({ signOut: vi.fn() } as never);
+  vi.spyOn(clerk, "useClerk").mockReturnValue({
+    signOut: vi.fn(),
+    isSignedIn: true,
+  } as never);
   vi.spyOn(routing, "usePublicPathname").mockImplementation(() => pathname);
   vi.spyOn(navigation, "useRouter").mockReturnValue({
     push: navigate,
