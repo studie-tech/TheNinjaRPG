@@ -150,16 +150,7 @@ export const useDeckChoice = (
     setBorrowFaction(faction);
     setValue(BORROW);
   };
-  return {
-    value,
-    setValue,
-    borrowFaction,
-    setBorrowFaction,
-    borrow,
-    deck,
-    source,
-    label,
-  };
+  return { value, setValue, borrowFaction, borrow, deck, source, label };
 };
 
 const DECK_OPTION =
@@ -173,7 +164,6 @@ export interface DeckChoice {
   value: string;
   setValue: (value: string) => void;
   borrowFaction: DeckFaction;
-  setBorrowFaction: (faction: DeckFaction) => void;
   /** Chooses today's borrowed deck of a faction. */
   borrow: (faction: DeckFaction) => void;
   /** The chosen saved deck; null for the borrowed deck. */
