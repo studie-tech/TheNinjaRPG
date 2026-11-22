@@ -454,8 +454,21 @@ describe("Replicate outputs that are not FileOutputs", () => {
       .spyOn(UTApi.prototype, "uploadFilesFromUrl")
       .mockResolvedValue(upload as never);
     await fastTxt2imgReplicate({ prompt: "A fox" });
-    expect(uploading.mock.calls[0]![0]).toMatchObject({
-      url: "https://replicate.delivery/p-image.webp",
-    });
+    const { url } = uploading.mock.calls[0]![0] as unknown as { url: URL };
+    expect(String(url)).toBe("https://replicate.delivery/p-image.webp");
+  });
+
+  it("hands a data-URI FileOutput to UploadThing as a URL object, which it accepts", async () => {
+    const dataUri = "data:image/webp;base64,AAAA";
+    vi.spyOn(Replicate.prototype, "run").mockResolvedValue([
+      { url: () => new URL(dataUri), blob: async () => new Blob() },
+    ] as never);
+    const uploading = vi
+      .spyOn(UTApi.prototype, "uploadFilesFromUrl")
+      .mockResolvedValue(upload as never);
+    await fastTxt2imgReplicate({ prompt: "A fox" });
+    const { url } = uploading.mock.calls[0]![0] as unknown as { url: unknown };
+    expect(url).toBeInstanceOf(URL);
+    expect(String(url)).toBe(dataUri);
   });
 });
