@@ -229,9 +229,9 @@ export function useTravelSession() {
     { enabled: bootSector !== null, gcTime: BOOT_WINDOW_RETENTION_MS },
   );
 
-  // Ingest a bootstrap window: layouts + all its entries into the store
+  // Re-ingest a cached bootstrap on return; walking may have pruned its outer sectors.
   useEffect(() => {
-    if (!bootWindow) return;
+    if (!bootWindow || bootWindow.center !== userData?.sector) return;
     for (const layout of bootWindow.windowLayouts) {
       windowLayoutsRef.current.set(layout.center, layout.entries);
     }
@@ -250,7 +250,7 @@ export function useTravelSession() {
     });
     visibleEpochRef.current += 1;
     setStoreTick((tick) => tick + 1);
-  }, [bootWindow]);
+  }, [bootWindow, userData?.sector]);
 
   // Assemble the visible window from the store; fall back to a bootstrap fetch
   // when the store cannot serve the sector yet
@@ -762,14 +762,14 @@ export function useTravelSession() {
     if (showSector) setHasOpenedSector(true);
   }, [showSector]);
 
-  // Attack revealed stealthed player after moving to their position
+  // Position state wakes this effect; live coordinates confirm the queued attack's arrival.
   useEffect(() => {
     if (
       pendingAttackTarget &&
       currentPosition &&
       userData &&
-      currentPosition.x === pendingAttackTarget.longitude &&
-      currentPosition.y === pendingAttackTarget.latitude &&
+      userData.longitude === pendingAttackTarget.longitude &&
+      userData.latitude === pendingAttackTarget.latitude &&
       !isAttackingRevealed
     ) {
       attackRevealedUser({

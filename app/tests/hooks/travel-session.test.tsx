@@ -22,7 +22,9 @@ import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 import { mockUserContextValue } from "../setup/userContext";
 
 const clients: QueryClient[] = [];
-const globe = { tiles: [{}, {}, {}] } as unknown as GlobalMapData;
+const globe = {
+  tiles: Array.from({ length: 16 }, () => ({})),
+} as unknown as GlobalMapData;
 const completeTutorialAction = vi.fn(async () => undefined);
 const navigate = vi.fn();
 const snapshot = { sector: 1, query: 7 };
@@ -103,8 +105,12 @@ afterEach(() => {
   restoreBrowserGlobals();
 });
 
-const setup = (respond?: (path: string, input: unknown) => unknown) => {
+const setup = (
+  respond?: (path: string, input: unknown) => unknown,
+  readWorld?: (path: string, input: unknown) => unknown,
+) => {
   const read = vi.fn((path: string, input: unknown) => {
+    if (readWorld && path.startsWith("worldMap.")) return readWorld(path, input);
     if (path === "village.getAll")
       return [{ id: "home", name: "Horizon", type: "SAFEZONE", sector: 1 }];
     if (path === "travel.getSectorData") return { sectorData: { village: null } };
@@ -247,9 +253,109 @@ describe("travel session ownership", () => {
     await waitFor(() => expect(test.result.current.admissionRecovery?.sector).toBe(2));
     expect(test.result.current.travelState?.sector).toBe(2);
     expect(test.result.current.canTravelTo(3)).toBe(false);
+    refreshUser.mockImplementationOnce(async () => {
+      user = { ...user!, ...admission().data };
+      return true;
+    });
     await act(async () => test.result.current.retryAdmission());
     expect(test.result.current.admissionRecovery).toBeNull();
+    expect(test.result.current.travelState).toMatchObject({
+      sector: 2,
+      status: "TRAVEL",
+    });
     expect(refreshUser).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([true, false])(
+    "reassembles a cached bootstrap after walking beyond its ring, neighbor published: %s",
+    async (neighborPublished) => {
+      user = { ...user!, sector: 10 };
+      const layout = (center: number) => ({
+        center,
+        entries: [center - 1, center, center + 1].map((sector) => ({
+          sector,
+          dx: sector - center,
+          dy: 0,
+        })),
+      });
+      const entry = (sector: number) => ({
+        sector,
+        map: sectorMap(3, 3, undefined, { sector }),
+      });
+      const isPublished = (sector: number) => neighborPublished || sector !== 9;
+      const test = setup(undefined, (path, input) => {
+        if (path === "worldMap.getSectorWindow") {
+          const { sector: center } = input as { sector: number };
+          return {
+            center,
+            windowLayouts: [center - 1, center, center + 1].map(layout),
+            sectors: [center - 1, center, center + 1]
+              .filter(isPublished)
+              .map((sector) => ({ ...entry(sector), dx: sector - center, dy: 0 })),
+          };
+        }
+        const { center, known } = input as { center: number; known: number[] };
+        const sectors = Array.from({ length: 5 }, (_, index) => center - 2 + index);
+        return {
+          windowLayouts: sectors.map(layout),
+          entries: sectors
+            .filter((s) => !known.includes(s) && isPublished(s))
+            .map(entry),
+          missingSectors: sectors.filter((s) => !known.includes(s) && !isPublished(s)),
+        };
+      });
+      await ready(test);
+      for (const sector of [11, 12]) {
+        user = { ...user!, sector };
+        test.rerender();
+        await ready(test);
+        await waitFor(() =>
+          expect(test.read).toHaveBeenCalledWith(
+            "worldMap.getSectorEntries",
+            expect.objectContaining({ center: sector }),
+          ),
+        );
+      }
+      user = { ...user!, sector: 10 };
+      test.rerender();
+      await ready(test);
+      expect(
+        test.read.mock.calls.filter(([path]) => path === "worldMap.getSectorWindow"),
+      ).toHaveLength(1);
+      expect(test.result.current.sectorWindow?.sectors.map((s) => s.sector)).toEqual(
+        neighborPublished ? [9, 10, 11] : [10, 11],
+      );
+    },
+  );
+
+  it("keeps a revealed-player attack queued until the live position reaches its target", async () => {
+    const test = setup(() => ({ success: false, message: "Not close enough" }));
+    await ready(test);
+    act(() => test.result.current.setQuickTravelOpen(true));
+    act(() => test.result.current.setQuickTravelOpen(false));
+    user = { ...user!, longitude: 2, latitude: 2 };
+    test.rerender();
+    await act(async () =>
+      test.result.current.setPendingAttackTarget({
+        userId: "target",
+        username: "Target",
+        longitude: 0,
+        latitude: 0,
+      }),
+    );
+    expect(
+      test.read.mock.calls.filter(([path]) => path === "combat.attackUser"),
+    ).toHaveLength(0);
+    expect(test.result.current.pendingAttackTarget?.userId).toBe("target");
+    user = { ...user!, longitude: 0, latitude: 0 };
+    act(() => test.result.current.setScenePosition({ x: 0, y: 0 }));
+    await waitFor(() =>
+      expect(test.read).toHaveBeenCalledWith(
+        "combat.attackUser",
+        expect.objectContaining({ userId: "target", longitude: 0, latitude: 0 }),
+      ),
+    );
+    expect(test.result.current.pendingAttackTarget).toBeNull();
   });
 
   it("validates a same-sector destination before issuing a walking target", async () => {
