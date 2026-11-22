@@ -3,7 +3,7 @@
 import BanInfo from "@/layout/BanInfo";
 import Loader from "@/layout/Loader";
 import Shop from "@/layout/Shop";
-import { useScreenNavigation } from "@/utils/ScreenNavigationContext";
+import { useScreenNavigation } from "@/screens/ScreenNavigationContext";
 import { useRequireInVillage } from "@/utils/UserContext";
 
 /** Render the village item catalog with its access checks in any screen host. */

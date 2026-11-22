@@ -33,6 +33,7 @@
       "@/env/*": ["./src/env/*"],
       "@/hooks/*": ["./src/hooks/*"],
       "@/layout/*": ["./src/layout/*"],
+      "@/screens/*": ["./src/screens/*"],
       "@/utils/*": ["./src/utils/*"],
       "@/validators/*": ["./src/validators/*"],
       "@/libs/*": ["./src/libs/*"],

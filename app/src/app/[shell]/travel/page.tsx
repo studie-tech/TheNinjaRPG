@@ -5,8 +5,8 @@ import { Suspense, useEffect, useRef } from "react";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { useTravelSession } from "@/hooks/useTravelSession";
 import Loader from "@/layout/Loader";
-import { TravelView } from "@/layout/travel/TravelView";
 import { showMutationToast } from "@/libs/toast";
+import { TravelView } from "@/screens/travel/TravelView";
 import { useAwake } from "@/utils/routing";
 import { travelLocationSchema } from "@/validators/travel";
 
