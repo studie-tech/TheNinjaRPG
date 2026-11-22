@@ -30,6 +30,7 @@ import {
 import { announceChallengeMatch } from "@/server/utils/challengeMatch";
 import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
+import { getMessagingRestriction } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -67,6 +68,10 @@ export const sparringRouter = createTRPCRouter({
       if (recent.length > 0) {
         return errorResponse("Max 1 challenge per 10 seconds");
       }
+      // The spar is announced as the challenger, so only one who may post there names it.
+      const announceInId = getMessagingRestriction(user)
+        ? undefined
+        : conversations[0]?.id;
       // Mutate
       await insertRequest(
         ctx.drizzle,
@@ -77,7 +82,7 @@ export const sparringRouter = createTRPCRouter({
         undefined,
         input.useRankedRules,
         input.spectatable,
-        conversations[0]?.id,
+        announceInId,
       );
       void pusher.trigger(input.targetId, "event", {
         type: "userMessage",

@@ -506,7 +506,10 @@ export const findConversationByTitle = (
     with: { users: true },
   });
 
-/** The id of a public conversation, such as a tavern, or nothing for any other id. */
+/**
+ * The id of an enabled public conversation, such as a tavern, or nothing for any other
+ * id.
+ */
 export const findPublicConversationId = (
   client: Pick<DrizzleClient, "select">,
   id: string,
@@ -514,7 +517,13 @@ export const findPublicConversationId = (
   client
     .select({ id: conversation.id })
     .from(conversation)
-    .where(and(eq(conversation.id, id), eq(conversation.isPublic, true)));
+    .where(
+      and(
+        eq(conversation.id, id),
+        eq(conversation.isPublic, true),
+        eq(conversation.isEnabled, true),
+      ),
+    );
 
 /** List public conversations by title, for following taverns by name. */
 export const listPublicConversationsByTitle = (

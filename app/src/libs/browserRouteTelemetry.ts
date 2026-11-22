@@ -50,6 +50,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/jutsus",
   "/kessen",
   "/kessen/leaderboard",
+  "/kessen/watch/[matchid]",
   "/layouts",
   "/login/[[...rest]]",
   "/manual",

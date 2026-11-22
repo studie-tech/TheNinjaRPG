@@ -79,7 +79,7 @@ export function CompactComment(props: CompactCommentProps) {
       <UserMenu
         user={user}
         isSelf={isAuthor}
-        conversationId={comment.conversationId}
+        conversationId={props.challengeConversationId ?? null}
         onMention={props.onMentionUser}
         onMessage={props.onMessageUser}
         tavernStyling={props.tavernStyling}
@@ -550,6 +550,8 @@ function CompactEditor({
 export interface CompactCommentProps {
   user: NonNullable<PostProps["user"]>;
   comment: ConversationComment;
+  /** The public conversation that announces a challenge sent from this message. */
+  challengeConversationId?: string | null;
   children: React.ReactNode;
   tavernStyling?: boolean;
   highlighted?: boolean;

@@ -442,6 +442,14 @@ describe("conversation comment row isolation", () => {
     ]);
   });
 
+  it("names the conversation as a challenge's announcer only when it is public", () => {
+    const { renders } = observeRows();
+    const view = render(<ConversationComments {...listProps([row("1")])} isPublic />);
+    expect(renders.mock.calls.at(-1)?.[0].challengeConversationId).toBe("conversation");
+    view.rerender(<ConversationComments {...listProps([row("1")])} />);
+    expect(renders.mock.calls.at(-1)?.[0].challengeConversationId).toBeNull();
+  });
+
   it("renders only changed cached rows in a 100-message history and reparses only changed content", () => {
     const { renders, parses } = observeRows();
     const history = Array.from({ length: 100 }, (_, i) => row(String(i)));

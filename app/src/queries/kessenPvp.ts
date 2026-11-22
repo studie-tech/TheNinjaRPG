@@ -376,6 +376,7 @@ export const listKessenDuelists = (
       rank: userData.rank,
       isAi: userData.isAi,
       isBanned: userData.isBanned,
+      isSilenced: userData.isSilenced,
       deletionAt: userData.deletionAt,
       isOutlaw: userData.isOutlaw,
       villageName: village.name,

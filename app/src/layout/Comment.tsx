@@ -47,6 +47,8 @@ export const CommentOnReport: React.FC<UserReportCommentProps> = (props) => {
  */
 interface ConversationCommentProps extends PostProps {
   comment: ConversationComment;
+  /** The public conversation that announces a challenge sent from this message. */
+  challengeConversationId?: string | null;
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
   quoteIds?: string[] | null;
@@ -104,6 +106,7 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
       <CompactComment
         user={props.user}
         comment={props.comment}
+        challengeConversationId={props.challengeConversationId ?? null}
         tavernStyling={props.tavernStyling}
         highlighted={props.color === "poppopover"}
         quoteIds={props.quoteIds}
@@ -127,7 +130,7 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
     <BaseComment
       {...props}
       system="conversation_comment"
-      challengeFrom={{ conversationId: props.comment.conversationId }}
+      challengeFrom={{ conversationId: props.challengeConversationId ?? null }}
       editComment={props.canEdit === false ? undefined : editComment.mutate}
       isEditPending={editComment.isPending}
       deleteComment={handleDelete}

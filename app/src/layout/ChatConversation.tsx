@@ -208,6 +208,7 @@ export function ChatConversation({
               compact
               pages={comments?.pages}
               conversationId={conversation.id}
+              isPublic={conversation.isPublic}
               deletedCommentIds={deletedCommentIds}
               quoteIds={quoteIds}
               username={userData?.username}

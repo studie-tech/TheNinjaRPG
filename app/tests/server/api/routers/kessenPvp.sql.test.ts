@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, spyOn } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { GET as kessenCron } from "@/app/api/kessen-match-expiry/route";
 import {
   KESSEN_CHALLENGE_EXPIRY_SECONDS,
@@ -10,6 +10,7 @@ import {
   KESSEN_RANKED_START_RATING,
   KESSEN_RANKED_WEEKLY_PACK_WINS,
   KESSEN_RANKED_WIN_RYO,
+  MESSAGING_MIN_LEVEL,
 } from "@/drizzle/constants";
 import {
   conversation,
@@ -501,6 +502,10 @@ describeWithDatabase("kessen duels", () => {
       { id: "tavern", title: "Tavern", isPublic: true },
       { id: "private", title: "Private", isPublic: false },
     ]);
+    await (await db())
+      .update(userData)
+      .set({ level: MESSAGING_MIN_LEVEL })
+      .where(eq(userData.userId, A));
     const a = await pvp(A);
     const b = await pvp(B);
     await a.createChallenge({ targetId: B, deck: LOANER_A, conversationId: "tavern" });
@@ -527,6 +532,49 @@ describeWithDatabase("kessen duels", () => {
           opponentName: "DuelistB",
         },
       }),
+    ]);
+  });
+
+  it("names no conversation its challenger may not post in", async () => {
+    await (await db()).insert(conversation).values([
+      { id: "tavern", title: "Tavern", isPublic: true },
+      { id: "closed", title: "Closed", isPublic: true, isEnabled: false },
+    ]);
+    await (await db())
+      .update(userData)
+      .set({ level: MESSAGING_MIN_LEVEL })
+      .where(inArray(userData.userId, [A, B]));
+    await (await db())
+      .update(userData)
+      .set({ isSilenced: true })
+      .where(eq(userData.userId, B));
+    // Below the messaging level, silenced, and in a disabled tavern.
+    const responses = [
+      await (await pvp(C)).createChallenge({
+        targetId: "duel-t1",
+        deck: LOANER_A,
+        conversationId: "tavern",
+      }),
+      await (await pvp(B)).createChallenge({
+        targetId: "duel-t2",
+        deck: LOANER_A,
+        conversationId: "tavern",
+      }),
+      await (await pvp(A)).createChallenge({
+        targetId: "duel-t3",
+        deck: LOANER_A,
+        conversationId: "closed",
+      }),
+    ];
+    for (const response of responses)
+      expect(response.success, response.message).toBe(true);
+    const sent = await (await db())
+      .select({ conversationId: userRequest.conversationId })
+      .from(userRequest);
+    expect(sent).toEqual([
+      { conversationId: null },
+      { conversationId: null },
+      { conversationId: null },
     ]);
   });
 

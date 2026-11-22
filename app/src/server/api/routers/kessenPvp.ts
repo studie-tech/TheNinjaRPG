@@ -77,6 +77,7 @@ import {
 } from "@/server/utils/kessenPvp";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { notifyKessenChallenge } from "@/server/utils/push/kessen";
+import { getMessagingRestriction } from "@/utils/permissions";
 import { getUtcDayKey, periodStart } from "@/utils/time";
 import { parseJsonFields } from "@/utils/typeutils";
 import {
@@ -281,6 +282,10 @@ export const kessenPvpRouter = createTRPCRouter({
         now,
       });
       if ("error" in deck) return errorResponse(deck.error);
+      // The duel is announced as the challenger, so only one who may post there names it.
+      const announceInId = getMessagingRestriction(me)
+        ? undefined
+        : conversations[0]?.id;
 
       // The pair's unique pending slot decides between concurrent challenges.
       try {
@@ -293,7 +298,7 @@ export const kessenPvpRouter = createTRPCRouter({
           encodeKessenDeckSource(input.deck),
           undefined,
           undefined,
-          conversations[0]?.id,
+          announceInId,
         );
       } catch (error) {
         if (isMysqlDuplicateKeyError(error))
