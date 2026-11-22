@@ -213,36 +213,41 @@ export const TradeRoutesPanel = ({
                               to {route.nextTravelMinutes} minutes.
                             </Confirm>
                           )}
-                        <Confirm
-                          title={
-                            route.status === "PROPOSED"
-                              ? "Withdraw proposal"
-                              : "Close route"
-                          }
-                          proceed_label="Close"
-                          onAccept={() =>
-                            actions.closeRoute.mutate({ routeId: route.id })
-                          }
-                          isLoading={
-                            actions.closeRoute.isPending &&
-                            actions.closeRoute.variables?.routeId === route.id
-                          }
-                          button={
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={actions.closeRoute.isPending}
-                            >
-                              <X className="mr-1 size-4" aria-hidden />
-                              {route.status === "PROPOSED" && route.proposedByUs
-                                ? "Withdraw"
-                                : "Close"}
-                            </Button>
-                          }
-                        >
-                          Caravans already on the road still arrive; unsent ones are
-                          called off.
-                        </Confirm>
+                        {!(route.status === "PROPOSED" && !route.proposedByUs) && (
+                          <Confirm
+                            title={
+                              route.status === "PROPOSED"
+                                ? "Withdraw proposal"
+                                : "Close route"
+                            }
+                            proceed_label={
+                              route.status === "PROPOSED"
+                                ? "Withdraw proposal"
+                                : "Close route"
+                            }
+                            onAccept={() =>
+                              actions.closeRoute.mutate({ routeId: route.id })
+                            }
+                            isLoading={
+                              actions.closeRoute.isPending &&
+                              actions.closeRoute.variables?.routeId === route.id
+                            }
+                            button={
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={actions.closeRoute.isPending}
+                              >
+                                <X className="mr-1 size-4" aria-hidden />
+                                {route.status === "PROPOSED" ? "Withdraw" : "Close"}
+                              </Button>
+                            }
+                          >
+                            {route.status === "PROPOSED"
+                              ? `${route.partner.name} can no longer accept this route.`
+                              : "Caravans already on the road still arrive; unsent ones are called off."}
+                          </Confirm>
+                        )}
                       </div>
                     )}
                   </div>
