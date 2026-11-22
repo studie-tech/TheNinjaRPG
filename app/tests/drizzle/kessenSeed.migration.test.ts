@@ -20,7 +20,10 @@ import {
   runRawSql,
 } from "../setup/testDatabase";
 
-const MIGRATION = "0191_seed_kessen_cards.sql";
+// The branch's one migration creates the Kessen tables, then seeds the cards and packs; the
+// seed tests run its seed section against tables the test database already has.
+const MIGRATION = "0190_wakeful_dreadnoughts.sql";
+const SEED_START = "-- Kessen cards";
 
 const sellPrice = (row: typeof item.$inferSelect, quantity: number) =>
   calcItemSellingPrice(
@@ -28,7 +31,8 @@ const sellPrice = (row: typeof item.$inferSelect, quantity: number) =>
     { quantity, item: row } as Parameters<typeof calcItemSellingPrice>[1],
     [],
   );
-const migration = await readMigration(MIGRATION);
+const file = await readMigration(MIGRATION);
+const migration = file.slice(file.indexOf(SEED_START));
 
 it("seeds every catalog card and pack", () => {
   for (const id of [...KESSEN_SEED_CATALOG, ...KESSEN_PACKS].map((entry) => entry.id)) {
