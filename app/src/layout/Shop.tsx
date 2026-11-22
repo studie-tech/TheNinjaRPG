@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getPurchasedAllowances } from "@/deltas/item";
 import {
   ItemTypes,
   KESSEN_CARD_SELL_VALUES,
@@ -210,10 +211,21 @@ const Shop: React.FC<ShopProps> = (props) => {
     }
   }
 
+  // The stall's limited listings read their allowances in one batch per loaded catalog.
+  const stallAllowanceKey = {
+    ids: cardStall ? catalogItems.filter(hasPurchaseLimit).map((row) => row.id) : [],
+  };
+  const stallAllowances = api.item.getPurchaseAllowances.useQuery(stallAllowanceKey, {
+    enabled: stallAllowanceKey.ids.length > 0,
+    staleTime: 30_000,
+    placeholderData: (previous) => previous,
+  });
+
   const { mutate: purchase, isPending: isPurchasing } = api.item.buy.useMutation({
     onMutate: () => ({
       revision: prepareUserUpdate(),
       hub: hubCache.prepareHubUpdate(),
+      allowanceKey: stallAllowanceKey,
     }),
     onSuccess: (data, variables, snapshots) => {
       showMutationToast(data);
@@ -229,6 +241,13 @@ const Shop: React.FC<ShopProps> = (props) => {
         }
         void utils.item.getUserItems.invalidate();
         void utils.item.getPurchaseAllowance.invalidate();
+        if (snapshots?.allowanceKey.ids.length) {
+          utils.item.getPurchaseAllowances.setData(snapshots.allowanceKey, (current) =>
+            current
+              ? getPurchasedAllowances(current, variables.itemId, variables.stack)
+              : current,
+          );
+        }
         if (item?.itemType === "FURNITURE") {
           void utils.home.getUserHome.invalidate();
         }
@@ -238,6 +257,8 @@ const Shop: React.FC<ShopProps> = (props) => {
       } else {
         setPurchaseError(data.message);
         void allowance.refetch();
+        if (snapshots?.allowanceKey.ids.length)
+          void utils.item.getPurchaseAllowances.invalidate(snapshots.allowanceKey);
       }
     },
     onError: (error) => setPurchaseError(error.message),
@@ -833,6 +854,11 @@ const Shop: React.FC<ShopProps> = (props) => {
                             ryoPrice={rowPrice.ryoCost}
                             canAfford={canAffordShopPrice(userData, rowPrice)}
                             copies={copiesOf(row)}
+                            allowance={
+                              stallAllowances.data?.find(
+                                (entry) => entry.itemId === row.id,
+                              ) ?? null
+                            }
                             onSelect={() => selectRow(row)}
                           />
                         ) : (
@@ -1005,6 +1031,7 @@ function StallCatalogCard({
   ryoPrice,
   canAfford,
   copies,
+  allowance,
 }: {
   item: Item;
   selected: boolean;
@@ -1013,19 +1040,15 @@ function StallCatalogCard({
   canAfford: boolean;
   /** Owned copies against the deck limit, for single cards. */
   copies: { owned: number; max: number } | null;
+  /** The listing's purchase allowance; null until the stall's batch loads. */
+  allowance: StallAllowance | null;
 }) {
-  const hasLimit = !!item.purchaseLimit && item.purchaseLimitPeriod !== "NONE";
-  // Shares the purchase dialog's cache entry, which a purchase invalidates.
-  const allowance = api.item.getPurchaseAllowance.useQuery(
-    { id: item.id },
-    { enabled: hasLimit, staleTime: 30_000 },
-  );
   const isPack = item.itemType !== "CARD";
   const isMaxed = !!copies && copies.owned >= copies.max;
-  const isSoldOut = allowance.data?.remaining === 0;
-  const limit = hasLimit
-    ? allowance.data
-      ? stallAllowanceLabel(allowance.data, item.id)
+  const isSoldOut = allowance?.remaining === 0;
+  const limit = hasPurchaseLimit(item)
+    ? allowance
+      ? stallAllowanceLabel(allowance, item.id)
       : purchaseLimitLabel(item)
     : null;
   return (
@@ -1313,6 +1336,10 @@ const STALL = {
   search:
     "h-[40px] rounded-lg text-base pointer-coarse:h-[44px] pointer-coarse:text-[16px]",
 };
+
+/** Whether a listing has a purchase limit that resets each period. */
+const hasPurchaseLimit = (item: Pick<Item, "purchaseLimit" | "purchaseLimitPeriod">) =>
+  !!item.purchaseLimit && item.purchaseLimitPeriod !== "NONE";
 
 /**
  * "Limit 3 per day" for listings with a purchase limit; null otherwise. Village Bundles

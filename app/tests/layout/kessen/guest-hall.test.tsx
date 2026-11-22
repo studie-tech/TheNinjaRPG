@@ -66,9 +66,8 @@ afterEach(async () => {
 });
 
 describe("Kessen for signed-out visitors", () => {
-  it("shows the guest hall: every lesson, every Circuit opponent and the locked sections", () => {
-    const view = render(<KessenPage />);
-    expect(view.getByText("Free to play in your browser")).toBeTruthy();
+  it("shows the guest hall: every lesson, every Circuit opponent and the locked sections", async () => {
+    const view = await renderGuestHall();
     expect(view.getByRole("heading", { name: "Lemu's Academy" })).toBeTruthy();
     for (const lesson of KESSEN_ACADEMY) {
       const start = view.getByRole("button", {
@@ -95,9 +94,9 @@ describe("Kessen for signed-out visitors", () => {
     expect(catalogFetched).toBeGreaterThan(0);
   });
 
-  it("keeps every table shut until sign-in is confirmed", () => {
+  it("keeps every table shut until sign-in is confirmed", async () => {
     session = { isSignedIn: false, isClerkLoaded: false };
-    const view = render(<KessenPage />);
+    const view = await renderGuestHall();
     const first = KESSEN_ACADEMY[0];
     const start = view.getByRole("button", {
       name: `Start lesson 1, ${first?.title}`,
@@ -109,11 +108,18 @@ describe("Kessen for signed-out visitors", () => {
     expect(play.disabled).toBe(true);
   });
 
-  it("switches the loaner faction the practice matches use", () => {
-    const view = render(<KessenPage />);
+  it("switches the loaner faction the practice matches use", async () => {
+    const view = await renderGuestHall();
     const hyorin = view.getByRole("radio", { name: "Hyorin" });
     fireEvent.click(hyorin);
     expect((hyorin as HTMLInputElement).checked).toBe(true);
     expect(view.getByText("Hyorin", { selector: "strong" })).toBeTruthy();
   });
 });
+
+/** The page with its guest hall, which loads as its own chunk. */
+const renderGuestHall = async () => {
+  const view = render(<KessenPage />);
+  await view.findByText("Free to play in your browser");
+  return view;
+};

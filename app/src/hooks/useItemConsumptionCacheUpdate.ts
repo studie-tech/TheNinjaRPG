@@ -17,11 +17,15 @@ export const useItemConsumptionCacheUpdate = () => {
     getQueryKey(api.raids.getUserRaidBuffs, undefined, "query"),
   );
   const kessenHub = useKessenHubCache();
-  /** Capture both inventory views, the buff view and the Card Hall before consuming. */
-  const prepareConsumptionUpdate = () => ({
+  /**
+   * Capture both inventory views, the buff view and the Card Hall before consuming, with
+   * the consumed stack the Card Hall's pack list loses one from when it was a pack.
+   */
+  const prepareConsumptionUpdate = (userItemId?: string) => ({
     inventory: inventory.prepareInventoryUpdate(),
     buffs: buffs.prepareUpdate(),
     kessenHub: kessenHub.prepareHubUpdate(),
+    userItemId,
   });
   /** Withheld metadata, profile recovery and transport uncertainty retain authoritative reads. */
   const updateConsumption = async (
@@ -56,7 +60,9 @@ export const useItemConsumptionCacheUpdate = () => {
       ...(packReveal || !result
         ? [
             kessenHub.updateHub(
-              packReveal ? (current) => withPackReveal(current, packReveal) : undefined,
+              packReveal
+                ? (current) => withPackReveal(current, packReveal, snapshot.userItemId)
+                : undefined,
               snapshot.kessenHub,
             ),
           ]

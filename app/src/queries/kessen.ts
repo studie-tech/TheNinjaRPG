@@ -8,6 +8,7 @@ import {
   desc,
   eq,
   exists,
+  gt,
   inArray,
   isNull,
   like,
@@ -234,6 +235,30 @@ export const listOwnedKessenCards = (
     .innerJoin(item, eq(item.id, userItem.itemId))
     .where(and(eq(userItem.userId, userId), eq(item.itemType, "CARD")))
     .groupBy(item.id, userItem.isInAuction);
+
+/** The player's unopened pack stacks outside the auction house, one row per stack. */
+export const listKessenPackStacks = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+) =>
+  client
+    .select({
+      userItemId: userItem.id,
+      itemId: userItem.itemId,
+      name: item.name,
+      quantity: userItem.quantity,
+    })
+    .from(userItem)
+    .innerJoin(item, eq(item.id, userItem.itemId))
+    .where(
+      and(
+        eq(userItem.userId, userId),
+        like(userItem.itemId, `${KESSEN_PACK_ID_PREFIX}%`),
+        eq(userItem.isInAuction, false),
+        gt(userItem.quantity, 0),
+      ),
+    )
+    .orderBy(userItem.id);
 
 export const listKessenDecks = (
   client: Pick<DrizzleClient, "select">,

@@ -253,11 +253,13 @@ import {
   listItemForGetEvolutions,
   listItemForUpdate,
   listItemForUpdate2,
+  listItemPurchaseLimits,
   listItemVariantForDelete,
   listItemVariantForGetItemVariants,
   listItemVariantForUpsertItemVariant,
   listItemVariantRequiringItemForDelete,
   listPetSpeciesForFetchRewardPetSpecies,
+  listPurchaseCounters,
   listQuestForGetItemRelations,
   listUserItemForExecuteMergeStacksForItem,
   listUserItemForFetchUserItems,
@@ -316,6 +318,7 @@ import {
   userItemAvailableAt,
 } from "@/queries/item";
 import { fetchJutsuLoadouts } from "@/queries/jutsu";
+import { listOwnedKessenCards } from "@/queries/kessen";
 import { findActionLogById } from "@/queries/logs";
 import { findLpcDesignForSelection } from "@/queries/lpc";
 import { insertUserPet, listVisiblePetJutsu } from "@/queries/pets";
@@ -2080,10 +2083,13 @@ export const itemRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, useritem, structures] = await Promise.all([
+      // Owned card copies, grouped per card, are read with the stack: an indexed join
+      // that saves a card sale a second round trip.
+      const [user, useritem, structures, ownedCards] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
         selectVillageStructureForSellUserItem(ctx.drizzle, ctx),
+        listOwnedKessenCards(ctx.drizzle, ctx.userId),
       ]);
       // Guard
       if (!useritem) return errorResponse("User item not found");
@@ -2093,17 +2099,11 @@ export const itemRouter = createTRPCRouter({
       if (isEarnedKessenPack(useritem.item)) {
         return errorResponse(`${useritem.item.name} ${EARNED_PACK_BLOCK_REASON}`);
       }
-      if (useritem.item.itemType === "CARD") {
-        // Deck copies are counted across every stack, which only a card sale needs loaded.
-        // Two tabs selling different stacks of one card can both pass this check. The cost
-        // is one player's deck copies sold below the limit, which support can restore, so
-        // the guard stays a readable check-then-write.
-        const ownedStacks = await fetchUserItems(ctx.drizzle, ctx.userId, {
-          includeHidden: true,
-        });
-        if (deckCopySaleRefusals([useritem], ownedStacks).size > 0) {
-          return errorResponse(`${useritem.item.name} ${DECK_COPIES_SALE_REASON}`);
-        }
+      // Deck copies are counted across every stack. Two tabs selling different stacks of
+      // one card can both pass this check. The cost is one player's deck copies sold below
+      // the limit, which support can restore, so the guard stays a readable check-then-write.
+      if (deckCopySaleRefusals([useritem], ownedCards).size > 0) {
+        return errorResponse(`${useritem.item.name} ${DECK_COPIES_SALE_REASON}`);
       }
       if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
         return errorResponse("Cannot sell crafting item");
@@ -2169,10 +2169,11 @@ export const itemRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, useritems, structures] = await Promise.all([
+      const [user, useritems, structures, ownedCards] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         listUserItemsForSellUserItems(ctx.drizzle, ctx, input.userItemIds),
         selectVillageStructureForSellUserItem(ctx.drizzle, ctx),
+        listOwnedKessenCards(ctx.drizzle, ctx.userId),
       ]);
       // Guard each stack: a single sale's rules, limited to the backpack's unequipped stacks
       const refused: { userItemId: string; name: string; reason: string }[] = [];
@@ -2192,14 +2193,9 @@ export const itemRouter = createTRPCRouter({
           });
         }
       }
-      // Deck copies are counted across every stack, which only card sales need loaded.
-      // The same two-tab race as in sellUserItem applies and is accepted for the same reason.
-      const takesDeckCopies = candidates.some((row) => row.item.itemType === "CARD")
-        ? deckCopySaleRefusals(
-            candidates,
-            await fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
-          )
-        : new Set<string>();
+      // Deck copies are counted across every stack. The same two-tab race as in
+      // sellUserItem applies and is accepted for the same reason.
+      const takesDeckCopies = deckCopySaleRefusals(candidates, ownedCards);
       const sellable = candidates.filter((useritem) => {
         if (!takesDeckCopies.has(useritem.id)) return true;
         refused.push({
@@ -3555,6 +3551,32 @@ export const itemRouter = createTRPCRouter({
       ]);
       if (!info) return null;
       return getItemPurchaseAllowance(info, counters, now);
+    }),
+  // The allowances of a shop page's limited listings in one read; uncached like the above.
+  getPurchaseAllowances: protectedProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(200) }))
+    .query(async ({ ctx, input }) => {
+      const now = new Date();
+      const [items, counters] = await Promise.all([
+        listItemPurchaseLimits(ctx.drizzle, input.ids),
+        listPurchaseCounters(
+          ctx.drizzle,
+          ctx.userId,
+          [...new Set(input.ids.map(itemPurchaseLimitKey))],
+          now,
+        ),
+      ]);
+      return items.map((info) => {
+        const limitKey = itemPurchaseLimitKey(info.id);
+        return {
+          itemId: info.id,
+          ...getItemPurchaseAllowance(
+            info,
+            counters.filter((row) => row.itemId === limitKey),
+            now,
+          ),
+        };
+      });
     }),
   buy: protectedProcedure
     .meta({ mcp: { description: "Buy an item from shop" } })

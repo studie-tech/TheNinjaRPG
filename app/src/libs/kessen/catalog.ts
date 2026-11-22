@@ -51,19 +51,22 @@ export const kessenCatalogCards = (
   });
 
 /**
- * Owned card copies per item id from per-stack (or grouped) rows: all of them, and the
- * `free` ones not listed in the auction house, which are the copies a deck may use.
+ * Owned card copies per item id from per-stack (or grouped) rows: all of them, the
+ * `free` ones not listed in the auction house, which are the copies a deck may use, and
+ * the `listed` rest.
  */
 export const ownedCardCounts = (
   rows: Iterable<{ itemId: string; isInAuction: boolean; quantity: number }>,
 ) => {
   const all: Record<string, number> = {};
   const free: Record<string, number> = {};
+  const listed: Record<string, number> = {};
   for (const row of rows) {
     all[row.itemId] = (all[row.itemId] ?? 0) + row.quantity;
-    if (!row.isInAuction) free[row.itemId] = (free[row.itemId] ?? 0) + row.quantity;
+    const split = row.isInAuction ? listed : free;
+    split[row.itemId] = (split[row.itemId] ?? 0) + row.quantity;
   }
-  return { all, free };
+  return { all, free, listed };
 };
 
 export const cardDataToKessenCard = (

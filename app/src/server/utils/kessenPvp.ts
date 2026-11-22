@@ -441,21 +441,19 @@ export const createKessenDuel = async (
   },
 ): Promise<{ row: KessenMatch } | { error: string }> => {
   const { now, seats } = input;
-  const pool = snapshotCatalog(kessenCatalogCards(input.catalogRows));
   const setup = {
     seed: nanoid(),
     seats: [
       { leaderId: seats[0].deck.leaderId, deck: expandDeckCards(seats[0].deck.cards) },
       { leaderId: seats[1].deck.leaderId, deck: expandDeckCards(seats[1].deck.cards) },
     ] as [{ leaderId: string; deck: string[] }, { leaderId: string; deck: string[] }],
-    cards: pool,
+    cards: snapshotCatalog(kessenCatalogCards(input.catalogRows)),
   };
   if (matchInputProblem(setup))
     return { error: "One of the decks has cards that are not available right now." };
   const engine = createMatch(setup);
   const state: KessenStoredPvpMatch = {
     engine,
-    pool,
     players: [seats[0].player, seats[1].player],
     borrowed: [borrowedIds(seats[0]), borrowedIds(seats[1])],
     plays: [0, 0],

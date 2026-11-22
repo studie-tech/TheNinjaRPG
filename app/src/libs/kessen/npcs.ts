@@ -6,6 +6,7 @@
 import { KESSEN_NPC_KEYS, type KessenTier } from "@/drizzle/constants";
 import type { KessenDeckCard } from "@/drizzle/schema";
 import type { KessenAiProfile } from "./ai";
+import { copyKey } from "./catalog";
 import {
   type DeckFaction,
   dayIndex,
@@ -15,7 +16,7 @@ import {
   normalizeDeckCards,
 } from "./deck";
 import { KESSEN_PACK_IDS } from "./packs";
-import type { KessenDropTableKey } from "./rewards";
+import { type KessenDropTableKey, standardLegendaries } from "./rewards";
 import { DEFAULT_KNOBS } from "./rules";
 import type { KessenKeyword } from "./text";
 import type { KessenCard, MatchRules } from "./types";
@@ -862,6 +863,37 @@ export const npcForbiddenPool = (npc: KessenNpc, cards: Iterable<KessenCard>) =>
   return npc.key === "shishi"
     ? forbidden.filter((card) => card.baseCardId === id("shishi-god-of-death"))
     : forbidden;
+};
+
+/**
+ * The catalog cards an NPC match stores for its turns and payout: every card of both
+ * seats' factions and Neutral's possible deck cards (what the AI infers hands and threats
+ * from), the drop and Forbidden pools, the legendaries of an unowned-legendary first-win
+ * pick, and each card sharing a name with those, so copy counts stay exact.
+ */
+export const npcMatchPool = (
+  npc: KessenNpc,
+  mode: KessenNpcMode,
+  factions: readonly string[],
+  cards: readonly KessenCard[],
+) => {
+  const rewards = [
+    ...npcDropPool(npc, cards),
+    ...npcForbiddenPool(npc, cards),
+    ...(npcVariant(npc, mode)?.firstWin.choice?.kind === "unownedLegendary"
+      ? standardLegendaries(cards)
+      : []),
+  ];
+  const names = new Set(rewards.map(copyKey));
+  return cards.filter(
+    (card) =>
+      factions.includes(card.faction) ||
+      (card.faction === "NEUTRAL" &&
+        card.isCollectible &&
+        card.kind !== "LEADER" &&
+        card.variant === "STANDARD") ||
+      names.has(copyKey(card)),
+  );
 };
 
 /** Village names mapped to their faction; Syndicate is the outlaw side. */

@@ -171,6 +171,16 @@ describeWithDatabase("item router and Kessen goods", () => {
           remaining: 0,
         });
       }
+      // The stall's batched read reports the same shared allowance for each listing.
+      const batch = await api.getPurchaseAllowances({
+        ids: [HYORIN_BUNDLE, AKASUMI_BUNDLE],
+      });
+      expect(batch.map((entry) => [entry.itemId, entry.remaining]).sort()).toEqual(
+        [
+          [AKASUMI_BUNDLE, 0],
+          [HYORIN_BUNDLE, 0],
+        ].sort(),
+      );
       expect(await moneyOf()).toBe(MONEY - PRICE);
       expect(await copiesOf(AKASUMI_BUNDLE)).toBe(0);
       expect(await sharedCounters()).toEqual([

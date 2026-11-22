@@ -98,6 +98,17 @@ export const fetchItem = async (client: DrizzleClient, id: string) => {
   });
 };
 
+/** The purchase limits of the listed items, for their allowances. */
+export const listItemPurchaseLimits = (client: DrizzleClient, ids: string[]) =>
+  client
+    .select({
+      id: item.id,
+      purchaseLimit: item.purchaseLimit,
+      purchaseLimitPeriod: item.purchaseLimitPeriod,
+    })
+    .from(item)
+    .where(inArray(item.id, ids));
+
 /** Load an item with its required bloodline and crafting ingredient definitions. */
 export const fetchItemWithCraftingRequirements = async (
   client: DrizzleClient,
@@ -198,11 +209,19 @@ export const fetchPurchaseCounters = (
   userId: string,
   limitKey: string,
   now: Date,
+) => listPurchaseCounters(client, userId, [limitKey], now);
+
+/** `fetchPurchaseCounters` for several limit keys at once, as a shop page lists them. */
+export const listPurchaseCounters = (
+  client: DrizzleClient,
+  userId: string,
+  limitKeys: string[],
+  now: Date,
 ) =>
   client.query.itemPurchaseCounter.findMany({
     where: and(
       eq(itemPurchaseCounter.userId, userId),
-      eq(itemPurchaseCounter.itemId, limitKey),
+      inArray(itemPurchaseCounter.itemId, limitKeys),
       inArray(
         itemPurchaseCounter.periodStart,
         (["DAILY", "WEEKLY", "MONTHLY"] as const)

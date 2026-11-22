@@ -239,6 +239,14 @@ export interface KessenCircuitEntry {
 }
 
 /** Everything the Card Hall lobby needs for the signed-in player. */
+/** One stack of unopened packs in the inventory. */
+export interface KessenOwnedPack {
+  userItemId: string;
+  itemId: string;
+  name: string;
+  quantity: number;
+}
+
 export interface KessenHub {
   progress: {
     lessonCompleted: boolean;
@@ -248,6 +256,10 @@ export interface KessenHub {
   };
   /** Owned copies per card item id, excluding copies listed in the auction house. */
   owned: Record<string, number>;
+  /** Copies per card item id listed in the auction house; still the player's. */
+  listed: Record<string, number>;
+  /** The player's unopened pack stacks. */
+  packs: KessenOwnedPack[];
   decks: KessenDeckRow[];
   circuit: KessenCircuitEntry[];
   today: {
@@ -290,8 +302,9 @@ export interface KessenHub {
 
 /**
  * What `KessenMatch.state` stores: the engine state plus the match context the server
- * needs on every turn, so a turn is one read. `pool` is the catalog snapshot taken at
- * the start (the AI's public card pool); `aiDeck` is the NPC's list, one id per copy.
+ * needs on every turn, so a turn is one read. `pool` holds the catalog cards taken at
+ * the start that the AI and the payout read (`npcMatchPool`); `aiDeck` is the NPC's
+ * list, one id per copy.
  */
 export interface KessenStoredMatch {
   engine: MatchState;
@@ -418,7 +431,6 @@ export interface KessenPvpSettlement {
  */
 export interface KessenStoredPvpMatch {
   engine: MatchState;
-  pool: KessenCard[];
   players: [KessenPvpPlayer, KessenPvpPlayer];
   /** Card item ids lent to each seat (loaner or fill). */
   borrowed: [string[], string[]];

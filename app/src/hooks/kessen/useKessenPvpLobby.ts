@@ -179,7 +179,7 @@ export const useKessenPvpLobby = (enabled = true) => {
 };
 
 /**
- * Polls the ranked queue every five seconds while the lobby holds a queue row: each poll
+ * Polls the ranked queue every ten seconds while the lobby holds a queue row: each poll
  * is the queue's heartbeat and runs matchmaking. A found duel calls `onMatchFound` and
  * reads the lobby again; a row the server removed clears the queue and returns its
  * message. Polls are not player actions, so a transport failure stays silent and the
@@ -266,5 +266,6 @@ const errorText = (error: unknown, fallback: string) => {
     : fallback;
 };
 
-const RANKED_QUEUE_POLL_MS = 5_000;
+// Three heartbeats per `KESSEN_RANKED_QUEUE_HEARTBEAT_SECONDS`; a found duel is also pushed.
+const RANKED_QUEUE_POLL_MS = 10_000;
 const LEADERBOARD_SIZE = 20;

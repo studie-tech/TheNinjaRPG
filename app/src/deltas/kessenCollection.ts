@@ -50,12 +50,26 @@ export const withStarterGranted = (
   return result.deck ? withSavedDeck(next, result.deck) : next;
 };
 
-/** Hub after a pack opening: delivered cards join the owned counts and pity updates. */
-export const withPackReveal = (hub: KessenHub, reveal: CardPackReveal): KessenHub => {
+/**
+ * Hub after a pack opening: delivered cards join the owned counts, pity updates and the
+ * opened stack (`openedStackId`) holds one pack fewer, leaving the hub once empty.
+ */
+export const withPackReveal = (
+  hub: KessenHub,
+  reveal: CardPackReveal,
+  openedStackId: string | undefined,
+): KessenHub => {
   const owned = { ...hub.owned };
   for (const card of reveal.cards)
     if (card.soldFor === null) owned[card.itemId] = (owned[card.itemId] ?? 0) + 1;
-  return { ...hub, owned, pity: reveal.pity };
+  const packs = hub.packs
+    .map((pack) =>
+      pack.userItemId === openedStackId
+        ? { ...pack, quantity: pack.quantity - 1 }
+        : pack,
+    )
+    .filter((pack) => pack.quantity > 0);
+  return { ...hub, owned, packs, pity: reveal.pity };
 };
 
 /** Hub with the auto-sell toggle set. */

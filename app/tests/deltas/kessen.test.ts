@@ -9,6 +9,7 @@ import {
   getKessenMatchLog,
   getKessenPayoutUserUpdate,
   kessenEndNeedsHubRefresh,
+  kessenGrantsPacks,
   kessenPendingPickOf,
   kessenResultGrantsItems,
 } from "@/deltas/kessen";
@@ -351,6 +352,16 @@ describe("kessen deltas", () => {
     expect(
       kessenResultGrantsItems(payload({ status: "ACTIVE", result: result() })),
     ).toBe(false);
+  });
+
+  it("tells grants with packs, whose stacks a hub read names, from card grants", () => {
+    expect(kessenGrantsPacks([{ itemId: "kessen-colossus" }])).toBe(false);
+    expect(
+      kessenGrantsPacks([
+        { itemId: "kessen-colossus" },
+        { itemId: "kessen-pack-paper" },
+      ]),
+    ).toBe(true);
   });
 
   it("asks for a hub refresh only when progress-derived state changed", () => {

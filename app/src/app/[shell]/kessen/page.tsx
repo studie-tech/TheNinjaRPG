@@ -44,7 +44,6 @@ import { CircuitMap } from "@/layout/kessen/hub/CircuitMap";
 import { CollectionBook } from "@/layout/kessen/hub/CollectionBook";
 import { DeckBuilder, type KessenDeckSaveInput } from "@/layout/kessen/hub/DeckBuilder";
 import { DuelsPanel } from "@/layout/kessen/hub/DuelsPanel";
-import { KessenGuestHall } from "@/layout/kessen/hub/GuestHall";
 import { HallBox, type HallScene } from "@/layout/kessen/hub/HallBox";
 import { HallHeader } from "@/layout/kessen/hub/HallHeader";
 import {
@@ -59,7 +58,7 @@ import {
 } from "@/layout/kessen/hub/hubData";
 import { type KessenStartRequest, NpcSheet } from "@/layout/kessen/hub/NpcSheet";
 import { PackOpening } from "@/layout/kessen/hub/PackOpening";
-import { type KessenOwnedPack, PacksPanel } from "@/layout/kessen/hub/PacksPanel";
+import { PacksPanel } from "@/layout/kessen/hub/PacksPanel";
 import { StarterChoice } from "@/layout/kessen/hub/StarterChoice";
 import { useKessenMotion } from "@/layout/kessen/useKessenMotion";
 import Link from "@/layout/Link";
@@ -75,7 +74,7 @@ import {
 } from "@/libs/kessen/academy";
 import type { DeckFaction } from "@/libs/kessen/deck";
 import type { KessenNpcKey } from "@/libs/kessen/npcs";
-import { isKessenPackId, KESSEN_PACK_IDS } from "@/libs/kessen/packs";
+import { KESSEN_PACK_IDS } from "@/libs/kessen/packs";
 import { findQuestChallenge } from "@/libs/quest/challenge";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
@@ -95,6 +94,12 @@ import type { CardPackReveal } from "@/validators/weightedCache";
 const KessenMatchView = dynamic(
   () => import("@/layout/kessen/match/MatchView").then((mod) => mod.KessenMatchView),
   { ssr: false, loading: () => <Loader explanation="Setting the table" /> },
+);
+
+// The guest hall and the in-browser NPC it plays stay out of a player's bundle; it still
+// renders on the server, so the prerendered page holds it.
+const KessenGuestHall = dynamic(() =>
+  import("@/layout/kessen/hub/GuestHall").then((mod) => mod.KessenGuestHall),
 );
 
 const TABS = ["Play", "Duels", "Decks", "Collection", "Packs"] as const;
@@ -145,10 +150,6 @@ function KessenHall() {
   const { hub: hubQuery, catalog: catalogQuery } = useKessenHub(!!userId);
   const hub = hubQuery.data;
   const catalog = catalogQuery.data;
-  const inventory = api.item.getUserItems.useQuery(undefined, {
-    enabled: !!userId,
-    staleTime: 60_000,
-  });
   const utils = api.useUtils();
   const collection = useKessenCollection();
   const { start, startLesson, isStarting } = useStartKessenMatch();
@@ -243,19 +244,10 @@ function KessenHall() {
   const playDeck = defaultDeck(summaries);
   const findContext: KessenFindContext = { packs: catalog.packs, circuit: hub.circuit };
   // The hub counts free copies only; listed ones still belong to the collection.
-  const listed = listedCardCounts(inventory.data);
+  const listed = hub.listed;
   const npcName = (key: KessenNpcKey) =>
     hub.circuit.find((entry) => entry.key === key)?.name ?? key;
-  const ownedPacks = (inventory.data ?? [])
-    .filter((row) => isKessenPackId(row.item.id) && row.quantity > 0)
-    .map(
-      (row): KessenOwnedPack => ({
-        userItemId: row.id,
-        itemId: row.itemId,
-        name: row.item.name,
-        quantity: row.quantity,
-      }),
-    );
+  const ownedPacks = hub.packs;
   const selectedEntry = hub.circuit.find((entry) => entry.key === selectedNpc) ?? null;
   const packCount = ownedPacks.reduce((sum, pack) => sum + pack.quantity, 0);
   const incomingChallenges =
@@ -380,11 +372,13 @@ function KessenHall() {
     }
     selectTab("Play");
     setSelectedNpc(LESSON_NPC);
-    // The First Bundle opens at once and its ceremony confirms the grant; the inventory
-    // names its new stack. Without the ceremony a toast confirms it instead.
-    const rows = await utils.item.getUserItems.fetch().catch(() => null);
-    const bundle = rows?.find((row) => row.itemId === KESSEN_PACK_IDS.first);
-    const revealed = bundle ? await openPack(bundle.id, bundle.itemId) : false;
+    // The First Bundle opens at once and its ceremony confirms the grant; the hub read
+    // that confirmed the starter names its new stack. Without the ceremony a toast
+    // confirms it instead.
+    const bundle = utils.kessen.getHub
+      .getData()
+      ?.packs.find((pack) => pack.itemId === KESSEN_PACK_IDS.first);
+    const revealed = bundle ? await openPack(bundle.userItemId, bundle.itemId) : false;
     if (!revealed)
       showMutationToast({
         success: true,
@@ -1386,25 +1380,6 @@ const selectChallengeUser = (profile: NonNullable<UserWithRelations>) => ({
   longitude: profile.longitude,
   latitude: profile.latitude,
 });
-
-/** Card copies listed in the auction house per item id, from the inventory rows. */
-const listedCardCounts = (
-  rows:
-    | readonly {
-        itemId: string;
-        quantity: number;
-        isInAuction: boolean;
-        item: { itemType: string };
-      }[]
-    | undefined,
-) => {
-  const counts: Record<string, number> = {};
-  for (const row of rows ?? []) {
-    if (row.isInAuction && row.item.itemType === "CARD")
-      counts[row.itemId] = (counts[row.itemId] ?? 0) + row.quantity;
-  }
-  return counts;
-};
 
 const TAB_ICON_COMPONENTS: Record<KessenTab, LucideIcon> = {
   Play: Swords,

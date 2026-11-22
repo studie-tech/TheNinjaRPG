@@ -296,9 +296,9 @@ export const useConsumeItem = ({
     useItemConsumptionCacheUpdate();
 
   const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
-    onMutate: () => ({
+    onMutate: (variables) => ({
       userRevision: prepareUserUpdate(),
-      consumption: prepareConsumptionUpdate(),
+      consumption: prepareConsumptionUpdate(variables.userItemId),
     }),
     onSuccess: async (data, variables, context) => {
       finishItemConsumeRequest(userId ?? "", variables.userItemId);

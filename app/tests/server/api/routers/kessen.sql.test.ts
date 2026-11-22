@@ -143,7 +143,7 @@ const reseed = async (matchId: string, seed: string) => {
       { leaderId: engine.seats[1].leader, deck: deckOf(1) },
     ],
     rules: engine.rules,
-    cards: stored.pool,
+    cards: Object.values(engine.cards),
   });
   await (await db())
     .update(kessenMatch)
@@ -725,6 +725,10 @@ describeWithDatabase("kessen router", () => {
     // First-win Paper Bundle plus the weekly first-win Paper Bundle.
     expect(await owned(KESSEN_PACK_IDS.paper)).toBe(2);
     expect(await owned("kessen-lemu-academy-instructor")).toBeGreaterThanOrEqual(1);
+    // The hub lists the paid packs as the stacks the Card Hall opens.
+    const packs = (await (await api()).getHub()).packs;
+    expect(packs.every((pack) => pack.itemId === KESSEN_PACK_IDS.paper)).toBe(true);
+    expect(packs.reduce((sum, pack) => sum + pack.quantity, 0)).toBe(2);
     const record = await progress();
     expect(record).toMatchObject({
       dayKey: getUtcDayKey(),

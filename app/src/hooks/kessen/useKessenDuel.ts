@@ -3,6 +3,7 @@
 import { getQueryKey } from "@trpc/react-query";
 import { useEffect, useRef } from "react";
 import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
+import { kessenGrantsPacks } from "@/deltas/kessen";
 import {
   getKessenPvpLobbyAfterEnd,
   getKessenPvpMatchCache,
@@ -146,6 +147,8 @@ export const useKessenDuel = (matchId: string | null) => {
     const ended = confirmed.status !== "ACTIVE";
     const granted = "granted" in data ? (data.granted ?? []) : [];
     if (granted.length > 0) void invalidateInventory();
+    // A pack reward adds a stack the Card Hall lists from its hub read.
+    if (kessenGrantsPacks(granted)) void utils.kessen.getHub.invalidate();
     // A result still settling moves the lobby once it settles.
     if (ended && confirmed.result?.settling) void utils.kessenPvp.getLobby.invalidate();
     const userDelta = "userDelta" in data ? data.userDelta : undefined;

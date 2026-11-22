@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { KESSEN_NPC_NAMES } from "@/drizzle/constants";
+import { aiRng, decide } from "@/libs/kessen/ai";
 import {
   catalogById,
   expandDeckCards,
@@ -8,7 +9,7 @@ import {
   starterDeck,
   validateDeck,
 } from "@/libs/kessen/deck";
-import { createMatch } from "@/libs/kessen/engine";
+import { actingSeats, applyAction, createMatch, viewFor } from "@/libs/kessen/engine";
 import {
   ascendedDeckOf,
   championKeys,
@@ -22,11 +23,13 @@ import {
   npcDropPool,
   npcForbiddenPool,
   npcLockReason,
+  npcMatchPool,
   npcVariant,
   villageFaction,
 } from "@/libs/kessen/npcs";
+import { runNpcReplies } from "@/libs/kessen/npcTurns";
 import { KESSEN_PACK_IDS } from "@/libs/kessen/packs";
-import { KESSEN_DROP_TABLES } from "@/libs/kessen/rewards";
+import { KESSEN_DROP_TABLES, standardLegendaries } from "@/libs/kessen/rewards";
 import { KESSEN_KEYWORDS } from "@/libs/kessen/text";
 import type { KessenCard } from "@/libs/kessen/types";
 import { KESSEN_SEED_CATALOG } from "./fixtures/catalog";
@@ -454,5 +457,63 @@ describe("village factions", () => {
       Array.from({ length: 30 }, (_, day) => momoFaction(`2026-12-${day + 1}`)),
     );
     expect(seen.size).toBe(6);
+  });
+});
+
+describe("match pool", () => {
+  it("keeps every card the AI and the payout read from the catalog", () => {
+    for (const entry of KESSEN_NPCS) {
+      const variant = entry.standard;
+      const human = starterDeck("HYORIN");
+      const aiDeck = expandDeckCards(variant.deck.cards);
+      let engine = createMatch({
+        seed: `pool:${entry.key}`,
+        seats: [
+          { leaderId: human.leaderId, deck: expandDeckCards(human.cards) },
+          { leaderId: variant.deck.leaderId, deck: aiDeck },
+        ],
+        rules: variant.rules,
+        cards: KESSEN_SEED_CATALOG,
+      });
+      const pool = npcMatchPool(
+        entry,
+        "standard",
+        engine.seats.map((seat) => seat.faction),
+        KESSEN_SEED_CATALOG,
+      );
+      expect(pool.length).toBeLessThan(KESSEN_SEED_CATALOG.length);
+      expect(npcDropPool(entry, pool)).toEqual(npcDropPool(entry, KESSEN_SEED_CATALOG));
+      expect(npcForbiddenPool(entry, pool)).toEqual(
+        npcForbiddenPool(entry, KESSEN_SEED_CATALOG),
+      );
+      if (variant.firstWin.choice?.kind === "unownedLegendary") {
+        expect(standardLegendaries(pool)).toEqual(
+          standardLegendaries(KESSEN_SEED_CATALOG),
+        );
+      }
+      // The NPC replies as it would from the whole catalog, turn after turn.
+      for (let turn = 0; turn < 80; turn++) {
+        const table = { engine, mode: "standard" as const, lesson: null, aiDeck };
+        const full = runNpcReplies(
+          { ...table, pool: KESSEN_SEED_CATALOG },
+          entry,
+          "CHUNIN",
+        );
+        expect(runNpcReplies({ ...table, pool }, entry, "CHUNIN")).toEqual(full);
+        engine = full.engine;
+        if (!actingSeats(engine).includes(0)) break;
+        const action = decide(
+          viewFor(engine, 0),
+          0,
+          { tier: "CHUNIN" },
+          aiRng(`human:${entry.key}`, 0, engine.step),
+          { pool: KESSEN_SEED_CATALOG },
+        );
+        const applied = applyAction(engine, 0, action);
+        if (!applied.ok) throw new Error(applied.reason);
+        engine = applied.state;
+      }
+      expect(actingSeats(engine)).toEqual([]);
+    }
   });
 });

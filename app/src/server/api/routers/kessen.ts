@@ -51,6 +51,7 @@ import {
   kessenNpc,
   momoFaction,
   npcLockReason,
+  npcMatchPool,
   npcVariant,
 } from "@/libs/kessen/npcs";
 import { runNpcReplies, tierOfMode } from "@/libs/kessen/npcTurns";
@@ -72,6 +73,7 @@ import {
   listKessenDecks,
   listKessenFirstWinChoices,
   listKessenPackItems,
+  listKessenPackStacks,
   listOwnedKessenCards,
   updateKessenMatchesForConcede,
   updateKessenMatchForExpiry,
@@ -150,21 +152,33 @@ export const kessenRouter = createTRPCRouter({
     .input(z.object({}).nullish())
     .query(async ({ ctx }): Promise<KessenHub> => {
       const userId = ctx.userId;
-      const [progressRows, npcRows, ownedRows, decks, active, playerRows, choices] =
-        await Promise.all([
-          findKessenProgress(ctx.drizzle, userId),
-          findKessenNpcProgressRows(ctx.drizzle, userId),
-          listOwnedKessenCards(ctx.drizzle, userId),
-          listKessenDecks(ctx.drizzle, userId),
-          listActiveKessenMatches(ctx.drizzle, userId),
-          findKessenPlayer(ctx.drizzle, userId),
-          listKessenFirstWinChoices(ctx.drizzle, userId),
-        ]);
+      const [
+        progressRows,
+        npcRows,
+        ownedRows,
+        packs,
+        decks,
+        active,
+        playerRows,
+        choices,
+      ] = await Promise.all([
+        findKessenProgress(ctx.drizzle, userId),
+        findKessenNpcProgressRows(ctx.drizzle, userId),
+        listOwnedKessenCards(ctx.drizzle, userId),
+        listKessenPackStacks(ctx.drizzle, userId),
+        listKessenDecks(ctx.drizzle, userId),
+        listActiveKessenMatches(ctx.drizzle, userId),
+        findKessenPlayer(ctx.drizzle, userId),
+        listKessenFirstWinChoices(ctx.drizzle, userId),
+      ]);
+      const counts = ownedCardCounts(ownedRows);
       return buildHub({
         now: new Date(),
         progress: progressRows[0] ?? null,
         npcRows,
-        owned: ownedCardCounts(ownedRows).free,
+        owned: counts.free,
+        listed: counts.listed,
+        packs,
         decks,
         active,
         choices,
@@ -278,6 +292,7 @@ export const kessenRouter = createTRPCRouter({
       if (matchInputProblem(setup))
         return errorResponse("This opponent's cards are not available right now.");
 
+      const engine = createMatch(setup);
       return openNpcMatch(ctx.drizzle, {
         userId,
         npc,
@@ -287,11 +302,16 @@ export const kessenRouter = createTRPCRouter({
         active,
         progressMissing: !progress,
         opening: {
-          engine: createMatch(setup),
+          engine,
           mode,
           lesson: null,
           challenge: quest ? input.challenge : null,
-          pool,
+          pool: npcMatchPool(
+            npc,
+            mode,
+            engine.seats.map((seat) => seat.faction),
+            pool,
+          ),
           aiDeck,
           borrowed: [...new Set(deck.borrowed.map((entry) => entry.itemId))].sort(),
           plays: [0, 0],
@@ -954,6 +974,8 @@ const buildHub = (input: {
   progress: KessenProgress | null;
   npcRows: readonly KessenNpcProgress[];
   owned: Record<string, number>;
+  listed: Record<string, number>;
+  packs: KessenHub["packs"];
   decks: KessenHub["decks"];
   active: Awaited<ReturnType<typeof listActiveKessenMatches>>;
   choices: Awaited<ReturnType<typeof listKessenFirstWinChoices>>;
@@ -1012,6 +1034,8 @@ const buildHub = (input: {
       seenKeywords: progress?.seenKeywords ?? [],
     },
     owned: input.owned,
+    listed: input.listed,
+    packs: input.packs,
     decks: input.decks,
     circuit: entries,
     today: {

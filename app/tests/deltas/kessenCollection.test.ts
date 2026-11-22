@@ -8,6 +8,7 @@ import {
 } from "@/deltas/kessenCollection";
 import { academyProgress } from "@/libs/kessen/academy";
 import type { KessenDeckRow, KessenHub } from "@/validators/kessen";
+import type { CardPackReveal } from "@/validators/weightedCache";
 
 const deck = (id: string, name = id): KessenDeckRow => ({
   id,
@@ -25,6 +26,11 @@ const hub = (): KessenHub => ({
     seenKeywords: [],
   },
   owned: { "kessen-a": 1 },
+  listed: {},
+  packs: [
+    { userItemId: "ui-paper", itemId: "kessen-pack-paper", name: "Paper", quantity: 2 },
+    { userItemId: "ui-first", itemId: "kessen-pack-first", name: "First", quantity: 1 },
+  ],
   decks: [deck("one"), deck("two")],
   circuit: [],
   today: { rewarded: 0, rewardedCap: 12, drops: 0, dropsCap: 5 },
@@ -71,8 +77,8 @@ describe("Kessen collection hub patches", () => {
     expect(next.decks.at(-1)?.id).toBe("starter");
   });
 
-  it("counts delivered pack cards, skips auto-sold ones and updates pity", () => {
-    const next = withPackReveal(hub(), {
+  it("counts delivered pack cards, skips auto-sold ones and updates pity and stacks", () => {
+    const reveal: CardPackReveal = {
       packItemId: "kessen-pack-paper",
       cards: [
         {
@@ -93,9 +99,17 @@ describe("Kessen collection hub patches", () => {
         },
       ],
       pity: { epicIn: 6, legendaryIn: 39 },
-    });
+    };
+    const next = withPackReveal(hub(), reveal, "ui-paper");
     expect(next.owned).toEqual({ "kessen-a": 2 });
     expect(next.pity).toEqual({ epicIn: 6, legendaryIn: 39 });
+    expect(next.packs.map((pack) => [pack.userItemId, pack.quantity])).toEqual([
+      ["ui-paper", 1],
+      ["ui-first", 1],
+    ]);
+    expect(
+      withPackReveal(hub(), reveal, "ui-first").packs.map((pack) => pack.userItemId),
+    ).toEqual(["ui-paper"]);
     expect(withAutoSell(hub(), true).autoSellSurplus).toBe(true);
   });
 });

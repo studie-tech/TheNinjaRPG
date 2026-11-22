@@ -245,16 +245,32 @@ export const listKessenRatedPairs = (
   userId: string,
   since: Date,
 ) =>
+  // One branch per seat, so each reads its own index: seat 0 through
+  // (userId, npcKey, finishedAt), where duels have no NPC, past the player's NPC matches.
   client
     .select({ userId: kessenMatch.userId, opponentId: kessenMatch.opponentId })
     .from(kessenMatch)
     .where(
       and(
+        eq(kessenMatch.userId, userId),
+        isNull(kessenMatch.npcKey),
+        gte(kessenMatch.finishedAt, since),
         eq(kessenMatch.kind, "RANKED"),
         eq(kessenMatch.rated, true),
-        gte(kessenMatch.finishedAt, since),
-        or(eq(kessenMatch.userId, userId), eq(kessenMatch.opponentId, userId)),
       ),
+    )
+    .unionAll(
+      client
+        .select({ userId: kessenMatch.userId, opponentId: kessenMatch.opponentId })
+        .from(kessenMatch)
+        .where(
+          and(
+            eq(kessenMatch.opponentId, userId),
+            gte(kessenMatch.finishedAt, since),
+            eq(kessenMatch.kind, "RANKED"),
+            eq(kessenMatch.rated, true),
+          ),
+        ),
     );
 
 /** Progress rows of several players (ratings and ranked counters). */

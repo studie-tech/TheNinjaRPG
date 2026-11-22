@@ -191,6 +191,10 @@ export const kessenResultGrantsItems = (match: KessenMatchPayload) => {
   );
 };
 
+/** Whether confirmed grants include packs, whose stacks only a hub read can name. */
+export const kessenGrantsPacks = (granted: readonly { itemId: string }[]) =>
+  granted.some((grant) => isKessenPackId(grant.itemId));
+
 /** Whether an ended match changed what the hub derives from progress (unlocks, starter). */
 export const kessenEndNeedsHubRefresh = (match: KessenMatchPayload) =>
   !!match.result?.firstWin || !!match.result?.lessonCompleted;

@@ -7231,6 +7231,12 @@ export const kessenMatch = mysqlTable(
         table.opponentId,
         table.status,
       ),
+      // First-win matches per NPC record; with a null `npcKey`, the player's duels.
+      userNpcFinishedIdx: index("KessenMatch_userId_npcKey_finishedAt_idx").on(
+        table.userId,
+        table.npcKey,
+        table.finishedAt,
+      ),
       statusUpdatedAtIdx: index("KessenMatch_status_updatedAt_idx").on(
         table.status,
         table.updatedAt,

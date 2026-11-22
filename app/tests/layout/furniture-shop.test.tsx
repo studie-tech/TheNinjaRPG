@@ -108,6 +108,7 @@ beforeEach(() => {
       getPurchaseAllowance: {
         useQuery: () => ({ data: { remaining: null, limit: null }, refetch: vi.fn() }),
       },
+      getPurchaseAllowances: { useQuery: () => ({ data: undefined }) },
       buy: {
         useMutation: (options: PurchaseOptions) => {
           purchaseOptions = options;

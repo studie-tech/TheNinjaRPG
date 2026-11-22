@@ -1,6 +1,6 @@
 {
-  "id": "111e2bb4-b8db-48bd-a29a-6f84825bf42e",
-  "prevId": "e5cb6d3d-f060-49b5-b175-63683791f73f",
+  "id": "d1b678d3-2787-4d4f-bf6b-ea3b6a96402e",
+  "prevId": "49fc2177-1e31-432c-b5ee-a3d62bb84a34",
   "version": "5",
   "dialect": "mysql",
   "tables": {
@@ -11159,6 +11159,15 @@
           "columns": [
             "opponentId",
             "status"
+          ],
+          "isUnique": false
+        },
+        "KessenMatch_userId_npcKey_finishedAt_idx": {
+          "name": "KessenMatch_userId_npcKey_finishedAt_idx",
+          "columns": [
+            "userId",
+            "npcKey",
+            "finishedAt"
           ],
           "isUnique": false
         },

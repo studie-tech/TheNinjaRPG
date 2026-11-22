@@ -70,7 +70,7 @@ export const deckCopySaleRefusals = (
   sale: (Pick<CardSaleRow, "id" | "itemId" | "quantity"> & {
     item: Pick<Item, "itemType" | "rarity">;
   })[],
-  ownedStacks: CardSaleRow[],
+  ownedStacks: Pick<CardSaleRow, "itemId" | "quantity" | "isInAuction">[],
 ): Set<string> => {
   const copiesLeft = new Map<string, number>();
   for (const row of ownedStacks) {

@@ -94,6 +94,7 @@ ALTER TABLE `UserRequest` ADD CONSTRAINT `UserRequest_pending_kessen_pair_unique
 CREATE INDEX `KessenDeck_userId_idx` ON `KessenDeck` (`userId`);
 CREATE INDEX `KessenMatch_userId_status_idx` ON `KessenMatch` (`userId`,`status`);
 CREATE INDEX `KessenMatch_opponentId_status_idx` ON `KessenMatch` (`opponentId`,`status`);
+CREATE INDEX `KessenMatch_userId_npcKey_finishedAt_idx` ON `KessenMatch` (`userId`,`npcKey`,`finishedAt`);
 CREATE INDEX `KessenMatch_status_updatedAt_idx` ON `KessenMatch` (`status`,`updatedAt`);
 CREATE INDEX `KessenMatch_status_turnDeadline_idx` ON `KessenMatch` (`status`,`turnDeadline`);
 CREATE INDEX `KessenRankedQueue_matchId_idx` ON `KessenRankedQueue` (`matchId`);

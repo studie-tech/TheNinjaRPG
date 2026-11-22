@@ -8,6 +8,7 @@ import {
   getKessenHubAfterTurn,
   getKessenMatchCache,
   kessenEndNeedsHubRefresh,
+  kessenGrantsPacks,
   kessenResultGrantsItems,
 } from "@/deltas/kessen";
 import { useKessenHubCache } from "@/hooks/kessen/useKessenHubCache";
@@ -80,11 +81,14 @@ export const useKessenMatch = (matchId: string | null) => {
     const granted = data.granted ?? [];
     const grantsItems = ended && kessenResultGrantsItems(confirmed);
     // Refetches run in the background: the confirmed patches below are what playback
-    // needs. Grants create inventory rows whose ids only the server knows, and a result
-    // whose grants this response does not list leaves the hub's owned cards unknown.
+    // needs. Grants create inventory rows whose ids only the server knows (the hub's pack
+    // stacks among them), and a result whose grants this response does not list leaves
+    // the hub's owned cards unknown.
     if (
       ended &&
-      (kessenEndNeedsHubRefresh(confirmed) || (grantsItems && granted.length === 0))
+      (kessenEndNeedsHubRefresh(confirmed) ||
+        kessenGrantsPacks(granted) ||
+        (grantsItems && granted.length === 0))
     )
       void utils.kessen.getHub.invalidate();
     if (granted.length > 0 || grantsItems) void invalidateInventory();
@@ -178,6 +182,7 @@ export const useKessenMatch = (matchId: string | null) => {
     if (!data.success || !("match" in data))
       return { ok: false, message: data.message };
     void invalidateInventory();
+    if (kessenGrantsPacks(data.granted)) void utils.kessen.getHub.invalidate();
     await Promise.all([
       matchCache.updateCache(
         (cached) => getKessenMatchCache(cached, data.match),

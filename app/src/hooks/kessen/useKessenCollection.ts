@@ -1,6 +1,7 @@
 "use client";
 
 import { api, type RouterInputs } from "@/app/_trpc/client";
+import { kessenGrantsPacks } from "@/deltas/kessen";
 import {
   withAutoSell,
   withoutDeck,
@@ -28,6 +29,7 @@ import { useUserDataSelector } from "@/utils/UserContext";
  * message and do not toast, because the deck builder answers them in place.
  */
 export const useKessenCollection = () => {
+  const utils = api.useUtils();
   const hub = useKessenHubCache();
   const {
     data: userId,
@@ -67,7 +69,8 @@ export const useKessenCollection = () => {
       if (!data.success) showMutationToast(data);
       if (data.success) {
         const { granted, deck } = data;
-        // The grant creates inventory rows whose ids only the server knows.
+        // The grant creates inventory rows (the First Bundle's stack among them) whose
+        // ids only the server knows.
         await Promise.all([
           hub.updateHub(
             (current) =>
@@ -80,14 +83,15 @@ export const useKessenCollection = () => {
           ),
           invalidateInventory(),
         ]);
+        if (kessenGrantsPacks(granted)) await utils.kessen.getHub.invalidate();
       }
     },
   });
 
   const openPackMutation = api.kessenCollection.openPack.useMutation({
-    onMutate: () => ({
+    onMutate: (variables) => ({
       userRevision: prepareUserUpdate(),
-      consumption: prepareConsumptionUpdate(),
+      consumption: prepareConsumptionUpdate(variables.userItemId),
     }),
     onSuccess: async (data, variables, context) => {
       if (userId) finishItemConsumeRequest(userId, variables.userItemId);

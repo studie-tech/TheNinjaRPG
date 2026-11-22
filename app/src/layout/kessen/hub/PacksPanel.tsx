@@ -21,7 +21,11 @@ import {
   kessenVillagePackFaction,
 } from "@/libs/kessen/packs";
 import { cn } from "@/libs/shadui";
-import type { KessenPackEntry, KessenPackOdds } from "@/validators/kessen";
+import type {
+  KessenOwnedPack,
+  KessenPackEntry,
+  KessenPackOdds,
+} from "@/validators/kessen";
 import {
   KESSEN_RARITY_LABELS,
   type KessenRarityTier,
@@ -31,13 +35,6 @@ import {
 import { RarityGem } from "../RarityGem";
 
 /** One stack of an owned pack, opened through its user item. */
-export interface KessenOwnedPack {
-  userItemId: string;
-  itemId: string;
-  name: string;
-  quantity: number;
-}
-
 /**
  * The player's packs as item tiles with Open buttons in a fixed order (Paper, Village,
  * Lacquer, First), the pity counters, the auto-sell switch with what a sale pays, and a
