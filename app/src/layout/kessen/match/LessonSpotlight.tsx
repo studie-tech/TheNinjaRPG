@@ -36,7 +36,9 @@ export const LessonSpotlight = ({
   retryError?: string | null;
 }) => {
   const target = lessonTargetSelector(step);
-  const names = markedNames(marks);
+  // The ring already shows the target, so only the other cards Lemu names are marked.
+  const shown = marks.filter((mark) => mark.selector !== target);
+  const names = markedNames(shown);
   return (
     <LessonGuide
       lesson={lesson}
@@ -54,7 +56,7 @@ export const LessonSpotlight = ({
           ) : undefined,
         action: step.text,
         target,
-        marks,
+        marks: shown,
         footer:
           step.retry && onRetry ? (
             <RetryRow

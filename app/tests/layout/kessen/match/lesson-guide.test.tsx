@@ -91,3 +91,28 @@ it("clears at once when the table closes with the coach on screen", async () => 
   view.unmount();
   await waitFor(() => expect(lesson()).toBeNull());
 });
+
+it("marks only the named cards besides the ringed target", () => {
+  const target = '[data-lesson-target="hand-card"][data-lesson-key="s0-3"]';
+  const copy = '[data-lesson-target="hand-card"][data-lesson-key="s0-4"]';
+  const view = render(
+    <LessonSpotlight
+      step={coach}
+      lesson={heading}
+      marks={[{ selector: target, label: "Arashima" }]}
+    />,
+  );
+  expect(lesson()?.step.marks).toEqual([]);
+  expect(view.queryByText(/marked/)).toBeNull();
+  view.rerender(
+    <LessonSpotlight
+      step={coach}
+      lesson={heading}
+      marks={[
+        { selector: target, label: "Arashima" },
+        { selector: copy, label: "Arashima" },
+      ]}
+    />,
+  );
+  expect(lesson()?.step.marks).toEqual([{ selector: copy, label: "Arashima" }]);
+});

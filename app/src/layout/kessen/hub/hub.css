@@ -417,6 +417,11 @@ button.kh-deckchip:focus-visible {
   color: #24602f;
 }
 @container kh-hall (max-width: 819px) {
+  /* A long deck name keeps its own line and the figures drop below it. */
+  .kh-deckchip {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
   .kh-deckchip-prov-label {
     display: none;
   }

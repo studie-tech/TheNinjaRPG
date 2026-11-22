@@ -171,7 +171,7 @@ export const DeckChip = ({
       <span className="kh-deckchip-name" data-deck-name title={deck.name}>
         {deck.name}
       </span>
-      {/* The figures never wrap or shrink; a long name ellipsises instead. */}
+      {/* The figures stay together; on a narrow hall they drop below a long name. */}
       <span className="kh-deckchip-tail">
         <span className="kh-deckchip-dot" aria-hidden>
           ·
