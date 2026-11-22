@@ -68,7 +68,8 @@ export const allUnits = (s: MatchState): UnitRef[] => [
   ...unitsOf(s, 1),
 ];
 
-export const findUnit = (s: MatchState, id: string): UnitRef | null => {
+/** A unit by instance id, on a match state's board or a redacted view's. */
+export const findUnit = (s: Pick<MatchState, "board">, id: string): UnitRef | null => {
   for (const side of [0, 1] as const) {
     for (const row of ROWS) {
       const unit = s.board[side][row].find((candidate) => candidate.id === id);

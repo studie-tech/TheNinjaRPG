@@ -1767,17 +1767,6 @@ div.kh-book-inspect {
     min-width: 44px;
     min-height: 44px;
   }
-  .kh-owned-only [role="checkbox"] {
-    position: relative;
-  }
-  .kh-owned-only [role="checkbox"]::before {
-    position: absolute;
-    top: -14px;
-    right: -14px;
-    bottom: -14px;
-    left: -14px;
-    content: "";
-  }
   .kh-dl-row {
     grid-template-columns: 26px 16px minmax(0, 1fr) auto auto 44px 44px;
     gap: 4px;
@@ -1833,14 +1822,6 @@ div.kh-book-inspect {
   }
   .kh-builder-option {
     min-height: 44px;
-  }
-  .kh-builder-dialog > button[class*="right-4"]::before {
-    position: absolute;
-    top: -14px;
-    right: -14px;
-    bottom: -14px;
-    left: -14px;
-    content: "";
   }
   .kh-builder-dialog [class*="flex-row"] > button {
     min-height: 44px;

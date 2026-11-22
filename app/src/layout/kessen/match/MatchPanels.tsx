@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Confirm } from "@/layout/Confirm";
+import { findUnit, type UnitRef } from "@/libs/kessen/board";
 import type { KessenHouseRule } from "@/libs/kessen/npcs";
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
 import {
@@ -19,7 +20,7 @@ import {
   type TerrainReach,
   terrainReach,
 } from "@/libs/kessen/text";
-import type { Row, Seat, Unit } from "@/libs/kessen/types";
+import type { Seat } from "@/libs/kessen/types";
 import { CardFace } from "../CardFace";
 import { KeywordText } from "../KeywordText";
 import {
@@ -74,7 +75,7 @@ export const InspectPanel = ({ table }: { table: MatchTable }) => {
   const catalogId = catalogKeyOf(key);
   const card = catalogId ? table.cardDisplay(catalogId) : table.instanceCard(key);
   if (!card) return <p className="km-panel-hint">That card is hidden.</p>;
-  const found = catalogId ? null : findUnit(view.board, key);
+  const found = catalogId ? null : findUnit(view, key);
   return (
     <div className="km-inspect">
       <CardFace
@@ -115,7 +116,7 @@ export const CardFacts = ({
   card: KessenCardDisplay;
   /** The seat whose Terrain reach the text follows; null for a card off the table. */
   seat: Seat | null;
-  found?: FoundUnit | null;
+  found?: UnitRef | null;
   power?: number | null;
   rules?: boolean;
 }) => {
@@ -214,7 +215,7 @@ const PowerLine = ({
   terrain,
 }: {
   card: KessenCardDisplay;
-  found: FoundUnit | null;
+  found: UnitRef | null;
   power: number | null;
   terrain: boolean;
 }) => {
@@ -514,15 +515,3 @@ const kindLabel = (card: KessenCardDisplay) => {
   if (card.kind === "LEADER") return "Leader";
   return !card.row || card.row === "ANY" ? "Any row" : ROW_LABELS[card.row];
 };
-
-const findUnit = (board: MatchTable["view"]["board"], id: string): FoundUnit | null => {
-  for (const side of [0, 1] as const) {
-    for (const row of ["CLOSE", "RANGED", "JUTSU"] as const) {
-      const unit = board[side][row].find((entry) => entry.id === id);
-      if (unit) return { unit, side, row };
-    }
-  }
-  return null;
-};
-
-type FoundUnit = { unit: Unit; side: Seat; row: Row };

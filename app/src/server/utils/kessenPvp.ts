@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { after } from "next/server";
-import { getKessenMatchLog } from "@/deltas/kessen";
+import { getKessenMatchLog } from "@/deltas/kessenPvp";
 import {
   KESSEN_PVP_MAX_TIMEOUTS,
   KESSEN_PVP_MULLIGAN_SECONDS,
@@ -14,6 +14,7 @@ import {
   type KessenMatchKind,
 } from "@/drizzle/constants";
 import type { KessenMatch, KessenProgress } from "@/drizzle/schema";
+import { other } from "@/libs/kessen/board";
 import { kessenCatalogCards, snapshotCatalog } from "@/libs/kessen/catalog";
 import { expandDeckCards } from "@/libs/kessen/deck";
 import {
@@ -745,8 +746,6 @@ const engineEnding = (engine: MatchState): DuelEnding | null =>
   engine.phase === "over"
     ? { winner: engine.result?.winner ?? null, endedBy: "play", loserBy: null }
     : null;
-
-const other = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
 
 const scoreOf = (winner: Seat | null, seat: Seat): 0 | 0.5 | 1 =>
   winner === null ? 0.5 : winner === seat ? 1 : 0;

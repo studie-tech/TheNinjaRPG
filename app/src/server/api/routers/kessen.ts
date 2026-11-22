@@ -193,7 +193,7 @@ export const kessenRouter = createTRPCRouter({
       const [found] = await findKessenMatch(ctx.drizzle, ctx.userId, input.matchId);
       if (!found) return { match: null };
       // A finishing request that ended before its payout was settled is finished here.
-      const { row } = await resumeKessenSettlement(ctx.drizzle, found);
+      const row = await resumeKessenSettlement(ctx.drizzle, found);
       return { match: toPayload(row) };
     }),
 
@@ -394,21 +394,10 @@ export const kessenRouter = createTRPCRouter({
       const npc = kessenNpc(match.npcKey ?? "") as KessenNpc;
       const tier = match.tier as KessenTier;
 
-      if (!actingSeats(stored.engine).includes(0)) {
-        return {
-          ...errorResponse("It is not your turn."),
-          match: toPayload(match),
-          events: [] as KessenEvent[],
-        };
-      }
+      if (!actingSeats(stored.engine).includes(0))
+        return refuseTurn(match, "It is not your turn.");
       const human = applyAction(stored.engine, 0, input.action);
-      if (!human.ok) {
-        return {
-          ...errorResponse(human.reason),
-          match: toPayload(match),
-          events: [] as KessenEvent[],
-        };
-      }
+      if (!human.ok) return refuseTurn(match, human.reason);
       const ai = runNpcReplies({ ...stored, engine: human.state }, npc, tier);
       const events = [...human.events, ...ai.events];
       const redacted = redactEvents(events, 0);
@@ -464,13 +453,7 @@ export const kessenRouter = createTRPCRouter({
               })
             : null,
         ]);
-      if (recorded && !recorded.ok) {
-        return {
-          ...errorResponse(recorded.message),
-          match: toPayload(match),
-          events: [] as KessenEvent[],
-        };
-      }
+      if (recorded && !recorded.ok) return refuseTurn(match, recorded.message);
       const plan = planKessenFinish({
         dropSeed: match.seed,
         npc,
@@ -581,7 +564,7 @@ export const kessenRouter = createTRPCRouter({
       const now = new Date();
       const [found] = await findKessenMatch(ctx.drizzle, ctx.userId, input.matchId);
       if (!found) return errorResponse("Match not found.");
-      const { row } = await resumeKessenSettlement(ctx.drizzle, found);
+      const row = await resumeKessenSettlement(ctx.drizzle, found);
       const stored = storedOf(row);
       const choice = stored.result?.firstWin?.choice;
       if (
@@ -758,7 +741,7 @@ const rejectTurn = async (
 ) => {
   if (!row) return errorResponse("Match not found.");
   if (row.status !== "ACTIVE") {
-    const { row: current } = await resumeKessenSettlement(client, row);
+    const current = await resumeKessenSettlement(client, row);
     return { ...errorResponse("This match is over."), match: toPayload(current) };
   }
   if (row.engineVersion !== CARD_ENGINE_VERSION) {
@@ -796,6 +779,13 @@ const staleTurn = async (client: DrizzleClient, userId: string, matchId: string)
     events: [] as KessenEvent[],
   };
 };
+
+/** A refused turn: the message with the match as it stands and no events. */
+const refuseTurn = (match: KessenMatch, message: string) => ({
+  ...errorResponse(message),
+  match: toPayload(match),
+  events: [] as KessenEvent[],
+});
 
 /** The player's view of a match row. */
 const toPayload = (row: KessenMatch): KessenMatchPayload => {

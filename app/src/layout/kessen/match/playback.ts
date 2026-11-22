@@ -6,7 +6,7 @@
  * last frame); they never decide anything.
  */
 
-import { other } from "@/libs/kessen/board";
+import { findUnit, other } from "@/libs/kessen/board";
 import { boardTotals } from "@/libs/kessen/engine";
 import { ROWS, TOKEN_CARD_ID, TOKEN_PREFIX } from "@/libs/kessen/rules";
 import type {
@@ -161,7 +161,7 @@ export const applyPlaybackEvent = (view: MatchView, event: KessenEvent): MatchVi
     }
     case "damaged":
     case "boosted": {
-      const unit = findUnit(next, event.id);
+      const unit = findUnit(next, event.id)?.unit;
       if (unit) {
         unit.stored = event.stored;
         if (event.t === "boosted" && event.cause === "meditate")
@@ -176,12 +176,12 @@ export const applyPlaybackEvent = (view: MatchView, event: KessenEvent): MatchVi
       break;
     }
     case "sealed": {
-      const unit = findUnit(next, event.id);
+      const unit = findUnit(next, event.id)?.unit;
       if (unit) unit.sealed = true;
       break;
     }
     case "resilient": {
-      const unit = findUnit(next, event.id);
+      const unit = findUnit(next, event.id)?.unit;
       if (unit) unit.res = true;
       break;
     }
@@ -365,16 +365,6 @@ const baseDuration = (event: KessenEvent, previous: KessenEvent | null, me: Seat
     default:
       return 0;
   }
-};
-
-const findUnit = (view: MatchView, id: string) => {
-  for (const side of view.board) {
-    for (const row of ROWS) {
-      const unit = side[row].find((entry) => entry.id === id);
-      if (unit) return unit;
-    }
-  }
-  return null;
 };
 
 const removeUnit = (view: MatchView, id: string) => {

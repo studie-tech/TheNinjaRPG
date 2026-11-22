@@ -264,7 +264,6 @@ describe("Card Hall data helpers", () => {
     expect(activeMatchStateText({ round: 3, roundWins: [1, 1], yourTurn: true })).toBe(
       "Round 3 · 1–1 · your turn",
     );
-    expect(activeMatchStateText({ round: 2, roundWins: [0, 1] })).toBe("Round 2 · 0–1");
   });
 
   it("names the home champion a champion lock waits on", () => {
@@ -400,16 +399,17 @@ describe("StarterChoice", () => {
   });
 });
 
+const LIVE_MATCH: Omit<NonNullable<KessenHub["activeMatch"]>, "npcKey"> = {
+  id: "match-9",
+  mode: "standard",
+  lesson: null,
+  challenge: null,
+  round: 1,
+  roundWins: [0, 0],
+  yourTurn: true,
+};
+
 describe("NpcDetail", () => {
-  const LIVE_MATCH: Omit<NonNullable<KessenHub["activeMatch"]>, "npcKey"> = {
-    id: "match-9",
-    mode: "standard",
-    lesson: null,
-    challenge: null,
-    round: 1,
-    roundWins: [0, 0],
-    yourTurn: true,
-  };
   const base = {
     cards: CARDS,
     packs: PACKS,
@@ -606,8 +606,7 @@ describe("NpcDetail", () => {
     render(
       <NpcDetail
         {...base}
-        activeMatch={{ ...LIVE_MATCH, npcKey: "hisame" }}
-        activeMatchState={{ round: 3, roundWins: [1, 1], yourTurn: true }}
+        activeMatch={{ ...LIVE_MATCH, npcKey: "hisame", round: 3, roundWins: [1, 1] }}
         entry={circuitEntry("hisame", {
           wins: 1,
           firstWinAt: new Date("2026-11-01T00:00:00Z"),
@@ -1068,7 +1067,7 @@ describe("CircuitMap", () => {
         circuit={[circuitEntry("lemu"), hisame]}
         cards={CARDS}
         packs={PACKS}
-        activeNpcKey="hisame"
+        activeMatch={{ ...LIVE_MATCH, npcKey: "hisame" }}
         onSelect={() => undefined}
       />,
     );

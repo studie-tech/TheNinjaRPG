@@ -29,6 +29,9 @@ export type KessenActionOutcome = {
 
 type MatchCache = RouterOutputs["kessen"]["getMatch"];
 type KessenActionInput = RouterInputs["kessen"]["playTurn"]["action"];
+type TurnResponse =
+  | RouterOutputs["kessen"]["playTurn"]
+  | RouterOutputs["kessen"]["concede"];
 
 /**
  * One Kessen match: the `kessen.getMatch` payload plus `play`, `concede` and
@@ -126,34 +129,13 @@ export const useKessenMatch = (matchId: string | null) => {
     ]);
   };
 
-  const play = async (action: KessenActionInput): Promise<KessenActionOutcome> => {
+  const send = async (
+    request: (current: KessenMatchPayload) => Promise<TurnResponse>,
+  ): Promise<KessenActionOutcome> => {
     const current = query.data?.match;
     if (!current) return { ok: false, message: "The match is still loading." };
     const snapshot = prepare(current.id);
-    const sent = await settle(() =>
-      playTurn.mutateAsync({ matchId: current.id, version: current.version, action }),
-    );
-    if (!sent.ok) {
-      void recover(current.id);
-      return { ok: false, message: errorText(sent.error) };
-    }
-    const data = sent.value;
-    await reconcile(snapshot, data);
-    return {
-      ok: data.success,
-      payload: data.match,
-      events: data.events,
-      message: data.message,
-    };
-  };
-
-  const concede = async (): Promise<KessenActionOutcome> => {
-    const current = query.data?.match;
-    if (!current) return { ok: false, message: "The match is still loading." };
-    const snapshot = prepare(current.id);
-    const sent = await settle(() =>
-      concedeMatch.mutateAsync({ matchId: current.id, version: current.version }),
-    );
+    const sent = await settle(() => request(current));
     if (!sent.ok) {
       void recover(current.id);
       return { ok: false, message: errorText(sent.error) };
@@ -163,9 +145,20 @@ export const useKessenMatch = (matchId: string | null) => {
     return {
       ok: data.success,
       payload: "match" in data ? data.match : undefined,
+      events: "events" in data ? data.events : undefined,
       message: data.message,
     };
   };
+
+  const play = (action: KessenActionInput) =>
+    send((current) =>
+      playTurn.mutateAsync({ matchId: current.id, version: current.version, action }),
+    );
+
+  const concede = () =>
+    send((current) =>
+      concedeMatch.mutateAsync({ matchId: current.id, version: current.version }),
+    );
 
   /** Picks the card of a first-win choice (`result.firstWin.choice`). */
   const claimChoice = async (itemId: string): Promise<KessenActionOutcome> => {

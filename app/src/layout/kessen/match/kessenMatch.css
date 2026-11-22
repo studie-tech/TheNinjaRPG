@@ -3564,13 +3564,3 @@
 .kessen-match .km-mull-actions > button {
   min-width: 132px;
 }
-.km-opponent-name {
-  margin: 0;
-  overflow: hidden;
-  color: var(--kessen-gold-hi);
-  font-family: var(--kessen-font-display);
-  font-size: 18px;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}

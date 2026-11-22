@@ -6,7 +6,7 @@
  * naive lines through the engine.
  */
 import type { AcademyPositionSpec } from "./academyPosition";
-import { rawPower, rowTotal as stateRowTotal } from "./board";
+import { other, rawPower, rowTotal as stateRowTotal } from "./board";
 import { boardTotals } from "./engine";
 import { ROWS } from "./rules";
 import type { KessenKeyword } from "./text";
@@ -105,8 +105,6 @@ const C = {
 
 // ---------------------------------------------------------------------------
 // View helpers (the player's view for advice, Lemu's view for its script)
-
-const other = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
 
 /** Board totals from `view.me`'s side: [mine, theirs]. */
 const sides = (view: MatchView): [number, number] => {

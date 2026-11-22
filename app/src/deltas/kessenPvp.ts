@@ -1,10 +1,30 @@
-import { getKessenMatchLog } from "@/deltas/kessen";
 import type {
   KessenEvent,
+  KessenMatchLog,
   KessenPvpLobby,
   KessenPvpMatchPayload,
   KessenPvpMatchQuery,
 } from "@/validators/kessen";
+
+/**
+ * A play log of `events` (already redacted for the player) at match `version`, naming
+ * only the instances the events refer to from `inst`. Instance ids name one card for
+ * the whole match, so later views extend the names without changing them.
+ */
+export const getKessenMatchLog = (
+  events: readonly KessenEvent[],
+  inst: Readonly<Record<string, string>>,
+  version: number,
+): KessenMatchLog => {
+  const names: Record<string, string> = {};
+  for (const event of events) {
+    for (const id of kessenEventInstances(event)) {
+      const cardId = inst[id];
+      if (cardId !== undefined) names[id] = cardId;
+    }
+  }
+  return { version, events: [...events], inst: names };
+};
 
 /**
  * The cached duel after a confirmed response or a refetch: the newer of the cached and
@@ -119,3 +139,14 @@ export const getKessenPvpLobbyQueueStatus = (
       : null,
   queueCount: status.queueCount ?? lobby.queueCount,
 });
+
+/** Instance ids an event names; redacted ids (`?`) are skipped. */
+const kessenEventInstances = (event: KessenEvent): string[] => {
+  const ids: string[] = [];
+  if ("id" in event) ids.push(event.id);
+  if (event.t === "drawn") ids.push(...event.cards);
+  if (event.t === "mulligan") ids.push(...event.removed, ...event.drawn);
+  if (event.t === "cleanup")
+    ids.push(...event.kept, ...event.discarded, ...event.banished);
+  return ids.filter((id) => id !== "?");
+};

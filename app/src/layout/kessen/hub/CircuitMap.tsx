@@ -27,7 +27,6 @@ import {
   circuitPinPosition,
   firstWinRewardLines,
   KESSEN_TIER_LABELS,
-  type KessenActiveMatchState,
   kessenWinText,
   lockProgressText,
   mapPinOrder,
@@ -72,8 +71,7 @@ export const CircuitMap = ({
   cards,
   packs = [],
   selectedKey,
-  activeNpcKey,
-  activeMatchState,
+  activeMatch,
   pendingPicks = [],
   onSelect,
   className,
@@ -83,15 +81,14 @@ export const CircuitMap = ({
   cards: readonly KessenCatalogEntry[];
   packs?: readonly KessenPackEntry[];
   selectedKey?: KessenNpcKey | null;
-  /** NPC of the player's unfinished match. */
-  activeNpcKey?: KessenNpcKey | null;
-  /** Round and score of that match, when the page knows them. */
-  activeMatchState?: KessenActiveMatchState | null;
+  /** The player's unfinished match. */
+  activeMatch?: KessenHub["activeMatch"];
   /** Won matches whose first-win card is still to be chosen. */
   pendingPicks?: KessenHub["pendingPicks"];
   onSelect: (key: KessenNpcKey) => void;
   className?: string;
 }) => {
+  const activeNpcKey = activeMatch?.npcKey ?? null;
   const lookup = catalogLookup(cards);
   const frameRef = useRef<HTMLDivElement>(null);
   const { view, glide, width, maxZoom, update } = useMapView(frameRef);
@@ -126,9 +123,9 @@ export const CircuitMap = ({
     null;
   const scale = pinScale(width || MAP_DESIGN_WIDTH, view.zoom);
   const zoomed = view.zoom > 1.001;
-  const liveLine = activeMatchState
-    ? `${activeMatchStateText(activeMatchState)} · select to resume`
-    : "Match in progress · select to resume";
+  const liveLine = activeMatch
+    ? `${activeMatchStateText(activeMatch)} · select to resume`
+    : null;
   /**
    * The zoom buttons work towards the opponent in hand (selected, live or next to beat):
    * zooming in holds it where it stands, or centres it when it is out of view; zooming
@@ -434,7 +431,7 @@ const PinDetails = ({
   lock: string | null;
   pick: boolean;
   active: boolean;
-  liveLine: string;
+  liveLine: string | null;
 }) => {
   const state = circuitState(entry);
   return (
@@ -849,7 +846,7 @@ type CircuitItemProps = {
   pick: boolean;
   selected: boolean;
   active: boolean;
-  /** What the live match's line says, e.g. "Match in progress · select to resume". */
-  liveLine: string;
+  /** What the live match's line says, e.g. "Round 2 · 1–0 · your turn · select to resume". */
+  liveLine: string | null;
   onSelect: (key: KessenNpcKey) => void;
 };

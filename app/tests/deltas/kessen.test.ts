@@ -6,7 +6,6 @@ import {
   getKessenHubAfterTurn,
   getKessenHubWithGrants,
   getKessenMatchCache,
-  getKessenMatchLog,
   getKessenPayoutUserUpdate,
   kessenEndNeedsHubRefresh,
   kessenGrantsPacks,
@@ -14,7 +13,6 @@ import {
   kessenResultGrantsItems,
 } from "@/deltas/kessen";
 import type {
-  KessenEvent,
   KessenHub,
   KessenMatchPayload,
   KessenMatchResult,
@@ -95,28 +93,6 @@ describe("kessen deltas", () => {
       match: payload(),
     });
     expect(getKessenMatchCache(undefined, payload())).toEqual({ match: payload() });
-  });
-
-  it("names only the instances a play log refers to, skipping redacted ids", () => {
-    const events: KessenEvent[] = [
-      { t: "drawn", seat: 1, cards: ["?", "?"], banked: 0 },
-      { t: "mulligan", seat: 0, count: 1, removed: ["s0-1"], drawn: ["s0-9"] },
-      { t: "damaged", id: "s1-4", amount: 2, stored: 3, source: "s0-2" },
-      { t: "returned", id: "?", seat: 1, to: "deck", from: "hand" },
-      { t: "cleanup", kept: ["s0-2"], discarded: [], banished: [] },
-    ];
-    const inst = {
-      "s0-1": "a",
-      "s0-2": "b",
-      "s0-9": "c",
-      "s1-4": "d",
-      "s1-7": "hidden",
-    };
-    expect(getKessenMatchLog(events, inst, 4)).toEqual({
-      version: 4,
-      events,
-      inst: { "s0-1": "a", "s0-9": "c", "s1-4": "d", "s0-2": "b" },
-    });
   });
 
   it("records a started match as active", () => {

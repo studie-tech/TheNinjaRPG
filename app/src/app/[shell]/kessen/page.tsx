@@ -857,8 +857,7 @@ function KessenHall() {
               cards={catalog.cards}
               packs={catalog.packs}
               selectedKey={selectedNpc}
-              activeNpcKey={hub.activeMatch?.npcKey ?? null}
-              activeMatchState={hub.activeMatch}
+              activeMatch={hub.activeMatch}
               pendingPicks={hub.pendingPicks}
               onSelect={(key) => {
                 setStartError(null);
@@ -880,7 +879,6 @@ function KessenHall() {
               needsLesson={hub.needsLesson}
               seenKeywords={hub.progress.seenKeywords}
               activeMatch={hub.activeMatch}
-              activeMatchState={hub.activeMatch}
               pendingPicks={hub.pendingPicks}
               pending={isStarting}
               error={startError}

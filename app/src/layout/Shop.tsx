@@ -380,7 +380,7 @@ const Shop: React.FC<ShopProps> = (props) => {
         isPurchasing
           ? undefined
           : allowance.data?.remaining === 0
-            ? `Limit reached ${STALL_PERIOD_LABEL[allowance.data.period] ?? ""}`.trim()
+            ? `Limit reached ${PURCHASE_LIMIT_PERIODS[allowance.data.period]?.label ?? ""}`.trim()
             : !canAfford
               ? missingString
               : cardStall && selectedSurplus > 0
@@ -1348,25 +1348,23 @@ const hasPurchaseLimit = (item: Pick<Item, "purchaseLimit" | "purchaseLimitPerio
 const purchaseLimitLabel = (
   item: Pick<Item, "id" | "purchaseLimit" | "purchaseLimitPeriod">,
 ) =>
-  item.purchaseLimit && item.purchaseLimitPeriod !== "NONE"
-    ? `Limit ${item.purchaseLimit} per ${PURCHASE_LIMIT_PERIOD_WORD[item.purchaseLimitPeriod]}${kessenVillagePackFaction(item.id) ? ", any village" : ""}`
+  hasPurchaseLimit(item)
+    ? `Limit ${item.purchaseLimit} per ${PURCHASE_LIMIT_PERIODS[item.purchaseLimitPeriod]?.word}${kessenVillagePackFaction(item.id) ? ", any village" : ""}`
     : null;
 
-/** "today", "this week" for the stall's remaining purchase allowance. */
-const STALL_PERIOD_LABEL: Record<string, string> = {
-  DAILY: "today",
-  WEEKLY: "this week",
-  MONTHLY: "this month",
-};
-
 /**
- * When a used-up purchase limit refills. Limits run on UTC periods, which the stall's
- * subtitle states, so the weekly and monthly chips name only the day.
+ * Wording per purchase-limit period: its unit ("Limit 3 per day"), the stall's remaining
+ * allowance ("2 of 3 left today") and when a used-up limit refills. Limits run on UTC
+ * periods, which the stall's subtitle states, so the weekly and monthly resets name only
+ * the day.
  */
-const STALL_PERIOD_RESET: Record<string, string> = {
-  DAILY: "resets 00:00 UTC",
-  WEEKLY: "resets Monday",
-  MONTHLY: "resets on the 1st",
+const PURCHASE_LIMIT_PERIODS: Record<
+  string,
+  { word: string; label: string; reset: string }
+> = {
+  DAILY: { word: "day", label: "today", reset: "resets 00:00 UTC" },
+  WEEKLY: { word: "week", label: "this week", reset: "resets Monday" },
+  MONTHLY: { word: "month", label: "this month", reset: "resets on the 1st" },
 };
 
 /**
@@ -1377,19 +1375,13 @@ const STALL_PERIOD_RESET: Record<string, string> = {
 const stallAllowanceLabel = (allowance: StallAllowance, itemId: string) => {
   if (allowance.limit == null || allowance.remaining == null) return null;
   const shared = !!kessenVillagePackFaction(itemId);
-  const reset = STALL_PERIOD_RESET[allowance.period] ?? "resets soon";
+  const reset = PURCHASE_LIMIT_PERIODS[allowance.period]?.reset ?? "resets soon";
   if (allowance.remaining === 0)
     return shared ? `Limit used · ${reset}` : `Sold out · ${reset}`;
   const left =
-    `${allowance.remaining} of ${allowance.limit} left ${STALL_PERIOD_LABEL[allowance.period] ?? ""}`.trim();
+    `${allowance.remaining} of ${allowance.limit} left ${PURCHASE_LIMIT_PERIODS[allowance.period]?.label ?? ""}`.trim();
   return shared ? `${left} · any village` : left;
 };
-
-const PURCHASE_LIMIT_PERIOD_WORD = {
-  DAILY: "day",
-  WEEKLY: "week",
-  MONTHLY: "month",
-} as const;
 
 /** First-page catalog size; further rows load through the existing infinite-query cursor. */
 const SHOP_CATALOG_PAGE_SIZE = 30;

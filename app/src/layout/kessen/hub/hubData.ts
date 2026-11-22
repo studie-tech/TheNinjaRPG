@@ -38,6 +38,7 @@ import type {
   KessenCatalogEntry,
   KessenCircuitEntry,
   KessenDeckRow,
+  KessenHub,
   KessenPackEntry,
 } from "@/validators/kessen";
 
@@ -355,28 +356,16 @@ export const kessenWinText = (
   return { standard: entry.wins > 0 ? count : null, ascended: null, total: null };
 };
 
-/** State of the player's unfinished match, when the page knows it. */
-export interface KessenActiveMatchState {
-  /** Round being played, 1 to 3. */
-  round: number;
-  /** Rounds won so far, `[player, opponent]`. */
-  roundWins: readonly [number, number];
-  /** Whether the player is to act; omitted when unknown. */
-  yourTurn?: boolean;
-}
-
 /**
  * "Round 2 · 1–0 · your turn" (round, rounds won by the player and the opponent, who
  * acts): one line for the sheet, the map strip and the banner's Resume button.
  */
-export const activeMatchStateText = (state: KessenActiveMatchState) =>
-  [
-    `Round ${state.round}`,
-    `${state.roundWins[0]}–${state.roundWins[1]}`,
-    state.yourTurn === undefined ? null : state.yourTurn ? "your turn" : "their turn",
-  ]
-    .filter((part) => part !== null)
-    .join(" · ");
+export const activeMatchStateText = ({
+  round,
+  roundWins,
+  yourTurn,
+}: Pick<NonNullable<KessenHub["activeMatch"]>, "round" | "roundWins" | "yourTurn">) =>
+  `Round ${round} · ${roundWins[0]}–${roundWins[1]} · ${yourTurn ? "your turn" : "their turn"}`;
 
 /**
  * Portrait of a Circuit NPC: the painted Kessen portrait once the NPC is open, else its

@@ -155,16 +155,15 @@ export const settleKessenPayout = async (
 /**
  * Finishes the payout of a FINISHED match that still carries its `settlement` (its
  * finishing request ended before writing the settled result) and returns the row as it
- * now stands, with what this call paid; any other row is returned as it is.
+ * now stands; any other row is returned as it is.
  */
 export const resumeKessenSettlement = async (
   client: DrizzleClient,
   row: KessenMatch,
-): Promise<{ row: KessenMatch; ryo: number; grants: ItemGrant[] }> => {
+): Promise<KessenMatch> => {
   const state = row.state as unknown as KessenStoredMatch;
   const plan = state.settlement;
-  if (row.status !== "FINISHED" || !plan || !row.finishedAt)
-    return { row, ryo: 0, grants: [] };
+  if (row.status !== "FINISHED" || !plan || !row.finishedAt) return row;
   const [questUser, questState] = plan.objective
     ? await Promise.all([
         fetchUser(client, row.userId),
@@ -191,18 +190,14 @@ export const resumeKessenSettlement = async (
   });
   if (!settled) {
     const [fresh] = await findKessenMatch(client, row.userId, row.id);
-    return { row: fresh ?? row, ryo: 0, grants: [] };
+    return fresh ?? row;
   }
   return {
-    row: {
-      ...row,
-      rewarded: settled.result.rewarded,
-      version: settled.version,
-      state: settled.state as unknown as Record<string, unknown>,
-      updatedAt: now,
-    },
-    ryo: settled.ryo,
-    grants: settled.grants,
+    ...row,
+    rewarded: settled.result.rewarded,
+    version: settled.version,
+    state: settled.state as unknown as Record<string, unknown>,
+    updatedAt: now,
   };
 };
 
@@ -210,7 +205,7 @@ export const resumeKessenSettlement = async (
  * The result the status CAS stores next to the settlement: the match's outcome with
  * nothing paid, until the settled result replaces it.
  */
-export const unsettledKessenResult = (plan: KessenFinishPlan): KessenMatchResult => ({
+export const unsettledKessenResult = (plan: KessenSettlement): KessenMatchResult => ({
   ...plan.result,
   rewarded: false,
   reason: "This match's reward is still being settled.",
@@ -243,7 +238,7 @@ export const kessenTrackerUser = (
  * the objective it was started for. Pure; the claims in `settleKessenPayout` decide
  * which parts are paid.
  */
-export const planKessenFinish = (input: PlanInput): KessenFinishPlan => {
+export const planKessenFinish = (input: PlanInput): KessenSettlement => {
   const { stored, npc, now } = input;
   const engine = stored.engine;
   const winner = engine.result?.winner ?? null;
@@ -454,7 +449,7 @@ const claimKessenPayout = async (
   client: DrizzleClient,
   userId: string,
   match: SettleInput["match"],
-  plan: KessenFinishPlan,
+  plan: KessenSettlement,
 ) => {
   const { npcKey, finishedAt } = match;
   const academy = plan.academy;
@@ -574,8 +569,6 @@ interface PlanInput {
   owned: OwnedCounts;
 }
 
-export type KessenFinishPlan = KessenSettlement;
-
 interface SettleInput {
   client: DrizzleClient;
   userId: string;
@@ -586,7 +579,7 @@ interface SettleInput {
   match: { id: string; npcKey: string; version: number; finishedAt: Date };
   /** The state the status CAS stored, with its `settlement`. */
   state: KessenStoredMatch;
-  plan: KessenFinishPlan;
+  plan: KessenSettlement;
   questData: ReturnType<typeof kessenObjectiveTrackers>;
   /** When the settled result is written. */
   now: Date;

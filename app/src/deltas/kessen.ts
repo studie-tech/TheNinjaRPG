@@ -1,8 +1,6 @@
 import { isKessenPackId } from "@/libs/kessen/packs";
 import type {
-  KessenEvent,
   KessenHub,
-  KessenMatchLog,
   KessenMatchPayload,
   KessenMatchQuery,
 } from "@/validators/kessen";
@@ -23,26 +21,6 @@ export const getKessenMatchCache = (
   if (cached && cached.id === confirmed.id && cached.version > confirmed.version)
     return current ?? { match: cached };
   return { match: confirmed };
-};
-
-/**
- * A play log of `events` (already redacted for the player) at match `version`, naming
- * only the instances the events refer to from `inst`. Instance ids name one card for
- * the whole match, so later views extend the names without changing them.
- */
-export const getKessenMatchLog = (
-  events: readonly KessenEvent[],
-  inst: Readonly<Record<string, string>>,
-  version: number,
-): KessenMatchLog => {
-  const names: Record<string, string> = {};
-  for (const event of events) {
-    for (const id of kessenEventInstances(event)) {
-      const cardId = inst[id];
-      if (cardId !== undefined) names[id] = cardId;
-    }
-  }
-  return { version, events: [...events], inst: names };
 };
 
 /** The hub after a match started: it is now the active match; a replaced one is gone. */
@@ -184,14 +162,3 @@ export const kessenGrantsPacks = (granted: readonly { itemId: string }[]) =>
 /** Whether an ended match changed what the hub derives from progress (unlocks, starter). */
 export const kessenEndNeedsHubRefresh = (match: KessenMatchPayload) =>
   !!match.result?.firstWin || !!match.result?.lessonCompleted;
-
-/** Instance ids an event names; redacted ids (`?`) are skipped. */
-const kessenEventInstances = (event: KessenEvent): string[] => {
-  const ids: string[] = [];
-  if ("id" in event) ids.push(event.id);
-  if (event.t === "drawn") ids.push(...event.cards);
-  if (event.t === "mulligan") ids.push(...event.removed, ...event.drawn);
-  if (event.t === "cleanup")
-    ids.push(...event.kept, ...event.discarded, ...event.banished);
-  return ids.filter((id) => id !== "?");
-};

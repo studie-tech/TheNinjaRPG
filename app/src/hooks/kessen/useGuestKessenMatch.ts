@@ -17,6 +17,7 @@ import {
 import type { KessenNpcKey } from "@/libs/kessen/npcs";
 import type { KessenAction } from "@/libs/kessen/types";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
+import { parseJsonSafe } from "@/utils/typeutils";
 import type { KessenCatalogEntry, KessenMatchPayload } from "@/validators/kessen";
 
 /**
@@ -120,12 +121,8 @@ export const useGuestKessenMatch = (
 };
 
 const readLessonsWon = (): KessenAcademyLessonKey[] => {
-  try {
-    const parsed: unknown = JSON.parse(safeLocalStorageGetItem(LESSONS_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter(isAcademyLessonKey) : [];
-  } catch {
-    return [];
-  }
+  const { data } = parseJsonSafe(safeLocalStorageGetItem(LESSONS_KEY) ?? "[]");
+  return Array.isArray(data) ? data.filter(isAcademyLessonKey) : [];
 };
 
 const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));

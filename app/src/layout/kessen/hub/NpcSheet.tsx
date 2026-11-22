@@ -38,7 +38,6 @@ import {
   activeMatchStateText,
   catalogLookup,
   KESSEN_TIER_LABELS,
-  type KessenActiveMatchState,
   type KessenDeckSummary,
   kessenItemName,
   kessenWinText,
@@ -118,7 +117,6 @@ export const NpcDetail = ({
   needsLesson,
   seenKeywords,
   activeMatch,
-  activeMatchState,
   pendingPicks = [],
   pending = false,
   error,
@@ -148,7 +146,7 @@ export const NpcDetail = ({
   const activeName = activeMatch
     ? (kessenNpc(activeMatch.npcKey)?.name ?? activeMatch.npcKey)
     : null;
-  const activeState = activeMatchState ? activeMatchStateText(activeMatchState) : null;
+  const activeState = activeMatch ? activeMatchStateText(activeMatch) : null;
   const pickMatchId =
     pendingPicks.find((pick) => pick.npcKey === entry.key)?.matchId ?? null;
   const wins = kessenWinText(entry);
@@ -427,20 +425,12 @@ export const NpcDetail = ({
               <p className={ACTIVE_NOTE} role="status">
                 Your match against {activeName} is unfinished. Resume it, or concede it
                 to challenge {entry.name}.
-                {activeState ? (
-                  <span className="block font-semibold tabular-nums">
-                    {activeState}
-                  </span>
-                ) : null}
+                <span className="block font-semibold tabular-nums">{activeState}</span>
               </p>
             ) : activeHere ? (
               <p className={ACTIVE_NOTE} role="status">
                 Your match against {entry.name} is still open.
-                {activeState ? (
-                  <span className="block font-semibold tabular-nums">
-                    {activeState}
-                  </span>
-                ) : null}
+                <span className="block font-semibold tabular-nums">{activeState}</span>
               </p>
             ) : null}
 
@@ -680,8 +670,6 @@ type NpcDetailProps = {
   needsLesson: boolean;
   seenKeywords: readonly string[];
   activeMatch: KessenHub["activeMatch"];
-  /** Round and score of the unfinished match, when the page knows them. */
-  activeMatchState?: KessenActiveMatchState | null;
   /** Won matches whose first-win card is still to be chosen. */
   pendingPicks?: KessenHub["pendingPicks"];
   pending?: boolean;

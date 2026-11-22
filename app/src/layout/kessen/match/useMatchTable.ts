@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { terrainSides } from "@/libs/kessen/abilities";
-import { displayedPower } from "@/libs/kessen/board";
+import { displayedPower, findUnit } from "@/libs/kessen/board";
 import { previewPartial, rowOptionsForView } from "@/libs/kessen/engine";
 import { kessenNpc, npcVariant } from "@/libs/kessen/npcs";
 import { ROWS } from "@/libs/kessen/rules";
@@ -235,10 +235,7 @@ export const useMatchTable = ({
   };
 
   const finishPlayback = (current: Playback) => {
-    const lines = current.steps
-      .map((entry) => describeEvent(entry.event, entry.before, names, entry.frame))
-      .filter((line): line is string => line !== null);
-    setLog((previous) => [...previous, ...lines].slice(-200));
+    setLog((previous) => [...previous, ...stepLines(current.steps, names)].slice(-200));
     setPlayback(null);
   };
 
@@ -270,10 +267,10 @@ export const useMatchTable = ({
   // The sent unit keeps standing in its row, with the projected total, until the
   // playback step that places it.
   const sentShown =
-    sent && (pending || playing) && !onBoard(view, sent.card) ? sent : null;
+    sent && (pending || playing) && !findUnit(view, sent.card) ? sent : null;
   useEffect(() => {
     if (!sent) return;
-    if (onBoard(view, sent.card) || (!pending && !playing)) setSent(null);
+    if (findUnit(view, sent.card) || (!pending && !playing)) setSent(null);
   }, [sent, view, pending, playing]);
 
   useEffect(() => {
@@ -310,13 +307,7 @@ export const useMatchTable = ({
   };
 
   const visibleLog = playback
-    ? [
-        ...log,
-        ...playback.steps
-          .slice(0, playback.index + 1)
-          .map((entry) => describeEvent(entry.event, entry.before, names, entry.frame))
-          .filter((line): line is string => line !== null),
-      ]
+    ? [...log, ...stepLines(playback.steps.slice(0, playback.index + 1), names)]
     : log;
 
   const roundEnd =
@@ -611,7 +602,7 @@ export const unitPowers = (view: MatchView) => {
   const out = new Map<string, number>();
   const state = view as unknown as MatchState;
   for (const side of [0, 1] as const) {
-    for (const row of ["CLOSE", "RANGED", "JUTSU"] as const) {
+    for (const row of ROWS) {
       for (const unit of view.board[side][row]) {
         try {
           out.set(unit.id, displayedPower(state, { unit, side, row }));
@@ -687,6 +678,12 @@ const catalogLookup = (catalog: KessenMatchCatalog) => {
 };
 
 /** The next step at or after `from` that takes time or waits; past the end when none. */
+/** The play-log lines of played-back steps. */
+const stepLines = (steps: readonly PlaybackStep[], names: MatchNames) =>
+  steps
+    .map((entry) => describeEvent(entry.event, entry.before, names, entry.frame))
+    .filter((line): line is string => line !== null);
+
 const firstStop = (steps: PlaybackStep[], from: number) => {
   let index = from;
   while (index < steps.length) {
@@ -966,14 +963,9 @@ const EMPTY_EFFECTS: ReadonlyMap<string, RowEffect> = new Map();
 export const stillInspectable = (view: MatchView, me: Seat, inspection: Inspection) => {
   const { key, fromDiscard } = inspection;
   if (key.startsWith("card:") || key.startsWith("leader:")) return true;
-  if (view.seats[me].hand?.includes(key) || onBoard(view, key)) return true;
+  if (view.seats[me].hand?.includes(key) || findUnit(view, key)) return true;
   return fromDiscard && view.seats.some((zone) => zone.discard.includes(key));
 };
-
-const onBoard = (view: MatchView, instance: string) =>
-  view.board.some((side) =>
-    ROWS.some((row) => side[row].some((unit) => unit.id === instance)),
-  );
 
 const EMPTY_DRAFT: Draft = { card: null, action: null };
 
