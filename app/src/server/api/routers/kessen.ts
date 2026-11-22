@@ -74,7 +74,7 @@ import {
   listKessenFirstWinChoices,
   listKessenPackItems,
   listKessenPackStacks,
-  listOwnedKessenCards,
+  listOwnedKessenCardCounts,
   updateKessenMatchesForConcede,
   updateKessenMatchForExpiry,
   updateKessenMatchForTurn,
@@ -164,7 +164,7 @@ export const kessenRouter = createTRPCRouter({
       ] = await Promise.all([
         findKessenProgress(ctx.drizzle, userId),
         findKessenNpcProgressRows(ctx.drizzle, userId),
-        listOwnedKessenCards(ctx.drizzle, userId),
+        listOwnedKessenCardCounts(ctx.drizzle, userId),
         listKessenPackStacks(ctx.drizzle, userId),
         listKessenDecks(ctx.drizzle, userId),
         listActiveKessenMatches(ctx.drizzle, userId),
@@ -235,7 +235,7 @@ export const kessenRouter = createTRPCRouter({
         listActiveKessenMatchesForPlayers(ctx.drizzle, [userId]),
         findKessenProgress(ctx.drizzle, userId),
         findKessenNpcProgressRows(ctx.drizzle, userId),
-        listOwnedKessenCards(ctx.drizzle, userId),
+        listOwnedKessenCardCounts(ctx.drizzle, userId),
         deckId ? findKessenDeck(ctx.drizzle, userId, deckId) : Promise.resolve([]),
         findKessenPlayer(ctx.drizzle, userId),
         input.challenge
@@ -451,7 +451,7 @@ export const kessenRouter = createTRPCRouter({
         await Promise.all([
           findKessenProgress(ctx.drizzle, userId),
           findKessenNpcProgressRows(ctx.drizzle, userId, npc.key),
-          listOwnedKessenCards(ctx.drizzle, userId),
+          listOwnedKessenCardCounts(ctx.drizzle, userId),
           objectivePossible ? fetchUser(ctx.drizzle, userId) : null,
           objectivePossible ? fetchQuestTrackerState(ctx.drizzle, userId) : null,
           challenge && winner === 0

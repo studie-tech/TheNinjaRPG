@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, spyOn } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { GET as runKessenCron } from "@/app/api/kessen-match-expiry/route";
+import { GET as kessenCron } from "@/app/api/kessen-match-expiry/route";
 import {
   KESSEN_CHALLENGE_EXPIRY_SECONDS,
   KESSEN_CHALLENGE_MAX_PENDING,
@@ -34,6 +34,7 @@ import { getUtcDayKey, periodStart } from "@/utils/time";
 import { CARD_ITEM_DEFAULTS } from "@/validators/itemCard";
 import type { KessenStoredPvpMatch } from "@/validators/kessen";
 import { KESSEN_SEED_CATALOG } from "../../../libs/kessen/fixtures/catalog";
+import { withAfterTasks } from "../../../setup/after";
 import { restoreEnvAfterEach } from "../../../setup/env";
 import { insertItems, insertUsers } from "../../../setup/factories";
 import { aroundStatements, interceptExecute, sqlText } from "../../../setup/statements";
@@ -59,6 +60,8 @@ const pvp = (userId: string) => callerFor(kessenPvpRouter, userId);
 type Caller = Awaited<ReturnType<typeof pvp>>;
 
 const pushes: { channel: string; data: unknown }[] = [];
+// The cron route runs its deferred pushes after its response, as Next does.
+const runKessenCron = withAfterTasks(kessenCron);
 
 const matchRow = async (id: string) =>
   (await (await db()).select().from(kessenMatch).where(eq(kessenMatch.id, id)))[0];

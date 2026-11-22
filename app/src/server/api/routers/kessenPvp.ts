@@ -29,7 +29,7 @@ import { getServerPusher } from "@/libs/pusher";
 import {
   findKessenDeck,
   listKessenCards,
-  listOwnedKessenCards,
+  listOwnedKessenCardCounts,
 } from "@/queries/kessen";
 import {
   countKessenRankedQueue,
@@ -198,7 +198,7 @@ export const kessenPvpRouter = createTRPCRouter({
         fetchRequests(ctx.drizzle, ["KESSEN"], 3600, userId),
         listKessenCards(ctx.drizzle),
         deckRowsFor(ctx.drizzle, userId, input.deck),
-        listOwnedKessenCards(ctx.drizzle, userId),
+        listOwnedKessenCardCounts(ctx.drizzle, userId),
         // Housekeeping: frees the pair slot of a challenge that expired unanswered.
         updateUserRequestForExpireKessenChallenges(
           ctx.drizzle,
@@ -321,8 +321,8 @@ export const kessenPvpRouter = createTRPCRouter({
         listKessenCards(ctx.drizzle),
         senderDeck ? deckRowsFor(ctx.drizzle, senderId, senderDeck) : [],
         deckRowsFor(ctx.drizzle, userId, input.deck),
-        listOwnedKessenCards(ctx.drizzle, senderId),
-        listOwnedKessenCards(ctx.drizzle, userId),
+        listOwnedKessenCardCounts(ctx.drizzle, senderId),
+        listOwnedKessenCardCounts(ctx.drizzle, userId),
       ]);
       const sender = players.find((entry) => entry.userId === senderId);
       const me = players.find((entry) => entry.userId === userId);
@@ -444,7 +444,7 @@ export const kessenPvpRouter = createTRPCRouter({
           listActiveKessenMatchesForPlayers(ctx.drizzle, [userId]),
           listKessenCards(ctx.drizzle),
           deckRowsFor(ctx.drizzle, userId, input.deck),
-          listOwnedKessenCards(ctx.drizzle, userId),
+          listOwnedKessenCardCounts(ctx.drizzle, userId),
         ]);
       const progress = progressRows[0];
       if (!isActivePlayer(players[0]))
@@ -697,8 +697,8 @@ const matchRankedQueue = async (client: DrizzleClient, userId: string, now: Date
     listKessenCards(client),
     deckRowsFor(client, userId, mine.deck as KessenDeckSource),
     deckRowsFor(client, opponent.userId, opponent.deck as KessenDeckSource),
-    listOwnedKessenCards(client, userId),
-    listOwnedKessenCards(client, opponent.userId),
+    listOwnedKessenCardCounts(client, userId),
+    listOwnedKessenCardCounts(client, opponent.userId),
   ]);
   const build = (
     entry: typeof mine,
@@ -814,7 +814,7 @@ const buildDuelDeck = (input: {
   source: KessenDeckSource;
   deckRow: { leaderItemId: string; cards: { itemId: string; count: number }[] } | null;
   catalogRows: Awaited<ReturnType<typeof listKessenCards>>;
-  ownedRows: Awaited<ReturnType<typeof listOwnedKessenCards>>;
+  ownedRows: Awaited<ReturnType<typeof listOwnedKessenCardCounts>>;
   now: Date;
 }) => {
   const deck = buildPlayerDeck({

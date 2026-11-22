@@ -55,24 +55,32 @@ export const useItemActions = ({
     onMutate: () => ({
       inventory: prepareInventoryUpdate(),
       user: prepareUserUpdate(),
+      itemType: useritem?.item.itemType,
     }),
     onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
       if (data.userRecovery) await updateUser(data, { revision: snapshot.user });
-      await updateInventory(
-        data.success
-          ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
-          : undefined,
-        snapshot.inventory,
-      );
+      await Promise.all([
+        updateInventory(
+          data.success
+            ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
+            : undefined,
+          snapshot.inventory,
+        ),
+        // The Card Hall lists pack stacks by id, so merged-away packs leave it.
+        data.success ? reconcileCardMoves([snapshot.itemType]) : undefined,
+      ]);
     },
-    onError: async (error) => {
+    onError: async (error, _input, snapshot) => {
       showMutationToast({
         success: false,
         message: error.message,
         variant: "destructive",
       });
-      await invalidateInventory();
+      await Promise.all([
+        invalidateInventory(),
+        reconcileCardMoves([snapshot?.itemType]),
+      ]);
     },
     onSettled,
   });
@@ -145,10 +153,14 @@ export const useItemActions = ({
 
   const { mutate: splitStack, isPending: isSplitting } =
     api.item.splitStack.useMutation({
-      onSuccess: async (data) => {
+      onMutate: () => ({ itemType: useritem?.item.itemType }),
+      onSuccess: async (data, _input, context) => {
         showMutationToast(data);
         // The source may have moved or changed cosmetics in another tab before splitting.
-        if (data.success) void invalidateInventory();
+        if (data.success) {
+          void invalidateInventory();
+          void reconcileCardMoves([context.itemType]);
+        }
       },
       onSettled,
     });

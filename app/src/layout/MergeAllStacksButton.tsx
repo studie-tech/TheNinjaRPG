@@ -26,8 +26,13 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
   onMerged,
 }) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
-  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
-    useInventoryCacheUpdate();
+  const {
+    prepareInventoryUpdate,
+    updateInventory,
+    invalidateInventory,
+    cachedItemTypes,
+    reconcileCardMoves,
+  } = useInventoryCacheUpdate();
 
   const { mutate: mergeAllStacks, isPending } = api.item.mergeAllStacks.useMutation({
     onMutate: () => ({
@@ -37,13 +42,20 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
     onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
       if (data.userRecovery) await updateUser(data, { revision: snapshot.user });
+      // The Card Hall lists pack stacks by id; withheld changes may have merged packs too.
+      const mergedTypes = data.inventoryChanges
+        ? cachedItemTypes(data.inventoryChanges.map((change) => change.id))
+        : ["CONSUMABLE"];
       // Partial failures can already have changed stacks and require authoritative recovery.
-      await updateInventory(
-        data.success
-          ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
-          : undefined,
-        snapshot.inventory,
-      );
+      await Promise.all([
+        updateInventory(
+          data.success
+            ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
+            : undefined,
+          snapshot.inventory,
+        ),
+        reconcileCardMoves(mergedTypes),
+      ]);
       if (data.success) {
         onMerged?.();
       }

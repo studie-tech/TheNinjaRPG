@@ -24,7 +24,7 @@ import {
   insertKessenDeck,
   listItemForKessenGrant,
   listKessenCards,
-  listOwnedKessenCards,
+  listOwnedKessenCardCounts,
   updateKessenDeck,
   updateKessenProgressForChooseStarter,
   upsertKessenProgressAutoSell,
@@ -68,7 +68,7 @@ export const kessenCollectionRouter = createTRPCRouter({
       // Query
       const [cardRows, ownedRows, deckCount, [existing]] = await Promise.all([
         listKessenCards(ctx.drizzle),
-        listOwnedKessenCards(ctx.drizzle, ctx.userId),
+        listOwnedKessenCardCounts(ctx.drizzle, ctx.userId),
         countKessenDecks(ctx.drizzle, ctx.userId),
         input.id ? findKessenDeck(ctx.drizzle, ctx.userId, input.id) : [],
       ]);

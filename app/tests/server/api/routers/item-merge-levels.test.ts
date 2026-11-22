@@ -216,6 +216,22 @@ describeWithDatabase("consumable merges across ownership levels", () => {
     ]);
   });
 
+  it("lists card stacks in the Items page read but not the shared backpack read", async () => {
+    await insertItems([
+      { id: "card", name: "Card", itemType: "CARD", canStack: true, stackSize: 99 },
+    ]);
+    await insertUserItems([
+      { id: "deck", userId: "merge-user", itemId: "card", quantity: 3 },
+      { id: "c1", userId: "merge-user", itemId: "consumable", quantity: 2 },
+    ]);
+    const api = await callerFor(itemRouter, "merge-user");
+    expect((await api.getUserItems()).map((row) => row.id)).toEqual(["c1"]);
+    expect((await api.getUserItemsWithVariants()).map((row) => row.id).sort()).toEqual([
+      "c1",
+      "deck",
+    ]);
+  });
+
   it.each(["ASLEEP", "HOSPITALIZED"] as const)(
     "reports confirmed %s recovery when only one item type merges",
     async (status) => {

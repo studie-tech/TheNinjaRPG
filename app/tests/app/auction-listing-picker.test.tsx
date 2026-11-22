@@ -19,7 +19,7 @@ beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   Object.assign(vi.spyOn(client, "api" as never), {
     item: {
-      getUserItems: {
+      getUserItemsWithVariants: {
         useQuery: () => ({
           data: [
             row("Available Sword"),
@@ -40,7 +40,12 @@ beforeEach(() => {
         useMutation: () => ({ mutate: vi.fn(), isPending: false }),
       },
     },
-    useUtils: () => ({ item: { getUserItems: { invalidate: vi.fn() } } }),
+    useUtils: () => ({
+      item: {
+        getUserItems: { invalidate: vi.fn() },
+        getUserItemsWithVariants: { invalidate: vi.fn() },
+      },
+    }),
   });
 });
 

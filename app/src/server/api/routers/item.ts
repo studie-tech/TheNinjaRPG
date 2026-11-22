@@ -318,7 +318,7 @@ import {
   userItemAvailableAt,
 } from "@/queries/item";
 import { fetchJutsuLoadouts } from "@/queries/jutsu";
-import { listOwnedKessenCards } from "@/queries/kessen";
+import { listOwnedKessenCardCounts } from "@/queries/kessen";
 import { findActionLogById } from "@/queries/logs";
 import { findLpcDesignForSelection } from "@/queries/lpc";
 import { insertUserPet, listVisiblePetJutsu } from "@/queries/pets";
@@ -1371,18 +1371,20 @@ export const itemRouter = createTRPCRouter({
       const counts = await selectUserItemForGetUserItemCounts(ctx.drizzle, ctx);
       return counts.map((c) => ({ id: c.itemId, quantity: c.quantity ?? 0 }));
     }),
-  // Get user items
+  // Get user items. Kessen cards are left out of this shared backpack read; the views
+  // that show them (Items page, auction listing picker) read getUserItemsWithVariants.
   getUserItems: protectedProcedure
-    .meta({ mcp: { description: "Get all user items" } })
+    .meta({ mcp: { description: "Get all user items except Kessen cards" } })
     .query(async ({ ctx }) => {
       const useritems = await fetchUserItems(ctx.drizzle, ctx.userId, {
         waitForActiveMergeClaims: true,
       });
-      return (await joinFinishedCrafts(ctx.drizzle, ctx.userId, useritems))
+      const rows = (await joinFinishedCrafts(ctx.drizzle, ctx.userId, useritems))
         ? await fetchUserItems(ctx.drizzle, ctx.userId, {
             waitForActiveMergeClaims: true,
           })
         : useritems;
+      return rows.filter((row) => row.item.itemType !== "CARD");
     }),
   getUserItemsWithVariants: protectedProcedure
     .meta({
@@ -2089,7 +2091,7 @@ export const itemRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
         selectVillageStructureForSellUserItem(ctx.drizzle, ctx),
-        listOwnedKessenCards(ctx.drizzle, ctx.userId),
+        listOwnedKessenCardCounts(ctx.drizzle, ctx.userId),
       ]);
       // Guard
       if (!useritem) return errorResponse("User item not found");
@@ -2173,7 +2175,7 @@ export const itemRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         listUserItemsForSellUserItems(ctx.drizzle, ctx, input.userItemIds),
         selectVillageStructureForSellUserItem(ctx.drizzle, ctx),
-        listOwnedKessenCards(ctx.drizzle, ctx.userId),
+        listOwnedKessenCardCounts(ctx.drizzle, ctx.userId),
       ]);
       // Guard each stack: a single sale's rules, limited to the backpack's unequipped stacks
       const refused: { userItemId: string; name: string; reason: string }[] = [];

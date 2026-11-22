@@ -214,9 +214,27 @@ export const findKessenNpcProgressRows = (
     );
 
 /**
- * Owned card copies per card, split by whether they are listed in the auction house,
- * with the card columns an engine card is built from. Deck building excludes listed
- * copies; dupe protection counts them.
+ * Owned card copies per card, split by whether they are listed in the auction house.
+ * Deck building excludes listed copies; sales and match rewards count them.
+ */
+export const listOwnedKessenCardCounts = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+) =>
+  client
+    .select({
+      itemId: item.id,
+      isInAuction: userItem.isInAuction,
+      quantity: sql<number>`CAST(SUM(${userItem.quantity}) AS SIGNED)`.mapWith(Number),
+    })
+    .from(userItem)
+    .innerJoin(item, eq(item.id, userItem.itemId))
+    .where(and(eq(userItem.userId, userId), eq(item.itemType, "CARD")))
+    .groupBy(item.id, userItem.isInAuction);
+
+/**
+ * `listOwnedKessenCardCounts` with the card columns an engine card is built from, for
+ * pack dupe protection.
  */
 export const listOwnedKessenCards = (
   client: Pick<DrizzleClient, "select">,

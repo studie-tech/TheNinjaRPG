@@ -80,7 +80,9 @@ export const NewAuctionListingDialog: React.FC<{
   onInitialHandled,
 }) => {
   const { data: userItems, isFetchedAfterMount: isInventoryFresh } =
-    api.item.getUserItems.useQuery(undefined, { refetchOnMount: "always" });
+    api.item.getUserItemsWithVariants.useQuery(undefined, {
+      refetchOnMount: "always",
+    });
   const { reconcileCardMoves } = useKessenCardMoves();
   const ignoreNextPopoverOpenRef = useRef(false);
   const itemSearchInputRef = useRef<HTMLInputElement>(null);
@@ -178,6 +180,7 @@ export const NewAuctionListingDialog: React.FC<{
           await Promise.all([
             utils.auction.getAuctionListings.invalidate(),
             utils.item.getUserItems.invalidate(),
+            utils.item.getUserItemsWithVariants.invalidate(),
             utils.auction.getAuctionListing.invalidate(),
             reconcileCardMoves([context?.itemType]),
           ]);
@@ -301,7 +304,7 @@ export const NewAuctionListingDialog: React.FC<{
         if (open) {
           // Inventory can change while this page stays mounted (e.g. unequipping in
           // another tab), so re-read it whenever the picker is opened.
-          void utils.item.getUserItems.invalidate();
+          void utils.item.getUserItemsWithVariants.invalidate();
           // Show the item search dropdown when opening the dialog,
           // then let `autoFocus` handle focusing the actual CommandInput.
           setItemSearchTerm("");
@@ -747,4 +750,6 @@ const priceBoundsLine = (
 const listingOrder = (item: ListingPickerItem["item"]) =>
   item.itemType !== "CARD" ? 0 : item.cardData?.variant === "FORBIDDEN" ? 2 : 1;
 
-type ListingPickerItem = NonNullable<RouterOutputs["item"]["getUserItems"]>[number];
+type ListingPickerItem = NonNullable<
+  RouterOutputs["item"]["getUserItemsWithVariants"]
+>[number];

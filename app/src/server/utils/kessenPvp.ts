@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { getKessenMatchLog } from "@/deltas/kessen";
 import {
   KESSEN_PVP_MAX_TIMEOUTS,
@@ -117,9 +118,13 @@ export const kessenDuelSeat = (
   userId: string,
 ): Seat => (row.userId === userId ? 0 : 1);
 
-/** Announces a duel's new version on its channel; the channel is public, so nothing else. */
-export const pushKessenDuelVersion = (matchId: string, version: number) =>
-  getServerPusher().trigger(matchId, "event", { version });
+/**
+ * Announces a duel's new version on its channel once the response is sent; the channel is
+ * public, so nothing else. The write has committed by then, so a failed announcement
+ * never fails the decision: the other seat reads the version on its next refetch.
+ */
+const pushKessenDuelVersion = (matchId: string, version: number) =>
+  after(() => getServerPusher().trigger(matchId, "event", { version }));
 
 /**
  * Brings a duel up to `now` and applies one seat's decision: forces every decision whose
@@ -155,7 +160,7 @@ export const advanceKessenDuel = async (
     });
     if (write.rowsAffected !== 1) return lostAdvance(client, row, decision);
     const expired = nextRow(row, state, now, null, "EXPIRED");
-    await pushKessenDuelVersion(row.id, expired.version);
+    pushKessenDuelVersion(row.id, expired.version);
     return {
       row: expired,
       events: [],
@@ -232,7 +237,7 @@ export const advanceKessenDuel = async (
     });
     if (write.rowsAffected !== 1) return lostAdvance(client, row, decision);
     const written = nextRow(row, next, now, deadline, null);
-    await pushKessenDuelVersion(row.id, written.version);
+    pushKessenDuelVersion(row.id, written.version);
     return { row: written, events, refused, lost: false, paid: null };
   }
 
@@ -258,7 +263,7 @@ export const advanceKessenDuel = async (
     current = settled.row;
     paid = settled.paid;
   }
-  await pushKessenDuelVersion(row.id, current.version);
+  pushKessenDuelVersion(row.id, current.version);
   return { row: current, events, refused, lost: false, paid };
 };
 
@@ -274,7 +279,7 @@ export const resumeKessenDuelSettlement = async (
   if ((row.status !== "FINISHED" && row.status !== "CONCEDED") || !stored.settlement)
     return { row, paid: null };
   const settled = await settleKessenDuel(client, row);
-  if (settled.row !== row) await pushKessenDuelVersion(row.id, settled.row.version);
+  if (settled.row !== row) pushKessenDuelVersion(row.id, settled.row.version);
   return settled;
 };
 
