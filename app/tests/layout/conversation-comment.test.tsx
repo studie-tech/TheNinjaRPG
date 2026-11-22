@@ -5,7 +5,7 @@ import {
   QueryClient,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { type Control, useController } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import * as Avatar from "@/layout/Avatar";
@@ -682,8 +682,9 @@ describe("compact chat challenge view", () => {
   it("moves keyboard focus into the challenge view and back to its menu item", async () => {
     installBrowserGlobals({ resizeObserver: true });
     mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
+    // The panel's own options are covered elsewhere; its leading slot holds Back.
     vi.spyOn(ChallengePlayer, "ChallengePanel").mockImplementation(
-      (() => null) as never,
+      ((props: { leading?: ReactNode }) => props.leading ?? null) as never,
     );
     try {
       const view = render(

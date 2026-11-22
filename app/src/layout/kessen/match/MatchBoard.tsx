@@ -397,7 +397,10 @@ const ChosenGhost = ({
   );
 };
 
-/** Round dots, pass states, the card-edge badge (hand sizes) and what each side needs. */
+/**
+ * Round dots, pass states, the card-edge badge (hand sizes) and what each side needs. A
+ * spectator reads each hand size in its player's bar instead of the badge.
+ */
 const CenterBand = ({
   table,
   pulseBadge,
@@ -406,7 +409,6 @@ const CenterBand = ({
   pulseBadge: boolean;
 }) => {
   const { view, me, them, opponentName } = table;
-  const badgeLabel = `Cards in hand: ${table.spectating ? table.selfName : "you"} ${view.seats[me].handCount}, ${opponentName} ${view.seats[them].handCount}`;
   return (
     <section
       className="km-center"
@@ -428,29 +430,25 @@ const CenterBand = ({
           return <span key={round} className="km-round-dot" data-state={state} />;
         })}
       </span>
-      <span
-        className="km-edge-badge"
-        data-lesson-target="badge"
-        data-pulse={pulseBadge ? "" : undefined}
-        title="Cards in hand"
-        role="img"
-        aria-label={badgeLabel}
-      >
-        {/* Labelled and set in body type on dark lacquer, so the counts never read as
-            the score. */}
-        <CardBack className="km-edge-card" renderSize={24} aria-hidden />
-        <span className="km-edge-label">Hand</span>
-        {table.spectating ? (
-          <span className="km-edge-name">{table.selfName}</span>
-        ) : null}
-        <span>
-          {table.spectating ? "" : "You "}
-          {view.seats[me].handCount} ·{" "}
+      {table.spectating ? null : (
+        <span
+          className="km-edge-badge"
+          data-lesson-target="badge"
+          data-pulse={pulseBadge ? "" : undefined}
+          title="Cards in hand"
+          role="img"
+          aria-label={`Cards in hand: you ${view.seats[me].handCount}, ${opponentName} ${view.seats[them].handCount}`}
+        >
+          {/* Labelled and set in body type on dark lacquer, so the counts never read as
+              the score. */}
+          <CardBack className="km-edge-card" renderSize={24} aria-hidden />
+          <span className="km-edge-label">Hand</span>
+          <span>You {view.seats[me].handCount} · </span>
+          {/* A long name gives way before either count does. */}
+          <span className="km-edge-name">{opponentName}</span>
+          <span> {view.seats[them].handCount}</span>
         </span>
-        {/* A long name gives way before either count does. */}
-        <span className="km-edge-name">{opponentName}</span>
-        <span> {view.seats[them].handCount}</span>
-      </span>
+      )}
       {/* A paper chip like the edge badge, the number in score figures; the sentence
           with the opponent's name is for screen readers. */}
       {table.needText ? (

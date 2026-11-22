@@ -1,9 +1,8 @@
 "use client";
 
 import { Eye, Layers, Loader2, Swords } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -18,6 +17,7 @@ import { KESSEN_CHALLENGE_EXPIRY_SECONDS, MAX_PLAYER_LEVEL } from "@/drizzle/con
 import { useKessenHub } from "@/hooks/kessen/useKessenHub";
 import { useKessenPvpLobby } from "@/hooks/kessen/useKessenPvpLobby";
 import { useCreateSparChallenge } from "@/hooks/useSparChallenge";
+import { OptionCheckbox } from "@/layout/battlearena/OptionCheckbox";
 import type { MutationFeedback } from "@/layout/FeedbackAlert";
 import { type DeckChoice, useDeckChoice } from "@/layout/kessen/hub/DeckPicker";
 import {
@@ -31,6 +31,7 @@ import { SPAR_EXPIRY_SECONDS } from "@/libs/combat/constants";
 import { type DeckFaction, KESSEN_DECK_FACTIONS } from "@/libs/kessen/deck";
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
 import { cn } from "@/libs/shadui";
+import { formatDateTime } from "@/utils/time";
 import type { ChallengeMatch } from "@/validators/comments";
 
 /**
@@ -72,12 +73,22 @@ export function ChallengeButton({
  * challenged player accepts on the arena or Card Hall page as usual. Render it only while
  * shown, since the Kessen option reads the player's decks.
  */
-export function ChallengePanel({ opponent, conversationId }: ChallengePanelProps) {
+export function ChallengePanel({
+  opponent,
+  conversationId,
+  leading,
+}: ChallengePanelProps & {
+  /** A control before the title, such as a way back to the menu that opened it. */
+  leading?: ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-[8px]">
-      <p className="px-[2px] text-[13px] font-bold">
-        Challenge <span className="break-all">{opponent.username}</span>
-      </p>
+      <div className="flex items-center gap-[4px]">
+        {leading}
+        <p className="min-w-0 px-[2px] text-[13px] font-bold">
+          Challenge <span className="break-all">{opponent.username}</span>
+        </p>
+      </div>
       <SparOption opponent={opponent} conversationId={conversationId} />
       <KessenOption opponent={opponent} conversationId={conversationId} />
     </div>
@@ -107,9 +118,12 @@ export function ChallengeMatchNotice({
   const Icon = isSpar ? Swords : Layers;
   return (
     <div
+      // The full variant takes the message cards' type size and date format.
       className={cn(
-        "flex items-center gap-[8px] rounded-lg border border-dashed text-[13px]",
-        compact ? "px-[8px] py-[4px]" : "bg-popover mb-3 px-[12px] py-[8px]",
+        "flex items-center gap-[8px] rounded-lg border border-dashed",
+        compact
+          ? "px-[8px] py-[4px] text-[13px]"
+          : "bg-popover mb-3 px-[12px] py-[8px]",
       )}
     >
       <Icon className="h-[16px] w-[16px] shrink-0 text-orange-600" aria-hidden />
@@ -120,7 +134,9 @@ export function ChallengeMatchNotice({
           {" · "}
           {/* Locale and timezone differ between server and browser. */}
           <time dateTime={createdAt.toISOString()} suppressHydrationWarning>
-            {createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {compact
+              ? createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              : formatDateTime(createdAt)}
           </time>
         </span>
       </p>
@@ -177,7 +193,7 @@ function SparOption({ opponent, conversationId }: ChallengePanelProps) {
           checked={useRankedRules}
           onChange={setUseRankedRules}
           label="Ranked rules"
-          hint={`ranked loadouts, level ${MAX_PLAYER_LEVEL} stats`}
+          hint={`Ranked loadouts, level ${MAX_PLAYER_LEVEL} stats, no LP rewards`}
         />
         <OptionCheckbox
           checked={spectatable}
@@ -418,34 +434,6 @@ function ChallengeOption({
         </p>
       )}
     </section>
-  );
-}
-
-/** A challenge setting; ids are per instance since every message can open the panel. */
-function OptionCheckbox({
-  checked,
-  onChange,
-  label,
-  hint,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-  hint?: string;
-}) {
-  const id = useId();
-  return (
-    <div className="flex items-center gap-[6px] text-[12px]">
-      <Checkbox
-        id={id}
-        checked={checked}
-        onCheckedChange={(value) => onChange(value === true)}
-      />
-      <label htmlFor={id} className="cursor-pointer">
-        {label}
-        {hint && <span className="text-muted-foreground"> · {hint}</span>}
-      </label>
-    </div>
   );
 }
 

@@ -1086,10 +1086,15 @@ describe("Spectating a duel", () => {
   it("names both players and offers no play, hand or concession", () => {
     const state = practiceMatch();
     const { onAction } = renderWatched(watched(state));
-    expect(document.querySelector(".km-hand-card")).toBeNull();
-    expect(document.querySelector(".km-hand-empty")?.textContent).toBe(
-      `Aiko holds ${state.seats[0].hand.length} cards, Botan ${state.seats[1].hand.length}.`,
-    );
+    // Each hand's size sits in its player's bar; the board takes the hand strip's room.
+    expect(document.querySelector(".km-hand-wrap")).toBeNull();
+    expect(document.querySelector(".km-edge-badge")).toBeNull();
+    expect(
+      document.querySelector('.km-bar-me [title="Cards in hand"]')?.textContent,
+    ).toBe(`Aiko holds${state.seats[0].hand.length} cards`);
+    expect(
+      document.querySelector('.km-bar-them [title="Cards in hand"]')?.textContent,
+    ).toBe(`Botan holds${state.seats[1].hand.length} cards`);
     expect(document.querySelector(".km-bar-me .km-bar-title")?.textContent).toBe(
       "Aiko",
     );

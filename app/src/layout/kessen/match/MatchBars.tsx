@@ -64,16 +64,7 @@ export const OpponentBar = ({
         ) : null}
       </span>
       <Lanterns count={zone.lanterns} label={`${opponentName}'s lanterns`} />
-      <Badge
-        variant="secondary"
-        className="km-count gap-[3px] px-[5px] py-0 text-[12px]"
-        title="Cards in hand"
-      >
-        <CardBack className="km-count-back" renderSize={24} aria-hidden />
-        <span className="sr-only">{opponentName} holds</span>
-        {zone.handCount}
-        <span className="sr-only"> cards</span>
-      </Badge>
+      <HandCount count={zone.handCount} holder={opponentName} />
       <DeckButton
         count={zone.deckCount}
         discard={zone.discard.length}
@@ -101,7 +92,10 @@ export const OpponentBar = ({
   );
 };
 
-/** The player's bar: lanterns, total, leader, banked mulligans, deck and hand sorting. */
+/**
+ * The player's bar: lanterns, total, leader, banked mulligans, deck and hand sorting (for
+ * a spectator, the hand's size).
+ */
 export const PlayerBar = ({
   table,
   sort,
@@ -137,8 +131,10 @@ export const PlayerBar = ({
           </Badge>
         ) : null}
       </span>
-      {/* A spectator sees no hand to sort. */}
-      {table.spectating ? null : (
+      {/* A spectator sees the hand's size where a player sorts it. */}
+      {table.spectating ? (
+        <HandCount count={zone.handCount} holder={table.selfName} />
+      ) : (
         <Button
           type="button"
           variant="outline"
@@ -179,6 +175,20 @@ export const PlayerBar = ({
     </section>
   );
 };
+
+/** A side's hand size, behind a card back. */
+const HandCount = ({ count, holder }: { count: number; holder: string }) => (
+  <Badge
+    variant="secondary"
+    className="km-count gap-[3px] px-[5px] py-0 text-[12px]"
+    title="Cards in hand"
+  >
+    <CardBack className="km-count-back" renderSize={24} aria-hidden />
+    <span className="sr-only">{holder} holds</span>
+    {count}
+    <span className="sr-only"> cards</span>
+  </Badge>
+);
 
 /** A side's deck count; it opens the discards. */
 const DeckButton = ({

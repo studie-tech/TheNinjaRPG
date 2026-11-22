@@ -18,6 +18,7 @@ import {
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment } from "@/drizzle/schema";
@@ -317,19 +318,27 @@ function UserMenu({
           collisionPadding={8}
           className="max-h-[var(--radix-popover-content-available-height)] w-[320px] overflow-y-auto p-[8px]"
         >
-          <button
-            type="button"
-            // biome-ignore lint/a11y/noAutofocus: Keeps keyboard focus inside the popover when the challenge view replaces the menu
-            autoFocus
-            className="text-muted-foreground hover:text-foreground mb-[4px] inline-flex items-center gap-[4px] text-[12px]"
-            onClick={() => {
-              setReturnedFromChallenge(true);
-              setView("menu");
-            }}
-          >
-            <ChevronLeft className="h-[14px] w-[14px]" aria-hidden /> Back
-          </button>
-          <ChallengePanel opponent={user} conversationId={conversationId} />
+          <ChallengePanel
+            opponent={user}
+            conversationId={conversationId}
+            leading={
+              <Button
+                variant="ghost"
+                size="icon"
+                // Keeps keyboard focus inside the popover when the challenge view replaces the menu.
+                autoFocus
+                className="h-[24px] w-[24px] shrink-0"
+                aria-label="Back"
+                title="Back"
+                onClick={() => {
+                  setReturnedFromChallenge(true);
+                  setView("menu");
+                }}
+              >
+                <ChevronLeft className="h-[16px] w-[16px]" aria-hidden />
+              </Button>
+            }
+          />
         </PopoverContent>
       ) : (
         <PopoverContent

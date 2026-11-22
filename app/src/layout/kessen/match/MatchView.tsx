@@ -255,9 +255,12 @@ export const KessenMatchView = ({
         )}
         {showEnd ? null : (
           <>
-            <div className="km-hand-wrap">
-              <HandStrip table={table} sort={sort} />
-            </div>
+            {/* A spectator's hand counts sit in the bars, so the board takes the room. */}
+            {table.spectating ? null : (
+              <div className="km-hand-wrap">
+                <HandStrip table={table} sort={sort} />
+              </div>
+            )}
             <ActionBar
               table={table}
               lesson={lesson}

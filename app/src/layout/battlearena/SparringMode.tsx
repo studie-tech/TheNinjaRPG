@@ -1,16 +1,16 @@
 "use client";
 
 import { Check, Trash2, X } from "lucide-react";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { MAX_PLAYER_LEVEL } from "@/drizzle/constants";
 import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useCreateSparChallenge } from "@/hooks/useSparChallenge";
 import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
 import { OpponentFinder } from "@/layout/battlearena/OpponentFinder";
+import { OptionCheckbox } from "@/layout/battlearena/OptionCheckbox";
 import { sparExamProgress } from "@/libs/battleArena";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
@@ -222,34 +222,6 @@ export function SparringMode() {
           label="Allow spectators"
         />
       </BattleSetupPanel>
-    </div>
-  );
-}
-
-/** A challenge option; rendered in both the rail and the phone sheet, so ids are per instance. */
-function OptionCheckbox({
-  checked,
-  onChange,
-  label,
-  hint,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-  hint?: string;
-}) {
-  const id = useId();
-  return (
-    <div className="flex items-start gap-2 text-sm">
-      <Checkbox
-        id={id}
-        checked={checked}
-        onCheckedChange={(value) => onChange(value === true)}
-      />
-      <label htmlFor={id}>
-        {label}
-        {hint && <span className="text-muted-foreground block text-xs">{hint}</span>}
-      </label>
     </div>
   );
 }
