@@ -345,7 +345,7 @@ function UserMenu({
         <PopoverContent
           align="start"
           collisionPadding={8}
-          className="w-[208px] p-[4px]"
+          className="max-h-[var(--radix-popover-content-available-height)] w-[208px] overflow-y-auto p-[4px]"
           role="menu"
           aria-label={`Actions for ${user.username}`}
         >
