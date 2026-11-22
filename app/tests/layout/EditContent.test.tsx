@@ -2382,8 +2382,15 @@ describe("schema-derived field visibility", () => {
     fireEvent.click(
       view.getByRole("button", { name: "Projectile animation: Pick from dialog" }),
     );
-    const folder = await view.findByRole("button", { name: /^Skyglass boss fx/ });
+    await view.findByRole("button", { name: /^Skyglass boss fx/ });
     expect(lastListing()[1].enabled).toBe(false);
+    const folderSearch = view.getByRole("textbox", { name: "Find a folder" });
+    fireEvent.change(folderSearch, { target: { value: "missing folder" } });
+    expect(view.queryByRole("button", { name: /^Skyglass boss fx/ })).toBeNull();
+    fireEvent.change(folderSearch, { target: { value: "  SKYGLASSBOSSFX  " } });
+    expect(view.getByRole("button", { name: /^Skyglass boss fx/ })).toBeTruthy();
+    fireEvent.change(folderSearch, { target: { value: "  SKYGLASS BOSS FX  " } });
+    const folder = view.getByRole("button", { name: /^Skyglass boss fx/ });
     fireEvent.click(folder);
     await waitFor(() =>
       expect(lastListing()).toEqual([

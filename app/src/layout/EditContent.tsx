@@ -144,8 +144,11 @@ export const EditContent = <
     assetFolder === null && (loadingAssetFolders || (assetFolders?.length ?? 0) > 0);
   const pickerFolder = assetFolder ?? undefined;
   const showPickerAssets = assetPickerOpen && !browsingAssetFolders;
-  const pickerFolderMatches = (assetFolders ?? []).filter((entry) =>
-    entry.folder.toLowerCase().includes(assetFolderSearch.trim().toLowerCase()),
+  const normalizedFolderSearch = assetFolderSearch.trim().toLowerCase();
+  const pickerFolderMatches = (assetFolders ?? []).filter(
+    (entry) =>
+      entry.folder.toLowerCase().includes(normalizedFolderSearch) ||
+      humanizeIdentifier(entry.folder).toLowerCase().includes(normalizedFolderSearch),
   );
   const { data: animationTagResp, isFetching: loadingAnimTags } =
     api.gameAsset.getNameTags.useQuery(
