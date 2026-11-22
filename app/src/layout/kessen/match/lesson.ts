@@ -49,12 +49,12 @@ export const lessonMarks = (
 export const markedNames = (marks: readonly GuidedLessonMark[]) =>
   [...new Set(marks.map((mark) => mark.label))].sort((a, b) => b.length - a.length);
 
+/** `value` as a literal inside a regular expression. */
+export const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** Whether `text` names `name` as a whole phrase (possessives included). */
 const namesCard = (text: string, name: string) =>
   new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(name)}(?=$|[^\\p{L}\\p{N}])`, "u").test(
     text,
   );
-
-/** `value` as a literal inside a regular expression. */
-export const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

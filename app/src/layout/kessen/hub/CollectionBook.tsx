@@ -34,14 +34,14 @@ import {
 } from "./hubData";
 
 /**
- * The collection as an ink bingo book: one page per faction behind a
- * completion ring, owned cards with copy pips, unowned cards as silhouettes with where to
- * find them (a popover, one open at a time). Copies listed in the auction house are still
- * owned: they count for the book and carry a "Listed" tag. Keyword chips stay greyed
- * until the keyword was seen in a match; tapping one shows its glossary line and lists
- * every card with it. The Forbidden shelf below keeps a locked niche for every variant
- * not yet owned; an owned variant repeats its epithet under the card only while the face
- * cuts its name short. Cards first held since the viewer last opened their page carry the NEW
+ * The collection as an ink bingo book: one page per faction behind a completion ring,
+ * owned cards with copy pips, unowned cards as silhouettes with where to find them (a
+ * popover, one open at a time). Copies listed in the auction house are still owned: they
+ * count for the book and carry a "Listed" tag. Keyword chips stay greyed until the
+ * keyword was seen in a match; tapping one shows its glossary line and lists every card
+ * with it. The Forbidden shelf below keeps a locked niche for every variant not yet
+ * owned; an owned variant repeats its epithet under the card only while the face cuts its
+ * name short. Cards first held since the viewer last opened their page carry the NEW
  * ribbon, and each faction tab counts them until that page is viewed (remembered per
  * viewer in this browser). The faction tabs are the game's tabs (one tab stop; the arrow
  * keys, Home and End move between them). Narrow books fold the keyword chips behind a

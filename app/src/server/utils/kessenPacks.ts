@@ -83,26 +83,6 @@ const KESSEN_PACK_TIER_NAMES: Record<KessenPackTier, string> = {
   FORBIDDEN: "Forbidden",
 };
 
-export type KessenPackKind = "paper" | "village" | "lacquer" | "first";
-
-/** One pack item: its pool, slot weights and Card Master stall listing. */
-export interface KessenPackDefinition {
-  id: string;
-  name: string;
-  kind: KessenPackKind;
-  /** Village Bundles draw from this faction plus Neutral; null draws from every faction. */
-  faction: DeckFaction | null;
-  description: string;
-  normalWeights: Record<KessenPackTier, number>;
-  rareSlotWeights: Record<KessenPackTier, number>;
-  /** Stall listing; null packs are earned only. */
-  listing: {
-    cost: number;
-    purchaseLimit: number;
-    purchaseLimitPeriod: (typeof ItemPurchaseLimitPeriods)[number];
-  } | null;
-}
-
 /** Cards per pack in words ("Five") and the ordinal of its rare slot ("fifth"). */
 const PACK_CARDS = numberWord(KESSEN_PACK_NORMAL_SLOTS + 1);
 const LAST_CARD = ordinalWord(KESSEN_PACK_NORMAL_SLOTS + 1);
@@ -274,12 +254,6 @@ export const kessenPackSlots = (effects: readonly ZodAllTags[]): KessenPackSlots
   };
 };
 
-/** Pity counters of `KessenProgress`. */
-export interface KessenPityCounters {
-  packsSinceEpic: number;
-  packsSinceLegendary: number;
-}
-
 /**
  * Packs until each guarantee, counting the guaranteed pack: after `KESSEN_EPIC_PITY_PACKS`
  * packs without an epic the next fifth slot is epic, and the `KESSEN_LEGENDARY_PITY_PACKS`th
@@ -301,37 +275,12 @@ export const kessenRareSlotMinimum = (
   return null;
 };
 
-export interface KessenPackPlanInput {
-  packItemId: string;
-  /** The pack's weighted caches in effect order; the last one is the fifth slot. */
-  caches: WeightedCache[];
-  /** Cards the caches reference, by item id. */
-  cards: ReadonlyMap<string, KessenCard>;
-  /** Owned copies per item id, auction listings included. */
-  owned: Readonly<Record<string, number>>;
-  counters: KessenPityCounters;
-  autoSellSurplus: boolean;
-  /** Seeds the re-rolls of dupe protection and the unowned-legendary pick. */
-  seed: string;
-  random?: () => number;
-}
-
-export type KessenPackCacheResult = ReturnType<typeof resolveWeightedCache>;
-
-export interface KessenPackPlan {
-  /** Cache results with auto-sold copies removed from `items`. */
-  results: KessenPackCacheResult[];
-  reveal: CardPackReveal;
-  soldRyo: number;
-  counters: KessenPityCounters & { firstBundleOpened: boolean };
-}
-
 /**
  * Resolves a pack's caches with the card hooks:
  * - the fifth slot is raised to EPIC for the First Bundle and after `KESSEN_EPIC_PITY_PACKS`
  *   packs without an epic, and to LEGENDARY on the `KESSEN_LEGENDARY_PITY_PACKS`th pack
- *   without a legendary, picking a standard
- *   legendary missing from the collection whenever the tier holds one;
+ *   without a legendary, picking a standard legendary missing from the collection
+ *   whenever the tier holds one;
  * - a card at its copy limit (C 3, R 2, E 1, L 1 per item id, counting auction listings;
  *   a Forbidden variant is collected once and never counts as a copy of its base) is
  *   re-rolled among the tier's non-maxed cards, and only when all are maxed is the copy
@@ -470,12 +419,12 @@ export const prepareKessenPackOpening = async ({
 }) => {
   if (!isKessenPackId(item.id) || caches.length === 0) return null;
   const ids = [...new Set(caches.flatMap(cacheItemIds))];
-  // The default row must exist for the pity reservation's compare-and-set to match.
   const [[stored], cardRows, ownedRows] = await Promise.all([
     findKessenProgress(client, userId),
     listKessenCards(client, ids),
     listOwnedKessenCardCounts(client, userId),
   ]);
+  // The default row must exist for the pity reservation's compare-and-set to match.
   if (!stored) await insertKessenProgressIfMissing(client, userId);
   const cards = new Map(kessenCatalogCards(cardRows).map((card) => [card.id, card]));
   if (ids.some((id) => cards.get(id)?.kind === "LEADER"))
@@ -621,4 +570,58 @@ function ordinalWord(position: number) {
     "ninth",
   ];
   return words[position - 1] ?? `${position}th`;
+}
+
+export type KessenPackKind = "paper" | "village" | "lacquer" | "first";
+
+/** One pack item: its pool, slot weights and Card Master stall listing. */
+export interface KessenPackDefinition {
+  id: string;
+  name: string;
+  kind: KessenPackKind;
+  /** Village Bundles draw from this faction plus Neutral; null draws from every faction. */
+  faction: DeckFaction | null;
+  description: string;
+  normalWeights: Record<KessenPackTier, number>;
+  rareSlotWeights: Record<KessenPackTier, number>;
+  /** Stall listing; null packs are earned only. */
+  listing: {
+    cost: number;
+    purchaseLimit: number;
+    purchaseLimitPeriod: (typeof ItemPurchaseLimitPeriods)[number];
+  } | null;
+}
+
+/** Pity counters of `KessenProgress`. */
+export interface KessenPityCounters {
+  packsSinceEpic: number;
+  packsSinceLegendary: number;
+}
+
+/** What `planKessenPackOpening` resolves one pack from. */
+export interface KessenPackPlanInput {
+  packItemId: string;
+  /** The pack's weighted caches in effect order; the last one is the fifth slot. */
+  caches: WeightedCache[];
+  /** Cards the caches reference, by item id. */
+  cards: ReadonlyMap<string, KessenCard>;
+  /** Owned copies per item id, auction listings included. */
+  owned: Readonly<Record<string, number>>;
+  counters: KessenPityCounters;
+  autoSellSurplus: boolean;
+  /** Seeds the re-rolls of dupe protection and the unowned-legendary pick. */
+  seed: string;
+  /** The cache rolls' random source; `Math.random` when omitted. */
+  random?: () => number;
+}
+
+export type KessenPackCacheResult = ReturnType<typeof resolveWeightedCache>;
+
+/** One resolved pack opening: what it grants, sells and reveals, and the pity after it. */
+export interface KessenPackPlan {
+  /** Cache results with auto-sold copies removed from `items`. */
+  results: KessenPackCacheResult[];
+  reveal: CardPackReveal;
+  soldRyo: number;
+  counters: KessenPityCounters & { firstBundleOpened: boolean };
 }

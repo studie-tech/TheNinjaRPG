@@ -30,8 +30,8 @@ import {
 
 /**
  * Staff editor for a card's Kessen stats (`Item.cardData`). Scalars use plain controls;
- * abilities are edited as JSON in printed order and previewed as printed card text. Item-level
- * validation (keyword budget by rarity, tradeability) reports under this section.
+ * abilities are edited as JSON in printed order and previewed as printed card text.
+ * Item-level validation (keyword budget by rarity, tradeability) reports under this section.
  */
 export function CardDataEditor({ form, disabled }: CardDataEditorProps) {
   const watched = useWatch({ control: form.control, name: "cardData" });

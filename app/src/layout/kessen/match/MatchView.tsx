@@ -539,6 +539,7 @@ const LOG_TABS: { id: LogTab; label: string }[] = [
 type Sheet = "hand" | "log" | null;
 type LogTab = "log" | "discards" | "rules" | "options";
 
+/** The match table's payload, card data and the callbacks its page binds. */
 export interface KessenMatchViewProps {
   /** A match against an NPC (or a lesson), or the viewer's seat at a duel. */
   payload: KessenTablePayload;

@@ -544,6 +544,7 @@ export const roundSummary = (
 export const plural = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? "" : "s"}`;
 
+/** A signed amount with a typographic minus ("+3", "−2", "+0"). */
 export const signed = (value: number) =>
   value > 0 ? `+${value}` : value < 0 ? `−${-value}` : "+0";
 
@@ -582,12 +583,14 @@ export interface MatchNames {
   houseRule?: KessenHouseRule | null;
 }
 
+/** The pass button's label and its fact line; `armed` asks for a confirming second tap. */
 export interface PassFacts {
   armed: boolean;
   label: string;
   line: string;
 }
 
+/** The preview of a play: its effect on both totals, kills and abilities left unused. */
 export interface Ghost {
   gain: number;
   theirChange: number;
@@ -611,6 +614,7 @@ export interface Ghost {
   fizzleTile: [string, string] | null;
 }
 
+/** The centre band's points-needed line in its sentence and chip forms. */
 export interface NeedLine {
   /** The whole sentence, for screen readers. */
   full: string;
@@ -621,6 +625,7 @@ export interface NeedLine {
   count: number | null;
 }
 
+/** A finished round from the player's side, for the round summary card. */
 export interface RoundSummaryData {
   round: number;
   mine: number;

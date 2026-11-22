@@ -103,18 +103,6 @@ const KessenGuestHall = dynamic(() =>
   import("@/layout/kessen/hub/GuestHall").then((mod) => mod.KessenGuestHall),
 );
 
-const TABS = ["Play", "Duels", "Decks", "Collection", "Packs"] as const;
-/** The content box subtitle names what each section is for, short enough for a phone. */
-const TAB_SUBTITLES: Record<(typeof TABS)[number], string> = {
-  Play: "Academy and Circuit",
-  Duels: "Friendly and ranked duels",
-  Decks: "Build your decks",
-  Collection: "Your cards",
-  Packs: "Packs and the Card Master",
-};
-const TAB_STORAGE_KEY = "kessenTab";
-const LESSON_NPC: KessenNpcKey = "lemu";
-
 /**
  * The Card Hall: Lemu's first lesson for a first visit, the starter choice and its First
  * Bundle, then the Academy and the Circuit, duels against other players, the deck
@@ -1379,6 +1367,18 @@ const selectChallengeUser = (profile: NonNullable<UserWithRelations>) => ({
   longitude: profile.longitude,
   latitude: profile.latitude,
 });
+
+const TABS = ["Play", "Duels", "Decks", "Collection", "Packs"] as const;
+/** The content box subtitle names what each section is for, short enough for a phone. */
+const TAB_SUBTITLES: Record<(typeof TABS)[number], string> = {
+  Play: "Academy and Circuit",
+  Duels: "Friendly and ranked duels",
+  Decks: "Build your decks",
+  Collection: "Your cards",
+  Packs: "Packs and the Card Master",
+};
+const TAB_STORAGE_KEY = "kessenTab";
+const LESSON_NPC: KessenNpcKey = "lemu";
 
 const TAB_ICON_COMPONENTS: Record<KessenTab, LucideIcon> = {
   Play: Swords,

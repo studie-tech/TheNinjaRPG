@@ -179,8 +179,6 @@ export const GuestGuidedLesson: React.FC = () => {
   );
 };
 
-const selectUserId = (user: { userId: string }) => ({ userId: user.userId });
-
 /**
  * Finishes the tutorial of a player who graduated with the lesson collapsed, on
  * the Quests tab or behind chat. The assistant only runs while the lesson is on
@@ -2018,7 +2016,11 @@ const findGuidedTarget = (selector: string): HighlightTarget | null => {
   return null;
 };
 
-// Helper function to find element to highlight based on current tutorial step
+/**
+ * The element a main-tutorial step highlights, with its box: the first usable of its ids,
+ * or a match in the open game menu for a step that needs it. `isPrimaryElement` tells
+ * whether it is the step's first id.
+ */
 const findElementToHighlight = (
   step: TutorialStepConfig,
   rightSideBarRef: React.RefObject<HTMLDivElement | null>,
@@ -2076,6 +2078,9 @@ const findElementToHighlight = (
     height: rect.height,
   };
 };
+
+/** Subscribe to account identity without observing unrelated profile fields. */
+const selectUserId = (user: { userId: string }) => ({ userId: user.userId });
 
 /**
  * Tutorial assistant component props

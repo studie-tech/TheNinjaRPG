@@ -8,6 +8,8 @@ import { useVisualEffects } from "@/hooks/visual-effects";
  * Whether Kessen may animate: the visitor allows motion, game animations are on and the
  * light layout is off. Components render `data-motion` from it; kessen.css runs every
  * animation only under `[data-motion="on"]`, so a gated element shows its final frame.
+ * An `override` (a caller's own motion setting) replaces the game settings; reduced
+ * motion still wins.
  */
 export const useKessenMotion = (override?: boolean) => {
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");

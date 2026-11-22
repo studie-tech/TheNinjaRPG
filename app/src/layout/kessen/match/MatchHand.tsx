@@ -102,6 +102,7 @@ export const HandStrip = ({
   );
 };
 
+/** One card in hand: a tap selects it, or picks it when a hand target is asked for. */
 const HandCard = ({
   table,
   instance,

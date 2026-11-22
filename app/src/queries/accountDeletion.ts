@@ -133,13 +133,13 @@ export const deleteEmailReminderForRemoveAccountGameData = (
   userId: string,
 ) => client.delete(emailReminder).where(eq(emailReminder.userId, userId));
 
-/** Build the `table` deletion for `user`, using the configured predicates. */
 /** Duels the deleted player sat in as seat 1 (`opponentId`); seat 0 goes by `userId`. */
 export const deleteKessenMatchForDeleteUserInternal = (
   client: Pick<DrizzleClient, "delete">,
   userId: string,
 ) => client.delete(kessenMatch).where(eq(kessenMatch.opponentId, userId));
 
+/** Build the `table` deletion for `user`, using the configured predicates. */
 export const deleteRowsForUser = (
   client: Pick<DrizzleClient, "delete">,
   table: import("drizzle-orm/mysql-core").MySqlTable & {

@@ -7191,8 +7191,8 @@ export const kessenDeckRelations = relations(kessenDeck, ({ one }) => ({
 /**
  * One Kessen match. `userId` sits in seat 0; seat 1 is the Circuit NPC `npcKey` (kind NPC)
  * or the player `opponentId` (FRIENDLY and RANKED duels, which have no NPC or tier).
- * `state` is the engine's serialised match; every write is a compare-and-set on
- * `version`, located through the primary key. A duel's `turnDeadline` is when the
+ * `state` is the engine's serialised match; every write moves `version` on, and turns
+ * and settlements are a compare-and-set on it. A duel's `turnDeadline` is when the
  * acting seat's clock runs out; `rated` is the ranked rating claim.
  */
 export const kessenMatch = mysqlTable(

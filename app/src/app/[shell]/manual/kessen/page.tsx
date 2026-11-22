@@ -921,7 +921,7 @@ const choiceText = (
 };
 
 /**
- * Target bands and the latest self-play measurements (Chunin mirror unless noted);
+ * Target bands and the self-play measurements (Chunin mirror unless noted);
  * `met` says whether the measurement falls inside its band.
  */
 const BALANCE_TARGETS = [

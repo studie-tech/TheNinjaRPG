@@ -259,8 +259,8 @@ const PowerLine = ({
 
 /**
  * Every line of this visit's play, newest last, kept scrolled to the end, under the
- * results of the rounds already played. The match payload carries no event history, so
- * plays made before the table opened are summed up by those round results.
+ * results of the rounds already played. Lines come from the events the table played
+ * back, so plays made before it opened are summed up by those round results.
  */
 export const PlayLog = ({ table }: { table: MatchTable }) => {
   const end = useRef<HTMLLIElement>(null);
@@ -510,6 +510,7 @@ const catalogKeyOf = (key: string) => (key.startsWith("card:") ? key.slice(5) : 
 const instanceSeat = (table: MatchTable, instance: string): Seat =>
   table.view.seats[table.them].discard.includes(instance) ? table.them : table.me;
 
+/** The type line of a card: Tactic, Leader or its row. */
 const kindLabel = (card: KessenCardDisplay) => {
   if (card.kind === "TACTIC") return "Tactic";
   if (card.kind === "LEADER") return "Leader";

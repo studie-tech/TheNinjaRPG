@@ -1,7 +1,8 @@
 /**
  * Pure reward math of Kessen NPC matches: eligibility, daily caps, ryo, first-win grants,
- * seeded drop-table rolls and dupe protection over owned quantities. The router applies
- * the plan with SQL increments and day and week guards; nothing here reads a clock.
+ * seeded drop-table rolls and dupe protection over owned quantities.
+ * `server/utils/kessenPayout.ts` applies the plan with SQL increments and day and week
+ * guards; nothing here reads a clock.
  */
 import {
   KESSEN_COPY_LIMITS,
@@ -47,6 +48,7 @@ export const selectWeighted = <K extends string>(
   return null;
 };
 
+/** The drop table an NPC rolls on. */
 export type KessenDropTableKey = "NOVICE" | "ADEPT" | "MASTER" | "KAGE";
 
 export interface KessenDropTable {
@@ -100,6 +102,7 @@ export const copiesByName = (owned: OwnedCounts, cards: Iterable<KessenCard>) =>
 export const isMaxed = (card: KessenCard, byName: ReadonlyMap<string, number>) =>
   (byName.get(copyKey(card)) ?? 0) >= KESSEN_COPY_LIMITS[card.rarity];
 
+/** A `dupeProtectedPick` result. */
 export interface ProtectedPick {
   card: KessenCard;
   /** The first pick was maxed and a non-maxed card replaced it. */
@@ -141,6 +144,7 @@ export interface DropRollInput {
   byName: ReadonlyMap<string, number>;
 }
 
+/** What `rollNpcDrop` dropped: a card, a Forbidden variant, both or neither. */
 export interface DropRollResult {
   card: ProtectedPick | null;
   /** The rarity rolled (before downgrading to one the pool has); null without a drop. */
@@ -184,6 +188,7 @@ export const rollNpcDrop = (input: DropRollInput): DropRollResult => {
   return { card, rarity, forbidden };
 };
 
+/** A finished match from the player's side. */
 export type KessenOutcome = "win" | "loss" | "draw";
 /** How a match ended: through play, a concession or idle expiry. */
 export type KessenMatchEnd = "play" | "concede" | "expire";
@@ -211,11 +216,13 @@ export interface EligibilityInput {
   plays: readonly [number, number];
 }
 
+/** Whether a match pays a reward, with the player-facing reason when it does not. */
 export type Eligibility = { eligible: true } | { eligible: false; reason: string };
 
 /**
- * Anti-farm guards: the match ended through play, lasted 90 s, had 8 card
- * plays in total, and a loss or draw needs 4 plays by the player.
+ * Anti-farm guards: the match ended through play, lasted `KESSEN_MIN_MATCH_SECONDS`, had
+ * `KESSEN_MIN_TOTAL_PLAYS` card plays in total, and a loss or draw needs
+ * `KESSEN_MIN_LOSER_PLAYS` plays by the player.
  */
 export const rewardEligibility = (input: EligibilityInput): Eligibility => {
   if (input.endedBy !== "play") {
@@ -262,7 +269,8 @@ export const weeklyWinsFor = (stored: KessenWeeklyCounter | null, weekKey: strin
 
 /**
  * Ryo of a rewarded result; `winIndex` is today's 1-based win count against this NPC
- * including this win (wins 1-4 full, 5-6 half, later none).
+ * including this win: full pay up to `KESSEN_NPC_FULL_PAY_WINS`, half up to
+ * `KESSEN_NPC_HALF_PAY_WINS`, none after. Losses and draws pay the tier's loss ryo.
  */
 export const matchRyo = (
   tier: KessenTier,
@@ -298,6 +306,7 @@ export interface PayoutInput {
 export const KESSEN_CHALLENGE_UNREWARDED =
   "Quest challenges pay only their quest objective.";
 
+/** What one finished match pays, and the counters to write with it. */
 export interface PayoutPlan {
   rewarded: boolean;
   /** Why the match pays nothing; null when rewarded. */
@@ -312,8 +321,9 @@ export interface PayoutPlan {
 }
 
 /**
- * Applies the daily cap (12 rewarded matches), the drop cap (5 rolls), per-NPC
- * diminishing ryo and the weekly first win to one finished match.
+ * Applies the daily caps (`KESSEN_DAILY_REWARDED_MATCHES` rewarded matches,
+ * `KESSEN_DAILY_DROP_ROLLS` drop rolls), per-NPC diminishing ryo and the weekly first win
+ * to one finished match.
  */
 export const planMatchPayout = (input: PayoutInput): PayoutPlan => {
   const counters = dailyCountersFor(input.counters, input.dayKey);

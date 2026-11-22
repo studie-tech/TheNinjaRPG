@@ -1005,8 +1005,9 @@ export const computeAutoEquipAssignments = (
 };
 
 /**
- * Kessen goods that can never be sold or dropped: leaders, Forbidden variants and the
- * First Bundle. Selling one would destroy it for no ryo and could break a saved deck.
+ * Kessen goods that are never sold to the shop or dropped: leaders, Forbidden variants
+ * and the First Bundle (tradeable ones can still be auctioned). Selling one would destroy
+ * it for no ryo and could break a saved deck.
  */
 export const isUnsellableCard = (
   item: Pick<Item, "id" | "itemType" | "cardData">,

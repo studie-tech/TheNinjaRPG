@@ -152,8 +152,9 @@ export const cardDataSchema = z
 export type CardData = z.output<typeof cardDataSchema>;
 
 /**
- * No ability asks for a choice after revealing hidden information, so the
- * client can compute every choice from its own view. Summon and All Hands (and Revive,
+ * Why an ability list breaks the hidden-information rule, or null: no ability may ask for
+ * a choice after revealing hidden information, so the client can compute every choice
+ * from its own view. Summon and All Hands (and Revive,
  * whose revived card may Summon) put deck cards on your side; Draw and Infiltrator put
  * deck cards in your hand. A later choice must not depend on what they revealed.
  */
@@ -198,6 +199,7 @@ const readsOwnBoard = (ability: KessenAbility, next: KessenAbility | undefined) 
   }
 };
 
+/** The card field of the item validator; `SuperRefineCardItem` requires it on cards only. */
 export const cardItemSchema = z.object({
   cardData: cardDataSchema.nullable().prefault(null),
 });

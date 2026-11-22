@@ -86,6 +86,10 @@ export const getItemPurchaseAllowance = (
   };
 };
 
+/**
+ * Error for a purchase over its allowance; a sold-out Village Bundle explains the shared
+ * weekly limit and when it resets.
+ */
 export const itemPurchaseLimitMessage = (
   allowance: ReturnType<typeof getItemPurchaseAllowance>,
   itemId: string,

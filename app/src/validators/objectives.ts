@@ -888,8 +888,9 @@ export const DamageDealt = z.object({
 });
 
 /**
- * Rewarded-eligible Kessen wins against NPCs (lessons excluded). `npcKey` (an NPC key
- * such as "kazehiko"; empty for any) and `tier` ("ANY" for every tier) narrow the wins.
+ * Reward-eligible Kessen wins against Circuit NPCs or in ranked duels (lessons and quest
+ * challenge matches excluded). `npcKey` (an NPC key such as "kazehiko", or "ranked";
+ * empty for any) and `tier` ("ANY" for every tier; ranked wins have none) narrow them.
  */
 export const WinCardDuel = z.object({
   ...baseObjectiveFields,

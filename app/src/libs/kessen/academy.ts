@@ -48,6 +48,7 @@ export interface KessenAcademyLessonInfo {
   rewardRyo: number;
 }
 
+/** Every lesson in series order, as the Card Hall lists it. */
 export const KESSEN_ACADEMY: readonly KessenAcademyLessonInfo[] =
   KESSEN_ACADEMY_LESSONS.map((lesson, index) => ({
     key: lesson.key,
@@ -62,14 +63,10 @@ export const KESSEN_ACADEMY: readonly KessenAcademyLessonInfo[] =
     rewardRyo: KESSEN_ACADEMY_LESSON_RYO,
   }));
 
+/** Whether a stored or requested value names an Academy lesson. */
 export const isAcademyLessonKey = (key: unknown): key is KessenAcademyLessonKey =>
   typeof key === "string" &&
   (KESSEN_ACADEMY_LESSON_KEYS as readonly string[]).includes(key);
-
-const definition = (key: KessenAcademyLessonKey): AcademyLessonDefinition =>
-  KESSEN_ACADEMY_LESSONS.find(
-    (lesson) => lesson.key === key,
-  ) as AcademyLessonDefinition;
 
 /**
  * Lesson keys completed in `KessenProgress.academy` (lesson key to the completing
@@ -105,6 +102,10 @@ export interface KessenAcademyProgress {
   graduationPackId: string;
 }
 
+/**
+ * The player's Academy standing from `KessenProgress.academy` and the match that
+ * graduated them (null until the whole series is complete).
+ */
 export const academyProgress = (
   academy: Readonly<Record<string, string>> | null | undefined,
   graduatedMatchId: string | null | undefined,
@@ -329,6 +330,7 @@ export type AcademyTargetName =
   | "unit"
   | "confirm";
 
+/** The control a coach step rings and, for keyed targets, which one. */
 export interface AcademyTarget {
   target: AcademyTargetName;
   key?: string;
@@ -349,6 +351,7 @@ export interface AcademyUiState {
   playOn?: boolean;
 }
 
+/** One coach prompt of a lesson table (`academyCoach`). */
 export interface AcademyCoachStep extends AcademyTarget {
   /** `guide` asks for the next tap; `mistake` explains why the last move was worse. */
   tone: "guide" | "mistake";
@@ -530,6 +533,12 @@ const targetStep = (
     action: wanted,
   };
 };
+
+/** A lesson's definition by key; every key names one. */
+const definition = (key: KessenAcademyLessonKey): AcademyLessonDefinition =>
+  KESSEN_ACADEMY_LESSONS.find(
+    (lesson) => lesson.key === key,
+  ) as AcademyLessonDefinition;
 
 const isRowName = (target: string): target is Row =>
   target === "CLOSE" || target === "RANGED" || target === "JUTSU";

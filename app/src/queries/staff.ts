@@ -1113,7 +1113,6 @@ export const updateUserHomeForUpdateUserId = (
     .set({ userId: input.newUserId })
     .where(eq(userHome.userId, input.userId));
 
-/** Build the `table` update for `updateUserId`, setting `userId`, using the configured predicates. */
 /** Build the `kessenMatch` update for `updateUserId`, setting `opponentId` (seat 1 of duels). */
 export const updateKessenMatchForUpdateUserId = (
   client: Pick<DrizzleClient, "update">,
@@ -1124,6 +1123,7 @@ export const updateKessenMatchForUpdateUserId = (
     .set({ opponentId: input.newUserId })
     .where(eq(kessenMatch.opponentId, input.userId));
 
+/** Build the `table` update for `updateUserId`, setting `userId`, using the configured predicates. */
 export const updateTableForUpdateUserId = (
   client: Pick<DrizzleClient, "update">,
   table: import("drizzle-orm/mysql-core").MySqlTable & {

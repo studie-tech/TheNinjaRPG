@@ -97,6 +97,7 @@ export const turnErrorOf = (s: MatchState, seat: Seat) => {
   return null;
 };
 
+/** Whether `seat` has a leader whose ability is unused. */
 export const leaderAvailable = (s: MatchState, seat: Seat) =>
   s.seats[seat].leader !== null && !s.seats[seat].leaderUsed;
 
@@ -173,6 +174,7 @@ export const actionError = (
   }
 };
 
+/** One placement row of `rowOptions`. */
 export interface RowOption {
   row: Row;
   /** The side the unit joins (the opponent's for Infiltrators). */
@@ -246,6 +248,7 @@ export const legalActions = (
   return out.slice(0, limit);
 };
 
+/** Depth-first walk of `base`'s target choices, appending each legal complete action. */
 const expandTargets = (
   s: MatchState,
   seat: Seat,
@@ -981,7 +984,7 @@ interface KessenSignal {
 }
 
 /**
- * Resolution signals are thrown as plain objects: AI searches raise thousands per
+ * Resolution signals are thrown as a non-`Error` class: AI searches raise thousands per
  * decision, and an `Error` would capture a stack trace for each.
  */
 class KessenSignalThrow {

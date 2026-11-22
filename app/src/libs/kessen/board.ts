@@ -15,6 +15,7 @@ import type {
   Unit,
 } from "./types";
 
+/** A unit with the side and row it stands on. */
 export interface UnitRef {
   unit: Unit;
   side: Seat;
@@ -25,6 +26,7 @@ export const other = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
 
 export const isTokenId = (id: string) => id.startsWith(TOKEN_PREFIX);
 
+/** Catalog card of an instance; undefined for a hidden or unknown instance. */
 export const cardOf = (s: MatchState, id: string): KessenCard | undefined => {
   const cardId = s.inst[id];
   return cardId === undefined ? undefined : s.cards[cardId];
@@ -109,6 +111,7 @@ export const displayedPower = (s: MatchState, ref: UnitRef) => {
   return afflicted ? Math.max(1, raw - s.knobs.terrainPenalty) : raw;
 };
 
+/** Sum of displayed power on one row. */
 export const rowTotal = (s: MatchState, side: Seat, row: Row) => {
   let total = 0;
   for (const unit of s.board[side][row])
@@ -167,6 +170,7 @@ export const sideTotal = (s: MatchState, side: Seat) => {
   return total;
 };
 
+/** Round totals, seat 0 first. */
 export const totals = (s: MatchState): [number, number] => [
   sideTotal(s, 0),
   sideTotal(s, 1),
@@ -228,6 +232,7 @@ export const place = (
   return { unit, side: input.side, row: input.row };
 };
 
+/** Takes a unit off its row without moving it to any zone. */
 export const removeUnit = (s: MatchState, ref: UnitRef) => {
   const row = s.board[ref.side][ref.row];
   const index = row.findIndex((unit) => unit.id === ref.unit.id);
@@ -285,6 +290,7 @@ const anyDepleted = (s: MatchState) => {
   return false;
 };
 
+/** Removes a unit to its owner's discard (tokens are banished) and records the event. */
 export const destroyUnit = (
   s: MatchState,
   events: KessenEvent[],

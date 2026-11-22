@@ -10,6 +10,7 @@ export const CARD_ENGINE_VERSION = 3;
 /** Board rows from the centre line outward; also the canonical row order. */
 export const ROWS: readonly Row[] = ["CLOSE", "RANGED", "JUTSU"];
 
+/** Lanterns each seat starts with; a lost round (both on a tie) costs one. */
 export const LANTERNS = 2;
 export const START_HAND = 10;
 export const LAST_ROUND = 3;

@@ -152,6 +152,12 @@ export const useDeckChoice = (
   return { value, setValue, borrowFaction, setBorrowFaction, deck, source, label };
 };
 
+const DECK_OPTION =
+  "flex cursor-pointer items-center gap-2 rounded-md border bg-card p-2 font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:ring-1 has-[[data-state=checked]]:ring-primary/40";
+
+const BORROW = "__borrow__";
+
+/** `useDeckChoice`'s state: the picker renders it and the caller's start sends `source`. */
 export interface DeckChoice {
   /** A saved deck id, or the borrowed deck. */
   value: string;
@@ -160,12 +166,8 @@ export interface DeckChoice {
   setBorrowFaction: (faction: DeckFaction) => void;
   /** The chosen saved deck; null for the borrowed deck. */
   deck: KessenDeckSummary | null;
+  /** What a match start sends for the chosen deck. */
   source: KessenDeckSource;
   /** "Fire Lotus", "Fire Lotus + borrowed copies" or "Borrowed Hyorin deck". */
   label: string;
 }
-
-const DECK_OPTION =
-  "flex cursor-pointer items-center gap-2 rounded-md border bg-card p-2 font-normal has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:ring-1 has-[[data-state=checked]]:ring-primary/40";
-
-const BORROW = "__borrow__";

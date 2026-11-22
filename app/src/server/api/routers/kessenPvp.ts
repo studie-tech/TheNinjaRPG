@@ -89,9 +89,8 @@ const idSchema = z.string().min(1).max(191);
 
 /**
  * Live Kessen duels between players: friendly challenges (no rewards, no rating) and the
- * ranked queue (Elo rating, modest ryo and a weekly pack). Every duel change is one
- * version CAS followed by a `{ version }` push on the duel's channel; each seat
- * refetches its own redacted view with `getMatch`, which also applies clocks that ran out.
+ * ranked queue (Elo rating, modest ryo and a weekly pack). Every duel change runs through
+ * `advanceKessenDuel`; each seat refetches its own redacted view with `getMatch`.
  */
 export const kessenPvpRouter = createTRPCRouter({
   getLobby: protectedProcedure
@@ -836,8 +835,7 @@ const buildDuelDeck = (input: {
   return { leaderId: deck.leaderId, cards: deck.cards, borrowed: deck.borrowed };
 };
 
-type Duelist = Awaited<ReturnType<typeof listKessenDuelists>>[number];
-
+/** A player who can duel: a real character, neither banned nor scheduled for deletion. */
 const isActivePlayer = (player: Duelist | undefined): player is Duelist =>
   !!player && !player.isAi && !player.isBanned && !player.deletionAt;
 
@@ -850,8 +848,7 @@ const duelPlayer = (player: Duelist, rating: number | null) => ({
   rating,
 });
 
-type ActiveRow = Awaited<ReturnType<typeof listActiveKessenMatchesForPlayers>>[number];
-
+/** The seat `userId` holds in a match, or null when they do not sit in it. */
 const seatOf = (
   row: Pick<ActiveRow, "userId" | "opponentId">,
   userId: string,
@@ -873,8 +870,7 @@ const isLiveChallenge = (
   now: Date,
 ) => request.status === "PENDING" && request.createdAt >= challengeCutoff(now);
 
-type RequestRow = Awaited<ReturnType<typeof fetchRequests>>[number];
-
+/** A KESSEN request as the lobby lists it for `userId`. */
 const challengeOf = (request: RequestRow, userId: string): KessenChallenge => {
   const outgoing = request.senderId === userId;
   const other = outgoing ? request.receiver : request.sender;
@@ -897,6 +893,7 @@ const challengeOf = (request: RequestRow, userId: string): KessenChallenge => {
   };
 };
 
+/** The lobby's ranked standing; counters of an earlier day or week read as zero. */
 const rankedSummary = (
   progress: KessenProgress | null,
   now: Date,
@@ -944,3 +941,9 @@ const activeDuelOf = (
         : standing.phase === "play" && standing.turn === seat,
   };
 };
+
+type Duelist = Awaited<ReturnType<typeof listKessenDuelists>>[number];
+
+type ActiveRow = Awaited<ReturnType<typeof listActiveKessenMatchesForPlayers>>[number];
+
+type RequestRow = Awaited<ReturnType<typeof fetchRequests>>[number];

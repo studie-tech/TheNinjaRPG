@@ -1489,7 +1489,7 @@ export interface ShopCatalogOverrides {
   headerExtra?: ReactNode;
 }
 
-/** What `item.getPurchaseAllowance` reports for one listing. */
+/** One listing's entry in `item.getPurchaseAllowances`, the stall's batched read. */
 interface StallAllowance {
   period: string;
   limit: number | null;

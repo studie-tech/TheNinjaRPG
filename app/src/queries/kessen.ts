@@ -147,10 +147,9 @@ export const listActiveKessenMatches = (
 /**
  * The player's finished matches that granted a first win, with the kind of their
  * first-win choice, its number of options and whether it is still unclaimed
- * (`claimedType` is `NULL`). A first
- * win writes the match's `finishedAt` and the NPC record's first-win time from one clock
- * reading, so the join on them finds exactly those matches; the choice is read only for
- * the joined rows.
+ * (`claimedType` is `NULL`). A first win writes the match's `finishedAt` and the NPC
+ * record's first-win time from one clock reading, so the join on them finds exactly
+ * those matches; the choice is read only for the joined rows.
  */
 export const listKessenFirstWinChoices = (
   client: Pick<DrizzleClient, "select">,
@@ -257,6 +256,7 @@ export const listKessenPackStacks = (
     )
     .orderBy(userItem.id);
 
+/** The player's saved decks, oldest first. */
 export const listKessenDecks = (
   client: Pick<DrizzleClient, "select">,
   userId: string,
@@ -307,6 +307,7 @@ export const insertKessenDeck = (
   },
 ) => client.insert(kessenDeck).values(deck);
 
+/** Rewrites one of the player's decks; no affected row when the player has no such deck. */
 export const updateKessenDeck = (
   client: Pick<DrizzleClient, "update">,
   userId: string,
@@ -323,6 +324,7 @@ export const updateKessenDeck = (
     .set(deck)
     .where(and(eq(kessenDeck.id, deckId), eq(kessenDeck.userId, userId)));
 
+/** Deletes one of the player's decks; no affected row when the player has no such deck. */
 export const deleteKessenDeck = (
   client: Pick<DrizzleClient, "delete">,
   userId: string,
@@ -552,7 +554,10 @@ export const updateKessenMatchForTurn = (
       ),
     );
 
-/** Rewrites the stored result of a finished match (claims, payout corrections); CAS on version. */
+/**
+ * Rewrites the stored result of a finished match (its settled payout, a first-win pick);
+ * CAS on version.
+ */
 export const updateKessenMatchResult = (
   client: Pick<DrizzleClient, "update">,
   match: { id: string; userId: string; version: number },

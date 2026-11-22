@@ -9,10 +9,11 @@ import { cn } from "@/libs/shadui";
 import { isUsableHighlightRect, type TutorialScreenBox } from "@/libs/tutorial";
 
 /**
- * The tutorial's spotlight over the viewport: the page dims around one control, an amber ring marks it and a hand points at it. The layer lets
- * every tap through except where `children` (placed inside the ring) take them, so the
- * real control under the hole receives the press. It is portalled into the body as a
- * `data-battle-focus-layer`, so a focus view keeps it interactive.
+ * The tutorial's spotlight over the viewport: the page dims around one control, an amber
+ * ring marks it and a hand points at it. The layer lets every tap through except where
+ * `children` (placed inside the ring) take them, so the real control under the hole
+ * receives the press. It is portalled into the body as a `data-battle-focus-layer`, so a
+ * focus view keeps it interactive.
  */
 export const Spotlight = ({
   box,
@@ -174,9 +175,10 @@ export const SpotlightPointer = ({ box }: { box: SpotlightBox }) => {
 };
 
 /**
- * The highlight is re-measured four times a second so it follows an element that moves. Almost
- * none of those measurements differ, and storing an equal box would re-render the whole
- * overlay for nothing, so the position setters keep the previous object when it has not moved.
+ * Whether two highlight boxes are equal. The highlight is re-measured four times a second
+ * so it follows an element that moves; almost none of those measurements differ, and
+ * storing an equal box would re-render the whole overlay for nothing, so the position
+ * setters keep the previous object when it has not moved.
  */
 export const isSameBox = (a: SpotlightBox, b: SpotlightBox) =>
   a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
@@ -296,6 +298,7 @@ const HOLE_PADDING_PX = 8;
 /** Space between a marked element and its dashed ring. */
 const MARK_PADDING_PX = 3;
 
+/** A highlighted element's viewport box. */
 export type SpotlightBox = TutorialScreenBox;
 
 /** A marked element's box and name; `key` tells marks apart across measurements. */

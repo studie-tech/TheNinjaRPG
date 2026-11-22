@@ -8,6 +8,7 @@
 /** The four 32-bit words of an sfc32 generator, JSON-serialisable. */
 export type RngState = [number, number, number, number];
 
+/** A seeded sfc32 generator (`createRng`, `rngFromState`). */
 export interface Rng {
   /** Next unsigned 32-bit integer. */
   next: () => number;
@@ -69,8 +70,8 @@ export const createRng = (seed: string): Rng => {
 };
 
 /**
- * A named stream of a match seed: `engine` (shuffle and coin), `ai:<seat>`,
- * `loaner:<seat>`. Streams never share state, so one consumer cannot shift another.
+ * A named stream of a match seed: `engine` (shuffle and coin), `ids` (instance labels),
+ * `ai:<seat>:<step>`. Streams never share state, so one consumer cannot shift another.
  */
 export const createStream = (matchSeed: string, name: string) =>
   createRng(`${matchSeed}#${name}`);

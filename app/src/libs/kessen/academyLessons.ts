@@ -20,6 +20,7 @@ import type {
   Seat,
 } from "./types";
 
+/** Lesson keys in series order; stored as the keys of `KessenProgress.academy`. */
 export const KESSEN_ACADEMY_LESSON_KEYS = [
   "first-blood",
   "enough",
@@ -54,6 +55,7 @@ export type AcademyAdvice =
       action: KessenAction | null;
     };
 
+/** One lesson: its texts, starting position, Lemu's script and the coach. */
 export interface AcademyLessonDefinition {
   key: KessenAcademyLessonKey;
   title: string;
@@ -921,6 +923,7 @@ const leadersMoment: AcademyLessonDefinition = {
   },
 };
 
+/** Every lesson, in the order of `KESSEN_ACADEMY_LESSON_KEYS`. */
 export const KESSEN_ACADEMY_LESSONS: readonly AcademyLessonDefinition[] = [
   firstBlood,
   enough,

@@ -26,6 +26,7 @@ export const KESSEN_KEYWORDS = [
 ] as const;
 export type KessenKeyword = (typeof KESSEN_KEYWORDS)[number];
 
+/** Player-facing row names. */
 export const ROW_LABELS: Record<Row, string> = {
   CLOSE: "Taijutsu",
   RANGED: "Bukijutsu",
@@ -86,6 +87,7 @@ export const KESSEN_TERMS = {
   Token: "Created by a rule; banished at round end and never enters a discard.",
 } as const;
 
+/** A run of card text; keyword runs are marked for colouring and tooltips. */
 export type TextSegment =
   | { t: "text"; s: string }
   | { t: "kw"; kw: KessenKeyword; s: string };

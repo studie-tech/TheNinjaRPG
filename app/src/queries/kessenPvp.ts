@@ -54,7 +54,7 @@ export const findKessenPvpMatch = (
     )
     .limit(1);
 
-/** A duel by id, for work no player drives (the clock sweep). */
+/** A duel by id without a seat check, for callers that already hold the row or the sweep. */
 export const findKessenPvpMatchById = (
   client: Pick<DrizzleClient, "select">,
   matchId: string,
@@ -68,8 +68,8 @@ export const findKessenPvpMatchById = (
 /**
  * ACTIVE matches of any kind on the current rules that one of `userIds` sits in, without
  * their state: the one-active-match guard and the lobby's duel summary. `standing` is
- * one JSON text with the engine's phase, turn and both seats' pending mulligans, and
- * `players` the duel's player snapshot.
+ * one JSON text with the engine's phase, turn, both seats' pending mulligans and the
+ * duel's player names (`names`).
  */
 export const listActiveKessenMatchesForPlayers = (
   client: Pick<DrizzleClient, "select">,
@@ -474,6 +474,7 @@ export const findKessenRankedQueueRow = (
     .where(eq(kessenRankedQueue.userId, userId))
     .limit(1);
 
+/** Queues the player; a second row for the same player fails on the primary key. */
 export const insertKessenRankedQueue = (
   client: Pick<DrizzleClient, "insert">,
   row: { userId: string; rating: number; deck: KessenDeckSource; now: Date },

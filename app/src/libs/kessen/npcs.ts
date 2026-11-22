@@ -23,6 +23,7 @@ import type { KessenCard, MatchRules } from "./types";
 
 /** Power a unit kept on the board gains under Junko's Ascended Blood Moon. */
 const BLOOD_MOON_CARRY = 2;
+/** Keys of every NPC, Lemu included, in roster order. */
 export const KessenNpcKeys = KESSEN_NPC_KEYS;
 export type KessenNpcKey = (typeof KessenNpcKeys)[number];
 
@@ -32,11 +33,13 @@ export type KessenCircuitMode = (typeof KESSEN_CIRCUIT_MODES)[number];
 /** Every NPC match mode: an Academy lesson at Lemu's table, or a Circuit match. */
 export type KessenNpcMode = "lesson" | KessenCircuitMode;
 
+/** An NPC deck: its leader and card counts. */
 export interface KessenNpcDeck {
   leaderId: string;
   cards: KessenDeckCard[];
 }
 
+/** Items a reward grants. */
 export interface KessenItemGrant {
   itemId: string;
   quantity: number;
@@ -63,6 +66,7 @@ export interface KessenFirstWinReward {
   title?: string;
 }
 
+/** A variant's named rule as the pre-match screen prints it; `MatchRules` enforce it. */
 export interface KessenHouseRule {
   name: string;
   text: string;
@@ -78,6 +82,7 @@ export interface KessenNpcVariant {
   firstWin: KessenFirstWinReward;
 }
 
+/** When an NPC's standard match opens (`npcLockReason`). */
 export type KessenNpcUnlock =
   | { kind: "always" }
   /** Every listed NPC beaten in its standard mode. */
@@ -100,6 +105,7 @@ export interface KessenBarks {
 /** An NPC's AI personality; the tier comes from the variant being played. */
 export type KessenNpcAiProfile = Omit<KessenAiProfile, "tier">;
 
+/** One Circuit opponent: identity, unlock, variants, barks and AI personality. */
 export interface KessenNpc {
   key: KessenNpcKey;
   name: string;
@@ -946,6 +952,7 @@ export interface KessenCircuitProgress {
   homeFaction: DeckFaction | null;
 }
 
+/** Keys of the village champions, in roster order. */
 export const championKeys = () =>
   KESSEN_NPCS.filter((npc) => npc.champion).map((npc) => npc.key);
 

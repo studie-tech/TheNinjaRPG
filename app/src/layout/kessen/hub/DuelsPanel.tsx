@@ -666,6 +666,7 @@ type DuelActions = {
   isLeaving: boolean;
 };
 
+/** What the hall passes the Duels tab; the tab loads the lobby and ladder itself. */
 export interface DuelsPanelProps {
   decks: readonly KessenDeckSummary[];
   defaultDeckId: string | null;
@@ -681,6 +682,7 @@ export interface DuelsPanelProps {
   onResumeNpc: (matchId: string) => void;
 }
 
+/** `DuelsPanelProps` plus the loaded lobby, ladder and lobby actions. */
 export interface DuelsViewProps extends DuelsPanelProps {
   lobby: KessenPvpLobby;
   leaderboard: KessenLeaderboard | null;

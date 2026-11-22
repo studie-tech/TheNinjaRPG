@@ -48,6 +48,7 @@ import type {
  */
 export const KESSEN_AI_VERSION = 2;
 
+/** AI strength tiers, weakest first (`KESSEN_AI_TIER_SPECS`). */
 export const KESSEN_AI_TIERS = ["GENIN", "CHUNIN", "JONIN", "KAGE"] as const;
 export type KessenAiTier = (typeof KESSEN_AI_TIERS)[number];
 
@@ -57,6 +58,7 @@ export type KessenAiSignatureRule =
   | { hold: "untilEnemyRowUnits"; row: Row; min: number }
   | { hold: "untilTargetStored"; min: number };
 
+/** A signature hint bound to one card of the NPC's deck. */
 export interface KessenAiSignature {
   /** Item id of the card in the NPC's deck. */
   cardId: string;
@@ -68,7 +70,7 @@ export interface KessenAiProfile {
   tier: KessenAiTier;
   /** Extra lead in points (-3..+3) required before a voluntary pass. */
   passLeadOffset?: number;
-  /** Percent applied to every retention weight (80..120). */
+  /** Percent applied to every retention weight (clamped to 50..150). */
   lambdaScale?: number;
   /** Minimum gain in points before the leader is used outside the final round. */
   leaderThreshold?: number;
@@ -91,6 +93,7 @@ export interface KessenAiContext {
   budget?: number;
 }
 
+/** `decideWithTrace`'s action with the rule that chose it and its cost. */
 export interface KessenAiDecision {
   action: KessenAction;
   /** The policy rule that decided. */
@@ -103,6 +106,7 @@ export interface KessenAiDecision {
   fallback: boolean;
 }
 
+/** The search and noise settings of one AI tier. */
 export interface KessenAiTierSpec {
   /** Percent chance to take the second-best play on a non-critical decision. */
   mistakePct: number;

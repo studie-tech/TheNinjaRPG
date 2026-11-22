@@ -64,6 +64,7 @@ export interface KessenKnobs {
   riggedOddsR3: boolean;
 }
 
+/** Terrain a house rule lays on `row` at the start of each listed round. */
 export interface StartTerrain {
   row: Row;
   rounds: number[];
@@ -92,6 +93,7 @@ export interface MatchRules {
   knobs?: Partial<KessenKnobs>;
 }
 
+/** Everything `createMatch` needs; `cards` must cover every card id the seats name. */
 export interface CreateMatchInput {
   seed: string;
   seats: [SeatSetup, SeatSetup];
@@ -108,13 +110,16 @@ export interface Unit {
   sealed: boolean;
   /** Power gained through Meditate so far. */
   med: number;
+  /** Resilient: the unit stays on the board through the next cleanup. */
   res: boolean;
+  /** Match-wide placement order (`MatchState.seq` when it was placed). */
   seq: number;
 }
 
 export type SideBoard = Record<Row, Unit[]>;
 export type SideTerrain = Record<Row, boolean>;
 
+/** One seat's full, unredacted state; `SeatView` is what a player may see of it. */
 export interface SeatState {
   leader: string | null;
   faction: KessenFaction;
@@ -135,6 +140,7 @@ export interface SeatState {
   sun: boolean;
 }
 
+/** A finished round's totals and winner, kept in `MatchState.history`. */
 export interface RoundResult {
   round: number;
   totals: [number, number];
@@ -145,7 +151,12 @@ export interface RoundResult {
 
 export type MatchPhase = "mulligan" | "play" | "over";
 
+/**
+ * The authoritative, unredacted match, JSON-serialisable and fully determined by `seed`
+ * and the applied actions; a player sees it through `viewFor`.
+ */
 export interface MatchState {
+  /** `CARD_ENGINE_VERSION` the match was created under. */
   v: number;
   seed: string;
   rules: MatchRules;
@@ -154,6 +165,7 @@ export interface MatchState {
   cards: Record<string, KessenCard>;
   /** Instance id to card id. */
   inst: Record<string, string>;
+  /** Tokens created so far; numbers the next token's instance id. */
   tokens: number;
   /** Match-wide placement counter. */
   seq: number;
@@ -176,12 +188,14 @@ export interface MatchState {
 /** Unit or card instance id, or a row name for row choices. */
 export type Target = string;
 
+/** One player decision; the engine validates it against the current state. */
 export type KessenAction =
   | { t: "play"; card: string; row?: Row; targets?: Target[] }
   | { t: "leader"; row?: Row; targets?: Target[] }
   | { t: "pass" }
   | { t: "mull"; cards: string[] };
 
+/** How a unit reached the board. */
 export type PlacementSource =
   | "hand"
   | "summon"
@@ -195,6 +209,7 @@ export type BoostCause = "empower" | "meditate" | "sun" | "highNoon" | "carry";
 /** `depleted`: a unit that entered at stored <= 0, such as a 0-power Shadow Clone. */
 export type DestroyCause = "strike" | "purge" | "depleted";
 
+/** What applying an action did, in order; clients animate and narrate from these. */
 export type KessenEvent =
   | { t: "roundStart"; round: number; opener: Seat }
   | { t: "drawn"; seat: Seat; cards: string[]; banked: number }
@@ -255,6 +270,7 @@ export type KessenEvent =
   | { t: "cleanup"; kept: string[]; discarded: string[]; banished: string[] }
   | { t: "matchEnd"; winner: Seat | null };
 
+/** A new state and its events, or why the action was rejected (the state is untouched). */
 export type ApplyResult =
   | { ok: true; state: MatchState; events: KessenEvent[] }
   | { ok: false; reason: string };
@@ -290,6 +306,7 @@ export type TargetStatus =
 /** Effects a preview cannot resolve because they reveal hidden cards. */
 export type HiddenEffect = "draw" | "summon";
 
+/** A seat as `MatchView` shows it: counts instead of the hidden hand and deck. */
 export interface SeatView {
   leader: string | null;
   faction: KessenFaction;
@@ -334,6 +351,7 @@ export interface MatchView {
   result: { winner: Seat | null } | null;
 }
 
+/** One unit whose displayed power a previewed action changes. */
 export interface UnitDelta {
   id: string;
   cardId: string;
@@ -345,6 +363,7 @@ export interface UnitDelta {
   after: number | null;
 }
 
+/** The board a complete action leads to, without revealing hidden cards. */
 export type PreviewResult =
   | {
       ok: true;
@@ -370,6 +389,7 @@ export type PartialOption =
     }
   | { target: Target; ok: false; reason: string };
 
+/** The board a partial action leads to so far, and where each next option leads. */
 export type PartialPreview =
   | {
       ok: true;

@@ -176,13 +176,14 @@ export type KessenCatalogEntry = KessenCard & {
 /** Slot odds of a pack tier in basis points (out of 10,000). */
 export type KessenPackOdds = Record<ItemRarity | "FORBIDDEN", number>;
 
+/** A card pack of the catalog with the odds and slots read from its stored caches. */
 export interface KessenPackEntry {
   id: string;
   name: string;
   image: string;
   description: string;
   odds: { normal: KessenPackOdds; rareSlot: KessenPackOdds };
-  /** Cards a pack opens per slot kind, from its stored caches (`kessenPackSlotLabels`). */
+  /** Cards the pack opens per slot kind; `kessenPackSlotLabels` words them. */
   slots: KessenPackSlots;
 }
 
@@ -192,7 +193,9 @@ export interface KessenPackSlots {
   rareSlot: number;
 }
 
+/** What `kessen.getCatalog` returns: every card and pack, the same for every player. */
 export interface KessenCatalog {
+  /** Hash of the engine-relevant card fields (`catalogFingerprint`). */
   fingerprint: string;
   cards: KessenCatalogEntry[];
   packs: KessenPackEntry[];
@@ -234,7 +237,6 @@ export interface KessenCircuitEntry {
   recommendedLesson: KessenAcademyLessonKey | null;
 }
 
-/** Everything the Card Hall lobby needs for the signed-in player. */
 /** One stack of unopened packs in the inventory. */
 export interface KessenOwnedPack {
   userItemId: string;
@@ -243,6 +245,7 @@ export interface KessenOwnedPack {
   quantity: number;
 }
 
+/** Everything the Card Hall lobby needs for the signed-in player. */
 export interface KessenHub {
   progress: {
     lessonCompleted: boolean;
@@ -555,6 +558,7 @@ export interface KessenLeaderboardEntry {
   draws: number;
 }
 
+/** What `kessenPvp.getLeaderboard` returns: the top of the ladder and the viewer's place. */
 export interface KessenLeaderboard {
   entries: KessenLeaderboardEntry[];
   /** The viewer's place; null before their first rated match. */

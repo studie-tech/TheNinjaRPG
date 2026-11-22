@@ -22,6 +22,7 @@ export const KESSEN_DECK_FACTIONS = [
   "SYNDICATE",
 ] as const satisfies readonly DeckFaction[];
 
+/** Rarities from lowest to highest. */
 export const KESSEN_RARITY_ORDER: readonly KessenRarity[] = [
   "COMMON",
   "RARE",
@@ -64,6 +65,7 @@ export const KESSEN_LOANER = {
   },
 } as const;
 
+/** Per-category caps the deck generator keeps (on top of the deck rules). */
 export interface KessenDeckQuotas {
   tacticsMax: number;
   terrainMax: number;
@@ -99,6 +101,7 @@ export type DeckErrorCode =
   | "budget"
   | "notOwned";
 
+/** One broken deck rule; `itemId` names the card or leader at fault. */
 export interface DeckError {
   code: DeckErrorCode;
   message: string;
@@ -110,12 +113,13 @@ export interface DeckStats {
   units: number;
   tactics: number;
   provision: number;
-  /** 150 + the leader's bonus; 0 without a valid leader. */
+  /** `KESSEN_DECK_RULES.baseBudget` + the leader's bonus; 0 without a valid leader. */
   budget: number;
   legendaries: number;
   infiltrators: number;
 }
 
+/** `validateDeck`'s verdict with the deck's totals. */
 export interface DeckValidation {
   ok: boolean;
   errors: DeckError[];
@@ -127,7 +131,7 @@ export interface ValidateDeckOptions {
   owned?: OwnedQuantities;
   /** Copies that need no ownership (loaner stamps). */
   borrowed?: readonly KessenDeckCard[];
-  /** Kage boss decks: a non-collectible leader and up to 3 legendaries. */
+  /** Kage boss decks: a non-collectible leader and up to `bossMaxLegendaries` legendaries. */
   boss?: boolean;
 }
 
@@ -171,6 +175,7 @@ export const expandDeckCards = (cards: readonly KessenDeckCard[]) =>
 export const collapseDeckCards = (ids: readonly string[]) =>
   normalizeDeckCards(ids.map((itemId) => ({ itemId, count: 1 })));
 
+/** Total copies in a deck list. */
 export const deckSize = (cards: readonly KessenDeckCard[]) =>
   cards.reduce((sum, entry) => sum + entry.count, 0);
 
@@ -336,6 +341,7 @@ export const validateDeck = (
   return { ok: errors.length === 0, errors, stats };
 };
 
+/** A starter-deck entry by card slug. */
 const e = (slug: string, count: number): KessenDeckCard => ({
   itemId: `kessen-${slug}`,
   count,
@@ -669,6 +675,46 @@ export const autoBuild = (input: AutoBuildInput): BuiltDeck | null => {
     : null;
 };
 
+/**
+ * A player's deck for one match: a saved deck of owned copies, today's loaner of a
+ * faction, or a saved deck completed with borrowed cards. `deckRow` is the saved deck
+ * the source names (null when it no longer exists).
+ */
+export const buildPlayerDeck = (input: {
+  source: PlayerDeckSource;
+  deckRow: { leaderItemId: string; cards: { itemId: string; count: number }[] } | null;
+  userId: string;
+  dayKey: string;
+  pool: readonly KessenCard[];
+  owned: OwnedQuantities;
+}): Pick<BuiltDeck, "leaderId" | "cards" | "borrowed"> | { error: string } => {
+  const { source } = input;
+  if (source.source === "loaner") {
+    return loanerDeck({
+      userId: input.userId,
+      dayKey: input.dayKey,
+      faction: source.faction,
+      cards: input.pool,
+    });
+  }
+  if (!input.deckRow) return { error: "That deck no longer exists." };
+  const deck = { leaderId: input.deckRow.leaderItemId, cards: input.deckRow.cards };
+  if (source.source === "fill") {
+    const filled = fillWithBorrowed({
+      userId: input.userId,
+      dayKey: input.dayKey,
+      deck,
+      owned: input.owned,
+      cards: input.pool,
+    });
+    return filled ?? { error: "This deck cannot be completed with borrowed cards." };
+  }
+  const check = validateDeck(deck, catalogById(input.pool), { owned: input.owned });
+  if (!check.ok)
+    return { error: check.errors[0]?.message ?? "This deck is not valid." };
+  return { leaderId: deck.leaderId, cards: deck.cards, borrowed: [] };
+};
+
 /** Hash of the owned copies of a pool, so auto-build changes when the collection does. */
 export const collectionHash = (pool: readonly KessenCard[], owned: OwnedQuantities) =>
   hashString(
@@ -981,43 +1027,3 @@ export type PlayerDeckSource =
   | { source: "saved"; deckId: string }
   | { source: "loaner"; faction: DeckFaction }
   | { source: "fill"; deckId: string };
-
-/**
- * A player's deck for one match: a saved deck of owned copies, today's loaner of a
- * faction, or a saved deck completed with borrowed cards. `deckRow` is the saved deck
- * the source names (null when it no longer exists).
- */
-export const buildPlayerDeck = (input: {
-  source: PlayerDeckSource;
-  deckRow: { leaderItemId: string; cards: { itemId: string; count: number }[] } | null;
-  userId: string;
-  dayKey: string;
-  pool: readonly KessenCard[];
-  owned: OwnedQuantities;
-}): Pick<BuiltDeck, "leaderId" | "cards" | "borrowed"> | { error: string } => {
-  const { source } = input;
-  if (source.source === "loaner") {
-    return loanerDeck({
-      userId: input.userId,
-      dayKey: input.dayKey,
-      faction: source.faction,
-      cards: input.pool,
-    });
-  }
-  if (!input.deckRow) return { error: "That deck no longer exists." };
-  const deck = { leaderId: input.deckRow.leaderItemId, cards: input.deckRow.cards };
-  if (source.source === "fill") {
-    const filled = fillWithBorrowed({
-      userId: input.userId,
-      dayKey: input.dayKey,
-      deck,
-      owned: input.owned,
-      cards: input.pool,
-    });
-    return filled ?? { error: "This deck cannot be completed with borrowed cards." };
-  }
-  const check = validateDeck(deck, catalogById(input.pool), { owned: input.owned });
-  if (!check.ok)
-    return { error: check.errors[0]?.message ?? "This deck is not valid." };
-  return { leaderId: deck.leaderId, cards: deck.cards, borrowed: [] };
-};

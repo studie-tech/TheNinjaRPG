@@ -299,6 +299,10 @@ const stepFx = (event: KessenEvent): PlaybackFx | null => {
   }
 };
 
+/**
+ * How long a step holds: its full beat with motion, at most 140 ms without, except round
+ * ends and house-rule stamps, which keep their reading time either way.
+ */
 const stepDuration = (
   event: KessenEvent,
   previous: KessenEvent | null,
@@ -376,6 +380,7 @@ const removeUnit = (view: MatchView, id: string) => {
 /** One action that swings the totals by this much earns a "Big Play" callout. */
 export const BIG_PLAY_SWING = 10;
 
+/** The animation a step plays on the units (or row) it touches. */
 export type PlaybackFxKind =
   | "placed"
   /** The player's own card settling where its ghost already stood. */
@@ -394,6 +399,7 @@ export type PlaybackFxKind =
   | "sweep"
   | "terrain";
 
+/** One step's visual effect: its kind, the unit ids it lands on and its amount. */
 export interface PlaybackFx {
   ids: string[];
   kind: PlaybackFxKind;
@@ -403,6 +409,7 @@ export interface PlaybackFx {
   row?: { side: Seat; row: Row };
 }
 
+/** One event of a playback, with the board to show and how long to show it (ms). */
 export interface PlaybackStep {
   event: KessenEvent;
   /** The board shown while this step plays (removals show the unit leaving). */

@@ -28,6 +28,7 @@ export type AcademyUnitSpec =
   | string
   | { card: string; stored?: number; sealed?: boolean; med?: number };
 
+/** One seat of a prepared position, as plain card ids. */
 export interface AcademySideSpec {
   leader?: string | null;
   leaderUsed?: boolean;
@@ -41,6 +42,7 @@ export interface AcademySideSpec {
   played?: number;
 }
 
+/** A prepared lesson position, built into a state by `buildAcademyPosition`. */
 export interface AcademyPositionSpec {
   round: number;
   opener: Seat;

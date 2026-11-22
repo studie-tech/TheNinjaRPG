@@ -46,9 +46,6 @@ import {
 import { PackArt } from "./PacksPanel";
 import { useReturnFocus } from "./useReturnFocus";
 
-/** What the start controls ask the server for. */
-export type KessenStartRequest = KessenStartInput;
-
 /**
  * NPC detail and start sheet (the game's side sheet): portrait with its bark, house rule,
  * the keywords the NPC teaches, the first-win reward and the start controls (saved deck,
@@ -681,3 +678,6 @@ type NpcDetailProps = {
   /** Opens a match: the unfinished one, or a won one whose first-win card is open. */
   onResume: (matchId: string) => void;
 };
+
+/** What the start controls ask the server for. */
+export type KessenStartRequest = KessenStartInput;

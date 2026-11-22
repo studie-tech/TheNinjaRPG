@@ -86,28 +86,19 @@ import {
   whereToFind,
 } from "./hubData";
 
-/** What a save sends; resolve with the saved deck's id to keep editing it. */
-export type KessenDeckSaveInput = {
-  id?: string;
-  name: string;
-  leaderItemId: string;
-  cards: KessenDeckCard[];
-};
-
 /**
- * Deck builder: leader plate, provision meter, counters and row split on
- * top of the deck list; the owned collection as a filterable card grid with copy counts,
- * unowned cards greyed with where to get them. Auto-build assembles a deck from owned
- * cards; Fill with borrowed completes a short deck with loaner copies (shown with a LOAN
- * stamp). A saved deck holds owned cards only: one that is merely short is saved as is
- * and every match fills it with borrowed copies again. Inline validation
- * explains every broken rule; a tap that cannot add a card says why over the card. Copies
- * listed at the auction house keep a card in the owned pool with a "listed" mark, but
- * only free copies join a deck. Narrow containers and short
- * landscape screens switch to Collection | Deck tabs with a deck bar pinned to the bottom
- * of the screen. Unsaved edits are marked, survive leaving
- * the tab (session storage) and are confirmed before another deck replaces them; a
- * leader switch that drops cards and a deletion are confirmed in the game's dialogs.
+ * Deck builder: leader plate, provision meter, counters and row split on top of the deck
+ * list; the owned collection as a filterable card grid with copy counts, unowned cards
+ * greyed with where to get them. Auto-build assembles a deck from owned cards; Fill with
+ * borrowed completes a short deck with loaner copies (shown with a LOAN stamp). A saved
+ * deck holds owned cards only: one that is merely short is saved as is and every match
+ * fills it with borrowed copies again. Inline validation explains every broken rule; a
+ * tap that cannot add a card says why over the card. Copies listed at the auction house
+ * keep a card in the owned pool with a "listed" mark, but only free copies join a deck.
+ * Narrow containers and short landscape screens switch to Collection | Deck tabs with a
+ * deck bar pinned to the bottom of the screen. Unsaved edits are marked, survive leaving
+ * the tab (session storage) and are confirmed before another deck replaces them; a leader
+ * switch that drops cards and a deletion are confirmed in the game's dialogs.
  */
 export const DeckBuilder = ({
   cards,
@@ -1476,7 +1467,7 @@ const useInDialog = (ref: RefObject<HTMLElement | null>) => {
   return inDialog;
 };
 
-/** Keep in step with `@container kh-builder (min-width: 620px)` in hub.css. */
+/** Keep in step with `@container kh-builder (min-width: 620px)` in builder.css. */
 const SIDE_BY_SIDE_WIDTH = 620;
 /** Keep in step with `@media (min-height: 521px)` around the side-by-side layout. */
 const SIDE_BY_SIDE_MIN_HEIGHT = 521;
@@ -1808,4 +1799,12 @@ type Draft = {
   counts: Record<string, number>;
   /** Copies lent by Fill with borrowed (part of `counts`). */
   borrowed: Record<string, number>;
+};
+
+/** What a save sends; resolve with the saved deck's id to keep editing it. */
+export type KessenDeckSaveInput = {
+  id?: string;
+  name: string;
+  leaderItemId: string;
+  cards: KessenDeckCard[];
 };

@@ -640,6 +640,7 @@ export const placementSide = (view: MatchView, instance: string, me: Seat): Seat
   return infiltrator ? other(me) : me;
 };
 
+/** Whether a target request asks for a row. */
 export const isRowKind = (kind: TargetRequest["kind"]) =>
   kind === "enemyRow" || kind === "ownRow" || kind === "anyRow";
 
@@ -663,9 +664,11 @@ export const rowRequestAccepts = (
   return request.kind === "enemyRow" ? side !== me : side === me;
 };
 
+/** Whether a target request asks for a unit on the board. */
 export const isUnitKind = (kind: TargetRequest["kind"]) =>
   kind === "enemyUnit" || kind === "ownUnit" || kind === "anyUnit";
 
+/** Whether a target request picks a card from a discard or the hand. */
 export const isPickerKind = (kind: TargetRequest["kind"]) =>
   kind === "discard" || kind === "enemyDiscard" || kind === "hand";
 
@@ -718,6 +721,7 @@ const summaryOf = (
 
 const readQuickPlay = () => safeLocalStorageGetItem(QUICK_PLAY_KEY) === "1";
 
+/** Device storage of the quick-play toggle (a complete row tap plays at once). */
 const QUICK_PLAY_KEY = "kessen:quickPlay";
 
 /**
@@ -972,6 +976,7 @@ const EMPTY_DRAFT: Draft = { card: null, action: null };
 /** What the table shows: a match against an NPC (or a lesson), or a duel seat's view. */
 export type KessenTablePayload = KessenMatchPayload | KessenPvpMatchPayload;
 
+/** Whether the table shows a duel (PvP payloads carry `kind`). */
 export const isDuelPayload = (
   payload: KessenTablePayload,
 ): payload is KessenPvpMatchPayload => "kind" in payload;
@@ -1005,6 +1010,7 @@ interface Playback {
   serial: number;
 }
 
+/** One row a selected unit could take: open with its ghost, or closed with a reason. */
 export interface RowChoice {
   row: Row;
   side: Seat;
@@ -1048,6 +1054,7 @@ export interface SentPlacement {
   rowAfter: number;
 }
 
+/** One option of a target request with its short outcome; `danger` marks a kill. */
 export interface TargetOption {
   target: string;
   ok: boolean;
@@ -1059,6 +1066,7 @@ export interface TargetOption {
   option: PartialOption;
 }
 
+/** The match table state and handlers every table component reads. */
 export type MatchTable = ReturnType<typeof useMatchTable>;
 
 /** The inspected key and whether it was read from a discard. */

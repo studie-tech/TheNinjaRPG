@@ -86,25 +86,7 @@ import type {
  * are settled once, after the ending write, through guarded claims.
  */
 
-/** A decision of one seat for `advanceKessenDuel`. */
-export type KessenDuelDecision =
-  | { seat: Seat; action: KessenAction; version: number }
-  | { seat: Seat; concede: true };
-
-/** What `advanceKessenDuel` did. */
-export interface KessenDuelAdvance {
-  /** The row as it stands after this call (refetched when another request won). */
-  row: KessenMatch;
-  /** Unredacted events this call committed, oldest first. */
-  events: KessenEvent[];
-  /** Why the decision was not applied; null when it was, or when none was given. */
-  refused: string | null;
-  /** Another request changed the duel first; nothing of this call was written. */
-  lost: boolean;
-  /** What the settlement paid, and to whom. */
-  paid: { userId: string; ryo: number; grants: ItemGrant[] } | null;
-}
-
+/** The refusal of a decision made against an outdated version of the duel. */
 export const STALE_DUEL_MESSAGE = "This match moved on; showing the latest turn.";
 const RULES_CHANGED_MESSAGE =
   "The Kessen rules changed since this match began, so it ended without a result.";
@@ -524,16 +506,6 @@ export const createKessenDuel = async (
   return { row };
 };
 
-/** One player of `createKessenDuel`. */
-export interface KessenDuelSeat {
-  player: KessenPvpPlayer;
-  deck: {
-    leaderId: string;
-    cards: { itemId: string; count: number }[];
-    borrowed: { itemId: string; count: number }[];
-  };
-}
-
 /** One seat's view of a duel row. */
 export const kessenDuelPayload = (
   row: KessenMatch,
@@ -668,13 +640,6 @@ export const planKessenDuelEnd = (input: {
   };
 };
 
-/** How a duel ends, in engine seats. */
-export interface DuelEnding {
-  winner: Seat | null;
-  endedBy: KessenPvpEnd;
-  loserBy: Seat | null;
-}
-
 /** Reads what the ranked plan needs (both players' progress, today's rated pairs) and plans. */
 const planDuelEnd = async (
   client: DrizzleClient,
@@ -727,6 +692,7 @@ const lostAdvance = async (
   };
 };
 
+/** The row as this call's version CAS left it; a terminal `status` also sets `finishedAt`. */
 const nextRow = (
   row: KessenMatch,
   state: KessenStoredPvpMatch,
@@ -843,3 +809,39 @@ const viewResult = (
     settling: stored.settling,
   };
 };
+
+/** A decision of one seat for `advanceKessenDuel`. */
+export type KessenDuelDecision =
+  | { seat: Seat; action: KessenAction; version: number }
+  | { seat: Seat; concede: true };
+
+/** What `advanceKessenDuel` did. */
+export interface KessenDuelAdvance {
+  /** The row as it stands after this call (refetched when another request won). */
+  row: KessenMatch;
+  /** Unredacted events this call committed, oldest first. */
+  events: KessenEvent[];
+  /** Why the decision was not applied; null when it was, or when none was given. */
+  refused: string | null;
+  /** Another request changed the duel first; nothing of this call was written. */
+  lost: boolean;
+  /** What the settlement paid, and to whom. */
+  paid: { userId: string; ryo: number; grants: ItemGrant[] } | null;
+}
+
+/** One player of `createKessenDuel`. */
+export interface KessenDuelSeat {
+  player: KessenPvpPlayer;
+  deck: {
+    leaderId: string;
+    cards: { itemId: string; count: number }[];
+    borrowed: { itemId: string; count: number }[];
+  };
+}
+
+/** How a duel ends, in engine seats. */
+export interface DuelEnding {
+  winner: Seat | null;
+  endedBy: KessenPvpEnd;
+  loserBy: Seat | null;
+}

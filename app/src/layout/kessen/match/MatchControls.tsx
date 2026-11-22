@@ -247,6 +247,7 @@ export const ActionBar = ({
   );
 };
 
+/** The pass button, armed for a second tap as `ActionBar` describes. */
 const PassControl = ({
   table,
   lesson,

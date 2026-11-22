@@ -5349,7 +5349,7 @@ export const KESSEN_NPC_HALF_PAY_WINS = 6;
 export const KESSEN_MIN_MATCH_SECONDS = 90;
 export const KESSEN_MIN_TOTAL_PLAYS = 8;
 export const KESSEN_MIN_LOSER_PLAYS = 4;
-/** An idle match expires as an unrewarded loss after this long. */
+/** An NPC match left idle this long expires without a reward; duels end by their clock. */
 export const KESSEN_MATCH_IDLE_EXPIRY_HOURS = 24;
 
 /**

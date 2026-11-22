@@ -251,10 +251,11 @@ const SideTotal = ({
 export const leaderSeatOf = (key: string | null): Seat | null =>
   key === "leader:0" ? 0 : key === "leader:1" ? 1 : null;
 
-export type HandSort = "row" | "power" | "order";
-
 const SORT_LABEL: Record<HandSort, string> = {
   row: "Row",
   power: "Power",
   order: "Drawn",
 };
+
+/** The hand's order: by row, by power, or as drawn. */
+export type HandSort = "row" | "power" | "order";

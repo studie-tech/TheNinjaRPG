@@ -588,17 +588,6 @@ export const kessenRouter = createTRPCRouter({
 });
 
 const STARTING_MESSAGE = "Another match is starting; try again in a moment.";
-
-/** A rejected start; the ids name the match that blocks it. */
-type KessenStartFailure = {
-  success: false;
-  message: string;
-  activeMatchId?: string;
-  activeDuelId?: string;
-};
-type KessenStartResult =
-  | KessenStartFailure
-  | { success: true; message: string; match: KessenMatchPayload };
 const CONCEDED_REASON = "Conceded matches pay no reward.";
 
 const UNREWARDED_RESULT: KessenMatchResult = {
@@ -792,6 +781,7 @@ const storedOf = (row: Pick<KessenMatch, "state">) =>
 const asJson = (stored: KessenStoredMatch) =>
   stored as unknown as Record<string, unknown>;
 
+/** Cards played from hand per seat once `events` are added, for the eligibility guard. */
 const addPlays = (
   plays: [number, number],
   events: readonly KessenEvent[],
@@ -843,6 +833,7 @@ const findTableChallenge = (
   return { npcKey: objective.npcKey, tier: objective.tier };
 };
 
+/** What the Circuit's unlock rules (`npcLockReason`) read from the player's records. */
 const circuitProgress = (
   progress: KessenProgress | null,
   npcRows: readonly KessenNpcProgress[],
@@ -1054,3 +1045,15 @@ const matchStanding = (
     yourTurn: fields.phase === "mulligan" ? fields.mull != null : fields.turn === 0,
   };
 };
+
+/** A rejected start; the ids name the match that blocks it. */
+type KessenStartFailure = {
+  success: false;
+  message: string;
+  activeMatchId?: string;
+  activeDuelId?: string;
+};
+
+type KessenStartResult =
+  | KessenStartFailure
+  | { success: true; message: string; match: KessenMatchPayload };

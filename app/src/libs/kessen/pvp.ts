@@ -1,3 +1,10 @@
+/**
+ * Live duels between two players. Every decision runs on a clock: the Round mulligans
+ * share one window for both seats, every play-phase decision gets its own. A seat whose
+ * clock runs out keeps its hand (mulligan) or passes the round (play), which counts as a
+ * timeout; `KESSEN_PVP_MAX_TIMEOUTS` timeouts forfeit the match. A disconnect is only
+ * missed clocks, so a player who leaves loses within a few minutes.
+ */
 import {
   KESSEN_MIN_LOSER_PLAYS,
   KESSEN_MIN_MATCH_SECONDS,
@@ -18,14 +25,6 @@ import { other } from "./board";
 import { actingSeats, applyAction } from "./engine";
 import type { Eligibility } from "./rewards";
 import type { KessenAction, KessenEvent, MatchState, Seat } from "./types";
-
-/**
- * Live duels between two players. Every decision runs on a clock: the Round mulligans
- * share one window for both seats, every play-phase decision gets its own. A seat whose
- * clock runs out keeps its hand (mulligan) or passes the round (play), which counts as a
- * timeout; `KESSEN_PVP_MAX_TIMEOUTS` timeouts forfeit the match. A disconnect is only
- * missed clocks, so a player who leaves loses within a few minutes.
- */
 
 /** Seconds the decision `state` waits on may take. */
 export const kessenClockSeconds = (state: MatchState) =>

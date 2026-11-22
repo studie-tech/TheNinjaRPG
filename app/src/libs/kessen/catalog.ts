@@ -7,6 +7,7 @@ import { canonicalJson } from "./engine";
 import { hashString } from "./rng";
 import type { KessenCard, KessenRarity } from "./types";
 
+/** Prefix of every Kessen card item id. */
 export const KESSEN_ID_PREFIX = "kessen-";
 
 /** URL-safe slug of a card name: "Ava, the Snow Terror" becomes "ava-the-snow-terror". */
@@ -69,6 +70,7 @@ export const ownedCardCounts = (
   return { all, free, listed };
 };
 
+/** Engine card of an item and its parsed `cardData`. */
 export const cardDataToKessenCard = (
   item: { id: string; name: string; rarity: KessenRarity },
   data: CardData,
@@ -89,7 +91,7 @@ export const cardDataToKessenCard = (
   isCollectible: data.isCollectible,
 });
 
-/** `cardData` for a card, with optional display fields (seed migrations, item editor). */
+/** `cardData` of an engine card; display fields take defaults unless given. */
 export const kessenCardToCardData = (
   card: KessenCard,
   display: { flavor?: string; artUrl?: string; focalX?: number; focalY?: number } = {},
@@ -115,7 +117,7 @@ export const kessenCardToCardData = (
 export const copyKey = (card: Pick<KessenCard, "id" | "baseCardId">) =>
   card.baseCardId ?? card.id;
 
-/** The engine fields of every card, sorted by id. */
+/** The engine fields of the cards (only those in `ids` when given), sorted by id. */
 export const snapshotCatalog = (
   cards: Iterable<KessenCard>,
   ids?: Iterable<string>,

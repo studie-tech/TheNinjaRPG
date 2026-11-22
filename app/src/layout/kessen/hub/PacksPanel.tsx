@@ -34,7 +34,6 @@ import {
 } from "../kessenArt";
 import { RarityGem } from "../RarityGem";
 
-/** One stack of an owned pack, opened through its user item. */
 /**
  * The player's packs as item tiles with Open buttons in a fixed order (Paper, Village,
  * Lacquer, First), the pity counters, the auto-sell switch with what a sale pays, and a
@@ -188,24 +187,6 @@ export const PacksPanel = ({
   );
 };
 
-/** Fixed tile order of the pack kinds. */
-const packOrder = (itemId: string) =>
-  itemId === KESSEN_PACK_IDS.paper
-    ? 0
-    : kessenVillagePackFaction(itemId)
-      ? 1
-      : itemId === KESSEN_PACK_IDS.lacquer
-        ? 2
-        : itemId === KESSEN_PACK_IDS.first
-          ? 3
-          : 4;
-
-/** "50 / 200 / 1,000 / 5,000": what a surplus copy of each rarity sells for. */
-const sellValues = () =>
-  (["COMMON", "RARE", "EPIC", "LEGENDARY"] as const)
-    .map((rarity) => KESSEN_CARD_SELL_VALUES[rarity].toLocaleString())
-    .join(" / ");
-
 /** "Epic within 3 packs · Legendary within 23 packs". */
 export const PityLine = ({
   pity,
@@ -302,6 +283,24 @@ const PackOdds = ({ pack }: { pack: KessenPackEntry }) => {
     </Popover>
   );
 };
+
+/** Fixed tile order of the pack kinds. */
+const packOrder = (itemId: string) =>
+  itemId === KESSEN_PACK_IDS.paper
+    ? 0
+    : kessenVillagePackFaction(itemId)
+      ? 1
+      : itemId === KESSEN_PACK_IDS.lacquer
+        ? 2
+        : itemId === KESSEN_PACK_IDS.first
+          ? 3
+          : 4;
+
+/** "50 / 200 / 1,000 / 5,000": what a surplus copy of each rarity sells for. */
+const sellValues = () =>
+  (["COMMON", "RARE", "EPIC", "LEGENDARY"] as const)
+    .map((rarity) => KESSEN_CARD_SELL_VALUES[rarity].toLocaleString())
+    .join(" / ");
 
 const ODDS_TIERS: readonly KessenRarityTier[] = [
   "COMMON",

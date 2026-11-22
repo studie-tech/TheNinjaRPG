@@ -338,8 +338,8 @@ export const RoundEndOverlay = ({
  * parting line, the rounds, what it paid (ryo, drops and first-win cards flipping in, a
  * first-win pick) and then Rematch / Edit deck. With cards or a pick to show, tables
  * from 540 px wide set the story and actions beside the rewards so the pick, Take and
- * the actions stay in view. Reward cards are read by hover (the
- * side panel), long-press, focus or tap. A finished lesson shows Lemu's debrief instead:
+ * the actions stay in view. Reward cards are read by hover (the side panel), long-press,
+ * focus or tap. A finished lesson shows Lemu's debrief instead:
  * why it was won or lost, the lesson's idea in one sentence, its reward, and the next
  * lesson (or "Try again"); the first lesson leads on to the faction choice, the last one
  * closes with the six faction perks.
