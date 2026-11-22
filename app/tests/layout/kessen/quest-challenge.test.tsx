@@ -1,0 +1,98 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
+import { KessenQuestChallenge } from "@/layout/KessenQuestChallenge";
+import type { KessenDeckSummary } from "@/layout/kessen/hub/hubData";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
+
+const DECK: KessenDeckSummary = {
+  id: "deck-1",
+  name: "Frost Wall",
+  faction: "HYORIN",
+  leaderName: "Hisame",
+  provision: 150,
+  budget: 160,
+  cards: 25,
+  ready: true,
+  fillable: true,
+  problem: null,
+};
+
+const CHALLENGE = {
+  quest: { id: "q1", name: "Cards at Dusk" },
+  objective: {
+    id: "duel",
+    task: "win_kessen_challenge",
+    npcKey: "kazehiko",
+    tier: "standard",
+    description: "",
+    sector: 724,
+    longitude: 10,
+    latitude: 7,
+    hideLocation: false,
+  },
+  done: false,
+  available: true,
+  atLocation: true,
+} as unknown as ComponentProps<typeof KessenQuestChallenge>["challenge"];
+
+const renderBriefing = (
+  patch: Partial<ComponentProps<typeof KessenQuestChallenge>> = {},
+) => {
+  const onStart = vi.fn();
+  render(
+    <KessenQuestChallenge
+      challenge={CHALLENGE}
+      opponent={undefined}
+      decks={[DECK]}
+      defaultDeckId={DECK.id}
+      loanerFaction="HYORIN"
+      isStarting={false}
+      error={null}
+      onStart={onStart}
+      {...patch}
+    />,
+  );
+  return { onStart };
+};
+
+beforeEach(() => {
+  installBrowserGlobals({ scrollIntoView: true, resizeObserver: true });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  restoreBrowserGlobals();
+});
+
+describe("KessenQuestChallenge", () => {
+  it("offers the deck picker and a seat when nothing is unfinished", () => {
+    const { onStart } = renderBriefing();
+    fireEvent.click(screen.getByRole("button", { name: /Take a seat/ }));
+    expect(onStart).toHaveBeenCalledWith({ source: "saved", deckId: DECK.id });
+  });
+
+  it("leads back to an unfinished duel and says why the seat is closed", () => {
+    const onOpen = vi.fn();
+    const { onStart } = renderBriefing({
+      resume: {
+        label: "Resume your duel vs Rival",
+        unfinished: "Your duel against Rival",
+        onOpen,
+      },
+    });
+    expect(
+      screen.getByText(
+        "Your duel against Rival is unfinished. Finish or concede it before you take a seat.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Take a seat/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Resume your duel vs Rival/ }));
+    expect(onOpen).toHaveBeenCalled();
+    expect(onStart).not.toHaveBeenCalled();
+  });
+});

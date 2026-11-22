@@ -425,6 +425,13 @@ button.kh-deckchip:focus-visible {
   .kh-deckchip-prov-label {
     display: none;
   }
+  /* The figures may start a line of their own, so a little space leads them, not a dot. */
+  .kh-deckchip-tail {
+    margin-left: 4px;
+  }
+  .kh-deckchip-tail > .kh-deckchip-dot:first-child {
+    display: none;
+  }
 }
 @container kh-hall (max-width: 599px) {
   .kh-hall-body {

@@ -734,7 +734,7 @@ const PackOdds = ({
         <thead>
           <tr className="border-b">
             <th className="p-1">Pack</th>
-            <th className="p-1">Slots</th>
+            <th className="p-1 whitespace-nowrap">Slots</th>
             {RARITY_COLUMNS.map(([rarity, label]) => (
               <th key={rarity} className="p-1">
                 {label}
@@ -747,7 +747,7 @@ const PackOdds = ({
             packSlotsOf(pack.slots).map(([slot, slotLabel], index) => (
               <tr key={`${pack.id}-${slot}`} className="border-b last:border-0">
                 <td className="p-1 font-bold">{index === 0 ? pack.name : ""}</td>
-                <td className="p-1">{slotLabel}</td>
+                <td className="p-1 whitespace-nowrap">{slotLabel}</td>
                 {RARITY_COLUMNS.map(([rarity]) => (
                   <td key={rarity} className="p-1">
                     {percent(pack.odds[slot][rarity])}

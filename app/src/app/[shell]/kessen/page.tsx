@@ -600,6 +600,12 @@ function KessenHall() {
         }
       : null;
 
+  // The unfinished NPC match as a sentence's subject, for the notices that block a start.
+  const npcMatchSubject = hub.activeMatch
+    ? hub.activeMatch.lesson
+      ? `Your lesson "${lessonTitle(hub.activeMatch.lesson)}"`
+      : `Your match against ${npcName(hub.activeMatch.npcKey)}`
+    : null;
   // Banner buttons back to the table: first-win picks left open, then the active match.
   const lobbyDuel = lobby?.activeMatch ?? null;
   const hallActions: HallActionEntry[] =
@@ -615,6 +621,7 @@ function KessenHall() {
                   duel: true,
                   label: `Resume your duel vs ${lobbyDuel.opponent.username}`,
                   detail: lobbyDuel.yourTurn ? "Your turn" : "Their turn",
+                  unfinished: `Your duel against ${lobbyDuel.opponent.username}`,
                 } satisfies HallActionEntry,
               ]
             : []),
@@ -638,6 +645,7 @@ function KessenHall() {
                     ? `Resume lesson: ${lessonTitle(hub.activeMatch.lesson)}`
                     : `Resume vs ${npcName(hub.activeMatch.npcKey)}`,
                   detail: activeMatchStateText(hub.activeMatch),
+                  unfinished: npcMatchSubject ?? undefined,
                 } satisfies HallActionEntry,
               ]
             : []),
@@ -655,6 +663,8 @@ function KessenHall() {
       onStart={(lessonKey) => void startLessonMatch(lessonKey)}
     />
   );
+  const openHallAction = (action: HallActionEntry) =>
+    action.duel ? openDuel(action.matchId) : openMatch(action.matchId);
   const header = (
     <HallHeader
       today={onboarding ? null : hub.today}
@@ -666,9 +676,7 @@ function KessenHall() {
           key={action.key}
           focusOnMount={leftTable && index === 0}
           onFocused={() => setLeftTable(false)}
-          onClick={() =>
-            action.duel ? openDuel(action.matchId) : openMatch(action.matchId)
-          }
+          onClick={() => openHallAction(action)}
         >
           <span className="kh-hall-action-icon" aria-hidden>
             {action.kind === "pick" ? (
@@ -689,12 +697,13 @@ function KessenHall() {
   );
 
   // A quest's Duel at the Table: its briefing takes the hall's place until a table opens.
-  // An unfinished match blocks a new start, so the briefing leads back to its table.
+  // An unfinished duel or match blocks a new start, so the briefing leads back to its
+  // table; the duel comes first, as in the server's start guard.
   if (challengeRequest && !scene) {
     const found = questUser
       ? findQuestChallenge(questUser, challengeRequest, "win_kessen_challenge")
       : null;
-    const resume = hallActions.find((action) => action.key === "resume");
+    const resume = hallActions.find((action) => action.kind === "resume");
     return (
       <HallBox subtitle="Duel at the Table" backHref={QUEST_LOGBOOK_HREF}>
         <KessenQuestChallenge
@@ -705,8 +714,15 @@ function KessenHall() {
           loanerFaction={hub.loanerFaction}
           isStarting={isStarting}
           error={startError}
-          resumeLabel={resume?.label}
-          onResume={resume ? () => openMatch(resume.matchId) : undefined}
+          resume={
+            resume?.unfinished
+              ? {
+                  label: resume.label,
+                  unfinished: resume.unfinished,
+                  onOpen: () => openHallAction(resume),
+                }
+              : undefined
+          }
           onStart={(deck) => {
             if (!found || isStarting) return;
             void startMatch({
@@ -880,13 +896,8 @@ function KessenHall() {
             defaultDeckId={playDeck?.id ?? null}
             loanerFaction={hub.loanerFaction}
             npcMatch={
-              hub.activeMatch
-                ? {
-                    id: hub.activeMatch.id,
-                    label: hub.activeMatch.lesson
-                      ? `Your lesson "${lessonTitle(hub.activeMatch.lesson)}"`
-                      : `Your match against ${npcName(hub.activeMatch.npcKey)}`,
-                  }
+              hub.activeMatch && npcMatchSubject
+                ? { id: hub.activeMatch.id, label: npcMatchSubject }
                 : null
             }
             queueMessage={queuePolling.message}
@@ -1426,4 +1437,6 @@ type HallActionEntry = {
   label: string;
   /** Where the match stands, under the label ("Round 2 · 1–0 · your turn"). */
   detail?: string;
+  /** A match to resume, as a sentence's subject ("Your duel against Rival"). */
+  unfinished?: string;
 };
