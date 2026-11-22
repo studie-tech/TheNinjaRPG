@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, Layers, Loader2, Swords } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -44,6 +44,7 @@ export function ChallengeButton({
   className,
 }: ChallengePanelProps & { className?: string }) {
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -57,9 +58,16 @@ export function ChallengeButton({
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        ref={panelRef}
+        tabIndex={-1}
         align="end"
         collisionPadding={8}
         className="max-h-[var(--radix-popover-content-available-height)] w-[320px] overflow-y-auto p-[8px]"
+        // Focus the panel, not its first Send button, so an extra Enter sends nothing.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          panelRef.current?.focus();
+        }}
       >
         <ChallengePanel opponent={opponent} conversationId={conversationId} />
       </PopoverContent>
@@ -194,11 +202,14 @@ function SparOption({ opponent, conversationId }: ChallengePanelProps) {
           onChange={setUseRankedRules}
           label="Ranked rules"
           hint={`Ranked loadouts, level ${MAX_PLAYER_LEVEL} stats, no LP rewards`}
+          className={OPTION_TEXT}
+          hintClassName={OPTION_TEXT}
         />
         <OptionCheckbox
           checked={spectatable}
           onChange={setSpectatable}
           label="Allow spectators"
+          className={OPTION_TEXT}
         />
       </div>
     </ChallengeOption>
@@ -436,6 +447,9 @@ function ChallengeOption({
     </section>
   );
 }
+
+/** The spar settings' type, matching an option's description line. */
+const OPTION_TEXT = "text-[12px] leading-snug";
 
 /** Select values of the borrowed decks, followed by the faction. */
 const BORROWED = "borrowed:";

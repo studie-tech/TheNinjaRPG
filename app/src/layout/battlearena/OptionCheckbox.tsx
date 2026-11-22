@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/libs/shadui";
 
 /**
  * A challenge setting with its hint below the label. Ids are per instance, since the
@@ -12,15 +13,20 @@ export function OptionCheckbox({
   onChange,
   label,
   hint,
+  className,
+  hintClassName,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label: string;
   hint?: string;
+  /** Overrides the row's type size, for panels with their own scale. */
+  className?: string;
+  hintClassName?: string;
 }) {
   const id = useId();
   return (
-    <div className="flex items-start gap-2 text-sm">
+    <div className={cn("flex items-start gap-2 text-sm", className)}>
       <Checkbox
         id={id}
         checked={checked}
@@ -28,7 +34,11 @@ export function OptionCheckbox({
       />
       <label htmlFor={id}>
         {label}
-        {hint && <span className="text-muted-foreground block text-xs">{hint}</span>}
+        {hint && (
+          <span className={cn("text-muted-foreground block text-xs", hintClassName)}>
+            {hint}
+          </span>
+        )}
       </label>
     </div>
   );

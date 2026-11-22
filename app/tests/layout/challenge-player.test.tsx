@@ -4,7 +4,11 @@ import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import * as Hub from "@/hooks/kessen/useKessenHub";
 import * as Lobby from "@/hooks/kessen/useKessenPvpLobby";
-import { ChallengeMatchNotice, ChallengePanel } from "@/layout/ChallengePlayer";
+import {
+  ChallengeButton,
+  ChallengeMatchNotice,
+  ChallengePanel,
+} from "@/layout/ChallengePlayer";
 import type { KessenDeckSummary } from "@/layout/kessen/hub/hubData";
 import * as HubData from "@/layout/kessen/hub/hubData";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
@@ -156,6 +160,19 @@ describe("challenge panel", () => {
     expect(send.hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("link", { name: "Open the Card Hall" })).toBeTruthy();
     expect(duel).not.toHaveBeenCalled();
+  });
+});
+
+describe("challenge button", () => {
+  it("focuses the opened panel, not its first Send button", async () => {
+    render(<ChallengeButton opponent={opponent} />);
+    fireEvent.click(screen.getByRole("button", { name: "Challenge Rival" }));
+    const send = await screen.findByRole("button", {
+      name: "Send Rival a sparring challenge",
+    });
+    const panel = screen.getByRole("dialog");
+    await waitFor(() => expect(document.activeElement).toBe(panel));
+    expect(panel.contains(send)).toBe(true);
   });
 });
 
