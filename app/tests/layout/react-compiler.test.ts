@@ -62,7 +62,8 @@ const targets = [
   ["layout/items/ItemInspector.tsx", ["ItemInspector"]],
   ["layout/items/SlotPicker.tsx", ["SlotPicker"]],
   ["layout/items/ItemsToolbar.tsx", ["ItemsToolbar"]],
-  ["app/[shell]/travel/page.tsx", ["StealthControls"]],
+  ["layout/travel/StealthControls.tsx", ["StealthControls"]],
+  ["layout/travel/TravelView.tsx", ["TravelView"]],
   ["app/[shell]/profile/experience/page.tsx", ["AssignExperience"]],
   ["app/[shell]/village/page.tsx", ["VillageOverview"]],
   ["app/[shell]/battlearena/page.tsx", ["Arena"]],
@@ -100,7 +101,7 @@ const compilerExceptions = [
   "app/[shell]/manual/world/tilesets/edit/[assetid]/page.tsx#SingleEditMapAsset",
   "app/[shell]/manual/world/tilesets/terrain/edit/[terrainid]/page.tsx#SingleEditMapTerrain",
   "app/[shell]/support/page.tsx#SupportPage",
-  "app/[shell]/travel/page.tsx#Travel",
+  "hooks/useTravelSession.ts#useTravelSession",
   "components/merch/MerchProvider.tsx#MerchProvider",
   "components/native/DeviceSettings.tsx#DeviceSettings",
   "components/native/NativeAccountDeletion.tsx#NativeAccountDeletion",
@@ -225,14 +226,17 @@ describe("React Compiler runtime", () => {
 
   it("updates compiled stealth visibility and activation after natural expiry", () => {
     const source = readFileSync(
-      new URL("../../src/app/[shell]/travel/page.tsx", import.meta.url),
+      new URL("../../src/layout/travel/StealthControls.tsx", import.meta.url),
       "utf8",
     );
-    const start = source.indexOf("const StealthControls:");
-    const end = source.indexOf("\n/**\n * Revealed Player Card", start);
+    const start = source.indexOf("export const StealthControls:");
+    const end = source.indexOf("\n// Alias the procedure", start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    const { code, compiled } = compile(source.slice(start, end), "travel.tsx");
+    const { code, compiled } = compile(
+      source.slice(start, end).replace("export const", "const"),
+      "travel.tsx",
+    );
     expect(compiled).toContain("StealthControls");
     const transpiler = new (require("bun").Transpiler)({
       loader: "tsx",
