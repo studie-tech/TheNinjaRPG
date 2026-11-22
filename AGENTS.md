@@ -121,14 +121,7 @@ Combat logic lives in `app/src/libs/combat/`: `actions.ts` (actions), `bossFight
 
 ## A/B tests
 
-Signed-out experiments measure tutorial completion per visitor and are reported at `/recruitment` (`app/src/layout/AbTestResults.tsx`). Reuse the wallpaper experiment's pattern rather than building another:
-
-- One module per experiment in `app/src/libs/` (see `wallpaperExperiment.ts`) owns the versioned cookie/experiment name, the variant tuple with a `control` arm (the results page infers the baseline from that name), assets, labels, `parse…` and `draw…`. Version the name (`ab_x_2`) whenever the arm set changes, so earlier assignments are not attributed to the new run.
-- `chooseShell` (`app/src/libs/shell.ts`) draws the assignment on a document landing visit and `app/src/proxy.ts` sets the cookie. An arm that changes what the cached page renders becomes part of the prerendered shell variant; otherwise the client reads the cookie after mount.
-- `createAppTRPCContext` (`app/src/server/api/trpc.ts`) parses the cookie into the context (every hand-built context must list the field), `getExperimentAssignments` (`app/src/libs/experimentAnalytics.ts`) turns it into assignments, `misc.trackVisitor` records the exposure and `profile.updateTutorialStep` records completion. Register labels and the description in `AbTestResults.tsx`.
-- Closing a test removes all of the above and promotes the winning asset into its constant; past rows in `AbEvent` stay for reporting.
-
-References: [#1711](https://github.com/studie-tech/TheNinjaRPG/pull/1711) adds a prerendered multi-arm test, [#1716](https://github.com/studie-tech/TheNinjaRPG/pull/1716) a client-read one, and [#2635](https://github.com/studie-tech/TheNinjaRPG/pull/2635) promotes a winner, closes that test and narrows another to a new run.
+Model new signed-out experiments on `app/src/libs/wallpaperExperiment.ts`; [#2635](https://github.com/studie-tech/TheNinjaRPG/pull/2635) shows every file an experiment touches.
 
 ## Native apps
 
