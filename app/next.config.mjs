@@ -123,13 +123,6 @@ const config = {
         destination: "/forum",
         permanent: true,
       },
-      // The minigames live in their own section of the manual; Wake Island's Minigames
-      // building and older links still point at /minigames.
-      {
-        source: "/minigames",
-        destination: "/manual#minigames",
-        permanent: true,
-      },
       // /manual/travel is linked from off-site and 404s; travel docs live in the guide.
       {
         source: "/manual/travel",

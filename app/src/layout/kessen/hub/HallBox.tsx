@@ -20,7 +20,7 @@ export const HallBox = ({
   title = KESSEN_GAME_NAME,
   subtitle = KESSEN_HALL_SUBTITLE,
   scene = null,
-  backHref = "/manual#minigames",
+  backHref = "/minigames",
 }: {
   children: React.ReactNode;
   /** The section tabs, in the frame's header. */

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import ManualMain from "@/app/[shell]/manual/page";
+import MinigamesPage from "@/app/[shell]/minigames/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as ImageLinkGrid from "@/layout/ImageLinkGrid";
 import * as StaffPlayerViewSwitch from "@/layout/StaffPlayerViewSwitch";
@@ -116,6 +117,14 @@ it("gives every role the minigames section, opening straight into play", () => {
     expect(document.getElementById("minigames")).not.toBeNull();
     cleanup();
   }
+});
+
+it("shows Wake Island's Minigames page the same games as the manual's section", () => {
+  const { minigames } = manualGrids("USER");
+  cleanup();
+  grids = [];
+  render(<MinigamesPage />);
+  expect(grids).toEqual([minigames]);
 });
 
 it("lists player pages, then the staff tools permitted to each role, by caption", () => {
