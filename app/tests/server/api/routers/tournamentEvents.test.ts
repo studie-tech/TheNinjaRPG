@@ -38,6 +38,7 @@ import {
   beginEventRound,
   createEventState,
   generateEventBracket,
+  isActiveEventEntrant,
 } from "@/libs/tournament/events";
 import * as questQueries from "@/queries/quests";
 import * as eventQueries from "@/queries/tournamentEvents";
@@ -751,6 +752,7 @@ describeWithDatabase("event tournament persistence", () => {
   const readyEvent = async (
     rules: "OPEN" | "RANKED" = "OPEN",
     userIds = ["hero", "foe"],
+    scheduling: "SIMULTANEOUS" | "SEQUENTIAL" = "SIMULTANEOUS",
   ) => {
     const database = await getTestDatabase();
     await insertUsers(
@@ -774,7 +776,11 @@ describeWithDatabase("event tournament persistence", () => {
       })),
     );
     await insertDefaultAiProfile({ userId: "ai" });
-    const event = createEventState({ ...eventConfig("Launch race"), rules });
+    const event = createEventState({
+      ...eventConfig("Launch race"),
+      rules,
+      scheduling,
+    });
     event.participants = userIds.map((userId, i) =>
       participant(userId, { id: `seat-${i}` }),
     );
@@ -1119,60 +1125,116 @@ describeWithDatabase("event tournament persistence", () => {
     ]);
   });
 
-  it("blocks open-world attacks on registered entrants until they withdraw", async () => {
-    const database = await getTestDatabase();
-    await insertUsers(
-      ["hero", "foe"].map((userId) => ({
-        userId,
-        username: userId,
-        status: "AWAKE",
-        rank: "JONIN",
-        level: 50,
-        isOutlaw: true,
-        sector: MAP_WAKE_ISLAND_SECTOR,
-        curHealth: 1000,
-        curChakra: 1000,
-        curStamina: 1000,
-        maxHealth: 1000,
-        maxChakra: 1000,
-        maxStamina: 1000,
-      })),
-    );
-    await insertDefaultAiProfile({ userId: "ai" });
-    const event = createEventState(eventConfig("Queue guard"));
-    event.status = "REGISTRATION";
-    event.participants = [participant("foe")];
-    await database.insert(tournament).values({
-      id: "queue-guard",
-      name: "Queue guard",
-      description: "Wake Island event",
-      image: "",
-      type: "EVENT",
-      eventData: event,
-      rewards: ObjectiveReward.parse({}),
-    });
-    const attack = () =>
-      initiateBattle(
+  it.each(["SIMULTANEOUS", "SEQUENTIAL"] as const)(
+    "keeps surviving entrants protected after the first ranked setup fails (%s)",
+    async (scheduling) => {
+      const userIds =
+        scheduling === "SEQUENTIAL"
+          ? ["hero", "foe", "other", "last"]
+          : ["hero", "foe"];
+      const { database, game, accept } = await readyEvent(
+        "RANKED",
+        userIds,
+        scheduling,
+      );
+      // Missing ranked loadouts produce a repairable setup failure after both accept.
+      expect((await accept(game.userIds[1]!)).success).toBe(true);
+      const event = (await fetchEvent(database, "launch"))!.eventData!;
+      expect(event.status).toBe("RUNNING");
+      expect(event.series.every((s) => !s.begun)).toBe(true);
+      expect(event.series[0]).toMatchObject({
+        complete: false,
+        scores: [0, 0],
+        dodges: [0, 0],
+        games: [{ id: game.id, status: "COMPLETE", outcome: "DRAW" }],
+      });
+      expect(event.audit.at(-1)?.action).toContain("Game setup failed");
+      expect(userIds.every((id) => isActiveEventEntrant(event, id))).toBe(true);
+      const targetId = userIds.at(-1)!;
+      const blocked = await initiateBattle(
         {
           client: database,
-          userIds: ["hero"],
-          targetIds: ["foe"],
+          userIds: [userIds.find((id) => id !== targetId)!],
+          targetIds: [targetId],
           sector: MAP_WAKE_ISLAND_SECTOR,
         },
         "COMBAT",
       );
-    const blocked = await attack();
-    expect(blocked.success).toBe(false);
-    expect(blocked.message).toContain("registered for an ongoing tournament");
-    expect(await database.query.battle.findFirst()).toBeUndefined();
-    event.participants[0]!.withdrawn = true;
-    await database
-      .update(tournament)
-      .set({ eventData: event })
-      .where(eq(tournament.id, "queue-guard"));
-    const allowed = await attack();
-    expect(allowed.success, allowed.message).toBe(true);
-  });
+      expect(blocked.success).toBe(false);
+      expect(blocked.message).toContain("registered for an ongoing tournament");
+      expect(await database.query.battle.findMany()).toHaveLength(0);
+    },
+  );
+
+  it.each(["REGISTRATION", "PREPARED", "RUNNING"] as const)(
+    "protects entrants from open-world attacks only after the tournament begins (%s)",
+    async (status) => {
+      const database = await getTestDatabase();
+      await insertUsers(
+        ["hero", "foe"].map((userId) => ({
+          userId,
+          username: userId,
+          status: "AWAKE",
+          rank: "JONIN",
+          level: 50,
+          isOutlaw: true,
+          sector: MAP_WAKE_ISLAND_SECTOR,
+          curHealth: 1000,
+          curChakra: 1000,
+          curStamina: 1000,
+          maxHealth: 1000,
+          maxChakra: 1000,
+          maxStamina: 1000,
+        })),
+      );
+      await insertDefaultAiProfile({ userId: "ai" });
+      const event = createEventState(eventConfig("Queue guard"));
+      event.status = "REGISTRATION";
+      event.participants = [participant("foe"), participant("hero")];
+      if (status !== "REGISTRATION") {
+        generateEventBracket(
+          event,
+          event.participants.map((p) => p.id),
+        );
+        if (status === "RUNNING") beginEventRound(event, Date.now());
+      }
+      await database.insert(tournament).values({
+        id: "queue-guard",
+        name: "Queue guard",
+        description: "Wake Island event",
+        image: "",
+        type: "EVENT",
+        eventData: event,
+        rewards: ObjectiveReward.parse({}),
+      });
+      const attack = () =>
+        initiateBattle(
+          {
+            client: database,
+            userIds: ["hero"],
+            targetIds: ["foe"],
+            sector: MAP_WAKE_ISLAND_SECTOR,
+          },
+          "COMBAT",
+        );
+      const blocked = await attack();
+      if (status !== "RUNNING") {
+        expect(blocked.success, blocked.message).toBe(true);
+        expect(await database.query.battle.findFirst()).toBeDefined();
+        return;
+      }
+      expect(blocked.success).toBe(false);
+      expect(blocked.message).toContain("registered for an ongoing tournament");
+      expect(await database.query.battle.findFirst()).toBeUndefined();
+      event.participants[0]!.withdrawn = true;
+      await database
+        .update(tournament)
+        .set({ eventData: event })
+        .where(eq(tournament.id, "queue-guard"));
+      const allowed = await attack();
+      expect(allowed.success, allowed.message).toBe(true);
+    },
+  );
 
   it("recovers a crash after STARTING commits but before the launch token exists", async () => {
     const { database, game, accept } = await readyEvent();

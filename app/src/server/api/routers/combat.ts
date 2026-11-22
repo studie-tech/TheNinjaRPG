@@ -2841,7 +2841,7 @@ export const initiateBattle = async (
     return errorResponse("Cannot attack players in Wake Island");
   }
 
-  // Registered event tournament entrants wait at Wake Island for their ready checks
+  // Surviving entrants in running tournaments wait for their ready checks
   if (
     battleType === "COMBAT" &&
     users.some(

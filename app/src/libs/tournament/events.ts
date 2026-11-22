@@ -238,17 +238,20 @@ export const resolveEventSlots = (event: EventTournamentState) => {
 };
 
 /**
- * Whether a player holds a live seat that the event may still call to a ready check:
- * a registration before the bracket exists, or a seat not yet eliminated from it.
- * Used to shield waiting entrants from open-world attacks that would fail their ready check.
+ * Whether a player holds a surviving seat in a tournament whose first round has begun.
+ * Shield waiting entrants from open-world attacks that would fail their ready check.
+ * Retained games preserve start evidence while a setup failure waits for staff repair.
  */
 export const isActiveEventEntrant = (event: EventTournamentState, userId: string) => {
   const seat = event.participants.find(
     (p) => p.userId === userId && p.accepted && !p.withdrawn,
   );
-  if (!seat || !["REGISTRATION", "PREPARED", "RUNNING"].includes(event.status))
+  if (
+    !seat ||
+    !["PREPARED", "RUNNING"].includes(event.status) ||
+    !event.series.some((series) => series.games.length > 0)
+  )
     return false;
-  if (!event.series.length) return true;
   // A seat stays live while it occupies an unfinished series or a finished series
   // routes it onward (bye, win, or a double-elimination drop) into an unresolved one.
   return event.series.some(

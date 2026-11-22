@@ -221,25 +221,32 @@ describe("staff event tournament brackets", () => {
     expect(event.participants[0]!.seed).toBe(1);
     expect(event.series.filter((s) => s.round === 3)[0]!.bestOf).toBe(5);
   });
-  it("shields registered and surviving entrants from open-world attacks until eliminated", () => {
+  it("shields surviving entrants only after the first round begins", () => {
     const event = makeEvent(4);
     const registering = createEventState(event.config);
     registering.status = "REGISTRATION";
     registering.participants = event.participants.map((p) => ({ ...p }));
     registering.participants[1]!.withdrawn = true;
     registering.participants[2]!.accepted = false;
-    expect(isActiveEventEntrant(registering, "user-0")).toBe(true);
+    expect(isActiveEventEntrant(registering, "user-0")).toBe(false);
     expect(isActiveEventEntrant(registering, "user-1")).toBe(false);
     expect(isActiveEventEntrant(registering, "user-2")).toBe(false);
     expect(isActiveEventEntrant(registering, "stranger")).toBe(false);
     expect(isActiveEventEntrant({ ...registering, status: "DRAFT" }, "user-0")).toBe(
       false,
     );
-    // Prepared bracket: every seeded entrant waits for a first-round ready check.
+    // Preparing or scheduling the bracket does not begin the tournament.
+    event.scheduledRoundAt = 1000;
+    expect(event.participants.some((p) => isActiveEventEntrant(event, p.userId))).toBe(
+      false,
+    );
+    beginEventRound(event, 1000);
     expect(event.participants.every((p) => isActiveEventEntrant(event, p.userId))).toBe(
       true,
     );
-    beginEventRound(event, 0);
+    for (const status of ["COMPLETED", "CANCELLED"] as const) {
+      expect(isActiveEventEntrant({ ...event, status }, "user-0")).toBe(false);
+    }
     const first = event.series.find((s) => s.begun)!;
     const game = first.games.at(-1)!;
     game.accepted = [...game.userIds];
@@ -249,6 +256,10 @@ describe("staff event tournament brackets", () => {
     expect(isActiveEventEntrant(event, game.userIds[0]!)).toBe(true);
     expect(isActiveEventEntrant(event, game.userIds[1]!)).toBe(false);
     eventAfterFirstGame(event);
+    advanceEvent(event, 1000);
+    expect(event.status).toBe("PREPARED");
+    expect(isActiveEventEntrant(event, game.userIds[0]!)).toBe(true);
+    expect(isActiveEventEntrant(event, game.userIds[1]!)).toBe(false);
     playOut(event);
     expect(event.participants.some((p) => isActiveEventEntrant(event, p.userId))).toBe(
       false,
