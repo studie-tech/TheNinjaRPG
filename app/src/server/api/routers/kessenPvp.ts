@@ -55,7 +55,12 @@ import {
 } from "@/queries/kessenPvp";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import { fetchRequest, updateRequestState } from "@/routers/sparring";
-import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import {
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+  publicProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
   advanceKessenDuel,
@@ -516,7 +521,11 @@ export const kessenPvpRouter = createTRPCRouter({
       return { ...status, success: status.inQueue || !!status.matchId };
     }),
 
-  getLeaderboard: protectedProcedure
+  /**
+   * The top of the ranked ladder for anyone, signed in or not, and the signed-in viewer's
+   * own place when they have played a rated duel.
+   */
+  getLeaderboard: publicProcedure
     .meta({ mcp: { description: "Get the ranked Kessen ladder" } })
     .input(
       z
@@ -527,27 +536,28 @@ export const kessenPvpRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }): Promise<KessenLeaderboard> => {
       const limit = input?.limit ?? KESSEN_RANKED_LEADERBOARD_SIZE;
+      const userId = ctx.userId;
       const [rows, mine] = await Promise.all([
         listKessenLeaderboard(ctx.drizzle, limit),
-        listKessenProgressRows(ctx.drizzle, [ctx.userId]),
+        userId ? listKessenProgressRows(ctx.drizzle, [userId]) : [],
       ]);
       const entries: KessenLeaderboardEntry[] = rows.map((row, index) => ({
         rank: index + 1,
         ...row,
       }));
-      const listed = entries.find((entry) => entry.userId === ctx.userId);
+      const listed = entries.find((entry) => entry.userId === userId);
       const progress = mine[0];
-      if (listed || !progress || progress.rankedPlayed === 0)
+      if (!userId || listed || !progress || progress.rankedPlayed === 0)
         return { entries, you: listed ?? null };
       const [[above], [player]] = await Promise.all([
         countKessenRatingsAbove(ctx.drizzle, progress.rating),
-        listKessenDuelists(ctx.drizzle, [ctx.userId]),
+        listKessenDuelists(ctx.drizzle, [userId]),
       ]);
       return {
         entries,
         you: {
           rank: (above?.above ?? 0) + 1,
-          userId: ctx.userId,
+          userId,
           username: player?.username ?? "",
           avatar: player?.avatar ?? null,
           level: player?.level ?? 1,

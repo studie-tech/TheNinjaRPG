@@ -2,8 +2,11 @@
 
 import "../kessen.css";
 import "./hub.css";
+import { Trophy } from "lucide-react";
 import type React from "react";
+import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 
 /**
  * The Card Hall in the game's page frame ("Kessen", with the way back to the minigames),
@@ -12,7 +15,8 @@ import ContentBox from "@/layout/ContentBox";
  * place in the lacquer scene palette, the tabs leave the header and the frame's title
  * leads back to the hall; the hall stays mounted behind, hidden, so the section, its
  * scroll and the control that opened the scene are still there. The subtitle wraps
- * rather than clipping beside the tabs on a phone.
+ * rather than clipping beside the tabs on a phone. Beside the tabs, a Leaderboard button
+ * opens the ranked ladder.
  */
 export const HallBox = ({
   children,
@@ -21,6 +25,7 @@ export const HallBox = ({
   subtitle = KESSEN_HALL_SUBTITLE,
   scene = null,
   backHref = "/minigames",
+  leaderboardLink = true,
 }: {
   children: React.ReactNode;
   /** The section tabs, in the frame's header. */
@@ -30,6 +35,8 @@ export const HallBox = ({
   scene?: HallScene | null;
   /** Where the frame's back control leads while no scene is open. */
   backHref?: string;
+  /** Show the Leaderboard button in the header; off on the leaderboard itself. */
+  leaderboardLink?: boolean;
 }) => (
   <ContentBox
     title={scene ? "Card Hall" : title}
@@ -39,7 +46,14 @@ export const HallBox = ({
     defaultBackHref={backHref}
     onBack={scene?.onLeave}
     padding={false}
-    topRightContent={scene ? undefined : tabs}
+    topRightContent={
+      scene ? undefined : (
+        <div className="flex items-center gap-2">
+          {tabs}
+          {leaderboardLink ? <LeaderboardLink /> : null}
+        </div>
+      )
+    }
   >
     <div className="kessen-hall kessen-ui">
       {scene ? <div className="kh-scene kessen-scene">{scene.content}</div> : null}
@@ -48,6 +62,19 @@ export const HallBox = ({
       </div>
     </div>
   </ContentBox>
+);
+
+/**
+ * The way to the ranked ladder, as the other minigames' Leaderboard buttons; a trophy
+ * alone on a phone, so the section tabs keep their place in the header.
+ */
+const LeaderboardLink = () => (
+  <Button asChild size="sm" className="px-2 sm:px-3">
+    <Link href="/kessen/leaderboard" aria-label="Leaderboard" title="Leaderboard">
+      <Trophy className="h-4 w-4 sm:mr-1.5" aria-hidden />
+      <span className="hidden sm:inline">Leaderboard</span>
+    </Link>
+  </Button>
 );
 
 export const KESSEN_GAME_NAME = "Kessen";
