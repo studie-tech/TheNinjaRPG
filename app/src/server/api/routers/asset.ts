@@ -9,6 +9,7 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { prepareLpcSheet, validateLpcImages } from "@/libs/lpc/import";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { callDiscordContent } from "@/libs/socials";
 import {
   deleteGameAssetForDelete,
@@ -307,33 +308,9 @@ export const gameAssetRouter = createTRPCRouter({
         await invalidateBattlefieldAssets();
         return errorResponse(`Not allowed to delete gameAsset`);
       }
+      const reservedError = reservedContentDeletionError("asset", entry.id);
+      if (reservedError) return errorResponse(reservedError);
       if (entry.type === "LPC") {
-        if (
-          [
-            "body",
-            "head-hard",
-            "head-soft",
-            "head-sharp",
-            "hair-short",
-            "hair-long",
-            "beard-long",
-            "beard-full",
-            "beard-stubble",
-            "shirt",
-            "pants",
-            "sandals",
-            "hood",
-            "mask",
-            "glasses",
-            "piercing",
-            "bandana",
-            "tattoo",
-            "scar",
-          ].includes(entry.id)
-        )
-          return errorResponse(
-            "This design is required by character creation or masked identities and cannot be deleted.",
-          );
         const deleted = await deleteUnreferencedLpcAsset(ctx.drizzle, entry.id);
         if (!deleted.rowsAffected)
           return errorResponse(

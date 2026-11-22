@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { callDiscordContent } from "@/libs/socials";
 import {
   deleteMapAssetForDelete,
@@ -138,6 +139,8 @@ export const mapAssetRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to delete map assets");
       }
+      const reservedError = reservedContentDeletionError("mapAsset", entry.id);
+      if (reservedError) return errorResponse(reservedError);
       // A concurrent author save can race this preflight. Missing art retains the arrival
       // pin and Inspect action, and staff can repair it by choosing replacement artwork.
       if (inUse)

@@ -5,6 +5,7 @@ import { getUnchangedHuntingUserUpdate } from "@/deltas/hunting";
 import { huntingHabitat, huntingSession } from "@/drizzle/schema";
 import { huntingAllowance, huntingEligibility } from "@/libs/hunting/contracts";
 import { getEffectiveStackSize } from "@/libs/item";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
 import { listAiUserIds } from "@/queries/ai";
@@ -229,6 +230,8 @@ export const huntingRouter = createTRPCRouter({
     const user = await findUserRoleById(ctx.drizzle, ctx.userId);
     if (!user || !canChangeContent(user.role))
       return errorResponse("You cannot edit hunting habitats.");
+    const reservedError = reservedContentDeletionError("hunting", input.id);
+    if (reservedError) return errorResponse(reservedError);
     const removed = await deleteHuntingHabitatForDelete(ctx.drizzle, input);
     if (!removed.rowsAffected) {
       const exists = await findHuntingHabitatForDelete(ctx.drizzle, input);

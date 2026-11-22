@@ -38,6 +38,7 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { validateUserUpdateReason } from "@/libs/moderator";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { callDiscordContent } from "@/libs/socials";
 import {
   deleteBloodlineForDelete,
@@ -532,6 +533,8 @@ export const bloodlineRouter = createTRPCRouter({
         return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role)) return errorResponse("Unauthorized");
       if (!reskin) return errorResponse("Reskin not found");
+      const reservedError = reservedContentDeletionError("bloodline_reskin", reskin.id);
+      if (reservedError) return errorResponse(reservedError);
       if (linkedJutsus.length)
         return errorResponse(
           "Unlink or delete its jutsu reskins before deleting this bloodline reskin",
@@ -687,6 +690,8 @@ export const bloodlineRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to delete bloodline");
       }
+      const reservedError = reservedContentDeletionError("bloodline", entry.id);
+      if (reservedError) return errorResponse(reservedError);
       if (usersWithBloodline.length > 0) {
         return errorResponse(`Bloodline used by users: ${usernames}, cannot delete`);
       }

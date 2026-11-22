@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { callDiscordContent } from "@/libs/socials";
 import {
   deleteMapTerrainForDelete,
@@ -138,6 +139,8 @@ export const mapTerrainRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to delete terrain");
       }
+      const reservedError = reservedContentDeletionError("mapTerrain", entry.id);
+      if (reservedError) return errorResponse(reservedError);
       if (entry.protected) {
         return errorResponse(
           "Built-in terrains cannot be deleted - the world map and combat fall back to them",

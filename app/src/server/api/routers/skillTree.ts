@@ -14,6 +14,7 @@ import {
   SKILL_TREE_RESET_FREE,
 } from "@/drizzle/constants";
 import { skillTree } from "@/drizzle/schema";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import { isSkillVisible } from "@/libs/skillRequirements";
 import { getResetAllowance } from "@/libs/skillReset";
 import { callDiscordContent } from "@/libs/socials";
@@ -534,6 +535,8 @@ export const skillTreeRouter = createTRPCRouter({
       }
 
       if (!skill) return errorResponse("Skill not found");
+      const reservedError = reservedContentDeletionError("skillTree", skill.id);
+      if (reservedError) return errorResponse(reservedError);
       if (requiredItems.length || requiredJutsus.length) {
         return errorResponse(
           "Cannot delete a skill required by items or jutsu. Remove their requirements first",
@@ -894,6 +897,8 @@ export const skillTreeRouter = createTRPCRouter({
       if (!folder) {
         return errorResponse("Folder not found");
       }
+      const reservedError = reservedContentDeletionError("skillTreeFolder", folder.id);
+      if (reservedError) return errorResponse(reservedError);
       if (skillsInFolder.length > 0) {
         return errorResponse(
           `Cannot delete folder that contains ${skillsInFolder.length} skill(s). Please move or delete skills first.`,

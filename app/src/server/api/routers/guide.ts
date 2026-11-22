@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { guideArticle } from "@/drizzle/schema";
+import { reservedContentDeletionError } from "@/libs/reservedContent";
 import {
   deleteGuideArticleForDelete,
   fetchGuide,
@@ -122,6 +123,8 @@ export const guideRouter = createTRPCRouter({
       if (!entry || !canChangeContent(user.role)) {
         return errorResponse("Not allowed to delete this guide");
       }
+      const reservedError = reservedContentDeletionError("guide", entry.id);
+      if (reservedError) return errorResponse(reservedError);
       await Promise.all([
         deleteGuideArticleForDelete(ctx.drizzle, input),
         insertActionLogForDelete(ctx.drizzle, ctx, entry),
