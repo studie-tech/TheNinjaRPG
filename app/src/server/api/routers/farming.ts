@@ -732,7 +732,10 @@ export const farmingRouter = createTRPCRouter({
 
       const now = new Date();
       const fertilizerStack = userItems.find(
-        (stack) => stack.id === input.userItemId && isEquippableUserItem(stack, now),
+        (stack) =>
+          stack.id === input.userItemId &&
+          !hasFortification(stack) &&
+          isEquippableUserItem(stack, now),
       );
       if (!fertilizerStack?.item.isFarmFertilizer) {
         return errorResponse("Fertilizer not found");
@@ -972,6 +975,9 @@ export const farmingRouter = createTRPCRouter({
 
       const cropStack = userItems.find((ui) => ui.id === input.userItemId);
       if (!cropStack) return errorResponse("Item not found");
+      if (hasFortification(cropStack)) {
+        return errorResponse("Fortified crops cannot be used here");
+      }
       if (!isEquippableUserItem(cropStack)) {
         return errorResponse("Crop is not available in inventory");
       }
@@ -1216,6 +1222,9 @@ export const farmingRouter = createTRPCRouter({
       if (!cropStack || cropStack.quantity < input.quantity) {
         return errorResponse("Crop not found");
       }
+      if (hasFortification(cropStack)) {
+        return errorResponse("Fortified crops cannot be used here");
+      }
       if (!isEquippableUserItem(cropStack)) {
         return errorResponse("Crop is not available in inventory");
       }
@@ -1293,6 +1302,7 @@ export const farmingRouter = createTRPCRouter({
         userItemId: cropStack.id,
         expectedQuantity: cropStack.quantity,
         nextQuantity: cropStack.quantity - input.quantity,
+        where: [isNull(userItem.fortification)],
       });
       if (!consumed) {
         await deleteFarmExtractionForExtractSeeds(ctx.drizzle, extractionId, ctx);
@@ -1537,6 +1547,7 @@ const fertilizeFarmPlots = async (
     userItemId: stack.id,
     expectedQuantity: stack.quantity,
     nextQuantity: stack.quantity - plots.length,
+    where: [isNull(userItem.fortification)],
   });
   if (!consumed) {
     await rollbackBulkFertilizer(client, userId, plots, now);
@@ -2199,6 +2210,7 @@ const findTopUpStack = (userItems: FarmUserItems, item: Item, now: Date) =>
           ui.itemId === item.id &&
           ui.equipped === "NONE" &&
           ui.item.canStack &&
+          !hasFortification(ui) &&
           isEquippableUserItem(ui, now),
       )
     : undefined;

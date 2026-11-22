@@ -45,6 +45,7 @@ import {
   findServiceEquipment,
   findServiceHistory,
   findServicePrices,
+  findServiceRequest,
   findVisibleOpenServiceRequests,
   insertServiceRequest,
   notifyServiceRequest,
@@ -423,9 +424,14 @@ export const craftingServiceProcedures = {
             ? await completeCraftingService(ctx.drizzle, request)
             : undefined;
         if (completion) request.status = "COMPLETED";
+        const settledStatus =
+          completion === false
+            ? (await findServiceRequest(ctx.drizzle, request.id))?.status
+            : request.status;
         return actionReadinessResponse(
           {
-            success: true,
+            success: completion !== false || settledStatus === "COMPLETED",
+            requiresServiceRefresh: completion === false,
             serviceUpdate: getServiceSubmissionCacheUpdate({
               requester: initialRequester,
               requesterResult,
@@ -439,13 +445,17 @@ export const craftingServiceProcedures = {
                 input.service === "IMBUE" ? crystal?.item.name : imbuement?.item.name,
             }),
             message:
-              input.service === "FORTIFY"
-                ? fortify?.succeeded
-                  ? "Fortify succeeded. Your item was delivered; the attempt cost and service fee were consumed"
-                  : "Fortify failed. Your item was delivered with an increased failure bonus; the attempt cost and service fee were consumed"
-                : input.service === "REPAIR"
-                  ? "Repair completed and delivered to your inventory"
-                  : "Request sent. Your fee and items are held in escrow",
+              completion === false && settledStatus !== "COMPLETED"
+                ? settledStatus === "REFUNDED"
+                  ? "Request refunded. Your costs and item were returned; the service was not applied"
+                  : "Service delivery could not be confirmed. Please check the service desk"
+                : input.service === "FORTIFY"
+                  ? fortify?.succeeded
+                    ? "Fortify succeeded. Your item was delivered; the attempt cost and service fee were consumed"
+                    : "Fortify failed. Your item was delivered with an increased failure bonus; the attempt cost and service fee were consumed"
+                  : input.service === "REPAIR"
+                    ? "Repair completed and delivered to your inventory"
+                    : "Request sent. Your fee and items are held in escrow",
           },
           readiness,
           ctx.drizzle,

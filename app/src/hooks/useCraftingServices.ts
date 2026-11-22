@@ -46,7 +46,11 @@ export const useCraftingServiceCache = () => {
       | RouterOutputs["occupation"]["respondToServiceRequest"],
     snapshot: ReturnType<typeof prepareServiceUpdate>,
   ) => {
-    if (!result.success) return;
+    if (
+      !result.success &&
+      !("requiresServiceRefresh" in result && result.requiresServiceRefresh)
+    )
+      return;
     const submission = "serviceUpdate" in result ? result.serviceUpdate : undefined;
     const inbox = client.getQueryState(inboxKey);
     const inboxRevision = inbox?.dataUpdateCount;

@@ -301,10 +301,11 @@ describeWithDatabase("crafting services escrow and delivery", () => {
       expect(await withAfterTasks(refundCraftingService)(db, request)).toBe(true);
       expect(await withAfterTasks(refundCraftingService)(db, request)).toBe(false);
       expect((await requireUser("requester")).money).toBe(20_000_000);
-      expect(
-        (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))
-          ?.fortification,
-      ).toEqual(equipment?.fortification);
+      const restored = await db.query.userItem.findFirst({
+        where: eq(userItem.id, "sword"),
+      });
+      expect(restored?.userId).toBe("requester");
+      expect(restored?.fortification).toEqual(equipment?.fortification);
     },
   );
 
@@ -317,36 +318,46 @@ describeWithDatabase("crafting services escrow and delivery", () => {
     });
   });
 
-  it("withholds the submission projection when another reader wins Fortify completion", async () => {
-    const db = await getTestDatabase();
-    await db
-      .update(userData)
-      .set({ money: 20_000_000 })
-      .where(eq(userData.userId, "requester"));
-    await db
-      .update(item)
-      .set({
-        canBeEnhanced: true,
-        effects: [
-          DamageTag.parse({
-            power: 20,
-            fortifyId: "damage",
-            fortifyEnabled: true,
-          }),
-        ],
-      })
-      .where(eq(item.id, "recipe"));
-    await db.insert(craftingServicePrice).values({
-      userId: "crafter",
-      service: "FORTIFY",
-      rarity: "COMMON",
-      fee: 50,
-    });
-    const observed = beforeTransaction(db, async (call) => {
-      if (call === 2) await completeCraftingService(db, await receipt());
-    });
-    expect(
-      await callerForDatabase(
+  it.each(["COMPLETED", "REFUNDED", "missing"] as const)(
+    "reports a competing %s Fortify outcome without projecting stale state",
+    async (outcome) => {
+      const db = await getTestDatabase();
+      await db
+        .update(userData)
+        .set({ money: 20_000_000 })
+        .where(eq(userData.userId, "requester"));
+      await db
+        .update(item)
+        .set({
+          canBeEnhanced: true,
+          effects: [
+            DamageTag.parse({
+              power: 20,
+              fortifyId: "damage",
+              fortifyEnabled: true,
+            }),
+          ],
+        })
+        .where(eq(item.id, "recipe"));
+      await db.insert(craftingServicePrice).values({
+        userId: "crafter",
+        service: "FORTIFY",
+        rarity: "COMMON",
+        fee: 50,
+      });
+      const observed = beforeTransaction(db, async (call) => {
+        if (call !== 2) return;
+        const request = await receipt();
+        if (outcome === "COMPLETED") await completeCraftingService(db, request);
+        else {
+          await withAfterTasks(refundCraftingService)(db, request);
+          if (outcome === "missing")
+            await db
+              .delete(craftingServiceRequest)
+              .where(eq(craftingServiceRequest.id, request.id));
+        }
+      });
+      const result = await callerForDatabase(
         occupationRouter,
         "requester",
         observed,
@@ -358,15 +369,33 @@ describeWithDatabase("crafting services escrow and delivery", () => {
         fortifyTagId: "damage",
         expectedFortifyLevel: 0,
         expectedFortifyFailures: 0,
-      }),
-    ).toMatchObject({ success: true, serviceUpdate: undefined });
-    expect((await requireUser("crafter")).money).toBe(150);
-    expect((await requireUser("requester")).money).toBe(18_999_950);
-    expect(
-      (await db.query.userItem.findFirst({ where: eq(userItem.id, "sword") }))
-        ?.fortification?.damage?.level,
-    ).toBe(1);
-  });
+      });
+      expect(result).toMatchObject({
+        success: outcome === "COMPLETED",
+        serviceUpdate: undefined,
+      });
+      expect(result.message).toContain(
+        outcome === "COMPLETED"
+          ? "Fortify succeeded"
+          : outcome === "REFUNDED"
+            ? "costs and item were returned"
+            : "could not be confirmed",
+      );
+      expect((await requireUser("crafter")).money).toBe(
+        outcome === "COMPLETED" ? 150 : 100,
+      );
+      expect((await requireUser("requester")).money).toBe(
+        outcome === "COMPLETED" ? 18_999_950 : 20_000_000,
+      );
+      const equipment = await db.query.userItem.findFirst({
+        where: eq(userItem.id, "sword"),
+      });
+      expect(equipment?.userId).toBe("requester");
+      expect(equipment?.fortification?.damage?.level ?? 0).toBe(
+        outcome === "COMPLETED" ? 1 : 0,
+      );
+    },
+  );
 
   it("reserves recipe materials/fee and cancels once with a full refund", async () => {
     const submission = await recordQueries(() => submit());

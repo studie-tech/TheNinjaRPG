@@ -4214,8 +4214,10 @@ export const getCombatStatCap = (
   stat: CombatStatName,
 ) => (stat === "offence" || stat === "defence" ? caps.stats_cap : caps.gens_cap);
 
-// =====================================// Tower Defense Constants
-// =====================================// Game balance lives in `libs/towerDefense/content.ts` and `balance.ts`.
+// ============================================
+// Tower Defense Constants
+// ============================================
+// Game balance lives in `libs/towerDefense/content.ts` and `balance.ts`.
 
 /** Waves one run must clear past its start wave to fulfil the daily Guard Hall duty. */
 export const TD_DAILY_WAVES = 10;
@@ -4522,8 +4524,10 @@ export const TD_BLAST_ANIMATION = {
   speed: 50,
 } as const;
 
-// =====================================// Stealth & Sensory System Constants
-// =====================================export const STEALTH_SENSORY_CAP = 20000;
+// ============================================
+// Stealth & Sensory System Constants
+// ============================================
+export const STEALTH_SENSORY_CAP = 20000;
 export const STEALTH_SENSORY_DEFAULT = 1000;
 export const STEALTH_BASE_DURATION_SECONDS = 60; // 1 minute base
 export const STEALTH_DURATION_PER_1000_POINTS = 60; // +1 minute per 1000 points
@@ -4997,8 +5001,10 @@ export const SUPPLY_REQUEST_BUNDLE_SIZE = 100;
 export const SUPPLY_REQUEST_EXPERIENCE = 2000;
 export const SUPPLY_REQUEST_PAYOUT_PERCENT = 60;
 
-// =====================================// Village Warehouse, trade routes and caravans
-// =====================================/** Village tokens (clan points in faction settlements) to construct the Warehouse at level 1. */
+// ============================================
+// Village Warehouse, trade routes and caravans
+// ============================================
+/** Village tokens (clan points in faction settlements) to construct the Warehouse at level 1. */
 export const WAREHOUSE_CONSTRUCTION_COST = 500_000;
 /** Funds for each Warehouse level above 1. */
 export const WAREHOUSE_UPGRADE_COST = 150_000;
@@ -5197,6 +5203,7 @@ export const BANDIT_STEAL_BP: Record<BanditRank, number> = {
 };
 /** Bandit experience of every successful operation and robbery. */
 export const BANDIT_OPERATION_EXP = 500;
+
 /** Per-tag Fortify progression and per-attempt prices. */
 export const FORTIFY_MAX_LEVEL = 5;
 export const FORTIFY_BASE_COST = 1_000_000;

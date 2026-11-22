@@ -62,6 +62,11 @@ export const findOpenServiceRequests = (db: DrizzleClient, userId: string) =>
       inArray(craftingServiceRequest.status, ["PENDING", "ACTIVE"]),
     ),
   });
+/** Read the durable outcome when another request wins immediate service settlement. */
+export const findServiceRequest = (db: DrizzleClient, requestId: string) =>
+  db.query.craftingServiceRequest.findFirst({
+    where: eq(craftingServiceRequest.id, requestId),
+  });
 /** Paginate recent request history without omitting pending work. */
 export const findServiceHistory = (db: DrizzleClient, userId: string) =>
   db.query.craftingServiceRequest.findMany({

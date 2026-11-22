@@ -468,6 +468,30 @@ it.each(["inbox read", "changed profile", "unknown completion"])(
   },
 );
 
+it.each([true, false])(
+  "refreshes a rejected service outcome only when its submission committed (%s)",
+  async (requiresServiceRefresh) => {
+    const { client, wrapper } = harness();
+    seedSubmissionViews(client);
+    const hook = renderHook(useCraftingServiceCache, { wrapper });
+    const snapshot = hook.result.current.prepareServiceUpdate();
+    await act(async () =>
+      hook.result.current.updateService(
+        {
+          success: false,
+          message: "Delivery could not be confirmed",
+          requiresServiceRefresh,
+        },
+        snapshot,
+      ),
+    );
+    for (const key of [profileKey, ...inventoryKeys, requestsKey, queueKey, timersKey])
+      expect(client.getQueryState(key)?.isInvalidated ?? false).toBe(
+        requiresServiceRefresh,
+      );
+  },
+);
+
 it("withholds a Fortify projection unless delivery and both hydration snapshots are confirmed", () => {
   const update = fortifySubmission(true);
   for (const request of [
