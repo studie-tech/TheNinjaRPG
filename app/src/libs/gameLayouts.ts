@@ -1,4 +1,5 @@
 import {
+  IMG_FRONTPAGE_SCREENSHOT_SECTOR,
   IMG_LAYOUT_CLASSIC_PREVIEW,
   IMG_LAYOUT_THEME_ART,
   IMG_PIXEL_HERO_POSTER,
@@ -105,6 +106,27 @@ export const GAME_LAYOUTS = [
     welcomeTitle: "Find your place among the shinobi.",
     welcomeIntro:
       "Some journeys are remembered for their battles. Others, for the people along the way. Make friends, join a village, and write a character story of your own.",
+  },
+  {
+    id: "experimental",
+    name: "Experimental sector layout",
+    art: IMG_FRONTPAGE_SCREENSHOT_SECTOR,
+    audience: "Players trying the sector as their main game interface",
+    rationale:
+      "Explore a full-screen sector map and visit the Bank and Item Shop in dialogs. Other destinations open as pages through the game menu.",
+    composition:
+      "A full-height map with compact navigation, player and game drawers, and building dialogs.",
+    tone: "dark",
+    frame: "experimental",
+    publicFrame: "page",
+    welcome: "illustrated",
+    // Navigation lives in drawers at every viewport width.
+    sidebarBreakpoint: 100000,
+    supportsColorMode: false,
+    visualLanguage: "Sector exploration · Experimental",
+    welcomeTitle: "Your next adventure is out there.",
+    welcomeIntro:
+      "Explore Seichi, train your shinobi and find your place in the village.",
   },
 ] as const;
 

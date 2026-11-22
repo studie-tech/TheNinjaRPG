@@ -27,7 +27,7 @@ export default function GameLayoutsPage() {
   return (
     <ContentBox
       title="Choose your surroundings"
-      subtitle="Five ways to make Seichi your own."
+      subtitle="Choose how you explore Seichi."
       defaultBackHref="/profile"
       padding={false}
     >
@@ -35,8 +35,7 @@ export default function GameLayoutsPage() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <p className="max-w-prose text-muted-foreground text-sm">
             Find a space that suits how you play. Every layout includes your character,
-            the full world menu, notifications and your mobile shortcuts. Your choice is
-            saved on this device.
+            the full world menu and notifications. Your choice is saved on this device.
           </p>
           <fieldset
             className="flex gap-1 rounded-lg border border-border p-1"
@@ -118,7 +117,7 @@ export default function GameLayoutsPage() {
           })}
         </div>
         <p className="mt-8 text-muted-foreground text-sm">
-          Reading preferences, text size and mobile shortcuts work with every layout.
+          Reading preferences and text size carry across layouts.
         </p>
       </div>
     </ContentBox>

@@ -14,6 +14,7 @@ import {
 } from "@/libs/layoutPreference";
 import { useChangeLayout } from "@/utils/LayoutContext";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
+import { useUserInfo } from "@/utils/UserContext";
 
 export const applyGameLayout = (id: GameLayoutId) => {
   const layout = getGameLayout(id);
@@ -39,6 +40,7 @@ export const applyGameLayout = (id: GameLayoutId) => {
  */
 export const useSelectGameLayout = () => {
   const changeLayout = useChangeLayout();
+  const { isSignedIn } = useUserInfo();
   const router = useNavigationRouter();
   return useCallback(
     (layout: GameLayoutId) => {
@@ -46,7 +48,8 @@ export const useSelectGameLayout = () => {
       persistLayoutPreferenceCookie(layout);
       changeLayout(layout);
       router.refresh();
+      if (layout === "experimental" && isSignedIn) router.replace("/travel");
     },
-    [changeLayout, router],
+    [changeLayout, router, isSignedIn],
   );
 };

@@ -68,7 +68,12 @@ import { calcGlobalTravelTime } from "@/libs/travel";
 import { getReadableVillageHexColor } from "@/utils/color";
 
 /** Render travel maps, controls and dialogs from a single session. */
-export function TravelView({ session, hasLocationRequest = false }: TravelViewProps) {
+export function TravelView({
+  session,
+  hasLocationRequest = false,
+  immersive = false,
+  isInteractive = true,
+}: TravelViewProps) {
   const {
     showActive,
     setShowActive,
@@ -224,7 +229,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           target={targetPosition}
           showSorrounding={showSorrounding}
           showActive={showOtherUsers}
-          isActive={!!showSector}
+          isActive={!!showSector && isInteractive}
           autoAttackMode={autoAttackMode}
           isWorldExpanded={isWorldExpanded && !!showSector}
           cameraFocusRevision={cameraFocusRevision}
@@ -248,6 +253,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
     autoAttackMode,
     isWorldExpanded,
     showSector,
+    isInteractive,
     cameraFocusRevision,
     villages,
     hasUser,
@@ -678,7 +684,12 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
   return (
     <>
       <HuntingArrival
-        blocked={!!admissionRecovery || !!locationRequest || hasLocationRequest}
+        blocked={
+          !isInteractive ||
+          !!admissionRecovery ||
+          !!locationRequest ||
+          hasLocationRequest
+        }
       />
       {locationRequest && (
         <Modal
@@ -730,7 +741,10 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
         topRightItems={travelTools}
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
-        <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
+        <div
+          data-travel-viewport={immersive ? "" : undefined}
+          className={userData.travelFinishAt ? "relative min-h-80" : "relative"}
+        >
           {(showGlobal || (hasOpenedGlobal && villages && globe)) && (
             <div
               aria-hidden={!showGlobal}
@@ -1068,6 +1082,10 @@ const SectorLoadingPlaceholder = () => (
 
 interface TravelViewProps {
   session: TravelSession;
+  /** Fill the host’s available map viewport while retaining the page controls. */
+  immersive?: boolean;
+  /** A building dialog pauses map input and automatic arrival prompts. */
+  isInteractive?: boolean;
   /** A route destination is being read before its confirmation reaches the session. */
   hasLocationRequest?: boolean;
 }

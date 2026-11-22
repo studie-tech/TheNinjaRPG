@@ -38,7 +38,13 @@ const PixelGame = dynamic(() =>
 const PanelGame = dynamic(() =>
   import("@/components/layout/PanelGameLayout").then((module) => module.PanelGame),
 );
+const ExperimentalGame = dynamic(() =>
+  import("@/components/layout/ExperimentalGameLayout").then(
+    (module) => module.ExperimentalGame,
+  ),
+);
 const GAME_FRAMES = {
+  experimental: ExperimentalGame,
   classic: ClassicGame,
   pixel: PixelGame,
   panel: PanelGame,

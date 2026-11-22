@@ -36,6 +36,7 @@ Object.assign(sensoryCapture, {
 });
 const dynamicSpy = vi.spyOn(dynamic, "default").mockReturnValue((() => null) as never);
 const { default: TravelPage } = await import("@/app/[shell]/travel/page");
+const { TravelScreen } = await import("@/screens/travel/TravelScreen");
 dynamicSpy.mockRestore();
 sensoryCapture.mockRestore();
 let actor: NonNullable<UserWithRelations>;
@@ -561,3 +562,12 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
       }
     },
   );
+
+it("lets a building finish its access guard before the map redirects an unavailable player", () => {
+  push.mockClear();
+  actor.status = "BATTLE";
+  const view = render(<TravelScreen immersive isInteractive={false} />);
+  expect(push).not.toHaveBeenCalled();
+  view.rerender(<TravelScreen immersive isInteractive />);
+  expect(push).toHaveBeenCalledWith("/combat");
+});

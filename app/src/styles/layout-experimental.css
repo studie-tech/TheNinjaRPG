@@ -1,0 +1,126 @@
+.experimental-game {
+  min-height: 100dvh;
+  color: var(--theme-text);
+  background: var(--theme-bg);
+  font-family: var(--theme-body-font);
+}
+.experimental-game-map {
+  display: flex;
+  height: 100dvh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.experimental-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--theme-line);
+  padding: max(0.5rem, env(safe-area-inset-top))
+    max(0.5rem, env(safe-area-inset-right)) 0.5rem
+    max(0.5rem, env(safe-area-inset-left));
+  background: var(--theme-surface);
+}
+.experimental-tool {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+}
+.experimental-tool:hover,
+.experimental-tool[aria-current="page"] {
+  color: var(--theme-accent);
+  background: var(--theme-bg);
+}
+.experimental-tool svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.experimental-drawer {
+  overflow-y: auto;
+}
+.experimental-page {
+  width: min(100%, 80rem);
+  margin-inline: auto;
+  padding: 1rem max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+}
+.experimental-map-main {
+  flex: 1;
+  min-height: 0;
+}
+.experimental-travel {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+.experimental-travel > [data-content-box] {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  flex-direction: column;
+}
+.experimental-travel > [data-content-box] > [data-content-box-header] {
+  padding: 0.5rem;
+}
+.experimental-travel > [data-content-box] > [data-content-box-inner] {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+}
+.experimental-travel [data-travel-viewport] {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.experimental-travel [data-travel-viewport] > div:has(#tutorial-travel-sector),
+.experimental-travel [data-travel-viewport] > div:has(#tutorial-global-map),
+.experimental-travel #tutorial-travel-sector,
+.experimental-travel #tutorial-travel-sector > div,
+.experimental-travel #tutorial-travel-sector > div > div,
+.experimental-travel #tutorial-global-map {
+  height: 100%;
+}
+/* Inventory actions can grow; bound their share so the map keeps a usable viewport. */
+.experimental-travel > div:not([data-content-box]) {
+  flex: none;
+  max-height: 22dvh;
+  overflow-y: auto;
+}
+.experimental-building-dialog {
+  grid-template-columns: minmax(0, 1fr);
+  width: calc(100% - 1rem);
+  max-width: 72rem;
+  padding: 2.5rem 1rem 1rem;
+}
+@media (max-width: 480px) {
+  .experimental-header {
+    gap: 0;
+  }
+  .experimental-header > div:last-child {
+    gap: 0;
+  }
+  .experimental-building-dialog {
+    padding-inline: 0.5rem;
+  }
+}
+
+.experimental-building-dialog > [data-content-box] {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* A collapsed lesson or its Quests tab still needs to open above the building.
+   Nested confirmations keep the shared dialog layer above that dock. */
+.experimental-building-dialog[data-guided-tutorial] {
+  z-index: 30;
+}

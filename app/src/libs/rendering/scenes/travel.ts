@@ -109,9 +109,10 @@ export const createTravelScene = async (options: {
     surface: "travel",
     backgroundAlpha: 0.5,
     height: (width) =>
-      options.mount.closest('[data-world-expanded="true"]')
+      options.mount.closest<HTMLElement>("[data-travel-viewport]")?.clientHeight ||
+      (options.mount.closest('[data-world-expanded="true"]')
         ? window.innerHeight
-        : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600)),
+        : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600))),
   });
   game.canvas.style.filter = "none";
   try {

@@ -11,6 +11,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 type PickerRouter = {
   refresh: ReturnType<typeof vi.fn>;
@@ -42,6 +43,7 @@ afterEach(async () => {
     cleanup();
     await flushRadixFocus();
   });
+  vi.restoreAllMocks();
   restoreBrowserGlobals();
 });
 
@@ -115,7 +117,30 @@ describe("game layout picker", () => {
     expect(localStorage.getItem(LAYOUT_PREFERENCE_COOKIE)).toBe('"3-sakura-courtyard"');
   });
 
-  it("offers all five layouts as peers in one selector", async () => {
+  it.each([true, false])(
+    "opens travel on an explicit experimental selection only when signed in (%s)",
+    async (isSignedIn) => {
+      const router = getRouter();
+      router.replace.mockClear();
+      mockUserContextValue({ isSignedIn });
+      function SelectExperiment() {
+        const selectLayout = useSelectGameLayout();
+        return (
+          <button type="button" onClick={() => selectLayout("experimental")}>
+            Try experimental
+          </button>
+        );
+      }
+      const view = render(<SelectExperiment />);
+      expect(router.replace).not.toHaveBeenCalled();
+      fireEvent.click(view.getByRole("button", { name: "Try experimental" }));
+      if (isSignedIn) expect(router.replace).toHaveBeenCalledWith("/travel");
+      else expect(router.replace).not.toHaveBeenCalled();
+      expect(document.cookie).toContain(`${LAYOUT_PREFERENCE_COOKIE}=experimental`);
+    },
+  );
+
+  it("offers the layouts including the opt-in experiment in one selector", async () => {
     const view = await openPicker();
     expect(view.getAllByRole("listbox")).toHaveLength(1);
     expect(view.getAllByRole("option").map((option) => option.textContent)).toEqual([
@@ -124,6 +149,7 @@ describe("game layout picker", () => {
       "Eclipse Observatory",
       "Obsidian Council",
       "Sakura Courtyard",
+      "Experimental sector layout",
     ]);
   });
 
