@@ -162,6 +162,7 @@ export const EditContent = <
     fetchNextPage: fetchMorePickerAssets,
     hasNextPage: hasMorePickerAssets,
     isFetchingNextPage: loadingMorePickerAssets,
+    isPending: loadingPickerAssets,
   } = api.gameAsset.getAll.useInfiniteQuery(
     {
       limit: 50,
@@ -171,7 +172,6 @@ export const EditContent = <
     },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
-      placeholderData: (previousData) => previousData,
       enabled: showPickerAssets,
     },
   );
@@ -453,7 +453,11 @@ export const EditContent = <
                     ))}
                   </div>
 
-                  {assetPickerType === "SFX" ? (
+                  {loadingPickerAssets ? (
+                    <p role="status" className="text-muted-foreground text-sm">
+                      Loading assets…
+                    </p>
+                  ) : assetPickerType === "SFX" ? (
                     <>
                       <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
                         {allPickerAssets

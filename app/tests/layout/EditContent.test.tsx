@@ -5,6 +5,8 @@ import {
   InfiniteQueryObserver,
   QueryClient,
   QueryClientProvider,
+  type UseInfiniteQueryOptions,
+  useInfiniteQuery,
   useQuery,
 } from "@tanstack/react-query";
 import {
@@ -2394,6 +2396,89 @@ describe("schema-derived field visibility", () => {
     await waitFor(() =>
       expect(lastListing()[0]).toEqual(expect.objectContaining({ exactFolder: "" })),
     );
+  });
+
+  it("clears selectable assets while another folder is loading", async () => {
+    const asset = (id: string, name: string) => ({
+      id,
+      name,
+      type: "ANIMATION" as const,
+      url: "https://example.com/animation.png",
+      hidden: false,
+    });
+    type AssetPage = { data: ReturnType<typeof asset>[]; nextCursor: undefined };
+    const secondFolder = deferred<AssetPage>();
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    vi.spyOn(api.gameAsset.getAllFolders, "useQuery").mockReturnValue({
+      data: [
+        { folder: "Fire", count: 1 },
+        { folder: "Water", count: 1 },
+      ],
+      isPending: false,
+    } as never);
+    vi.spyOn(api.gameAsset.getAll, "useInfiniteQuery").mockImplementation(((
+      input: { exactFolder?: string },
+      options: Pick<UseInfiniteQueryOptions<AssetPage>, "enabled" | "placeholderData">,
+    ) =>
+      useInfiniteQuery({
+        ...options,
+        queryKey: ["picker-assets", input],
+        queryFn: async () =>
+          input.exactFolder === "Water"
+            ? secondFolder.promise
+            : { data: [asset("flame", "Flame Burst")], nextCursor: undefined },
+        initialPageParam: undefined,
+        getNextPageParam: (page) => page.nextCursor,
+      })) as never);
+    const onEffectsChange = vi.fn();
+    const PickerForm = () => {
+      const [effects, setEffects] = useState<ZodAllTags[]>([DamageTag.parse({})]);
+      return (
+        <EffectFormWrapper
+          type="jutsu"
+          idx={0}
+          tag={effects[0]!}
+          effects={effects}
+          setEffects={(nextEffects) => {
+            onEffectsChange(nextEffects);
+            setEffects(nextEffects);
+          }}
+          availableTags={["damage"]}
+          hideTagType
+        />
+      );
+    };
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <PickerForm />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(
+      view.getByRole("button", { name: "Projectile animation: Pick from dialog" }),
+    );
+    fireEvent.click(await view.findByRole("button", { name: /^Fire/ }));
+    await view.findByText("Flame Burst");
+    fireEvent.click(view.getByRole("button", { name: "Folders" }));
+    fireEvent.click(await view.findByRole("button", { name: /^Water/ }));
+    expect(view.queryByText("Flame Burst")).toBeNull();
+    expect(view.queryByText("No assets match the selected tags.")).toBeNull();
+    expect(view.getByRole("status").textContent).toBe("Loading assets…");
+    await act(async () => {
+      secondFolder.resolve({
+        data: [asset("wave", "Tidal Wave")],
+        nextCursor: undefined,
+      });
+    });
+    fireEvent.click(await view.findByText("Tidal Wave"));
+    await waitFor(() =>
+      expect(onEffectsChange).toHaveBeenLastCalledWith([
+        expect.objectContaining({ projectileAnimation: "wave" }),
+      ]),
+    );
+    expect(view.queryByRole("dialog")).toBeNull();
+    queryClient.clear();
   });
 
   it("keeps linked reskin presentation editable while locking mechanics", () => {
