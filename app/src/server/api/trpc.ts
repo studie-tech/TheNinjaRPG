@@ -9,7 +9,6 @@ import type { ReadonlyHeaders } from "next/dist/server/web/spec-extension/adapte
 import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 import superjson from "superjson";
 import { ZodError } from "zod";
-import { LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
 import type { McpMeta } from "@/libs/mcp";
 import {
   parseQueryMetricsHeader,
@@ -63,10 +62,6 @@ export const createAppTRPCContext = async (options: {
       options.procedureTypes,
     ),
   };
-  // AB testing cookies
-  const abLemuReplacementVariant = normalizeLemuVariant(
-    options.readCookies.get(LEMU_EXPERIMENT)?.value,
-  );
   return {
     ...telemetry,
     drizzle: drizzleDB,
@@ -74,7 +69,6 @@ export const createAppTRPCContext = async (options: {
     userCountry,
     userId,
     userAgent,
-    abLemuReplacementVariant,
     wallpaperVariant: parseWallpaperVariant(
       options.readCookies.get(WALLPAPER_EXPERIMENT)?.value,
     ),
@@ -91,7 +85,6 @@ export const createCdnTRPCContext = (readHeaders: ReadonlyHeaders) => ({
   userCountry: undefined,
   userId: null,
   userAgent: undefined,
-  abLemuReplacementVariant: undefined,
   wallpaperVariant: undefined,
 });
 
@@ -251,7 +244,6 @@ export const cdnCachedProcedure = publicProcedure
         userIp: undefined,
         userCountry: undefined,
         userAgent: undefined,
-        abLemuReplacementVariant: undefined,
         wallpaperVariant: undefined,
       },
     }),

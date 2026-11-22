@@ -607,7 +607,6 @@ export const profileRouter = createTRPCRouter({
         ctx.userIp && ctx.userIp !== "unknown" ? hashIp(ctx.userIp) : undefined;
       if (input.step === TUTORIAL_STEPS_COUNT && ipHash) {
         const experiments = getExperimentAssignments({
-          abLemuReplacementVariant: ctx.abLemuReplacementVariant,
           wallpaperVariant: ctx.wallpaperVariant,
         });
         await Promise.all(

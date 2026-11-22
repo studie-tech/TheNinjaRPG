@@ -11,7 +11,6 @@ import VisitorFiltering, {
   getFilter as getVisitorFilter,
   useFiltering as useVisitorFiltering,
 } from "@/layout/VisitorFiltering";
-import { LEMU_EXPERIMENT, lemuLabel } from "@/libs/lemuExperiment";
 import {
   betaCurve,
   betaPosterior,
@@ -381,10 +380,8 @@ const ExperimentResults = ({ exp }: { exp: ExperimentAgg }) => {
       <div className="font-bold text-lg">{exp.experiment}</div>
       <p className="text-sm">
         {exp.experiment === WALLPAPER_EXPERIMENT
-          ? `Wallpaper experiment · control is the fall wallpaper · equal allocation across ${WALLPAPER_VARIANTS.length} village and seasonal candidates.`
-          : exp.experiment === LEMU_EXPERIMENT
-            ? "Lemu experiment · current Lemu baseline and six alternatives · equal allocation across seven arms."
-            : "Tutorial experiment"}
+          ? `Wallpaper experiment · control is the Horizon wallpaper · equal allocation across ${WALLPAPER_VARIANTS.length} village candidates.`
+          : "Tutorial experiment"}
       </p>
       <p className="text-sm">
         Select a variant to view its graph and comparison with the baseline.
@@ -531,7 +528,6 @@ const inferControlTreatment = (
 /** Readable name of a variant in the experiments that define one. */
 const variantLabel = (experiment: string, variant: string) => {
   if (experiment === WALLPAPER_EXPERIMENT) return wallpaperLabel(variant);
-  if (experiment === LEMU_EXPERIMENT) return lemuLabel(variant);
   return humanizeIdentifier(variant);
 };
 

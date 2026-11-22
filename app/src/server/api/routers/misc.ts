@@ -140,7 +140,6 @@ export const miscRouter = createTRPCRouter({
       if (ip === "unknown") return { success: false, message: "No IP detected" };
 
       const experiments = getExperimentAssignments({
-        abLemuReplacementVariant: ctx.abLemuReplacementVariant,
         wallpaperVariant:
           input.wallpaperVariant === ctx.wallpaperVariant
             ? ctx.wallpaperVariant

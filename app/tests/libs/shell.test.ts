@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { GAME_LAYOUTS } from "@/libs/gameLayouts";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
-import { LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
   chooseShell,
   parseShellParam,
@@ -99,8 +98,7 @@ describe("chooseShell", () => {
     userAgent: CHROME,
     pathname: "/home",
     userId: null,
-    draw: () => "treatment_1",
-    drawWallpaper: () => "winter",
+    drawWallpaper: () => "tsukimori",
     ...overrides,
     cookies: new Map(Object.entries(overrides.cookies ?? {})),
   });
@@ -108,68 +106,32 @@ describe("chooseShell", () => {
   it("gives a first-time visitor on the landing page the default layout", () => {
     const { variant, assigned } = chooseShell(request({ pathname: "/" }));
     expect(assigned).toEqual({
-      [LEMU_EXPERIMENT]: "treatment_1",
-      [WALLPAPER_EXPERIMENT]: "winter",
+      [WALLPAPER_EXPERIMENT]: "tsukimori",
     });
     expect(variant).toEqual({
       client: "web",
       layout: "default",
       signedIn: false,
-      wallpaper: "winter",
+      wallpaper: "tsukimori",
     });
   });
 
   it("draws nothing off the landing page, and nothing a visitor already carries", () => {
     expect(chooseShell(request({ pathname: "/home" })).assigned).toEqual({});
     const carried = chooseShell(
-      request({
-        pathname: "/",
-        cookies: { [LEMU_EXPERIMENT]: "control", [WALLPAPER_EXPERIMENT]: "spring" },
-      }),
+      request({ pathname: "/", cookies: { [WALLPAPER_EXPERIMENT]: "hyorin" } }),
     );
     expect(carried.assigned).toEqual({});
   });
 
-  it("draws a fresh assignment when the browser only carries the previous experiment", () => {
+  it("draws a fresh assignment when the browser only carries previous experiments", () => {
     const choice = chooseShell(
       request({
         pathname: "/",
-        cookies: {
-          ab_lemu_replacement_2: "treatment",
-          [WALLPAPER_EXPERIMENT]: "spring",
-        },
+        cookies: { ab_lemu_replacement_3: "treatment_3", ab_wallpaper_1: "spring" },
       }),
     );
-    expect(choice.assigned).toEqual({ [LEMU_EXPERIMENT]: "treatment_1" });
-  });
-
-  it.each([
-    "treatment_1",
-    "treatment_2",
-    "treatment_3",
-    "treatment_4",
-    "treatment_5",
-    "treatment_6",
-  ])("preserves %s across landing visits", (variant) => {
-    expect(
-      chooseShell(
-        request({
-          pathname: "/",
-          cookies: { [LEMU_EXPERIMENT]: variant, [WALLPAPER_EXPERIMENT]: "spring" },
-        }),
-      ).assigned,
-    ).toEqual({});
-  });
-
-  it("reassigns an invalid cookie rather than recording an unknown arm", () => {
-    expect(
-      chooseShell(
-        request({
-          pathname: "/",
-          cookies: { [LEMU_EXPERIMENT]: "treatment", [WALLPAPER_EXPERIMENT]: "spring" },
-        }),
-      ).assigned,
-    ).toEqual({ [LEMU_EXPERIMENT]: "treatment_1" });
+    expect(choice.assigned).toEqual({ [WALLPAPER_EXPERIMENT]: "tsukimori" });
   });
 
   it("preserves a pixel preference on both public and signed-in pages", () => {
@@ -201,7 +163,7 @@ describe("chooseShell", () => {
         pathname: "/",
         cookies: {
           [LAYOUT_PREFERENCE_COOKIE]: "17-obsidian-council",
-          [WALLPAPER_EXPERIMENT]: "winter",
+          [WALLPAPER_EXPERIMENT]: "tsukimori",
         },
       }),
       "17-obsidian-council",
@@ -337,7 +299,6 @@ describe("wallpaper shell isolation", () => {
         userId: null,
         pathname: "/signup",
         cookies: new Map([[WALLPAPER_EXPERIMENT, wallpaper]]),
-        draw: () => "control",
         drawWallpaper: () => "control",
       });
       expect(choice.variant).toEqual(variant);
@@ -350,8 +311,7 @@ describe("wallpaper shell isolation", () => {
       userId: null,
       pathname: "/",
       cookies: new Map<string, string>(),
-      draw: () => "control" as const,
-      drawWallpaper: () => "winter" as const,
+      drawWallpaper: () => "tsukimori" as const,
     };
     for (const overrides of [
       { isDocument: false },
@@ -372,16 +332,15 @@ describe("wallpaper shell isolation", () => {
         userId: null,
         pathname: "/",
         cookies: new Map([[WALLPAPER_EXPERIMENT, "bogus"]]),
-        draw: () => "control",
-        drawWallpaper: () => "summer",
+        drawWallpaper: () => "hyorin",
       }).variant.wallpaper,
-    ).toBe("summer");
+    ).toBe("hyorin");
   });
   describe("drawWallpaperVariant", () => {
     afterEach(() => vi.restoreAllMocks());
     it.each([
       [0, "control"],
-      [0.999, "horizon"],
+      [0.999, "tsukimori"],
     ] as const)("allocates random draw %s to %s", (draw, variant) => {
       vi.spyOn(Math, "random").mockReturnValue(draw);
       expect(drawWallpaperVariant()).toBe(variant);

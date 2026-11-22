@@ -26,6 +26,7 @@ import type { SortableItem } from "@/components/ui/sortable-list";
 import { SortableList } from "@/components/ui/sortable-list";
 import type { QuestType } from "@/drizzle/constants";
 import {
+  IMG_URL_ASSISTANT,
   IMG_URL_HANDPOINTER,
   OrderedQuestTypesInTutorial,
   TUTORIAL_STEPS_COUNT,
@@ -34,7 +35,6 @@ import type { UserQuest } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { tutorialPageGuidanceAtom, useTutorialStep } from "@/hooks/tutorial";
-import { useAbVariant } from "@/hooks/useAbVariant";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
@@ -42,11 +42,6 @@ import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { QuestObjectives, useCheckRewards } from "@/layout/Logbook";
-import {
-  getLemuImage,
-  LEMU_EXPERIMENT,
-  LEMU_PORTRAIT_WAIST,
-} from "@/libs/lemuExperiment";
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import {
   dialogChoiceContentId,
@@ -101,6 +96,8 @@ const TUTORIAL_AUTO_CLAIM_MS = 1200;
 
 /** Gap between Lemu and the end of the dock she stands at. */
 const PORTRAIT_INSET_PX = 16;
+/** Fraction of the assistant portrait above her waist, cropped against the dialogue border. */
+const ASSISTANT_PORTRAIT_WAIST = 0.44;
 
 /** Delay before a tutorial redirect is sent a second time. */
 const REDIRECT_RETRY_MS = 1500;
@@ -1144,10 +1141,9 @@ const AssistantPortrait: React.FC<{
   avoidBox: TutorialScreenBox | null;
   dodgeHighlight?: boolean;
 }> = ({ characterImage, avoidBox, dodgeHighlight }) => {
-  const { variant } = useAbVariant(LEMU_EXPERIMENT);
   const { swapSides } = useActivityDock();
-  const image = characterImage || getLemuImage(variant);
-  const waist = LEMU_PORTRAIT_WAIST[image] ?? 0.5;
+  const image = characterImage || IMG_URL_ASSISTANT;
+  const waist = image === IMG_URL_ASSISTANT ? ASSISTANT_PORTRAIT_WAIST : 0.5;
   const stripRef = React.useRef<HTMLDivElement>(null);
   const [side, setSide] = useState<TutorialPortraitSide | null>("right");
   // Measured after layout so she never paints where she is about to leave. The
@@ -1400,7 +1396,6 @@ const CancelTutorialConfirmDialog: React.FC<{
   isPending: boolean;
   errorMessage?: string;
 }> = ({ open, onOpenChange, onConfirm, isPending, errorMessage }) => {
-  const { variant } = useAbVariant(LEMU_EXPERIMENT);
   return (
     <Dialog
       open={open}
@@ -1461,7 +1456,7 @@ const CancelTutorialConfirmDialog: React.FC<{
             </div>
           </div>
           <Image
-            src={getLemuImage(variant)}
+            src={IMG_URL_ASSISTANT}
             width={256}
             height={384}
             alt=""

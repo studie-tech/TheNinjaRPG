@@ -1,4 +1,3 @@
-import { LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
 import {
   parseWallpaperVariant,
   WALLPAPER_EXPERIMENT,
@@ -59,17 +58,9 @@ export interface ExperimentAssignment {
 
 /** Normalize persisted experiment variants into valid assignments for exposure and completion attribution. */
 export const getExperimentAssignments = (variants: {
-  abLemuReplacementVariant?: string | null;
   wallpaperVariant?: string | null;
 }): ExperimentAssignment[] => {
   const assignments: ExperimentAssignment[] = [];
-  const variant = normalizeLemuVariant(variants.abLemuReplacementVariant);
-  if (variant) {
-    assignments.push({
-      experiment: LEMU_EXPERIMENT,
-      variant,
-    });
-  }
   const wallpaper = parseWallpaperVariant(variants.wallpaperVariant);
   if (wallpaper)
     assignments.push({ experiment: WALLPAPER_EXPERIMENT, variant: wallpaper });

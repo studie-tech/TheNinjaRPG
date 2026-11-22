@@ -62,7 +62,6 @@ export async function POST(request: Request) {
     userId,
     userAgent: "tnr-reviewer-broker",
     userCountry: undefined,
-    abLemuReplacementVariant: undefined,
     wallpaperVariant: undefined,
   });
 

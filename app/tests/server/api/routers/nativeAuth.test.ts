@@ -26,7 +26,6 @@ const caller = (userId: string | null = null) =>
     userIp: "127.0.0.1",
     userAgent: "test",
     userCountry: undefined,
-    abLemuReplacementVariant: undefined,
     wallpaperVariant: undefined,
   }).nativeAuth;
 

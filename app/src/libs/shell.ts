@@ -5,11 +5,6 @@ import {
   toGameLayoutId,
 } from "@/libs/gameLayouts";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
-import {
-  LEMU_EXPERIMENT,
-  type LemuVariant,
-  normalizeLemuVariant,
-} from "@/libs/lemuExperiment";
 import { parseNativeUserAgent } from "@/libs/native/userAgent";
 import {
   parseWallpaperVariant,
@@ -105,8 +100,7 @@ export interface ShellRequest {
   /** The user id Clerk verified for this request, if any. */
   userId: string | null;
   cookies: ReadonlyMap<string, string>;
-  /** Draws an experiment assignment for a visitor who has none. */
-  draw: () => LemuVariant;
+  /** Draws a wallpaper experiment assignment for a visitor who has none. */
   drawWallpaper: () => WallpaperVariant;
   /** Only a document visit can enroll a new visitor, never prefetch or RSC navigation. */
   isDocument?: boolean;
@@ -147,7 +141,7 @@ const clientHasSession = (cookies: ReadonlyMap<string, string>) => {
  * receive the site's welcome default; signed-in players without a choice receive Classic.
  * Crawlers always receive the default. A person whose browser string happens to match the
  * crawler pattern is told apart by their session cookies. A signed-out visitor arriving on
- * the landing page without assignments for the Lemu and wallpaper experiments is given them
+ * the landing page without a wallpaper experiment assignment is given one
  * here so the document and the cookie agree.
  */
 export const chooseShell = (
@@ -169,9 +163,6 @@ export const chooseShell = (
     layout === "default" &&
     request.pathname === "/" &&
     request.isDocument !== false;
-  if (isLandingVisit && !normalizeLemuVariant(request.cookies.get(LEMU_EXPERIMENT))) {
-    assigned[LEMU_EXPERIMENT] = request.draw();
-  }
   let wallpaper = parseWallpaperVariant(request.cookies.get(WALLPAPER_EXPERIMENT));
   if (client === "web" && isLandingVisit && !wallpaper) {
     wallpaper = request.drawWallpaper();
