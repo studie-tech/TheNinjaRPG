@@ -4,6 +4,7 @@
  * the browser both run these, so a guest meets the same opponent a player does.
  */
 import type { KessenTier } from "@/drizzle/constants";
+import type { KessenDeckCard } from "@/drizzle/schema";
 import {
   academyNpcAction,
   KESSEN_ACADEMY_FIRST_LESSON,
@@ -11,20 +12,53 @@ import {
   type KessenAcademyLessonKey,
 } from "./academy";
 import { aiRng, decide } from "./ai";
-import { actingSeats, applyAction, viewFor } from "./engine";
+import { expandDeckCards } from "./deck";
+import {
+  actingSeats,
+  applyAction,
+  createMatch,
+  matchInputProblem,
+  viewFor,
+} from "./engine";
 import {
   type KessenNpc,
   type KessenNpcMode,
+  type KessenNpcVariant,
   kessenNpcAiProfile,
   npcVariant,
 } from "./npcs";
-import type { KessenCard, KessenEvent, MatchState } from "./types";
+import type { CreateMatchInput, KessenCard, KessenEvent, MatchState } from "./types";
 
 /** The tier an NPC mode plays at; Academy lessons play at the Academy's. */
 export const tierOfMode = (npc: KessenNpc, mode: KessenNpcMode): KessenTier =>
   mode === "lesson"
     ? KESSEN_ACADEMY_TIER
     : (npcVariant(npc, mode)?.tier ?? npc.standard.tier);
+
+/**
+ * A match between a player's deck (seat 0) and an NPC variant's deck (seat 1) under the
+ * variant's rules, with the NPC's deck list; null when either deck names a card missing
+ * from `cards` (an NPC deck can name a card staff removed from the catalog).
+ */
+export const createNpcMatch = (input: {
+  seed: string;
+  deck: { leaderId: string | null; cards: readonly KessenDeckCard[] };
+  variant: KessenNpcVariant;
+  cards: KessenCard[];
+}) => {
+  const aiDeck = expandDeckCards(input.variant.deck.cards);
+  const setup: CreateMatchInput = {
+    seed: input.seed,
+    seats: [
+      { leaderId: input.deck.leaderId, deck: expandDeckCards(input.deck.cards) },
+      { leaderId: input.variant.deck.leaderId, deck: aiDeck },
+    ],
+    rules: input.variant.rules,
+    cards: input.cards,
+  };
+  if (matchInputProblem(setup)) return null;
+  return { engine: createMatch(setup), aiDeck };
+};
 
 /** What the NPC's replies read from a match. */
 export interface KessenNpcTable {

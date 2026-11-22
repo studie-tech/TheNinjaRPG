@@ -27,19 +27,11 @@ import {
 } from "@/libs/kessen/catalog";
 import {
   buildPlayerDeck,
-  expandDeckCards,
   KESSEN_DECK_FACTIONS,
   KESSEN_RARITY_ORDER,
   loanerFaction,
 } from "@/libs/kessen/deck";
-import {
-  actingSeats,
-  applyAction,
-  createMatch,
-  matchInputProblem,
-  redactEvents,
-  viewFor,
-} from "@/libs/kessen/engine";
+import { actingSeats, applyAction, redactEvents, viewFor } from "@/libs/kessen/engine";
 import {
   homeFaction,
   KESSEN_CIRCUIT_MODES,
@@ -54,10 +46,10 @@ import {
   npcMatchPool,
   npcVariant,
 } from "@/libs/kessen/npcs";
-import { runNpcReplies, tierOfMode } from "@/libs/kessen/npcTurns";
+import { createNpcMatch, runNpcReplies, tierOfMode } from "@/libs/kessen/npcTurns";
 import { countPlays, weeklyWinsFor } from "@/libs/kessen/rewards";
 import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
-import type { KessenEvent, SeatSetup } from "@/libs/kessen/types";
+import type { KessenEvent } from "@/libs/kessen/types";
 import { findQuestChallenge } from "@/libs/quest/challenge";
 import {
   findKessenDeck,
@@ -277,21 +269,11 @@ export const kessenRouter = createTRPCRouter({
         owned: ownedCardCounts(ownedRows).free,
       });
       if ("error" in deck) return errorResponse(deck.error);
-      const aiDeck = expandDeckCards(variant.deck.cards);
-      const setup = {
-        seed: nanoid(),
-        seats: [
-          { leaderId: deck.leaderId, deck: expandDeckCards(deck.cards) },
-          { leaderId: variant.deck.leaderId, deck: aiDeck },
-        ] as [SeatSetup, SeatSetup],
-        rules: variant.rules,
-        cards: pool,
-      };
-      // An NPC deck can name a card staff removed from the catalog.
-      if (matchInputProblem(setup))
+      const created = createNpcMatch({ seed: nanoid(), deck, variant, cards: pool });
+      if (!created)
         return errorResponse("This opponent's cards are not available right now.");
 
-      const engine = createMatch(setup);
+      const { engine, aiDeck } = created;
       return openNpcMatch(ctx.drizzle, {
         userId,
         npc,
@@ -729,6 +711,8 @@ const openNpcMatch = async (
   };
 };
 
+const STALE_TURN = "This match moved on in another window; showing the latest turn.";
+
 /**
  * Rejections shared by turns and concessions: a missing or ended match, retired rules
  * (the match expires unrewarded) and a stale version (the fresh match is returned).
@@ -760,12 +744,7 @@ const rejectTurn = async (
     };
   }
   if (row.version !== version) {
-    return {
-      ...errorResponse(
-        "This match moved on in another window; showing the latest turn.",
-      ),
-      match: toPayload(row),
-    };
+    return { ...errorResponse(STALE_TURN), match: toPayload(row) };
   }
   return null;
 };
@@ -774,7 +753,7 @@ const rejectTurn = async (
 const staleTurn = async (client: DrizzleClient, userId: string, matchId: string) => {
   const [fresh] = await findKessenMatch(client, userId, matchId);
   return {
-    ...errorResponse("This match moved on in another window; showing the latest turn."),
+    ...errorResponse(STALE_TURN),
     match: fresh ? toPayload(fresh) : undefined,
     events: [] as KessenEvent[],
   };

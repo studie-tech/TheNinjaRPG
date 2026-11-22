@@ -72,6 +72,7 @@ import {
   KESSEN_ACADEMY_FIRST_LESSON,
   type KessenAcademyLessonKey,
 } from "@/libs/kessen/academy";
+import { other } from "@/libs/kessen/board";
 import type { DeckFaction } from "@/libs/kessen/deck";
 import type { KessenNpcKey } from "@/libs/kessen/npcs";
 import { KESSEN_PACK_IDS } from "@/libs/kessen/packs";
@@ -454,7 +455,7 @@ function KessenHall() {
   const duelPayload = duel.match;
   const duelDeck = deckSourceOf(playDeck, hub);
   const duelOpponent = duelPayload
-    ? duelPayload.players[duelPayload.seat === 0 ? 1 : 0]
+    ? duelPayload.players[other(duelPayload.seat)]
     : null;
   const duelRematch =
     duelPayload && duelOpponent

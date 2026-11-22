@@ -17,7 +17,7 @@ import {
   type KessenAcademyLessonKey,
 } from "./academyLessons";
 import { academyPositionProblem, buildAcademyPosition } from "./academyPosition";
-import { isInfiltrator } from "./board";
+import { isInfiltrator, other } from "./board";
 import { actingSeats, applyAction, targetOptionsForView, viewFor } from "./engine";
 import type { KessenKeyword } from "./text";
 import { ROW_LABELS } from "./text";
@@ -278,7 +278,7 @@ export const academyDebrief = (
   }
   const last = view.history[view.history.length - 1];
   const left = view.seats[view.me].handCount;
-  const them = view.me === 0 ? 1 : 0;
+  const them = other(view.me);
   if (last && last.winner !== view.me && left > 0) {
     return {
       won: false,

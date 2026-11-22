@@ -1,3 +1,4 @@
+import { other } from "@/libs/kessen/board";
 import type {
   KessenEvent,
   KessenMatchLog,
@@ -76,8 +77,7 @@ export const getKessenPvpLobbyAfterStart = (
   lobby: KessenPvpLobby,
   match: KessenPvpMatchPayload,
 ): KessenPvpLobby => {
-  const opponentSeat = match.seat === 0 ? 1 : 0;
-  const opponent = match.players[opponentSeat];
+  const opponent = match.players[other(match.seat)];
   return {
     ...lobby,
     queue: null,

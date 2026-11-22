@@ -408,7 +408,7 @@ const Shop: React.FC<ShopProps> = (props) => {
       confirmClassName={
         cardStall
           ? canAfford
-            ? STALL.buy
+            ? undefined
             : STALL.cannotBuy
           : canAfford
             ? "bg-blue-600 text-white hover:bg-blue-700"
@@ -443,7 +443,7 @@ const Shop: React.FC<ShopProps> = (props) => {
               variant="outline"
               disabled={isPurchasing}
               onClick={() => setItemConfirmOpen(false)}
-              className={cn("order-1", STALL.close)}
+              className="order-1"
             >
               Close
             </Button>
@@ -681,7 +681,9 @@ const Shop: React.FC<ShopProps> = (props) => {
         <div
           className={cn(
             "border-b px-2 py-3 md:px-6 md:py-4",
-            cardStall ? STALL.rule : "bg-linear-to-b from-amber-950/10 to-muted/30",
+            cardStall
+              ? "border-border"
+              : "bg-linear-to-b from-amber-950/10 to-muted/30",
           )}
         >
           <div className="mx-auto flex max-w-5xl flex-col gap-1.5 sm:gap-2">
@@ -719,7 +721,7 @@ const Shop: React.FC<ShopProps> = (props) => {
             <p
               className={cn(
                 "hidden text-balance text-center text-muted-foreground text-xs leading-relaxed sm:block",
-                cardStall && cn("block text-base", STALL.muted),
+                cardStall && "text-muted-foreground block text-base",
               )}
             >
               {tabHint}
@@ -730,7 +732,7 @@ const Shop: React.FC<ShopProps> = (props) => {
         <div
           className={cn(
             "border-b px-2 py-3 md:px-5 md:py-4",
-            cardStall ? STALL.rule : "bg-muted/25",
+            cardStall ? "border-border" : "bg-muted/25",
           )}
         >
           <div className="mx-auto flex max-w-5xl flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -739,7 +741,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                 htmlFor={catalogSearchId}
                 className={cn(
                   "text-muted-foreground text-xs uppercase",
-                  cardStall && cn("text-base normal-case", STALL.muted),
+                  cardStall && "text-muted-foreground text-base normal-case",
                 )}
               >
                 {cardStall ? "Search the stall" : "Search catalog"}
@@ -761,7 +763,7 @@ const Shop: React.FC<ShopProps> = (props) => {
               </div>
             </div>
             {isStallCards && stallFactions.length > 1 && (
-              <label className={cn("flex flex-col gap-1 lg:w-48", STALL.muted)}>
+              <label className="text-muted-foreground flex flex-col gap-1 lg:w-48">
                 Faction
                 <select
                   value={stallFaction}
@@ -902,7 +904,7 @@ const Shop: React.FC<ShopProps> = (props) => {
       >
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
           {props.subtitle && (
-            <p className={cn("min-w-0 flex-1", STALL.muted)}>{props.subtitle}</p>
+            <p className="text-muted-foreground min-w-0 flex-1">{props.subtitle}</p>
           )}
           {headerControls}
         </div>
@@ -1108,7 +1110,11 @@ function StallCatalogCard({
       <span
         className={cn(
           "mt-auto inline-flex items-center gap-1 font-semibold text-lg tabular-nums",
-          isSoldOut ? STALL.muted : canAfford ? "text-primary" : "text-destructive",
+          isSoldOut
+            ? "text-muted-foreground"
+            : canAfford
+              ? "text-primary"
+              : "text-destructive",
         )}
         style={{ fontFamily: "var(--kessen-font-display)" }}
       >
@@ -1264,7 +1270,7 @@ function StallPurchaseSummary({
             {totalPrice.toLocaleString()}
             <span className="sr-only"> ryo</span>
           </span>
-          <span className={STALL.muted}>
+          <span className="text-muted-foreground">
             {quantity > 1 && `${eachPrice.toLocaleString()} each · `}you have{" "}
             {money.toLocaleString()} ryo
           </span>
@@ -1319,8 +1325,6 @@ function StallPurchaseSummary({
 /** Card Hall classes of the Card Master stall; tokens come from the Kessen stylesheet. */
 const STALL = {
   surface: "bg-card text-base text-card-foreground",
-  rule: "border-border",
-  muted: "text-muted-foreground",
   tabList: "grid h-auto grid-cols-2 gap-1 rounded-lg bg-muted p-1",
   tab: "flex min-h-[40px] flex-row items-center justify-center gap-2 rounded-md px-2 font-semibold text-base pointer-coarse:min-h-[44px]",
   tabActive:
@@ -1329,9 +1333,7 @@ const STALL = {
   dialog: "md:max-w-xl",
   dialogFooter:
     "sm:flex-wrap [&>:is(button,a)]:min-h-[44px] [&>:is(button,a)]:text-base sm:[&>:is(button,a)]:min-h-[44px] sm:[&>:is(button,a)]:px-5 sm:[&>:is(button,a)]:text-base",
-  buy: "",
   cannotBuy: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-  close: "",
   step: "flex size-[44px] shrink-0 items-center justify-center rounded-lg border bg-background font-semibold text-[18px] hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40",
   search:
     "h-[40px] rounded-lg text-base pointer-coarse:h-[44px] pointer-coarse:text-[16px]",

@@ -42,6 +42,7 @@ import {
   insertKessenMatch,
   insertKessenProgressRowsIfMissing,
   type listKessenCards,
+  updateKessenMatchForTurn,
   updateUserDataForKessenPayout,
 } from "@/queries/kessen";
 import {
@@ -53,7 +54,6 @@ import {
   updateKessenMatchForRatingClaim,
   updateKessenProgressForRankedReward,
   updateKessenPvpMatchesForVoid,
-  updateKessenPvpMatchForTurn,
   updateKessenPvpMatchResult,
 } from "@/queries/kessenPvp";
 import { fetchUser } from "@/queries/profile";
@@ -156,7 +156,7 @@ export const advanceKessenDuel = async (
   const stored = storedDuelOf(row);
   if (row.engineVersion !== CARD_ENGINE_VERSION) {
     const state: KessenStoredPvpMatch = { ...stored, result: voidResult() };
-    const write = await updateKessenPvpMatchForTurn(client, row, {
+    const write = await updateKessenMatchForTurn(client, row, {
       state,
       now,
       deadline: null,
@@ -234,7 +234,7 @@ export const advanceKessenDuel = async (
     timeouts: clock.timeouts,
   };
   if (!ending) {
-    const write = await updateKessenPvpMatchForTurn(client, row, {
+    const write = await updateKessenMatchForTurn(client, row, {
       state: next,
       now,
       deadline,
@@ -253,7 +253,7 @@ export const advanceKessenDuel = async (
     result: plan.settlement ? unsettledResult(plan.settlement.result) : plan.result,
     settlement: plan.settlement,
   };
-  const write = await updateKessenPvpMatchForTurn(client, row, {
+  const write = await updateKessenMatchForTurn(client, row, {
     state: ended,
     now,
     deadline: null,

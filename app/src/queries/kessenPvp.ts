@@ -103,38 +103,6 @@ export const listActiveKessenMatchesForPlayers = (
     )
     .orderBy(desc(kessenMatch.startedAt));
 
-/**
- * The one write of a duel decision (or of the clock forcing one): a CAS on `version` of
- * an ACTIVE duel. An ending write sets the terminal status in the same statement, so
- * exactly one request ends a duel.
- */
-export const updateKessenPvpMatchForTurn = (
-  client: Pick<DrizzleClient, "update">,
-  match: { id: string; version: number },
-  change: {
-    state: KessenStoredPvpMatch;
-    now: Date;
-    deadline: Date | null;
-    status?: "FINISHED" | "CONCEDED" | "EXPIRED";
-  },
-) =>
-  client
-    .update(kessenMatch)
-    .set({
-      state: change.state as unknown as Record<string, unknown>,
-      version: match.version + 1,
-      updatedAt: change.now,
-      turnDeadline: change.deadline,
-      ...(change.status ? { status: change.status, finishedAt: change.now } : {}),
-    })
-    .where(
-      and(
-        eq(kessenMatch.id, match.id),
-        eq(kessenMatch.version, match.version),
-        eq(kessenMatch.status, "ACTIVE"),
-      ),
-    );
-
 /** Rewrites the stored result of an ended duel (its settled result); CAS on version. */
 export const updateKessenPvpMatchResult = (
   client: Pick<DrizzleClient, "update">,

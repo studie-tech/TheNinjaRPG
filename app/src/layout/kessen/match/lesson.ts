@@ -5,6 +5,7 @@
  */
 import type { GuidedLessonMark } from "@/layout/tutorial/guidedLesson";
 import type { AcademyTarget } from "@/libs/kessen/academy";
+import { other } from "@/libs/kessen/board";
 import { ROWS } from "@/libs/kessen/rules";
 import type { MatchView } from "@/libs/kessen/types";
 
@@ -28,7 +29,7 @@ export const lessonMarks = (
     const name = cardId ? view.cards[cardId]?.name : undefined;
     if (name && namesCard(text, name)) marks.push({ selector, label: name });
   };
-  const them = view.me === 0 ? 1 : 0;
+  const them = other(view.me);
   for (const side of [them, view.me] as const) {
     for (const row of ROWS) {
       for (const unit of view.board[side][row]) {

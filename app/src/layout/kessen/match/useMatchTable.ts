@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { terrainSides } from "@/libs/kessen/abilities";
-import { displayedPower, findUnit } from "@/libs/kessen/board";
+import { displayedPower, findUnit, other } from "@/libs/kessen/board";
 import { previewPartial, rowOptionsForView } from "@/libs/kessen/engine";
 import { kessenNpc, npcVariant } from "@/libs/kessen/npcs";
 import { ROWS } from "@/libs/kessen/rules";
@@ -98,7 +98,7 @@ export const useMatchTable = ({
   useEffect(() => setQuickPlayState(readQuickPlay()), []);
 
   const npc = npcMatch ? kessenNpc(npcMatch.npcKey) : null;
-  const opponent = duel ? duel.players[duel.seat === 0 ? 1 : 0] : null;
+  const opponent = duel ? duel.players[other(duel.seat)] : null;
   const opponentName = opponent?.username ?? npc?.name ?? "Opponent";
   // The rule of the variant being played (an Ascended rematch or a boss), for the whole match.
   const houseRule =
@@ -117,7 +117,7 @@ export const useMatchTable = ({
   const step = playback ? (playback.steps[playback.index] ?? null) : null;
   const view = step ? step.frame : confirmed.view;
   const me = view.me;
-  const them: Seat = me === 0 ? 1 : 0;
+  const them = other(me);
   const playing = playback !== null;
   const over = confirmed.status !== "ACTIVE" || confirmed.view.phase === "over";
   const myTurn =
@@ -637,7 +637,7 @@ export const rowAfterOf = (units: readonly UnitDelta[], side: Seat, row: Row) =>
 export const placementSide = (view: MatchView, instance: string, me: Seat): Seat => {
   const card = view.cards[view.inst[instance] ?? ""];
   const infiltrator = card?.abilities.some((ability) => ability.k === "infiltrator");
-  return infiltrator ? (me === 0 ? 1 : 0) : me;
+  return infiltrator ? other(me) : me;
 };
 
 export const isRowKind = (kind: TargetRequest["kind"]) =>
@@ -677,13 +677,13 @@ const catalogLookup = (catalog: KessenMatchCatalog) => {
   return map;
 };
 
-/** The next step at or after `from` that takes time or waits; past the end when none. */
 /** The play-log lines of played-back steps. */
 const stepLines = (steps: readonly PlaybackStep[], names: MatchNames) =>
   steps
     .map((entry) => describeEvent(entry.event, entry.before, names, entry.frame))
     .filter((line): line is string => line !== null);
 
+/** The next step at or after `from` that takes time or waits; past the end when none. */
 const firstStop = (steps: PlaybackStep[], from: number) => {
   let index = from;
   while (index < steps.length) {
@@ -736,7 +736,7 @@ const placementChoices = (
   const placements = rowOptionsForView(view, me, cardInstance);
   const side = placementSide(view, cardInstance, me);
   const closed: RowChoice[] = [];
-  for (const rowSide of [me, me === 0 ? 1 : 0] as const) {
+  for (const rowSide of [me, other(me)] as const) {
     for (const row of ROWS) {
       if (placements.some((entry) => entry.row === row && entry.side === rowSide)) {
         continue;

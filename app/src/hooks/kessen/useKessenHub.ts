@@ -2,6 +2,7 @@
 
 import { api, type RouterInputs } from "@/app/_trpc/client";
 import { getKessenHubAfterStart } from "@/deltas/kessen";
+import { settle } from "@/hooks/kessen/settle";
 import { useKessenHubCache } from "@/hooks/kessen/useKessenHubCache";
 import type { KessenMatchPayload } from "@/validators/kessen";
 
@@ -59,12 +60,8 @@ export const useStartKessenMatch = () => {
     request: () => ReturnType<typeof mutation.mutateAsync>,
   ): Promise<KessenStartOutcome> => {
     const snapshot = hubCache.prepareHubUpdate();
-    let failure: unknown = null;
-    const data = await request().catch((error: unknown) => {
-      failure = error;
-      return null;
-    });
-    if (!data) {
+    const sent = await settle(request);
+    if (!sent.ok) {
       // A match may have started before the failure; the hub names it if so. The read
       // is not awaited: during an outage it retries with backoff, and the message
       // belongs next to the start button now.
@@ -72,11 +69,12 @@ export const useStartKessenMatch = () => {
       return {
         ok: false,
         message:
-          failure instanceof Error && failure.message
-            ? failure.message
+          sent.error instanceof Error && sent.error.message
+            ? sent.error.message
             : "The server could not confirm the match start.",
       };
     }
+    const data = sent.value;
     if (!data.success || !("match" in data) || !data.match) {
       return {
         ok: false,

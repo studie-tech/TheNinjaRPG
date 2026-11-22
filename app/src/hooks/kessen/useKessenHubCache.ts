@@ -9,14 +9,13 @@ import type { KessenHub } from "@/validators/kessen";
 
 /**
  * The Card Hall hub cache (`kessen.getHub`) for mutations anywhere in the game: a
- * snapshot taken when a mutation starts, its confirmed update, granted cards credited to
- * the owned copies, and `reconcileCardMoves` (see `useKessenCardMoves`).
+ * snapshot taken when a mutation starts, its confirmed update and granted cards credited
+ * to the owned copies.
  */
 export const useKessenHubCache = () => {
   const { prepareUpdate, updateCache } = useQueryCacheUpdate<KessenHub>(
     getQueryKey(api.kessen.getHub, undefined, "query"),
   );
-  const { reconcileCardMoves } = useKessenCardMoves();
   const utils = api.useUtils();
   // Granted packs add stacks whose ids only a hub read names.
   const creditHubGrants = useCallback(
@@ -33,7 +32,6 @@ export const useKessenHubCache = () => {
     prepareHubUpdate: prepareUpdate,
     updateHub: updateCache,
     creditHubGrants,
-    reconcileCardMoves,
   };
 };
 

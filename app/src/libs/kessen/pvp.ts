@@ -14,6 +14,7 @@ import {
   KESSEN_RANKED_RADIUS_STEP_SECONDS,
   KESSEN_RANKED_RATING_FLOOR,
 } from "@/drizzle/constants";
+import { other } from "./board";
 import { actingSeats, applyAction } from "./engine";
 import type { Eligibility } from "./rewards";
 import type { KessenAction, KessenEvent, MatchState, Seat } from "./types";
@@ -115,7 +116,7 @@ export const resolveKessenClock = (input: {
 
 /** The winner of a forfeit: the other seat, or nobody when both ran out together. */
 export const kessenForfeitWinner = (forfeited: readonly Seat[]): Seat | null =>
-  forfeited.length === 1 ? (forfeited[0] === 0 ? 1 : 0) : null;
+  forfeited.length === 1 ? other(forfeited[0] as Seat) : null;
 
 /** Elo change of a rated match for one player; the K-factor is higher while provisional. */
 export const kessenRatingDelta = (input: {
@@ -195,7 +196,7 @@ export const kessenDuelEligibility = (input: {
     return { eligible: false, reason: "The match was too short to be rewarded." };
   if (input.plays[0] + input.plays[1] < KESSEN_MIN_TOTAL_PLAYS)
     return { eligible: false, reason: "Too few cards were played to be rewarded." };
-  if (input.plays[input.winner === 0 ? 1 : 0] < KESSEN_MIN_LOSER_PLAYS)
+  if (input.plays[other(input.winner)] < KESSEN_MIN_LOSER_PLAYS)
     return {
       eligible: false,
       reason: "Your opponent played too few cards for the win to be rewarded.",

@@ -39,10 +39,10 @@ type TurnResponse =
  * match query (a stale version returns the fresh match, which replaces the cache) and the
  * hub: the active match's standing while it goes on; once it ended, the counters, cards
  * and open picks, with paid ryo (or a quest challenge's finished objective) applied to
- * the profile. The inventory (and the hub after
- * a first win) refreshes in the background so playback starts at once. A transport or server failure resolves at once with a rejection the table shows
- * next to the action; the outcome is unknown, so the match, hub, profile and inventory
- * are read again in the background.
+ * the profile. The inventory (and the hub after a first win) refreshes in the background
+ * so playback starts at once. A transport or server failure resolves at once with a
+ * rejection the table shows next to the action; the outcome is unknown, so the match,
+ * hub, profile and inventory are read again in the background.
  */
 export const useKessenMatch = (matchId: string | null) => {
   const input = { matchId: matchId ?? "" };
@@ -62,8 +62,7 @@ export const useKessenMatch = (matchId: string | null) => {
   const claimFirstWinChoice = api.kessen.claimFirstWinChoice.useMutation();
 
   /** Capture the caches this match's key points at when the action starts. */
-  const prepare = (id: string) => ({
-    id,
+  const prepare = () => ({
     match: matchCache.prepareUpdate(),
     hub: hubCache.prepareHubUpdate(),
     user: prepareUserUpdate(),
@@ -134,7 +133,7 @@ export const useKessenMatch = (matchId: string | null) => {
   ): Promise<KessenActionOutcome> => {
     const current = query.data?.match;
     if (!current) return { ok: false, message: "The match is still loading." };
-    const snapshot = prepare(current.id);
+    const snapshot = prepare();
     const sent = await settle(() => request(current));
     if (!sent.ok) {
       void recover(current.id);
@@ -164,7 +163,7 @@ export const useKessenMatch = (matchId: string | null) => {
   const claimChoice = async (itemId: string): Promise<KessenActionOutcome> => {
     const current = query.data?.match;
     if (!current) return { ok: false, message: "The match is still loading." };
-    const snapshot = prepare(current.id);
+    const snapshot = prepare();
     const sent = await settle(() =>
       claimFirstWinChoice.mutateAsync({ matchId: current.id, itemId }),
     );

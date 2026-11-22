@@ -17,6 +17,7 @@ import {
 } from "@/drizzle/constants";
 import type { KessenProgress, UserRequest } from "@/drizzle/schema";
 import { finishedFirstLesson } from "@/libs/kessen/academy";
+import { other } from "@/libs/kessen/board";
 import {
   kessenCatalogCards,
   ownedCardCounts,
@@ -927,7 +928,7 @@ const activeDuelOf = (
   if (!row || seat === null) return null;
   const standing = parseJsonFields(row.standing);
   const names = Array.isArray(standing.names) ? standing.names : [];
-  const opponentSeat = seat === 0 ? 1 : 0;
+  const opponentSeat = other(seat);
   return {
     id: row.id,
     kind: row.kind as KessenPvpActiveMatch["kind"],

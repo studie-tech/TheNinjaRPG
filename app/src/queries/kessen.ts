@@ -518,15 +518,18 @@ export const kessenMatchIsActive = (
   );
 
 /**
- * The one write of a turn: a CAS on `version` of an ACTIVE match. A finishing turn sets
- * the terminal status in the same statement, so only one request can pay a match.
+ * The one write of an NPC turn or a duel decision (or of the clock forcing one): a CAS on
+ * `version` of an ACTIVE match. An ending write sets the terminal status in the same
+ * statement, so exactly one request ends (and pays) a match. Duels pass their turn
+ * clock's `deadline`; NPC matches have none.
  */
 export const updateKessenMatchForTurn = (
   client: Pick<DrizzleClient, "update">,
   match: { id: string; version: number },
   change: {
-    state: KessenStoredMatch;
+    state: KessenStoredMatch | KessenStoredPvpMatch;
     now: Date;
+    deadline?: Date | null;
     status?: "FINISHED" | "CONCEDED" | "EXPIRED";
     rewarded?: boolean;
   },
@@ -537,6 +540,7 @@ export const updateKessenMatchForTurn = (
       state: change.state as unknown as Record<string, unknown>,
       version: match.version + 1,
       updatedAt: change.now,
+      ...(change.deadline !== undefined ? { turnDeadline: change.deadline } : {}),
       ...(change.status ? { status: change.status, finishedAt: change.now } : {}),
       ...(change.rewarded !== undefined ? { rewarded: change.rewarded } : {}),
     })

@@ -13,18 +13,16 @@ import {
   type KessenAcademyLessonKey,
 } from "./academy";
 import { snapshotCatalog } from "./catalog";
-import { type DeckFaction, expandDeckCards, loanerDeck } from "./deck";
-import {
-  actingSeats,
-  applyAction,
-  createMatch,
-  matchInputProblem,
-  redactEvents,
-  viewFor,
-} from "./engine";
+import { type DeckFaction, loanerDeck } from "./deck";
+import { actingSeats, applyAction, redactEvents, viewFor } from "./engine";
 import { type KessenNpc, type KessenNpcKey, kessenNpc, npcVariant } from "./npcs";
-import { type KessenNpcTable, runNpcReplies, tierOfMode } from "./npcTurns";
-import type { KessenAction, KessenCard, KessenEvent, SeatSetup } from "./types";
+import {
+  createNpcMatch,
+  type KessenNpcTable,
+  runNpcReplies,
+  tierOfMode,
+} from "./npcTurns";
+import type { KessenAction, KessenCard, KessenEvent } from "./types";
 
 /** A match in the browser: the full engine state and what the payload names. */
 export interface LocalKessenMatch {
@@ -80,29 +78,19 @@ export const startLocalNpcMatch = (input: {
     faction: input.faction,
     cards: pool,
   });
-  const aiDeck = expandDeckCards(variant.deck.cards);
-  const setup = {
-    seed: input.seed,
-    seats: [
-      { leaderId: deck.leaderId, deck: expandDeckCards(deck.cards) },
-      { leaderId: variant.deck.leaderId, deck: aiDeck },
-    ] as [SeatSetup, SeatSetup],
-    rules: variant.rules,
-    cards: pool,
-  };
-  if (matchInputProblem(setup))
-    return refusal("This opponent's cards are not available right now.");
+  const created = createNpcMatch({ seed: input.seed, deck, variant, cards: pool });
+  if (!created) return refusal("This opponent's cards are not available right now.");
   return openMatch({
     id: input.id,
     npc,
     now,
     borrowed: [...new Set(deck.cards.map((entry) => entry.itemId))].sort(),
     table: {
-      engine: createMatch(setup),
+      engine: created.engine,
       mode: "standard",
       lesson: null,
       pool,
-      aiDeck,
+      aiDeck: created.aiDeck,
     },
   });
 };

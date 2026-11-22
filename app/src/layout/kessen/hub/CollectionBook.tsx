@@ -180,6 +180,19 @@ export const CollectionBook = ({
   }, [pageKey, fresh, seenKey]);
 
   const pageValue = keyword ? KEYWORD_PAGE : faction;
+  const bookCard = (card: KessenCatalogEntry) => (
+    <BookCard
+      key={card.id}
+      card={card}
+      owned={held(card.id)}
+      listed={listed[card.id] ?? 0}
+      isNew={fresh.has(card.id)}
+      findContext={findContext}
+      findOpen={findOpen === card.id}
+      onFindOpenChange={(open) => setFindOpen(open ? card.id : null)}
+      onInspect={onInspect}
+    />
+  );
 
   return (
     <section
@@ -341,39 +354,11 @@ export const CollectionBook = ({
           {leaders.length > 0 ? (
             <>
               <h4 className="kh-page-h4">Leaders</h4>
-              <ul className="kh-book-grid">
-                {leaders.map((card) => (
-                  <BookCard
-                    key={card.id}
-                    card={card}
-                    owned={held(card.id)}
-                    listed={listed[card.id] ?? 0}
-                    isNew={fresh.has(card.id)}
-                    findContext={findContext}
-                    findOpen={findOpen === card.id}
-                    onFindOpenChange={(open) => setFindOpen(open ? card.id : null)}
-                    onInspect={onInspect}
-                  />
-                ))}
-              </ul>
+              <ul className="kh-book-grid">{leaders.map(bookCard)}</ul>
             </>
           ) : null}
           <h4 className="kh-page-h4">{keyword ? "Cards" : "Deck cards"}</h4>
-          <ul className="kh-book-grid">
-            {deckCards.map((card) => (
-              <BookCard
-                key={card.id}
-                card={card}
-                owned={held(card.id)}
-                listed={listed[card.id] ?? 0}
-                isNew={fresh.has(card.id)}
-                findContext={findContext}
-                findOpen={findOpen === card.id}
-                onFindOpenChange={(open) => setFindOpen(open ? card.id : null)}
-                onInspect={onInspect}
-              />
-            ))}
-          </ul>
+          <ul className="kh-book-grid">{deckCards.map(bookCard)}</ul>
         </TabsContent>
       </Tabs>
 
