@@ -197,7 +197,8 @@ function KessenOption({ opponent, conversationId }: ChallengePanelProps) {
     description: `Friendly card duel, no rating or rewards. Expires in ${KESSEN_CHALLENGE_EXPIRY_SECONDS / 60} min.`,
     sendLabel: `Send ${opponent.username} a Kessen challenge`,
   };
-  if (hub.isError || catalog.isError) {
+  // A failed background refetch keeps the loaded decks usable.
+  if ((!hub.data && hub.isError) || (!catalog.data && catalog.isError)) {
     return (
       <ChallengeOption {...props} disabled>
         <p className="text-destructive text-[12px]">

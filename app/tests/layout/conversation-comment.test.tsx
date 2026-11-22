@@ -9,6 +9,7 @@ import type { ComponentProps } from "react";
 import { type Control, useController } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import * as Avatar from "@/layout/Avatar";
+import * as ChallengePlayer from "@/layout/ChallengePlayer";
 import * as CommentModule from "@/layout/Comment";
 import { CommentOnConversation } from "@/layout/Comment";
 import { CompactComment } from "@/layout/CompactComment";
@@ -616,6 +617,39 @@ describe("compact chat identity", () => {
       await act(flushRadixFocus);
     } finally {
       avatar.mockRestore();
+      restoreBrowserGlobals();
+    }
+  });
+});
+
+describe("compact chat challenge view", () => {
+  it("moves keyboard focus into the challenge view and back to its menu item", async () => {
+    installBrowserGlobals({ resizeObserver: true });
+    mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
+    vi.spyOn(ChallengePlayer, "ChallengePanel").mockImplementation(
+      (() => null) as never,
+    );
+    try {
+      const view = render(
+        <CompactComment
+          user={user}
+          comment={comment}
+          editing={false}
+          setEditing={() => {}}
+        >
+          Message
+        </CompactComment>,
+      );
+      fireEvent.click(view.getByRole("button", { name: "Actions for Friend" }));
+      fireEvent.click(view.getByRole("menuitem", { name: "Challenge" }));
+      expect(document.activeElement).toBe(view.getByRole("button", { name: "Back" }));
+      fireEvent.click(view.getByRole("button", { name: "Back" }));
+      expect(document.activeElement).toBe(
+        view.getByRole("menuitem", { name: "Challenge" }),
+      );
+      view.unmount();
+      await act(flushRadixFocus);
+    } finally {
       restoreBrowserGlobals();
     }
   });

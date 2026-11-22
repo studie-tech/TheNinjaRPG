@@ -273,6 +273,9 @@ function UserMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "challenge">("menu");
+  // Both views share one PopoverContent, so swapping them removes the focused
+  // control; the challenge view focuses Back and returning focuses Challenge.
+  const [returnedFromChallenge, setReturnedFromChallenge] = useState(false);
   const { userColor, titleColor } = getPostUserClasses(user, tavernStyling);
   const { refreshBlacklist } = useBlacklistCacheUpdate();
   const { mutate: toggleBlock, isPending } =
@@ -291,7 +294,10 @@ function UserMenu({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setView("menu");
+        if (!next) {
+          setView("menu");
+          setReturnedFromChallenge(false);
+        }
       }}
     >
       <PopoverTrigger
@@ -313,8 +319,13 @@ function UserMenu({
         >
           <button
             type="button"
+            // biome-ignore lint/a11y/noAutofocus: Keeps keyboard focus inside the popover when the challenge view replaces the menu
+            autoFocus
             className="text-muted-foreground hover:text-foreground mb-[4px] inline-flex items-center gap-[4px] text-[12px]"
-            onClick={() => setView("menu")}
+            onClick={() => {
+              setReturnedFromChallenge(true);
+              setView("menu");
+            }}
           >
             <ChevronLeft className="h-[14px] w-[14px]" aria-hidden /> Back
           </button>
@@ -371,7 +382,10 @@ function UserMenu({
             </MenuItem>
           )}
           {!isSelf && (
-            <MenuItem onSelect={() => setView("challenge")}>
+            <MenuItem
+              autoFocus={returnedFromChallenge}
+              onSelect={() => setView("challenge")}
+            >
               <Swords /> Challenge
             </MenuItem>
           )}
@@ -410,6 +424,7 @@ function MenuItem({
   href,
   destructive,
   disabled,
+  autoFocus,
 }: {
   children: React.ReactNode;
   onSelect: () => void;
@@ -417,6 +432,7 @@ function MenuItem({
   href?: string;
   destructive?: boolean;
   disabled?: boolean;
+  autoFocus?: boolean;
 }) {
   const className = cn(
     "hover:bg-muted focus-visible:bg-muted flex min-h-[36px] w-full items-center gap-[8px] rounded-sm px-[8px] text-left text-[13px] focus-visible:outline-none disabled:opacity-50 [&_svg]:h-[16px] [&_svg]:w-[16px]",
@@ -435,6 +451,8 @@ function MenuItem({
       role="menuitem"
       className={className}
       disabled={disabled}
+      // biome-ignore lint/a11y/noAutofocus: Returns focus to the item that opened the challenge view
+      autoFocus={autoFocus}
       onClick={onSelect}
     >
       {children}

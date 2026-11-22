@@ -124,6 +124,31 @@ describe("challenge panel", () => {
     );
   });
 
+  it("keeps loaded decks usable when a background refetch fails", () => {
+    vi.spyOn(Hub, "useKessenHub").mockReturnValue({
+      hub: {
+        data: { needsLesson: false, decks: [{ id: DECK.id }], owned: {} },
+        isError: true,
+      },
+      catalog: { data: { cards: [] }, isError: true },
+    } as never);
+    render(<ChallengePanel opponent={opponent} />);
+    expect(screen.queryByText(/Your decks could not be loaded/)).toBeNull();
+    const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
+    expect(send.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("offers a retry when the decks never loaded", () => {
+    vi.spyOn(Hub, "useKessenHub").mockReturnValue({
+      hub: { data: undefined, isError: true, refetch: vi.fn() },
+      catalog: { data: { cards: [] }, isError: false, refetch: vi.fn() },
+    } as never);
+    render(<ChallengePanel opponent={opponent} />);
+    expect(screen.getByText(/Your decks could not be loaded/)).toBeTruthy();
+    const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
+    expect(send.hasAttribute("disabled")).toBe(true);
+  });
+
   it("points a player without the first Academy lesson to the Card Hall", () => {
     needsLesson = true;
     render(<ChallengePanel opponent={opponent} />);
