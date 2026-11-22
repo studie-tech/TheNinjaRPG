@@ -119,6 +119,7 @@ export const ContentTypes = [
   "user",
   "skillTree",
   "guide",
+  "splash",
 ] as const;
 export type ContentType = (typeof ContentTypes)[number];
 
@@ -3493,6 +3494,9 @@ export const IMG_MANUAL_STAFF =
 /** Village notices and welcome supplies for the announcement editor. */
 export const IMG_MANUAL_SPLASH =
   "https://uploadthing.b-cdn.net/f/manual-splash-831326f5-0e1e-4802-9f52-1b0d1ee516a3-0.webp";
+/** Illustrated masthead for the welcome dispatch, published through the game media CDN. */
+export const IMG_WELCOME_DISPATCH =
+  "https://uploadthing.b-cdn.net/f/content-YKwL-xgKC3li5b9gyEtUu.webp";
 export const IMG_MANUAL_REVIEW =
   "https://uploadthing.b-cdn.net/f/content-WaMWC0umwru8ZLBGJYbsR.webp";
 export const IMG_MANUAL_QUEST =

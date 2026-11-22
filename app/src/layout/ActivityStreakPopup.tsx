@@ -1,25 +1,13 @@
 "use client";
 
 import { useSetAtom } from "jotai";
-import { BellOff, Gift, X } from "lucide-react";
-import dynamic from "next/dynamic";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityStreaks } from "@/hooks/useActivityStreaks";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { useSplash } from "@/hooks/useSplash";
-import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
-import Loader from "@/layout/Loader";
-import { WelcomeBoard } from "@/layout/WelcomeBoard";
+import { loadActivityStreakPanel, WelcomeDialog } from "@/layout/WelcomeDialog";
 import {
   isActivityStreakPopupBlocking,
   resolveActivityStreakDateLatches,
@@ -32,19 +20,13 @@ import { usePublicPathname } from "@/utils/routing";
 import { getDateKey, nextUtcDayAt } from "@/utils/time";
 import { blockingPopupOpenAtom, useUserDataSelector } from "@/utils/UserContext";
 
-const loadActivityStreakPanel = () => import("@/layout/ActivityStreakPanel");
-
-// The reward panel downloads with the streak query that decides whether the dialog opens,
-// so pages where it never appears do not carry it.
-const ActivityStreakPanel = dynamic(loadActivityStreakPanel, {
-  loading: () => <Loader explanation="Loading rewards" />,
-});
-
 const ActivityStreakPopup: React.FC = () => {
   const pathname = usePublicPathname();
   // Browser authentication must keep its account confirmation reachable without
   // claiming or dismissing rewards that remain eligible in the game.
   const isSuppressedRoute =
+    // The announcement editor owns its preview so the automatic dialog cannot cover it.
+    pathname === "/manual/splash" ||
     pathname === "/merch" ||
     pathname.startsWith("/merch/") ||
     isBrowserAuthPath(pathname);
@@ -180,75 +162,11 @@ const ActivityStreakPopup: React.FC = () => {
   }
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent
-        className={`flex max-h-[calc(100dvh-1rem)] flex-col overflow-hidden border-2 border-border bg-background p-4 text-foreground sm:p-6 ${
-          (splash.data?.announcements.length ?? 0) > 2
-            ? "md:w-[94vw] md:max-w-[1440px]"
-            : "md:max-w-5xl"
-        }`}
-      >
-        <DialogHeader className="shrink-0">
-          <DialogTitle className="flex items-center gap-2 pr-6 font-serif text-3xl">
-            <Gift className="h-5 w-5 text-primary" />
-            {splash.data?.announcements.length
-              ? "Village dispatch"
-              : "Daily Activity Rewards"}
-          </DialogTitle>
-          <DialogDescription>
-            {splash.data?.announcements.length
-              ? "News, adventures and offers from across Seichi, alongside your daily rewards."
-              : "View and claim your daily activity rewards"}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="min-h-0 overflow-y-auto overscroll-contain">
-          <WelcomeBoard
-            announcements={splash.data?.announcements ?? []}
-            onNavigate={handleDismissForToday}
-            leadingContent={
-              <section className="overflow-hidden rounded-sm border-2 border-border bg-card text-card-foreground">
-                <h3 className="flex items-center gap-2 border-b-2 border-border bg-primary px-4 py-2 font-serif text-xl font-bold text-primary-foreground">
-                  <Gift className="h-5 w-5" /> Daily activity rewards
-                </h3>
-                <div className="p-4">
-                  <ChunkErrorBoundary
-                    fallback={() => (
-                      <div
-                        role="alert"
-                        className="flex items-center justify-between gap-2 text-sm"
-                      >
-                        <span>Rewards could not be loaded.</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => window.location.reload()}
-                        >
-                          Reload
-                        </Button>
-                      </div>
-                    )}
-                  >
-                    <ActivityStreakPanel />
-                  </ChunkErrorBoundary>
-                </div>
-              </section>
-            }
-          />
-        </div>
-
-        <div className="flex shrink-0 justify-between gap-2 pt-2">
-          <Button variant="ghost" size="sm" onClick={handleDismissForToday}>
-            <BellOff className="mr-2 h-4 w-4" />
-            Dismiss for today
-          </Button>
-          <Button variant="outline" onClick={handleClose}>
-            <X className="mr-2 h-4 w-4" />
-            Close
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <WelcomeDialog
+      announcements={splash.data?.announcements ?? []}
+      onClose={handleClose}
+      onDismissForToday={handleDismissForToday}
+    />
   );
 };
 

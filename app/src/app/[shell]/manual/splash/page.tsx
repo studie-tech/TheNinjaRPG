@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { nanoid } from "nanoid";
 import type { RefObject } from "react";
 import { useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -10,16 +11,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { SPLASH_MAX_VISIBLE } from "@/drizzle/constants";
 import type { SplashAnnouncement } from "@/drizzle/schema";
 import { useSplashMutations } from "@/hooks/useSplash";
 import ContentBox from "@/layout/ContentBox";
+import ContentImageSelector from "@/layout/ContentImageSelector";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { WelcomeBoard } from "@/layout/WelcomeBoard";
+import { WelcomeDialog } from "@/layout/WelcomeDialog";
 import {
   isSplashActive,
   splashEditable,
@@ -41,6 +45,8 @@ export default function SplashEditorPage() {
   const [filter, setFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [editing, setEditing] = useState<{ entry?: SplashAnnouncement }>();
   const [message, setMessage] = useState<string>();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const previewToggleRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement>(null);
   const mutations = useSplashMutations({
     onSuccess: (result, createdId) => {
@@ -88,6 +94,17 @@ export default function SplashEditorPage() {
             </Link>
             .
           </p>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="splash-preview"
+              ref={previewToggleRef}
+              checked={previewOpen}
+              onCheckedChange={setPreviewOpen}
+            />
+            <Label htmlFor="splash-preview">
+              Preview splash screen ({preview.length}/{SPLASH_MAX_VISIBLE})
+            </Label>
+          </div>
           <Button
             onClick={(event) => {
               returnFocusRef.current = event.currentTarget;
@@ -185,15 +202,13 @@ export default function SplashEditorPage() {
             </p>
           )}
         </div>
-        <h2 className="text-xl font-bold">
-          Live preview ({preview.length}/{SPLASH_MAX_VISIBLE})
-        </h2>
-        {preview.length ? (
-          <WelcomeBoard announcements={preview} />
-        ) : (
-          <p className="text-sm">
-            No announcements are live. The dialog shows daily rewards when available.
-          </p>
+        {previewOpen && (
+          <WelcomeDialog
+            announcements={preview}
+            onClose={() => setPreviewOpen(false)}
+            onDismissForToday={() => setPreviewOpen(false)}
+            returnFocusRef={previewToggleRef}
+          />
         )}
         {editing && (
           <AnnouncementEditor
@@ -203,11 +218,11 @@ export default function SplashEditorPage() {
             message={message}
             returnFocusRef={returnFocusRef}
             onClose={() => setEditing(undefined)}
-            onSave={(data) => {
+            onSave={(data, id) => {
               setMessage(undefined);
               if (editing.entry)
                 mutations.update.mutate({ id: editing.entry.id, data });
-              else mutations.create.mutate({ data });
+              else mutations.create.mutate({ id, data });
             }}
           />
         )}
@@ -229,8 +244,9 @@ function AnnouncementEditor({
   message?: string;
   returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
-  onSave: (data: SplashInput) => void;
+  onSave: (data: SplashInput, id: string) => void;
 }) {
+  const [imageRelationId] = useState(() => entry?.id ?? nanoid());
   const form = useForm<SplashFormInput, unknown, SplashInput>({
     resolver: zodResolver(splashSchema),
     defaultValues: entry
@@ -270,7 +286,7 @@ function AnnouncementEditor({
     >
       <form
         id="announcement-editor"
-        onSubmit={form.handleSubmit(onSave)}
+        onSubmit={form.handleSubmit((data) => onSave(data, imageRelationId))}
         className="space-y-3"
       >
         <fieldset disabled={pending} className="space-y-3">
@@ -290,7 +306,40 @@ function AnnouncementEditor({
                   }[field]
                 }
               </Label>
-              {field === "description" ? (
+              {field === "image" ? (
+                <Controller
+                  control={form.control}
+                  name="image"
+                  render={({ field: imageField }) => (
+                    <div className="space-y-2">
+                      <ContentImageSelector
+                        label="Announcement image"
+                        imageUrl={imageField.value || null}
+                        id={imageRelationId}
+                        prompt={`Welcome announcement: ${values.name ?? ""}. ${values.description ?? ""}`}
+                        allowImageUpload
+                        emptyImageLabel="Generate or upload announcement artwork"
+                        type="splash"
+                        size="portrait"
+                        maxDim={512}
+                        disabled={pending}
+                        onUploadComplete={imageField.onChange}
+                      />
+                      <Input id="announcement-image" {...imageField} />
+                      {imageField.value && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={pending}
+                          onClick={() => imageField.onChange("")}
+                        >
+                          Remove image
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                />
+              ) : field === "description" ? (
                 <Textarea
                   id={`announcement-${field}`}
                   {...form.register(field)}

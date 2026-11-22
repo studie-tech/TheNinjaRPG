@@ -5,6 +5,7 @@ import {
   contentProposalBasis,
   contentProposalChange,
   contentProposalMedia,
+  historicalAvatar,
   splashAnnouncement,
   userData,
 } from "@/drizzle/schema";
@@ -56,6 +57,7 @@ describeWithDatabase("structured welcome announcements", () => {
       contentProposal,
       splashAnnouncement,
       actionLog,
+      historicalAvatar,
       userData,
     );
     await insertUsers([
@@ -64,6 +66,29 @@ describeWithDatabase("structured welcome announcements", () => {
     ]);
   });
   afterEach(() => vi.restoreAllMocks());
+  it("preserves a draft image-history identity on creation and rejects a reused ID", async () => {
+    const db = await getTestDatabase();
+    const id = "draftImageHistory1234";
+    await db.insert(historicalAvatar).values({
+      userId: id,
+      avatar: splashEntry().image,
+      status: "content-success",
+      done: true,
+    });
+    const editor = await callerFor(splashRouter, "splash-editor");
+    expect(await editor.create({ id, data: splashInput() })).toMatchObject({
+      success: true,
+      message: id,
+    });
+    const [saved] = await editor.getForEdit();
+    expect(saved?.id).toBe(id);
+    expect((await db.query.historicalAvatar.findFirst())?.userId).toBe(saved?.id);
+    expect(
+      (await editor.create({ id, data: splashInput({ topicKey: "another-topic" }) }))
+        .success,
+    ).toBe(false);
+    expect(await editor.getForEdit()).toHaveLength(1);
+  });
   it("refuses player writes and never fabricates fallback entries", async () => {
     const player = await callerFor(splashRouter, "splash-player");
     expect((await player.get()).announcements).toEqual([]);

@@ -59,6 +59,7 @@ import "../../styles/globals.css";
 import "../../styles/layout-themes.css";
 import "../../styles/layout-directions.css";
 import "../../styles/layout-welcome.css";
+import "../../styles/layout-splash.css";
 import "sonner/dist/styles.css";
 import "vanilla-cookieconsent/dist/cookieconsent.css";
 import "../../styles/consent.css";
