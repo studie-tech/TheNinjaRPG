@@ -237,7 +237,9 @@
   border-radius: 8px;
   padding: 8px 10px 8px 12px;
 }
-.kg-npc-portrait {
+/* Scoped under the row so it outranks circuit.css's full-size .kh-portrait in either
+   load order. */
+.kg-npc .kg-npc-portrait {
   width: 52px;
   height: 52px;
   flex-shrink: 0;

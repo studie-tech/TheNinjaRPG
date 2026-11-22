@@ -161,13 +161,15 @@ export default TutorialAssistant;
  * A guided lesson for a visitor without a character, who has no tutorial assistant: the
  * same Activity dock, Lemu, coach card and spotlight, holding the lesson alone. Pages
  * that teach guests (the Card Hall's guest Academy) mount it; it stands down whenever a
- * character's assistant is on screen.
+ * character's assistant is on screen. The dock is portalled to the body, as the page's
+ * layout columns open their own stacking contexts and would leave it under the blocking
+ * layer of a step that waits for an answer.
  */
 export const GuestGuidedLesson: React.FC = () => {
   const { data: userData } = useUserDataSelector(selectUserId);
   const guidedLesson = useAtomValue(guidedLessonAtom);
   if (userData || !guidedLesson) return null;
-  return (
+  return createPortal(
     <ActivityDock
       guidedLesson={{
         id: guidedLesson.id,
@@ -175,7 +177,8 @@ export const GuestGuidedLesson: React.FC = () => {
       }}
     >
       <GuidedLessonAssistant step={guidedLesson.step} />
-    </ActivityDock>
+    </ActivityDock>,
+    document.body,
   );
 };
 
