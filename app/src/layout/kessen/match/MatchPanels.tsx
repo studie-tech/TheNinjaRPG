@@ -55,7 +55,7 @@ export const InspectPanel = ({ table }: { table: MatchTable }) => {
             <section key={seat} className="km-inspect-leader">
               <h3 className="km-panel-title">
                 {seat === table.me
-                  ? `${table.spectating ? `${table.selfName}'s` : "Your"} leader`
+                  ? `${table.selfPossessive} leader`
                   : `${table.opponentName}'s leader`}
               </h3>
               <LeaderPlate
@@ -171,11 +171,7 @@ export const CardFacts = ({
       </p>
       {found && power !== null ? (
         <p className="km-facts-place">
-          {found.side === table.me
-            ? table.spectating
-              ? `${table.selfName}'s`
-              : "Your"
-            : `${table.opponentName}'s`}{" "}
+          {found.side === table.me ? table.selfPossessive : `${table.opponentName}'s`}{" "}
           {ROW_LABELS[found.row]} row
         </p>
       ) : null}
@@ -322,7 +318,7 @@ export const PlayLog = ({ table }: { table: MatchTable }) => {
 /** Both discards, public and in discard order. */
 export const Discards = ({ table }: { table: MatchTable }) => {
   const { view } = table;
-  const mine = table.spectating ? `${table.selfName}'s` : "Your";
+  const mine = table.selfPossessive;
   return (
     <div className="km-discards">
       {[table.me, table.them].map((seat) => {

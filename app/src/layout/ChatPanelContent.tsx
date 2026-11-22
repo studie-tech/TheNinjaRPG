@@ -244,11 +244,7 @@ export default function ChatPanelBody({
           ) : showPhoneList ? (
             <PhoneChatList onOpen={setPhoneChat} />
           ) : (isPhone ? activeTab : tab.id) === "inbox" ? (
-            <InboxPane
-              hideRail={isPhone}
-              onMessageUser={openMessageWith}
-              onClose={onClose}
-            />
+            <InboxPane hideRail={isPhone} onMessageUser={openMessageWith} />
           ) : (
             <TavernPane
               fixedTavern={phoneChat?.kind === "tavern" ? phoneChat.tavern : undefined}
@@ -354,7 +350,6 @@ function TavernPane({
       tavernStyling
       onConversationLoaded={onConversationLoaded}
       onMessageUser={onMessageUser}
-      onNavigate={onClose}
       toolbarStart={tavernSwitch}
       toolbarEnd={
         <>
@@ -449,11 +444,9 @@ function TavernMoreMenu({ onOpenFullTavern }: { onOpenFullTavern: () => void }) 
 function InboxPane({
   hideRail,
   onMessageUser,
-  onClose,
 }: {
   hideRail: boolean;
   onMessageUser: (user: ChatStartUser) => void;
-  onClose: () => void;
 }) {
   const { data: userData } = useUserDataSelector((u) => ({ userId: u.userId }));
   const [panel, setPanel] = useAtom(chatPanelAtom);
@@ -540,7 +533,6 @@ function InboxPane({
             key={selected.id}
             convoId={selected.id}
             onMessageUser={onMessageUser}
-            onNavigate={onClose}
             toolbarStart={
               <span className="truncate text-[13px] font-semibold">
                 {conversationTitle(selected, userData.userId)}

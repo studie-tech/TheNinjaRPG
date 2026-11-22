@@ -63,8 +63,6 @@ interface ConversationCommentProps extends PostProps {
   compact?: boolean;
   onMentionUser?: (username: string) => void;
   onMessageUser?: (user: ChatStartUser) => void;
-  /** Called as a challenge link opens another page, e.g. to close the chat panel. */
-  onNavigate?: () => void;
 }
 export const CommentOnConversation: React.FC<ConversationCommentProps> = (props) => {
   const [editing, setEditing] = useState(false);
@@ -119,7 +117,6 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
         match={props.comment.challengeMatch}
         createdAt={props.comment.createdAt}
         compact={props.compact}
-        onNavigate={props.onNavigate}
         action={
           userData &&
           canDeleteComment(userData, props.comment.userId) && (
@@ -154,7 +151,6 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
         setEditing={setEditing}
         onMentionUser={props.onMentionUser}
         onMessageUser={props.onMessageUser}
-        onNavigate={props.onNavigate}
       >
         {props.children}
       </CompactComment>
@@ -242,8 +238,6 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
       : [];
 
   const footer = !props.editing && (
-    // Reactions and the timestamp row share the card's bottom edge, below the message
-    // however tall the avatar makes the card.
     <div className="flex flex-row flex-wrap items-end gap-2">
       {reactions.length > 0 && (
         <TooltipProvider>

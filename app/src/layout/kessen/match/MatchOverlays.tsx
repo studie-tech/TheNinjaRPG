@@ -304,7 +304,7 @@ export const RoundEndOverlay = ({
         <span>{table.selfName}</span>
         <Lanterns
           count={event.lanterns[table.me]}
-          label={table.spectating ? `${table.selfName}'s lanterns` : "Your lanterns"}
+          label={`${table.selfPossessive} lanterns`}
         />
         <Lanterns
           count={event.lanterns[table.them]}

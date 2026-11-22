@@ -28,7 +28,6 @@ export function ChatConversation({
   tavernStyling,
   onConversationLoaded,
   onMessageUser,
-  onNavigate,
   toolbarStart,
   toolbarEnd,
 }: ChatConversationProps) {
@@ -223,7 +222,6 @@ export function ChatConversation({
               canInteract={canComposeMessage}
               onMentionUser={canComposeMessage ? mentionUser : undefined}
               onMessageUser={onMessageUser}
-              onNavigate={onNavigate}
             />
           </div>
         </div>
@@ -326,8 +324,6 @@ interface ChatConversationProps {
   /** Reports the resolved conversation, e.g. to clear its mention count. */
   onConversationLoaded?: (conversationId: string) => void;
   onMessageUser?: (user: ChatStartUser) => void;
-  /** Called as a challenge link in a message opens another page, to close the panel. */
-  onNavigate?: () => void;
   /** Controls shown left of the search button, e.g. a tavern switch. */
   toolbarStart?: React.ReactNode;
   /** Controls shown right of the search button, e.g. mute and more. */

@@ -111,14 +111,8 @@ export const PlayerBar = ({
   const zone = view.seats[me];
   const leader = zone.leader ? table.cardDisplay(zone.leader) : null;
   return (
-    <section
-      className="km-bar km-bar-me"
-      aria-label={table.spectating ? `${table.selfName}'s side` : "Your side"}
-    >
-      <Lanterns
-        count={zone.lanterns}
-        label={table.spectating ? `${table.selfName}'s lanterns` : "Your lanterns"}
-      />
+    <section className="km-bar km-bar-me" aria-label={`${table.selfPossessive} side`}>
+      <Lanterns count={zone.lanterns} label={`${table.selfPossessive} lanterns`} />
       <span className="km-bar-name">
         <span className="km-bar-title">{table.selfName}</span>
         {zone.banked > 0 ? (
@@ -152,7 +146,7 @@ export const PlayerBar = ({
         count={zone.deckCount}
         discard={zone.discard.length}
         onClick={onOpenDiscards}
-        label={`${table.spectating ? `${table.selfName}'s` : "Your"} deck ${zone.deckCount}, discard ${zone.discard.length}. Open discards`}
+        label={`${table.selfPossessive} deck ${zone.deckCount}, discard ${zone.discard.length}. Open discards`}
       />
       {leader ? (
         <LeaderMedallion
@@ -168,7 +162,7 @@ export const PlayerBar = ({
       <SideTotal
         value={table.sideTotals[me]}
         side="me"
-        label={table.spectating ? `${table.selfName}'s total` : "Your total"}
+        label={`${table.selfPossessive} total`}
         passed={zone.passed}
         motion={table.motion}
       />

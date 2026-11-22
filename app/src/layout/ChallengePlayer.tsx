@@ -1,5 +1,6 @@
 "use client";
 
+import { useSetAtom } from "jotai";
 import { Eye, Layers, Swords } from "lucide-react";
 import dynamic from "next/dynamic";
 import { type ReactNode, useRef, useState } from "react";
@@ -8,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { chatPanelAtom } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
 import { formatDateTime } from "@/utils/time";
 import type { ChallengeMatch } from "@/validators/comments";
@@ -84,6 +86,7 @@ export function ChallengePanel({
     /** A control before the title, such as a way back to the menu that opened it. */
     leading?: ReactNode;
   }) {
+  const closeChat = useCloseChatPanel();
   return (
     <div className="flex flex-col gap-[8px]">
       <div className="flex items-center gap-[4px]">
@@ -109,7 +112,10 @@ export function ChallengePanel({
         <ChallengeOptions
           opponent={opponent}
           conversationId={conversationId}
-          onNavigate={onNavigate}
+          onNavigate={() => {
+            closeChat();
+            onNavigate?.();
+          }}
         />
       </ChunkErrorBoundary>
     </div>
@@ -126,8 +132,7 @@ export function ChallengeMatchNotice({
   createdAt,
   compact = false,
   action,
-  onNavigate,
-}: ChallengeNavigation & {
+}: {
   challenger: string;
   match: ChallengeMatch;
   createdAt: Date;
@@ -136,6 +141,7 @@ export function ChallengeMatchNotice({
   /** A moderation control shown after the watch link. */
   action?: ReactNode;
 }) {
+  const closeChat = useCloseChatPanel();
   const isSpar = match.type === "SPAR";
   const Icon = isSpar ? Swords : Layers;
   return (
@@ -171,7 +177,7 @@ export function ChallengeMatchNotice({
           href={
             isSpar ? `/battlelog/${match.matchId}` : `/kessen/watch/${match.matchId}`
           }
-          onNavigate={onNavigate}
+          onNavigate={closeChat}
         >
           <Eye className="mr-[4px] h-[14px] w-[14px]" aria-hidden /> Watch
         </Link>
@@ -180,6 +186,13 @@ export function ChallengeMatchNotice({
     </div>
   );
 }
+
+/** Closes the chat panel as a challenge link in it opens another page. */
+const useCloseChatPanel = () => {
+  const setPanel = useSetAtom(chatPanelAtom);
+  return () =>
+    setPanel((current) => (current.owner ? { ...current, owner: null } : current));
+};
 
 /** Who a challenge goes to, and the public conversation it is sent from, if any. */
 export interface ChallengePanelProps {
@@ -190,7 +203,7 @@ export interface ChallengePanelProps {
 
 /** Lets the surface holding a challenge control close when one of its links opens a page. */
 export interface ChallengeNavigation {
-  /** Called as a link here opens another page, e.g. to close a popover or the chat panel. */
+  /** Called as a link here opens another page, e.g. to close the popover holding it. */
   onNavigate?: () => void;
 }
 

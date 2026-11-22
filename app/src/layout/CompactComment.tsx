@@ -83,7 +83,6 @@ export function CompactComment(props: CompactCommentProps) {
         challengeFrom={props.challengeFrom}
         onMention={props.onMentionUser}
         onMessage={props.onMessageUser}
-        onNavigate={props.onNavigate}
         tavernStyling={props.tavernStyling}
       />
       <div className="min-w-0 flex-1">
@@ -264,7 +263,6 @@ function UserMenu({
   challengeFrom,
   onMention,
   onMessage,
-  onNavigate,
   tavernStyling,
 }: {
   user: CompactCommentProps["user"];
@@ -273,7 +271,6 @@ function UserMenu({
   tavernStyling?: boolean;
   onMention?: (username: string) => void;
   onMessage?: (user: ChatStartUser) => void;
-  onNavigate?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "challenge">("menu");
@@ -324,10 +321,7 @@ function UserMenu({
           <ChallengePanel
             opponent={user}
             conversationId={challengeFrom?.conversationId ?? null}
-            onNavigate={() => {
-              changeOpen(false);
-              onNavigate?.();
-            }}
+            onNavigate={() => changeOpen(false)}
             leading={
               <Button
                 variant="ghost"
@@ -582,6 +576,4 @@ export interface CompactCommentProps {
   setQuoteId?: (id: string) => void;
   onMentionUser?: (username: string) => void;
   onMessageUser?: (user: ChatStartUser) => void;
-  /** Called as a challenge link opens another page, e.g. to close the chat panel. */
-  onNavigate?: () => void;
 }

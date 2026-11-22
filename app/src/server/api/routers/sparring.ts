@@ -199,19 +199,19 @@ export const sparringRouter = createTRPCRouter({
             route: "/combat",
             routeText: "To Combat",
           }),
-          // Only a spar open to spectators is announced where it was challenged.
-          ...(result.battleId && challenge.spectatable
-            ? announceChallengeMatch(ctx.drizzle, {
-                conversationId: challenge.conversationId,
-                challengerId: challenge.senderId,
-                match: {
-                  type: "SPAR",
-                  matchId: result.battleId,
-                  opponentName: user.username,
-                },
-              })
-            : []),
         ]);
+        // Only a spar open to spectators is announced where it was challenged.
+        if (result.battleId && challenge.spectatable) {
+          announceChallengeMatch(ctx.drizzle, {
+            conversationId: challenge.conversationId,
+            challengerId: challenge.senderId,
+            match: {
+              type: "SPAR",
+              matchId: result.battleId,
+              opponentName: user.username,
+            },
+          });
+        }
       }
       return result;
     }),

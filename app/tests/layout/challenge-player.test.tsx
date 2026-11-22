@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { getDefaultStore } from "jotai";
 import * as navigation from "next/navigation";
 import type { ReactElement } from "react";
 import * as client from "@/app/_trpc/client";
@@ -13,6 +14,7 @@ import {
 import type { KessenDeckSummary } from "@/layout/kessen/hub/hubData";
 import * as HubData from "@/layout/kessen/hub/hubData";
 import * as Link from "@/layout/Link";
+import { chatPanelAtom } from "@/libs/chatPanel";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const DECK: KessenDeckSummary = {
@@ -129,17 +131,6 @@ describe("challenge panel", () => {
     expect(duel).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the button available after a refusal", async () => {
-    duel.mockResolvedValue({ ok: false, message: "Rival is busy." });
-    await renderPanel(<ChallengePanel opponent={opponent} />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Send Rival a Kessen challenge" }),
-    );
-    await screen.findByRole("alert");
-    const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
-    expect(send.hasAttribute("disabled")).toBe(false);
-  });
-
   it("sends a challenge from a conversation open to spectators, to announce it there", async () => {
     duel.mockResolvedValue({ ok: true, message: "Challenge sent to Rival." });
     await renderPanel(<ChallengePanel opponent={opponent} conversationId="tavern" />);
@@ -158,7 +149,7 @@ describe("challenge panel", () => {
     expect(duel.mock.calls[0]?.[0]).toMatchObject({ conversationId: "tavern" });
   });
 
-  it("duels with the player's ready deck and shows a refusal by the button", async () => {
+  it("duels with the player's ready deck and keeps it available after a refusal", async () => {
     duel.mockResolvedValue({
       ok: false,
       message: "That player has not learned Kessen yet.",
@@ -176,6 +167,8 @@ describe("challenge panel", () => {
         "That player has not learned Kessen yet.",
       ),
     );
+    const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
+    expect(send.hasAttribute("disabled")).toBe(false);
   });
 
   it("keeps loaded decks usable when a background refetch fails", async () => {
@@ -270,19 +263,18 @@ describe("challenge match notice", () => {
     },
   );
 
-  it("lets the chat panel close when Watch opens the match", () => {
-    const onNavigate = vi.fn();
+  it("closes the chat panel when Watch opens the match", () => {
+    getDefaultStore().set(chatPanelAtom, (current) => ({ ...current, owner: "panel" }));
     render(
       <ChallengeMatchNotice
         challenger="Hero"
         match={{ type: "SPAR", matchId: "m-1", opponentName: "Rival" }}
         createdAt={new Date()}
         compact
-        onNavigate={onNavigate}
       />,
     );
     fireEvent.click(screen.getByRole("link", { name: "Watch" }));
-    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(getDefaultStore().get(chatPanelAtom).owner).toBeNull();
   });
 });
 

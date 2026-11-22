@@ -21,7 +21,6 @@ export const ConversationComments = ({
   compact,
   onMentionUser,
   onMessageUser,
-  onNavigate,
 }: ConversationCommentsProps) => {
   const unique = new Set<string>();
   const visibleComments = pages
@@ -65,7 +64,6 @@ export const ConversationComments = ({
             compact={compact}
             onMentionUser={onMentionUser}
             onMessageUser={onMessageUser}
-            onNavigate={onNavigate}
           />
         </div>
       ))}
@@ -89,7 +87,6 @@ const ConversationCommentRow = memo(function ConversationCommentRow({
   compact,
   onMentionUser,
   onMessageUser,
-  onNavigate,
 }: ConversationCommentRowProps) {
   const content = useMemo(() => parseHtml(comment.content), [comment.content]);
 
@@ -113,7 +110,6 @@ const ConversationCommentRow = memo(function ConversationCommentRow({
       compact={compact}
       onMentionUser={onMentionUser}
       onMessageUser={onMessageUser}
-      onNavigate={onNavigate}
     >
       {content}
     </CommentOnConversation>
@@ -140,8 +136,6 @@ interface ConversationCommentsProps {
   compact?: boolean;
   onMentionUser?: (username: string) => void;
   onMessageUser?: (user: ChatStartUser) => void;
-  /** Called as a challenge link opens another page, e.g. to close the chat panel. */
-  onNavigate?: () => void;
 }
 
 type ConversationCommentRowProps = Pick<
@@ -155,7 +149,6 @@ type ConversationCommentRowProps = Pick<
   | "compact"
   | "onMentionUser"
   | "onMessageUser"
-  | "onNavigate"
 > & {
   comment: RouterOutputs["comments"]["getConversationComments"]["data"][number];
   challengeConversationId: string | null;

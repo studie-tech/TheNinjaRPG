@@ -13,20 +13,18 @@ export function OptionCheckbox({
   onChange,
   label,
   hint,
-  className,
-  hintClassName,
+  textClassName,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label: string;
   hint?: string;
-  /** Overrides the row's type size, for panels with their own scale. */
-  className?: string;
-  hintClassName?: string;
+  /** Overrides the label's and hint's type size, for panels with their own scale. */
+  textClassName?: string;
 }) {
   const id = useId();
   return (
-    <div className={cn("flex items-start gap-2 text-sm", className)}>
+    <div className={cn("flex items-start gap-2 text-sm", textClassName)}>
       <Checkbox
         id={id}
         checked={checked}
@@ -35,7 +33,7 @@ export function OptionCheckbox({
       <label htmlFor={id}>
         {label}
         {hint && (
-          <span className={cn("text-muted-foreground block text-xs", hintClassName)}>
+          <span className={cn("text-muted-foreground block text-xs", textClassName)}>
             {hint}
           </span>
         )}

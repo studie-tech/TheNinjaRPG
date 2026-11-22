@@ -64,7 +64,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { announceChallengeMatchAfterResponse } from "@/server/utils/challengeMatch";
+import { announceChallengeMatch } from "@/server/utils/challengeMatch";
 import {
   advanceKessenDuel,
   createKessenDuel,
@@ -436,7 +436,7 @@ export const kessenPvpRouter = createTRPCRouter({
         ],
       });
       if ("error" in created) return errorResponse(created.error);
-      announceChallengeMatchAfterResponse(ctx.drizzle, {
+      announceChallengeMatch(ctx.drizzle, {
         conversationId: request.conversationId,
         challengerId: senderId,
         match: { type: "KESSEN", matchId, opponentName: me.username },

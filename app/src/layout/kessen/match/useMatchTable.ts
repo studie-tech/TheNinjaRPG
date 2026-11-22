@@ -550,6 +550,8 @@ export const useMatchTable = ({
     spectating,
     /** "You", or the watched seat's name for a spectator. */
     selfName: self ?? "You",
+    /** "Your", or the watched seat's name for a spectator. */
+    selfPossessive: self ? `${self}'s` : "Your",
     names,
     cardDisplay,
     instanceCard,

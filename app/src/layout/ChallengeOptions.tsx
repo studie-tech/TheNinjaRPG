@@ -41,23 +41,11 @@ import { cn } from "@/libs/shadui";
  * sends with one click and answers next to its button; the challenged player accepts on
  * the arena or Card Hall page as usual.
  */
-export function ChallengeOptions({
-  opponent,
-  conversationId,
-  onNavigate,
-}: ChallengePanelProps & ChallengeNavigation) {
+export function ChallengeOptions(props: ChallengePanelProps & ChallengeNavigation) {
   return (
     <>
-      <SparOption
-        opponent={opponent}
-        conversationId={conversationId}
-        onNavigate={onNavigate}
-      />
-      <KessenOption
-        opponent={opponent}
-        conversationId={conversationId}
-        onNavigate={onNavigate}
-      />
+      <SparOption {...props} />
+      <KessenOption {...props} />
     </>
   );
 }
@@ -103,14 +91,13 @@ function SparOption({
           onChange={setUseRankedRules}
           label="Ranked rules"
           hint={`Ranked loadouts, level ${MAX_PLAYER_LEVEL} stats, no LP rewards`}
-          className={OPTION_TEXT}
-          hintClassName={OPTION_TEXT}
+          textClassName={OPTION_TEXT}
         />
         <OptionCheckbox
           checked={spectatable}
           onChange={setSpectatable}
           label="Allow spectators"
-          className={OPTION_TEXT}
+          textClassName={OPTION_TEXT}
         />
       </div>
     </ChallengeOption>
