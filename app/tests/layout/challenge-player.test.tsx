@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as navigation from "next/navigation";
+import type { ReactElement } from "react";
 import * as client from "@/app/_trpc/client";
 import * as Hub from "@/hooks/kessen/useKessenHub";
 import * as Lobby from "@/hooks/kessen/useKessenPvpLobby";
@@ -91,7 +92,7 @@ describe("challenge panel", () => {
     spar.mockImplementation((_input, options) =>
       options.onSuccess({ success: true, message: "Challenge sent to Rival." }),
     );
-    render(<ChallengePanel opponent={opponent} />);
+    await renderPanel(<ChallengePanel opponent={opponent} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /Allow spectators/ }));
     fireEvent.click(
       screen.getByRole("button", { name: "Send Rival a sparring challenge" }),
@@ -111,7 +112,7 @@ describe("challenge panel", () => {
       options.onSuccess({ success: true, message: "Challenge sent to Rival." }),
     );
     duel.mockResolvedValue({ ok: true, message: "Challenge sent to Rival." });
-    render(<ChallengePanel opponent={opponent} />);
+    await renderPanel(<ChallengePanel opponent={opponent} />);
     fireEvent.click(
       screen.getByRole("button", { name: "Send Rival a sparring challenge" }),
     );
@@ -130,7 +131,7 @@ describe("challenge panel", () => {
 
   it("keeps the button available after a refusal", async () => {
     duel.mockResolvedValue({ ok: false, message: "Rival is busy." });
-    render(<ChallengePanel opponent={opponent} />);
+    await renderPanel(<ChallengePanel opponent={opponent} />);
     fireEvent.click(
       screen.getByRole("button", { name: "Send Rival a Kessen challenge" }),
     );
@@ -139,9 +140,9 @@ describe("challenge panel", () => {
     expect(send.hasAttribute("disabled")).toBe(false);
   });
 
-  it("sends a challenge from a conversation open to spectators, to announce it there", () => {
+  it("sends a challenge from a conversation open to spectators, to announce it there", async () => {
     duel.mockResolvedValue({ ok: true, message: "Challenge sent to Rival." });
-    render(<ChallengePanel opponent={opponent} conversationId="tavern" />);
+    await renderPanel(<ChallengePanel opponent={opponent} conversationId="tavern" />);
     fireEvent.click(
       screen.getByRole("button", { name: "Send Rival a sparring challenge" }),
     );
@@ -162,7 +163,7 @@ describe("challenge panel", () => {
       ok: false,
       message: "That player has not learned Kessen yet.",
     });
-    render(<ChallengePanel opponent={opponent} />);
+    await renderPanel(<ChallengePanel opponent={opponent} />);
     fireEvent.click(
       screen.getByRole("button", { name: "Send Rival a Kessen challenge" }),
     );
@@ -177,7 +178,7 @@ describe("challenge panel", () => {
     );
   });
 
-  it("keeps loaded decks usable when a background refetch fails", () => {
+  it("keeps loaded decks usable when a background refetch fails", async () => {
     vi.spyOn(Hub, "useKessenHub").mockReturnValue({
       hub: {
         data: { needsLesson: false, decks: [{ id: DECK.id }], owned: {} },
@@ -185,36 +186,36 @@ describe("challenge panel", () => {
       },
       catalog: { data: { cards: [] }, isError: true },
     } as never);
-    render(<ChallengePanel opponent={opponent} />);
+    await renderPanel(<ChallengePanel opponent={opponent} />);
     expect(screen.queryByText(/Your decks could not be loaded/)).toBeNull();
     const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
     expect(send.hasAttribute("disabled")).toBe(false);
   });
 
-  it("offers a retry when the decks never loaded", () => {
+  it("offers a retry when the decks never loaded", async () => {
     vi.spyOn(Hub, "useKessenHub").mockReturnValue({
       hub: { data: undefined, isError: true, refetch: vi.fn() },
       catalog: { data: { cards: [] }, isError: false, refetch: vi.fn() },
     } as never);
-    render(<ChallengePanel opponent={opponent} />);
+    await renderPanel(<ChallengePanel opponent={opponent} />);
     expect(screen.getByText(/Your decks could not be loaded/)).toBeTruthy();
     const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
     expect(send.hasAttribute("disabled")).toBe(true);
   });
 
-  it("points a player without the first Academy lesson to the Card Hall", () => {
+  it("points a player without the first Academy lesson to the Card Hall", async () => {
     needsLesson = true;
-    render(<ChallengePanel opponent={opponent} />);
+    await renderPanel(<ChallengePanel opponent={opponent} />);
     const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
     expect(send.hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("link", { name: "Open the Card Hall" })).toBeTruthy();
     expect(duel).not.toHaveBeenCalled();
   });
 
-  it("lets its holder close when one of its links opens a page", () => {
+  it("lets its holder close when one of its links opens a page", async () => {
     needsLesson = true;
     const onNavigate = vi.fn();
-    render(<ChallengePanel opponent={opponent} onNavigate={onNavigate} />);
+    await renderPanel(<ChallengePanel opponent={opponent} onNavigate={onNavigate} />);
     fireEvent.click(screen.getByRole("link", { name: "Open the Card Hall" }));
     expect(onNavigate).toHaveBeenCalledTimes(1);
   });
@@ -284,3 +285,9 @@ describe("challenge match notice", () => {
     expect(onNavigate).toHaveBeenCalledTimes(1);
   });
 });
+
+/** Renders the panel and waits for its options, which load on demand. */
+const renderPanel = async (panel: ReactElement) => {
+  render(panel);
+  await screen.findByRole("button", { name: "Send Rival a sparring challenge" });
+};
