@@ -156,7 +156,12 @@ const BoardRow = ({
       ? choice?.ghost?.partial === true
       : state === "chosen" && table.draftGhost?.partial === true);
 
-  const label = `${mine ? "Your" : `${table.opponentName}'s`} ${ROW_LABELS[row]}, total ${total}${terrain ? ", under Terrain" : ""}${effect ? `. This play: ${effect.label}, total ${effect.after}` : ""}`;
+  const owner = mine
+    ? table.spectating
+      ? `${table.selfName}'s`
+      : "Your"
+    : `${table.opponentName}'s`;
+  const label = `${owner} ${ROW_LABELS[row]}, total ${total}${terrain ? ", under Terrain" : ""}${effect ? `. This play: ${effect.label}, total ${effect.after}` : ""}`;
   const selectable = state === "legal" || state === "chosen" || state === "target";
   return (
     <div

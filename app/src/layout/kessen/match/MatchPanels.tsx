@@ -54,7 +54,9 @@ export const InspectPanel = ({ table }: { table: MatchTable }) => {
           return (
             <section key={seat} className="km-inspect-leader">
               <h3 className="km-panel-title">
-                {seat === table.me ? "Your leader" : `${table.opponentName}'s leader`}
+                {seat === table.me
+                  ? `${table.spectating ? `${table.selfName}'s` : "Your"} leader`
+                  : `${table.opponentName}'s leader`}
               </h3>
               <LeaderPlate
                 leader={leader}
@@ -169,7 +171,11 @@ export const CardFacts = ({
       </p>
       {found && power !== null ? (
         <p className="km-facts-place">
-          {found.side === table.me ? "Your" : `${table.opponentName}'s`}{" "}
+          {found.side === table.me
+            ? table.spectating
+              ? `${table.selfName}'s`
+              : "Your"
+            : `${table.opponentName}'s`}{" "}
           {ROW_LABELS[found.row]} row
         </p>
       ) : null}
@@ -316,6 +322,7 @@ export const PlayLog = ({ table }: { table: MatchTable }) => {
 /** Both discards, public and in discard order. */
 export const Discards = ({ table }: { table: MatchTable }) => {
   const { view } = table;
+  const mine = table.spectating ? `${table.selfName}'s` : "Your";
   return (
     <div className="km-discards">
       {[table.me, table.them].map((seat) => {
@@ -323,11 +330,13 @@ export const Discards = ({ table }: { table: MatchTable }) => {
         return (
           <section
             key={seat}
-            aria-label={seat === table.me ? "Your discard" : "Their discard"}
+            aria-label={seat === table.me ? `${mine} discard` : "Their discard"}
           >
             <h3 className="km-panel-title">
-              {seat === table.me ? "Your discard" : `${table.opponentName}'s discard`} ·{" "}
-              <span className="kessen-num">{pile.length}</span>
+              {seat === table.me
+                ? `${mine} discard`
+                : `${table.opponentName}'s discard`}{" "}
+              · <span className="kessen-num">{pile.length}</span>
             </h3>
             {pile.length === 0 ? (
               <p className="km-panel-hint">Empty.</p>

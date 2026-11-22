@@ -1102,10 +1102,20 @@ describe("Spectating a duel", () => {
     for (const row of document.querySelectorAll<HTMLElement>(".km-row-hit"))
       fireEvent.click(row);
     expect(onAction).not.toHaveBeenCalled();
+    // The first seat's side is named for its player, never addressed as the viewer's.
+    expect(screen.getByRole("button", { name: /^Aiko's deck / })).toBeTruthy();
+    expect(screen.getByLabelText(/^Aiko's total \d/)).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /^Aiko's Taijutsu, total/ }),
+    ).toBeTruthy();
+    expect(document.body.innerHTML).not.toMatch(/\bYour\b/);
 
     fireEvent.click(
       screen.getByRole("button", { name: "Play log, discards and options" }),
     );
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Discards" }));
+    expect(screen.getByRole("region", { name: "Aiko's discard" })).toBeTruthy();
+    expect(screen.getByText(/^Aiko's discard/)).toBeTruthy();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Options" }));
     expect(screen.queryByRole("button", { name: /Concede/ })).toBeNull();
   });

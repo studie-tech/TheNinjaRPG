@@ -3,7 +3,7 @@
 import "../../hall.css";
 import { Eye } from "lucide-react";
 import dynamic from "next/dynamic";
-import { use } from "react";
+import { use, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useWatchedKessenDuel } from "@/hooks/kessen/useKessenDuel";
 import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
@@ -24,7 +24,8 @@ const KessenMatchView = dynamic(
 /**
  * A Kessen duel between two players, watched read-only on the Card Hall's table: both
  * hands hidden, seen from the first player's side, following each turn live until the
- * result. The way back leads to the tavern, where such duels are announced.
+ * result. The way back leads to the tavern, where such duels are announced. A player
+ * seated in the live duel is sent to the Card Hall, which opens their own table.
  */
 export default function KessenWatchPage(props: {
   params: Promise<{ matchid: string }>;
@@ -36,7 +37,15 @@ export default function KessenWatchPage(props: {
   const catalog = useKessenCatalog(!!userId);
   const { match } = duel;
   const leave = () => router.push(TAVERN_HREF);
+  const isSeated =
+    !!match &&
+    match.status === "ACTIVE" &&
+    match.players.some((player) => player.userId === userId);
+  useEffect(() => {
+    if (isSeated) router.replace(SEAT_HREF);
+  }, [isSeated, router]);
 
+  if (isSeated) return <Loader explanation="Taking your seat" />;
   if (match && catalog.data) {
     const [first, second] = match.players;
     return (
@@ -97,6 +106,8 @@ export default function KessenWatchPage(props: {
 }
 
 const TAVERN_HREF = "/tavern";
+/** The Card Hall opens the player's live duel on arrival, over its Duels section. */
+const SEAT_HREF = "/kessen?tab=duels";
 
 /** A spectator's table sends nothing; its controls never offer a play. */
 const refuse = async () => ({ ok: false, message: "Spectators cannot play." });

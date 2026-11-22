@@ -156,7 +156,7 @@ export const PlayerBar = ({
         count={zone.deckCount}
         discard={zone.discard.length}
         onClick={onOpenDiscards}
-        label={`Your deck ${zone.deckCount}, discard ${zone.discard.length}. Open discards`}
+        label={`${table.spectating ? `${table.selfName}'s` : "Your"} deck ${zone.deckCount}, discard ${zone.discard.length}. Open discards`}
       />
       {leader ? (
         <LeaderMedallion
@@ -172,7 +172,7 @@ export const PlayerBar = ({
       <SideTotal
         value={table.sideTotals[me]}
         side="me"
-        label="Your total"
+        label={table.spectating ? `${table.selfName}'s total` : "Your total"}
         passed={zone.passed}
         motion={table.motion}
       />
