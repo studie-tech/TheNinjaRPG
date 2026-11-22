@@ -14,13 +14,16 @@ function ActivityGuard({
   status,
   autoWakeUp,
   allowActionRecovery,
+  onUnavailable,
 }: {
   status: UserStatus;
   autoWakeUp: boolean;
   allowActionRecovery: boolean;
+  onUnavailable?: () => void;
 }) {
   const awake = routing.useAwake({ status, autoWakeUp } as UserWithRelations, {
     allowActionRecovery,
+    onUnavailable,
   });
   return <p>{awake ? "Awake" : "Unavailable"}</p>;
 }
@@ -51,3 +54,42 @@ it.each([
     expect(view.getByText("Unavailable")).toBeTruthy();
   },
 );
+
+it.each(["ASLEEP", "HOSPITALIZED", "BATTLE", "TRAVEL", "QUEUED"] as const)(
+  "lets the host close an unavailable %s screen without navigating",
+  (status) => {
+    const replace = vi.fn();
+    const close = vi.fn();
+    vi.spyOn(router, "useNavigationRouter").mockReturnValue({ replace } as never);
+    vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
+    const view = render(
+      <ActivityGuard
+        status={status}
+        autoWakeUp={false}
+        allowActionRecovery={false}
+        onUnavailable={close}
+      />,
+    );
+    expect(view.getByText("Unavailable")).toBeTruthy();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(replace).not.toHaveBeenCalled();
+  },
+);
+
+it("keeps an awake hosted screen open", () => {
+  const replace = vi.fn();
+  const close = vi.fn();
+  vi.spyOn(router, "useNavigationRouter").mockReturnValue({ replace } as never);
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
+  const view = render(
+    <ActivityGuard
+      status="AWAKE"
+      autoWakeUp={false}
+      allowActionRecovery={false}
+      onUnavailable={close}
+    />,
+  );
+  expect(view.getByText("Awake")).toBeTruthy();
+  expect(close).not.toHaveBeenCalled();
+  expect(replace).not.toHaveBeenCalled();
+});

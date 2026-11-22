@@ -6,11 +6,14 @@ import * as client from "@/app/_trpc/client";
 import Bank from "@/app/[shell]/bank/page";
 import BlackMarket from "@/app/[shell]/blackmarket/page";
 import * as bankInterest from "@/hooks/useBankInterest";
+import { BankScreen } from "@/layout/bank/BankScreen";
+import type { ContentBoxProps } from "@/layout/ContentBox";
 import * as ContentBox from "@/layout/ContentBox";
 import * as GraphBankLedger from "@/layout/GraphBankLedger";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
+import { ScreenNavigationProvider } from "@/utils/ScreenNavigationContext";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { mockUserContextValue } from "../setup/userContext";
@@ -92,6 +95,41 @@ afterEach(() => {
 });
 
 describe("bank transfers", () => {
+  it("binds only the bank's first section to its host", () => {
+    const sections = new Map<string | undefined, ContentBoxProps>();
+    vi.spyOn(ContentBox, "default").mockImplementation((props) => {
+      sections.set(props.title, props);
+      return <div>{props.children}</div>;
+    });
+    vi.spyOn(bankInterest, "usePendingBankInterest").mockReturnValue({
+      data: { totalPending: 20, records: [{}] },
+    } as never);
+    const close = vi.fn();
+    renderPage(
+      <ScreenNavigationProvider onBack={close}>
+        <BankScreen />
+      </ScreenNavigationProvider>,
+    );
+    expect([...sections.keys()]).toEqual([
+      "Bank",
+      "Pending Interest",
+      "Transfer",
+      "Bank Ledger",
+    ]);
+    expect(sections.get("Bank")).toMatchObject({
+      defaultBackHref: "/village",
+      onBack: close,
+    });
+    expect(
+      [...sections.values()]
+        .slice(1)
+        .every((props) => !props.onBack && !props.defaultBackHref),
+    ).toBe(true);
+    expect(UserContext.useRequireInVillage).toHaveBeenCalledWith("/bank", {
+      onAccessDenied: close,
+    });
+  });
+
   it("starts every amount empty so its placeholder shows", () => {
     renderPage(<Bank />);
     for (const placeholder of [

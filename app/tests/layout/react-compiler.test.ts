@@ -73,6 +73,8 @@ const targets = [
   ["layout/items/ItemsToolbar.tsx", ["ItemsToolbar"]],
   ["layout/travel/StealthControls.tsx", ["StealthControls"]],
   ["layout/travel/TravelView.tsx", ["TravelView"]],
+  ["layout/bank/BankScreen.tsx", ["BankScreen"]],
+  ["layout/itemshop/ItemShopScreen.tsx", ["ItemShopScreen"]],
   ["app/[shell]/profile/experience/page.tsx", ["AssignExperience"]],
   ["app/[shell]/village/page.tsx", ["VillageOverview"]],
   ["app/[shell]/battlearena/page.tsx", ["Arena"]],

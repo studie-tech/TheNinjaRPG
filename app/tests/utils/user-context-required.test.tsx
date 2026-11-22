@@ -12,6 +12,7 @@ import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import * as sector from "@/hooks/useSectorVillage";
 import * as pusher from "@/layout/PusherHandler";
+import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
 import {
   UserContextProvider,
@@ -42,6 +43,9 @@ beforeEach(() => {
   );
   vi.spyOn(userContext, "useRequiredUserDataSelector").mockImplementation(
     actualUserContext.useRequiredUserDataSelector,
+  );
+  vi.spyOn(userContext, "useRequireInVillage").mockImplementation(
+    actualUserContext.useRequireInVillage,
   );
   vi.spyOn(userContext, "useUserDataSelector").mockImplementation(
     actualUserContext.useUserDataSelector,
@@ -147,13 +151,45 @@ describe("useRequireInVillage", () => {
   const VillageConsumer = ({
     enabled = true,
     redirectTo,
+    onAccessDenied,
   }: {
     enabled?: boolean;
     redirectTo?: string;
+    onAccessDenied?: () => void;
   }) => {
-    const { access } = useRequireInVillage("/hospital", { enabled, redirectTo });
+    const { access } = useRequireInVillage("/hospital", {
+      enabled,
+      redirectTo,
+      onAccessDenied,
+    });
     return <span>{access ? "Allowed" : "Waiting"}</span>;
   };
+
+  it("keeps denied content inaccessible and lets its host close after the toast", async () => {
+    vi.spyOn(sector, "useSectorVillage").mockReturnValue({
+      sectorVillage: undefined,
+      isLoading: false,
+    } as never);
+    const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => {});
+    const close = vi.fn(() => expect(showToast).toHaveBeenCalled());
+    const view = await mount(
+      { isLoaded: true, isSignedIn: true },
+      {
+        serverTime: 0,
+        notifications: [],
+        userData: { userId: "required-test" },
+      },
+      undefined,
+      true,
+      <VillageConsumer onAccessDenied={close} />,
+    );
+    expect(view.getByText("Waiting")).toBeTruthy();
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, id: "structure-access-denied" }),
+    );
+    expect(close).toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+  });
 
   it.each([false, true])(
     "preserves ordinary hospital access for outlaw=%s",

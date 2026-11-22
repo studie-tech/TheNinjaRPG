@@ -21,6 +21,8 @@ const DEFERRED_FILES = [
   "src/components/layout/GameLayout.tsx",
   "src/layout/MenuBoxProfile.tsx",
   "src/layout/travel/TravelView.tsx",
+  "src/layout/bank/BankScreen.tsx",
+  "src/layout/itemshop/ItemShopScreen.tsx",
   "src/hooks/useTravelSession.ts",
   "src/layout/ActivityStreakPanel.tsx",
   "src/utils/parse.ts",

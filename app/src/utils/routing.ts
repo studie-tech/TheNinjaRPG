@@ -65,10 +65,18 @@ export const pushToCombat = (
   router.push("/combat");
 };
 
-/** Route unavailable actors to their activity page; action pages may admit eligible recovery. */
+/** Route unavailable actors to their activity page or let their screen host close it. */
 export const useAwake = (
   userData: UserWithRelations,
-  { allowActionRecovery = false }: { allowActionRecovery?: boolean } = {},
+  {
+    allowActionRecovery = false,
+    onUnavailable,
+  }: {
+    /** Action pages may admit eligible recovery without leaving the page. */
+    allowActionRecovery?: boolean;
+    /** A screen host can dismiss unavailable content without changing the host route. */
+    onUnavailable?: () => void;
+  } = {},
 ) => {
   const router = useNavigationRouter();
   const pathname = usePublicPathname();
@@ -76,6 +84,10 @@ export const useAwake = (
   const canRecover = allowActionRecovery && canAttemptAwakeAction(userData);
   useEffect(() => {
     if (canRecover) return;
+    if (userStatus && userStatus !== "AWAKE" && onUnavailable) {
+      onUnavailable();
+      return;
+    }
     if (userStatus === "HOSPITALIZED") {
       void router.replace("/hospital");
     } else if (userStatus === "BATTLE") {
@@ -85,6 +97,6 @@ export const useAwake = (
     } else if (userStatus === "ASLEEP") {
       void router.replace("/home");
     }
-  }, [pathname, userStatus, router, canRecover]);
+  }, [pathname, userStatus, router, canRecover, onUnavailable]);
   return userStatus === "AWAKE";
 };

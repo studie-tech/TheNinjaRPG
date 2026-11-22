@@ -485,10 +485,19 @@ export const useRequiredUserInfo = () => useRequiredUserDataSelector(selectUserI
  * narrowed further to a specific structure in the village.
  * `enabled` pauses access redirects while relocation settles; `redirectTo` then
  * takes precedence over the ordinary structure check for the reconciled profile.
+ * `onAccessDenied` lets a screen host close denied content after the access toast.
  */
 export const useRequireInVillage = (
   structureRoute?: StructureRoute,
-  { enabled = true, redirectTo }: { enabled?: boolean; redirectTo?: string } = {},
+  {
+    enabled = true,
+    redirectTo,
+    onAccessDenied,
+  }: {
+    enabled?: boolean;
+    redirectTo?: string;
+    onAccessDenied?: () => void;
+  } = {},
 ) => {
   // Access state
   const [access, setAccess] = useState<boolean>(false);
@@ -516,6 +525,7 @@ export const useRequireInVillage = (
         const access = canAccessStructure(userData, structureRoute, sectorVillage);
         // Redirect user
         if (!sectorVillage || !access) {
+          setAccess(false);
           showMutationToast({
             success: false,
             title: "Not reachable from here",
@@ -526,7 +536,8 @@ export const useRequireInVillage = (
             ),
             id: "structure-access-denied",
           });
-          void router.replace("/");
+          if (onAccessDenied) onAccessDenied();
+          else void router.replace("/");
         } else {
           setAccess(true);
         }
@@ -542,6 +553,7 @@ export const useRequireInVillage = (
     structureRoute,
     enabled,
     redirectTo,
+    onAccessDenied,
   ]);
   return {
     userData,
