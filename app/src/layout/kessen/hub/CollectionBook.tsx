@@ -18,6 +18,8 @@ import {
   type KessenKeyword,
 } from "@/libs/kessen/text";
 import { cn } from "@/libs/shadui";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
+import { parseJsonSafe } from "@/utils/typeutils";
 import type { KessenFaction } from "@/validators/itemCard";
 import type { KessenCatalogEntry } from "@/validators/kessen";
 import { CardFace } from "../CardFace";
@@ -594,21 +596,13 @@ const seenStorageKey = (viewerId: string | undefined) =>
 
 /** Card ids this viewer has seen in the book; null before the first visit. */
 const readSeenCards = (key: string): Set<string> | null => {
-  try {
-    const raw = window.localStorage.getItem(key);
-    const ids = raw ? (JSON.parse(raw) as unknown) : null;
-    return Array.isArray(ids)
-      ? new Set(ids.filter((id) => typeof id === "string"))
-      : null;
-  } catch {
-    return null;
-  }
+  const raw = safeLocalStorageGetItem(key);
+  const ids = raw ? parseJsonSafe(raw).data : null;
+  return Array.isArray(ids)
+    ? new Set(ids.filter((id) => typeof id === "string"))
+    : null;
 };
 
-const writeSeenCards = (key: string, ids: readonly string[]) => {
-  try {
-    window.localStorage.setItem(key, JSON.stringify([...new Set(ids)]));
-  } catch {
-    // Storage blocked: every visit then starts without NEW marks.
-  }
-};
+// Storage blocked: every visit then starts without NEW marks.
+const writeSeenCards = (key: string, ids: readonly string[]) =>
+  safeLocalStorageSetItem(key, JSON.stringify([...new Set(ids)]));

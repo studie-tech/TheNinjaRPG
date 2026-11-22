@@ -11,6 +11,7 @@ import {
   kessenGrantsPacks,
   kessenResultGrantsItems,
 } from "@/deltas/kessen";
+import { errorText, settle } from "@/hooks/kessen/settle";
 import { useKessenHubCache } from "@/hooks/kessen/useKessenHubCache";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
@@ -134,7 +135,7 @@ export const useKessenMatch = (matchId: string | null) => {
     );
     if (!sent.ok) {
       void recover(current.id);
-      return { ok: false, message: errorMessage(sent.error) };
+      return { ok: false, message: errorText(sent.error) };
     }
     const data = sent.value;
     await reconcile(snapshot, data);
@@ -155,7 +156,7 @@ export const useKessenMatch = (matchId: string | null) => {
     );
     if (!sent.ok) {
       void recover(current.id);
-      return { ok: false, message: errorMessage(sent.error) };
+      return { ok: false, message: errorText(sent.error) };
     }
     const data = sent.value;
     await reconcile(snapshot, data);
@@ -176,7 +177,7 @@ export const useKessenMatch = (matchId: string | null) => {
     );
     if (!sent.ok) {
       void recover(current.id);
-      return { ok: false, message: errorMessage(sent.error) };
+      return { ok: false, message: errorText(sent.error) };
     }
     const data = sent.value;
     if (!data.success || !("match" in data))
@@ -205,33 +206,4 @@ export const useKessenMatch = (matchId: string | null) => {
     isActing:
       playTurn.isPending || concedeMatch.isPending || claimFirstWinChoice.isPending,
   };
-};
-
-/**
- * Runs a request and reports a rejection as a value, which keeps `try` out of the
- * hook (the React Compiler cannot lower value blocks inside one).
- */
-const settle = async <T>(
-  run: () => Promise<T>,
-): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> => {
-  try {
-    return { ok: true, value: await run() };
-  } catch (error) {
-    return { ok: false, error };
-  }
-};
-
-/**
- * A request rejection as the line the table shows: a client error (4xx) keeps its own
- * reason, while transport and server failures read as an unreachable table.
- */
-const errorMessage = (error: unknown) => {
-  const httpStatus = (error as { data?: { httpStatus?: unknown } } | null)?.data
-    ?.httpStatus;
-  return error instanceof Error &&
-    error.message &&
-    typeof httpStatus === "number" &&
-    httpStatus < 500
-    ? error.message
-    : "The table could not reach the server. Try again.";
 };

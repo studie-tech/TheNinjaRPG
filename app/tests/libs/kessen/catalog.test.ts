@@ -19,7 +19,6 @@ import {
   KESSEN_GLOSSARY,
   KESSEN_KEYWORDS,
   keywordGlossary,
-  PERMAFROST_TERRAIN_NOTE,
   terrainReach,
 } from "@/libs/kessen/text";
 import type { KessenCard } from "@/libs/kessen/types";
@@ -448,7 +447,6 @@ describe("card text", () => {
       "Permafrost: afflicts only the enemy's row",
     );
     expect(keywordGlossary("Strike", "enemy")).toBe(KESSEN_GLOSSARY.Strike);
-    expect(PERMAFROST_TERRAIN_NOTE).toBe("Permafrost: only the enemy row.");
   });
 
   it("derives Terrain reach from the same rule as the engine", () => {

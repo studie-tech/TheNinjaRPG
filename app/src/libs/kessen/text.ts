@@ -70,9 +70,6 @@ export const terrainReach = (
 ): TerrainReach =>
   permafrostHolds(faction, at.round ?? 1, at.knobs ?? DEFAULT_KNOBS) ? "enemy" : "both";
 
-/** Short note for a one-sided Terrain, beside a card or in the Hyorin perk line. */
-export const PERMAFROST_TERRAIN_NOTE = "Permafrost: only the enemy row.";
-
 /** A keyword's glossary line; Terrain names the one-sided case when `reach` is "enemy". */
 export const keywordGlossary = (
   keyword: KessenKeyword,

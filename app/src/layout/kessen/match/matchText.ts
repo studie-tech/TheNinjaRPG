@@ -2,6 +2,7 @@
  * Plain-language lines for the match table: play-log entries, the pass facts, ghost
  * numbers and round summaries. Every line states what happens; none advises.
  */
+import { other } from "@/libs/kessen/board";
 import type { KessenHouseRule } from "@/libs/kessen/npcs";
 import { ROW_LABELS } from "@/libs/kessen/text";
 import type {
@@ -551,8 +552,6 @@ export const mineTheirs = (
   totals: readonly [number, number],
   me: Seat,
 ): [number, number] => (me === 0 ? [totals[0], totals[1]] : [totals[1], totals[0]]);
-
-const other = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
 
 const ABILITY_LABELS: Partial<Record<KessenAbilityKind, string>> = {
   strike: "Strike",

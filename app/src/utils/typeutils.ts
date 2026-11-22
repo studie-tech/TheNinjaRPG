@@ -25,6 +25,19 @@ export const parseJsonSafe = (value: string): { data: unknown; error: string } =
   }
 };
 
+/** The fields of a JSON object text; empty for null, invalid JSON or a non-object. */
+export const parseJsonFields = (text: string | null): Record<string, unknown> => {
+  if (!text) return {};
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
 // Set a key on an object and return the object
 export const setValueOnObj = <T, K extends keyof T>(object: T, key: K, value: T[K]) => {
   object[key] = value;

@@ -2,7 +2,6 @@
 
 import { AlertTriangle, Check, ChevronDown, Swords } from "lucide-react";
 import { useId, useState } from "react";
-import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +23,7 @@ import {
   KESSEN_VILLAGE_BUNDLE_WEEKLY_LIMIT,
   KessenTiers,
 } from "@/drizzle/constants";
+import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
 import ContentBox from "@/layout/ContentBox";
 import { KESSEN_BOOK_FACTIONS, KESSEN_FACTION_INFO } from "@/layout/kessen/hub/hubData";
 import Link from "@/layout/Link";
@@ -77,9 +77,7 @@ import type {
 export default function ManualKessen() {
   const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const isStaff = !!userData && canChangeContent(userData.role);
-  const catalog = api.kessen.getCatalog.useQuery(undefined, {
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const catalog = useKessenCatalog();
   const sections = isStaff ? [...PLAYER_SECTIONS, ...STAFF_SECTIONS] : PLAYER_SECTIONS;
 
   return (

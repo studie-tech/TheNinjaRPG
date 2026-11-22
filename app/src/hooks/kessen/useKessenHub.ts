@@ -21,7 +21,7 @@ export const useKessenHub = (enabled = true) => {
   return { hub, catalog };
 };
 
-/** The public card catalog alone, for the guest hall that has no hub. */
+/** The public card catalog alone, for screens without the hub. */
 export const useKessenCatalog = (enabled = true) =>
   api.kessen.getCatalog.useQuery(undefined, {
     enabled,

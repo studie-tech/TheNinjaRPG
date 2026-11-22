@@ -5,6 +5,7 @@ import { terrainSides } from "@/libs/kessen/abilities";
 import { displayedPower } from "@/libs/kessen/board";
 import { previewPartial, rowOptionsForView } from "@/libs/kessen/engine";
 import { kessenNpc, npcVariant } from "@/libs/kessen/npcs";
+import { ROWS } from "@/libs/kessen/rules";
 import { ROW_LABELS } from "@/libs/kessen/text";
 import type {
   KessenAction,
@@ -18,6 +19,7 @@ import type {
   UnitDelta,
 } from "@/libs/kessen/types";
 import { haptics } from "@/libs/native";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import type {
   KessenCatalogEntry,
   KessenMatchLog,
@@ -517,12 +519,8 @@ export const useMatchTable = ({
 
   const setQuickPlay = (enabled: boolean) => {
     setQuickPlayState(enabled);
-    const stored = enabled ? "1" : "0";
-    try {
-      window.localStorage.setItem(QUICK_PLAY_KEY, stored);
-    } catch {
-      // Storage can be unavailable (private windows); the toggle still applies here.
-    }
+    // Storage can be unavailable (private windows); the toggle still applies here.
+    safeLocalStorageSetItem(QUICK_PLAY_KEY, enabled ? "1" : "0");
   };
 
   // ------------------------------------------------------------------ board
@@ -721,13 +719,7 @@ const summaryOf = (
   return roundSummary(event, step.before, kept, names);
 };
 
-const readQuickPlay = () => {
-  try {
-    return window.localStorage.getItem(QUICK_PLAY_KEY) === "1";
-  } catch {
-    return false;
-  }
-};
+const readQuickPlay = () => safeLocalStorageGetItem(QUICK_PLAY_KEY) === "1";
 
 const QUICK_PLAY_KEY = "kessen:quickPlay";
 
@@ -748,7 +740,7 @@ const placementChoices = (
   const side = placementSide(view, cardInstance, me);
   const closed: RowChoice[] = [];
   for (const rowSide of [me, me === 0 ? 1 : 0] as const) {
-    for (const row of BOARD_ROWS) {
+    for (const row of ROWS) {
       if (placements.some((entry) => entry.row === row && entry.side === rowSide)) {
         continue;
       }
@@ -941,7 +933,7 @@ export const rowEffectsOf = (
 ) => {
   const effects = new Map<string, RowEffect>();
   for (const side of [0, 1] as const) {
-    for (const row of BOARD_ROWS) {
+    for (const row of ROWS) {
       let terrain: boolean | null = null;
       for (const event of outcome.events) {
         if (event.t === "terrain" && event.side === side && event.row === row) {
@@ -980,10 +972,8 @@ export const stillInspectable = (view: MatchView, me: Seat, inspection: Inspecti
 
 const onBoard = (view: MatchView, instance: string) =>
   view.board.some((side) =>
-    BOARD_ROWS.some((row) => side[row].some((unit) => unit.id === instance)),
+    ROWS.some((row) => side[row].some((unit) => unit.id === instance)),
   );
-
-const BOARD_ROWS: readonly Row[] = ["CLOSE", "RANGED", "JUTSU"];
 
 const EMPTY_DRAFT: Draft = { card: null, action: null };
 

@@ -119,55 +119,6 @@ describe("kessen deltas", () => {
     });
   });
 
-  it("extends a cached play log in step with the match by a turn's events", () => {
-    const before: KessenEvent[] = [{ t: "passed", seat: 1, auto: false }];
-    const turn: KessenEvent[] = [
-      {
-        t: "placed",
-        id: "s0-3",
-        cardId: "kessen-colossus",
-        owner: 0,
-        side: 0,
-        row: "CLOSE",
-        source: "hand",
-        stored: 9,
-      },
-    ];
-    const cached = payload({ status: "ACTIVE", version: 3, view: roundTwoView() });
-    const confirmed = payload({
-      status: "ACTIVE",
-      version: 4,
-      view: roundTwoView({ inst: { "s0-3": "kessen-colossus" } }),
-    });
-    const log = { version: 3, events: before, inst: {} };
-    expect(getKessenMatchCache({ match: cached, log }, confirmed, turn)).toEqual({
-      match: confirmed,
-      log: {
-        version: 4,
-        events: [...before, ...turn],
-        inst: { "s0-3": "kessen-colossus" },
-      },
-    });
-    // Without events (a concession or claim) the log keeps the version it reflects.
-    expect(getKessenMatchCache({ match: cached, log }, confirmed)).toEqual({
-      match: confirmed,
-      log,
-    });
-    // A log behind the cached match cannot take the events in order.
-    const behind = { ...log, version: 2 };
-    expect(
-      getKessenMatchCache({ match: cached, log: behind }, confirmed, turn),
-    ).toEqual({ match: confirmed, log: behind });
-    // Another match's log is dropped.
-    expect(
-      getKessenMatchCache(
-        { match: cached, log },
-        payload({ id: "m2", version: 1 }),
-        turn,
-      ),
-    ).toEqual({ match: payload({ id: "m2", version: 1 }) });
-  });
-
   it("records a started match as active", () => {
     const next = getKessenHubAfterStart(
       hub({ activeMatch: null }),

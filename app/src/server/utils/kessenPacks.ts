@@ -25,7 +25,7 @@ import {
   KESSEN_VILLAGE_BUNDLE_WEEKLY_LIMIT,
   type KessenPackTier,
 } from "@/drizzle/constants";
-import { itemToKessenCard, kessenCatalogCards } from "@/libs/kessen/catalog";
+import { kessenCatalogCards, ownedCardCounts } from "@/libs/kessen/catalog";
 import { type DeckFaction, KESSEN_DECK_FACTIONS } from "@/libs/kessen/deck";
 import {
   isKessenPackId,
@@ -46,10 +46,10 @@ import {
   findKessenProgress,
   insertKessenProgressIfMissing,
   listKessenCards,
-  listOwnedKessenCards,
+  listOwnedKessenCardCounts,
   updateKessenProgressForReservePackPity,
-  updateUserDataForKessenAutoSell,
 } from "@/queries/kessen";
+import { incrementUserMoney } from "@/queries/profile";
 import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { NonCombatConsumeRewardTag, type ZodAllTags } from "@/validators/combat";
@@ -301,20 +301,14 @@ export const kessenRareSlotMinimum = (
   return null;
 };
 
-/** One owned card stack, auction listings included. */
-export interface KessenOwnedCard {
-  itemId: string;
-  quantity: number;
-  card: KessenCard | null;
-}
-
 export interface KessenPackPlanInput {
   packItemId: string;
   /** The pack's weighted caches in effect order; the last one is the fifth slot. */
   caches: WeightedCache[];
   /** Cards the caches reference, by item id. */
   cards: ReadonlyMap<string, KessenCard>;
-  owned: readonly KessenOwnedCard[];
+  /** Owned copies per item id, auction listings included. */
+  owned: Readonly<Record<string, number>>;
   counters: KessenPityCounters;
   autoSellSurplus: boolean;
   /** Seeds the re-rolls of dupe protection and the unowned-legendary pick. */
@@ -347,7 +341,7 @@ export interface KessenPackPlan {
  */
 export const planKessenPackOpening = (input: KessenPackPlanInput): KessenPackPlan => {
   const rng = createRng(input.seed);
-  const copies = ownedCopyCounts(input.owned);
+  const copies = new Map(Object.entries(input.owned));
   const minimum = kessenRareSlotMinimum(input.counters, input.packItemId);
   const legendaryPity = minimum === "LEGENDARY";
   const reveal: CardPackReveal["cards"] = [];
@@ -480,17 +474,13 @@ export const prepareKessenPackOpening = async ({
   const [[stored], cardRows, ownedRows] = await Promise.all([
     findKessenProgress(client, userId),
     listKessenCards(client, ids),
-    listOwnedKessenCards(client, userId),
+    listOwnedKessenCardCounts(client, userId),
   ]);
   if (!stored) await insertKessenProgressIfMissing(client, userId);
   const cards = new Map(kessenCatalogCards(cardRows).map((card) => [card.id, card]));
   if (ids.some((id) => cards.get(id)?.kind === "LEADER"))
     return errorResponse("This pack lists a leader card. Please contact staff.");
-  const owned = ownedRows.map((row) => ({
-    itemId: row.itemId,
-    quantity: row.quantity,
-    card: itemToKessenCard({ ...row, id: row.itemId }),
-  }));
+  const owned = ownedCardCounts(ownedRows).all;
   const counters = {
     packsSinceEpic: stored?.packsSinceEpic ?? 0,
     packsSinceLegendary: stored?.packsSinceLegendary ?? 0,
@@ -522,8 +512,7 @@ export const prepareKessenPackOpening = async ({
             plan.counters,
           );
           if (reserved.rowsAffected !== 1) throw new KessenPackRaceError();
-          if (plan.soldRyo > 0)
-            await updateUserDataForKessenAutoSell(tx, userId, plan.soldRyo);
+          if (plan.soldRyo > 0) await incrementUserMoney(tx, plan.soldRyo, userId);
         },
         notifications:
           plan.soldRyo > 0
@@ -600,14 +589,8 @@ const isMaxedIn = (copies: ReadonlyMap<string, number>, card: KessenCard) =>
   countOf(copies, card) >=
   (card.variant === "FORBIDDEN" ? 1 : KESSEN_COPY_LIMITS[card.rarity]);
 
-const addCopy = (copies: Map<string, number>, card: KessenCard, quantity = 1) => {
-  copies.set(card.id, (copies.get(card.id) ?? 0) + quantity);
-};
-
-const ownedCopyCounts = (owned: readonly KessenOwnedCard[]) => {
-  const copies = new Map<string, number>();
-  for (const row of owned) if (row.card) addCopy(copies, row.card, row.quantity);
-  return copies;
+const addCopy = (copies: Map<string, number>, card: KessenCard) => {
+  copies.set(card.id, (copies.get(card.id) ?? 0) + 1);
 };
 
 function numberWord(count: number) {

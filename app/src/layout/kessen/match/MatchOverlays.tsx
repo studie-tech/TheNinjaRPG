@@ -28,7 +28,7 @@ import { KESSEN_DECK_FACTIONS } from "@/libs/kessen/deck";
 import { KESSEN_FACTION_NAMES, kessenPackName } from "@/libs/kessen/packs";
 import { TOKEN_PREFIX } from "@/libs/kessen/rules";
 import { abilitySegments, cardKeywords } from "@/libs/kessen/text";
-import type { Seat } from "@/libs/kessen/types";
+import type { RoundResult, Seat } from "@/libs/kessen/types";
 import { CardBack } from "../CardBack";
 import { CardFace, kessenCardLabel } from "../CardFace";
 import { KESSEN_FACTION_INFO, npcPortrait } from "../hub/hubData";
@@ -548,23 +548,7 @@ export const MatchEndScreen = ({
               </p>
             </div>
           ) : null}
-          {history.length > 0 ? (
-            <ol className="km-end-rounds" aria-label="Rounds">
-              {history.map((entry) => (
-                <li
-                  key={entry.round}
-                  data-outcome={
-                    entry.winner === null ? "tie" : entry.winner === me ? "won" : "lost"
-                  }
-                >
-                  <span className="km-eyebrow">Round {entry.round}</span>
-                  <span className="km-end-score">
-                    {entry.totals[me]} – {entry.totals[them]}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          ) : null}
+          <EndRounds history={history} me={me} them={them} />
         </div>
         <div className="km-end-claim">
           {/* The result's rewards, as the combat result lists them. */}
@@ -766,6 +750,34 @@ export const MatchEndScreen = ({
     </section>
   );
 };
+
+/** The round scores of an ended match or duel, from the player's side. */
+export const EndRounds = ({
+  history,
+  me,
+  them,
+}: {
+  history: readonly RoundResult[];
+  me: Seat;
+  them: Seat;
+}) =>
+  history.length > 0 ? (
+    <ol className="km-end-rounds" aria-label="Rounds">
+      {history.map((entry) => (
+        <li
+          key={entry.round}
+          data-outcome={
+            entry.winner === null ? "tie" : entry.winner === me ? "won" : "lost"
+          }
+        >
+          <span className="km-eyebrow">Round {entry.round}</span>
+          <span className="km-end-score">
+            {entry.totals[me]} – {entry.totals[them]}
+          </span>
+        </li>
+      ))}
+    </ol>
+  ) : null;
 
 /**
  * The six factions' passive perks on one screen, closing the Academy: the player picks

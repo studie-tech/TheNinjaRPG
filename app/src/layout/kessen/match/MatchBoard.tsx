@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { academyRowKey } from "@/libs/kessen/academy";
+import { ROWS } from "@/libs/kessen/rules";
 import { ROW_LABELS } from "@/libs/kessen/text";
 import type { Row, Seat, Unit } from "@/libs/kessen/types";
 import { CardBack } from "../CardBack";
@@ -48,7 +49,7 @@ export const MatchBoard = ({
         <BoardRow key={`t-${row}`} table={table} side={them} row={row} named={lesson} />
       ))}
       <CenterBand table={table} pulseBadge={pulseBadge} />
-      {OWN_ROWS.map((row) => (
+      {ROWS.map((row) => (
         <BoardRow key={`m-${row}`} table={table} side={me} row={row} named={lesson} />
       ))}
       {view.phase === "mulligan" && !table.mulliganOpen && !table.playing ? (
@@ -494,4 +495,3 @@ const roundsLabel = (table: MatchTable) =>
     .join(", ");
 
 const OPPONENT_ROWS: Row[] = ["JUTSU", "RANGED", "CLOSE"];
-const OWN_ROWS: Row[] = ["CLOSE", "RANGED", "JUTSU"];

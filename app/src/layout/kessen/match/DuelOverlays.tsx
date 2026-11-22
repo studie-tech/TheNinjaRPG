@@ -18,6 +18,7 @@ import { kessenPackName } from "@/libs/kessen/packs";
 import type { Seat } from "@/libs/kessen/types";
 import { cn } from "@/libs/shadui";
 import type { KessenPvpMatchPayload } from "@/validators/kessen";
+import { EndRounds } from "./MatchOverlays";
 import type { MatchTable } from "./useMatchTable";
 
 /**
@@ -161,23 +162,7 @@ export const DuelEndScreen = ({
             {opponent.villageName ? ` of ${opponent.villageName}` : ""}, level{" "}
             {opponent.level}
           </p>
-          {history.length > 0 ? (
-            <ol className="km-end-rounds" aria-label="Rounds">
-              {history.map((entry) => (
-                <li
-                  key={entry.round}
-                  data-outcome={
-                    entry.winner === null ? "tie" : entry.winner === me ? "won" : "lost"
-                  }
-                >
-                  <span className="km-eyebrow">Round {entry.round}</span>
-                  <span className="km-end-score">
-                    {entry.totals[me]} – {entry.totals[them]}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          ) : null}
+          <EndRounds history={history} me={me} them={them} />
         </div>
         <div className="km-end-claim">
           {duel.kind === "RANKED" || result?.note || result?.settling ? (

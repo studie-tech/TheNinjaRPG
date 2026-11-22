@@ -6,6 +6,8 @@
  * of the map for pins.
  */
 
+import { clamp } from "@/utils/math";
+
 export type MapView = { zoom: number; x: number; y: number };
 
 /** The whole map fitted to its frame. */
@@ -41,9 +43,6 @@ export const pinScale = (width: number, zoom: number) =>
 
 /** Whether every pin shows its name plate at this pin scale. */
 export const labelsShown = (scale: number) => scale >= LABEL_MIN_SCALE;
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
 
 /** The view with its zoom inside [1, maxZoom] and the map covering the whole frame. */
 export const clampView = (view: MapView, maxZoom: number): MapView => {

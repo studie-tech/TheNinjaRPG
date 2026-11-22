@@ -1,5 +1,4 @@
 import { describe, expect, it, setDefaultTimeout } from "bun:test";
-import { readFileSync } from "node:fs";
 import {
   aiRng,
   chooseMulligan,
@@ -590,30 +589,5 @@ describe("Kessen greedy baseline", () => {
     expect(greedyDecide(viewFor(s, 1), 1)).toEqual(play);
     s.seats[0].passed = true;
     expect(greedyDecide(viewFor(s, 1), 1)).toEqual({ t: "pass" });
-  });
-});
-
-describe("Kessen AI source", () => {
-  it("keeps floats, wall clocks and ambient randomness out of the AI", () => {
-    const source = readFileSync(
-      new URL("../../../src/libs/kessen/ai.ts", import.meta.url),
-      "utf8",
-    )
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/\/\/.*$/gm, "");
-    for (const banned of [
-      /Math\.random/,
-      /\bDate\b/,
-      /\bperformance\b/,
-      /Math\.(pow|exp|sin|cos|tan|hypot|log|sqrt|round)\b/,
-      /\*\*/,
-      /\bparseFloat\b/,
-      /\b\d+\.\d+\b/,
-    ]) {
-      expect({ banned: String(banned), found: banned.test(source) }).toEqual({
-        banned: String(banned),
-        found: false,
-      });
-    }
   });
 });

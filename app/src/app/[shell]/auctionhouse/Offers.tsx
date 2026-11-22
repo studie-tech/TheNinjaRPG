@@ -43,6 +43,7 @@ import {
   type AuctionListingState,
   MAX_ITEM_STACK_SIZE,
 } from "@/drizzle/constants";
+import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
 import { useKessenCardMoves } from "@/hooks/kessen/useKessenHubCache";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import Image from "@/layout/Image";
@@ -178,10 +179,7 @@ export function NewOfferDialog({
     enabled: isOpen,
   });
   // Card names, to explain why a searched card is not among the wanted items.
-  const kessenCatalog = api.kessen.getCatalog.useQuery(undefined, {
-    enabled: isOpen,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const kessenCatalog = useKessenCatalog(isOpen);
   const cardNames = kessenCatalog.data?.cards.map((card) => card.name.toLowerCase());
   const wantedEmpty = (query: string) => {
     const search = query.trim().toLowerCase();

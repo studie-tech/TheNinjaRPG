@@ -24,6 +24,7 @@ import {
 } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
+import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
 import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import { CardDataEditor } from "@/layout/CardDataEditor";
@@ -342,9 +343,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
  * the pity rules and the Kessen manual for the rest.
  */
 function PackSummary({ effects }: { effects: readonly unknown[] }) {
-  const { data: catalog } = api.kessen.getCatalog.useQuery(undefined, {
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const { data: catalog } = useKessenCatalog();
   const names = new Map(catalog?.cards.map((card) => [card.id, card.name]));
   const caches = effects.flatMap((effect) => {
     const tag = effect as { rewardMode?: unknown; weightedCache?: unknown } | null;

@@ -22,7 +22,6 @@ import {
   KESSEN_RANKED_WEEKLY_PACK_WINS,
 } from "@/drizzle/constants";
 import {
-  type KessenMatch,
   kessenMatch,
   kessenProgress,
   kessenRankedQueue,
@@ -103,15 +102,6 @@ export const listActiveKessenMatchesForPlayers = (
       ),
     )
     .orderBy(desc(kessenMatch.startedAt));
-
-export const insertKessenPvpMatch = (
-  client: Pick<DrizzleClient, "insert">,
-  row: Omit<KessenMatch, "state"> & { state: KessenStoredPvpMatch },
-) =>
-  client.insert(kessenMatch).values({
-    ...row,
-    state: row.state as unknown as Record<string, unknown>,
-  });
 
 /**
  * The one write of a duel decision (or of the clock forcing one): a CAS on `version` of
@@ -282,23 +272,6 @@ export const listKessenProgressRows = (
     .select()
     .from(kessenProgress)
     .where(inArray(kessenProgress.userId, userIds.length > 0 ? [...userIds] : [""]));
-
-/** Creates default progress rows for players who have none; existing rows are kept. */
-export const insertKessenProgressRowsIfMissing = (
-  client: Pick<DrizzleClient, "insert">,
-  userIds: readonly string[],
-) =>
-  client
-    .insert(kessenProgress)
-    .values(
-      userIds.map((userId) => ({
-        userId,
-        academy: {},
-        seenKeywords: [],
-        npcWinsToday: {},
-      })),
-    )
-    .onDuplicateKeyUpdate({ set: { userId: sql`${kessenProgress.userId}` } });
 
 /**
  * The rating claim of a ranked duel: marks the match rated and applies both seats'

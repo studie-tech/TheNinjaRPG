@@ -13,30 +13,16 @@ export const getKessenPayoutUserUpdate = (ryo: number) =>
 
 /**
  * The cached match after a confirmed response: the server's payload, unless the cache
- * already holds a newer version of the same match (a later response landed first). A
- * cached play log in step with the cached match gains the response's `events`; without
- * events it keeps the version it reflects.
+ * already holds a newer version of the same match (a later response landed first).
  */
 export const getKessenMatchCache = (
   current: KessenMatchQuery | undefined,
   confirmed: KessenMatchPayload,
-  events: readonly KessenEvent[] = [],
 ): KessenMatchQuery => {
   const cached = current?.match;
   if (cached && cached.id === confirmed.id && cached.version > confirmed.version)
     return current ?? { match: cached };
-  const log = cached?.id === confirmed.id ? current?.log : undefined;
-  if (!log || !cached) return { match: confirmed };
-  if (events.length === 0 || log.version !== cached.version)
-    return { match: confirmed, log };
-  return {
-    match: confirmed,
-    log: getKessenMatchLog(
-      [...log.events, ...events],
-      { ...cached.view.inst, ...confirmed.view.inst, ...log.inst },
-      confirmed.version,
-    ),
-  };
+  return { match: confirmed };
 };
 
 /**

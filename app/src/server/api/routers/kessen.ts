@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getKessenMatchLog, getKessenPayoutUserUpdate } from "@/deltas/kessen";
+import { getKessenPayoutUserUpdate } from "@/deltas/kessen";
 import { getQuestChallengeUserUpdate } from "@/deltas/questChallenge";
 import {
   KESSEN_DAILY_DROP_ROLLS,
@@ -107,12 +107,12 @@ import {
 } from "@/server/utils/kessenPayout";
 import { recordQuestChallengeWin } from "@/server/utils/questChallenge";
 import { getUtcDayKey, periodStart } from "@/utils/time";
+import { parseJsonFields } from "@/utils/typeutils";
 import {
   type KessenCatalog,
   type KessenCatalogEntry,
   type KessenCircuitEntry,
   type KessenHub,
-  type KessenMatchLog,
   type KessenMatchPayload,
   type KessenMatchQuery,
   type KessenMatchResult,
@@ -191,10 +191,10 @@ export const kessenRouter = createTRPCRouter({
     .input(z.object({ matchId: matchIdSchema }))
     .query(async ({ ctx, input }): Promise<KessenMatchQuery> => {
       const [found] = await findKessenMatch(ctx.drizzle, ctx.userId, input.matchId);
-      if (!found) return { match: null, log: null };
+      if (!found) return { match: null };
       // A finishing request that ended before its payout was settled is finished here.
       const { row } = await resumeKessenSettlement(ctx.drizzle, found);
-      return { match: toPayload(row), log: matchLog(row) };
+      return { match: toPayload(row) };
     }),
 
   /**
@@ -221,7 +221,6 @@ export const kessenRouter = createTRPCRouter({
       const deckId = input.deck.source === "loaner" ? null : input.deck.deckId;
       const [
         catalogRows,
-        active,
         anyActive,
         progressRows,
         npcRows,
@@ -231,7 +230,6 @@ export const kessenRouter = createTRPCRouter({
         questUser,
       ] = await Promise.all([
         listKessenCards(ctx.drizzle),
-        listActiveKessenMatches(ctx.drizzle, userId),
         listActiveKessenMatchesForPlayers(ctx.drizzle, [userId]),
         findKessenProgress(ctx.drizzle, userId),
         findKessenNpcProgressRows(ctx.drizzle, userId),
@@ -263,6 +261,7 @@ export const kessenRouter = createTRPCRouter({
         ? null
         : npcLockReason(npc, mode, circuitProgress(progress, npcRows, home));
       if (lock) return errorResponse(lock);
+      const active = anyActive.filter((entry) => entry.kind === "NPC");
       const busy = activeMatchRejection(anyActive, active, input.replaceActive);
       if (busy) return busy;
 
@@ -315,7 +314,6 @@ export const kessenRouter = createTRPCRouter({
           aiDeck,
           borrowed: [...new Set(deck.borrowed.map((entry) => entry.itemId))].sort(),
           plays: [0, 0],
-          log: [],
           result: null,
         },
       });
@@ -332,9 +330,8 @@ export const kessenRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }): Promise<KessenStartResult> => {
       const userId = ctx.userId;
       const now = new Date();
-      const [catalogRows, active, anyActive, progressRows] = await Promise.all([
+      const [catalogRows, anyActive, progressRows] = await Promise.all([
         listKessenCards(ctx.drizzle),
-        listActiveKessenMatches(ctx.drizzle, userId),
         listActiveKessenMatchesForPlayers(ctx.drizzle, [userId]),
         findKessenProgress(ctx.drizzle, userId),
       ]);
@@ -344,6 +341,7 @@ export const kessenRouter = createTRPCRouter({
         academyLessonsCompleted(progress?.academy),
       );
       if (lock) return errorResponse(lock);
+      const active = anyActive.filter((entry) => entry.kind === "NPC");
       const busy = activeMatchRejection(anyActive, active, input.replaceActive);
       if (busy) return busy;
       const start = academyLessonStart(
@@ -371,7 +369,6 @@ export const kessenRouter = createTRPCRouter({
           aiDeck: [],
           borrowed: [],
           plays: [0, 0],
-          log: [],
           result: null,
         },
       });
@@ -419,7 +416,6 @@ export const kessenRouter = createTRPCRouter({
         ...stored,
         engine: ai.engine,
         plays: addPlays(stored.plays, events),
-        log: addLog(stored.log ?? [], redacted),
       };
 
       if (ai.engine.phase !== "over") {
@@ -637,9 +633,7 @@ type KessenStartFailure = {
 };
 type KessenStartResult =
   | KessenStartFailure
-  | { success: true; message: string; match: KessenMatchPayload; log: KessenMatchLog };
-/** Stored play-log events per match; a full match stays well below it. */
-const MAX_LOG_EVENTS = 2000;
+  | { success: true; message: string; match: KessenMatchPayload };
 const CONCEDED_REASON = "Conceded matches pay no reward.";
 
 const UNREWARDED_RESULT: KessenMatchResult = {
@@ -661,7 +655,7 @@ const UNREWARDED_RESULT: KessenMatchResult = {
  */
 const activeMatchRejection = (
   anyActive: Awaited<ReturnType<typeof listActiveKessenMatchesForPlayers>>,
-  active: Awaited<ReturnType<typeof listActiveKessenMatches>>,
+  active: readonly { id: string }[],
   replaceActive: boolean | undefined,
 ): KessenStartFailure | null => {
   const duel = anyActive.find((entry) => entry.kind !== "NPC");
@@ -692,7 +686,7 @@ const openNpcMatch = async (
     tier: KessenTier;
     deckId: string | null;
     now: Date;
-    active: Awaited<ReturnType<typeof listActiveKessenMatches>>;
+    active: readonly { id: string }[];
     progressMissing: boolean;
     opening: KessenStoredMatch;
   },
@@ -703,7 +697,6 @@ const openNpcMatch = async (
     ...opening,
     engine: ai.engine,
     plays: addPlays(opening.plays, ai.events),
-    log: addLog(opening.log, redactEvents(ai.events, 0)),
   };
   const row: KessenMatch = {
     id: nanoid(),
@@ -750,7 +743,6 @@ const openNpcMatch = async (
     success: true,
     message: stored.mode === "lesson" ? "Lesson started." : "Match started.",
     match: toPayload(row),
-    log: matchLog(row),
   };
 };
 
@@ -824,16 +816,6 @@ const toPayload = (row: KessenMatch): KessenMatchPayload => {
     result: stored.result ?? null,
   };
 };
-
-/** The player's play log of a match row, as `kessen.getMatch` returns it. */
-const matchLog = (row: KessenMatch) => {
-  const stored = storedOf(row);
-  return getKessenMatchLog(stored.log ?? [], stored.engine.inst, row.version);
-};
-
-/** The stored play log with a turn's redacted events, keeping the newest. */
-const addLog = (log: readonly KessenEvent[], events: readonly KessenEvent[]) =>
-  [...log, ...events].slice(-MAX_LOG_EVENTS);
 
 const storedOf = (row: Pick<KessenMatch, "state">) =>
   row.state as unknown as KessenStoredMatch;
@@ -1092,7 +1074,7 @@ const buildHub = (input: {
 const matchStanding = (
   text: string | null,
 ): Pick<NonNullable<KessenHub["activeMatch"]>, "round" | "roundWins" | "yourTurn"> => {
-  const fields = parseStanding(text);
+  const fields = parseJsonFields(text);
   const winners = Array.isArray(fields.winners) ? fields.winners : [];
   return {
     round: typeof fields.round === "number" ? fields.round : 1,
@@ -1102,16 +1084,4 @@ const matchStanding = (
     ],
     yourTurn: fields.phase === "mulligan" ? fields.mull != null : fields.turn === 0,
   };
-};
-
-const parseStanding = (text: string | null): Record<string, unknown> => {
-  if (!text) return {};
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return parsed && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
 };

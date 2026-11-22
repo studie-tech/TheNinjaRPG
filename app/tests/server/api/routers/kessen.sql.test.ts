@@ -572,49 +572,6 @@ describeWithDatabase("kessen router", () => {
     expect(row?.engineVersion).toBe(CARD_ENGINE_VERSION);
   });
 
-  it("returns the whole play log, redacted for the player, with the match", async () => {
-    await setProgress({ academy: FIRST_LESSON_DONE });
-    const caller = await api();
-    const started = await caller.startMatch({
-      npcKey: "lemu",
-      mode: "standard",
-      deck: { source: "loaner", faction: "AKASUMI" },
-    });
-    if (!started.success || !("match" in started) || !started.match)
-      throw new Error(started.message);
-    const matchId = started.match.id;
-    expect(started.log?.version).toBe(started.match.version);
-    const sent = [...(started.log?.events ?? [])];
-    for (let turn = 0; turn < 6; turn++) {
-      const { match } = await caller.getMatch({ matchId });
-      if (match?.status !== "ACTIVE") break;
-      const response = await caller.playTurn({
-        matchId,
-        version: match.version,
-        action: humanAction(match),
-      });
-      expect(response.success, response.message).toBe(true);
-      sent.push(...response.events);
-    }
-    const { match, log } = await caller.getMatch({ matchId });
-    expect(log?.version).toBe(match?.version);
-    expect(log?.events).toEqual(sent);
-    expect(sent.some((event) => event.t === "mulligan" && event.seat === 0)).toBe(true);
-    // The opponent's draws and replaced cards stay hidden; only ids the events name are listed.
-    for (const event of log?.events ?? []) {
-      if (event.t === "drawn" && event.seat === 1)
-        expect(event.cards.every((id) => id === "?")).toBe(true);
-      if (event.t === "mulligan" && event.seat === 1)
-        expect([...event.removed, ...event.drawn].every((id) => id === "?")).toBe(true);
-    }
-    const stored = (await matchRow(matchId))?.state as unknown as KessenStoredMatch;
-    const named = JSON.stringify(log?.events ?? []);
-    for (const [id, cardId] of Object.entries(log?.inst ?? {})) {
-      expect(named).toContain(`"${id}"`);
-      expect(stored.engine.inst[id]).toBe(cardId);
-    }
-  });
-
   it("opens Academy lessons in order and pays each first completion once", async () => {
     const caller = await api();
     expect(await caller.startLesson({ lessonKey: "enough" })).toEqual({

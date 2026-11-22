@@ -43,7 +43,6 @@ const wonMatch = (npc: KessenNpc = SHISHI): KessenStoredMatch => {
     aiDeck: deck,
     borrowed: [],
     plays: [8, 8],
-    log: [],
     result: null,
   };
 };
@@ -158,7 +157,6 @@ describe("Academy lesson payout", () => {
         aiDeck: [],
         borrowed: [],
         plays: [line.actions.length, 0],
-        log: [],
         result: null,
       },
       startedAt: new Date(NOW.getTime() - 60_000),

@@ -42,7 +42,7 @@ import { KESSEN_ACADEMY_FIRST_LESSON } from "@/libs/kessen/academy";
 import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import type { DrizzleClient } from "@/server/db";
 import type { KessenFaction } from "@/validators/itemCard";
-import type { KessenStoredMatch } from "@/validators/kessen";
+import type { KessenStoredMatch, KessenStoredPvpMatch } from "@/validators/kessen";
 import type { QuestTrackerType } from "@/validators/objectives";
 
 /** Card items with their display fields, optionally restricted to ids. */
@@ -215,7 +215,8 @@ export const findKessenNpcProgressRows = (
 
 /**
  * Owned card copies per card, split by whether they are listed in the auction house.
- * Deck building excludes listed copies; sales and match rewards count them.
+ * Deck building excludes listed copies; sales, match rewards and pack dupe protection
+ * count them.
  */
 export const listOwnedKessenCardCounts = (
   client: Pick<DrizzleClient, "select">,
@@ -224,28 +225,6 @@ export const listOwnedKessenCardCounts = (
   client
     .select({
       itemId: item.id,
-      isInAuction: userItem.isInAuction,
-      quantity: sql<number>`CAST(SUM(${userItem.quantity}) AS SIGNED)`.mapWith(Number),
-    })
-    .from(userItem)
-    .innerJoin(item, eq(item.id, userItem.itemId))
-    .where(and(eq(userItem.userId, userId), eq(item.itemType, "CARD")))
-    .groupBy(item.id, userItem.isInAuction);
-
-/**
- * `listOwnedKessenCardCounts` with the card columns an engine card is built from, for
- * pack dupe protection.
- */
-export const listOwnedKessenCards = (
-  client: Pick<DrizzleClient, "select">,
-  userId: string,
-) =>
-  client
-    .select({
-      itemId: item.id,
-      name: item.name,
-      rarity: item.rarity,
-      cardData: item.cardData,
       isInAuction: userItem.isInAuction,
       quantity: sql<number>`CAST(SUM(${userItem.quantity}) AS SIGNED)`.mapWith(Number),
     })
@@ -377,15 +356,21 @@ const kessenProgressDefaults = (userId: string) => ({
   npcWinsToday: {},
 });
 
+/** Creates default progress rows for players who have none; existing rows are kept. */
+export const insertKessenProgressRowsIfMissing = (
+  client: Pick<DrizzleClient, "insert">,
+  userIds: readonly string[],
+) =>
+  client
+    .insert(kessenProgress)
+    .values(userIds.map((userId) => kessenProgressDefaults(userId)))
+    .onDuplicateKeyUpdate({ set: { userId: sql`${kessenProgress.userId}` } });
+
 /** Creates the player's default progress row; an existing row is kept. */
 export const insertKessenProgressIfMissing = (
   client: Pick<DrizzleClient, "insert">,
   userId: string,
-) =>
-  client
-    .insert(kessenProgress)
-    .values(kessenProgressDefaults(userId))
-    .onDuplicateKeyUpdate({ set: { userId: sql`${kessenProgress.userId}` } });
+) => insertKessenProgressRowsIfMissing(client, [userId]);
 
 /** Sets the auto-sell toggle, creating the player's progress row when it is missing. */
 export const upsertKessenProgressAutoSell = (
@@ -455,17 +440,6 @@ export const updateKessenProgressForReservePackPity = (
       ),
     );
 
-/** The `userData` money increment that pays auto-sold surplus cards. */
-export const updateUserDataForKessenAutoSell = (
-  client: Pick<DrizzleClient, "update">,
-  userId: string,
-  ryo: number,
-) =>
-  client
-    .update(userData)
-    .set({ money: sql`${userData.money} + ${ryo}` })
-    .where(eq(userData.userId, userId));
-
 /** An item's id and name, for checking that items exist before a grant. */
 export const listItemForKessenGrant = (
   client: Pick<DrizzleClient, "select">,
@@ -488,9 +462,10 @@ export const findUserItemForOpenPack = (
     .where(and(eq(userItem.id, userItemId), eq(userItem.userId, userId)))
     .limit(1);
 
+/** Stores a new NPC match or duel. */
 export const insertKessenMatch = (
   client: Pick<DrizzleClient, "insert">,
-  row: Omit<KessenMatch, "state"> & { state: KessenStoredMatch },
+  row: Omit<KessenMatch, "state"> & { state: KessenStoredMatch | KessenStoredPvpMatch },
 ) =>
   client.insert(kessenMatch).values({
     ...row,

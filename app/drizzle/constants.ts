@@ -5401,19 +5401,11 @@ export const KESSEN_RANKED_LEADERBOARD_SIZE = 50;
 export const KESSEN_EPIC_PITY_PACKS = 6;
 export const KESSEN_LEGENDARY_PITY_PACKS = 80;
 
-/** Card Master stall prices and purchase limits. Epic and legendary cards are never sold. */
+/** Card Master stall bundle prices and purchase limits. */
 export const KESSEN_PAPER_BUNDLE_PRICE = 4_000 * KESSEN_RYO_SCALE;
 export const KESSEN_PAPER_BUNDLE_DAILY_LIMIT = 1;
 export const KESSEN_VILLAGE_BUNDLE_PRICE = 6_500 * KESSEN_RYO_SCALE;
 export const KESSEN_VILLAGE_BUNDLE_WEEKLY_LIMIT = 1;
-export const KESSEN_SHOP_CARD_PRICES: Partial<Record<ItemRarity, number>> = {
-  COMMON: 1_500 * KESSEN_RYO_SCALE,
-  RARE: 6_000 * KESSEN_RYO_SCALE,
-};
-export const KESSEN_SHOP_CARD_WEEKLY_LIMITS: Partial<Record<ItemRarity, number>> = {
-  COMMON: 3,
-  RARE: 1,
-};
 
 /** Item id prefix of every Kessen card pack; packs are sold only at the Card Master stall. */
 export const KESSEN_PACK_ID_PREFIX = "kessen-pack-";

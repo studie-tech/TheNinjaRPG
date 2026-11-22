@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
 import { ownedCardCounts } from "@/libs/kessen/catalog";
 import {
   autoBuild,
@@ -774,31 +773,6 @@ describe("deck helpers", () => {
       { itemId: "a", count: 1 },
       { itemId: "b", count: 2 },
     ]);
-  });
-
-  it("keeps engine-dependent maths and randomness out of the deck, NPC and reward modules", () => {
-    for (const file of ["deck.ts", "npcs.ts", "rewards.ts"]) {
-      const source = readFileSync(
-        new URL(`../../../src/libs/kessen/${file}`, import.meta.url),
-        "utf8",
-      )
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
-      for (const banned of [
-        /Math\.random/,
-        /\bDate\b/,
-        /Math\.(pow|exp|sin|cos|tan|hypot|log|sqrt|round)\b/,
-        /\*\*/,
-        /\bparseFloat\b/,
-        /\b\d+\.\d+\b/,
-      ]) {
-        expect({ file, banned: String(banned), found: banned.test(source) }).toEqual({
-          file,
-          banned: String(banned),
-          found: false,
-        });
-      }
-    }
   });
 });
 

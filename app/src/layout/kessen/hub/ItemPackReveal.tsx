@@ -1,6 +1,6 @@
 "use client";
 
-import { api } from "@/app/_trpc/client";
+import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
 import type { CardPackReveal } from "@/validators/weightedCache";
 import { catalogLookup, kessenItemName } from "./hubData";
 import { PackOpening } from "./PackOpening";
@@ -23,9 +23,7 @@ export const ItemPackReveal = ({
   /** Focus target after closing, for an opener that unmounts with the ceremony open. */
   returnFocusTo?: () => HTMLElement | null | undefined;
 }) => {
-  const catalog = api.kessen.getCatalog.useQuery(undefined, {
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const catalog = useKessenCatalog();
   const cards = catalog.data?.cards ?? [];
   const packName = reveal
     ? kessenItemName(reveal.packItemId, catalogLookup(cards), catalog.data?.packs)

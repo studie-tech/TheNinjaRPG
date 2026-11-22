@@ -146,7 +146,7 @@ export interface KessenMatchPayload {
 }
 
 /**
- * The play log of a match as seat 0 may see it, oldest event first. It reflects the
+ * The play log of a duel as its viewer may see it, oldest event first. It reflects the
  * match at `version`; `inst` names every instance the events refer to.
  */
 export interface KessenMatchLog {
@@ -155,13 +155,9 @@ export interface KessenMatchLog {
   inst: Record<string, string>;
 }
 
-/**
- * What `kessen.getMatch` returns and caches. `log` is absent from a cache seeded by a
- * response that carried none.
- */
+/** What `kessen.getMatch` returns and caches. */
 export interface KessenMatchQuery {
   match: KessenMatchPayload | null;
-  log?: KessenMatchLog | null;
 }
 
 /** One card of the public catalog, with display fields. */
@@ -321,8 +317,6 @@ export interface KessenStoredMatch {
   borrowed: string[];
   /** Cards played from hand, `[human, npc]`, for the reward eligibility guard. */
   plays: [number, number];
-  /** Every event of the match redacted for seat 0, oldest first: the play log. */
-  log: KessenEvent[];
   /** Set when the match ends; first-win choices are claimed by rewriting it. */
   result: KessenMatchResult | null;
   /**

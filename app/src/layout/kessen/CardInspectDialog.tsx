@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useLayoutEffect, useRef } from "react";
+import { useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/libs/shadui";
 import { CardFace } from "./CardFace";
+import { useReturnFocus } from "./hub/useReturnFocus";
 import {
   KESSEN_RARITY_LABELS,
   type KessenCardDisplay,
@@ -59,14 +60,7 @@ export const CardInspectDialog = ({
 }) => {
   const open = card !== null;
   const contentRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<HTMLElement | null>(null);
-  // Layout effects run before Radix moves the focus, so the opener is still active.
-  useLayoutEffect(() => {
-    if (!open) return;
-    const active = document.activeElement;
-    openerRef.current =
-      active instanceof HTMLElement && active !== document.body ? active : null;
-  }, [open]);
+  const focusReturn = useReturnFocus(returnFocus);
   const tier = card ? kessenRarityTier(card) : null;
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
@@ -78,17 +72,11 @@ export const CardInspectDialog = ({
           scene && "kessen-scene border-[var(--kessen-gold-lo)]",
         )}
         onOpenAutoFocus={(event) => {
+          focusReturn.onOpenAutoFocus();
           event.preventDefault();
           contentRef.current?.focus();
         }}
-        onCloseAutoFocus={(event) => {
-          const opener = openerRef.current;
-          openerRef.current = null;
-          const target = opener?.isConnected ? opener : returnFocus?.();
-          if (!target) return;
-          event.preventDefault();
-          target.focus({ preventScroll: true });
-        }}
+        onCloseAutoFocus={focusReturn.onCloseAutoFocus}
       >
         {card && tier ? (
           <>

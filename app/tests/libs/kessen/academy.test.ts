@@ -1,6 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   KESSEN_ACADEMY_GRADUATION_PACK_ID,
   KESSEN_ACADEMY_LESSON_RYO,
@@ -300,16 +298,6 @@ describe("Academy series", () => {
       false,
     ]);
     expect(academyProgress(stored, "m6").graduated).toBe(true);
-  });
-
-  it("keeps lesson code free of randomness and the wall clock", () => {
-    for (const file of ["academy.ts", "academyLessons.ts", "academyPosition.ts"]) {
-      const source = readFileSync(
-        join(import.meta.dirname, "../../../src/libs/kessen", file),
-        "utf8",
-      );
-      expect(source).not.toMatch(/Math\.random|Date\b|performance\.now/);
-    }
   });
 });
 

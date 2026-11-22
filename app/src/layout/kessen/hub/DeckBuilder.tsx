@@ -61,6 +61,12 @@ import {
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
 import { cardKeywords, KESSEN_KEYWORDS, ROW_LABELS } from "@/libs/kessen/text";
 import { cn } from "@/libs/shadui";
+import {
+  safeSessionStorageGetItem,
+  safeSessionStorageRemoveItem,
+  safeSessionStorageSetItem,
+} from "@/utils/storage";
+import { parseJsonSafe } from "@/utils/typeutils";
 import type { KessenFaction } from "@/validators/itemCard";
 import type { KessenCatalogEntry, KessenDeckRow } from "@/validators/kessen";
 import { CardFace } from "../CardFace";
@@ -1729,13 +1735,8 @@ const restoreDraft = (
   userId: string,
   decks: readonly KessenDeckRow[],
 ): Draft | null => {
-  let stored: StoredDraft | null = null;
-  try {
-    const raw = window.sessionStorage.getItem(draftStorageKey(userId));
-    stored = raw ? (JSON.parse(raw) as StoredDraft) : null;
-  } catch {
-    return null;
-  }
+  const raw = safeSessionStorageGetItem(draftStorageKey(userId));
+  const stored = raw ? (parseJsonSafe(raw).data as StoredDraft | undefined) : null;
   if (!stored?.draft) return null;
   const { draft, base } = stored;
   if (draft.id === null) return draft;
@@ -1743,14 +1744,11 @@ const restoreDraft = (
   return deck && deckPrint(deck) === base ? draft : null;
 };
 
+// Storage blocked: unsaved edits then last only while the builder stays open.
 const writeStoredDraft = (userId: string, stored: StoredDraft | null) => {
-  try {
-    const key = draftStorageKey(userId);
-    if (stored) window.sessionStorage.setItem(key, JSON.stringify(stored));
-    else window.sessionStorage.removeItem(key);
-  } catch {
-    // Storage blocked: unsaved edits then last only while the builder stays open.
-  }
+  const key = draftStorageKey(userId);
+  if (stored) safeSessionStorageSetItem(key, JSON.stringify(stored));
+  else safeSessionStorageRemoveItem(key);
 };
 
 type RowBucket = "CLOSE" | "RANGED" | "JUTSU" | "ANY" | "TACTIC";

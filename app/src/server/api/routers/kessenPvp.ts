@@ -69,6 +69,7 @@ import {
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { notifyKessenChallenge } from "@/server/utils/push/kessen";
 import { getUtcDayKey, periodStart } from "@/utils/time";
+import { parseJsonFields } from "@/utils/typeutils";
 import {
   decodeKessenDeckSource,
   encodeKessenDeckSource,
@@ -924,7 +925,7 @@ const activeDuelOf = (
   const row = active.find((entry) => entry.kind !== "NPC");
   const seat = row ? seatOf(row, userId) : null;
   if (!row || seat === null) return null;
-  const standing = parseStanding(row.standing);
+  const standing = parseJsonFields(row.standing);
   const names = Array.isArray(standing.names) ? standing.names : [];
   const opponentSeat = seat === 0 ? 1 : 0;
   return {
@@ -941,16 +942,4 @@ const activeDuelOf = (
         ? standing[`mull${seat}`] != null
         : standing.phase === "play" && standing.turn === seat,
   };
-};
-
-const parseStanding = (text: string | null): Record<string, unknown> => {
-  if (!text) return {};
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return parsed && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
 };

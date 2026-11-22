@@ -16,7 +16,6 @@ import { cacheItemIds, isWeightedCacheEffect } from "@/libs/weightedCache";
 import {
   buildKessenPackEffects,
   KESSEN_PACKS,
-  type KessenOwnedCard,
   kessenPackOdds,
   kessenPackSlots,
   kessenPityCountdown,
@@ -83,12 +82,6 @@ const testPack = (): WeightedCache[] => [
     tier("Legendary", 1, ["l1", "l2"]),
   ]),
 ];
-const owned = (counts: Record<string, number>): KessenOwnedCard[] =>
-  Object.entries(counts).map(([itemId, quantity]) => ({
-    itemId,
-    quantity,
-    card: byId.get(itemId) ?? null,
-  }));
 /** Draws that always land at the start of every interval. */
 const zero = () => 0;
 const plan = (overrides: Partial<Parameters<typeof planKessenPackOpening>[0]> = {}) =>
@@ -96,7 +89,7 @@ const plan = (overrides: Partial<Parameters<typeof planKessenPackOpening>[0]> = 
     packItemId: "kessen-pack-test",
     caches: testPack(),
     cards: byId,
-    owned: [],
+    owned: {},
     counters: { packsSinceEpic: 0, packsSinceLegendary: 0 },
     autoSellSurplus: false,
     seed: "seed",
@@ -287,7 +280,7 @@ describe("Kessen pack opening plan", () => {
     for (const seed of ["a", "b", "c", "d", "e"]) {
       const result = plan({
         seed,
-        owned: owned({ l1: 1 }),
+        owned: { l1: 1 },
         counters: { packsSinceEpic: 2, packsSinceLegendary: LAST_DRY_PACK },
       });
       expect(result.reveal.cards.at(-1)).toMatchObject({ itemId: "l2", isNew: true });
@@ -303,7 +296,7 @@ describe("Kessen pack opening plan", () => {
       // Only the variant of l1 is owned: legendary pity still owes the base card.
       const result = plan({
         seed,
-        owned: owned({ f1: 1, l2: 1 }),
+        owned: { f1: 1, l2: 1 },
         counters: { packsSinceEpic: 0, packsSinceLegendary: LAST_DRY_PACK },
       });
       expect(result.reveal.cards.at(-1)).toMatchObject({
@@ -314,7 +307,7 @@ describe("Kessen pack opening plan", () => {
     }
     // A base card pulled outside pity is new too, not surplus of the variant.
     const caches = [cache(1, [tier("Legendary", 10_000, ["l1"])])];
-    const result = plan({ caches, owned: owned({ f1: 1 }) });
+    const result = plan({ caches, owned: { f1: 1 } });
     expect(result.reveal.cards).toEqual([
       expect.objectContaining({ itemId: "l1", isNew: true, surplus: false }),
     ]);
@@ -326,8 +319,7 @@ describe("Kessen pack opening plan", () => {
       ...byId,
       ...["l3", "l4"].map((id) => [id, card(id, "LEGENDARY")] as const),
     ]);
-    const held = (ids: string[]) =>
-      ids.map((itemId) => ({ itemId, quantity: 1, card: cards.get(itemId) ?? null }));
+    const held = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, 1]));
     const caches = [
       cache(4, [tier("Common", 10_000, ["c1", "c2"])]),
       cache(1, [tier("Rare", 9_999, ["r1"]), tier("Legendary", 1, legendaries)]),
@@ -360,7 +352,7 @@ describe("Kessen pack opening plan", () => {
   });
 
   it("re-rolls maxed cards and grants surplus only when the whole tier is maxed", () => {
-    const result = plan({ owned: owned({ c1: 3 }) });
+    const result = plan({ owned: { c1: 3 } });
     expect(result.reveal.cards.slice(0, 4)).toEqual([
       expect.objectContaining({ itemId: "c2", isNew: true, surplus: false }),
       expect.objectContaining({ itemId: "c2", surplus: false }),
@@ -375,7 +367,7 @@ describe("Kessen pack opening plan", () => {
   });
 
   it("auto-sells surplus at its fixed value instead of delivering it", () => {
-    const result = plan({ owned: owned({ c1: 3, c2: 3 }), autoSellSurplus: true });
+    const result = plan({ owned: { c1: 3, c2: 3 }, autoSellSurplus: true });
     const sold = result.reveal.cards.filter((c) => c.soldFor !== null);
     expect(sold).toHaveLength(4);
     expect(result.soldRyo).toBe(4 * KESSEN_CARD_SELL_VALUES.COMMON);
@@ -390,7 +382,7 @@ describe("Kessen pack opening plan", () => {
     ];
     const result = plan({
       caches,
-      owned: owned({ f1: 1 }),
+      owned: { f1: 1 },
       autoSellSurplus: true,
       counters: { packsSinceEpic: 3, packsSinceLegendary: 3 },
     });
@@ -415,7 +407,7 @@ describe("Kessen pack opening plan", () => {
 
   it("leaves caches without card entries to the ordinary draw", () => {
     const caches = [cache(2, [tier("Common", 10_000, ["pill", "c1"])])];
-    const result = plan({ caches, owned: owned({ c1: 3 }) });
+    const result = plan({ caches, owned: { c1: 3 } });
     expect(result.reveal.cards).toEqual([]);
     expect(result.results[0]?.items).toEqual([{ itemId: "pill", quantity: 2 }]);
   });

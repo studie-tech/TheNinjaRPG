@@ -37,11 +37,14 @@ import { countPlays } from "@/libs/kessen/rewards";
 import { CARD_ENGINE_VERSION } from "@/libs/kessen/rules";
 import type { KessenAction, KessenEvent, MatchState, Seat } from "@/libs/kessen/types";
 import { getServerPusher } from "@/libs/pusher";
-import { type listKessenCards, updateUserDataForKessenPayout } from "@/queries/kessen";
+import {
+  insertKessenMatch,
+  insertKessenProgressRowsIfMissing,
+  type listKessenCards,
+  updateUserDataForKessenPayout,
+} from "@/queries/kessen";
 import {
   findKessenPvpMatchById,
-  insertKessenProgressRowsIfMissing,
-  insertKessenPvpMatch,
   listActiveKessenMatchesForPlayers,
   listKessenProgressRows,
   listKessenRatedPairs,
@@ -490,7 +493,7 @@ export const createKessenDuel = async (
     finishedAt: null,
   };
   await Promise.all([
-    insertKessenPvpMatch(client, { ...row, state }),
+    insertKessenMatch(client, { ...row, state }),
     insertKessenProgressRowsIfMissing(client, userIds),
   ]);
   const active = await listActiveKessenMatchesForPlayers(client, userIds);

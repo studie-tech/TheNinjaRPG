@@ -8,6 +8,7 @@ import {
   getKessenPvpLobbyQueueStatus,
   getKessenPvpLobbyWithoutChallenge,
 } from "@/deltas/kessenPvp";
+import { errorText, settle } from "@/hooks/kessen/settle";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import type {
   KessenDeckSource,
@@ -239,32 +240,6 @@ export const useKessenPvpLobbyCache = () =>
   useQueryCacheUpdate<KessenPvpLobby>(
     getQueryKey(api.kessenPvp.getLobby, undefined, "query"),
   );
-
-/**
- * Runs a request and reports a rejection as a value, which keeps `try` out of the
- * hook (the React Compiler cannot lower value blocks inside one).
- */
-const settle = async <T>(
-  run: () => Promise<T>,
-): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> => {
-  try {
-    return { ok: true, value: await run() };
-  } catch (error) {
-    return { ok: false, error };
-  }
-};
-
-/** A client error keeps its own reason; transport and server failures use `fallback`. */
-const errorText = (error: unknown, fallback: string) => {
-  const httpStatus = (error as { data?: { httpStatus?: unknown } } | null)?.data
-    ?.httpStatus;
-  return error instanceof Error &&
-    error.message &&
-    typeof httpStatus === "number" &&
-    httpStatus < 500
-    ? error.message
-    : fallback;
-};
 
 // Three heartbeats per `KESSEN_RANKED_QUEUE_HEARTBEAT_SECONDS`; a found duel is also pushed.
 const RANKED_QUEUE_POLL_MS = 10_000;

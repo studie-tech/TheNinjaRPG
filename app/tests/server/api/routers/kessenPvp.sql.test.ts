@@ -488,7 +488,6 @@ describeWithDatabase("kessen duels", () => {
     // The NPC endpoints never serve a duel.
     expect(await (await callerFor(kessenRouter, A)).getMatch({ matchId })).toEqual({
       match: null,
-      log: null,
     });
   });
 

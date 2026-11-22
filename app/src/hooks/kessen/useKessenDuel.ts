@@ -9,6 +9,7 @@ import {
   getKessenPvpMatchCache,
   isNewerKessenPvpVersion,
 } from "@/deltas/kessenPvp";
+import { errorText, settle } from "@/hooks/kessen/settle";
 import { useKessenPvpLobbyCache } from "@/hooks/kessen/useKessenPvpLobby";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
@@ -181,7 +182,7 @@ export const useKessenDuel = (matchId: string | null) => {
       refetch();
       void utils.kessenPvp.getLobby.invalidate();
       void updateUser(undefined);
-      return { ok: false, message: errorMessage(sent.error) };
+      return { ok: false, message: errorText(sent.error) };
     }
     const data = sent.value;
     await reconcile(snapshot, lobbySnapshot, data);
@@ -221,32 +222,3 @@ const selectUserId = (user: { userId: string }) => ({ userId: user.userId });
 const DEADLINE_GRACE_MS = 1_000;
 /** Read a settling result again after this long. */
 const SETTLING_RETRY_MS = 1_500;
-
-/**
- * Runs a request and reports a rejection as a value, which keeps `try` out of the
- * hook (the React Compiler cannot lower value blocks inside one).
- */
-const settle = async <T>(
-  run: () => Promise<T>,
-): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> => {
-  try {
-    return { ok: true, value: await run() };
-  } catch (error) {
-    return { ok: false, error };
-  }
-};
-
-/**
- * A request rejection as the line the table shows: a client error (4xx) keeps its own
- * reason, while transport and server failures read as an unreachable table.
- */
-const errorMessage = (error: unknown) => {
-  const httpStatus = (error as { data?: { httpStatus?: unknown } } | null)?.data
-    ?.httpStatus;
-  return error instanceof Error &&
-    error.message &&
-    typeof httpStatus === "number" &&
-    httpStatus < 500
-    ? error.message
-    : "The table could not reach the server. Try again.";
-};

@@ -396,7 +396,7 @@ describe("deterministic replay", () => {
     expect(catalogFingerprint(KESSEN_SEED_CATALOG)).toBe("53a19431618af328");
   });
 
-  it("keeps engine-dependent maths and randomness out of the deterministic modules", () => {
+  it("keeps floats, wall clocks and ambient randomness out of the deterministic modules", () => {
     const files = [
       "rng.ts",
       "types.ts",
@@ -406,6 +406,13 @@ describe("deterministic replay", () => {
       "abilities.ts",
       "text.ts",
       "catalog.ts",
+      "ai.ts",
+      "deck.ts",
+      "npcs.ts",
+      "rewards.ts",
+      "academy.ts",
+      "academyLessons.ts",
+      "academyPosition.ts",
     ];
     for (const file of files) {
       const source = stripComments(
@@ -417,6 +424,7 @@ describe("deterministic replay", () => {
       for (const banned of [
         /Math\.random/,
         /\bDate\b/,
+        /\bperformance\b/,
         /Math\.(pow|exp|sin|cos|tan|hypot|log|sqrt|round)\b/,
         /\*\*/,
         /\bparseFloat\b/,

@@ -32,6 +32,7 @@ import {
 } from "@/libs/kessen/packs";
 import { DEFAULT_KNOBS } from "@/libs/kessen/rules";
 import type { KessenCard, KessenKnobs } from "@/libs/kessen/types";
+import { clamp } from "@/utils/math";
 import type { KessenFaction } from "@/validators/itemCard";
 import type {
   KessenCatalogEntry,
@@ -280,42 +281,6 @@ export const ascendedFirstWinRewardLines = (
     lookup,
     packs,
   );
-};
-
-/**
- * The Ascended first win in a few words for a Circuit row: "1 of 2 cards" for a plain
- * card choice, otherwise the one-line form of `lines`; the sheet shows the cards.
- */
-export const ascendedRewardShortText = (
-  entry: Pick<KessenCircuitEntry, "key">,
-  lines: readonly string[],
-) => {
-  if (lines.length === 0) return null;
-  const reward = kessenNpc(entry.key)?.ascended?.firstWin;
-  const choice = reward?.choice;
-  return choice?.kind === "items" && reward?.items.length === 0 && !reward.title
-    ? `1 of ${choice.itemIds.length} cards`
-    : shortRewardText(lines);
-};
-
-/**
- * First-win rewards on one line: the first item, then a bundle or title in a word, or a
- * count of the rest ("Kaze no Seirei + bundle"); the sheet lists them in full.
- */
-export const shortRewardText = (lines: readonly string[]) => {
-  const [first, ...rest] = lines;
-  if (first === undefined) return null;
-  if (rest.length === 0) return first;
-  const [only] = rest;
-  const tail =
-    rest.length > 1 || only === undefined
-      ? `${rest.length} more`
-      : /bundle$/i.test(only)
-        ? "bundle"
-        : only.startsWith("the title")
-          ? "a title"
-          : only;
-  return `${first} + ${tail}`;
 };
 
 /**
@@ -613,9 +578,6 @@ const packCovers = (packId: string, faction: KessenFaction) => {
   const village = kessenVillagePackFaction(packId);
   return !village || faction === "NEUTRAL" || faction === village;
 };
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
 
 /** The server's lock reason for a champion behind the player's home champion. */
 const HOME_CHAMPION_LOCK = /home champion/i;

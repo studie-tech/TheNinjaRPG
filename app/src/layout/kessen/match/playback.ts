@@ -5,8 +5,10 @@
  * resets and similar rewrites only arrive with the confirmed view, which replaces the
  * last frame); they never decide anything.
  */
+
+import { other } from "@/libs/kessen/board";
 import { boardTotals } from "@/libs/kessen/engine";
-import { TOKEN_CARD_ID, TOKEN_PREFIX } from "@/libs/kessen/rules";
+import { ROWS, TOKEN_CARD_ID, TOKEN_PREFIX } from "@/libs/kessen/rules";
 import type {
   KessenEvent,
   MatchRules,
@@ -223,7 +225,7 @@ export const applyPlaybackEvent = (view: MatchView, event: KessenEvent): MatchVi
     case "cleanup": {
       const kept = new Set(event.kept);
       for (const side of [0, 1] as const) {
-        for (const row of ROW_ORDER) {
+        for (const row of ROWS) {
           const remaining: Unit[] = [];
           for (const unit of next.board[side][row]) {
             if (kept.has(unit.id)) remaining.push(unit);
@@ -367,7 +369,7 @@ const baseDuration = (event: KessenEvent, previous: KessenEvent | null, me: Seat
 
 const findUnit = (view: MatchView, id: string) => {
   for (const side of view.board) {
-    for (const row of ROW_ORDER) {
+    for (const row of ROWS) {
       const unit = side[row].find((entry) => entry.id === id);
       if (unit) return unit;
     }
@@ -377,13 +379,9 @@ const findUnit = (view: MatchView, id: string) => {
 
 const removeUnit = (view: MatchView, id: string) => {
   for (const side of view.board) {
-    for (const row of ROW_ORDER) side[row] = side[row].filter((unit) => unit.id !== id);
+    for (const row of ROWS) side[row] = side[row].filter((unit) => unit.id !== id);
   }
 };
-
-const other = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
-
-const ROW_ORDER: readonly Row[] = ["CLOSE", "RANGED", "JUTSU"];
 
 /** One action that swings the totals by this much earns a "Big Play" callout. */
 export const BIG_PLAY_SWING = 10;
