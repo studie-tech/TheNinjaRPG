@@ -698,12 +698,18 @@ function KessenHall() {
 
   // A quest's Duel at the Table: its briefing takes the hall's place until a table opens.
   // An unfinished duel or match blocks a new start, so the briefing leads back to its
-  // table; the duel comes first, as in the server's start guard.
+  // table; the duel comes first, as in the server's start guard. The match may be this
+  // very duel, left for the hall.
   if (challengeRequest && !scene) {
     const found = questUser
       ? findQuestChallenge(questUser, challengeRequest, "win_kessen_challenge")
       : null;
     const resume = hallActions.find((action) => action.kind === "resume");
+    const activeChallenge = hub.activeMatch?.challenge;
+    const resumesThisDuel =
+      !resume?.duel &&
+      activeChallenge?.questId === challengeRequest.questId &&
+      activeChallenge.objectiveId === challengeRequest.objectiveId;
     return (
       <HallBox subtitle="Duel at the Table" backHref={QUEST_LOGBOOK_HREF}>
         <KessenQuestChallenge
@@ -719,6 +725,7 @@ function KessenHall() {
               ? {
                   label: resume.label,
                   unfinished: resume.unfinished,
+                  isThisDuel: resumesThisDuel,
                   onOpen: () => openHallAction(resume),
                 }
               : undefined

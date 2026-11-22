@@ -29,7 +29,8 @@ import { hasReward } from "@/validators/rewards";
  * The briefing of a quest's Duel at the Table challenge, shown in full only at the
  * objective's position: the opponent, the AI's tier, the deck to bring and the start.
  * Elsewhere it only points the way there. The match pays nothing but the objective.
- * While another match or duel is unfinished (`resume`), the start gives way to its table.
+ * While a match or duel is unfinished (`resume`), the start gives way to its table: this
+ * duel's own when the player left it for the hall, otherwise the one blocking the seat.
  */
 export const KessenQuestChallenge = (props: {
   challenge: FoundChallenge | null;
@@ -41,10 +42,16 @@ export const KessenQuestChallenge = (props: {
   isStarting: boolean;
   error: string | null;
   /**
-   * The unfinished match or duel: its resume button text ("Resume vs Kazehiko") and
-   * the match as a sentence's subject ("Your match against Kazehiko").
+   * The unfinished match or duel: its resume button text ("Resume vs Kazehiko"), the
+   * match as a sentence's subject ("Your match against Kazehiko") and whether it is
+   * this briefing's own duel.
    */
-  resume?: { label: string; unfinished: string; onOpen: () => void };
+  resume?: {
+    label: string;
+    unfinished: string;
+    isThisDuel: boolean;
+    onOpen: () => void;
+  };
   onStart: (deck: KessenDeckSource) => void;
 }) => {
   const { challenge, opponent } = props;
@@ -116,6 +123,10 @@ export const KessenQuestChallenge = (props: {
         <ChallengeNotice icon={<ScrollText className="h-5 w-5 text-amber-500" />}>
           Finish the earlier objectives of {quest.name} first.
         </ChallengeNotice>
+      ) : props.resume?.isThisDuel ? (
+        <ChallengeNotice icon={<Hourglass className="h-5 w-5 text-amber-500" />}>
+          This duel is under way.
+        </ChallengeNotice>
       ) : props.resume ? (
         <ChallengeNotice icon={<Hourglass className="h-5 w-5 text-amber-500" />}>
           {props.resume.unfinished} is unfinished. Finish or concede it before you take
@@ -138,7 +149,7 @@ export const KessenQuestChallenge = (props: {
         ) : props.resume ? (
           <Button size="lg" className="w-full @md:w-auto" onClick={props.resume.onOpen}>
             <Play className="mr-2 h-5 w-5" />
-            {props.resume.label}
+            {props.resume.isThisDuel ? "Return to the table" : props.resume.label}
           </Button>
         ) : (
           <Button

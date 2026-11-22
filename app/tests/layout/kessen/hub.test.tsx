@@ -405,6 +405,7 @@ describe("NpcDetail", () => {
     id: "match-9",
     mode: "standard",
     lesson: null,
+    challenge: null,
     round: 1,
     roundWins: [0, 0],
     yourTurn: true,

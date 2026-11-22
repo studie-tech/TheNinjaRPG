@@ -1029,6 +1029,13 @@ const buildHub = (input: {
           npcKey: active.npcKey as KessenNpcKey,
           mode: (active.mode ?? "standard") as KessenMode,
           lesson: isAcademyLessonKey(active.lesson) ? active.lesson : null,
+          challenge:
+            active.challengeQuestId && active.challengeObjectiveId
+              ? {
+                  questId: active.challengeQuestId,
+                  objectiveId: active.challengeObjectiveId,
+                }
+              : null,
           ...matchStanding(active.standing),
         }
       : null,

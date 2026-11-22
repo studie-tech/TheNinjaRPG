@@ -118,6 +118,12 @@ export const listActiveKessenMatches = (
       lesson: sql<
         string | null
       >`JSON_UNQUOTE(JSON_EXTRACT(${kessenMatch.state}, '$.lesson'))`,
+      challengeQuestId: sql<
+        string | null
+      >`JSON_UNQUOTE(JSON_EXTRACT(${kessenMatch.state}, '$.challenge.questId'))`,
+      challengeObjectiveId: sql<
+        string | null
+      >`JSON_UNQUOTE(JSON_EXTRACT(${kessenMatch.state}, '$.challenge.objectiveId'))`,
       standing: sql<string | null>`CAST(JSON_OBJECT(
         'round', JSON_EXTRACT(${kessenMatch.state}, '$.engine.round'),
         'phase', JSON_EXTRACT(${kessenMatch.state}, '$.engine.phase'),

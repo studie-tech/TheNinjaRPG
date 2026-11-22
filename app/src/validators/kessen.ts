@@ -267,6 +267,8 @@ export interface KessenHub {
     mode: KessenMode;
     /** The Academy lesson of an active lesson match. */
     lesson: KessenAcademyLessonKey | null;
+    /** The quest objective of an active quest challenge match. */
+    challenge: QuestChallengeRequest | null;
     /** Round being played, 1 to 3. */
     round: number;
     /** Rounds won so far, `[player, opponent]`. */

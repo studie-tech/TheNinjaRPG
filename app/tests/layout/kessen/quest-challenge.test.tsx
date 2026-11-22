@@ -82,6 +82,7 @@ describe("KessenQuestChallenge", () => {
       resume: {
         label: "Resume your duel vs Rival",
         unfinished: "Your duel against Rival",
+        isThisDuel: false,
         onOpen,
       },
     });
@@ -94,5 +95,22 @@ describe("KessenQuestChallenge", () => {
     fireEvent.click(screen.getByRole("button", { name: /Resume your duel vs Rival/ }));
     expect(onOpen).toHaveBeenCalled();
     expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it("leads back to its own duel left for the hall without asking to concede it", () => {
+    const onOpen = vi.fn();
+    renderBriefing({
+      resume: {
+        label: "Resume vs Kazehiko",
+        unfinished: "Your match against Kazehiko",
+        isThisDuel: true,
+        onOpen,
+      },
+    });
+    expect(screen.getByText("This duel is under way.")).toBeTruthy();
+    expect(screen.queryByText(/Finish or concede/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Take a seat/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Return to the table/ }));
+    expect(onOpen).toHaveBeenCalled();
   });
 });

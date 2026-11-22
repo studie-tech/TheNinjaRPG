@@ -87,6 +87,7 @@ const kessenActiveMatchOf = (
     npcKey: match.npcKey,
     mode: match.mode,
     lesson: match.lesson,
+    challenge: match.challenge ?? null,
     round: view.round,
     roundWins: [
       view.history.filter((round) => round.winner === view.me).length,

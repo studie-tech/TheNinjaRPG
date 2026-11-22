@@ -1246,6 +1246,7 @@ describeWithDatabase("kessen router", () => {
       npcKey: "lemu",
       mode: "standard",
       lesson: null,
+      challenge: null,
       round: 1,
       roundWins: [0, 0],
       yourTurn: true,
@@ -1387,6 +1388,8 @@ describeWithDatabase("kessen router", () => {
         challenge: TABLE_REQUEST,
       },
     });
+    // The hall knows the active match is this objective's duel.
+    expect((await caller.getHub()).activeMatch?.challenge).toEqual(TABLE_REQUEST);
     // The same opponent outside the quest is still locked.
     const locked = await caller.startMatch({
       npcKey: "shishi",
