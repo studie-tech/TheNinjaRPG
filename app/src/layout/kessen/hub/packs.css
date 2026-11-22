@@ -1103,6 +1103,10 @@
   [data-motion="on"] .kh-spotlight {
     animation: kh-spot-lift 1500ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
   }
+  /* The lifted pull is shown alone, so its frame spins (kessen.css pauses it elsewhere). */
+  .kh-spotlight .kh-spotlight-card [data-motion="on"].kessen-card .kc-frame {
+    animation-play-state: running;
+  }
   [data-motion="on"] .kh-flip[data-flipped][data-tier="EPIC"] {
     animation: kh-epic-pulse 900ms ease-out 420ms 1;
   }

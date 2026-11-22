@@ -1580,23 +1580,32 @@
 /* ------------------------------------------------------------------------ motion */
 
 @media (prefers-reduced-motion: no-preference) {
+  /* The frame spin animates --kc-angle, which cannot run on the compositor, so every
+     frame repaints the whole card. It waits paused on the static frame and runs only on
+     a card shown alone (an inspect view, whose card takes interactive keywords, or the
+     pack spotlight) or under a fine pointer; grids, the hand and the board keep the
+     static frame at no per-frame cost. */
   [data-motion="on"].kessen-card[data-tier="LEGENDARY"] .kc-frame,
   [data-motion="on"].kessen-card[data-tier="FORBIDDEN"] .kc-frame,
   [data-motion="on"].kessen-tile[data-tier="LEGENDARY"] .kt-frame,
   [data-motion="on"].kessen-tile[data-tier="FORBIDDEN"] .kt-frame {
-    animation: kessen-spin 9s linear infinite;
+    animation: kessen-spin 9s linear infinite paused;
   }
   [data-motion="on"].kessen-card[data-tier="FORBIDDEN"] .kc-frame,
   [data-motion="on"].kessen-tile[data-tier="FORBIDDEN"] .kt-frame {
     animation-duration: 5.5s;
   }
+  [data-motion="on"].kessen-card[data-interactive] .kc-frame {
+    animation-play-state: running;
+  }
   [data-motion="on"].kessen-card[data-tier="FORBIDDEN"] .kessen-gem circle {
     animation: kessen-core-pulse 2.4s ease-in-out infinite;
   }
-  [data-motion="on"].kessen-back[data-telegraph="LEGENDARY"] .kessen-back-glow {
-    animation: kessen-spin 7s linear infinite;
-  }
   [data-motion="on"].kessen-back[data-telegraph] .kessen-back-glow {
+    animation: kessen-breathe 1.8s ease-in-out infinite;
+  }
+  /* Only the Legendary glow draws from --kc-angle, so only it spins. */
+  [data-motion="on"].kessen-back[data-telegraph="LEGENDARY"] .kessen-back-glow {
     animation-name: kessen-spin, kessen-breathe;
     animation-duration: 7s, 1.8s;
     animation-timing-function: linear, ease-in-out;
@@ -1615,6 +1624,9 @@
     animation: kessen-lantern 2.6s ease-in-out infinite;
   }
   @media (hover: hover) and (pointer: fine) {
+    [data-motion="on"]:is(.kessen-card, .kessen-tile):hover :is(.kc-frame, .kt-frame) {
+      animation-play-state: running;
+    }
     [data-motion="on"].kessen-card:is(
         [data-tier="EPIC"],
         [data-tier="LEGENDARY"],
