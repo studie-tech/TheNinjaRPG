@@ -241,7 +241,6 @@ describeWithDatabase("Diamond bloodline swaps", () => {
       message: "Diamond bloodline swaps require Diamond Federal Support",
     });
     expect(await caller.getDiamondSwapBloodlines()).toEqual([]);
-    await patch({ federalStatus: "GOLD", staffAccount: false });
     expect(await readUser()).toMatchObject({
       bloodlineId: "owned-line",
       diamondBloodlineActive: false,
