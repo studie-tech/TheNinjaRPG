@@ -7,10 +7,13 @@ import {
   FORTIFY_LEVEL_COST,
   FORTIFY_MAX_LEVEL,
 } from "@/drizzle/constants";
-import type { UserItem } from "@/drizzle/schema";
 import type { ZodAllTags } from "@/validators/combat";
 
-export type Fortification = UserItem["fortification"];
+/** Owned tag progress keyed by authored tag ID; null represents an untouched copy. */
+export type Fortification = Record<
+  string,
+  { type: string; level: number; failures: number }
+> | null;
 
 /** Resolve only the matching authored tag; removed/replaced tags never inherit upgrades. */
 export const getFortifyProgress = (
@@ -83,6 +86,9 @@ export const rollFortify = (
     },
   };
 };
+
+/** Persist the resolved attempt so service delivery applies the recorded roll exactly once. */
+export type FortifyResult = ReturnType<typeof rollFortify>;
 
 /** Staff-controlled eligible base tags; crystals and imbuement effects are never candidates. */
 export const fortifyTags = (item: {

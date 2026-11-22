@@ -31,6 +31,7 @@ import type {
   GroundEffect,
   UserEffect,
 } from "@/libs/combat/types";
+import type { Fortification, FortifyResult } from "@/libs/fortify";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { VillageDutyPatrol } from "@/libs/villageDuty";
 import type { AiRuleType } from "@/validators/ai";
@@ -3912,10 +3913,7 @@ export const userItem = mysqlTable(
     craftingFinishedAt: datetime("craftingFinishedAt", { mode: "date", fsp: 3 }),
     isInAuction: boolean("isInAuction").default(false).notNull(),
     activeVariantId: varchar("activeVariantId", { length: 191 }),
-    fortification:
-      json("fortification").$type<
-        Record<string, { type: string; level: number; failures: number }>
-      >(),
+    fortification: json("fortification").$type<NonNullable<Fortification>>(),
     dropChancePerc: smallint("dropChancePerc", { unsigned: true }).default(0).notNull(),
   },
   (table) => {
@@ -8346,12 +8344,7 @@ export const craftingServiceRequest = mysqlTable(
     imbuementId: varchar("imbuementId", { length: 191 }),
     materials: json("materials").$type<CraftingQueueMaterial[]>().notNull(),
     repairDurability: int("repairDurability", { unsigned: true }),
-    fortify: json("fortify").$type<{
-      tagId: string;
-      cost: number;
-      succeeded: boolean;
-      state: NonNullable<UserItem["fortification"]>;
-    }>(),
+    fortify: json("fortify").$type<FortifyResult>(),
     outputQuantity: int("outputQuantity", { unsigned: true }).default(1).notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
