@@ -249,7 +249,8 @@ export const useMatchTable = ({
 
   // The play log's length at each version it was seen with, so a newer payload that
   // arrives without this seat's own request (the opponent's turn, a timeout) plays back
-  // the events added since the board shown last.
+  // the events added since the board shown last. One that arrives during a playback waits
+  // for it to end, so a held round summary stays until Continue or Skip.
   const logLengths = useRef(new Map<number, number>());
   const [shownVersion, setShownVersion] = useState(confirmed.version);
   const [shownView, setShownView] = useState(confirmed.view);
@@ -257,7 +258,7 @@ export const useMatchTable = ({
     if (matchLog) logLengths.current.set(matchLog.version, matchLog.events.length);
   }, [matchLog]);
   useEffect(() => {
-    if (pending || confirmed.version <= shownVersion) return;
+    if (pending || playing || confirmed.version <= shownVersion) return;
     const from = logLengths.current.get(shownVersion);
     const fromView = shownView;
     setShownVersion(confirmed.version);
@@ -265,7 +266,7 @@ export const useMatchTable = ({
     if (from === undefined || !matchLog || matchLog.version !== confirmed.version)
       return;
     startPlayback(fromView, matchLog.events.slice(from), null);
-  }, [confirmed.version, pending, matchLog]);
+  }, [confirmed.version, pending, playing, matchLog]);
 
   // Every round end waits for the player, the deciding one too, so its summary and the
   // opponent's line are read before the match result.

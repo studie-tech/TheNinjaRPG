@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { KESSEN_CHALLENGE_EXPIRY_SECONDS, MAX_PLAYER_LEVEL } from "@/drizzle/constants";
+import { errorText } from "@/hooks/kessen/settle";
 import { useKessenHub } from "@/hooks/kessen/useKessenHub";
 import { useKessenPvpLobby } from "@/hooks/kessen/useKessenPvpLobby";
 import { useCreateSparChallenge } from "@/hooks/useSparChallenge";
@@ -70,7 +71,18 @@ function SparOption({
         spectatable,
         conversationId: conversationId ?? undefined,
       },
-      { onSuccess: (data) => setFeedback(data) },
+      {
+        onSuccess: (data) => setFeedback(data),
+        // A lost response may still have created the challenge.
+        onError: (error) =>
+          setFeedback({
+            success: false,
+            message: errorText(
+              error,
+              "The challenge could not be confirmed. Check the arena before sending it again.",
+            ),
+          }),
+      },
     );
   };
   return (
@@ -120,6 +132,23 @@ function KessenOption({
     description: `Friendly card duel, no rating or rewards. Expires in ${KESSEN_CHALLENGE_EXPIRY_SECONDS / 60} min.`,
     sendLabel: `Send ${opponent.username} a Kessen challenge`,
   };
+  // The lesson comes from the hub alone, so it is explained whatever the catalog's state.
+  if (hub.data?.needsLesson) {
+    return (
+      <ChallengeOption {...props} disabled>
+        <p className="text-[12px]">
+          Finish Lemu&apos;s first Academy lesson to duel players.{" "}
+          <Link
+            href="/kessen"
+            className="font-semibold text-orange-600 hover:underline"
+            onNavigate={onNavigate}
+          >
+            Open the Card Hall
+          </Link>
+        </p>
+      </ChallengeOption>
+    );
+  }
   // A failed background refetch keeps the loaded decks usable.
   if ((!hub.data && hub.isError) || (!catalog.data && catalog.isError)) {
     return (
@@ -141,22 +170,6 @@ function KessenOption({
     return (
       <ChallengeOption {...props} disabled isSending>
         <p className="text-muted-foreground text-[12px]">Loading your decks…</p>
-      </ChallengeOption>
-    );
-  }
-  if (hub.data.needsLesson) {
-    return (
-      <ChallengeOption {...props} disabled>
-        <p className="text-[12px]">
-          Finish Lemu&apos;s first Academy lesson to duel players.{" "}
-          <Link
-            href="/kessen"
-            className="font-semibold text-orange-600 hover:underline"
-            onNavigate={onNavigate}
-          >
-            Open the Card Hall
-          </Link>
-        </p>
       </ChallengeOption>
     );
   }

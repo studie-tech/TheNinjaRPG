@@ -231,15 +231,22 @@ export const useWatchedKessenDuel = (matchId: string, enabled = true) => {
   useEffect(() => {
     if (!enabled || !pusher) return;
     const channel = pusher.subscribe(matchId);
+    // Cancel even a first load: it may have read the duel before this push or subscription.
+    const reread = () =>
+      void utils.kessenPvp.watchMatch
+        .cancel({ matchId })
+        .then(() => utils.kessenPvp.watchMatch.invalidate({ matchId }));
     const onUpdate = (data: { version?: number }) => {
       if (typeof data.version !== "number") return;
       const current = utils.kessenPvp.watchMatch.getData({ matchId });
-      if (isNewerKessenPvpVersion(current, { version: data.version }))
-        void utils.kessenPvp.watchMatch.invalidate({ matchId });
+      if (isNewerKessenPvpVersion(current, { version: data.version })) reread();
     };
     channel.bind("event", onUpdate);
+    // Subscription confirmation closes the first read/subscribe gap and follows reconnects.
+    channel.bind("pusher:subscription_succeeded", reread);
     return () => {
       channel.unbind("event", onUpdate);
+      channel.unbind("pusher:subscription_succeeded", reread);
       pusher.unsubscribe(matchId);
     };
   }, [matchId, pusher, enabled]);

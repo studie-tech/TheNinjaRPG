@@ -33,12 +33,10 @@ const DECK: KessenDeckSummary = {
 const opponent = { userId: "u-rival", username: "Rival" };
 const spar = vi.fn();
 const duel = vi.fn();
-let needsLesson = false;
 
 beforeEach(() => {
   installBrowserGlobals();
   vi.clearAllMocks();
-  needsLesson = false;
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
   // An unmodified click on a Link navigates in the app, as Next's Link does.
   vi.spyOn(Link, "default").mockImplementation(
@@ -66,7 +64,7 @@ beforeEach(() => {
       ({
         hub: {
           data: {
-            needsLesson,
+            needsLesson: false,
             decks: [{ id: DECK.id }],
             owned: {},
             loanerFaction: "AKASUMI",
@@ -107,6 +105,18 @@ describe("challenge panel", () => {
     const sent = await screen.findByRole("status");
     expect(sent.textContent).toContain("Challenge sent to Rival.");
     expect(screen.getByRole("link", { name: "Open the arena" })).toBeTruthy();
+  });
+
+  it("answers an unconfirmed spar next to its button", async () => {
+    spar.mockImplementation((_input, options) =>
+      options.onError(new Error("fetch failed")),
+    );
+    await renderPanel(<ChallengePanel opponent={opponent} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send Rival a sparring challenge" }),
+    );
+    const failed = await screen.findByRole("alert");
+    expect(failed.textContent).toContain("The challenge could not be confirmed.");
   });
 
   it("disables each option's button once its challenge is sent", async () => {
@@ -197,7 +207,11 @@ describe("challenge panel", () => {
   });
 
   it("points a player without the first Academy lesson to the Card Hall", async () => {
-    needsLesson = true;
+    // The lesson is explained while the catalog is still loading.
+    vi.spyOn(Hub, "useKessenHub").mockReturnValue({
+      hub: { data: { needsLesson: true }, isError: false },
+      catalog: { data: undefined, isError: false },
+    } as never);
     const onNavigate = vi.fn();
     await renderPanel(<ChallengePanel opponent={opponent} onNavigate={onNavigate} />);
     const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });

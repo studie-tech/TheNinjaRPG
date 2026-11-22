@@ -505,11 +505,15 @@ describeWithDatabase("kessen duels", () => {
     await (await db())
       .update(userData)
       .set({ level: MESSAGING_MIN_LEVEL })
-      .where(eq(userData.userId, A));
+      .where(inArray(userData.userId, [A, C]));
     const a = await pvp(A);
     const b = await pvp(B);
     await a.createChallenge({ targetId: B, deck: LOANER_A, conversationId: "tavern" });
-    await a.createChallenge({ targetId: C, deck: LOANER_A, conversationId: "private" });
+    await (await pvp(C)).createChallenge({
+      targetId: "duel-t1",
+      deck: LOANER_A,
+      conversationId: "private",
+    });
     const fromTavern = (await b.getLobby()).challenges[0];
     if (!fromTavern) throw new Error("No challenge");
     const accepted = await b.acceptChallenge({
@@ -518,9 +522,14 @@ describeWithDatabase("kessen duels", () => {
     });
     if (!accepted.success || !("match" in accepted) || !accepted.match)
       throw new Error(accepted.message);
-    const toC = (await (await pvp(C)).getLobby()).challenges[0];
-    if (!toC) throw new Error("No challenge");
-    await (await pvp(C)).acceptChallenge({ requestId: toC.id, deck: LOANER_B });
+    const target = await pvp("duel-t1");
+    const fromPrivate = (await target.getLobby()).challenges[0];
+    if (!fromPrivate) throw new Error("No challenge");
+    const acceptedPrivate = await target.acceptChallenge({
+      requestId: fromPrivate.id,
+      deck: LOANER_B,
+    });
+    expect(acceptedPrivate.success, acceptedPrivate.message).toBe(true);
     const announced = await (await db()).select().from(conversationComment);
     expect(announced).toEqual([
       expect.objectContaining({
