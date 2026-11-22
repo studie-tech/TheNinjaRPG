@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import * as gameConstants from "@/drizzle/constants";
 import {
   CS_SFX,
+  HOME_FURNITURE_STARTERS,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   TD_SFX,
   TUTORIAL_ITEM_ID,
@@ -13,6 +15,24 @@ import {
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 
 describe("reserved content", () => {
+  it("reserves exported IDs whose names identify a content dependency", () => {
+    for (const [name, value] of Object.entries(gameConstants)) {
+      if (typeof value !== "string") continue;
+      const kind = name.match(/_(JUTSU|ITEM|QUEST|BLOODLINE|AI|DUMMY)_ID$/)?.[1];
+      const type =
+        name.startsWith("ID_SFX_") || name.startsWith("ID_ANIMATION_")
+          ? "asset"
+          : kind === "DUMMY"
+            ? "ai"
+            : kind?.toLowerCase();
+      if (!type) continue;
+      expect(
+        reservedContentDeletionError(type as keyof typeof RESERVED_CONTENT_IDS, value),
+        name,
+      ).toContain("reserved content");
+    }
+  });
+
   it("protects every minigame sound cue from its source map", () => {
     for (const id of [...Object.values(TD_SFX), ...Object.values(CS_SFX)]) {
       expect(reservedContentDeletionError("asset", id)).toContain("reserved content");
@@ -23,6 +43,13 @@ describe("reserved content", () => {
     for (const id of [TUTORIAL_JUTSU_ID, SAGE_MODE_ACTIVATION_JUTSU_ID]) {
       expect(reservedContentDeletionError("jutsu", id)).toContain("reserved content");
     }
+  });
+
+  it("protects the starter home fixtures granted to every character", () => {
+    for (const { itemId } of HOME_FURNITURE_STARTERS)
+      expect(reservedContentDeletionError("item", itemId)).toContain(
+        "reserved content",
+      );
   });
 
   it("scopes reservations to the owning content type and allows ordinary IDs", () => {

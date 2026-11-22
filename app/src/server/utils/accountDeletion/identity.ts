@@ -1,4 +1,5 @@
 import { clerkClient } from "@clerk/nextjs/server";
+import { reservedCharacterDeletionError } from "@/libs/reservedContent";
 import { deleteEmailReminderForRemoveAccountIdentity } from "@/queries/accountDeletion";
 import { drizzleDB } from "@/server/db";
 import { fetchClerkUser, isClerkNotFound } from "@/server/utils/clerk";
@@ -13,6 +14,8 @@ export const removeAccountIdentity = async (
   userId: string,
   appleRevokedSubject: string | null = null,
 ) => {
+  const reservedError = reservedCharacterDeletionError(userId);
+  if (reservedError) throw new Error(reservedError);
   const clerk = await clerkClient();
   // Clerk may have deleted the identity before a response or queue update was lost.
   const user = await fetchClerkUser(userId);

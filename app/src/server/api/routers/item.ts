@@ -755,8 +755,6 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role))
         return errorResponse("Not allowed to delete item");
-      const reservedError = reservedContentDeletionError("item", input.id);
-      if (reservedError) return errorResponse(reservedError);
       const [entry, childEvolutions, huntingReferences, requiredByVariants] =
         await Promise.all([
           fetchItem(ctx.drizzle, input.id),
@@ -764,6 +762,8 @@ export const itemRouter = createTRPCRouter({
           listHuntingHabitats(ctx.drizzle),
           listItemVariantRequiringItemForDelete(ctx.drizzle, input),
         ]);
+      const reservedError = reservedContentDeletionError("item", entry?.id ?? input.id);
+      if (reservedError) return errorResponse(reservedError);
       if (
         huntingReferences.some((h) =>
           h.content.contracts.some((c) => c.rewards.some((r) => r.itemId === input.id)),

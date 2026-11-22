@@ -20,6 +20,7 @@ import {
   userTowerDefenseUpgrade,
   villageElderVoteEntry,
 } from "@/drizzle/schema";
+import { reservedCharacterDeletionError } from "@/libs/reservedContent";
 import {
   deleteEmailReminderForRemoveAccountGameData,
   deleteRowsForUser,
@@ -45,6 +46,8 @@ import { retireStoreUserId } from "@/server/utils/purchases/storeIdentity";
 import { removeAccountProcessorData } from "./processors";
 
 export const removeAccountGameData = async (userId: string) => {
+  const reservedError = reservedCharacterDeletionError(userId);
+  if (reservedError) throw new Error(reservedError);
   // Let the normal auction settlement path release escrow; deleting bids or the
   // character first could strand another player's payment or reward.
   const [selling, bidding] = await Promise.all([

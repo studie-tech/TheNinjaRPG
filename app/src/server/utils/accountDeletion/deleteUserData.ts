@@ -20,7 +20,7 @@ import {
   warehouseMember,
 } from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
-import { reservedContentDeletionError } from "@/libs/reservedContent";
+import { reservedCharacterDeletionError } from "@/libs/reservedContent";
 import {
   deleteKessenMatchForDeleteUserInternal,
   deleteRowsForUser,
@@ -131,9 +131,7 @@ import { recordSanctionTombstone } from "@/server/utils/sanctionTombstone";
  * @returns An expected rejection before cleanup, or undefined after successful deletion.
  */
 export const deleteUser = async (client: DrizzleClient, userId: string) => {
-  const reservedError =
-    reservedContentDeletionError("ai", userId) ??
-    reservedContentDeletionError("user", userId);
+  const reservedError = reservedCharacterDeletionError(userId);
   if (reservedError) return errorResponse(reservedError);
   // Only the selected contract is a dependency, even in a full-habitat legacy snapshot.
   const activeHunt = await findHuntingSessionForDeleteUser(client, userId);

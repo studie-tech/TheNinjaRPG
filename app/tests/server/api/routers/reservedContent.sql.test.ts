@@ -16,6 +16,7 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import { RESERVED_CONTENT_IDS } from "@/libs/reservedContent";
+import { deleteGameAssetForRollback } from "@/queries/contentReview";
 import { gameAssetRouter } from "@/server/api/routers/asset";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { itemRouter } from "@/server/api/routers/item";
@@ -167,5 +168,23 @@ describeWithDatabase("reserved content deletion guards", () => {
         where: (table, { eq }) => eq(table.id, "ordinary-sound"),
       }),
     ).toBeUndefined();
+  });
+
+  it("retains reserved assets when a content-review rollback removes an import batch", async () => {
+    const database = await getTestDatabase();
+    const ordinary = {
+      id: "rollback-import",
+      name: "Rollback import",
+      image: IMG_AVATAR_DEFAULT,
+      url: IMG_AVATAR_DEFAULT,
+      type: "SFX" as const,
+    };
+    await database.insert(gameAsset).values(ordinary);
+    const assets = await database.select().from(gameAsset);
+    await deleteGameAssetForRollback(database, assets);
+    const remaining = await database.select({ id: gameAsset.id }).from(gameAsset);
+    expect(remaining.map(({ id }) => id).sort()).toEqual(
+      [...new Set(RESERVED_CONTENT_IDS.asset)].sort(),
+    );
   });
 });

@@ -2,6 +2,7 @@ import { auth, reverificationError } from "@clerk/nextjs/server";
 import * as Sentry from "@sentry/nextjs";
 import { after } from "next/server";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
+import { reservedCharacterDeletionError } from "@/libs/reservedContent";
 import {
   findAccountDeletionForRequest,
   insertAccountDeletionForRequest,
@@ -31,6 +32,8 @@ export const accountDeletionRouter = createTRPCRouter({
           "Your signed-in account changed. Close this dialog and start again.",
         );
       }
+      const reservedError = reservedCharacterDeletionError(ctx.userId);
+      if (reservedError) return errorResponse(reservedError);
       // Clerk's hook recognizes this hint after tRPC deserializes it, verifies the
       // session and retries this mutation. No deletion is queued before verification.
       if (!session.has({ reverification: ACCOUNT_DELETION_REVERIFICATION })) {

@@ -4,6 +4,7 @@ import {
   CREATOR_TRIAL_FIRST_FORM,
   CS_SFX,
   HEAVENLY_SONATA_BLOODLINE_ID,
+  HOME_FURNITURE_STARTERS,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
   ID_ANIMATION_SMOKE,
@@ -26,6 +27,7 @@ import {
   TUTORIAL_STARTER_QUEST_ID,
   VILLAGE_PROTECTOR_AI_ID,
 } from "@/drizzle/constants";
+import { KESSEN_RESERVED_ITEM_IDS } from "@/libs/kessen/reservedContent";
 
 /**
  * Content referenced by game code, grouped by the table that owns the ID. Add code
@@ -83,7 +85,11 @@ export const RESERVED_CONTENT_IDS: Readonly<
   bloodline_reskin: [],
   guide: [],
   hunting: [],
-  item: [TUTORIAL_ITEM_ID],
+  item: [
+    TUTORIAL_ITEM_ID,
+    ...HOME_FURNITURE_STARTERS.map(({ itemId }) => itemId),
+    ...KESSEN_RESERVED_ITEM_IDS,
+  ],
   item_variant: [],
   jutsu: [TUTORIAL_JUTSU_ID, SAGE_MODE_ACTIVATION_JUTSU_ID],
   jutsu_reskin: [],
@@ -116,6 +122,11 @@ export const reservedContentDeletionError = (
 };
 
 const collator = new Intl.Collator("en", { sensitivity: "base" });
+
+/** Protect required AI and system identities at every character or account deletion entry. */
+export const reservedCharacterDeletionError = (userId: string): string | null =>
+  reservedContentDeletionError("ai", userId) ??
+  reservedContentDeletionError("user", userId);
 
 type ReservedContentType =
   | ContentType
