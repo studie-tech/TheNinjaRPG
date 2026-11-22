@@ -131,7 +131,7 @@ export default function ChakraStormPage() {
         subtitle={
           user ? "Scout Seichi for your village" : "Free to play in your browser"
         }
-        defaultBackHref="/manual#minigames"
+        defaultBackHref="/minigames"
         topRightContent={<LeaderboardButton size="sm" variant="default" />}
       >
         <ChakraStormLobby
@@ -203,7 +203,7 @@ export default function ChakraStormPage() {
     <ContentBox
       title={run.hud?.config.challenge ? "Survive the Storm" : "Chakra Storm"}
       subtitle={run.hud ? CS_STAGE_INFO[run.hud.config.stage].name : "Scouting"}
-      defaultBackHref="/manual#minigames"
+      defaultBackHref="/minigames"
       onBack={run.leave}
       padding={false}
     >

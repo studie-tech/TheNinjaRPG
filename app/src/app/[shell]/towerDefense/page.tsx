@@ -150,7 +150,7 @@ export default function TowerDefensePage() {
             ? "Defend the village against endless raiders"
             : "Free to play in your browser"
         }
-        defaultBackHref="/manual#minigames"
+        defaultBackHref="/minigames"
         topRightContent={<LeaderboardLink />}
       >
         <TowerDefenseLobby
@@ -211,7 +211,7 @@ export default function TowerDefensePage() {
     <ContentBox
       title={state?.config.challenge ? "Hold Your Ground" : "Tower Defense"}
       subtitle={state ? `Wave ${state.wave}` : "Run"}
-      defaultBackHref="/manual#minigames"
+      defaultBackHref="/minigames"
       noRightAlign
       padding={false}
     >

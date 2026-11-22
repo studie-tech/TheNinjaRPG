@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CS_CARD_URL,
   IMG_KESSEN_MINIGAME_TILE,
   IMG_MANUAL_ACTIVITY_STREAK,
   IMG_MANUAL_AI,
@@ -34,12 +33,12 @@ import {
   IMG_MANUAL_STAFF,
   IMG_MANUAL_TITLE,
   IMG_MANUAL_TOURNAMENTS,
-  IMG_MANUAL_TOWER_UPGRADES,
   IMG_MANUAL_TRAVEL,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { ImageLinkGrid } from "@/layout/ImageLinkGrid";
 import Link from "@/layout/Link";
+import { MinigameGrid } from "@/layout/MinigameGrid";
 import { StaffPlayerViewSwitch } from "@/layout/StaffPlayerViewSwitch";
 import {
   canChangeContent,
@@ -160,27 +159,6 @@ export default function ManualMain() {
       .sort((a, b) => a.label.localeCompare(b.label))
       .map(({ name, label, img }) => ({ name, label, img, href: `/manual/${name}` }));
   const playerTiles = toTiles(entries.filter((page) => page.visible === undefined));
-  // The minigames open straight into play.
-  const minigameTiles = [
-    {
-      name: "towerDefense",
-      label: "Tower Defense",
-      img: IMG_MANUAL_TOWER_UPGRADES,
-      href: "/towerDefense",
-    },
-    {
-      name: "chakraStorm",
-      label: "Chakra Storm",
-      img: CS_CARD_URL,
-      href: "/chakraStorm",
-    },
-    {
-      name: "kessen",
-      label: "Kessen",
-      img: IMG_KESSEN_MINIGAME_TILE,
-      href: "/kessen",
-    },
-  ];
   const staffTiles = toTiles(entries.filter((page) => page.visible === true));
 
   return (
@@ -212,7 +190,7 @@ export default function ManualMain() {
         subtitle="Fun games to play in the ninja world"
         initialBreak={true}
       >
-        <ImageLinkGrid entries={minigameTiles} />
+        <MinigameGrid />
       </ContentBox>
       {staffTiles.length > 0 && (
         <ContentBox

@@ -139,6 +139,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/merch",
   "/merch/[handle]",
   "/merch/cart",
+  "/minigames",
   "/missionhall",
   "/native-sign-in",
   "/news",
