@@ -69,6 +69,8 @@ export const PUBLIC_MUTATIONS: string[] = [
   "misc.trackVisitor",
   // Declining marketing cookies forgets the visitor's ad click, signed in or not.
   "misc.withdrawAdClickConsent",
+  // Saved marketing consent is synchronized and withdrawn before a visitor signs in.
+  "meta.synchronizeConsent",
   // Email preference links are followed straight from an email, usually signed out.
   "misc.toggleEmailReminder",
   "misc.deleteEmailReminder",
