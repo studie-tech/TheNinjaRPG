@@ -4,6 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowLeft,
   Check,
+  ChevronLeft,
+  ChevronRight,
   ChevronsUpDown,
   Folder,
   Loader2,
@@ -12,7 +14,7 @@ import {
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import type React from "react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
 import { useForm, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -128,10 +130,18 @@ export const EditContent = <
   >("ANIMATION");
   const [assetPickerField, setAssetPickerField] = useState<string | null>(null);
   const [assetTokens, setAssetTokens] = useState<string[]>([]);
+  const [assetPage, setAssetPage] = useState(0);
+  const assetPickerContentRef = useRef<HTMLDivElement>(null);
   // Null lists the folders, undefined searches every folder and an empty string
   // selects Unfiled exactly.
   const [assetFolder, setAssetFolder] = useState<string | null | undefined>(null);
   const [assetFolderSearch, setAssetFolderSearch] = useState("");
+
+  // Modal owns the scroll container; cached pages must also start at the top.
+  useEffect(() => {
+    const body = assetPickerContentRef.current?.parentElement;
+    if (body) body.scrollTop = 0;
+  }, [assetPage, assetFolder, assetTokens]);
 
   // Asset picker data
   const { data: assetFolders, isPending: loadingAssetFolders } =
@@ -160,32 +170,34 @@ export const EditContent = <
       { type: assetPickerType, selected: assetTokens, exactFolder: pickerFolder },
       { enabled: showPickerAssets && assetPickerType !== "ANIMATION" },
     );
+  // Page-specific keys retain cached results while mounting at most 50 previews.
   const {
-    data: assetPages,
-    fetchNextPage: fetchMorePickerAssets,
-    hasNextPage: hasMorePickerAssets,
-    isFetchingNextPage: loadingMorePickerAssets,
+    data: assetPageData,
     isPending: loadingPickerAssets,
-  } = api.gameAsset.getAll.useInfiniteQuery(
+    isFetching: fetchingPickerAssets,
+    isError: pickerAssetsFailed,
+    refetch: retryPickerAssets,
+  } = api.gameAsset.getAll.useQuery(
     {
       limit: 50,
       type: assetPickerType,
       nameTokens: assetTokens,
       exactFolder: pickerFolder,
+      cursor: assetPage,
     },
     {
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
       enabled: showPickerAssets,
     },
   );
-  const allPickerAssets = useMemo(
-    () => (assetPages?.pages.flatMap((p) => p.data) || []).filter((a) => !a.hidden),
-    [assetPages],
+  const pickerAssets = useMemo(
+    () => (assetPageData?.data ?? []).filter((a) => !a.hidden),
+    [assetPageData],
   );
   const pickerTags =
     assetPickerType === "ANIMATION" ? animationTagResp?.tags : generalTagResp?.tags;
 
   const openAssetPicker = (fieldId: string, type: "ANIMATION" | "STATIC" | "SFX") => {
+    setAssetPage(0);
     setAssetPickerField(fieldId);
     setAssetPickerType(type);
     setAssetTokens([]);
@@ -196,6 +208,7 @@ export const EditContent = <
 
   /** Open a folder, Unfiled ("") or every asset (undefined) with no word filters. */
   const openAssetFolder = (folder: string | null | undefined) => {
+    setAssetPage(0);
     setAssetFolder(folder);
     setAssetTokens([]);
   };
@@ -359,7 +372,7 @@ export const EditContent = <
             isValid={false}
             className="max-h-[99%] w-[800px] max-w-[99%]"
           >
-            <div className="space-y-3">
+            <div ref={assetPickerContentRef} className="space-y-3">
               {browsingAssetFolders ? (
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-2">
@@ -444,6 +457,7 @@ export const EditContent = <
                         className={`rounded border px-2 py-1 text-xs ${assetTokens.includes(String(t)) ? "border-foreground bg-foreground text-background" : "border-muted-foreground/30 bg-background"}`}
                         onClick={(e) => {
                           e.preventDefault();
+                          setAssetPage(0);
                           setAssetTokens((prev) =>
                             prev.includes(String(t))
                               ? prev.filter((x) => x !== String(t))
@@ -460,10 +474,21 @@ export const EditContent = <
                     <p role="status" className="text-muted-foreground text-sm">
                       Loading assets…
                     </p>
+                  ) : pickerAssetsFailed ? (
+                    <div role="alert" className="space-y-3 rounded-md border p-4">
+                      <p>Assets could not be loaded. Please try again.</p>
+                      <Button
+                        type="button"
+                        disabled={fetchingPickerAssets}
+                        onClick={() => void retryPickerAssets()}
+                      >
+                        {fetchingPickerAssets ? "Retrying…" : "Retry"}
+                      </Button>
+                    </div>
                   ) : assetPickerType === "SFX" ? (
                     <>
                       <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
-                        {allPickerAssets
+                        {pickerAssets
                           .filter((a) => a.type === "SFX")
                           .map((a) => {
                             const selected =
@@ -521,7 +546,7 @@ export const EditContent = <
                     </>
                   ) : (
                     <ActionSelector
-                      items={allPickerAssets.map((a) => ({
+                      items={pickerAssets.map((a) => ({
                         ...a,
                         type: "asset" as const,
                       }))}
@@ -545,17 +570,40 @@ export const EditContent = <
                       emptyText="No assets match the selected tags."
                     />
                   )}
-                  {hasMorePickerAssets && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="w-full"
-                      disabled={loadingMorePickerAssets}
-                      onClick={() => void fetchMorePickerAssets()}
-                    >
-                      {loadingMorePickerAssets ? "Loading…" : "Show more"}
-                    </Button>
-                  )}
+                  {!loadingPickerAssets &&
+                    (assetPage > 0 || assetPageData?.nextCursor != null) && (
+                      <nav
+                        aria-label="Asset pages"
+                        className="flex w-full items-center justify-between gap-2"
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-[44px] sm:min-h-9"
+                          disabled={assetPage === 0}
+                          onClick={() => setAssetPage(assetPage - 1)}
+                        >
+                          <ChevronLeft aria-hidden="true" className="mr-1 h-4 w-4" />
+                          Previous
+                        </Button>
+                        <span
+                          role="status"
+                          className="text-muted-foreground text-sm tabular-nums"
+                        >
+                          Page {assetPage + 1}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-[44px] sm:min-h-9"
+                          disabled={assetPageData?.nextCursor == null}
+                          onClick={() => setAssetPage(assetPage + 1)}
+                        >
+                          Next
+                          <ChevronRight aria-hidden="true" className="ml-1 h-4 w-4" />
+                        </Button>
+                      </nav>
+                    )}
                 </>
               )}
             </div>

@@ -131,7 +131,7 @@ beforeEach(() => {
       getAllFolders: { useQuery: () => ({ data: [], isPending: false }) },
       getNameTags: { useQuery: () => ({ data: undefined }) },
       getSceneAssets: { useQuery: () => ({ data: [] }) },
-      getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },
+      getAll: { useQuery: () => ({ data: { data: [] } }) },
     },
   });
 });

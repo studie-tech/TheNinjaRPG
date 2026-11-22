@@ -5,8 +5,7 @@ import {
   InfiniteQueryObserver,
   QueryClient,
   QueryClientProvider,
-  type UseInfiniteQueryOptions,
-  useInfiniteQuery,
+  type UseQueryOptions,
   useQuery,
 } from "@tanstack/react-query";
 import {
@@ -36,7 +35,6 @@ import { RewardEditor, RewardFormWrapper } from "@/layout/RewardEditor";
 import { JUTSU_EFFECT_COSMETICS } from "@/libs/jutsu/reskins";
 import * as toastHelpers from "@/libs/toast";
 import * as errorUtils from "@/utils/error";
-import * as UserContext from "@/utils/UserContext";
 import {
   DamageTag,
   getTagSchema,
@@ -122,9 +120,9 @@ const api = {
   gameAsset: {
     getAllNames: names,
     getAllFolders: { useQuery: () => ({ data: [], isPending: false }) },
-    getNameTags: names,
+    getNameTags: { useQuery: () => ({ data: undefined }) },
     getSceneAssets: names,
-    getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },
+    getAll: { useQuery: () => ({ data: { data: [] } }) },
   },
 };
 beforeEach(() => {
@@ -2361,7 +2359,7 @@ describe("schema-derived field visibility", () => {
       data: [{ folder: "SkyglassBossFX", count: 25 }],
       isPending: false,
     } as never);
-    const listing = vi.spyOn(api.gameAsset.getAll, "useInfiniteQuery");
+    const listing = vi.spyOn(api.gameAsset.getAll, "useQuery");
     const tag = DamageTag.parse({});
     const view = render(
       <EffectFormWrapper
@@ -2425,19 +2423,17 @@ describe("schema-derived field visibility", () => {
       ],
       isPending: false,
     } as never);
-    vi.spyOn(api.gameAsset.getAll, "useInfiniteQuery").mockImplementation(((
+    vi.spyOn(api.gameAsset.getAll, "useQuery").mockImplementation(((
       input: { exactFolder?: string },
-      options: Pick<UseInfiniteQueryOptions<AssetPage>, "enabled" | "placeholderData">,
+      options: Pick<UseQueryOptions<AssetPage>, "enabled" | "placeholderData">,
     ) =>
-      useInfiniteQuery({
+      useQuery({
         ...options,
         queryKey: ["picker-assets", input],
         queryFn: async () =>
           input.exactFolder === "Water"
             ? secondFolder.promise
             : { data: [asset("flame", "Flame Burst")], nextCursor: undefined },
-        initialPageParam: undefined,
-        getNextPageParam: (page) => page.nextCursor,
       })) as never);
     const onEffectsChange = vi.fn();
     const PickerForm = () => {
@@ -2485,6 +2481,213 @@ describe("schema-derived field visibility", () => {
       ]),
     );
     expect(view.queryByRole("dialog")).toBeNull();
+    queryClient.clear();
+  });
+
+  /** Exercise real picker rendering with the application query cache defaults. */
+  const mountPagedPicker = (pendingPage?: ReturnType<typeof deferred<PickerPage>>) => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    const read = vi.fn(
+      async (input: PickerInput, page: number): Promise<PickerPage> => {
+        if (pendingPage && page === 1 && input.exactFolder === "Fire") {
+          return pendingPage.promise;
+        }
+        const prefix = `${input.exactFolder}-${input.type}-${input.nameTokens.join("_") || "all"}-${page}`;
+        return {
+          data: Array.from({ length: input.limit }, (_, index) => ({
+            id: `${prefix}-${index}`,
+            name: `${prefix}-${index}`,
+            type: input.type,
+            url: "https://example.com/animation.png",
+            hidden: page === 0 && index === 49,
+          })),
+          nextCursor: page < 2 ? page + 1 : undefined,
+        };
+      },
+    );
+    vi.spyOn(api.gameAsset.getAllFolders, "useQuery").mockReturnValue({
+      data: [
+        { folder: "Fire", count: 150 },
+        { folder: "Water", count: 150 },
+      ],
+      isPending: false,
+    } as never);
+    vi.spyOn(api.gameAsset.getNameTags, "useQuery").mockReturnValue({
+      data: { tags: ["Bright"] },
+    } as never);
+    vi.spyOn(api.gameAsset.getAll, "useQuery").mockImplementation(((
+      input: PickerInput,
+      options: Pick<UseQueryOptions<PickerPage>, "enabled">,
+    ) =>
+      useQuery({
+        ...options,
+        queryKey: ["picker-assets", input],
+        queryFn: () => read(input, input.cursor),
+      })) as never);
+    const onEffectsChange = vi.fn();
+    const PickerForm = () => {
+      const [effects, setEffects] = useState<ZodAllTags[]>([DamageTag.parse({})]);
+      return (
+        <EffectFormWrapper
+          type="jutsu"
+          idx={0}
+          tag={effects[0]!}
+          effects={effects}
+          setEffects={(next) => {
+            onEffectsChange(next);
+            setEffects(next);
+          }}
+          availableTags={["damage"]}
+          hideTagType
+        />
+      );
+    };
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <PickerForm />
+      </QueryClientProvider>,
+    );
+    return { view, read, queryClient, onEffectsChange };
+  };
+
+  type PickerInput = {
+    cursor: number;
+    limit: number;
+    type: "ANIMATION" | "STATIC" | "SFX";
+    exactFolder?: string;
+    nameTokens: string[];
+  };
+  type PickerPage = {
+    data: {
+      id: string;
+      name: string;
+      type: PickerInput["type"];
+      url: string;
+      hidden: boolean;
+    }[];
+    nextCursor: number | undefined;
+  };
+
+  it("renders one asset page and reuses fetched pages when navigating back and forward", async () => {
+    const { view, read, queryClient, onEffectsChange } = mountPagedPicker();
+    fireEvent.click(
+      view.getByRole("button", { name: "Projectile animation: Pick from dialog" }),
+    );
+    fireEvent.click(await view.findByRole("button", { name: /^Fire/ }));
+    await view.findByText("Fire-ANIMATION-all-0-0");
+    expect(view.getAllByText(/^Fire-ANIMATION-all-\d-\d+$/)).toHaveLength(49);
+    expect(view.queryByText("Fire-ANIMATION-all-0-49")).toBeNull();
+    expect(
+      view.getByRole("button", { name: "Previous" }).hasAttribute("disabled"),
+    ).toBe(true);
+    const body = view.getByRole("navigation", { name: "Asset pages" }).parentElement!
+      .parentElement!;
+    body.scrollTop = 500;
+    fireEvent.click(view.getByRole("button", { name: "Next" }));
+    await view.findByText("Fire-ANIMATION-all-1-0");
+    expect(body.scrollTop).toBe(0);
+    expect(view.getAllByText(/^Fire-ANIMATION-all-\d-\d+$/)).toHaveLength(50);
+    expect(view.queryByText("Fire-ANIMATION-all-0-0")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Next" }));
+    await view.findByText("Fire-ANIMATION-all-2-0");
+    expect(view.getAllByText(/^Fire-ANIMATION-all-\d-\d+$/)).toHaveLength(50);
+    expect(view.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(
+      true,
+    );
+    expect(read).toHaveBeenCalledTimes(3);
+    fireEvent.click(view.getByRole("button", { name: "Previous" }));
+    await view.findByText("Fire-ANIMATION-all-1-0");
+    fireEvent.click(view.getByRole("button", { name: "Next" }));
+    await view.findByText("Fire-ANIMATION-all-2-0");
+    expect(read).toHaveBeenCalledTimes(3);
+    fireEvent.click(view.getByText("Fire-ANIMATION-all-2-0"));
+    await waitFor(() =>
+      expect(onEffectsChange).toHaveBeenLastCalledWith([
+        expect.objectContaining({ projectileAnimation: "Fire-ANIMATION-all-2-0" }),
+      ]),
+    );
+    expect(view.queryByRole("dialog")).toBeNull();
+    queryClient.clear();
+  });
+
+  it("resets the asset page for folders, tags, reopening and asset types", async () => {
+    const { view, queryClient } = mountPagedPicker();
+    const openPicker = async (field = "Projectile animation") => {
+      fireEvent.click(view.getByRole("button", { name: `${field}: Pick from dialog` }));
+      fireEvent.click(await view.findByRole("button", { name: /^Fire/ }));
+    };
+    const nextPage = async (name: string) => {
+      fireEvent.click(view.getByRole("button", { name: "Next" }));
+      await view.findByText(name);
+    };
+    const close = () =>
+      fireEvent.click(view.getAllByRole("button", { name: "Close" })[0]!);
+    await openPicker();
+    await view.findByText("Fire-ANIMATION-all-0-0");
+    await nextPage("Fire-ANIMATION-all-1-0");
+    fireEvent.click(view.getByRole("button", { name: "Folders" }));
+    fireEvent.click(await view.findByRole("button", { name: /^Water/ }));
+    await view.findByText("Water-ANIMATION-all-0-0");
+    expect(view.getByText("Page 1")).toBeTruthy();
+    await nextPage("Water-ANIMATION-all-1-0");
+    fireEvent.click(view.getByRole("button", { name: "Bright" }));
+    await view.findByText("Water-ANIMATION-Bright-0-0");
+    expect(view.getByText("Page 1")).toBeTruthy();
+    await nextPage("Water-ANIMATION-Bright-1-0");
+    close();
+    await openPicker();
+    await view.findByText("Fire-ANIMATION-all-0-0");
+    expect(view.getByText("Page 1")).toBeTruthy();
+    await nextPage("Fire-ANIMATION-all-1-0");
+    close();
+    await openPicker("Static asset path");
+    await view.findByText("Fire-STATIC-all-0-0");
+    expect(view.getByText("Page 1")).toBeTruthy();
+    queryClient.clear();
+  });
+
+  it("does not advance a new folder when a pending page finishes", async () => {
+    const pendingPage = deferred<PickerPage>();
+    const { view, queryClient } = mountPagedPicker(pendingPage);
+    fireEvent.click(
+      view.getByRole("button", { name: "Projectile animation: Pick from dialog" }),
+    );
+    fireEvent.click(await view.findByRole("button", { name: /^Fire/ }));
+    await view.findByText("Fire-ANIMATION-all-0-0");
+    fireEvent.click(view.getByRole("button", { name: "Next" }));
+    await view.findByText("Loading assets…");
+    fireEvent.click(view.getByRole("button", { name: "Folders" }));
+    fireEvent.click(await view.findByRole("button", { name: /^Water/ }));
+    await view.findByText("Water-ANIMATION-all-0-0");
+    await act(async () => pendingPage.resolve({ data: [], nextCursor: undefined }));
+    expect(view.getByText("Page 1")).toBeTruthy();
+    expect(view.getByText("Water-ANIMATION-all-0-0")).toBeTruthy();
+    queryClient.clear();
+  });
+
+  it("offers retry and previous-page recovery when an asset page fails", async () => {
+    const { view, read, queryClient } = mountPagedPicker();
+    fireEvent.click(
+      view.getByRole("button", { name: "Projectile animation: Pick from dialog" }),
+    );
+    fireEvent.click(await view.findByRole("button", { name: /^Fire/ }));
+    await view.findByText("Fire-ANIMATION-all-0-0");
+    read.mockRejectedValueOnce(new Error("Unavailable"));
+    fireEvent.click(view.getByRole("button", { name: "Next" }));
+    expect((await view.findByRole("alert")).textContent).toContain(
+      "Assets could not be loaded. Please try again.",
+    );
+    expect(view.queryByText("No assets match the selected tags.")).toBeNull();
+    expect(
+      view.getByRole("button", { name: "Previous" }).hasAttribute("disabled"),
+    ).toBe(false);
+    fireEvent.click(view.getByRole("button", { name: "Retry" }));
+    await view.findByText("Fire-ANIMATION-all-1-0");
+    expect(view.queryByRole("alert")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Previous" }));
+    await view.findByText("Fire-ANIMATION-all-0-0");
     queryClient.clear();
   });
 

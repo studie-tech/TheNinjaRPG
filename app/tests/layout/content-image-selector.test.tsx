@@ -169,7 +169,7 @@ it("keeps a pending activity-streak image when the same config changes streak ty
       getAllFolders: { useQuery: () => ({ data: [], isPending: false }) },
       getNameTags: { useQuery: () => ({ data: [] }) },
       getSceneAssets: { useQuery: () => ({ data: [] }) },
-      getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },
+      getAll: { useQuery: () => ({ data: { data: [] } }) },
     },
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
