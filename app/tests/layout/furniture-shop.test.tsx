@@ -48,6 +48,7 @@ const furniture = {
   expireFromStoreAt: null,
 };
 let tutorialItem: typeof furniture | undefined;
+const tutorialItemQuery = vi.fn(() => ({ data: tutorialItem }));
 const homeInvalidation = vi.fn(async () => undefined);
 const invalidate = vi.fn(async () => undefined);
 const updateUser = vi.fn(async () => undefined);
@@ -114,7 +115,7 @@ beforeEach(() => {
       },
     },
     item: {
-      get: { useQuery: () => ({ data: tutorialItem }) },
+      get: { useQuery: tutorialItemQuery },
       getAll: { useInfiniteQuery: catalogQuery },
       getBloodlineRollOdds: { useQuery: () => ({}) },
       getPurchaseAllowance: {
@@ -200,7 +201,10 @@ describe("furniture catalog integration", () => {
           <Screen />
         </ScreenNavigationProvider>,
       );
-      expect(UserContext.useRequireInVillage).toHaveBeenCalledWith("/itemshop");
+      expect(UserContext.useRequireInVillage).toHaveBeenCalledWith("/itemshop", {
+        onAccessDenied: close,
+      });
+      expect(routing.useAwake).toHaveBeenCalledWith(user, { onUnavailable: close });
       fireEvent.click(view.getByRole("button", { name: /Painted Cabinet/ }));
       expect(view.getByRole("dialog")).toBeTruthy();
       view.rerender(
@@ -209,6 +213,9 @@ describe("furniture catalog integration", () => {
         </ScreenNavigationProvider>,
       );
       expect(view.getByRole("dialog")).toBeTruthy();
+      expect(routing.useAwake).toHaveBeenLastCalledWith(user, {
+        onUnavailable: nextClose,
+      });
       fireEvent.click(view.getByRole("button", { name: "Buy for 100 ryo" }));
       expect(view.queryByRole("dialog")).toBeNull();
       expect(close).not.toHaveBeenCalled();
@@ -276,31 +283,74 @@ describe("furniture catalog integration", () => {
     expect(view.queryByRole("alert")).toBeNull();
   });
 
-  it("keeps the tutorial item reachable after a category change and advances on purchase", async () => {
-    tutorialItem = {
-      ...furniture,
-      id: TUTORIAL_ITEM_ID,
-      name: "Shuriken",
-      itemType: "WEAPON",
-    };
-    const completeTutorialAction = vi.fn(async () => {});
-    vi.spyOn(routing, "usePublicPathname").mockReturnValue("/itemshop");
-    vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
-      currentStep: { id: "tools-buy-shuriken", page: "/itemshop" },
-      completeTutorialAction,
-    } as never);
-    const view = renderShop(<Shop userData={user} defaultType="WEAPON" />);
-    fireEvent.mouseDown(view.getByRole("tab", { name: "Furniture" }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    expect(view.container.querySelector("#tutorial-itemshop-item")).toBeTruthy();
-    fireEvent.click(view.getByRole("button", { name: /Shuriken/ }));
-    await act(async () =>
-      fireEvent.click(view.getByRole("button", { name: "Buy for 100 ryo" })),
-    );
-    expect(completeTutorialAction).toHaveBeenCalledWith("buyItem");
-  });
+  it.each([
+    ["ordinary route", "/itemshop", false],
+    ["hosted screen", "/travel", true],
+  ] as const)(
+    "keeps the tutorial item reachable in the %s and advances on purchase",
+    async (_name, path, hosted) => {
+      tutorialItem = {
+        ...furniture,
+        id: TUTORIAL_ITEM_ID,
+        name: "Shuriken",
+        itemType: "WEAPON",
+      };
+      const completeTutorialAction = vi.fn(async () => {});
+      vi.spyOn(routing, "usePublicPathname").mockReturnValue(path);
+      vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
+        currentStep: { id: "tools-buy-shuriken", page: "/itemshop" },
+        completeTutorialAction,
+      } as never);
+      const view = renderShop(
+        hosted ? (
+          <ScreenNavigationProvider onBack={vi.fn()}>
+            <ItemShopScreen />
+          </ScreenNavigationProvider>
+        ) : (
+          <ItemShopPage />
+        ),
+      );
+      expect(tutorialItemQuery).toHaveBeenLastCalledWith(
+        { id: TUTORIAL_ITEM_ID },
+        { enabled: true },
+      );
+      fireEvent.mouseDown(view.getByRole("tab", { name: "Furniture" }), {
+        button: 0,
+        ctrlKey: false,
+      });
+      expect(view.container.querySelector("#tutorial-itemshop-item")).toBeTruthy();
+      fireEvent.click(view.getByRole("button", { name: /Shuriken/ }));
+      await act(async () =>
+        fireEvent.click(view.getByRole("button", { name: "Buy for 100 ryo" })),
+      );
+      expect(completeTutorialAction).toHaveBeenCalledWith("buyItem");
+    },
+  );
+
+  it.each(["/souvenirs", "/blackmarket", "/kessen"])(
+    "does not pin or advance the item-shop lesson in the %s catalog",
+    (path) => {
+      tutorialItem = { ...furniture, id: TUTORIAL_ITEM_ID, name: "Shuriken" };
+      vi.spyOn(routing, "usePublicPathname").mockReturnValue(path);
+      const completeTutorialAction = vi.fn(async () => {});
+      vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
+        currentStep: { id: "tools-buy-shuriken", page: "/itemshop" },
+        completeTutorialAction,
+      } as never);
+      const view = renderShop(<Shop userData={user} defaultType="WEAPON" />);
+      expect(tutorialItemQuery).toHaveBeenLastCalledWith(
+        { id: TUTORIAL_ITEM_ID },
+        { enabled: false },
+      );
+      expect(view.container.querySelector("#tutorial-itemshop-item")).toBeNull();
+      purchaseOptions.onSuccess(
+        purchaseResult,
+        { itemId: TUTORIAL_ITEM_ID, stack: 1 },
+        undefined,
+      );
+      expect(completeTutorialAction).not.toHaveBeenCalled();
+    },
+  );
 
   it("purchases through item.buy and refreshes the residence after delivery", async () => {
     const view = renderShop(<Shop userData={user} defaultType="FURNITURE" />);

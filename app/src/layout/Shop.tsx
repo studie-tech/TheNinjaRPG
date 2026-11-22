@@ -125,7 +125,7 @@ const Shop: React.FC<ShopProps> = (props) => {
     stacksize <= maxPurchaseQuantity;
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const filteringState = useShopFiltering(defaultType);
-  const isAwake = useAwake(userData);
+  const isAwake = useAwake(userData, { onUnavailable: props.onBack });
   const itemTypeTabOptions = useMemo(
     () => (props.restrictTypes?.length ? props.restrictTypes : GENERAL_SHOP_ITEM_TYPES),
     [props.restrictTypes],
@@ -179,11 +179,11 @@ const Shop: React.FC<ShopProps> = (props) => {
 
   const pathname = usePublicPathname();
   const { currentStep, completeTutorialAction } = useTutorialStep();
-  // Shop also renders the souvenir and black-market catalogs; the tutorial pin
-  // belongs only on the page its step points at.
+  // Only the item-shop screen opts into its logical tutorial page when hosted elsewhere.
+  // Other catalogs match the route so they cannot advance the item-shop lesson.
   const isItemBuyStep =
     isTutorialItemBuyStep(currentStep) &&
-    isTutorialPageMatch(currentStep?.page, pathname);
+    isTutorialPageMatch(currentStep?.page, props.tutorialPage ?? pathname);
 
   const setItemConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
     const next = typeof open === "function" ? open(isOpen) : open;
@@ -1510,6 +1510,8 @@ interface ShopProps {
   defaultBackHref?: string;
   /** Page-level back action supplied by the screen host. */
   onBack?: () => void;
+  /** Logical page for the item-shop lesson when its screen is hosted off-route. */
+  tutorialPage?: "/itemshop";
   initialBreak?: boolean;
   minCost?: number;
   minRepsCost?: number;

@@ -125,7 +125,9 @@ describe("bank transfers", () => {
         .slice(1)
         .every((props) => !props.onBack && !props.defaultBackHref),
     ).toBe(true);
-    expect(UserContext.useRequireInVillage).toHaveBeenCalledWith("/bank");
+    expect(UserContext.useRequireInVillage).toHaveBeenCalledWith("/bank", {
+      onAccessDenied: close,
+    });
   });
 
   it("starts every amount empty so its placeholder shows", () => {

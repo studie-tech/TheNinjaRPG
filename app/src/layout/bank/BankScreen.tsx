@@ -68,7 +68,7 @@ export function BankScreen() {
 
   // User data
   const { userData, access, timeDiff, prepareUserUpdate, updateUser } =
-    useRequireInVillage("/bank");
+    useRequireInVillage("/bank", { onAccessDenied: navigation.onBack });
   const money = userData?.money ?? 0;
   const bank = userData?.bank ?? 0;
 

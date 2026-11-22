@@ -10,7 +10,9 @@ import { useRequireInVillage } from "@/utils/UserContext";
 export function ItemShopScreen() {
   const navigation = useScreenNavigation("/village");
   // Settings
-  const { userData, access } = useRequireInVillage("/itemshop");
+  const { userData, access } = useRequireInVillage("/itemshop", {
+    onAccessDenied: navigation.onBack,
+  });
 
   // Checks
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -24,6 +26,7 @@ export function ItemShopScreen() {
       minCost={1}
       defaultType="WEAPON"
       {...navigation}
+      tutorialPage="/itemshop"
       eventItems={false}
       subtitle="Browse gear and supplies — open a card to inspect and buy."
     />
