@@ -36,18 +36,17 @@ const show = (value: ChakraStormOutcome) =>
     />,
   );
 
-it("says a refused claim saved no intel, and why", () => {
+it("explains why a claim is unconfirmed and how to retry", () => {
   const view = show(
     outcome({
       message: "Chakra Storm rewards are temporarily paused.",
       retryable: true,
     }),
   );
-  expect(view.getByText("No intel or region progress saved")).toBeTruthy();
+  expect(view.getByText("Intel and region progress not confirmed")).toBeTruthy();
   expect(view.getByText("Chakra Storm rewards are temporarily paused.")).toBeTruthy();
-  expect(view.getByText(/kept until you start another one/)).toBeTruthy();
+  expect(view.getByText(/Try again before leaving this screen/)).toBeTruthy();
   expect(view.getByRole("button", { name: /Try again/ })).toBeTruthy();
-  // The headline no longer claims the report was delivered.
   expect(view.queryByText(/report delivered/)).toBeNull();
   expect(view.getByText("Scouting complete")).toBeTruthy();
 });
@@ -56,14 +55,41 @@ it("explains a refusal for good without offering a retry", () => {
   const view = show(
     outcome({ message: "This run's token is invalid.", retryable: false, won: false }),
   );
-  expect(view.getByText("No intel or region progress saved")).toBeTruthy();
+  expect(view.getByText("Intel and region progress not confirmed")).toBeTruthy();
   expect(view.getByText(/Only runs the server verifies earn intel/)).toBeTruthy();
   expect(view.queryByRole("button", { name: /^Try again$/ })).toBeNull();
 });
+
+it.each([false, true])(
+  "does not report lost progress after a transport failure (challenge: %s)",
+  (challenge) => {
+    const message =
+      "We could not reach the server to verify this run. Keep this tab open and try again.";
+    const view = show(
+      outcome({
+        message,
+        retryable: true,
+        challenge: challenge ? { questId: "quest", objectiveId: "storm" } : undefined,
+      }),
+    );
+    expect(
+      view.getByText(
+        challenge
+          ? "Run result not confirmed"
+          : "Intel and region progress not confirmed",
+      ),
+    ).toBeTruthy();
+    expect(view.getByText(message)).toBeTruthy();
+    expect(view.getByRole("button", { name: /^Try again$/ })).toBeTruthy();
+    expect(
+      view.queryByText(/not recorded|No intel or region progress saved/),
+    ).toBeNull();
+  },
+);
 
 it("shows the intel of a paid run", () => {
   const view = show(outcome({ claim: "paid", intel: 1_730, unlocked: "akasumi" }));
   expect(view.getByText(/1,730/)).toBeTruthy();
   expect(view.getByText("Scouting complete: report delivered!")).toBeTruthy();
-  expect(view.queryByText("No intel or region progress saved")).toBeNull();
+  expect(view.queryByText("Intel and region progress not confirmed")).toBeNull();
 });

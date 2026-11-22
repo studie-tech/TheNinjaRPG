@@ -720,13 +720,13 @@ export const ChakraStormResults = (props: {
           <div className="space-y-1.5 rounded-lg border border-red-400/60 bg-red-500/10 p-2 text-base text-balance">
             <p className="font-bold">
               {outcome.challenge
-                ? "This run was not recorded"
-                : "No intel or region progress saved"}
+                ? "Run result not confirmed"
+                : "Intel and region progress not confirmed"}
             </p>
             <p>{outcome.message}</p>
             <p className="text-muted-foreground text-sm">
               {outcome.retryable
-                ? "This run is kept until you start another one, so try again first."
+                ? "Try again before leaving this screen or starting another run."
                 : outcome.challenge
                   ? "Only a run the server verifies completes the objective."
                   : "Only runs the server verifies earn intel, records and new regions."}
