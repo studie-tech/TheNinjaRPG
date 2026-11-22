@@ -273,8 +273,8 @@ function UserMenu({
   onMessage?: (user: ChatStartUser) => void;
 }) {
   const [open, setOpen] = useState(false);
-  // Both views share one PopoverContent, so swapping them removes the focused
-  // control; the challenge view focuses Back and returning ("back") focuses Challenge.
+  // Swapping the popover's content between the views unmounts the focused control, so
+  // the challenge view focuses Back and returning ("back") focuses Challenge.
   const [view, setView] = useState<"menu" | "challenge" | "back">("menu");
   const { userColor, titleColor } = getPostUserClasses(user, tavernStyling);
   const { refreshBlacklist } = useBlacklistCacheUpdate();

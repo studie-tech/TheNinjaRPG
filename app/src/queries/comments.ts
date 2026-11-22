@@ -365,7 +365,10 @@ export const findSupportTicketForConversation = (
     columns: { id: true, status: true, createdByUserId: true },
   });
 
-/** Build a conversation comment insert with separate displayed user and author IDs. */
+/**
+ * Build a conversation comment insert with separate displayed user and author IDs;
+ * `challengeMatch` marks it as the announcement of a match challenged from there.
+ */
 export const insertConversationComment = (
   client: Pick<DrizzleClient, "insert">,
   id: string,

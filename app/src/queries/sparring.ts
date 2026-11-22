@@ -97,6 +97,7 @@ export const updateUserRequestForUpdateRequestState = (
  * @param [relatedId] - Optional. The related entity ID.
  * @param [useRankedRules] - Optional. Whether the challenge uses ranked rules.
  * @param [spectatable] - Optional. Whether the challenge can be spectated.
+ * @param [conversationId] - Optional. The public conversation that announces its match.
  * @returns A Promise that resolves when the request is successfully inserted.
  */
 export const insertRequest = async (
