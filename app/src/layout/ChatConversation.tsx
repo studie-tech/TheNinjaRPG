@@ -209,6 +209,8 @@ export function ChatConversation({
               pages={comments?.pages}
               conversationId={conversation.id}
               isPublic={conversation.isPublic}
+              // The chat panel holds only taverns and inbox conversations.
+              allowChallenge
               deletedCommentIds={deletedCommentIds}
               quoteIds={quoteIds}
               username={userData?.username}

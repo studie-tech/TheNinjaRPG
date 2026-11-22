@@ -67,6 +67,7 @@ function InboxContent() {
       <Conversation
         refreshKey={0}
         convo_id={selectedConvo}
+        allowChallenge
         defaultBackHref="/inbox"
         onBack={() => {
           selectConvo(null);

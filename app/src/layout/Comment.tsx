@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment, UserReportComment } from "@/drizzle/schema";
-import { ChallengeButton, ChallengeMatchNotice } from "@/layout/ChallengePlayer";
+import {
+  ChallengeButton,
+  type ChallengeFrom,
+  ChallengeMatchNotice,
+} from "@/layout/ChallengePlayer";
 import { CompactComment } from "@/layout/CompactComment";
 import Confirm from "@/layout/Confirm";
 import { EmojiPicker } from "@/layout/EmojiPicker";
@@ -47,8 +51,8 @@ export const CommentOnReport: React.FC<UserReportCommentProps> = (props) => {
  */
 interface ConversationCommentProps extends PostProps {
   comment: ConversationComment;
-  /** The public conversation that announces a challenge sent from this message. */
-  challengeConversationId?: string | null;
+  /** Offers the challenge shortcut on other players' messages. */
+  challengeFrom?: ChallengeFrom;
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
   quoteIds?: string[] | null;
@@ -133,7 +137,7 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
       <CompactComment
         user={props.user}
         comment={props.comment}
-        challengeConversationId={props.challengeConversationId ?? null}
+        challengeFrom={props.challengeFrom}
         tavernStyling={props.tavernStyling}
         highlighted={props.color === "poppopover"}
         quoteIds={props.quoteIds}
@@ -157,7 +161,6 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
     <BaseComment
       {...props}
       system="conversation_comment"
-      challengeFrom={{ conversationId: props.challengeConversationId ?? null }}
       editComment={props.canEdit === false ? undefined : editComment.mutate}
       isEditPending={editComment.isPending}
       deleteComment={handleDelete}
@@ -185,8 +188,8 @@ interface BaseCommentProps extends PostProps {
   isDeletePending?: boolean;
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
-  /** Offers the challenge shortcut on other players' messages sent in this conversation. */
-  challengeFrom?: { conversationId: string | null };
+  /** Offers the challenge shortcut on other players' messages. */
+  challengeFrom?: ChallengeFrom;
 }
 const BaseComment: React.FC<BaseCommentProps> = (props) => {
   const { data: userData } = useUserDataSelector((u) => ({

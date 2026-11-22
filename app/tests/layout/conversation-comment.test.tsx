@@ -175,13 +175,29 @@ describe("conversation comment editing permissions", () => {
 });
 
 describe("challenge shortcut", () => {
+  const challengeable = (
+    <CommentOnConversation
+      comment={comment}
+      user={user}
+      challengeFrom={{ conversationId: null }}
+    >
+      {comment.content}
+    </CommentOnConversation>
+  );
+
   it("offers to challenge the author of another player's message", () => {
     mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
-    const view = render(message());
+    const view = render(challengeable);
     expect(view.getByRole("button", { name: "Challenge Friend" })).toBeTruthy();
   });
 
   it("does not offer to challenge yourself", () => {
+    const view = render(challengeable);
+    expect(view.queryByRole("button", { name: "Challenge Friend" })).toBeNull();
+  });
+
+  it("is offered only where the conversation opts in", () => {
+    mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
     const view = render(message());
     expect(view.queryByRole("button", { name: "Challenge Friend" })).toBeNull();
   });
@@ -490,12 +506,20 @@ describe("conversation comment row isolation", () => {
     ]);
   });
 
-  it("names the conversation as a challenge's announcer only when it is public", () => {
+  it("offers challenges only when allowed and names a public conversation as their announcer", () => {
     const { renders } = observeRows();
-    const view = render(<ConversationComments {...listProps([row("1")])} isPublic />);
-    expect(renders.mock.calls.at(-1)?.[0].challengeConversationId).toBe("conversation");
-    view.rerender(<ConversationComments {...listProps([row("1")])} />);
-    expect(renders.mock.calls.at(-1)?.[0].challengeConversationId).toBeNull();
+    const view = render(
+      <ConversationComments {...listProps([row("1")])} allowChallenge isPublic />,
+    );
+    expect(renders.mock.calls.at(-1)?.[0].challengeFrom).toEqual({
+      conversationId: "conversation",
+    });
+    view.rerender(<ConversationComments {...listProps([row("1")])} allowChallenge />);
+    expect(renders.mock.calls.at(-1)?.[0].challengeFrom).toEqual({
+      conversationId: null,
+    });
+    view.rerender(<ConversationComments {...listProps([row("1")])} isPublic />);
+    expect(renders.mock.calls.at(-1)?.[0].challengeFrom).toBeUndefined();
   });
 
   it("renders only changed cached rows in a 100-message history and reparses only changed content", () => {
@@ -691,6 +715,7 @@ describe("compact chat challenge view", () => {
         <CompactComment
           user={user}
           comment={comment}
+          challengeFrom={{ conversationId: null }}
           editing={false}
           setEditing={() => {}}
         >
@@ -699,6 +724,7 @@ describe("compact chat challenge view", () => {
       );
       fireEvent.click(view.getByRole("button", { name: "Actions for Friend" }));
       fireEvent.click(view.getByRole("menuitem", { name: "Challenge" }));
+      expect(view.getByRole("dialog", { name: "Challenge Friend" })).toBeTruthy();
       expect(document.activeElement).toBe(view.getByRole("button", { name: "Back" }));
       fireEvent.click(view.getByRole("button", { name: "Back" }));
       expect(document.activeElement).toBe(

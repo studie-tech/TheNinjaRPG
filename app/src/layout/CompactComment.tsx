@@ -24,7 +24,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment } from "@/drizzle/schema";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
-import { ChallengePanel } from "@/layout/ChallengePlayer";
+import { type ChallengeFrom, ChallengePanel } from "@/layout/ChallengePlayer";
 import Confirm from "@/layout/Confirm";
 import { EmojiPicker } from "@/layout/EmojiPicker";
 import Link from "@/layout/Link";
@@ -80,7 +80,7 @@ export function CompactComment(props: CompactCommentProps) {
       <UserMenu
         user={user}
         isSelf={isAuthor}
-        conversationId={props.challengeConversationId ?? null}
+        challengeFrom={props.challengeFrom}
         onMention={props.onMentionUser}
         onMessage={props.onMessageUser}
         tavernStyling={props.tavernStyling}
@@ -260,14 +260,14 @@ export function CompactComment(props: CompactCommentProps) {
 function UserMenu({
   user,
   isSelf,
-  conversationId,
+  challengeFrom,
   onMention,
   onMessage,
   tavernStyling,
 }: {
   user: CompactCommentProps["user"];
   isSelf: boolean;
-  conversationId: string | null;
+  challengeFrom?: ChallengeFrom;
   tavernStyling?: boolean;
   onMention?: (username: string) => void;
   onMessage?: (user: ChatStartUser) => void;
@@ -316,11 +316,12 @@ function UserMenu({
         <PopoverContent
           align="start"
           collisionPadding={8}
+          aria-label={`Challenge ${user.username}`}
           className="max-h-[var(--radix-popover-content-available-height)] w-[320px] overflow-y-auto p-[8px]"
         >
           <ChallengePanel
             opponent={user}
-            conversationId={conversationId}
+            conversationId={challengeFrom?.conversationId ?? null}
             leading={
               <Button
                 variant="ghost"
@@ -390,7 +391,7 @@ function UserMenu({
               <Mail /> Send private message
             </MenuItem>
           )}
-          {!isSelf && (
+          {!isSelf && challengeFrom && (
             <MenuItem
               autoFocus={returnedFromChallenge}
               onSelect={() => setView("challenge")}
@@ -559,8 +560,8 @@ function CompactEditor({
 export interface CompactCommentProps {
   user: NonNullable<PostProps["user"]>;
   comment: ConversationComment;
-  /** The public conversation that announces a challenge sent from this message. */
-  challengeConversationId?: string | null;
+  /** Offers the challenge shortcut in the author's menu. */
+  challengeFrom?: ChallengeFrom;
   children: React.ReactNode;
   tavernStyling?: boolean;
   highlighted?: boolean;

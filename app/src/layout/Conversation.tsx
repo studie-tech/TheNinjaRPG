@@ -65,6 +65,8 @@ interface ConversationProps extends ConversationLogicProps {
   onBack?: () => void;
   /** Enables persisted username/title colors only for tavern conversations. */
   tavernStyling?: boolean;
+  /** Offers the challenge shortcut on other players' messages, where players meet. */
+  allowChallenge?: boolean;
 }
 
 export const ConversationSkeleton: React.FC<ConversationProps> = (props) => {
@@ -873,6 +875,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
             pages={comments?.pages}
             conversationId={conversation?.id}
             isPublic={conversation?.isPublic}
+            allowChallenge={props.allowChallenge}
             deletedCommentIds={deletedCommentIds}
             quoteIds={quoteIds}
             username={userData?.username}

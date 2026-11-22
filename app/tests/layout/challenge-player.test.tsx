@@ -170,7 +170,7 @@ describe("challenge button", () => {
     const send = await screen.findByRole("button", {
       name: "Send Rival a sparring challenge",
     });
-    const panel = screen.getByRole("dialog");
+    const panel = screen.getByRole("dialog", { name: "Challenge Rival" });
     await waitFor(() => expect(document.activeElement).toBe(panel));
     expect(panel.contains(send)).toBe(true);
   });

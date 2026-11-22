@@ -105,6 +105,7 @@ export default function Tavern() {
       {...convoProps}
       convo_title={conversation}
       tavernStyling
+      allowChallenge
       topRightContent={
         <div className="flex flex-row gap-1">
           {tavernSelector}

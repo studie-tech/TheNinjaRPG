@@ -62,6 +62,7 @@ export function ChallengeButton({
         tabIndex={-1}
         align="end"
         collisionPadding={8}
+        aria-label={`Challenge ${opponent.username}`}
         className="max-h-[var(--radix-popover-content-available-height)] w-[320px] overflow-y-auto p-[8px]"
         // Focus the panel, not its first Send button, so an extra Enter sends nothing.
         onOpenAutoFocus={(event) => {
@@ -130,7 +131,7 @@ export function ChallengeMatchNotice({
       className={cn(
         "flex items-center gap-[8px] rounded-lg border border-dashed",
         compact
-          ? "px-[8px] py-[4px] text-[13px]"
+          ? "mx-[8px] px-[8px] py-[4px] text-[13px]"
           : "bg-popover mb-3 px-[12px] py-[8px]",
       )}
     >
@@ -459,6 +460,11 @@ interface ChallengePanelProps {
   opponent: ChallengeOpponent;
   /** Announces the match there when it starts. */
   conversationId?: string | null;
+}
+
+/** Where a challenge shortcut is offered: the public conversation that announces its match, if any. */
+export interface ChallengeFrom {
+  conversationId: string | null;
 }
 
 /** The player a challenge goes to. */
