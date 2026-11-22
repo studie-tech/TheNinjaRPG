@@ -324,7 +324,7 @@ const PassControl = ({
         )}
       </Button>
       <span id={confirmId} className="sr-only" role="status">
-        {armed ? "Tap again within 3 seconds to end the round." : ""}
+        {armed ? `Tap again within ${ARM_SECONDS} seconds to end the round.` : ""}
       </span>
     </div>
   );

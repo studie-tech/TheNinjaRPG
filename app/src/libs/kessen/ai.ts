@@ -7,6 +7,7 @@
  * from the opponent's possible pool. Heuristics are integer milli-points, and cost is
  * counted in engine applications, never wall time, so a replay reproduces every move.
  */
+import { KESSEN_COPY_LIMITS } from "@/drizzle/constants";
 import type { KessenAbilityKind } from "@/validators/itemCard";
 import { leaderAvailable, resolveAction, signalOf } from "./abilities";
 import {
@@ -25,6 +26,7 @@ import {
   unitsOf,
 } from "./board";
 import { cardValueMilli, copyKey } from "./catalog";
+import { KESSEN_DECK_RULES } from "./deck";
 import { applyAction, viewFor, viewToState } from "./engine";
 import { createStream, type Rng, shuffleInPlace } from "./rng";
 import { ROWS, TOKEN_CARD_ID } from "./rules";
@@ -446,12 +448,6 @@ const ROUND_WIN: Record<number, number> = { 1: 30000, 2: 45000, 3: 45000 };
 const CARD_WEIGHT: Record<number, number> = { 1: 7000, 2: 9000, 3: 0 };
 const MATCH_DECIDED = 100000;
 
-const COPY_LIMIT: Record<KessenRarity, number> = {
-  COMMON: 3,
-  RARE: 2,
-  EPIC: 1,
-  LEGENDARY: 1,
-};
 /** Sampling weight per available copy: commons fill most of a real deck. */
 const RARITY_WEIGHT: Record<KessenRarity, number> = {
   COMMON: 8,
@@ -459,8 +455,6 @@ const RARITY_WEIGHT: Record<KessenRarity, number> = {
   EPIC: 2,
   LEGENDARY: 1,
 };
-const MAX_LEGENDARIES = 2;
-const MAX_INFILTRATORS = 2;
 
 const REMOVAL: readonly KessenAbilityKind[] = ["strike", "purge", "seal"];
 const CONTINUOUS: readonly KessenAbilityKind[] = [
@@ -1385,9 +1379,12 @@ const possiblePool = (s: MatchState, opponent: Seat, pool: readonly KessenCard[]
       card.kind !== "LEADER" &&
       card.variant === "STANDARD" &&
       (card.faction === faction || card.faction === "NEUTRAL") &&
-      (seen.byKey.get(copyKey(card)) ?? 0) < COPY_LIMIT[card.rarity] &&
-      !(card.rarity === "LEGENDARY" && seen.legendaries >= MAX_LEGENDARIES) &&
-      !(isInfiltrator(card) && seen.infiltrators >= MAX_INFILTRATORS),
+      (seen.byKey.get(copyKey(card)) ?? 0) < KESSEN_COPY_LIMITS[card.rarity] &&
+      !(
+        card.rarity === "LEGENDARY" &&
+        seen.legendaries >= KESSEN_DECK_RULES.maxLegendaries
+      ) &&
+      !(isInfiltrator(card) && seen.infiltrators >= KESSEN_DECK_RULES.maxInfiltrators),
   );
 };
 
@@ -1645,7 +1642,7 @@ const sampleState = (
   const seen = seenCopies(probe, opponent);
   const copies: KessenCard[] = [];
   for (const card of available) {
-    const left = COPY_LIMIT[card.rarity] - (seen.byKey.get(copyKey(card)) ?? 0);
+    const left = KESSEN_COPY_LIMITS[card.rarity] - (seen.byKey.get(copyKey(card)) ?? 0);
     for (let n = 0; n < left; n++) copies.push(card);
   }
   let legendaries = seen.legendaries;
@@ -1662,8 +1659,13 @@ const sampleState = (
         if (roll < 0) break;
       }
       const card = copies.splice(index, 1)[0] as KessenCard;
-      if (card.rarity === "LEGENDARY" && legendaries >= MAX_LEGENDARIES) continue;
-      if (isInfiltrator(card) && infiltrators >= MAX_INFILTRATORS) continue;
+      if (
+        card.rarity === "LEGENDARY" &&
+        legendaries >= KESSEN_DECK_RULES.maxLegendaries
+      )
+        continue;
+      if (isInfiltrator(card) && infiltrators >= KESSEN_DECK_RULES.maxInfiltrators)
+        continue;
       if (card.rarity === "LEGENDARY") legendaries += 1;
       if (isInfiltrator(card)) infiltrators += 1;
       return card.id;

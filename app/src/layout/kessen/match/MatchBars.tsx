@@ -5,6 +5,7 @@ import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import AvatarImage from "@/layout/Avatar";
 import Image from "@/layout/Image";
+import { LANTERNS } from "@/libs/kessen/rules";
 import type { Seat } from "@/libs/kessen/types";
 import { cn } from "@/libs/shadui";
 import { CardBack } from "../CardBack";
@@ -196,10 +197,14 @@ const DeckButton = ({
   </Button>
 );
 
-/** Lit and spent lanterns of one side (two per match). */
+/** Lit and spent lanterns of one side (`LANTERNS` per match). */
 export const Lanterns = ({ count, label }: { count: number; label: string }) => (
-  <span className="km-lanterns" role="img" aria-label={`${label}: ${count} of 2`}>
-    {[0, 1].map((index) => (
+  <span
+    className="km-lanterns"
+    role="img"
+    aria-label={`${label}: ${count} of ${LANTERNS}`}
+  >
+    {Array.from({ length: LANTERNS }, (_, index) => (
       <span
         key={index}
         className="km-lantern"
