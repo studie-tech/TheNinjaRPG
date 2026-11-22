@@ -90,6 +90,39 @@ describe("challenge panel", () => {
     expect(screen.getByRole("link", { name: "Open the arena" })).toBeTruthy();
   });
 
+  it("disables each option's button once its challenge is sent", async () => {
+    spar.mockImplementation((_input, options) =>
+      options.onSuccess({ success: true, message: "Challenge sent to Rival." }),
+    );
+    duel.mockResolvedValue({ ok: true, message: "Challenge sent to Rival." });
+    render(<ChallengePanel opponent={opponent} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send Rival a sparring challenge" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send Rival a Kessen challenge" }),
+    );
+    for (const name of ["Spar challenge sent", "Kessen duel challenge sent"]) {
+      const sent = await screen.findByRole("button", { name });
+      expect(sent.hasAttribute("disabled")).toBe(true);
+      expect(sent.textContent).toBe("Sent");
+      fireEvent.click(sent);
+    }
+    expect(spar).toHaveBeenCalledTimes(1);
+    expect(duel).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the button available after a refusal", async () => {
+    duel.mockResolvedValue({ ok: false, message: "Rival is busy." });
+    render(<ChallengePanel opponent={opponent} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Send Rival a Kessen challenge" }),
+    );
+    await screen.findByRole("alert");
+    const send = screen.getByRole("button", { name: "Send Rival a Kessen challenge" });
+    expect(send.hasAttribute("disabled")).toBe(false);
+  });
+
   it("sends a challenge from a conversation open to spectators, to announce it there", () => {
     duel.mockResolvedValue({ ok: true, message: "Challenge sent to Rival." });
     render(<ChallengePanel opponent={opponent} conversationId="tavern" />);

@@ -395,6 +395,8 @@ function ChallengeOption({
   followUp,
   children,
 }: ChallengeOptionProps) {
+  // A sent challenge stays sent: another tap would only duplicate or refuse it.
+  const isSent = !!feedback?.success;
   return (
     <section
       aria-label={title}
@@ -412,12 +414,14 @@ function ChallengeOption({
         </div>
         <Button
           className="h-[32px] shrink-0 px-[12px] text-[12px]"
-          disabled={disabled || isSending}
-          aria-label={sendLabel}
+          disabled={disabled || isSending || isSent}
+          aria-label={isSent ? `${title} challenge sent` : sendLabel}
           onClick={onSend}
         >
           {isSending ? (
             <Loader2 className="h-[14px] w-[14px] animate-spin" aria-hidden />
+          ) : isSent ? (
+            "Sent"
           ) : (
             "Send"
           )}
