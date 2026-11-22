@@ -73,13 +73,13 @@ describe("Diamond bloodline memory", () => {
 });
 
 describe("Diamond swap access and restore target", () => {
-  it("follows the effective tier, so staff never get Diamond swaps", () => {
+  it("grants staff Diamond swaps through their effective tier", () => {
     expect(
       hasDiamondBloodlineSwaps({ federalStatus: "DIAMOND", staffAccount: false }),
     ).toBe(true);
     expect(
-      hasDiamondBloodlineSwaps({ federalStatus: "DIAMOND", staffAccount: true }),
-    ).toBe(false);
+      hasDiamondBloodlineSwaps({ federalStatus: "NONE", staffAccount: true }),
+    ).toBe(true);
     expect(
       hasDiamondBloodlineSwaps({ federalStatus: "GOLD", staffAccount: false }),
     ).toBe(false);

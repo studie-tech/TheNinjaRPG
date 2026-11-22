@@ -2,7 +2,7 @@
  * Database access for bloodline; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { and, eq, gt, gte, isNotNull } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull, or } from "drizzle-orm";
 import { alias, type MySqlUpdateSetSource } from "drizzle-orm/mysql-core";
 import type { z } from "zod";
 import type {
@@ -747,7 +747,7 @@ export const updateUserDataForUpdateBloodline = (
 
 /**
  * Columns and guards a Diamond swap writes with its bloodline change: the player must still
- * be DIAMOND, and the bloodline to restore is remembered when asked.
+ * have Diamond benefits, and the bloodline to restore is remembered when asked.
  */
 export const diamondSwapUserUpdate = (info: {
   user: { diamondBloodlineActive: boolean; bloodlineId: string | null };
@@ -758,7 +758,7 @@ export const diamondSwapUserUpdate = (info: {
     ...(info.rememberCurrent ? { preDiamondBloodlineId: info.user.bloodlineId } : {}),
   },
   where: and(
-    eq(userData.federalStatus, "DIAMOND"),
+    or(eq(userData.federalStatus, "DIAMOND"), eq(userData.staffAccount, true)),
     // The remember decision was made from this flag; a concurrent change must re-read it.
     eq(userData.diamondBloodlineActive, info.user.diamondBloodlineActive),
   ) as SQL,
@@ -857,6 +857,7 @@ export const lapsedDiamondGuard = () =>
   and(
     eq(userData.diamondBloodlineActive, true),
     ne(userData.federalStatus, "DIAMOND"),
+    eq(userData.staffAccount, false),
     sql`NOT ${pendingDiamondRenewal()}`,
   ) as SQL;
 

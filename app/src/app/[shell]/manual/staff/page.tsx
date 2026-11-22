@@ -365,7 +365,7 @@ export default function Staff() {
                 from the S-ranks not currently owned. This is based of admin evaluation
                 of actual work + contribution done by the member.
               </li>
-              <li>Gold federal support</li>
+              <li>Diamond federal support</li>
               <li>Free bloodline reskins</li>
               <li>Free jutsu swaps</li>
             </ul>

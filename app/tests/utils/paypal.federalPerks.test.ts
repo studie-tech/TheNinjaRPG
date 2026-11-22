@@ -33,8 +33,8 @@ describe("federal tier perks", () => {
     expect(TIERS.map((tier) => fedItemLoadouts(member(tier)))).toEqual([2, 3, 4, 5, 6]);
     expect(fedJutsuLoadouts()).toBe(2);
     expect(fedItemLoadouts()).toBe(2);
-    expect(fedJutsuLoadouts(member("NONE", true))).toBe(5);
-    expect(fedItemLoadouts(member("NONE", true))).toBe(5);
+    expect(fedJutsuLoadouts(member("NONE", true))).toBe(6);
+    expect(fedItemLoadouts(member("NONE", true))).toBe(6);
   });
 
   it("prices each paid tier in reputation and rejects the free tier", () => {
@@ -66,8 +66,8 @@ describe("federal tier perks", () => {
     expect(TIERS.map((tier) => getQueueWaitingSlots(member(tier)))).toEqual([
       1, 2, 3, 4, 5,
     ]);
-    // Staff keep Gold's allowances rather than Diamond's.
-    expect(getQueueWaitingSlots(member("NONE", true))).toBe(4);
+    // Staff receive Diamond allowances.
+    expect(getQueueWaitingSlots(member("NONE", true))).toBe(5);
   });
 
   it("prices only upward tier upgrades", () => {
