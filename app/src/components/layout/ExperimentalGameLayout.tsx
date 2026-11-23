@@ -1,6 +1,11 @@
 "use client";
 
-import { Compass, Map as MapIcon, Menu, MessageCircle } from "lucide-react";
+import {
+  Map as MapIcon,
+  MessageCircle,
+  PanelLeftOpen,
+  PanelRightOpen,
+} from "lucide-react";
 import { Suspense } from "react";
 import {
   Sheet,
@@ -73,7 +78,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
                 aria-label="Open player menu"
                 data-experimental-travel-link={isMapPage || undefined}
               >
-                <Menu aria-hidden="true" />
+                <PanelLeftOpen aria-hidden="true" />
                 <span className="sr-only">Player</span>
               </SheetTrigger>
               <SheetContent
@@ -110,7 +115,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
                 aria-label="Open game menu"
                 id="tutorial-gameBtn"
               >
-                <Compass aria-hidden="true" />
+                <PanelRightOpen aria-hidden="true" />
                 <span className="sr-only">Game menu</span>
               </SheetTrigger>
               <SheetContent

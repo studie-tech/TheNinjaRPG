@@ -277,7 +277,10 @@ describe("game settings categories", () => {
     vi.spyOn(clerk, "useUser").mockReturnValue({ isSignedIn: false } as never);
     vi.spyOn(navigation, "useRouter").mockReturnValue({ refresh: vi.fn() } as never);
     Object.assign(vi.spyOn(client, "api" as never), {
-      profile: { updatePreferences: { useMutation: () => ({ mutate: vi.fn() }) } },
+      profile: {
+        getUser: { useQuery: () => ({ data: undefined }) },
+        updatePreferences: { useMutation: () => ({ mutate: vi.fn() }) },
+      },
     });
     vi.spyOn(iframeMute, "useIframeMute").mockReturnValue({
       isIframesMuted: false,

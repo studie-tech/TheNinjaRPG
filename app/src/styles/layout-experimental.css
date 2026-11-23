@@ -48,9 +48,6 @@
 .experimental-drawer {
   overflow-y: auto;
 }
-.experimental-game [data-sidebar-title] {
-  color: var(--theme-text);
-}
 /* Equal edge slots keep the map navigation centered between the mobile menu buttons. */
 .experimental-header > [data-content-box-actions],
 .experimental-travel > [data-content-box] > [data-content-box-header] > [data-content-box-actions] {
