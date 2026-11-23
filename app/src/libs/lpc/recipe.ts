@@ -188,6 +188,11 @@ export const importLpcRecipe = (
         );
       if (!base)
         throw new Error(`${entry.design.id} has no default artwork for ${style}.`);
+      for (const [material, selectedColor] of entry.colors)
+        if (!base.some((sheet) => sheet.material === material))
+          warnings.push(
+            `${entry.design.id}: ${material} colour ${selectedColor} is unavailable on ${style}; using the saved palette.`,
+          );
       const components = [...new Set(base.map((sheet) => sheet.component))];
       for (const [index, sheet] of base.entries()) {
         const selectedColor = sheet.material && entry.colors.get(sheet.material);

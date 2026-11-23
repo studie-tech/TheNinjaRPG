@@ -178,6 +178,41 @@ it("composes upstream recipes with exact definition IDs, material colours, repla
   expect(lpcConfigValidator.safeParse(result.config).success).toBe(true);
 });
 
+it("warns for requested material channels absent from the saved hair-tied sheets and retains their artwork", () => {
+  const saved = importLpcRecipe(
+    JSON.stringify({
+      version: 2,
+      bodyType: "male",
+      selections: {
+        hair: { itemId: "hair_long_tied", subId: 0, recolor: "hair.ulpc.black" },
+      },
+    }),
+    lpcAssets,
+    { category: "equipment" },
+  );
+  for (const tie of ["red", "blue"]) {
+    const result = importLpcRecipe(
+      JSON.stringify({
+        version: 2,
+        bodyType: "male",
+        selections: {
+          hair: { itemId: "hair_long_tied", subId: 0, recolor: "hair.ulpc.black" },
+          tie: { itemId: "hair_long_tied", subId: 1, recolor: `cloth.ulpc.${tie}` },
+        },
+      }),
+      lpcAssets,
+      { category: "equipment" },
+    );
+    expect(result.warnings).toEqual(
+      ["male", "female"].map(
+        (body) =>
+          `hair-tied: cloth colour ${tie} is unavailable on ${body}; using the saved palette.`,
+      ),
+    );
+    expect(result.config).toEqual(saved.config);
+  }
+});
+
 it("imports generator URL selections and refuses unsupported bodies and arbitrary hosts", () => {
   const designs = [{ id: "coat", hidden: false, lpcConfig: layeredDesign() }];
   const url =
