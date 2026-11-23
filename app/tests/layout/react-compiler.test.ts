@@ -75,7 +75,7 @@ const targets = [
   ["layout/items/SlotPicker.tsx", ["SlotPicker"]],
   ["layout/items/ItemsToolbar.tsx", ["ItemsToolbar"]],
   ["layout/travel/StealthControls.tsx", ["StealthControls"]],
-  ["screens/travel/TravelView.tsx", ["TravelView"]],
+  ["screens/travel/TravelView.tsx", ["TravelView", "TravelMapControls"]],
   ["screens/bank/BankScreen.tsx", ["BankScreen"]],
   ["screens/itemshop/ItemShopScreen.tsx", ["ItemShopScreen"]],
   ["app/[shell]/profile/experience/page.tsx", ["AssignExperience"]],

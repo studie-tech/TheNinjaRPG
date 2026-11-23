@@ -14,6 +14,8 @@ import { hasInAppPreviousEntry } from "@/utils/routing";
 export interface ContentBoxProps {
   children: React.ReactNode;
   title?: string;
+  /** Keep the heading accessible without occupying space in the header. */
+  hideTitle?: boolean;
   defaultBackHref?: string;
   subtitle?: string | React.ReactNode;
   topRightContent?: React.ReactNode;
@@ -110,7 +112,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
           className="flex min-w-0 flex-row items-center gap-2"
         >
           {props.title && (
-            <div ref={titleRef} className="min-w-0">
+            <div ref={titleRef} className={props.hideTitle ? "sr-only" : "min-w-0"}>
               {props.initialBreak || props.alreadyHasH1 ? (
                 <h2
                   className="truncate font-bold text-2xl text-background-foreground"

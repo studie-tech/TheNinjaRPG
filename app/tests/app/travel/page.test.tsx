@@ -241,18 +241,31 @@ it("updates the Travel destination when the saved automatic-wake preference chan
   ).toBe("/home");
 });
 
-it("keeps the Sector and Global tabs in the header while the tutorial runs", () => {
-  const tabs = () => document.querySelector("[data-header-start]")?.textContent;
-  const playing = render(<TravelPage />);
-  expect(tabs()).toContain("Sector");
-  expect(tabs()).toContain("Global");
-  playing.unmount();
-  actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
-  userRef.current = actor;
-  render(<TravelPage />);
-  expect(tabs()).toContain("Sector");
-  expect(tabs()).toContain("Global");
-});
+it.each([false, true])(
+  "keeps Sector and Global tabs visible during the tutorial (immersive=%s)",
+  (immersive) => {
+    actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
+    userRef.current = actor;
+    const view = render(<TravelScreen immersive={immersive} />);
+    expect(view.getByRole("button", { name: "Sector" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Global" })).toBeTruthy();
+    expect(ContentBox.default).toHaveBeenLastCalledWith(
+      expect.objectContaining(
+        immersive
+          ? {
+              topRightItems: expect.arrayContaining([
+                expect.objectContaining({ key: "tabs", priority: 0 }),
+              ]),
+            }
+          : {
+              headerStartContent: expect.anything(),
+              collapsedActionsLabel: "Map controls",
+            },
+      ),
+      undefined,
+    );
+  },
+);
 
 it("keeps Quick Travel disabled for the current sector", async () => {
   actor.status = "ASLEEP";
@@ -613,6 +626,18 @@ it("renders host navigation alongside travel tools in the immersive header", () 
     />,
   );
   expect(view.getByRole("button", { name: "Host menu" })).toBeTruthy();
+  fireEvent.click(view.getByRole("button", { name: "Map controls" }));
   expect(view.getByRole("button", { name: "Quick Travel" })).toBeTruthy();
   expect(view.queryByRole("button", { name: "Expand world" })).toBeNull();
 });
+
+it.each([false, true])(
+  "hides the Travel heading only when immersive=%s",
+  (immersive) => {
+    render(<TravelScreen immersive={immersive} />);
+    expect(ContentBox.default).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: "Travel", hideTitle: immersive }),
+      undefined,
+    );
+  },
+);

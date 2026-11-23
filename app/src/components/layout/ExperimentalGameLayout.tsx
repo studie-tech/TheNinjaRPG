@@ -44,7 +44,6 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
     rightSideBarOpen,
     rightSideBarRef,
     shownNotifications,
-    signedInIcons,
     userData,
     variant,
   } = props;
@@ -56,6 +55,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
   const headerItems: HeaderActionItem[] = [
     {
       key: "player-menu",
+      pinned: "start",
       node: (
         <Sheet open={leftSideBarOpen} onOpenChange={onLeftSideBarOpenChange}>
           <SheetTrigger
@@ -88,6 +88,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
     },
     {
       key: "game-menu",
+      pinned: "end",
       node: (
         <Sheet
           open={rightSideBarOpen}
@@ -154,11 +155,24 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
       ),
       priority: 2,
     },
-    {
-      key: "account",
-      node: <div className="hidden sm:flex">{signedInIcons}</div>,
-      priority: 8,
-    },
+    ...(!isMapPage
+      ? [
+          {
+            key: "travel-home",
+            node: (
+              <Link
+                href="/travel"
+                data-experimental-travel-link
+                className="experimental-tool"
+                aria-label="Travel"
+              >
+                <MapIcon aria-hidden="true" />
+              </Link>
+            ),
+            priority: 2,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -171,15 +185,6 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
       </a>
       {!isMapPage && (
         <header className="experimental-header">
-          <Link
-            href="/travel"
-            data-experimental-travel-link
-            className="experimental-tool"
-            aria-current={isMapPage ? "page" : undefined}
-          >
-            <MapIcon aria-hidden="true" />
-            <span>Travel</span>
-          </Link>
           <ContentBoxPriorityActions items={headerItems} label="Game" />
         </header>
       )}
