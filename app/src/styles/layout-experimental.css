@@ -262,6 +262,7 @@ html[data-game-layout="experimental"] {
 
 /* Give the character summary the full header width while retaining a 44px row. */
 .experimental-player-status {
+  container-type: inline-size;
   display: grid;
   grid-template-columns: 36px minmax(60px, 0.8fr) minmax(80px, 1.2fr) minmax(
       72px,
@@ -398,10 +399,11 @@ html[data-game-layout="experimental"] {
 }
 @media (min-width: 768px) {
   .experimental-player-status {
-    grid-template-columns: 40px clamp(90px, 14vw, 180px) minmax(180px, 1.2fr) minmax(
-        220px,
-        1.5fr
-      );
+    grid-template-columns: 40px clamp(90px, 12vw, 160px) clamp(
+        180px,
+        25vw,
+        340px
+      ) minmax(0, 1fr);
     gap: 2px 1rem;
   }
   .player-status-avatar {
@@ -436,8 +438,8 @@ html[data-game-layout="experimental"] {
     grid-column: 4;
     grid-row: 1;
     flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 0 0.65rem;
+    justify-content: start;
+    gap: 0 1rem;
     align-items: center;
     max-height: 22px;
     overflow: auto;
@@ -514,4 +516,85 @@ html[data-game-layout="experimental"] {
   left: 50%;
   max-width: calc(100% - 136px);
   transform: translateX(-50%);
+}
+
+/* Extra room adds meaning instead of stretching the meters and shortcut gaps. */
+.experimental-player-status [data-player-summary-label],
+.experimental-player-status [data-player-summary-full-value],
+.player-status-meter-name,
+.player-status-rank {
+  display: none;
+}
+.player-status-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+@container (min-width: 1000px) {
+  .experimental-player-status [data-player-summary-label] {
+    display: inline;
+    margin-right: 0.35rem;
+  }
+  .player-status-meter-name {
+    display: inline;
+  }
+  .player-status-meter-short {
+    display: none;
+  }
+  .player-status-meter {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+  }
+  .player-status-name {
+    line-height: 1.1;
+  }
+  .player-status-standing {
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.1;
+  }
+  .player-status-standing [data-player-summary-label] {
+    opacity: 0.7;
+  }
+  .player-status-rank {
+    display: block;
+    font-size: 8px;
+    line-height: 1;
+    opacity: 0.7;
+  }
+  .player-status-activities {
+    gap: 0 1.25rem;
+  }
+  .player-status-timers {
+    gap: 1.25rem;
+  }
+}
+
+/* Preserve the clock when a long training or crafting name needs to shorten. */
+.player-status-timers > button {
+  flex-shrink: 1;
+  min-width: 0;
+}
+.player-status-timers > button > div {
+  min-width: 0;
+}
+.player-status-timers svg,
+.player-status-timers a {
+  flex-shrink: 0;
+}
+.player-status-timers [data-player-summary-label] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@container (min-width: 1200px) {
+  .player-status-timers [data-player-summary-label] {
+    max-width: 24ch;
+  }
+  .experimental-player-status [data-player-summary-full-value] {
+    display: inline;
+  }
+  .experimental-player-status [data-player-summary-short-value] {
+    display: none;
+  }
 }

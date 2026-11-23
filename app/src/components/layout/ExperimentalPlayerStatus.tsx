@@ -57,14 +57,20 @@ export function ExperimentalPlayerStatus({
         >
           {identity.username}
         </Link>
+        <span className="player-status-rank">{identity.rank}</span>
         <div className="player-status-standing">
-          <StatusLink status={identity.status} hasLocation={hasLocation} />
+          <span className="player-status-state">
+            <span data-player-summary-label>Status:</span>
+            <StatusLink status={identity.status} hasLocation={hasLocation} />
+          </span>
           {identity.village && (
             <Link
               href="/village"
               className="player-status-village"
+              aria-label={identity.village}
               title={identity.village}
             >
+              <span data-player-summary-label>Village:</span>
               {identity.village}
             </Link>
           )}

@@ -21,7 +21,7 @@ import * as pools from "@/hooks/useEffectivePools";
 import * as gameMenu from "@/hooks/useGameMenu";
 import * as Avatar from "@/layout/Avatar";
 import * as Image from "@/layout/Image";
-import MenuBoxProfile from "@/layout/MenuBoxProfile";
+import MenuBoxProfile, { ProfileTimers } from "@/layout/MenuBoxProfile";
 import * as PoolStatusBars from "@/layout/PoolStatusBars";
 import * as userContext from "@/utils/UserContext";
 
@@ -221,6 +221,29 @@ describe("sidebar status rows", () => {
         "mr-2 h-6 w-6",
       );
     }
+  });
+
+  it("provides each compact timer's description beside its countdown", () => {
+    const view = render(<ProfileTimers compact />);
+    const descriptions = Array.from(
+      view.container.querySelectorAll("[data-player-summary-label]"),
+      (label) => label.textContent,
+    );
+    expect(descriptions).toEqual([
+      "Mastery training",
+      "Training Fireball to level 3",
+      "Stealth training",
+      "Crafting Kunai",
+      "Imbuing Flame onto Sword",
+    ]);
+    expect(view.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
+      "/traininggrounds",
+      "/traininggrounds",
+      "/traininggrounds",
+      "/occupation",
+      "/occupation",
+    ]);
+    expect(view.container.textContent).toContain("[30:00]");
   });
 
   it("hides quota rows once their daily limit is reached", () => {

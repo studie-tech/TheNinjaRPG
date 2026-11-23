@@ -179,6 +179,7 @@ export const ProfilePools: React.FC<{ compact?: boolean; onInspect?: () => void 
       />
       <StatusBar
         title="EP"
+        resourceName="Energy"
         compact={compact}
         onInspect={onInspect}
         tooltip="Energy continues recovering during combat and is credited when you leave."
@@ -228,6 +229,7 @@ export const ProfileLevel: React.FC<{ compact?: boolean; onInspect?: () => void 
     <>
       <StatusBar
         title="XP"
+        resourceName="Experience"
         compact={compact}
         onInspect={onInspect}
         tooltip={
@@ -389,11 +391,19 @@ export const ProfileMoney: React.FC<{ hasLocation: boolean; compact?: boolean }>
           >
             <div className="flex flex-row items-center">
               <p className="mr-3 text-xl">両</p>
-              {money === undefined
-                ? "??"
-                : compact
-                  ? compactNumberFormat.format(money)
-                  : money.toLocaleString()}
+              {compact ? (
+                <>
+                  <span data-player-summary-label>Money</span>
+                  <span data-player-summary-short-value>
+                    {money === undefined ? "??" : compactNumberFormat.format(money)}
+                  </span>
+                  <span data-player-summary-full-value>
+                    {money?.toLocaleString() ?? "??"}
+                  </span>
+                </>
+              ) : (
+                (money?.toLocaleString() ?? "??")
+              )}
             </div>
           </Link>
         </TooltipTrigger>
@@ -460,6 +470,7 @@ export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false
                 <Utensils className="mr-2 h-6 w-6" />
                 <span>
                   {!compact && <>Meal: </>}
+                  {compact && <span data-player-summary-label>Meal</span>}
                   <Countdown
                     format={compact ? formatBracketedClock : undefined}
                     targetDate={buff.expiresAt}
@@ -484,6 +495,7 @@ export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false
             <TooltipTrigger className="w-full">
               <div className="flex flex-row items-center">
                 <ShieldCheck className="mr-2 h-6 w-6" />
+                {compact && <span data-player-summary-label>PvP immunity</span>}
                 <Countdown
                   targetDate={userData.immunityUntil}
                   timeDiff={timeDiff}
@@ -502,6 +514,9 @@ export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false
             <TooltipTrigger className="w-full">
               <div className="flex flex-row items-center text-orange-500">
                 <ShieldAlert className="mr-2 h-6 w-6" />
+                {compact && (
+                  <span data-player-summary-label>Bracket immunity lifted</span>
+                )}
                 <Countdown
                   targetDate={userData.bracketImmunityLiftedUntil}
                   timeDiff={timeDiff}
@@ -520,6 +535,7 @@ export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false
             <TooltipTrigger className="w-full">
               <div className="flex flex-row items-center text-red-500">
                 <Swords className="mr-2 h-6 w-6" />
+                {compact && <span data-player-summary-label>War participant</span>}
                 <Countdown
                   targetDate={userData.warParticipantUntil}
                   timeDiff={timeDiff}
@@ -538,6 +554,7 @@ export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false
           const Icon = kind === "ELEMENT" ? Flame : Medal;
           return endsAt ? (
             <SidebarTimerRow
+              showSummaryLabel={compact}
               key={kind}
               icon={<Icon className="mr-2 h-6 w-6" />}
               href="/traininggrounds"
@@ -553,6 +570,7 @@ export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false
         })}
       {trainingJutsu && (
         <SidebarTimerRow
+          showSummaryLabel={compact}
           icon={<Atom className="mr-2 h-6 w-6" />}
           href="/traininggrounds"
           tooltip={
@@ -576,6 +594,7 @@ export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false
       )}
       {userData?.covertTrainingType && covertTrainingFinishAt && (
         <SidebarTimerRow
+          showSummaryLabel={compact}
           icon={
             userData.covertTrainingType === "stealth" ? (
               <EyeOff className="mr-2 h-6 w-6" />
@@ -602,6 +621,7 @@ export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false
       )}
       {activeItemCraftingTimer && (
         <SidebarTimerRow
+          showSummaryLabel={compact}
           icon={<Hammer className="mr-2 h-6 w-6" />}
           href="/occupation"
           tooltip={<>Crafting {activeItemCraftingTimer.itemName}</>}
@@ -616,6 +636,7 @@ export const ProfileTimers: React.FC<{ compact?: boolean }> = ({ compact = false
       )}
       {activeImbuementTimer && (
         <SidebarTimerRow
+          showSummaryLabel={compact}
           icon={<Gem className="mr-2 h-6 w-6" />}
           href="/occupation"
           tooltip={
@@ -648,29 +669,33 @@ export const ProfileDailyActivities: React.FC<{ compact?: boolean }> = ({
         [
           {
             icon: LayoutList,
+            name: "Missions",
             done: userData.dailyMissions,
             limit: MISSIONS_PER_DAY,
             tooltip: "Daily missions to complete",
           },
           {
             icon: ClipboardList,
+            name: "Errands",
             done: userData.dailyErrands ?? 0,
             limit: ERRANDS_PER_DAY,
             tooltip: "Daily errands to complete",
           },
           {
             icon: Stethoscope,
+            name: "Medical",
             done: userData.dailyMedicalMissions ?? 0,
             limit: MEDICAL_MISSIONS_PER_DAY,
             tooltip: "Daily medical missions to complete",
           },
           {
             icon: Swords,
+            name: "PvP",
             done: userData.dailyPvpMissions ?? 0,
             limit: PVP_MISSIONS_PER_DAY,
             tooltip: "Daily PvP missions to complete",
           },
-        ].map(({ icon: Icon, done, limit, tooltip }) =>
+        ].map(({ icon: Icon, done, limit, tooltip, name }) =>
           done < limit ? (
             <SidebarLinkRow
               key={tooltip}
@@ -679,6 +704,7 @@ export const ProfileDailyActivities: React.FC<{ compact?: boolean }> = ({
               label={`${tooltip}: ${done} / ${limit}`}
             >
               <Icon className="mr-2 h-6 w-6" />{" "}
+              {compact && <span data-player-summary-label>{name}</span>}
               {compact ? `${done}/${limit}` : `${done} / ${limit}`}
             </SidebarLinkRow>
           ) : null,
@@ -699,11 +725,21 @@ export const ProfileReputation: React.FC<{ compact?: boolean }> = ({
       label={`Reputation points: ${reputationPoints ?? "Loading"}`}
     >
       <Star className="mr-2 h-6 w-6" />{" "}
-      {reputationPoints === undefined
-        ? "??"
-        : compact
-          ? compactNumberFormat.format(reputationPoints)
-          : reputationPoints}
+      {compact ? (
+        <>
+          <span data-player-summary-label>Reputation</span>
+          <span data-player-summary-short-value>
+            {reputationPoints === undefined
+              ? "??"
+              : compactNumberFormat.format(reputationPoints)}
+          </span>
+          <span data-player-summary-full-value>
+            {reputationPoints?.toLocaleString() ?? "??"}
+          </span>
+        </>
+      ) : (
+        (reputationPoints ?? "??")
+      )}
     </SidebarLinkRow>
   );
 };
@@ -713,13 +749,15 @@ const SidebarTimerRow: React.FC<{
   icon: React.ReactNode;
   href: string;
   tooltip: React.ReactNode;
+  showSummaryLabel?: boolean;
   children: React.ReactNode;
-}> = ({ icon, href, tooltip, children }) => (
+}> = ({ icon, href, tooltip, children, showSummaryLabel = false }) => (
   <TooltipProvider delayDuration={50}>
     <Tooltip>
       <TooltipTrigger className="w-full">
         <div className="flex flex-row items-center hover:text-orange-500">
           {icon}
+          {showSummaryLabel && <span data-player-summary-label>{tooltip}</span>}
           <Link href={href}>{children}</Link>
         </div>
       </TooltipTrigger>

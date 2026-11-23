@@ -19,6 +19,7 @@ export const PoolStatusBars: React.FC<PoolStatusBarsProps> = ({
           key={remountOnChange ? `${title}-${current}-${total}` : title}
           {...barProps}
           title={title}
+          resourceName={pool}
           tooltip={pool}
           color={color}
           showText={true}

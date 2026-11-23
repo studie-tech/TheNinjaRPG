@@ -13,6 +13,8 @@ import type { RegenerationPeriod, TimedBuff } from "@/libs/timedBuffs";
 
 export interface StatusBarProps {
   title: string;
+  /** Full resource name revealed by spacious character summaries. */
+  resourceName?: string;
   regen?: number;
   lastRegenAt?: Date | null;
   tooltip?: string;
@@ -140,7 +142,12 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
           >
             {compact && (
               <span className="player-status-meter-label">
-                <span>{title}</span>
+                <span className="player-status-meter-title">
+                  <span className="player-status-meter-short">{title}</span>
+                  <span className="player-status-meter-name">
+                    {props.resourceName ?? title}
+                  </span>
+                </span>
                 <span className="player-status-meter-value">{valueLabel}</span>
               </span>
             )}
