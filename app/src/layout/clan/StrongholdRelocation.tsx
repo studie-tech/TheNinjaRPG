@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
+import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
 import { useMap } from "@/hooks/map";
 import { useStrongholdRelocation } from "@/hooks/useStrongholdRelocation";
 import Loader from "@/layout/Loader";
@@ -21,7 +22,10 @@ export const StrongholdRelocation = ({
   const { data: villages } = api.village.getAll.useQuery();
   const [selectedSector, setSelectedSector] = useState<number | null>(null);
   const relocation = useStrongholdRelocation(clanId);
-  const destination = selectedSector !== null && selectedSector !== homeSector;
+  const destination =
+    Number.isSafeInteger(selectedSector) &&
+    (selectedSector ?? -1) >= 0 &&
+    selectedSector !== homeSector;
   const error =
     relocation.error?.message ??
     (relocation.data?.success === false ? relocation.data.message : null);
@@ -35,11 +39,7 @@ export const StrongholdRelocation = ({
       }}
       proceed_label="Confirm relocation"
       isLoading={relocation.isPending}
-      proceedDisabled={
-        !destination ||
-        !Number.isSafeInteger(selectedSector) ||
-        (selectedSector ?? -1) < 0
-      }
+      proceedDisabled={!destination}
       keepOpenOnAccept
       onAccept={() => {
         if (selectedSector === null) return;
@@ -80,17 +80,14 @@ export const StrongholdRelocation = ({
         <label className="block" htmlFor="stronghold-destination">
           Destination sector
         </label>
-        <Input
+        <NumberInput
           id="stronghold-destination"
-          type="number"
           min={0}
+          max={MAP_SECTOR_ID_MAX}
           step={1}
           value={selectedSector ?? ""}
           disabled={relocation.isPending}
-          onChange={(event) => {
-            const value = event.target.value;
-            setSelectedSector(value === "" ? null : Number(value));
-          }}
+          onValueChange={setSelectedSector}
         />
         {destination && (
           <p>
