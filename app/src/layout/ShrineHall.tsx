@@ -33,7 +33,6 @@ import {
   SHRINE_BOOST_TYPES,
   SHRINE_MAX_AI_ASSIGNMENTS,
   SHRINE_MAX_LEVEL,
-  SHRINE_MAX_PER_VILLAGE,
   SHRINE_UPGRADE_COST,
   SHRINE_WEEKLY_MAINTENANCE_COST,
 } from "@/drizzle/constants";
@@ -263,11 +262,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
           label="Village Tokens"
           value={user.village?.tokens?.toLocaleString() ?? 0}
         />
-        <StatsCard
-          icon={Shield}
-          label="Active Shrines"
-          value={`${activeShrines.length}/${SHRINE_MAX_PER_VILLAGE}`}
-        />
+        <StatsCard icon={Shield} label="Active Shrines" value={activeShrines.length} />
       </div>
 
       <div className="space-y-4">

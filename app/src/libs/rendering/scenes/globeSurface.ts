@@ -49,6 +49,7 @@ export const buildGlobeSurfaceData = (
   const positions = new Float32Array(vertexTotal * 3);
   const colors = new Float32Array(vertexTotal * 3);
   const water = new Float32Array(vertexTotal);
+  const tints = new Float32Array(vertexTotal * 4);
   const indices = new Uint32Array(indexTotal);
   const vertexRanges = new Int32Array(tiles.length * 2).fill(-1);
   let vertexCursor = 0;
@@ -93,10 +94,14 @@ export const buildGlobeSurfaceData = (
         const red = ((packed >> 16) & 0xff) / 255;
         const green = ((packed >> 8) & 0xff) / 255;
         const blue = (packed & 0xff) / 255;
-        colors[offset] = tint ? red * tint.r : red;
-        colors[offset + 1] = tint ? green * tint.g : green;
-        colors[offset + 2] = tint ? blue * tint.b : blue;
-        water[base + y * stride + x] = tint ? 0 : surfaceWater(red, blue);
+        colors[offset] = red;
+        colors[offset + 1] = green;
+        colors[offset + 2] = blue;
+        water[base + y * stride + x] = surfaceWater(red, blue);
+        if (tint) {
+          const tintOffset = (base + y * stride + x) * 4;
+          tints.set([tint.r, tint.g, tint.b, 0.75], tintOffset);
+        }
       }
     }
 
@@ -120,7 +125,7 @@ export const buildGlobeSurfaceData = (
     vertexCursor += stride * stride;
   }
 
-  return { positions, colors, water, indices, vertexRanges };
+  return { positions, colors, water, tints, indices, vertexRanges };
 };
 
 /**

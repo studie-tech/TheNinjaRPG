@@ -4728,6 +4728,7 @@ export const village = mysqlTable(
       .default({})
       .notNull(),
     wasDowngraded: boolean("wasDowngraded").default(false).notNull(),
+    strongholdRelocatedAt: datetime("strongholdRelocatedAt", { mode: "date", fsp: 3 }),
     kageSchedule:
       json("kageSchedule").$type<import("@/validators/kage").KageDefenseSchedule>(),
     kageScheduleVersion: int("kageScheduleVersion").default(0).notNull(),

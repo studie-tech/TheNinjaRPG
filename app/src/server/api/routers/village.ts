@@ -133,7 +133,15 @@ export const villageRouter = createTRPCRouter({
               war.warAllies.some((ally) => ally.villageId === user.villageId),
           )
         : sectorWars;
-      return { sectors, colors, wars: returnedWars };
+      // Home sectors are owned even when no captured shrine row exists there.
+      const captured = new Set(sectors.map((entry) => entry.sector));
+      const homes = colors
+        .filter((home) => !captured.has(home.sector))
+        .map((home) => ({
+          sector: home.sector,
+          villageId: home.id,
+        }));
+      return { sectors: [...sectors, ...homes], colors, wars: returnedWars };
     }),
   // Buying food in ramen shop
   buyFood: protectedProcedure

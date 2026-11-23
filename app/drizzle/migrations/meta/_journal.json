@@ -1338,6 +1338,13 @@
       "when": 1795372294832,
       "tag": "0191_smart_micromacro",
       "breakpoints": false
+    },
+    {
+      "idx": 192,
+      "version": "5",
+      "when": 1795409080227,
+      "tag": "0192_green_blue_shield",
+      "breakpoints": false
     }
   ]
 }

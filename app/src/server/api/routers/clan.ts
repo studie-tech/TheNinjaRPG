@@ -50,6 +50,7 @@ import { isElderCandidateWithoutCutoff } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
 import { hasEnergyQueue } from "@/libs/queue";
 import { hasRequiredRank } from "@/libs/rank";
+import { isVillageStructurePlacementAllowed } from "@/libs/sector-map/village-walls";
 import { findHistoricalAvatarByImage } from "@/queries/avatar";
 import {
   deleteBattleQueueMemberById,
@@ -92,6 +93,9 @@ import {
   listClanForGetAllNames,
   listClanForNominateElder,
   listClanForSearchClans,
+  listRoutesForStrongholdRelocation,
+  listStructuresForStrongholdRelocation,
+  relocateStronghold,
   setClanVillageKage,
   updateClanForClearLeadership,
   updateClanForConvertPointsToRyo,
@@ -120,6 +124,7 @@ import {
 import { fetchAllGameSettings, fetchUser, findUserById } from "@/queries/profile";
 import { findMembershipUserCache } from "@/queries/socialUserCache";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
+import { closeTradeRoutes } from "@/queries/tradeRoute";
 import { fetchStructures, fetchVillage, fetchVillages } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
 import { updateNindo } from "@/routers/profile";
@@ -143,7 +148,10 @@ import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlE
 import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { membershipUpdate } from "@/server/utils/push/messages";
-import { isSectorAvailableForHideout } from "@/server/utils/sectorMap";
+import {
+  fetchPublishedSectorMaps,
+  isSectorAvailableForHideout,
+} from "@/server/utils/sectorMap";
 import { canEditClans } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromDate } from "@/utils/time";
@@ -235,6 +243,97 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: "Hideout purchased successfully",
+      };
+    }),
+  relocateStronghold: protectedProcedure
+    .meta({ mcp: { description: "Use a Stronghold's one-time free relocation" } })
+    .input(z.object({ clanId: z.string(), sector: z.int().nonnegative() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [user, faction, maps, structures, routes] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchClan(ctx.drizzle, input.clanId),
+        fetchPublishedSectorMaps(ctx.drizzle, [input.sector], { revalidate: true }),
+        listStructuresForStrongholdRelocation(ctx.drizzle, input.clanId),
+        listRoutesForStrongholdRelocation(ctx.drizzle, input.clanId),
+      ]);
+      if (
+        !faction ||
+        !user.isOutlaw ||
+        user.clanId !== faction.id ||
+        faction.leaderId !== user.userId
+      )
+        return errorResponse("Only the faction leader can relocate its Stronghold");
+      const home = faction.village;
+      if (home.type !== "STRONGHOLD")
+        return errorResponse("Only Strongholds can relocate");
+      if (home.strongholdRelocatedAt)
+        return errorResponse("This Stronghold has already used its relocation");
+      if (input.sector === home.sector || !isSectorAvailableForHideout(input.sector))
+        return errorResponse("Choose a different, non-reserved sector on the globe");
+      const destination = maps.get(input.sector);
+      if (!destination)
+        return errorResponse(
+          "This sector has no published map. Choose another location",
+        );
+      if (
+        structures.some(
+          (structure) =>
+            structure.hasPage !== 0 &&
+            !isVillageStructurePlacementAllowed(destination, {
+              x: structure.longitude,
+              y: structure.latitude,
+            }),
+        )
+      )
+        return errorResponse(
+          "The Stronghold's buildings do not fit in this sector. Choose another location",
+        );
+      try {
+        // The joined write moves the home shrine and settlement under the same one-use,
+        // membership, destination and war guards; unique sector keys arbitrate competing moves.
+        const relocatedAt = new Date();
+        const result = await retryOnDeadlock(() => {
+          if (routes.length === 0)
+            return relocateStronghold(
+              ctx.drizzle,
+              input,
+              ctx.userId,
+              home,
+              relocatedAt,
+              destination,
+            );
+          // A joined UPDATE evaluates the home's one-use guard after its first matching
+          // route, so it cannot close every agreement. Hold the home write and route
+          // closures together; path-guarded proposals and caravan preparations wait on it.
+          return ctx.drizzle.transaction(async (tx) => {
+            const moved = await relocateStronghold(
+              tx,
+              input,
+              ctx.userId,
+              home,
+              relocatedAt,
+              destination,
+              true,
+            );
+            if (moved.rowsAffected)
+              await closeTradeRoutes(tx, { villageId: home.id }, relocatedAt);
+            return moved;
+          });
+        });
+        if (!result.rowsAffected)
+          return errorResponse(
+            "Relocation unavailable: choose an unclaimed published sector, finish or cancel all caravans, and make sure your faction is not at war",
+          );
+      } catch (error) {
+        if (!isMysqlDuplicateKeyError(error)) throw error;
+        return errorResponse(
+          "This sector has just been claimed. Choose another location",
+        );
+      }
+      return {
+        success: true,
+        message: `Stronghold relocated to sector ${input.sector}`,
       };
     }),
   upgradeHideoutToStronghold: protectedProcedure
