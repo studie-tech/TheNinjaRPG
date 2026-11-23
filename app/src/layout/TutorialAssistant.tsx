@@ -1,6 +1,6 @@
 "use client";
 
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import {
   ArrowRight,
   Gift,
@@ -36,8 +36,12 @@ import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useRetryQuestBattle } from "@/hooks/quest";
 import { TUTORIAL_REMATCH_TITLE, useTutorialStep } from "@/hooks/tutorial";
 import { characterStorageKey } from "@/hooks/useActivityDock";
-import { arrivalScenePlayingAtom, mapSpokenStepAtom } from "@/hooks/useArrivalScene";
 import { useStoryGuidance } from "@/hooks/useStoryGuidance";
+import {
+  spokenStepAtom,
+  storyScenePlayingAtom,
+  villageChoiceHiddenAtom,
+} from "@/hooks/useStoryScene";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
@@ -73,13 +77,12 @@ import {
   canRetryQuestBattle,
   dialogChoiceContentId,
   getActiveObjective,
-  getRewardClaimLabel,
+  getQuestClaim,
   isQuestComplete,
 } from "@/libs/objectives";
 import { levelUpBlockMessage } from "@/libs/profile";
 import { sceneCharactersAtom } from "@/libs/questScene";
 import { getEnergyQueue } from "@/libs/queue";
-import { collapseRewards } from "@/libs/rewards";
 import { cn } from "@/libs/shadui";
 import { getChapterForQuest, getNavigationLevel } from "@/libs/storyGuidance";
 import {
@@ -111,7 +114,6 @@ import { usePublicPathname } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserDataSelector } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
-import { rewardPayloads } from "@/validators/rewardPackages";
 
 /** Marks the assistant panel so the highlight logic can measure what it covers. */
 const TUTORIAL_ASSISTANT_PANEL_ID = "tutorial-assistant-panel";
@@ -352,11 +354,19 @@ const PlayerTutorialAssistant: React.FC<
   }, [sidebarBreakpoint]);
 
   // The village choice opens as a full page; the player may close it to look around.
-  const [isVillageChooserHidden, setIsVillageChooserHidden] = useState(false);
-  // The control that opened the chooser is gone once it hides, so focus its reopen button.
+  const [isVillageChooserHidden, setIsVillageChooserHidden] = useAtom(
+    villageChoiceHiddenAtom,
+  );
+  useEffect(() => () => setIsVillageChooserHidden(false), [setIsVillageChooserHidden]);
+  // The control that opened the chooser is gone once it hides, so focus what reopens it:
+  // the lesson's button, or the proctor's on the map.
   const reopenVillageChooserRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (isVillageChooserHidden) reopenVillageChooserRef.current?.focus();
+    if (!isVillageChooserHidden) return;
+    const reopen =
+      reopenVillageChooserRef.current ??
+      document.querySelector<HTMLElement>("#tutorial-story-answers button");
+    reopen?.focus({ preventScroll: true });
   }, [isVillageChooserHidden]);
   // Returning players are offered Express Trials until they reach the exam or decline.
   const [hasDeclinedExpress, setHasDeclinedExpress] = useLocalStorage(
@@ -819,7 +829,10 @@ const PlayerTutorialAssistant: React.FC<
   // player has had time to read it, quote included, and then done nothing for a few
   // seconds; any tap or key press shows they are acting, and restarts a plain wait. A
   // dialog over the page has the player's attention, so the wait does not end under it.
-  const teachesInGame = !!currentStep?.teachOnPage;
+  // So does one whose answer or reward a scene on this page holds.
+  const isInStoryScene =
+    !!currentStep?.scenePage && isTutorialPageMatch(currentStep.scenePage, pathname);
+  const teachesInGame = !!currentStep?.teachOnPage || isInStoryScene;
   const isOnTheWay = !!currentStep?.wayHref;
   const readingMs = currentStep
     ? lessonReadingSeconds(
@@ -838,8 +851,8 @@ const PlayerTutorialAssistant: React.FC<
     });
   }, [lessonKey, isOnTheWay, teachesInGame, isOwnLessonShown, idleKey, readingMs]);
   const isModalDialogOpen = useIsModalDialogOpen();
-  const isScenePlaying = useAtomValue(arrivalScenePlayingAtom);
-  const spokenStepId = useAtomValue(mapSpokenStepAtom);
+  const isScenePlaying = useAtomValue(storyScenePlayingAtom);
+  const spokenStep = useAtomValue(spokenStepAtom);
 
   // A lost lesson fight the player can start again from the lesson itself.
   const retryQuestId = (() => {
@@ -864,28 +877,20 @@ const PlayerTutorialAssistant: React.FC<
       : null;
 
   // Reward waiting to be claimed on a claim step
-  const claimable = (() => {
-    if (currentTutorialStep?.advanceOn !== "questReward" || !relatedQuest) return;
-    const quest = relatedQuest.userQuest.quest;
-    const objective = quest.content.objectives.find(
-      (entry) => entry.id === currentTutorialStep.objectiveId,
-    );
-    const goal = relatedQuest.tracker.goals.find((entry) => entry.id === objective?.id);
-    if (!objective) return;
-    const isQuestWin = objective.task === "win_quest";
-    return {
-      questId: relatedQuest.userQuest.questId,
-      // Winning collects itself; what is left to claim is the finished quest.
-      isReady: isQuestWin
-        ? isQuestComplete(quest, relatedQuest.tracker)
-        : !!goal?.done && !goal.collected,
-      objectiveText: objective.description,
-      // A won quest pays out from its Quests entry's claim, named the same here.
-      label: getRewardClaimLabel(
-        isQuestWin ? collapseRewards(rewardPayloads(quest.content.reward)) : objective,
-      ),
-    };
-  })();
+  const claim =
+    currentTutorialStep?.advanceOn === "questReward" &&
+    currentTutorialStep.objectiveId &&
+    relatedQuest
+      ? getQuestClaim(
+          relatedQuest.userQuest.quest,
+          relatedQuest.tracker,
+          toObjectiveIds(currentTutorialStep.objectiveId)[0],
+        )
+      : undefined;
+  const claimable =
+    claim && relatedQuest
+      ? { ...claim, questId: relatedQuest.userQuest.questId }
+      : undefined;
 
   // Where the related quest wants the player to go next, for a one-tap trip there
   const autoTravelHref = (() => {
@@ -1168,14 +1173,17 @@ const PlayerTutorialAssistant: React.FC<
 
   const isQuestOverlay = !!dynamicQuestStep;
   const sceneLead = isScenePlaying ? currentTutorialStep.sceneLead : undefined;
-  // A character on the map says the words; the lesson keeps its title and what to do.
-  const isSpokenOnMap = spokenStepId === currentTutorialStep.id;
+  // A character in the scene says the words; the lesson keeps its title and what to do.
+  const spokenWords =
+    spokenStep?.stepId === currentTutorialStep.id ? spokenStep.words : undefined;
   // A lesson that teaches the page's own control, or the way to its page, offers its
   // shortcut only to a stuck player, and no shortcut shows under a dialog the player has open or before the scene
   // the lesson answers has played.
   const isShortcutShown =
     !(
-      (currentTutorialStep.teachOnPage || currentTutorialStep.wayHref) &&
+      (currentTutorialStep.teachOnPage ||
+        isInStoryScene ||
+        currentTutorialStep.wayHref) &&
       idleKey !== lessonKey
     ) &&
     !isModalDialogOpen &&
@@ -1214,9 +1222,17 @@ const PlayerTutorialAssistant: React.FC<
   // The lesson's own trip, answer and claim, and its skip. Until they are offered they
   // are previewed unseen, so they arrive without moving the dock.
   // A lesson on the Quests tab marks the tab, where its answer or reward waits.
+  const hasRetry = !!retryQuestId;
+  const reopensVillageChooser =
+    !!dialogOptions && isVillageChoice && isVillageChooserHidden;
+  // A scene's answer or reward is given in the lesson itself away from the scene.
+  const isSceneElsewhere =
+    !!currentTutorialStep.scenePage && highlight?.stepId !== currentTutorialStep.id;
   const hasShortcut =
     !currentTutorialStep.questsTab &&
-    ((!!autoTravelHref && !!currentTutorialStep.autoTravelLabel) ||
+    (hasRetry ||
+      reopensVillageChooser ||
+      (!!autoTravelHref && !!currentTutorialStep.autoTravelLabel) ||
       (!!dialogOptions && !isVillageChoice) ||
       !!claimable);
   const renderShortcuts = (isPreview: boolean) => (
@@ -1244,6 +1260,29 @@ const PlayerTutorialAssistant: React.FC<
           </Button>
         </DockHighlight>
       )}
+      {retryQuestId && (
+        <Button
+          size="lg"
+          decoration="gold"
+          className="w-full"
+          disabled={isRetrying || userData?.status !== "AWAKE"}
+          onClick={() => retryBattle({ questId: retryQuestId })}
+        >
+          <RotateCcw className="mr-2 h-5 w-5" aria-hidden="true" />
+          {isRetrying ? "Retrying..." : "Retry battle"}
+        </Button>
+      )}
+      {reopensVillageChooser && (
+        <Button
+          ref={isPreview ? undefined : reopenVillageChooserRef}
+          size="lg"
+          decoration="gold"
+          className="w-full"
+          onClick={() => setIsVillageChooserHidden(false)}
+        >
+          Choose your village
+        </Button>
+      )}
       {dialogOptions && !isVillageChoice && (
         <div>
           <h3 className="mb-2 flex items-center text-base font-semibold">
@@ -1255,60 +1294,64 @@ const PlayerTutorialAssistant: React.FC<
               />
             )}
           </h3>
-          <div className="flex flex-wrap gap-2">
-            {!isCheckingRewards &&
-              dialogOptions.options.map((entry) => (
-                <Button
-                  key={entry.nextObjectiveId ?? entry.text}
-                  variant={isQuestOverlay ? "outline" : "default"}
-                  size="lg"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    checkRewards({
-                      questId: dialogOptions.questId,
-                      nextObjectiveId: dialogChoiceContentId(
-                        entry.nextObjectiveId,
-                        dialogOptions.objectiveId,
-                      ),
-                    });
-                  }}
-                  className="min-w-[120px] flex-1"
-                >
-                  {entry.text}
-                </Button>
-              ))}
-          </div>
+          <DockHighlight active={!isPreview && isSceneElsewhere}>
+            <div className="flex flex-wrap gap-2">
+              {!isCheckingRewards &&
+                dialogOptions.options.map((entry) => (
+                  <Button
+                    key={entry.nextObjectiveId ?? entry.text}
+                    variant={isQuestOverlay ? "outline" : "default"}
+                    size="lg"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      checkRewards({
+                        questId: dialogOptions.questId,
+                        nextObjectiveId: dialogChoiceContentId(
+                          entry.nextObjectiveId,
+                          dialogOptions.objectiveId,
+                        ),
+                      });
+                    }}
+                    className="min-w-[120px] flex-1"
+                  >
+                    {entry.text}
+                  </Button>
+                ))}
+            </div>
+          </DockHighlight>
         </div>
       )}
       {claimable && (
         <div className="bg-muted/40 rounded-lg border p-3">
           {claimable.isReady ? (
-            <Button
-              size="lg"
-              decoration="gold"
-              // A claim names every reward, so a long one wraps inside the dock.
-              className="h-auto min-h-10 w-full px-4 py-2 text-left text-balance whitespace-normal"
-              disabled={isCheckingRewards}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                checkRewards({ questId: claimable.questId });
-              }}
-            >
-              {isCheckingRewards ? (
-                <Loader2
-                  className="mr-2 h-5 w-5 shrink-0 animate-spin"
-                  aria-hidden="true"
-                />
-              ) : (
-                <Gift className="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
-              )}
-              {isCheckingRewards ? "Claiming" : claimable.label}
-            </Button>
+            <DockHighlight active={!isPreview && isSceneElsewhere}>
+              <Button
+                size="lg"
+                decoration="gold"
+                // A claim names every reward, so a long one wraps inside the dock.
+                className="h-auto min-h-10 w-full px-4 py-2 text-left text-balance whitespace-normal"
+                disabled={isCheckingRewards}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  checkRewards({ questId: claimable.questId });
+                }}
+              >
+                {isCheckingRewards ? (
+                  <Loader2
+                    className="mr-2 h-5 w-5 shrink-0 animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Gift className="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
+                )}
+                {isCheckingRewards ? "Claiming" : claimable.label}
+              </Button>
+            </DockHighlight>
           ) : (
             <p className="text-muted-foreground text-base">
-              Objective: {parseHtml(claimable.objectiveText || "Complete the task.")}
+              Objective: {parseHtml(claimable.text || "Complete the task.")}
             </p>
           )}
         </div>
@@ -1406,29 +1449,6 @@ const PlayerTutorialAssistant: React.FC<
           footer={
             <>
               {isShortcutShown && hasShortcut && renderShortcuts(false)}
-              {retryQuestId && (
-                <Button
-                  size="lg"
-                  decoration="gold"
-                  className="w-full"
-                  disabled={isRetrying || userData?.status !== "AWAKE"}
-                  onClick={() => retryBattle({ questId: retryQuestId })}
-                >
-                  <RotateCcw className="mr-2 h-5 w-5" aria-hidden="true" />
-                  {isRetrying ? "Retrying..." : "Retry battle"}
-                </Button>
-              )}
-              {dialogOptions && isVillageChoice && isVillageChooserHidden && (
-                <Button
-                  ref={reopenVillageChooserRef}
-                  size="lg"
-                  decoration="gold"
-                  className="w-full"
-                  onClick={() => setIsVillageChooserHidden(false)}
-                >
-                  Choose your village
-                </Button>
-              )}
               {dialogOptions &&
                 isVillageChoice &&
                 !isVillageChooserHidden &&
@@ -1469,7 +1489,7 @@ const PlayerTutorialAssistant: React.FC<
             ) : undefined
           }
           lead={
-            isSpokenOnMap ? undefined : (
+            spokenWords === "lesson" ? undefined : (
               <StepDescription
                 description={currentTutorialStep.description}
                 className={leadClassName}
@@ -1478,6 +1498,7 @@ const PlayerTutorialAssistant: React.FC<
           }
         >
           {currentTutorialStep.quoteObjective &&
+            spokenWords !== "objective" &&
             activeRelatedObjective?.description && (
               <blockquote className="border-primary bg-muted/40 border-l-4 py-2 pr-3 pl-3 text-base leading-relaxed italic">
                 {parseHtml(activeRelatedObjective.description)}

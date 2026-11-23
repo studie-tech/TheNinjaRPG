@@ -2,6 +2,7 @@ import {
   ARRIVAL_PUP_AI_ID,
   BLACKSTEEL_COURIER_AI_ID,
   BLACKSTEEL_DOUBLE_AI_ID,
+  BLACKSTEEL_PROCTOR_AI_ID,
   type OverworldInteractionType,
 } from "@/drizzle/constants";
 import { oddQHexDistance } from "@/libs/hexgrid";
@@ -10,31 +11,40 @@ import type { NpcWalk, SectorUser } from "@/libs/sector-map/world-types";
 import { type StoryActorArt, storyActorKey, storyActorUser } from "@/libs/storyActors";
 import type { SpriteAppearance } from "@/validators/lpc";
 
-/** Where the player stands in the opening of the Academy Trials, as the map stages it. */
-export type ArrivalSceneKind = "greeting" | "ambush" | "standoff";
+/**
+ * How the map stages a lesson: a moment of the Academy Trials' opening, or a meeting, where
+ * figures stand by the player.
+ */
+export type StorySceneKind = "greeting" | "ambush" | "standoff" | "meeting";
 
 /** A hex tile of the sector the scene plays in. */
 type Tile = { x: number; y: number };
 
-/** The figures of the opening: Lemu, the pup, its hunter and the hunter's double. */
-export type CastRole = "lemu" | "pup" | "courier" | "double";
+/** The figures of the story's scenes. */
+export type StoryRole = "lemu" | "pup" | "courier" | "double" | "proctor" | "clone";
 
 /** One figure: when it is on the map, and the walk or tile it keeps there. */
-type CastEntry = { role: CastRole; from: number; until: number; walk: NpcWalk };
+type CastEntry = { role: StoryRole; from: number; until: number; walk: NpcWalk };
 
 /** A figure's words, which the scene says and when; the lesson supplies Lemu's. */
-export type ArrivalLineId = "greeting" | "warning" | "yelp" | "order" | "challenge";
-export type ArrivalLine = {
-  id: ArrivalLineId;
-  role: CastRole;
+export type StoryLineId =
+  | "greeting"
+  | "warning"
+  | "yelp"
+  | "order"
+  | "challenge"
+  | "meeting";
+export type StoryLine = {
+  id: StoryLineId;
+  role: StoryRole;
   from: number;
   until: number;
 };
 
-export type ArrivalScene = {
-  kind: ArrivalSceneKind;
+export type StoryScene = {
+  kind: StorySceneKind;
   cast: CastEntry[];
-  lines: ArrivalLine[];
+  lines: StoryLine[];
   /** Tile the lesson points at: the ground beside Lemu, or where the double appears. */
   marker: Tile;
   /** Milliseconds from the start: the smoke, and the moment the player answers. */
@@ -68,14 +78,14 @@ const CHASE_TILES = 11;
  * or the double waiting for a rematch. Figures stand where no scenery covers them, as far
  * as there are such tiles. Undefined where there is no room for the scene.
  */
-export const planArrivalScene = (info: {
-  kind: ArrivalSceneKind;
+export const planStoryScene = (info: {
+  kind: Exclude<StorySceneKind, "meeting">;
   player: Tile;
   isOpen: (tile: Tile) => boolean;
   isCovered: (tile: Tile) => boolean;
   startAt: number;
   previousLemu?: Tile;
-}): ArrivalScene | undefined => {
+}): StoryScene | undefined => {
   const { kind, player, isOpen, isCovered, startAt, previousLemu } = info;
   const key = (tile: Tile) => getSectorTileKey(tile.x, tile.y);
   const distance = (a: Tile, b: Tile) => oddQHexDistance(a.x, a.y, b.x, b.y);
@@ -94,7 +104,7 @@ export const planArrivalScene = (info: {
   const standing = (tile: Tile) =>
     (isCovered(tile) ? 20 : 0) + Math.abs(tile.y - player.y) * 3;
   const still = (tile: Tile): NpcWalk => ({ tiles: [tile], startAt, stepMs: 1 });
-  const always = (role: CastRole, tile: Tile): CastEntry => ({
+  const always = (role: StoryRole, tile: Tile): CastEntry => ({
     role,
     from: 0,
     until: Number.POSITIVE_INFINITY,
@@ -102,11 +112,11 @@ export const planArrivalScene = (info: {
   });
 
   const says = (
-    role: CastRole,
-    id: ArrivalLineId,
+    role: StoryRole,
+    id: StoryLineId,
     from = 0,
     until = Number.POSITIVE_INFINITY,
-  ): ArrivalLine => ({ id, role, from, until });
+  ): StoryLine => ({ id, role, from, until });
 
   if (kind === "greeting") {
     const lemu = best(
@@ -235,6 +245,70 @@ export const planArrivalScene = (info: {
   };
 };
 
+/**
+ * Stages figures standing together, the first of them speaking two tiles from the player,
+ * which leaves both in view with a control over the figure, and the rest at their side.
+ * Undefined without room.
+ */
+export const planStoryMeeting = (info: {
+  cast: readonly StoryRole[];
+  player: Tile;
+  isOpen: (tile: Tile) => boolean;
+  isCovered: (tile: Tile) => boolean;
+  startAt: number;
+}): StoryScene | undefined => {
+  const { cast, player, isOpen, isCovered, startAt } = info;
+  const key = (tile: Tile) => getSectorTileKey(tile.x, tile.y);
+  const reach = walkFrom(player, isOpen, 3);
+  const taken = new Set([key(player)]);
+  const standing: Tile[] = [];
+  for (const _ of cast) {
+    const speaker = standing[0];
+    const from = speaker ?? player;
+    const wanted = speaker ? 1 : 2;
+    const tile = [...reach.values()]
+      .map((entry) => entry.tile)
+      .filter((entry) => !taken.has(key(entry)))
+      .map((entry) => ({
+        entry,
+        // Open ground in view counts most, then the wanted distance, then standing beside
+        // one another rather than in front.
+        cost:
+          (isCovered(entry) ? 100 : 0) +
+          Math.abs(oddQHexDistance(entry.x, entry.y, from.x, from.y) - wanted) * 10 +
+          Math.abs(entry.y - from.y) * 3 +
+          (entry.x === from.x ? 4 : 0),
+      }))
+      .sort((a, b) => a.cost - b.cost)[0]?.entry;
+    if (!tile) return undefined;
+    taken.add(key(tile));
+    standing.push(tile);
+  }
+  const [speaker] = cast;
+  const [marker] = standing;
+  if (!speaker || !marker) return undefined;
+  return {
+    kind: "meeting",
+    cast: cast.flatMap((role, index) => {
+      const tile = standing[index];
+      return tile
+        ? [
+            {
+              role,
+              from: 0,
+              until: Number.POSITIVE_INFINITY,
+              walk: { tiles: [tile], startAt, stepMs: 1 },
+            },
+          ]
+        : [];
+    }),
+    lines: [{ id: "meeting", role: speaker, from: 0, until: Number.POSITIVE_INFINITY }],
+    marker,
+    smokeAt: 0,
+    endsAt: 0,
+  };
+};
+
 /** Where an actor on a walk stands at `now`, between two of its tiles. */
 export const npcWalkPose = (walk: NpcWalk, now: number) => {
   const last = walk.tiles.length - 1;
@@ -252,24 +326,24 @@ export const npcWalkPose = (walk: NpcWalk, now: number) => {
 };
 
 /** What the figures other than Lemu say. */
-export const ARRIVAL_LINES = {
+export const STORY_LINES = {
   yelp: "Yip! Yip!",
   order: "Hold them here.",
 } as const;
 
 /** The map actor key of a scene's figure, which speech and lessons hold on to. */
-export const arrivalActorKey = (role: CastRole) => storyActorKey(role);
+export const storyRoleKey = (role: StoryRole) => storyActorKey(role);
 
 /**
  * The scene's figures on the map at `elapsed` milliseconds. Reduced motion shows only how
  * the scene ends. `interactions` gives a figure a control; the rest are scenery.
  */
-export const arrivalSceneActors = (
-  scene: ArrivalScene,
+export const storySceneActors = (
+  scene: StoryScene,
   elapsed: number,
   art: Partial<Record<string, StoryActorArt>>,
   sector: number,
-  interactions: Partial<Record<CastRole, OverworldInteractionType>> = {},
+  interactions: Partial<Record<StoryRole, OverworldInteractionType>> = {},
 ): SectorUser[] =>
   scene.cast.flatMap((entry) => {
     if (elapsed < entry.from || elapsed >= entry.until) return [];
@@ -294,18 +368,22 @@ export const arrivalSceneActors = (
   });
 
 /** AI whose map artwork each figure wears; Lemu is a layered character. */
-const CAST_AI_IDS: Record<CastRole, string | undefined> = {
+export const CAST_AI_IDS: Record<StoryRole, string | undefined> = {
   lemu: undefined,
   pup: ARRIVAL_PUP_AI_ID,
   courier: BLACKSTEEL_COURIER_AI_ID,
   double: BLACKSTEEL_DOUBLE_AI_ID,
+  proctor: BLACKSTEEL_PROCTOR_AI_ID,
+  clone: BLACKSTEEL_PROCTOR_AI_ID,
 };
 
-export const CAST_NAMES: Record<CastRole, string> = {
+export const CAST_NAMES: Record<StoryRole, string> = {
   lemu: "Lemu",
   pup: "Frightened pup",
   courier: "Masked figure",
   double: "Smoke double",
+  proctor: "Proctor",
+  clone: "Proctor's clone",
 };
 
 /** Lemu as a map character, after the portrait; her violet is a tint over white hair. */

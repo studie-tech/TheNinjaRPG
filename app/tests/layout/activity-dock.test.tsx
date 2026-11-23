@@ -395,15 +395,11 @@ it.each(
 });
 
 it("leaves the Quests tab unmarked where the lesson points elsewhere", () => {
-  const index = TUTORIAL_STEPS.findIndex(
-    (step) => step.questsTab && step.page === "/pets",
-  );
   for (const [path, status] of [
-    ["/village", "AWAKE"],
     ["/combat", "AWAKE"],
     ["/pets", "HOSPITALIZED"],
   ]) {
-    onQuestsTabLesson(index);
+    onQuestsTabLesson();
     vi.spyOn(routing, "usePublicPathname").mockReturnValue(path!);
     user.status = status!;
     const view = render(<ActivityDock>Lesson</ActivityDock>);
@@ -437,92 +433,18 @@ it("spotlights the claim and its callout in the Quests tab", () => {
   }
 });
 
-it("keeps Quests open for the answer after claiming an older reward there", () => {
-  const index = TUTORIAL_STEPS.findIndex(
-    (step) => step.questsTab && step.advanceOn === "questDialog",
-  );
-  const questId = onQuestsTabLesson(index);
-  const view = render(<ActivityDock>Lesson</ActivityDock>);
-  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
-    button: 0,
-    ctrlKey: false,
-  });
-  user.questData = [
-    { id: "other", goals: [] },
-    { id: questId, goals: [{ id: "a", done: true, collected: true }] },
-  ];
-  view.rerender(<ActivityDock>Lesson</ActivityDock>);
-  expect(view.queryByText("Lesson")).toBeNull();
-  expect(view.getByText("Progress for The Trials")).toBeTruthy();
-});
-
-it("keeps Quests open for the proctor's answer after claiming the level reward", () => {
-  // The exam's goals as the server stores them when the proctor's question opens.
-  const index = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-tour");
-  const questId = String(TUTORIAL_STEPS[index]!.relatedValue);
-  const located = { sector: 222, latitude: 8, longitude: 13, locationChecked: true };
-  const goals = (levelClaimed: boolean) => [
-    {
-      id: "lG3__",
-      done: true,
-      value: 5,
-      collected: levelClaimed,
-      // The claim's confirmed tracker comes back without the parsed defaults.
-      ...(levelClaimed ? {} : { recentlyDied: false }),
-      selectedNextObjectiveId: "mKVnH",
-    },
-    {
-      id: "mKVnH",
-      done: true,
-      value: 0,
-      collected: false,
-      recentlyDied: false,
-      selectedNextObjectiveId: "tFTYj",
-      ...located,
-    },
-    {
-      id: "tFTYj",
-      done: false,
-      value: 0,
-      collected: false,
-      recentlyDied: false,
-      ...located,
-    },
-  ];
-  user.tutorialStep = index;
-  user.userQuests = [lessonQuest(questId, "Road to Genin")];
-  user.questData = [{ id: questId, goals: goals(false) }];
-  const view = render(<ActivityDock>Lesson</ActivityDock>);
-  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
-    button: 0,
-    ctrlKey: false,
-  });
-  user = { ...user, questData: [{ id: questId, goals: goals(true) }] };
-  view.rerender(<ActivityDock>Lesson</ActivityDock>);
-  expect(view.queryByText("Lesson")).toBeNull();
-  expect(view.getByText("Progress for Road to Genin")).toBeTruthy();
-  // The answer moves the step on, and the dock returns to the next lesson.
-  user = { ...user, tutorialStep: index + 1 };
-  view.rerender(<ActivityDock>Lesson</ActivityDock>);
-  expect(view.getByText("Lesson")).toBeTruthy();
-});
-
-it("brings the proctor's answer into view when Quests opens", () => {
-  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
-  const index = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-tour");
-  const questId = String(TUTORIAL_STEPS[index]!.relatedValue);
-  user.tutorialStep = index;
-  user.userQuests = [lessonQuest(questId, "Road to Genin")];
-  user.questData = [{ id: questId, goals: [] }];
+it("brings the claim into view when Quests opens", () => {
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/traininggrounds");
+  onQuestsTabLesson();
   vi.spyOn(logbook, "LogbookEntry").mockImplementation(() => (
-    <div id="tutorial-dialog-options">Choose my village</div>
+    <div data-quest-claim="">Claim reward</div>
   ));
-  // The answer sits 120px below the bottom of the scrolling list.
+  // The claim sits 120px below the bottom of the scrolling list.
   const rect = (top: number, bottom: number) => new DOMRect(0, top, 200, bottom - top);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
-    return this.id === "tutorial-dialog-options" ? rect(500, 560) : rect(0, 440);
+    return this.dataset.questClaim === undefined ? rect(0, 440) : rect(500, 560);
   });
   const view = render(<ActivityDock>Lesson</ActivityDock>);
   fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {

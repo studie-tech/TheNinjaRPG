@@ -10,9 +10,9 @@ import { useUserDataSelector } from "@/utils/UserContext";
  */
 export const useQuestFight = (info: {
   questId: string;
-  /** Dialog objective whose answer opens the fight. */
-  dialogId: string;
-  battleId: string;
+  /** Dialog objective whose answer opens the fight; left out, only a lost one is fought again. */
+  dialogId?: string;
+  battleId: string | undefined;
 }) => {
   const { questId, dialogId, battleId } = info;
   const { data: user } = useUserDataSelector((current) => ({
@@ -22,7 +22,7 @@ export const useQuestFight = (info: {
   const { checkRewards, isCheckingRewards } = useCheckRewards();
   const { retryBattle, isRetrying } = useRetryQuestBattle();
   const goals = user?.questData?.find((tracker) => tracker.id === questId)?.goals;
-  const goal = (id: string) => goals?.find((entry) => entry.id === id);
+  const goal = (id: string | undefined) => goals?.find((entry) => entry.id === id);
   const isAnswer = goal(dialogId)?.done === false;
   const isRetry = canRetryQuestBattle(goal(battleId));
   if (user?.status !== "AWAKE" || (!isAnswer && !isRetry)) return undefined;

@@ -355,6 +355,32 @@ export const getRewardClaimLabel = (
 };
 
 /**
+ * The reward of one objective, or of the whole quest for the objective that wins it:
+ * whether it waits to be claimed, and what the claim says.
+ */
+export const getQuestClaim = (
+  quest: Pick<Quest, "content" | "consecutiveObjectives">,
+  tracker: QuestTrackerType,
+  objectiveId: string | undefined,
+) => {
+  const objective = quest.content.objectives.find((entry) => entry.id === objectiveId);
+  if (!objective) return undefined;
+  const goal = tracker.goals.find((entry) => entry.id === objective.id);
+  // Winning collects itself; what is left to claim is the finished quest.
+  const isQuestWin = objective.task === "win_quest";
+  return {
+    isReady: isQuestWin
+      ? isQuestComplete(quest, tracker)
+      : !!goal?.done && !goal.collected,
+    text: objective.description,
+    // A won quest pays out from its Quests entry's claim, named the same here.
+    label: getRewardClaimLabel(
+      isQuestWin ? collapseRewards(rewardPayloads(quest.content.reward)) : objective,
+    ),
+  };
+};
+
+/**
  * Returns the active objective for a quest.
  * @param quest - The quest object.
  * @param tracker - The quest tracker object.

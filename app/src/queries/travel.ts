@@ -202,8 +202,8 @@ export const insertActionLogForRobPlayer = (
     relatedImage: user.avatarLight,
   });
 
-/** Build the listing of AIs with their idle/move sheets for the Academy Trials' opening scene. */
-export const listArrivalCast = (
+/** Build the listing of AIs with their idle/move sheets for the Academy Trials' map scenes. */
+export const listStoryCast = (
   client: Pick<DrizzleClient, "query">,
   aiIds: readonly string[],
 ) =>

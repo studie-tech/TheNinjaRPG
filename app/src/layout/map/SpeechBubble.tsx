@@ -55,7 +55,7 @@ export const SpeechBubble = ({
       {children}
     </div>
     {footer && (
-      <div className="pointer-events-auto mt-2 flex flex-wrap gap-2">{footer}</div>
+      <div className="pointer-events-auto mt-3 flex flex-wrap gap-2">{footer}</div>
     )}
   </div>
 );

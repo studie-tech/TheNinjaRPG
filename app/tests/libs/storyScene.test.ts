@@ -3,19 +3,21 @@ import {
   ARRIVAL_PUP_AI_ID,
   BLACKSTEEL_COURIER_AI_ID,
   BLACKSTEEL_DOUBLE_AI_ID,
+  BLACKSTEEL_PROCTOR_AI_ID,
 } from "@/drizzle/constants";
-import {
-  type ArrivalScene,
-  type ArrivalSceneKind,
-  arrivalActorKey,
-  arrivalSceneActors,
-  npcWalkPose,
-  planArrivalScene,
-} from "@/libs/arrivalScene";
 import { oddQHexDistance } from "@/libs/hexgrid";
 import { travelActorKey } from "@/libs/rendering/scenes/travelActors";
 import { getNeighborCoordinates } from "@/libs/sector-map/validation";
 import { isStoryPlacementId } from "@/libs/storyActors";
+import {
+  npcWalkPose,
+  planStoryMeeting,
+  planStoryScene,
+  type StoryScene,
+  type StorySceneKind,
+  storyRoleKey,
+  storySceneActors,
+} from "@/libs/storyScene";
 
 type Tile = { x: number; y: number };
 
@@ -27,10 +29,10 @@ const distance = (a: Tile, b: Tile) => oddQHexDistance(a.x, a.y, b.x, b.y);
 const START = 1_000_000;
 
 const plan = (
-  kind: ArrivalSceneKind,
-  overrides: Partial<Parameters<typeof planArrivalScene>[0]> = {},
+  kind: Exclude<StorySceneKind, "meeting">,
+  overrides: Partial<Parameters<typeof planStoryScene>[0]> = {},
 ) =>
-  planArrivalScene({
+  planStoryScene({
     kind,
     player,
     isOpen: onMap,
@@ -39,13 +41,13 @@ const plan = (
     ...overrides,
   });
 
-const staged = (...args: Parameters<typeof plan>): ArrivalScene => {
+const staged = (...args: Parameters<typeof plan>): StoryScene => {
   const scene = plan(...args);
   if (!scene) throw new Error("expected a scene");
   return scene;
 };
 
-const standingOf = (scene: ArrivalScene, role: string) =>
+const standingOf = (scene: StoryScene, role: string) =>
   scene.cast.find((entry) => entry.role === role)?.walk.tiles.at(-1) as Tile;
 
 const art = Object.fromEntries(
@@ -54,10 +56,10 @@ const art = Object.fromEntries(
     { avatar: `${id}.webp` },
   ]),
 );
-const namesAt = (scene: ArrivalScene, elapsed: number) =>
-  arrivalSceneActors(scene, elapsed, art, 301).map((actor) => actor.userId);
+const namesAt = (scene: StoryScene, elapsed: number) =>
+  storySceneActors(scene, elapsed, art, 301).map((actor) => actor.userId);
 
-describe("planArrivalScene", () => {
+describe("planStoryScene", () => {
   it("greets with Lemu a short walk away and points at the ground beside her", () => {
     const scene = staged("greeting");
     const lemu = standingOf(scene, "lemu");
@@ -123,7 +125,7 @@ describe("planArrivalScene", () => {
   });
 });
 
-describe("arrivalSceneActors", () => {
+describe("storySceneActors", () => {
   const scene = staged("ambush");
 
   it("brings the double out of the smoke and lets the hunter go", () => {
@@ -139,7 +141,7 @@ describe("arrivalSceneActors", () => {
   });
 
   it("anchors every figure where the scene happens, as scenery without controls", () => {
-    for (const actor of arrivalSceneActors(scene, 0, art, 301)) {
+    for (const actor of storySceneActors(scene, 0, art, 301)) {
       expect({ x: actor.longitude, y: actor.latitude }).toEqual(scene.marker);
       expect(actor.isStoryActor).toBe(true);
       expect(actor.npcInteractionType).toBe("AMBIENT");
@@ -148,7 +150,7 @@ describe("arrivalSceneActors", () => {
   });
 
   it("gives a figure the map's own control when the scene says so", () => {
-    const actors = arrivalSceneActors(scene, 60_000, art, 301, { double: "HOSTILE" });
+    const actors = storySceneActors(scene, 60_000, art, 301, { double: "HOSTILE" });
     expect(
       actors.map((actor) => [actor.npcPlacementId, actor.npcInteractionType]),
     ).toEqual([
@@ -162,13 +164,13 @@ describe("arrivalSceneActors", () => {
   });
 
   it("leaves out a figure whose artwork did not load", () => {
-    const actors = arrivalSceneActors(scene, 60_000, {}, 301);
+    const actors = storySceneActors(scene, 60_000, {}, 301);
     expect(actors.map((actor) => actor.userId)).toEqual(["story-lemu"]);
   });
 });
 
 describe("what the figures say", () => {
-  const linesAt = (scene: ArrivalScene, elapsed: number) =>
+  const linesAt = (scene: StoryScene, elapsed: number) =>
     scene.lines
       .filter((line) => elapsed >= line.from && elapsed < line.until)
       .map((line) => line.id);
@@ -190,9 +192,62 @@ describe("what the figures say", () => {
     const scene = staged("ambush");
     for (const line of scene.lines) {
       const at = Number.isFinite(line.until) ? (line.from + line.until) / 2 : line.from;
-      const keys = arrivalSceneActors(scene, at, art, 301).map(travelActorKey);
-      expect(keys).toContain(arrivalActorKey(line.role));
+      const keys = storySceneActors(scene, at, art, 301).map(travelActorKey);
+      expect(keys).toContain(storyRoleKey(line.role));
     }
+  });
+});
+
+describe("planStoryMeeting", () => {
+  const meet = (isCovered: (tile: Tile) => boolean = () => false, isOpen = onMap) =>
+    planStoryMeeting({
+      cast: ["proctor", "clone"],
+      player,
+      isOpen,
+      isCovered,
+      startAt: START,
+    });
+
+  it("stands the speaker two tiles away and the rest beside them, off the player's tile", () => {
+    const scene = meet();
+    if (!scene) throw new Error("expected a scene");
+    const proctor = standingOf(scene, "proctor");
+    const clone = standingOf(scene, "clone");
+    expect(distance(proctor, player)).toBe(2);
+    expect(distance(clone, proctor)).toBe(1);
+    expect(clone).not.toEqual(player);
+    expect(clone.x).not.toBe(proctor.x);
+    expect(scene.lines.map((line) => line.role)).toEqual(["proctor"]);
+  });
+
+  it("stands where no scenery covers them, nearer or farther if need be", () => {
+    const isCovered = (tile: Tile) => distance(tile, player) === 2;
+    const scene = meet(isCovered);
+    if (!scene) throw new Error("expected a scene");
+    expect(isCovered(standingOf(scene, "proctor"))).toBe(false);
+    expect(isCovered(standingOf(scene, "clone"))).toBe(false);
+  });
+
+  it("has no scene without open ground", () => {
+    expect(meet(undefined, () => false)).toBeUndefined();
+  });
+
+  it("gives the figure to talk to its control and leaves the rest as scenery", () => {
+    const scene = meet();
+    if (!scene) throw new Error("expected a scene");
+    const actors = storySceneActors(
+      scene,
+      0,
+      { [BLACKSTEEL_PROCTOR_AI_ID]: { avatar: "proctor.webp" } },
+      222,
+      { proctor: "FRIENDLY" },
+    );
+    expect(
+      actors.map(({ username, npcInteractionType }) => [username, npcInteractionType]),
+    ).toEqual([
+      ["Proctor", "FRIENDLY"],
+      ["Proctor's clone", "AMBIENT"],
+    ]);
   });
 });
 

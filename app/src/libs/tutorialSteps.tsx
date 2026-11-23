@@ -7,6 +7,7 @@ import {
   TUTORIAL_STARTER_QUEST_ID,
 } from "@/drizzle/constants";
 import type { GuidedLessonMark } from "@/layout/tutorial/guidedLesson";
+import type { StoryRole } from "@/libs/storyScene";
 import {
   GENIN_QUEST_OBJECTIVES,
   STARTER_QUEST_OBJECTIVES,
@@ -48,6 +49,15 @@ export interface TutorialStepConfig {
   marks?: GuidedLessonMark[];
   /** What Lemu says while the scene that opens the step still plays on the map. */
   sceneLead?: { description: string; action: string };
+  /** Figures the sector map shows while the player is on the step. */
+  mapScene?: TutorialMapScene;
+  /** Who speaks on `scenePage`, with the answer the step waits for. */
+  pageScene?: { speaker: string; says: TutorialMapScene["says"] };
+  /**
+   * The page whose scene takes the step's answer or reward, when its own controls do. The
+   * lesson's button waits for a stuck player there, and shows at once on any other page.
+   */
+  scenePage?: string;
   /** The target stands in a scene, which is scrolled no further than the target needs. */
   isInScene?: boolean;
   /** Element brought into view, unmarked, while no target is on screen. */
@@ -78,10 +88,9 @@ export interface TutorialStepConfig {
    */
   teachOnPage?: boolean;
   /**
-   * The step's answer or reward is given on the Activity dock's Quests tab, which leads
-   * with the quest, open, and returns to the lesson once the quest moves on. The lesson's
-   * own buttons wait as with `teachOnPage`; `marks` sets how much of the tab points, and
-   * `prompt` what the tab says to do there (by default, to answer or claim per `advanceOn`).
+   * The step's reward is claimed on the Activity dock's Quests tab, which leads with the
+   * quest, open, and returns to the lesson once the quest moves on. `prompt` is what the
+   * tab says to do there.
    */
   questsTab?: { prompt?: string };
   /** Game action that completes the step. */
@@ -130,6 +139,21 @@ export interface TutorialStepConfig {
   screen?: TutorialScreenKind;
 }
 
+/**
+ * Figures standing by the player on the sector map, the first of them speaking. Their bubble
+ * holds the answer or reward the lesson waits for and they can be talked to, or the last
+ * figure can be fought.
+ */
+export type TutorialMapScene = {
+  cast: readonly StoryRole[];
+  offers: "answer" | "claim" | "fight";
+  /**
+   * What the speaker says: their own words, or the lesson's or the quest objective's, which
+   * the lesson then leaves out.
+   */
+  says: string | { from: "lesson" | "objective" };
+};
+
 /** Full-screen moments of the Academy Trials: the promotion and the evening's close. */
 export type TutorialScreenKind = "rankUp" | "tomorrow";
 
@@ -155,6 +179,16 @@ const mapSceneTarget = {
   isInScene: true,
   // What is said on the map stays readable in the dimmed page.
   marks: [{ selector: "[data-map-speech-line]", label: "" }],
+};
+// A speaker's answers on the page: in the dialog they open, or under their words.
+const sceneAnswers = {
+  elementIds: ["tutorial-npc-answers", "tutorial-story-answers"],
+  isInScene: true,
+  marks: [
+    ...mapSceneTarget.marks,
+    { selector: "#tutorial-map-speaker", label: "" },
+    { selector: "[data-page-speech]", label: "" },
+  ],
 };
 // The trip's confirmation and arrival timer, ahead of the controls that lead to them.
 const globalTravelElements = [
@@ -262,6 +296,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       "I drove the double off, but it is circling back. Step next to it, and spend all your Action Points striking before you end your turn.",
     action: "Tap the smoke double to attack it again.",
     ...mapSceneTarget,
+    scenePage: "/travel",
     page: "/travel",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.double,
@@ -660,9 +695,15 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "Safe and sound",
     description:
-      "The masked courier hurls a smoke pellet and vanishes. Where they stood lies a sliver of <b>dark metal</b>, threaded with violet veins, and the pup's collar is scorched the same violet. Strange... Let's get it home first.",
-    action: "Open Quests and claim your reward there.",
-    questsTab: {},
+      "A smoke pellet, and they're gone! Look where they stood: a sliver of <b>dark metal</b>, threaded with violet veins, and the pup's collar is scorched the same violet. Strange... Let's get it home first.",
+    action: "Claim your reward.",
+    ...sceneAnswers,
+    scenePage: "/travel",
+    mapScene: {
+      cast: ["lemu", "pup"],
+      offers: "claim",
+      says: { from: "lesson" },
+    },
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.pup,
@@ -727,8 +768,13 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Home at last",
     description:
       "The Bondkeepers rush out to meet you, the pup wriggling in your arms at the sight of them, and their elder bows low to thank you for bringing it home.",
-    action: "Open Quests and hand over the pup there.",
-    questsTab: { prompt: "Answer to hand over the pup." },
+    action: "Hand over the pup.",
+    ...sceneAnswers,
+    scenePage: "/pets",
+    pageScene: {
+      speaker: "Bondkeeper elder",
+      says: "You brought one of ours home! Let us repay the kindness.",
+    },
     page: "/pets",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.sanctuary,
@@ -752,8 +798,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Graduation",
     description:
       "You did well out there, better than most graduates. That metal the courier left behind... show it to no one; I'll take it to the academy archives myself. Now, you have earned your graduation.",
-    action: "Open Quests and answer me there to complete the Academy Trials.",
-    questsTab: { prompt: "Answer here to complete the Academy Trials." },
+    action: "Answer me to complete the Academy Trials.",
+    ...sceneAnswers,
+    scenePage: "/pets",
+    pageScene: { speaker: "Lemu", says: { from: "lesson" } },
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.debrief,
@@ -811,7 +859,14 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Not this time",
     description:
       "The clone won this round, and every Genin has lost a fight. Spend all your Action Points each turn, and use your strongest action whenever it is ready. Low on chakra or stamina? Have a bowl of ramen first.",
-    action: "Tap Retry battle when you are ready.",
+    action: "Tap the proctor's clone when you are ready.",
+    ...mapSceneTarget,
+    scenePage: "/travel",
+    mapScene: {
+      cast: ["proctor", "clone"],
+      offers: "fight",
+      says: "Catch your breath. My clone is waiting whenever you are.",
+    },
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.proctor,
@@ -823,8 +878,14 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "exam",
     title: "Exam passed",
     description: "You passed! The proctor has one last question for you.",
-    action: "Open Quests and answer the proctor there.",
-    questsTab: { prompt: "Answer the proctor here." },
+    action: "Answer the proctor.",
+    ...sceneAnswers,
+    scenePage: "/travel",
+    mapScene: {
+      cast: ["proctor"],
+      offers: "answer",
+      says: { from: "objective" },
+    },
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.tour,
@@ -837,7 +898,14 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Choose your village",
     description:
       "This is the biggest choice of your career, so read about each village before you pick.",
-    action: "Pick the village you want to join, then confirm.",
+    action: "Talk to the proctor to choose your village.",
+    ...sceneAnswers,
+    scenePage: "/travel",
+    mapScene: {
+      cast: ["proctor"],
+      offers: "answer",
+      says: "Take your time. Which village will you call home?",
+    },
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.choose,
@@ -847,9 +915,15 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     id: "exam-joined",
     chapter: "exam",
     title: "A new home",
-    description: "Answer <b>Travel home</b> in Quests, and I'll show you the way.",
-    action: "Open Quests and answer the proctor there.",
-    questsTab: { prompt: "Answer the proctor here." },
+    description: "Answer <b>Travel home</b>, and I'll show you the way.",
+    action: "Answer the proctor.",
+    ...sceneAnswers,
+    scenePage: "/travel",
+    mapScene: {
+      cast: ["proctor"],
+      offers: "answer",
+      says: { from: "objective" },
+    },
     page: "/travel",
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.join,
@@ -893,8 +967,14 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Your headband",
     description:
       "You made it. Claim your reward to receive the Genin rank and your headband.",
-    action: "Open Quests and tap Claim there.",
-    questsTab: {},
+    action: "Claim your reward.",
+    ...sceneAnswers,
+    scenePage: "/travel",
+    mapScene: {
+      cast: ["lemu"],
+      offers: "claim",
+      says: { from: "lesson" },
+    },
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
     objectiveId: GENIN_QUEST_OBJECTIVES.win,

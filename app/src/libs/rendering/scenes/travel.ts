@@ -3,7 +3,6 @@ import type { Grid } from "honeycomb-grid";
 import { Container, RenderLayer } from "pixi.js";
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
-import { npcWalkPose } from "@/libs/arrivalScene";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { hexGridHeightRatio } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
@@ -69,6 +68,7 @@ import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { planVillageWallWindow } from "@/libs/sector-map/village-walls";
+import { npcWalkPose } from "@/libs/storyScene";
 import { getBiomeFromTileType } from "@/libs/travel";
 import {
   villageDutyNavigationMap,

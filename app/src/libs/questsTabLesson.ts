@@ -2,7 +2,7 @@ import { isTutorialActive } from "@/libs/tutorial";
 import { TUTORIAL_STEPS } from "@/libs/tutorialSteps";
 
 /**
- * A lesson that asks for an answer or a reward on the Activity dock's Quests tab: the
+ * A lesson that has a reward claimed on the Activity dock's Quests tab: the
  * quest it concerns and what the tab says to do there. The lesson unmounts while that tab
  * is open, so the tab leads with the quest and returns to the lesson once the quest moves
  * on.
@@ -21,8 +21,6 @@ export const getQuestsTabLesson = (
   if (!step?.questsTab || typeof step.relatedValue !== "string") return null;
   return {
     questId: step.relatedValue,
-    prompt:
-      step.questsTab.prompt ??
-      (step.advanceOn === "questDialog" ? "Answer here." : "Claim your reward here."),
+    prompt: step.questsTab.prompt ?? "Claim your reward here.",
   };
 };

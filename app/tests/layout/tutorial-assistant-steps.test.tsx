@@ -53,6 +53,7 @@ const {
   lessonReadingSeconds,
 } = steps;
 const { default: TutorialAssistant } = await import("@/layout/TutorialAssistant");
+const { spokenStepAtom } = await import("@/hooks/useStoryScene");
 
 type Profile = {
   userId: string;
@@ -1166,9 +1167,16 @@ describe("quest steps", () => {
       index,
       dialogQuest(String(step.relatedValue), String(step.objectiveId)),
     );
+    // The proctor waits on the map, and the lesson's own button only helps a stuck player.
+    const onMap = document.createElement("div");
+    onMap.id = "tutorial-story-answers";
+    const talk = document.createElement("button");
+    onMap.append(talk);
+    document.body.append(onMap);
     fireEvent.click(view.getByRole("button", { name: "Not yet, let me look around" }));
-    const reopen = view.getByRole("button", { name: "Choose your village" });
-    expect(document.activeElement).toBe(reopen);
+    expect(document.activeElement).toBe(talk);
+    expect(view.queryByRole("button", { name: "Choose your village" })).toBeNull();
+    onMap.remove();
   });
 
   it("claims a finished objective's reward from the lesson", () => {
@@ -1296,7 +1304,7 @@ describe("quest steps", () => {
     vi.useRealTimers();
   });
 
-  it("teaches the first claim in the logbook and sends the rest to the lesson's Claim", () => {
+  it("teaches the first claim in the logbook and then on the Quests tab, then where it was earned", () => {
     const claimSteps = TUTORIAL_STEPS.filter(
       (step) => step.advanceOn === "questReward",
     );
@@ -1304,7 +1312,11 @@ describe("quest steps", () => {
     expect(first?.id).toBe("combat-claim-reward");
     expect(first?.teachOnPage).toBe(true);
     expect(first?.elementIds?.[0]).toBe("tutorial-objective-claim");
-    for (const step of rest) expect(step.elementIds ?? []).toEqual([]);
+    expect(rest.map((step) => [step.id, !!step.questsTab, step.scenePage])).toEqual([
+      ["tools-claim-jutsu", true, undefined],
+      ["mission-claim-pup", false, "/travel"],
+      ["exam-claim", false, "/travel"],
+    ]);
   });
 
   it("practises assigning experience and levelling up with fewer pointers each time", () => {
@@ -1377,13 +1389,17 @@ describe("quest steps", () => {
       ],
     });
     state.retryBattle.mockClear();
-    const view = show(index, lostTo(true) as never);
+    // The clone waits on the map; the lesson's own button helps a player who cannot find it.
+    const waiting = show(index, lostTo(true) as never);
+    expect(waiting.queryByRole("button", { name: "Retry battle" })).toBeNull();
+    cleanup();
+    const view = showAfterIdle(index, lostTo(true) as never);
     fireEvent.click(view.getByRole("button", { name: "Retry battle" }));
     expect(state.retryBattle).toHaveBeenCalledWith({ questId });
     cleanup();
     // Nothing to retry before a loss.
     expect(
-      show(index, lostTo(false) as never).queryByRole("button", {
+      showAfterIdle(index, lostTo(false) as never).queryByRole("button", {
         name: "Retry battle",
       }),
     ).toBeNull();
@@ -1426,18 +1442,23 @@ describe("quest steps", () => {
         ],
       };
     };
-    const claimSteps = ["tools-claim-jutsu", "mission-claim-pup"];
     vi.useFakeTimers();
-    for (const stepId of claimSteps) {
+    const claims = (stepId: string, path?: string) => {
       const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
       state.checkRewards.mockClear();
-      const view = show(index, readyQuest(index));
-      // The Quests tab is marked throughout, so nothing is claimed, or offered, elsewhere.
+      const view = show(index, readyQuest(index), path);
+      const atOnce = view.queryAllByRole("button", { name: /^Claim / }).length;
       act(() => vi.advanceTimersByTime(idleWaitMs(index) * 2));
+      const onceStuck = view.queryAllByRole("button", { name: /^Claim / }).length;
       expect(state.checkRewards).not.toHaveBeenCalled();
-      expect(view.queryByRole("button", { name: /^Claim / })).toBeNull();
       cleanup();
-    }
+      return [atOnce, onceStuck];
+    };
+    // The Quests tab is marked throughout, so nothing is offered elsewhere.
+    expect(claims("tools-claim-jutsu")).toEqual([0, 0]);
+    // Lemu holds it out on the map; on any other page the lesson has it.
+    expect(claims("mission-claim-pup", "/travel")).toEqual([0, 1]);
+    expect(claims("mission-claim-pup", "/profile")).toEqual([1, 1]);
     vi.useRealTimers();
   });
 
@@ -1534,38 +1555,49 @@ describe("quest steps", () => {
     vi.useRealTimers();
   });
 
-  it("sends later answers and claims to the Quests tab", () => {
-    for (const stepId of ["tools-claim-jutsu", "bond-return-pup", "exam-claim"]) {
-      const index = TUTORIAL_STEPS.findIndex((step) => step.id === stepId);
-      const step = TUTORIAL_STEPS[index]!;
-      expect(step.action).toContain("Open Quests");
-      expect(getQuestsTabLesson({ tutorialOn: true, tutorialStep: index })).toEqual({
-        questId: String(step.relatedValue),
-        prompt: step.questsTab!.prompt ?? "Claim your reward here.",
-      });
-      expect(getQuestsTabLesson({ tutorialOn: false, tutorialStep: index })).toBeNull();
-    }
+  it("teaches the Quests tab once, with a claim", () => {
+    const index = TUTORIAL_STEPS.findIndex((step) => step.questsTab);
+    expect(TUTORIAL_STEPS.filter((step) => step.questsTab)).toHaveLength(1);
+    expect(TUTORIAL_STEPS[index]?.id).toBe("tools-claim-jutsu");
+    expect(getQuestsTabLesson({ tutorialOn: true, tutorialStep: index })).toEqual({
+      questId: String(TUTORIAL_STEPS[index]?.relatedValue),
+      prompt: "Claim your reward here. Then I'll go on.",
+    });
+    expect(getQuestsTabLesson({ tutorialOn: false, tutorialStep: index })).toBeNull();
     expect(getQuestsTabLesson({ tutorialOn: true, tutorialStep: 0 })).toBeNull();
   });
 
-  it("says on the Quests tab what each lesson sent there asks", () => {
-    expect(
-      TUTORIAL_STEPS.filter((step) => step.questsTab).map((step) => [
-        step.id,
-        getQuestsTabLesson({
-          tutorialOn: true,
-          tutorialStep: TUTORIAL_STEPS.indexOf(step),
-        })?.prompt,
-      ]),
-    ).toEqual([
-      ["tools-claim-jutsu", "Claim your reward here. Then I'll go on."],
-      ["mission-claim-pup", "Claim your reward here."],
-      ["bond-return-pup", "Answer to hand over the pup."],
-      ["genin-debrief", "Answer here to complete the Academy Trials."],
-      ["exam-tour", "Answer the proctor here."],
-      ["exam-joined", "Answer the proctor here."],
-      ["exam-claim", "Claim your reward here."],
+  it("takes every later answer and claim in a scene on its page", () => {
+    const steps = TUTORIAL_STEPS.filter((step) => step.mapScene || step.pageScene);
+    expect(steps.map((step) => step.id)).toEqual([
+      "mission-claim-pup",
+      "bond-return-pup",
+      "genin-debrief",
+      "exam-proctor-retry",
+      "exam-tour",
+      "exam-choose",
+      "exam-joined",
+      "exam-claim",
     ]);
+    for (const step of steps) {
+      expect(step.scenePage).toBe(step.mapScene ? "/travel" : "/pets");
+      expect([step.scenePage, "*"]).toContain(step.page);
+    }
+  });
+
+  it("leaves out the words a scene's speaker says", () => {
+    const index = TUTORIAL_STEPS.findIndex((step) => step.id === "mission-claim-pup");
+    const step = TUTORIAL_STEPS[index]!;
+    const words = textOf(parseHtml(String(step.description)));
+    cleanup();
+    const before = show(index, {}, "/travel");
+    expect(document.body.textContent).toContain(words);
+    act(() =>
+      getDefaultStore().set(spokenStepAtom, { stepId: step.id, words: "lesson" }),
+    );
+    expect(document.body.textContent).not.toContain(words);
+    act(() => getDefaultStore().set(spokenStepAtom, null));
+    before.unmount();
   });
 
   it("answers in the logbook before the lesson offers its own answers", () => {

@@ -9,6 +9,7 @@ import {
   ARRIVAL_PUP_AI_ID,
   BLACKSTEEL_COURIER_AI_ID,
   BLACKSTEEL_DOUBLE_AI_ID,
+  BLACKSTEEL_PROCTOR_AI_ID,
   IMG_AVATAR_DEFAULT,
   MAP_WAKE_ISLAND_SECTOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
@@ -92,10 +93,10 @@ import {
   findUserDataForGetSectorUsers,
   findUserForGlobalTravelFinish,
   insertActionLogForRobPlayer,
-  listArrivalCast,
   listQuestHistoryForGetSectorData,
   listQuestHistoryForGetSectorData2,
   listSectorForGetAllSectors,
+  listStoryCast,
   listUserDataForCompleteExpiredGlobalTravel,
   listUserDataForGetSectorUsers,
   listWarForGetSectorData,
@@ -169,13 +170,14 @@ const pusher = getServerPusher();
 
 export const travelRouter = createTRPCRouter({
   // Map artwork of the figures in the Academy Trials' opening scene
-  getArrivalCast: cdnCachedProcedure
-    .meta({ mcp: { description: "Get artwork of the Academy Trials' opening scene" } })
+  getStoryCast: cdnCachedProcedure
+    .meta({ mcp: { description: "Get artwork of the Academy Trials' map scenes" } })
     .query(async ({ ctx }) => {
-      const cast = await listArrivalCast(ctx.drizzle, [
+      const cast = await listStoryCast(ctx.drizzle, [
         ARRIVAL_PUP_AI_ID,
         BLACKSTEEL_COURIER_AI_ID,
         BLACKSTEEL_DOUBLE_AI_ID,
+        BLACKSTEEL_PROCTOR_AI_ID,
       ]);
       return Object.fromEntries(
         cast.map(({ userId, avatar, spriteAnimationBindings }) => [

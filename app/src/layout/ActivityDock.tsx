@@ -169,17 +169,13 @@ export function ActivityDock({
   const tutorialStep = user?.tutorialStep ?? 0;
   const isTutorialRunning = isTutorialActive(user);
   const lessonStep = isTutorialRunning ? TUTORIAL_STEPS[tutorialStep] : undefined;
-  // An answer moves the step on, so a lesson waiting for one hands back only then: a
-  // reward claimed meanwhile rewrites the quest's tracker, not the lesson's progress.
-  const awaitsQuestsAnswer = !!questsLesson && lessonStep?.advanceOn === "questDialog";
-  const lessonProgress =
-    questsLesson && !awaitsQuestsAnswer
-      ? JSON.stringify([
-          lessonQuest?.endAt ?? null,
-          user?.questData?.find((entry) => entry.id === questsLesson.questId)?.goals ??
-            null,
-        ])
-      : "";
+  const lessonProgress = questsLesson
+    ? JSON.stringify([
+        lessonQuest?.endAt ?? null,
+        user?.questData?.find((entry) => entry.id === questsLesson.questId)?.goals ??
+          null,
+      ])
+    : "";
   // While Quests is showing, a new step or progress on the lesson's quest returns the
   // dock to the lesson; a collapsed dock reopens on it too. A new step that is itself
   // answered here keeps the tab, now showing its marks.
@@ -432,7 +428,7 @@ function ActivityQuests({
 }: {
   user: ActivityUser;
   lesson: QuestsTabLesson | null;
-  /** The lesson's answers or claim take the spotlight, scrolled into view once shown. */
+  /** The lesson's claim takes the spotlight, scrolled into view once shown. */
   isControlMarked: boolean;
   scrollerRef: RefObject<HTMLDivElement | null>;
 }) {
@@ -511,8 +507,8 @@ function ActivityQuests({
 }
 
 /**
- * Where the lesson's answers or claim stand in the Quests tab, and the callout that stays
- * lit with them. Each is brought into view once, when it appears; the player's own
+ * Where the lesson's claim stands in the Quests tab, and the callout that stays
+ * lit with it. The claim is brought into view once, when it appears; the player's own
  * scrolling is left alone after that, and a control scrolled out of the tab has no box.
  */
 const useQuestControlBox = (
@@ -586,7 +582,7 @@ const getVisibleBox = (element: Element, view: DOMRect): SpotlightBox | null => 
 
 /** The answers or claim of the lesson's quest. */
 const QUEST_CONTROL_SELECTOR =
-  "[data-lesson-quest] :is(#tutorial-dialog-options, #tutorial-objective-claim, [data-quest-claim])";
+  "[data-lesson-quest] :is(#tutorial-objective-claim, [data-quest-claim])";
 /** Room under the control for the spotlight's ring. */
 const CONTROL_MARGIN_PX = 12;
 

@@ -64,7 +64,8 @@ export const MapAnchored = ({
     <div
       ref={ref}
       id={id}
-      aria-hidden="true"
+      // What it holds is decoration; an empty box has nothing to hide from readers.
+      aria-hidden={children ? "true" : undefined}
       className={cn("pointer-events-none absolute", className)}
       style={{ display: "none" }}
     >

@@ -22,7 +22,6 @@ import type { UserUpdateOptions } from "@/deltas/profile";
 import { getSectorPresenceUpdate } from "@/deltas/travel";
 import {
   IMG_AVATAR_DEFAULT,
-  IMG_SCENE_BACKGROUND,
   SECTOR_WALK_STEP_MS,
   STRUCTURE_ADJACENTS,
   WAR_SHRINE_IMAGE_BY_BIOME,
@@ -34,12 +33,12 @@ import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
-import { useArrivalScene } from "@/hooks/useArrivalScene";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
+import { type StorySceneTap, useStoryScene } from "@/hooks/useStoryScene";
 import { useVillageDutyPursuit } from "@/hooks/useVillageDuty";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
@@ -47,11 +46,12 @@ import HealingPopover from "@/layout/HealingPopover";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { QuestDialogScene, QuestUpdateModal } from "@/layout/Logbook";
+import { QuestUpdateModal } from "@/layout/Logbook";
 import { MapLocationActions } from "@/layout/MapLocationActions";
 import Modal from "@/layout/Modal";
 import { MapAnchored } from "@/layout/map/MapAnchored";
 import { MapSpeech, type SpeechAvoid } from "@/layout/map/MapSpeech";
+import { NpcDialogModal } from "@/layout/NpcDialogModal";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import { SurroundingUsers } from "@/layout/SurroundingUsers";
@@ -279,7 +279,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const mountRef = useRef<HTMLDivElement | null>(null);
   // What overlays over the map hold on to: markers, glows and speech.
   const [mapAnchors] = useState(createMapAnchors);
-  const onStoryTapRef = useRef<(placementId: string) => SectorUser | null>(() => null);
+  const onStoryTapRef = useRef<StorySceneTap>(() => null);
   const pathFinderRef = useRef<PathCalculator | null>(null);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
@@ -571,14 +571,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     { enabled: userData?.sector === sector },
   );
   const activeRaid = sectorRaidsData?.raids?.[0] ?? null;
-
-  const dialogSceneAssetIds = npcDialog
-    ? [npcDialog.sceneBackground, ...npcDialog.sceneCharacters].filter(Boolean)
-    : [];
-  const { data: dialogSceneAssets } = api.gameAsset.getSceneAssets.useQuery(
-    { assetIds: dialogSceneAssetIds },
-    { enabled: dialogSceneAssetIds.length > 0 },
-  );
 
   const {
     data: publicLocations = [],
@@ -2399,9 +2391,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       // A story figure is no placement: its scene says what tapping it does, and one with
       // nothing to do leaves the ground behind it to tap.
       if (i.npcPlacementId && isStoryPlacementId(i.npcPlacementId)) {
-        const attacked = onStoryTapRef.current(i.npcPlacementId);
-        if (attacked) setTargetUser(attacked);
-        return !attacked;
+        const tap = onStoryTapRef.current(i.npcPlacementId);
+        if (tap?.attacked) setTargetUser(tap.attacked);
+        return !tap;
       }
       const questMarker = i.type === "questMarker" ? i : null;
       if (questMarker?.type === "questMarker") {
@@ -2625,7 +2617,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             routeTarget: pendingWorldTargetRef.current ?? routeTargetRef.current,
             sector: sectorRef.current,
             viewer: userRef.current,
-            users: arrivalScene.withCast(usersRef.current),
+            users: storyScene.withCast(usersRef.current),
             col: animatedPositionRef.current?.x ?? userRef.current?.longitude ?? 0,
             row: animatedPositionRef.current?.y ?? userRef.current?.latitude ?? 0,
             nav: windowNavRef.current,
@@ -2660,8 +2652,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }),
     `${lightLayout}:${travelLightingMode(sector)}`,
   );
-  // The tutorial's opening, staged around the player.
-  const arrivalScene = useArrivalScene({
+  // The tutorial's scenes, staged around the player.
+  const storyScene = useStoryScene({
     step: props.isActive && profile?.status === "AWAKE" ? currentStep : undefined,
     sector,
     map: travelWindow.find((entry) => entry.sector === sector)?.map,
@@ -2678,18 +2670,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
   });
   useLayoutEffect(() => {
-    onStoryTapRef.current = arrivalScene.onStoryTap;
+    onStoryTapRef.current = storyScene.onStoryTap;
   });
   // Speech leaves the player's character and the ground to tap in view.
   const storyTargetBox =
-    arrivalScene.target?.kind === "actor" ? STORY_FIGURE_BOX : STORY_TILE_BOX;
+    storyScene.target?.kind === "actor" ? STORY_FIGURE_BOX : STORY_TILE_BOX;
   const speechAvoids: SpeechAvoid[] = [
     ...(userData
       ? [{ anchor: { kind: "actor" as const, key: `user:${userData.userId}` } }]
       : []),
-    ...(arrivalScene.target
-      ? [{ anchor: arrivalScene.target, box: storyTargetBox }]
-      : []),
+    ...(storyScene.target ? [{ anchor: storyScene.target, box: storyTargetBox }] : []),
   ];
   const attachSceneHost = useCallback((slot: HTMLDivElement | null) => {
     if (!slot) return;
@@ -2754,52 +2744,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const arrivalCta = arrivalNpc
     ? resolveArrivalPromptCta(arrivalNpc, arrivalBound?.objective.task ?? null)
     : null;
-  const dialogBackground =
-    dialogSceneAssets?.find((asset) => asset.type === "SCENE_BACKGROUND")?.image ??
-    IMG_SCENE_BACKGROUND;
-  const dialogCharacters =
-    dialogSceneAssets
-      ?.filter((asset) => asset.type === "SCENE_CHARACTER")
-      .map((asset) => asset.image) ?? [];
-
-  const weatherControls = (
-    <div
-      data-sector-weather
-      className="absolute top-3 right-3 z-10 flex items-start gap-2"
-    >
-      <DayNightIndicator
-        className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
-        previewDate={lightingPreviewDate}
-        onPreviewDateChange={setLightingPreviewDate}
-        previewWeather={weatherPreview}
-        onPreviewWeatherChange={setWeatherPreview}
-      />
-      {isWorldExpanded && (
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="bg-background/90"
-          ref={expandedExitRef}
-          aria-label="Exit expanded world"
-          onClick={() => setWorldExpanded(false)}
-        >
-          <Minimize2 className="h-4 w-4" />
-        </Button>
-      )}
-    </div>
-  );
-  const actionStructure = hoveredStructure ?? currentStructure;
-  const actionServices = structures.filter(
-    (service) =>
-      (service.hasPage || service.id === currentStructure?.id) &&
-      service.route &&
-      service.longitude === actionStructure?.longitude &&
-      service.latitude === actionStructure?.latitude,
-  );
   const content = (
     <div
       data-world-expanded={isWorldExpanded ? "true" : undefined}
+      data-map-root=""
       className={isWorldExpanded ? "fixed inset-0 z-50 bg-[#263c36]" : "relative"}
     >
       <div className="relative">
@@ -2820,31 +2768,39 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         {/* Lesson anchor kept over what a story scene points at: a figure or a tile. */}
         <MapAnchored
           anchors={mapAnchors}
-          anchor={arrivalScene.target}
+          anchor={storyScene.target}
           box={storyTargetBox}
           id="tutorial-map-target"
           onPlaced={announceTutorialLayout}
         />
         <MapAnchored
           anchors={mapAnchors}
-          anchor={arrivalScene.marker}
+          anchor={storyScene.speaker}
+          box={STORY_SPEAKER_BOX}
+          id="tutorial-map-speaker"
+          onPlaced={announceTutorialLayout}
+        />
+        <MapAnchored
+          anchors={mapAnchors}
+          anchor={storyScene.marker}
           box={{ width: 1.6, height: 1.4 }}
         >
-          {arrivalScene.smoke > 0 && (
-            <span key={arrivalScene.smoke} className="story-smoke absolute inset-0" />
+          {storyScene.smoke > 0 && (
+            <span key={storyScene.smoke} className="story-smoke absolute inset-0" />
           )}
         </MapAnchored>
-        {arrivalScene.flash > 0 && (
+        {storyScene.flash > 0 && (
           <div
-            key={arrivalScene.flash}
+            key={storyScene.flash}
             aria-hidden="true"
             className="story-flash pointer-events-none absolute inset-0 z-10"
           />
         )}
         <MapSpeech
           anchors={mapAnchors}
-          lines={arrivalScene.lines}
+          lines={storyScene.lines}
           avoid={speechAvoids}
+          onPlaced={announceTutorialLayout}
         />
         {showWorldLoader && !travel.isReady && !travel.error && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
@@ -2934,36 +2890,26 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           ))}
         </Modal>
       )}
-      {props.isActive &&
-        actionStructure &&
-        actionStructure.id !== dismissedStructureId && (
-          <TravelBuildingCard
-            key={actionStructure.id}
-            structure={actionStructure}
-            services={actionServices}
-            onEnter={enterBuilding}
-            openingServiceId={openingServiceId}
-            getBounds={() =>
-              travel.scene.current?.structureBounds(actionStructure.id) ?? null
-            }
-            boundary={mountRef.current}
-            onGoTo={() =>
-              setTarget({
-                x: actionStructure.longitude,
-                y: actionStructure.latitude,
-              })
-            }
-            onClose={() => {
-              buildingEntryRef.current = null;
-              setOpeningServiceId(null);
-              hoveredStructureIdRef.current = null;
-              setDismissedStructureId(actionStructure.id);
-            }}
-          />
-        )}
-      {/* Stack location, dungeon and raid cards without overlap. */}
+      {currentStructure && (
+        <div
+          data-map-hud=""
+          className="absolute bottom-3 left-3 z-20 max-w-[calc(50%-40px)] rounded-lg bg-black/80 p-3 text-white shadow-lg sm:bottom-4 sm:left-4 sm:max-w-xs"
+        >
+          <h3 className="text-sm font-semibold">
+            {currentServices.map((service) => service.name).join(" · ")}
+          </h3>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {currentServices.map((service) => (
+              <Button key={service.id} asChild size="sm" className="min-h-10">
+                <Link href={service.route}>Enter {service.name}</Link>
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Stack corner actions so dungeon, hover and raid cards share the map without overlap. */}
       <div
-        data-sector-corner-actions
+        data-map-hud=""
         className="pointer-events-none absolute right-3 bottom-3 z-20 flex max-w-[calc(50%-40px)] flex-col items-end gap-2 sm:right-4 sm:bottom-4 sm:max-w-xs"
       >
         <MapLocationActions
@@ -3082,8 +3028,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         />
       )}
       {targetUser &&
-        (isAttacking || arrivalScene.isAttacking || userData?.status === "BATTLE") && (
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black">
+        (isAttacking || storyScene.isAttacking || userData?.status === "BATTLE") && (
+          <div className="absolute top-0 right-0 bottom-0 left-0 z-30 m-auto flex flex-col justify-center bg-black">
             <div className="m-auto text-center text-white">
               <p className="p-5 text-3xl">
                 <AvatarImage
@@ -3168,51 +3114,36 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         </Modal>
       )}
       {props.isActive && npcDialog && pendingNpcInteractRef.current && (
-        <Modal
-          isOpen={!!npcDialog}
-          setIsOpen={(open) => {
-            if (!open) setNpcDialog(null);
-          }}
-          title="NPC Dialog"
-        >
-          <div className="flex flex-col gap-3 p-2">
-            <QuestDialogScene
-              background={dialogBackground}
-              characters={dialogCharacters}
-              description={npcDialog.description}
-            />
-            {npcDialog.branches.map((branch, index) => (
-              <Button
-                key={`${index}-${branch.text}`}
-                type="button"
-                variant="info"
-                disabled={isInteracting}
-                className="h-auto w-full justify-start text-left whitespace-normal"
-                onClick={() => {
-                  const ctx = pendingNpcInteractRef.current;
-                  if (!ctx) {
-                    setNpcDialog(null);
-                    return;
-                  }
-                  // Keep the dialog open while the choice is sent: the response either carries
-                  // the NPC's next dialog or closes it (see interactNpc onSuccess / onError).
-                  if (isInteracting) return;
-                  interactNpc({
-                    placementId: ctx.placementId,
-                    positionVersion: ctx.positionVersion,
-                    copy: ctx.copy,
-                    dialogContentId: dialogChoiceContentId(
-                      branch.nextObjectiveId,
-                      npcDialog.objectiveId,
-                    ),
-                  });
-                }}
-              >
-                {branch.text}
-              </Button>
-            ))}
-          </div>
-        </Modal>
+        <NpcDialogModal
+          dialog={npcDialog}
+          isPending={isInteracting}
+          onClose={() => setNpcDialog(null)}
+          answers={npcDialog.branches.map((branch) => ({
+            text: branch.text,
+            choose: () => {
+              const ctx = pendingNpcInteractRef.current;
+              if (!ctx) {
+                setNpcDialog(null);
+                return;
+              }
+              // Keep the dialog open while the choice is sent: the response either carries
+              // the NPC's next dialog or closes it (see interactNpc onSuccess / onError).
+              if (isInteracting) return;
+              interactNpc({
+                placementId: ctx.placementId,
+                positionVersion: ctx.positionVersion,
+                copy: ctx.copy,
+                dialogContentId: dialogChoiceContentId(
+                  branch.nextObjectiveId,
+                  npcDialog.objectiveId,
+                ),
+              });
+            },
+          }))}
+        />
+      )}
+      {props.isActive && storyScene.conversation && (
+        <NpcDialogModal {...storyScene.conversation} />
       )}
     </div>
   );
@@ -3234,6 +3165,7 @@ const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
 
 /** What a lesson marks over a story's figure, with its control, and over its tile, in tiles. */
 const STORY_FIGURE_BOX = { width: 2.2, height: 1.7 };
+const STORY_SPEAKER_BOX = { width: 2.2, height: 1.9 };
 const STORY_TILE_BOX = { width: 1.5, height: 1 };
 const OBJECTIVE_ANCHOR: MapAnchor = { kind: "objective" };
 const announceTutorialLayout = () =>

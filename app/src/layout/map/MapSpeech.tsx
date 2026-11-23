@@ -24,18 +24,22 @@ export const MAP_HUD_ATTRIBUTE = "data-map-hud";
 
 /**
  * Everything characters on a map are saying, as bubbles that follow them. Bubbles stay whole
- * on the map and clear of its panels (elements with `data-map-hud`), of the things in
- * `avoid`, and of each other. Put it inside the map's positioned container.
+ * on the map and clear of its panels (elements with `data-map-hud` in the same
+ * `data-map-root`), of the things in `avoid`, and of each other. Put it inside the map's
+ * positioned container.
  */
 export const MapSpeech = ({
   anchors,
   lines,
   avoid = NOTHING,
+  onPlaced,
 }: {
   anchors: MapAnchors;
   lines: readonly MapSpeechLine[];
   /** Characters and tiles a bubble should leave in view, with any box marked over them. */
   avoid?: readonly SpeechAvoid[];
+  /** Runs after a bubble moves, for anything outside that measures the controls in it. */
+  onPlaced?: () => void;
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const avoided = useRef(new Map<string, SpeechRect>());
@@ -81,8 +85,9 @@ export const MapSpeech = ({
       };
     };
     const panels =
-      layer?.parentElement?.querySelectorAll<HTMLElement>(`[${MAP_HUD_ATTRIBUTE}]`) ??
-      [];
+      (
+        layer?.closest("[data-map-root]") ?? layer?.parentElement
+      )?.querySelectorAll<HTMLElement>(`[${MAP_HUD_ATTRIBUTE}]`) ?? [];
     // The Activity dock floats over the map on a short screen and would hide the words.
     const dock = document.querySelector("[data-activity-dock]");
     return [
@@ -103,7 +108,7 @@ export const MapSpeech = ({
       ref={ref}
       data-map-speech=""
       // Over the map's panels, which a bubble without room elsewhere covers.
-      className="pointer-events-none absolute inset-0 z-[15] overflow-hidden"
+      className="pointer-events-none absolute inset-0 z-[25] overflow-hidden"
     >
       {lines.map((line) => (
         <SpokenLine
@@ -116,6 +121,7 @@ export const MapSpeech = ({
           onPlaced={(rect) => {
             if (rect) placed.current.set(line.id, rect);
             else placed.current.delete(line.id);
+            onPlaced?.();
           }}
         />
       ))}
