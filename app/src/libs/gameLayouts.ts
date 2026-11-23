@@ -157,3 +157,7 @@ export const getGameLayoutScript = (id: GameLayoutId) => {
   const layout = getGameLayout(id);
   return `(function(){var dark=${layout.tone === "dark"};${layout.supportsColorMode ? 'try{dark=localStorage.getItem("theme")==="dark"}catch(e){}' : ""}document.documentElement.setAttribute("${GAME_LAYOUT_ATTRIBUTE}","${layout.id}");document.documentElement.setAttribute("${GAME_LAYOUT_FRAME_ATTRIBUTE}","${layout.frame}");document.documentElement.classList.toggle("dark",dark)})()`;
 };
+
+/** Prerender a character-only preference with Classic until its account is confirmed. */
+export const getInitialGameLayout = (id: GameLayoutId): GameLayoutId =>
+  id === "experimental" ? DEFAULT_GAME_LAYOUT : id;

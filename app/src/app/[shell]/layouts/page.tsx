@@ -3,10 +3,10 @@
 import { Check, Palette } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useSelectGameLayout } from "@/hooks/useGameLayout";
+import { useAvailableGameLayouts, useSelectGameLayout } from "@/hooks/useGameLayout";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
-import { GAME_LAYOUTS, type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
+import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import { cn } from "@/libs/shadui";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
@@ -15,7 +15,10 @@ export default function GameLayoutsPage() {
   const selectLayout = useSelectGameLayout();
   const [tone, setTone] = useState<"all" | "light" | "dark">("all");
   const [announcement, setAnnouncement] = useState("");
-  const themes = GAME_LAYOUTS.filter((theme) => tone === "all" || theme.tone === tone);
+  const availableLayouts = useAvailableGameLayouts();
+  const themes = availableLayouts.filter(
+    (theme) => tone === "all" || theme.tone === tone,
+  );
 
   const chooseTheme = (id: GameLayoutId) => {
     selectLayout(id);

@@ -36,6 +36,12 @@ beforeEach(() => {
   localStorage.removeItem(LAYOUT_PREFERENCE_COOKIE);
   document.cookie = `${LAYOUT_PREFERENCE_COOKIE}=; path=/; max-age=0`;
   installBrowserGlobals({ scrollIntoView: true });
+  mockUserContextValue({
+    data: { userId: "player" },
+    userId: "player",
+    isClerkLoaded: true,
+    isSignedIn: true,
+  });
 });
 
 afterEach(async () => {
@@ -117,12 +123,53 @@ describe("game layout picker", () => {
     expect(localStorage.getItem(LAYOUT_PREFERENCE_COOKIE)).toBe('"3-sakura-courtyard"');
   });
 
-  it.each([true, false])(
-    "opens travel on an explicit experimental selection only when signed in (%s)",
-    async (isSignedIn) => {
+  it.each([
+    {
+      label: "created character",
+      isClerkLoaded: true,
+      isSignedIn: true,
+      userId: "player",
+      data: { userId: "player" },
+      allowed: true,
+    },
+    {
+      label: "no character",
+      isClerkLoaded: true,
+      isSignedIn: true,
+      userId: "player",
+      data: undefined,
+      allowed: false,
+    },
+    {
+      label: "loading auth",
+      isClerkLoaded: false,
+      isSignedIn: true,
+      userId: "player",
+      data: { userId: "player" },
+      allowed: false,
+    },
+    {
+      label: "signed out",
+      isClerkLoaded: true,
+      isSignedIn: false,
+      userId: "player",
+      data: { userId: "player" },
+      allowed: false,
+    },
+    {
+      label: "stale account profile",
+      isClerkLoaded: true,
+      isSignedIn: true,
+      userId: "other",
+      data: { userId: "player" },
+      allowed: false,
+    },
+  ])(
+    "admits experimental selection only for a signed-in character: $label",
+    async ({ allowed, ...session }) => {
       const router = getRouter();
       router.replace.mockClear();
-      mockUserContextValue({ isSignedIn });
+      mockUserContextValue(session);
       function SelectExperiment() {
         const selectLayout = useSelectGameLayout();
         return (
@@ -132,13 +179,33 @@ describe("game layout picker", () => {
         );
       }
       const view = render(<SelectExperiment />);
-      expect(router.replace).not.toHaveBeenCalled();
       fireEvent.click(view.getByRole("button", { name: "Try experimental" }));
-      if (isSignedIn) expect(router.replace).toHaveBeenCalledWith("/travel");
-      else expect(router.replace).not.toHaveBeenCalled();
-      expect(document.cookie).toContain(`${LAYOUT_PREFERENCE_COOKIE}=experimental`);
+      if (allowed) {
+        expect(router.replace).toHaveBeenCalledWith("/travel");
+        expect(document.cookie).toContain(`${LAYOUT_PREFERENCE_COOKIE}=experimental`);
+      } else {
+        expect(router.replace).not.toHaveBeenCalled();
+        expect(localStorage.getItem(LAYOUT_PREFERENCE_COOKIE)).toBeNull();
+        expect(document.cookie).not.toContain(
+          `${LAYOUT_PREFERENCE_COOKIE}=experimental`,
+        );
+      }
     },
   );
+
+  it("omits the experimental choice before character creation", async () => {
+    mockUserContextValue({
+      isClerkLoaded: true,
+      isSignedIn: true,
+      userId: "new-player",
+      status: "success",
+    });
+    const view = await openPicker();
+    expect(
+      view.queryByRole("option", { name: "Experimental sector layout" }),
+    ).toBeNull();
+    expect(view.getByRole("option", { name: "Classic" })).toBeTruthy();
+  });
 
   it("offers the layouts including the opt-in experiment in one selector", async () => {
     const view = await openPicker();

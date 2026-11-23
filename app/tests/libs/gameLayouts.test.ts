@@ -4,6 +4,7 @@ import {
   GAME_LAYOUTS,
   type GameLayoutId,
   getGameLayoutScript,
+  getInitialGameLayout,
   getWelcomeLayout,
   toGameLayoutId,
 } from "@/libs/gameLayouts";
@@ -85,3 +86,10 @@ describe("layout before first paint", () => {
     ).toBe(layout.id);
   });
 });
+
+it.each([...GAME_LAYOUTS])(
+  "prerenders $name without assuming a created character",
+  ({ id }) => {
+    expect(getInitialGameLayout(id)).toBe(id === "experimental" ? "default" : id);
+  },
+);

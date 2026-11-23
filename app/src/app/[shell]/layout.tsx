@@ -27,7 +27,11 @@ import StructuredData from "@/layout/StructuredData";
 import { TavernActivity } from "@/layout/TavernActivity";
 import { WebAnalytics } from "@/layout/WebAnalytics";
 import { CONSENT_BOOTSTRAP } from "@/libs/consentConfig";
-import { getGameLayout, getGameLayoutScript } from "@/libs/gameLayouts";
+import {
+  getGameLayout,
+  getGameLayoutScript,
+  getInitialGameLayout,
+} from "@/libs/gameLayouts";
 import {
   DEFAULT_FONT_SCALE,
   FONT_SCALE_COOKIE,
@@ -115,14 +119,17 @@ export default async function RootLayout({
   if (!variant) notFound();
   const initialIsSignedIn = variant.signedIn;
   const initialLayout = variant.layout;
+  const initialPresentation = getInitialGameLayout(initialLayout);
   const isNativeShell = variant.client !== "web";
 
   return (
     <html
       lang="en"
-      className={getGameLayout(initialLayout).tone === "dark" ? "dark" : undefined}
-      data-game-layout={initialLayout}
-      data-game-frame={getGameLayout(initialLayout).frame}
+      className={
+        getGameLayout(initialPresentation).tone === "dark" ? "dark" : undefined
+      }
+      data-game-layout={initialPresentation}
+      data-game-frame={getGameLayout(initialPresentation).frame}
       suppressHydrationWarning
     >
       <head>
@@ -132,7 +139,7 @@ export default async function RootLayout({
         )}
         <script
           // biome-ignore lint/security/noDangerouslySetInnerHtml: configuration comes from the validated layout registry.
-          dangerouslySetInnerHTML={{ __html: getGameLayoutScript(initialLayout) }}
+          dangerouslySetInnerHTML={{ __html: getGameLayoutScript(initialPresentation) }}
         />
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the script is a module-level constant assembled from three other constants, with no input from anywhere. */}
         <script dangerouslySetInnerHTML={{ __html: FONT_SCALE_SCRIPT }} />
