@@ -182,6 +182,7 @@ export const importLpcRecipe = (
       const base =
         exact ??
         config.variants[`${style}/${config.defaultColor}/${config.defaultEyes}`];
+      const baseEyes = exact ? eyes : config.defaultEyes;
       if (!exact && (entry.color || entry.eyes))
         warnings.push(
           `${entry.design.id}: ${color}/${eyes} is unavailable on ${style}; using its default.`,
@@ -198,7 +199,7 @@ export const importLpcRecipe = (
         const selectedColor = sheet.material && entry.colors.get(sheet.material);
         const selected =
           selectedColor &&
-          config.variants[`${style}/${selectedColor}/${eyes}`]?.find(
+          config.variants[`${style}/${selectedColor}/${baseEyes}`]?.find(
             (part) => part.part === sheet.part && part.material === sheet.material,
           );
         if (selectedColor && !selected)

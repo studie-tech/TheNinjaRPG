@@ -1,4 +1,5 @@
-import type { LpcBody, LpcMaterial } from "@/validators/lpc";
+import { resolveLpcVariantSheets } from "@/libs/lpc/catalog";
+import type { LpcBody, LpcMaterial, LpcMaterialColors } from "@/validators/lpc";
 import { lpcAnimations } from "@/validators/lpc";
 import type { LpcConfig } from "@/validators/lpcAsset";
 
@@ -41,11 +42,14 @@ export const lpcDesignCoverage = (
   body: LpcBody,
   color = config.defaultColor,
   eyes = config.defaultEyes,
+  materialColors?: LpcMaterialColors,
 ) => {
   const sheets =
-    config.variants[`${body}/${color}/${eyes}`] ??
-    config.variants[`${body}/${config.defaultColor}/${config.defaultEyes}`] ??
-    [];
+    resolveLpcVariantSheets(
+      (palette, selectedEyes) => config.variants[`${body}/${palette}/${selectedEyes}`],
+      config,
+      { color, eyes, materialColors },
+    ) ?? [];
   const components = [...new Set(sheets.map((sheet) => sheet.component))];
   return lpcAnimations.map((animation) => ({
     animation,

@@ -11,14 +11,13 @@ import sharp from "sharp";
 import { UTApi, UTFile } from "uploadthing/server";
 import type { LpcSheet } from "../src/libs/lpc/catalog";
 import { servedUfsUrl, UPLOADTHING_HOST } from "../src/libs/uploadthing";
-import { fetchWithRetry } from "../src/utils/http";
 import { textureImageUrl } from "../src/utils/image";
 import { withRetry } from "../src/utils/retry";
 import type { LpcLayout } from "../src/validators/lpcAsset";
 
 /** Retry complete downloads, including bodies interrupted after their response headers arrived. */
 const readPublishedBytes = (url: string) => withRetry(async () => {
-  const response = await fetchWithRetry(url, {}, 30_000, { deadlineMs: 100_000 });
+  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`Media download failed (${response.status}).`);
   return Buffer.from(await response.arrayBuffer());
 }, { isTransient: () => true, deadlineMs: 120_000 });
@@ -175,10 +174,7 @@ const main = async () => {
     uploads[id] = servedUfsUrl(result.data);
     await writeFile(checkpoint, `${JSON.stringify(uploads, null, 2)}\n`);
   }
-  const response = await fetchWithRetry(uploads[id]!, {}, 30_000, {
-    deadlineMs: 100_000,
-  });
-  if (!response.ok || !Buffer.from(await response.arrayBuffer()).equals(credits)) {
+  if (!(await readPublishedBytes(uploads[id]!)).equals(credits)) {
     throw new Error("Uploaded attribution differs from the staged credits");
   }
   catalog.creditsUrl = uploads[id];

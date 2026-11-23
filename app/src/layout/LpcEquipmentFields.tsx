@@ -151,7 +151,7 @@ export const LpcEquipmentFields = <
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="AUTO">
-                    {variant ? "Inherit item colour" : "Design default"}
+                    {variant ? "Inherit item colour" : "Automatic colour"}
                   </SelectItem>
                   {typeof field.value === "string" &&
                     field.value &&
@@ -167,6 +167,11 @@ export const LpcEquipmentFields = <
                   ))}
                 </SelectContent>
               </Select>
+              {!variant && !field.value && (
+                <p className="text-muted-foreground text-sm">
+                  Uses gray when available, otherwise the design default.
+                </p>
+              )}
               {fieldState.error && (
                 <p role="alert" className="text-destructive text-sm">
                   {fieldState.error.message}
@@ -243,6 +248,7 @@ export const LpcEquipmentFields = <
             config={selectedDesign}
             body={body}
             color={visual.color}
+            materialColors={visual.materialColors}
           />
         )}
       </div>

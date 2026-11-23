@@ -5,6 +5,7 @@ import * as lpcHooks from "@/hooks/lpc";
 import * as characterPreview from "@/layout/CharacterPreview";
 import { LpcEquipmentFields } from "@/layout/LpcEquipmentFields";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import { buildLpcCatalog, spriteLayerSheets } from "@/libs/lpc/catalog";
 import type { LpcColor, LpcMaterialColors, SpriteAppearance } from "@/validators/lpc";
 import {
   flushRadixFocus,
@@ -49,6 +50,89 @@ afterEach(async () => {
 });
 
 describe("staff equipment preview", () => {
+  it("describes automatic base colour while retaining gray before a custom design default", async () => {
+    const source = structuredClone(lpcAssets.find((asset) => asset.id === "shirt")!);
+    source.lpcConfig.defaultColor = "blue";
+    vi.spyOn(lpcHooks, "useLpcDesigns").mockReturnValue({
+      data: [source],
+      error: null,
+    } as unknown as ReturnType<typeof lpcHooks.useLpcDesigns>);
+    const { result } = renderHook(() =>
+      useForm<Fields>({
+        defaultValues: { lpcProfile: "shirt", lpcColor: null },
+      }),
+    );
+    const view = render(
+      <LpcEquipmentFields control={result.current.control} item={item} />,
+    );
+    const help = "Uses gray when available, otherwise the design default.";
+    expect(view.getByRole("combobox", { name: "Equipment colour" }).textContent).toBe(
+      "Automatic colour",
+    );
+    expect(view.getByText(help)).toBeTruthy();
+    const appearance = JSON.parse(
+      view.getByTestId("appearance").textContent!,
+    ) as SpriteAppearance;
+    const layer = appearance.layers.find((entry) => entry.slot === "CHEST")!;
+    expect(
+      spriteLayerSheets(buildLpcCatalog([source]), appearance, layer)[0]!.image,
+    ).toBe(source.lpcConfig.variants["male/gray/blue"]![0]!.image);
+    await act(async () => result.current.setValue("lpcColor", "blue"));
+    expect(view.queryByText(help)).toBeNull();
+    await act(async () => result.current.setValue("lpcColor", null));
+    view.rerender(
+      <LpcEquipmentFields
+        control={result.current.control}
+        item={item}
+        variant={{ name: "Inherited" }}
+      />,
+    );
+    expect(view.getByRole("combobox", { name: "Equipment colour" }).textContent).toBe(
+      "Inherit item colour",
+    );
+    expect(view.queryByText(help)).toBeNull();
+  });
+
+  it("updates coverage with inherited and unsaved material palettes on either body", async () => {
+    const source = structuredClone(lpcAssets.find((asset) => asset.id === "shirt")!);
+    for (const [key, sheets] of Object.entries(source.lpcConfig.variants))
+      for (const sheet of sheets) {
+        sheet.part = "fabric";
+        sheet.component = "fabric";
+        sheet.material = "cloth";
+        if (key.split("/")[1] === "blue") delete sheet.layout.clips.idle;
+      }
+    vi.spyOn(lpcHooks, "useLpcDesigns").mockReturnValue({
+      data: [source],
+      error: null,
+    } as unknown as ReturnType<typeof lpcHooks.useLpcDesigns>);
+    const { result } = renderHook(() =>
+      useForm<Fields>({
+        defaultValues: { lpcProfile: null, lpcColor: null, lpcMaterialColors: null },
+      }),
+    );
+    const view = render(
+      <LpcEquipmentFields
+        control={result.current.control}
+        item={{
+          ...item,
+          lpcProfile: "shirt",
+          lpcColor: "gray",
+          lpcMaterialColors: { cloth: "blue" },
+        }}
+        variant={{ name: "Inherited" }}
+      />,
+    );
+    expect(view.getByText(/Held-pose fallback: idle\./)).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "Slender" }));
+    expect(view.getByText(/Held-pose fallback: idle\./)).toBeTruthy();
+    await act(async () =>
+      result.current.setValue("lpcMaterialColors", { cloth: "gray" }),
+    );
+    expect(view.queryByText(/Held-pose fallback: idle\./)).toBeNull();
+    expect(view.getByText(/^Authored:/).textContent).toContain("idle");
+  });
+
   it("searches the visual library and applies a design without changing saved item data", async () => {
     const { result } = renderHook(() =>
       useForm<Fields>({ defaultValues: { lpcProfile: null, lpcColor: "blue" } }),

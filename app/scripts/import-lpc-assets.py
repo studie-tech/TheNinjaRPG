@@ -388,14 +388,16 @@ importer_hash = hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()
 for profile, definition in definitions.items():
     checkpoint_key = hashlib.sha256(json.dumps([REVISION, PROFILES.get(profile), definition, importer_hash], sort_keys=True).encode()).hexdigest()[:24]
     checkpoint = OUT / ("profile-" + checkpoint_key + ".json")
-    if checkpoint.exists():
+    try:
         cached = json.loads(checkpoint.read_text())
-        if all((OUT / file).exists() for file in cached["files"]):
-            catalog.update(cached["entries"])
-            credits.extend(cached["credits"])
-            generated.update(cached["files"])
-            print(profile + " (cached)", flush=True)
-            continue
+    except (OSError, ValueError):
+        cached = None
+    if cached is not None and all((OUT / file).exists() for file in cached["files"]):
+        catalog.update(cached["entries"])
+        credits.extend(cached["credits"])
+        generated.update(cached["files"])
+        print(profile + " (cached)", flush=True)
+        continue
     material_channels = sorted(set(material_ramps(definition).values())) if not (profile == "body" or profile.startswith(("head-", "hair-", "beard-")) or definition.get("supplement")) else []
     colors = SKINS if profile == "body" or profile.startswith("head-") else COLORS
     if profile.startswith("hair-") or profile.startswith("beard-"):
@@ -429,7 +431,9 @@ for profile, definition in definitions.items():
         credits.append({"profile": profile, **credit, "urls": urls, "chosenLicense": chosen})
     entries = {key: value for key, value in catalog.items() if key.startswith(profile + "/")}
     files = sorted({part["image"] for layers in entries.values() for sheet in layers for part in [sheet, *([sheet["travel"]] if "travel" in sheet else [])]})
-    checkpoint.write_text(json.dumps({"entries": entries, "credits": [credit for credit in credits if credit["profile"] == profile], "files": files}, separators=(",", ":")))
+    temporary = checkpoint.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps({"entries": entries, "credits": [credit for credit in credits if credit["profile"] == profile], "files": files}, separators=(",", ":")))
+    temporary.replace(checkpoint)
     material_images.clear()
     images.clear()
     print(profile, flush=True)

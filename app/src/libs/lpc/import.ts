@@ -3,8 +3,8 @@ import { canonicalJson } from "@/libs/contentReview/version";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import { chunkArray } from "@/utils/array";
-import { fetchWithRetry } from "@/utils/http";
 import { textureImageUrl } from "@/utils/image";
+import { withRetry } from "@/utils/retry";
 import type { LpcAnimation } from "@/validators/lpc";
 import type { LpcAssetSheet, LpcConfig, LpcLayout } from "@/validators/lpcAsset";
 import { lpcLayoutValidator } from "@/validators/lpcAsset";
@@ -303,8 +303,14 @@ const publishAtlas = async (bytes: Buffer) => {
   );
   if (!upload.data) throw new Error("Could not upload the processed sheet. Try again.");
   const url = upload.data.ufsUrl;
-  const delivered = await fetchWithRetry(textureImageUrl(url, 0), {}, 30_000);
-  if (!delivered.ok || !Buffer.from(await delivered.arrayBuffer()).equals(bytes))
+  const delivered = await withRetry(async () => {
+    const response = await fetch(textureImageUrl(url, 0), {
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) throw new Error(`Media download failed (${response.status}).`);
+    return Buffer.from(await response.arrayBuffer());
+  });
+  if (!delivered.equals(bytes))
     throw new Error(
       "The sprite CDN changed the processed sheet. Upload again before saving.",
     );

@@ -1,5 +1,5 @@
 import { lpcDesignCoverage } from "@/libs/lpc/designs";
-import type { LpcBody } from "@/validators/lpc";
+import type { LpcBody, LpcMaterialColors } from "@/validators/lpc";
 import type { LpcConfig } from "@/validators/lpcAsset";
 
 /** Make absent poses visible before a staff member saves an outfit or assigns it to an item. */
@@ -8,13 +8,15 @@ export const LpcAnimationCoverage = ({
   body,
   color,
   eyes,
+  materialColors,
 }: {
   config: LpcConfig;
   body: LpcBody;
   color?: string;
   eyes?: string;
+  materialColors?: LpcMaterialColors;
 }) => {
-  const coverage = lpcDesignCoverage(config, body, color, eyes);
+  const coverage = lpcDesignCoverage(config, body, color, eyes, materialColors);
   const supplied = coverage
     .filter((pose) => pose.supplied)
     .map((pose) => pose.animation);

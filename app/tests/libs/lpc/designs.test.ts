@@ -116,6 +116,86 @@ it("offers only palettes available for both builds and identifies held animation
   ).toBe(false);
 });
 
+it("checks the material palettes rendered after base-eye fallback and retains exact requested eyes", () => {
+  const config = layeredDesign();
+  config.defaultColor = "blue";
+  for (const body of ["male", "female"] as const) {
+    for (const sheet of config.variants[`${body}/gold/blue`]!) {
+      sheet.component = sheet.part;
+      delete sheet.layout.clips.idle;
+    }
+    const catalog = buildLpcCatalog([{ id: "coat", lpcConfig: config }]);
+    const appearance = { version: 1 as const, body, layers: [] };
+    const layer = {
+      profile: "coat",
+      color: "gray",
+      eyes: "green",
+      materialColors: { cloth: "gold", trim: "gold" },
+    };
+    const fallback = spriteLayerSheets(catalog, appearance, layer);
+    expect(fallback.map((sheet) => sheet.image)).toEqual(
+      config.variants[`${body}/gold/blue`]!.map((sheet) => sheet.image),
+    );
+    expect(
+      lpcDesignCoverage(config, body, "gray", "blue").find(
+        (pose) => pose.animation === "idle",
+      )?.supplied,
+    ).toBe(true);
+    expect(
+      lpcDesignCoverage(config, body, "gray", "green", layer.materialColors).find(
+        (pose) => pose.animation === "idle",
+      )?.supplied,
+    ).toBe(false);
+    expect(
+      spriteLayerSheets(catalog, appearance, layer, "travel").map(
+        (sheet) => sheet.image,
+      ),
+    ).toEqual(fallback.map((sheet) => sheet.travel!.image));
+
+    config.variants[`${body}/gray/green`] = structuredClone(
+      config.variants[`${body}/gray/blue`]!,
+    );
+    config.variants[`${body}/gold/green`] = config.variants[`${body}/gold/blue`]!.map(
+      (sheet) => ({ ...sheet, image: `${sheet.image}-green-eyes` }),
+    );
+    const exactCatalog = buildLpcCatalog([{ id: "coat", lpcConfig: config }]);
+    expect(
+      spriteLayerSheets(exactCatalog, appearance, layer).map((sheet) => sheet.image),
+    ).toEqual(config.variants[`${body}/gold/green`]!.map((sheet) => sheet.image));
+  }
+});
+
+it("uses fallback eyes for recipe material palettes when the requested base is unavailable", () => {
+  const config = layeredDesign();
+  config.defaultColor = "blue";
+  config.upstream[0]!.colors.push({ label: "Eyes", group: "eyes", material: "eyes" });
+  const result = importLpcRecipe(
+    JSON.stringify({
+      version: 2,
+      bodyType: "male",
+      selections: {
+        fabric: { itemId: "test_shirt", subId: 0, recolor: "cloth.ulpc.gold" },
+        eyes: { itemId: "test_shirt", subId: 2, recolor: "eye.ulpc.green" },
+      },
+    }),
+    [{ id: "coat", hidden: false, lpcConfig: config }],
+    { category: "equipment" },
+  );
+  for (const body of ["male", "female"] as const) {
+    expect(result.config.variants[`${body}/gray/blue`]![0]!.image).toBe(
+      config.variants[`${body}/gold/blue`]![0]!.image,
+    );
+    expect(result.config.variants[`${body}/gray/blue`]![1]!.image).toBe(
+      config.variants[`${body}/blue/blue`]![1]!.image,
+    );
+  }
+  expect(result.warnings).toEqual(
+    ["male", "female"].map(
+      (body) => `coat: blue/green is unavailable on ${body}; using its default.`,
+    ),
+  );
+});
+
 it("keeps imported outfit components separate when checking both full and movement breathing poses", () => {
   const config = layeredDesign();
   for (const sheets of Object.values(config.variants)) {

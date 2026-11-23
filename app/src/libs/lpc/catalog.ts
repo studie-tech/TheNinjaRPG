@@ -90,24 +90,16 @@ export const spriteLayerSheets = (
   mode: "all" | "travel" = "all",
 ): LpcSheet[] => {
   const design = lpcCatalog.designs[layer.profile];
-  const color = layer.color === "blonde" ? "yellow" : layer.color;
-  const eyes = layer.eyes ?? design?.defaultEyes ?? "blue";
-  const key = `${layer.profile}/${appearance.body}/${color}/${eyes}`;
-  const fallback = `${layer.profile}/${appearance.body}/${design?.defaultColor ?? "gray"}/${design?.defaultEyes ?? "blue"}`;
-  const base = lpcCatalog.entries[key] ?? lpcCatalog.entries[fallback];
-  const sheets = base?.map((sheet) => {
-    const selected = sheet.material && layer.materialColors?.[sheet.material];
-    if (!selected || !sheet.part) return sheet;
-    return (
-      lpcCatalog.entries[
-        `${layer.profile}/${appearance.body}/${selected}/${eyes}`
-      ]?.find(
-        (candidate) =>
-          candidate.part === sheet.part && candidate.material === sheet.material,
-      ) ?? sheet
+  const sheets = resolveLpcVariantSheets(
+    (color, eyes) =>
+      lpcCatalog.entries[`${layer.profile}/${appearance.body}/${color}/${eyes}`],
+    design,
+    layer,
+  );
+  if (!sheets)
+    throw new Error(
+      `Sprite selection is unavailable: ${layer.profile}/${appearance.body}/${layer.color}/${layer.eyes ?? design?.defaultEyes ?? "blue"}`,
     );
-  });
-  if (!sheets) throw new Error(`Sprite selection is unavailable: ${key}`);
   return mode === "travel"
     ? sheets.flatMap((sheet) =>
         sheet.travel
@@ -120,6 +112,30 @@ export const spriteLayerSheets = (
           : [],
       )
     : sheets;
+};
+
+/** Resolve base and material palettes together, retaining the eyes of the selected base. */
+export const resolveLpcVariantSheets = <T extends Pick<LpcSheet, "part" | "material">>(
+  sheetsFor: (color: string, eyes: string) => T[] | undefined,
+  defaults: Pick<LpcConfig, "defaultColor" | "defaultEyes"> | undefined,
+  selection: Pick<SpriteLayer, "color" | "eyes" | "materialColors">,
+): T[] | undefined => {
+  const defaultEyes = defaults?.defaultEyes ?? "blue";
+  const eyes = selection.eyes ?? defaultEyes;
+  const color = selection.color === "blonde" ? "yellow" : selection.color;
+  const requested = sheetsFor(color, eyes);
+  const base = requested ?? sheetsFor(defaults?.defaultColor ?? "gray", defaultEyes);
+  const baseEyes = requested ? eyes : defaultEyes;
+  return base?.map((sheet) => {
+    const selected = sheet.material && selection.materialColors?.[sheet.material];
+    if (!selected || !sheet.part) return sheet;
+    return (
+      sheetsFor(selected, baseEyes)?.find(
+        (candidate) =>
+          candidate.part === sheet.part && candidate.material === sheet.material,
+      ) ?? sheet
+    );
+  });
 };
 
 /** Authored pose duration shared by sampling and retained actor updates. */
