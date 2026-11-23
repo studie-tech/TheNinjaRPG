@@ -62,7 +62,7 @@ function testMocks() {
     rewardHook: vi.fn(),
     step: {
       id: "welcome",
-      chapter: "student",
+      chapter: "arrival",
       title: "Welcome",
       description: "Welcome",
       page: "/profile",
@@ -118,7 +118,7 @@ vi.mock("@/utils/routing", () => ({ usePublicPathname: () => "/profile" }));
 vi.mock("@/libs/tutorialSteps", () => {
   const step = {
     id: "welcome",
-    chapter: "student",
+    chapter: "arrival",
     title: "Welcome",
     description: "Welcome",
     page: "/profile",
@@ -225,7 +225,7 @@ beforeEach(() => {
   mocks.stepNumber = 0;
   mocks.step = {
     id: "welcome",
-    chapter: "student",
+    chapter: "arrival",
     title: "Welcome",
     description: "Welcome",
     page: "/profile",

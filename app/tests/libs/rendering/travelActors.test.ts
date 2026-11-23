@@ -189,6 +189,24 @@ describe("travel actor snapshots", () => {
       recipes([deer(0), player()], { showAmbient: false }).map((recipe) => recipe.key),
     ).toEqual(["user:other"]);
   });
+  it("keeps a story scene's figures on the map whatever its filters hide", () => {
+    const story = player({
+      isNpc: true,
+      isStoryActor: true,
+      npcInteractionType: "AMBIENT",
+      npcPlacementId: "story-double",
+      npcWalk: { tiles: [{ x: 5, y: 5 }], startAt: 0, stepMs: 1 },
+    });
+    const shown = recipes([story, player()], {
+      showUsers: false,
+      showAmbient: false,
+      bracketFilter: [],
+    });
+    expect(shown.map((recipe) => recipe.key)).toEqual(["npc:story-double:0:0"]);
+    expect(shown[0]?.parts.map((part) => part.kind)).toEqual(["avatar"]);
+    // Unlike wildlife, a figure the story is about is lit at night.
+    expect(shown[0]?.parts[0]).toHaveProperty("light");
+  });
   it("omits restricted attack actions while preserving healing and profile details", () => {
     expect(
       recipes([player({ rank: "STUDENT" })])[0]?.parts.map((part) => part.kind),

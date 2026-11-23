@@ -608,7 +608,7 @@ describe("combat result screen", () => {
       state.profile = { ...state.profile, tutorialOn: true, tutorialStep: 8 };
       state.currentStep = {
         id: "combat-fight",
-        chapter: "combat",
+        chapter: "academy",
         title: "Fight!",
         description: "",
         page: "/combat",
@@ -669,7 +669,7 @@ describe("combat result screen", () => {
     state.profile = { ...state.profile, tutorialOn: true, tutorialStep: 8 };
     state.currentStep = {
       id: "combat-fight",
-      chapter: "combat",
+      chapter: "academy",
       title: "Fight!",
       description: "",
       page: "/combat",
@@ -686,7 +686,7 @@ describe("combat result screen", () => {
     state.profile = { ...state.profile, tutorialOn: true };
     state.currentStep = {
       id: "combat-fight",
-      chapter: "combat",
+      chapter: "academy",
       title: "Fight!",
       description: "",
       page: "/combat",
@@ -715,12 +715,12 @@ describe("combat action notifications", () => {
   it("titles each settlement notice by its kind and advances the tutorial on a win", async () => {
     state.currentStep = {
       id: "combat-fight",
-      chapter: "combat",
+      chapter: "academy",
       title: "Fight!",
       description: "",
       page: "/combat",
       onCombatWin: "combat-claim-reward",
-      onCombatLoss: "combat-enter-arena",
+      onCombatLoss: "combat-rematch",
     };
     const battle = makeBattle();
     mount({ battle, result: null, isPending: false });

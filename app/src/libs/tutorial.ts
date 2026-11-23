@@ -34,6 +34,7 @@ export const TutorialTriggers = [
   "questDialog",
   "questReward",
   "questObjective",
+  "sectorWalk",
   "arenaStart",
   "assignStats",
   "levelUp",
@@ -47,6 +48,12 @@ export const TutorialTriggers = [
   "claimStreak",
 ] as const;
 export type TutorialTrigger = (typeof TutorialTriggers)[number];
+
+/** Step that has the player take their first steps on the sector map, over to Lemu. */
+export const TUTORIAL_ARRIVAL_STEP_ID = "arrival-welcome";
+
+/** Step that plays the ambush at Horizon on the sector map. */
+export const TUTORIAL_AMBUSH_STEP_ID = "arrival-ambush";
 
 /** Step that has the player train a stat with a small, previewed amount of Energy. */
 export const TUTORIAL_TRAIN_STAT_STEP_ID = "tools-train-stat";
@@ -97,9 +104,11 @@ export const TUTORIAL_HOME_SECTOR = horizon.sector;
  * version of the chain let them skip).
  */
 export const STARTER_QUEST_OBJECTIVES = {
-  accept: "eHayd",
-  arena: "tArna",
+  stand: "eHayd",
+  double: "tDubl",
+  accept: "tAccp",
   jutsu: "tJtsu",
+  arena: "tDumy",
   brief: "tBrf1",
   pup: "_nY7o",
   sanctuary: "tSnct",
@@ -211,6 +220,10 @@ export const isTutorialJutsuPickStep = (step?: { id?: string } | null) =>
 
 export const isTutorialItemBuyStep = (step?: { id?: string } | null) =>
   step?.id === TUTORIAL_ITEM_BUY_STEP_ID;
+
+/** Whether the step is part of the opening scene on Horizon's sector map. */
+export const isTutorialArrivalStep = (step?: { id?: string } | null) =>
+  step?.id === TUTORIAL_ARRIVAL_STEP_ID || step?.id === TUTORIAL_AMBUSH_STEP_ID;
 
 export const isTutorialCaptureStep = (step?: { id?: string } | null) =>
   step?.id === TUTORIAL_CAPTURE_STEP_ID;

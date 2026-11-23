@@ -16,6 +16,7 @@ import { getSectorPresenceUpdate } from "@/deltas/travel";
 import {
   IMG_AVATAR_DEFAULT,
   IMG_SCENE_BACKGROUND,
+  IMG_URL_HANDPOINTER,
   SECTOR_WALK_STEP_MS,
   STRUCTURE_ADJACENTS,
   WAR_SHRINE_IMAGE_BY_BIOME,
@@ -27,6 +28,7 @@ import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useArrivalScene } from "@/hooks/useArrivalScene";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
@@ -77,6 +79,7 @@ import {
 import { findConsecutiveQuestId } from "@/libs/questRun";
 import {
   createTravelScene,
+  type TravelMarkerPoint,
   type TravelPick,
   type TravelSnapshot,
   travelLightingMode,
@@ -118,6 +121,7 @@ import {
 } from "@/libs/travel";
 import {
   isTutorialActive,
+  isTutorialArrivalStep,
   isTutorialCaptureStep,
   TUTORIAL_LAYOUT_EVENT,
 } from "@/libs/tutorial";
@@ -230,11 +234,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const liveZoomRef = useRef<number | null>(null);
   // Global travel lands a tutorial player within a few tiles of the capture
   // target, so that step opens zoomed right in: the puppy and its marker fill
-  // the view rather than being a speck somewhere on a 26x26 map. Only the
-  // opening view -- zooming back out afterwards sticks, as it does anywhere
+  // the view rather than being a speck somewhere on a 26x26 map. The opening scene
+  // at Horizon does the same for its figures. Only the opening view -- zooming back out afterwards sticks, as it does anywhere
   // else, and every other step keeps the player's stored zoom.
-  const { currentStep } = useTutorialStep();
-  const openSectorZoomedIn = isTutorialCaptureStep(currentStep);
+  const { currentStep, completeTutorialAction } = useTutorialStep();
+  const openSectorZoomedIn =
+    isTutorialCaptureStep(currentStep) || isTutorialArrivalStep(currentStep);
   const [currentStructure, setCurrentStructure] = useState<VillageStructure | null>(
     null,
   );
@@ -265,6 +270,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const mountRef = useRef<HTMLDivElement | null>(null);
   // Lesson anchor kept over the viewer's objective marker, so guidance can point at it.
   const objectiveMarkerRef = useRef<HTMLDivElement | null>(null);
+  // The same over the tile the tutorial's story scene points at.
+  const storyMarkerRef = useRef<HTMLDivElement | null>(null);
+  const storyMarkerTileRef = useRef<SectorPoint | null>(null);
   const pathFinderRef = useRef<PathCalculator | null>(null);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
@@ -1707,8 +1715,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         publishMovementStatus(false);
         document.body.style.cursor = "default";
         continueMovement();
-        if (!isEntryAtDestination) autoAttackRef.current();
-      } else if (!context?.entryCommitted) {
+        autoAttackRef.current();
+        if (!movePendingRef.current) void completeTutorialAction("sectorWalk");
+      } else {
         // Navigation can outlive a committed move. Refresh rather than apply an
         // older location over a later action in this account's profile cache.
         await utils.profile.getUser.invalidate();
@@ -2589,19 +2598,14 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           liveZoomRef.current = zoom;
           setStoredZoom(zoom);
         },
-        onQuestMarkerPoint: (at) => {
-          const anchor = objectiveMarkerRef.current;
-          if (!anchor) return;
-          anchor.style.display = at ? "" : "none";
-          if (at) {
-            // The pin stands on its tile, so the box rises from the tile's foot.
-            anchor.style.left = `${at.x}px`;
-            anchor.style.top = `${at.y + at.size * 0.25}px`;
-            anchor.style.width = `${at.size * 1.5}px`;
-            anchor.style.height = `${at.size * 2.5}px`;
-          }
-          window.dispatchEvent(new Event(TUTORIAL_LAYOUT_EVENT));
-        },
+        onQuestMarkerPoint: (at) =>
+          // The pin stands on its tile, so the box rises from the tile's foot.
+          placeMarkerAnchor(objectiveMarkerRef.current, at, {
+            width: 1.5,
+            height: 2.5,
+          }),
+        onStoryMarkerPoint: (at) =>
+          placeMarkerAnchor(storyMarkerRef.current, at, { width: 1.6, height: 1.4 }),
         getSnapshot: () => {
           const snapshot = travelSnapshot.current;
           if (!snapshot) throw new Error("Travel snapshot unavailable");
@@ -2614,7 +2618,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             routeTarget: pendingWorldTargetRef.current ?? routeTargetRef.current,
             sector: sectorRef.current,
             viewer: userRef.current,
-            users: usersRef.current,
+            users: arrivalScene.withCast(usersRef.current),
+            storyMarker: storyMarkerTileRef.current,
             col: animatedPositionRef.current?.x ?? userRef.current?.longitude ?? 0,
             row: animatedPositionRef.current?.y ?? userRef.current?.latitude ?? 0,
             nav: windowNavRef.current,
@@ -2649,6 +2654,24 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }),
     `${lightLayout}:${travelLightingMode(sector)}`,
   );
+  // The tutorial's opening, staged around the player.
+  const arrivalScene = useArrivalScene({
+    stepId: props.isActive && profile?.status === "AWAKE" ? currentStep?.id : undefined,
+    sector,
+    map: travelWindow.find((entry) => entry.sector === sector)?.map,
+    getPosition: () =>
+      animatedPositionRef.current ??
+      (userRef.current && {
+        x: userRef.current.longitude,
+        y: userRef.current.latitude,
+      }),
+    scenery: travel.isReady ? travel.scene.current : null,
+    getNow: () => Date.now() - timeDiffRef.current,
+    onCastChange: () => {
+      actorRevisionRef.current++;
+    },
+  });
+  storyMarkerTileRef.current = arrivalScene.marker;
   const attachSceneHost = useCallback((slot: HTMLDivElement | null) => {
     if (!slot) return;
     mountRef.current ??= document.createElement("div");
@@ -2774,6 +2797,36 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           className="pointer-events-none absolute -translate-x-1/2 -translate-y-full"
           style={{ display: "none" }}
         />
+        <div
+          ref={storyMarkerRef}
+          id="tutorial-story-marker"
+          aria-hidden="true"
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full"
+          style={{ display: "none" }}
+        >
+          {arrivalScene.kind === "greeting" && (
+            <>
+              <span className="story-target absolute inset-x-0 bottom-0" />
+              <Image
+                src={IMG_URL_HANDPOINTER}
+                alt=""
+                width={80}
+                height={80}
+                className="absolute top-full left-1/2 h-14 w-14 -translate-x-5 animate-bounce drop-shadow-lg motion-reduce:animate-none"
+              />
+            </>
+          )}
+          {arrivalScene.smoke > 0 && (
+            <span key={arrivalScene.smoke} className="story-smoke absolute inset-0" />
+          )}
+        </div>
+        {arrivalScene.flash > 0 && (
+          <div
+            key={arrivalScene.flash}
+            aria-hidden="true"
+            className="story-flash pointer-events-none absolute inset-0 z-10"
+          />
+        )}
         {showWorldLoader && !travel.isReady && !travel.error && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div
@@ -3135,6 +3188,23 @@ const SECTOR_MAX_ZOOM = 3;
  * window so closing scouting cannot also walk to a tile.
  */
 const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
+
+/** Keeps a lesson's anchor over a marker on the map canvas, `box` tiles in size. */
+const placeMarkerAnchor = (
+  anchor: HTMLElement | null,
+  at: TravelMarkerPoint | null,
+  box: { width: number; height: number },
+) => {
+  if (!anchor) return;
+  anchor.style.display = at ? "" : "none";
+  if (at) {
+    anchor.style.left = `${at.x}px`;
+    anchor.style.top = `${at.y + at.size * 0.25}px`;
+    anchor.style.width = `${at.size * box.width}px`;
+    anchor.style.height = `${at.size * box.height}px`;
+  }
+  window.dispatchEvent(new Event(TUTORIAL_LAYOUT_EVENT));
+};
 
 type SectorWindowEntry =
   RouterOutputs["worldMap"]["getSectorWindow"]["sectors"][number];

@@ -109,8 +109,8 @@ const WIDE_LAYOUT_QUERY = "(min-width: 48rem)";
 const PHONE_NAV_REM = 7;
 /** Breathing room at the foot of the window on wider layouts. */
 const WIDE_EDGE_REM = 1;
-/** The jutsu and item loadout row under the sector map, with its gap. */
-const LOADOUT_ROW_REM = 3;
+/** The loadout and fullscreen row under the sector map, with its gap. */
+const LOADOUT_ROW_REM = 4.5;
 /** Space between the map and whatever covers the foot of the screen. */
 const GAP_REM = 1;
 /** The travel box's title row and the frame above it, kept in view over the map. */

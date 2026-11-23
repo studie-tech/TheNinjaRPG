@@ -6,6 +6,9 @@ import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
 import { getFinishGlobalMoveUserUpdate, getRobPlayerUserUpdate } from "@/deltas/travel";
 import {
+  ARRIVAL_PUP_AI_ID,
+  BLACKSTEEL_COURIER_AI_ID,
+  BLACKSTEEL_DOUBLE_AI_ID,
   IMG_AVATAR_DEFAULT,
   MAP_WAKE_ISLAND_SECTOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
@@ -89,6 +92,7 @@ import {
   findUserDataForGetSectorUsers,
   findUserForGlobalTravelFinish,
   insertActionLogForRobPlayer,
+  listArrivalCast,
   listQuestHistoryForGetSectorData,
   listQuestHistoryForGetSectorData2,
   listSectorForGetAllSectors,
@@ -115,6 +119,7 @@ import { breakStealth } from "@/routers/stealth";
 import { fetchActiveWars } from "@/routers/war";
 import {
   baseServerResponse,
+  cdnCachedProcedure,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -163,6 +168,22 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 const pusher = getServerPusher();
 
 export const travelRouter = createTRPCRouter({
+  // Map artwork of the figures in the Academy Trials' opening scene
+  getArrivalCast: cdnCachedProcedure
+    .meta({ mcp: { description: "Get artwork of the Academy Trials' opening scene" } })
+    .query(async ({ ctx }) => {
+      const cast = await listArrivalCast(ctx.drizzle, [
+        ARRIVAL_PUP_AI_ID,
+        BLACKSTEEL_COURIER_AI_ID,
+        BLACKSTEEL_DOUBLE_AI_ID,
+      ]);
+      return Object.fromEntries(
+        cast.map(({ userId, avatar, spriteAnimationBindings }) => [
+          userId,
+          { avatar, sheets: snapshotSpriteAnimations(spriteAnimationBindings) },
+        ]),
+      );
+    }),
   // Rob another player
   robPlayer: protectedProcedure
     .meta({ mcp: { description: "Rob another player for ryo" } })

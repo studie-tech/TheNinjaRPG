@@ -1845,6 +1845,12 @@ export const ONBOARDING_DAILY_QUEST_IDS: readonly string[] = [
   "blacksteel-daily-first-steps",
   "blacksteel-daily-active-duty",
 ];
+/** Opponent of the Academy Trials' first fight: the double the masked courier leaves at Horizon. */
+export const BLACKSTEEL_DOUBLE_AI_ID = "blacksteel-smoke-double";
+/** The masked courier of the Academy Trials. */
+export const BLACKSTEEL_COURIER_AI_ID = "blacksteel-masked-courier";
+/** The pup the courier hunts, as it runs across the sector map. */
+export const ARRIVAL_PUP_AI_ID = "oY4j0GzdZ_VUQSU45lPKx";
 /** Opponent of the Genin exam's practical test. */
 export const BLACKSTEEL_PROCTOR_AI_ID = "blacksteel-proctor-clone";
 /** The seeded training dummy fought from the arena. */
@@ -1898,7 +1904,7 @@ export const RECRUITMENT_GOALS = {
 export const RECRUITMENT_STALLED_AFTER_DAYS = 7;
 
 // Length of TUTORIAL_STEPS in hooks/tutorial.tsx; tests/libs/tutorial.test.ts enforces it.
-export const TUTORIAL_STEPS_COUNT = 45;
+export const TUTORIAL_STEPS_COUNT = 49;
 
 // Recruitment rewards config
 export const RECRUITMENT_REWARDS = [

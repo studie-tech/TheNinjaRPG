@@ -833,7 +833,7 @@ export const createTravelActors = (
       }
       // Players, quest NPCs and orbiting crowds re-sort the moment they cross scenery.
       if (
-        recipe.user?.npcInteractionType !== "AMBIENT" &&
+        (recipe.user?.npcInteractionType !== "AMBIENT" || recipe.user.isStoryActor) &&
         (record.x !== fromX || record.y !== fromY || recipe.spread || recipe.quest)
       )
         urgentDepth = true;
@@ -1210,9 +1210,10 @@ export const travelActorRecipes = (
   for (const user of snapshot.users) {
     if (!canShowUser(snapshot, user)) continue;
     // Roaming NPCs only start on their anchor; they never orbit tile mates.
-    const key = user.npcWander
-      ? travelActorKey(user)
-      : `${user.longitude},${user.latitude}`;
+    const key =
+      user.npcWander || user.npcWalk
+        ? travelActorKey(user)
+        : `${user.longitude},${user.latitude}`;
     const group = grouped.get(key) ?? [];
     group.push(user);
     grouped.set(key, group);
@@ -1467,15 +1468,17 @@ const sameAppearance = (inputs: AppearanceInputs, user: SectorUser) =>
   // Walking steps carry the same recipe object; a rebuilt one is compared by value.
   (inputs.spriteAppearance === user.spriteAppearance ||
     inputs.appearanceJson === JSON.stringify(user.spriteAppearance));
-const ambientRank = (user: SectorUser) => Number(user.npcInteractionType === "AMBIENT");
+const ambientRank = (user: SectorUser) =>
+  Number(user.npcInteractionType === "AMBIENT" && !user.isStoryActor);
 /** Apply the same visibility policy before body selection and full-roster encounter/count recipes. */
 const canShowUser = (snapshot: TravelActorsSnapshot, user: SectorUser) =>
-  (snapshot.showUsers || user.userId === snapshot.viewer?.userId) &&
-  (snapshot.showAmbient !== false || user.npcInteractionType !== "AMBIENT") &&
-  (user.isNpc ||
-    user.userId === snapshot.viewer?.userId ||
-    user.isVillageDuty ||
-    passesBracketFilter(user, snapshot.bracketFilter));
+  user.isStoryActor ||
+  ((snapshot.showUsers || user.userId === snapshot.viewer?.userId) &&
+    (snapshot.showAmbient !== false || user.npcInteractionType !== "AMBIENT") &&
+    (user.isNpc ||
+      user.userId === snapshot.viewer?.userId ||
+      user.isVillageDuty ||
+      passesBracketFilter(user, snapshot.bracketFilter)));
 
 const part = (
   tile: TerrainHex,
@@ -1553,7 +1556,7 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
               // Body art and NPCs stand on the ground like players: grounded and animated, and
               // lit at night unless they are wildlife.
               shadow: PLAYER_TRAVEL_SHADOW,
-              ...(user.npcInteractionType === "AMBIENT"
+              ...(user.npcInteractionType === "AMBIENT" && !user.isStoryActor
                 ? {}
                 : { light: PLAYER_TRAVEL_LIGHT }),
               ...(user.bodyArt

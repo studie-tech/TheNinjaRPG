@@ -19,8 +19,8 @@ import {
 } from "@/libs/tutorial";
 
 export const TUTORIAL_CHAPTERS = [
-  { id: "student", title: "A New Student" },
-  { id: "combat", title: "Trial by Combat" },
+  { id: "arrival", title: "A Violet Flash" },
+  { id: "academy", title: "Academy Trials" },
   { id: "tools", title: "Tools of the Trade" },
   { id: "mission", title: "The Missing Pup" },
   { id: "bond", title: "Bondkeepers" },
@@ -39,6 +39,10 @@ export interface TutorialStepConfig {
   action?: string;
   /** Elements to highlight, most specific first; the first one on screen wins. */
   elementIds?: string[];
+  /** What Lemu says while the scene that opens the step still plays on the map. */
+  sceneLead?: { description: string; action: string };
+  /** Brings the element into view and leaves the page lit: the step plays on it, unmarked. */
+  isRevealOnly?: boolean;
   /**
    * Elements to highlight instead for a player who took Express Trials, whose skipped
    * lessons taught the controls this step expects them to know.
@@ -114,7 +118,7 @@ export type TutorialScreenKind = "rankUp" | "tomorrow";
 /** Shown in place of any step while the player is in the hospital. */
 export const TUTORIAL_HOSPITALIZED_STEP: TutorialStepConfig = {
   id: "hospitalized",
-  chapter: "combat",
+  chapter: "academy",
   title: "Patched up",
   description:
     "Every shinobi loses a fight now and then. You'll be discharged for free when the timer runs out, or you can pay a little ryo to heal right away.",
@@ -142,106 +146,112 @@ const levelUpElements = [
 ];
 
 export const TUTORIAL_STEPS: TutorialStepConfig[] = [
-  // Chapter 1: A New Student
+  // Chapter 1: A Violet Flash
   {
-    id: "student-welcome",
-    chapter: "student",
+    id: "arrival-welcome",
+    chapter: "arrival",
     title: "Welcome to Horizon",
     description:
-      "Welcome to Horizon, where every shinobi begins. I'm <b>Lemu</b>, your instructor. Every building here offers something different, and the <b>location menu</b> always shows what the place you stand in offers. To earn your Genin headband, pass the <b>Academy Trials</b>. They begin at the academy.",
-    action: "Tap Academy.",
-    elementIds: ["tutorial-academy"],
-    page: "/village",
-    proceedOnHighlightClick: true,
+      "You made it. I'm <b>Lemu</b>, and from today I'm your instructor. This is <b>Horizon</b>, where every shinobi begins. Come, walk with me.",
+    action: "Tap the glowing ground to walk over to me.",
+    elementIds: ["tutorial-travel-sector"],
+    isRevealOnly: true,
+    page: "/travel",
+    objectiveId: STARTER_QUEST_OBJECTIVES.stand,
+    advanceOn: "sectorWalk",
   },
   {
-    id: "academy-accept-trials",
-    chapter: "student",
-    title: "Your first quest",
+    id: "arrival-ambush",
+    chapter: "arrival",
+    title: "A violet flash",
     description:
-      "Quests are how you progress: chains of objectives with rewards along the way. Your active quests are always in your <b>logbook</b>. Your first one is the <b>Academy Trials</b>.",
-    action: "Answer me in the Academy Trials to accept them.",
-    elementIds: ["tutorial-dialog-options", starterLogbookEntry],
-    teachOnPage: true,
-    page: "/academy",
+      "That poor pup! Whoever is hunting it left a <b>smoke double</b> behind to stop us. Breathe. A fight is only this: you move, then you strike. I'm right here.",
+    action: "Face the smoke double.",
+    sceneLead: {
+      description:
+        "That light on the ridge... Stay close to me. Something is running this way!",
+      action: "Watch the map.",
+    },
+    elementIds: ["tutorial-travel-sector"],
+    isRevealOnly: true,
+    page: "/travel",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
-    objectiveId: STARTER_QUEST_OBJECTIVES.accept,
+    objectiveId: STARTER_QUEST_OBJECTIVES.stand,
     advanceOn: "questDialog",
-  },
-  // Chapter 2: Trial by Combat
-  {
-    id: "combat-arena-building",
-    chapter: "combat",
-    title: "The Battle Arena",
-    description:
-      "Your first trial is a fight. The arena is where you test yourself against training opponents.",
-    action: "Tap Battle Arena.",
-    elementIds: ["tutorial-battlearena"],
-    page: "/village",
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "combat-enter-arena",
-    chapter: "combat",
-    title: "Your first fight",
-    description:
-      "I've picked the <b>Academy Dummy</b> for you. Auto combat stays off while you train with me: today you fight with your own hands.",
-    action: "Tap the Fight button.",
-    elementIds: ["tutorial-battlearena-challenge-ai-enter"],
-    page: "/battlearena",
-    advanceOn: "arenaStart",
   },
   {
     id: "combat-battlefield",
-    chapter: "combat",
+    chapter: "arrival",
     title: "The battlefield",
     description:
-      "Fights play out on a grid of hexagonal tiles. The dummy stands just two tiles away. You act by choosing an action below the field and then tapping a tile on it.",
+      "Fights play out on a grid of hexagonal tiles. The double stands just two tiles away. You act by choosing an action below the field and then tapping a tile on it.",
     elementIds: ["tutorial-combat-field"],
     page: "/combat",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.double,
     showNextButton: true,
     onCombatWin: "combat-claim-reward",
-    onCombatLoss: "combat-enter-arena",
+    onCombatLoss: "combat-rematch",
   },
   {
     id: "combat-turns",
-    chapter: "combat",
+    chapter: "arrival",
     title: "Turns and Action Points",
     description:
-      "Each turn you get <b>100 Action Points (AP)</b>, shown on this bar: moving costs 10 AP and a basic attack 20. While you train with me there is no time limit, and I'll guide your first turn.",
+      "Each turn you get <b>100 Action Points (AP)</b>, shown on this bar: moving costs 10 AP and a basic attack 20. There is no time limit while I'm with you, and I'll guide your first turn.",
     elementIds: ["tutorial-combat-action-timer"],
     page: "/combat",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.double,
     showNextButton: true,
     onCombatWin: "combat-claim-reward",
-    onCombatLoss: "combat-enter-arena",
+    onCombatLoss: "combat-rematch",
   },
   {
     id: "combat-fight",
-    chapter: "combat",
+    chapter: "arrival",
     title: "Fight!",
-    description: "Defeat the Academy Dummy.",
+    description: "Defeat the smoke double.",
     elementIds: ["tutorial-combat-field"],
     page: "/combat",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.double,
     onCombatWin: "combat-claim-reward",
-    onCombatLoss: "combat-enter-arena",
+    onCombatLoss: "combat-rematch",
+  },
+  {
+    id: "combat-rematch",
+    chapter: "arrival",
+    title: "Back on your feet",
+    description:
+      "I drove the double off before it could finish you, but it is circling back. Nobody wins by standing still: step next to it, and spend all your Action Points striking before you end your turn.",
+    action: "Tap Retry battle to face it again.",
+    elementIds: ["tutorial-travel-sector"],
+    isRevealOnly: true,
+    page: "/travel",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.double,
+    onCombatWin: "combat-claim-reward",
+    onCombatLoss: "combat-rematch",
   },
   {
     id: "combat-claim-reward",
-    chapter: "combat",
-    title: "Victory!",
+    chapter: "arrival",
+    title: "Only smoke",
     description:
-      "Well fought! Winning completed your first objective. Objective rewards wait in your <b>logbook</b> until you claim them.",
+      "The double bursts into violet smoke, and the hunter it was shielding is gone. You held your ground without a day of training! Deeds like that earn rewards, and they wait in your <b>logbook</b> until you claim them.",
     action: "Tap Claim in your logbook to collect your reward.",
     elementIds: ["tutorial-objective-claim"],
     teachOnPage: true,
     page: "/profile",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
-    objectiveId: STARTER_QUEST_OBJECTIVES.arena,
+    objectiveId: STARTER_QUEST_OBJECTIVES.double,
     advanceOn: "questReward",
   },
+  // Chapter 2: The Academy Trials
   {
     id: "combat-assign-notice",
-    chapter: "combat",
+    chapter: "academy",
     title: "Unassigned experience",
     description:
       "Experience from quests goes into the stats you choose. New experience always shows up here.",
@@ -255,7 +265,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "combat-assign-form",
-    chapter: "combat",
+    chapter: "academy",
     title: "Choose your strengths",
     description:
       "Each specialization raises <b>Offence</b> (harder hits) and <b>Defence</b> (softer blows), plus two of the stats your techniques draw on. Pick the one that fits how you want to fight; <b>Advanced</b> lets you place each point yourself later.",
@@ -267,7 +277,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "combat-level-up",
-    chapter: "combat",
+    chapter: "academy",
     title: "Level up!",
     description:
       "Your experience now covers level 2. Every level raises your maximum health, chakra and stamina.",
@@ -276,13 +286,38 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/profile/experience",
     advanceOn: "levelUp",
   },
-  // Chapter 3: Tools of the Trade
+  {
+    id: "academy-building",
+    chapter: "academy",
+    title: "To the academy",
+    description:
+      "Whoever that was will be back, and we'll be ready. The <b>location menu</b> always shows what the place you stand in offers, and every building in Horizon offers something different. Your training begins at the academy.",
+    action: "Tap Academy.",
+    elementIds: ["tutorial-academy"],
+    page: "/village",
+    objectiveId: STARTER_QUEST_OBJECTIVES.accept,
+    proceedOnHighlightClick: true,
+  },
+  {
+    id: "academy-accept-trials",
+    chapter: "academy",
+    title: "Your first quest",
+    description:
+      "Quests are how you progress: chains of objectives with rewards along the way. Your active quests are always in your <b>logbook</b>. Your first one is the <b>Academy Trials</b>.",
+    action: "Answer me in the Academy Trials to accept them.",
+    elementIds: ["tutorial-dialog-options", starterLogbookEntry],
+    teachOnPage: true,
+    page: "/academy",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.accept,
+    advanceOn: "questDialog",
+  },
   {
     id: "tools-training-building",
-    chapter: "tools",
+    chapter: "academy",
     title: "Training Grounds",
     description:
-      "A win is a fine start, but shinobi grow through daily training. Let's visit the training grounds.",
+      "Courage carried you through that fight. Next time you'll have skill as well: shinobi grow through daily training. Let's visit the training grounds.",
     action: "Tap Training Grounds.",
     elementIds: ["tutorial-traininggrounds"],
     page: "/village",
@@ -290,7 +325,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "tools-train-stat",
-    chapter: "tools",
+    chapter: "academy",
     title: "Train with Energy",
     description:
       "Training spends <b>Energy</b> to raise a stat instantly. I've set aside a small amount so you can see what it buys.",
@@ -301,7 +336,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "tools-queue-energy",
-    chapter: "tools",
+    chapter: "academy",
     title: "The Energy queue",
     description:
       "Energy refills over time, even while you are offline. The <b>Energy queue</b> spends it for you as it comes back, so your training never stops.",
@@ -312,7 +347,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "tools-train-jutsu",
-    chapter: "tools",
+    chapter: "academy",
     title: "Your first jutsu",
     description:
       "Jutsu are your signature techniques. <b>Sonic Slash</b> is a piercing blade strike that hits from a few tiles away. The first level takes about a minute and costs a little ryo, and a new jutsu is equipped automatically.",
@@ -327,10 +362,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   },
   {
     id: "tools-claim-jutsu",
-    chapter: "tools",
+    chapter: "academy",
     title: "Objective complete",
     description:
-      "Learning a jutsu completed your next trial. You can use Sonic Slash in battle right away, even while it finishes training.",
+      "Learning a jutsu completed your first trial. You can use Sonic Slash in battle right away, even while it finishes training.",
     action: "Open Quests and claim your reward there.",
     questsTab: { marks: "all", prompt: "Claim your reward here." },
     page: "/traininggrounds",
@@ -339,6 +374,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     objectiveStepId: TUTORIAL_JUTSU_PICK_STEP_ID,
     advanceOn: "questReward",
   },
+  // Chapter 3: Tools of the Trade
   {
     id: "tools-assign",
     chapter: "tools",
@@ -400,13 +436,48 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     page: "/itemshop",
     advanceOn: "buyItem",
   },
+  {
+    id: "arena-building",
+    chapter: "tools",
+    title: "The Battle Arena",
+    description:
+      "The double took all those small hits to bring down. Let's see what a jutsu does! The arena is where you test yourself against training opponents, as often as you like.",
+    action: "Tap Battle Arena.",
+    elementIds: ["tutorial-battlearena"],
+    page: "/village",
+    objectiveId: STARTER_QUEST_OBJECTIVES.arena,
+    proceedOnHighlightClick: true,
+  },
+  {
+    id: "arena-enter",
+    chapter: "tools",
+    title: "Your second trial",
+    description:
+      "I've picked the <b>Academy Dummy</b> for you. Auto combat stays off while you train with me, so you strike with your own hands. Open with Sonic Slash.",
+    action: "Tap the Fight button.",
+    elementIds: ["tutorial-battlearena-challenge-ai-enter"],
+    page: "/battlearena",
+    objectiveId: STARTER_QUEST_OBJECTIVES.arena,
+    advanceOn: "arenaStart",
+  },
+  {
+    id: "arena-fight",
+    chapter: "tools",
+    title: "Put it to work",
+    description: "Defeat the Academy Dummy with what you have learned.",
+    elementIds: ["tutorial-combat-field"],
+    page: "/combat",
+    objectiveId: STARTER_QUEST_OBJECTIVES.arena,
+    onCombatWin: "mission-brief",
+    onCombatLoss: "arena-enter",
+  },
   // Chapter 4: The Missing Pup
   {
     id: "mission-brief",
     chapter: "mission",
     title: "A real mission",
     description:
-      "Last night a violet flash lit up the eastern ridge, and a pup from the <b>Bondkeeper Sanctuary</b> bolted in fright. A hunter swears a masked figure was chasing it. Your final trial: find the pup and bring it back safely.",
+      "The pup that ran past us belongs to the <b>Bondkeeper Sanctuary</b>. A hunter has seen it cornered on the eastern ridge, with the masked figure closing in. Your final trial: find the pup and bring it back safely.",
     action: "Accept the mission in the Academy Trials.",
     elementIds: [starterLogbookEntry],
     teachOnPage: true,
@@ -420,7 +491,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "Beyond the walls",
     description:
-      "Missions take you out into the world of Seichi. The travel map shows both the sector you stand in and the whole globe. The buttons along its top are labelled while you learn them.",
+      "Missions take you out into the world of Seichi. The travel map shows both the sector you stand in and the whole globe. The menu button in its header holds the map's other controls.",
     action: "Tap Travel in the main menu.",
     elementIds: ["tutorial-travel"],
     page: "/academy",
@@ -451,8 +522,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       <>
         The pup is cornered at the{" "}
         <MapPin className="inline-block h-4 w-4 text-red-500" /> marker, and the masked
-        figure is with it. Whoever it is, they won&apos;t hand it over. On your first
-        turn I&apos;ll show you Sonic Slash and your shuriken; then the fight is yours.
+        figure is with it: no double this time. They won&apos;t hand it over, so use
+        everything you have. I&apos;ll call out what I see, but the fight is yours.
       </>
     ),
     action: "Tap the marker to walk to it.",

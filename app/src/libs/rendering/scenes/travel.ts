@@ -3,6 +3,7 @@ import type { Grid } from "honeycomb-grid";
 import { Container, RenderLayer } from "pixi.js";
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
+import { npcWalkPose } from "@/libs/arrivalScene";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { hexGridHeightRatio } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
@@ -105,6 +106,8 @@ export const createTravelScene = async (options: {
    * its tile's height there), or null while it is off screen. Called when it moves.
    */
   onQuestMarkerPoint?: (at: TravelMarkerPoint | null) => void;
+  /** The same for the snapshot's `storyMarker` tile. */
+  onStoryMarkerPoint?: (at: TravelMarkerPoint | null) => void;
   initialZoom: number;
   resolution?: number;
 }) => {
@@ -373,10 +376,12 @@ export const createTravelScene = async (options: {
       );
     };
     game.setResize(() => transform(true));
-    let questMarkerKey = "";
-    const reportQuestMarker = () => {
-      if (!options.onQuestMarkerPoint) return;
-      const marker = actors.questMarker();
+    const reportMarker = (
+      report: ((at: TravelMarkerPoint | null) => void) | undefined,
+      reportedKey: string,
+      marker: { x: number; y: number; size: number } | undefined,
+    ) => {
+      if (!report) return reportedKey;
       const s = scale(),
         { width, height } = game.renderer;
       const x = marker ? world.position.x + marker.x * s : 0,
@@ -388,9 +393,36 @@ export const createTravelScene = async (options: {
       const key = at
         ? `${Math.round(at.x)}:${Math.round(at.y)}:${Math.round(at.size)}:${width}:${height}`
         : "";
-      if (key === questMarkerKey) return;
-      questMarkerKey = key;
-      options.onQuestMarkerPoint(at);
+      if (key !== reportedKey) report(at);
+      return key;
+    };
+    let questMarkerKey = "",
+      storyMarkerKey = "";
+    /** The snapshot's story tile in window coordinates, as `questMarker` gives its own. */
+    const storyMarkerTile = () => {
+      const { storyMarker, sector } = options.getSnapshot();
+      const entry = sectors.get(sector);
+      const tile =
+        storyMarker && entry?.grid.getHex({ col: storyMarker.x, row: storyMarker.y });
+      return entry && tile
+        ? {
+            x: -tile.center.x + tile.width / 2 + entry.position.x,
+            y: -tile.center.y + standingOffset(tile) + entry.position.y,
+            size: tile.height,
+          }
+        : undefined;
+    };
+    const reportMarkers = () => {
+      questMarkerKey = reportMarker(
+        options.onQuestMarkerPoint,
+        questMarkerKey,
+        actors.questMarker(),
+      );
+      storyMarkerKey = reportMarker(
+        options.onStoryMarkerPoint,
+        storyMarkerKey,
+        storyMarkerTile(),
+      );
     };
     const pick = (x: number, y: number): TravelPick => {
       const snapshot = options.getSnapshot(),
@@ -910,37 +942,48 @@ export const createTravelScene = async (options: {
         wanderWalks.clear();
       }
       const clock = snapshot.weatherTime ?? Date.now();
+      /** Walk an NPC between two tiles; reduced motion stands it on the nearer one. */
+      const walkBetween = (
+        actorKey: string,
+        pose: { from: WanderTile; to: WanderTile; progress: number; isMoving: boolean },
+      ) => {
+        const from = entry.grid.getHex({ col: pose.from.x, row: pose.from.y });
+        const to = entry.grid.getHex({ col: pose.to.x, row: pose.to.y });
+        if (!from || !to) return false;
+        const progress = frame.reducedMotion
+          ? Math.round(pose.progress)
+          : pose.progress;
+        movements.set(actorKey, {
+          x: -from.center.x + (-to.center.x + from.center.x) * progress,
+          y:
+            -from.center.y +
+            standingOffset(from) +
+            (-to.center.y + standingOffset(to) + from.center.y - standingOffset(from)) *
+              progress,
+          direction: pose.isMoving && !frame.reducedMotion ? "horizontal" : null,
+          facing: to.center.x > from.center.x ? 1 : -1,
+        });
+        return true;
+      };
       for (const user of wanderMap ? snapshot.users : []) {
+        if (user.npcWalk) {
+          const pose = npcWalkPose(user.npcWalk, clock);
+          if (pose) walkBetween(travelActorKey(user), pose);
+          continue;
+        }
         const wander = user.npcWander;
         if (!wander || !wanderMap) continue;
         const actorKey = travelActorKey(user);
         if (wander.pursuit) {
           const pose = villageDutyPursuitPosition(wander.pursuit, clock);
-          const from =
-            pose && entry.grid.getHex({ col: pose.from.x, row: pose.from.y });
-          const to = pose && entry.grid.getHex({ col: pose.to.x, row: pose.to.y });
-          if (pose && from && to) {
-            const progress = frame.reducedMotion
-              ? Math.round(pose.progress)
-              : pose.progress;
-            movements.set(actorKey, {
-              x: -from.center.x + (-to.center.x + from.center.x) * progress,
-              y:
-                -from.center.y +
-                standingOffset(from) +
-                (-to.center.y +
-                  standingOffset(to) +
-                  from.center.y -
-                  standingOffset(from)) *
-                  progress,
-              direction:
-                pose.progress > 0 && pose.progress < 1 && !frame.reducedMotion
-                  ? "horizontal"
-                  : null,
-              facing: to.center.x > from.center.x ? 1 : -1,
-            });
+          if (
+            pose &&
+            walkBetween(actorKey, {
+              ...pose,
+              isMoving: pose.progress > 0 && pose.progress < 1,
+            })
+          )
             continue;
-          }
         }
         const key = `${wander.seed}:${wander.anchor.x}:${wander.anchor.y}:${wander.radius}:${wander.wildOnly}:${wander.villageOnly ?? false}`;
         let spots = wanderSpotCache.get(key);
@@ -1216,7 +1259,7 @@ export const createTravelScene = async (options: {
         route.set(points, tile?.width ?? 50);
       }
       route.animate(frame, actors.feet(snapshot.viewer?.userId ?? ""), scale());
-      reportQuestMarker();
+      reportMarkers();
       const currentWeather =
         snapshot.weather ??
         getWorldWeather(
@@ -1276,21 +1319,21 @@ export const createTravelScene = async (options: {
       fit: game.fit,
       updateWindow: requestWindowUpdate,
       setBackground,
-      /** Client-space artwork bounds for DOM actions that follow pan, zoom and resize. */
-      structureBounds: (id: string) => {
-        const entry = sectors
-          .get(options.getSnapshot().sector)
-          ?.art.entries.find((entry) => entry.description.structureId === id);
-        if (!entry) return null;
-        const bounds = entry.sprite.getBounds();
-        const canvas = game.canvas.getBoundingClientRect();
-        const sx = canvas.width / game.renderer.width;
-        const sy = canvas.height / game.renderer.height;
-        return new DOMRect(
-          canvas.left + bounds.x * sx,
-          canvas.top + bounds.y * sy,
-          bounds.width * sx,
-          bounds.height * sy,
+      /** Resolves once the viewer's sector has its scenery, or never had any to wait for. */
+      sceneryReady: () => currentSceneryReady,
+      /** Whether scenery would be painted over a figure standing on a tile of a sector. */
+      isTileCovered: (sector: number, at: { x: number; y: number }) => {
+        const rendered = sectors.get(sector);
+        const tile = rendered?.grid.getHex({ col: at.x, row: at.y });
+        if (!rendered || !tile) return false;
+        const left = -tile.center.x,
+          foot = -tile.center.y + standingOffset(tile);
+        return revealCandidates(rendered.art).some(
+          ({ bounds }) =>
+            bounds.minY <= foot &&
+            bounds.maxY > foot &&
+            bounds.minX < left + tile.width &&
+            bounds.maxX > left,
         );
       },
       /** Resume smooth character tracking after inspecting the map with a drag. */
@@ -1328,6 +1371,8 @@ export type TravelSnapshot = Omit<TravelActorsSnapshot, "grid"> & {
   enabled: boolean;
   /** Committed destination takes precedence over hover while the journey is in progress. */
   routeTarget?: { sector: number; x: number; y: number } | null;
+  /** Tile of the viewer's sector that a story scene points at. */
+  storyMarker?: { x: number; y: number } | null;
   /** Ungated world-clock brightness; ambient and contact-shadow consumers apply their own preference. */
   brightness: number;
   motionSteps?: ReadonlyMap<

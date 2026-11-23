@@ -202,6 +202,22 @@ export const insertActionLogForRobPlayer = (
     relatedImage: user.avatarLight,
   });
 
+/** Build the listing of AIs with their idle/move sheets for the Academy Trials' opening scene. */
+export const listArrivalCast = (
+  client: Pick<DrizzleClient, "query">,
+  aiIds: readonly string[],
+) =>
+  client.query.userData.findMany({
+    where: and(eq(userData.isAi, true), inArray(userData.userId, [...aiIds])),
+    columns: { userId: true, avatar: true },
+    with: {
+      spriteAnimationBindings: {
+        where: (binding) => inArray(binding.actionKey, ["idle", "move"]),
+        with: { animation: true },
+      },
+    },
+  });
+
 /** Build the `userData` lookup for `getSectorData`, using predicates on `userId`. */
 export const findUserDataForGetSectorData = (
   client: Pick<DrizzleClient, "query">,

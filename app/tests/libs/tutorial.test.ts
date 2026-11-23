@@ -37,7 +37,9 @@ import {
   isTutorialPageMatch,
   isUsableHighlightRect,
   STARTER_QUEST_OBJECTIVES,
+  TUTORIAL_AMBUSH_STEP_ID,
   TUTORIAL_ANY_PAGE,
+  TUTORIAL_ARRIVAL_STEP_ID,
   TUTORIAL_CAPTURE_STEP_ID,
   TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
   TUTORIAL_HOME_SECTOR,
@@ -347,6 +349,8 @@ describe("TUTORIAL_STEPS", () => {
   it("keeps the pinned-step constants pointing at real steps", () => {
     const ids = stepIds();
     for (const id of [
+      TUTORIAL_ARRIVAL_STEP_ID,
+      TUTORIAL_AMBUSH_STEP_ID,
       TUTORIAL_JUTSU_PICK_STEP_ID,
       TUTORIAL_ITEM_BUY_STEP_ID,
       TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
@@ -545,9 +549,14 @@ describe("starter quest progress", () => {
   it("follows the chain to the first objective that is not done", () => {
     const progress = getStarterQuestProgress(
       user([
-        { id: O.accept, done: true, selectedNextObjectiveId: O.arena },
-        { id: O.arena, done: true, collected: true, selectedNextObjectiveId: O.jutsu },
-        { id: O.jutsu },
+        { id: O.stand, done: true, selectedNextObjectiveId: O.double },
+        {
+          id: O.double,
+          done: true,
+          collected: true,
+          selectedNextObjectiveId: O.accept,
+        },
+        { id: O.accept },
       ]),
     );
     expect(progress).toMatchObject({ finished: false, activeIndex: 2 });
@@ -557,12 +566,12 @@ describe("starter quest progress", () => {
     // The previous chain went straight from the opening dialog to the pup.
     const progress = getStarterQuestProgress(
       user([
-        { id: O.accept, done: true, selectedNextObjectiveId: O.pup },
+        { id: O.stand, done: true, selectedNextObjectiveId: O.pup },
         { id: O.pup },
       ]),
     );
     if (!progress) throw new Error("expected progress");
-    expect(progress.activeIndex).toBe(4);
+    expect(progress.activeIndex).toBe(Object.values(O).indexOf(O.pup));
     expect(isStarterObjectiveSatisfied(O.arena, progress, true)).toBe(true);
     expect(isStarterObjectiveSatisfied(O.brief, progress)).toBe(true);
     expect(isStarterObjectiveSatisfied(O.pup, progress)).toBe(false);
@@ -626,8 +635,9 @@ describe("getTutorialRewindStepIndex", () => {
     questData: [{ id: TUTORIAL_STARTER_QUEST_ID, goals }] as never,
   });
   const reachedJutsu = [
-    { id: O.accept, done: true, selectedNextObjectiveId: O.arena },
-    { id: O.arena, done: true, collected: true, selectedNextObjectiveId: O.jutsu },
+    { id: O.stand, done: true, selectedNextObjectiveId: O.double },
+    { id: O.double, done: true, collected: true, selectedNextObjectiveId: O.accept },
+    { id: O.accept, done: true, selectedNextObjectiveId: O.jutsu },
   ];
 
   it("sends a player who skipped the lesson back from the empty claim step", () => {
@@ -1177,11 +1187,11 @@ describe("getTutorialStrandedBattleStepId", () => {
   // Same shape as the combat chapter and the pup fight in TUTORIAL_STEPS.
   const outcomes = {
     onCombatWin: "combat-claim-reward",
-    onCombatLoss: "combat-enter-arena",
+    onCombatLoss: "arena-enter",
   };
   const steps = [
-    { id: "combat-arena-building", page: "/village" },
-    { id: "combat-enter-arena", page: "/battlearena" },
+    { id: "arena-building", page: "/village" },
+    { id: "arena-enter", page: "/battlearena" },
     { id: "combat-battlefield", page: "/combat", ...outcomes },
     { id: "combat-turns", page: "/combat", ...outcomes },
     { id: "combat-fight", page: "/combat", ...outcomes },
@@ -1213,7 +1223,7 @@ describe("getTutorialStrandedBattleStepId", () => {
           awake([accepted, { id: O.arena }]),
           "/profile",
         ),
-      ).toBe("combat-enter-arena");
+      ).toBe("arena-enter");
     }
   });
 
@@ -1246,7 +1256,7 @@ describe("getTutorialStrandedBattleStepId", () => {
   it("treats a stale battle status without a battle as over", () => {
     const user = { ...awake([accepted, { id: O.arena }]), status: "BATTLE" };
     expect(getTutorialStrandedBattleStepId(steps, battleIndex, user, "/profile")).toBe(
-      "combat-enter-arena",
+      "arena-enter",
     );
   });
 

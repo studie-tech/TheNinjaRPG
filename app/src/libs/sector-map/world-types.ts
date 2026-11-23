@@ -57,6 +57,9 @@ export interface GlobalMapData {
   tiles: NonEmptyArray<GlobalTile>;
 }
 
+/** Tiles walked one after another from `startAt`, on the server-corrected clock. */
+export type NpcWalk = { tiles: SectorPoint[]; startAt: number; stepMs: number };
+
 export interface SectorUser {
   /** Viewer-safe resolved art; the sector router substitutes uniforms for masked identities. */
   spriteAppearance?: import("@/validators/lpc").SpriteAppearance;
@@ -119,6 +122,10 @@ export interface SectorUser {
     /** Shared server pursuit; scenes interpolate it without per-frame requests. */
     pursuit?: NonNullable<VillageDutyPatrol["pursuit"]>;
   };
+  /** A timed walk along tiles, which a figure of a story scene follows and then stands. */
+  npcWalk?: NpcWalk;
+  /** A figure of a story scene only this player sees; the map's filters never hide it. */
+  isStoryActor?: boolean;
   /** Drawn height relative to the default NPC height. */
   npcScale?: number;
   /** Walk and idle sheets that replace the NPC's still artwork on the map. */

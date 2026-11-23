@@ -11,4 +11,5 @@ export const CDN_CACHED_QUERY_PATHS: readonly string[] = [
   "profile.getStrongestUsers",
   "towerDefense.getLeaderboard",
   "towerDefense.getRoster",
+  "travel.getArrivalCast",
 ];

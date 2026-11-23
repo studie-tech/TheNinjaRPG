@@ -71,9 +71,9 @@ export const HomeLanding: React.FC = () => {
       // NativeBridge already issued this destination. Even one duplicate navigation can
       // restart a slow route; character refreshes must leave it alone entirely.
       if (store.get(nativeHomeRedirectAtom)) return;
-      // A brand-new character starts in the village, where the Academy Trials begin.
+      // A brand-new character starts on Horizon's sector map, where the Academy Trials begin.
       const isNewStudent = isTutorialActive(userData) && userData.tutorialStep === 0;
-      void router.replace(isNewStudent ? "/village" : "/profile");
+      void router.replace(isNewStudent ? "/travel" : "/profile");
     }
   }, [
     clerk,

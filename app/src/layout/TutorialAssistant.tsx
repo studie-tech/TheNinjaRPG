@@ -41,6 +41,7 @@ import {
   useTutorialStep,
 } from "@/hooks/tutorial";
 import { characterStorageKey } from "@/hooks/useActivityDock";
+import { arrivalScenePlayingAtom } from "@/hooks/useArrivalScene";
 import { useStoryGuidance } from "@/hooks/useStoryGuidance";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
@@ -788,6 +789,7 @@ const PlayerTutorialAssistant: React.FC<
     });
   }, [lessonKey, teachesInGame, isOwnLessonShown, idleKey, readingMs]);
   const isModalDialogOpen = useIsModalDialogOpen();
+  const isScenePlaying = useAtomValue(arrivalScenePlayingAtom);
 
   // A lost lesson fight the player can start again from the lesson itself.
   const retryQuestId = (() => {
@@ -1111,13 +1113,17 @@ const PlayerTutorialAssistant: React.FC<
   }
 
   const isQuestOverlay = !!dynamicQuestStep;
+  const sceneLead = isScenePlaying ? currentTutorialStep.sceneLead : undefined;
   // A lesson that teaches the page's own control offers its shortcut only to a stuck
-  // player, and no shortcut shows under a dialog the player has open.
+  // player, and no shortcut shows under a dialog the player has open or before the scene
+  // the lesson answers has played.
   const isShortcutShown =
     !(
       (currentTutorialStep.teachOnPage || currentTutorialStep.questsTab) &&
       idleKey !== lessonKey
-    ) && !isModalDialogOpen;
+    ) &&
+    !isModalDialogOpen &&
+    !isScenePlaying;
   // Fights end on their own; skipping a step mid-battle would lose the lesson.
   // The quest cannot go on without Sonic Slash, so its lesson has no skip either.
   const canOfferSkip =
@@ -1309,6 +1315,7 @@ const PlayerTutorialAssistant: React.FC<
         )}
       {highlight &&
         highlight.stepId === currentTutorialStep.id &&
+        !currentTutorialStep.isRevealOnly &&
         !showCancelConfirmDialog && (
           // Only the highlighted control captures clicks; game controls stay reachable.
           <Spotlight
@@ -1348,7 +1355,11 @@ const PlayerTutorialAssistant: React.FC<
               ? undefined
               : `${currentTutorialStep.id}:${isModalDialogOpen ? "dialog" : "page"}`
           }
-          action={isQuestOverlay ? undefined : currentTutorialStep.action}
+          action={
+            isQuestOverlay
+              ? undefined
+              : (sceneLead?.action ?? currentTutorialStep.action)
+          }
           isBusy={isDisablingTutorial}
           errorMessage={disableTutorialError}
           onOpenDisableModal={openDisableModal}
@@ -1424,10 +1435,22 @@ const PlayerTutorialAssistant: React.FC<
             ) : undefined
           }
           lead={
-            <StepDescription
-              description={currentTutorialStep.description}
-              className={leadClassName}
-            />
+            <div className="grid *:col-start-1 *:row-start-1">
+              {/* The words that follow a scene keep their room while it plays, so the map
+              beside the dock is not resized under it. */}
+              <div aria-hidden={!!sceneLead} className={cn(sceneLead && "invisible")}>
+                <StepDescription
+                  description={currentTutorialStep.description}
+                  className={leadClassName}
+                />
+              </div>
+              {sceneLead && (
+                <StepDescription
+                  description={sceneLead.description}
+                  className={leadClassName}
+                />
+              )}
+            </div>
           }
         >
           {currentTutorialStep.quoteObjective &&
@@ -1582,10 +1605,10 @@ const StepDescription: React.FC<{
 /**
  * Lemu, or whoever speaks in the lesson, in a column down the card's left side,
  * facing the text on a tint that fades into the card behind a tapered divider. She
- * stands at the column's foot, as tall as it allows from just below its top, and her
- * raised hand reaches past the divider into the text's left padding without covering
- * the words: her picture is never wider than keeps the hand within half a rem of the
- * divider, which the text's padding always exceeds.
+ * stands at the column's foot, as tall as it allows from just below its top, placed by
+ * her raised hand: it always reaches half a rem past the divider, into the text's left
+ * padding without covering the words. A shorter lesson draws her smaller, so she steps
+ * less past the card's left edge.
  */
 const AssistantPortrait: React.FC<{ image: string }> = ({ image }) => (
   <div
@@ -1599,12 +1622,11 @@ const AssistantPortrait: React.FC<{ image: string }> = ({ image }) => (
       width={512}
       height={768}
       alt=""
-      // Her whole figure at its own proportions. The picture's transparent margin is
-      // about 30% of its width, so this shift lets her hair step a little past the card's
-      // left edge, inside the dock's margin to the screen. Her hand ends 55% of the
-      // picture's width from the column's left edge once shifted, so the width cap keeps it
-      // half a rem past the divider; a taller lesson then stands her at the foot.
-      className="pointer-events-none absolute top-2 bottom-0 left-0 h-[calc(100%-0.5rem)] w-auto max-w-[calc((100%_+_0.5rem)/0.55)] -translate-x-[30%] scale-x-[-1] object-contain object-bottom drop-shadow-md select-none"
+      // Her whole figure at its own proportions. Mirrored, her hand ends 85% across the
+      // picture, so moving it right by the remaining 15% of its width stands the hand at
+      // its box's right edge, half a rem past the divider. The width cap keeps a tall
+      // lesson's picture from stepping out of the dock's margin to the screen.
+      className="pointer-events-none absolute top-2 -right-2 bottom-0 h-[calc(100%-0.5rem)] w-auto max-w-[calc((100%_+_0.5rem)/0.55)] translate-x-[15%] scale-x-[-1] object-contain object-bottom drop-shadow-md select-none"
     />
   </div>
 );

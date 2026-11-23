@@ -10,11 +10,11 @@ describe("travel map viewport height", () => {
     hasRowBelow: true,
   };
   it("stops a phone map above an open lesson dock", () => {
-    expect(fillHeight({ ...phone, pageTop: 135, dockTop: 443 })).toBe(443 - 36 - 135);
+    expect(fillHeight({ ...phone, pageTop: 135, dockTop: 443 })).toBe(443 - 54 - 135);
   });
   it("reaches the navigation bar when no dock covers the map", () => {
     expect(fillHeight({ ...phone, pageTop: 55, dockTop: null })).toBe(
-      812 - 84 - 36 - 55,
+      812 - 84 - 54 - 55,
     );
   });
   it("fills a wider layout's view of the map, its title and the row under it kept", () => {
@@ -28,7 +28,7 @@ describe("travel map viewport height", () => {
         minimum: 483,
         hasRowBelow: true,
       }),
-    ).toBe(900 - 12 - 36 - 96);
+    ).toBe(900 - 12 - 54 - 96);
   });
   it("lets a map with nothing under it reach the dock", () => {
     expect(

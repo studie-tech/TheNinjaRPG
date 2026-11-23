@@ -32,7 +32,9 @@ import {
 } from "@/utils/UserContext";
 
 /** Steps the hands-on combat lesson replaces with live guidance once the fight is on. */
-const GUIDED_COMBAT_STEP_IDS = ["combat-fight", "mission-find-pup"];
+const GUIDED_COMBAT_STEP_IDS = ["combat-fight", "arena-fight", "mission-find-pup"];
+/** Guided fights that coach from the first turn: the player has been shown a turn before. */
+const COACHED_COMBAT_STEP_IDS = ["mission-find-pup"];
 /** Title of a lost lesson's rematch, whose advice stays on screen beside the fight. */
 export const TUTORIAL_REMATCH_TITLE = "Rematch";
 const noBattleAtom = atom<ReturnedBattle | undefined>(undefined);
@@ -146,8 +148,9 @@ export const useTutorialStep = () => {
       (action) => getActionSelectionId(action) === selectedActionId,
     )?.id;
     // Everyone acts once a round, so from round 2 the player has played a turn under
-    // instruction; from then on they choose and are only coached.
-    if (battle.round > 1) {
+    // instruction; from then on, and in a fight that instructs no turn, they choose and are
+    // only coached.
+    if (battle.round > 1 || COACHED_COMBAT_STEP_IDS.includes(staticStep.id)) {
       const coaching = getTutorialCombatCoaching({
         isPlayersTurn,
         distanceToEnemy,
@@ -196,22 +199,21 @@ export const useTutorialStep = () => {
     if (pathname !== "/combat") return staticStep;
     const isBattleStep = !!staticStep.onCombatWin || !!staticStep.onCombatLoss;
     // After a guided fight the step has already moved on; point at the way back.
-    if (!isBattleStep) {
-      if (inBattle && !hasLeftBattle) return staticStep;
-      return {
-        ...staticStep,
-        title: "Battle over",
-        description: "That's the fight done. Let's carry on where we left off.",
-        action: "Tap the highlighted button.",
-        elementIds: ["return"],
-        page: "/combat",
-        // One call to action on the result screen; the next step does the rest.
-        advanceOn: undefined,
-        relatedValue: undefined,
-        showNextButton: false,
-        proceedOnHighlightClick: false,
-      };
-    }
+    const battleOver = {
+      ...staticStep,
+      title: "Battle over",
+      description: "That's the fight done. Let's carry on where we left off.",
+      action: "Tap the highlighted button.",
+      elementIds: ["return"],
+      isRevealOnly: false,
+      page: "/combat",
+      // One call to action on the result screen; the next step does the rest.
+      advanceOn: undefined,
+      relatedValue: undefined,
+      showNextButton: false,
+      proceedOnHighlightClick: false,
+    };
+    if (!isBattleStep) return inBattle && !hasLeftBattle ? staticStep : battleOver;
     if (!GUIDED_COMBAT_STEP_IDS.includes(staticStep.id)) {
       // A rematch started from another page keeps its lesson's advice on screen.
       if (inBattle && getTutorialStepPath(staticStep.page) !== "/combat") {
@@ -226,7 +228,10 @@ export const useTutorialStep = () => {
           proceedOnHighlightClick: false,
         };
       }
-      return staticStep;
+      // A rematch that was lost again stays on its lesson, whose page is elsewhere.
+      return getTutorialStepPath(staticStep.page) === "/combat"
+        ? staticStep
+        : battleOver;
     }
     if (coachingKey) {
       return getCoachedCombatStep(

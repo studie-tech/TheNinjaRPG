@@ -1,0 +1,185 @@
+import { describe, expect, it } from "bun:test";
+import {
+  ARRIVAL_PUP_AI_ID,
+  BLACKSTEEL_COURIER_AI_ID,
+  BLACKSTEEL_DOUBLE_AI_ID,
+} from "@/drizzle/constants";
+import {
+  type ArrivalScene,
+  type ArrivalSceneKind,
+  arrivalSceneActors,
+  npcWalkPose,
+  planArrivalScene,
+} from "@/libs/arrivalScene";
+import { oddQHexDistance } from "@/libs/hexgrid";
+import { getNeighborCoordinates } from "@/libs/sector-map/validation";
+
+type Tile = { x: number; y: number };
+
+const SIZE = 30;
+const player = { x: 14, y: 14 };
+const onMap = (tile: Tile) =>
+  tile.x >= 0 && tile.y >= 0 && tile.x < SIZE && tile.y < SIZE;
+const distance = (a: Tile, b: Tile) => oddQHexDistance(a.x, a.y, b.x, b.y);
+const START = 1_000_000;
+
+const plan = (
+  kind: ArrivalSceneKind,
+  overrides: Partial<Parameters<typeof planArrivalScene>[0]> = {},
+) =>
+  planArrivalScene({
+    kind,
+    player,
+    isOpen: onMap,
+    isCovered: () => false,
+    startAt: START,
+    ...overrides,
+  });
+
+const staged = (...args: Parameters<typeof plan>): ArrivalScene => {
+  const scene = plan(...args);
+  if (!scene) throw new Error("expected a scene");
+  return scene;
+};
+
+const standingOf = (scene: ArrivalScene, role: string) =>
+  scene.cast.find((entry) => entry.role === role)?.walk.tiles.at(-1) as Tile;
+
+const art = Object.fromEntries(
+  [ARRIVAL_PUP_AI_ID, BLACKSTEEL_COURIER_AI_ID, BLACKSTEEL_DOUBLE_AI_ID].map((id) => [
+    id,
+    { avatar: `${id}.webp` },
+  ]),
+);
+const namesAt = (scene: ArrivalScene, elapsed: number) =>
+  arrivalSceneActors(scene, elapsed, art, 301).map((actor) => actor.userId);
+
+describe("planArrivalScene", () => {
+  it("greets with Lemu a short walk away and points at the ground beside her", () => {
+    const scene = staged("greeting");
+    const lemu = standingOf(scene, "lemu");
+    expect(distance(lemu, player)).toBe(3);
+    expect(distance(scene.marker, player)).toBe(2);
+    expect(distance(scene.marker, lemu)).toBe(1);
+  });
+
+  it("stands its figures where no scenery covers them", () => {
+    const isCovered = (tile: Tile) => tile.x !== player.x;
+    const scene = staged("greeting", { isCovered });
+    expect(isCovered(standingOf(scene, "lemu"))).toBe(false);
+  });
+
+  it("leaves the double two tiles away, to the east, with Lemu on the player's other side", () => {
+    const scene = staged("ambush");
+    const double = standingOf(scene, "double");
+    const lemu = standingOf(scene, "lemu");
+    expect(distance(double, player)).toBe(2);
+    expect(double.x).toBeGreaterThan(player.x);
+    expect(distance(lemu, player)).toBe(1);
+    expect(distance(lemu, double)).toBeGreaterThanOrEqual(2);
+    expect(scene.marker).toEqual(double);
+  });
+
+  it("runs the chase step by step past the player, never through them or Lemu", () => {
+    const scene = staged("ambush");
+    const lemu = standingOf(scene, "lemu");
+    for (const { role, walk } of scene.cast) {
+      if (role === "lemu") continue;
+      walk.tiles.slice(1).forEach((tile, index) => {
+        expect(getNeighborCoordinates(walk.tiles[index] as Tile)).toContainEqual(tile);
+      });
+      for (const tile of walk.tiles) {
+        expect(tile).not.toEqual(player);
+        expect(tile).not.toEqual(lemu);
+      }
+    }
+    const pup = scene.cast.find((entry) => entry.role === "pup")?.walk.tiles ?? [];
+    expect(pup[0]?.x).toBeGreaterThan(player.x + 5);
+    expect(pup.at(-1)?.x).toBeLessThan(player.x - 5);
+  });
+
+  it("walks Lemu over from where she greeted the player", () => {
+    const scene = staged("ambush", { previousLemu: { x: 10, y: 14 } });
+    const walk = scene.cast.find((entry) => entry.role === "lemu")?.walk.tiles ?? [];
+    expect(walk[0]).toEqual({ x: 10, y: 14 });
+    expect(distance(walk.at(-1) as Tile, player)).toBe(1);
+  });
+
+  it("waits for a rematch with Lemu and the double alone", () => {
+    expect(staged("standoff").cast.map((entry) => entry.role)).toEqual([
+      "lemu",
+      "double",
+    ]);
+  });
+
+  it("stages nothing without the room for it", () => {
+    for (const kind of ["greeting", "ambush", "standoff"] as const)
+      expect(plan(kind, { isOpen: (tile) => distance(tile, player) === 0 })).toBe(
+        undefined,
+      );
+  });
+});
+
+describe("arrivalSceneActors", () => {
+  const scene = staged("ambush");
+
+  it("brings the double out of the smoke and lets the hunter go", () => {
+    expect(namesAt(scene, 0)).toEqual(["story-lemu", "story-pup", "story-courier"]);
+    expect(namesAt(scene, scene.smokeAt + 400)).toContain("story-double");
+    expect(namesAt(scene, scene.smokeAt + 400)).toContain("story-courier");
+    expect(namesAt(scene, 60_000)).toEqual(["story-lemu", "story-double"]);
+  });
+
+  it("lets the player answer once the double stands there", () => {
+    expect(namesAt(scene, scene.endsAt)).toContain("story-double");
+    expect(scene.endsAt).toBeGreaterThan(scene.smokeAt);
+  });
+
+  it("anchors every figure where the scene happens, as scenery without controls", () => {
+    for (const actor of arrivalSceneActors(scene, 0, art, 301)) {
+      expect({ x: actor.longitude, y: actor.latitude }).toEqual(scene.marker);
+      expect(actor.isStoryActor).toBe(true);
+      expect(actor.npcInteractionType).toBe("AMBIENT");
+      expect(actor.sector).toBe(301);
+    }
+  });
+
+  it("leaves out a figure whose artwork did not load", () => {
+    const actors = arrivalSceneActors(scene, 60_000, {}, 301);
+    expect(actors.map((actor) => actor.userId)).toEqual(["story-lemu"]);
+  });
+});
+
+describe("npcWalkPose", () => {
+  const walk = {
+    tiles: [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+    ],
+    startAt: 100,
+    stepMs: 50,
+  };
+
+  it("stands on the first tile until the walk starts and on the last one after", () => {
+    expect(npcWalkPose(walk, 0)).toMatchObject({ from: { x: 0 }, progress: 0 });
+    expect(npcWalkPose(walk, 0)?.isMoving).toBe(false);
+    expect(npcWalkPose(walk, 10_000)).toMatchObject({ to: { x: 2 }, progress: 1 });
+    expect(npcWalkPose(walk, 10_000)?.isMoving).toBe(false);
+  });
+
+  it("moves between the tiles of the step under way", () => {
+    expect(npcWalkPose(walk, 175)).toEqual({
+      from: { x: 1, y: 0 },
+      to: { x: 2, y: 0 },
+      progress: 0.5,
+      isMoving: true,
+    });
+  });
+
+  it("stands a figure with a single tile on it", () => {
+    expect(
+      npcWalkPose({ tiles: [{ x: 4, y: 5 }], startAt: 0, stepMs: 1 }, 99),
+    ).toMatchObject({ from: { x: 4, y: 5 }, progress: 0, isMoving: false });
+  });
+});

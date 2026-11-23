@@ -345,11 +345,13 @@ describe("each tutorial step", () => {
       ).toBe(String(progress.position));
       if (step.action) expect(region.textContent).toContain(step.action);
 
-      // The highlight surrounds the step's first target and only captures clicks that advance.
-      const highlightButton = target
+      // The highlight surrounds the step's first target and only captures clicks that
+      // advance; a step that only brings its target into view leaves the page lit.
+      const marked = step.isRevealOnly ? undefined : target;
+      const highlightButton = marked
         ? view.getByRole("button", { name: step.action ?? "Continue tutorial" })
         : null;
-      if (target) {
+      if (marked) {
         const hole = highlightButton!.parentElement!.parentElement!;
         expect(hole.style.transform).toBe("translate(32px, 292px)");
         expect(highlightButton!.className.includes("pointer-events-auto")).toBe(
@@ -403,7 +405,7 @@ describe("each tutorial step", () => {
           (fresh) => fireEvent.click(fresh.getByRole("button", { name: nextLabel })),
           true,
         );
-      if (target)
+      if (marked)
         await advance(
           (fresh) =>
             fireEvent.click(
@@ -462,7 +464,7 @@ describe("step overrides", () => {
     window.scrollBy = scrollBy as never;
     const below = window.innerHeight + 400;
     const view = show(
-      0,
+      TUTORIAL_STEPS.findIndex((step) => step.id === "academy-building"),
       {},
       undefined,
       <Target id="tutorial-academy" box={new DOMRect(40, below, 160, 48)} />,
@@ -627,7 +629,7 @@ describe("routing", () => {
 });
 
 describe("highlight placement", () => {
-  const index = TUTORIAL_STEPS.findIndex((step) => step.id === "student-welcome");
+  const index = TUTORIAL_STEPS.findIndex((step) => step.id === "academy-building");
   const target = () => TUTORIAL_STEPS[index]!.elementIds![0]!;
 
   it("scrolls an off-screen target towards the middle, a bounded number of times", async () => {

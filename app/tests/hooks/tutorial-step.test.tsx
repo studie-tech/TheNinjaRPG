@@ -99,6 +99,45 @@ describe("useTutorialStep combat subscriptions", () => {
     expect(result.current.currentStep?.action).toBeUndefined();
   });
 
+  it("coaches the courier fight from its first turn, where the first fights instruct", () => {
+    pathname = "/combat";
+    status = "BATTLE";
+    const battle = makeCompleteBattle({
+      activeUserId: "u1",
+      round: 1,
+      roundStartAt: new Date(),
+      usersState: [
+        makeBattleUser("u1", { direction: "left", longitude: 0 }),
+        makeBattleUser("enemy", { longitude: 2, direction: "right" }),
+      ],
+    });
+    act(() => store.set(UserContext.userBattleAtom, battle));
+    const spotlitAt = (id: string) => {
+      tutorialStep = TUTORIAL_STEPS.findIndex((step) => step.id === id);
+      const { result, unmount } = renderHook(() => useTutorialStep());
+      const elements = result.current.currentStep?.elementIds ?? [];
+      unmount();
+      return elements;
+    };
+    expect(spotlitAt("combat-fight")).not.toEqual([]);
+    expect(spotlitAt("arena-fight")).not.toEqual([]);
+    expect(spotlitAt("mission-find-pup")).toEqual([]);
+  });
+
+  it("points at the way back after a rematch that was lost again", () => {
+    tutorialStep = TUTORIAL_STEPS.findIndex((step) => step.id === "combat-rematch");
+    pathname = "/combat";
+    status = "BATTLE";
+    expect(renderHook(() => useTutorialStep()).result.current.currentStep?.title).toBe(
+      "Rematch",
+    );
+    status = "AWAKE";
+    const { result } = renderHook(() => useTutorialStep());
+    expect(result.current.currentStep?.title).toBe("Battle over");
+    expect(result.current.currentStep?.elementIds).toEqual(["return"]);
+    expect(result.current.currentStep?.isRevealOnly).toBe(false);
+  });
+
   it("ignores battle updates and action selection outside a guided combat lesson", () => {
     const renders = renderCounted();
     const before = renders();
@@ -272,7 +311,7 @@ describe("useTutorialStep step saving", () => {
   });
 
   it("leaves battles to the battle start and stays on a page the step uses", async () => {
-    tutorialStep = stepIndex("combat-enter-arena");
+    tutorialStep = stepIndex("arena-enter");
     pathname = "/battlearena";
     await saveStep(tutorialStep + 1);
     tutorialStep = stepIndex("combat-turns");
