@@ -24,7 +24,8 @@ import {
  * The tutorial's spotlight over the viewport: the page dims around one control, an amber
  * ring marks it and a hand points at it. The layer lets every tap through except where
  * `children` (placed inside the ring) take them, so the real control under the hole
- * receives the press. It is portalled into the body as a `data-battle-focus-layer`, so a
+ * receives the press. Around a control standing alone in the lit element, as an answer in
+ * its box or a Claim in its row, the rest of the element presses it too. It is portalled into the body as a `data-battle-focus-layer`, so a
  * focus view keeps it interactive. The control under the hole is shown at full opacity:
  * pages fade a hovered card or the actions not selected, which would make the one control
  * the player is told to press look disabled. While the hole, its pointer or a mark sits
@@ -37,6 +38,7 @@ export const Spotlight = ({
   ping = true,
   pointer = true,
   holeClassName,
+  onPress,
   children,
 }: {
   box: SpotlightBox;
@@ -50,6 +52,8 @@ export const Spotlight = ({
   pointer?: boolean;
   /** Classes for the hole box (pointer events, background). */
   holeClassName?: string;
+  /** Takes the presses in the hole, for something shown rather than used. */
+  onPress?: () => void;
   /** Rendered inside the ring, such as a button covering the hole. */
   children?: ReactNode;
 }) => {
@@ -63,6 +67,17 @@ export const Spotlight = ({
     litRef.current = findBoxElement(box, layerRef.current);
     litRef.current?.setAttribute(SPOTLIT_ATTRIBUTE, "");
   }, [box]);
+  useEffect(() => {
+    if (!pointer) return;
+    const pressLone = (event: MouseEvent) => {
+      const lit = litRef.current;
+      if (!(event.target instanceof Element) || !lit?.contains(event.target)) return;
+      if (event.target.closest(PRESSABLE_SELECTOR)) return;
+      getLoneControl(lit)?.click();
+    };
+    document.addEventListener("click", pressLone);
+    return () => document.removeEventListener("click", pressLone);
+  }, [pointer]);
   // After every render: the pointer and marks move with the box.
   useLayoutEffect(() => {
     setToastClearance(
@@ -98,6 +113,20 @@ export const Spotlight = ({
           <span className="animate-spotlight-ping pointer-events-none absolute inset-0 rounded-lg motion-reduce:animate-none" />
         )}
         <div className="absolute inset-0 z-[1] rounded-lg border-[3px] border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.8)]">
+          {onPress && (
+            // The lesson's Next button says the same to a keyboard or screen reader.
+            <button
+              type="button"
+              aria-hidden="true"
+              tabIndex={-1}
+              data-spotlight-press=""
+              className="pointer-events-auto absolute inset-0 cursor-pointer rounded-lg"
+              onClick={(event) => {
+                event.stopPropagation();
+                onPress();
+              }}
+            />
+          )}
           {children}
         </div>
       </div>
@@ -615,6 +644,19 @@ const isBoxOf = (element: Element, box: SpotlightBox) => {
     Math.abs(rect.width - box.width) < 1 &&
     Math.abs(rect.height - box.height) < 1
   );
+};
+
+/** Whatever takes a press of its own. */
+const PRESSABLE_SELECTOR =
+  'button, a[href], input, select, textarea, label, summary, canvas, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"])';
+
+/** The enabled button or link that is the only thing to press inside an element. */
+const getLoneControl = (element: Element) => {
+  const [control, ...others] = Array.from(
+    element.querySelectorAll<HTMLElement>(PRESSABLE_SELECTOR),
+  ).filter((each) => each.getClientRects().length > 0);
+  if (!control || others.length > 0) return null;
+  return control.matches("button:not(:disabled), a[href]") ? control : null;
 };
 
 /** Set on the element under the spotlight's hole while it is lit. */

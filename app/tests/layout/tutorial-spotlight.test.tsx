@@ -262,6 +262,58 @@ describe("a target under a modal", () => {
   });
 });
 
+describe("pressing the highlight", () => {
+  const box = { top: 100, left: 40, width: 300, height: 80 };
+  const lit = (html: string) => {
+    const row = place(document.body.appendChild(document.createElement("div")), box);
+    row.innerHTML = html;
+    document.elementsFromPoint = () => [row];
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue([
+      new DOMRect(0, 0, 10, 10),
+    ] as never);
+    return row;
+  };
+
+  it("presses on when the step only shows the element", () => {
+    const onPress = vi.fn();
+    render(<Spotlight box={box} onPress={onPress} />);
+    const hole = document.querySelector<HTMLElement>("[data-spotlight-press]");
+    hole?.click();
+    expect(onPress).toHaveBeenCalledTimes(1);
+    // Next stays the one control a keyboard or screen reader finds.
+    expect(hole?.getAttribute("aria-hidden")).toBe("true");
+    expect(hole?.tabIndex).toBe(-1);
+  });
+
+  it.each([
+    ["the only control in it", "<p>Streak</p><button>Claim</button>", 1],
+    ["nothing among several", "<p>Pick</p><button>A</button><button>B</button>", 0],
+    ["no disabled control", "<p>Streak</p><button disabled>Claim</button>", 0],
+    ["no control beside a map", "<p>Map</p><canvas></canvas><button>Zoom</button>", 0],
+  ])("presses %s", (_, html, presses) => {
+    const row = lit(html);
+    const onClick = vi.fn();
+    for (const button of row.querySelectorAll("button"))
+      button.addEventListener("click", onClick);
+    render(<Spotlight box={box} />);
+    row.querySelector("p")?.click();
+    expect(onClick).toHaveBeenCalledTimes(presses);
+    // The control's own press counts once.
+    onClick.mockClear();
+    row.querySelector<HTMLElement>("button:not(:disabled)")?.click();
+    expect(onClick).toHaveBeenCalledTimes(row.querySelector("button:disabled") ? 0 : 1);
+  });
+
+  it("leaves the element to itself when the spotlight only marks it", () => {
+    const row = lit("<p>Streak</p><button>Claim</button>");
+    const onClick = vi.fn();
+    row.querySelector("button")?.addEventListener("click", onClick);
+    render(<Spotlight box={box} pointer={false} />);
+    row.querySelector("p")?.click();
+    expect(onClick).not.toHaveBeenCalled();
+  });
+});
+
 describe("edge pointer", () => {
   it("keeps its label on one line, inside the page beside the screen's edge", () => {
     viewport(375, 812);

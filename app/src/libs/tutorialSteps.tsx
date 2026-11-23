@@ -599,7 +599,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "The pup that ran past us belongs to the <b>Bondkeeper Sanctuary</b>. A hunter has seen it cornered on the eastern ridge, with the masked figure closing in. Your final trial: find the pup and bring it back safely.",
     action: "Accept the mission in the Academy Trials.",
-    elementIds: [starterLogbookEntry],
+    elementIds: ["tutorial-dialog-options", starterLogbookEntry],
     teachOnPage: true,
     page: "/academy",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,

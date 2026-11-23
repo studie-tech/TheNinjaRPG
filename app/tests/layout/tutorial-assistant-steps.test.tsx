@@ -366,12 +366,18 @@ describe("each tutorial step", () => {
       const action = (target && step.elementActions?.[target]) ?? step.action;
       if (action) expect(region.textContent).toContain(action);
 
-      // The highlight surrounds the step's first target and leaves its presses to it.
+      // The highlight surrounds the step's first target and leaves its presses to it,
+      // unless it only shows something: then pressing it goes on, as Next does.
       const hole = overlay()?.querySelector<HTMLElement>(".absolute.rounded-lg");
       if (target) {
         expect(hole?.style.transform).toBe("translate(32px, 292px)");
         expect(hole?.className).toContain("pointer-events-none");
-        expect(!!overlay()?.querySelector(".animate-spotlight-ping")).toBe(!!action);
+        expect(!!overlay()?.querySelector(".animate-spotlight-ping")).toBe(
+          !!action || !!step.showNextButton,
+        );
+        expect(!!overlay()?.querySelector("[data-spotlight-press]")).toBe(
+          !!step.showNextButton,
+        );
       } else {
         expect(overlay() === null).toBe(true);
       }
@@ -1321,14 +1327,14 @@ describe("quest steps", () => {
     expect(levelSteps.slice(2).every((step) => !step.elementIds?.length)).toBe(true);
   });
 
-  it("points the second briefing at its logbook entry only", () => {
+  it("points both briefings at their answers, ahead of the logbook entry", () => {
     const byId = (id: string) => TUTORIAL_STEPS.find((step) => step.id === id);
     expect(byId("academy-accept-trials")?.elementIds?.[0]).toBe(
       "tutorial-dialog-options",
     );
-    expect(byId("mission-brief")?.elementIds).toEqual([
-      byId("academy-accept-trials")?.elementIds?.[1] ?? "",
-    ]);
+    expect(byId("mission-brief")?.elementIds).toEqual(
+      byId("academy-accept-trials")?.elementIds,
+    );
   });
 
   it("asks for a rematch after the proctor's clone wins", () => {

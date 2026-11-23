@@ -1070,8 +1070,10 @@ const PlayerTutorialAssistant: React.FC<
       ? currentTutorialStep.elementActions?.[highlight.elementId]
       : undefined;
   const stepAction = elementAction ?? currentTutorialStep?.action;
+  // What a step only shows is pressed to go on, as its Next button is.
+  const isHighlightNext = !!currentTutorialStep?.showNextButton && !elementAction;
   // Point at the highlight only when the step wants it pressed.
-  const showPointer = !!stepAction;
+  const showPointer = !!stepAction || isHighlightNext;
 
   // If showing the special Game Menu tutorial
   if (showGameMenuTutorial) {
@@ -1370,6 +1372,7 @@ const PlayerTutorialAssistant: React.FC<
             ping={showPointer}
             pointer={showPointer}
             holeClassName="pointer-events-none bg-transparent"
+            onPress={isHighlightNext ? () => handleNextStep() : undefined}
           />
         )}
 
@@ -1454,9 +1457,7 @@ const PlayerTutorialAssistant: React.FC<
                   />,
                   document.body,
                 )}
-              {((currentTutorialStep.showNextButton && !elementAction) ||
-                isSkipShown) &&
-                renderNextRow(isSkipShown)}
+              {(isHighlightNext || isSkipShown) && renderNextRow(isSkipShown)}
             </>
           }
           pendingFooter={
