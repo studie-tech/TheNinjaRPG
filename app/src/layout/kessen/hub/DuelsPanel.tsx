@@ -182,11 +182,16 @@ export const DuelsView = ({
         actions={actions}
         renderFinder={renderFinder}
       />
-      <RankedLadder
-        leaderboard={leaderboard}
-        error={leaderboardError}
-        onRetry={onRetryLeaderboard}
-      />
+      <section className={SECTION} aria-labelledby="kessen-ladder">
+        <h3 id="kessen-ladder" className={HEADING}>
+          Ranked ladder
+        </h3>
+        <RankedLadder
+          leaderboard={leaderboard}
+          error={leaderboardError}
+          onRetry={onRetryLeaderboard}
+        />
+      </section>
     </div>
   );
 };
