@@ -9,7 +9,7 @@ import {
 } from "@/drizzle/constants";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import type { RevealedPlayer } from "@/hooks/useTravelSession";
-import { mapToolClassName } from "@/layout/travel/styles";
+import { mapIconToolClassName, mapToolClassName } from "@/layout/travel/styles";
 import { cn } from "@/libs/shadui";
 import { getRemainingSensoryCooldown, getStealthStatus } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
@@ -20,7 +20,8 @@ import {
 /** Own stealth and sensory cooldowns so their ticks only render these controls. */
 export const StealthControls: React.FC<{
   onRevealed: (players: RevealedPlayer[]) => void;
-}> = ({ onRevealed }) => {
+  asMenu?: boolean;
+}> = ({ onRevealed, asMenu = true }) => {
   const {
     data: userData,
     timeDiff,
@@ -131,10 +132,20 @@ export const StealthControls: React.FC<{
           isDeactivatingStealth ||
           (!isCurrentlyStealthed && stealthCooldown > 0)
         }
+        title={
+          isCurrentlyStealthed
+            ? `Stealth active (${Math.ceil(stealthDuration)}s remaining)`
+            : stealthCooldown > 0
+              ? `Stealth cooldown (${Math.ceil(stealthCooldown)}s)`
+              : "Activate stealth"
+        }
         aria-busy={isActivatingStealth || isDeactivatingStealth}
         aria-pressed={isCurrentlyStealthed}
         aria-label={isCurrentlyStealthed ? "Deactivate stealth" : "Activate stealth"}
-        className={cn(mapToolClassName, isCurrentlyStealthed && "text-purple-500")}
+        className={cn(
+          asMenu ? mapToolClassName : mapIconToolClassName,
+          isCurrentlyStealthed && "text-purple-500",
+        )}
         onClick={() => {
           if (
             activationInFlightRef.current ||
@@ -157,7 +168,7 @@ export const StealthControls: React.FC<{
         ) : (
           <Ghost className="size-6 shrink-0" aria-hidden />
         )}
-        <span className="min-w-0">
+        <span className={asMenu ? "min-w-0" : "sr-only"}>
           <span className="block text-sm font-semibold">
             {isCurrentlyStealthed ? "Deactivate stealth" : "Activate stealth"}
           </span>
@@ -179,9 +190,14 @@ export const StealthControls: React.FC<{
         disabled={
           isScanningSensory || sensoryCooldown > 0 || currentSector === undefined
         }
+        title={
+          sensoryCooldown > 0
+            ? `Sensory cooldown (${Math.ceil(sensoryCooldown)}s)`
+            : `Scan for hidden players (${(stealthStatus?.sensoryDetectChance ?? 5).toFixed(0)}% chance)`
+        }
         aria-busy={isScanningSensory}
         aria-label="Scan sector"
-        className={mapToolClassName}
+        className={asMenu ? mapToolClassName : mapIconToolClassName}
         onClick={() => {
           const successfulScanCooldown = getRemainingSensoryCooldown(
             lastSuccessfulSensoryAtRef.current,
@@ -205,7 +221,7 @@ export const StealthControls: React.FC<{
         ) : (
           <Radar className="size-6 shrink-0" aria-hidden />
         )}
-        <span className="min-w-0">
+        <span className={asMenu ? "min-w-0" : "sr-only"}>
           <span className="block text-sm font-semibold">Sensory scan</span>
           <span className="text-muted-foreground block text-xs" role="status">
             {isScanningSensory
