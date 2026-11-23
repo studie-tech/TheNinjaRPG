@@ -30,6 +30,10 @@ const originalScrollWidth = Object.getOwnPropertyDescriptor(
   Element.prototype,
   "scrollWidth",
 );
+const originalScrollHeight = Object.getOwnPropertyDescriptor(
+  Element.prototype,
+  "scrollHeight",
+);
 
 class HeaderResizeObserver {
   notify: () => void;
@@ -92,6 +96,8 @@ afterEach(async () => {
     Object.defineProperty(Element.prototype, "clientWidth", originalClientWidth);
   if (originalScrollWidth)
     Object.defineProperty(Element.prototype, "scrollWidth", originalScrollWidth);
+  if (originalScrollHeight)
+    Object.defineProperty(Element.prototype, "scrollHeight", originalScrollHeight);
   restoreBrowserGlobals();
   resizeCallbacks.clear();
 });
@@ -134,6 +140,44 @@ it("keeps title and controls beside each other when the panel has space", () => 
   expect(header?.className).not.toContain("flex-col");
   expect(view.queryByRole("button", { name: "Town Hall controls" })).toBeNull();
   expect(view.getByRole("textbox", { name: "Control draft" })).toBeDefined();
+});
+
+it("uses available viewport height for menus and flips upward when that offers more room", () => {
+  let top = 0;
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+    () => new window.DOMRect(0, top, 200, 44),
+  );
+  Object.defineProperty(Element.prototype, "scrollHeight", {
+    configurable: true,
+    get: () => 900,
+  });
+  const view = render(
+    <ContentBox
+      title="Travel"
+      collapsedActionsLabel="Map controls"
+      topRightContent={<button type="button">Map action</button>}
+    >
+      Map
+    </ContentBox>,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Map controls" }));
+  const panel = view.getByRole("region", { name: "Map controls" });
+  expect(panel.style.maxHeight).toBe(`${window.innerHeight - 64}px`);
+  expect(Number.parseFloat(panel.style.maxHeight)).toBeGreaterThan(
+    window.innerHeight * 0.6,
+  );
+  top = window.innerHeight - 100;
+  fireEvent.resize(window);
+  expect(panel.style.maxHeight).toBe(`${top - 20}px`);
+  expect(panel.className).toContain("bottom-full");
+  top = 0;
+  document.documentElement.style.setProperty("--game-bottom-nav-h", "80px");
+  try {
+    fireEvent.resize(window);
+    expect(panel.style.maxHeight).toBe(`${window.innerHeight - 144}px`);
+  } finally {
+    document.documentElement.style.removeProperty("--game-bottom-nav-h");
+  }
 });
 
 it("keeps named action menus collapsed at every width and reveals guided targets", () => {

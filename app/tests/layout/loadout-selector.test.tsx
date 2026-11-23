@@ -2,17 +2,25 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import * as userContext from "@/utils/UserContext";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 
 beforeEach(() => {
+  installBrowserGlobals();
   vi.spyOn(userContext, "useUserDataSelector").mockImplementation(((
     select: (user: { itemLoadout: string }) => unknown,
   ) => ({ data: select({ itemLoadout: "l2" }) })) as never);
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await flushRadixFocus();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
+  restoreBrowserGlobals();
 });
 
 const renderDropdown = (props: { renamable?: boolean; label?: string } = {}) => {
@@ -76,4 +84,33 @@ it("offers no rename on dropdowns that do not ask for it", () => {
 it("names the dropdown by its label", () => {
   renderDropdown({ label: "Jutsu loadout" });
   expect(screen.getByRole("combobox", { name: "Jutsu loadout" })).toBeTruthy();
+});
+
+it("selects and renames loadouts through the menu presentation", async () => {
+  const select = vi.fn();
+  const rename = vi.fn();
+  render(
+    <LoadoutSelector
+      variant="menu"
+      label="Jutsu"
+      config={{
+        query: { data: [{ id: "l1", name: "PvE" }, { id: "l2" }], isFetching: false },
+        selectMutation: { mutate: select, isPending: false },
+        renameMutation: { mutate: rename, isPending: false },
+        maxLoadoutsFn: () => 2,
+        getSelectedId: () => "l2",
+      }}
+    />,
+  );
+  const trigger = screen.getByRole("button", { name: "Change loadout (Jutsu 2)" });
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole("button", { name: "Rename PvE" }));
+  const input = screen.getByRole("textbox", { name: "Rename PvE" });
+  fireEvent.change(input, { target: { value: "Arena" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(rename).toHaveBeenCalledWith({ id: "l1", name: "Arena" });
+  fireEvent.click(screen.getByRole("button", { name: "PvE" }));
+  expect(select).toHaveBeenCalledWith({ id: "l1" });
+  await act(async () => flushRadixFocus());
+  expect(screen.queryByRole("dialog")).toBeNull();
 });

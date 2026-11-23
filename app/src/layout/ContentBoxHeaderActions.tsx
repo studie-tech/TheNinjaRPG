@@ -94,20 +94,24 @@ export function ContentBoxHeaderActions({
 
     const place = () => {
       const rect = root.getBoundingClientRect();
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const viewportTop = window.visualViewport?.offsetTop ?? 0;
+      const viewportBottom =
+        viewportTop + (window.visualViewport?.height ?? window.innerHeight);
       const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
-      const above = rect.top - 16;
-      // Keep controls clear of the fixed mobile navigation and Activity dock.
-      const below = viewportHeight - rect.bottom - 80;
-      const wanted = Math.min(
-        (contentRef.current?.scrollHeight ?? 0) + 24,
-        viewportHeight * 0.6,
+      const bottomNavInset =
+        Number.parseFloat(
+          document.documentElement.style.getPropertyValue("--game-bottom-nav-h"),
+        ) || 0;
+      // Leave a viewport margin and the menu's 4px gap, clearing any raised mobile nav.
+      const above = rect.top - viewportTop - 20;
+      const usableBottom = Math.min(
+        viewportBottom,
+        window.innerHeight - bottomNavInset,
       );
+      const below = usableBottom - rect.bottom - 20;
+      const wanted = (contentRef.current?.scrollHeight ?? 0) + 26;
       const opensAbove = below < wanted && above > below;
-      const maxHeight = Math.max(
-        44,
-        Math.min(viewportHeight * 0.6, opensAbove ? above : below),
-      );
+      const maxHeight = Math.max(44, opensAbove ? above : below);
       // Persistent controls can follow a named menu; use the header edge so they
       // do not squeeze its options into the space left of its trigger.
       const menuRight = collapsedLabel
@@ -139,11 +143,19 @@ export function ContentBoxHeaderActions({
     document.addEventListener("focusin", dismissOutside);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
+    window.visualViewport?.addEventListener("resize", place);
+    window.visualViewport?.addEventListener("scroll", place);
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    if (contentRef.current) observer?.observe(contentRef.current);
     return () => {
       document.removeEventListener("pointerdown", dismissOutside);
       document.removeEventListener("focusin", dismissOutside);
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
+      window.visualViewport?.removeEventListener("resize", place);
+      window.visualViewport?.removeEventListener("scroll", place);
+      observer?.disconnect();
     };
   }, [isDisclosure, isOpen, collapsedLabel, headerRef]);
 
@@ -215,7 +227,7 @@ export function ContentBoxHeaderActions({
         }
         className={cn(
           isDisclosure &&
-            "bg-popover text-popover-foreground absolute top-full right-0 z-[45] mt-1 max-h-[60dvh] max-w-[calc(100vw-2rem)] overflow-auto rounded-md border p-3 shadow-md",
+            "bg-popover text-popover-foreground absolute top-full right-0 z-[45] mt-1 max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-auto rounded-md border p-3 shadow-md",
           collapsedLabel && "w-96",
           isDisclosure && placement.above && "top-auto bottom-full mb-1",
           isDisclosure &&

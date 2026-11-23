@@ -665,6 +665,14 @@ it.each([false, true])(
     expect(controls.contains(view.getByRole("button", { name: "Item loadout" }))).toBe(
       true,
     );
+    const loadouts = view.getByRole("group", { name: "Loadouts" });
+    expect(loadouts.parentElement?.lastElementChild).toBe(loadouts);
+    expect(loadouts.contains(view.getByRole("button", { name: "Jutsu loadout" }))).toBe(
+      true,
+    );
+    expect(loadouts.contains(view.getByRole("button", { name: "Item loadout" }))).toBe(
+      true,
+    );
     if (!immersive) {
       expect(
         controls.contains(view.getByRole("button", { name: "Expand world" })),

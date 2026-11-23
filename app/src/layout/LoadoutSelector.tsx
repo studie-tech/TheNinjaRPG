@@ -171,8 +171,11 @@ const LoadoutSelector = <T extends LoadoutData>(
     !selectedName.startsWith(`${props.label} `)
       ? `${props.label} · ${selectedName}`
       : selectedName;
-  const chipClass =
-    props.size === "small"
+  const isMenu = variant === "menu";
+  const hasCompactTrigger = props.compact || isMenu;
+  const chipClass = isMenu
+    ? "min-h-[44px] w-full gap-3 px-3 text-sm"
+    : props.size === "small"
       ? "h-8 gap-2 px-2 text-xs"
       : props.compact
         ? "h-9 gap-1 px-2 text-sm"
@@ -186,22 +189,24 @@ const LoadoutSelector = <T extends LoadoutData>(
         if (!next) setEditingId(null);
       }}
     >
-      <div className="inline-flex min-w-0 max-w-full self-start">
+      <div
+        className={`inline-flex min-w-0 max-w-full self-start ${isMenu ? "w-full" : ""}`}
+      >
         <PopoverTrigger asChild>
           <button
             type="button"
             className={`flex min-w-0 items-center justify-between rounded-md border border-input bg-background text-left disabled:cursor-not-allowed ${chipClass} ${isPending || props.disabled ? "opacity-50" : ""}`}
             disabled={isPending || props.disabled}
             aria-describedby={props.describedBy}
-            aria-label={props.compact ? `Change loadout (${chipText})` : undefined}
-            title={props.compact ? "Change loadout" : undefined}
+            aria-label={hasCompactTrigger ? `Change loadout (${chipText})` : undefined}
+            title={hasCompactTrigger ? "Change loadout" : undefined}
           >
             <span
               className={`min-w-0 truncate ${props.compact ? "max-w-[5.5rem] sm:max-w-[10rem]" : ""}`}
             >
               {chipText}
             </span>
-            {props.compact ? (
+            {hasCompactTrigger ? (
               <ChevronDown
                 className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
               />
@@ -214,7 +219,7 @@ const LoadoutSelector = <T extends LoadoutData>(
         </PopoverTrigger>
       </div>
       <PopoverContent
-        align={props.compact ? "end" : "start"}
+        align={hasCompactTrigger ? "end" : "start"}
         side="bottom"
         sideOffset={8}
         collisionPadding={{ top: 72, right: 8, bottom: 88, left: 8 }}
@@ -317,8 +322,8 @@ function RenameInput({
 export interface LoadoutSelectorDisplayProps {
   size?: "small" | "large";
   label?: string;
-  /** "sheet" lists named loadouts under a chip; "dropdown" uses a compact select */
-  variant?: "sheet" | "dropdown";
+  /** "sheet" uses a chip; "menu" a full-width touch target; "dropdown" a compact select. */
+  variant?: "sheet" | "menu" | "dropdown";
   /** Sheet chip sized for a toolbar: icon instead of "Change", shorter name on mobile */
   compact?: boolean;
   /** Dropdown only: a pencil beside it renames the selected loadout */

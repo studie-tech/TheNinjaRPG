@@ -671,12 +671,6 @@ export function TravelView({
   );
   const mapControls = (
     <div className="flex flex-col gap-1 text-sm [&_svg]:shrink-0">
-      {showSector && (
-        <div className="flex flex-wrap items-center gap-2">
-          <JutsuLoadoutSelector label="Jutsu" />
-          <ItemLoadoutSelector label="Items" />
-        </div>
-      )}
       {travelTools.map(({ key, node }) => (
         <Fragment key={key}>{node}</Fragment>
       ))}
@@ -692,6 +686,15 @@ export function TravelView({
           <Maximize2 className="h-7 w-7" aria-hidden />
           <span>Fullscreen</span>
         </button>
+      )}
+      {showSector && (
+        <fieldset
+          aria-label="Loadouts"
+          className="mt-2 min-w-0 space-y-3 border-t pt-3"
+        >
+          <JutsuLoadoutSelector variant="menu" label="Jutsu" />
+          <ItemLoadoutSelector variant="menu" label="Items" />
+        </fieldset>
       )}
     </div>
   );
