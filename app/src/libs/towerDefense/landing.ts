@@ -13,7 +13,9 @@ import {
   TD_ULTIMATES,
 } from "@/libs/towerDefense/content";
 
-export const TD_LANDING_TITLE = "Free Ninja Tower Defense Game";
+export const TD_GAME_NAME = "Shuriken Siege";
+
+export const TD_LANDING_TITLE = `${TD_GAME_NAME}: Free Ninja Tower Defense Game`;
 
 /** The search snippet: what the game is and that it is free, within about 155 characters. */
 export const TD_LANDING_DESCRIPTION =
@@ -22,7 +24,7 @@ export const TD_LANDING_DESCRIPTION =
 /** Questions a new player asks before their first run, answered for the page and search. */
 export const TD_LANDING_FAQ = [
   {
-    question: "Is Ninja Tower Defense free to play?",
+    question: `Is ${TD_GAME_NAME} free to play?`,
     answer:
       "Yes. It runs in your browser on desktop and mobile, with nothing to download and nothing to buy.",
   },

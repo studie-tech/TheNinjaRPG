@@ -8,7 +8,6 @@ import type React from "react";
 import { Button } from "@/components/ui/button";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
-import { cn } from "@/libs/shadui";
 import {
   formatDaysHours,
   formatHoursMinutes,
@@ -27,8 +26,6 @@ export const HallHeader = ({
   deck,
   onDeckClick,
   actions,
-  lead,
-  className,
 }: {
   today: KessenHub["today"] | null;
   week: KessenHub["week"] | null;
@@ -37,24 +34,10 @@ export const HallHeader = ({
   /** Without it the deck chip is left out (before any deck exists). */
   onDeckClick?: () => void;
   actions?: React.ReactNode;
-  /** A line under the title, for the guest hall's pitch. */
-  lead?: React.ReactNode;
-  className?: string;
 }) => (
-  <header
-    className={cn(
-      lead
-        ? "kh-hall"
-        : "kh-lobby bg-card flex flex-col gap-3 rounded-xl border-2 border-amber-500/70 p-3 @[34rem]:flex-row @[34rem]:items-center",
-      className,
-    )}
-  >
+  <header className="kh-lobby bg-card flex flex-col gap-3 rounded-xl border-2 border-amber-500/70 p-3 @[34rem]:flex-row @[34rem]:items-center">
     <div
-      className={
-        lead
-          ? "kh-hall-art"
-          : "h-24 w-full shrink-0 overflow-hidden rounded-lg @[34rem]:h-20 @[34rem]:w-32"
-      }
+      className="h-24 w-full shrink-0 overflow-hidden rounded-lg @[34rem]:h-20 @[34rem]:w-32"
       aria-hidden
     >
       <Image
@@ -64,20 +47,14 @@ export const HallHeader = ({
         height={683}
         priority
         draggable={false}
-        className={lead ? undefined : "h-full w-full object-cover"}
+        className="h-full w-full object-cover"
       />
     </div>
-    {lead ? <div className="kh-hall-shade" aria-hidden /> : null}
-    <div className={lead ? "kh-hall-body" : "min-w-0 flex-1"}>
-      <p
-        className={lead ? "kh-eyebrow" : "text-muted-foreground text-sm font-semibold"}
-      >
+    <div className="min-w-0 flex-1">
+      <p className="text-muted-foreground text-sm font-semibold">
         The Card Hall of Wake Island
       </p>
-      <h2 className={lead ? "kh-hall-title" : "text-xl leading-tight font-black"}>
-        The Ninja War Table
-      </h2>
-      {lead ? <p className="kh-hall-lead">{lead}</p> : null}
+      <h2 className="text-xl leading-tight font-black">The Ninja War Table</h2>
       {today ? (
         <ul className="kh-today mt-2" aria-label="Rewards today and this week">
           <li className="kh-today-item">
@@ -114,7 +91,7 @@ export const HallHeader = ({
         </ul>
       ) : null}
       {onDeckClick || actions ? (
-        <div className={cn("kh-hall-row", !lead && "mt-2")}>
+        <div className="kh-hall-row mt-2">
           {onDeckClick ? <DeckChip deck={deck} onClick={onDeckClick} /> : null}
           {actions ? <div className="kh-hall-actions">{actions}</div> : null}
         </div>

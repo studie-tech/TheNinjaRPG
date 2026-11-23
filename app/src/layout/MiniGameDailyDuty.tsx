@@ -40,10 +40,10 @@ export const MiniGameDailyDuty = (props: {
       <h2 id={props.id} className="text-base leading-tight font-bold">
         {props.title}
       </h2>
-      <p className="text-muted-foreground text-sm">{props.description}</p>
+      <p className="text-muted-foreground text-[0.875rem]">{props.description}</p>
     </div>
     {!props.done && props.reward && (
-      <span className="flex flex-wrap gap-1.5 text-sm font-bold">
+      <span className="flex flex-wrap gap-1.5 text-[0.875rem] font-bold">
         <RewardChip>{props.reward.ryo.toLocaleString()} ryo</RewardChip>
         <RewardChip>{props.reward.prestige} prestige</RewardChip>
         {props.hasVillage && (

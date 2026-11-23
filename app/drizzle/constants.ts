@@ -3261,6 +3261,10 @@ export const IMG_MERCH_ARTWORK = {
 } as const;
 
 // Kessen card game artwork. Card illustrations live on each card item (`cardData.artUrl`).
+/** Kessen's title logo, matching the minigames' shared visual identity. */
+export const IMG_KESSEN_LOGO =
+  "https://uploadthing.b-cdn.net/f/kessen-logo-d4de6b291297a6ca.webp";
+
 export const IMG_KESSEN_BOARD =
   "https://uploadthing.b-cdn.net/f/kessen-ASGtfBcVOi.webp";
 export const IMG_KESSEN_CARD_BACK =
@@ -4390,7 +4394,7 @@ export const TD_STAGE_IMAGE_URLS = {
     "https://uploadthing.b-cdn.net/f/td-stage-infinite-dream-3f0f4ae37c289f9f.webp",
 } as const;
 
-/** Title logo of Shuriken Siege, the standalone tower defense build for game portals. */
+/** Title logo of Shuriken Siege, the tower defense minigame and its standalone build. */
 export const SHURIKEN_SIEGE_LOGO_URL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDUtFWrzEwoh0WXMnscL279N8ayVQUCbRzS3p";
 

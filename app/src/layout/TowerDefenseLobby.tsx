@@ -26,7 +26,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TD_DAILY_WAVES, TD_STAGE_IMAGE_URLS } from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
-import Link from "@/layout/Link";
 import { MiniGameDailyDuty } from "@/layout/MiniGameDailyDuty";
 import { SEAL_GLYPHS, SEAL_HOTKEYS } from "@/layout/TowerDefenseHud";
 import { TowerDefenseLanding } from "@/layout/TowerDefenseLanding";
@@ -140,15 +139,6 @@ export const TowerDefenseLobby = (props: {
           disabled={busy}
           onPlay={() => props.onStart(1, false)}
         />
-      )}
-      {props.isGuest && (
-        <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-3 text-sm">
-          Playing as a guest: runs are not saved and earn no scrolls.{" "}
-          <Link className="font-semibold underline" href="/login">
-            Log in
-          </Link>{" "}
-          to train in the Guard Hall and climb the leaderboard.
-        </div>
       )}
       {props.dailyDutyDone !== undefined && (
         <DailyDuty

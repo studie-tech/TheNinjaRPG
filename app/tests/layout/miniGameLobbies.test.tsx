@@ -1,13 +1,59 @@
-import { afterEach, expect, it } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ChakraStormLobby } from "@/layout/ChakraStormLobby";
 import { MiniGameDailyDuty } from "@/layout/MiniGameDailyDuty";
+import { TowerDefenseLanding } from "@/layout/TowerDefenseLanding";
 import { TowerDefenseLobby } from "@/layout/TowerDefenseLobby";
 import { CS_EMPTY_PROGRESS } from "@/libs/chakraStorm/progress";
 
 afterEach(cleanup);
 
 const reward = { ryo: 2750, prestige: 150, villageTokens: 200 };
+
+it("puts the defense account benefit directly after the guest hero, before the features", () => {
+  const onPlay = vi.fn();
+  render(<TowerDefenseLanding isStarting={false} disabled={false} onPlay={onPlay} />);
+  const hero = screen.getByRole("region", { name: "Shuriken Siege: play for free" });
+  expect(hero.nextElementSibling).toBe(
+    screen.getByRole("region", { name: "Daily Guard Hall duty" }),
+  );
+  expect(hero.parentElement?.nextElementSibling).toBe(
+    screen.getByRole("region", { name: "Why players keep coming back" }),
+  );
+  expect(
+    screen.getByRole("link", { name: "Create free account" }).getAttribute("href"),
+  ).toBe("/signup");
+  expect(screen.getByRole("link", { name: "Join to earn" }).getAttribute("href")).toBe(
+    "/signup",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Play now, free" }));
+  expect(onPlay).toHaveBeenCalledTimes(1);
+});
+
+it.each([false, true])(
+  "keeps the scout guest benefit below the shared hero and guards starting while loading: %s",
+  (isLoading) => {
+    const onStart = vi.fn();
+    render(
+      <ChakraStormLobby
+        progress={CS_EMPTY_PROGRESS}
+        stage="horizon"
+        isGuest
+        isLoading={isLoading}
+        daily={null}
+        onStage={() => {}}
+        onStart={onStart}
+        onTrain={() => {}}
+      />,
+    );
+    const hero = screen.getByRole("region", { name: "Chakra Storm: play for free" });
+    expect(hero.nextElementSibling).toBe(
+      screen.getByRole("region", { name: "Daily scouting report" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Play now, free" }));
+    expect(onStart).toHaveBeenCalledTimes(isLoading ? 0 : 1);
+  },
+);
 
 it("places a signed-in scout's duty before the scouting action", () => {
   render(

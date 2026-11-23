@@ -30,6 +30,7 @@ import { useKessenCatalog } from "@/hooks/kessen/useKessenHub";
 import { FeedbackAlert } from "@/layout/FeedbackAlert";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { MiniGameGuestHero } from "@/layout/MiniGameGuestHero";
 import { QueryError } from "@/layout/QueryError";
 import { GuestGuidedLesson } from "@/layout/TutorialAssistant";
 import { KESSEN_ACADEMY, type KessenAcademyLessonKey } from "@/libs/kessen/academy";
@@ -37,9 +38,9 @@ import { type DeckFaction, KESSEN_DECK_FACTIONS } from "@/libs/kessen/deck";
 import { KESSEN_NPCS, type KessenNpc, type KessenNpcKey } from "@/libs/kessen/npcs";
 import { KESSEN_FACTION_NAMES } from "@/libs/kessen/packs";
 import { FactionSigil } from "../FactionSigil";
+import { KESSEN_IMAGES } from "../kessenArt";
 import { NpcPortrait } from "./CircuitMap";
 import { HallBox, type HallScene } from "./HallBox";
-import { HallHeader } from "./HallHeader";
 import { KESSEN_FACTION_INFO, KESSEN_TIER_LABELS, tierPips } from "./hubData";
 
 // The table, its playback and its stylesheet load only when a match opens.
@@ -49,8 +50,7 @@ const KessenMatchView = dynamic(
 );
 
 /**
- * The Card Hall for visitors without an account: the hall's banner with the game in one
- * line, all six Academy lessons with Lemu guiding every move, and practice matches
+ * The Card Hall for visitors without an account: the shared game introduction, all six Academy lessons with Lemu guiding every move, and practice matches
  * against every Circuit opponent with today's loaner deck of a faction the guest picks.
  * Matches run in the browser (`useGuestKessenMatch`) on the same table, engine and
  * opponents as a player's; nothing is saved or rewarded, and the collection, decks,
@@ -116,44 +116,26 @@ export const KessenGuestHall = ({ ready }: { ready: boolean }) => {
   return (
     <>
       <HallBox subtitle="Free to play in your browser" scene={scene} isGuest>
-        <HallHeader
-          className="kg-hall"
-          today={null}
-          week={null}
-          deck={null}
-          lead="Three rows, three rounds and the art of passing at the right moment. Learn it from Lemu in six short lessons, then take on the Circuit. No account needed."
-          actions={
-            <>
-              <Button
-                className="kh-hall-action"
-                disabled={!canStart}
-                onClick={() => nextLesson && startLesson(nextLesson.key)}
-              >
-                <span className="kh-hall-action-icon" aria-hidden>
-                  <Play className="kh-hall-action-play" />
-                </span>
-                <span className="kh-hall-action-text">
-                  <span className="kh-hall-action-label">
-                    {lessonsWon.length > 0 ? "Next lesson" : "Start with Lemu"}
-                  </span>
-                  <span className="kh-hall-action-detail">
-                    Lesson {nextLesson?.order}: {nextLesson?.title}
-                  </span>
-                </span>
-              </Button>
-              <Button asChild className="kh-hall-action">
-                <Link href="/login">
-                  <span className="kh-hall-action-icon" aria-hidden>
-                    <LogIn />
-                  </span>
-                  <span className="kh-hall-action-text">
-                    <span className="kh-hall-action-label">Log in</span>
-                    <span className="kh-hall-action-detail">Keep cards and ryo</span>
-                  </span>
-                </Link>
-              </Button>
-            </>
-          }
+        <MiniGameGuestHero
+          id="kessen"
+          name="Kessen"
+          logo={{ src: KESSEN_IMAGES.logo, width: 480, height: 240 }}
+          background={KESSEN_IMAGES.hallHero}
+          title="Master the war table"
+          description="Three rows, three rounds and the art of passing at the right moment. Learn from Lemu in six short lessons, then take on the Circuit. No account needed."
+          stats={[
+            { value: `${KESSEN_ACADEMY.length}`, label: "lessons" },
+            { value: `${KESSEN_NPCS.length}`, label: "opponents" },
+            { value: `${KESSEN_DECK_FACTIONS.length}`, label: "factions" },
+          ]}
+          benefit={{
+            title: "Keep cards and ryo",
+            description:
+              "Play with a free account to earn cards and ryo, keep your collection and build your own decks. Guest matches are practice only.",
+          }}
+          disabled={!canStart}
+          playLabel={lessonsWon.length > 0 ? "Continue lessons" : undefined}
+          onPlay={() => nextLesson && startLesson(nextLesson.key)}
         />
         {/* The failure shows from the first failed attempt, which the retries that
             follow would otherwise hide; until then the disabled starts say why. */}

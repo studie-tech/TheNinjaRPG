@@ -33,6 +33,7 @@ import {
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { MiniGameDailyDuty } from "@/layout/MiniGameDailyDuty";
+import { MiniGameGuestHero } from "@/layout/MiniGameGuestHero";
 import {
   CS_DAILY_SECONDS,
   CS_JUTSU,
@@ -95,71 +96,26 @@ export const ChakraStormLobby = (props: {
       {!props.isGuest && <DailyReport daily={props.daily} />}
       {/* A visitor meets the landing; a signed-in scout goes straight to the run. */}
       {props.isGuest ? (
-        <section className="relative overflow-hidden rounded-xl border border-black/20 bg-black text-white shadow-lg">
-          <Image
-            src={CS_KEYART_URL}
-            alt="A lone shinobi surrounded by hostiles, wind sickles and a fire comet around them"
-            width={1024}
-            height={683}
-            priority
-            className="absolute inset-0 h-full w-full object-cover object-[30%_50%] opacity-90"
-          />
-          <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10 @2xl:bg-gradient-to-l @2xl:from-black/90 @2xl:via-black/55 @2xl:to-transparent" />
-          <div className="relative flex min-h-[22rem] flex-col justify-end gap-3 p-4 pt-6 @2xl:ml-auto @2xl:w-[58%] @2xl:justify-center @2xl:p-6 @2xl:py-8">
-            <h2 className="sr-only">Chakra Storm</h2>
-            <Image
-              src={CS_LOGO_URL}
-              alt="Chakra Storm"
-              width={480}
-              height={308}
-              priority
-              className="h-auto w-[min(70%,16rem)] drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]"
-            />
-            <p className="text-base font-semibold text-white/95">
-              Your village needs eyes on Seichi. Scout a region while hostiles close in
-              from every side: your jutsu cast themselves, you choose the path, the
-              chakra to gather and the arts to learn. Hold out fifteen minutes until
-              your village's reinforcements arrive to bring the report home.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="lg"
-                className="bg-amber-500 text-lg font-bold text-black hover:bg-amber-400"
-                disabled={props.isStarting || props.isLoading}
-                onClick={props.onStart}
-              >
-                <Play className="mr-2 h-5 w-5" />
-                {props.isStarting
-                  ? "Preparing..."
-                  : props.isGuest
-                    ? "Play now, free"
-                    : "Begin scouting"}
-              </Button>
-              {props.isGuest && (
-                <Button
-                  asChild
-                  size="lg"
-                  variant="outline"
-                  className="border-white/60 bg-black/30 text-white hover:bg-black/50 hover:text-white"
-                >
-                  <Link href="/signup">
-                    <UserPlus className="mr-2 h-5 w-5" />
-                    Join TheNinja-RPG
-                  </Link>
-                </Button>
-              )}
-            </div>
-            <p className="text-sm text-white/80">
-              Region: <span className="font-bold text-white">{stage.name}</span>
-            </p>
-            <dl className="grid grid-cols-4 gap-1.5 text-center">
-              <HeroStat value={`${CS_LANDING_STATS.jutsu}`} label="jutsu" />
-              <HeroStat value={`${CS_LANDING_STATS.jutsu}`} label="awakenings" />
-              <HeroStat value={`${CS_LANDING_STATS.stages}`} label="regions" />
-              <HeroStat value={`${CS_LANDING_STATS.minutes}`} label="minutes" />
-            </dl>
-          </div>
-        </section>
+        <MiniGameGuestHero
+          id="cs"
+          name="Chakra Storm"
+          logo={{ src: CS_LOGO_URL, width: 480, height: 308 }}
+          background={CS_KEYART_URL}
+          title="Survive the storm"
+          description={`Scout ${stage.name} while hostiles close in from every side. Your jutsu cast themselves; you choose the path, gather chakra and learn new arts. Hold out ${CS_LANDING_STATS.minutes} minutes until reinforcements arrive.`}
+          stats={[
+            { value: `${CS_LANDING_STATS.jutsu}`, label: "jutsu" },
+            { value: `${CS_LANDING_STATS.stages}`, label: "regions" },
+            { value: `${CS_LANDING_STATS.minutes}`, label: "minutes" },
+          ]}
+          benefit={{
+            title: "Daily scouting report",
+            description: `Signed-in scouts earn ryo, prestige and village tokens once a day for a run of ${CS_DAILY_SECONDS / 60} minutes or more. Every run is verified by the server.`,
+          }}
+          disabled={!!props.isStarting || !!props.isLoading}
+          isStarting={props.isStarting}
+          onPlay={props.onStart}
+        />
       ) : (
         <ScoutingCard
           stage={props.stage}
@@ -169,8 +125,6 @@ export const ChakraStormLobby = (props: {
           onStart={props.onStart}
         />
       )}
-
-      {props.isGuest && <DailyReport daily={props.daily} />}
 
       {/* Stages */}
       <section aria-labelledby="cs-stages" className="space-y-2">
@@ -311,13 +265,6 @@ export const ChakraStormLobby = (props: {
     </div>
   );
 };
-
-const HeroStat = (props: { value: string; label: string }) => (
-  <div className="flex flex-col-reverse rounded-lg bg-white/10 px-1 py-1 backdrop-blur-sm">
-    <dt className="text-sm text-white/80">{props.label}</dt>
-    <dd className="text-lg font-black">{props.value}</dd>
-  </div>
-);
 
 const StageCard = (props: {
   id: CsStage;

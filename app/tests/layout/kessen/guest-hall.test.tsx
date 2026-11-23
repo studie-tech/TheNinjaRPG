@@ -68,6 +68,13 @@ afterEach(async () => {
 describe("Kessen for signed-out visitors", () => {
   it("shows the guest hall: every lesson, every Circuit opponent and the locked sections", async () => {
     const view = await renderGuestHall();
+    const hero = view.getByRole("region", { name: "Kessen: play for free" });
+    expect(hero.nextElementSibling).toBe(
+      view.getByRole("region", { name: "Keep cards and ryo" }),
+    );
+    expect(view.getByRole("link", { name: "Join to earn" }).getAttribute("href")).toBe(
+      "/signup",
+    );
     expect(view.getByRole("heading", { name: "Lemu's Academy" })).toBeTruthy();
     for (const lesson of KESSEN_ACADEMY) {
       const start = view.getByRole("button", {
@@ -102,6 +109,10 @@ describe("Kessen for signed-out visitors", () => {
       name: `Start lesson 1, ${first?.title}`,
     }) as HTMLButtonElement;
     expect(start.disabled).toBe(true);
+    expect(
+      (view.getByRole("button", { name: "Play now, free" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
     const play = view.getByRole("button", {
       name: /^Play Kazehiko, /,
     }) as HTMLButtonElement;

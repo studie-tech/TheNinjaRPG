@@ -5,17 +5,17 @@ import {
   ChevronDown,
   Hand,
   type LucideIcon,
-  Play,
   ScrollText,
   Shield,
   Sparkles,
   Trophy,
-  UserPlus,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { TD_STAGE_IMAGE_URLS } from "@/drizzle/constants";
-import Image from "@/layout/Image";
-import Link from "@/layout/Link";
+import {
+  SHURIKEN_SIEGE_LOGO_URL,
+  TD_DAILY_WAVES,
+  TD_STAGE_IMAGE_URLS,
+} from "@/drizzle/constants";
+import { MiniGameGuestHero } from "@/layout/MiniGameGuestHero";
 import {
   TD_BOSS_INTERVAL,
   TD_ERA_INTERVAL,
@@ -24,7 +24,7 @@ import {
   TD_STAGES,
   TD_ULTIMATES,
 } from "@/libs/towerDefense/content";
-import { TD_LANDING_FAQ } from "@/libs/towerDefense/landing";
+import { TD_GAME_NAME, TD_LANDING_FAQ } from "@/libs/towerDefense/landing";
 
 /**
  * The public face of tower defense for visitors without an account: what the game is,
@@ -37,57 +37,26 @@ export const TowerDefenseLanding = (props: {
   onPlay: () => void;
 }) => (
   <div className="@container space-y-4">
-    <section className="relative overflow-hidden rounded-xl border border-black/20 bg-black text-white shadow-lg">
-      <Image
-        src={TD_STAGE_IMAGE_URLS.Dusk}
-        alt=""
-        width={960}
-        height={640}
-        priority
-        className="absolute inset-0 h-full w-full object-cover opacity-80"
-      />
-      <span className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/10" />
-      <div className="relative max-w-xl space-y-3 p-5 sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-widest text-amber-300">
-          Free browser game · No download
-        </p>
-        <h2 className="font-bold text-3xl leading-tight sm:text-4xl">
-          Hold the line against endless raiders
-        </h2>
-        <p className="text-sm text-white/90 sm:text-base">
-          Raiders march on the village and you are its last line. Weave hand seals,
-          raise sentries and unleash ultimate jutsu against endless waves on the road to
-          wave {TD_STAGES.at(-1)?.wave}.
-        </p>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button
-            size="lg"
-            className="bg-amber-500 text-black hover:bg-amber-400"
-            disabled={props.disabled}
-            onClick={props.onPlay}
-          >
-            <Play className="mr-2 h-5 w-5" />
-            {props.isStarting ? "Preparing..." : "Play now, free"}
-          </Button>
-          <Button
-            asChild
-            size="lg"
-            variant="outline"
-            className="border-white/60 bg-black/30 text-white hover:bg-black/50 hover:text-white"
-          >
-            <Link href="/signup">
-              <UserPlus className="mr-2 h-5 w-5" />
-              Create free account
-            </Link>
-          </Button>
-        </div>
-        <dl className="grid grid-cols-3 gap-2 pt-2 text-center">
-          <HeroStat value={`${TD_STAGES.at(-1)?.wave}+`} label="waves" />
-          <HeroStat value={`${TD_SEAL_ARTS.length}`} label="seal arts" />
-          <HeroStat value={`${TD_ULTIMATES.length}`} label="ultimates" />
-        </dl>
-      </div>
-    </section>
+    <MiniGameGuestHero
+      id="td"
+      name={TD_GAME_NAME}
+      logo={{ src: SHURIKEN_SIEGE_LOGO_URL, width: 480, height: 200 }}
+      background={TD_STAGE_IMAGE_URLS.Dusk}
+      title="Hold the line"
+      description={`Raiders march on the village and you are its last line. Weave hand seals, raise sentries and unleash ultimate jutsu against endless waves on the road to wave ${TD_STAGES.at(-1)?.wave}.`}
+      stats={[
+        { value: `${TD_STAGES.at(-1)?.wave}+`, label: "waves" },
+        { value: `${TD_SEAL_ARTS.length}`, label: "seal arts" },
+        { value: `${TD_ULTIMATES.length}`, label: "ultimates" },
+      ]}
+      benefit={{
+        title: "Daily Guard Hall duty",
+        description: `Signed-in defenders earn ryo, prestige and village tokens once a day for clearing ${TD_DAILY_WAVES} waves in one run. A free account also saves your scrolls and Guard Hall upgrades.`,
+      }}
+      disabled={props.disabled}
+      isStarting={props.isStarting}
+      onPlay={props.onPlay}
+    />
 
     <section aria-labelledby="td-features" className="space-y-2">
       <h2 id="td-features" className="font-bold text-xl">
@@ -137,13 +106,6 @@ export const TowerDefenseLanding = (props: {
         ))}
       </div>
     </section>
-  </div>
-);
-
-const HeroStat = (props: { value: string; label: string }) => (
-  <div className="flex flex-col-reverse rounded-lg bg-white/10 px-2 py-1.5 backdrop-blur-sm">
-    <dt className="text-[11px] uppercase tracking-wide text-white/75">{props.label}</dt>
-    <dd className="font-bold text-lg">{props.value}</dd>
   </div>
 );
 
