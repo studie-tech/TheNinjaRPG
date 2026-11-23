@@ -37,12 +37,16 @@ import {
   AvailableEffectTypes,
   AvailableTargets,
   aiCoordinatesSchema,
+  aiRoundNumbersSchema,
   countCustomRules,
   countRulesWithUnequippedActions,
   enforceExtraRules,
+  enmityRankSchema,
   getActionSchema,
   getBackupRules,
   getConditionSchema,
+  isEnmityTarget,
+  normalizeAiRuleRounds,
   updateAiProfileSchema,
 } from "@/validators/ai";
 
@@ -217,7 +221,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
     const source = await utils.ai.getAiProfile.fetch({ id }).catch(() => null);
     setCopyingId(null);
     if (!source) return;
-    const copied = structuredClone(source.rules);
+    const copied = normalizeAiRuleRounds(structuredClone(source.rules));
     if (includeDefault || (!isStaff && !isControlled)) {
       enforceExtraRules(copied, getBackupRules());
     }
@@ -233,7 +237,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   useEffect(() => {
     if (!profile) return;
     void hydration;
-    const copyRules = structuredClone(profile.rules);
+    const copyRules = normalizeAiRuleRounds(structuredClone(profile.rules));
     if (profile.includeDefaultRules || (!isStaff && !isControlled)) {
       enforceExtraRules(copyRules, getBackupRules());
     }
@@ -327,7 +331,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
     ruleIndex: number,
     conditionIdx: number,
     field: string,
-    value: string | number,
+    value: string | number | number[],
   ) => {
     setRules((prevRules) =>
       prevRules.map((rule, i) => {
@@ -339,6 +343,13 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                 return {
                   ...condition,
                   [field]: value,
+                  ...(field === "target" && "target" in condition
+                    ? {
+                        enmityRank: isEnmityTarget(String(value))
+                          ? (condition.enmityRank ?? 1)
+                          : undefined,
+                      }
+                    : {}),
                 };
               }
               return condition;
@@ -784,7 +795,7 @@ const RuleConditionsEditor: React.FC<{
     ruleIndex: number,
     conditionIdx: number,
     field: string,
-    value: string | number,
+    value: string | number | number[],
   ) => void;
 }> = ({ rule, ruleIndex, canEdit, setRules, updateCondition }) => (
   <div className="flex flex-col gap-2">
@@ -849,7 +860,16 @@ const RuleConditionsEditor: React.FC<{
             }}
           />
         )}
-        {"value" in condition && (
+        {condition.type === "specific_round" && (
+          <RuleRoundsInput
+            value={condition.value}
+            canEdit={canEdit}
+            onChange={(value) =>
+              updateCondition(ruleIndex, conditionIndex, "value", value)
+            }
+          />
+        )}
+        {"value" in condition && condition.type !== "specific_round" && (
           <Input
             disabled={!canEdit}
             id="value"
@@ -941,9 +961,97 @@ const RuleConditionsEditor: React.FC<{
             </SelectContent>
           </Select>
         )}
+        {"target" in condition && isEnmityTarget(condition.target) && (
+          <EnmityRankInput
+            value={condition.enmityRank ?? 1}
+            canEdit={canEdit}
+            onChange={(value) =>
+              updateCondition(ruleIndex, conditionIndex, "enmityRank", value)
+            }
+          />
+        )}
       </div>
     ))}
     {rule.conditions.length === 0 && <Badge className="bg-slate-500">None Added</Badge>}
+  </div>
+);
+
+/** Editable comma-separated rounds retain unfinished text until the player corrects it. */
+const RuleRoundsInput = ({
+  value,
+  canEdit,
+  onChange,
+}: {
+  value: number[];
+  canEdit: boolean;
+  onChange: (value: number[]) => void;
+}) => {
+  const [draft, setDraft] = useState({ source: value, text: value.join(", ") });
+  const text = draft.source === value ? draft.text : value.join(", ");
+  const isValid = aiRoundNumbersSchema.safeParse(value).success;
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>
+        Rounds
+        <Input
+          aria-label="Rounds"
+          aria-invalid={!isValid || undefined}
+          disabled={!canEdit}
+          placeholder="1, 3, 5"
+          value={text}
+          onChange={(event) => {
+            const text = event.target.value;
+            const rounds = text
+              .split(",")
+              .map((part) => (part.trim() === "" ? Number.NaN : Number(part.trim())));
+            setDraft({ source: rounds, text });
+            onChange(rounds);
+          }}
+        />
+      </Label>
+      <p>
+        Enter round numbers separated by commas, such as 1, 3, 5. Other conditions must
+        also match.
+      </p>
+      {!isValid && (
+        <p role="alert" className="text-red-500">
+          Enter at least one positive whole round number, separated by commas.
+        </p>
+      )}
+    </div>
+  );
+};
+
+/** One-based opponent position used by enmity actions and conditions. */
+const EnmityRankInput = ({
+  value,
+  canEdit,
+  onChange,
+}: {
+  value: number;
+  canEdit: boolean;
+  onChange: (value: number) => void;
+}) => (
+  <div className="flex flex-col gap-2">
+    <Label>
+      Enmity rank
+      <NumberInput
+        aria-label="Enmity rank"
+        disabled={!canEdit}
+        min={1}
+        value={value}
+        onValueChange={onChange}
+      />
+    </Label>
+    <p>
+      1 selects the highest or lowest opponent, 2 the second, and so on. Ties use battle
+      order. If that position is unavailable, this rule is skipped.
+    </p>
+    {!enmityRankSchema.safeParse(value).success && (
+      <p role="alert" className="text-red-500">
+        Enmity rank must be a positive whole number.
+      </p>
+    )}
   </div>
 );
 
@@ -1096,6 +1204,7 @@ const RuleActionEditor: React.FC<{
                 return {
                   ...action,
                   target: e as typeof action.target,
+                  enmityRank: isEnmityTarget(e) ? (action.enmityRank ?? 1) : undefined,
                   coordinates:
                     e === "COORDINATE"
                       ? (action.coordinates ?? {
@@ -1118,6 +1227,15 @@ const RuleActionEditor: React.FC<{
               ))}
             </SelectContent>
           </Select>
+        )}
+        {"target" in rule.action && isEnmityTarget(rule.action.target) && (
+          <EnmityRankInput
+            value={rule.action.enmityRank ?? 1}
+            canEdit={canEdit}
+            onChange={(value) =>
+              updateAction(ruleIndex, (action) => ({ ...action, enmityRank: value }))
+            }
+          />
         )}
         {"target" in rule.action && rule.action.target === "COORDINATE" && (
           <div className="flex flex-col gap-2">

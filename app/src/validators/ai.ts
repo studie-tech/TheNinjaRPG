@@ -50,6 +50,17 @@ export const AvailableTargets = [
 
 export type AvailableTarget = (typeof AvailableTargets)[number];
 
+/** Whether a target selects an opponent by its position in the enmity order. */
+export const isEnmityTarget = (target: string) =>
+  target === "HIGHEST_ENMITY_OPPONENT" || target === "LOWEST_ENMITY_OPPONENT";
+
+export const enmityRankSchema = z
+  .union([z.number(), z.string().trim().min(1)])
+  .pipe(z.coerce.number<string | number>().int().positive());
+const enmityTargetSettings = {
+  enmityRank: enmityRankSchema.optional(),
+};
+
 /*********************************/
 /*          Conditions           */
 /*********************************/
@@ -60,6 +71,7 @@ export const ConditionHealthBelow = z.object({
 });
 
 export const ConditionDistanceHigherThan = z.object({
+  ...enmityTargetSettings,
   type: z.literal("distance_higher_than").prefault("distance_higher_than"),
   description: z.string().prefault("Distance higher than or equal given value"),
   value: z.coerce.number().int().positive().prefault(3),
@@ -67,16 +79,26 @@ export const ConditionDistanceHigherThan = z.object({
 });
 
 export const ConditionDistanceLowerThan = z.object({
+  ...enmityTargetSettings,
   type: z.literal("distance_lower_than").prefault("distance_lower_than"),
   description: z.string().prefault("Distance lower than or equal given value"),
   value: z.coerce.number().int().positive().prefault(2),
   target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
 });
 
+const aiRoundNumber = z
+  .union([z.number(), z.string().trim().min(1)])
+  .pipe(z.coerce.number<string | number>().int().positive());
+
+/** Saved round lists; scalar inputs normalize single-round profiles and battle snapshots. */
+export const aiRoundNumbersSchema = z
+  .union([z.array(aiRoundNumber).min(1), aiRoundNumber.transform((round) => [round])])
+  .transform((rounds) => [...new Set(rounds)].sort((a, b) => a - b));
+
 export const ConditionSpecificRound = z.object({
   type: z.literal("specific_round").prefault("specific_round"),
-  description: z.string().prefault("A specific round number"),
-  value: z.coerce.number().int().positive().prefault(10),
+  description: z.string().prefault("One of the specified rounds"),
+  value: aiRoundNumbersSchema.prefault([10]),
 });
 
 export const ConditionRoundGreaterThan = z.object({
@@ -129,6 +151,7 @@ export const ConditionHasEffect = z.object({
 });
 
 export const ConditionTargetHasEffect = z.object({
+  ...enmityTargetSettings,
   type: z.literal("target_has_effect").prefault("target_has_effect"),
   description: z.string().prefault("Target is affected by a specific effect"),
   effectType: z.enum(AvailableEffectTypes).prefault("damage"),
@@ -175,6 +198,7 @@ export const aiCoordinatesSchema = z.object({
 });
 
 const actionTargetSettings = {
+  ...enmityTargetSettings,
   target: z.enum(AvailableActionTargets).prefault("RANDOM_OPPONENT"),
   coordinates: aiCoordinatesSchema.optional(),
 };
@@ -313,6 +337,21 @@ export const updateAiProfileSchema = z.object({
 });
 
 export type AiRuleType = z.infer<typeof AiRule>;
+
+/** Normalize round conditions when loading or copying saved rules into the editor. */
+export const normalizeAiRuleRounds = (rules: AiRuleType[]): AiRuleType[] =>
+  rules.map((rule) => ({
+    ...rule,
+    conditions: rule.conditions.map((condition) => {
+      if (condition.type !== "specific_round") return condition;
+      const parsed = aiRoundNumbersSchema.safeParse(condition.value);
+      return {
+        ...condition,
+        description: "One of the specified rounds",
+        value: parsed.success ? parsed.data : [Number.NaN],
+      };
+    }),
+  }));
 
 /**
  * Returns the catch-all rules enforced at the end of user AI profiles and profiles with
