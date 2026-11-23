@@ -248,29 +248,24 @@ describe("responsive experimental menus", () => {
     );
   });
 
-  it("shows desktop menus with Activity in the toolbar and keeps tutorial targets mounted once", () => {
+  it("uses corner sidebar toggles and bottom Activity navigation on desktop", () => {
     isDesktop = true;
     const input = props();
     const view = render(<ExperimentalGameLayout {...input} />);
-    expect(view.getByRole("complementary", { name: "Player menu" })).toBeTruthy();
-    expect(view.getByRole("complementary", { name: "Game menu" })).toBeTruthy();
-    expect(view.getByText("Player statistics")).toBeTruthy();
-    expect(view.getByRole("button", { name: "Account controls" })).toBeTruthy();
-    const village = view.getByRole("link", { name: "Horizon Village" });
-    expect(input.rightSideBarRef.current?.contains(village)).toBe(true);
-    expect(view.container.querySelectorAll("#tutorial-village")).toHaveLength(1);
-    expect(view.queryByRole("button", { name: "Open player menu" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Open game menu" })).toBeNull();
-    expect(
-      view.container.querySelector(
-        '[data-header-item="activity"] [data-desktop-activity-trigger]',
-      ),
-    ).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "Open player menu" }));
+    expect(input.onLeftSideBarOpenChange).toHaveBeenCalledWith(true);
+    fireEvent.click(view.getByRole("button", { name: "Open game menu" }));
+    expect(input.onRightSideBarOpenChange).toHaveBeenCalledWith(true);
+    expect(view.getByRole("button", { name: "Activity" })).toBeTruthy();
+    expect(view.queryByText("Player statistics")).toBeNull();
+    expect(view.queryByRole("dialog")).toBeNull();
+    expect(view.queryByRole("complementary", { name: "Game menu" })).toBeNull();
+    expect(view.container.querySelector('[data-header-item="activity"]')).toBeNull();
     expect(view.getByRole("button", { name: "Chat" })).toBeTruthy();
     expect(
       view.queryByRole("button", { name: /Open notifications|Settings/ }),
     ).toBeNull();
-    expect(getGameLayout("experimental").sidebarBreakpoint).toBe(768);
+    expect(getGameLayout("experimental").sidebarBreakpoint).toBeNull();
   });
   it("uses mobile corner menus and the shared configured bottom navigation", () => {
     const input = props();
@@ -301,7 +296,7 @@ describe("responsive experimental menus", () => {
     expect(view.getByRole("button", { name: "Activity" })).toBeTruthy();
     expect(view.queryByRole("link", { name: "Village" })).toBeNull();
   });
-  it("moves menu contents between the mobile drawer and desktop without duplicate tutorial targets", async () => {
+  it("keeps an open sidebar and its tutorial target through desktop/mobile resizing", async () => {
     const input = { ...props(), rightSideBarOpen: true };
     const view = render(<ExperimentalGameLayout {...input} />);
     expect(view.getByRole("dialog", { name: "Game menu" })).toBeTruthy();
@@ -313,8 +308,29 @@ describe("responsive experimental menus", () => {
     await act(async () => {
       await flushRadixFocus();
     });
-    expect(view.queryByRole("dialog", { name: "Game menu" })).toBeNull();
-    expect(view.container.querySelectorAll("#tutorial-village")).toHaveLength(1);
+    expect(view.getByRole("dialog", { name: "Game menu" })).toBeTruthy();
+    expect(document.querySelectorAll("#tutorial-village")).toHaveLength(1);
+    expect(
+      input.rightSideBarRef.current?.querySelector("#tutorial-village"),
+    ).toBeTruthy();
+  });
+  it("lets desktop map interactions keep the open nonmodal sidebar", async () => {
+    isDesktop = true;
+    const input = props();
+    input.rightSideBarOpen = true;
+    input.userData = { ...input.userData, tutorialOn: false } as never;
+    const view = render(
+      <>
+        <button type="button">Map surface</button>
+        <ExperimentalGameLayout {...input} />
+      </>,
+    );
+    await act(async () => flushRadixFocus());
+    expect(view.getByRole("dialog", { name: "Game menu" })).toBeTruthy();
+    const surface = view.getByRole("button", { name: "Map surface" });
+    fireEvent.pointerDown(surface);
+    fireEvent.click(surface);
+    expect(input.onRightSideBarOpenChange).not.toHaveBeenCalled();
     expect(
       input.rightSideBarRef.current?.querySelector("#tutorial-village"),
     ).toBeTruthy();

@@ -84,9 +84,11 @@ afterEach(() => {
   localStorage.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   restoreBrowserGlobals();
+  document.documentElement.removeAttribute("data-mobile-activity-nav");
 });
 
-it("opens from a desktop toolbar and returns focus there when collapsed", () => {
+it("returns focus to the bottom Activity control when collapsed", () => {
+  document.documentElement.setAttribute("data-mobile-activity-nav", "true");
   localStorage.setItem(`activityDockOpen:${user.userId}`, "false");
   const view = render(
     <>

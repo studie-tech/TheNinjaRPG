@@ -63,6 +63,7 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
   return (
     <div
       ref={navRef}
+      data-has-cookie-control={showCookieSettings}
       className={cn(
         // The fixed web consent control balances the configured shortcuts around the centre.
         // Native clients keep two wider left slots; the insets clear a landscape notch.
@@ -95,7 +96,6 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
         </div>
       ))}
       <ActivityDockButton
-        mobile
         className="relative -top-2 flex min-h-[44px] min-w-0 justify-center"
         iconClassName={cn(mobileNavbarButtonClassName, "max-w-full")}
       />

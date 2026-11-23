@@ -9,19 +9,16 @@ import { cn } from "@/libs/shadui";
 export function ActivityDockButton({
   className,
   iconClassName,
-  mobile = false,
 }: {
   className?: string;
   iconClassName?: string;
-  mobile?: boolean;
 }) {
   const activity = useAtomValue(activityDockStateAtom);
   const requestActivity = useSetAtom(activityDockRequestAtom);
   return (
     <button
       type="button"
-      data-mobile-activity-trigger={mobile ? "" : undefined}
-      data-desktop-activity-trigger={mobile ? undefined : ""}
+      data-mobile-activity-trigger
       aria-label="Activity"
       aria-expanded={activity.open}
       aria-controls={activity.panelId ?? undefined}
@@ -40,7 +37,6 @@ export function ActivityDockButton({
       }
     >
       <ListChecks className={cn("size-5", iconClassName)} aria-hidden />
-      {!mobile && <span>Activity</span>}
     </button>
   );
 }

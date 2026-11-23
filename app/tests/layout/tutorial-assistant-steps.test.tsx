@@ -207,7 +207,10 @@ afterEach(() => {
   restoreBrowserGlobals();
 });
 
-const assistant = (sidebarBreakpoint = 768, rightSideBarOpen = false) => (
+const assistant = (
+  sidebarBreakpoint: number | null = 768,
+  rightSideBarOpen = false,
+) => (
   <TutorialAssistant
     sidebarBreakpoint={sidebarBreakpoint}
     rightSideBarOpen={rightSideBarOpen}
@@ -237,7 +240,7 @@ const show = (
   values: Partial<Profile> = {},
   pathname?: string,
   extra?: ReactNode,
-  breakpoint?: number,
+  breakpoint?: number | null,
 ) => {
   state.profile = makeProfile(step, values);
   state.pathname =
@@ -554,6 +557,19 @@ describe("highlight placement", () => {
 
 describe("mobile game menu", () => {
   const index = TUTORIAL_STEPS.findIndex((step) => step.requiresGameMenu);
+  it("guides drawer-only desktop layouts through the game-menu button", async () => {
+    const view = show(
+      index,
+      {},
+      undefined,
+      <Target id="tutorial-gameBtn" box={new DOMRect(1000, 10, 44, 44)} />,
+      null,
+    );
+    const region = await waitFor(() => lesson(view, TUTORIAL_STEPS[index]!.title));
+    expect(region.textContent).toContain("Tap the highlighted menu button.");
+    fireEvent.click(view.getByRole("button", { name: "Open menu" }));
+    expect(state.setRightSideBarOpen).toHaveBeenCalledWith(true);
+  });
 
   it("highlights the menu button until the drawer opens", async () => {
     const view = show(
@@ -569,7 +585,7 @@ describe("mobile game menu", () => {
     );
     expect(region.textContent).toContain("Tap the highlighted menu button.");
     expect(region.textContent).toContain(
-      "On phones, the location and main menus live in the game menu.",
+      "The location and main menus live in the game menu.",
     );
     fireEvent.click(view.getByRole("button", { name: "Open menu" }));
     expect(state.setRightSideBarOpen).toHaveBeenCalledWith(true);

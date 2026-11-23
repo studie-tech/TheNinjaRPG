@@ -1,8 +1,10 @@
-.experimental-game {
+html[data-game-layout="experimental"] {
   --experimental-bottom-nav-space: calc(5rem + env(safe-area-inset-bottom));
   --experimental-header-height: calc(
     max(0.5rem, env(safe-area-inset-top)) + 44px + 0.5rem + 1px
   );
+}
+.experimental-game {
   min-height: 100dvh;
   color: var(--theme-text);
   background: var(--theme-bg);
@@ -57,28 +59,24 @@
   flex: 1;
 }
 .experimental-game [data-header-item="player-menu"],
-.experimental-game [data-header-item="activity"],
 .experimental-game [data-header-item="game-menu"],
 .experimental-game [data-header-item="map-navigation"],
 .experimental-game [data-header-item="travel-home"] {
   grid-row: 1;
   margin: 0;
 }
-.experimental-game [data-header-item="player-menu"],
-.experimental-game [data-header-item="activity"] {
+.experimental-game [data-header-item="player-menu"] {
   grid-column: 1;
   justify-self: start;
 }
 .experimental-game [data-header-item="game-menu"] {
   grid-column: 3;
+  justify-self: end;
 }
 .experimental-game [data-header-item="map-navigation"],
 .experimental-game [data-header-item="travel-home"] {
   grid-column: 2;
   justify-self: center;
-}
-.experimental-desktop-menu {
-  display: none;
 }
 .experimental-mobile-nav {
   position: fixed;
@@ -171,78 +169,63 @@
 }
 
 @media (min-width: 768px) {
-  .experimental-game {
-    --experimental-bottom-nav-space: 0px;
-    --experimental-menu-width: clamp(180px, 18vw, 260px);
-    --experimental-hud-height: 5.5rem;
-    --experimental-sidebar-top: calc(var(--experimental-header-height) + 1rem);
-  }
-  .experimental-game-map:has([data-travel-sector-active="true"]) {
-    --experimental-sidebar-top: calc(var(--experimental-header-height) + var(--experimental-hud-height) + 2rem);
-  }
   .experimental-header > [data-content-box-actions],
   .experimental-travel > [data-content-box] > [data-content-box-header] > [data-content-box-actions] {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   }
-  html[data-game-layout="experimental"] [data-activity-launcher] {
-    display: none;
-  }
-  .experimental-game .experimental-chat-launcher {
-    top: max(0.5rem, env(safe-area-inset-top));
-    right: max(0.5rem, env(safe-area-inset-right));
-    bottom: auto;
-    left: auto;
-  }
-  .experimental-mobile-nav {
-    display: none;
-  }
-  .experimental-desktop-menu {
-    position: fixed;
-    top: var(--experimental-sidebar-top);
-    bottom: 5rem;
-    z-index: 20;
-    display: block;
-    width: var(--experimental-menu-width);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+  .experimental-drawer {
+    top: calc(var(--experimental-header-height) + 1rem);
+    bottom: calc(var(--experimental-bottom-nav-space) + 1rem);
+    width: clamp(240px, 22vw, 320px);
+    max-width: calc(100vw - 2rem);
+    height: auto;
     border: 1px solid var(--theme-line);
     border-radius: var(--radius);
-    padding: 1rem;
-    background: var(--theme-surface);
-    box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
   }
-  .experimental-player-menu {
+  .experimental-drawer[data-experimental-sidebar="player"] {
     left: max(1rem, env(safe-area-inset-left));
   }
-  .experimental-world-menu {
+  .experimental-drawer[data-experimental-sidebar="game"] {
     right: max(1rem, env(safe-area-inset-right));
   }
-  .experimental-page {
-    width: calc(100% - 2 * var(--experimental-menu-width) - 4rem);
+  .experimental-mobile-nav[data-has-cookie-control="true"] {
+    grid-template-columns: repeat(7, 4.5rem);
   }
-  .experimental-travel [aria-label="Map compass and neighboring sectors"] {
-    position: fixed;
-    top: calc(var(--experimental-header-height) + 1rem);
-    left: max(1rem, env(safe-area-inset-left));
-    display: flex;
-    width: var(--experimental-menu-width);
-    height: var(--experimental-hud-height);
-    align-items: center;
-    justify-content: center;
+  .experimental-mobile-nav[data-has-cookie-control="false"] {
+    grid-template-columns: repeat(2, 6.75rem) repeat(4, 4.5rem);
   }
-  .experimental-travel [data-sector-weather] {
-    position: fixed;
-    top: calc(var(--experimental-header-height) + 1rem);
-    right: max(1rem, env(safe-area-inset-right));
-    width: var(--experimental-menu-width);
-    height: var(--experimental-hud-height);
+}
+
+.experimental-weather [data-sector-weather] {
+  display: flex;
+  align-items: center;
+}
+@media (max-width: 600px) {
+  /* Keep the full countdown accessible while the narrow toolbar shows the phase. */
+  .experimental-weather [data-day-night-countdown] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
-  .experimental-travel [data-sector-weather] > div:first-child {
-    display: flex;
-    width: 100%;
-    height: 100%;
-    flex-direction: column;
-    justify-content: center;
+}
+/* The phase icon leaves room for both map tabs even with enlarged text. */
+@media (max-width: 400px) {
+  .experimental-weather [data-day-night-phase] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .experimental-weather [data-map-preview-icon] {
+    display: none;
+  }
+  .experimental-weather [data-day-night-indicator] {
+    padding-inline: 0.25rem;
   }
 }
 

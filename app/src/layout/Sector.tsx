@@ -2591,6 +2591,41 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       ?.filter((asset) => asset.type === "SCENE_CHARACTER")
       .map((asset) => asset.image) ?? [];
 
+  const weatherControls = (
+    <div
+      data-sector-weather
+      className={
+        props.weatherControlsContainer === undefined
+          ? "absolute top-3 right-3 z-10 flex items-start gap-2"
+          : "flex items-center gap-2"
+      }
+    >
+      <DayNightIndicator
+        className={
+          props.weatherControlsContainer === undefined
+            ? "bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
+            : "px-2 py-1"
+        }
+        previewDate={lightingPreviewDate}
+        onPreviewDateChange={setLightingPreviewDate}
+        previewWeather={weatherPreview}
+        onPreviewWeatherChange={setWeatherPreview}
+      />
+      {isWorldExpanded && (
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          className="bg-background/90"
+          ref={expandedExitRef}
+          aria-label="Exit expanded world"
+          onClick={() => setWorldExpanded(false)}
+        >
+          <Minimize2 className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
   const content = (
     <div
       data-world-expanded={isWorldExpanded ? "true" : undefined}
@@ -2614,60 +2649,41 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             </div>
           </div>
         )}
-        <aside
-          aria-label="Map compass and neighboring sectors"
-          className="bg-background/90 pointer-events-none absolute top-3 left-3 z-10 rounded-lg border p-2 text-center text-xs shadow-md backdrop-blur-sm"
-        >
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
-            <span className="col-span-3">
-              N ·{" "}
-              {sectorGridNeighbors(sector)[0] < 0
-                ? "Polar boundary"
-                : sectorGridNeighbors(sector)[0]}
-            </span>
-            <span className="text-right whitespace-nowrap">
-              {sectorGridNeighbors(sector)[3]} · W
-            </span>
-            <span className="border-foreground/20 bg-muted min-w-8 rounded border px-1.5 py-0.5 font-bold">
-              <span className="sr-only">Current sector </span>
-              {sector}
-            </span>
-            <span className="text-left whitespace-nowrap">
-              E · {sectorGridNeighbors(sector)[1]}
-            </span>
-            <span className="col-span-3">
-              S ·{" "}
-              {sectorGridNeighbors(sector)[2] < 0
-                ? "Polar boundary"
-                : sectorGridNeighbors(sector)[2]}
-            </span>
-          </div>
-        </aside>
-        <div
-          data-sector-weather
-          className="absolute top-3 right-3 z-10 flex items-start gap-2"
-        >
-          <DayNightIndicator
-            className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
-            previewDate={lightingPreviewDate}
-            onPreviewDateChange={setLightingPreviewDate}
-            previewWeather={weatherPreview}
-            onPreviewWeatherChange={setWeatherPreview}
-          />
-          {isWorldExpanded && (
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              className="bg-background/90"
-              ref={expandedExitRef}
-              aria-label="Exit expanded world"
-              onClick={() => setWorldExpanded(false)}
-            >
-              <Minimize2 className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        {props.showCompass !== false && (
+          <aside
+            aria-label="Map compass and neighboring sectors"
+            className="bg-background/90 pointer-events-none absolute top-3 left-3 z-10 rounded-lg border p-2 text-center text-xs shadow-md backdrop-blur-sm"
+          >
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
+              <span className="col-span-3">
+                N ·{" "}
+                {sectorGridNeighbors(sector)[0] < 0
+                  ? "Polar boundary"
+                  : sectorGridNeighbors(sector)[0]}
+              </span>
+              <span className="text-right whitespace-nowrap">
+                {sectorGridNeighbors(sector)[3]} · W
+              </span>
+              <span className="border-foreground/20 bg-muted min-w-8 rounded border px-1.5 py-0.5 font-bold">
+                <span className="sr-only">Current sector </span>
+                {sector}
+              </span>
+              <span className="text-left whitespace-nowrap">
+                E · {sectorGridNeighbors(sector)[1]}
+              </span>
+              <span className="col-span-3">
+                S ·{" "}
+                {sectorGridNeighbors(sector)[2] < 0
+                  ? "Polar boundary"
+                  : sectorGridNeighbors(sector)[2]}
+              </span>
+            </div>
+          </aside>
+        )}
+        {props.weatherControlsContainer === undefined
+          ? weatherControls
+          : props.weatherControlsContainer &&
+            createPortal(weatherControls, props.weatherControlsContainer)}
       </div>
       {travel.error && <WebGlError />}
       {inspectedLocations && (
@@ -3020,6 +3036,10 @@ export interface SectorWindowData {
 }
 
 interface SectorProps {
+  /** Hosts can omit the map HUD when their navigation already identifies the sector. */
+  showCompass?: boolean;
+  /** Move the scene-owned lighting controls into a host toolbar; null waits for its mount. */
+  weatherControlsContainer?: HTMLElement | null;
   loadLpcCatalog: () => Promise<LpcCatalog>;
   sector: number;
   tile: GlobalTile;
