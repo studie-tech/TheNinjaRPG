@@ -82,7 +82,8 @@ export const FindSectorPopover: React.FC<{
 /** Sector-ID input for forms built on `sectorFormSchema`. */
 export const SectorIdField: React.FC<{
   control: Control<SectorFormInput, unknown, SectorForm>;
-}> = ({ control }) => (
+  id?: string;
+}> = ({ control, id }) => (
   <FormField
     control={control}
     name="sector"
@@ -90,6 +91,7 @@ export const SectorIdField: React.FC<{
       <FormItem>
         <FormControl>
           <NumberInput
+            id={id}
             className="w-full"
             placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
             {...field}

@@ -4,6 +4,7 @@ import * as dynamic from "next/dynamic";
 import { createRef, useEffect, useState } from "react";
 import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTypes";
 import { layoutVariantClasses } from "@/components/layout/shared/layoutVariants";
+import * as compass from "@/components/layout/shared/TravelCompass";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import * as navigation from "@/hooks/navigation";
 import * as media from "@/hooks/useMediaQuery";
@@ -223,6 +224,9 @@ describe("responsive experimental menus", () => {
     variantClasses: layoutVariantClasses.experimental,
   });
   beforeEach(() => {
+    vi.spyOn(compass, "TravelCompass").mockReturnValue(
+      <button type="button">Destination compass</button>,
+    );
     isDesktop = false;
     vi.spyOn(media, "useMediaQuery").mockImplementation(() => isDesktop);
     vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
@@ -262,7 +266,7 @@ describe("responsive experimental menus", () => {
   });
   it("uses mobile corner menus and the shared configured bottom navigation", () => {
     const input = props();
-    input.mobileNavConfig = { left: ["bank", "itemshop"], right: ["profile", "items"] };
+    input.mobileNavConfig = { left: ["bank"], right: ["itemshop", "items", "tavern"] };
     const view = render(<ExperimentalGameLayout {...input} />);
     expect(view.getByRole("button", { name: "Open player menu" })).toBeTruthy();
     const game = view.getByRole("button", { name: "Open game menu" });
@@ -276,8 +280,18 @@ describe("responsive experimental menus", () => {
     expect(view.getByRole("link", { name: "Village" }).getAttribute("href")).toBe(
       "/village",
     );
+    expect(view.queryByRole("button", { name: "Destination compass" })).toBeNull();
+    expect(view.getByRole("button", { name: "Activity" })).toBeTruthy();
     expect(view.queryByRole("complementary", { name: "Game menu" })).toBeNull();
     expect(view.queryByText("Player statistics")).toBeNull();
+  });
+  it("shows the compass outside a village while keeping Activity reachable", () => {
+    const input = props();
+    input.location = undefined;
+    const view = render(<ExperimentalGameLayout {...input} />);
+    expect(view.getByRole("button", { name: "Destination compass" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Activity" })).toBeTruthy();
+    expect(view.queryByRole("link", { name: "Village" })).toBeNull();
   });
   it("moves menu contents between the mobile drawer and desktop without duplicate tutorial targets", async () => {
     const input = { ...props(), rightSideBarOpen: true };

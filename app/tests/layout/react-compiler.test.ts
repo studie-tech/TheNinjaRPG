@@ -23,6 +23,14 @@ const { c } = require("react/compiler-runtime") as { c: (size: number) => unknow
 
 const targets = [
   ["components/layout/ExperimentalGameLayout.tsx", ["ExperimentalGameLayout"]],
+  [
+    "components/layout/shared/TravelCompass.tsx",
+    ["TravelCompass", "CharacterTravelCompass"],
+  ],
+  [
+    "components/layout/shared/MobileGameNav.tsx",
+    ["MobileGameNav", "MobileGameNavButton"],
+  ],
   ["components/layout/ExperimentalTravelHost.tsx", ["ExperimentalTravelHost"]],
   ["screens/travel/TravelScreen.tsx", ["TravelScreen", "TravelRoute"]],
   [

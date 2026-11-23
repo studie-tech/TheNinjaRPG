@@ -1,9 +1,12 @@
 "use client";
 
-import { Compass, Cookie, House } from "lucide-react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { Compass, Cookie, House, ListChecks } from "lucide-react";
+import type { ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import Link from "@/layout/Link";
+import { activityDockRequestAtom, activityDockStateAtom } from "@/libs/activityDock";
 import { openCookieConsentDialog } from "@/libs/cookieConsent";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { MobileNavConfig } from "@/libs/mobileNavConfig";
@@ -17,15 +20,17 @@ interface MobileGameNavProps {
   yellowButtonClassName: string;
   mobileNavbarButtonClassName: string;
   className?: string;
+  /** Experimental frames use a destination compass in place of the location link. */
+  centerControl?: ReactNode;
 }
 
 /** Render a configured navigation shortcut, omitting unavailable travel destinations and unknown IDs. */
 const MobileGameNavButton: React.FC<{
   optionId: string;
-  location?: NavBarDropdownLink;
   mobileNavbarButtonClassName: string;
-}> = ({ optionId, location, mobileNavbarButtonClassName }) => {
-  if (optionId === "travel" && !location) return null;
+  hasTravelCenter: boolean;
+}> = ({ optionId, mobileNavbarButtonClassName, hasTravelCenter }) => {
+  if (optionId === "travel" && hasTravelCenter) return null;
 
   const option = getNavOptionById(optionId);
   if (!option) return null;
@@ -49,11 +54,14 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
   yellowButtonClassName,
   mobileNavbarButtonClassName,
   className,
+  centerControl,
 }) => {
   const isNativeShell = useNativeShell();
   const showCookieSettings =
     isNativeShell === false && !isNativeUserAgent(navigator.userAgent);
   const navRef = useRef<HTMLDivElement>(null);
+  const activity = useAtomValue(activityDockStateAtom);
+  const requestActivity = useSetAtom(activityDockRequestAtom);
   useBottomNavInset(navRef);
   return (
     <div
@@ -84,37 +92,57 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
         <div key={optionId} className="min-w-0">
           <MobileGameNavButton
             optionId={optionId}
-            location={location}
+            hasTravelCenter={!location && !centerControl}
             mobileNavbarButtonClassName={mobileNavbarButtonClassName}
           />
         </div>
       ))}
-      {location ? (
-        <Link
-          href="/village"
-          aria-label="Village"
-          className="relative -top-8 flex justify-center"
-        >
-          <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
-            <House className={cn(yellowButtonClassName)} />
-          </div>
-        </Link>
-      ) : (
-        <Link
-          href="/travel"
-          aria-label="Travel"
-          className="relative -top-8 flex justify-center"
-        >
-          <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
-            <Compass className={mobileNavbarButtonClassName} />
-          </div>
-        </Link>
-      )}
+      <button
+        type="button"
+        data-mobile-activity-trigger
+        aria-label="Activity"
+        aria-expanded={activity.open}
+        aria-controls={activity.panelId ?? undefined}
+        disabled={!activity.panelId}
+        title="Tutorial & quests"
+        className="focus-visible:outline-ring relative -top-2 flex min-h-[44px] min-w-0 justify-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+        onClick={() =>
+          requestActivity((current) => ({
+            sequence: current.sequence + 1,
+            userId: activity.userId,
+            open: !activity.open,
+          }))
+        }
+      >
+        <ListChecks className={cn(mobileNavbarButtonClassName, "max-w-full")} />
+      </button>
+      {centerControl ??
+        (location ? (
+          <Link
+            href="/village"
+            aria-label="Village"
+            className="relative -top-8 flex justify-center"
+          >
+            <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
+              <House className={cn(yellowButtonClassName)} />
+            </div>
+          </Link>
+        ) : (
+          <Link
+            href="/travel"
+            aria-label="Travel"
+            className="relative -top-8 flex justify-center"
+          >
+            <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
+              <Compass className={mobileNavbarButtonClassName} />
+            </div>
+          </Link>
+        ))}
       {mobileNavConfig.right.map((optionId) => (
         <div key={optionId} className="min-w-0">
           <MobileGameNavButton
             optionId={optionId}
-            location={location}
+            hasTravelCenter={!location && !centerControl}
             mobileNavbarButtonClassName={mobileNavbarButtonClassName}
           />
         </div>
@@ -141,17 +169,19 @@ const useBottomNavInset = (navRef: React.RefObject<HTMLDivElement | null>) => {
       const rect = nav.getBoundingClientRect();
       if (!rect.height) {
         root.style.setProperty(BOTTOM_NAV_INSET_VARIABLE, "0px");
+        root.removeAttribute("data-mobile-activity-nav");
         return;
       }
       const top = Math.min(
         rect.top,
         ...Array.from(
-          nav.querySelectorAll("a"),
+          nav.querySelectorAll("a, button"),
           (link) => link.getBoundingClientRect().top,
         ),
       );
       const inset = Math.max(0, Math.round(window.innerHeight - top));
       root.style.setProperty(BOTTOM_NAV_INSET_VARIABLE, `${inset}px`);
+      root.setAttribute("data-mobile-activity-nav", "true");
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -161,6 +191,7 @@ const useBottomNavInset = (navRef: React.RefObject<HTMLDivElement | null>) => {
       observer.disconnect();
       window.removeEventListener("resize", measure);
       root.style.removeProperty(BOTTOM_NAV_INSET_VARIABLE);
+      root.removeAttribute("data-mobile-activity-nav");
     };
   }, [navRef]);
 };

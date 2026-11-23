@@ -37,6 +37,7 @@ import {
   SIDEBAR_COLUMNS_SHOWN_QUERY,
 } from "./shared/layoutUtils";
 import { MobileGameNav } from "./shared/MobileGameNav";
+import { TravelCompass } from "./shared/TravelCompass";
 import "../../styles/layout-experimental.css";
 
 /** A compact frame that gives travel the viewport and keeps other pages reachable. */
@@ -237,6 +238,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
           yellowButtonClassName={variantClasses.yellowButton}
           mobileNavbarButtonClassName={variantClasses.mobileNavbarButton}
           className="experimental-mobile-nav"
+          centerControl={location ? undefined : <TravelCompass />}
         />
       )}
     </div>

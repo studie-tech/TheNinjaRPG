@@ -45,15 +45,15 @@ it("replaces only the chosen slot on its own side", () => {
     ...DEFAULT_MOBILE_NAV_CONFIG.left,
     ...DEFAULT_MOBILE_NAV_CONFIG.right,
   ]);
-  fireEvent.change(slots[1] as HTMLInputElement, { target: { value: "bank" } });
+  fireEvent.change(slots[0] as HTMLInputElement, { target: { value: "bank" } });
   expect(setConfig).toHaveBeenLastCalledWith({
-    left: ["profile", "bank"],
-    right: ["items", "tavern", "settings"],
+    left: ["bank"],
+    right: ["inbox", "tavern", "settings"],
   });
-  fireEvent.change(slots[4] as HTMLInputElement, { target: { value: "bank" } });
+  fireEvent.change(slots[3] as HTMLInputElement, { target: { value: "bank" } });
   expect(setConfig).toHaveBeenLastCalledWith({
-    left: ["profile", "inbox"],
-    right: ["items", "tavern", "bank"],
+    left: ["profile"],
+    right: ["inbox", "tavern", "bank"],
   });
   fireEvent.click(view.getByRole("button", { name: "Reset to Default" }));
   expect(setConfig).toHaveBeenLastCalledWith(DEFAULT_MOBILE_NAV_CONFIG);

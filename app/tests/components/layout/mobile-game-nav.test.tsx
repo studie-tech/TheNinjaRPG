@@ -4,6 +4,7 @@ import { MobileGameNav } from "@/components/layout/shared/MobileGameNav";
 import * as nativeShell from "@/hooks/useNativeShell";
 import * as cookieConsent from "@/libs/cookieConsent";
 import type { MobileNavConfig } from "@/libs/mobileNavConfig";
+import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
@@ -11,7 +12,7 @@ import {
 
 const userAgent = Object.getOwnPropertyDescriptor(navigator, "userAgent");
 const shortcuts: MobileNavConfig = {
-  left: ["academy", "inbox"],
+  left: ["academy"],
   right: ["items", "tavern", "settings"],
 };
 const props = {
@@ -35,6 +36,24 @@ afterEach(() => {
 });
 
 describe("mobile game navigation cookie settings", () => {
+  it("places Activity beside Profile and balances the default shortcuts around the center", () => {
+    const view = render(
+      <MobileGameNav {...props} mobileNavConfig={DEFAULT_MOBILE_NAV_CONFIG} />,
+    );
+    expect(
+      Array.from(view.container.querySelectorAll("a, button"), (control) =>
+        control.getAttribute("aria-label"),
+      ),
+    ).toEqual([
+      "Cookie settings",
+      "Profile",
+      "Activity",
+      "Village",
+      "Inbox",
+      "Tavern",
+      "Settings",
+    ]);
+  });
   it("opens preferences without leaving the player's current page", () => {
     const open = vi
       .spyOn(cookieConsent, "openCookieConsentDialog")
@@ -68,7 +87,7 @@ describe("mobile game navigation cookie settings", () => {
     expect(isNavigationPrevented).toBe(false);
   });
 
-  it("retains all five configured shortcuts and the village destination", () => {
+  it("retains four configured shortcuts beside Activity and the village destination", () => {
     const view = render(<MobileGameNav {...props} />);
     expect(
       view
@@ -77,12 +96,12 @@ describe("mobile game navigation cookie settings", () => {
     ).toEqual([
       ["Cookie settings", "/consent"],
       ["Academy", "/academy"],
-      ["Inbox", "/inbox"],
       ["Village", "/village"],
       ["Items", "/items"],
       ["Tavern", "/tavern"],
       ["Settings", "/profile/edit"],
     ]);
+    expect(view.getByRole("button", { name: "Activity" })).toBeTruthy();
   });
 
   it("preserves travel outside a village and hides an unavailable configured travel link", () => {
@@ -90,7 +109,7 @@ describe("mobile game navigation cookie settings", () => {
       <MobileGameNav
         {...props}
         location={undefined}
-        mobileNavConfig={{ ...shortcuts, left: ["profile", "travel"] }}
+        mobileNavConfig={{ ...shortcuts, left: ["travel"] }}
       />,
     );
     expect(view.getAllByRole("link", { name: "Travel" })).toHaveLength(1);
@@ -107,7 +126,7 @@ describe("mobile game navigation cookie settings", () => {
       vi.spyOn(nativeShell, "useNativeShell").mockReturnValue(native);
       const view = render(<MobileGameNav {...props} />);
       expect(view.queryByRole("link", { name: "Cookie settings" })).toBeNull();
-      expect(view.getAllByRole("link")).toHaveLength(6);
+      expect(view.getAllByRole("link")).toHaveLength(5);
     },
   );
 
@@ -118,6 +137,21 @@ describe("mobile game navigation cookie settings", () => {
     });
     const view = render(<MobileGameNav {...props} />);
     expect(view.queryByRole("link", { name: "Cookie settings" })).toBeNull();
-    expect(view.getAllByRole("link")).toHaveLength(6);
+    expect(view.getAllByRole("link")).toHaveLength(5);
+  });
+
+  it("keeps configured Travel reachable when a compass replaces the location link", () => {
+    const view = render(
+      <MobileGameNav
+        {...props}
+        location={undefined}
+        mobileNavConfig={{ ...shortcuts, left: ["travel"] }}
+        centerControl={<button type="button">Compass</button>}
+      />,
+    );
+    expect(view.getByRole("link", { name: "Travel" }).getAttribute("href")).toBe(
+      "/travel",
+    );
+    expect(view.getByRole("button", { name: "Compass" })).toBeTruthy();
   });
 });

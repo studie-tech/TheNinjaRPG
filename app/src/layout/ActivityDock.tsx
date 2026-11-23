@@ -1,6 +1,6 @@
 "use client";
 
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   ArrowLeftRight,
   BookOpen,
@@ -18,6 +18,7 @@ import { useActivityDock } from "@/hooks/useActivityDock";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import { LogbookEntry } from "@/layout/Logbook";
+import { activityDockRequestAtom, activityDockStateAtom } from "@/libs/activityDock";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
@@ -86,6 +87,39 @@ export function ActivityDock({
   const lessonShown =
     open && tab === "tutorial" && (!!guided || user?.tutorialOn !== false);
   const panelId = useId();
+  const request = useAtomValue(activityDockRequestAtom);
+  const reportState = useSetAtom(activityDockStateAtom);
+  const previousRequest = useRef(request.sequence);
+  const focusRequested = useRef(false);
+  useEffect(() => {
+    reportState({ userId: user?.userId ?? null, panelId, open });
+  }, [user?.userId, panelId, open, reportState]);
+  useEffect(
+    () => () => {
+      reportState({ userId: null, panelId: null, open: false });
+    },
+    [reportState],
+  );
+  useEffect(() => {
+    if (previousRequest.current === request.sequence) return;
+    previousRequest.current = request.sequence;
+    if (!user || request.userId !== user.userId) return;
+    focusRequested.current = request.open;
+    if (request.open) {
+      setChat((current) => ({ ...current, owner: null, openRequested: false }));
+    }
+    changeOpen(request.open);
+  }, [request, user, changeOpen, setChat]);
+  useEffect(() => {
+    if (!open || !focusRequested.current) return;
+    const activeTab = document
+      .getElementById(panelId)
+      ?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]');
+    if (activeTab) {
+      focusRequested.current = false;
+      activeTab.focus();
+    }
+  }, [open, panelId, tab, request.sequence]);
   const previousTutorialOn = useRef(user?.tutorialOn);
   useEffect(() => {
     // Re-enabling lessons in Settings must also reveal them in a collapsed dock.
@@ -152,7 +186,14 @@ export function ActivityDock({
               size="icon"
               className="h-9 w-9"
               aria-label="Collapse Activity"
-              onClick={() => changeOpen(false)}
+              onClick={() => {
+                changeOpen(false);
+                if (document.documentElement.dataset.mobileActivityNav === "true") {
+                  document
+                    .querySelector<HTMLButtonElement>("[data-mobile-activity-trigger]")
+                    ?.focus();
+                }
+              }}
             >
               <ChevronDown className="h-4 w-4" />
             </Button>
@@ -185,7 +226,11 @@ export function ActivityDock({
       ) : (
         <Button
           variant="outline"
-          className="pointer-events-auto h-11 gap-2 rounded-full bg-card shadow-lg"
+          className={cn(
+            "bg-card pointer-events-auto h-11 gap-2 rounded-full shadow-lg",
+            // Guests and compact frames without a visible mobile bar keep a launcher.
+            user && "[[data-mobile-activity-nav=true]_&]:hidden",
+          )}
           aria-expanded={false}
           aria-controls={panelId}
           aria-label="Open Activity"

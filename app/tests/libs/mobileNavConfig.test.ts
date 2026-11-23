@@ -64,14 +64,14 @@ describe("normalizeMobileNavConfig", () => {
   });
 
   it("keeps a complete valid layout", () => {
-    const config = { left: ["home", "bank"], right: ["items", "tavern", "anbu"] };
+    const config = { left: ["home"], right: ["items", "tavern", "anbu"] };
     expect(normalizeMobileNavConfig(config)).toEqual(config);
   });
 
   it("falls back per side for a malformed side", () => {
     expect(
       normalizeMobileNavConfig({
-        left: ["home"],
+        left: [],
         right: ["bank", "anbu", "travel"],
       }),
     ).toEqual({
@@ -83,7 +83,25 @@ describe("normalizeMobileNavConfig", () => {
         left: ["home", "bank"],
         right: ["anbu", "anbu", "travel"],
       }),
-    ).toEqual({ left: ["home", "bank"], right: DEFAULT_MOBILE_NAV_CONFIG.right });
+    ).toEqual({ left: ["home"], right: DEFAULT_MOBILE_NAV_CONFIG.right });
+  });
+
+  it("moves saved default Inbox to the right when Activity takes its fixed slot", () => {
+    expect(
+      normalizeMobileNavConfig({
+        left: ["profile", "inbox"],
+        right: ["items", "tavern", "settings"],
+      }),
+    ).toBe(DEFAULT_MOBILE_NAV_CONFIG);
+  });
+
+  it("retains the outer shortcut and right side of customized five-slot bars", () => {
+    expect(
+      normalizeMobileNavConfig({
+        left: ["home", "bank"],
+        right: ["anbu", "items", "travel"],
+      }),
+    ).toEqual({ left: ["home"], right: ["anbu", "items", "travel"] });
   });
 
   it("rejects an id used on both sides", () => {
