@@ -1,10 +1,9 @@
 "use client";
 
-import { atom, useAtomValue, useStore } from "jotai";
+import { atom, useAtomValue } from "jotai";
 import { useMemo, useSyncExternalStore } from "react";
 import { api } from "@/app/_trpc/client";
 import { TUTORIAL_ITEM_ID, TUTORIAL_JUTSU_ID } from "@/drizzle/constants";
-import { useNavigationRouter } from "@/hooks/navigation";
 import {
   actionPointsAfterAction,
   availableUserActions,
@@ -24,6 +23,7 @@ import {
   type TutorialTrigger,
 } from "@/libs/tutorial";
 import { TUTORIAL_STEPS, type TutorialStepConfig } from "@/libs/tutorialSteps";
+import { getTutorialWay, type TutorialWay } from "@/libs/tutorialWay";
 import { usePublicPathname } from "@/utils/routing";
 import {
   combatActionIdAtom,
@@ -41,12 +41,6 @@ const noBattleAtom = atom<ReturnedBattle | undefined>(undefined);
 const noSelectedActionAtom = atom<string | undefined>(undefined);
 
 /**
- * Whether the open lesson is leading the player to the current step's page. It follows the
- * saved step itself, so step changes navigate from here only while the lesson is collapsed.
- */
-export const tutorialPageGuidanceAtom = atom(false);
-
-/**
  * Hook to get the current tutorial step
  * @returns
  */
@@ -62,13 +56,22 @@ export const useTutorialStep = () => {
     tutorialStep: user.tutorialStep,
     status: user.status,
     battleId: user.battleId,
+    sector: user.sector,
+    villageName: user.village?.name,
+    villageSector: user.village?.sector,
+    hasUnassignedExperience: (user.earnedExperience ?? 0) > 0,
   }));
   const pathname = usePublicPathname();
-  const router = useNavigationRouter();
-  const store = useStore();
 
   // Derived
-  const stepNumber = userData?.tutorialStep || 0;
+  const savedStepNumber = userData?.tutorialStep || 0;
+  // A step that ends where its control leads is behind the player as soon as they are
+  // there, whichever way they came; saving that follows.
+  const hasArrived =
+    isTutorialActive(userData) &&
+    !!TUTORIAL_STEPS[savedStepNumber]?.arrivesAt &&
+    TUTORIAL_STEPS[savedStepNumber]?.arrivesAt === pathname;
+  const stepNumber = hasArrived ? savedStepNumber + 1 : savedStepNumber;
   // A switched-off tutorial has no current step. Callers use `currentStep` to
   // pin UI (hide training sections, pin shop rows, force quest tabs), so a
   // player who stopped the tutorial mid-way must not keep that UI forever.
@@ -192,11 +195,52 @@ export const useTutorialStep = () => {
   const coachingKey =
     combatGuidance?.kind === "coach" ? JSON.stringify(combatGuidance) : undefined;
 
+  // On another page than the step's own, the lesson shows the way there. A fight keeps the
+  // player until it ends, and the hospital has a lesson of its own.
+  const isOnTheWay =
+    !!staticStep &&
+    staticStep.page !== TUTORIAL_ANY_PAGE &&
+    getTutorialStepPath(staticStep.page) !== "/combat" &&
+    pathname !== "/combat" &&
+    userData?.status !== "BATTLE" &&
+    userData?.status !== "HOSPITALIZED";
+  const wayPage = isOnTheWay ? staticStep.page : undefined;
+  const arrivesAt = staticStep?.arrivesAt;
+  const sector = userData?.sector;
+  const villageName = userData?.villageName;
+  const villageSector = userData?.villageSector;
+  const hasUnassignedExperience = !!userData?.hasUnassignedExperience;
+  const way = useMemo(
+    () =>
+      wayPage
+        ? getTutorialWay({
+            page: wayPage,
+            arrivesAt,
+            pathname,
+            sector,
+            village:
+              villageName && villageSector !== undefined
+                ? { name: villageName, sector: villageSector }
+                : undefined,
+            hasUnassignedExperience,
+          })
+        : undefined,
+    [
+      wayPage,
+      arrivesAt,
+      pathname,
+      sector,
+      villageName,
+      villageSector,
+      hasUnassignedExperience,
+    ],
+  );
+
   // The step to show, with the combat lesson's live instruction in place of a
   // static one while the player is fighting a guided battle.
   const currentStep = useMemo(() => {
     if (!staticStep) return staticStep;
-    if (pathname !== "/combat") return staticStep;
+    if (pathname !== "/combat") return way ? getWayStep(staticStep, way) : staticStep;
     const isBattleStep = !!staticStep.onCombatWin || !!staticStep.onCombatLoss;
     // After a guided fight the step has already moved on; point at the way back.
     const battleOver = {
@@ -212,7 +256,6 @@ export const useTutorialStep = () => {
       advanceOn: undefined,
       relatedValue: undefined,
       showNextButton: false,
-      proceedOnHighlightClick: false,
     };
     if (!isBattleStep) return inBattle && !hasLeftBattle ? staticStep : battleOver;
     if (!GUIDED_COMBAT_STEP_IDS.includes(staticStep.id)) {
@@ -226,7 +269,6 @@ export const useTutorialStep = () => {
           page: "/combat",
           advanceOn: undefined,
           showNextButton: false,
-          proceedOnHighlightClick: false,
         };
       }
       // A rematch that was lost again stays on its lesson, whose page is elsewhere.
@@ -252,7 +294,6 @@ export const useTutorialStep = () => {
             action: undefined,
             elementIds: [],
             showNextButton: false,
-            proceedOnHighlightClick: false,
           };
     }
     const guidance: TutorialCombatGuidance | { kind: "auto" } =
@@ -267,6 +308,7 @@ export const useTutorialStep = () => {
     return getGuidedCombatStep(staticStep, guidance, guidanceDistance, isTouch);
   }, [
     staticStep,
+    way,
     pathname,
     inBattle,
     hasLeftBattle,
@@ -279,43 +321,18 @@ export const useTutorialStep = () => {
     coachingKey,
   ]);
 
-  /**
-   * Leads to the step's page. Battles keep the player until they end, and the battle
-   * start itself enters /combat. A failed save can undo only this navigation.
-   */
-  const navigateToStep = (step: number) => {
-    if (store.get(tutorialPageGuidanceAtom)) return;
-    const stepPage = TUTORIAL_STEPS[step]?.page;
-    if (stepPage === TUTORIAL_ANY_PAGE) return;
-    const involvesBattle = pathname === "/combat" || stepPage === "/combat";
-    if (stepPage && !involvesBattle && !isSamePage(stepPage, pathname)) {
-      const previousPage = window.location.href;
-      const nextPage = new URL(stepPage, previousPage).href;
-      router.push(stepPage);
-      return () => {
-        // Include the source while the optimistic route is still loading; leave an
-        // independent navigation alone. Read the live URL even if this hook unmounted.
-        if ([previousPage, nextPage].includes(window.location.href)) {
-          const { pathname, search, hash } = new URL(previousPage);
-          router.replace(`${pathname}${search}${hash}`);
-        }
-      };
-    }
-  };
-
   // Saves the tutorial step: `mutate` for callers that fire and forget, the async
-  // form for `saveStep`. The step and its page change at once; a step the server
-  // does not take is put back.
+  // form for `saveStep`. The step changes at once; one the server does not take is put
+  // back. The page stays: the lesson shows the way to its own.
   const {
     mutate: updateTutorialStep,
     mutateAsync: saveTutorialStep,
     isPending,
   } = api.profile.updateTutorialStep.useMutation({
     onMutate: async ({ step }) => {
-      const previousStep = stepNumber;
+      const previousStep = savedStepNumber;
       await updateUser({ tutorialStep: step });
-      const rollbackNavigation = navigateToStep(step);
-      return { previousStep, rollbackNavigation };
+      return { previousStep };
     },
     onSuccess: async (data) => {
       const savedStep = data.success ? data.userPatch?.tutorialStep : undefined;
@@ -330,7 +347,6 @@ export const useTutorialStep = () => {
         (error || !data?.success || data.userPatch?.tutorialStep === undefined)
       ) {
         await updateUser({ tutorialStep: context.previousStep });
-        context.rollbackNavigation?.();
       }
     },
   });
@@ -342,7 +358,7 @@ export const useTutorialStep = () => {
    * if the server does not take it, so a tap on Next never sits unanswered.
    */
   const saveStep = async (nextStep: number) => {
-    if (isPending || nextStep === stepNumber) return;
+    if (isPending || nextStep === savedStepNumber) return;
     // A failed save is already rolled back by the mutation.
     await saveTutorialStep({ step: nextStep }).catch(() => undefined);
   };
@@ -372,6 +388,10 @@ export const useTutorialStep = () => {
   // Return
   return {
     stepNumber,
+    /** The step to save on arriving where the last one led, if it is not saved yet. */
+    arrivedStep: hasArrived ? stepNumber : undefined,
+    /** The step itself, without the words a fight or the way to it puts in its place. */
+    lessonStep: staticStep,
     currentStep,
     updateTutorialStep,
     handleNextStep,
@@ -379,6 +399,24 @@ export const useTutorialStep = () => {
     completeTutorialAction,
   };
 };
+
+/** A step as it shows on the way to its page: where to go next, and nothing to do yet. */
+const getWayStep = (
+  step: TutorialStepConfig,
+  way: TutorialWay,
+): TutorialStepConfig => ({
+  id: step.id,
+  chapter: step.chapter,
+  title: step.title,
+  description: step.wayLead ?? way.lead,
+  action: way.action,
+  elementIds: way.elementIds,
+  page: TUTORIAL_ANY_PAGE,
+  wayHref: way.href,
+  autoTravelLabel: "Take me there",
+  requiresGameMenu: way.isInGameMenu,
+  gameMenuLead: typeof step.wayLead === "string" ? step.wayLead : way.lead,
+});
 
 /** A primary pointer as coarse as a finger: a touch screen. */
 const COARSE_POINTER_QUERY = "(pointer: coarse)";
@@ -396,12 +434,6 @@ const subscribeToPointer = (onChange: () => void) => {
   return () => query?.removeEventListener("change", onChange);
 };
 
-/** A step page counts as reached when its path and any requested tab match. */
-const isSamePage = (stepPage: string, pathname: string) =>
-  stepPage.split("?")[0]?.split("#")[0] === pathname &&
-  !stepPage.includes("?") &&
-  !stepPage.includes("#");
-
 /** The combat lesson's live instruction, worded for what the player should do now. */
 const getGuidedCombatStep = (
   step: TutorialStepConfig,
@@ -415,7 +447,6 @@ const getGuidedCombatStep = (
     ...step,
     page: "/combat",
     showNextButton: false,
-    proceedOnHighlightClick: false,
   };
   if (guidance.kind === "auto") {
     return {
@@ -519,7 +550,6 @@ const getCoachedCombatStep = (
     ...step,
     page: "/combat",
     showNextButton: false,
-    proceedOnHighlightClick: false,
     // Nothing is spotlit: the whole battlefield and action bar are the player's to read.
     elementIds: [],
   };

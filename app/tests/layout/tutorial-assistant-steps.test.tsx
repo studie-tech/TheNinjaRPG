@@ -22,6 +22,7 @@ import * as toast from "@/libs/toast";
 import {
   getTutorialChapterProgress,
   TUTORIAL_VILLAGE_CHOICE_STEP_ID,
+  TUTORIAL_WAKE_SECTOR,
 } from "@/libs/tutorial";
 import type * as TutorialSteps from "@/libs/tutorialSteps";
 import { parseHtml } from "@/utils/parse";
@@ -323,7 +324,14 @@ describe("each tutorial step", () => {
     async (index) => {
       const step = TUTORIAL_STEPS[index]!;
       const target = step.elementIds?.[0];
-      const view = show(index, {}, undefined, target ? <Target id={target} /> : null);
+      // The sanctuary stands on Wake Island's village page.
+      const values = step.arrivesAt === "/pets" ? { sector: TUTORIAL_WAKE_SECTOR } : {};
+      const view = show(
+        index,
+        values,
+        undefined,
+        target ? <Target id={target} /> : null,
+      );
       const region = lesson(view, step.title);
       expect(region.getAttribute("data-tutorial-step")).toBe(step.id);
 
@@ -345,20 +353,13 @@ describe("each tutorial step", () => {
       ).toBe(String(progress.position));
       if (step.action) expect(region.textContent).toContain(step.action);
 
-      // The highlight surrounds the step's first target and only captures clicks that
-      // advance; a scene on the page stays lit around its target.
-      const marked = target;
-      const highlightButton = marked
-        ? view.getByRole("button", { name: step.action ?? "Continue tutorial" })
-        : null;
-      if (marked) {
-        const hole = highlightButton!.parentElement!.parentElement!;
-        expect(hole.style.transform).toBe("translate(32px, 292px)");
-        expect(highlightButton!.className.includes("pointer-events-auto")).toBe(
-          !!step.proceedOnHighlightClick,
-        );
+      // The highlight surrounds the step's first target and leaves its presses to it.
+      const hole = overlay()?.querySelector<HTMLElement>(".absolute.rounded-lg");
+      if (target) {
+        expect(hole?.style.transform).toBe("translate(32px, 292px)");
+        expect(hole?.className).toContain("pointer-events-none");
         expect(!!overlay()?.querySelector(".animate-spotlight-ping")).toBe(
-          !!step.action || !!step.proceedOnHighlightClick,
+          !!step.action,
         );
       } else {
         expect(overlay() === null).toBe(true);
@@ -380,7 +381,7 @@ describe("each tutorial step", () => {
         state.updateUser.mockClear();
         const fresh = show(
           index,
-          {},
+          values,
           undefined,
           target ? <Target id={target} /> : null,
         );
@@ -395,23 +396,15 @@ describe("each tutorial step", () => {
           expect(state.saveStep).not.toHaveBeenCalled();
         }
       };
-      // Enter advances exactly the steps that offer Next or a pressable highlight.
+      // Enter advances exactly the steps that offer Next.
       await advance(
         () => fireEvent.keyDown(window, { key: "Enter" }),
-        !!step.showNextButton || !!step.proceedOnHighlightClick,
+        !!step.showNextButton,
       );
       if (step.showNextButton)
         await advance(
           (fresh) => fireEvent.click(fresh.getByRole("button", { name: nextLabel })),
           true,
-        );
-      if (marked)
-        await advance(
-          (fresh) =>
-            fireEvent.click(
-              fresh.getByRole("button", { name: step.action ?? "Continue tutorial" }),
-            ),
-          !!step.proceedOnHighlightClick,
         );
       expect(state.push).not.toHaveBeenCalled();
       expect(state.replace).not.toHaveBeenCalled();
@@ -489,9 +482,7 @@ describe("step overrides", () => {
     const region = lesson(view, TUTORIAL_HOSPITALIZED_STEP.title);
     expect(region.getAttribute("data-tutorial-step")).toBe("hospitalized");
     expect(region.textContent).toContain(TUTORIAL_HOSPITALIZED_STEP.action!);
-    expect(
-      view.getByRole("button", { name: TUTORIAL_HOSPITALIZED_STEP.action! }),
-    ).toBeTruthy();
+    expect(overlay()).toBeTruthy();
     expect(state.push).not.toHaveBeenCalled();
   });
 
@@ -505,7 +496,7 @@ describe("step overrides", () => {
     );
     const region = lesson(view, "A bond is formed");
     expect(region.textContent).toContain("The Bondkeepers bless your new bond.");
-    expect(view.getByRole("button", { name: "Continue tutorial" })).toBeTruthy();
+    expect(overlay()).toBeTruthy();
     expect(state.saveStep).not.toHaveBeenCalled();
     // Nothing reports an adoption, so the reveal moves on with Next or Enter.
     expect(view.getByRole("button", { name: "Next" })).toBeTruthy();
@@ -558,46 +549,27 @@ describe("step overrides", () => {
 });
 
 describe("routing", () => {
-  it.each([false, true])(
-    "keeps drawer-only tutorial dismissal responsive (desktop=%s)",
-    (desktop) => {
-      const original = Object.getOwnPropertyDescriptor(window, "matchMedia");
-      Object.defineProperty(window, "matchMedia", {
-        configurable: true,
-        value: () => ({
-          matches: desktop,
-          addEventListener() {},
-          removeEventListener() {},
-        }),
-      });
-      try {
-        state.pathname = "/not-the-lesson";
-        state.profile = makeProfile(0);
-        render(assistant(null, true));
-        expect(state.push).toHaveBeenCalled();
-        if (desktop) expect(state.setRightSideBarOpen).not.toHaveBeenCalledWith(false);
-        else expect(state.setRightSideBarOpen).toHaveBeenCalledWith(false);
-      } finally {
-        cleanup();
-        if (original) Object.defineProperty(window, "matchMedia", original);
-        else Reflect.deleteProperty(window, "matchMedia");
-      }
-    },
-  );
+  it("shows the way to a step's page instead of taking the player there", async () => {
+    const index = TUTORIAL_STEPS.findIndex((step) => step.id === "combat-claim-reward");
+    const view = show(index, {}, "/travel", <Target id="tutorial-profile" />);
+    const region = lesson(view, TUTORIAL_STEPS[index]!.title);
+    expect(region.textContent).toContain("Tap Profile in the main menu.");
+    expect(overlay()).toBeTruthy();
+    expect(state.push).not.toHaveBeenCalled();
+    expect(state.replace).not.toHaveBeenCalled();
+  });
 
-  it("sends the player to the step's page and tries once more", async () => {
-    vi.useFakeTimers();
-    const index = TUTORIAL_STEPS.findIndex((step) => step.page === "/village");
-    const view = show(index, {}, "/profile");
-    expect(state.push).toHaveBeenCalledWith("/village");
-    expect(state.setRightSideBarOpen).toHaveBeenCalledWith(false);
-    // While the page opens the lesson says where it is going, never an empty dock.
-    expect(lesson(view, TUTORIAL_STEPS[index]!.title).textContent).toContain(
-      "Taking you there",
+  it("takes a hospitalized player to the hospital", () => {
+    show(5, { status: "HOSPITALIZED" }, "/travel");
+    expect(state.push).toHaveBeenCalledWith("/hospital");
+  });
+
+  it("saves a step on reaching the page it led to", async () => {
+    const index = TUTORIAL_STEPS.findIndex((step) => step.id === "academy-building");
+    show(index, {}, "/academy");
+    await waitFor(() =>
+      expect(state.updateStep).toHaveBeenCalledWith({ step: index + 1 }),
     );
-    expect(view.queryByText("There is no tutorial guidance on this page.")).toBeNull();
-    act(() => vi.advanceTimersByTime(1500));
-    expect(state.push).toHaveBeenCalledTimes(2);
   });
 
   it("returns a player to their abandoned tutorial fight", () => {
@@ -1306,7 +1278,7 @@ describe("quest steps", () => {
     const [first, ...rest] = claimSteps;
     expect(first?.id).toBe("combat-claim-reward");
     expect(first?.teachOnPage).toBe(true);
-    expect(first?.elementIds).toEqual(["tutorial-objective-claim"]);
+    expect(first?.elementIds?.[0]).toBe("tutorial-objective-claim");
     for (const step of rest) expect(step.elementIds ?? []).toEqual([]);
   });
 
@@ -1859,7 +1831,8 @@ describe("quest steps", () => {
       undefined,
       <Target id="tutorial-Global" />,
     );
-    expect(express.getByRole("button", { name: step.action! })).toBeTruthy();
+    expect(lesson(express, step.title).textContent).toContain(step.action!);
+    expect(overlay()).toBeTruthy();
     cleanup();
     // A player who played the trials has made two trips already.
     localStorage.setItem("expressTrialsDeclined:actor", "true");
@@ -1869,7 +1842,8 @@ describe("quest steps", () => {
       undefined,
       <Target id="tutorial-Global" />,
     );
-    expect(trials.queryByRole("button", { name: step.action! })).toBeNull();
+    expect(lesson(trials, step.title)).toBeTruthy();
+    expect(overlay()).toBeNull();
   });
 
   it("names where new experience waits in the phone's game menu", () => {

@@ -13,7 +13,7 @@ import { getIsolatedPyramid } from "@/libs/questRun";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialBattleReturnPage } from "@/libs/tutorial";
-import { TUTORIAL_STEPS, type TutorialStepConfig } from "@/libs/tutorialSteps";
+import type { TutorialStepConfig } from "@/libs/tutorialSteps";
 import { useRequiredUserDataSelector, userBattleAtom } from "@/utils/UserContext";
 
 interface CombatResultScreenProps {
@@ -40,7 +40,7 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
     userQuests: u.userQuests,
   }));
 
-  // A fight the tutorial teaches ends with one way forward: the tutorial picks the page.
+  // A fight the tutorial teaches ends with one way forward: back where it began.
   // The battle carries that identity from initiation (isTutorialGuidedBattle), so an
   // ordinary fight during the tutorial keeps its usual follow-ups.
   const isTutorialFight =
@@ -69,14 +69,11 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
       // Navigation must wait for the confirmed profile: a cached BATTLE status
       // otherwise makes the tutorial redirect back to the fight that just ended.
       const profile = await utils.profile.getUser.fetch(undefined, { staleTime: 0 });
-      router.push(
-        getTutorialBattleReturnPage(
-          TUTORIAL_STEPS,
-          profile.userData,
-          result?.outcome,
-          destination,
-        ),
-      );
+      const page =
+        isTutorialFight &&
+        profile.userData &&
+        getTutorialBattleReturnPage(profile.userData, battleType);
+      router.push(page || destination);
     } catch {
       showMutationToast({
         success: false,

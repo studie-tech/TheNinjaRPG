@@ -124,74 +124,29 @@ describe("isTutorialPageMatch", () => {
 });
 
 describe("getTutorialBattleReturnPage", () => {
-  const steps = [
-    { id: "fight", page: "/combat", onCombatWin: "training", onCombatLoss: "arena" },
-    { id: "training", page: "/village" },
-    { id: "arena", page: "/battlearena" },
-    { id: "puppy", page: "/travel", onCombatWin: "home" },
-    { id: "home", page: "/travel" },
-  ];
   const active = { tutorialOn: true, tutorialStep: 0, status: "AWAKE" };
 
-  it("returns a first polled win directly to training before its step write settles", () => {
-    expect(getTutorialBattleReturnPage(steps, active, "Won", "/profile")).toBe(
-      "/village",
-    );
+  it("ends a fight where it began: on the map, or in the arena", () => {
+    expect(getTutorialBattleReturnPage(active, "QUEST")).toBe("/travel");
+    expect(getTutorialBattleReturnPage(active, "ARENA")).toBe("/battlearena");
   });
 
-  it("uses the confirmed lesson when progress has already advanced", () => {
+  it("leads a hospitalized player to healing", () => {
     expect(
-      getTutorialBattleReturnPage(
-        steps,
-        { ...active, tutorialStep: 1 },
-        "Won",
-        "/profile",
-      ),
-    ).toBe("/village");
-  });
-
-  it("keeps the puppy victory on travel and a hospitalized player on healing", () => {
-    expect(
-      getTutorialBattleReturnPage(
-        steps,
-        { ...active, tutorialStep: 3 },
-        "Won",
-        "/profile",
-      ),
-    ).toBe("/travel");
-    expect(
-      getTutorialBattleReturnPage(
-        steps,
-        { ...active, status: "HOSPITALIZED" },
-        "Lost",
-        "/profile",
-      ),
+      getTutorialBattleReturnPage({ ...active, status: "HOSPITALIZED" }, "QUEST"),
     ).toBe("/hospital");
   });
 
-  it("preserves the chosen destination after the tutorial is disabled or finished", () => {
+  it("leaves the way back to the result screen once the tutorial is off or finished", () => {
+    expect(
+      getTutorialBattleReturnPage({ ...active, tutorialOn: false }, "QUEST"),
+    ).toBeUndefined();
     expect(
       getTutorialBattleReturnPage(
-        steps,
-        { ...active, tutorialOn: false },
-        "Won",
-        "/profile",
-      ),
-    ).toBe("/profile");
-    expect(
-      getTutorialBattleReturnPage(
-        steps,
         { ...active, tutorialStep: TUTORIAL_STEPS_COUNT },
-        "Won",
-        "/profile",
+        "QUEST",
       ),
-    ).toBe("/profile");
-  });
-
-  it("does not send an unresolved battle return back to combat", () => {
-    expect(getTutorialBattleReturnPage(steps, active, undefined, "/profile")).toBe(
-      "/profile",
-    );
+    ).toBeUndefined();
   });
 });
 
@@ -426,7 +381,7 @@ describe("TUTORIAL_STEPS", () => {
       TUTORIAL_ITEM_BUY_STEP_ID,
       "tools-train-stat",
       "tools-queue-energy",
-      "mission-ramen",
+      "tools-ramen",
       "bond-adopt",
       "exam-dashboard",
     ]) {
@@ -1022,21 +977,9 @@ describe("getTutorialCombatCoaching", () => {
 });
 
 describe("practice steps on any page", () => {
-  it("match every page and never become a page to return to", () => {
+  it("match every page", () => {
     expect(isTutorialPageMatch(TUTORIAL_ANY_PAGE, "/travel")).toBe(true);
     expect(isTutorialPageMatch(TUTORIAL_ANY_PAGE, "/profile/experience")).toBe(true);
-    const steps = [
-      { id: "fight", page: "/combat", onCombatWin: "practice" },
-      { id: "practice", page: TUTORIAL_ANY_PAGE },
-    ];
-    expect(
-      getTutorialBattleReturnPage(
-        steps,
-        { tutorialOn: true, tutorialStep: 0, status: "AWAKE" },
-        "Won",
-        "/profile",
-      ),
-    ).toBe("/profile");
   });
 });
 

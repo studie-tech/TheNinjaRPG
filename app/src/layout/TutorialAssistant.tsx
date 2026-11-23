@@ -1,6 +1,6 @@
 "use client";
 
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue } from "jotai";
 import {
   ArrowRight,
   Gift,
@@ -35,11 +35,7 @@ import type { UserQuest } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useRetryQuestBattle } from "@/hooks/quest";
-import {
-  TUTORIAL_REMATCH_TITLE,
-  tutorialPageGuidanceAtom,
-  useTutorialStep,
-} from "@/hooks/tutorial";
+import { TUTORIAL_REMATCH_TITLE, useTutorialStep } from "@/hooks/tutorial";
 import { characterStorageKey } from "@/hooks/useActivityDock";
 import { arrivalScenePlayingAtom, mapSpokenStepAtom } from "@/hooks/useArrivalScene";
 import { useStoryGuidance } from "@/hooks/useStoryGuidance";
@@ -252,7 +248,12 @@ const TutorialCompletionSync: React.FC = () => {
     rank: user.rank,
     userQuests: user.userQuests,
   }));
-  const { currentStep, handleNextStep } = useTutorialStep();
+  const { arrivedStep, currentStep, updateTutorialStep, handleNextStep } =
+    useTutorialStep();
+  // Reaching the page a step led to completes it, also while the lesson is collapsed.
+  useEffect(() => {
+    if (arrivedStep !== undefined) updateTutorialStep({ step: arrivedStep });
+  }, [arrivedStep, updateTutorialStep]);
   const { mutate: saveStep } = api.profile.updateTutorialStep.useMutation({
     onSuccess: async (data) => {
       if (data.success && data.userPatch?.tutorialStep !== undefined) {
@@ -312,13 +313,6 @@ const PlayerTutorialAssistant: React.FC<
   const pathname = usePublicPathname();
   const router = useRouter();
 
-  // While the lesson is open it leads the player to each step's page itself.
-  const setPageGuidance = useSetAtom(tutorialPageGuidanceAtom);
-  useEffect(() => {
-    setPageGuidance(true);
-    return () => setPageGuidance(false);
-  }, [setPageGuidance]);
-
   const {
     isDisablingTutorial,
     disableTutorialError,
@@ -369,6 +363,8 @@ const PlayerTutorialAssistant: React.FC<
   // Tutorial management hook
   const {
     stepNumber,
+    arrivedStep,
+    lessonStep,
     currentStep: savedStep,
     updateTutorialStep,
     handleNextStep,
@@ -384,6 +380,11 @@ const PlayerTutorialAssistant: React.FC<
   });
   const isStreakClaimDone =
     awaitsStreakClaim && !!streaks && !streakDaysAhead(streaks).today;
+  // Reaching the page a step led to completes it.
+  useEffect(() => {
+    if (arrivedStep !== undefined) updateTutorialStep({ step: arrivedStep });
+  }, [arrivedStep, updateTutorialStep]);
+
   // Where the player is on the trip the lesson sends them on, which changes its words.
   const tripPhase = getTutorialTripPhase(savedStep, userData);
   // A returning player still on the trials past the exam step without having declined
@@ -443,17 +444,17 @@ const PlayerTutorialAssistant: React.FC<
     isActiveStep &&
     onVisibilityStepPage &&
     (needsGameMenu ? rightSideBarOpen : true);
-  // The effect below takes the player to the step's page, and the dock says so meanwhile:
-  // away from a fight to an unrelated page, or into the battle they are in.
+  // Two things hold the player and open by themselves, the dock saying so meanwhile: the
+  // battle they are in, and the hospital. Every other page they reach on their own.
   const isOpeningStepPage =
     isTutorialOn &&
     isActiveStep &&
     !onVisibilityStepPage &&
-    !!visibilityStep &&
-    ((pathname !== "/combat" && visibilityStep.page !== "/combat") ||
-      (userData?.status === "BATTLE" && visibilityStep.page === "/combat"));
+    (userData?.status === "HOSPITALIZED"
+      ? pathname !== "/combat"
+      : userData?.status === "BATTLE" && visibilityStep?.page === "/combat");
 
-  // Lead the player to the step's page, and bring the game menu button into view.
+  // Open the page that holds the player, and bring the game menu button into view.
   useEffect(() => {
     if (!userData || !isTutorialOn) return;
     if (isHeldForBattle) return navigateWithRetry(() => router.replace("/combat"));
@@ -486,28 +487,28 @@ const PlayerTutorialAssistant: React.FC<
   // not have, adopting a companion when they already formed a bond, or
   // travelling somewhere the player already is.
   useEffect(() => {
-    if (userData?.tutorialOn !== true || !currentStep) return;
+    if (userData?.tutorialOn !== true || !lessonStep) return;
     const nothingToAssign =
-      currentStep.needsUnassignedExperience && userData.earnedExperience === 0;
+      lessonStep.needsUnassignedExperience && userData.earnedExperience === 0;
     // A level-up the player cannot take and has no experience left to assign towards.
     const nothingToLevel =
-      currentStep.advanceOn === "levelUp" &&
+      lessonStep.advanceOn === "levelUp" &&
       userData.earnedExperience === 0 &&
       !!levelUpBlockMessage(userData);
     // On the sanctuary page the new companion is being revealed; Next moves on.
     const alreadyBonded =
-      currentStep.advanceOn === "petAdopt" &&
+      lessonStep.advanceOn === "petAdopt" &&
       (userData.petAcquisitions ?? 0) > 0 &&
       pathname !== "/pets";
     // A trip to the sector the player is already standing in has nowhere to go.
     const alreadyThere =
-      currentStep.advanceOn === "travelArrive" &&
-      currentStep.relatedValue === userData.sector &&
+      lessonStep.advanceOn === "travelArrive" &&
+      lessonStep.relatedValue === userData.sector &&
       userData.status === "AWAKE";
     if (nothingToAssign || nothingToLevel || alreadyBonded || alreadyThere) {
       void handleNextStepAsync();
     }
-  }, [currentStep, userData, pathname]);
+  }, [lessonStep, userData, pathname]);
 
   // A combat lesson whose fight ended while the player was away has nothing to
   // show anywhere: pick the tutorial up at the win, or back at the arena.
@@ -621,7 +622,7 @@ const PlayerTutorialAssistant: React.FC<
           event.preventDefault();
           event.stopPropagation();
           setRightSideBarOpen(true);
-        } else if (offersNext || currentStep?.proceedOnHighlightClick) {
+        } else if (offersNext) {
           event.preventDefault();
           event.stopPropagation();
           handleNextStep();
@@ -645,18 +646,23 @@ const PlayerTutorialAssistant: React.FC<
     setRightSideBarOpen,
     router,
     offersNext,
-    currentStep?.proceedOnHighlightClick,
     isDisablingTutorial,
     showCancelConfirmDialog,
   ]);
 
   // The waits below count only while the step's own lesson is on screen: not while a
-  // fight's close stands in for it on /combat, nor while its page is still opening. Each
+  // fight's close stands in for it on /combat, nor on the way to its page. Each
   // stage of a trip is a lesson of its own, so its waits start again.
+  const lessonPage = TUTORIAL_STEPS[stepNumber]?.page;
   const isOwnLessonShown =
     isAssistantVisible &&
-    isTutorialPageMatch(TUTORIAL_STEPS[stepNumber]?.page, pathname);
-  const lessonKey = currentStep ? `${currentStep.id}:${tripPhase ?? ""}` : undefined;
+    !currentStep?.wayHref &&
+    (pathname === "/combat"
+      ? lessonPage === "/combat"
+      : isTutorialPageMatch(lessonPage, pathname));
+  const lessonKey = currentStep
+    ? `${currentStep.id}:${tripPhase ?? ""}${currentStep.wayHref ? `:${pathname}` : ""}`
+    : undefined;
   const isTripUnderWay = tripPhase === "travelling";
 
   // A step whose only exit is one specific game action can strand a player
@@ -789,6 +795,7 @@ const PlayerTutorialAssistant: React.FC<
   // seconds; any tap or key press shows they are acting, and restarts a plain wait. A
   // dialog over the page has the player's attention, so the wait does not end under it.
   const teachesInGame = !!(currentStep?.teachOnPage || currentStep?.questsTab);
+  const isOnTheWay = !!currentStep?.wayHref;
   const readingMs = currentStep
     ? lessonReadingSeconds(
         currentStep,
@@ -797,14 +804,14 @@ const PlayerTutorialAssistant: React.FC<
     : 0;
   const [idleKey, setIdleKey] = useState<string>();
   useEffect(() => {
-    if (!lessonKey || !teachesInGame || !isOwnLessonShown || idleKey === lessonKey)
-      return;
+    const isWaited = isOnTheWay || (teachesInGame && isOwnLessonShown);
+    if (!lessonKey || !isWaited || idleKey === lessonKey) return;
     const idleMs = SHORTCUT_IDLE_SECONDS * 1000;
     return waitForIdle(idleMs, () => setIdleKey(lessonKey), {
       firstMs: readingMs + idleMs,
       canEnd: () => !hasOpenModalDialog(),
     });
-  }, [lessonKey, teachesInGame, isOwnLessonShown, idleKey, readingMs]);
+  }, [lessonKey, isOnTheWay, teachesInGame, isOwnLessonShown, idleKey, readingMs]);
   const isModalDialogOpen = useIsModalDialogOpen();
   const isScenePlaying = useAtomValue(arrivalScenePlayingAtom);
   const spokenStepId = useAtomValue(mapSpokenStepAtom);
@@ -858,6 +865,7 @@ const PlayerTutorialAssistant: React.FC<
   // Where the related quest wants the player to go next, for a one-tap trip there
   const autoTravelHref = (() => {
     if (!currentTutorialStep?.autoTravelLabel) return;
+    if (currentTutorialStep.wayHref) return currentTutorialStep.wayHref;
     // A travel step names its sector; finding the spot there is the next lesson.
     if (
       currentTutorialStep.advanceOn === "travelArrive" &&
@@ -979,10 +987,12 @@ const PlayerTutorialAssistant: React.FC<
                 {!currentStep?.gameMenuLead && currentStep?.description && (
                   <StepDescription description={currentStep.description} />
                 )}
-                <p>
-                  {currentStep?.gameMenuLead ??
-                    "On phones, the location and main menus live in the game menu."}
-                </p>
+                <StepDescription
+                  description={
+                    currentStep?.gameMenuLead ??
+                    "On phones, the location and main menus live in the game menu."
+                  }
+                />
               </div>
             }
             footer={
@@ -1028,16 +1038,8 @@ const PlayerTutorialAssistant: React.FC<
           .map((asset) => asset.image)?.[0]
       : undefined;
 
-  // Derived
-  const pointerEvents =
-    !isDisablingTutorial &&
-    currentTutorialStep?.proceedOnHighlightClick &&
-    highlight?.isPrimaryElement
-      ? "pointer-events-auto"
-      : "pointer-events-none";
   // Point at the highlight only when the step wants it pressed.
-  const showPointer =
-    !!currentTutorialStep?.action || !!currentTutorialStep?.proceedOnHighlightClick;
+  const showPointer = !!currentTutorialStep?.action;
 
   // If showing the special Game Menu tutorial
   if (showGameMenuTutorial) {
@@ -1134,12 +1136,14 @@ const PlayerTutorialAssistant: React.FC<
   const sceneLead = isScenePlaying ? currentTutorialStep.sceneLead : undefined;
   // A character on the map says the words; the lesson keeps its title and what to do.
   const isSpokenOnMap = spokenStepId === currentTutorialStep.id;
-  // A lesson that teaches the page's own control offers its shortcut only to a stuck
-  // player, and no shortcut shows under a dialog the player has open or before the scene
+  // A lesson that teaches the page's own control, or the way to its page, offers its
+  // shortcut only to a stuck player, and no shortcut shows under a dialog the player has open or before the scene
   // the lesson answers has played.
   const isShortcutShown =
     !(
-      (currentTutorialStep.teachOnPage || currentTutorialStep.questsTab) &&
+      (currentTutorialStep.teachOnPage ||
+        currentTutorialStep.questsTab ||
+        currentTutorialStep.wayHref) &&
       idleKey !== lessonKey
     ) &&
     !isModalDialogOpen &&
@@ -1337,28 +1341,14 @@ const PlayerTutorialAssistant: React.FC<
         highlight.stepId === currentTutorialStep.id &&
         !highlight.isRevealed &&
         !showCancelConfirmDialog && (
-          // Only the highlighted control captures clicks; game controls stay reachable.
+          // The real control under the hole takes the press.
           <Spotlight
             box={highlight}
             dim={!currentTutorialStep.isPageLit}
             ping={showPointer}
             pointer={showPointer}
-            holeClassName={cn("bg-transparent", pointerEvents)}
-          >
-            <button
-              type="button"
-              className={cn("absolute inset-0 z-[2] cursor-pointer", pointerEvents)}
-              aria-label={currentTutorialStep.action ?? "Continue tutorial"}
-              disabled={isDisablingTutorial}
-              onClick={(e) => {
-                if (currentTutorialStep.proceedOnHighlightClick) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!isDisablingTutorial) handleNextStep();
-                }
-              }}
-            />
-          </Spotlight>
+            holeClassName="pointer-events-none bg-transparent"
+          />
         )}
 
       {/* Assistant panel */}
@@ -2079,7 +2069,6 @@ const useHighlightPlacement = <Step extends { id: string }>({
 }) => {
   const [highlight, setHighlight] = useState<{
     stepId: string;
-    isPrimaryElement: boolean;
     isRevealed: boolean;
     top: number;
     left: number;
@@ -2290,7 +2279,6 @@ const useHighlightPlacement = <Step extends { id: string }>({
       const rect = highlightInfo.element.getBoundingClientRect();
       const next = {
         stepId: currentStepConfig.id,
-        isPrimaryElement: highlightInfo.isPrimaryElement,
         isRevealed: !!highlightInfo.isRevealed,
         top: rect.top,
         left: rect.left,
@@ -2300,7 +2288,6 @@ const useHighlightPlacement = <Step extends { id: string }>({
       setHighlight((prev) =>
         prev &&
         prev.stepId === next.stepId &&
-        prev.isPrimaryElement === next.isPrimaryElement &&
         prev.isRevealed === next.isRevealed &&
         isSameBox(prev, next)
           ? prev
@@ -2682,7 +2669,7 @@ const findGuidedTarget = (selector: string): HighlightTarget | null => {
     const style = window.getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden") continue;
     if (isUsableHighlightRect(element.getBoundingClientRect())) {
-      return { element, isPrimaryElement: true };
+      return { element };
     }
   }
   return null;
@@ -2690,8 +2677,8 @@ const findGuidedTarget = (selector: string): HighlightTarget | null => {
 
 /**
  * The element a main-tutorial step highlights: the first usable of its ids,
- * or a match in the open game menu for a step that needs it. `isPrimaryElement` tells
- * whether it is the step's first id. With none on screen, `revealId` is brought into view.
+ * or a match in the open game menu for a step that needs it. With none on screen,
+ * `revealId` is brought into view.
  */
 const findElementToHighlight = (
   step: TutorialStepConfig,
@@ -2701,10 +2688,6 @@ const findElementToHighlight = (
 ): HighlightTarget | null => {
   let element: HTMLElement | null =
     step.elementIds?.map((id) => getUsableHighlightElement(id)).find(Boolean) || null;
-  const primaryElement = getUsableHighlightElement(step.elementIds?.[0]);
-  const isPrimaryElement = Boolean(
-    element && primaryElement && element === primaryElement,
-  );
 
   // Check within the rightSideBarRef if available and open
   const sidebarElement = rightSideBarRef.current;
@@ -2734,7 +2717,7 @@ const findElementToHighlight = (
 
   if (!element) {
     const revealed = getUsableHighlightElement(revealId);
-    return revealed && { element: revealed, isPrimaryElement: false, isRevealed: true };
+    return revealed && { element: revealed, isRevealed: true };
   }
 
   const rect = element.getBoundingClientRect();
@@ -2745,7 +2728,6 @@ const findElementToHighlight = (
   // Return the element reference along with its dimensions
   return {
     element,
-    isPrimaryElement,
     isInScene: step.isPageLit,
   };
 };
@@ -2780,7 +2762,6 @@ type PanelDodge = boolean | "left" | "right";
 
 type HighlightTarget = {
   element: HTMLElement;
-  isPrimaryElement: boolean;
   /** Only brought into view: the step's scene plays there with nothing to mark yet. */
   isRevealed?: boolean;
   /** Part of a scene that must stay in view around it, so it is only uncovered. */

@@ -31,7 +31,7 @@ import type {
 import * as combatScene from "@/libs/rendering/scenes/combat";
 import * as toast from "@/libs/toast";
 import * as tutorialLib from "@/libs/tutorial";
-import * as tutorialSteps from "@/libs/tutorialSteps";
+import type * as tutorialSteps from "@/libs/tutorialSteps";
 import { combatActionIdAtom } from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { makeCompleteBattle, makeEffect, makeUser } from "../setup/combat";
@@ -602,7 +602,7 @@ describe("combat result screen", () => {
     ["/profile", "Won", 50],
     ["/hospital", "Lost", 0],
   ] as const)(
-    "waits for the confirmed profile before continuing to the next lesson (%s)",
+    "waits for the confirmed profile before returning where the fight began (%s)",
     async (destination, outcome, curHealth) => {
       const name = "Continue";
       state.profile = { ...state.profile, tutorialOn: true, tutorialStep: 8 };
@@ -615,7 +615,7 @@ describe("combat result screen", () => {
       };
       const returnPage = vi
         .spyOn(tutorialLib, "getTutorialBattleReturnPage")
-        .mockReturnValue("/next-lesson");
+        .mockReturnValue("/travel");
       spies.push(returnPage);
       let settle!: (profile: Awaited<ReturnType<typeof state.fetchProfile>>) => void;
       state.fetchProfile.mockImplementationOnce(
@@ -629,7 +629,7 @@ describe("combat result screen", () => {
         result: result({ outcome, curHealth } as never),
         isPending: false,
       });
-      // The tutorial picks the page, so its fight ends with a single way forward.
+      // A tutorial fight ends with a single way forward.
       expect(view.getAllByRole("link").map((link) => link.textContent)).toEqual([name]);
       const button = view.getByRole("link", { name });
       const link = button.closest("a")!;
@@ -654,13 +654,8 @@ describe("combat result screen", () => {
         userData: { tutorialOn: true, tutorialStep: 9, status: "AWAKE" },
       };
       await act(async () => settle(profile));
-      expect(returnPage).toHaveBeenCalledWith(
-        tutorialSteps.TUTORIAL_STEPS,
-        profile.userData,
-        outcome,
-        destination,
-      );
-      expect(state.push).toHaveBeenCalledWith("/next-lesson");
+      expect(returnPage).toHaveBeenCalledWith(profile.userData, "QUEST");
+      expect(state.push).toHaveBeenCalledWith("/travel");
       await waitFor(() => expect(view.getByRole("link", { name })).toBeTruthy());
     },
   );

@@ -8,8 +8,6 @@ import * as dialogComponents from "@/components/ui/dialog";
 import * as sortableList from "@/components/ui/sortable-list";
 import type { UserPatch } from "@/deltas/profile";
 import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
-import * as mediaQuery from "@/hooks/useMediaQuery";
-import { BattleFocusView } from "@/layout/BattleFocusView";
 import * as logbook from "@/layout/Logbook";
 import * as objective from "@/layout/Objective";
 import TutorialAssistant from "@/layout/TutorialAssistant";
@@ -246,66 +244,15 @@ describe("TutorialAssistant highlight activation", () => {
     </>
   );
 
-  it("advances on the completed click so a press cannot activate the next page", () => {
-    mocks.step = {
-      ...mocks.step,
-      elementIds: ["lesson-control"],
-      proceedOnHighlightClick: true,
-    };
-    const view = render(highlightedAssistant());
-    const control = view.getByRole("button", { name: "Continue tutorial" });
-    fireEvent.pointerDown(control);
-    fireEvent.touchStart(control);
-    expect(mocks.next).not.toHaveBeenCalled();
-    fireEvent.click(control);
-    expect(mocks.next).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the next lesson tappable when it highlights the same control", () => {
-    mocks.step = {
-      ...mocks.step,
-      elementIds: ["lesson-control"],
-      proceedOnHighlightClick: true,
-    };
-    const view = render(highlightedAssistant());
-    mocks.step = { ...mocks.step, id: "next-lesson", title: "Next lesson" };
-    view.rerender(highlightedAssistant());
-    expect(view.getByRole("region", { name: "Tutorial: Next lesson" })).toBeTruthy();
-    fireEvent.click(view.getByRole("button", { name: "Continue tutorial" }));
-    expect(mocks.next).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the highlighted tutorial control interactive above battle focus", async () => {
-    for (const spy of dialogSpies.splice(0)) spy.mockRestore();
-    vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(false);
-    mocks.step = {
-      ...mocks.step,
-      elementIds: ["lesson-control"],
-      proceedOnHighlightClick: true,
-    };
-    const view = render(highlightedAssistant());
-    render(
-      <BattleFocusView
-        battle={undefined}
-        renderTimer={(exitButton) => (
-          <div>
-            <p>Timer</p>
-            {exitButton}
-          </div>
-        )}
-        field={<p>Field</p>}
-        dock={<p>Actions</p>}
-        log={<p>Log</p>}
-        timeline={<p>Timeline</p>}
-        onShowLayout={() => {}}
-      />,
+  it("leaves the press to the marked control itself", () => {
+    mocks.step = { ...mocks.step, elementIds: ["lesson-control"] };
+    render(highlightedAssistant());
+    const spotlight = document.body.querySelector(
+      "div[data-battle-focus-layer].inset-0",
     );
-    const control = view.getByRole("button", { name: "Continue tutorial" });
-    await waitFor(() => expect(control.closest("[inert]")).toBeNull());
-    control.focus();
-    expect(document.activeElement).toBe(control);
-    fireEvent.click(control);
-    expect(mocks.next).toHaveBeenCalledTimes(1);
+    expect(spotlight?.querySelector("[data-spotlight-keep]")).toBeTruthy();
+    expect(spotlight?.querySelector("button")).toBeNull();
+    expect(spotlight?.className).toContain("pointer-events-none");
   });
 });
 afterEach(() => {

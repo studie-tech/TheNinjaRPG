@@ -165,32 +165,17 @@ export const isTutorialPageMatch = (stepPage: string | undefined, pathname: stri
   return stepPath !== "" && stepPath === pathname;
 };
 
-/** Return directly to the next lesson, including when its progress write is still settling. */
+/**
+ * Where a fight the tutorial taught leaves the player: back where it began, from where the
+ * next lesson shows the way. Undefined for a player the tutorial no longer guides.
+ */
 export const getTutorialBattleReturnPage = (
-  steps: readonly {
-    id: string;
-    page: string;
-    onCombatWin?: string;
-    onCombatLoss?: string;
-  }[],
-  user:
-    | { tutorialOn?: boolean | null; tutorialStep?: number | null; status?: string }
-    | null
-    | undefined,
-  outcome: string | undefined,
-  fallback: string,
+  user: { tutorialOn?: boolean | null; tutorialStep?: number | null; status?: string },
+  battleType: string | undefined,
 ) => {
-  if (!isTutorialActive(user)) return fallback;
-  if (user?.status === "HOSPITALIZED") return "/hospital";
-  const step = steps[user?.tutorialStep ?? 0];
-  if (!step) return fallback;
-  const outcomeStepId =
-    outcome === "Won" ? step.onCombatWin : outcome ? step.onCombatLoss : undefined;
-  const next = steps.find((candidate) => candidate.id === outcomeStepId) ?? step;
-  const nextPath = getTutorialStepPath(next.page);
-  return nextPath === "/combat" || next.page === TUTORIAL_ANY_PAGE
-    ? fallback
-    : next.page;
+  if (!isTutorialActive(user)) return undefined;
+  if (user.status === "HOSPITALIZED") return "/hospital";
+  return battleType === "QUEST" ? "/travel" : "/battlearena";
 };
 
 /**

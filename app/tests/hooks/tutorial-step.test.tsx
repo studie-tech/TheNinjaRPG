@@ -21,15 +21,14 @@ const realStepsPath = "../../src/libs/tutorialSteps.tsx?real";
 const steps = (await import(realStepsPath)) as typeof TutorialSteps;
 mock.module("@/libs/tutorialSteps", () => steps);
 const realTutorialPath = "../../src/hooks/tutorial.tsx?real";
-const { tutorialPageGuidanceAtom, useTutorialStep } = (await import(
-  realTutorialPath
-)) as typeof TutorialHooks;
+const { useTutorialStep } = (await import(realTutorialPath)) as typeof TutorialHooks;
 const { TUTORIAL_STEPS } = steps;
 
 const store = getDefaultStore();
 let tutorialStep = 0;
 let pathname = "/profile";
 let status = "AWAKE";
+let place: Record<string, unknown> = {};
 let updateUser = vi.fn();
 let push = vi.fn();
 let replace = vi.fn();
@@ -40,6 +39,7 @@ beforeEach(() => {
   tutorialStep = 0;
   pathname = "/profile";
   status = "AWAKE";
+  place = { sector: 301, villageName: "Horizon", villageSector: 301 };
   updateUser = vi.fn();
   push = vi.fn();
   replace = vi.fn();
@@ -48,7 +48,7 @@ beforeEach(() => {
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
     () =>
       ({
-        data: { userId: "u1", tutorialOn: true, tutorialStep, status },
+        data: { userId: "u1", tutorialOn: true, tutorialStep, status, ...place },
         updateUser,
         timeDiff: 0,
       }) as never,
@@ -73,7 +73,6 @@ afterEach(() => {
   act(() => {
     store.set(UserContext.userBattleAtom, undefined);
     store.set(UserContext.combatActionIdAtom, undefined);
-    store.set(tutorialPageGuidanceAtom, false);
   });
   vi.restoreAllMocks();
 });
@@ -290,37 +289,14 @@ describe("useTutorialStep step saving", () => {
     return { options, context };
   };
 
-  it("leads a collapsed lesson to the next step's page before the save returns", async () => {
+  it("changes the step at once and leaves the player on their page", async () => {
     tutorialStep = stepIndex("tools-itemshop-building");
     pathname = "/village";
     const next = tutorialStep + 1;
     const { context } = await saveStep(next);
     expect(updateUser).toHaveBeenCalledWith({ tutorialStep: next });
-    expect(push).toHaveBeenCalledTimes(1);
-    expect(push).toHaveBeenCalledWith(TUTORIAL_STEPS[next]?.page);
+    expect(push).not.toHaveBeenCalled();
     expect(context.previousStep).toBe(tutorialStep);
-  });
-
-  it("leaves navigation to an open lesson, which follows the saved step", async () => {
-    tutorialStep = stepIndex("tools-itemshop-building");
-    pathname = "/village";
-    act(() => store.set(tutorialPageGuidanceAtom, true));
-    await saveStep(tutorialStep + 1);
-    expect(updateUser).toHaveBeenCalledWith({ tutorialStep: tutorialStep + 1 });
-    expect(push).not.toHaveBeenCalled();
-  });
-
-  it("leaves battles to the battle start and stays on a page the step uses", async () => {
-    tutorialStep = stepIndex("arena-enter");
-    pathname = "/battlearena";
-    await saveStep(tutorialStep + 1);
-    tutorialStep = stepIndex("combat-turns");
-    pathname = "/combat";
-    await saveStep(tutorialStep + 1);
-    tutorialStep = stepIndex("mission-brief");
-    pathname = "/academy";
-    await saveStep(tutorialStep + 1);
-    expect(push).not.toHaveBeenCalled();
   });
 
   it("puts the step back when the save fails, and keeps a confirmed one", async () => {
@@ -344,54 +320,45 @@ describe("useTutorialStep step saving", () => {
     );
     expect(updateUser).not.toHaveBeenCalled();
   });
+});
 
-  it.each(["transport", "rejection"])(
-    "restores a collapsed lesson's page after a %s failure",
-    async (failure) => {
-      tutorialStep = stepIndex("academy-accept-trials");
-      pathname = "/academy";
-      const nextStep = tutorialStep + 1;
-      const { options, context } = await saveStep(nextStep);
-      // The source component unmounts when the optimistic destination commits.
-      cleanup();
-      window.history.replaceState({}, "", "/village");
-      await options.onSettled(
-        failure === "rejection" ? { success: false } : undefined,
-        failure === "transport" ? new Error("offline") : null,
-        { step: nextStep },
-        context,
-      );
-      expect(updateUser).toHaveBeenLastCalledWith({ tutorialStep });
-      expect(replace).toHaveBeenCalledWith("/academy");
-    },
-  );
+describe("useTutorialStep on the way to a step's page", () => {
+  const at = (id: string, path: string) => {
+    tutorialStep = TUTORIAL_STEPS.findIndex((step) => step.id === id);
+    pathname = path;
+    const { result, unmount } = renderHook(() => useTutorialStep());
+    const { currentStep, stepNumber, arrivedStep } = result.current;
+    unmount();
+    return { currentStep, stepNumber, arrivedStep };
+  };
 
-  it("cancels a still-loading optimistic page when saving fails", async () => {
-    tutorialStep = stepIndex("academy-accept-trials");
-    pathname = "/academy";
-    const { options, context } = await saveStep(tutorialStep + 1);
-    await options.onSettled(
-      undefined,
-      new Error("offline"),
-      { step: tutorialStep + 1 },
-      context,
-    );
-    expect(replace).toHaveBeenCalledWith("/academy");
+  it("points at the next control and keeps the lesson's own words for its page", () => {
+    const lesson = TUTORIAL_STEPS.find((step) => step.id === "combat-claim-reward")!;
+    const way = at("combat-claim-reward", "/travel").currentStep;
+    expect(way?.action).toBe("Tap Profile in the main menu.");
+    expect(way?.elementIds).toEqual(["tutorial-profile"]);
+    expect(way?.description).toBe(lesson.wayLead!);
+    expect(way?.page).toBe("*");
+    expect(way?.advanceOn).toBeUndefined();
+    expect(at("combat-claim-reward", "/profile").currentStep).toBe(lesson);
+    expect(push).not.toHaveBeenCalled();
   });
 
-  it("preserves an independent navigation when an optimistic save fails", async () => {
-    tutorialStep = stepIndex("academy-accept-trials");
-    pathname = "/academy";
-    const { options, context } = await saveStep(tutorialStep + 1);
-    window.history.replaceState({}, "", "/profile");
-    await options.onSettled(
-      undefined,
-      new Error("offline"),
-      { step: tutorialStep + 1 },
-      context,
-    );
-    expect(updateUser).toHaveBeenLastCalledWith({ tutorialStep });
-    expect(replace).not.toHaveBeenCalled();
+  it("shows no way to a player held by a fight or the hospital", () => {
+    const lesson = TUTORIAL_STEPS.find((step) => step.id === "academy-building")!;
+    status = "BATTLE";
+    expect(at("academy-building", "/travel").currentStep).toBe(lesson);
+    status = "HOSPITALIZED";
+    expect(at("academy-building", "/hospital").currentStep).toBe(lesson);
+  });
+
+  it("completes a step on reaching the page its control leads to, by any way", () => {
+    const academy = TUTORIAL_STEPS.findIndex((step) => step.id === "academy-building");
+    expect(at("academy-building", "/village").arrivedStep).toBeUndefined();
+    const arrived = at("academy-building", "/academy");
+    expect(arrived.arrivedStep).toBe(academy + 1);
+    expect(arrived.stepNumber).toBe(academy + 1);
+    expect(arrived.currentStep).toBe(TUTORIAL_STEPS[academy + 1]!);
   });
 });
 
