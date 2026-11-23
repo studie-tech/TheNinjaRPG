@@ -15,6 +15,9 @@ export const attributes = [
   "Soft features",
   "Hard features",
   "Sharp features",
+  "Small features",
+  "Mature features",
+  "Round features",
   "Tattoo",
   "Scar",
   "Piercing",
@@ -22,6 +25,16 @@ export const attributes = [
   "Hat",
   "Long Hair",
   "Short Hair",
+  "Bob Hair",
+  "Messy Hair",
+  "Ponytail",
+  "Topknot",
+  "Braided Hair",
+  "Pixie Hair",
+  "Parted Hair",
+  "Wavy Hair",
+  "Tied Hair",
+  "Cowlick Hair",
   "Bald",
   "Long Beard",
   "Full Beard",
@@ -53,9 +66,34 @@ const characterColorGroups: Record<"Hair" | "Eyes" | "Skin", readonly string[]> 
 };
 
 // Group order defines the visible choice when older accounts contain conflicting traits.
+/** Authored hairstyles available to creation, profile editing and appearance resolution. */
+export const hairStyleProfiles = {
+  "Long Hair": "hair-long",
+  "Short Hair": "hair-short",
+  "Bob Hair": "hair-bob",
+  "Messy Hair": "hair-messy",
+  Ponytail: "hair-ponytail",
+  Topknot: "hair-topknot",
+  "Braided Hair": "hair-braid",
+  "Pixie Hair": "hair-pixie",
+  "Parted Hair": "hair-parted",
+  "Wavy Hair": "hair-wavy",
+  "Tied Hair": "hair-tied",
+  "Cowlick Hair": "hair-cowlick",
+} as const;
+/** Face shapes remain independent of gender and body build. */
+export const faceShapeProfiles = {
+  "Sharp features": "head-sharp",
+  "Hard features": "head-hard",
+  "Soft features": "head-soft",
+  "Small features": "head-small",
+  "Mature features": "head-elderly",
+  "Round features": "head-round",
+} as const;
+
 const characterAttributeGroups: readonly (readonly string[])[] = [
-  ["Bald", "Long Hair", "Short Hair"],
-  ["Sharp features", "Hard features", "Soft features"],
+  ["Bald", ...Object.keys(hairStyleProfiles)],
+  Object.keys(faceShapeProfiles),
   ["Long Beard", "Full Beard", "Stubble"],
   ...Object.values(characterColorGroups),
 ];

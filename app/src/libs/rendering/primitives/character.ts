@@ -27,8 +27,9 @@ export const createLpcCharacter = async (
   if (!lpcCatalog) throw new Error("Character catalog unavailable");
   const replacementSlots = new Set<string>(
     appearance.layers.flatMap((layer) => {
-      const slot = lpcCatalog.designs[layer.profile]?.replacementSlot;
-      return slot && slot !== "none" && layer.slot !== slot ? [slot] : [];
+      return (lpcCatalog.designs[layer.profile]?.replacementSlots ?? []).filter(
+        (slot) => layer.slot !== slot,
+      );
     }),
   );
   const parts = appearance.layers
@@ -36,12 +37,17 @@ export const createLpcCharacter = async (
     .flatMap((layer) => {
       const sheets = spriteLayerSheets(lpcCatalog, appearance, layer, mode);
       // Oversized weapons split held and attack poses across separate sheets.
-      const authored = new Set(
-        sheets.flatMap((sheet) =>
-          Object.keys(lpcCatalog.layouts[sheet.layout]?.clips ?? {}),
+      return sheets.map((sheet) => ({
+        layer,
+        sheet,
+        authored: new Set(
+          sheets
+            .filter((candidate) => candidate.component === sheet.component)
+            .flatMap((candidate) =>
+              Object.keys(lpcCatalog.layouts[candidate.layout]?.clips ?? {}),
+            ),
         ),
-      );
-      return sheets.map((sheet) => ({ layer, sheet, authored }));
+      }));
     });
   const loaded = await Promise.all(
     parts.map(async (part) => ({

@@ -1,3 +1,4 @@
+import type { LpcMaterial } from "../../../src/validators/lpc";
 import type { LpcConfig, LpcLayout } from "../../../src/validators/lpcAsset";
 import { lpcConfigValidator } from "../../../src/validators/lpcAsset";
 import source from "./catalog.json";
@@ -10,12 +11,15 @@ const catalog = source as unknown as {
       image: string;
       z: number;
       layout: number;
+      part?: string;
+      material?: LpcMaterial;
       travel?: { image: string; z: number; layout: number };
     }[]
   >;
   layouts: LpcLayout[];
   revision: string;
   creditsUrl: string;
+  upstream?: Record<string, LpcConfig["upstream"]>;
 };
 
 /** Stable IDs preserve saved item profiles and built-in character trait recipes. */
@@ -23,13 +27,15 @@ export const lpcSeedAssets = () => {
   const profiles = [
     ...new Set(Object.keys(catalog.entries).map((key) => key.split("/")[0]!)),
   ];
-  return profiles.map((profile) => {
+  const assets = profiles.map((profile) => {
     // Persist these recipe roles so runtime clothing replacement needs no source-path knowledge.
     const replacementSlot =
       (
         {
           shirt: "shirt",
           robe: "shirt",
+          "shirt-short": "shirt",
+          "shirt-sleeveless": "shirt",
           leather: "shirt",
           plate: "shirt",
           chainmail: "shirt",
@@ -42,10 +48,14 @@ export const lpcSeedAssets = () => {
           bandana: "bandana",
           headband: "bandana",
           hood: "bandana",
+          "hood-sack": "bandana",
+          kerchief: "bandana",
+          "headband-tied": "bandana",
+          "bandana-bordered": "bandana",
           helmet: "bandana",
           "wide-hat": "bandana",
           crown: "bandana",
-        } as Record<string, LpcConfig["replacementSlot"]>
+        } as Record<string, LpcConfig["replacementSlots"][number]>
       )[profile] ?? "none";
     const category: LpcConfig["category"] =
       profile === "body"
@@ -66,6 +76,8 @@ export const lpcSeedAssets = () => {
         image: sheet.image,
         z: sheet.z,
         layout: catalog.layouts[sheet.layout] as LpcLayout,
+        ...(sheet.part ? { part: sheet.part } : {}),
+        ...(sheet.material ? { material: sheet.material } : {}),
         ...(sheet.travel
           ? {
               travel: {
@@ -78,9 +90,14 @@ export const lpcSeedAssets = () => {
       }));
     }
     const config = lpcConfigValidator.parse({
-      version: 1,
+      version: 2,
+      upstream: catalog.upstream?.[profile] ?? [],
       category,
-      replacementSlot,
+      replacementSlots: [
+        ...(replacementSlot === "none" ? [] : [replacementSlot]),
+        ...(["hood", "hood-sack", "helmet"].includes(profile) ? ["hair" as const] : []),
+        ...(profile === "mask" ? ["beard" as const] : []),
+      ],
       defaultColor: category === "body" || category === "head" ? "light" : "gray",
       defaultEyes: "blue",
       variants,
@@ -102,4 +119,55 @@ export const lpcSeedAssets = () => {
       lpcConfig: config,
     };
   });
+  for (const recipe of [
+    {
+      id: "outfit-shinobi",
+      name: "Shinobi uniform",
+      profiles: ["shirt", "pants", "sandals"],
+    },
+    { id: "hooded-cloak", name: "Hooded cloak", profiles: ["cloak", "hood"] },
+    { id: "helmet-horned", name: "Horned helmet", profiles: ["helmet", "horns"] },
+    { id: "hood-horned", name: "Horned hood", profiles: ["hood", "horns"] },
+  ]) {
+    const sources = recipe.profiles.map(
+      (id) => assets.find((asset) => asset.id === id)!,
+    );
+    const first = sources[0]!;
+    const variants: LpcConfig["variants"] = {};
+    for (const key of Object.keys(first.lpcConfig.variants)) {
+      if (!sources.every((asset) => asset.lpcConfig.variants[key])) continue;
+      variants[key] = sources.flatMap((asset, component) =>
+        asset.lpcConfig.variants[key]!.map((sheet, index) => ({
+          ...sheet,
+          part: `component_${component}_${index}`,
+          component: `component_${component}`,
+        })),
+      );
+    }
+    const config = lpcConfigValidator.parse({
+      ...first.lpcConfig,
+      category: ["helmet-horned", "hood-horned"].includes(recipe.id)
+        ? "headgear"
+        : "equipment",
+      replacementSlots: [
+        ...new Set(sources.flatMap((asset) => asset.lpcConfig.replacementSlots)),
+      ],
+      variants,
+      upstream: [],
+      attributions: [
+        ...new Map(
+          sources
+            .flatMap((asset) => asset.lpcConfig.attributions)
+            .map((credit) => [JSON.stringify(credit), credit]),
+        ).values(),
+      ],
+    });
+    assets.push({
+      ...first,
+      id: recipe.id,
+      name: `LPC ${recipe.name}`,
+      lpcConfig: config,
+    });
+  }
+  return assets;
 };

@@ -513,8 +513,10 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           <FormItem className="min-w-0 gap-1 self-center">
             <FormLabel>Body style</FormLabel>
             <Select
-              value={field.value ?? (gender === "Female" ? "female" : "male")}
-              onValueChange={field.onChange}
+              value={field.value ?? "AUTO"}
+              onValueChange={(value) =>
+                field.onChange(value === "AUTO" ? undefined : value)
+              }
             >
               <FormControl>
                 <SelectTrigger>
@@ -522,10 +524,17 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
+                <SelectItem value="AUTO">
+                  Follow gender ({gender === "Female" ? "slender" : "broad"})
+                </SelectItem>
                 <SelectItem value="male">Broad build</SelectItem>
                 <SelectItem value="female">Slender build</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-muted-foreground text-xs">
+              Gender sets the default build. Choosing broad or slender keeps that build
+              when gender changes.
+            </p>
             <FormMessage />
           </FormItem>
         )}

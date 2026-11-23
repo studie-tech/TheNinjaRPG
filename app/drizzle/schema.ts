@@ -54,6 +54,11 @@ import type {
 } from "@/validators/hunting";
 import type { CardData, KessenFaction } from "@/validators/itemCard";
 import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
+import type {
+  LpcColor,
+  LpcEquipmentProfile,
+  LpcMaterialColors,
+} from "@/validators/lpc";
 import type { MethodSize } from "@/validators/methodSize";
 import type { QuestContentType, QuestTrackerType } from "@/validators/objectives";
 import type { ZodPetSpeciesEffect } from "@/validators/petSpecies";
@@ -1946,12 +1951,9 @@ export const item = mysqlTable(
     stackSize: int("stackSize").default(1).notNull(),
     image: varchar("image", { length: 191 }).notNull(),
     destroyOnUse: boolean("destroyOnUse").default(false).notNull(),
-    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<
-      import("@/validators/lpc").LpcEquipmentProfile
-    >(),
-    lpcColor: varchar("lpcColor", { length: 16 }).$type<
-      import("@/validators/lpc").LpcColor
-    >(),
+    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<LpcEquipmentProfile>(),
+    lpcColor: varchar("lpcColor", { length: 32 }).$type<LpcColor>(),
+    lpcMaterialColors: json("lpcMaterialColors").$type<LpcMaterialColors>(),
     range: int("range").default(0).notNull(),
     chakraCost: double("chakraCost").default(0).notNull(),
     staminaCost: double("staminaCost").default(0).notNull(),
@@ -2118,12 +2120,9 @@ export const itemVariant = mysqlTable(
     image: varchar("image", { length: 512 }).notNull(),
     requiredItemId: varchar("requiredItemId", { length: 191 }),
     costType: mysqlEnum("costType", consts.VARIANT_COST_TYPES).notNull(),
-    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<
-      import("@/validators/lpc").LpcEquipmentProfile
-    >(),
-    lpcColor: varchar("lpcColor", { length: 16 }).$type<
-      import("@/validators/lpc").LpcColor
-    >(),
+    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<LpcEquipmentProfile>(),
+    lpcColor: varchar("lpcColor", { length: 32 }).$type<LpcColor>(),
+    lpcMaterialColors: json("lpcMaterialColors").$type<LpcMaterialColors>(),
     cost: int("cost").default(0).notNull(),
     order: smallint("order", { unsigned: true }).default(1).notNull(),
     description: text("description"),

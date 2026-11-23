@@ -104,22 +104,29 @@ export const AttributeChange: React.FC = () => {
             <Label htmlFor="character-body-style">Body style</Label>
             <Select
               disabled={bodyMutation.isPending}
-              value={
-                spriteUser?.spriteBodyStyle ??
-                (spriteUser?.gender === "Female" ? "female" : "male")
-              }
+              value={spriteUser?.spriteBodyStyle ?? "AUTO"}
               onValueChange={(body) =>
-                bodyMutation.mutate({ body: body as "male" | "female" })
+                bodyMutation.mutate({
+                  body: body === "AUTO" ? null : (body as "male" | "female"),
+                })
               }
             >
               <SelectTrigger id="character-body-style">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="AUTO">
+                  Follow gender ({spriteUser?.gender === "Female" ? "slender" : "broad"}
+                  )
+                </SelectItem>
                 <SelectItem value="male">Broad build</SelectItem>
                 <SelectItem value="female">Slender build</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-muted-foreground text-xs">
+              Gender sets the default build. An explicit build stays the same when
+              gender changes.
+            </p>
           </div>
           <div className="space-y-1">
             <p className="font-medium text-sm">

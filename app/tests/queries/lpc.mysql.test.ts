@@ -54,6 +54,7 @@ describeWithDatabase("sprite appearance database snapshots", () => {
         itemType: "ARMOR",
         lpcProfile: "plate",
         lpcColor: "blue",
+        lpcMaterialColors: { cloth: "black", metal: "gold" },
       },
     ]);
     const database = await getTestDatabase();
@@ -66,6 +67,7 @@ describeWithDatabase("sprite appearance database snapshots", () => {
       costType: "MONEY",
       lpcProfile: "leather",
       lpcColor: "red",
+      lpcMaterialColors: { cloth: null, metal: "silver" },
     });
     await database.insert(userAttribute).values([
       { id: "sprite-hair", userId: "sprite-owner", attribute: "Long Hair" },
@@ -95,7 +97,11 @@ describeWithDatabase("sprite appearance database snapshots", () => {
     });
     expect(
       appearance.layers.find((layer) => layer.profile === "leather"),
-    ).toMatchObject({ profile: "leather", color: "red" });
+    ).toMatchObject({
+      profile: "leather",
+      color: "red",
+      materialColors: { cloth: "black", metal: "silver" },
+    });
   });
   it("uses the same appearance inputs for the authenticated profile", async () => {
     const client = (await getTestDatabase()) as unknown as DrizzleClient;
@@ -123,12 +129,17 @@ describeWithDatabase("sprite appearance database snapshots", () => {
         method: "SINGLE",
         lpcProfile: "robe",
         lpcColor: "green",
+        lpcMaterialColors: { cloth: "blue", trim: "gold" },
       }),
     });
     expect(response.success, response.message).toBe(true);
     expect(
       await database.query.item.findFirst({ where: eq(item.id, row.id) }),
-    ).toMatchObject({ lpcProfile: "robe", lpcColor: "green" });
+    ).toMatchObject({
+      lpcProfile: "robe",
+      lpcColor: "green",
+      lpcMaterialColors: { cloth: "blue", trim: "gold" },
+    });
     const variant = ItemVariantValidator.parse({
       name: "Emerald cloak",
       image: "https://example.com/sprite.png",
@@ -137,13 +148,18 @@ describeWithDatabase("sprite appearance database snapshots", () => {
       order: 2,
       lpcProfile: "cloak",
       lpcColor: "green",
+      lpcMaterialColors: { metal: "silver" },
     });
     const created = await api.upsertItemVariant({ itemId: row.id, variant });
     expect(created.success, created.message).toBe(true);
     const saved = await database.query.itemVariant.findFirst({
       where: eq(itemVariant.name, variant.name),
     });
-    expect(saved).toMatchObject({ lpcProfile: "cloak", lpcColor: "green" });
+    expect(saved).toMatchObject({
+      lpcProfile: "cloak",
+      lpcColor: "green",
+      lpcMaterialColors: { metal: "silver" },
+    });
     if (!saved) throw new Error("Missing saved variant");
     const updated = await api.upsertItemVariant({
       itemId: row.id,

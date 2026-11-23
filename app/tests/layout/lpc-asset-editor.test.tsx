@@ -33,6 +33,61 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("reviews generator imports with explicit warnings before applying an editable draft", async () => {
+  const asset = lpcAssets.find((entry) => entry.id === "shirt")!;
+  const { result } = renderHook(() =>
+    useForm<ZodGameAssetInput, unknown, ZodGameAssetType>({ defaultValues: asset }),
+  );
+  const view = render(
+    <LpcAssetEditor
+      id={asset.id}
+      name={asset.name}
+      form={result.current}
+      disabled={false}
+      onBusyChange={() => {}}
+    />,
+  );
+  fireEvent.change(view.getByRole("textbox", { name: "Generator recipe" }), {
+    target: {
+      value: JSON.stringify({
+        version: 2,
+        bodyType: "female",
+        selections: {
+          shirt: {
+            itemId: "torso_clothes_longsleeve",
+            subId: 0,
+            recolor: "cloth.ulpc.blue",
+          },
+          unavailable: { itemId: "unpublished_animation" },
+        },
+      }),
+    },
+  });
+  fireEvent.click(view.getByRole("button", { name: "Review import" }));
+  expect(view.getByText("Unsupported artwork: unpublished_animation.")).toBeTruthy();
+  expect(result.current.getValues("lpcConfig.variants")).toEqual(
+    asset.lpcConfig.variants,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Use supported artwork" }));
+  expect(Object.keys(result.current.getValues("lpcConfig.variants")!)).toEqual([
+    "male/gray/blue",
+    "female/gray/blue",
+  ]);
+  expect(
+    result.current.getValues("lpcConfig.variants")!["female/gray/blue"]![0]!.image,
+  ).toBe(asset.lpcConfig.variants["female/blue/blue"]![0]!.image);
+  expect((view.getByLabelText("Body style") as HTMLSelectElement).value).toBe("female");
+  fireEvent.click(view.getByRole("checkbox", { name: /^legs$/ }));
+  fireEvent.click(view.getByRole("checkbox", { name: /^hair$/ }));
+  expect(result.current.getValues("lpcConfig.replacementSlots")).toEqual([
+    "shirt",
+    "legs",
+    "hair",
+  ]);
+  expect(result.current.getFieldState("lpcConfig").isDirty).toBe(true);
+  expect(asset.lpcConfig.replacementSlots).toEqual(["shirt"]);
+});
+
 it("discards an unapplied layout draft when selecting a variant with an identical saved layout", async () => {
   const asset = lpcAssets.find((entry) => entry.id === "shirt")!;
   const { result } = renderHook(() =>

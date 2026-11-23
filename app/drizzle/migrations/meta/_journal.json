@@ -1345,6 +1345,13 @@
       "when": 1795409080227,
       "tag": "0192_green_blue_shield",
       "breakpoints": false
+    },
+    {
+      "idx": 193,
+      "version": "5",
+      "when": 1795433289907,
+      "tag": "0193_low_warstar",
+      "breakpoints": false
     }
   ]
 }

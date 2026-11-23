@@ -1,23 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { type UseFormReturn, useFormState, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { CharacterPreview } from "@/layout/CharacterPreview";
+import { LpcAnimationCoverage } from "@/layout/LpcAnimationCoverage";
 import { previewSpriteDesign, resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { buildLpcCatalog } from "@/libs/lpc/catalog";
+import { importLpcRecipe } from "@/libs/lpc/recipe";
 import { chunkArray } from "@/utils/array";
 import { downloadBlob } from "@/utils/dom";
 import { textureImageUrl } from "@/utils/image";
 import { UploadButton } from "@/utils/uploadthing";
 import type { ZodGameAssetInput, ZodGameAssetType } from "@/validators/asset";
 import type { LpcAnimation, LpcBody } from "@/validators/lpc";
-import { lpcAnimations, lpcColors } from "@/validators/lpc";
+import { lpcAnimations, lpcColors, lpcMaterials } from "@/validators/lpc";
 import {
   LPC_CONFIG_MAX_BYTES,
   type LpcConfig,
@@ -42,7 +45,10 @@ export function LpcAssetEditor({
   onBusyChange: (busy: boolean) => void;
 }) {
   const value = useWatch({ control: form.control, name: "lpcConfig" });
-  const config = value ?? emptyConfig;
+  const config = useMemo<LpcConfig>(
+    () => (value ? { ...value, upstream: value.upstream ?? [] } : emptyConfig),
+    [value],
+  );
   const { errors, submitCount } = useFormState({
     control: form.control,
     name: "lpcConfig",
@@ -81,6 +87,8 @@ export function LpcAssetEditor({
   const [solo, setSolo] = useState(false);
   const [layoutText, setLayoutText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recipeText, setRecipeText] = useState("");
+  const [recipe, setRecipe] = useState<ReturnType<typeof importLpcRecipe> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
   // Preparation must update the variant/layer selected when the upload began.
@@ -133,7 +141,12 @@ export function LpcAssetEditor({
       if (!result.success || !result.sheet) throw new Error(result.message);
       const variants = { ...operation.config.variants },
         next = [...(variants[operation.key] ?? [])];
-      next[operation.index] = result.sheet;
+      next[operation.index] = {
+        ...result.sheet,
+        part: next[operation.index]?.part,
+        material: next[operation.index]?.material,
+        component: next[operation.index]?.component,
+      };
       variants[operation.key] = next;
       change({ ...operation.config, variants });
     } catch (cause) {
@@ -183,19 +196,36 @@ export function LpcAssetEditor({
                 change({ ...config, category: category as LpcConfig["category"] })
               }
             />
-            <LpcSelect
-              label="Replaces base clothing"
-              value={config.replacementSlot}
-              values={lpcReplacementSlots}
-              onChange={(replacementSlot) =>
-                change({
-                  ...config,
-                  replacementSlot: replacementSlot as LpcConfig["replacementSlot"],
-                })
-              }
-            />
+            <fieldset className="col-span-full space-y-2">
+              <legend className="font-medium text-sm">
+                Hide or replace base layers
+              </legend>
+              <p className="text-muted-foreground text-xs">
+                Choose every garment or trait this design covers. These choices apply to
+                both builds.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {lpcReplacementSlots.map((slot) => (
+                  <Label key={slot} className="flex items-center gap-2">
+                    <Checkbox
+                      checked={config.replacementSlots.includes(slot)}
+                      onCheckedChange={(checked) =>
+                        change({
+                          ...config,
+                          replacementSlots: checked
+                            ? [...config.replacementSlots, slot]
+                            : config.replacementSlots.filter((value) => value !== slot),
+                        })
+                      }
+                    />
+                    {slot}
+                  </Label>
+                ))}
+              </div>
+            </fieldset>
             <LpcSelect
               label="Default colour"
+              allowCustom
               value={config.defaultColor}
               values={[
                 ...new Set([
@@ -204,12 +234,16 @@ export function LpcAssetEditor({
                   "olive",
                   "ivory",
                   config.defaultColor,
+                  ...Object.keys(config.variants).map(
+                    (variant) => variant.split("/")[1]!,
+                  ),
                 ]),
               ]}
               onChange={(defaultColor) => change({ ...config, defaultColor })}
             />
             <LpcSelect
               label="Default eyes"
+              allowCustom
               value={config.defaultEyes}
               values={[
                 "blue",
@@ -220,6 +254,10 @@ export function LpcAssetEditor({
                 "red",
                 "yellow",
                 "white",
+                config.defaultEyes,
+                ...new Set(
+                  Object.keys(config.variants).map((variant) => variant.split("/")[2]!),
+                ),
               ]}
               onChange={(defaultEyes) => change({ ...config, defaultEyes })}
             />
@@ -240,6 +278,7 @@ export function LpcAssetEditor({
           />
           <LpcSelect
             label="Variant colour"
+            allowCustom
             value={color}
             values={[
               ...new Set([
@@ -259,6 +298,7 @@ export function LpcAssetEditor({
           />
           <LpcSelect
             label="Variant eyes"
+            allowCustom
             value={eyes}
             values={[
               "blue",
@@ -269,6 +309,9 @@ export function LpcAssetEditor({
               "red",
               "yellow",
               "white",
+              ...new Set(
+                Object.keys(config.variants).map((variant) => variant.split("/")[2]!),
+              ),
             ]}
             onChange={(next) => {
               setEyes(next);
@@ -318,6 +361,12 @@ export function LpcAssetEditor({
             >
               {solo ? "Show on character" : "Show design alone"}
             </Button>
+            <LpcAnimationCoverage
+              config={config}
+              body={body}
+              color={color}
+              eyes={eyes}
+            />
             <div className="space-y-1 text-sm" role="status">
               {(["male", "female"] as const).map((style) => (
                 <p key={style}>
@@ -366,6 +415,69 @@ export function LpcAssetEditor({
                     }}
                   />
                 </Label>
+                <Label className="grid gap-2">
+                  Layer name
+                  <Input
+                    value={sheet.part ?? ""}
+                    placeholder={`layer-${sheetIndex + 1}`}
+                    onChange={(event) => {
+                      const next = [...sheets];
+                      next[sheetIndex] = {
+                        ...sheet,
+                        part: event.target.value || undefined,
+                      };
+                      change({
+                        ...config,
+                        variants: { ...config.variants, [key]: next },
+                      });
+                    }}
+                  />
+                  <span className="text-muted-foreground text-xs">
+                    Use the same name for this layer in every colour.
+                  </span>
+                </Label>
+                <LpcSelect
+                  label="Material"
+                  value={sheet.material ?? "none"}
+                  values={[{ id: "none", name: "Fixed artwork" }, ...lpcMaterials]}
+                  onChange={(material) => {
+                    const next = [...sheets];
+                    next[sheetIndex] = {
+                      ...sheet,
+                      part: sheet.part ?? `layer-${sheetIndex + 1}`,
+                      material:
+                        material === "none"
+                          ? undefined
+                          : (material as (typeof lpcMaterials)[number]),
+                    };
+                    change({
+                      ...config,
+                      variants: { ...config.variants, [key]: next },
+                    });
+                  }}
+                />
+                <Label className="grid gap-2">
+                  Pose group
+                  <Input
+                    value={sheet.component ?? ""}
+                    placeholder="Shared poses"
+                    onChange={(event) => {
+                      const next = [...sheets];
+                      next[sheetIndex] = {
+                        ...sheet,
+                        component: event.target.value || undefined,
+                      };
+                      change({
+                        ...config,
+                        variants: { ...config.variants, [key]: next },
+                      });
+                    }}
+                  />
+                  <span className="text-muted-foreground text-xs">
+                    Keep split sheets of one garment together. Give separate garments
+                    different groups.
+                  </span>
+                </Label>
                 <Button
                   type="button"
                   variant="outline"
@@ -391,6 +503,13 @@ export function LpcAssetEditor({
               ]}
               onChange={(next) => setFormat(next as "packed" | "standard")}
             />
+            {format === "standard" && (
+              <p className="text-muted-foreground text-xs">
+                Imports standing, walking, idle, combat idle, slash, thrust, spellcast,
+                shoot and hurt. Other generator poses are not used by the game. Empty
+                animation rows use a held-pose fallback.
+              </p>
+            )}
             {format === "packed" && (
               <Label className="grid gap-2">
                 Frame layout (JSON)
@@ -620,6 +739,68 @@ export function LpcAssetEditor({
                 )}
               </div>
             </details>
+            <details className="space-y-3">
+              <summary className="cursor-pointer font-medium text-sm">
+                Import from the LPC generator
+              </summary>
+              <p className="text-muted-foreground text-sm">
+                Paste an exported v2 JSON recipe or generator URL. Published library
+                artwork and its credits are retained; unsupported selections are listed
+                for review.
+              </p>
+              <Textarea
+                aria-label="Generator recipe"
+                rows={5}
+                value={recipeText}
+                onChange={(event) => {
+                  setRecipeText(event.target.value);
+                  setRecipe(null);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!designs || !recipeText.trim()}
+                onClick={() => {
+                  try {
+                    setRecipe(importLpcRecipe(recipeText, designs ?? [], config));
+                    setError(null);
+                  } catch (cause) {
+                    setRecipe(null);
+                    fail(cause);
+                  }
+                }}
+              >
+                Review import
+              </Button>
+              {recipe && (
+                <div className="space-y-2" role="status">
+                  <p>Included: {recipe.designs.join(", ")}.</p>
+                  {recipe.warnings.length ? (
+                    <ul className="list-disc pl-5">
+                      {recipe.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>All selections are supported.</p>
+                  )}
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      change(recipe.config);
+                      setBody(recipe.body);
+                      setColor(recipe.config.defaultColor);
+                      setEyes(recipe.config.defaultEyes);
+                      setSheetIndex(0);
+                      setRecipe(null);
+                    }}
+                  >
+                    Use supported artwork
+                  </Button>
+                </div>
+              )}
+            </details>
             <div className="flex flex-wrap gap-3">
               <Button
                 type="button"
@@ -704,29 +885,56 @@ function LpcSelect({
   value,
   values,
   onChange,
+  allowCustom = false,
 }: {
   label: string;
   value: string;
   values: readonly (string | { id: string; name: string })[];
   onChange: (value: string) => void;
+  allowCustom?: boolean;
 }) {
+  const id = useId();
+  const options = [
+    ...new Map(
+      values.map((entry) => {
+        const option = typeof entry === "string" ? { id: entry, name: entry } : entry;
+        return [option.id, option];
+      }),
+    ).values(),
+  ];
   return (
     <Label className="grid min-w-0 gap-2">
       {label}
-      <select
-        className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {values.map((entry) => {
-          const option = typeof entry === "string" ? { id: entry, name: entry } : entry;
-          return (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          );
-        })}
-      </select>
+      {allowCustom ? (
+        <>
+          <Input
+            list={id}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <datalist id={id}>
+            {options.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </datalist>
+        </>
+      ) : (
+        <select
+          className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {options.map((option) => {
+            return (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            );
+          })}
+        </select>
+      )}
     </Label>
   );
 }
@@ -766,9 +974,10 @@ async function downloadLpcDesign(name: string, config: LpcConfig) {
 }
 
 const emptyConfig: LpcConfig = {
-  version: 1,
+  version: 2,
+  upstream: [],
   category: "equipment",
-  replacementSlot: "none",
+  replacementSlots: [],
   defaultColor: "gray",
   defaultEyes: "blue",
   variants: {},

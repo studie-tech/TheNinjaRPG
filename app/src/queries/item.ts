@@ -4,6 +4,11 @@ import type {
   ActionReadiness,
   ActionReadinessWrite,
 } from "@/server/utils/actionReadiness";
+import type {
+  LpcColor,
+  LpcEquipmentProfile,
+  LpcMaterialColors,
+} from "@/validators/lpc";
 /**
  * Database access for item; authorization and transaction scopes stay in callers.
  */
@@ -1045,8 +1050,9 @@ export const updateItemVariantForUpsertItemVariant = (
       order: number;
       furnitureData: null | FurnitureVariantData;
       id: string;
-      lpcProfile?: import("@/validators/lpc").LpcEquipmentProfile | null;
-      lpcColor?: import("@/validators/lpc").LpcColor | null;
+      lpcProfile?: LpcEquipmentProfile | null;
+      lpcColor?: LpcColor | null;
+      lpcMaterialColors?: LpcMaterialColors | null;
     };
     itemId: string;
   },
@@ -1068,6 +1074,7 @@ export const updateItemVariantForUpsertItemVariant = (
       updatedAt: new Date(),
       lpcProfile: input.variant.lpcProfile,
       lpcColor: input.variant.lpcColor,
+      lpcMaterialColors: input.variant.lpcMaterialColors,
     })
     .where(
       and(
@@ -1097,8 +1104,9 @@ export const insertItemVariantForUpsertItemVariant = (
       cost: number;
       order: number;
       furnitureData: null | FurnitureVariantData;
-      lpcProfile?: import("@/validators/lpc").LpcEquipmentProfile | null;
-      lpcColor?: import("@/validators/lpc").LpcColor | null;
+      lpcProfile?: LpcEquipmentProfile | null;
+      lpcColor?: LpcColor | null;
+      lpcMaterialColors?: LpcMaterialColors | null;
     };
   },
   safeDescription: null | string,
@@ -1112,6 +1120,7 @@ export const insertItemVariantForUpsertItemVariant = (
     requiredItemId: input.variant.requiredItemId,
     lpcProfile: input.variant.lpcProfile,
     lpcColor: input.variant.lpcColor,
+    lpcMaterialColors: input.variant.lpcMaterialColors,
     costType: input.variant.costType,
     cost: input.variant.cost,
     order: input.variant.order,

@@ -46,18 +46,20 @@ expanding the equipment layout. It uses the current inventory query, including
 selected variants, so equipment actions and loadout changes update the displayed
 look. Closing the preview releases its renderer and texture leases.
 
+Creation starts with random, compatible traits and colours that remain editable. The body selector can follow the gender-derived default or keep an explicit build; profile editing can restore the default.
+
 Skin, eye and hair palettes save directly from their selectors and do not count
 toward the trait limit. Hair styles, face shapes and beard styles are mutually
 exclusive within each group. The shared attribute resolver displays deterministic
 choices for conflicting saved rows; selecting or removing a group replaces or
 clears its old choices. Bald hides scalp hair while retaining the hair palette for beards.
 
-Item and variant rows store their LPC silhouette and palette. Each unset variant
-field inherits the corresponding item field. Unconfigured items are hidden, and
+Item and variant rows store their LPC silhouette, palette and independent cloth, metal, wood and trim overrides. Each unset variant
+field and material channel inherits the corresponding item field. Unconfigured items are hidden, and
 an unset item palette uses gray. Names, descriptions and item IDs do not select
-artwork. The staff editors preview these saved fields and inheritance for both
-body styles. Select Hidden on character to explicitly suppress an equipment layer.
-Clothing replaces the corresponding base garment; cloaks, jewellery and partial
+artwork. The staff editors browse searchable, categorized static thumbnails, offer palettes supplied for both builds, and preview saved fields and inheritance for both
+body styles. Animation coverage distinguishes authored poses from held-pose fallbacks. Select Hidden on character to explicitly suppress an equipment layer.
+Designs can replace several base garments together and hide covered hair, beards or other traits; cloaks, jewellery and partial
 leg armour and waist skirts remain layered over the base clothing.
 
 `profiles.json` selects upstream definitions for both supported bodies. Missing
@@ -85,11 +87,11 @@ opening a transaction or locking an account row between separate reads and write
 ## Rebuilding artwork
 
 The published frame catalogue is checked in; sprite binaries are stored in UploadThing.
-The complete movement catalogue stays within a 96 MiB RGBA texture-pixel budget;
+The complete movement catalogue stays within a 128 MiB RGBA texture-pixel budget;
 only the distinct artwork used by visible characters is leased at runtime.
 Running the game needs neither Python nor the upstream generator. The import script
 consumes artwork and attribution metadata from a pinned revision and stages
-content-addressed PNG atlases in the gitignored `app/scripts/.artifacts/lpc/` directory.
+content-addressed PNG atlases in the external `/tmp/tnr-lpc-publication/` directory.
 Atlas dimensions stay within WebGL 1's guaranteed 2048px texture size.
 Movement packing reconstructs every logical frame and verifies all visible RGBA
 pixels and alpha values before writing an atlas. Recolouring replaces exact authored
@@ -99,12 +101,12 @@ From the repository root:
 
 ```sh
 python3 -m venv /tmp/tnr-lpc-import-env
-/tmp/tnr-lpc-import-env/bin/pip install Pillow==12.2.0
+/tmp/tnr-lpc-import-env/bin/pip install Pillow==12.2.0 numpy==2.5.5
 git clone --filter=blob:none --sparse https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator /tmp/tnr-lpc-source
 git -C /tmp/tnr-lpc-source checkout 86160e7507d6841259cff624a51a63c1d4847ee3
 git -C /tmp/tnr-lpc-source sparse-checkout set sheet_definitions palette_definitions
 /tmp/tnr-lpc-import-env/bin/python app/scripts/import-lpc-assets.py /tmp/tnr-lpc-source
-make bun run scripts/upload-lpc-assets.ts
+make bun run scripts/upload-lpc-assets.ts /tmp/tnr-lpc-publication
 ```
 
 The publisher uses the configured UploadThing token. It compares optimized PNGs with
@@ -119,16 +121,21 @@ automatic resizing, which changes packed frame coordinates. Publication verifies
 Bunny's delivered bytes, preserving frame coordinates and pixel colours. No sprite binaries
 are served by Next.js or committed to the repository.
 
+Material planes partition authored source pixels before recolouring, preserving alpha and allowing independent palettes without multiplying colour combinations. Profile checkpoints in the external publication directory resume unchanged imports.
+
 To add artwork, update `profiles.json` and the shared equipment validator when
 introducing a new silhouette, then import again. The script selects only required
 source blobs and removes obsolete staged PNGs. Keep its `REVISION` synchronized
 with the checked-out upstream revision when deliberately upgrading the source.
 
-The `0130_lpc_item_appearances.sql` data migration fills audited appearances on
-existing items and variants. Apply it before deploying the resolver. It preserves
-configured staff fields independently and skips rows whose portrait changed since
-inspection; skipped or subsequently authored content can be configured in the
-item/variant editor. No player inventory rewrite is required.
+The journaled appearance migrations configure audited items and variants without
+rewriting player inventory. The adult customization migration upgrades design
+settings to version 2, refreshes unchanged published designs and adds the expanded
+library. Its item and variant corrections require the inspected ID, name, portrait,
+revision and appearance fields to match. Staff edits remain intact; editors can
+configure skipped or subsequently authored content through the same controls.
+
+The LPC editor accepts the generator's v2 JSON recipe or URL. Exact definition IDs (and URL selection groups) match published library artwork; unsupported or ambiguous selections and palettes are listed before the editor applies the draft. Source credits are retained. Standard PNG imports preserve breathing rows and omit wholly transparent reserved animation rows.
 
 ## Distribution and validation
 
@@ -138,10 +145,10 @@ The catalogue's UploadThing credits URL carries downloadable attribution. Sprite
 and credits remain publicly accessible for web and native players through immutable,
 versioned UploadThing URLs.
 
-The [LPC migration](../app/drizzle/migrations/0129_superb_polaris.sql) adds nullable
-item and variant overrides plus the player's body choice. Apply the journaled
-migrations through this migration before deploying code that selects these columns.
-Apply the appearance data migration after these columns exist. Character attributes continue to supply the base appearance.
+Apply journaled migrations, including the adult customization migration, before
+deploying code that reads their columns and version 2 design settings. Character
+attributes continue to supply the base appearance. New artwork is published and
+byte-verified before a manifest or migration references it.
 
 Tests under `app/tests/libs/lpc/` validate creation choices, mappings, attribution,
 published asset URLs and frame bounds. The publication command validates lossless

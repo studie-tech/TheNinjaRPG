@@ -6,18 +6,25 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import sharp from "sharp";
 import { UTApi, UTFile } from "uploadthing/server";
 import type { LpcSheet } from "../src/libs/lpc/catalog";
-import { servedUfsUrl } from "../src/libs/uploadthing";
-import { fetchWithRetry } from "../src/utils/http";
+import { servedUfsUrl, UPLOADTHING_HOST } from "../src/libs/uploadthing";
 import { textureImageUrl } from "../src/utils/image";
 import { withRetry } from "../src/utils/retry";
 import type { LpcLayout } from "../src/validators/lpcAsset";
 
+/** Retry complete downloads, including bodies interrupted after their response headers arrived. */
+const readPublishedBytes = (url: string) => withRetry(async () => {
+  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`Media download failed (${response.status}).`);
+  return Buffer.from(await response.arrayBuffer());
+}, { isTransient: () => true, deadlineMs: 120_000 });
+
 /** Content-addressed uploads can be resumed without replacing existing files. */
 const main = async () => {
-  const directory = resolve(process.argv[2] ?? "scripts/.artifacts/lpc");
+  const directory = resolve(process.argv[2] ?? `${tmpdir()}/tnr-lpc-publication`);
   const catalog = JSON.parse(await readFile(`${directory}/catalog.json`, "utf8")) as {
     entries: Record<string, LpcSheet[]>;
     layouts: LpcLayout[];
@@ -76,6 +83,20 @@ const main = async () => {
         return { name, id, bytes, type: `image/${extension}` };
       }),
     );
+    const unknown = batch.filter((file) => !uploads[file.id]);
+    if (unknown.length) {
+      // Custom-ID lookup avoids listing the game's entire media library. Match by verified bytes,
+      // because the response carries raw keys rather than the requested custom IDs or their order.
+      const known = await utapi.getFileUrls(unknown.map((file) => file.id), { keyType: "customId" });
+      await Promise.all(known.data.map(async (file) => {
+        const url = `${UPLOADTHING_HOST}/f/${file.key}`;
+        const bytes = await readPublishedBytes(textureImageUrl(url, 0));
+        const match = unknown.find((candidate) => candidate.bytes.equals(bytes));
+        if (!match) throw new Error(`Existing atlas differs from its content hash: ${file.key}`);
+        uploads[match.id] = url;
+      }));
+      await writeFile(checkpoint, `${JSON.stringify(uploads, null, 2)}\n`);
+    }
     await withRetry(
       async () => {
         const pending = batch.filter((file) => !uploads[file.id]);
@@ -104,13 +125,7 @@ const main = async () => {
     await Promise.all(
       batch.map(async (file) => {
         const url = uploads[file.id]!;
-        const response = await fetchWithRetry(textureImageUrl(url, 0), {}, 30_000, {
-          deadlineMs: 100_000,
-        });
-        if (
-          !response.ok ||
-          !Buffer.from(await response.arrayBuffer()).equals(file.bytes)
-        ) {
+        if (!(await readPublishedBytes(textureImageUrl(url, 0))).equals(file.bytes)) {
           throw new Error(`Upload differs from the verified atlas: ${file.id}`);
         }
         urls.set(file.name, url);
@@ -159,10 +174,7 @@ const main = async () => {
     uploads[id] = servedUfsUrl(result.data);
     await writeFile(checkpoint, `${JSON.stringify(uploads, null, 2)}\n`);
   }
-  const response = await fetchWithRetry(uploads[id]!, {}, 30_000, {
-    deadlineMs: 100_000,
-  });
-  if (!response.ok || !Buffer.from(await response.arrayBuffer()).equals(credits)) {
+  if (!(await readPublishedBytes(uploads[id]!)).equals(credits)) {
     throw new Error("Uploaded attribution differs from the staged credits");
   }
   catalog.creditsUrl = uploads[id];

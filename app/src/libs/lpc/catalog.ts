@@ -1,6 +1,7 @@
 import type {
   LpcAnimation,
   LpcDirection,
+  LpcMaterial,
   SpriteAppearance,
   SpriteLayer,
 } from "@/validators/lpc";
@@ -13,14 +14,22 @@ export const LPC_ATTACK_FRAME_MS = 80;
 export const LPC_IDLE_FRAME_MS = 200;
 
 /** A layer's full poses and its optional movement-only atlas share the same visual selection. */
-export type LpcSheet = { image: string; z: number; layout: number; travel?: LpcSheet };
+export type LpcSheet = {
+  image: string;
+  z: number;
+  layout: number;
+  travel?: LpcSheet;
+  part?: string;
+  material?: LpcMaterial;
+  component?: string;
+};
 /** A scene owns one resolved database snapshot, keeping all its actors on the same artwork. */
 export type LpcCatalog = {
   entries: Record<string, LpcSheet[]>;
   layouts: LpcLayout[];
   designs: Record<
     string,
-    Pick<LpcConfig, "category" | "replacementSlot" | "defaultColor" | "defaultEyes">
+    Pick<LpcConfig, "category" | "replacementSlots" | "defaultColor" | "defaultEyes">
   >;
 };
 
@@ -47,7 +56,7 @@ export const buildLpcCatalog = (
     if (!config) continue;
     catalog.designs[asset.id] = {
       category: config.category,
-      replacementSlot: config.replacementSlot,
+      replacementSlots: config.replacementSlots,
       defaultColor: config.defaultColor,
       defaultEyes: config.defaultEyes,
     };
@@ -56,6 +65,9 @@ export const buildLpcCatalog = (
         image: sheet.image,
         z: sheet.z,
         layout: layoutId(sheet.layout),
+        ...(sheet.part ? { part: sheet.part } : {}),
+        ...(sheet.material ? { material: sheet.material } : {}),
+        ...(sheet.component ? { component: sheet.component } : {}),
         ...(sheet.travel
           ? {
               travel: {
@@ -78,15 +90,52 @@ export const spriteLayerSheets = (
   mode: "all" | "travel" = "all",
 ): LpcSheet[] => {
   const design = lpcCatalog.designs[layer.profile];
-  const color = layer.color === "blonde" ? "yellow" : layer.color;
-  const eyes = layer.eyes ?? design?.defaultEyes ?? "blue";
-  const key = `${layer.profile}/${appearance.body}/${color}/${eyes}`;
-  const fallback = `${layer.profile}/${appearance.body}/${design?.defaultColor ?? "gray"}/${design?.defaultEyes ?? "blue"}`;
-  const sheets = lpcCatalog.entries[key] ?? lpcCatalog.entries[fallback];
-  if (!sheets) throw new Error(`Sprite selection is unavailable: ${key}`);
+  const sheets = resolveLpcVariantSheets(
+    (color, eyes) =>
+      lpcCatalog.entries[`${layer.profile}/${appearance.body}/${color}/${eyes}`],
+    design,
+    layer,
+  );
+  if (!sheets)
+    throw new Error(
+      `Sprite selection is unavailable: ${layer.profile}/${appearance.body}/${layer.color}/${layer.eyes ?? design?.defaultEyes ?? "blue"}`,
+    );
   return mode === "travel"
-    ? sheets.flatMap((sheet) => (sheet.travel ? [sheet.travel] : []))
+    ? sheets.flatMap((sheet) =>
+        sheet.travel
+          ? [
+              {
+                ...sheet.travel,
+                ...(sheet.component ? { component: sheet.component } : {}),
+              },
+            ]
+          : [],
+      )
     : sheets;
+};
+
+/** Resolve base and material palettes together, retaining the eyes of the selected base. */
+export const resolveLpcVariantSheets = <T extends Pick<LpcSheet, "part" | "material">>(
+  sheetsFor: (color: string, eyes: string) => T[] | undefined,
+  defaults: Pick<LpcConfig, "defaultColor" | "defaultEyes"> | undefined,
+  selection: Pick<SpriteLayer, "color" | "eyes" | "materialColors">,
+): T[] | undefined => {
+  const defaultEyes = defaults?.defaultEyes ?? "blue";
+  const eyes = selection.eyes ?? defaultEyes;
+  const color = selection.color === "blonde" ? "yellow" : selection.color;
+  const requested = sheetsFor(color, eyes);
+  const base = requested ?? sheetsFor(defaults?.defaultColor ?? "gray", defaultEyes);
+  const baseEyes = requested ? eyes : defaultEyes;
+  return base?.map((sheet) => {
+    const selected = sheet.material && selection.materialColors?.[sheet.material];
+    if (!selected || !sheet.part) return sheet;
+    return (
+      sheetsFor(selected, baseEyes)?.find(
+        (candidate) =>
+          candidate.part === sheet.part && candidate.material === sheet.material,
+      ) ?? sheet
+    );
+  });
 };
 
 /** Authored pose duration shared by sampling and retained actor updates. */

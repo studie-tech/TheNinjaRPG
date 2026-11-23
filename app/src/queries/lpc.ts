@@ -29,7 +29,7 @@ export const lpcDesignAssignmentGuard = (profile?: string | null) =>
 export const updateSpriteBodyStyle = (
   client: DrizzleClient,
   userId: string,
-  body: "male" | "female",
+  body: "male" | "female" | null,
 ) =>
   client
     .update(userData)
@@ -51,8 +51,17 @@ export const spriteUserRelations = {
   cosmeticSlots: {
     columns: { slot: true },
     with: {
-      item: { columns: { slot: true, lpcProfile: true, lpcColor: true } },
-      variant: { columns: { lpcProfile: true, lpcColor: true } },
+      item: {
+        columns: {
+          slot: true,
+          lpcProfile: true,
+          lpcColor: true,
+          lpcMaterialColors: true,
+        },
+      },
+      variant: {
+        columns: { lpcProfile: true, lpcColor: true, lpcMaterialColors: true },
+      },
     },
   },
   attributes: { columns: { attribute: true } },
@@ -70,8 +79,18 @@ export const spriteUserRelations = {
       ),
     ),
     with: {
-      item: { columns: { id: true, slot: true, lpcProfile: true, lpcColor: true } },
-      activeVariant: { columns: { lpcProfile: true, lpcColor: true } },
+      item: {
+        columns: {
+          id: true,
+          slot: true,
+          lpcProfile: true,
+          lpcColor: true,
+          lpcMaterialColors: true,
+        },
+      },
+      activeVariant: {
+        columns: { lpcProfile: true, lpcColor: true, lpcMaterialColors: true },
+      },
     },
   },
 } as const;

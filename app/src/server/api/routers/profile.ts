@@ -1685,7 +1685,7 @@ export const profileRouter = createTRPCRouter({
     }),
   /** Save a cosmetic choice as an absolute user patch; stale guards return recoverable responses. */
   updateSpriteBody: protectedProcedure
-    .input(z.object({ body: z.enum(["male", "female"]) }))
+    .input(z.object({ body: z.enum(["male", "female"]).nullable() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);

@@ -1,8 +1,17 @@
 import type { ItemSlot } from "@/drizzle/constants";
 import { isCompatibleEquipSlot } from "@/libs/item";
-import type { LpcColor, SpriteAppearance, SpriteLayer } from "@/validators/lpc";
+import type {
+  LpcColor,
+  LpcMaterialColors,
+  SpriteAppearance,
+  SpriteLayer,
+} from "@/validators/lpc";
 import type { LpcConfig } from "@/validators/lpcAsset";
-import { getCharacterAttributes } from "@/validators/register";
+import {
+  faceShapeProfiles,
+  getCharacterAttributes,
+  hairStyleProfiles,
+} from "@/validators/register";
 
 /** Preview a design in its visual role, matching base skin while preserving unrelated outfit layers. */
 export const previewSpriteDesign = (
@@ -17,7 +26,7 @@ export const previewSpriteDesign = (
     profile: id,
     color,
     eyes,
-    slot: config.replacementSlot === "none" ? "preview" : config.replacementSlot,
+    slot: "preview",
   };
   if (solo) return { ...base, layers: [layer] };
   const baseRole = ["body", "head", "hair", "beard"].includes(config.category)
@@ -31,8 +40,10 @@ export const previewSpriteDesign = (
           (entry) =>
             entry.profile !== id &&
             (!baseRole || entry.slot !== baseRole) &&
-            (config.replacementSlot === "none" ||
-              entry.slot !== config.replacementSlot),
+            (!entry.slot ||
+              !config.replacementSlots.includes(
+                entry.slot as (typeof config.replacementSlots)[number],
+              )),
         )
         .map((entry) =>
           (config.category === "body" || config.category === "head") &&
@@ -76,7 +87,22 @@ export const resolveItemSprite = (item: SpriteItem, variant?: SpriteVariant | nu
       : item.lpcProfile && item.lpcProfile !== "AUTO"
         ? item.lpcProfile
         : "NONE";
-  return { profile, color: variant?.lpcColor ?? item.lpcColor ?? "gray" };
+  const materials = {
+    ...item.lpcMaterialColors,
+    ...Object.fromEntries(
+      Object.entries(variant?.lpcMaterialColors ?? {}).filter(
+        ([, color]) => color != null,
+      ),
+    ),
+  };
+  const materialColors = Object.fromEntries(
+    Object.entries(materials).filter(([, color]) => color != null),
+  );
+  return {
+    profile,
+    color: variant?.lpcColor ?? item.lpcColor ?? "gray",
+    ...(Object.keys(materialColors).length ? { materialColors } : {}),
+  };
 };
 
 /**
@@ -116,21 +142,21 @@ export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
   put("feet", "sandals", "brown");
   put(
     "head",
-    attributes.has("sharp features")
-      ? "head-sharp"
-      : attributes.has("hard features")
-        ? "head-hard"
-        : attributes.has("soft features")
-          ? "head-soft"
-          : body === "female"
-            ? "head-soft"
-            : "head-hard",
+    Object.entries(faceShapeProfiles).find(([trait]) =>
+      attributes.has(trait.toLowerCase()),
+    )?.[1] ?? (body === "female" ? "head-soft" : "head-hard"),
     skin,
     choices.Eyes.toLowerCase().replace("blonde", "yellow"),
   );
   // Existing accounts can contain contradictory traits. A stable priority makes them reproducible.
   if (!attributes.has("bald"))
-    put("hair", attributes.has("long hair") ? "hair-long" : "hair-short", hair);
+    put(
+      "hair",
+      Object.entries(hairStyleProfiles).find(([trait]) =>
+        attributes.has(trait.toLowerCase()),
+      )?.[1] ?? "hair-short",
+      hair,
+    );
   const beard = attributes.has("long beard")
     ? "beard-long"
     : attributes.has("full beard")
@@ -200,6 +226,7 @@ export const resolveSpriteEquipment = (
       slot,
       profile: visual.profile,
       color: visual.color,
+      ...(visual.materialColors ? { materialColors: visual.materialColors } : {}),
       ...(owned.equipped === "HAND_2" ? { mirror: true } : {}),
     };
   }
@@ -239,6 +266,7 @@ export type SpriteVariant = {
   name?: string;
   lpcProfile?: string | null;
   lpcColor?: LpcColor | null;
+  lpcMaterialColors?: LpcMaterialColors | null;
 };
 /** Minimal content inputs accepted from both lean and full inventory queries. */
 export type SpriteItem = SpriteVariant & {
