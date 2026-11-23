@@ -1,7 +1,8 @@
 import { afterEach, expect, it, vi } from "bun:test";
 import type { DrizzleClient } from "@/server/db";
 import { lpcSeedAssets } from "../../drizzle/data/lpc/seed";
-import { isLocalLpcDatabase, prepareDevLpc } from "../../scripts/dev-lpc";
+import { isLocalDevDatabase } from "../../scripts/dev-database";
+import { prepareDevLpc } from "../../scripts/dev-lpc";
 
 const environment = {
   NODE_ENV: process.env.NODE_ENV,
@@ -44,7 +45,7 @@ it.each([
   ["not a URL", false],
   [undefined, false],
 ] as const)("classifies the development database URL %s", (url, expected) => {
-  expect(isLocalLpcDatabase(url)).toBe(expected);
+  expect(isLocalDevDatabase(url)).toBe(expected);
 });
 
 it("skips a remote database before reading or writing it", async () => {

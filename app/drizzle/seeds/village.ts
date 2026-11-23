@@ -10,6 +10,7 @@ import { village, villageStructure } from "@/drizzle/schema";
 import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import type { DrizzleClient } from "@/server/db";
 import { executeSqlDump } from "./sqlDump";
+import { seedPublishedBuildings } from "./structures";
 
 export const seedVillages = async (client: DrizzleClient) => {
   console.log("\nSyncing villages...");
@@ -42,5 +43,6 @@ export const seedVillages = async (client: DrizzleClient) => {
       maxLevel: 1,
     });
   }
+  await seedPublishedBuildings(client);
   console.log("Done syncing villages!");
 };

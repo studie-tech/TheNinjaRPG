@@ -29,8 +29,12 @@ stops only that worktree's server. Startup installs dependencies and reuses shar
 services without recreating them or deleting `.next`. Before Next starts, preparation
 backfills missing bundled LPC designs on local database proxies, preserving existing
 artwork and using its CDN references. Remote/deployed databases are skipped; schema
-migrations remain explicit. `make dev-doctor` checks LPC readiness without writes and
-shows the database target and broker configuration without exposing credentials.
+migrations remain explicit. Preparation also applies the public production building snapshot
+and existing published art references to canonical settlements, preserving local gameplay
+state and extra QA structures. Missing buildings are added, and `make seed` uses the same
+snapshot. No production connection is needed during startup. `make dev-doctor` checks
+LPC readiness without writes and shows the database target and broker configuration
+without exposing credentials.
 Worktrees still share the database in `app/.env`.
 
 Run `make test` for the Bun suite. The [testing guide](app/tests/README.md) covers

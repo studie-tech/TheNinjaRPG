@@ -2,21 +2,7 @@
 import { lpcSeedAssets } from "../drizzle/data/lpc/seed";
 import type { DrizzleClient } from "../src/server/db";
 import { lpcConfigValidator } from "../src/validators/lpcAsset";
-
-/** Exact loopback and Compose proxy names; a remote database is never backfilled automatically. */
-export const isLocalLpcDatabase = (value: string | undefined) => {
-  try {
-    const url = new URL(value ?? "");
-    return (
-      ["http:", "https:"].includes(url.protocol) &&
-      ["localhost", "127.0.0.1", "[::1]", "planetscale", "tnr_planetscale"].includes(
-        url.hostname,
-      )
-    );
-  } catch {
-    return false;
-  }
-};
+import { isLocalDevDatabase } from "./dev-database";
 
 /** Read catalog readiness, optionally backfilling missing designs in local development. */
 export const prepareDevLpc = async ({
@@ -42,7 +28,7 @@ export const prepareDevLpc = async ({
       message: "Configure a valid DATABASE_URL in app/.env.",
     };
   }
-  if (!isLocalLpcDatabase(databaseUrl))
+  if (!isLocalDevDatabase(databaseUrl))
     return {
       status: "skipped",
       message: "DATABASE_URL is not a local development proxy.",
