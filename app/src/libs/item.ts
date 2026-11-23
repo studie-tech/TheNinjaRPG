@@ -1182,3 +1182,17 @@ export const partitionImbuementsForItemTransfer = <T extends ImbuementForTransfe
   }
   return { keep, remove };
 };
+
+/**
+ * Whether these effects let a token unlock the variant: an `unlockitemvariant` effect
+ * without a binding unlocks any variant, a bound one only the variant it names.
+ */
+export const canUnlockVariant = (
+  effects: ZodAllTags[],
+  variantId: string | null | undefined,
+) =>
+  effects.some(
+    (effect) =>
+      effect.type === "unlockitemvariant" &&
+      (!effect.variantId || effect.variantId === variantId),
+  );
