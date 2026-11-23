@@ -169,9 +169,12 @@ html[data-game-layout="experimental"] {
   z-index: 30;
 }
 
-/* Nine equal slots keep the location action centered, including native clients without cookies. */
+/* A wider center slot separates the location action from two tighter shortcut groups. */
 .experimental-mobile-nav[data-travel-controls="true"] {
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(5rem, 1.6fr) repeat(
+      4,
+      minmax(0, 1fr)
+    );
 }
 .experimental-nav-map-controls,
 .experimental-nav-view {
@@ -222,6 +225,7 @@ html[data-game-layout="experimental"] {
 .experimental-mobile-nav [data-nav-center] > a,
 .experimental-mobile-nav [data-nav-center] > button {
   top: -1rem;
+  width: 100%;
 }
 .experimental-mobile-nav [data-nav-center] > a > div,
 .experimental-mobile-nav [data-nav-center] > button > span {
@@ -252,7 +256,7 @@ html[data-game-layout="experimental"] {
 }
 @media (min-width: 768px) {
   .experimental-mobile-nav[data-travel-controls="true"] {
-    grid-template-columns: repeat(9, 4rem);
+    grid-template-columns: repeat(4, 3.75rem) 6rem repeat(4, 3.75rem);
   }
 }
 
