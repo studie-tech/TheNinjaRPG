@@ -26,9 +26,12 @@ make start PORT=3000 # Start development server in the foreground
 For parallel Git worktrees, use `make dev-up` to allocate a port and start or reuse a
 background server. `make dev-status` prints its URL and live log path; `make dev-down`
 stops only that worktree's server. Startup installs dependencies and reuses shared Docker
-services without recreating them or deleting `.next`. `make dev-doctor` shows the database
-target and broker configuration without exposing credentials. Worktrees still share
-the database in `app/.env`.
+services without recreating them or deleting `.next`. Before Next starts, preparation
+backfills missing bundled LPC designs on local database proxies, preserving existing
+artwork and using its CDN references. Remote/deployed databases are skipped; schema
+migrations remain explicit. `make dev-doctor` checks LPC readiness without writes and
+shows the database target and broker configuration without exposing credentials.
+Worktrees still share the database in `app/.env`.
 
 Run `make test` for the Bun suite. The [testing guide](app/tests/README.md) covers
 feature locations, shared fixtures, focused runs and disposable SQL/Redis setup.
