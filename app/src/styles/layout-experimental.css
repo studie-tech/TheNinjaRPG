@@ -381,7 +381,6 @@ html[data-game-layout="experimental"] {
 .player-status-shortcuts {
   display: grid;
   grid-auto-flow: column;
-  container-type: inline-size;
   grid-template-rows: repeat(2, 20px);
   grid-auto-columns: max-content;
   align-content: safe center;
@@ -442,11 +441,7 @@ html[data-game-layout="experimental"] {
 }
 @media (min-width: 768px) {
   .experimental-player-status {
-    grid-template-columns: 40px minmax(90px, 1fr) clamp(
-        180px,
-        25vw,
-        340px
-      ) minmax(0, 1fr);
+    grid-template-columns: 40px clamp(90px, 12vw, 160px) minmax(180px, 1fr) minmax(0, max-content);
     gap: 2px 1rem;
   }
   .player-status-avatar {
@@ -540,7 +535,7 @@ html[data-game-layout="experimental"] {
   gap: 3px;
 }
 @container (min-width: 1000px) {
-  .experimental-player-status [data-player-summary-label] {
+  .player-status-identity [data-player-summary-label] {
     display: inline;
     margin-right: 0.35rem;
   }
@@ -572,8 +567,8 @@ html[data-game-layout="experimental"] {
   }
 }
 
-/* Shortcut labels depend on their own space, keeping the resource column centered. */
-@container (min-width: 600px) {
+/* Reveal card descriptions when the header can fit them beside the resource meters. */
+@container (min-width: 1400px) {
   .player-status-shortcuts [data-player-summary-label] {
     display: inline;
     max-width: 24ch;
