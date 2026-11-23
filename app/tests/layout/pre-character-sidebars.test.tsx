@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, within } from "@testing-library/react"
 import * as client from "@/app/_trpc/client";
 import {
   LayoutLeftSidebar,
+  LayoutMainMenu,
   LayoutRightSidebarContent,
 } from "@/components/layout/shared/LayoutSidebars";
 import { DISCORD_INVITE_URL } from "@/drizzle/constants";
@@ -151,4 +152,41 @@ describe("sidebars before character creation", () => {
     expect(view.queryByAltText("DiscordProvider")).toBeNull();
     expect(view.queryByRole("navigation", { name: "Explore Seichi" })).toBeNull();
   });
+});
+
+it("uses distinct Experimental navigation sections and preserves the location tutorial target", () => {
+  const navigate = vi.fn();
+  const view = render(
+    <>
+      <LayoutMainMenu
+        variant="experimental"
+        navbarMenuItems={[{ href: "/news", name: "News" }]}
+        signedInIcons={<button type="button">Account controls</button>}
+        onNavigate={navigate}
+      />
+      <LayoutRightSidebarContent
+        variant="experimental"
+        isSignedInLayout
+        accountState={null}
+        userData={{ userId: "actor", username: "Actor", status: "AWAKE" }}
+        systems={[{ href: "/profile", name: "Profile", id: "tutorial-profile" }]}
+        location={{
+          href: "/village",
+          name: "Village",
+          id: "tutorial-village",
+          icon: <span>Horizon Village</span>,
+        }}
+        isCombatPage={false}
+      />
+    </>,
+  );
+  expect(view.getByText("Community")).toBeTruthy();
+  expect(view.getByText("Account")).toBeTruthy();
+  expect(view.queryByText("Main Menu")).toBeNull();
+  fireEvent.click(view.getByRole("link", { name: "News" }));
+  expect(navigate).toHaveBeenCalledTimes(1);
+  expect(view.getByRole("link", { name: "Profile" }).id).toBe("tutorial-profile");
+  expect(view.getByRole("link", { name: "Horizon Village" }).id).toBe(
+    "tutorial-village",
+  );
 });

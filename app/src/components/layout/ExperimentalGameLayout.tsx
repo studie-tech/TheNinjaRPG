@@ -7,7 +7,7 @@ import {
   PanelLeftOpen,
   PanelRightOpen,
 } from "lucide-react";
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -71,8 +71,6 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
     [controlsTarget, viewTarget],
   );
 
-  const playerMeterFocus = useRef<HTMLElement | null>(null);
-
   const playerMenu = (
     <Sheet
       open={leftSideBarOpen}
@@ -93,20 +91,6 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
         className="experimental-drawer"
         data-experimental-sidebar="player"
         data-reading-surface
-        onOpenAutoFocus={() => {
-          const focused = document.activeElement;
-          playerMeterFocus.current =
-            focused instanceof HTMLElement && focused.closest("[data-compact-meter]")
-              ? focused
-              : null;
-        }}
-        onCloseAutoFocus={(event) => {
-          if (playerMeterFocus.current?.isConnected) {
-            event.preventDefault();
-            playerMeterFocus.current.focus({ preventScroll: true });
-          }
-          playerMeterFocus.current = null;
-        }}
         onInteractOutside={(event) => {
           if (isDesktop) event.preventDefault();
           else keepSheetOpenForClerk(event);
@@ -172,12 +156,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
           Skip to game content
         </a>
         <header className="experimental-header">
-          {userData && (
-            <ExperimentalPlayerStatus
-              hasLocation={!!location}
-              onOpenPlayerMenu={() => onLeftSideBarOpenChange(true)}
-            />
-          )}
+          {userData && <ExperimentalPlayerStatus hasLocation={!!location} />}
         </header>
         <div className="experimental-sidebar-controls">
           <div>{playerMenu}</div>

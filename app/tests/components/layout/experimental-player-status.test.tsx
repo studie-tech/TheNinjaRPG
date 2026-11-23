@@ -1,20 +1,26 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { ExperimentalPlayerStatus } from "@/components/layout/ExperimentalPlayerStatus";
 import { MISSIONS_PER_DAY } from "@/drizzle/constants";
 import * as Avatar from "@/layout/Avatar";
 import * as userContext from "@/utils/UserContext";
 import {
+  flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
 
 let user: Record<string, unknown>;
-const openPlayer = vi.fn();
 beforeEach(() => {
   installBrowserGlobals();
-  openPlayer.mockClear();
   user = {
     userId: "hud-player",
     username: "Shinobi",
@@ -59,31 +65,50 @@ beforeEach(() => {
     raids: { getUserRaidBuffs: { useQuery: () => ({ data: undefined }) } },
   });
 });
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+    await flushRadixFocus();
+  });
   vi.restoreAllMocks();
   restoreBrowserGlobals();
 });
 
-it("shows five live meters and opens the detailed player menu from each", () => {
-  const view = render(
-    <ExperimentalPlayerStatus hasLocation onOpenPlayerMenu={openPlayer} />,
-  );
-  for (const name of ["HP: 80 / 100", "CP: 60 / 100", "SP: 40 / 100", "EP: 20 / 100"]) {
-    fireEvent.click(view.getByRole("button", { name }));
-  }
-  fireEvent.click(view.getByRole("button", { name: /^XP:/ }));
-  expect(openPlayer).toHaveBeenCalledTimes(5);
+it("keeps five live HUD meters while profile pools update", () => {
+  const view = render(<ExperimentalPlayerStatus hasLocation />);
   expect(view.getAllByRole("button", { name: /^(HP|CP|SP|EP|XP):/ })).toHaveLength(5);
   user = { ...user, curHealth: 35, maxHealth: 90 };
-  view.rerender(<ExperimentalPlayerStatus hasLocation onOpenPlayerMenu={openPlayer} />);
+  view.rerender(<ExperimentalPlayerStatus hasLocation />);
   expect(view.getByRole("button", { name: "HP: 35 / 90" })).toBeTruthy();
 });
 
+it("opens full character readings from each meter and returns keyboard focus on close", async () => {
+  const view = render(<ExperimentalPlayerStatus hasLocation />);
+  const meters = view.getAllByRole("button", { name: /^(HP|CP|SP|EP|XP):/ });
+  for (const meter of meters) {
+    await act(async () => {
+      meter.focus();
+      await flushRadixFocus();
+    });
+    fireEvent.click(meter);
+    const details = view.getByRole("dialog", { name: "Character details" });
+    expect(within(details).getByText("HP (80 / 100)")).toBeTruthy();
+    expect(within(details).getByText("EP (20 / 100)")).toBeTruthy();
+    await act(async () => flushRadixFocus());
+    expect(document.activeElement).toBe(
+      within(details).getByRole("heading", { name: "Character details" }),
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    await act(async () => flushRadixFocus());
+    await waitFor(() =>
+      expect(view.queryByRole("dialog", { name: "Character details" })).toBeNull(),
+    );
+    expect(document.activeElement).toBe(meter);
+  }
+});
+
 it("keeps profile, status, village, balances and daily destinations accessible", () => {
-  const view = render(
-    <ExperimentalPlayerStatus hasLocation onOpenPlayerMenu={openPlayer} />,
-  );
+  const view = render(<ExperimentalPlayerStatus hasLocation />);
   expect(
     view.getByRole("link", { name: "Shinobi's profile" }).getAttribute("href"),
   ).toBe("/profile");
@@ -105,9 +130,7 @@ it("keeps profile, status, village, balances and daily destinations accessible",
     view.getByRole("link", { name: "Reputation points: 7" }).getAttribute("href"),
   ).toBe("/points");
   user = { ...user, status: "ASLEEP", dailyMissions: MISSIONS_PER_DAY };
-  view.rerender(
-    <ExperimentalPlayerStatus hasLocation={false} onOpenPlayerMenu={openPlayer} />,
-  );
+  view.rerender(<ExperimentalPlayerStatus hasLocation={false} />);
   expect(view.getByRole("link", { name: "ASLEEP" }).getAttribute("href")).toBe("/home");
   expect(
     view.getByRole("link", { name: "Money on hand: 1,200" }).getAttribute("href"),
@@ -117,9 +140,7 @@ it("keeps profile, status, village, balances and daily destinations accessible",
 
 it("shortens HUD balances while retaining their exact accessible values", () => {
   user = { ...user, money: 1_234_567, reputationPoints: 100_000 };
-  const view = render(
-    <ExperimentalPlayerStatus hasLocation onOpenPlayerMenu={openPlayer} />,
-  );
+  const view = render(<ExperimentalPlayerStatus hasLocation />);
   expect(
     view.getByRole("link", { name: "Money on hand: 1,234,567" }).textContent,
   ).toContain("1.2M");

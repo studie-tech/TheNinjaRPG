@@ -297,30 +297,6 @@ describe("responsive experimental menus", () => {
     },
   );
 
-  it("returns keyboard focus to the resource meter that opened player details", async () => {
-    vi.spyOn(playerStatus, "ExperimentalPlayerStatus").mockImplementation(
-      ({ onOpenPlayerMenu }) => (
-        <div data-compact-meter>
-          <button type="button" onClick={onOpenPlayerMenu}>
-            HP details
-          </button>
-        </div>
-      ),
-    );
-    const input = props();
-    const view = render(<ExperimentalGameLayout {...input} />);
-    const meter = view.getByRole("button", { name: "HP details" });
-    meter.focus();
-    fireEvent.click(meter);
-    expect(input.onLeftSideBarOpenChange).toHaveBeenCalledWith(true);
-    view.rerender(<ExperimentalGameLayout {...input} leftSideBarOpen />);
-    await act(async () => flushRadixFocus());
-    expect(view.getByRole("dialog", { name: "Player menu" })).toBeTruthy();
-    view.rerender(<ExperimentalGameLayout {...input} leftSideBarOpen={false} />);
-    await act(async () => flushRadixFocus());
-    expect(document.activeElement).toBe(meter);
-  });
-
   it("uses mobile corner menus and the shared configured bottom navigation", () => {
     const input = props();
     input.mobileNavConfig = { left: ["bank"], right: ["itemshop", "items", "tavern"] };

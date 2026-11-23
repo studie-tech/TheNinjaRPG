@@ -68,7 +68,8 @@ import { userBattleAtom, useUserDataSelector } from "@/utils/UserContext";
  * Profile sidebar. Each section selects only the profile fields it displays, so a profile
  * write re-renders the sections showing a changed value.
  */
-const MenuBoxProfile: React.FC<{ showAvatar?: boolean }> = ({ showAvatar = true }) => {
+const MenuBoxProfile: React.FC<MenuBoxProfileProps> = ({ presentation = "full" }) => {
+  const isSupplemental = presentation === "supplemental";
   const { data: identity } = useUserDataSelector(selectIdentity);
   const { location } = useGameMenu();
   const hasLocation = !!location;
@@ -76,14 +77,8 @@ const MenuBoxProfile: React.FC<{ showAvatar?: boolean }> = ({ showAvatar = true 
   return (
     <>
       <div className="flex-col items-center justify-center">
-        <div
-          className={
-            showAvatar
-              ? "grid grid-cols-2 items-center justify-center md:grid-cols-1"
-              : ""
-          }
-        >
-          {showAvatar && (
+        {!isSupplemental && (
+          <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
             <Link href="/profile">
               <AvatarImage
                 href={identity?.avatar}
@@ -94,32 +89,37 @@ const MenuBoxProfile: React.FC<{ showAvatar?: boolean }> = ({ showAvatar = true 
                 priority
               />
             </Link>
-          )}
 
-          <div className={showAvatar ? "pt-5" : ""}>
-            <ProfilePools />
-            <ProfileLevel />
+            <div className="pt-5">
+              <ProfilePools />
+              <ProfileLevel />
+            </div>
           </div>
-        </div>
+        )}
+        {isSupplemental && <ProfileLevel showProgress={false} />}
 
-        <div className="mt-4">
+        <div className={isSupplemental ? "" : "mt-4"}>
           <hr />
-          <ProfileStanding hasLocation={hasLocation} />
+          <ProfileStanding hasLocation={hasLocation} showIdentity={!isSupplemental} />
           <p suppressHydrationWarning>
             <b>Time: </b> <GameClock />
           </p>
         </div>
         <ProfileBattleEffects />
-        <hr className="my-2" />
-        <div className="flex flex-col gap-1">
-          <ProfileMoney hasLocation={hasLocation} />
-          <ProfileTimers />
-          <ProfileDailyActivities />
-          <ProfileReputation />
-        </div>
+        {!isSupplemental && (
+          <>
+            <hr className="my-2" />
+            <div className="flex flex-col gap-1">
+              <ProfileMoney hasLocation={hasLocation} />
+              <ProfileTimers />
+              <ProfileDailyActivities />
+              <ProfileReputation />
+            </div>
+          </>
+        )}
       </div>
       <hr className="my-2" />
-      <div className="flex justify-center px-2 pt-2 align-center">
+      <div className="flex justify-center px-2 pt-2 align-center" data-profile-social>
         {SOCIAL_LINKS.map((social) => {
           return (
             <a
@@ -212,10 +212,11 @@ export const ProfilePools: React.FC<{ compact?: boolean; onInspect?: () => void 
 };
 
 /** Experience toward the next level, the level-up action or Elite Jonin milestones. */
-export const ProfileLevel: React.FC<{ compact?: boolean; onInspect?: () => void }> = ({
-  compact = false,
-  onInspect,
-}) => {
+export const ProfileLevel: React.FC<{
+  compact?: boolean;
+  onInspect?: () => void;
+  showProgress?: boolean;
+}> = ({ compact = false, onInspect, showProgress = true }) => {
   const { data: userData } = useUserDataSelector(selectLevel);
   if (!compact && userData?.rank === "ELITE JONIN")
     return (
@@ -227,25 +228,27 @@ export const ProfileLevel: React.FC<{ compact?: boolean; onInspect?: () => void 
   if (!compact && userData?.canLevelUp) return <LevelUpBtn />;
   return (
     <>
-      <StatusBar
-        title="XP"
-        resourceName="Experience"
-        compact={compact}
-        onInspect={onInspect}
-        tooltip={
-          userData?.canLevelUp
-            ? "Ready to level up in your player menu"
-            : userData?.rank === "ELITE JONIN"
-              ? "Elite Jonin milestones are available at the Academy"
-              : "Experience required for next level"
-        }
-        color="bg-yellow-500"
-        showText={true}
-        regen={0}
-        status={userData?.status}
-        current={userData?.earnedExperience ?? 0}
-        total={userData?.requiredExperience}
-      />
+      {(showProgress || compact) && (
+        <StatusBar
+          title="XP"
+          resourceName="Experience"
+          compact={compact}
+          onInspect={onInspect}
+          tooltip={
+            userData?.canLevelUp
+              ? "Ready to level up in your player menu"
+              : userData?.rank === "ELITE JONIN"
+                ? "Elite Jonin milestones are available at the Academy"
+                : "Experience required for next level"
+          }
+          color="bg-yellow-500"
+          showText={true}
+          regen={0}
+          status={userData?.status}
+          current={userData?.earnedExperience ?? 0}
+          total={userData?.requiredExperience}
+        />
+      )}
       {!compact && userData && userData.unassignedExperience > 0 && (
         <Link
           href="/profile/experience"
@@ -260,26 +263,33 @@ export const ProfileLevel: React.FC<{ compact?: boolean; onInspect?: () => void 
 };
 
 /** Status, village and PvP bracket. */
-const ProfileStanding: React.FC<{ hasLocation: boolean }> = ({ hasLocation }) => {
+const ProfileStanding: React.FC<{ hasLocation: boolean; showIdentity?: boolean }> = ({
+  hasLocation,
+  showIdentity = true,
+}) => {
   const { data: userData } = useUserDataSelector(selectStanding);
   return (
     <>
-      <p className="mt-2 flex flex-row">
-        <b>Status: </b>{" "}
-        <span className="ml-1">
-          <StatusLink
-            status={userData?.status ?? "UNKNOWN"}
-            hasLocation={hasLocation}
-          />
-        </span>
-      </p>
-      {userData?.villageName && (
-        <p className="flex flex-row">
-          <b>Village: </b>{" "}
-          <Link href="/village" className="ml-1 hover:text-orange-500">
-            {userData.villageName}
-          </Link>
-        </p>
+      {showIdentity && (
+        <>
+          <p className="mt-2 flex flex-row">
+            <b>Status: </b>{" "}
+            <span className="ml-1">
+              <StatusLink
+                status={userData?.status ?? "UNKNOWN"}
+                hasLocation={hasLocation}
+              />
+            </span>
+          </p>
+          {userData?.villageName && (
+            <p className="flex flex-row">
+              <b>Village: </b>{" "}
+              <Link href="/village" className="ml-1 hover:text-orange-500">
+                {userData.villageName}
+              </Link>
+            </p>
+          )}
+        </>
       )}
       {userData && (
         <TooltipProvider delayDuration={50}>
@@ -911,3 +921,8 @@ const compactNumberFormat = new Intl.NumberFormat("en", {
 });
 
 type ProfileUser = NonNullable<UserWithRelations>;
+
+export interface MenuBoxProfileProps {
+  /** Supplemental sidebars show only details that the persistent character HUD omits. */
+  presentation?: "full" | "supplemental";
+}
