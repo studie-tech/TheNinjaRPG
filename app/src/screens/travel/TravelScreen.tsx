@@ -10,6 +10,7 @@ import { TravelView } from "@/screens/travel/TravelView";
 import { useAwake, usePublicPathname } from "@/utils/routing";
 import { travelLocationSchema } from "@/validators/travel";
 
+/** Host the travel session in a route or retained map viewport with a loading boundary. */
 export function TravelScreen({
   immersive = false,
   isInteractive = true,
