@@ -42,6 +42,8 @@ interface MapProps {
   showOwnership?: boolean;
   /** Slowly spin the globe while the user is idle (default on) */
   autoRotate?: boolean;
+  /** Freeze retained maps while another screen owns interaction. Defaults to active. */
+  isActive?: boolean;
   actionExplanation?: string;
   focusSector?: number | null;
   /** Sector of a trip awaiting confirmation; the route arc keeps pointing at it. */
@@ -144,7 +146,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   useLayoutEffect(() => {
     current.current = { state, props };
   });
-  const { scene, error } = useGameScene(
+  const { scene, error, isReady } = useGameScene(
     "globe",
     mountRef,
     async (mount, signal, onError) => {
@@ -164,6 +166,9 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   useEffect(() => {
     scene.current?.updateState(state);
   }, [state]);
+  useEffect(() => {
+    scene.current?.setPaused(props.isActive === false);
+  }, [props.isActive, isReady]);
 
   return (
     // The overlay labels anchor to this wrapper (the map itself), so they sit

@@ -2526,6 +2526,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     mountRef.current ??= document.createElement("div");
     slot.appendChild(mountRef.current);
   }, []);
+  useEffect(() => {
+    travel.scene.current?.setPaused(!props.isActive);
+  }, [props.isActive, travel.isReady]);
+
   // The expanded layout fills the viewport's height, which a same-width move does not report.
   useEffect(() => {
     if (travel.isReady) travel.scene.current?.fit();

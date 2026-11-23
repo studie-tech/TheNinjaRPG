@@ -4,6 +4,7 @@ import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import { destroyParkedRenderer } from "@/libs/rendering/rendererPool";
 import { sessionRenderQuality } from "@/libs/rendering/renderQuality";
+import type { GameFrame } from "@/libs/rendering/runtime";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { farmPlotAt, farmPlotPosition } from "@/libs/rendering/scenes/farmLayout";
 import type { RendererSurface } from "@/libs/rendering/telemetry";
@@ -94,19 +95,27 @@ describe("renderer context loss", () => {
       resolution = 1,
       backgroundAlpha = 0,
       beforeInit,
+      height = () => 100,
     }: {
       resolution?: number;
       backgroundAlpha?: number;
       beforeInit?: () => Promise<void>;
+      height?: () => number;
     } = {},
   ) => {
+    let notifyResize = () => {};
     class NoopObserver {
       observe() {}
       disconnect() {}
     }
     Object.assign(globalThis, {
       IntersectionObserver: NoopObserver,
-      ResizeObserver: NoopObserver,
+      ResizeObserver: class extends NoopObserver {
+        constructor(callback: () => void) {
+          super();
+          notifyResize = callback;
+        }
+      },
       requestAnimationFrame: (callback: FrameRequestCallback) => {
         frame = callback;
         return 1;
@@ -153,7 +162,7 @@ describe("renderer context loss", () => {
         surface,
         mount,
         signal: new window.AbortController().signal,
-        height: () => 100,
+        height,
         backgroundAlpha,
         onError,
       });
@@ -161,7 +170,17 @@ describe("renderer context loss", () => {
       return { game, mount };
     };
     const { game, mount } = await create();
-    return { game, mount, canvas, render, destroy, init, resize, create };
+    return {
+      game,
+      mount,
+      canvas,
+      render,
+      destroy,
+      init,
+      resize,
+      create,
+      notifyResize: () => notifyResize(),
+    };
   };
   const runFrame = (now: number) => {
     const callback = frame;
@@ -431,6 +450,40 @@ describe("renderer context loss", () => {
     runFrame(5200);
     expect(redrawing).toHaveBeenCalledTimes(1);
     expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains a paused scene without drawing invalidations and resumes its same canvas", async () => {
+    let height = 100;
+    const { game, canvas, render, init, mount, resize, notifyResize } = await start(
+      vi.fn(),
+      { height: () => height },
+    );
+    Object.defineProperty(mount, "clientWidth", { value: 100 });
+    render.mockImplementation(() => {});
+    const update = vi.fn((_frame: GameFrame) => game.setAnimating(true));
+    game.setUpdate(update);
+    runFrame(5000);
+    expect(render).toHaveBeenCalledTimes(1);
+
+    game.setPaused(true);
+    game.invalidate();
+    height = 240;
+    notifyResize();
+    runFrame(5100);
+    expect(frame).toBeNull();
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(resize).not.toHaveBeenCalled();
+    await game.afterFrame();
+
+    game.setPaused(false);
+    runFrame(5200);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(update.mock.calls[1]?.[0]).toMatchObject({ delta: 0 });
+    expect(resize).toHaveBeenCalledWith(100, 240, 1);
+    expect(game.canvas).toBe(canvas);
+    expect(mount.contains(canvas)).toBe(true);
+    expect(init).toHaveBeenCalledTimes(1);
   });
 
   it("gives a reused renderer the density its surface settled on", async () => {

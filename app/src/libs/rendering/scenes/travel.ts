@@ -1239,6 +1239,7 @@ export const createTravelScene = async (options: {
     };
     return {
       dispose: game.dispose,
+      setPaused: game.setPaused,
       sectors,
       fit: game.fit,
       updateWindow: requestWindowUpdate,

@@ -188,6 +188,7 @@ export function TravelView({
           userLocation={true}
           showOwnership={showOwnership && !userData?.tutorialOn}
           autoRotate={false}
+          isActive={!!showGlobal && isInteractive}
           focusSector={globeFocusSector}
           actionExplanation={
             isTraveling ? "You are traveling to your destination" : undefined
@@ -211,6 +212,8 @@ export function TravelView({
     targetSector,
     userData?.tutorialOn,
     initiateTravelToSector,
+    showGlobal,
+    isInteractive,
   ]);
 
   // Retain the sector scene while the view switches map tabs.

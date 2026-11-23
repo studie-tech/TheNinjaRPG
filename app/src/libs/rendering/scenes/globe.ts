@@ -632,6 +632,7 @@ export const createGlobeScene = async (options: {
     });
     return {
       dispose: game.dispose,
+      setPaused: game.setPaused,
       updateState,
       zoom: (factor: number) => {
         controls.zoom(factor);
