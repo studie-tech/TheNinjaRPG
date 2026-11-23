@@ -8,7 +8,7 @@ import type { JutsuLevelTransfer, UserJutsuFilteringSchema } from "@/validators/
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { UserCachePatch, UserDeltaResponse } from "@/validators/userCache";
 
-/** Project confirmed training charges, generated queue rows and public quest progress from the loaded actor. */
+/** Project confirmed training charges, queue rows, public quest progress and the supplied equipped jutsu snapshot. */
 export const getStartedJutsuUserUpdate = ({
   user,
   cost,
@@ -17,7 +17,6 @@ export const getStartedJutsuUserUpdate = ({
   requiresProgressionRefresh,
   publishedAchievementIds,
   equippedJutsus,
-  learnedJutsu,
 }: {
   user: Parameters<typeof getSavedTrainingQueueUserUpdate>[0]["user"];
   cost: number;
@@ -26,7 +25,6 @@ export const getStartedJutsuUserUpdate = ({
   requiresProgressionRefresh: boolean;
   publishedAchievementIds: readonly string[];
   equippedJutsus?: { jutsuId: string }[];
-  learnedJutsu?: { jutsuId: string; equipped: boolean };
 }) => {
   const projection: Pick<UserDeltaResponse, "userPatch" | "achievementProgress"> =
     getSavedTrainingQueueUserUpdate({
@@ -42,12 +40,7 @@ export const getStartedJutsuUserUpdate = ({
           ...projection.userPatch,
           ...(equippedJutsus
             ? {
-                jutsus: [
-                  ...equippedJutsus.map(({ jutsuId }) => ({ jutsuId })),
-                  ...(learnedJutsu?.equipped
-                    ? [{ jutsuId: learnedJutsu.jutsuId }]
-                    : []),
-                ],
+                jutsus: equippedJutsus.map(({ jutsuId }) => ({ jutsuId })),
               }
             : {}),
         }

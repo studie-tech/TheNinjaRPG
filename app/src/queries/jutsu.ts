@@ -1601,6 +1601,16 @@ export const updateUserJutsuForTryEquipUserJutsuAtomically = (
       ),
     );
 
+/** Load the complete equipped jutsu IDs after equipment writes have settled. */
+export const selectUserEquippedJutsus = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+) =>
+  client
+    .select({ jutsuId: userJutsu.jutsuId })
+    .from(userJutsu)
+    .where(and(eq(userJutsu.userId, userId), eq(userJutsu.equipped, true)));
+
 /** Build the equipped-state lookup for a jutsu owned by one user. */
 export const selectUserJutsuEquipped = (
   client: Pick<DrizzleClient, "select">,

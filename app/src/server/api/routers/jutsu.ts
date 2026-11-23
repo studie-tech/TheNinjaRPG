@@ -186,6 +186,7 @@ import {
   selectJutsuReskinForGetJutsuRelations,
   selectUserDataForFetchUserJutsus,
   selectUserDataForUpdateReskin,
+  selectUserEquippedJutsus,
   selectUserJutsuEquipped,
   selectUserJutsuForFetchOwned,
   selectUserJutsuForFetchUserJutsus,
@@ -1546,7 +1547,6 @@ export const jutsuRouter = createTRPCRouter({
         questDataFull = trackers;
       }
       const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);
-      let learnedJutsuEquipped = false;
 
       if (userjutsuObj) {
         // The level and debit commit together; the returned level must describe this
@@ -1659,7 +1659,7 @@ export const jutsuRouter = createTRPCRouter({
           );
         }
 
-        const [, keptEquipped] = await Promise.all([
+        await Promise.all([
           updateUserQuestData(ctx.drizzle, questDataForDb, ctx.userId),
           canAutoEquip
             ? rollbackEquipIfOverCap({
@@ -1672,16 +1672,17 @@ export const jutsuRouter = createTRPCRouter({
               })
             : undefined,
         ]);
-        learnedJutsuEquipped = keptEquipped === true;
       }
 
       // Queue the further levels; the started one stands even if this fails.
-      const queued = await enqueueJutsuLevels(
-        ctx.drizzle,
-        user,
-        input.jutsuId,
-        followUps,
-      );
+      const [queued, confirmedEquippedJutsus] = await Promise.all([
+        enqueueJutsuLevels(ctx.drizzle, user, input.jutsuId, followUps),
+        // A zero-row rollback also means another tab already unequipped the row.
+        // Read the entire set so concurrent loadout changes cannot retain stale IDs.
+        userjutsuObj
+          ? equippedJutsus
+          : selectUserEquippedJutsus(ctx.drizzle, ctx.userId),
+      ]);
       const queuedCost = queued.success ? queued.cost : 0;
       return actionReadinessResponse(
         {
@@ -1693,10 +1694,7 @@ export const jutsuRouter = createTRPCRouter({
             questData: questDataFull,
             requiresProgressionRefresh: data.requiresProgressionRefresh,
             publishedAchievementIds: data.publishedAchievementIds,
-            equippedJutsus,
-            learnedJutsu: !userjutsuObj
-              ? { jutsuId: input.jutsuId, equipped: learnedJutsuEquipped }
-              : undefined,
+            equippedJutsus: confirmedEquippedJutsus,
           }),
           message: queued.success
             ? followUps.length > 0

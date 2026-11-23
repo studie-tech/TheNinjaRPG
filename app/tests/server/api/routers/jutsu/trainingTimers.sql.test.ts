@@ -113,6 +113,64 @@ describeWithDatabase("jutsu training progress timestamps", () => {
   });
 
   it.each([false, true])(
+    "projects cleared equipment when another tab unequips during learning (existing equip=%s)",
+    async (hasExistingEquip) => {
+      const db = await getTestDatabase();
+      if (hasExistingEquip) {
+        await insertJutsus([{ id: "existing-jutsu", name: "Existing Jutsu", ...info }]);
+        await db.insert(userJutsu).values({
+          id: "existing-owned",
+          userId,
+          jutsuId: "existing-jutsu",
+          level: 1,
+          equipped: true,
+        });
+      }
+      await db
+        .insert(jutsuLoadout)
+        .values({ id: "training-loadout", userId, jutsuIds: [] });
+      await db
+        .update(userData)
+        .set({ jutsuLoadout: "training-loadout", tutorialOn: false })
+        .where(eq(userData.userId, userId));
+      const profile = await callerFor(profileRouter, userId);
+      await profile.getUser();
+      let intervened = false;
+      const learning = beforeStatements(
+        db,
+        userJutsu,
+        [
+          async () => {
+            const inserted = await db.query.userJutsu.findFirst({
+              where: eq(userJutsu.jutsuId, jutsuId),
+            });
+            expect(inserted?.equipped).toBe(true);
+            const unequipped = await (
+              await callerFor(jutsuRouter, userId)
+            ).unequipAll();
+            expect(unequipped.success, unequipped.message).toBe(true);
+            intervened = true;
+          },
+        ],
+        { when: (values) => values.equipped === false },
+      );
+      const started = await callerForDatabase(
+        jutsuRouter,
+        userId,
+        learning,
+      ).startTraining({
+        jutsuId,
+      });
+      expect(intervened).toBe(true);
+      expect(started.success, started.message).toBe(true);
+      const saved = await profile.getUser();
+      expect(saved.userData?.jutsus).toEqual([]);
+      expect(saved.notifications).toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
+      expect(started.userPatch?.jutsus).toEqual(saved.userData?.jutsus);
+    },
+  );
+
+  it.each([false, true])(
     "retains the direct start across bonus changes and equip (initial boost=%s)",
     async (boosted) => {
       const db = await getTestDatabase();
