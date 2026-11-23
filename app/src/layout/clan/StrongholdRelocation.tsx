@@ -66,7 +66,7 @@ export const StrongholdRelocation = ({
               highlights={villages}
               showOwnership
               autoRotate={false}
-              focusSector={selectedSector ?? homeSector}
+              focusSector={destination ? selectedSector : homeSector}
               actionExplanation="Click to select a relocation sector"
               onTileClick={(sector) => {
                 if (!relocation.isPending) setSelectedSector(sector);
