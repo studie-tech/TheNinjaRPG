@@ -29,6 +29,11 @@ export const StrongholdRelocation = ({
   const error =
     relocation.error?.message ??
     (relocation.data?.success === false ? relocation.data.message : null);
+  const handleSectorSelect = (sector: number) => {
+    if (relocation.isPending) return;
+    relocation.reset();
+    setSelectedSector(sector);
+  };
   return (
     <Modal
       id="relocate-stronghold"
@@ -68,9 +73,7 @@ export const StrongholdRelocation = ({
               autoRotate={false}
               focusSector={destination ? selectedSector : homeSector}
               actionExplanation="Click to select a relocation sector"
-              onTileClick={(sector) => {
-                if (!relocation.isPending) setSelectedSector(sector);
-              }}
+              onTileClick={handleSectorSelect}
             />
           </div>
         ) : mapError ? (
@@ -88,7 +91,7 @@ export const StrongholdRelocation = ({
           step={1}
           value={selectedSector ?? ""}
           disabled={relocation.isPending}
-          onValueChange={setSelectedSector}
+          onValueChange={handleSectorSelect}
         />
         {destination && (
           <p>
