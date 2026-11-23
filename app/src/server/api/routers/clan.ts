@@ -50,6 +50,7 @@ import { isElderCandidateWithoutCutoff } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
 import { hasEnergyQueue } from "@/libs/queue";
 import { hasRequiredRank } from "@/libs/rank";
+import { isVillageStructurePlacementAllowed } from "@/libs/sector-map/village-walls";
 import { findHistoricalAvatarByImage } from "@/queries/avatar";
 import {
   deleteBattleQueueMemberById,
@@ -92,6 +93,8 @@ import {
   listClanForGetAllNames,
   listClanForNominateElder,
   listClanForSearchClans,
+  listStructuresForStrongholdRelocation,
+  relocateStronghold,
   setClanVillageKage,
   updateClanForClearLeadership,
   updateClanForConvertPointsToRyo,
@@ -143,7 +146,10 @@ import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlE
 import { fetchActionUser } from "@/server/utils/profileDefinitions";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { membershipUpdate } from "@/server/utils/push/messages";
-import { isSectorAvailableForHideout } from "@/server/utils/sectorMap";
+import {
+  fetchPublishedSectorMaps,
+  isSectorAvailableForHideout,
+} from "@/server/utils/sectorMap";
 import { canEditClans } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromDate } from "@/utils/time";
@@ -235,6 +241,70 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: "Hideout purchased successfully",
+      };
+    }),
+  relocateStronghold: protectedProcedure
+    .meta({ mcp: { description: "Use a Stronghold's one-time free relocation" } })
+    .input(z.object({ clanId: z.string(), sector: z.int().nonnegative() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [user, faction, maps, structures] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchClan(ctx.drizzle, input.clanId),
+        fetchPublishedSectorMaps(ctx.drizzle, [input.sector]),
+        listStructuresForStrongholdRelocation(ctx.drizzle, input.clanId),
+      ]);
+      if (
+        !faction ||
+        !user.isOutlaw ||
+        user.clanId !== faction.id ||
+        faction.leaderId !== user.userId
+      )
+        return errorResponse("Only the faction leader can relocate its Stronghold");
+      const home = faction.village;
+      if (home.type !== "STRONGHOLD")
+        return errorResponse("Only Strongholds can relocate");
+      if (home.strongholdRelocatedAt)
+        return errorResponse("This Stronghold has already used its relocation");
+      if (input.sector === home.sector || !isSectorAvailableForHideout(input.sector))
+        return errorResponse("Choose a different, non-reserved sector on the globe");
+      const destination = maps.get(input.sector);
+      if (!destination)
+        return errorResponse(
+          "This sector has no published map. Choose another location",
+        );
+      if (
+        structures.some(
+          (structure) =>
+            structure.hasPage !== 0 &&
+            !isVillageStructurePlacementAllowed(destination, {
+              x: structure.longitude,
+              y: structure.latitude,
+            }),
+        )
+      )
+        return errorResponse(
+          "The Stronghold's buildings do not fit in this sector. Choose another location",
+        );
+      try {
+        // The joined write moves the home shrine and settlement under the same one-use,
+        // membership, destination and war guards; unique sector keys arbitrate competing moves.
+        const result = await retryOnDeadlock(() =>
+          relocateStronghold(ctx.drizzle, input, ctx.userId, home, new Date()),
+        );
+        if (!result.rowsAffected)
+          return errorResponse(
+            "Relocation unavailable: choose an unclaimed sector and make sure your faction is not at war",
+          );
+      } catch (error) {
+        if (!isMysqlDuplicateKeyError(error)) throw error;
+        return errorResponse(
+          "This sector has just been claimed. Choose another location",
+        );
+      }
+      return {
+        success: true,
+        message: `Stronghold relocated to sector ${input.sector}`,
       };
     }),
   upgradeHideoutToStronghold: protectedProcedure

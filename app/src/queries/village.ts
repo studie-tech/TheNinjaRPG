@@ -370,6 +370,7 @@ export const listVillageForGetSectorOwnerships = (
       name: true,
       mapName: true,
       hexColor: true,
+      sector: true,
     },
   });
 

@@ -1,0 +1,1 @@
+ALTER TABLE `Village` ADD `strongholdRelocatedAt` datetime(3);

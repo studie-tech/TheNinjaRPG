@@ -2769,7 +2769,6 @@ export const VILLAGE_WAR_TYPES: (typeof WAR_TYPES)[number][] = [
   "VILLAGE_WAR",
   "WAR_RAID",
 ];
-export const SHRINE_MAX_PER_VILLAGE = 4;
 export const SHRINE_BOOST_COST = 15_000;
 export const SHRINE_BOOST_BASE_PERC = 10; // Base shrine boost with 1+ shrines (10%)
 export const SHRINE_BOOST_PER_SHRINE_PERC = 3.33; // Additional boost per shrine (~3.33% per additional shrine for 10-20% range)

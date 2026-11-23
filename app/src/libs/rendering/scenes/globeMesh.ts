@@ -51,12 +51,15 @@ export const createGlobeMesh = (
 attribute vec3 aPosition;
 attribute vec3 aColor;
 attribute float aWater;
+attribute vec4 aTint;
+varying vec4 vTint;
 varying vec3 vColor;
 varying vec3 vNormal;
 varying vec3 vView;
 varying float vWater;
 ${globeCameraShader}
 void main() {
+  vTint = aTint;
   vColor = aColor;
   vWater = aWater;
   vNormal = aPosition;
@@ -72,6 +75,7 @@ varying vec3 vColor;
 varying vec3 vNormal;
 varying vec3 vView;
 varying float vWater;
+varying vec4 vTint;
 uniform float uPainted;
 ${displayColorShader}
 ${globeLightShader}
@@ -90,6 +94,9 @@ void main() {
     water = mix(water, painted.a, uPainted);
     normal = normalize(mix(normal, reliefNormal(normal, uv, climate.y), uPainted * land));
   }
+  // Ownership is composited after the painted climate, including oceans and snow.
+  color = mix(color, vTint.rgb, vTint.a);
+  water *= 1.0 - vTint.a;
   float shade = clamp((uShade - 0.45) / 0.55, 0.0, 1.0);
   if (uClouds.x > 0.0 && shade > 0.0)
     color *= 1.0 - cloudCover(normalize(vNormal + uLight * 0.02)) * 0.3 * shade;
@@ -113,12 +120,14 @@ void main() {
     colors: Float32Array,
     water: Float32Array,
     indices: Uint16Array,
+    tints = new Float32Array((positions.length / 3) * 4),
   ) => {
     const geometry = new Geometry({
       attributes: {
         aPosition: { buffer: positions, format: "float32x3", stride: 12 },
         aColor: { buffer: colors, format: "float32x3", stride: 12 },
         aWater: { buffer: water, format: "float32", stride: 4 },
+        aTint: { buffer: tints, format: "float32x4", stride: 16 },
       },
       indexBuffer: indices,
     });
@@ -142,6 +151,7 @@ void main() {
         data.indices.slice(indexStart, indexEnd),
         (index) => index - chunkStart,
       ),
+      data.tints.slice(chunkStart * 4, chunkEnd * 4),
     );
     chunkStart = chunkEnd;
     indexStart = indexEnd;

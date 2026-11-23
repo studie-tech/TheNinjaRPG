@@ -216,6 +216,7 @@ export const fetchClan = async (client: DrizzleClient, clanId: string) => {
           id: true,
           name: true,
           wasDowngraded: true,
+          strongholdRelocatedAt: true,
           belowMemberMinimumSince: true,
           lastMaintenancePaidAt: true,
           type: true,
@@ -342,6 +343,55 @@ export const insertVillageForPurchaseHideout = (
     allianceSystem: true,
     villageGraphic: IMG_VILLAGE_FACTION,
   });
+
+/** Load building positions for a faction without waiting for its settlement lookup. */
+export const listStructuresForStrongholdRelocation = (
+  client: Pick<DrizzleClient, "select">,
+  clanId: string,
+) =>
+  client
+    .select({
+      longitude: villageStructure.longitude,
+      latitude: villageStructure.latitude,
+      hasPage: villageStructure.hasPage,
+    })
+    .from(villageStructure)
+    .innerJoin(clan, eq(clan.villageId, villageStructure.villageId))
+    .where(eq(clan.id, clanId));
+
+/** Move a stronghold and its home shrine together, consuming the settlement's one relocation. */
+export const relocateStronghold = (
+  client: Pick<DrizzleClient, "execute">,
+  input: { clanId: string; sector: number },
+  actorId: string,
+  home: { id: string; sector: number },
+  relocatedAt: Date,
+) =>
+  client.execute(sql`
+  UPDATE ${village}
+  INNER JOIN ${clan} ON ${clan.villageId} = ${village.id}
+  INNER JOIN ${userData} ON ${userData.userId} = ${actorId}
+  LEFT JOIN ${sector} ON ${sector.sector} = ${home.sector}
+  LEFT JOIN Village AS destination ON destination.sector = ${input.sector}
+  LEFT JOIN Sector AS claimed ON claimed.sector = ${input.sector}
+  LEFT JOIN ${war} ON ${war.status} = 'ACTIVE' AND (
+    ${war.attackerVillageId} = ${home.id} OR ${war.defenderVillageId} = ${home.id}
+    OR ${war.sector} IN (${home.sector}, ${input.sector})
+  )
+  LEFT JOIN (${warAlly} INNER JOIN War AS alliedWar
+    ON alliedWar.id = ${warAlly.warId} AND alliedWar.status = 'ACTIVE')
+    ON ${warAlly.villageId} = ${home.id} AND ${warAlly.endedAt} IS NULL
+  SET ${village.sector} = ${input.sector},
+      ${village.strongholdRelocatedAt} = ${relocatedAt},
+      ${sector.sector} = ${input.sector}
+  WHERE ${village.id} = ${home.id} AND ${village.sector} = ${home.sector}
+    AND ${village.type} = 'STRONGHOLD' AND ${village.strongholdRelocatedAt} IS NULL
+    AND ${clan.id} = ${input.clanId} AND ${clan.leaderId} = ${actorId}
+    AND ${userData.clanId} = ${clan.id} AND ${userData.isOutlaw} = 1
+    AND (${sector.id} IS NULL OR ${sector.villageId} = ${village.id})
+    AND destination.id IS NULL AND claimed.id IS NULL
+    AND ${war.id} IS NULL AND alliedWar.id IS NULL
+`);
 
 /** Execute the database statement for `upgradeHideoutToStronghold`. */
 export const executeResultForUpgradeHideoutToStronghold = (

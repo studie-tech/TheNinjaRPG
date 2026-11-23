@@ -66,6 +66,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ClansOverview } from "@/layout/clan/ClansOverview";
 import { ignoreToastedError } from "@/layout/clan/ignoreToastedError";
+import { StrongholdRelocation } from "@/layout/clan/StrongholdRelocation";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -119,6 +120,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   const [selectedNomineeId, setSelectedNomineeId] = useState<string>(
     clanData.elderNominee?.userId ?? "",
   );
+  const [isRelocationOpen, setIsRelocationOpen] = useState(false);
   const [isColorModalOpen, setIsColorModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
@@ -945,6 +947,26 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               onNominate={() => nominateElder({ clanId, nomineeId: selectedNomineeId })}
             />
           )}
+          {isLeader &&
+            inClan &&
+            village.type === "STRONGHOLD" &&
+            !village.strongholdRelocatedAt && (
+              <>
+                <Button
+                  className="my-2 w-full"
+                  onClick={() => setIsRelocationOpen(true)}
+                >
+                  Relocate Stronghold
+                </Button>
+                {isRelocationOpen && (
+                  <StrongholdRelocation
+                    clanId={clanId}
+                    homeSector={village.sector}
+                    onClose={() => setIsRelocationOpen(false)}
+                  />
+                )}
+              </>
+            )}
           {leaderLike && canCreateStronghold && (
             <>
               <Button

@@ -141,23 +141,17 @@ describe("buildGlobeSurfaceData", () => {
     const shaded = buildGlobeSurfaceData(hexasphere, (sector) =>
       sector === tinted ? { r: 0.5, g: 0.25, b: 0.125 } : null,
     );
-    const plainColors = plain.colors;
-    const shadedColors = shaded.colors;
-    const start = (shaded.vertexRanges[tinted * 2] as number) * 3;
-    const count = (shaded.vertexRanges[tinted * 2 + 1] as number) * 3;
-
-    for (let i = 0; i < count; i += 3) {
-      expect(shadedColors[start + i]).toBeCloseTo(
-        (plainColors[start + i] ?? 0) * 0.5,
-        6,
-      );
-      expect(shadedColors[start + i + 1]).toBeCloseTo(
-        (plainColors[start + i + 1] ?? 0) * 0.25,
-        6,
-      );
+    expect(shaded.colors).toEqual(plain.colors);
+    expect(shaded.water).toEqual(plain.water);
+    const start = (shaded.vertexRanges[tinted * 2] as number) * 4;
+    const count = (shaded.vertexRanges[tinted * 2 + 1] as number) * 4;
+    for (let i = 0; i < count; i += 4) {
+      expect(Array.from(shaded.tints.slice(start + i, start + i + 4))).toEqual([
+        0.5, 0.25, 0.125, 0.75,
+      ]);
     }
-    // Neighbouring sectors keep their terrain colors untouched.
-    const neighbourStart = (shaded.vertexRanges[(tinted + 1) * 2] as number) * 3;
-    expect(shadedColors[neighbourStart]).toBe(plainColors[neighbourStart]);
+    // Neighbouring sectors have no overlay, even after painted terrain loads.
+    const neighbourStart = (shaded.vertexRanges[(tinted + 1) * 2] as number) * 4;
+    expect(shaded.tints[neighbourStart + 3]).toBe(0);
   });
 });

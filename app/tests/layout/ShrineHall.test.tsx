@@ -63,6 +63,19 @@ describe("ShrineHall reserve boost locks", () => {
     }
   });
 
+  it("shows the owned shrine count without a fixed cap", () => {
+    const view = renderShrineHall(
+      Array.from({ length: 13 }, (_, i) => ({
+        id: i + 1,
+        sector: 100 + i,
+        villageId: "reserve-village",
+        shrineLevel: 2,
+      })),
+    );
+    expect(view.getByText("13")).toBeTruthy();
+    expect(view.queryByText("13/4")).toBeNull();
+  });
+
   it("leaves destroyed level 0 shrines out of maintenance", () => {
     const view = renderShrineHall([
       { id: 1, sector: 100, villageId: "reserve-village", shrineLevel: 2 },
