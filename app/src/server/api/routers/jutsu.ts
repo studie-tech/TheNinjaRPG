@@ -186,6 +186,7 @@ import {
   selectJutsuReskinForGetJutsuRelations,
   selectUserDataForFetchUserJutsus,
   selectUserDataForUpdateReskin,
+  selectUserEquippedJutsus,
   selectUserJutsuEquipped,
   selectUserJutsuForFetchOwned,
   selectUserJutsuForFetchUserJutsus,
@@ -628,6 +629,7 @@ export const jutsuRouter = createTRPCRouter({
               id,
               loadoutJutsuIds: loadout.jutsuIds,
               aiProfileId: result.aiProfileId,
+              equippedJutsus: result.jutsus,
             }),
           }
         : result;
@@ -1064,6 +1066,10 @@ export const jutsuRouter = createTRPCRouter({
                 ...getEvolveJutsuUserUpdate({
                   progressionUserPatch: progression.userPatch,
                   activeLoadout,
+                  userJutsus,
+                  previousJutsuId: oldJutsuId,
+                  evolutionJutsuId: input.evolutionJutsuId,
+                  isRestrictedEquipType,
                 }),
               }
             : {}),
@@ -1669,12 +1675,14 @@ export const jutsuRouter = createTRPCRouter({
       }
 
       // Queue the further levels; the started one stands even if this fails.
-      const queued = await enqueueJutsuLevels(
-        ctx.drizzle,
-        user,
-        input.jutsuId,
-        followUps,
-      );
+      const [queued, confirmedEquippedJutsus] = await Promise.all([
+        enqueueJutsuLevels(ctx.drizzle, user, input.jutsuId, followUps),
+        // A zero-row rollback also means another tab already unequipped the row.
+        // Read the entire set so concurrent loadout changes cannot retain stale IDs.
+        userjutsuObj
+          ? equippedJutsus
+          : selectUserEquippedJutsus(ctx.drizzle, ctx.userId),
+      ]);
       const queuedCost = queued.success ? queued.cost : 0;
       return actionReadinessResponse(
         {
@@ -1686,6 +1694,7 @@ export const jutsuRouter = createTRPCRouter({
             questData: questDataFull,
             requiresProgressionRefresh: data.requiresProgressionRefresh,
             publishedAchievementIds: data.publishedAchievementIds,
+            equippedJutsus: confirmedEquippedJutsus,
           }),
           message: queued.success
             ? followUps.length > 0

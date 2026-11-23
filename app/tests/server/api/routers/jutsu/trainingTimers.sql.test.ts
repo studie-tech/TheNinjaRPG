@@ -16,6 +16,7 @@ import {
   village,
 } from "@/drizzle/schema";
 import { calcJutsuTrainTime } from "@/libs/train";
+import { NO_JUTSU_EQUIPPED_NOTIFICATION } from "@/libs/userNotifications";
 import {
   trainOwnedJutsuLevelAtomically,
   updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically,
@@ -86,6 +87,88 @@ describeWithDatabase("jutsu training progress timestamps", () => {
     await insertUserVotes([{ userId }]);
     await insertJutsus([{ id: jutsuId, name: "Timer Jutsu", ...info }]);
   });
+
+  it("removes the empty-equipment warning when learning auto-equips a jutsu", async () => {
+    const db = await getTestDatabase();
+    await db
+      .insert(jutsuLoadout)
+      .values({ id: "training-loadout", userId, jutsuIds: [] });
+    await db
+      .update(userData)
+      .set({ jutsuLoadout: "training-loadout", tutorialOn: false })
+      .where(eq(userData.userId, userId));
+    const profile = await callerFor(profileRouter, userId);
+    expect((await profile.getUser()).notifications).toContainEqual(
+      NO_JUTSU_EQUIPPED_NOTIFICATION,
+    );
+    const started = await (await callerFor(jutsuRouter, userId)).startTraining({
+      jutsuId,
+    });
+    expect(started.success, started.message).toBe(true);
+    expect(started.userPatch?.jutsus).toEqual([{ jutsuId }]);
+    const saved = await profile.getUser();
+    expect(saved.userData?.loadout?.jutsuIds).toEqual([]);
+    expect(saved.userData?.jutsus).toEqual([{ jutsuId }]);
+    expect(saved.notifications).not.toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
+  });
+
+  it.each([false, true])(
+    "projects cleared equipment when another tab unequips during learning (existing equip=%s)",
+    async (hasExistingEquip) => {
+      const db = await getTestDatabase();
+      if (hasExistingEquip) {
+        await insertJutsus([{ id: "existing-jutsu", name: "Existing Jutsu", ...info }]);
+        await db.insert(userJutsu).values({
+          id: "existing-owned",
+          userId,
+          jutsuId: "existing-jutsu",
+          level: 1,
+          equipped: true,
+        });
+      }
+      await db
+        .insert(jutsuLoadout)
+        .values({ id: "training-loadout", userId, jutsuIds: [] });
+      await db
+        .update(userData)
+        .set({ jutsuLoadout: "training-loadout", tutorialOn: false })
+        .where(eq(userData.userId, userId));
+      const profile = await callerFor(profileRouter, userId);
+      await profile.getUser();
+      let intervened = false;
+      const learning = beforeStatements(
+        db,
+        userJutsu,
+        [
+          async () => {
+            const inserted = await db.query.userJutsu.findFirst({
+              where: eq(userJutsu.jutsuId, jutsuId),
+            });
+            expect(inserted?.equipped).toBe(true);
+            const unequipped = await (
+              await callerFor(jutsuRouter, userId)
+            ).unequipAll();
+            expect(unequipped.success, unequipped.message).toBe(true);
+            intervened = true;
+          },
+        ],
+        { when: (values) => values.equipped === false },
+      );
+      const started = await callerForDatabase(
+        jutsuRouter,
+        userId,
+        learning,
+      ).startTraining({
+        jutsuId,
+      });
+      expect(intervened).toBe(true);
+      expect(started.success, started.message).toBe(true);
+      const saved = await profile.getUser();
+      expect(saved.userData?.jutsus).toEqual([]);
+      expect(saved.notifications).toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
+      expect(started.userPatch?.jutsus).toEqual(saved.userData?.jutsus);
+    },
+  );
 
   it.each([false, true])(
     "retains the direct start across bonus changes and equip (initial boost=%s)",

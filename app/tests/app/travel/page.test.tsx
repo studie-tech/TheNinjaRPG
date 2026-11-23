@@ -136,8 +136,9 @@ beforeEach(() => {
     completeTutorialAction: vi.fn(),
   } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(
-    ({ children, topRightContent, topRightItems }) => (
+    ({ children, headerStartContent, topRightContent, topRightItems }) => (
       <div>
+        <div data-header-start>{headerStartContent}</div>
         {topRightContent}
         {topRightItems?.map((item) => (
           <div key={item.key} data-header-item={item.key} data-priority={item.priority}>
@@ -237,28 +238,17 @@ it("updates the Travel destination when the saved automatic-wake preference chan
   ).toBe("/home");
 });
 
-it("keeps the You and Global tabs in the header row while the tutorial runs", () => {
-  const priorities = (): Record<string, number> =>
-    Object.fromEntries(
-      Array.from(document.querySelectorAll<HTMLElement>("[data-header-item]")).map(
-        (element) => [
-          element.dataset.headerItem ?? "",
-          Number(element.dataset.priority),
-        ],
-      ),
-    );
+it("keeps the Sector and Global tabs in the header while the tutorial runs", () => {
+  const tabs = () => document.querySelector("[data-header-start]")?.textContent;
   const playing = render(<TravelPage />);
-  expect(priorities().tabs).toBe(3);
+  expect(tabs()).toContain("Sector");
+  expect(tabs()).toContain("Global");
   playing.unmount();
   actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
   userRef.current = actor;
   render(<TravelPage />);
-  const inTutorial = priorities();
-  const tabs = inTutorial.tabs ?? Number.NaN;
-  expect(Math.min(...Object.values(inTutorial))).toBe(tabs);
-  expect(
-    Object.entries(inTutorial).filter(([, priority]) => priority === tabs),
-  ).toEqual([["tabs", tabs]]);
+  expect(tabs()).toContain("Sector");
+  expect(tabs()).toContain("Global");
 });
 
 it("keeps Quick Travel disabled for the current sector", async () => {

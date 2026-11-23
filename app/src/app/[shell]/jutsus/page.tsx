@@ -26,6 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea";
 import {
   getEquippedJutsuProfilePatch,
+  getForgottenJutsuProfilePatch,
   getForgottenJutsus,
   getTransferredJutsus,
   getUnequippedJutsus,
@@ -332,14 +333,25 @@ export default function MyJutsu() {
     });
 
   const { mutate: forget, isPending: isForgetting } = api.jutsu.forget.useMutation({
-    onMutate: prepareJutsuUpdate,
+    onMutate: (variables) => ({
+      jutsus: prepareJutsuUpdate(),
+      user: prepareUserUpdate(),
+      owned: userJutsus?.find((row) => row.id === variables.id),
+    }),
     onSuccess: async (data, variables, context) => {
       showMutationToast(data);
       if (data.success) {
-        await updateJutsuRows(
-          (rows) => getForgottenJutsus(rows, variables.id),
-          context,
-        );
+        await Promise.all([
+          updateJutsuRows(
+            (rows) => getForgottenJutsus(rows, variables.id),
+            context.jutsus,
+          ),
+          updateUser(
+            (current) =>
+              getForgottenJutsuProfilePatch(current, context.owned, variables.id),
+            { revision: context.user },
+          ),
+        ]);
       }
     },
     onSettled,

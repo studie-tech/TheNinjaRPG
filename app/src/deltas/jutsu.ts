@@ -8,7 +8,7 @@ import type { JutsuLevelTransfer, UserJutsuFilteringSchema } from "@/validators/
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { UserCachePatch, UserDeltaResponse } from "@/validators/userCache";
 
-/** Project confirmed training charges, generated queue rows and public quest progress from the loaded actor. */
+/** Project confirmed training charges, queue rows, public quest progress and the supplied equipped jutsu snapshot. */
 export const getStartedJutsuUserUpdate = ({
   user,
   cost,
@@ -16,6 +16,7 @@ export const getStartedJutsuUserUpdate = ({
   questData,
   requiresProgressionRefresh,
   publishedAchievementIds,
+  equippedJutsus,
 }: {
   user: Parameters<typeof getSavedTrainingQueueUserUpdate>[0]["user"];
   cost: number;
@@ -23,6 +24,7 @@ export const getStartedJutsuUserUpdate = ({
   questData: QuestTrackerType[] | null;
   requiresProgressionRefresh: boolean;
   publishedAchievementIds: readonly string[];
+  equippedJutsus?: { jutsuId: string }[];
 }) => {
   const projection: Pick<UserDeltaResponse, "userPatch" | "achievementProgress"> =
     getSavedTrainingQueueUserUpdate({
@@ -33,6 +35,16 @@ export const getStartedJutsuUserUpdate = ({
     });
   return {
     ...projection,
+    userPatch: projection.userPatch
+      ? {
+          ...projection.userPatch,
+          ...(equippedJutsus
+            ? {
+                jutsus: equippedJutsus.map(({ jutsuId }) => ({ jutsuId })),
+              }
+            : {}),
+        }
+      : undefined,
     userDelta: projection.userPatch ? { money: -cost } : undefined,
   };
 };
@@ -60,25 +72,28 @@ export const getSelectJutsuLoadoutUserUpdate = ({
   id,
   loadoutJutsuIds,
   aiProfileId,
+  equippedJutsus,
 }: {
   id: string;
   loadoutJutsuIds: string[];
   aiProfileId: string | null;
+  equippedJutsus: { jutsuId: string }[];
 }) => ({
   userPatch: {
     jutsuLoadout: id,
     aiProfileId,
     loadout: { jutsuIds: loadoutJutsuIds },
+    jutsus: equippedJutsus.map(({ jutsuId }) => ({ jutsuId })),
   },
 });
 
-/** Empty the profile's selected loadout after unequipping all; otherwise confirm a no-op. */
+/** Clear actual equipment and the selected loadout when one exists. */
 export const getUnequipAllJutsuUserUpdate = (
   clearedActiveLoadout: boolean,
 ): Pick<UserDeltaResponse, "userPatch" | "userDelta"> =>
   clearedActiveLoadout
-    ? { userPatch: { loadout: { jutsuIds: [] } } }
-    : { userDelta: {} };
+    ? { userPatch: { loadout: { jutsuIds: [] }, jutsus: [] } }
+    : { userPatch: { jutsus: [] } };
 
 /**
  * Combine the confirmed import projection with loadout fields only when the imported loadout
@@ -98,7 +113,11 @@ export const getImportJutsuLoadoutUserUpdate = ({
   userPatch: {
     ...cacheUpdateUserPatch,
     ...(isActive
-      ? { jutsuLoadout: loadoutId, loadout: { jutsuIds: previewJutsuIds } }
+      ? {
+          jutsuLoadout: loadoutId,
+          loadout: { jutsuIds: previewJutsuIds },
+          jutsus: previewJutsuIds.map((jutsuId) => ({ jutsuId })),
+        }
       : {}),
   },
 });
@@ -110,8 +129,16 @@ export const getImportJutsuLoadoutUserUpdate = ({
 export const getEvolveJutsuUserUpdate = ({
   progressionUserPatch,
   activeLoadout,
+  userJutsus,
+  previousJutsuId,
+  evolutionJutsuId,
+  isRestrictedEquipType,
 }: {
   progressionUserPatch: UserCachePatch | undefined;
+  userJutsus: { jutsuId: string; equipped: boolean }[];
+  previousJutsuId: string;
+  evolutionJutsuId: string;
+  isRestrictedEquipType: boolean;
   activeLoadout:
     | {
         id: string;
@@ -122,6 +149,15 @@ export const getEvolveJutsuUserUpdate = ({
   userPatch: {
     ...progressionUserPatch,
     ...(activeLoadout ? { loadout: { jutsuIds: activeLoadout.jutsuIds } } : {}),
+    jutsus: userJutsus.flatMap((row) =>
+      !row.equipped || (row.jutsuId === previousJutsuId && isRestrictedEquipType)
+        ? []
+        : [
+            {
+              jutsuId: row.jutsuId === previousJutsuId ? evolutionJutsuId : row.jutsuId,
+            },
+          ],
+    ),
   },
 });
 
@@ -180,6 +216,28 @@ export const getForgottenJutsus = <T extends { id: string }>(
     ? rows.filter((row) => row.id !== userJutsuId)
     : undefined;
 
+/** Remove confirmed forgotten equipment from the profile so its warning follows actual equips, independently of saved loadout IDs. */
+export const getForgottenJutsuProfilePatch = (
+  user: Pick<NonNullable<UserWithRelations>, "jutsus">,
+  owned: { id: string; jutsuId: string } | undefined,
+  userJutsuId: string,
+) => {
+  if (!user.jutsus || !owned || owned.id !== userJutsuId) return;
+  return { jutsus: user.jutsus.filter((row) => row.jutsuId !== owned.jutsuId) };
+};
+
+/** Project actual equipment after confirmed requirement invalidations so warnings do not follow stale saved loadout IDs. */
+export const getInvalidatedJutsuUserUpdate = (
+  rows: { jutsuId: string; equipped: boolean }[],
+  invalidatedJutsuIds: string[],
+) => ({
+  userPatch: {
+    jutsus: rows
+      .filter((row) => row.equipped && !invalidatedJutsuIds.includes(row.jutsuId))
+      .map(({ jutsuId }) => ({ jutsuId })),
+  },
+});
+
 /** Clear every equip flag; filtered lists that admit equipped rows need a read for membership. */
 export const getUnequippedJutsus = <T extends { equipped: boolean }>(
   rows: T[],
@@ -233,16 +291,24 @@ export const getEquippedJutsuUserPatch = (
 
 /** Keep profile equipment on the confirmed active loadout and baseline; changed selections refetch. */
 export const getEquippedJutsuProfilePatch = (
-  user: Pick<NonNullable<UserWithRelations>, "jutsuLoadout" | "loadout">,
+  user: Pick<NonNullable<UserWithRelations>, "jutsuLoadout" | "loadout" | "jutsus">,
   change: RouterOutputs["jutsu"]["toggleEquip"]["data"],
 ) => {
   if (
+    !user.jutsus ||
     !change?.loadout ||
     user.jutsuLoadout !== change.loadout.id ||
     JSON.stringify(user.loadout?.jutsuIds) !== JSON.stringify(change.loadout.jutsuIds)
   )
     return;
-  return getEquippedJutsuUserPatch(user.loadout?.jutsuIds ?? [], change);
+  return {
+    ...getEquippedJutsuUserPatch(user.loadout?.jutsuIds ?? [], change),
+    jutsus: change.equipped
+      ? [...new Set([...user.jutsus.map((row) => row.jutsuId), change.jutsuId])].map(
+          (jutsuId) => ({ jutsuId }),
+        )
+      : user.jutsus.filter((row) => row.jutsuId !== change.jutsuId),
+  };
 };
 
 /** Confirmed single-level training with no waiting jobs; timestamps also identify its sidebar timer. */

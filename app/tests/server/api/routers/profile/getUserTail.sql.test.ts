@@ -5,15 +5,19 @@ import {
   dungeonMember,
   dungeonRun,
   farmPlot,
+  jutsu,
+  jutsuLoadout,
   notification,
   userData,
+  userJutsu,
   userVote,
   village,
 } from "@/drizzle/schema";
 import { getWorldCyclePosition } from "@/libs/dayNight";
+import { NO_JUTSU_EQUIPPED_NOTIFICATION } from "@/libs/userNotifications";
 import { profileRouter } from "@/server/api/routers/profile";
 import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
-import { insertUsers } from "../../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -37,6 +41,9 @@ describeWithDatabase("profile read notification waves", () => {
       dungeonMember,
       notification,
       farmPlot,
+      jutsu,
+      jutsuLoadout,
+      userJutsu,
     );
     await insertUsers(
       [STAFF_ID, PLAYER_ID].map((userId) => ({
@@ -70,6 +77,47 @@ describeWithDatabase("profile read notification waves", () => {
       ),
     );
   });
+
+  it.each([false, true])(
+    "uses actual equipment when saved loadout membership disagrees (equipped=%s)",
+    async (equipped) => {
+      const db = await getTestDatabase();
+      await insertJutsus([{ id: "sonic-slash", name: "Sonic Slash" }]);
+      await db.insert(jutsuLoadout).values({
+        id: "notification-loadout",
+        userId: PLAYER_ID,
+        jutsuIds: equipped ? [] : ["sonic-slash"],
+      });
+      await db
+        .update(userData)
+        .set({
+          jutsuLoadout: "notification-loadout",
+          tutorialOn: false,
+        })
+        .where(eq(userData.userId, PLAYER_ID));
+      await db.insert(userJutsu).values([
+        { id: "player-jutsu", userId: PLAYER_ID, jutsuId: "sonic-slash", equipped },
+        { id: "staff-jutsu", userId: STAFF_ID, jutsuId: "sonic-slash", equipped: true },
+      ]);
+      const { result } = await readProfile(PLAYER_ID);
+      expect(result.userData?.jutsus).toEqual(
+        equipped ? [{ jutsuId: "sonic-slash" }] : [],
+      );
+      expect(result.notifications.includes(NO_JUTSU_EQUIPPED_NOTIFICATION)).toBe(
+        !equipped,
+      );
+      // The equipment check also works before a default loadout has been selected.
+      await db
+        .update(userData)
+        .set({ jutsuLoadout: null })
+        .where(eq(userData.userId, PLAYER_ID));
+      expect(
+        (await readProfile(PLAYER_ID)).result.notifications.includes(
+          NO_JUTSU_EQUIPPED_NOTIFICATION,
+        ),
+      ).toBe(!equipped);
+    },
+  );
 
   it("claims a dungeon queue and reads announcements in the staff count wave", async () => {
     const quiet = await readProfile(STAFF_ID);

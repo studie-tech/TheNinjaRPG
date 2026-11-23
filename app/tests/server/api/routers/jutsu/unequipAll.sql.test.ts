@@ -61,7 +61,7 @@ describeWithDatabase("jutsu unequip all", () => {
     });
   });
 
-  it("confirms an empty change when no active loadout is selected", async () => {
+  it("patches equipment when no active loadout is selected", async () => {
     const db = await getTestDatabase();
     await db
       .update(userData)
@@ -69,8 +69,7 @@ describeWithDatabase("jutsu unequip all", () => {
       .where(eq(userData.userId, userId));
     const result = await (await callerFor(jutsuRouter, userId)).unequipAll();
     expect(result.success).toBe(true);
-    expect(result.userPatch).toBeUndefined();
-    expect(result.userDelta).toEqual({});
+    expect(result.userPatch).toEqual({ jutsus: [] });
     expect(await loadoutIds("active")).toEqual(["strike", "guard"]);
   });
 
@@ -93,15 +92,14 @@ describeWithDatabase("jutsu unequip all", () => {
     expect(await loadoutIds("active")).toEqual([]);
   });
 
-  it("does not clear or patch a foreign loadout pointer", async () => {
+  it("clears equipment without patching a foreign loadout pointer", async () => {
     const db = await getTestDatabase();
     await db
       .update(userData)
       .set({ jutsuLoadout: "foreign" })
       .where(eq(userData.userId, userId));
     const result = await (await callerFor(jutsuRouter, userId)).unequipAll();
-    expect(result.userPatch).toBeUndefined();
-    expect(result.userDelta).toEqual({});
+    expect(result.userPatch).toEqual({ jutsus: [] });
     expect(await loadoutIds("foreign")).toEqual(["strike"]);
     const rows = await db.query.userJutsu.findMany({
       where: eq(userJutsu.userId, userId),

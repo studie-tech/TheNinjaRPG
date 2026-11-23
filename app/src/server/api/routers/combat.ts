@@ -19,7 +19,10 @@ import {
   getAutoCombatPreferencePatch,
   getCombatAdmissionUserUpdate,
 } from "@/deltas/combat";
-import { getSelectJutsuLoadoutUserUpdate } from "@/deltas/jutsu";
+import {
+  getInvalidatedJutsuUserUpdate,
+  getSelectJutsuLoadoutUserUpdate,
+} from "@/deltas/jutsu";
 import {
   AdjustableBasicActions,
   AutoBattleTypes,
@@ -1328,12 +1331,13 @@ export const combatRouter = createTRPCRouter({
       const appliedJutsuLoadout = jutsuLoadouts.find(
         (loadout) => loadout.id === jutsuLoadoutIdToApply,
       );
-      const loadoutPatch: Pick<UserDeltaResponse, "userPatch"> =
+      let loadoutPatch: Pick<UserDeltaResponse, "userPatch"> =
         appliedJutsuLoadout && "aiProfileId" in jutsuLoadoutResult
           ? getSelectJutsuLoadoutUserUpdate({
               id: appliedJutsuLoadout.id,
               loadoutJutsuIds: appliedJutsuLoadout.jutsuIds,
               aiProfileId: jutsuLoadoutResult.aiProfileId,
+              equippedJutsus: jutsuLoadoutResult.jutsus,
             })
           : {};
 
@@ -1355,6 +1359,7 @@ export const combatRouter = createTRPCRouter({
             ctx,
             invalidatedJutsuIds,
           );
+          loadoutPatch = getInvalidatedJutsuUserUpdate(userjutsus, invalidatedJutsuIds);
         }
       }
 

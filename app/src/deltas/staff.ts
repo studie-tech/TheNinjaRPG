@@ -16,7 +16,7 @@ export const getUnequipAllJutsusUserUpdate = ({
 }) => ({
   userPatch: userIsAi
     ? {}
-    : { ...(userJutsuLoadout ? { loadout: { jutsuIds: [] } } : {}) },
+    : { jutsus: [], ...(userJutsuLoadout ? { loadout: { jutsuIds: [] } } : {}) },
 });
 
 /**
