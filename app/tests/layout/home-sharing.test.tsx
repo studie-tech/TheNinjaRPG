@@ -46,6 +46,7 @@ const request = (overrides: Partial<HomeRequest> = {}): HomeRequest => ({
   activeHomeReceiverId: "visitor",
   useRankedRules: false,
   spectatable: false,
+  conversationId: null,
   createdAt: new Date("2026-10-01T12:00:00Z"),
   sender: player("Owner"),
   receiver: player("Visitor"),

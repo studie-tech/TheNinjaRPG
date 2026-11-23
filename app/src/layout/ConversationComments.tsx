@@ -8,6 +8,8 @@ export const ConversationComments = ({
   canInteract,
   pages,
   conversationId,
+  isPublic,
+  allowChallenge,
   deletedCommentIds,
   quoteIds,
   username,
@@ -47,6 +49,8 @@ export const ConversationComments = ({
         >
           <ConversationCommentRow
             comment={comment}
+            allowChallenge={allowChallenge}
+            challengeConversationId={isPublic ? comment.conversationId : null}
             isQuoted={quoteIds?.includes(comment.id) ?? false}
             isHighlighted={
               comment.content.includes(`quote author="${username}`) ||
@@ -71,6 +75,8 @@ export const ConversationComments = ({
 // parsed content behind this boundary so a chat event only renders changed rows.
 const ConversationCommentRow = memo(function ConversationCommentRow({
   comment,
+  allowChallenge,
+  challengeConversationId,
   isQuoted,
   isHighlighted,
   tavernStyling,
@@ -89,6 +95,9 @@ const ConversationCommentRow = memo(function ConversationCommentRow({
       user={comment}
       hover_effect={false}
       comment={comment}
+      challengeFrom={
+        allowChallenge ? { conversationId: challengeConversationId } : undefined
+      }
       quoteIds={isQuoted ? [comment.id] : null}
       tavernStyling={tavernStyling}
       color={isHighlighted ? "poppopover" : undefined}
@@ -110,6 +119,10 @@ const ConversationCommentRow = memo(function ConversationCommentRow({
 interface ConversationCommentsProps {
   pages?: RouterOutputs["comments"]["getConversationComments"][];
   conversationId?: string;
+  /** A public conversation, such as a tavern, announces the challenges sent from it. */
+  isPublic?: boolean;
+  /** Offers the challenge shortcut on other players' messages, where players meet. */
+  allowChallenge?: boolean;
   deletedCommentIds: Set<string>;
   quoteIds: string[] | null;
   username?: string;
@@ -127,6 +140,7 @@ interface ConversationCommentsProps {
 
 type ConversationCommentRowProps = Pick<
   ConversationCommentsProps,
+  | "allowChallenge"
   | "tavernStyling"
   | "canInteract"
   | "onReact"
@@ -137,6 +151,7 @@ type ConversationCommentRowProps = Pick<
   | "onMessageUser"
 > & {
   comment: RouterOutputs["comments"]["getConversationComments"]["data"][number];
+  challengeConversationId: string | null;
   isQuoted: boolean;
   isHighlighted: boolean;
 };

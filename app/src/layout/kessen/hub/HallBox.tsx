@@ -39,7 +39,7 @@ export const HallBox = ({
   leaderboardLink?: boolean;
 }) => (
   <ContentBox
-    title={scene ? "Card Hall" : title}
+    title={scene ? (scene.title ?? "Card Hall") : title}
     subtitle={
       <span className="block whitespace-normal">{scene?.label ?? subtitle}</span>
     }
@@ -84,5 +84,7 @@ export const KESSEN_HALL_SUBTITLE = "Best-of-three card duels";
 export type HallScene = {
   content: React.ReactNode;
   label: string;
+  /** The frame's title; "Card Hall", where the way back leads, unless named. */
+  title?: string;
   onLeave: () => void;
 };

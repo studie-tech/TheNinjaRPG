@@ -64,16 +64,7 @@ export const OpponentBar = ({
         ) : null}
       </span>
       <Lanterns count={zone.lanterns} label={`${opponentName}'s lanterns`} />
-      <Badge
-        variant="secondary"
-        className="km-count gap-[3px] px-[5px] py-0 text-[12px]"
-        title="Cards in hand"
-      >
-        <CardBack className="km-count-back" renderSize={24} aria-hidden />
-        <span className="sr-only">{opponentName} holds</span>
-        {zone.handCount}
-        <span className="sr-only"> cards</span>
-      </Badge>
+      <HandCount count={zone.handCount} holder={opponentName} />
       <DeckButton
         count={zone.deckCount}
         discard={zone.discard.length}
@@ -101,7 +92,10 @@ export const OpponentBar = ({
   );
 };
 
-/** The player's bar: lanterns, total, leader, banked mulligans, deck and hand sorting. */
+/**
+ * The player's bar: lanterns, total, leader, banked mulligans, deck and hand sorting (for
+ * a spectator, the hand's size).
+ */
 export const PlayerBar = ({
   table,
   sort,
@@ -117,10 +111,10 @@ export const PlayerBar = ({
   const zone = view.seats[me];
   const leader = zone.leader ? table.cardDisplay(zone.leader) : null;
   return (
-    <section className="km-bar km-bar-me" aria-label="Your side">
-      <Lanterns count={zone.lanterns} label="Your lanterns" />
+    <section className="km-bar km-bar-me" aria-label={`${table.selfPossessive} side`}>
+      <Lanterns count={zone.lanterns} label={`${table.selfPossessive} lanterns`} />
       <span className="km-bar-name">
-        <span className="km-bar-title">You</span>
+        <span className="km-bar-title">{table.selfName}</span>
         {zone.banked > 0 ? (
           <Badge
             variant="outline"
@@ -131,23 +125,28 @@ export const PlayerBar = ({
           </Badge>
         ) : null}
       </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="km-hit h-6 gap-[3px] rounded-full px-[7px] text-[11px]"
-        onClick={onSort}
-        aria-label={`Sort hand by ${sort === "row" ? "power" : sort === "power" ? "play order" : "row"}`}
-        title="Sort hand"
-      >
-        <ArrowDownWideNarrow className="h-3 w-3" aria-hidden />
-        <span>{SORT_LABEL[sort]}</span>
-      </Button>
+      {/* A spectator sees the hand's size where a player sorts it. */}
+      {table.spectating ? (
+        <HandCount count={zone.handCount} holder={table.selfName} />
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="km-hit h-6 gap-[3px] rounded-full px-[7px] text-[11px]"
+          onClick={onSort}
+          aria-label={`Sort hand by ${sort === "row" ? "power" : sort === "power" ? "play order" : "row"}`}
+          title="Sort hand"
+        >
+          <ArrowDownWideNarrow className="h-3 w-3" aria-hidden />
+          <span>{SORT_LABEL[sort]}</span>
+        </Button>
+      )}
       <DeckButton
         count={zone.deckCount}
         discard={zone.discard.length}
         onClick={onOpenDiscards}
-        label={`Your deck ${zone.deckCount}, discard ${zone.discard.length}. Open discards`}
+        label={`${table.selfPossessive} deck ${zone.deckCount}, discard ${zone.discard.length}. Open discards`}
       />
       {leader ? (
         <LeaderMedallion
@@ -163,13 +162,27 @@ export const PlayerBar = ({
       <SideTotal
         value={table.sideTotals[me]}
         side="me"
-        label="Your total"
+        label={`${table.selfPossessive} total`}
         passed={zone.passed}
         motion={table.motion}
       />
     </section>
   );
 };
+
+/** A side's hand size, behind a card back. */
+const HandCount = ({ count, holder }: { count: number; holder: string }) => (
+  <Badge
+    variant="secondary"
+    className="km-count gap-[3px] px-[5px] py-0 text-[12px]"
+    title="Cards in hand"
+  >
+    <CardBack className="km-count-back" renderSize={24} aria-hidden />
+    <span className="sr-only">{holder} holds</span>
+    {count}
+    <span className="sr-only"> cards</span>
+  </Badge>
+);
 
 /** A side's deck count; it opens the discards. */
 const DeckButton = ({

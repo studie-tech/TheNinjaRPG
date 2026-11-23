@@ -455,6 +455,21 @@ export const summarizeDeck = (
   };
 };
 
+/**
+ * The deck matches start with: the newest ready deck, else the newest one a borrowed fill
+ * completes, else the newest saved one. Decks are listed oldest first, so the search runs
+ * from the end.
+ */
+export const defaultDeck = (summaries: readonly KessenDeckSummary[]) => {
+  const newestFirst = [...summaries].reverse();
+  return (
+    newestFirst.find((deck) => deck.ready) ??
+    newestFirst.find((deck) => deck.fillable) ??
+    newestFirst[0] ??
+    null
+  );
+};
+
 /** Live sources of a card for the collection book's "Where to find" list. */
 export interface KessenFindContext {
   packs: readonly KessenPackEntry[];

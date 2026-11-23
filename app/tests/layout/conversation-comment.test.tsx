@@ -5,10 +5,11 @@ import {
   QueryClient,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { type Control, useController } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import * as Avatar from "@/layout/Avatar";
+import * as ChallengePlayer from "@/layout/ChallengePlayer";
 import * as CommentModule from "@/layout/Comment";
 import { CommentOnConversation } from "@/layout/Comment";
 import { CompactComment } from "@/layout/CompactComment";
@@ -35,6 +36,7 @@ import { mockUserContextValue } from "../setup/userContext";
 
 const actualEmojiPicker = EmojiPicker.EmojiPicker;
 const edit = vi.fn();
+const remove = vi.fn();
 const api = {
   useUtils: () => ({ comments: { getConversationComments: { invalidate: vi.fn() } } }),
   profile: {
@@ -47,7 +49,7 @@ const api = {
       useMutation: () => ({ mutate: edit, isPending: false }),
     },
     deleteConversationComment: {
-      useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+      useMutation: () => ({ mutate: remove, isPending: false }),
     },
   },
 };
@@ -80,12 +82,15 @@ beforeEach(() => {
   vi.spyOn(ModerationSummary, "ModerationSummary").mockImplementation(() => null);
   vi.spyOn(Report, "default").mockImplementation(() => null);
   vi.spyOn(EmojiPicker, "EmojiPicker").mockImplementation(() => null);
-  vi.spyOn(PostModule, "default").mockImplementation(({ children, options }) => (
-    <div>
-      {options}
-      {children}
-    </div>
-  ));
+  vi.spyOn(PostModule, "default").mockImplementation(
+    ({ children, options, footer }) => (
+      <div>
+        {options}
+        {children}
+        {footer}
+      </div>
+    ),
+  );
   vi.spyOn(Confirm, "default").mockImplementation(() => null);
 });
 afterEach(() => {
@@ -104,6 +109,7 @@ const comment = {
   isPinned: false,
   isReported: false,
   isStaffOnly: false,
+  challengeMatch: null,
 };
 const user: PostProps["user"] = {
   userId: "friend",
@@ -165,6 +171,82 @@ describe("conversation comment editing permissions", () => {
       quoteIds: null,
       senderId: null,
     });
+  });
+});
+
+describe("challenge shortcut", () => {
+  const challengeable = (
+    <CommentOnConversation
+      comment={comment}
+      user={user}
+      challengeFrom={{ conversationId: null }}
+    >
+      {comment.content}
+    </CommentOnConversation>
+  );
+
+  it("offers to challenge the author of another player's message", () => {
+    mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
+    const view = render(challengeable);
+    expect(view.getByRole("button", { name: "Challenge Friend" })).toBeTruthy();
+  });
+
+  it("does not offer to challenge yourself", () => {
+    const view = render(challengeable);
+    expect(view.queryByRole("button", { name: "Challenge Friend" })).toBeNull();
+  });
+
+  it("is offered only where the conversation opts in", () => {
+    mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
+    const view = render(message());
+    expect(view.queryByRole("button", { name: "Challenge Friend" })).toBeNull();
+  });
+});
+
+describe("match announcement", () => {
+  const announcement = {
+    ...comment,
+    content: "<p>Started a spar with Rival.</p>",
+    challengeMatch: { type: "SPAR", matchId: "m-1", opponentName: "Rival" } as const,
+  };
+  const notice = (compact?: boolean) => (
+    <CommentOnConversation comment={announcement} user={user} compact={compact}>
+      {announcement.content}
+    </CommentOnConversation>
+  );
+  beforeEach(() => {
+    vi.spyOn(Confirm, "default").mockImplementation(({ triggerLabel, onAccept }) => (
+      <button
+        type="button"
+        aria-label={triggerLabel}
+        onClick={(e) => onAccept?.(e, { close: vi.fn() })}
+      />
+    ));
+  });
+
+  it.each([false, true])(
+    "lets its author and moderators delete it (compact: %p)",
+    (compact) => {
+      for (const viewer of [
+        { userId: "friend", role: "USER" },
+        { userId: "mod", role: "MODERATOR" },
+      ]) {
+        mockUserContextValue({ data: viewer } as never);
+        const view = render(notice(compact));
+        expect(view.getByRole("link", { name: "Watch" })).toBeTruthy();
+        fireEvent.click(view.getByRole("button", { name: "Delete comment" }));
+        expect(remove).toHaveBeenLastCalledWith({ id: announcement.id });
+        view.unmount();
+      }
+      expect(remove).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("offers other players no delete action", () => {
+    mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
+    const view = render(notice());
+    expect(view.getByText("Rival")).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Delete comment" })).toBeNull();
   });
 });
 
@@ -424,6 +506,22 @@ describe("conversation comment row isolation", () => {
     ]);
   });
 
+  it("offers challenges only when allowed and names a public conversation as their announcer", () => {
+    const { renders } = observeRows();
+    const view = render(
+      <ConversationComments {...listProps([row("1")])} allowChallenge isPublic />,
+    );
+    expect(renders.mock.calls.at(-1)?.[0].challengeFrom).toEqual({
+      conversationId: "conversation",
+    });
+    view.rerender(<ConversationComments {...listProps([row("1")])} allowChallenge />);
+    expect(renders.mock.calls.at(-1)?.[0].challengeFrom).toEqual({
+      conversationId: null,
+    });
+    view.rerender(<ConversationComments {...listProps([row("1")])} isPublic />);
+    expect(renders.mock.calls.at(-1)?.[0].challengeFrom).toBeUndefined();
+  });
+
   it("renders only changed cached rows in a 100-message history and reparses only changed content", () => {
     const { renders, parses } = observeRows();
     const history = Array.from({ length: 100 }, (_, i) => row(String(i)));
@@ -599,6 +697,42 @@ describe("compact chat identity", () => {
       await act(flushRadixFocus);
     } finally {
       avatar.mockRestore();
+      restoreBrowserGlobals();
+    }
+  });
+});
+
+describe("compact chat challenge view", () => {
+  it("moves keyboard focus into the challenge view and back to its menu item", async () => {
+    installBrowserGlobals({ resizeObserver: true });
+    mockUserContextValue({ data: { userId: "me", role: "USER" } } as never);
+    // The panel's own options are covered elsewhere; its leading slot holds Back.
+    vi.spyOn(ChallengePlayer, "ChallengePanel").mockImplementation(
+      ((props: { leading?: ReactNode }) => props.leading ?? null) as never,
+    );
+    try {
+      const view = render(
+        <CompactComment
+          user={user}
+          comment={comment}
+          challengeFrom={{ conversationId: null }}
+          editing={false}
+          setEditing={() => {}}
+        >
+          Message
+        </CompactComment>,
+      );
+      fireEvent.click(view.getByRole("button", { name: "Actions for Friend" }));
+      fireEvent.click(view.getByRole("menuitem", { name: "Challenge" }));
+      expect(view.getByRole("dialog", { name: "Challenge Friend" })).toBeTruthy();
+      expect(document.activeElement).toBe(view.getByRole("button", { name: "Back" }));
+      fireEvent.click(view.getByRole("button", { name: "Back" }));
+      expect(document.activeElement).toBe(
+        view.getByRole("menuitem", { name: "Challenge" }),
+      );
+      view.unmount();
+      await act(flushRadixFocus);
+    } finally {
       restoreBrowserGlobals();
     }
   });

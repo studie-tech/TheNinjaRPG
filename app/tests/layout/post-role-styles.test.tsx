@@ -166,6 +166,26 @@ describe("post username and role styling", () => {
     }
   });
 
+  it("centres the content column unless a footer is pinned below it", () => {
+    vi.spyOn(Avatar, "default").mockImplementation(() => null);
+    const plain = render(<Post user={poster("USER")}>Body</Post>).getByText("Body");
+    expect(plain.parentElement?.className).toBe("flex flex-col h-full justify-center");
+    expect(plain.parentElement?.parentElement?.className).toBe("grow basis-1/2");
+    cleanup();
+    const pinned = render(
+      <Post user={poster("USER")} footer="Footer">
+        Body
+      </Post>,
+    );
+    const body = pinned.getByText("Body");
+    expect(body.parentElement?.className).toBe("flex flex-col");
+    expect(body.parentElement?.parentElement?.className).toBe(
+      "grow basis-1/2 flex flex-col",
+    );
+    expect(pinned.getByText("Footer").className).toBe("mt-auto pt-2");
+    cleanup();
+  });
+
   it("labels a village leader as Kage or Daimyo", () => {
     vi.spyOn(Avatar, "default").mockImplementation(() => null);
     const leader = { ...poster("USER"), villageKageId: "poster" };

@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment, UserReportComment } from "@/drizzle/schema";
+import {
+  ChallengeButton,
+  type ChallengeFrom,
+  ChallengeMatchNotice,
+} from "@/layout/ChallengePlayer";
 import { CompactComment } from "@/layout/CompactComment";
 import Confirm from "@/layout/Confirm";
 import { EmojiPicker } from "@/layout/EmojiPicker";
@@ -46,6 +51,8 @@ export const CommentOnReport: React.FC<UserReportCommentProps> = (props) => {
  */
 interface ConversationCommentProps extends PostProps {
   comment: ConversationComment;
+  /** Offers the challenge shortcut on other players' messages. */
+  challengeFrom?: ChallengeFrom;
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
   quoteIds?: string[] | null;
@@ -61,6 +68,10 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
   const [editing, setEditing] = useState(false);
   const utils = api.useUtils();
   const deleteInFlightRef = useRef(false);
+  const { data: userData } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
 
   const editComment = api.comments.editConversationComment.useMutation({
     onSuccess: async (data) => {
@@ -98,11 +109,35 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
     deleteComment.mutate(data);
   };
 
+  // A match announcement holds no player-written text to report, only its delete action.
+  if (props.comment.challengeMatch && props.user) {
+    return (
+      <ChallengeMatchNotice
+        challenger={props.user.username}
+        match={props.comment.challengeMatch}
+        createdAt={props.comment.createdAt}
+        compact={props.compact}
+        action={
+          userData &&
+          canDeleteComment(userData, props.comment.userId) && (
+            <DeleteCommentConfirm
+              comment={props.comment}
+              author={props.user.username}
+              isPending={deleteComment.isPending}
+              onDelete={handleDelete}
+            />
+          )
+        }
+      />
+    );
+  }
+
   if (props.compact && props.user) {
     return (
       <CompactComment
         user={props.user}
         comment={props.comment}
+        challengeFrom={props.challengeFrom}
         tavernStyling={props.tavernStyling}
         highlighted={props.color === "poppopover"}
         quoteIds={props.quoteIds}
@@ -153,6 +188,8 @@ interface BaseCommentProps extends PostProps {
   isDeletePending?: boolean;
   toggleReaction?: (emoji: string) => void;
   setQuoteId?: (id: string) => void;
+  /** Offers the challenge shortcut on other players' messages. */
+  challengeFrom?: ChallengeFrom;
 }
 const BaseComment: React.FC<BaseCommentProps> = (props) => {
   const { data: userData } = useUserDataSelector((u) => ({
@@ -200,8 +237,53 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
         ))
       : [];
 
+  const footer = !props.editing && (
+    <div className="flex flex-row flex-wrap items-end gap-2">
+      {reactions.length > 0 && (
+        <TooltipProvider>
+          <div className="flex flex-row flex-wrap gap-2">{reactions}</div>
+        </TooltipProvider>
+      )}
+      <div className="ml-auto flex flex-row items-center justify-end gap-1">
+        {/* Server and browser locale or timezone settings can format this date
+            differently during hydration. */}
+        <p className="pr-2 text-gray-600 text-xs italic" suppressHydrationWarning>
+          {formatDateTime(props.comment.createdAt)}
+        </p>
+        {props.user && props.system && !props.comment?.isReported && (
+          <ReportUser
+            user={props.user}
+            content={props.comment}
+            system={props.system}
+            label={`Report message by ${props.user.username}`}
+            className={postActionClassName}
+            button={<Flag className="h-6 w-6 hover:text-orange-500" />}
+          />
+        )}
+        {props.system && props.comment?.isReported && (
+          <span className="inline-flex p-0.5">
+            <Flag className="h-6 w-6 fill-orange-500" aria-hidden="true" />
+            <span className="sr-only">Reported</span>
+          </span>
+        )}
+        {props.user &&
+          userData &&
+          canDeleteComment(userData, props.user.userId) &&
+          props.deleteComment && (
+            <DeleteCommentConfirm
+              comment={props.comment}
+              author={props.user.username}
+              isPending={props.isDeletePending}
+              onDelete={props.deleteComment}
+            />
+          )}
+      </div>
+    </div>
+  );
+
   return (
     <Post
+      footer={footer}
       options={
         props.user && (
           <div className="flex flex-row gap-1">
@@ -274,6 +356,13 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
                 />
               </Button>
             )}
+            {props.challengeFrom && userData && !isAuthor && (
+              <ChallengeButton
+                opponent={props.user}
+                conversationId={props.challengeFrom.conversationId}
+                className={postActionClassName}
+              />
+            )}
             {userData && (isAuthor || canSeeSecretData(userData.role)) && (
               <ModerationSummary
                 userId={props.user.userId}
@@ -310,77 +399,53 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
           />
         </form>
       ) : (
-        <>
-          <div data-reading-text className="[&_img]:h-auto [&_img]:max-w-full">
-            {props.children}
-          </div>
-          {/* In flow below the message, so a long message or wrapped actions never overlap it. */}
-          <div className="flex flex-row items-center justify-end gap-1">
-            {/* Server and browser locale or timezone settings can format this date
-                differently during hydration. */}
-            <p className="pr-2 text-gray-600 text-xs italic" suppressHydrationWarning>
-              {formatDateTime(props.comment.createdAt)}
-            </p>
-            {props.user && props.system && !props.comment?.isReported && (
-              <ReportUser
-                user={props.user}
-                content={props.comment}
-                system={props.system}
-                label={`Report message by ${props.user.username}`}
-                className={postActionClassName}
-                button={<Flag className="h-6 w-6 hover:text-orange-500" />}
-              />
-            )}
-            {props.system && props.comment?.isReported && (
-              <span className="inline-flex p-0.5">
-                <Flag className="h-6 w-6 fill-orange-500" aria-hidden="true" />
-                <span className="sr-only">Reported</span>
-              </span>
-            )}
-            {props.user &&
-              userData &&
-              canDeleteComment(userData, props.user.userId) &&
-              props.deleteComment && (
-                <Confirm
-                  id={`delete-comment-${props.comment.id}`}
-                  title="Confirm Deletion"
-                  triggerLabel="Delete comment"
-                  triggerClassName={cn(postActionClassName, "justify-center")}
-                  button={<Trash2 className="h-6 w-6 hover:text-orange-500" />}
-                  disabled={props.isDeletePending}
-                  confirmClassName="bg-red-600 text-white hover:bg-red-700"
-                  proceed_label="Delete comment"
-                  proceed_loading_label="Deleting"
-                  isLoading={props.isDeletePending}
-                  keepOpenOnAccept={true}
-                  onAccept={(e) => {
-                    e.preventDefault();
-                    if (props.deleteComment && !props.isDeletePending) {
-                      props.deleteComment({ id: props.comment.id });
-                    }
-                  }}
-                >
-                  <div className="space-y-2">
-                    <p>
-                      Delete this comment by {props.user.username}? This cannot be
-                      undone.
-                    </p>
-                    <blockquote className="line-clamp-3 border-muted-foreground/40 border-l-4 pl-3 text-muted-foreground text-sm italic">
-                      “{stripHtmlPreview(props.comment.content)}”
-                    </blockquote>
-                  </div>
-                </Confirm>
-              )}
-          </div>
-
-          <TooltipProvider>
-            <div className="flex flex-row flex-wrap gap-2">{reactions}</div>
-          </TooltipProvider>
-        </>
+        <div data-reading-text className="[&_img]:h-auto [&_img]:max-w-full">
+          {props.children}
+        </div>
       )}
     </Post>
   );
 };
+
+/** The trash action that confirms before deleting a comment. */
+function DeleteCommentConfirm({
+  comment,
+  author,
+  isPending,
+  onDelete,
+}: {
+  comment: { id: string; content: string };
+  author: string;
+  isPending?: boolean;
+  onDelete: (data: DeleteCommentSchema) => void;
+}) {
+  return (
+    <Confirm
+      id={`delete-comment-${comment.id}`}
+      title="Confirm Deletion"
+      triggerLabel="Delete comment"
+      triggerClassName={cn(postActionClassName, "justify-center")}
+      button={<Trash2 className="h-6 w-6 hover:text-orange-500" />}
+      disabled={isPending}
+      confirmClassName="bg-red-600 text-white hover:bg-red-700"
+      proceed_label="Delete comment"
+      proceed_loading_label="Deleting"
+      isLoading={isPending}
+      keepOpenOnAccept={true}
+      onAccept={(e) => {
+        e.preventDefault();
+        if (!isPending) onDelete({ id: comment.id });
+      }}
+    >
+      <div className="space-y-2">
+        <p>Delete this comment by {author}? This cannot be undone.</p>
+        <blockquote className="line-clamp-3 border-muted-foreground/40 border-l-4 pl-3 text-muted-foreground text-sm italic">
+          “{stripHtmlPreview(comment.content)}”
+        </blockquote>
+      </div>
+    </Confirm>
+  );
+}
 
 /** An icon action in a post's header or footer row, sized to its icon. */
 const postActionClassName = "size-auto shrink-0 rounded-md p-0.5 hover:bg-accent";

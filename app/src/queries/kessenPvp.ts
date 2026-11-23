@@ -54,7 +54,10 @@ export const findKessenPvpMatch = (
     )
     .limit(1);
 
-/** A duel by id without a seat check, for callers that already hold the row or the sweep. */
+/**
+ * A duel by id without a seat check, for callers that already hold the row, the sweep
+ * and spectators.
+ */
 export const findKessenPvpMatchById = (
   client: Pick<DrizzleClient, "select">,
   matchId: string,
@@ -373,6 +376,7 @@ export const listKessenDuelists = (
       rank: userData.rank,
       isAi: userData.isAi,
       isBanned: userData.isBanned,
+      isSilenced: userData.isSilenced,
       deletionAt: userData.deletionAt,
       isOutlaw: userData.isOutlaw,
       villageName: village.name,

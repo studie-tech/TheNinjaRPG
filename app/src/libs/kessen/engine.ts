@@ -581,16 +581,21 @@ const startRound = (
 // ---------------------------------------------------------------------------
 // Views and previews
 
-/** The match as `seat` may see it: own hand only, decks and opponent hand as counts. */
-export const viewFor = (s: MatchState, seat: Seat): MatchView => {
+/**
+ * The match as `viewer` may see it: its own hand only, decks and the other hand as
+ * counts. A spectator (`viewer` null) sees both hands as counts, from seat 0's side.
+ */
+export const viewFor = (s: MatchState, viewer: Seat | null): MatchView => {
   const visible: string[] = [];
   for (const ref of allUnits(s)) visible.push(ref.unit.id);
   for (const zone of s.seats) visible.push(...zone.discard);
-  visible.push(...s.seats[seat].hand);
-  // A token outside the opponent's hand has been played, which is public.
-  const hiddenHand = s.seats[other(seat)].hand;
+  if (viewer !== null) visible.push(...s.seats[viewer].hand);
+  // A token outside the hidden hands has been played, which is public.
+  const hiddenHands = ([0, 1] as const)
+    .filter((seat) => seat !== viewer)
+    .flatMap((seat) => s.seats[seat].hand);
   for (const id of Object.keys(s.inst))
-    if (isTokenId(id) && !hiddenHand.includes(id)) visible.push(id);
+    if (isTokenId(id) && !hiddenHands.includes(id)) visible.push(id);
   const inst: Record<string, string> = {};
   for (const id of visible) {
     const cardId = s.inst[id];
@@ -599,7 +604,7 @@ export const viewFor = (s: MatchState, seat: Seat): MatchView => {
   const cardIds = new Set<string>(Object.values(inst));
   cardIds.add(TOKEN_CARD_ID);
   for (const zone of s.seats) if (zone.leader !== null) cardIds.add(zone.leader);
-  for (const id of s.seats[seat].deck) {
+  for (const id of viewer === null ? [] : s.seats[viewer].deck) {
     const cardId = s.inst[id];
     if (cardId !== undefined) cardIds.add(cardId);
   }
@@ -610,7 +615,7 @@ export const viewFor = (s: MatchState, seat: Seat): MatchView => {
   }
   const seatView = (viewed: Seat): SeatView => {
     const zone = s.seats[viewed];
-    const own = viewed === seat;
+    const own = viewed === viewer;
     return {
       leader: zone.leader,
       faction: zone.faction,
@@ -631,7 +636,7 @@ export const viewFor = (s: MatchState, seat: Seat): MatchView => {
   const board = cloneState(s).board;
   return {
     v: s.v,
-    me: seat,
+    me: viewer ?? 0,
     rules: s.rules,
     knobs: s.knobs,
     cards,
@@ -875,10 +880,13 @@ const deltas = (before: Map<string, PowerEntry>, after: Map<string, PowerEntry>)
   return out;
 };
 
-/** Events as `viewer` may see them: the opponent's hidden draws and returns lose their ids. */
+/**
+ * Events as `viewer` may see them: the opponent's hidden draws and returns lose their
+ * ids; a spectator (`viewer` null) sees neither seat's.
+ */
 export const redactEvents = (
   events: readonly KessenEvent[],
-  viewer: Seat,
+  viewer: Seat | null,
 ): KessenEvent[] =>
   events.map((event) => {
     if (event.t === "drawn" && event.seat !== viewer) {

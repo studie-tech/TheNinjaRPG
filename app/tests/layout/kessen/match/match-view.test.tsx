@@ -1,12 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, mock, vi } from "bun:test";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { getDefaultStore, useAtomValue } from "jotai";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import { RoundEndOverlay } from "@/layout/kessen/match/MatchOverlays";
 import { KessenMatchView } from "@/layout/kessen/match/MatchView";
-import type {
-  KessenTableOutcome,
-  MatchTable,
+import {
+  type KessenTableOutcome,
+  type MatchTable,
+  useMatchTable,
 } from "@/layout/kessen/match/useMatchTable";
 import { guidedLessonAtom } from "@/layout/tutorial/guidedLesson";
 import { academyLessonState, academyNpcAction } from "@/libs/kessen/academy";
@@ -25,7 +34,13 @@ import type {
   MatchState,
   MatchView,
 } from "@/libs/kessen/types";
-import type { KessenCatalogEntry, KessenMatchPayload } from "@/validators/kessen";
+import type {
+  KessenCatalogEntry,
+  KessenMatchLog,
+  KessenMatchPayload,
+  KessenPvpMatchPayload,
+  KessenPvpPlayer,
+} from "@/validators/kessen";
 import { KESSEN_SEED_CATALOG } from "../../../libs/kessen/fixtures/catalog";
 import {
   flushRadixFocus,
@@ -1022,5 +1037,209 @@ describe("KessenMatchView", () => {
       "1 –to 2 in rounds",
     );
     expect(document.querySelector(".km-summary-card")?.textContent).toContain("0 – 3");
+  });
+});
+
+describe("Spectating a duel", () => {
+  const player = (userId: string, username: string): KessenPvpPlayer => ({
+    userId,
+    username,
+    avatar: null,
+    level: 10,
+    villageName: null,
+    rating: null,
+  });
+  const watched = (
+    state: MatchState,
+    patch: Partial<KessenPvpMatchPayload> = {},
+  ): KessenPvpMatchPayload => ({
+    id: "duel-1",
+    kind: "FRIENDLY",
+    version: 4,
+    status: "ACTIVE",
+    startedAt: new Date(0),
+    finishedAt: null,
+    seat: 0,
+    players: [player("a", "Aiko"), player("b", "Botan")],
+    view: viewFor(state, null),
+    clock: {
+      deadline: new Date(Date.now() + 60_000),
+      acting: actingSeats(state),
+      serverNow: new Date(),
+      turnSeconds: 60,
+      mulliganSeconds: 30,
+      timeouts: [0, 0],
+      maxTimeouts: 3,
+    },
+    borrowed: [],
+    result: null,
+    ...patch,
+  });
+  const renderWatched = (payload: KessenPvpMatchPayload) => {
+    const onAction = mock(
+      async (): Promise<KessenTableOutcome> => ({ ok: false, message: "No." }),
+    );
+    const onConcede = mock(() => undefined);
+    render(
+      <KessenMatchView
+        payload={payload}
+        catalog={catalog}
+        onAction={onAction}
+        onConcede={onConcede}
+        onClose={() => undefined}
+        spectating
+      />,
+    );
+    return { onAction, onConcede };
+  };
+
+  it("names both players and offers no play, hand or concession", () => {
+    const state = practiceMatch();
+    const { onAction } = renderWatched(watched(state));
+    // Each hand's size sits in its player's bar; the board takes the hand strip's room.
+    expect(document.querySelector(".km-hand-wrap")).toBeNull();
+    expect(document.querySelector(".km-edge-badge")).toBeNull();
+    expect(
+      document.querySelector('.km-bar-me [title="Cards in hand"]')?.textContent,
+    ).toBe(`Aiko holds${state.seats[0].hand.length} cards`);
+    expect(
+      document.querySelector('.km-bar-them [title="Cards in hand"]')?.textContent,
+    ).toBe(`Botan holds${state.seats[1].hand.length} cards`);
+    expect(document.querySelector(".km-bar-me .km-bar-title")?.textContent).toBe(
+      "Aiko",
+    );
+    expect(document.querySelector(".km-prompt")?.textContent).toBe(
+      `${state.turn === 0 ? "Aiko" : "Botan"} is choosing a play…`,
+    );
+    expect(screen.getByText("Spectating: both hands stay hidden.")).toBeTruthy();
+    for (const name of ["Pass", "Show the whole hand", "Sort hand by power"])
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    for (const row of document.querySelectorAll<HTMLElement>(".km-row-hit"))
+      fireEvent.click(row);
+    expect(onAction).not.toHaveBeenCalled();
+    // The first seat's side is named for its player, never addressed as the viewer's.
+    expect(screen.getByRole("button", { name: /^Aiko's deck / })).toBeTruthy();
+    expect(screen.getByLabelText(/^Aiko's total \d/)).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /^Aiko's Taijutsu, total/ }),
+    ).toBeTruthy();
+    expect(document.body.innerHTML).not.toMatch(/\bYour\b/);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Play log, discards and options" }),
+    );
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Discards" }));
+    expect(screen.getByRole("region", { name: "Aiko's discard" })).toBeTruthy();
+    expect(screen.getByText(/^Aiko's discard/)).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Options" }));
+    expect(screen.queryByRole("button", { name: /Concede/ })).toBeNull();
+  });
+
+  it("names the winner and how the duel ended", () => {
+    const state = practiceMatch();
+    renderWatched(
+      watched(state, {
+        status: "CONCEDED",
+        clock: { ...watched(state).clock, deadline: null, acting: [] },
+        result: {
+          winner: 1,
+          outcome: "loss",
+          endedBy: "concede",
+          loserBy: 0,
+          rating: null,
+          reward: null,
+          note: null,
+          settling: false,
+        },
+      }),
+    );
+    const end = document.querySelector(".km-match-end");
+    expect(end?.querySelector("h2")?.textContent).toBe("Botan won");
+    expect(end?.textContent).toContain("Aiko conceded");
+    expect(end?.textContent).toContain("Friendly duel between Aiko and Botan");
+  });
+});
+
+describe("A newer version arriving during a playback", () => {
+  type Version = { payload: KessenMatchPayload; log: KessenMatchLog };
+  type Version3 = [Version, Version, Version];
+  type Version4 = [...Version3, Version];
+  /** The practice match's confirmed versions, each with the play log it arrives with. */
+  const versions = async (...plays: ((view: MatchView) => KessenAction)[]) => {
+    const state = practiceMatch();
+    const { onAction } = localServer(state);
+    const list: Version[] = [
+      { payload: payloadOf(state), log: { version: 1, events: [], inst: {} } },
+    ];
+    for (const play of plays) {
+      const previous = list[list.length - 1] as Version;
+      const outcome = await onAction(play(previous.payload.view));
+      const payload = outcome.payload as KessenMatchPayload;
+      const events = [...previous.log.events, ...(outcome.events ?? [])];
+      list.push({ payload, log: { version: payload.version, events, inst: {} } });
+    }
+    return list;
+  };
+  const firstCard = (view: MatchView): KessenAction => ({
+    t: "play",
+    card: view.seats[0].hand?.[0] as string,
+    row: "CLOSE",
+  });
+  const pass = (): KessenAction => ({ t: "pass" });
+  const renderTableState = (first: Version) =>
+    renderHook(
+      ({ payload, log }: Version) =>
+        useMatchTable({
+          payload,
+          log,
+          catalog,
+          onAction: async () => ({ ok: false }),
+          onConcede: () => undefined,
+          motion: false,
+        }),
+      { initialProps: first },
+    );
+
+  it("waits for the playback, then plays its events from the board shown", async () => {
+    const [v1, v2, v3] = (await versions(firstCard, firstCard)) as Version3;
+    const table = renderTableState(v1);
+    table.rerender(v2);
+    const step = table.result.current.step;
+    expect(step).not.toBeNull();
+    table.rerender(v3);
+    expect(table.result.current.step).toBe(step);
+    act(() => table.result.current.skipPlayback());
+    // Only the events the newer version added play back.
+    expect(v3.log.events.slice(v2.log.events.length)).toContainEqual(
+      table.result.current.step?.event as KessenEvent,
+    );
+    act(() => table.result.current.skipPlayback());
+    expect(table.result.current.playing).toBe(false);
+    expect(table.result.current.view).toEqual(v3.payload.view);
+  });
+
+  it("keeps a held round summary until Continue", async () => {
+    const [, v2, v3, v4] = (await versions(firstCard, pass, firstCard)) as Version4;
+    const table = renderTableState(v2);
+    table.rerender(v3);
+    await waitFor(() => expect(table.result.current.holding).toBe(true));
+    const summary = table.result.current.step;
+    table.rerender(v4);
+    expect(table.result.current.holding).toBe(true);
+    expect(table.result.current.step).toBe(summary);
+    act(() => table.result.current.continuePlayback());
+    await waitFor(() => expect(table.result.current.playing).toBe(false));
+    expect(table.result.current.view).toEqual(v4.payload.view);
+  });
+
+  it("ends on the newest board when its log arrives late", async () => {
+    const [v1, v2, v3] = (await versions(firstCard, firstCard)) as Version3;
+    const table = renderTableState(v1);
+    table.rerender(v2);
+    table.rerender({ payload: v3.payload, log: v2.log });
+    act(() => table.result.current.skipPlayback());
+    table.rerender(v3);
+    expect(table.result.current.playing).toBe(false);
+    expect(table.result.current.view).toEqual(v3.payload.view);
   });
 });

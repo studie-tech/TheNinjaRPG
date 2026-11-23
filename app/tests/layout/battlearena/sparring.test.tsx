@@ -227,11 +227,10 @@ it("challenges with the chosen options", () => {
   render(<SparringMode />);
   fireEvent.click(screen.getAllByRole("checkbox", { name: /Ranked rules/ })[0]!);
   fireEvent.click(within(finder()).getByRole("button", { name: "Challenge Sora" }));
-  expect(mutations.createChallenge).toHaveBeenCalledWith({
-    targetId: "sora",
-    useRankedRules: true,
-    spectatable: false,
-  });
+  expect(mutations.createChallenge).toHaveBeenCalledWith(
+    { targetId: "sora", useRankedRules: true, spectatable: false },
+    expect.anything(),
+  );
 });
 
 it("marks players already challenged", () => {

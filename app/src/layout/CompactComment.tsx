@@ -5,22 +5,26 @@ import {
   AtSign,
   Ban,
   BarChart2,
+  ChevronLeft,
   Flag,
   Mail,
   Reply,
   SmilePlus,
   SquarePen,
+  Swords,
   Trash2,
   UserRound,
 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment } from "@/drizzle/schema";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
+import { type ChallengeFrom, ChallengePanel } from "@/layout/ChallengePlayer";
 import Confirm from "@/layout/Confirm";
 import { EmojiPicker } from "@/layout/EmojiPicker";
 import Link from "@/layout/Link";
@@ -76,6 +80,7 @@ export function CompactComment(props: CompactCommentProps) {
       <UserMenu
         user={user}
         isSelf={isAuthor}
+        challengeFrom={props.challengeFrom}
         onMention={props.onMentionUser}
         onMessage={props.onMessageUser}
         tavernStyling={props.tavernStyling}
@@ -255,17 +260,22 @@ export function CompactComment(props: CompactCommentProps) {
 function UserMenu({
   user,
   isSelf,
+  challengeFrom,
   onMention,
   onMessage,
   tavernStyling,
 }: {
   user: CompactCommentProps["user"];
   isSelf: boolean;
+  challengeFrom?: ChallengeFrom;
   tavernStyling?: boolean;
   onMention?: (username: string) => void;
   onMessage?: (user: ChatStartUser) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Swapping the popover's content between the views unmounts the focused control, so
+  // the challenge view focuses Back and returning ("back") focuses Challenge.
+  const [view, setView] = useState<"menu" | "challenge" | "back">("menu");
   const { userColor, titleColor } = getPostUserClasses(user, tavernStyling);
   const { refreshBlacklist } = useBlacklistCacheUpdate();
   const { mutate: toggleBlock, isPending } =
@@ -273,14 +283,19 @@ function UserMenu({
       onSuccess: async (result) => {
         showMutationToast(result);
         if (result.success) {
-          setOpen(false);
+          changeOpen(false);
           await refreshBlacklist();
         }
       },
     });
 
+  const changeOpen = (next: boolean) => {
+    setOpen(next);
+    if (!next) setView("menu");
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger
         className="focus-visible:ring-ring h-[36px] w-[36px] shrink-0 overflow-hidden rounded-lg focus-visible:ring-2"
         aria-label={`Actions for ${user.username}`}
@@ -292,78 +307,112 @@ function UserMenu({
           className="w-full rounded-lg"
         />
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        collisionPadding={8}
-        className="w-[208px] p-[4px]"
-        role="menu"
-        aria-label={`Actions for ${user.username}`}
-      >
-        <div className="mb-[4px] border-b px-[8px] pt-[4px] pb-[8px]">
-          <AvatarImage
-            href={user.avatar}
-            alt={user.username}
-            size={160}
-            className="mb-2 w-full rounded-lg"
-          />
-          <p className={cn("truncate text-[13px] font-bold", userColor)}>
-            {user.username}
-          </p>
-          {user.displayTitle && (
-            <span
-              className={cn(
-                "mt-1 inline-block rounded-md px-2 py-0.5 text-xs",
-                titleColor,
-              )}
-            >
-              {user.displayTitle}
-            </span>
-          )}
-          <p className="text-muted-foreground text-[12px]">
-            Lv {user.level} {showUserRank(user)}
-            {user.villageName ? ` · ${user.villageName}` : ""}
-          </p>
-        </div>
-        <MenuItem
-          asLink
-          href={`/username/${user.username}`}
-          onSelect={() => setOpen(false)}
+      {view === "challenge" ? (
+        <PopoverContent
+          align="start"
+          collisionPadding={8}
+          aria-label={`Challenge ${user.username}`}
+          className="max-h-[var(--radix-popover-content-available-height)] w-[320px] overflow-y-auto p-[8px]"
         >
-          <UserRound /> See profile
-        </MenuItem>
-        {!isSelf && onMessage && (
+          <ChallengePanel
+            opponent={user}
+            conversationId={challengeFrom?.conversationId ?? null}
+            onNavigate={() => changeOpen(false)}
+            leading={
+              <Button
+                variant="ghost"
+                size="icon"
+                // Keeps keyboard focus inside the popover when the challenge view replaces the menu.
+                autoFocus
+                className="h-[24px] w-[24px] shrink-0"
+                aria-label="Back"
+                title="Back"
+                onClick={() => setView("back")}
+              >
+                <ChevronLeft className="h-[16px] w-[16px]" aria-hidden />
+              </Button>
+            }
+          />
+        </PopoverContent>
+      ) : (
+        <PopoverContent
+          align="start"
+          collisionPadding={8}
+          className="max-h-[var(--radix-popover-content-available-height)] w-[208px] overflow-y-auto p-[4px]"
+          role="menu"
+          aria-label={`Actions for ${user.username}`}
+        >
+          <div className="mb-[4px] border-b px-[8px] pt-[4px] pb-[8px]">
+            <AvatarImage
+              href={user.avatar}
+              alt={user.username}
+              size={160}
+              className="mb-2 w-full rounded-lg"
+            />
+            <p className={cn("truncate text-[13px] font-bold", userColor)}>
+              {user.username}
+            </p>
+            {user.displayTitle && (
+              <span
+                className={cn(
+                  "mt-1 inline-block rounded-md px-2 py-0.5 text-xs",
+                  titleColor,
+                )}
+              >
+                {user.displayTitle}
+              </span>
+            )}
+            <p className="text-muted-foreground text-[12px]">
+              Lv {user.level} {showUserRank(user)}
+              {user.villageName ? ` · ${user.villageName}` : ""}
+            </p>
+          </div>
           <MenuItem
-            onSelect={() => {
-              setOpen(false);
-              onMessage(user);
-            }}
+            asLink
+            href={`/username/${user.username}`}
+            onSelect={() => changeOpen(false)}
           >
-            <Mail /> Send private message
+            <UserRound /> See profile
           </MenuItem>
-        )}
-        {!isSelf && onMention && (
-          <MenuItem
-            onSelect={() => {
-              setOpen(false);
-              onMention(user.username);
-            }}
-          >
-            <AtSign /> Mention in chat
-          </MenuItem>
-        )}
-        {!isSelf && (
-          <>
-            <div className="my-[4px] border-t" />
+          {!isSelf && onMessage && (
             <MenuItem
-              destructive
-              disabled={isPending}
-              onSelect={() => toggleBlock({ userId: user.userId, active: true })}
+              onSelect={() => {
+                changeOpen(false);
+                onMessage(user);
+              }}
             >
-              <Ban /> Block user
+              <Mail /> Send private message
             </MenuItem>
-          </>
-        )}
-      </PopoverContent>
+          )}
+          {!isSelf && challengeFrom && (
+            <MenuItem autoFocus={view === "back"} onSelect={() => setView("challenge")}>
+              <Swords /> Challenge
+            </MenuItem>
+          )}
+          {!isSelf && onMention && (
+            <MenuItem
+              onSelect={() => {
+                changeOpen(false);
+                onMention(user.username);
+              }}
+            >
+              <AtSign /> Mention in chat
+            </MenuItem>
+          )}
+          {!isSelf && (
+            <>
+              <div className="my-[4px] border-t" />
+              <MenuItem
+                destructive
+                disabled={isPending}
+                onSelect={() => toggleBlock({ userId: user.userId, active: true })}
+              >
+                <Ban /> Block user
+              </MenuItem>
+            </>
+          )}
+        </PopoverContent>
+      )}
     </Popover>
   );
 }
@@ -375,6 +424,7 @@ function MenuItem({
   href,
   destructive,
   disabled,
+  autoFocus,
 }: {
   children: React.ReactNode;
   onSelect: () => void;
@@ -382,6 +432,7 @@ function MenuItem({
   href?: string;
   destructive?: boolean;
   disabled?: boolean;
+  autoFocus?: boolean;
 }) {
   const className = cn(
     "hover:bg-muted focus-visible:bg-muted flex min-h-[36px] w-full items-center gap-[8px] rounded-sm px-[8px] text-left text-[13px] focus-visible:outline-none disabled:opacity-50 [&_svg]:h-[16px] [&_svg]:w-[16px]",
@@ -400,6 +451,8 @@ function MenuItem({
       role="menuitem"
       className={className}
       disabled={disabled}
+      // biome-ignore lint/a11y/noAutofocus: Returns focus to the item that opened the challenge view
+      autoFocus={autoFocus}
       onClick={onSelect}
     >
       {children}
@@ -497,6 +550,8 @@ function CompactEditor({
 export interface CompactCommentProps {
   user: NonNullable<PostProps["user"]>;
   comment: ConversationComment;
+  /** Offers the challenge shortcut in the author's menu. */
+  challengeFrom?: ChallengeFrom;
   children: React.ReactNode;
   tavernStyling?: boolean;
   highlighted?: boolean;

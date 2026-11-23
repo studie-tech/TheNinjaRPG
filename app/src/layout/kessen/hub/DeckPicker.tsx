@@ -99,10 +99,7 @@ export const DeckPicker = ({
         </Label>
         <Select
           value={choice.borrowFaction}
-          onValueChange={(value) => {
-            choice.setBorrowFaction(value as DeckFaction);
-            choice.setValue(BORROW);
-          }}
+          onValueChange={(value) => choice.borrow(value as DeckFaction)}
         >
           <SelectTrigger
             className="ml-auto h-8 w-[130px] shrink-0"
@@ -149,7 +146,11 @@ export const useDeckChoice = (
   const label = deck
     ? `${deck.name}${deck.ready ? "" : " + borrowed copies"}`
     : `Borrowed ${KESSEN_FACTION_NAMES[borrowFaction]} deck`;
-  return { value, setValue, borrowFaction, setBorrowFaction, deck, source, label };
+  const borrow = (faction: DeckFaction) => {
+    setBorrowFaction(faction);
+    setValue(BORROW);
+  };
+  return { value, setValue, borrowFaction, borrow, deck, source, label };
 };
 
 const DECK_OPTION =
@@ -163,7 +164,8 @@ export interface DeckChoice {
   value: string;
   setValue: (value: string) => void;
   borrowFaction: DeckFaction;
-  setBorrowFaction: (faction: DeckFaction) => void;
+  /** Chooses today's borrowed deck of a faction. */
+  borrow: (faction: DeckFaction) => void;
   /** The chosen saved deck; null for the borrowed deck. */
   deck: KessenDeckSummary | null;
   /** What a match start sends for the chosen deck. */

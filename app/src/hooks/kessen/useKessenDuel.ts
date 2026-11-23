@@ -216,6 +216,43 @@ export const useKessenDuel = (matchId: string | null) => {
   };
 };
 
+/**
+ * A duel watched without a seat: the `kessenPvp.watchMatch` payload and play log, both
+ * hands hidden. Like a seat it reads the duel again when its channel pushes a newer
+ * version; the seats drive the clock, so watching never writes.
+ */
+export const useWatchedKessenDuel = (matchId: string, enabled = true) => {
+  const query = api.kessenPvp.watchMatch.useQuery(
+    { matchId },
+    { enabled, staleTime: 5_000 },
+  );
+  const utils = api.useUtils();
+  const { pusher } = useUserDataSelector(selectUserId);
+  useEffect(() => {
+    if (!enabled || !pusher) return;
+    const channel = pusher.subscribe(matchId);
+    // Cancel even a first load: it may have read the duel before this push or subscription.
+    const reread = () =>
+      void utils.kessenPvp.watchMatch
+        .cancel({ matchId })
+        .then(() => utils.kessenPvp.watchMatch.invalidate({ matchId }));
+    const onUpdate = (data: { version?: number }) => {
+      if (typeof data.version !== "number") return;
+      const current = utils.kessenPvp.watchMatch.getData({ matchId });
+      if (isNewerKessenPvpVersion(current, { version: data.version })) reread();
+    };
+    channel.bind("event", onUpdate);
+    // Subscription confirmation closes the first read/subscribe gap and follows reconnects.
+    channel.bind("pusher:subscription_succeeded", reread);
+    return () => {
+      channel.unbind("event", onUpdate);
+      channel.unbind("pusher:subscription_succeeded", reread);
+      pusher.unsubscribe(matchId);
+    };
+  }, [matchId, pusher, enabled]);
+  return { ...query, match: query.data?.match ?? null, log: query.data?.log ?? null };
+};
+
 const selectUserId = (user: { userId: string }) => ({ userId: user.userId });
 
 /** Read the duel this long after its deadline, so the server's clock has passed it. */

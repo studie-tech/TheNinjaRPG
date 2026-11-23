@@ -60,6 +60,7 @@ export const useKessenPvpLobby = (enabled = true) => {
   const createChallenge = async (input: {
     targetId: string;
     deck: KessenDeckSource;
+    conversationId?: string;
   }): Promise<KessenPvpOutcome> => {
     const { data, message } = await run(
       () => create.mutateAsync(input),

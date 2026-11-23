@@ -1331,6 +1331,13 @@
       "when": 1795345466517,
       "tag": "0190_wakeful_dreadnoughts",
       "breakpoints": false
+    },
+    {
+      "idx": 191,
+      "version": "5",
+      "when": 1795372294832,
+      "tag": "0191_smart_micromacro",
+      "breakpoints": false
     }
   ]
 }

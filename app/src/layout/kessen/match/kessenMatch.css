@@ -842,6 +842,8 @@
   max-width: 100%;
   min-width: 0;
   align-items: baseline;
+  /* The last column, also when a spectator's band has no edge badge. */
+  grid-column: -2;
   justify-self: end;
   gap: 4px;
   overflow: hidden;
