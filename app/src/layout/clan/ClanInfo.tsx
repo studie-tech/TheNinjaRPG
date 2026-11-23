@@ -8,6 +8,7 @@ import {
   FilePenLine,
   List,
   Loader2,
+  MapPin,
   Palette,
   PiggyBank,
   Star,
@@ -728,7 +729,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
           />
         </div>
         <div>
-          <div className="grid grid-cols-1 pt-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-4 pt-2 sm:grid-cols-2">
             <div>
               {!userData?.isOutlaw && <p>Village: {clanData.village.name}</p>}
               <p>
@@ -790,63 +791,66 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               )}
             </div>
             <div>
-              <p>PvP Activity: {clanData.pvpActivity}</p>
-              <div className="flex items-center">
-                <p>Points: {clanData.points.toLocaleString()}</p>
-                {leaderLike && userData.clanId === clanId && (
-                  <ClanPointConversion clanId={clanId} points={clanData.points} />
-                )}
-              </div>
-              <div className="flex flex-row items-center">
-                <p>Bank: {clanData.bank.toLocaleString()}</p>{" "}
-                <Confirm
-                  title={`Donate to ${groupLabel.toLowerCase()}`}
-                  proceed_label="Donate"
-                  button={
-                    <PiggyBank className="ml-2 h-6 w-6 hover:cursor-pointer hover:text-orange-500" />
-                  }
-                  triggerLabel={`Donate to ${groupLabel.toLowerCase()} bank`}
-                  disabled={isDepositing}
-                  isLoading={isDepositing}
-                  onAccept={onDeposit}
-                >
+              <p className="px-1">PvP Activity: {clanData.pvpActivity}</p>
+              {leaderLike && userData.clanId === clanId ? (
+                <ClanPointConversion clanId={clanId} points={clanData.points} />
+              ) : (
+                <p className="px-1 py-1">Points: {clanData.points.toLocaleString()}</p>
+              )}
+              <Confirm
+                title={`Donate to ${groupLabel.toLowerCase()}`}
+                proceed_label="Donate"
+                button={
+                  <Button
+                    variant="ghost"
+                    className="hover:bg-primary/10 focus-visible:bg-primary/10 h-auto min-h-8 w-full justify-between gap-2 px-1 py-1 text-left font-normal whitespace-normal text-[length:inherit]"
+                    disabled={isDepositing}
+                  >
+                    <span>Bank: {clanData.bank.toLocaleString()}</span>
+                    <PiggyBank className="h-5 w-5 shrink-0" aria-hidden />
+                  </Button>
+                }
+                triggerLabel={`Bank: ${clanData.bank.toLocaleString()}. Donate to ${groupLabel.toLowerCase()} bank`}
+                disabled={isDepositing}
+                isLoading={isDepositing}
+                onAccept={onDeposit}
+              >
+                <p>
+                  Confirm donating money from pocket to {groupLabel.toLowerCase()} bank.
+                  You currently have {userData.money.toLocaleString()} ryo in your
+                  pocket.
+                </p>
+                {userData.isOutlaw && (
                   <p>
-                    Confirm donating money from pocket to {groupLabel.toLowerCase()}{" "}
-                    bank. You currently have {userData.money.toLocaleString()} ryo in
-                    your pocket.
+                    Once the faction has {HIDEOUT_COST} ryo, it becomes possible for the
+                    leader to purchase a hideout on the global map. At this point the
+                    faction detaches from the Syndicate, and effectively establishes
+                    their own base of operation.
                   </p>
-                  {userData.isOutlaw && (
-                    <p>
-                      Once the faction has {HIDEOUT_COST} ryo, it becomes possible for
-                      the leader to purchase a hideout on the global map. At this point
-                      the faction detaches from the Syndicate, and effectively
-                      establishes their own base of operation.
-                    </p>
-                  )}
-                  <Form {...toBankForm}>
-                    <form onSubmit={onDeposit} className="relative">
-                      <FormField
-                        control={toBankForm.control}
-                        name="amount"
-                        render={({ field }) => (
-                          <FormItem className="flex w-full flex-col">
-                            <FormControl>
-                              <Input
-                                id="amount"
-                                className="mt-2"
-                                placeholder="Transfer to bank"
-                                {...field}
-                                value={field.value as number}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </form>
-                  </Form>
-                </Confirm>
-              </div>
+                )}
+                <Form {...toBankForm}>
+                  <form onSubmit={onDeposit} className="relative">
+                    <FormField
+                      control={toBankForm.control}
+                      name="amount"
+                      render={({ field }) => (
+                        <FormItem className="flex w-full flex-col">
+                          <FormControl>
+                            <Input
+                              id="amount"
+                              className="mt-2"
+                              placeholder="Transfer to bank"
+                              {...field}
+                              value={field.value as number}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </form>
+                </Form>
+              </Confirm>
               {!hadStronghold && hadHideout && userData?.isOutlaw && (
                 <div className="flex flex-row items-center">
                   <p>Faction treasury: {clanData.repTreasury} reps</p>
@@ -957,6 +961,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   className="my-2 w-full"
                   onClick={() => setIsRelocationOpen(true)}
                 >
+                  <MapPin className="mr-2 h-6 w-6" aria-hidden />
                   Relocate Stronghold
                 </Button>
                 {isRelocationOpen && (
@@ -1339,51 +1344,51 @@ const BoostRow: React.FC<BoostRowProps> = ({
   const canAfford = clanBank >= cost;
   const isMaxed = currentLevel >= CLAN_BOOST_MAX_LEVEL;
 
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <p>
-        {label}: {currentBoost}%
-      </p>
-      {canPurchase && (
-        <Confirm
-          title={`Purchase ${label}`}
-          proceed_label={!isMaxed && canAfford ? "Purchase" : "Cannot purchase"}
-          confirmDisabled={isMaxed || !canAfford}
-          triggerClassName="shrink-0"
-          button={
-            <>
-              <span className="sr-only">Purchase {label}</span>
-              <ArrowBigUpDash className="h-6 w-6 hover:cursor-pointer hover:text-orange-500" />
-            </>
-          }
+  return canPurchase ? (
+    <Confirm
+      title={`Purchase ${label}`}
+      proceed_label={!isMaxed && canAfford ? "Purchase" : "Cannot purchase"}
+      confirmDisabled={isMaxed || !canAfford}
+      triggerLabel={`${label}: ${currentBoost}%. Purchase ${label}`}
+      button={
+        <Button
+          variant="ghost"
+          className="hover:bg-primary/10 focus-visible:bg-primary/10 h-auto min-h-8 w-full justify-between gap-2 px-1 py-1 text-left font-normal whitespace-normal text-[length:inherit]"
           disabled={isPending}
-          onAccept={onPurchase}
         >
-          {isMaxed ? (
-            <p>
-              Maximum level reached (
-              {CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL}%)
-            </p>
-          ) : (
-            <div>
-              <p>
-                Purchase {CLAN_BOOST_PERCENT_PER_LEVEL}% {label.toLowerCase()} for{" "}
-                <span className={canAfford ? "text-green-600" : "text-red-600"}>
-                  {cost.toLocaleString()} Ryo
-                </span>{" "}
-                from the bank.
-              </p>
-              <p className="mt-2">
-                Current bank balance: {clanBank.toLocaleString()} Ryo
-              </p>
-              <p className="mt-2 text-gray-500 text-sm">
-                Note: Boosts decay by {CLAN_BOOST_PERCENT_PER_LEVEL}% per day.
-              </p>
-            </div>
-          )}
-        </Confirm>
+          <span>
+            {label}: {currentBoost}%
+          </span>
+          <ArrowBigUpDash className="h-5 w-5 shrink-0" aria-hidden />
+        </Button>
+      }
+      disabled={isPending}
+      onAccept={onPurchase}
+    >
+      {isMaxed ? (
+        <p>
+          Maximum level reached ({CLAN_BOOST_MAX_LEVEL * CLAN_BOOST_PERCENT_PER_LEVEL}%)
+        </p>
+      ) : (
+        <div>
+          <p>
+            Purchase {CLAN_BOOST_PERCENT_PER_LEVEL}% {label.toLowerCase()} for{" "}
+            <span className={canAfford ? "text-green-600" : "text-red-600"}>
+              {cost.toLocaleString()} Ryo
+            </span>{" "}
+            from the bank.
+          </p>
+          <p className="mt-2">Current bank balance: {clanBank.toLocaleString()} Ryo</p>
+          <p className="mt-2 text-gray-500 text-sm">
+            Note: Boosts decay by {CLAN_BOOST_PERCENT_PER_LEVEL}% per day.
+          </p>
+        </div>
       )}
-    </div>
+    </Confirm>
+  ) : (
+    <p className="px-1 py-1">
+      {label}: {currentBoost}%
+    </p>
   );
 };
 
@@ -1428,10 +1433,9 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
   return (
     <>
       <Button
-        size="icon"
         variant="ghost"
-        className="ml-1 h-8 w-8 shrink-0"
-        aria-label="Convert points to ryo"
+        className="hover:bg-primary/10 focus-visible:bg-primary/10 h-auto min-h-8 w-full justify-between gap-2 px-1 py-1 text-left font-normal whitespace-normal text-[length:inherit]"
+        aria-label={`Points: ${points.toLocaleString()}. Convert points to ryo`}
         hoverText="Convert points to ryo"
         disabled={points < 1}
         onClick={() => {
@@ -1439,7 +1443,8 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
           setIsOpen(true);
         }}
       >
-        <ArrowRightLeft className="h-5 w-5" aria-hidden />
+        <span>Points: {points.toLocaleString()}</span>
+        <ArrowRightLeft className="h-5 w-5 shrink-0" aria-hidden />
       </Button>
       <Modal
         id="convert-clan-points"
