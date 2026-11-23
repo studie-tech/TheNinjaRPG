@@ -7,7 +7,7 @@ import {
   PanelLeftOpen,
   PanelRightOpen,
 } from "lucide-react";
-import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -71,25 +71,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
     [controlsTarget, viewTarget],
   );
 
-  const headerRef = useRef<HTMLElement>(null);
   const playerMeterFocus = useRef<HTMLElement | null>(null);
-  useLayoutEffect(() => {
-    const header = headerRef.current;
-    if (!header) return;
-    const root = document.documentElement;
-    const measure = () =>
-      root.style.setProperty(
-        "--experimental-header-height",
-        `${Math.ceil(header.getBoundingClientRect().height)}px`,
-      );
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(header);
-    return () => {
-      observer.disconnect();
-      root.style.removeProperty("--experimental-header-height");
-    };
-  }, []);
 
   const playerMenu = (
     <Sheet
@@ -188,7 +170,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
         <a href="#game-content" className="theme-skip-link">
           Skip to game content
         </a>
-        <header ref={headerRef} className="experimental-header">
+        <header className="experimental-header">
           <div data-header-item="player-menu">{playerMenu}</div>
           {userData && (
             <ExperimentalPlayerStatus

@@ -373,7 +373,10 @@ const ProfileBattleEffects: React.FC = () => {
 };
 
 /** Money on hand, linked to the bank inside a location. */
-export const ProfileMoney: React.FC<{ hasLocation: boolean }> = ({ hasLocation }) => {
+export const ProfileMoney: React.FC<{ hasLocation: boolean; compact?: boolean }> = ({
+  hasLocation,
+  compact = false,
+}) => {
   const { data: money } = useUserDataSelector(selectMoney);
   return (
     <TooltipProvider delayDuration={50}>
@@ -386,7 +389,11 @@ export const ProfileMoney: React.FC<{ hasLocation: boolean }> = ({ hasLocation }
           >
             <div className="flex flex-row items-center">
               <p className="mr-3 text-xl">両</p>
-              {money?.toLocaleString() ?? "??"}
+              {money === undefined
+                ? "??"
+                : compact
+                  ? compactNumberFormat.format(money)
+                  : money.toLocaleString()}
             </div>
           </Link>
         </TooltipTrigger>
@@ -681,7 +688,9 @@ export const ProfileDailyActivities: React.FC<{ compact?: boolean }> = ({
 };
 
 /** Reputation points, linked to the black market. */
-export const ProfileReputation: React.FC = () => {
+export const ProfileReputation: React.FC<{ compact?: boolean }> = ({
+  compact = false,
+}) => {
   const { data: reputationPoints } = useUserDataSelector(selectReputationPoints);
   return (
     <SidebarLinkRow
@@ -689,7 +698,12 @@ export const ProfileReputation: React.FC = () => {
       tooltip="Reputation points for use in black market"
       label={`Reputation points: ${reputationPoints ?? "Loading"}`}
     >
-      <Star className="mr-2 h-6 w-6" /> {reputationPoints ?? "??"}
+      <Star className="mr-2 h-6 w-6" />{" "}
+      {reputationPoints === undefined
+        ? "??"
+        : compact
+          ? compactNumberFormat.format(reputationPoints)
+          : reputationPoints}
     </SidebarLinkRow>
   );
 };
@@ -851,5 +865,11 @@ const selectDailyActivities = (user: ProfileUser) => ({
 });
 
 const selectReputationPoints = (user: ProfileUser) => user.reputationPoints;
+
+/** Short HUD balances retain their exact amounts in the accessible link label. */
+const compactNumberFormat = new Intl.NumberFormat("en", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
 
 type ProfileUser = NonNullable<UserWithRelations>;

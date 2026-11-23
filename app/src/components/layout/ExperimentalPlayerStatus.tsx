@@ -78,9 +78,9 @@ export function ExperimentalPlayerStatus({
         className="player-status-activities"
         aria-label="Daily activities and balances"
       >
-        <ProfileMoney hasLocation={hasLocation} />
+        <ProfileMoney hasLocation={hasLocation} compact />
         <ProfileDailyActivities compact />
-        <ProfileReputation />
+        <ProfileReputation compact />
       </fieldset>
       <fieldset
         className="player-status-timers"

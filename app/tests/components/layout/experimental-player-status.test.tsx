@@ -114,3 +114,16 @@ it("keeps profile, status, village, balances and daily destinations accessible",
   ).toBe("/profile");
   expect(view.queryByRole("link", { name: /^Daily missions/ })).toBeNull();
 });
+
+it("shortens HUD balances while retaining their exact accessible values", () => {
+  user = { ...user, money: 1_234_567, reputationPoints: 100_000 };
+  const view = render(
+    <ExperimentalPlayerStatus hasLocation onOpenPlayerMenu={openPlayer} />,
+  );
+  expect(
+    view.getByRole("link", { name: "Money on hand: 1,234,567" }).textContent,
+  ).toContain("1.2M");
+  expect(
+    view.getByRole("link", { name: "Reputation points: 100000" }).textContent,
+  ).toContain("100K");
+});

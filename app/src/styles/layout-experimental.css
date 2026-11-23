@@ -22,6 +22,7 @@ html[data-game-layout="experimental"] {
   display: grid;
   flex: none;
   grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-rows: 44px;
   align-items: center;
   gap: 0.5rem;
   border-bottom: 1px solid var(--theme-line);
@@ -264,38 +265,40 @@ html[data-game-layout="experimental"] {
   }
 }
 
-/* The HUD compresses labels while the player drawer keeps the full readings. */
+/* Keep the character HUD within the menu buttons' 44px row at every viewport. */
 .experimental-player-status {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 0.45rem 0.75rem;
-  width: min(100%, 1000px);
+  grid-template-columns: 28px minmax(32px, 0.8fr) minmax(54px, 1.2fr) minmax(
+      56px,
+      1fr
+    );
+  gap: 3px;
+  width: min(100%, 1100px);
+  height: 44px;
   min-width: 0;
   justify-self: center;
   align-items: center;
 }
 .player-status-avatar {
   position: relative;
-  grid-row: 1 / 3;
-  align-self: start;
-  width: 44px;
+  width: 28px;
 }
 .player-status-avatar .player-status-portrait {
   width: 100%;
   margin: 0;
   border: 1px solid var(--theme-line);
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
 }
 .player-status-level {
   position: absolute;
-  right: -3px;
-  bottom: -3px;
-  min-width: 20px;
+  right: -2px;
+  bottom: -2px;
+  min-width: 14px;
   border: 1px solid var(--theme-line);
-  border-radius: 0.35rem;
-  padding: 1px 3px;
+  border-radius: 0.25rem;
+  padding: 0 2px;
   background: var(--theme-surface);
-  font-size: 10px;
+  font-size: 8px;
   line-height: 1.2;
   font-weight: 700;
   text-align: center;
@@ -304,18 +307,19 @@ html[data-game-layout="experimental"] {
   min-width: 0;
 }
 .player-status-name {
-  font-size: max(12px, 1.1rem);
   display: block;
   overflow: hidden;
+  font-size: 9px;
   font-weight: 700;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .player-status-standing {
   display: flex;
-  gap: 0.6rem;
-  align-items: center;
-  font-size: 10px;
+  flex-direction: column;
+  font-size: 8px;
+  line-height: 1.2;
 }
 .player-status-standing > a,
 .player-status-standing > span {
@@ -323,8 +327,8 @@ html[data-game-layout="experimental"] {
   white-space: nowrap;
 }
 .player-status-standing svg {
-  width: 12px;
-  height: 12px;
+  width: 9px;
+  height: 9px;
 }
 .player-status-village {
   overflow: hidden;
@@ -332,141 +336,153 @@ html[data-game-layout="experimental"] {
 }
 .player-status-pools {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: 1fr;
+  grid-auto-rows: 8px;
+  gap: 1px;
   min-width: 0;
 }
 .player-status-meter {
-  display: block;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 3px;
   width: 100%;
+  height: 8px;
+  align-items: center;
   text-align: left;
 }
 .player-status-meter-label {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 9px;
-  line-height: 1.3;
+  display: contents;
+  font-size: 8px;
+  line-height: 1;
+}
+.player-status-meter-label > span:first-child {
+  grid-column: 1;
+  grid-row: 1;
 }
 .player-status-meter-value {
   display: none;
+  grid-column: 3;
+  grid-row: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .player-status-meter-track {
-  height: 5px;
+  grid-column: 2;
+  grid-row: 1;
+  height: 4px;
   overflow: hidden;
   border-radius: 2px;
   background: rgb(0 0 0 / 0.15);
 }
-
-.player-status-activities,
-.player-status-timers {
-  display: flex;
-  grid-column: 1 / -1;
-  flex-wrap: wrap;
-  gap: 0.3rem 0.8rem;
-  align-items: center;
-  font-size: 10px;
+.player-status-activities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 14px;
+  min-width: 0;
+  font-size: 8px;
   font-variant-numeric: tabular-nums;
 }
 .player-status-activities > a,
-.player-status-activities > button,
-.player-status-timers > button {
+.player-status-activities > button {
   width: auto;
-  min-height: 24px;
+  min-width: 0;
+  white-space: nowrap;
 }
-.player-status-activities svg,
-.player-status-timers svg {
-  width: 14px;
-  height: 14px;
-  margin-right: 0.25rem;
+.player-status-activities svg {
+  width: 9px;
+  height: 9px;
+  margin-right: 2px;
 }
 .player-status-activities p {
-  margin-right: 0.25rem;
-  font-size: 14px;
+  margin-right: 2px;
+  font-size: 10px;
 }
-.player-status-timers:empty {
-  display: none;
-}
+/* Active timer descriptions remain available in the player drawer on small screens. */
 .player-status-timers {
-  opacity: 0.8;
+  display: none;
 }
 @media (min-width: 768px) {
   .experimental-player-status {
-    grid-template-columns: 56px minmax(120px, 0.8fr) minmax(180px, 1.3fr) minmax(
-        240px,
+    grid-template-columns: 36px minmax(90px, 0.7fr) minmax(180px, 1.2fr) minmax(
+        220px,
         1.5fr
       );
-    gap: 0.25rem 1.25rem;
+    gap: 2px 1rem;
   }
   .player-status-avatar {
-    grid-column: 1;
+    width: 36px;
     grid-row: 1 / 3;
-    width: 56px;
   }
   .player-status-identity {
     grid-column: 2;
     grid-row: 1 / 3;
   }
   .player-status-name {
-    font-size: max(14px, 1.25rem);
+    font-size: 12px;
   }
   .player-status-standing {
+    flex-direction: row;
     flex-wrap: wrap;
-    font-size: 11px;
-    gap: 0.25rem 0.8rem;
+    gap: 0 0.5rem;
+    font-size: 9px;
   }
   .player-status-pools {
     grid-column: 3;
     grid-row: 1 / 3;
-    grid-template-columns: 1fr;
-    gap: 2px;
   }
-  .player-status-meter-label {
-    font-size: 9px;
-    line-height: 1.1;
+  .player-status-meter {
+    grid-template-columns: 14px minmax(0, 1fr) auto;
   }
   .player-status-meter-value {
     display: inline;
   }
-  .player-status-meter-track {
-    height: 4px;
-  }
   .player-status-activities {
+    display: flex;
     grid-column: 4;
     grid-row: 1;
-    font-size: 11px;
+    flex-wrap: wrap;
+    gap: 0 0.65rem;
+    align-items: center;
+    max-height: 22px;
+    overflow: auto;
+    font-size: 10px;
+  }
+  .player-status-activities svg,
+  .player-status-timers svg {
+    width: 12px;
+    height: 12px;
+    margin-right: 3px;
+  }
+  .player-status-activities p {
+    font-size: 12px;
+  }
+  .player-status-activities > a,
+  .player-status-activities > button {
+    min-height: 20px;
   }
   .player-status-timers {
+    display: flex;
     grid-column: 4;
     grid-row: 2;
-    font-size: 11px;
+    gap: 0.75rem;
+    align-items: center;
+    min-width: 0;
+    max-height: 20px;
+    overflow: auto;
+    font-size: 9px;
+    opacity: 0.8;
   }
-}
-
-.player-status-activities {
-  gap: 0.25rem 0.5rem;
-  justify-content: space-between;
-}
-.player-status-activities > a {
-  white-space: nowrap;
-}
-@media (min-width: 768px) {
+  .player-status-timers > button {
+    width: auto;
+    flex: none;
+    white-space: nowrap;
+  }
+  .player-status-timers:empty {
+    display: none;
+  }
   .experimental-player-status:has(.player-status-timers:empty)
     .player-status-activities {
     grid-row: 1 / 3;
-    align-self: center;
-  }
-  .player-status-activities {
-    justify-content: start;
-    gap: 0.5rem 1rem;
-  }
-}
-
-@media (max-width: 767px) {
-  /* The counters sit below the menu buttons and can use their otherwise empty columns. */
-  .player-status-activities,
-  .player-status-timers {
-    width: calc(100% + 88px);
-    margin-inline: -44px;
+    max-height: 44px;
   }
 }
