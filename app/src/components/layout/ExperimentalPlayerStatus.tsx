@@ -91,20 +91,18 @@ export function ExperimentalPlayerStatus({ hasLocation }: { hasLocation: boolean
           <ProfilePools compact onInspect={inspectResources} />
           <ProfileLevel compact onInspect={inspectResources} />
         </fieldset>
-        <fieldset
-          className="player-status-activities"
-          aria-label="Daily activities and balances"
+        <section
+          className="player-status-shortcuts"
+          aria-label="Character shortcuts"
+          onFocusCapture={(event) =>
+            event.target.scrollIntoView({ block: "nearest", inline: "nearest" })
+          }
         >
           <ProfileMoney hasLocation={hasLocation} compact />
           <ProfileDailyActivities compact />
           <ProfileReputation compact />
-        </fieldset>
-        <fieldset
-          className="player-status-timers"
-          aria-label="Active effects and training"
-        >
           <ProfileTimers compact />
-        </fieldset>
+        </section>
       </section>
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent

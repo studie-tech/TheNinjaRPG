@@ -380,32 +380,57 @@ html[data-game-layout="experimental"] {
   border-radius: 2px;
   background: rgb(0 0 0 / 0.15);
 }
-.player-status-activities {
+/* Fill each column before wrapping, balancing cards across the available rows. */
+.player-status-shortcuts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 14px;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(3, 13px);
+  grid-auto-columns: max-content;
+  align-content: safe center;
+  align-items: center;
+  justify-content: start;
+  gap: 1px 3px;
   min-width: 0;
+  max-height: 44px;
+  overflow: auto;
+  scrollbar-width: none;
   font-size: 9px;
   font-variant-numeric: tabular-nums;
 }
-.player-status-activities > a,
-.player-status-activities > button {
+.player-status-shortcuts > a,
+.player-status-shortcuts > button {
   width: auto;
   min-width: 0;
+  max-width: 100%;
+  min-height: 13px;
+  border: 1px solid color-mix(in srgb, var(--theme-line) 20%, transparent);
+  border-radius: 3px;
+  padding: 0 2px;
+  line-height: 1.2;
   white-space: nowrap;
 }
-.player-status-activities svg {
+.player-status-shortcuts > a:hover,
+.player-status-shortcuts > button:hover {
+  background: var(--theme-bg);
+}
+.player-status-shortcuts svg {
+  flex-shrink: 0;
   width: 10px;
   height: 10px;
   margin-right: 2px;
 }
-.player-status-activities p {
+.player-status-shortcuts p {
   margin-right: 2px;
   font-size: 10px;
 }
-/* Active timer descriptions remain available in the player drawer on small screens. */
-.player-status-timers {
-  display: none;
+.player-status-shortcuts > button > div {
+  min-width: 0;
+}
+.player-status-shortcuts [data-player-summary-label] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (min-width: 768px) {
   .experimental-player-status {
@@ -443,55 +468,25 @@ html[data-game-layout="experimental"] {
   .player-status-meter-value {
     display: inline;
   }
-  .player-status-activities {
-    display: flex;
+  .player-status-shortcuts {
     grid-column: 4;
-    grid-row: 1;
-    flex-wrap: wrap;
-    justify-content: start;
-    gap: 0 1rem;
-    align-items: center;
-    max-height: 22px;
-    overflow: auto;
+    grid-row: 1 / 3;
+    grid-template-rows: repeat(2, 20px);
+    gap: 2px 0.5rem;
     font-size: 10px;
   }
-  .player-status-activities svg,
-  .player-status-timers svg {
+  .player-status-shortcuts svg {
     width: 12px;
     height: 12px;
     margin-right: 3px;
   }
-  .player-status-activities p {
+  .player-status-shortcuts p {
     font-size: 12px;
   }
-  .player-status-activities > a,
-  .player-status-activities > button {
+  .player-status-shortcuts > a,
+  .player-status-shortcuts > button {
     min-height: 20px;
-  }
-  .player-status-timers {
-    display: flex;
-    grid-column: 4;
-    grid-row: 2;
-    gap: 0.75rem;
-    align-items: center;
-    min-width: 0;
-    max-height: 20px;
-    overflow: auto;
-    font-size: 9px;
-    opacity: 0.8;
-  }
-  .player-status-timers > button {
-    width: auto;
-    flex: none;
-    white-space: nowrap;
-  }
-  .player-status-timers:empty {
-    display: none;
-  }
-  .experimental-player-status:has(.player-status-timers:empty)
-    .player-status-activities {
-    grid-row: 1 / 3;
-    max-height: 44px;
+    padding-inline: 0.4rem;
   }
 }
 
@@ -571,34 +566,20 @@ html[data-game-layout="experimental"] {
     line-height: 1;
     opacity: 0.7;
   }
-  .player-status-activities {
-    gap: 0 1.25rem;
-  }
-  .player-status-timers {
-    gap: 1.25rem;
-  }
 }
 
-/* Preserve the clock when a long training or crafting name needs to shorten. */
-.player-status-timers > button {
-  flex-shrink: 1;
-  min-width: 0;
+@container (min-width: 1000px) and (max-width: 1199px) {
+  .player-status-shortcuts [data-player-summary-label] {
+    display: none;
+  }
 }
-.player-status-timers > button > div {
-  min-width: 0;
-}
-.player-status-timers svg,
-.player-status-timers a {
-  flex-shrink: 0;
-}
-.player-status-timers [data-player-summary-label] {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+@container (min-width: 1600px) {
+  .player-status-shortcuts {
+    grid-template-rows: 20px;
+  }
 }
 @container (min-width: 1200px) {
-  .player-status-timers [data-player-summary-label] {
+  .player-status-shortcuts [data-player-summary-label] {
     max-width: 24ch;
   }
   .experimental-player-status [data-player-summary-full-value] {
