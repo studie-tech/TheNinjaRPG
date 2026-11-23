@@ -671,9 +671,28 @@ export function TravelView({
   );
   const mapControls = (
     <div className="flex flex-col gap-1 text-sm [&_svg]:shrink-0">
+      {showSector && (
+        <div className="flex flex-wrap items-center gap-2">
+          <JutsuLoadoutSelector label="Jutsu" />
+          <ItemLoadoutSelector label="Items" />
+        </div>
+      )}
       {travelTools.map(({ key, node }) => (
         <Fragment key={key}>{node}</Fragment>
       ))}
+      {!immersive && isSectorTools && (
+        <button
+          type="button"
+          aria-label="Expand world"
+          aria-expanded={isWorldExpanded}
+          disabled={!showSector || !SectorComponent}
+          className={mapToolClassName}
+          onClick={() => setWorldExpanded(true)}
+        >
+          <Maximize2 className="h-7 w-7" aria-hidden />
+          <span>Fullscreen</span>
+        </button>
+      )}
     </div>
   );
 
@@ -845,33 +864,12 @@ export function TravelView({
           )}
         </div>
       </ContentBox>
-      <div className="flex flex-wrap items-center justify-between gap-2 p-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" compact />}
-          {showSector && <ItemLoadoutSelector size="small" label="Items" compact />}
+      {showSector && userData?.anbuId && autoAttackMode && (
+        <div className="flex w-full items-center p-1 text-sm font-semibold text-red-500">
+          <Zap className="mr-1 h-4 w-4" />
+          Auto-Attack: Scanning for enemies to hunt...
         </div>
-        {!immersive && isSectorTools && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Expand world"
-            aria-expanded={isWorldExpanded}
-            disabled={!showSector || !SectorComponent}
-            className="text-muted-foreground ml-auto min-h-[44px] gap-2"
-            onClick={() => setWorldExpanded(true)}
-          >
-            <Maximize2 className="size-4" aria-hidden />
-            Fullscreen
-          </Button>
-        )}
-        {showSector && userData?.anbuId && autoAttackMode && (
-          <div className="flex w-full items-center text-sm font-semibold text-red-500">
-            <Zap className="mr-1 h-4 w-4" />
-            Auto-Attack: Scanning for enemies to hunt...
-          </div>
-        )}
-      </div>
+      )}
       {shownConsumables && shownConsumables.length > 0 && (
         <div className="flex flex-col" inert={isFetchingItems}>
           <p className="font-bold">Consumables</p>

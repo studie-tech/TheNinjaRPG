@@ -15,6 +15,8 @@ import * as sectorCache from "@/hooks/useSectorCacheUpdate";
 import * as sectorVillage from "@/hooks/useSectorVillage";
 import { useTravelSession } from "@/hooks/useTravelSession";
 import * as ContentBox from "@/layout/ContentBox";
+import * as ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
+import * as JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import * as TravelPosition from "@/layout/TravelPositionLabel";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as UserContext from "@/utils/UserContext";
@@ -66,6 +68,7 @@ const villageData = [
 ];
 const userRef = { current: undefined as NonNullable<UserWithRelations> | undefined };
 const push = vi.fn();
+const RealContentBox = ContentBox.default;
 beforeEach(() => {
   mutation.mutate.mockClear();
   mutation.isPending = false;
@@ -630,6 +633,50 @@ it("renders host navigation alongside travel tools in the immersive header", () 
   expect(view.getByRole("button", { name: "Quick Travel" })).toBeTruthy();
   expect(view.queryByRole("button", { name: "Expand world" })).toBeNull();
 });
+
+it.each([false, true])(
+  "keeps loadouts inside Map controls without a below-map toolbar (immersive=%s)",
+  async (immersive) => {
+    vi.spyOn(ContentBox, "default").mockImplementation(RealContentBox);
+    vi.spyOn(JutsuLoadoutSelector, "default").mockReturnValue(
+      <button type="button">Jutsu loadout</button>,
+    );
+    vi.spyOn(ItemLoadoutSelector, "default").mockReturnValue(
+      <button type="button">Item loadout</button>,
+    );
+    let session: ReturnType<typeof useTravelSession>;
+    function LoadedTravel() {
+      session = useTravelSession();
+      return (
+        <TravelView
+          session={{ ...session, showSector: !session.isGlobal }}
+          immersive={immersive}
+        />
+      );
+    }
+    const view = render(<LoadedTravel />);
+    expect(view.queryByRole("button", { name: "Jutsu loadout" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Item loadout" })).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Map controls" }));
+    const controls = view.getByRole("region", { name: "Map controls" });
+    expect(controls.contains(view.getByRole("button", { name: "Jutsu loadout" }))).toBe(
+      true,
+    );
+    expect(controls.contains(view.getByRole("button", { name: "Item loadout" }))).toBe(
+      true,
+    );
+    if (!immersive) {
+      expect(
+        controls.contains(view.getByRole("button", { name: "Expand world" })),
+      ).toBe(true);
+    }
+    const box = view.container.querySelector("[data-content-box]");
+    expect(box?.nextElementSibling).toBeNull();
+    await act(async () => session.setActiveTab(session.globalLink));
+    expect(view.queryByRole("button", { name: "Jutsu loadout" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Item loadout" })).toBeNull();
+  },
+);
 
 it.each([false, true])(
   "hides the Travel heading only when immersive=%s",
