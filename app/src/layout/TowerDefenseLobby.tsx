@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CheckCircle2,
   Coins,
   Crosshair,
   Crown,
@@ -13,7 +12,6 @@ import {
   Play,
   RotateCcw,
   ScrollText,
-  Shield,
   Sparkles,
   Swords,
   Trash2,
@@ -28,7 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TD_DAILY_WAVES, TD_STAGE_IMAGE_URLS } from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
-import Link from "@/layout/Link";
+import { MiniGameDailyDuty } from "@/layout/MiniGameDailyDuty";
 import { SEAL_GLYPHS, SEAL_HOTKEYS } from "@/layout/TowerDefenseHud";
 import { TowerDefenseLanding } from "@/layout/TowerDefenseLanding";
 import { cn } from "@/libs/shadui";
@@ -142,15 +140,6 @@ export const TowerDefenseLobby = (props: {
           onPlay={() => props.onStart(1, false)}
         />
       )}
-      {props.isGuest && (
-        <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-3 text-sm">
-          Playing as a guest: runs are not saved and earn no scrolls.{" "}
-          <Link className="font-semibold underline" href="/login">
-            Log in
-          </Link>{" "}
-          to train in the Guard Hall and climb the leaderboard.
-        </div>
-      )}
       {props.dailyDutyDone !== undefined && (
         <DailyDuty
           done={props.dailyDutyDone}
@@ -159,7 +148,7 @@ export const TowerDefenseLobby = (props: {
         />
       )}
       <div className="grid gap-4">
-        <Card>
+        <Card className="rounded-xl border-2 border-amber-500/70 shadow-none">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Swords className="h-5 w-5" /> Defend the Village
@@ -315,30 +304,18 @@ export const TowerDefenseLobby = (props: {
 const DailyDuty = (props: { done: boolean; level: number; villageName?: string }) => {
   const reward = tdDailyReward(props.level);
   return (
-    <div
-      className={cn(
-        "flex items-start gap-3 rounded-lg border p-3 text-sm",
+    <MiniGameDailyDuty
+      id="td-daily"
+      title={props.done ? "Guard Hall duty done for today" : "Daily Guard Hall duty"}
+      done={props.done}
+      description={
         props.done
-          ? "border-green-600/40 bg-green-600/10"
-          : "border-amber-500/50 bg-amber-500/10",
-      )}
-    >
-      {props.done ? (
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
-      ) : (
-        <Shield className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-      )}
-      <div className="space-y-0.5">
-        <p className="font-semibold">
-          {props.done ? "Guard Hall duty done for today" : "Daily Guard Hall duty"}
-        </p>
-        <p>
-          {props.done
-            ? `${props.villageName ?? "Your village"} rests easy. A new duty comes with tomorrow's raiders.`
-            : `Raiders march on ${props.villageName ?? "the village"} every day. Clear ${TD_DAILY_WAVES} waves in one run to earn ${reward.ryo.toLocaleString()} ryo${props.villageName ? `, ${reward.prestige} prestige and ${reward.villageTokens} tokens for ${props.villageName}` : ` and ${reward.prestige} prestige`}.`}
-        </p>
-      </div>
-    </div>
+          ? `${props.villageName ?? "Your village"} rests easy. A new duty comes with tomorrow's raiders.`
+          : `Clear ${TD_DAILY_WAVES} waves in one run to defend ${props.villageName ?? "the village"} today.`
+      }
+      reward={reward}
+      hasVillage={!!props.villageName}
+    />
   );
 };
 

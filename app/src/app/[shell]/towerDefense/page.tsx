@@ -24,6 +24,7 @@ import { TowerDefensePlayfield } from "@/layout/TowerDefensePlayfield";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { findQuestChallenge } from "@/libs/quest/challenge";
 import { tdDailyDutyDone } from "@/libs/towerDefense/balance";
+import { TD_GAME_NAME } from "@/libs/towerDefense/landing";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -144,7 +145,7 @@ export default function TowerDefensePage() {
   if (run.phase === "lobby") {
     const lobby = (
       <ContentBox
-        title={userId ? "Tower Defense" : "Ninja Tower Defense"}
+        title={userId ? "Tower Defense" : TD_GAME_NAME}
         subtitle={
           userId
             ? "Defend the village against endless raiders"

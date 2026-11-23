@@ -4,22 +4,6 @@
  * hall; each section lays itself out against its own width.
  */
 
-/* The banner's pitch under its title. */
-.kh-hall-lead {
-  max-width: 560px;
-  margin: 0;
-  color: var(--kessen-cream);
-  font-size: 14px;
-  line-height: 1.45;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
-}
-@container kh-hall (min-width: 600px) {
-  .kh-hall-lead {
-    flex-basis: 100%;
-    margin-top: -2px;
-  }
-}
-
 /* The Academy and the Circuit sit side by side once both have room. */
 .kg-columns {
   display: grid;
@@ -384,19 +368,4 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-/* The guest banner's two calls to action lead its row and share it evenly. */
-.kg-hall .kh-hall-actions {
-  flex: 1 1 100%;
-  justify-content: flex-start;
-  margin-left: 0;
-}
-.kg-hall .kh-hall-action {
-  flex: 0 1 auto;
-}
-@container kh-hall (max-width: 599px) {
-  .kg-hall .kh-hall-action {
-    flex: 1 1 100%;
-  }
 }

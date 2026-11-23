@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { absoluteUrl, buildMetadata, SITE_URL } from "@/libs/seo";
 import {
+  TD_GAME_NAME,
   TD_LANDING_DESCRIPTION,
   TD_LANDING_FAQ,
   TD_LANDING_TITLE,
@@ -19,7 +20,7 @@ const JSON_LD = JSON.stringify({
     {
       "@type": "VideoGame",
       "@id": `${absoluteUrl("/towerDefense")}#game`,
-      name: "Ninja Tower Defense",
+      name: TD_GAME_NAME,
       url: absoluteUrl("/towerDefense"),
       description: TD_LANDING_DESCRIPTION,
       genre: ["Tower defense", "Strategy"],
