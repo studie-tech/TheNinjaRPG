@@ -1,5 +1,6 @@
 html[data-game-layout="experimental"] {
   --experimental-bottom-nav-space: calc(5rem + env(safe-area-inset-bottom));
+  --experimental-sidebar-width: clamp(240px, 22vw, 320px);
   --experimental-header-height: calc(
     max(0.5rem, env(safe-area-inset-top)) + 44px + 0.5rem + 1px
   );
@@ -176,7 +177,7 @@ html[data-game-layout="experimental"] {
   .experimental-drawer {
     top: calc(var(--experimental-header-height) + 1rem);
     bottom: calc(var(--experimental-bottom-nav-space) + 1rem);
-    width: clamp(240px, 22vw, 320px);
+    width: var(--experimental-sidebar-width);
     max-width: calc(100vw - 2rem);
     height: auto;
     border: 1px solid var(--theme-line);
@@ -187,6 +188,9 @@ html[data-game-layout="experimental"] {
   }
   .experimental-drawer[data-experimental-sidebar="game"] {
     right: max(1rem, env(safe-area-inset-right));
+  }
+  .experimental-game[data-right-sidebar-open="true"] .experimental-travel [data-sector-weather] {
+    right: calc(var(--experimental-sidebar-width) + max(1rem, env(safe-area-inset-right)) + 1rem);
   }
   .experimental-mobile-nav[data-has-cookie-control="true"] {
     grid-template-columns: repeat(7, 4.5rem);

@@ -154,6 +154,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
   return (
     <div
       data-world-page
+      data-right-sidebar-open={rightSideBarOpen || undefined}
       className={cn("experimental-game", isMapPage && "experimental-game-map")}
     >
       <a href="#game-content" className="theme-skip-link">
