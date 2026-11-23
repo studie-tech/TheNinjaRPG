@@ -264,10 +264,10 @@ html[data-game-layout="experimental"] {
       1fr
     );
   gap: 3px;
-  width: min(100%, 1100px);
+  width: 100%;
   height: 44px;
   min-width: 0;
-  justify-self: center;
+  justify-self: stretch;
   align-items: center;
 }
 .player-status-avatar {
@@ -394,7 +394,7 @@ html[data-game-layout="experimental"] {
 }
 @media (min-width: 768px) {
   .experimental-player-status {
-    grid-template-columns: 40px minmax(90px, 0.7fr) minmax(180px, 1.2fr) minmax(
+    grid-template-columns: 40px clamp(90px, 14vw, 180px) minmax(180px, 1.2fr) minmax(
         220px,
         1.5fr
       );
@@ -432,6 +432,7 @@ html[data-game-layout="experimental"] {
     grid-column: 4;
     grid-row: 1;
     flex-wrap: wrap;
+    justify-content: space-between;
     gap: 0 0.65rem;
     align-items: center;
     max-height: 22px;
