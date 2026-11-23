@@ -780,6 +780,7 @@ describe("travel scene ground depth", () => {
     const herdYs = async (terrace: number) => {
       const state = snapshotFixture(),
         entry = state.window[0]!;
+      state.weatherTime = 0;
       entry.map = { ...entry.map, objects: [] };
       entry.structures = [];
       const real = terrainElevation.createTerrainField;
