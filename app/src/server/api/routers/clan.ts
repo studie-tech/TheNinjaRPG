@@ -251,7 +251,7 @@ export const clanRouter = createTRPCRouter({
       const [user, faction, maps, structures] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
-        fetchPublishedSectorMaps(ctx.drizzle, [input.sector]),
+        fetchPublishedSectorMaps(ctx.drizzle, [input.sector], { revalidate: true }),
         listStructuresForStrongholdRelocation(ctx.drizzle, input.clanId),
       ]);
       if (

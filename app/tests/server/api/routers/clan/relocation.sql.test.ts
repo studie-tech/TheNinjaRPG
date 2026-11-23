@@ -13,7 +13,10 @@ import {
 } from "@/drizzle/schema";
 import { clanRouter } from "@/server/api/routers/clan";
 import { villageRouter } from "@/server/api/routers/village";
-import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
+import {
+  fetchPublishedSectorMaps,
+  invalidatePublishedMapCache,
+} from "@/server/utils/sectorMap";
 import { insertClans, insertUsers } from "../../../../setup/factories";
 import { huntingMap } from "../../../../setup/hunting";
 import {
@@ -148,6 +151,22 @@ describeWithDatabase("Stronghold relocation", () => {
       hasPage: 1,
     });
     expect((await caller.relocateStronghold(input)).success).toBe(false);
+    expect(await db.query.village.findFirst()).toMatchObject({
+      sector: 301,
+      strongholdRelocatedAt: null,
+    });
+  });
+
+  it("rechecks a cached destination after another instance unpublishes it", async () => {
+    const db = await getTestDatabase();
+    await fetchPublishedSectorMaps(db, [1500]);
+    await db
+      .update(sectorMap)
+      .set({ status: "ARCHIVED" })
+      .where(eq(sectorMap.sector, 1500));
+    expect(
+      (await (await callerFor(clanRouter, "leader")).relocateStronghold(input)).success,
+    ).toBe(false);
     expect(await db.query.village.findFirst()).toMatchObject({
       sector: 301,
       strongholdRelocatedAt: null,
