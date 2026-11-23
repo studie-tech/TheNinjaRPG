@@ -53,6 +53,9 @@
 .experimental-map-main {
   flex: 1;
   min-height: 0;
+  /* Keep map controls clear of the home indicator and landscape notch. */
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
 }
 .experimental-travel {
   display: flex;
