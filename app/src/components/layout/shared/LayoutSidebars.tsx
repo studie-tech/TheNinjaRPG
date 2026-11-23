@@ -366,7 +366,6 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         userData={userData}
         updateUser={updateUser}
         trigger="settings"
-        section={userData ? "audio" : "all"}
       />
       {getGameLayout(variant).supportsColorMode && (
         <button

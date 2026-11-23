@@ -8,11 +8,7 @@ import * as audioHook from "@/hooks/useAudio";
 import * as gameLayoutHook from "@/hooks/useGameLayout";
 import * as iframeHook from "@/hooks/useIframeMute";
 import * as layoutPicker from "@/layout/GameLayoutPicker";
-import {
-  GameSettingsPanel,
-  GameSettingsPopover,
-  SETTINGS_HREF,
-} from "@/layout/GameSettings";
+import { GameSettingsPanel, GameSettingsPopover } from "@/layout/GameSettings";
 import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import { hasTutorialReminder, TutorialSettings } from "@/layout/TutorialSettings";
 import * as audioPreferences from "@/libs/audioPreferences";
@@ -222,7 +218,7 @@ describe("game settings sections", () => {
     }
   });
 
-  it("gives character owners a top-bar settings gear with sound controls and a link to all settings", async () => {
+  it("gives character owners all three top-bar settings categories", async () => {
     renderInAudio(
       <SignedInIcons
         variant="default"
@@ -244,10 +240,16 @@ describe("game settings sections", () => {
       fireEvent.click(screen.getByRole("button", { name: "Game settings" }));
     });
     expect(screen.getByLabelText(MUSIC)).toBeTruthy();
-    expect(screen.queryByLabelText(LIGHTING)).toBeNull();
-    const link = screen.getByRole("link", { name: "All settings" });
-    expect(link.getAttribute("href")).toBe(SETTINGS_HREF);
-    expect(screen.queryByRole("tab", { name: "Game layout" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Audio" })).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Game layout" }), {
+      button: 0,
+    });
+    expect(screen.getByLabelText(SIDEBARS)).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Visual effects" }), {
+      button: 0,
+    });
+    expect(screen.getByLabelText(LIGHTING)).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Graphics quality" })).toBeTruthy();
   });
 
   it.each([true, false])(
