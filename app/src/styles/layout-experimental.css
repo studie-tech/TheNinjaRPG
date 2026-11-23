@@ -196,39 +196,6 @@ html[data-game-layout="experimental"] {
   }
 }
 
-.experimental-weather [data-sector-weather] {
-  display: flex;
-  align-items: center;
-}
-@media (max-width: 600px) {
-  /* Keep the full countdown accessible while the narrow toolbar shows the phase. */
-  .experimental-weather [data-day-night-countdown] {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-}
-/* The phase icon leaves room for both map tabs even with enlarged text. */
-@media (max-width: 400px) {
-  .experimental-weather [data-day-night-phase] {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  .experimental-weather [data-map-preview-icon] {
-    display: none;
-  }
-  .experimental-weather [data-day-night-indicator] {
-    padding-inline: 0.25rem;
-  }
-}
-
 .experimental-building-dialog > [data-content-box] {
   min-width: 0;
   width: 100%;

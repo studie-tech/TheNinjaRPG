@@ -64,15 +64,12 @@ export const DayNightIndicator = memo(function DayNightIndicator({
         ) : (
           <Moon className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
         )}
-        <span data-day-night-phase>{cycle.phase === "day" ? "Day" : "Night"}</span>
+        {cycle.phase === "day" ? "Day" : "Night"}
         {canPreview && (
-          <SlidersHorizontal
-            data-map-preview-icon
-            className="text-muted-foreground ml-auto h-3 w-3"
-          />
+          <SlidersHorizontal className="text-muted-foreground ml-auto h-3 w-3" />
         )}
       </span>
-      <span data-day-night-countdown className="text-muted-foreground block text-xs">
+      <span className="text-muted-foreground block text-xs">
         {selectedDate || selectedWeather ? (
           <>
             Preview ·{" "}
@@ -92,7 +89,6 @@ export const DayNightIndicator = memo(function DayNightIndicator({
 
   return (
     <div
-      data-day-night-indicator
       className={
         className ??
         "bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"

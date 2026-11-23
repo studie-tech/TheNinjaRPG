@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -49,7 +49,6 @@ import {
   ContentBoxHeaderActions,
   type HeaderActionItem,
 } from "@/layout/ContentBoxHeaderActions";
-import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import { FindSectorPopover, SectorIdField } from "@/layout/FindSectorPopover";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
@@ -182,8 +181,6 @@ export function TravelView({
     showSector,
   } = session;
   const hasUser = !!userData;
-  const [weatherControlsContainer, setWeatherControlsContainer] =
-    useState<HTMLDivElement | null>(null);
   // Memoized Map component to prevent re-renders during countdown updates
   const MapComponent = useMemo(() => {
     return (
@@ -240,9 +237,6 @@ export function TravelView({
           showSorrounding={showSorrounding}
           showActive={showOtherUsers}
           showCompass={!immersive}
-          weatherControlsContainer={
-            immersive ? (isGlobal ? null : weatherControlsContainer) : undefined
-          }
           isActive={!!showSector && isInteractive}
           autoAttackMode={autoAttackMode}
           isWorldExpanded={isWorldExpanded && !!showSector}
@@ -274,8 +268,6 @@ export function TravelView({
     setWorldExpanded,
     setShowSorrounding,
     immersive,
-    weatherControlsContainer,
-    isGlobal,
   ]);
 
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -785,14 +777,6 @@ export function TravelView({
                     >
                       {mapTabs}
                       <TravelMapControls>{mapControls}</TravelMapControls>
-                      <div
-                        ref={setWeatherControlsContainer}
-                        className="experimental-weather"
-                      >
-                        {(!SectorComponent || isGlobal) && (
-                          <DayNightIndicator className="px-2 py-1" />
-                        )}
-                      </div>
                     </div>
                   ),
                   priority: 0,

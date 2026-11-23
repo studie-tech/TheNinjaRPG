@@ -2594,18 +2594,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const weatherControls = (
     <div
       data-sector-weather
-      className={
-        props.weatherControlsContainer === undefined
-          ? "absolute top-3 right-3 z-10 flex items-start gap-2"
-          : "flex items-center gap-2"
-      }
+      className="absolute top-3 right-3 z-10 flex items-start gap-2"
     >
       <DayNightIndicator
-        className={
-          props.weatherControlsContainer === undefined
-            ? "bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
-            : "px-2 py-1"
-        }
+        className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
         previewDate={lightingPreviewDate}
         onPreviewDateChange={setLightingPreviewDate}
         previewWeather={weatherPreview}
@@ -2680,10 +2672,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             </div>
           </aside>
         )}
-        {props.weatherControlsContainer === undefined
-          ? weatherControls
-          : props.weatherControlsContainer &&
-            createPortal(weatherControls, props.weatherControlsContainer)}
+        {weatherControls}
       </div>
       {travel.error && <WebGlError />}
       {inspectedLocations && (
@@ -3038,8 +3027,6 @@ export interface SectorWindowData {
 interface SectorProps {
   /** Hosts can omit the map HUD when their navigation already identifies the sector. */
   showCompass?: boolean;
-  /** Move the scene-owned lighting controls into a host toolbar; null waits for its mount. */
-  weatherControlsContainer?: HTMLElement | null;
   loadLpcCatalog: () => Promise<LpcCatalog>;
   sector: number;
   tile: GlobalTile;
