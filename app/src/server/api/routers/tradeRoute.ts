@@ -156,7 +156,7 @@ export const tradeRouteRouter = createTRPCRouter({
       if (!path) return errorResponse("No path connects the two villages");
       const routeId = nanoid();
       try {
-        await insertTradeRoute(ctx.drizzle, {
+        const inserted = await insertTradeRoute(ctx.drizzle, {
           id: routeId,
           villageIdA,
           villageIdB,
@@ -166,6 +166,10 @@ export const tradeRouteRouter = createTRPCRouter({
           path,
           createdAt: new Date(),
         });
+        if (inserted.rowsAffected !== 1)
+          return errorResponse(
+            "A village moved while the route was being proposed. Refresh and try again",
+          );
       } catch (error) {
         if (isMysqlDuplicateKeyError(error))
           return errorResponse(`You already have an agreement with ${partner.name}`);

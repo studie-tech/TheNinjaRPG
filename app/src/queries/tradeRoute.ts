@@ -61,11 +61,19 @@ export const listWarehouseVillages = (client: Pick<DrizzleClient, "select">) =>
 export const listVillageRelationships = (client: Pick<DrizzleClient, "select">) =>
   client.select().from(villageAlliance);
 
-/** Propose a route; the open-pair key rejects a second open route between two villages. */
+/** Propose a route only while its path still connects both homes; open-pair keys prevent duplicates. */
 export const insertTradeRoute = (
-  client: Pick<DrizzleClient, "insert">,
+  client: Pick<DrizzleClient, "execute">,
   values: typeof tradeRoute.$inferInsert,
-) => client.insert(tradeRoute).values(values);
+) =>
+  client.execute(sql`
+  INSERT INTO ${tradeRoute} (id, villageIdA, villageIdB, openPair, status, proposedByVillageId, path, createdAt)
+  SELECT ${values.id}, ${values.villageIdA}, ${values.villageIdB}, ${values.openPair ?? null},
+    ${values.status}, ${values.proposedByVillageId}, CAST(${JSON.stringify(values.path)} AS JSON), ${values.createdAt}
+  FROM ${village} AS homeA INNER JOIN Village AS homeB ON homeB.id = ${values.villageIdB}
+  WHERE homeA.id = ${values.villageIdA}
+    AND homeA.sector = ${values.path[0]} AND homeB.sector = ${values.path.at(-1)}
+`);
 
 /** Accept a proposal still awaiting an answer. */
 export const acceptTradeRoute = (

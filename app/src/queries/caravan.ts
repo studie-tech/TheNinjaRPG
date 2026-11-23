@@ -1207,8 +1207,12 @@ export const insertCaravanWithinCapacity = (
     INSERT INTO ${caravan} (id, routeId, originVillageId, destinationVillageId, status, cargo, path, createdAt)
     SELECT ${values.id}, ${values.routeId}, ${values.originVillageId}, ${values.destinationVillageId}, 'PREPARING',
            CAST(${JSON.stringify(values.cargo)} AS JSON), CAST(${JSON.stringify(values.path)} AS JSON), ${values.now}
-    FROM DUAL
-    WHERE (SELECT COUNT(*) FROM ${caravan} AS sent WHERE sent.originVillageId = ${values.originVillageId} AND sent.status IN ('PREPARING', 'TRAVELLING')) < ${capacity}
+    FROM ${tradeRoute}
+    INNER JOIN Village AS origin ON origin.id = ${values.originVillageId}
+    INNER JOIN Village AS destination ON destination.id = ${values.destinationVillageId}
+    WHERE ${tradeRoute.id} = ${values.routeId} AND ${tradeRoute.status} = 'ACTIVE'
+      AND origin.sector = ${values.path[0]} AND destination.sector = ${values.path.at(-1)}
+      AND (SELECT COUNT(*) FROM ${caravan} AS sent WHERE sent.originVillageId = ${values.originVillageId} AND sent.status IN ('PREPARING', 'TRAVELLING')) < ${capacity}
   `);
 
 /**

@@ -23,6 +23,8 @@ export const useStrongholdRelocation = (clanId: string) => {
       utils.travel.getVillageInSector.invalidate(),
       utils.worldMap.getSectorEntries.invalidate(),
       utils.worldMap.getSectorWindow.invalidate(),
+      utils.tradeRoute.getRoutes.invalidate(),
+      utils.caravan.getCaravans.invalidate(),
       utils.shrine.getCapturedSectors.invalidate(),
       utils.shrine.getSectorShrine.invalidate(),
     ]);

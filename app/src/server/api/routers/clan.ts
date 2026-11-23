@@ -93,6 +93,7 @@ import {
   listClanForGetAllNames,
   listClanForNominateElder,
   listClanForSearchClans,
+  listRoutesForStrongholdRelocation,
   listStructuresForStrongholdRelocation,
   relocateStronghold,
   setClanVillageKage,
@@ -123,6 +124,7 @@ import {
 import { fetchAllGameSettings, fetchUser, findUserById } from "@/queries/profile";
 import { findMembershipUserCache } from "@/queries/socialUserCache";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
+import { closeTradeRoutes } from "@/queries/tradeRoute";
 import { fetchStructures, fetchVillage, fetchVillages } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
 import { updateNindo } from "@/routers/profile";
@@ -248,11 +250,12 @@ export const clanRouter = createTRPCRouter({
     .input(z.object({ clanId: z.string(), sector: z.int().nonnegative() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [user, faction, maps, structures] = await Promise.all([
+      const [user, faction, maps, structures, routes] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
         fetchPublishedSectorMaps(ctx.drizzle, [input.sector], { revalidate: true }),
         listStructuresForStrongholdRelocation(ctx.drizzle, input.clanId),
+        listRoutesForStrongholdRelocation(ctx.drizzle, input.clanId),
       ]);
       if (
         !faction ||
@@ -289,12 +292,38 @@ export const clanRouter = createTRPCRouter({
       try {
         // The joined write moves the home shrine and settlement under the same one-use,
         // membership, destination and war guards; unique sector keys arbitrate competing moves.
-        const result = await retryOnDeadlock(() =>
-          relocateStronghold(ctx.drizzle, input, ctx.userId, home, new Date()),
-        );
+        const relocatedAt = new Date();
+        const result = await retryOnDeadlock(() => {
+          if (routes.length === 0)
+            return relocateStronghold(
+              ctx.drizzle,
+              input,
+              ctx.userId,
+              home,
+              relocatedAt,
+              destination,
+            );
+          // A joined UPDATE evaluates the home's one-use guard after its first matching
+          // route, so it cannot close every agreement. Hold the home write and route
+          // closures together; path-guarded proposals and caravan preparations wait on it.
+          return ctx.drizzle.transaction(async (tx) => {
+            const moved = await relocateStronghold(
+              tx,
+              input,
+              ctx.userId,
+              home,
+              relocatedAt,
+              destination,
+              true,
+            );
+            if (moved.rowsAffected)
+              await closeTradeRoutes(tx, { villageId: home.id }, relocatedAt);
+            return moved;
+          });
+        });
         if (!result.rowsAffected)
           return errorResponse(
-            "Relocation unavailable: choose an unclaimed sector and make sure your faction is not at war",
+            "Relocation unavailable: choose an unclaimed published sector, finish or cancel all caravans, and make sure your faction is not at war",
           );
       } catch (error) {
         if (!isMysqlDuplicateKeyError(error)) throw error;

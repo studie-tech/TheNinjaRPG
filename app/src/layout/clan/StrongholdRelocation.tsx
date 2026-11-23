@@ -55,11 +55,12 @@ export const StrongholdRelocation = ({
         <p>
           Move your Stronghold and its home shrine for free, once only. Other captured
           sectors stay where they are. Choose an unclaimed, non-reserved sector. Your
-          faction cannot relocate while participating in a war. Players stay in their
-          current sectors.
+          faction cannot relocate while participating in a war or while caravans are
+          preparing or travelling to or from it. Relocation closes its trade agreements;
+          propose new routes from the new home. Players stay in their current sectors.
         </p>
         {globe ? (
-          <div className="mx-auto aspect-square w-full max-w-md overflow-hidden rounded-md">
+          <div className="mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-md sm:max-w-md">
             <GlobalMap
               hexasphere={globe}
               highlights={villages}

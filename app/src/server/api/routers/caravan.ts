@@ -309,7 +309,7 @@ export const caravanRouter = createTRPCRouter({
       const logs = cargoLogs(own.id, "RESERVE", cargo, user.userId);
       const capacity = getCaravanCapacity(routes).total;
       const full = new WarehouseConflict(
-        `Your ${capacity} trade route${capacity === 1 ? "" : "s"} allow${capacity === 1 ? "s" : ""} ${capacity} caravan${capacity === 1 ? "" : "s"} at a time`,
+        `Your ${capacity} trade route${capacity === 1 ? "" : "s"} allow${capacity === 1 ? "s" : ""} ${capacity} caravan${capacity === 1 ? "" : "s"} at a time. The route must still be active and connect both villages`,
       );
       try {
         // No MySQL statement both inserts the caravan and reserves its stock, and neither order

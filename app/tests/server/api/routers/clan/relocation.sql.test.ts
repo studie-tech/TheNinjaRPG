@@ -2,15 +2,19 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { MAP_RESERVED_SECTORS } from "@/drizzle/constants";
 import {
+  caravan,
   clan,
   sector,
   sectorMap,
+  tradeRoute,
   userData,
   village,
   villageStructure,
   war,
   warAlly,
 } from "@/drizzle/schema";
+import { insertCaravanWithinCapacity } from "@/queries/caravan";
+import { insertTradeRoute } from "@/queries/tradeRoute";
 import { clanRouter } from "@/server/api/routers/clan";
 import { villageRouter } from "@/server/api/routers/village";
 import {
@@ -20,7 +24,13 @@ import {
 import { insertClans, insertUsers } from "../../../../setup/factories";
 import { huntingMap } from "../../../../setup/hunting";
 import {
+  beforeStatements,
+  failStatements,
+  inTransactions,
+} from "../../../../setup/statements";
+import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -31,6 +41,8 @@ const input = { clanId: "faction", sector: 1500 };
 describeWithDatabase("Stronghold relocation", () => {
   beforeEach(async () => {
     await resetTables(
+      caravan,
+      tradeRoute,
       warAlly,
       war,
       sector,
@@ -171,6 +183,202 @@ describeWithDatabase("Stronghold relocation", () => {
       sector: 301,
       strongholdRelocatedAt: null,
     });
+  });
+
+  it("checks publication again inside the relocation write", async () => {
+    const db = await getTestDatabase();
+    const guarded = beforeStatements(
+      db,
+      village,
+      [
+        () =>
+          db
+            .update(sectorMap)
+            .set({ status: "ARCHIVED" })
+            .where(eq(sectorMap.sector, 1500)),
+      ],
+      { operations: ["execute"] },
+    );
+    expect(
+      (await callerForDatabase(clanRouter, "leader", guarded).relocateStronghold(input))
+        .success,
+    ).toBe(false);
+    expect(await db.query.village.findFirst()).toMatchObject({
+      sector: 301,
+      strongholdRelocatedAt: null,
+    });
+  });
+
+  it("rejects an overlapping newer published map that no longer fits", async () => {
+    const db = await getTestDatabase();
+    await db.insert(villageStructure).values({
+      id: "hall",
+      villageId: "home",
+      name: "Hall",
+      route: "/townhall",
+      image: "",
+      longitude: 15,
+      latitude: 15,
+      hasPage: 1,
+    });
+    const guarded = beforeStatements(
+      db,
+      village,
+      [
+        () =>
+          db.insert(sectorMap).values({
+            id: "new-map",
+            sector: 1500,
+            name: "Smaller destination",
+            version: 2,
+            status: "PUBLISHED",
+            width: 10,
+            height: 10,
+            normalizedJson: { ...huntingMap(), sector: 1500, width: 10, height: 10 },
+          }),
+      ],
+      { operations: ["execute"] },
+    );
+    expect(
+      (await callerForDatabase(clanRouter, "leader", guarded).relocateStronghold(input))
+        .success,
+    ).toBe(false);
+    expect(await db.query.village.findFirst()).toMatchObject({
+      sector: 301,
+      strongholdRelocatedAt: null,
+    });
+  });
+
+  it("closes active and proposed trade routes together with relocation", async () => {
+    const db = await getTestDatabase();
+    await db.insert(tradeRoute).values(
+      ["ACTIVE", "PROPOSED"].map((status, i) => ({
+        id: `route-${i}`,
+        villageIdA: "home",
+        villageIdB: `other-${i}`,
+        openPair: `home:other-${i}`,
+        status: status as "ACTIVE" | "PROPOSED",
+        proposedByVillageId: "home",
+        path: [301, 400 + i],
+        createdAt: new Date(),
+      })),
+    );
+    expect(
+      (await (await callerFor(clanRouter, "leader")).relocateStronghold(input)).success,
+    ).toBe(true);
+    expect(await db.query.tradeRoute.findMany()).toEqual([
+      expect.objectContaining({
+        status: "CLOSED",
+        openPair: null,
+        closedAt: expect.any(Date),
+      }),
+      expect.objectContaining({
+        status: "CLOSED",
+        openPair: null,
+        closedAt: expect.any(Date),
+      }),
+    ]);
+  });
+
+  it("rolls back the move and its one-use allowance if route closure fails", async () => {
+    const db = await getTestDatabase();
+    await db.insert(tradeRoute).values({
+      id: "route",
+      villageIdA: "home",
+      villageIdB: "other",
+      status: "ACTIVE",
+      proposedByVillageId: "home",
+      path: [301, 400],
+      createdAt: new Date(),
+    });
+    const guarded = inTransactions(db, (tx) =>
+      failStatements(tx, tradeRoute, 1, { operations: ["update"] }),
+    );
+    await expect(
+      callerForDatabase(clanRouter, "leader", guarded).relocateStronghold(input),
+    ).rejects.toThrow();
+    expect(await db.query.village.findFirst()).toMatchObject({
+      sector: 301,
+      strongholdRelocatedAt: null,
+    });
+    expect(
+      await db.query.sector.findFirst({ where: eq(sector.sector, 301) }),
+    ).toMatchObject({ villageId: "home" });
+    expect(await db.query.tradeRoute.findFirst()).toMatchObject({ status: "ACTIVE" });
+  });
+
+  it.each(["PREPARING", "TRAVELLING"] as const)(
+    "waits for %s caravans without closing agreements",
+    async (status) => {
+      const db = await getTestDatabase();
+      await db.insert(tradeRoute).values({
+        id: "route",
+        villageIdA: "home",
+        villageIdB: "other",
+        status: "ACTIVE",
+        proposedByVillageId: "home",
+        path: [301, 400],
+        createdAt: new Date(),
+      });
+      await db.insert(caravan).values({
+        id: "cargo",
+        routeId: "route",
+        originVillageId: status === "PREPARING" ? "home" : "other",
+        destinationVillageId: status === "PREPARING" ? "other" : "home",
+        status,
+        cargo: [],
+        path: [301, 400],
+        createdAt: new Date(),
+      });
+      const caller = await callerFor(clanRouter, "leader");
+      expect((await caller.relocateStronghold(input)).success).toBe(false);
+      expect(await db.query.tradeRoute.findFirst()).toMatchObject({ status: "ACTIVE" });
+      expect(await db.query.village.findFirst()).toMatchObject({
+        sector: 301,
+        strongholdRelocatedAt: null,
+      });
+      await db.update(caravan).set({ status: "DELIVERED" });
+      expect((await caller.relocateStronghold(input)).success).toBe(true);
+    },
+  );
+
+  it("rejects stale trade and caravan paths while allowing routes from the new home", async () => {
+    const db = await getTestDatabase();
+    await db
+      .insert(village)
+      .values({ id: "other", name: "Partner", sector: 400, kageId: "other" });
+    expect(
+      (await (await callerFor(clanRouter, "leader")).relocateStronghold(input)).success,
+    ).toBe(true);
+    const route = {
+      id: "route",
+      villageIdA: "home",
+      villageIdB: "other",
+      status: "PROPOSED" as const,
+      proposedByVillageId: "home",
+      path: [301, 400],
+      createdAt: new Date(),
+    };
+    expect((await insertTradeRoute(db, route)).rowsAffected).toBe(0);
+    expect(
+      (await insertTradeRoute(db, { ...route, path: [1500, 400] })).rowsAffected,
+    ).toBe(1);
+    const cargo = {
+      id: "cargo",
+      routeId: "route",
+      originVillageId: "home",
+      destinationVillageId: "other",
+      cargo: [],
+      path: [301, 400],
+      now: new Date(),
+    };
+    expect((await insertCaravanWithinCapacity(db, cargo, 1)).rowsAffected).toBe(0);
+    await db.update(tradeRoute).set({ status: "ACTIVE" });
+    expect((await insertCaravanWithinCapacity(db, cargo, 1)).rowsAffected).toBe(0);
+    expect(
+      (await insertCaravanWithinCapacity(db, { ...cargo, path: [1500, 400] }, 1))
+        .rowsAffected,
+    ).toBe(1);
   });
 
   it("allows only the current outlaw faction leader", async () => {

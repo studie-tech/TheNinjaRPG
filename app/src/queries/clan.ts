@@ -40,11 +40,14 @@ import {
   battle,
   battleAction,
   type Clan,
+  caravan,
   clan,
   conversation,
   mpvpBattleQueue,
   mpvpBattleUser,
   sector,
+  sectorMap,
+  tradeRoute,
   userData,
   userRequest,
   village,
@@ -359,6 +362,25 @@ export const listStructuresForStrongholdRelocation = (
     .innerJoin(clan, eq(clan.villageId, villageStructure.villageId))
     .where(eq(clan.id, clanId));
 
+/** Open agreements determine whether relocating must also close trade routes atomically. */
+export const listRoutesForStrongholdRelocation = (
+  client: Pick<DrizzleClient, "select">,
+  clanId: string,
+) =>
+  client
+    .select({ id: tradeRoute.id })
+    .from(tradeRoute)
+    .innerJoin(
+      clan,
+      or(
+        eq(clan.villageId, tradeRoute.villageIdA),
+        eq(clan.villageId, tradeRoute.villageIdB),
+      ),
+    )
+    .where(
+      and(eq(clan.id, clanId), inArray(tradeRoute.status, ["PROPOSED", "ACTIVE"])),
+    );
+
 /** Move a stronghold and its home shrine together, consuming the settlement's one relocation. */
 export const relocateStronghold = (
   client: Pick<DrizzleClient, "execute">,
@@ -366,10 +388,21 @@ export const relocateStronghold = (
   actorId: string,
   home: { id: string; sector: number },
   relocatedAt: Date,
+  destinationMap: { width: number; height: number },
+  closesTradeRoutes = false,
 ) =>
   client.execute(sql`
   UPDATE ${village}
   INNER JOIN ${clan} ON ${clan.villageId} = ${village.id}
+  INNER JOIN ${sectorMap} ON ${sectorMap.sector} = ${input.sector}
+    AND ${sectorMap.status} = 'PUBLISHED'
+    AND ${sectorMap.width} = ${destinationMap.width} AND ${sectorMap.height} = ${destinationMap.height}
+  LEFT JOIN SectorMap AS newerMap ON newerMap.sector = ${sectorMap.sector}
+    AND newerMap.status = 'PUBLISHED' AND newerMap.version > ${sectorMap.version}
+  LEFT JOIN ${tradeRoute} ON (${tradeRoute.villageIdA} = ${home.id} OR ${tradeRoute.villageIdB} = ${home.id})
+    AND ${tradeRoute.status} IN ('PROPOSED', 'ACTIVE')
+  LEFT JOIN ${caravan} ON (${caravan.originVillageId} = ${home.id} OR ${caravan.destinationVillageId} = ${home.id})
+    AND ${caravan.status} IN ('PREPARING', 'TRAVELLING')
   INNER JOIN ${userData} ON ${userData.userId} = ${actorId}
   LEFT JOIN ${sector} ON ${sector.sector} = ${home.sector}
   LEFT JOIN Village AS destination ON destination.sector = ${input.sector}
@@ -390,7 +423,8 @@ export const relocateStronghold = (
     AND ${userData.clanId} = ${clan.id} AND ${userData.isOutlaw} = 1
     AND (${sector.id} IS NULL OR ${sector.villageId} = ${village.id})
     AND destination.id IS NULL AND claimed.id IS NULL
-    AND ${war.id} IS NULL AND alliedWar.id IS NULL
+    AND ${war.id} IS NULL AND alliedWar.id IS NULL AND ${caravan.id} IS NULL
+    AND newerMap.id IS NULL AND ${closesTradeRoutes ? sql`TRUE` : sql`${tradeRoute.id} IS NULL`}
 `);
 
 /** Execute the database statement for `upgradeHideoutToStronghold`. */
