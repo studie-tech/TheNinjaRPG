@@ -682,6 +682,8 @@ export const getExpressTrialsUserUpdate = (input: {
   progression: ReturnType<typeof getUserProgressionUpdate> | undefined;
   items?: UserItemWithRelations[];
   learnedJutsu?: { loadoutJutsuIds: string[]; jutsuId: string };
+  /** Every jutsu the player has equipped once the trials' one stayed equipped. */
+  equippedJutsuIds?: string[];
 }) =>
   input.progression
     ? {
@@ -700,6 +702,9 @@ export const getExpressTrialsUserUpdate = (input: {
                   ],
                 },
               }
+            : {}),
+          ...(input.equippedJutsuIds
+            ? { jutsus: input.equippedJutsuIds.map((jutsuId) => ({ jutsuId })) }
             : {}),
           tutorialStep: input.step,
           sector: input.sector,

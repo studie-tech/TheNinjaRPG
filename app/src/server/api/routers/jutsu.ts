@@ -177,7 +177,6 @@ import {
   listUserJutsuForGetReskin,
   listUserJutsuForUpdateReskin,
   selectBloodlineReskinForUpdate,
-  selectEquippedJutsuIds,
   selectJutsuForCreateLinkedReskin,
   selectJutsuForDelete,
   selectJutsuForDelete2,
@@ -583,15 +582,15 @@ export const jutsuRouter = createTRPCRouter({
         },
         new Date(),
       );
-      // Equipped jutsu belong in the active loadout, which the loadout UI and the "No jutsu
-      // equipped!" notice read. An empty active loadout, also one created or activated now,
-      // lists the jutsu a player equipped before it existed or that never reached it.
+      // Equipped jutsu belong in the active loadout. An empty active loadout, also one created
+      // or activated now, lists the jutsu a player equipped before it existed or that never
+      // reached it.
       const slots = [...loadouts, ...missing];
       const activeId = user?.jutsuLoadout ?? slots[0]?.id;
       const active = slots.find((row) => row.id === activeId);
       const equippedIds =
         activeId && active?.jutsuIds.length === 0
-          ? (await selectEquippedJutsuIds(ctx.drizzle, ctx.userId)).map(
+          ? (await selectUserEquippedJutsus(ctx.drizzle, ctx.userId)).map(
               (row) => row.jutsuId,
             )
           : [];
@@ -1725,9 +1724,8 @@ export const jutsuRouter = createTRPCRouter({
               })
             : false,
         ]);
-        // The auto-equipped jutsu joins the active loadout, which the loadout UI and the
-        // "No jutsu equipped!" notice read. A lost append leaves the row equipped but
-        // unlisted; toggling it on /jutsus repairs that.
+        // The auto-equipped jutsu joins the active loadout. A lost append leaves the row
+        // equipped but unlisted; toggling it on /jutsus repairs that.
         const activeLoadoutId = user.jutsuLoadout;
         const synced =
           kept && activeLoadoutId

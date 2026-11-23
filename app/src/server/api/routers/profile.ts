@@ -824,8 +824,8 @@ export const profileRouter = createTRPCRouter({
             ),
           )
         ).rowsAffected === 0;
-      // The equipped jutsu joins the active loadout, which the loadout page and the
-      // "No jutsu equipped!" notice read; a first loadout is later made from equipped rows.
+      // The equipped jutsu joins the active loadout; a first loadout is later made from
+      // equipped rows.
       const loadoutId = keptEquipped ? user.jutsuLoadout : null;
       const loadoutBaseline = user.loadout?.jutsuIds ?? [];
       const loadoutSynced =
@@ -881,6 +881,14 @@ export const profileRouter = createTRPCRouter({
           items: granted?.items as UserItemWithRelations[] | undefined,
           learnedJutsu: loadoutId
             ? { loadoutJutsuIds: loadoutBaseline, jutsuId: TUTORIAL_JUTSU_ID }
+            : undefined,
+          equippedJutsuIds: keptEquipped
+            ? [
+                ...new Set([
+                  ...(user.jutsus ?? []).map((row) => row.jutsuId),
+                  TUTORIAL_JUTSU_ID,
+                ]),
+              ]
             : undefined,
         }),
       };

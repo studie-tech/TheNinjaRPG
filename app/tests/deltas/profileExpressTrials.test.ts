@@ -21,12 +21,15 @@ describe("Express Trials cache update", () => {
       progression: { achievementProgress: [], userPatch: { level: 1 } } as never,
       items: [{ id: "shuriken" }] as never,
       learnedJutsu: { loadoutJutsuIds: ["other", "sonic"], jutsuId: "sonic" },
+      equippedJutsuIds: ["other", "sonic"],
     });
     expect(update.userPatch).toEqual(
       expect.objectContaining({
         level: 1,
         items: [{ id: "shuriken" }],
         loadout: { jutsuIds: ["other", "sonic"] },
+        // The "No jutsu equipped!" notice follows actual equipment, not the loadout.
+        jutsus: [{ jutsuId: "other" }, { jutsuId: "sonic" }],
         tutorialStep: 33,
         sector: 7,
         guidanceLevel: "HINTS",
@@ -42,5 +45,6 @@ describe("Express Trials cache update", () => {
     });
     expect(update.userPatch).not.toHaveProperty("items");
     expect(update.userPatch).not.toHaveProperty("loadout");
+    expect(update.userPatch).not.toHaveProperty("jutsus");
   });
 });

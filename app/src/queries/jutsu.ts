@@ -306,17 +306,6 @@ export const insertJutsuLoadoutForInsertMissing = (
     .values(rows)
     .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
-/** Build the lookup of the jutsu a player has equipped, in the order they were learned. */
-export const selectEquippedJutsuIds = (
-  client: Pick<DrizzleClient, "select">,
-  userId: string,
-) =>
-  client
-    .select({ jutsuId: userJutsu.jutsuId })
-    .from(userJutsu)
-    .where(and(eq(userJutsu.userId, userId), eq(userJutsu.equipped, true)))
-    .orderBy(asc(userJutsu.createdAt), asc(userJutsu.id));
-
 /**
  * Build the update listing equipped jutsu in the player's active loadout while it is still
  * empty, so a loadout created or activated after the jutsu were equipped shows them.
@@ -1659,7 +1648,7 @@ export const updateUserJutsuForTryEquipUserJutsuAtomically = (
       ),
     );
 
-/** Load the complete equipped jutsu IDs after equipment writes have settled. */
+/** Build the lookup of every jutsu a player has equipped, in the order they were learned. */
 export const selectUserEquippedJutsus = (
   client: Pick<DrizzleClient, "select">,
   userId: string,
@@ -1667,7 +1656,8 @@ export const selectUserEquippedJutsus = (
   client
     .select({ jutsuId: userJutsu.jutsuId })
     .from(userJutsu)
-    .where(and(eq(userJutsu.userId, userId), eq(userJutsu.equipped, true)));
+    .where(and(eq(userJutsu.userId, userId), eq(userJutsu.equipped, true)))
+    .orderBy(asc(userJutsu.createdAt), asc(userJutsu.id));
 
 /** Build the equipped-state lookup for a jutsu owned by one user. */
 export const selectUserJutsuEquipped = (
