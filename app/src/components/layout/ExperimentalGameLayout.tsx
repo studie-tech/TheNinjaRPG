@@ -80,7 +80,8 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
       modal={!isDesktop}
     >
       <SheetTrigger
-        className="experimental-tool"
+        className="experimental-tool experimental-sidebar-toggle"
+        hidden={leftSideBarOpen}
         aria-label="Open player menu"
         data-experimental-travel-link={isMapPage || undefined}
       >
@@ -130,7 +131,8 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
       modal={!isDesktop && !isGuidedTutorial}
     >
       <SheetTrigger
-        className="experimental-tool"
+        className="experimental-tool experimental-sidebar-toggle"
+        hidden={rightSideBarOpen}
         aria-label="Open game menu"
         id="tutorial-gameBtn"
       >
@@ -164,22 +166,23 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
     <TravelNavigationContext value={travelNavigation}>
       <div
         data-world-page
-        data-right-sidebar-open={rightSideBarOpen || undefined}
         className={cn("experimental-game", isMapPage && "experimental-game-map")}
       >
         <a href="#game-content" className="theme-skip-link">
           Skip to game content
         </a>
         <header className="experimental-header">
-          <div data-header-item="player-menu">{playerMenu}</div>
           {userData && (
             <ExperimentalPlayerStatus
               hasLocation={!!location}
               onOpenPlayerMenu={() => onLeftSideBarOpenChange(true)}
             />
           )}
-          <div data-header-item="game-menu">{gameMenu}</div>
         </header>
+        <div className="experimental-sidebar-controls">
+          <div>{playerMenu}</div>
+          <div>{gameMenu}</div>
+        </div>
 
         <main
           id="game-content"

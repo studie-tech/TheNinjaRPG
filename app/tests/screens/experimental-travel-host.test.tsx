@@ -271,6 +271,32 @@ describe("responsive experimental menus", () => {
     ).toBeNull();
     expect(getGameLayout("experimental").sidebarBreakpoint).toBeNull();
   });
+  it.each([false, true])(
+    "shows only the closed sidebar's overlay toggle (desktop=%s)",
+    async (desktop) => {
+      isDesktop = desktop;
+      const input = props();
+      const view = render(<ExperimentalGameLayout {...input} />);
+      const player = view.getByRole("button", { name: "Open player menu" });
+      const game = view.getByRole("button", { name: "Open game menu" });
+      expect(player.closest("header")).toBeNull();
+      expect(game.closest("header")).toBeNull();
+      view.rerender(<ExperimentalGameLayout {...input} leftSideBarOpen />);
+      await act(async () => flushRadixFocus());
+      expect(player.hidden).toBe(true);
+      expect(game.hidden).toBe(false);
+      view.rerender(<ExperimentalGameLayout {...input} rightSideBarOpen />);
+      await act(async () => flushRadixFocus());
+      expect(player.hidden).toBe(false);
+      expect(game.hidden).toBe(true);
+      view.rerender(<ExperimentalGameLayout {...input} />);
+      await act(async () => flushRadixFocus());
+      expect(player.hidden).toBe(false);
+      expect(game.hidden).toBe(false);
+      expect(game.id).toBe("tutorial-gameBtn");
+    },
+  );
+
   it("returns keyboard focus to the resource meter that opened player details", async () => {
     vi.spyOn(playerStatus, "ExperimentalPlayerStatus").mockImplementation(
       ({ onOpenPlayerMenu }) => (
