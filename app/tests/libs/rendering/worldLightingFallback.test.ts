@@ -363,6 +363,7 @@ describe("world lighting precision fallback", () => {
         sound: false,
         volume: 0,
         showGridNumbers: false,
+        showHexOutlines: false,
         inspect: false,
       };
       const scene = await createCombatScene({
@@ -438,6 +439,7 @@ describe("world lighting precision fallback", () => {
       sound: false,
       volume: 0,
       showGridNumbers: false,
+      showHexOutlines: false,
       inspect: false,
     };
     const scene = await createCombatScene({
@@ -588,6 +590,7 @@ describe("world lighting precision fallback", () => {
       sound: false,
       volume: 0,
       showGridNumbers: false,
+      showHexOutlines: false,
       inspect: false,
     };
     const now = vi.spyOn(Date, "now").mockReturnValue(WORLD_DAY_SECONDS * 500);

@@ -359,6 +359,10 @@ export const useCombatPreferences = () => {
     "showGridNumbers",
     false,
   );
+  const [showHexOutlines, toggleHexOutlines] = useStoredToggle(
+    "combatShowHexOutlines",
+    false,
+  );
   const [useSmallActions, toggleSmallActions] = useStoredToggle(
     "combatSmallActions",
     false,
@@ -400,6 +404,8 @@ export const useCombatPreferences = () => {
     setSwapFocusPanels,
     showGridNumbers,
     toggleGridNumbers,
+    showHexOutlines,
+    toggleHexOutlines,
     useSmallActions,
     toggleSmallActions,
     resourceBarsVisibility,

@@ -301,6 +301,7 @@ export const createBattlefieldPreview = async (
     sound: live && sound,
     volume,
     showGridNumbers: !!options.targeting,
+    showHexOutlines: false,
     inspect: false,
     revision,
     targetTiles: selectedTiles,

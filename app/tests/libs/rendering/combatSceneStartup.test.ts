@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BitmapText, Container, Texture, UniformGroup } from "pixi.js";
+import {
+  Assets,
+  BitmapText,
+  Container,
+  type Graphics,
+  Texture,
+  UniformGroup,
+} from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
 import * as combatActions from "@/libs/combat/actions";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
@@ -13,6 +20,7 @@ import {
   createCombatScene,
 } from "@/libs/rendering/scenes/combat";
 import * as combatEffects from "@/libs/rendering/scenes/combatEffects";
+import * as combatTerrain from "@/libs/rendering/scenes/combatTerrain";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { deferred } from "../../setup/deferred";
@@ -68,6 +76,7 @@ const start = (
     sound: false,
     volume: 0,
     showGridNumbers: false,
+    showHexOutlines: false,
     inspect: true,
   } as unknown as CombatSceneSnapshot;
   const height = 390 * hexGridHeightRatio(12, 10);
@@ -234,6 +243,60 @@ describe("combat scene startup", () => {
     fixture.patchSnapshot({ showGridNumbers: true });
     fixture.tick();
     expect(labels.children).toHaveLength(built);
+  });
+
+  it("centers each grid number on its hex's visible face", async () => {
+    const prepare = combatTerrain.prepareCombatTerrain;
+    vi.spyOn(combatTerrain, "prepareCombatTerrain").mockImplementation((...args) => {
+      const data = prepare(...args);
+      // A recessed face, as stock water draws outside the light layout.
+      data.terrain.faceOffsets.set("2,3", -5);
+      return data;
+    });
+    const fixture = start();
+    fixture.fighterArt.resolve(Texture.WHITE);
+    const { grid } = await fixture.scene;
+    fixture.patchSnapshot({ showGridNumbers: true });
+    fixture.tick();
+    const world = fixture.game.stage.children[0] as Container;
+    const labels = world.getChildByLabel("combat-grid-labels", true) as Container;
+    const centers = new Map(
+      grid
+        .toArray()
+        .map((tile) => [
+          tile.name,
+          { x: tile.x, y: tile.y + (tile.col === 2 && tile.row === 3 ? -5 : 0) },
+        ]),
+    );
+    for (const label of labels.children as BitmapText[])
+      expect({ x: label.position.x, y: label.position.y }).toEqual(
+        centers.get(label.text)!,
+      );
+  });
+
+  it("draws hex outlines only once a player shows them", async () => {
+    const fixture = start();
+    await settle();
+    fixture.tick();
+    const world = fixture.game.stage.children[0] as Container;
+    const outlines = (world.getChildByLabel("combat-hex-outlines", true)?.parent
+      ?.children ?? []) as Graphics[];
+    const grids = outlines.filter((child) => child.label === "combat-hex-outlines");
+    expect(grids).toHaveLength(2);
+    const draws = grids.map((graphics) => vi.spyOn(graphics, "stroke"));
+    expect(grids.every((graphics) => !graphics.visible)).toBe(true);
+    fixture.patchSnapshot({ showHexOutlines: true });
+    fixture.tick();
+    expect(grids.every((graphics) => graphics.visible)).toBe(true);
+    // Level arena ground draws the whole grid on its one face layer.
+    expect(draws.reduce((total, draw) => total + draw.mock.calls.length, 0)).toBe(1);
+    fixture.tick();
+    fixture.patchSnapshot({ showHexOutlines: false });
+    fixture.tick();
+    expect(grids.every((graphics) => !graphics.visible)).toBe(true);
+    fixture.patchSnapshot({ showHexOutlines: true });
+    fixture.tick();
+    expect(draws.reduce((total, draw) => total + draw.mock.calls.length, 0)).toBe(1);
   });
 
   it("checks the turn for highlights only when the battle or its deadline changes", async () => {

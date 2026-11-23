@@ -274,6 +274,7 @@ const mount = (battleState: BattleState, extra: { arenaActions?: ReactNode } = {
           {
             showAggro: false,
             showGridNumbers: false,
+            showHexOutlines: false,
             resourceBarsVisibility: "all",
           } as never
         }

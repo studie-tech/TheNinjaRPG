@@ -87,18 +87,12 @@ export const combatHighlightEdges = (
   >();
   for (const { tile, color } of tiles.values()) {
     const offset = offsets.get(`${tile.col},${tile.row}`) ?? 0;
-    tile.corners.forEach((a, index) => {
-      const b = tile.corners[(index + 1) % tile.corners.length];
-      if (!b) return;
-      const key = [a, b]
-        .map((p) => `${p.x.toFixed(4)},${p.y.toFixed(4)}`)
-        .sort()
-        .join(":");
+    for (const { a, b, key } of tileSides(tile)) {
       const before = edges.get(key);
       // A continuous range needs no second outline across its shoreline's vertical step.
       const hidden = !!before && before.offset !== offset && before.color === color;
       edges.set(key, { a, b, color, offset, hidden });
-    });
+    }
   }
   const batches = new Map<string, { layer: number; color: number; points: number[] }>();
   for (const { a, b, color, offset, hidden } of edges.values()) {
@@ -114,3 +108,39 @@ export const combatHighlightEdges = (
   }
   return [...batches.values()];
 };
+
+/**
+ * The optional hex grid outlines every tile on its own face, so recessed tiles stay closed
+ * hexes; higher faces cover recessed strokes, and an edge shared at one elevation draws once.
+ */
+export const combatGridEdges = (
+  tiles: Iterable<TerrainHex>,
+  offsets: ReadonlyMap<string, number>,
+) => {
+  const drawn = new Set<string>();
+  const batches = new Map<number, number[]>();
+  for (const tile of tiles) {
+    const offset = offsets.get(`${tile.col},${tile.row}`) ?? 0;
+    const layer = offset < 0 ? -0.5 : 0;
+    const points = batches.get(layer) ?? [];
+    batches.set(layer, points);
+    for (const { a, b, key } of tileSides(tile)) {
+      if (drawn.has(`${key}@${offset}`)) continue;
+      drawn.add(`${key}@${offset}`);
+      points.push(a.x, a.y + offset, b.x, b.y + offset);
+    }
+  }
+  return [...batches].map(([layer, points]) => ({ layer, points }));
+};
+
+/** A tile's sides, keyed independently of direction so neighbouring tiles share each key. */
+const tileSides = (tile: TerrainHex) =>
+  tile.corners.flatMap((a, index) => {
+    const b = tile.corners[(index + 1) % tile.corners.length];
+    if (!b) return [];
+    const key = [a, b]
+      .map((p) => `${p.x.toFixed(4)},${p.y.toFixed(4)}`)
+      .sort()
+      .join(":");
+    return [{ a, b, key }];
+  });

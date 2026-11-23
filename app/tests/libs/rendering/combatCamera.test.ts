@@ -59,6 +59,7 @@ const setup = async (
     sound: false,
     volume: 0,
     showGridNumbers: false,
+    showHexOutlines: false,
     inspect: true,
   } as unknown as CombatSceneSnapshot;
   const height = 390 * hexGridHeightRatio(12, 10),

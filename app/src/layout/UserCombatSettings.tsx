@@ -133,6 +133,12 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                 onCheckedChange={config.toggleGridNumbers}
               />
               <SettingsToggle
+                label="Hex outlines"
+                description="Dark border around each hex on the battlefield"
+                checked={config.showHexOutlines}
+                onCheckedChange={config.toggleHexOutlines}
+              />
+              <SettingsToggle
                 label="Small action icons"
                 description={
                   battleFocus

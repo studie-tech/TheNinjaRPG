@@ -937,6 +937,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           sound: getAudioPreference("sfxOn", userData?.sfxOn),
           volume: savedSfxVolume(),
           showGridNumbers: config.showGridNumbers,
+          showHexOutlines: config.showHexOutlines,
           inspect: !isTouchInputRef.current || touchDetailsOpenRef.current,
         }
       : null;

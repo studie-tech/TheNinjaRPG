@@ -111,6 +111,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
     battleState,
     userId,
     config.showGridNumbers,
+    config.showHexOutlines,
     config.showAggro,
     config.resourceBarsVisibility,
     loadLpcCatalog,

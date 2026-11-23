@@ -37,6 +37,7 @@ it("restores the desktop panel preference independently of battle focus", () => 
 
 it.each([
   ["toggleGridNumbers", "showGridNumbers", "showGridNumbers", false],
+  ["toggleHexOutlines", "showHexOutlines", "combatShowHexOutlines", false],
   ["toggleSmallActions", "useSmallActions", "combatSmallActions", false],
   ["toggleBattleLog", "showBattleLog", "combatShowBattleLog", false],
   ["toggleTimeline", "showTimeline", "combatShowTimeline", true],

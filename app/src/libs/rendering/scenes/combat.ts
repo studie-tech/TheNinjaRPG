@@ -20,6 +20,7 @@ import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import { combatEffectRenditions } from "@/libs/rendering/combatEffectAssets";
 import {
+  combatGridEdges,
   combatHighlightEdges,
   combatHighlightPlan,
 } from "@/libs/rendering/combatHighlights";
@@ -156,6 +157,18 @@ export const createCombatScene = async (options: {
         return [layer, graphics] as const;
       }),
     );
+    // The optional hex grid sits just beneath the targeting strokes on each face layer.
+    const gridLayers = new Map(
+      [-0.5, 0].map((layer) => {
+        const graphics = new Graphics({
+          label: "combat-hex-outlines",
+          zIndex: layer < 0 ? 3.4 : 5.4,
+          visible: false,
+        });
+        terrain.container.addChild(graphics);
+        return [layer, graphics] as const;
+      }),
+    );
     terrain.container.sortableChildren = true;
     // Tile markings share the ground plane, beneath physical fighters and scenery.
     const fighterBackdrop = new Container();
@@ -215,8 +228,30 @@ export const createCombatScene = async (options: {
         text.alpha = 0.3;
         const factor = (Math.max(tile.height, tile.width) * 0.2) / 18;
         text.scale.set(factor, -factor);
-        text.position.set(tile.x, tile.y - 28 / 3);
+        // Centered on the tile's visible face, so each number reads as its own hex.
+        const face = data.terrain.faceOffsets.get(`${tile.col},${tile.row}`) ?? 0;
+        text.position.set(tile.x, tile.y + face);
         labels.addChild(text);
+      }
+    };
+    let outlineEdges: ReturnType<typeof combatGridEdges> | null = null,
+      outlineScale = 0;
+    /** Hex outlines are opt-in; like targeting strokes they stay one pixel wide at every zoom. */
+    const showOutlines = (visible: boolean) => {
+      for (const graphics of gridLayers.values()) graphics.visible = visible;
+      if (!visible || outlineScale === scale()) return;
+      outlineScale = scale();
+      // Edges are fixed for the battle; a zoom only restrokes them.
+      outlineEdges ??= combatGridEdges(data.grid, data.terrain.faceOffsets);
+      for (const graphics of gridLayers.values()) graphics.clear();
+      for (const { layer, points } of outlineEdges) {
+        const graphics = gridLayers.get(layer);
+        if (!graphics || !points.length) continue;
+        for (let index = 0; index < points.length; index += 4)
+          graphics
+            .moveTo(points[index] ?? 0, points[index + 1] ?? 0)
+            .lineTo(points[index + 2] ?? 0, points[index + 3] ?? 0);
+        graphics.stroke({ color: 0x000000, alpha: 0.35, width: 1 / outlineScale });
       }
     };
     // Physical fighters and scenery share painter ordering; meters and controls remain unlit.
@@ -601,6 +636,7 @@ export const createCombatScene = async (options: {
       for (const [userId, { severity, ...direction }] of struck)
         actors.react(userId, direction, severity);
       showLabels(snapshot.showGridNumbers);
+      showOutlines(snapshot.showHexOutlines);
       const pointer = controls.dragging() ? null : controls.pointer();
       const tile = pointer ? tileAt(pointer.x, pointer.y) : null;
       const actor = pointer ? actors.hit(pointer.x, pointer.y) : null;
@@ -818,6 +854,7 @@ export type CombatSceneSnapshot = {
   sound: boolean;
   volume: number;
   showGridNumbers: boolean;
+  showHexOutlines: boolean;
   inspect: boolean;
   /** Change for in-place preview edits that preserve battle identity/version. */
   revision?: number;
