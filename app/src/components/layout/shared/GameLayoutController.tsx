@@ -13,6 +13,7 @@ import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
 import { useGameMenu } from "@/hooks/useGameMenu";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useRankedQueueCount } from "@/hooks/useRankedQueueCount";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
@@ -46,7 +47,7 @@ import {
   SignedInIcons,
 } from "./LayoutSidebars";
 import type { GameLayoutControllerProps, GameLayoutRenderProps } from "./layoutTypes";
-import { shouldCloseRightSidebar } from "./layoutUtils";
+import { SIDEBAR_COLUMNS_SHOWN_QUERY, shouldCloseRightSidebar } from "./layoutUtils";
 import { getImageSet, layoutVariantClasses } from "./layoutVariants";
 
 // Lessons and quest scenes load once a character exists; visitors only need the welcome page.
@@ -78,6 +79,8 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   }));
   const pathname = usePublicPathname();
   const isPageActive = usePageActive();
+  const isDesktop = useMediaQuery(SIDEBAR_COLUMNS_SHOWN_QUERY);
+  const keepSidebarsOpen = variant === "experimental" && isDesktop;
   const { systems, location } = useGameMenu();
   const [leftSideBarOpen, setLeftSideBarOpen] = useState(false);
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);
@@ -125,11 +128,11 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const activeTerritoryWar = useTerritoryWarNotice(!!userData, timeDiff, isPageActive);
 
   useEffect(() => {
-    if (variant === "experimental") return;
+    if (keepSidebarsOpen) return;
     // Deep links and notification taps navigate without clicking a sidebar item.
     setLeftSideBarOpen(false);
     setRightSideBarOpen(false);
-  }, [pathname, variant]);
+  }, [pathname, keepSidebarsOpen]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -280,7 +283,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   }));
 
   const closeLeftSidebarOnNavigate = () => {
-    if (variant !== "experimental") setLeftSideBarOpen(false);
+    if (!keepSidebarsOpen) setLeftSideBarOpen(false);
   };
 
   const signedInIcons = (
@@ -326,7 +329,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   );
 
   const handleRightSidebarClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (shouldCloseRightSidebar(e.target as HTMLElement)) {
+    if (!keepSidebarsOpen && shouldCloseRightSidebar(e.target as HTMLElement)) {
       setRightSideBarOpen(false);
     }
   };

@@ -438,13 +438,32 @@ describe("step overrides", () => {
 });
 
 describe("routing", () => {
-  it("preserves an open drawer-only menu while routing to a lesson", () => {
-    state.pathname = "/not-the-lesson";
-    state.profile = makeProfile(0);
-    render(assistant(null, true));
-    expect(state.push).toHaveBeenCalled();
-    expect(state.setRightSideBarOpen).not.toHaveBeenCalledWith(false);
-  });
+  it.each([false, true])(
+    "keeps drawer-only tutorial dismissal responsive (desktop=%s)",
+    (desktop) => {
+      const original = Object.getOwnPropertyDescriptor(window, "matchMedia");
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: () => ({
+          matches: desktop,
+          addEventListener() {},
+          removeEventListener() {},
+        }),
+      });
+      try {
+        state.pathname = "/not-the-lesson";
+        state.profile = makeProfile(0);
+        render(assistant(null, true));
+        expect(state.push).toHaveBeenCalled();
+        if (desktop) expect(state.setRightSideBarOpen).not.toHaveBeenCalledWith(false);
+        else expect(state.setRightSideBarOpen).toHaveBeenCalledWith(false);
+      } finally {
+        cleanup();
+        if (original) Object.defineProperty(window, "matchMedia", original);
+        else Reflect.deleteProperty(window, "matchMedia");
+      }
+    },
+  );
 
   it("sends the player to the step's page and tries once more", async () => {
     vi.useFakeTimers();

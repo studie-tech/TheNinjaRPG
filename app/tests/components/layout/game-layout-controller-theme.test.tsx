@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from "react";
 import GameLayoutController from "@/components/layout/shared/GameLayoutController";
 import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTypes";
 import * as gameMenu from "@/hooks/useGameMenu";
+import * as media from "@/hooks/useMediaQuery";
 import * as pageActive from "@/hooks/usePageActive";
 import * as rankedQueue from "@/hooks/useRankedQueueCount";
 import * as territoryWar from "@/hooks/useTerritoryWarNotice";
@@ -21,6 +22,7 @@ const Renderer = (props: GameLayoutRenderProps) => {
 
 beforeEach(() => {
   renderProps = undefined;
+  vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
   window.localStorage.clear();
   document.documentElement.classList.remove("dark");
   vi.spyOn(UserContext, "useUserDataSelector").mockReturnValue({

@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from "react";
 import GameLayoutController from "@/components/layout/shared/GameLayoutController";
 import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTypes";
 import * as gameMenu from "@/hooks/useGameMenu";
+import * as media from "@/hooks/useMediaQuery";
 import * as pageActive from "@/hooks/usePageActive";
 import * as rankedQueue from "@/hooks/useRankedQueueCount";
 import * as territoryWar from "@/hooks/useTerritoryWarNotice";
@@ -21,6 +22,7 @@ const notifications: NavBarDropdownLink[] = [
 
 let renderProps: GameLayoutRenderProps | undefined;
 let pathname = "/items";
+let isDesktop = false;
 const Renderer = (props: GameLayoutRenderProps) => {
   renderProps = props;
   return null;
@@ -29,6 +31,8 @@ const Renderer = (props: GameLayoutRenderProps) => {
 beforeEach(() => {
   renderProps = undefined;
   pathname = "/items";
+  isDesktop = false;
+  vi.spyOn(media, "useMediaQuery").mockImplementation(() => isDesktop);
   vi.spyOn(UserContext, "useUserDataSelector").mockReturnValue({
     data: undefined,
     notifications,
@@ -108,9 +112,16 @@ it("marks only the battle page as the combat page", () => {
   expect(navigate(view, "/combat-log").isCombatPage).toBe(false);
 });
 
-it.each(["default", "experimental"] as const)(
-  "keeps navigation dismissal specific to the %s layout",
-  async (variant) => {
+it.each([
+  ["default", false],
+  ["default", true],
+  ["experimental", false],
+  ["experimental", true],
+] as const)(
+  "keeps navigation dismissal specific to %s (desktop=%s)",
+  async (variant, desktop) => {
+    isDesktop = desktop;
+    const keepOpen = variant === "experimental" && desktop;
     const view = render(
       <GameLayoutController variant={variant} renderer={Renderer}>
         <div />
@@ -126,13 +137,20 @@ it.each(["default", "experimental"] as const)(
       onNavigate: () => void;
     }>;
     await act(async () => menu.props.onNavigate());
-    expect(renderProps!.leftSideBarOpen).toBe(variant === "experimental");
+    expect(renderProps!.leftSideBarOpen).toBe(keepOpen);
     await reopen();
     const icons = renderProps!.signedInIcons as ReactElement<{
       onEventClick: () => void;
     }>;
     await act(async () => icons.props.onEventClick());
-    expect(renderProps!.leftSideBarOpen).toBe(variant === "experimental");
+    expect(renderProps!.leftSideBarOpen).toBe(keepOpen);
+    await reopen();
+    const link = document.createElement("a");
+    link.href = "/items";
+    await act(async () =>
+      renderProps!.handleRightSidebarClick({ target: link } as never),
+    );
+    expect(renderProps!.rightSideBarOpen).toBe(keepOpen);
     await reopen();
     pathname = "/bank";
     view.rerender(
@@ -140,8 +158,8 @@ it.each(["default", "experimental"] as const)(
         <div />
       </GameLayoutController>,
     );
-    expect(renderProps!.leftSideBarOpen).toBe(variant === "experimental");
-    expect(renderProps!.rightSideBarOpen).toBe(variant === "experimental");
+    expect(renderProps!.leftSideBarOpen).toBe(keepOpen);
+    expect(renderProps!.rightSideBarOpen).toBe(keepOpen);
     await act(async () => {
       renderProps!.onLeftSideBarOpenChange(false);
       renderProps!.onRightSideBarOpenChange(false);

@@ -5,6 +5,7 @@ import { ArrowRight, Gift, Loader2, MapPin, Settings2, Sparkles } from "lucide-r
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/app/_trpc/client";
+import { SIDEBAR_COLUMNS_SHOWN_QUERY } from "@/components/layout/shared/layoutUtils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -369,8 +370,10 @@ const PlayerTutorialAssistant: React.FC<
 
       // If we're at a valid step but not on the correct page, redirect
       if (isActiveStep && !onCorrectPage && currentStepConfig) {
-        // Always-drawer layouts keep the game menu available between lessons.
-        if (sidebarBreakpoint !== null && !currentStepConfig?.requiresGameMenu) {
+        const keepMenuOpen =
+          sidebarBreakpoint === null &&
+          window.matchMedia(SIDEBAR_COLUMNS_SHOWN_QUERY).matches;
+        if (!keepMenuOpen && !currentStepConfig?.requiresGameMenu) {
           setRightSideBarOpen(false);
         }
         const battleCheck =
