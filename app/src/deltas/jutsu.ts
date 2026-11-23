@@ -223,6 +223,28 @@ export const getForgottenJutsus = <T extends { id: string }>(
     ? rows.filter((row) => row.id !== userJutsuId)
     : undefined;
 
+/** Remove confirmed forgotten equipment from the profile so its warning follows actual equips, independently of saved loadout IDs. */
+export const getForgottenJutsuProfilePatch = (
+  user: Pick<NonNullable<UserWithRelations>, "jutsus">,
+  owned: { id: string; jutsuId: string } | undefined,
+  userJutsuId: string,
+) => {
+  if (!user.jutsus || !owned || owned.id !== userJutsuId) return;
+  return { jutsus: user.jutsus.filter((row) => row.jutsuId !== owned.jutsuId) };
+};
+
+/** Project actual equipment after confirmed requirement invalidations so warnings do not follow stale saved loadout IDs. */
+export const getInvalidatedJutsuUserUpdate = (
+  rows: { jutsuId: string; equipped: boolean }[],
+  invalidatedJutsuIds: string[],
+) => ({
+  userPatch: {
+    jutsus: rows
+      .filter((row) => row.equipped && !invalidatedJutsuIds.includes(row.jutsuId))
+      .map(({ jutsuId }) => ({ jutsuId })),
+  },
+});
+
 /** Clear every equip flag; filtered lists that admit equipped rows need a read for membership. */
 export const getUnequippedJutsus = <T extends { equipped: boolean }>(
   rows: T[],

@@ -2,6 +2,7 @@ import { describe, expect, it, setSystemTime } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import {
   getEquippedJutsuProfilePatch,
+  getForgottenJutsuProfilePatch,
   getSelectJutsuLoadoutUserUpdate,
   getUnequipAllJutsuUserUpdate,
 } from "@/deltas/jutsu";
@@ -74,6 +75,43 @@ const setup = (active = true) => {
 };
 
 describe("user cache updates", () => {
+  it("warns immediately after forgetting the last actual equip outside the saved loadout", async () => {
+    const test = setup();
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: {
+        ...profile(100).userData,
+        isAi: false,
+        tutorialOn: false,
+        jutsuLoadout: "main",
+        loadout: { jutsuIds: [] },
+        jutsus: [{ jutsuId: "auto-equipped" }, { jutsuId: "remaining" }],
+      },
+      notifications: [],
+    });
+    for (const jutsuId of ["auto-equipped", "remaining"]) {
+      const revision = prepareUserUpdate(test.client, key);
+      await updateUserCache(
+        test.client,
+        key,
+        (user) =>
+          getForgottenJutsuProfilePatch(user, { id: jutsuId, jutsuId }, jutsuId),
+        { revision },
+      );
+      expect(test.value()?.userData.jutsus).toHaveLength(
+        jutsuId === "remaining" ? 0 : 1,
+      );
+      expect(test.value()?.userData.loadout).toEqual({ jutsuIds: [] });
+      const notifications = test.value()
+        ?.notifications as unknown as NavBarDropdownLink[];
+      expect(notifications.includes(NO_JUTSU_EQUIPPED_NOTIFICATION)).toBe(
+        jutsuId === "remaining",
+      );
+    }
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
   it("keeps equipment warnings accurate across saved-loadout mismatches without refetching", async () => {
     const test = setup();
     test.client.setQueryData(key, {

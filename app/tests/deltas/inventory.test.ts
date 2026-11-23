@@ -20,7 +20,9 @@ import {
 } from "@/deltas/item";
 import {
   getEquippedJutsus,
+  getForgottenJutsuProfilePatch,
   getForgottenJutsus,
+  getInvalidatedJutsuUserUpdate,
   getTransferredJutsus,
   getUnequippedJutsus,
 } from "@/deltas/jutsu";
@@ -312,6 +314,28 @@ describe("jutsu mutation projections", () => {
   it("removes a forgotten jutsu and refetches a missing one", () => {
     expect(getForgottenJutsus(jutsus, "one")).toEqual([jutsus[1]!]);
     expect(getForgottenJutsus(jutsus, "missing")).toBeUndefined();
+  });
+
+  it("requires matching ownership and known profile equipment before projecting a forgotten jutsu", () => {
+    const user = { jutsus: [{ jutsuId: "a" }] };
+    expect(getForgottenJutsuProfilePatch(user, undefined, "one")).toBeUndefined();
+    expect(getForgottenJutsuProfilePatch(user, jutsus[0], "two")).toBeUndefined();
+    expect(getForgottenJutsuProfilePatch({}, jutsus[0], "one")).toBeUndefined();
+    expect(getForgottenJutsuProfilePatch(user, jutsus[1], "two")).toEqual(user);
+  });
+
+  it("projects only equipment retained after confirmed requirement invalidations", () => {
+    const equipped = [
+      ...jutsus,
+      { id: "three", jutsuId: "c", equipped: true, level: 1 },
+    ];
+    expect(getInvalidatedJutsuUserUpdate(equipped, ["a"])).toEqual({
+      userPatch: { jutsus: [{ jutsuId: "c" }] },
+    });
+    expect(getInvalidatedJutsuUserUpdate(equipped, ["a", "c"])).toEqual({
+      userPatch: { jutsus: [] },
+    });
+    expect(equipped[0]?.equipped).toBe(true);
   });
 
   it("clears every equip flag unless the filter admits equipped rows", () => {

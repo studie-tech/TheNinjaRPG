@@ -726,13 +726,26 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
     ).toBe("NONE");
   });
 
-  it("clears persisted jutsu equips after an item-only switch removes their mastery source", async () => {
-    await seedLobby(true);
-    const result = await (await callerFor(combatRouter, USER)).updateCombatLoadout({
-      battleId: BATTLE,
-      itemLoadoutId: "without-armor",
-    });
-    expect(result.success).toBe(true);
-    expect(await equippedIds()).toEqual([]);
-  });
+  it.each([false, true])(
+    "projects persisted equipment after an item-only mastery loss (retains usable equip: %s)",
+    async (retainUsable) => {
+      await seedLobby(true);
+      if (retainUsable) {
+        const db = await getTestDatabase();
+        await db
+          .update(userJutsu)
+          .set({ equipped: true })
+          .where(eq(userJutsu.id, "owned-usable"));
+      }
+      const result = await (await callerFor(combatRouter, USER)).updateCombatLoadout({
+        battleId: BATTLE,
+        itemLoadoutId: "without-armor",
+      });
+      expect(result.success).toBe(true);
+      expect(await equippedIds()).toEqual(retainUsable ? ["usable"] : []);
+      expect(result).toMatchObject({
+        userPatch: { jutsus: retainUsable ? [{ jutsuId: "usable" }] : [] },
+      });
+    },
+  );
 });
