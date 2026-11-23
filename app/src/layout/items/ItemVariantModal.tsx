@@ -12,7 +12,7 @@ import { useCosmetics } from "@/hooks/useCosmetics";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import Image from "@/layout/Image";
 import Modal from "@/layout/Modal";
-import { isEquippableUserItem } from "@/libs/item";
+import { canUnlockVariant, isEquippableUserItem } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { getVillageLoyaltyShopCost } from "@/libs/villageLoyalty";
 import { useRequiredUserDataSelector } from "@/utils/UserContext";
@@ -166,11 +166,7 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
           const matchingToken = variantTokens.find(
             (token) =>
               (!v.requiredItemId || token.item.id === v.requiredItemId) &&
-              token.item.effects.some(
-                (effect) =>
-                  effect.type === "unlockitemvariant" &&
-                  (!effect.variantId || effect.variantId === v.id),
-              ),
+              canUnlockVariant(token.item.effects, v.id),
           );
           const tokenActionLabel = matchingToken
             ? `Use ${matchingToken.item.name}`

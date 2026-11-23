@@ -102,6 +102,7 @@ import {
   calcItemRepairCost,
   calcItemSellingPrice,
   canEquipAdditional,
+  canUnlockVariant,
   compatibleEquipSlots,
   computeAutoEquipAssignments,
   computeLoadoutAssignments,
@@ -259,6 +260,7 @@ import {
   listItemVariantForGetItemVariants,
   listItemVariantForUpsertItemVariant,
   listItemVariantRequiringItemForDelete,
+  listItemVariantRequiringItemForUpdate,
   listPetSpeciesForFetchRewardPetSpecies,
   listPurchaseCounters,
   listQuestForGetItemRelations,
@@ -849,6 +851,7 @@ export const itemRouter = createTRPCRouter({
         titleError,
         lpcDesign,
         warehouseVillage,
+        requiredByVariants,
       ] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
@@ -878,6 +881,7 @@ export const itemRouter = createTRPCRouter({
         input.data.villageId
           ? findWarehouseVillage(ctx.drizzle, input.data.villageId)
           : Promise.resolve(undefined),
+        listItemVariantRequiringItemForUpdate(ctx.drizzle, input),
       ]);
       if (titleError) return errorResponse(titleError);
       if (input.data.requiredSkillId && requiredSkill?.pathType !== "SKILL") {
@@ -916,6 +920,19 @@ export const itemRouter = createTRPCRouter({
         )
       )
         return errorResponse("Companion rewards must reference existing species.");
+      // Only refuse unlocks this save takes away: a token that already cannot unlock a
+      // variant stays editable. A variant bound to it mid-save can slip through, which
+      // staff undo by restoring the effect.
+      const lostVariants = requiredByVariants.filter(
+        (variant) =>
+          canUnlockVariant(entry.effects, variant.id) &&
+          !canUnlockVariant(input.data.effects, variant.id),
+      );
+      if (lostVariants.length > 0) {
+        return errorResponse(
+          `This item unlocks variants: ${lostVariants.map((variant) => variant.name).join(", ")}. Keep an unlockitemvariant effect that covers them, or change their required unlock item first.`,
+        );
+      }
       // Validate evolution chain constraints
       if (input.data.parentItemId) {
         const graphValidation = validateEvolutionGraph({
@@ -1499,14 +1516,7 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("Required unlock item not found");
       if (input.variant.requiredItemId && input.variant.costType !== "VARIANT_TOKEN")
         return errorResponse("Only token variants can require an unlock item");
-      if (
-        requiredItem &&
-        !requiredItem.effects.some(
-          (effect) =>
-            effect.type === "unlockitemvariant" &&
-            (!effect.variantId || effect.variantId === input.variant.id),
-        )
-      ) {
+      if (requiredItem && !canUnlockVariant(requiredItem.effects, input.variant.id)) {
         return errorResponse("Required unlock item cannot unlock this variant");
       }
       if (parentItem.itemType !== "FURNITURE" && input.variant.furnitureData) {
@@ -1821,15 +1831,10 @@ export const itemRouter = createTRPCRouter({
       if (variant.costType !== "VARIANT_TOKEN") {
         return errorResponse("This variant does not require a Variant Token");
       }
-      const hasVariantTokenEffect = tokenItem.item.effects.some(
-        (e) =>
-          e.type === "unlockitemvariant" &&
-          (!e.variantId || e.variantId === variant.id),
-      );
       if (variant.requiredItemId && variant.requiredItemId !== tokenItem.item.id) {
         return errorResponse("This variant requires a different unlock item");
       }
-      if (!hasVariantTokenEffect) {
+      if (!canUnlockVariant(tokenItem.item.effects, variant.id)) {
         return errorResponse("This item cannot unlock this variant");
       }
       if (!ownershipRows.length) return errorResponse("You don't own this item");

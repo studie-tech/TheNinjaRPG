@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq, getTableName } from "drizzle-orm";
 import {
   actionLog,
@@ -9,8 +9,13 @@ import {
   userItemImbuement,
   userItemVariant,
 } from "@/drizzle/schema";
+import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { itemRouter } from "@/server/api/routers/item";
-import { UnlockItemVariantTag } from "@/validators/combat";
+import {
+  ItemValidator,
+  UnlockItemVariantTag,
+  type ZodAllTags,
+} from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeStatements, failStatements } from "../../../setup/statements";
@@ -110,6 +115,100 @@ describeWithDatabase("item variant unlock requirements", () => {
       ]);
       expect(names.find((entry) => entry.id === "ore")?.unlockVariantIds).toEqual([]);
     }
+  });
+
+  describe("editing a required token", () => {
+    const saveToken = async (overrides: Record<string, unknown>) => {
+      const db = await getTestDatabase();
+      const row = await fetchItemWithCraftingRequirements(db, "token");
+      if (!row) throw new Error("Missing token fixture");
+      return (await callerFor(itemRouter, "staff")).update({
+        id: "token",
+        data: ItemValidator.parse({
+          ...row,
+          cost: 1,
+          target: "SELF",
+          method: "SINGLE",
+          destroyOnUse: true,
+          preventBattleUsage: true,
+          ...overrides,
+        }),
+      });
+    };
+    const setEffects = async (effects: ZodAllTags[]) =>
+      (await getTestDatabase())
+        .update(item)
+        .set({ effects })
+        .where(eq(item.id, "token"));
+    const readToken = async () =>
+      (
+        await (await getTestDatabase()).select().from(item).where(eq(item.id, "token"))
+      )[0];
+
+    it.each<[string, Record<string, unknown>]>([
+      ["clears the effects", { itemType: "COSMETIC", effects: [] }],
+      [
+        "binds the unlock to another variant",
+        { effects: [UnlockItemVariantTag.parse({ variantId: "other-variant" })] },
+      ],
+    ])("refuses a save that %s and names the variant", async (_case, overrides) => {
+      expect(await saveToken({ ...overrides, name: "Renamed" })).toEqual({
+        success: false,
+        message:
+          "This item unlocks variants: Sword: Red. Keep an unlockitemvariant effect that covers them, or change their required unlock item first.",
+      });
+      expect(await readToken()).toMatchObject({
+        name: "Token",
+        itemType: "CONSUMABLE",
+        effects: [{ type: "unlockitemvariant", variantId: null }],
+      });
+      expect(await (await getTestDatabase()).select().from(actionLog)).toHaveLength(0);
+    });
+
+    it.each<[string, string | null]>([
+      ["generic", null],
+      ["matching", "variant"],
+    ])("accepts a %s unlock effect", async (_case, variantId) => {
+      const result = await saveToken({
+        effects: [UnlockItemVariantTag.parse({ variantId })],
+      });
+      expect(result.success, result.message).toBe(true);
+    });
+
+    it("names only the variants a narrower binding leaves locked", async () => {
+      await (await getTestDatabase()).insert(itemVariant).values({
+        id: "blue-variant",
+        itemId: "weapon",
+        name: "Blue",
+        image: "/blue.png",
+        costType: "VARIANT_TOKEN",
+        requiredItemId: "token",
+        order: 2,
+      });
+      const result = await saveToken({
+        effects: [UnlockItemVariantTag.parse({ variantId: "variant" })],
+      });
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("unlocks variants: Sword: Blue.");
+    });
+
+    it("keeps a token that already lost its unlock editable and repairable", async () => {
+      await setEffects([]);
+      const edited = await saveToken({ name: "Renamed", effects: [] });
+      expect(edited.success, edited.message).toBe(true);
+      const restored = await saveToken({ effects: [UnlockItemVariantTag.parse({})] });
+      expect(restored.success, restored.message).toBe(true);
+      expect((await saveToken({ effects: [] })).success).toBe(false);
+    });
+
+    it("allows removing the effect once no variant requires the item", async () => {
+      await (await getTestDatabase())
+        .update(itemVariant)
+        .set({ requiredItemId: null })
+        .where(eq(itemVariant.id, "variant"));
+      const result = await saveToken({ effects: [] });
+      expect(result.success, result.message).toBe(true);
+    });
   });
 
   it("blocks deleting a required token before deleting its inventory, then permits deletion after reassignment", async () => {

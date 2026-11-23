@@ -522,6 +522,20 @@ export const listItemVariantRequiringItemForDelete = (
     columns: { name: true },
   });
 
+/** List the variants of live items that require this item as their unlock token. */
+export const listItemVariantRequiringItemForUpdate = (
+  client: Pick<DrizzleClient, "select">,
+  input: { id: string },
+) =>
+  client
+    .select({
+      id: itemVariant.id,
+      name: sql<string>`concat(${item.name}, ": ", ${itemVariant.name})`,
+    })
+    .from(itemVariant)
+    .innerJoin(item, eq(item.id, itemVariant.itemId))
+    .where(eq(itemVariant.requiredItemId, input.id));
+
 /**
  * Build the `huntingSession` lookup for `delete`, selecting only `userId`, using
  * predicates on `content` and `contractId`.
