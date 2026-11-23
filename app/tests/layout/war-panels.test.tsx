@@ -19,6 +19,7 @@ import {
   WAR_POINT_PRESTIGE_RATE,
 } from "@/drizzle/constants";
 import * as combatEntry from "@/hooks/combatEntry";
+import * as caravans from "@/layout/CaravanControls";
 import * as modal from "@/layout/Modal";
 import { ObjectiveWarPanel } from "@/layout/ObjectiveWarPanel";
 import { WarDashboardNotices } from "@/layout/WarDashboardNotices";
@@ -180,7 +181,7 @@ beforeEach(() => {
     loadBattle: vi.fn(),
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
-  installBrowserGlobals();
+  installBrowserGlobals({ resizeObserver: true });
   vi.clearAllMocks();
   vi.useFakeTimers();
   setSystemTime(NOW);
@@ -401,6 +402,37 @@ describe("war field objectives", () => {
       { villageId: "own" },
       expect.objectContaining({ refetchInterval: 60_000 }),
     );
+  });
+
+  it("opens field dialogs directly from their menu rows", () => {
+    vi.spyOn(caravans, "CaravanControls").mockReturnValue(<p>Caravan operations</p>);
+    const view = mount(<WarFieldActions includeCaravans />);
+    fireEvent.click(view.getByRole("button", { name: /^War\s*View war objectives/ }));
+    const warDialog = view.getByRole("dialog", { name: "War" });
+    expect(
+      within(warDialog).getByRole("region", { name: "War objectives" }),
+    ).toBeDefined();
+    fireEvent.click(within(warDialog).getByRole("button", { name: "Close" }));
+    fireEvent.click(view.getByRole("button", { name: /^Caravans/ }));
+    expect(view.getByRole("dialog", { name: "Caravans" }).textContent).toContain(
+      "Caravan operations",
+    );
+  });
+
+  it("keeps caravans accessible without a war and labels war updates in the menu", () => {
+    camps = [{ id: "open", sector: 20, endsAt: new Date(NOW + 60_000) }];
+    const view = mount(<WarFieldActions includeCaravans />);
+    expect(view.getByText("1 update · View war objectives")).toBeDefined();
+    wars = [];
+    camps = [];
+    view.rerender(<WarFieldActions includeCaravans />);
+    expect(
+      (view.getByRole("button", { name: /^War\s*No active wars/ }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (view.getByRole("button", { name: /^Caravans/ }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 
   it("selects one participating war at a time and falls back when the selected war ends", () => {

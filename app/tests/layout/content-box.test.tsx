@@ -136,6 +136,51 @@ it("keeps title and controls beside each other when the panel has space", () => 
   expect(view.getByRole("textbox", { name: "Control draft" })).toBeDefined();
 });
 
+it("keeps named action menus collapsed at every width and reveals guided targets", () => {
+  const view = render(
+    <ContentBox
+      title="Travel"
+      collapsedActionsLabel="Map controls"
+      collapsedActionsIconOnly
+      headerStartContent={
+        <div>
+          <button type="button">Sector</button>
+          <button type="button">Global</button>
+        </div>
+      }
+      topRightContent={
+        <input id="guided-map-setting" aria-label="Map setting" defaultValue="Saved" />
+      }
+    >
+      Map
+    </ContentBox>,
+  );
+  const trigger = view.getByRole("button", { name: "Map controls" });
+  const target = view.container.querySelector(
+    "#guided-map-setting",
+  ) as HTMLInputElement;
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(trigger.textContent).toBe("");
+  expect(view.getByRole("button", { name: "Sector" }).closest("[inert]")).toBeNull();
+  expect(view.getByRole("button", { name: "Global" }).closest("[inert]")).toBeNull();
+  expect(
+    view.getByRole("button", { name: "Global" }).compareDocumentPosition(trigger) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(view.queryByRole("textbox", { name: "Map setting" })).toBeNull();
+  fireEvent(target, new Event(REVEAL_CONTENT_BOX_CONTROLS, { bubbles: true }));
+  expect(view.getByRole("textbox", { name: "Map setting" })).toBe(target);
+  fireEvent.change(target, { target: { value: "Edited" } });
+  resizeHeader(1200);
+  expect(view.getByRole("button", { name: "Map controls" })).toBe(trigger);
+  fireEvent.keyDown(target, { key: "Escape" });
+  expect(document.activeElement).toBe(trigger);
+  expect(view.queryByRole("textbox", { name: "Map setting" })).toBeNull();
+  fireEvent.click(trigger);
+  expect(view.getByRole("textbox", { name: "Map setting" })).toBe(target);
+  expect(target.value).toBe("Edited");
+});
+
 it("uses the panel width and preserves the same control and draft across resizes", () => {
   const view = setup();
   const draft = view.getByRole("textbox", { name: "Control draft" });

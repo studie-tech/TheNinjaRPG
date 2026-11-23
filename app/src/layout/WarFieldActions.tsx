@@ -1,5 +1,5 @@
 "use client";
-import { Swords } from "lucide-react";
+import { Caravan, Swords } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -11,17 +11,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useActiveWars } from "@/hooks/useActiveWars";
+import { useHeaderActionsFocus } from "@/hooks/useHeaderActionsFocus";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
+import { CaravanControls } from "@/layout/CaravanControls";
 import Link from "@/layout/Link";
 import Modal from "@/layout/Modal";
 import { ObjectiveWarPanel } from "@/layout/ObjectiveWarPanel";
+import { mapToolClassName } from "@/layout/travel/styles";
 import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Keep Travel focused on the map, fetching detailed war actions only on demand. */
-export const WarFieldActions = () => {
+export const WarFieldActions = ({
+  includeCaravans = false,
+  asMenu = false,
+}: {
+  includeCaravans?: boolean;
+  asMenu?: boolean;
+}) => {
+  const [isCaravansOpen, setIsCaravansOpen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedWar, setSelectedWar] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useHeaderActionsFocus() ?? triggerRef;
   const { data: user, timeDiff } = useUserDataSelector((user) => ({
     villageId: user.villageId,
     warMission: user.warMission,
@@ -58,30 +69,87 @@ export const WarFieldActions = () => {
     if (!objectiveWars.length) setIsOpen(false);
   }, [objectiveWars.length]);
   return useMemo(() => {
-    if (!user || !activeWar) return null;
+    if (!user || (!activeWar && !includeCaravans)) return null;
     return (
       <>
-        <Button
-          ref={triggerRef}
-          size="icon"
-          variant="ghost"
-          className="mr-2 h-7 w-7"
-          aria-label={
-            updates ? `War, ${updates} ${updates === 1 ? "update" : "updates"}` : "War"
-          }
-          aria-haspopup="dialog"
-          aria-expanded={isOpen}
-          count={updates}
-          onClick={() => setIsOpen(true)}
-        >
-          <Swords className="h-7 w-7" aria-hidden />
-        </Button>
-        {isOpen && (
+        {includeCaravans || asMenu ? (
+          <>
+            <button
+              type="button"
+              className={mapToolClassName}
+              disabled={!activeWar}
+              aria-haspopup="dialog"
+              onClick={() => {
+                setIsOpen(true);
+              }}
+            >
+              <Swords className="size-6 shrink-0" aria-hidden />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">War</span>
+                <span className="text-muted-foreground block text-xs">
+                  {activeWar
+                    ? updates
+                      ? `${updates} ${updates === 1 ? "update" : "updates"} · View war objectives`
+                      : "View war objectives"
+                    : "No active wars"}
+                </span>
+              </span>
+            </button>
+            {includeCaravans && (
+              <button
+                type="button"
+                className={mapToolClassName}
+                aria-haspopup="dialog"
+                onClick={() => {
+                  setIsCaravansOpen(true);
+                }}
+              >
+                <Caravan className="size-6 shrink-0" aria-hidden />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">Caravans</span>
+                  <span className="text-muted-foreground block text-xs">
+                    Scout trade routes and manage operations
+                  </span>
+                </span>
+              </button>
+            )}
+          </>
+        ) : (
+          <Button
+            ref={triggerRef}
+            size="icon"
+            variant="ghost"
+            className="mr-2 h-7 w-7"
+            aria-label={
+              updates
+                ? `War, ${updates} ${updates === 1 ? "update" : "updates"}`
+                : "War"
+            }
+            aria-haspopup="dialog"
+            aria-expanded={isOpen}
+            count={updates}
+            onClick={() => setIsOpen(true)}
+          >
+            <Swords className="h-7 w-7" aria-hidden />
+          </Button>
+        )}
+        {isCaravansOpen && (
+          <Modal
+            title="Caravans"
+            isOpen={isCaravansOpen}
+            setIsOpen={setIsCaravansOpen}
+            returnFocusRef={returnFocusRef}
+            className="sm:max-w-3xl md:max-w-3xl"
+          >
+            <CaravanControls />
+          </Modal>
+        )}
+        {isOpen && activeWar && (
           <Modal
             title="War"
             isOpen={isOpen}
             setIsOpen={setIsOpen}
-            returnFocusRef={triggerRef}
+            returnFocusRef={returnFocusRef}
             className="sm:max-w-3xl md:max-w-3xl"
           >
             {objectiveWars.length > 1 ? (
@@ -119,5 +187,16 @@ export const WarFieldActions = () => {
         )}
       </>
     );
-  }, [user, activeWar, objectiveWars, updates, isOpen, selectedWar]);
+  }, [
+    user,
+    activeWar,
+    objectiveWars,
+    updates,
+    isOpen,
+    selectedWar,
+    includeCaravans,
+    asMenu,
+    isCaravansOpen,
+    returnFocusRef,
+  ]);
 };

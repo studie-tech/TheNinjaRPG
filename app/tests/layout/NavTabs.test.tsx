@@ -17,6 +17,28 @@ afterEach(() => {
 const options = ["Dashboard", "Character", "Achievements"];
 
 describe("optional tab remembering", () => {
+  it("keeps unavailable views visible with display labels and restores selection after travel", () => {
+    const onChange = vi.fn();
+    const props = {
+      current: "Global",
+      options: ["You", "Global"],
+      labels: { You: "Sector" },
+      onChange,
+    };
+    const view = render(<NavTabs {...props} disabledOptions={["You"]} />);
+    const sector = view.getByRole("button", { name: "Sector" }) as HTMLButtonElement;
+    expect(sector.disabled).toBe(true);
+    expect(
+      view.getByRole("button", { name: "Global" }).getAttribute("aria-current"),
+    ).toBe("true");
+    fireEvent.click(sector);
+    expect(onChange).not.toHaveBeenCalled();
+    view.rerender(<NavTabs {...props} />);
+    expect(sector.disabled).toBe(false);
+    fireEvent.click(sector);
+    expect(onChange).toHaveBeenCalledWith("You");
+  });
+
   it("keeps responsive icon tabs named and keyboard accessible", async () => {
     const iconOptions = [
       "Dashboard",

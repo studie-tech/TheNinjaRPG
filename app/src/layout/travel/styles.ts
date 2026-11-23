@@ -1,3 +1,3 @@
-/** Every map tool in the same 44px box, so the header row stays even and each is easy to tap. */
+/** Labeled map actions keep a full touch target and wrap their supporting status. */
 export const mapToolClassName =
-  "inline-flex size-[44px] shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+  "flex min-h-[44px] w-full cursor-pointer items-center gap-3 rounded-md px-3 py-3 text-left hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
