@@ -329,10 +329,10 @@ describe("React Compiler runtime", () => {
         React.createElement(StealthControls, { onRevealed: vi.fn() }),
       );
       expect(view.getByRole("button", { name: "Deactivate stealth" })).toBeTruthy();
-      expect(view.getByText("Stealth Active (2s remaining)")).toBeTruthy();
+      expect(view.getByText("Hidden · 2s remaining")).toBeTruthy();
       now += 2000;
       act(() => vi.advanceTimersByTime(2000));
-      expect(view.queryByText(/Stealth Active/)).toBeNull();
+      expect(view.queryByText(/Hidden ·/)).toBeNull();
       fireEvent.click(view.getByRole("button", { name: "Activate stealth" }));
       expect(activate).toHaveBeenCalledTimes(1);
       expect(deactivate).not.toHaveBeenCalled();

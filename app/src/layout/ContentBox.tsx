@@ -17,6 +17,11 @@ export interface ContentBoxProps {
   defaultBackHref?: string;
   subtitle?: string | React.ReactNode;
   topRightContent?: React.ReactNode;
+  /** Keep header actions behind a named disclosure at every panel width. */
+  collapsedActionsLabel?: string;
+  collapsedActionsIconOnly?: boolean;
+  /** Controls that stay visible before the header action menu. */
+  headerStartContent?: React.ReactNode;
   /** Header controls kept in the row by priority, the rest behind a "More" menu. */
   topRightItems?: HeaderActionItem[];
   bottomRightContent?: React.ReactNode;
@@ -74,6 +79,26 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
       {props.title}
     </div>
   );
+  const headerActions = props.topRightItems ? (
+    <ContentBoxPriorityActions
+      items={props.topRightItems}
+      label={props.title || "Page"}
+    />
+  ) : (
+    props.topRightContent && (
+      <ContentBoxHeaderActions
+        headerRef={headerRef}
+        titleRef={titleRef}
+        label={props.title || "Page"}
+        noRightAlign={props.noRightAlign}
+        collapsedLabel={props.collapsedActionsLabel}
+        iconOnly={props.collapsedActionsIconOnly}
+      >
+        {props.topRightContent}
+      </ContentBoxHeaderActions>
+    )
+  );
+
   // Show the content box
   return (
     <>
@@ -113,22 +138,16 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
               )}
             </div>
           )}
-          {props.topRightItems ? (
-            <ContentBoxPriorityActions
-              items={props.topRightItems}
-              label={props.title || "Page"}
-            />
+          {props.headerStartContent ? (
+            <div className="ml-auto flex shrink-0 items-center">
+              <div className="shrink-0 pr-2">{props.headerStartContent}</div>
+              {headerActions && (
+                <span aria-hidden className="border-border/50 h-6 shrink-0 border-l" />
+              )}
+              {headerActions}
+            </div>
           ) : (
-            props.topRightContent && (
-              <ContentBoxHeaderActions
-                headerRef={headerRef}
-                titleRef={titleRef}
-                label={props.title || "Page"}
-                noRightAlign={props.noRightAlign}
-              >
-                {props.topRightContent}
-              </ContentBoxHeaderActions>
-            )
+            headerActions
           )}
         </div>
 

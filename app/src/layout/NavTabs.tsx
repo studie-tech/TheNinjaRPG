@@ -10,6 +10,8 @@ interface NavTabsProps {
   className?: string;
   current: string | null;
   options: string[] | readonly string[];
+  /** Keep unavailable views visible without allowing a selection. */
+  disabledOptions?: readonly string[];
   icons?: Partial<Record<string, React.ReactNode>>;
   /** Display content can change independently of the stable selection value. */
   labels?: Partial<Record<string, React.ReactNode>>;
@@ -66,6 +68,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
     const button = (
       <button
         type="button"
+        disabled={props.disabledOptions?.includes(option)}
         title={isIconOnly ? option : undefined}
         aria-label={
           isIconOnly
@@ -74,7 +77,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
         }
         aria-current={!props.accessibleTabs && isSelected ? "true" : undefined}
         className={cn(
-          "inline-block min-h-11 min-w-11 rounded-t-lg border-b-2 px-2 py-2",
+          "inline-block min-h-11 min-w-11 rounded-t-lg border-b-2 px-2 py-2 disabled:cursor-not-allowed disabled:opacity-50",
           isSelected
             ? "active border-primary font-semibold text-foreground"
             : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
@@ -129,6 +132,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
         {props.accessibleTabs ? (
           <TabsTrigger
             value={props.values?.[option] ?? option}
+            disabled={props.disabledOptions?.includes(option)}
             asChild
             className={cn(
               "rounded-b-none data-[state=active]:bg-transparent data-[state=active]:shadow-none",

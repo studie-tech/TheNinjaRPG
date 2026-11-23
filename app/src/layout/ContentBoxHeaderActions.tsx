@@ -1,6 +1,6 @@
 "use client";
 
-import { Ellipsis, List } from "lucide-react";
+import { ChevronDown, Ellipsis, List, Menu } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,8 @@ export function ContentBoxHeaderActions({
   titleRef,
   label,
   noRightAlign,
+  collapsedLabel,
+  iconOnly = false,
 }: ContentBoxHeaderActionsProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -33,10 +35,14 @@ export function ContentBoxHeaderActions({
     above: false,
     maxHeight: 0,
     maxWidth: 0,
+    right: 0,
   });
   const panelId = useId();
+  const isDisclosure = !!collapsedLabel || isOverflowing;
+  const controlsLabel = collapsedLabel ?? `${label} controls`;
 
   useEffect(() => {
+    if (collapsedLabel) return;
     const header = headerRef.current;
     const content = contentRef.current;
     if (!header || !content) return;
@@ -62,7 +68,7 @@ export function ContentBoxHeaderActions({
     observer.observe(content);
     if (titleRef.current) observer.observe(titleRef.current);
     return () => observer.disconnect();
-  }, [children, headerRef, titleRef, label]);
+  }, [children, headerRef, titleRef, label, collapsedLabel]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -82,7 +88,7 @@ export function ContentBoxHeaderActions({
   }, []);
 
   useEffect(() => {
-    if (!isOverflowing || !isOpen) return;
+    if (!isDisclosure || !isOpen) return;
     const root = rootRef.current;
     if (!root) return;
 
@@ -102,13 +108,20 @@ export function ContentBoxHeaderActions({
         44,
         Math.min(viewportHeight * 0.6, opensAbove ? above : below),
       );
-      const maxWidth = Math.max(44, Math.min(viewportWidth - 32, rect.right - 16));
+      // Persistent controls can follow a named menu; use the header edge so they
+      // do not squeeze its options into the space left of its trigger.
+      const menuRight = collapsedLabel
+        ? (headerRef.current?.getBoundingClientRect().right ?? rect.right)
+        : rect.right;
+      const right = rect.right - menuRight;
+      const maxWidth = Math.max(44, Math.min(viewportWidth - 32, menuRight - 16));
       setPlacement((previous) =>
         previous.above === opensAbove &&
         previous.maxHeight === maxHeight &&
-        previous.maxWidth === maxWidth
+        previous.maxWidth === maxWidth &&
+        previous.right === right
           ? previous
-          : { above: opensAbove, maxHeight, maxWidth },
+          : { above: opensAbove, maxHeight, maxWidth, right },
       );
     };
     place();
@@ -132,18 +145,18 @@ export function ContentBoxHeaderActions({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [isOverflowing, isOpen]);
+  }, [isDisclosure, isOpen, collapsedLabel, headerRef]);
 
   return (
     <div
       ref={rootRef}
       className={cn(
         "relative min-w-0",
-        !isOverflowing && noRightAlign ? "grow" : "ml-auto shrink-0",
+        !isDisclosure && noRightAlign ? "grow" : "ml-auto shrink-0",
       )}
       onKeyDownCapture={(event) => {
         if (
-          !isOverflowing ||
+          !isDisclosure ||
           !isOpen ||
           event.key !== "Escape" ||
           hasPortalledControlLayer(event.currentTarget)
@@ -155,37 +168,57 @@ export function ContentBoxHeaderActions({
         triggerRef.current?.focus();
       }}
       data-content-box-actions
-      data-overflow={isOverflowing || undefined}
-      data-expanded={(isOverflowing && isOpen) || undefined}
+      data-overflow={isDisclosure || undefined}
+      data-expanded={(isDisclosure && isOpen) || undefined}
     >
       <Button
         ref={triggerRef}
-        size="icon"
-        className={cn(!isOverflowing && "hidden")}
-        hidden={!isOverflowing}
-        aria-hidden={!isOverflowing || undefined}
-        aria-label={`${label} controls`}
+        size={collapsedLabel && !iconOnly ? "default" : "icon"}
+        variant={iconOnly ? "ghost" : collapsedLabel ? "outline" : "default"}
+        className={cn(
+          !isDisclosure && "hidden",
+          collapsedLabel && "min-h-[44px] gap-2",
+          iconOnly && "size-[44px]",
+        )}
+        hidden={!isDisclosure}
+        aria-hidden={!isDisclosure || undefined}
+        aria-label={controlsLabel}
         aria-controls={panelId}
-        aria-expanded={isOverflowing && isOpen}
+        aria-expanded={isDisclosure && isOpen}
         onClick={() => setIsOpen((open) => !open)}
       >
-        <List className="h-5 w-5" aria-hidden />
+        {iconOnly ? (
+          <Menu className="size-6" aria-hidden />
+        ) : (
+          <List className="h-5 w-5" aria-hidden />
+        )}
+        {collapsedLabel && !iconOnly && (
+          <>
+            {collapsedLabel}
+            <ChevronDown className="size-4" aria-hidden />
+          </>
+        )}
       </Button>
       <section
         id={panelId}
-        aria-label={isOverflowing ? `${label} controls` : undefined}
-        aria-hidden={isOverflowing && !isOpen ? true : undefined}
-        inert={isOverflowing && !isOpen}
+        aria-label={isDisclosure ? controlsLabel : undefined}
+        aria-hidden={isDisclosure && !isOpen ? true : undefined}
+        inert={isDisclosure && !isOpen}
         style={
-          isOverflowing && isOpen && placement.maxHeight
-            ? { maxHeight: placement.maxHeight, maxWidth: placement.maxWidth }
+          isDisclosure && isOpen && placement.maxHeight
+            ? {
+                maxHeight: placement.maxHeight,
+                maxWidth: placement.maxWidth,
+                right: placement.right,
+              }
             : undefined
         }
         className={cn(
-          isOverflowing &&
+          isDisclosure &&
             "bg-popover text-popover-foreground absolute top-full right-0 z-[45] mt-1 max-h-[60dvh] max-w-[calc(100vw-2rem)] overflow-auto rounded-md border p-3 shadow-md",
-          isOverflowing && placement.above && "top-auto bottom-full mb-1",
-          isOverflowing &&
+          collapsedLabel && "w-96",
+          isDisclosure && placement.above && "top-auto bottom-full mb-1",
+          isDisclosure &&
             !isOpen &&
             "pointer-events-none invisible h-0 overflow-hidden border-0 py-0",
         )}
@@ -193,7 +226,7 @@ export function ContentBoxHeaderActions({
         <div
           ref={contentRef}
           style={
-            isOverflowing
+            isDisclosure
               ? {
                   maxWidth: placement.maxWidth
                     ? Math.max(44, placement.maxWidth - 26)
@@ -202,13 +235,13 @@ export function ContentBoxHeaderActions({
               : undefined
           }
           className={cn(
-            "w-max",
-            noRightAlign && !isOverflowing && "min-w-full",
-            isOverflowing && "[&>div]:flex-wrap [&>div]:gap-y-2",
+            collapsedLabel ? "w-full" : "w-max",
+            noRightAlign && !isDisclosure && "min-w-full",
+            isDisclosure && "[&>div]:flex-wrap [&>div]:gap-y-2",
           )}
           data-content-box-controls
         >
-          <HeaderActionsFocusContext value={isOverflowing ? triggerRef : null}>
+          <HeaderActionsFocusContext value={isDisclosure ? triggerRef : null}>
             {children}
           </HeaderActionsFocusContext>
         </div>
@@ -563,6 +596,8 @@ type ContentBoxHeaderActionsProps = {
   titleRef: RefObject<HTMLDivElement | null>;
   label: string;
   noRightAlign?: boolean;
+  collapsedLabel?: string;
+  iconOnly?: boolean;
 };
 
 /** One header control for `ContentBoxPriorityActions`. */

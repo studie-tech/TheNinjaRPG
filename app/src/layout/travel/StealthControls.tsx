@@ -4,12 +4,6 @@ import { Ghost, Loader2, Radar } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
 } from "@/drizzle/constants";
@@ -130,143 +124,98 @@ export const StealthControls: React.FC<{
 
   return (
     <>
-      {/* Stealth Toggle */}
-      <TooltipProvider delayDuration={50}>
-        <Tooltip>
-          <TooltipTrigger
-            type="button"
-            disabled={isActivatingStealth || isDeactivatingStealth}
-            aria-busy={isActivatingStealth || isDeactivatingStealth}
-            aria-disabled={isActivatingStealth || isDeactivatingStealth}
-            aria-label={
-              isActivatingStealth
-                ? "Activating"
-                : isDeactivatingStealth
-                  ? "Deactivating"
-                  : isCurrentlyStealthed
-                    ? "Deactivate stealth"
-                    : "Activate stealth"
-            }
-            className={cn(
-              mapToolClassName,
-              (isActivatingStealth || isDeactivatingStealth) && "cursor-wait",
-            )}
-            onClick={() => {
-              if (
-                activationInFlightRef.current ||
-                deactivationInFlightRef.current ||
-                isActivatingStealth ||
-                isDeactivatingStealth
-              ) {
-                return;
-              }
-              if (isCurrentlyStealthed) {
-                deactivationInFlightRef.current = true;
-                deactivateStealth();
-              } else if (stealthCooldown <= 0) {
-                activationInFlightRef.current = true;
-                activateStealth();
-              }
-            }}
-          >
-            {isActivatingStealth || isDeactivatingStealth ? (
-              <Loader2
-                className="h-7 w-7 animate-spin text-purple-500"
-                aria-hidden="true"
-              />
-            ) : (
-              <Ghost
-                className={`h-7 w-7 ${isCurrentlyStealthed ? "text-purple-500" : stealthCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-purple-500"}`}
-              />
-            )}
-          </TooltipTrigger>
-          <TooltipContent aria-live="polite">
+      <button
+        type="button"
+        disabled={
+          isActivatingStealth ||
+          isDeactivatingStealth ||
+          (!isCurrentlyStealthed && stealthCooldown > 0)
+        }
+        aria-busy={isActivatingStealth || isDeactivatingStealth}
+        aria-pressed={isCurrentlyStealthed}
+        aria-label={isCurrentlyStealthed ? "Deactivate stealth" : "Activate stealth"}
+        className={cn(mapToolClassName, isCurrentlyStealthed && "text-purple-500")}
+        onClick={() => {
+          if (
+            activationInFlightRef.current ||
+            deactivationInFlightRef.current ||
+            isActivatingStealth ||
+            isDeactivatingStealth
+          )
+            return;
+          if (isCurrentlyStealthed) {
+            deactivationInFlightRef.current = true;
+            deactivateStealth();
+          } else if (stealthCooldown <= 0) {
+            activationInFlightRef.current = true;
+            activateStealth();
+          }
+        }}
+      >
+        {isActivatingStealth || isDeactivatingStealth ? (
+          <Loader2 className="size-6 shrink-0 animate-spin" aria-hidden />
+        ) : (
+          <Ghost className="size-6 shrink-0" aria-hidden />
+        )}
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">
+            {isCurrentlyStealthed ? "Deactivate stealth" : "Activate stealth"}
+          </span>
+          <span className="text-muted-foreground block text-xs" role="status">
             {isActivatingStealth
-              ? "Activating"
+              ? "Activating…"
               : isDeactivatingStealth
-                ? "Deactivating"
+                ? "Deactivating…"
                 : isCurrentlyStealthed
-                  ? `Stealth Active (${Math.ceil(stealthDuration)}s remaining)`
+                  ? `Hidden · ${Math.ceil(stealthDuration)}s remaining`
                   : stealthCooldown > 0
-                    ? `Stealth Cooldown (${Math.ceil(stealthCooldown)}s)`
-                    : "Activate Stealth"}
-          </TooltipContent>
-        </Tooltip>
-        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {isActivatingStealth
-            ? "Activating"
-            : isDeactivatingStealth
-              ? "Deactivating"
-              : ""}
+                    ? `Ready in ${Math.ceil(stealthCooldown)}s`
+                    : "Hide from other players"}
+          </span>
         </span>
-      </TooltipProvider>
-      {/* Sensory Scan */}
-      <TooltipProvider delayDuration={50}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <button
-                type="button"
-                disabled={
-                  isScanningSensory ||
-                  sensoryCooldown > 0 ||
-                  currentSector === undefined
-                }
-                aria-busy={isScanningSensory}
-                aria-disabled={
-                  isScanningSensory ||
-                  sensoryCooldown > 0 ||
-                  currentSector === undefined
-                }
-                aria-label={isScanningSensory ? "Scanning" : "Scan sector"}
-                className={cn(mapToolClassName, isScanningSensory && "cursor-wait")}
-                onClick={() => {
-                  const successfulScanCooldown = getRemainingSensoryCooldown(
-                    lastSuccessfulSensoryAtRef.current,
-                    userData?.sensory ?? 0,
-                    timeDiff,
-                  );
-                  if (
-                    sensoryInFlightRef.current ||
-                    isScanningSensory ||
-                    successfulScanCooldown > 0
-                  ) {
-                    return;
-                  }
-                  if (sensoryCooldown <= 0) {
-                    if (currentSector !== undefined) {
-                      sensoryInFlightRef.current = true;
-                      scanSensory({ sector: currentSector });
-                    }
-                  }
-                }}
-              >
-                {isScanningSensory ? (
-                  <Loader2
-                    className="h-7 w-7 animate-spin text-blue-500"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <Radar
-                    className={`h-7 w-7 ${sensoryCooldown > 0 ? "cursor-not-allowed text-gray-400" : "hover:text-blue-500"}`}
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent aria-live="polite">
+      </button>
+      <button
+        type="button"
+        disabled={
+          isScanningSensory || sensoryCooldown > 0 || currentSector === undefined
+        }
+        aria-busy={isScanningSensory}
+        aria-label="Scan sector"
+        className={mapToolClassName}
+        onClick={() => {
+          const successfulScanCooldown = getRemainingSensoryCooldown(
+            lastSuccessfulSensoryAtRef.current,
+            userData?.sensory ?? 0,
+            timeDiff,
+          );
+          if (
+            sensoryInFlightRef.current ||
+            isScanningSensory ||
+            successfulScanCooldown > 0
+          )
+            return;
+          if (sensoryCooldown <= 0 && currentSector !== undefined) {
+            sensoryInFlightRef.current = true;
+            scanSensory({ sector: currentSector });
+          }
+        }}
+      >
+        {isScanningSensory ? (
+          <Loader2 className="size-6 shrink-0 animate-spin" aria-hidden />
+        ) : (
+          <Radar className="size-6 shrink-0" aria-hidden />
+        )}
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">Sensory scan</span>
+          <span className="text-muted-foreground block text-xs" role="status">
             {isScanningSensory
-              ? "Scanning"
+              ? "Scanning…"
               : sensoryCooldown > 0
-                ? `Sensory Cooldown (${Math.ceil(sensoryCooldown)}s)`
-                : `Scan for Hidden Enemies (${(stealthStatus?.sensoryDetectChance ?? 5).toFixed(0)}% chance)`}
-          </TooltipContent>
-        </Tooltip>
-        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {isScanningSensory ? "Scanning" : ""}
+                ? `Ready in ${Math.ceil(sensoryCooldown)}s`
+                : `Find hidden players · ${(stealthStatus?.sensoryDetectChance ?? 5).toFixed(0)}% chance`}
+          </span>
         </span>
-      </TooltipProvider>
+      </button>
     </>
   );
 };
