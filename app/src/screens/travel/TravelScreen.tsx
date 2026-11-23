@@ -26,7 +26,7 @@ export function TravelScreen({
 
 /** Travel owns URL requests and redirects; the session can be hosted independently. */
 function TravelRoute({ immersive, isInteractive }: TravelScreenProps) {
-  const session = useTravelSession();
+  const session = useTravelSession(isInteractive);
   const { userData, setLocationRequest } = session;
   const searchParams = useSearchParams();
   const pathname = usePublicPathname();

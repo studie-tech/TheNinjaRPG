@@ -59,7 +59,7 @@ import {
  * Own travel data, destinations, mutations and arrival state once per mounted host.
  * Share the returned controller with its view; URL requests and activity redirects belong to the host.
  */
-export function useTravelSession() {
+export function useTravelSession(isInteractive = true) {
   // Display preferences and travel controls
   const [showActive, setShowActive] = useLocalStorage<boolean>(
     "showActiveOnMap4",
@@ -762,9 +762,10 @@ export function useTravelSession() {
     if (showSector) setHasOpenedSector(true);
   }, [showSector]);
 
-  // Position state wakes this effect; live coordinates confirm the queued attack's arrival.
+  // Retain the queued attack while a building owns input; live coordinates confirm arrival.
   useEffect(() => {
     if (
+      isInteractive &&
       pendingAttackTarget &&
       currentPosition &&
       userData &&
@@ -782,6 +783,7 @@ export function useTravelSession() {
       setPendingAttackTarget(null);
     }
   }, [
+    isInteractive,
     currentPosition,
     pendingAttackTarget,
     userData,

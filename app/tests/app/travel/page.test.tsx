@@ -649,7 +649,7 @@ it.each(["World Travel", "Auto Travel"])(
   async (title) => {
     let session: ReturnType<typeof useTravelSession>;
     function RetainedTravel({ isInteractive }: { isInteractive: boolean }) {
-      session = useTravelSession();
+      session = useTravelSession(isInteractive);
       return <TravelView session={session} immersive isInteractive={isInteractive} />;
     }
     const view = render(<RetainedTravel isInteractive />);
