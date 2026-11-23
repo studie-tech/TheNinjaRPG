@@ -148,9 +148,8 @@ beforeEach(() => {
     completeTutorialAction: vi.fn(),
   } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(
-    ({ children, headerStartContent, topRightContent, topRightItems }) => (
+    ({ children, topRightContent, topRightItems }) => (
       <div>
-        <div data-header-start>{headerStartContent}</div>
         {topRightContent}
         {topRightItems?.map((item) => (
           <div key={item.key} data-header-item={item.key} data-priority={item.priority}>
@@ -250,18 +249,28 @@ it("updates the Travel destination when the saved automatic-wake preference chan
   ).toBe("/home");
 });
 
-it("keeps the standard Sector and Global tabs visible during the tutorial", () => {
+it("keeps the Sector and Global tabs in the header row while the tutorial runs", () => {
+  const priorities = (): Record<string, number> =>
+    Object.fromEntries(
+      Array.from(document.querySelectorAll<HTMLElement>("[data-header-item]")).map(
+        (element) => [
+          element.dataset.headerItem ?? "",
+          Number(element.dataset.priority),
+        ],
+      ),
+    );
+  const playing = render(<TravelPage />);
+  expect(priorities().tabs).toBe(3);
+  playing.unmount();
   actor = { ...actor, tutorialOn: true, tutorialStep: 0 } as never;
   userRef.current = actor;
-  const view = render(<TravelScreen />);
-  expect(view.getByRole("button", { name: "Sector" })).toBeTruthy();
-  expect(view.getByRole("button", { name: "Global" })).toBeTruthy();
+  render(<TravelPage />);
+  const inTutorial = priorities();
+  const tabs = inTutorial.tabs ?? Number.NaN;
+  expect(Math.min(...Object.values(inTutorial))).toBe(tabs);
   expect(
-    view
-      .getByRole("button", { name: "Sector" })
-      .closest('[data-header-item="tabs"]')
-      ?.getAttribute("data-priority"),
-  ).toBe("0");
+    Object.entries(inTutorial).filter(([, priority]) => priority === tabs),
+  ).toEqual([["tabs", tabs]]);
 });
 
 it("switches the retained tutorial map from the bottom bar and pauses its controls with a building", async () => {
