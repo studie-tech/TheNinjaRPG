@@ -134,7 +134,7 @@ export const combatGridEdges = (
 };
 
 /** A tile's sides, keyed independently of direction so neighbouring tiles share each key. */
-export const tileSides = (tile: TerrainHex) =>
+const tileSides = (tile: TerrainHex) =>
   tile.corners.flatMap((a, index) => {
     const b = tile.corners[(index + 1) % tile.corners.length];
     if (!b) return [];

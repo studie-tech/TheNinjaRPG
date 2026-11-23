@@ -6,7 +6,6 @@ import {
   combatGridEdges,
   combatHighlightEdges,
   combatHighlightPlan,
-  tileSides,
 } from "@/libs/rendering/combatHighlights";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
@@ -222,10 +221,8 @@ describe("combat hex outlines", () => {
     const [batch, ...rest] = combatGridEdges(grid, new Map());
     expect(rest).toHaveLength(0);
     expect(batch?.layer).toBe(0);
-    const keys = new Set(
-      grid.toArray().flatMap((tile) => tileSides(tile).map((side) => side.key)),
-    );
-    expect(batch?.points).toHaveLength(keys.size * 4);
+    // Nine hexes have 54 sides; 16 shared borders leave 38 unique edges.
+    expect(batch?.points).toHaveLength(38 * 4);
   });
 
   it("closes a recessed tile on its own face and keeps the shared edge on level ground", () => {
