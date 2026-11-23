@@ -99,12 +99,12 @@ export const LpcDesignBrowser = ({
             >
               <span className="flex w-full justify-center gap-1">
                 <LpcThumbnail
-                  className="h-auto w-1/2"
+                  className="aspect-square h-auto w-1/2"
                   config={design.lpcConfig!}
                   label={`${design.name}, broad`}
                 />
                 <LpcThumbnail
-                  className="h-auto w-1/2"
+                  className="aspect-square h-auto w-1/2"
                   config={design.lpcConfig!}
                   body="female"
                   label={`${design.name}, slender`}
