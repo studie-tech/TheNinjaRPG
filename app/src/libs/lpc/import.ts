@@ -3,6 +3,8 @@ import { canonicalJson } from "@/libs/contentReview/version";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { validateUrlForSsrf } from "@/server/utils/ssrf";
 import { chunkArray } from "@/utils/array";
+import { fetchWithRetry } from "@/utils/http";
+import { textureImageUrl } from "@/utils/image";
 import type { LpcAnimation } from "@/validators/lpc";
 import type { LpcAssetSheet, LpcConfig, LpcLayout } from "@/validators/lpcAsset";
 import { lpcLayoutValidator } from "@/validators/lpcAsset";
@@ -104,24 +106,35 @@ export const packStandardLpc = async (bytes: Buffer) => {
     .raw()
     .toBuffer();
   // Standard exports reserve the first walk column for standing and share one hurt row.
-  const poses: [LpcAnimation, number, number][] = [
-    ["stand", 8, 1],
-    ["walk", 8, 8],
-    ["spellcast", 0, 7],
-    ["thrust", 4, 8],
-    ["slash", 12, 6],
-    ["shoot", 16, 13],
-    ["hurt", 20, 6],
+  const poses: [LpcAnimation, number, number[]][] = [
+    ["stand", 8, [0]],
+    ["walk", 8, [1, 2, 3, 4, 5, 6, 7, 8]],
+    ["spellcast", 0, [0, 1, 2, 3, 4, 5, 6]],
+    ["thrust", 4, [0, 1, 2, 3, 4, 5, 6, 7]],
+    ["slash", 12, [0, 1, 2, 3, 4, 5]],
+    ["shoot", 16, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]],
+    ["hurt", 20, [0, 1, 2, 3, 4, 5]],
+    ["idle", 22, [0, 0, 1]],
+    ["combat", 42, [0, 0, 1]],
   ];
   const frames: Buffer[] = [],
     clips: LpcLayout["clips"] = {};
-  for (const [animation, firstRow, count] of poses) {
-    clips[animation] = [];
+  for (const [animation, firstRow, columns] of poses) {
+    if ((firstRow + (animation === "hurt" ? 1 : 4)) * 64 > metadata.height) continue;
+    const firstFrame = frames.length;
+    const directions: number[][] = [];
+    let hasVisiblePixels = false;
     for (let direction = 0; direction < 4; direction++) {
       const indices: number[] = [];
-      for (let column = 0; column < count; column++) {
+      const repeated = new Map<number, number>();
+      for (const column of columns) {
+        const previous = repeated.get(column);
+        if (previous !== undefined) {
+          indices.push(previous);
+          continue;
+        }
         const index = frames.length;
-        const x = (column + (animation === "walk" ? 1 : 0)) * 64,
+        const x = column * 64,
           y = (firstRow + (animation === "hurt" ? 0 : direction)) * 64;
         const frame = Buffer.alloc(64 * 64 * 4);
         for (let row = 0; row < 64; row++)
@@ -131,12 +144,22 @@ export const packStandardLpc = async (bytes: Buffer) => {
             ((y + row) * 832 + x) * 4,
             ((y + row) * 832 + x + 64) * 4,
           );
+        for (let alpha = 3; alpha < frame.length && !hasVisiblePixels; alpha += 4)
+          if (frame[alpha]) hasVisiblePixels = true;
+        repeated.set(column, index);
         frames.push(frame);
         indices.push(index);
       }
-      clips[animation]!.push(indices);
+      directions.push(indices);
     }
+    // Empty reserved rows are absent poses, so the renderer can use its held-pose fallback.
+    if (hasVisiblePixels) clips[animation] = directions;
+    else frames.length = firstFrame;
   }
+  if (!clips.stand || !clips.walk)
+    throw new Error(
+      "Provide visible standing and walking artwork before importing this sheet.",
+    );
   const width = 1024,
     height = Math.ceil(frames.length / 16) * 64,
     output = Buffer.alloc(width * height * 4);
@@ -279,7 +302,13 @@ const publishAtlas = async (bytes: Buffer) => {
     ),
   );
   if (!upload.data) throw new Error("Could not upload the processed sheet. Try again.");
-  return upload.data.ufsUrl;
+  const url = upload.data.ufsUrl;
+  const delivered = await fetchWithRetry(textureImageUrl(url, 0), {}, 30_000);
+  if (!delivered.ok || !Buffer.from(await delivered.arrayBuffer()).equals(bytes))
+    throw new Error(
+      "The sprite CDN changed the processed sheet. Upload again before saving.",
+    );
+  return url;
 };
 
 /** Prepare a replacement sheet and regenerate its compact movement companion before saving. */

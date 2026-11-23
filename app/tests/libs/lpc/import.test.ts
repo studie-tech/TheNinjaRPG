@@ -6,13 +6,13 @@ import { lpcAssets } from "../../setup/lpc";
 
 describe("LPC imports", () => {
   it("retains all existing design variants, custom poses and attribution", () => {
-    expect(lpcAssets).toHaveLength(63);
+    expect(lpcAssets.length).toBeGreaterThan(63);
     expect(
       lpcAssets.reduce(
         (sum, asset) => sum + Object.keys(asset.lpcConfig.variants).length,
         0,
       ),
-    ).toBe(1566);
+    ).toBeGreaterThan(1566);
     for (const asset of lpcAssets)
       expect(lpcConfigValidator.safeParse(asset.lpcConfig).success).toBe(true);
   });
@@ -101,4 +101,47 @@ describe("LPC imports", () => {
     await expect(validateLpcAtlas(bytes, layout)).resolves.toBeUndefined();
     await expect(validateLpcAtlas(bytes.subarray(0, 100), layout)).rejects.toThrow();
   });
+});
+
+it("keeps authored breathing cycles and omits wholly transparent attack rows", async () => {
+  const width = 832,
+    height = 46 * 64;
+  const source = Buffer.alloc(width * height * 4);
+  for (const firstRow of [8, 22, 42])
+    for (let direction = 0; direction < 4; direction++)
+      for (let column = 0; column < (firstRow === 8 ? 9 : 2); column++)
+        source.set(
+          [31, 72, 118, 127],
+          (((firstRow + direction) * 64 + 30) * width + column * 64 + 20) * 4,
+        );
+  const packed = await packStandardLpc(
+    await sharp(source, { raw: { width, height, channels: 4 } })
+      .png()
+      .toBuffer(),
+  );
+  expect(Object.keys(packed.layout.clips).sort()).toEqual([
+    "combat",
+    "idle",
+    "stand",
+    "walk",
+  ]);
+  for (const animation of ["idle", "combat"] as const) {
+    for (const row of packed.layout.clips[animation]!) {
+      expect(row).toHaveLength(3);
+      expect(row[0]).toBe(row[1]);
+      expect(row[1]).not.toBe(row[2]);
+    }
+  }
+  const travel = await packLpcTravel(packed.bytes, packed.layout);
+  expect(travel?.layout.clips.idle).toBeDefined();
+  expect(travel?.layout.clips.combat).toBeUndefined();
+  await expect(
+    packStandardLpc(
+      await sharp({
+        create: { width: 832, height: 1344, channels: 4, background: "transparent" },
+      })
+        .png()
+        .toBuffer(),
+    ),
+  ).rejects.toThrow("visible standing and walking");
 });

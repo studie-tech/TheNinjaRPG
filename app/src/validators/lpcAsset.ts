@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { LpcAnimation } from "@/validators/lpc";
-import { lpcAnimations } from "@/validators/lpc";
+import { lpcAnimations, lpcMaterials } from "@/validators/lpc";
 
 /** Shared serialized bound keeps saved designs and exported settings round-trippable. */
 export const LPC_CONFIG_MAX_BYTES = 2 * 1024 * 1024;
@@ -16,11 +16,18 @@ export const lpcCategories = [
 ] as const;
 /** Base outfit slots an equipped design replaces; none keeps all base clothing. */
 export const lpcReplacementSlots = [
-  "none",
   "shirt",
   "legs",
   "feet",
   "bandana",
+  "hair",
+  "beard",
+  "body",
+  "head",
+  "glasses",
+  "piercing",
+  "tattoo",
+  "scar",
 ] as const;
 
 // Every clip has rows in authored north, west, south, east order.
@@ -106,7 +113,19 @@ const atlas = z.object({
   layout: lpcLayoutValidator,
 });
 /** A full-pose layer may carry a separate movement atlas with its own crop and frame indices. */
-export const lpcSheetValidator = atlas.extend({ travel: atlas.optional() });
+export const lpcSheetValidator = atlas.extend({
+  travel: atlas.optional(),
+  /** Stable part identifiers pair the same material across palette variants. */
+  part: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9_-]+$/)
+    .optional(),
+  material: z.enum(lpcMaterials).optional(),
+  /** Combined outfits retain each source design's pose compatibility group. */
+  component: z.string().min(1).max(64).optional(),
+});
 /** Keep artist credits and licence/source terms with the artwork across edits and exports. */
 export const lpcAttributionValidator = z.object({
   profile: z.string().max(191).optional(),
@@ -121,26 +140,48 @@ export const lpcAttributionValidator = z.object({
 /** Complete design contract shared by persistence, rendering, imports and staff forms. */
 export const lpcConfigValidator = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     category: z.enum(lpcCategories),
-    replacementSlot: z.enum(lpcReplacementSlots),
+    replacementSlots: z
+      .array(z.enum(lpcReplacementSlots))
+      .max(lpcReplacementSlots.length),
     defaultColor: z
       .string()
       .min(1)
       .max(32)
-      .regex(/^[a-z0-9-]+$/),
+      .regex(/^[a-z0-9_-]+$/),
     defaultEyes: z
       .string()
       .min(1)
       .max(32)
-      .regex(/^[a-z0-9-]+$/),
+      .regex(/^[a-z0-9_-]+$/),
     variants: z.record(
-      z.string().regex(/^(male|female)\/[a-z0-9-]+\/[a-z0-9-]+$/),
+      z.string().regex(/^(male|female)\/[a-z0-9_-]+\/[a-z0-9_-]+$/),
       z.array(lpcSheetValidator).min(1).max(16),
     ),
     attributions: z.array(lpcAttributionValidator).min(1).max(100),
     sourceRevision: z.string().max(191).optional(),
     sourceUrl: z.url().optional(),
+    /** Exact generator definition IDs allow recipe import without name-based guessing. */
+    upstream: z
+      .array(
+        z.object({
+          id: z.string().min(1).max(191),
+          name: z.string().min(1).max(191),
+          group: z.string().min(1).max(191),
+          colors: z
+            .array(
+              z.object({
+                label: z.string().max(191),
+                group: z.string().min(1).max(191),
+                material: z.enum([...lpcMaterials, "skin", "hair", "eyes"]),
+              }),
+            )
+            .max(8),
+        }),
+      )
+      .max(32)
+      .default([]),
   })
   .superRefine((config, ctx) => {
     if (
@@ -151,6 +192,12 @@ export const lpcConfigValidator = z
         message: "LPC design settings must be at most 2 MB.",
       });
     const variants = Object.entries(config.variants);
+    if (new Set(config.replacementSlots).size !== config.replacementSlots.length)
+      ctx.addIssue({
+        code: "custom",
+        path: ["replacementSlots"],
+        message: "Choose each base layer once.",
+      });
     if (variants.length > 256)
       ctx.addIssue({
         code: "custom",
@@ -165,6 +212,16 @@ export const lpcConfigValidator = z
         });
     }
     for (const [key, sheets] of variants) {
+      const parts = sheets.flatMap((sheet) => (sheet.part ? [sheet.part] : []));
+      if (
+        new Set(parts).size !== parts.length ||
+        sheets.some((sheet) => sheet.material && !sheet.part)
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["variants", key],
+          message: "Material layers need unique layer names within each variant.",
+        });
       if (
         !["stand", "walk"].every((animation) =>
           sheets.some((sheet) => sheet.layout.clips[animation as LpcAnimation]),

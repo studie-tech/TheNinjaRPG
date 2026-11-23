@@ -480,7 +480,7 @@ export const getActionPreferenceUserUpdate = (
 export const getUpdateSpriteBodyUserUpdate = ({
   inputBody,
 }: {
-  inputBody: "male" | "female";
+  inputBody: "male" | "female" | null;
 }) => ({
   userPatch: { spriteBodyStyle: inputBody },
 });

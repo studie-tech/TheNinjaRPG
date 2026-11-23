@@ -1,4 +1,4 @@
-"""Import pinned LPC artwork. Requires Pillow: python3 -m pip install Pillow==12.2.0.
+"""Import pinned LPC artwork. Requires Pillow and NumPy; see docs/CharacterSprites.md.
 
 Usage: python3 app/scripts/import-lpc-assets.py /path/to/Universal-LPC-Spritesheet-Character-Generator
 Only selected source blobs are checked out. Output is content-addressed, with per-layer
@@ -12,12 +12,14 @@ import pathlib
 import re
 import subprocess
 import sys
+import tempfile
+import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
 REVISION = "86160e7507d6841259cff624a51a63c1d4847ee3"
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = pathlib.Path(sys.argv[1]).resolve()
-OUT = ROOT / "scripts/.artifacts/lpc"
+OUT = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else pathlib.Path(tempfile.gettempdir()) / "tnr-lpc-publication").resolve()
 LIB = ROOT / "drizzle/data/lpc"
 PROFILES = json.loads((LIB / "profiles.json").read_text())
 COLORS = ["black", "blue", "brown", "gray", "green", "orange", "purple", "red", "white", "yellow", "gold", "silver"]
@@ -117,7 +119,7 @@ def recolor(image, definition, color, eyes, source_variant):
         if material in palettes:
             target = eyes if material == "eye" else color
             # Legacy garments declare their source ramp (for example cloth/leather or cloth/brown).
-            for old, new in zip(palettes[material][part.get("base", bases[material])], palette(material, target)):
+            for old, new in zip(palettes[material][(part.get("base") or bases[material])], palette(material, target)):
                 replacements[tuple(bytes.fromhex(old.lstrip("#")))] = tuple(bytes.fromhex(new.lstrip("#")))
     if not replacements:
         # Legacy fixed-variant weapons do not have palette metadata. A shaded
@@ -129,9 +131,16 @@ def recolor(image, definition, color, eyes, source_variant):
             return painted
         return image
     # Match authored RGB ramps exactly; palette quantization would round partially transparent pixels.
-    painted = Image.new("RGBA", image.size)
-    painted.putdata([(*replacements.get(pixel[:3], pixel[:3]), pixel[3]) for pixel in image.get_flattened_data()])
-    return painted
+    pixels = np.array(image)
+    codes = (pixels[..., 0].astype(np.uint32) << 16) | (pixels[..., 1].astype(np.uint32) << 8) | pixels[..., 2]
+    ordered = sorted((rgb[0] << 16 | rgb[1] << 8 | rgb[2], value) for rgb, value in replacements.items())
+    keys = np.array([key for key, _ in ordered], dtype=np.uint32)
+    values = np.array([value for _, value in ordered], dtype=np.uint8)
+    indices = np.searchsorted(keys, codes)
+    bounded = np.minimum(indices, len(keys) - 1)
+    matched = (indices < len(keys)) & (keys[bounded] == codes)
+    pixels[..., :3] = np.where(matched[..., None], values[bounded], pixels[..., :3])
+    return Image.fromarray(pixels)
 
 def candidates(definition, layer, body, state, color):
     """Locate source poses while keeping alternative slash animations mutually exclusive."""
@@ -169,7 +178,38 @@ def candidates(definition, layer, body, state, color):
                     found.append(candidate)
     return found
 
-def pack(definition, layer, body, color, eyes):
+def material_ramps(definition):
+    """Assign authored source ramps to independently selectable material planes."""
+    config = definition.get("recolors", {})
+    configs = list(config.values()) if "color_1" in config else [config]
+    ramps = {}
+    used = set()
+    for part in configs:
+        material = part.get("material")
+        if material not in ["cloth", "metal", "wood"]:
+            continue
+        channel = material if material not in used else "trim"
+        used.add(channel)
+        for value in palettes[material][(part.get("base") or bases[material])]:
+            ramps[tuple(bytes.fromhex(value.lstrip("#")))] = channel
+    return ramps
+
+material_images = {}
+def material_image(path, definition, material):
+    """Partition original source pixels once, before any palette can merge material colours."""
+    key = (path, id(definition), material)
+    if key not in material_images:
+        ramps = material_ramps(definition)
+        colors = [rgb[0] << 16 | rgb[1] << 8 | rgb[2] for rgb, channel in ramps.items() if material == "detail" or channel == material]
+        pixels = np.array(read_image(path))
+        codes = (pixels[..., 0].astype(np.uint32) << 16) | (pixels[..., 1].astype(np.uint32) << 8) | pixels[..., 2]
+        selected = np.isin(codes, np.array(colors, dtype=np.uint32))
+        if material == "detail": selected = ~selected
+        pixels[~selected] = 0
+        material_images[key] = Image.fromarray(pixels)
+    return material_images[key]
+
+def pack(definition, layer, body, color, eyes, material=None):
     """Collect directional frames and produce combat and compact movement atlases."""
     clips, frames, cell = {}, [], 64
     for state, cycle in CYCLES.items():
@@ -177,7 +217,7 @@ def pack(definition, layer, body, color, eyes):
         if not options:
             continue
         path = options[0]
-        image = read_image(path)
+        image = material_image(path, definition, material) if material else read_image(path)
         rows = 1 if state == "hurt" else 4
         size = image.height // rows
         if size not in [64, 128, 192]:
@@ -208,7 +248,7 @@ def pack(definition, layer, body, color, eyes):
     if definition is definitions.get("crossbow") and "thrust" in clips:
         # The authored crossbow fires in its thrust pose; combat's ranged cue is named shoot.
         clips["shoot"] = clips["thrust"]
-    if not frames:
+    if not frames or not any(frame.getchannel("A").getbbox() for frame in frames):
         return None
     if definition.get("resting_pose_fallback") and "stand" not in clips:
         # A reverse attack's last column matches the body's neutral first pose.
@@ -344,15 +384,36 @@ def supplement(template, profile, direction, color):
         draw.line([(x-2,y-1),(x+2,y-1)], fill=rgb, width=2)
     return output
 
+importer_hash = hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()
 for profile, definition in definitions.items():
+    checkpoint_key = hashlib.sha256(json.dumps([REVISION, PROFILES.get(profile), definition, importer_hash], sort_keys=True).encode()).hexdigest()[:24]
+    checkpoint = OUT / ("profile-" + checkpoint_key + ".json")
+    if checkpoint.exists():
+        cached = json.loads(checkpoint.read_text())
+        if all((OUT / file).exists() for file in cached["files"]):
+            catalog.update(cached["entries"])
+            credits.extend(cached["credits"])
+            generated.update(cached["files"])
+            print(profile + " (cached)", flush=True)
+            continue
+    material_channels = sorted(set(material_ramps(definition).values())) if not (profile == "body" or profile.startswith(("head-", "hair-", "beard-")) or definition.get("supplement")) else []
     colors = SKINS if profile == "body" or profile.startswith("head-") else COLORS
     if profile.startswith("hair-") or profile.startswith("beard-"):
         colors = ["yellow", "black", "brown", "blue", "red", "white", "gray"]
     for body in ["male", "female"]:
         for color in colors:
             for eyes in EYES if profile.startswith("head-") else ["blue"]:
-                layers = [pack(definition, layer, body, color, eyes) for key, layer in definition.items() if key.startswith("layer_")]
-                layers = [layer for layer in layers if layer]
+                layers = []
+                for key, layer in definition.items():
+                    if not key.startswith("layer_"): continue
+                    for material in [*material_channels, "detail"] if material_channels else [None]:
+                        packed = pack(definition, layer, body, color, eyes, material)
+                        if not packed: continue
+                        packed["part"] = key + ("_" + material if material else "")
+                        if material and material != "detail": packed["material"] = material
+                        layers.append(packed)
+                if len(layers) > 16:
+                    raise ValueError(f"Too many material planes for {profile}: {len(layers)}")
                 if not layers:
                     raise ValueError(f"No artwork for {profile}/{body}")
                 catalog[f"{profile}/{body}/{color}/{eyes}"] = layers
@@ -361,8 +422,37 @@ for profile, definition in definitions.items():
         chosen = next((v for prefix in ["CC0", "OGA-BY", "CC-BY ", "CC-BY-SA"] for v in licenses if v.startswith(prefix)), None)
         if not chosen:
             raise ValueError(f"No supported artwork license for {profile}: {licenses}")
-        credits.append({"profile": profile, **credit, "chosenLicense": chosen})
+        # A pinned definition remains a usable source when the artist metadata omits URLs.
+        selected = PROFILES.get(profile)
+        sources = [selected] if isinstance(selected, str) else list(selected.values()) if selected else []
+        urls = credit.get("urls") or [f"https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator/blob/{REVISION}/sheet_definitions/{path}" for path in sources]
+        credits.append({"profile": profile, **credit, "urls": urls, "chosenLicense": chosen})
+    entries = {key: value for key, value in catalog.items() if key.startswith(profile + "/")}
+    files = sorted({part["image"] for layers in entries.values() for sheet in layers for part in [sheet, *([sheet["travel"]] if "travel" in sheet else [])]})
+    checkpoint.write_text(json.dumps({"entries": entries, "credits": [credit for credit in credits if credit["profile"] == profile], "files": files}, separators=(",", ":")))
+    material_images.clear()
+    images.clear()
     print(profile, flush=True)
+
+def upstream_metadata():
+    """Retain exact definition IDs and recolour slots for offline generator recipe import."""
+    result = {}
+    for profile, selected in PROFILES.items():
+        result[profile] = []
+        for path in [selected] if isinstance(selected, str) else selected.values():
+            definition = load_definition(path)
+            recolors = definition.get("recolors", {})
+            parts = list(recolors.values()) if "color_1" in recolors else [recolors] if recolors else []
+            colors, used = [], set()
+            for part in parts:
+                source = part.get("material")
+                material = {"body": "skin", "eye": "eyes"}.get(source, source)
+                if material not in ["skin", "hair", "eyes", "cloth", "metal", "wood"]: continue
+                if material in used: material = "trim"
+                used.add(material)
+                colors.append({"label": part.get("label", {"body": "Body Color", "eye": "Eye Color", "hair": "Hair Color"}.get(source, source.capitalize())), "group": part.get("type_name") or definition.get("type_name", pathlib.Path(path).stem), "material": material})
+            result[profile].append({"id": pathlib.Path(path).stem, "name": definition["name"], "group": definition.get("type_name", pathlib.Path(path).stem), "colors": colors})
+    return result
 
 # Empty source metadata is never silently published; compatibility comes from actual frames.
 layouts, layout_ids = [], {}
@@ -374,7 +464,7 @@ for layers in catalog.values():
             layout_ids[key] = len(layouts)
             layouts.append(layout)
         layer["layout"] = layout_ids[key]
-(OUT / "catalog.json").write_text(json.dumps({"revision": REVISION, "entries": catalog, "layouts": layouts}, separators=(",", ":")) + "\n")
+(OUT / "catalog.json").write_text(json.dumps({"revision": REVISION, "entries": catalog, "layouts": layouts, "upstream": upstream_metadata()}, separators=(",", ":")) + "\n")
 (OUT / "credits.json").write_text(json.dumps(credits, indent=2, ensure_ascii=False) + "\n")
 for path in OUT.glob("*.png"):
     if path.name not in generated:

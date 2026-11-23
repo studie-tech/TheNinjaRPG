@@ -134,7 +134,7 @@ describe("layered LPC actors", () => {
     const catalog = structuredClone(lpcCatalog);
     catalog.designs["custom-coat"] = {
       ...catalog.designs.plate!,
-      replacementSlot: "shirt",
+      replacementSlots: ["shirt"],
     };
     for (const [key, sheets] of Object.entries(catalog.entries))
       if (key.startsWith("plate/"))
@@ -153,7 +153,7 @@ describe("layered LPC actors", () => {
     await characters.createLpcCharacter(game, appearance);
     expect(texture.mock.calls.some(([url]) => shirt.includes(url))).toBe(false);
     texture.mockClear();
-    catalog.designs["custom-coat"]!.replacementSlot = "none";
+    catalog.designs["custom-coat"]!.replacementSlots = [];
     await characters.createLpcCharacter(game, appearance);
     expect(texture.mock.calls.some(([url]) => shirt.includes(url))).toBe(true);
   });
@@ -184,6 +184,59 @@ describe("layered LPC actors", () => {
         );
     }
   });
+  it("replaces several base garments and covered traits while retaining the equipped outfit", async () => {
+    const { game } = gameFixture();
+    const catalog = structuredClone(lpcCatalog);
+    catalog.designs["combined"] = {
+      ...catalog.designs.shirt!,
+      replacementSlots: ["shirt", "legs", "feet", "hair"],
+    };
+    for (const [key, sheets] of Object.entries(catalog.entries))
+      if (key.startsWith("shirt/"))
+        catalog.entries[key.replace("shirt/", "combined/")] = sheets;
+    game.lpcCatalog = catalog;
+    const appearance = resolveSpriteAppearance({
+      attributes: ["Long Hair"],
+      items: [{ equipped: "CHEST", item: { lpcProfile: "combined" } }],
+    });
+    const actor = await characters.createLpcCharacter(game, appearance);
+    const expected = appearance.layers
+      .filter((layer) => !["shirt", "legs", "feet", "hair"].includes(layer.slot ?? ""))
+      .flatMap((layer) => spriteLayerSheets(catalog, appearance, layer))
+      .map((sheet) => sheet.image);
+    expect(actor.layers.map((part) => part.image)).toEqual(expected);
+  });
+  it.each(["all", "travel"] as const)(
+    "keeps separate outfit components on a compatible neutral pose in %s mode",
+    async (mode) => {
+      const { game } = gameFixture();
+      const catalog = structuredClone(lpcCatalog);
+      const shirt = structuredClone(catalog.entries["shirt/male/gray/blue"]![0]!);
+      const trousers = structuredClone(catalog.entries["pants/male/gray/blue"]![0]!);
+      shirt.component = "shirt";
+      trousers.component = "trousers";
+      for (const sheet of [trousers, trousers.travel!]) {
+        const layout = structuredClone(catalog.layouts[sheet.layout]!);
+        delete layout.clips.idle;
+        delete layout.clips.combat;
+        sheet.layout = catalog.layouts.push(layout) - 1;
+      }
+      catalog.entries["combined/male/gray/blue"] = [shirt, trousers];
+      catalog.designs.combined = { ...catalog.designs.shirt!, replacementSlots: [] };
+      game.lpcCatalog = catalog;
+      const actor = await characters.createLpcCharacter(
+        game,
+        { version: 1, body: "male", layers: [{ profile: "combined", color: "gray" }] },
+        mode,
+      );
+      actor.render(frame(0), "idle", 2);
+      const neutral = actor.layers.map((part) => part.sprite.texture);
+      for (let tick = 1; tick < 60; tick++)
+        actor.render({ now: tick * 100, delta: 0.1, reducedMotion: false }, "idle", 2);
+      expect(actor.layers.map((part) => part.sprite.texture)).toEqual(neutral);
+      expect(actor.layers.every((part) => part.sprite.visible)).toBe(true);
+    },
+  );
   it("varies each idle cycle's speed and leaves walking and attacks on their authored clock", async () => {
     const { game } = gameFixture();
     const random = vi

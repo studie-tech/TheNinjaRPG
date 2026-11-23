@@ -451,6 +451,7 @@ type VariantFormInput = {
   furnitureData?: FurnitureVariantData | null;
   lpcProfile?: ZodItemVariantType["lpcProfile"];
   lpcColor?: ZodItemVariantType["lpcColor"];
+  lpcMaterialColors?: ZodItemVariantType["lpcMaterialColors"];
 };
 
 const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({

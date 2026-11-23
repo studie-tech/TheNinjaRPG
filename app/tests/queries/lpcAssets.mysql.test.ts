@@ -18,6 +18,7 @@ import type { LpcConfig } from "@/validators/lpcAsset";
 import { seedLpcAssets } from "../../drizzle/seeds/lpc";
 import { deferred } from "../setup/deferred";
 import { insertItems, insertUsers } from "../setup/factories";
+import { lpcAssets } from "../setup/lpc";
 import { rateLimitResponse, stubRateLimitTransport } from "../setup/rateLimit";
 import {
   aroundStatements,
@@ -106,8 +107,8 @@ describeWithDatabase("LPC GameAsset persistence", () => {
   it("syncs all designs idempotently and preserves edited media and attribution", async () => {
     const database = await getTestDatabase();
     expect(await seedLpcAssets(database)).toEqual({
-      designs: 63,
-      inserted: 63,
+      designs: lpcAssets.length,
+      inserted: lpcAssets.length,
       preserved: 0,
     });
     const first = await database.query.gameAsset.findFirst({
@@ -131,9 +132,9 @@ describeWithDatabase("LPC GameAsset persistence", () => {
       .set({ name: "Edited katana", lpcConfig: edited })
       .where(eq(gameAsset.id, "katana"));
     expect(await seedLpcAssets(database)).toEqual({
-      designs: 63,
+      designs: lpcAssets.length,
       inserted: 0,
-      preserved: 63,
+      preserved: lpcAssets.length,
     });
     expect(
       await database.query.gameAsset.findFirst({ where: eq(gameAsset.id, "katana") }),
@@ -191,13 +192,17 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     ]);
 
     const sync = await recordQueries(() => seedLpcAssets(deadlocked));
-    expect(sync.result).toEqual({ designs: 63, inserted: 0, preserved: 63 });
+    expect(sync.result).toEqual({
+      designs: lpcAssets.length,
+      inserted: 0,
+      preserved: lpcAssets.length,
+    });
     expect(
       sync.statements.filter((statement) =>
         statement.startsWith("insert into `GameAsset`"),
       ),
-    ).toHaveLength(63);
-    expect(await listLpcAssets(database)).toHaveLength(63);
+    ).toHaveLength(lpcAssets.length);
+    expect(await listLpcAssets(database)).toHaveLength(lpcAssets.length);
     expect(
       await database.query.gameAsset.findFirst({
         where: eq(gameAsset.id, original.id),
@@ -249,20 +254,20 @@ describeWithDatabase("LPC GameAsset persistence", () => {
       where: eq(gameAsset.id, "katana"),
     });
     const config = structuredClone(saved!.lpcConfig!);
-    config.replacementSlot = "shirt";
+    config.replacementSlots = ["shirt"];
     const result = await caller.update({
       id: "katana",
       data: gameAssetValidator.parse({ ...saved, lpcConfig: config }),
     });
     expect(result.success, result.message).toBe(true);
-    expect(before.designs.katana!.replacementSlot).toBe("none");
+    expect(before.designs.katana!.replacementSlots).toEqual([]);
     // The save replaces the cached scene snapshot on every instance.
-    expect((await caller.getLpcSceneCatalog()).designs.katana!.replacementSlot).toBe(
-      "shirt",
-    );
     expect(
-      buildLpcCatalog(await caller.getLpcCatalog()).designs.katana!.replacementSlot,
-    ).toBe("shirt");
+      (await caller.getLpcSceneCatalog()).designs.katana!.replacementSlots,
+    ).toEqual(["shirt"]);
+    expect(
+      buildLpcCatalog(await caller.getLpcCatalog()).designs.katana!.replacementSlots,
+    ).toEqual(["shirt"]);
     expect((await caller.delete({ id: "body" })).success).toBe(false);
   });
 
@@ -288,7 +293,7 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     const saved = await database.query.gameAsset.findFirst({
       where: eq(gameAsset.id, "katana"),
     });
-    const config = { ...saved!.lpcConfig!, replacementSlot: "shirt" };
+    const config = { ...saved!.lpcConfig!, replacementSlots: ["shirt"] };
     const invalidating = deferred();
     const release = deferred();
     const invalidate = lpcSceneCatalog.invalidateLpcSceneCatalog;
@@ -309,10 +314,10 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     expect(await Promise.race([update, setImmediate("pending")])).toBe("pending");
     release.resolve();
     expect(await update).toMatchObject({ message: "Action log unavailable" });
-    expect(before.designs.katana!.replacementSlot).toBe("none");
-    expect((await caller.getLpcSceneCatalog()).designs.katana!.replacementSlot).toBe(
-      "shirt",
-    );
+    expect(before.designs.katana!.replacementSlots).toEqual([]);
+    expect(
+      (await caller.getLpcSceneCatalog()).designs.katana!.replacementSlots,
+    ).toEqual(["shirt"]);
   });
 
   it.each(["full", "travel"] as const)(

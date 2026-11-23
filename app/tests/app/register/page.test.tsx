@@ -6,6 +6,7 @@ import * as navigation from "next/navigation";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import * as carousel from "@/components/ui/carousel";
+import * as selects from "@/components/ui/select";
 import * as characterPreview from "@/layout/CharacterPreview";
 import { BOTID_BLOCKED_MESSAGE } from "@/libs/botid";
 import {
@@ -14,6 +15,7 @@ import {
   recordAdClickWithdrawn,
   storeAdClick,
 } from "@/libs/campaignSource";
+import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as toast from "@/libs/toast";
 import {
   installBrowserGlobals,
@@ -229,4 +231,49 @@ it("offers hair, eye and skin colours before the three traits", () => {
       view.getByText(label).closest("div")?.querySelector("[role=combobox]"),
     ).toBeTruthy();
   }
+});
+
+it("follows gender until an explicit build is chosen and restores the default without replacing traits", async () => {
+  vi.spyOn(selects, "Select").mockImplementation(
+    ({ children, value, onValueChange }) => (
+      <select value={value} onChange={(event) => onValueChange?.(event.target.value)}>
+        {children}
+      </select>
+    ),
+  );
+  vi.spyOn(selects, "SelectTrigger").mockReturnValue(null as never);
+  vi.spyOn(selects, "SelectContent").mockImplementation(
+    Object.assign(({ children }: { children?: ReactNode }) => <>{children}</>, {
+      displayName: "SelectContent",
+    }),
+  );
+  vi.spyOn(selects, "SelectItem").mockImplementation(
+    Object.assign(
+      ({ children, value }: { children?: ReactNode; value: string }) => (
+        <option value={value}>{children}</option>
+      ),
+      { displayName: "SelectItem" },
+    ),
+  );
+  const { view } = mount(async () => ({ success: true, message: "OK" }));
+  const preview = vi.spyOn(characterPreview, "CharacterPreview");
+  const current = () => preview.mock.calls.at(-1)![0].user;
+  const traits = current().attributes;
+  const controls = [...view.container.querySelectorAll("select")];
+  const gender = controls.find((select) =>
+    [...select.options].some((option) => option.value === "Female"),
+  )!;
+  const body = controls.find((select) =>
+    [...select.options].some((option) => option.value === "female"),
+  )!;
+  fireEvent.change(gender, { target: { value: "Female" } });
+  await waitFor(() => expect(resolveSpriteAppearance(current()).body).toBe("female"));
+  fireEvent.change(body, { target: { value: "male" } });
+  fireEvent.change(gender, { target: { value: "Male" } });
+  fireEvent.change(gender, { target: { value: "Female" } });
+  expect(resolveSpriteAppearance(current()).body).toBe("male");
+  expect(current().attributes).toEqual(traits);
+  fireEvent.change(body, { target: { value: "AUTO" } });
+  await waitFor(() => expect(resolveSpriteAppearance(current()).body).toBe("female"));
+  expect(current().spriteBodyStyle).toBeUndefined();
 });

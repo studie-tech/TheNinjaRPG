@@ -1557,6 +1557,7 @@ export const itemRouter = createTRPCRouter({
               id: input.variant.id,
               lpcProfile: input.variant.lpcProfile,
               lpcColor: input.variant.lpcColor,
+              lpcMaterialColors: input.variant.lpcMaterialColors,
             },
             itemId: input.itemId,
           },

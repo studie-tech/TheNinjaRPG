@@ -1,4 +1,4 @@
-import type { RegistrationSchema } from "@/validators/register";
+import type { Attribute, RegistrationSchema } from "@/validators/register";
 
 type RegistrationField = keyof RegistrationSchema;
 
@@ -94,3 +94,19 @@ export const registrationStepReadiness = (
     false,
   ];
 };
+
+/** Deliberate starting appearances avoid contradictory randomized features while keeping every trait editable. */
+export const CHARACTER_CREATION_PRESETS = [
+  { id: "scout", name: "Scout", traits: ["Short Hair", "Hard features", "Scar"] },
+  { id: "scholar", name: "Scholar", traits: ["Long Hair", "Soft features", "Glasses"] },
+  { id: "wanderer", name: "Wanderer", traits: ["Tied Hair", "Sharp features", "Hat"] },
+  {
+    id: "sentinel",
+    name: "Sentinel",
+    traits: ["Topknot", "Round features", "Piercing"],
+  },
+] as const satisfies readonly {
+  id: string;
+  name: string;
+  traits: readonly [Attribute, Attribute, Attribute];
+}[];

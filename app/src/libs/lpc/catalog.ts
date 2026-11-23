@@ -1,6 +1,7 @@
 import type {
   LpcAnimation,
   LpcDirection,
+  LpcMaterial,
   SpriteAppearance,
   SpriteLayer,
 } from "@/validators/lpc";
@@ -13,14 +14,22 @@ export const LPC_ATTACK_FRAME_MS = 80;
 export const LPC_IDLE_FRAME_MS = 200;
 
 /** A layer's full poses and its optional movement-only atlas share the same visual selection. */
-export type LpcSheet = { image: string; z: number; layout: number; travel?: LpcSheet };
+export type LpcSheet = {
+  image: string;
+  z: number;
+  layout: number;
+  travel?: LpcSheet;
+  part?: string;
+  material?: LpcMaterial;
+  component?: string;
+};
 /** A scene owns one resolved database snapshot, keeping all its actors on the same artwork. */
 export type LpcCatalog = {
   entries: Record<string, LpcSheet[]>;
   layouts: LpcLayout[];
   designs: Record<
     string,
-    Pick<LpcConfig, "category" | "replacementSlot" | "defaultColor" | "defaultEyes">
+    Pick<LpcConfig, "category" | "replacementSlots" | "defaultColor" | "defaultEyes">
   >;
 };
 
@@ -47,7 +56,7 @@ export const buildLpcCatalog = (
     if (!config) continue;
     catalog.designs[asset.id] = {
       category: config.category,
-      replacementSlot: config.replacementSlot,
+      replacementSlots: config.replacementSlots,
       defaultColor: config.defaultColor,
       defaultEyes: config.defaultEyes,
     };
@@ -56,6 +65,9 @@ export const buildLpcCatalog = (
         image: sheet.image,
         z: sheet.z,
         layout: layoutId(sheet.layout),
+        ...(sheet.part ? { part: sheet.part } : {}),
+        ...(sheet.material ? { material: sheet.material } : {}),
+        ...(sheet.component ? { component: sheet.component } : {}),
         ...(sheet.travel
           ? {
               travel: {
@@ -82,10 +94,31 @@ export const spriteLayerSheets = (
   const eyes = layer.eyes ?? design?.defaultEyes ?? "blue";
   const key = `${layer.profile}/${appearance.body}/${color}/${eyes}`;
   const fallback = `${layer.profile}/${appearance.body}/${design?.defaultColor ?? "gray"}/${design?.defaultEyes ?? "blue"}`;
-  const sheets = lpcCatalog.entries[key] ?? lpcCatalog.entries[fallback];
+  const base = lpcCatalog.entries[key] ?? lpcCatalog.entries[fallback];
+  const sheets = base?.map((sheet) => {
+    const selected = sheet.material && layer.materialColors?.[sheet.material];
+    if (!selected || !sheet.part) return sheet;
+    return (
+      lpcCatalog.entries[
+        `${layer.profile}/${appearance.body}/${selected}/${eyes}`
+      ]?.find(
+        (candidate) =>
+          candidate.part === sheet.part && candidate.material === sheet.material,
+      ) ?? sheet
+    );
+  });
   if (!sheets) throw new Error(`Sprite selection is unavailable: ${key}`);
   return mode === "travel"
-    ? sheets.flatMap((sheet) => (sheet.travel ? [sheet.travel] : []))
+    ? sheets.flatMap((sheet) =>
+        sheet.travel
+          ? [
+              {
+                ...sheet.travel,
+                ...(sheet.component ? { component: sheet.component } : {}),
+              },
+            ]
+          : [],
+      )
     : sheets;
 };
 

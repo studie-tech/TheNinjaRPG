@@ -17,6 +17,19 @@ export const lpcColors = [
 ] as const;
 /** Atlas body keys are independent of the player's gender selection. */
 export const lpcBodyStyles = ["male", "female"] as const;
+/** Independently coloured parts retain their authored silhouettes and alpha. */
+export const lpcMaterials = ["cloth", "metal", "wood", "trim"] as const;
+export const lpcColorValidator = z
+  .string()
+  .min(1)
+  .max(32)
+  .regex(/^[a-z0-9_-]+$/);
+export const lpcMaterialColorsValidator = z.partialRecord(
+  z.enum(lpcMaterials),
+  lpcColorValidator.nullable(),
+);
+export type LpcMaterial = (typeof lpcMaterials)[number];
+export type LpcMaterialColors = z.infer<typeof lpcMaterialColorsValidator>;
 /** Nullable variant fields inherit the item; unconfigured items have no equipment layer. */
 export const lpcItemFields = z.object({
   lpcProfile: z
@@ -26,10 +39,11 @@ export const lpcItemFields = z.object({
     .regex(/^[a-zA-Z0-9_-]+$/)
     .nullable()
     .default(null),
-  lpcColor: z.enum(lpcColors).nullable().default(null),
+  lpcColor: lpcColorValidator.nullable().default(null),
+  lpcMaterialColors: lpcMaterialColorsValidator.nullable().default(null),
 });
 export type LpcEquipmentProfile = string;
-export type LpcColor = (typeof lpcColors)[number];
+export type LpcColor = string;
 export type LpcBody = (typeof lpcBodyStyles)[number];
 /** Shared clip names for authored layouts, renderer playback and editor choices. */
 export const lpcAnimations = [
@@ -53,6 +67,7 @@ export type SpriteLayer = {
   eyes?: string;
   mirror?: boolean;
   slot?: string;
+  materialColors?: LpcMaterialColors;
 };
 /** Serializable public artwork recipe without raw inventory IDs, stats or content URLs. */
 export type SpriteAppearance = { version: 1; body: LpcBody; layers: SpriteLayer[] };

@@ -213,6 +213,7 @@ it("shows equipped gear in inventory and passes cosmetic selections to the chara
         slot: "HAND",
         lpcProfile: null,
         lpcColor: null,
+        lpcMaterialColors: null,
       },
       variant: null,
     },

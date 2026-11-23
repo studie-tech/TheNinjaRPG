@@ -49,6 +49,7 @@ export const useItemEditForm = (
     ...data,
     lpcProfile: data.lpcProfile || null,
     lpcColor: data.lpcColor || null,
+    lpcMaterialColors: data.lpcMaterialColors || null,
     coordinateTargeting: data.coordinateTargeting || null,
     methodSize: data.methodSize || null,
     expireFromStoreAt: expireFromStoreAt,

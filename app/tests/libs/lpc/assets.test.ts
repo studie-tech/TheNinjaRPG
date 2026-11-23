@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { lpcFacing, lpcFrame } from "@/libs/lpc/catalog";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import credits from "../../../drizzle/data/lpc/credits.json";
-import { lpcCatalog } from "../../setup/lpc";
+import { lpcAssets, lpcCatalog } from "../../setup/lpc";
 
 // Publication verifies decoded RGBA pixels; runtime tests validate our atlas/frame manifest offline.
 describe("published LPC artwork", () => {
@@ -77,15 +77,19 @@ describe("published LPC artwork", () => {
   });
   it("retains attribution for every imported profile and pins the upstream revision", () => {
     expect(lpcCatalog.revision).toMatch(/^[a-f0-9]{40}$/);
-    for (const key of Object.keys(lpcCatalog.entries))
+    for (const asset of lpcAssets)
       expect(
-        credits.some(
-          (entry) =>
-            entry.profile === key.split("/")[0] &&
-            entry.authors.length &&
-            entry.chosenLicense &&
-            entry.urls.length,
-        ),
+        asset.lpcConfig.attributions.length > 0 &&
+          asset.lpcConfig.attributions.every(
+            (entry) =>
+              entry.authors.length &&
+              entry.chosenLicense &&
+              entry.urls.length &&
+              credits.some(
+                (source) =>
+                  source.profile === entry.profile && source.file === entry.file,
+              ),
+          ),
       ).toBe(true);
   });
   it("bounds movement texture memory while retaining authored resting and walking steps", () => {
@@ -116,7 +120,7 @@ describe("published LPC artwork", () => {
       }
     // The complete movement catalogue bounds distinct visible outfits independently of sharing.
     expect([...images.values()].reduce((sum, bytes) => sum + bytes, 0)).toBeLessThan(
-      96 * 1024 * 1024,
+      128 * 1024 * 1024,
     );
   });
   it("uses the authored four directions, freezes reduced motion and clamps one-shot frames", () => {

@@ -28,10 +28,18 @@ export const cosmeticSlotRelation = {
         slot: true,
         lpcProfile: true,
         lpcColor: true,
+        lpcMaterialColors: true,
       },
     },
     variant: {
-      columns: { id: true, name: true, image: true, lpcProfile: true, lpcColor: true },
+      columns: {
+        id: true,
+        name: true,
+        image: true,
+        lpcProfile: true,
+        lpcColor: true,
+        lpcMaterialColors: true,
+      },
     },
   },
 } as const;
