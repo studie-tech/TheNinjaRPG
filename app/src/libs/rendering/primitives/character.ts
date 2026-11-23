@@ -75,6 +75,7 @@ export const createLpcCharacter = async (
     child.anchor.set(0.5);
     child.scale.set((part.layer.mirror ? -1 : 1) / 64, 1 / 64);
     child.zIndex = part.sheet.z;
+    child.tint = part.layer.tint ?? 0xffffff;
     rig.addChild(child);
     return { ...part, child };
   });
@@ -225,7 +226,7 @@ export const createLpcCharacter = async (
     const poses = pose?.frames[poseOwner?.layer.mirror ? opposite : direction];
     const poseStep = poses?.[Math.min(step, poses.length - 1)];
     const textures: (Texture | null)[] = [];
-    // Layer textures and mirroring identify a frame; identical outfits share its composite.
+    // Layer textures, mirroring and tints identify a frame; identical outfits share its composite.
     let key = "";
     for (const entry of layers) {
       const facing = entry.layer.mirror ? opposite : direction;
@@ -271,7 +272,8 @@ export const createLpcCharacter = async (
           )
         : null;
       textures.push(texture);
-      if (texture) key += `${texture.uid}${entry.layer.mirror ? "m" : ""},`;
+      if (texture)
+        key += `${texture.uid}${entry.layer.mirror ? "m" : ""}${entry.layer.tint === undefined ? "" : `t${entry.layer.tint}`},`;
     }
     return { textures, key };
   };

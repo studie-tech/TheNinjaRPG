@@ -16,14 +16,24 @@ export type ArrivalSceneKind = "greeting" | "ambush" | "standoff";
 type Tile = { x: number; y: number };
 
 /** The figures of the opening: Lemu, the pup, its hunter and the hunter's double. */
-type CastRole = "lemu" | "pup" | "courier" | "double";
+export type CastRole = "lemu" | "pup" | "courier" | "double";
 
 /** One figure: when it is on the map, and the walk or tile it keeps there. */
 type CastEntry = { role: CastRole; from: number; until: number; walk: NpcWalk };
 
+/** A figure's words, which the scene says and when; the lesson supplies Lemu's. */
+export type ArrivalLineId = "greeting" | "warning" | "yelp" | "order" | "challenge";
+export type ArrivalLine = {
+  id: ArrivalLineId;
+  role: CastRole;
+  from: number;
+  until: number;
+};
+
 export type ArrivalScene = {
   kind: ArrivalSceneKind;
   cast: CastEntry[];
+  lines: ArrivalLine[];
   /** Tile the lesson points at: the ground beside Lemu, or where the double appears. */
   marker: Tile;
   /** Milliseconds from the start: the smoke, and the moment the player answers. */
@@ -36,11 +46,16 @@ const PUP_STEP_MS = 220;
 const COURIER_STEP_MS = 230;
 const FLIGHT_STEP_MS = 180;
 const LEMU_STEP_MS = 260;
+/** Lemu speaks up once the flash has swelled. */
+const WARNING_AT = 400;
+/** The pup yelps while it crosses in front of the player. */
+const YELP_FROM = 1200;
+const YELP_UNTIL = 3600;
 /** The flash comes first; then the pup, and its hunter close behind. */
 const PUP_STARTS_AT = 700;
 const COURIER_STARTS_AT = 1900;
 /** The hunter stops for one breath to raise the double. */
-const COURIER_PAUSE_MS = 900;
+const COURIER_PAUSE_MS = 1400;
 const SMOKE_DELAY_MS = 350;
 const DOUBLE_DELAY_MS = 600;
 /** Tiles from the player that the chase comes from and leaves to, past the map's edge of view. */
@@ -85,6 +100,13 @@ export const planArrivalScene = (info: {
     walk: still(tile),
   });
 
+  const says = (
+    role: CastRole,
+    id: ArrivalLineId,
+    from = 0,
+    until = Number.POSITIVE_INFINITY,
+  ): ArrivalLine => ({ id, role, from, until });
+
   if (kind === "greeting") {
     const lemu = best(
       tiles.filter((tile) => distance(tile, player) === 3),
@@ -99,7 +121,14 @@ export const planArrivalScene = (info: {
         standing,
       );
     if (!marker || !lemu) return undefined;
-    return { kind, cast: [always("lemu", lemu)], marker, smokeAt: 0, endsAt: 0 };
+    return {
+      kind,
+      cast: [always("lemu", lemu)],
+      lines: [says("lemu", "greeting")],
+      marker,
+      smokeAt: 0,
+      endsAt: 0,
+    };
   }
 
   // The double stands two tiles away, to the east if it can: between player and ridge.
@@ -122,6 +151,7 @@ export const planArrivalScene = (info: {
     return {
       kind,
       cast: [always("lemu", lemu), always("double", double)],
+      lines: [says("lemu", "challenge")],
       marker: double,
       smokeAt: 0,
       endsAt: 0,
@@ -192,6 +222,12 @@ export const planArrivalScene = (info: {
         walk: still(double),
       },
     ],
+    lines: [
+      says("lemu", "warning", WARNING_AT, reached - 200),
+      says("pup", "yelp", PUP_STARTS_AT + YELP_FROM, PUP_STARTS_AT + YELP_UNTIL),
+      says("courier", "order", reached, leaves + 100),
+      says("lemu", "challenge", leaves + 400),
+    ],
     marker: double,
     smokeAt: reached + SMOKE_DELAY_MS,
     endsAt: leaves + 400,
@@ -213,6 +249,15 @@ export const npcWalkPose = (walk: NpcWalk, now: number) => {
     isMoving: progress > 0 && progress < last,
   };
 };
+
+/** What the figures other than Lemu say. */
+export const ARRIVAL_LINES = {
+  yelp: "Yip! Yip!",
+  order: "Hold them here.",
+} as const;
+
+/** The map actor key of a scene's figure, which speech and lessons hold on to. */
+export const arrivalActorKey = (role: CastRole) => `npc:story-${role}:0:0`;
 
 /** The artwork one figure wears on the map. */
 export type ArrivalCastArt = {
@@ -283,14 +328,14 @@ const CAST_AI_IDS: Record<CastRole, string | undefined> = {
   double: BLACKSTEEL_DOUBLE_AI_ID,
 };
 
-const CAST_NAMES: Record<CastRole, string> = {
+export const CAST_NAMES: Record<CastRole, string> = {
   lemu: "Lemu",
   pup: "Frightened pup",
   courier: "Masked figure",
   double: "Smoke double",
 };
 
-/** Lemu as a map character, after the portrait; the atlas's nearest hair to her violet is blue. */
+/** Lemu as a map character, after the portrait; her violet is a tint over white hair. */
 const LEMU_APPEARANCE: SpriteAppearance = {
   version: 1,
   body: "female",
@@ -300,7 +345,7 @@ const LEMU_APPEARANCE: SpriteAppearance = {
     { slot: "legs", profile: "leggings", color: "black" },
     { slot: "feet", profile: "boots", color: "black" },
     { slot: "head", profile: "head-soft", color: "light", eyes: "blue" },
-    { slot: "hair", profile: "hair-long", color: "blue" },
+    { slot: "hair", profile: "hair-long", color: "white", tint: 0x8a55d8 },
     { slot: "gloves", profile: "gloves", color: "red" },
     { slot: "armarmour", profile: "armarmour", color: "red" },
     { slot: "belt", profile: "belt", color: "red" },

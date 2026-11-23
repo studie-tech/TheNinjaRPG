@@ -73,6 +73,35 @@ afterEach(() => {
 });
 
 describe("layered LPC actors", () => {
+  it("tints a layer for a colour its design lacks, as a figure of its own", async () => {
+    const { game } = gameFixture();
+    const keys: string[] = [];
+    game.characterComposites = {
+      epoch: () => 0,
+      acquire: (key: string) => {
+        keys.push(key);
+        return null;
+      },
+      release: () => {},
+    } as never;
+    const plain = resolveSpriteAppearance({});
+    const tinted: SpriteAppearance = {
+      ...plain,
+      layers: plain.layers.map((layer) =>
+        layer.slot === "hair" ? { ...layer, tint: 0x8a55d8 } : layer,
+      ),
+    };
+    await characters.createLpcCharacter(game, plain, "travel");
+    const untinted = new Set(keys.splice(0));
+    const character = await characters.createLpcCharacter(game, tinted, "travel");
+    const tints = character.layers.map(({ sprite }) => sprite.tint);
+    expect(tints).toContain(0x8a55d8);
+    expect(tints.filter((tint) => tint !== 0xffffff)).toHaveLength(
+      tints.filter((tint) => tint === 0x8a55d8).length,
+    );
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.some((key) => untinted.has(key))).toBe(false);
+  });
   it("stabilizes every cached character frame while retaining atlas/trim coordinates and shared source ownership", async () => {
     const { game, source } = gameFixture();
     source.source.style.scaleMode = "nearest";

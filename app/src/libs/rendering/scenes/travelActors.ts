@@ -1014,18 +1014,16 @@ export const createTravelActors = (
       const feet = actorFeet(record);
       return { x: feet.x + container.x, y: feet.y + container.y };
     },
-    /** The viewer's first objective marker: its foot in window coordinates and its tile's height. */
+    /** The viewer's first objective marker, as `stance` describes one actor. */
     questMarker: () => {
-      for (const [key, record] of records) {
-        if (!key.startsWith("quest:")) continue;
-        const feet = actorFeet(record);
-        return {
-          x: feet.x + container.x,
-          y: feet.y + container.y,
-          size: record.recipe.tile.height,
-        };
-      }
+      for (const [key, record] of records)
+        if (key.startsWith("quest:")) return actorStance(record, container);
       return undefined;
+    },
+    /** Where an actor stands in window coordinates: its feet, its head and its tile's height. */
+    stance: (key: string) => {
+      const record = records.get(key);
+      return record && actorStance(record, container);
     },
     /** World-space extent and paint depth of a user's actor; scenery above that depth covers it. */
     body: (userId: string) => {
@@ -1124,6 +1122,23 @@ const actorFeet = (record: ActorRecord) => {
     y:
       record.root.y +
       (body ? body.y - (body.size * 28) / 64 : record.recipe.tile.height / 2),
+  };
+};
+
+/** An actor's feet and head in window coordinates, steady through its animation frames. */
+const actorStance = (record: ActorRecord, origin: { x: number; y: number }) => {
+  const feet = actorFeet(record);
+  const body = record.recipe.parts.find((part) => part.kind === "avatar");
+  const height = body
+    ? body.character
+      ? body.size * LPC_FIGURE_HEIGHT
+      : body.size * ART_FIGURE_HEIGHT
+    : record.recipe.tile.height;
+  return {
+    x: feet.x + origin.x,
+    y: feet.y + origin.y,
+    top: feet.y + origin.y + height,
+    size: record.recipe.tile.height,
   };
 };
 
@@ -1370,6 +1385,8 @@ const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
 /** A walking LPC figure spans about 24 of its frame's 64 columns and 48 of its rows. */
 const LPC_FIGURE_HALF_WIDTH = 12 / 64;
 const LPC_FIGURE_HEIGHT = 48 / 64;
+/** Full-body art fills most of its frame's height. */
+const ART_FIGURE_HEIGHT = 0.85;
 const NPC_TRAVEL_HEIGHT = 1.3;
 /** Water rings follow a figure's width within this range of an LPC character's. */
 const RING_MIN_SCALE = 0.6;

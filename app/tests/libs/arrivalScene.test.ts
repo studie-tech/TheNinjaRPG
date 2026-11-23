@@ -7,11 +7,13 @@ import {
 import {
   type ArrivalScene,
   type ArrivalSceneKind,
+  arrivalActorKey,
   arrivalSceneActors,
   npcWalkPose,
   planArrivalScene,
 } from "@/libs/arrivalScene";
 import { oddQHexDistance } from "@/libs/hexgrid";
+import { travelActorKey } from "@/libs/rendering/scenes/travelActors";
 import { getNeighborCoordinates } from "@/libs/sector-map/validation";
 
 type Tile = { x: number; y: number };
@@ -147,6 +149,35 @@ describe("arrivalSceneActors", () => {
   it("leaves out a figure whose artwork did not load", () => {
     const actors = arrivalSceneActors(scene, 60_000, {}, 301);
     expect(actors.map((actor) => actor.userId)).toEqual(["story-lemu"]);
+  });
+});
+
+describe("what the figures say", () => {
+  const linesAt = (scene: ArrivalScene, elapsed: number) =>
+    scene.lines
+      .filter((line) => elapsed >= line.from && elapsed < line.until)
+      .map((line) => line.id);
+
+  it("has Lemu greet, then warn, then call for the answer once it can be given", () => {
+    expect(linesAt(staged("greeting"), 0)).toEqual(["greeting"]);
+    const scene = staged("ambush");
+    expect(linesAt(scene, 1000)).toContain("warning");
+    expect(linesAt(scene, scene.endsAt)).toEqual(["challenge"]);
+    expect(linesAt(staged("standoff"), 0)).toEqual(["challenge"]);
+  });
+
+  it("has the hunter order the double while they stand together", () => {
+    const scene = staged("ambush");
+    expect(linesAt(scene, scene.smokeAt)).toEqual(["order"]);
+  });
+
+  it("holds each line to a figure that is on the map while it is said", () => {
+    const scene = staged("ambush");
+    for (const line of scene.lines) {
+      const at = Number.isFinite(line.until) ? (line.from + line.until) / 2 : line.from;
+      const keys = arrivalSceneActors(scene, at, art, 301).map(travelActorKey);
+      expect(keys).toContain(arrivalActorKey(line.role));
+    }
   });
 });
 

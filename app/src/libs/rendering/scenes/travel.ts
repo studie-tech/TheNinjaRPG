@@ -7,6 +7,7 @@ import { npcWalkPose } from "@/libs/arrivalScene";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { hexGridHeightRatio } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
+import type { MapAnchor, MapAnchors } from "@/libs/mapAnchors";
 import {
   type WanderLeg,
   type WanderTile,
@@ -101,13 +102,8 @@ export const createTravelScene = async (options: {
   onTap: (hit: TravelPick, client: { x: number; y: number }) => void;
   onHover: (structureId: string | null, locationId: string | null) => void;
   onZoom: (zoom: number) => void;
-  /**
-   * Where the viewer's objective marker stands in the canvas's CSS pixels (`size` is
-   * its tile's height there), or null while it is off screen. Called when it moves.
-   */
-  onQuestMarkerPoint?: (at: TravelMarkerPoint | null) => void;
-  /** The same for the snapshot's `storyMarker` tile. */
-  onStoryMarkerPoint?: (at: TravelMarkerPoint | null) => void;
+  /** What overlays hold on to; the scene reports where those things stand as they move. */
+  anchors?: MapAnchors;
   initialZoom: number;
   resolution?: number;
 }) => {
@@ -376,53 +372,47 @@ export const createTravelScene = async (options: {
       );
     };
     game.setResize(() => transform(true));
-    const reportMarker = (
-      report: ((at: TravelMarkerPoint | null) => void) | undefined,
-      reportedKey: string,
-      marker: { x: number; y: number; size: number } | undefined,
-    ) => {
-      if (!report) return reportedKey;
+    /** Where an anchor stands in window coordinates, as the actors' `stance` gives it. */
+    const anchorStance = (anchor: MapAnchor) => {
+      if (anchor.kind === "actor") return actors.stance(anchor.key);
+      if (anchor.kind === "objective") return actors.questMarker();
+      const entry = sectors.get(anchor.sector);
+      const tile = entry?.grid.getHex({ col: anchor.x, row: anchor.y });
+      if (!entry || !tile) return undefined;
+      const y = -tile.center.y + standingOffset(tile) + entry.position.y;
+      return {
+        x: -tile.center.x + tile.width / 2 + entry.position.x,
+        y,
+        top: y + tile.height,
+        size: tile.height,
+      };
+    };
+    if (options.anchors) {
+      const stop = options.anchors.onWanted(() => game.invalidate());
+      game.own(() => void stop());
+    }
+    /** Report every anchor an overlay holds on to in the canvas's CSS pixels. */
+    const reportAnchors = () => {
+      const { anchors } = options;
+      if (!anchors) return;
       const s = scale(),
         { width, height } = game.renderer;
-      const x = marker ? world.position.x + marker.x * s : 0,
-        y = marker ? world.position.y - marker.y * s : 0;
-      const at =
-        marker && x >= 0 && x <= width && y >= 0 && y <= height
-          ? { x, y, size: marker.size * s, width, height }
-          : null;
-      const key = at
-        ? `${Math.round(at.x)}:${Math.round(at.y)}:${Math.round(at.size)}:${width}:${height}`
-        : "";
-      if (key !== reportedKey) report(at);
-      return key;
-    };
-    let questMarkerKey = "",
-      storyMarkerKey = "";
-    /** The snapshot's story tile in window coordinates, as `questMarker` gives its own. */
-    const storyMarkerTile = () => {
-      const { storyMarker, sector } = options.getSnapshot();
-      const entry = sectors.get(sector);
-      const tile =
-        storyMarker && entry?.grid.getHex({ col: storyMarker.x, row: storyMarker.y });
-      return entry && tile
-        ? {
-            x: -tile.center.x + tile.width / 2 + entry.position.x,
-            y: -tile.center.y + standingOffset(tile) + entry.position.y,
-            size: tile.height,
-          }
-        : undefined;
-    };
-    const reportMarkers = () => {
-      questMarkerKey = reportMarker(
-        options.onQuestMarkerPoint,
-        questMarkerKey,
-        actors.questMarker(),
-      );
-      storyMarkerKey = reportMarker(
-        options.onStoryMarkerPoint,
-        storyMarkerKey,
-        storyMarkerTile(),
-      );
+      for (const [id, { anchor }] of anchors.wanted()) {
+        const stance = anchorStance(anchor);
+        anchors.report(
+          id,
+          stance
+            ? {
+                x: world.position.x + stance.x * s,
+                foot: world.position.y - stance.y * s,
+                top: world.position.y - stance.top * s,
+                tile: stance.size * s,
+                width,
+                height,
+              }
+            : null,
+        );
+      }
     };
     const pick = (x: number, y: number): TravelPick => {
       const snapshot = options.getSnapshot(),
@@ -1259,7 +1249,7 @@ export const createTravelScene = async (options: {
         route.set(points, tile?.width ?? 50);
       }
       route.animate(frame, actors.feet(snapshot.viewer?.userId ?? ""), scale());
-      reportMarkers();
+      reportAnchors();
       const currentWeather =
         snapshot.weather ??
         getWorldWeather(
@@ -1371,8 +1361,6 @@ export type TravelSnapshot = Omit<TravelActorsSnapshot, "grid"> & {
   enabled: boolean;
   /** Committed destination takes precedence over hover while the journey is in progress. */
   routeTarget?: { sector: number; x: number; y: number } | null;
-  /** Tile of the viewer's sector that a story scene points at. */
-  storyMarker?: { x: number; y: number } | null;
   /** Ungated world-clock brightness; ambient and contact-shadow consumers apply their own preference. */
   brightness: number;
   motionSteps?: ReadonlyMap<
@@ -1396,14 +1384,6 @@ export type TravelPick = {
   actor: TravelActorHit | null;
   structureId: string | null;
   locationId: string | null;
-};
-/** A point on the travel canvas in CSS pixels, with the canvas size it was measured in. */
-export type TravelMarkerPoint = {
-  x: number;
-  y: number;
-  size: number;
-  width: number;
-  height: number;
 };
 export type TravelScene = Awaited<ReturnType<typeof createTravelScene>>;
 type TravelSector = {

@@ -41,7 +41,7 @@ import {
   useTutorialStep,
 } from "@/hooks/tutorial";
 import { characterStorageKey } from "@/hooks/useActivityDock";
-import { arrivalScenePlayingAtom } from "@/hooks/useArrivalScene";
+import { arrivalScenePlayingAtom, mapSpokenStepAtom } from "@/hooks/useArrivalScene";
 import { useStoryGuidance } from "@/hooks/useStoryGuidance";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
@@ -790,6 +790,7 @@ const PlayerTutorialAssistant: React.FC<
   }, [lessonKey, teachesInGame, isOwnLessonShown, idleKey, readingMs]);
   const isModalDialogOpen = useIsModalDialogOpen();
   const isScenePlaying = useAtomValue(arrivalScenePlayingAtom);
+  const spokenStepId = useAtomValue(mapSpokenStepAtom);
 
   // A lost lesson fight the player can start again from the lesson itself.
   const retryQuestId = (() => {
@@ -1114,6 +1115,8 @@ const PlayerTutorialAssistant: React.FC<
 
   const isQuestOverlay = !!dynamicQuestStep;
   const sceneLead = isScenePlaying ? currentTutorialStep.sceneLead : undefined;
+  // A character on the map says the words; the lesson keeps its title and what to do.
+  const isSpokenOnMap = spokenStepId === currentTutorialStep.id;
   // A lesson that teaches the page's own control offers its shortcut only to a stuck
   // player, and no shortcut shows under a dialog the player has open or before the scene
   // the lesson answers has played.
@@ -1435,22 +1438,12 @@ const PlayerTutorialAssistant: React.FC<
             ) : undefined
           }
           lead={
-            <div className="grid *:col-start-1 *:row-start-1">
-              {/* The words that follow a scene keep their room while it plays, so the map
-              beside the dock is not resized under it. */}
-              <div aria-hidden={!!sceneLead} className={cn(sceneLead && "invisible")}>
-                <StepDescription
-                  description={currentTutorialStep.description}
-                  className={leadClassName}
-                />
-              </div>
-              {sceneLead && (
-                <StepDescription
-                  description={sceneLead.description}
-                  className={leadClassName}
-                />
-              )}
-            </div>
+            isSpokenOnMap ? undefined : (
+              <StepDescription
+                description={currentTutorialStep.description}
+                className={leadClassName}
+              />
+            )
           }
         >
           {currentTutorialStep.quoteObjective &&

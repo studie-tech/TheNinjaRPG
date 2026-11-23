@@ -81,6 +81,8 @@
   --animate-cta-pulse: cta-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   /* The tutorial spotlight's ring pulses a fixed 10px outward, whatever the size of the control it surrounds. */
   --animate-spotlight-ping: spotlight-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  /* A speech bubble pops in from its speaker. */
+  --animate-speech-pop: speech-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   /* Loading placeholders pulse below their resting 20% opacity, on the compositor. */
   --animate-placeholder-pulse: placeholder-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
@@ -91,6 +93,13 @@
     }
     50% {
       opacity: 0.1;
+    }
+  }
+
+  @keyframes speech-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
     }
   }
 

@@ -2,20 +2,31 @@ import { atom, useSetAtom } from "jotai";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
+  ARRIVAL_LINES,
+  type ArrivalLine,
+  type ArrivalLineId,
   type ArrivalScene,
   type ArrivalSceneKind,
+  arrivalActorKey,
   arrivalSceneActors,
+  CAST_NAMES,
   planArrivalScene,
 } from "@/libs/arrivalScene";
+import type { MapSpeechLine } from "@/libs/mapSpeech";
 import { isWanderTile } from "@/libs/overworldWander";
 import type { TravelScene } from "@/libs/rendering/scenes/travel";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { getSectorTile } from "@/libs/sector-map/validation";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { TUTORIAL_AMBUSH_STEP_ID, TUTORIAL_ARRIVAL_STEP_ID } from "@/libs/tutorial";
+import type { TutorialStepConfig } from "@/libs/tutorialSteps";
+import { parseHtml } from "@/utils/parse";
 
 /** True while the ambush plays on the map, when its lesson has nothing to answer yet. */
 export const arrivalScenePlayingAtom = atom(false);
+
+/** Tutorial step whose words a character on the map is saying, so the lesson leaves them out. */
+export const mapSpokenStepAtom = atom<string | null>(null);
 
 /** Tutorial steps the sector map stages, each with how. */
 const SCENE_KINDS: Record<string, ArrivalSceneKind> = {
@@ -32,7 +43,7 @@ const SCENE_KINDS: Record<string, ArrivalSceneKind> = {
  * the scene as it ends.
  */
 export const useArrivalScene = (info: {
-  stepId: string | undefined;
+  step: TutorialStepConfig | undefined;
   /** The viewer's sector and where they stand in it, once the map shows it. */
   sector: number;
   map: NormalizedSectorMap | undefined;
@@ -44,7 +55,8 @@ export const useArrivalScene = (info: {
   /** Has the renderer reconcile its actors. */
   onCastChange: () => void;
 }) => {
-  const kind = info.stepId ? SCENE_KINDS[info.stepId] : undefined;
+  const stepId = info.step?.id;
+  const kind = stepId ? SCENE_KINDS[stepId] : undefined;
   const { data: art, isPending } = api.travel.getArrivalCast.useQuery(undefined, {
     enabled: !!kind,
     staleTime: Number.POSITIVE_INFINITY,
@@ -52,6 +64,7 @@ export const useArrivalScene = (info: {
   const [scene, setScene] = useState<{ plan: ArrivalScene; startAt: number }>();
   const [flash, setFlash] = useState(0);
   const [smoke, setSmoke] = useState(0);
+  const [spoken, setSpoken] = useState<ArrivalLineId[]>([]);
   const lemuRef = useRef<{ x: number; y: number } | undefined>(undefined);
   const infoRef = useRef(info);
   useLayoutEffect(() => {
@@ -115,6 +128,51 @@ export const useArrivalScene = (info: {
     };
   }, [kind, isStageable, scenery, setPlaying]);
 
+  // Each line stands for its own stretch of the scene.
+  const setSpokenStep = useSetAtom(mapSpokenStepAtom);
+  useEffect(() => {
+    if (!scene || !stepId) return;
+    const { lines } = scene.plan;
+    const speak = () => {
+      const elapsed = infoRef.current.getNow() - scene.startAt;
+      setSpoken(
+        lines
+          .filter((line) => elapsed >= line.from && elapsed < line.until)
+          .map(lineId),
+      );
+    };
+    speak();
+    setSpokenStep(stepId);
+    const elapsed = infoRef.current.getNow() - scene.startAt;
+    const timers = lines
+      .flatMap((line) => [line.from, line.until])
+      .filter((at) => at > elapsed && Number.isFinite(at))
+      // A timer can come a moment early; the next frame's clock is past the boundary.
+      .map((at) => setTimeout(speak, at - elapsed + 30));
+    return () => {
+      timers.forEach(clearTimeout);
+      setSpoken([]);
+      setSpokenStep(null);
+    };
+  }, [scene, stepId, setSpokenStep]);
+  const step = info.step;
+  const lines: MapSpeechLine[] = (scene?.plan.lines ?? [])
+    .filter((line) => spoken.includes(line.id))
+    .flatMap((line) => {
+      const text = step && lineText(line.id, step);
+      return text
+        ? [
+            {
+              id: `${step.id}:${line.id}`,
+              anchor: { kind: "actor" as const, key: arrivalActorKey(line.role) },
+              speaker: line.role === "pup" ? undefined : CAST_NAMES[line.role],
+              tone: line.id === "yelp" ? ("shout" as const) : ("say" as const),
+              text: typeof text === "string" ? parseHtml(text) : text,
+            },
+          ]
+        : [];
+    });
+
   // The frame loop asks for the merged list every frame; it is rebuilt only when the
   // players or the figures on the map change.
   const merged = useRef<{ users: SectorUser[]; key: string; result: SectorUser[] }>(
@@ -145,7 +203,8 @@ export const useArrivalScene = (info: {
 
   return {
     withCast: (users: SectorUser[]) => withCastRef.current(users),
-    marker: scene?.plan.marker ?? null,
+    lines,
+    marker: scene ? { ...scene.plan.marker, sector: info.sector } : null,
     kind: scene?.plan.kind,
     flash,
     smoke,
@@ -157,6 +216,16 @@ type ArrivalScenery = Pick<TravelScene, "sceneryReady" | "isTileCovered">;
 
 /** Longest the scene waits for scenery to stand its figures clear of. */
 const SCENERY_WAIT_MS = 4000;
+
+const lineId = (line: ArrivalLine) => line.id;
+
+/** The words of a line: Lemu's are the lesson's own, which the dock shows without a map. */
+const lineText = (id: ArrivalLineId, step: TutorialStepConfig) =>
+  id === "warning"
+    ? step.sceneLead?.description
+    : id === "greeting" || id === "challenge"
+      ? step.description
+      : ARRIVAL_LINES[id];
 
 /** Long enough before now that a scene staged without motion has ended. */
 const REDUCED_HEAD_START_MS = 60_000;

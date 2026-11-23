@@ -152,7 +152,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "arrival",
     title: "Welcome to Horizon",
     description:
-      "You made it. I'm <b>Lemu</b>, and from today I'm your instructor. This is <b>Horizon</b>, where every shinobi begins. Come, walk with me.",
+      "You made it! I'm <b>Lemu</b>, your instructor from today. This is <b>Horizon</b>, where every shinobi begins. Come, walk with me.",
     action: "Tap the glowing ground to walk over to me.",
     elementIds: ["tutorial-travel-sector"],
     isRevealOnly: true,
@@ -165,11 +165,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "arrival",
     title: "A violet flash",
     description:
-      "That poor pup! Whoever is hunting it left a <b>smoke double</b> behind to stop us. Breathe. A fight is only this: you move, then you strike. I'm right here.",
+      "That poor pup! Its hunter left a <b>smoke double</b> to stop us. Breathe. You move, then you strike. I'm right here.",
     action: "Face the smoke double.",
     sceneLead: {
-      description:
-        "That light on the ridge... Stay close to me. Something is running this way!",
+      description: "That light on the ridge... Stay close to me!",
       action: "Watch the map.",
     },
     elementIds: ["tutorial-travel-sector"],
@@ -224,7 +223,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "arrival",
     title: "Back on your feet",
     description:
-      "I drove the double off before it could finish you, but it is circling back. Nobody wins by standing still: step next to it, and spend all your Action Points striking before you end your turn.",
+      "I drove the double off, but it is circling back. Step next to it, and spend all your Action Points striking before you end your turn.",
     action: "Tap Retry battle to face it again.",
     elementIds: ["tutorial-travel-sector"],
     isRevealOnly: true,

@@ -44,6 +44,8 @@ import Loader from "@/layout/Loader";
 import { QuestDialogScene, QuestUpdateModal } from "@/layout/Logbook";
 import { MapLocationActions } from "@/layout/MapLocationActions";
 import Modal from "@/layout/Modal";
+import { MapAnchored } from "@/layout/map/MapAnchored";
+import { MapSpeech } from "@/layout/map/MapSpeech";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import { SurroundingUsers } from "@/layout/SurroundingUsers";
@@ -59,6 +61,7 @@ import { findHex, oddQHexDistance, PathCalculator } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
+import { createMapAnchors, type MapAnchor } from "@/libs/mapAnchors";
 import { getQuestMapLocations, groupMapLocations } from "@/libs/mapLocations";
 import { dialogChoiceContentId } from "@/libs/objectives";
 import {
@@ -79,7 +82,6 @@ import {
 import { findConsecutiveQuestId } from "@/libs/questRun";
 import {
   createTravelScene,
-  type TravelMarkerPoint,
   type TravelPick,
   type TravelSnapshot,
   travelLightingMode,
@@ -268,11 +270,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const originRef = useRef<TerrainHex | undefined>(undefined);
   // The renderer's host outlives the in-page and expanded layouts, so the scene moves between them.
   const mountRef = useRef<HTMLDivElement | null>(null);
-  // Lesson anchor kept over the viewer's objective marker, so guidance can point at it.
-  const objectiveMarkerRef = useRef<HTMLDivElement | null>(null);
-  // The same over the tile the tutorial's story scene points at.
-  const storyMarkerRef = useRef<HTMLDivElement | null>(null);
-  const storyMarkerTileRef = useRef<SectorPoint | null>(null);
+  // What overlays over the map hold on to: markers, glows and speech.
+  const [mapAnchors] = useState(createMapAnchors);
   const pathFinderRef = useRef<PathCalculator | null>(null);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
@@ -2598,14 +2597,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           liveZoomRef.current = zoom;
           setStoredZoom(zoom);
         },
-        onQuestMarkerPoint: (at) =>
-          // The pin stands on its tile, so the box rises from the tile's foot.
-          placeMarkerAnchor(objectiveMarkerRef.current, at, {
-            width: 1.5,
-            height: 2.5,
-          }),
-        onStoryMarkerPoint: (at) =>
-          placeMarkerAnchor(storyMarkerRef.current, at, { width: 1.6, height: 1.4 }),
+        anchors: mapAnchors,
         getSnapshot: () => {
           const snapshot = travelSnapshot.current;
           if (!snapshot) throw new Error("Travel snapshot unavailable");
@@ -2619,7 +2611,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             sector: sectorRef.current,
             viewer: userRef.current,
             users: arrivalScene.withCast(usersRef.current),
-            storyMarker: storyMarkerTileRef.current,
             col: animatedPositionRef.current?.x ?? userRef.current?.longitude ?? 0,
             row: animatedPositionRef.current?.y ?? userRef.current?.latitude ?? 0,
             nav: windowNavRef.current,
@@ -2656,7 +2647,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   // The tutorial's opening, staged around the player.
   const arrivalScene = useArrivalScene({
-    stepId: props.isActive && profile?.status === "AWAKE" ? currentStep?.id : undefined,
+    step: props.isActive && profile?.status === "AWAKE" ? currentStep : undefined,
     sector,
     map: travelWindow.find((entry) => entry.sector === sector)?.map,
     getPosition: () =>
@@ -2671,7 +2662,15 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       actorRevisionRef.current++;
     },
   });
-  storyMarkerTileRef.current = arrivalScene.marker;
+  const storyTarget: MapAnchor | null = arrivalScene.marker && {
+    kind: "tile",
+    ...arrivalScene.marker,
+  };
+  // Speech leaves the player's character and the ground to tap in view.
+  const speechAvoids: MapAnchor[] = [
+    ...(userData ? [{ kind: "actor" as const, key: `user:${userData.userId}` }] : []),
+    ...(storyTarget ? [storyTarget] : []),
+  ];
   const attachSceneHost = useCallback((slot: HTMLDivElement | null) => {
     if (!slot) return;
     mountRef.current ??= document.createElement("div");
@@ -2790,19 +2789,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           aria-busy={!travel.isReady && !travel.error}
           className={!travel.isReady && !travel.error ? "min-h-60" : undefined}
         ></div>
-        <div
-          ref={objectiveMarkerRef}
+        {/* Lesson anchor kept over the viewer's objective marker, so guidance can point at it. */}
+        <MapAnchored
+          anchors={mapAnchors}
+          anchor={OBJECTIVE_ANCHOR}
+          box={{ width: 1.5, height: 2.5 }}
           id="tutorial-objective-marker"
-          aria-hidden="true"
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full"
-          style={{ display: "none" }}
+          onPlaced={announceTutorialLayout}
         />
-        <div
-          ref={storyMarkerRef}
-          id="tutorial-story-marker"
-          aria-hidden="true"
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full"
-          style={{ display: "none" }}
+        <MapAnchored
+          anchors={mapAnchors}
+          anchor={storyTarget}
+          box={{ width: 1.6, height: 1.4 }}
         >
           {arrivalScene.kind === "greeting" && (
             <>
@@ -2819,7 +2817,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           {arrivalScene.smoke > 0 && (
             <span key={arrivalScene.smoke} className="story-smoke absolute inset-0" />
           )}
-        </div>
+        </MapAnchored>
         {arrivalScene.flash > 0 && (
           <div
             key={arrivalScene.flash}
@@ -2827,6 +2825,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             className="story-flash pointer-events-none absolute inset-0 z-10"
           />
         )}
+        <MapSpeech
+          anchors={mapAnchors}
+          lines={arrivalScene.lines}
+          avoid={speechAvoids}
+        />
         {showWorldLoader && !travel.isReady && !travel.error && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div
@@ -2838,38 +2841,61 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             </div>
           </div>
         )}
-        {props.showCompass !== false && (
-          <aside
-            aria-label="Map compass and neighboring sectors"
-            className="bg-background/90 pointer-events-none absolute top-3 left-3 z-10 rounded-lg border p-2 text-center text-xs shadow-md backdrop-blur-sm"
-          >
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
-              <span className="col-span-3">
-                N ·{" "}
-                {sectorGridNeighbors(sector)[0] < 0
-                  ? "Polar boundary"
-                  : sectorGridNeighbors(sector)[0]}
-              </span>
-              <span className="text-right whitespace-nowrap">
-                {sectorGridNeighbors(sector)[3]} · W
-              </span>
-              <span className="border-foreground/20 bg-muted min-w-8 rounded border px-1.5 py-0.5 font-bold">
-                <span className="sr-only">Current sector </span>
-                {sector}
-              </span>
-              <span className="text-left whitespace-nowrap">
-                E · {sectorGridNeighbors(sector)[1]}
-              </span>
-              <span className="col-span-3">
-                S ·{" "}
-                {sectorGridNeighbors(sector)[2] < 0
-                  ? "Polar boundary"
-                  : sectorGridNeighbors(sector)[2]}
-              </span>
-            </div>
-          </aside>
-        )}
-        {weatherControls}
+        <aside
+          aria-label="Map compass and neighboring sectors"
+          data-map-hud=""
+          className="bg-background/90 pointer-events-none absolute top-3 left-3 z-10 rounded-lg border p-2 text-center text-xs shadow-md backdrop-blur-sm"
+        >
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
+            <span className="col-span-3">
+              N ·{" "}
+              {sectorGridNeighbors(sector)[0] < 0
+                ? "Polar boundary"
+                : sectorGridNeighbors(sector)[0]}
+            </span>
+            <span className="text-right whitespace-nowrap">
+              {sectorGridNeighbors(sector)[3]} · W
+            </span>
+            <span className="border-foreground/20 bg-muted min-w-8 rounded border px-1.5 py-0.5 font-bold">
+              <span className="sr-only">Current sector </span>
+              {sector}
+            </span>
+            <span className="text-left whitespace-nowrap">
+              E · {sectorGridNeighbors(sector)[1]}
+            </span>
+            <span className="col-span-3">
+              S ·{" "}
+              {sectorGridNeighbors(sector)[2] < 0
+                ? "Polar boundary"
+                : sectorGridNeighbors(sector)[2]}
+            </span>
+          </div>
+        </aside>
+        <div
+          data-map-hud=""
+          className="absolute top-3 right-3 z-10 flex items-start gap-2"
+        >
+          <DayNightIndicator
+            className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
+            previewDate={lightingPreviewDate}
+            onPreviewDateChange={setLightingPreviewDate}
+            previewWeather={weatherPreview}
+            onPreviewWeatherChange={setWeatherPreview}
+          />
+          {isWorldExpanded && (
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="bg-background/90"
+              ref={expandedExitRef}
+              aria-label="Exit expanded world"
+              onClick={() => setWorldExpanded(false)}
+            >
+              <Minimize2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       {travel.error && <WebGlError />}
       {inspectedLocations && (
@@ -3189,22 +3215,9 @@ const SECTOR_MAX_ZOOM = 3;
  */
 const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
 
-/** Keeps a lesson's anchor over a marker on the map canvas, `box` tiles in size. */
-const placeMarkerAnchor = (
-  anchor: HTMLElement | null,
-  at: TravelMarkerPoint | null,
-  box: { width: number; height: number },
-) => {
-  if (!anchor) return;
-  anchor.style.display = at ? "" : "none";
-  if (at) {
-    anchor.style.left = `${at.x}px`;
-    anchor.style.top = `${at.y + at.size * 0.25}px`;
-    anchor.style.width = `${at.size * box.width}px`;
-    anchor.style.height = `${at.size * box.height}px`;
-  }
+const OBJECTIVE_ANCHOR: MapAnchor = { kind: "objective" };
+const announceTutorialLayout = () =>
   window.dispatchEvent(new Event(TUTORIAL_LAYOUT_EVENT));
-};
 
 type SectorWindowEntry =
   RouterOutputs["worldMap"]["getSectorWindow"]["sectors"][number];
