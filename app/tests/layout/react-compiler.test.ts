@@ -63,6 +63,7 @@ const targets = [
     ["PlayerTutorialAssistant", "GuidedLessonAssistant", "GuestGuidedLesson"],
   ],
   ["layout/ActivityDock.tsx", ["ActivityDock", "ActivityQuests"]],
+  ["layout/ActivityDockButton.tsx", ["ActivityDockButton"]],
   ["layout/kessen/match/LessonSpotlight.tsx", ["LessonGuide"]],
   [
     "layout/kessen/hub/GuestHall.tsx",

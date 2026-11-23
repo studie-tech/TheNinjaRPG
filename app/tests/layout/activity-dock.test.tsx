@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import { MobileGameNav } from "@/components/layout/shared/MobileGameNav";
 import { ActivityDock } from "@/layout/ActivityDock";
+import { ActivityDockButton } from "@/layout/ActivityDockButton";
 import * as logbook from "@/layout/Logbook";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
@@ -83,6 +84,24 @@ afterEach(() => {
   localStorage.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   restoreBrowserGlobals();
+});
+
+it("opens from a desktop toolbar and returns focus there when collapsed", () => {
+  localStorage.setItem(`activityDockOpen:${user.userId}`, "false");
+  const view = render(
+    <>
+      <ActivityDockButton />
+      <ActivityDock>Desktop lesson</ActivityDock>
+    </>,
+  );
+  const trigger = view.getByRole("button", { name: "Activity" });
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(trigger);
+  expect(view.getByText("Desktop lesson")).toBeTruthy();
+  expect(document.activeElement?.textContent).toBe("Tutorial");
+  fireEvent.click(view.getByRole("button", { name: "Collapse Activity" }));
+  expect(document.activeElement).toBe(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
 });
 
 it("persists the chosen side and collapsed state without disabling the tutorial", () => {

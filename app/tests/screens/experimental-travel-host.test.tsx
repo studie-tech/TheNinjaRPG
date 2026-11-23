@@ -239,14 +239,16 @@ describe("responsive experimental menus", () => {
       ({ headerItems }) => (
         <div aria-label="Map host">
           {headerItems?.map((item) => (
-            <div key={item.key}>{item.node}</div>
+            <div key={item.key} data-header-item={item.key}>
+              {item.node}
+            </div>
           ))}
         </div>
       ),
     );
   });
 
-  it("shows both desktop menus without toolbar launchers and keeps tutorial targets mounted once", () => {
+  it("shows desktop menus with Activity in the toolbar and keeps tutorial targets mounted once", () => {
     isDesktop = true;
     const input = props();
     const view = render(<ExperimentalGameLayout {...input} />);
@@ -259,6 +261,12 @@ describe("responsive experimental menus", () => {
     expect(view.container.querySelectorAll("#tutorial-village")).toHaveLength(1);
     expect(view.queryByRole("button", { name: "Open player menu" })).toBeNull();
     expect(view.queryByRole("button", { name: "Open game menu" })).toBeNull();
+    expect(
+      view.container.querySelector(
+        '[data-header-item="activity"] [data-desktop-activity-trigger]',
+      ),
+    ).toBeTruthy();
+    expect(view.getByRole("button", { name: "Chat" })).toBeTruthy();
     expect(
       view.queryByRole("button", { name: /Open notifications|Settings/ }),
     ).toBeNull();

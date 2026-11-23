@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { ActivityDockButton } from "@/layout/ActivityDockButton";
 import {
   ContentBoxPriorityActions,
   type HeaderActionItem,
@@ -67,7 +68,14 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
   const isGuidedTutorial = isTutorialActive(userData);
 
   const headerItems: HeaderActionItem[] = hasDesktopMenus
-    ? []
+    ? [
+        {
+          key: "activity",
+          pinned: "start",
+          priority: 0,
+          node: <ActivityDockButton className="experimental-tool" />,
+        },
+      ]
     : [
         {
           key: "player-menu",

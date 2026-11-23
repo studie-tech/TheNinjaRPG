@@ -188,11 +188,11 @@ export function ActivityDock({
               aria-label="Collapse Activity"
               onClick={() => {
                 changeOpen(false);
-                if (document.documentElement.dataset.mobileActivityNav === "true") {
-                  document
-                    .querySelector<HTMLButtonElement>("[data-mobile-activity-trigger]")
-                    ?.focus();
-                }
+                const trigger =
+                  document.documentElement.dataset.mobileActivityNav === "true"
+                    ? "[data-mobile-activity-trigger]"
+                    : "[data-desktop-activity-trigger]";
+                document.querySelector<HTMLButtonElement>(trigger)?.focus();
               }}
             >
               <ChevronDown className="h-4 w-4" />
@@ -225,6 +225,7 @@ export function ActivityDock({
         </Tabs>
       ) : (
         <Button
+          data-activity-launcher
           variant="outline"
           className={cn(
             "bg-card pointer-events-auto h-11 gap-2 rounded-full shadow-lg",

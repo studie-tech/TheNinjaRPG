@@ -1,12 +1,11 @@
 "use client";
 
-import { useAtomValue, useSetAtom } from "jotai";
-import { Compass, Cookie, House, ListChecks } from "lucide-react";
+import { Compass, Cookie, House } from "lucide-react";
 import type { ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { useNativeShell } from "@/hooks/useNativeShell";
+import { ActivityDockButton } from "@/layout/ActivityDockButton";
 import Link from "@/layout/Link";
-import { activityDockRequestAtom, activityDockStateAtom } from "@/libs/activityDock";
 import { openCookieConsentDialog } from "@/libs/cookieConsent";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { MobileNavConfig } from "@/libs/mobileNavConfig";
@@ -60,8 +59,6 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
   const showCookieSettings =
     isNativeShell === false && !isNativeUserAgent(navigator.userAgent);
   const navRef = useRef<HTMLDivElement>(null);
-  const activity = useAtomValue(activityDockStateAtom);
-  const requestActivity = useSetAtom(activityDockRequestAtom);
   useBottomNavInset(navRef);
   return (
     <div
@@ -97,25 +94,11 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
           />
         </div>
       ))}
-      <button
-        type="button"
-        data-mobile-activity-trigger
-        aria-label="Activity"
-        aria-expanded={activity.open}
-        aria-controls={activity.panelId ?? undefined}
-        disabled={!activity.panelId}
-        title="Tutorial & quests"
-        className="focus-visible:outline-ring relative -top-2 flex min-h-[44px] min-w-0 justify-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
-        onClick={() =>
-          requestActivity((current) => ({
-            sequence: current.sequence + 1,
-            userId: activity.userId,
-            open: !activity.open,
-          }))
-        }
-      >
-        <ListChecks className={cn(mobileNavbarButtonClassName, "max-w-full")} />
-      </button>
+      <ActivityDockButton
+        mobile
+        className="relative -top-2 flex min-h-[44px] min-w-0 justify-center"
+        iconClassName={cn(mobileNavbarButtonClassName, "max-w-full")}
+      />
       {centerControl ??
         (location ? (
           <Link
