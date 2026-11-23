@@ -49,10 +49,7 @@ import AutoAttackModal from "@/layout/AutoAttackModal";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
-import {
-  ContentBoxHeaderActions,
-  type HeaderActionItem,
-} from "@/layout/ContentBoxHeaderActions";
+import { ContentBoxHeaderActions } from "@/layout/ContentBoxHeaderActions";
 import { FindSectorPopover, SectorIdField } from "@/layout/FindSectorPopover";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
@@ -81,7 +78,6 @@ export function TravelView({
   hasLocationRequest = false,
   immersive = false,
   isInteractive = true,
-  headerItems = [],
 }: TravelViewProps) {
   const navigation = useContext(TravelNavigationContext);
   const {
@@ -796,7 +792,6 @@ export function TravelView({
         collapsedActionsIconOnly
         headerStartContent={immersive ? undefined : mapTabs}
         topRightContent={immersive ? undefined : mapControls}
-        topRightItems={immersive ? headerItems : undefined}
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
         <div
@@ -1155,8 +1150,6 @@ const SectorLoadingPlaceholder = () => (
 
 interface TravelViewProps {
   session: TravelSession;
-  /** Navigation from an immersive host shares the travel tools’ responsive header. */
-  headerItems?: HeaderActionItem[];
   /** Fill the host’s available map viewport while retaining the page controls. */
   immersive?: boolean;
   /** A building dialog pauses map input and automatic arrival prompts. */

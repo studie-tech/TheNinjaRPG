@@ -239,16 +239,8 @@ describe("responsive experimental menus", () => {
         {children}
       </button>
     ));
-    vi.spyOn(travelHost, "ExperimentalTravelHost").mockImplementation(
-      ({ headerItems }) => (
-        <div aria-label="Map host">
-          {headerItems?.map((item) => (
-            <div key={item.key} data-header-item={item.key}>
-              {item.node}
-            </div>
-          ))}
-        </div>
-      ),
+    vi.spyOn(travelHost, "ExperimentalTravelHost").mockReturnValue(
+      <div aria-label="Map host" />,
     );
   });
 

@@ -508,42 +508,6 @@ it("keeps every priority control in the header row while they fit", () => {
   expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
 });
 
-it("keeps pinned navigation at the edges and outside More through resizes", () => {
-  const view = setupPriority([
-    {
-      key: "game-menu",
-      priority: 10,
-      pinned: "end",
-      node: (
-        <button type="button" id="tutorial-gameBtn">
-          Game menu
-        </button>
-      ),
-    },
-    ...travelLikeItems(),
-    {
-      key: "player-menu",
-      priority: 10,
-      pinned: "start",
-      node: <button type="button">Player menu</button>,
-    },
-  ]);
-  const game = view.getByRole("button", { name: "Game menu" });
-  const player = view.getByRole("button", { name: "Player menu" });
-  for (const width of [176, 88, 800]) {
-    resizeActions(width);
-    expect(view.getByRole("button", { name: "Game menu" })).toBe(game);
-    expect(view.getByRole("button", { name: "Player menu" })).toBe(player);
-    expect(game.closest("[inert]")).toBeNull();
-    expect(player.closest("[inert]")).toBeNull();
-    const buttons = Array.from(
-      view.container.querySelectorAll<HTMLElement>("[data-content-box-actions] button"),
-    ).filter((button) => !button.hidden && !button.closest("[inert]"));
-    expect(buttons[0]).toBe(player);
-    expect(buttons.at(-1)).toBe(game);
-  }
-});
-
 it("keeps a visually hidden heading accessible without reserving toolbar space", () => {
   headerWidth = 250;
   const view = render(

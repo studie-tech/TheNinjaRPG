@@ -4,10 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useContext, useEffect, useRef } from "react";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { useTravelSession } from "@/hooks/useTravelSession";
-import {
-  type HeaderActionItem,
-  REVEAL_CONTENT_BOX_CONTROLS,
-} from "@/layout/ContentBoxHeaderActions";
+import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
@@ -19,21 +16,16 @@ import { travelLocationSchema } from "@/validators/travel";
 export function TravelScreen({
   immersive = false,
   isInteractive = true,
-  headerItems,
 }: TravelScreenProps) {
   return (
     <Suspense fallback={<Loader explanation="Loading travel" />}>
-      <TravelRoute
-        immersive={immersive}
-        isInteractive={isInteractive}
-        headerItems={headerItems}
-      />
+      <TravelRoute immersive={immersive} isInteractive={isInteractive} />
     </Suspense>
   );
 }
 
 /** Travel owns URL requests and redirects; the session can be hosted independently. */
-function TravelRoute({ immersive, isInteractive, headerItems }: TravelScreenProps) {
+function TravelRoute({ immersive, isInteractive }: TravelScreenProps) {
   const session = useTravelSession();
   const { userData, setLocationRequest } = session;
   const searchParams = useSearchParams();
@@ -112,7 +104,6 @@ function TravelRoute({ immersive, isInteractive, headerItems }: TravelScreenProp
     <TravelView
       session={session}
       hasLocationRequest={searchParams.has("sector")}
-      headerItems={headerItems}
       immersive={immersive}
       isInteractive={isInteractive}
     />
@@ -121,7 +112,6 @@ function TravelRoute({ immersive, isInteractive, headerItems }: TravelScreenProp
 }
 
 interface TravelScreenProps {
-  headerItems?: HeaderActionItem[];
   immersive?: boolean;
   isInteractive?: boolean;
 }

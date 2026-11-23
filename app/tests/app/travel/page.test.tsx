@@ -669,22 +669,12 @@ it.each(["World Travel", "Auto Travel"])(
   },
 );
 
-it("renders host navigation above the map and travel tools in the bottom bar", () => {
+it("renders travel tools in the bottom bar", () => {
   const view = render(
     <TravelNavigationHarness>
-      <TravelScreen
-        immersive
-        headerItems={[
-          {
-            key: "host-menu",
-            node: <button type="button">Host menu</button>,
-            priority: 0,
-          },
-        ]}
-      />
+      <TravelScreen immersive />
     </TravelNavigationHarness>,
   );
-  expect(view.getByRole("button", { name: "Host menu" })).toBeTruthy();
   fireEvent.click(view.getByRole("button", { name: "Map controls" }));
   expect(view.getByRole("button", { name: "Quick Travel" })).toBeTruthy();
   expect(view.queryByRole("button", { name: "Expand world" })).toBeNull();

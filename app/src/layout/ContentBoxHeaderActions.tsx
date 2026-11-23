@@ -293,7 +293,7 @@ export function ContentBoxPriorityActions({
   const [isOpen, setIsOpen] = useState(false);
   const baseId = useId();
   const keys = items
-    .map((item) => `${item.key}:${item.priority}:${item.pinned}:${item.node ? 1 : 0}`)
+    .map((item) => `${item.key}:${item.priority}:${item.node ? 1 : 0}`)
     .join(",");
   const menuId = `${baseId}-menu`;
   const itemId = (key: string) => `${baseId}-${key}`;
@@ -436,7 +436,6 @@ export function ContentBoxPriorityActions({
         inert={isFolded}
         className={cn(
           "flex shrink-0 items-center",
-          item.pinned === "start" && "mr-auto",
           // A control keeps its own width in the menu rather than wrapping to fit it.
           place && "absolute z-[46] w-max",
           isFolded && "pointer-events-none invisible",
@@ -456,10 +455,7 @@ export function ContentBoxPriorityActions({
   return (
     <div
       ref={rootRef}
-      className={cn(
-        "relative ml-auto flex flex-row items-center justify-end",
-        items.some((item) => item.pinned) ? "min-w-0 flex-1" : "shrink-0",
-      )}
+      className="relative ml-auto flex shrink-0 flex-row items-center justify-end"
       onKeyDownCapture={(event) => {
         if (
           !isExpanded ||
@@ -487,13 +483,9 @@ export function ContentBoxPriorityActions({
           style={{ width: menu.width, height: menu.height }}
         ></section>
       )}
-      {/* A single keyed list preserves controls as they move into More. Pinned navigation
-          stays at the edges of the row, outside the collapsible controls. */}
+      {/* A single keyed list preserves controls as they move into More. */}
       {[
-        ...items.filter((item) => item.pinned === "start").map(renderItem),
-        ...items
-          .filter((item) => !item.pinned && !menu.places[item.key])
-          .map(renderItem),
+        ...items.filter((item) => !menu.places[item.key]).map(renderItem),
         <Button
           key={MORE_TRIGGER_KEY}
           ref={triggerRef}
@@ -515,7 +507,6 @@ export function ContentBoxPriorityActions({
           )}
         </Button>,
         ...items.filter((item) => menu.places[item.key]).map(renderItem),
-        ...items.filter((item) => item.pinned === "end").map(renderItem),
       ]}
     </div>
   );
@@ -578,22 +569,19 @@ export const layoutHeaderMenu = (
 
 /**
  * The controls that leave the header row: none when all fit; otherwise, with room kept for
- * the "More" trigger and pinned navigation, controls are kept by priority while they fit.
+ * the "More" trigger, controls are kept by priority while they fit.
  */
 export const splitHeaderActions = (
-  items: Pick<HeaderActionItem, "key" | "priority" | "pinned">[],
+  items: Pick<HeaderActionItem, "key" | "priority">[],
   widthOf: (key: string) => number,
   available: number,
   triggerWidth: number,
 ) => {
   const total = items.reduce((sum, item) => sum + widthOf(item.key), 0);
   if (total <= available) return new Set<string>();
-  const pinned = items.filter((item) => item.pinned);
-  let used = triggerWidth + pinned.reduce((sum, item) => sum + widthOf(item.key), 0);
-  const kept = new Set(pinned.map((item) => item.key));
-  for (const item of items
-    .filter((item) => !item.pinned)
-    .sort((a, b) => a.priority - b.priority)) {
+  let used = triggerWidth;
+  const kept = new Set<string>();
+  for (const item of [...items].sort((a, b) => a.priority - b.priority)) {
     const width = widthOf(item.key);
     if (used + width <= available) {
       kept.add(item.key);
@@ -644,8 +632,6 @@ export type HeaderActionItem = {
   node: ReactNode;
   /** Lower stays in the row longer. */
   priority: number;
-  /** Keep navigation visible at this edge of the header, outside the "More" menu. */
-  pinned?: "start" | "end";
   /** Marks the "More" trigger while this control is hidden in it. */
   attention?: boolean;
 };
