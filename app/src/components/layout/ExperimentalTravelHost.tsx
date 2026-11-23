@@ -68,7 +68,9 @@ export function ExperimentalTravelHost({
             event.preventDefault();
             const target = returnFocus.current?.isConnected
               ? returnFocus.current
-              : document.querySelector<HTMLElement>("[data-experimental-travel-link]");
+              : document.querySelector<HTMLElement>(
+                  "[data-experimental-travel-link], [data-experimental-map-navigation] button",
+                );
             target?.focus({ preventScroll: true });
           }}
           onInteractOutside={(event) => {

@@ -1,4 +1,8 @@
 .experimental-game {
+  --experimental-bottom-nav-space: calc(5rem + env(safe-area-inset-bottom));
+  --experimental-header-height: calc(
+    max(0.5rem, env(safe-area-inset-top)) + 44px + 0.5rem + 1px
+  );
   min-height: 100dvh;
   color: var(--theme-text);
   background: var(--theme-bg);
@@ -44,17 +48,63 @@
 .experimental-drawer {
   overflow-y: auto;
 }
+.experimental-game [data-sidebar-title] {
+  color: var(--theme-text);
+}
+/* Equal edge slots keep the map navigation centered between the mobile menu buttons. */
+.experimental-header > [data-content-box-actions],
+.experimental-travel > [data-content-box] > [data-content-box-header] > [data-content-box-actions] {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  width: 100%;
+  flex: 1;
+}
+.experimental-game [data-header-item="player-menu"],
+.experimental-game [data-header-item="game-menu"],
+.experimental-game [data-header-item="map-navigation"],
+.experimental-game [data-header-item="travel-home"] {
+  grid-row: 1;
+  margin: 0;
+}
+.experimental-game [data-header-item="player-menu"] {
+  grid-column: 1;
+}
+.experimental-game [data-header-item="game-menu"] {
+  grid-column: 3;
+}
+.experimental-game [data-header-item="map-navigation"],
+.experimental-game [data-header-item="travel-home"] {
+  grid-column: 2;
+  justify-self: center;
+}
+.experimental-desktop-menu {
+  display: none;
+}
+.experimental-mobile-nav {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 50;
+  height: var(--experimental-bottom-nav-space);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--theme-line);
+  background: var(--theme-surface);
+  color: var(--theme-text);
+}
+.experimental-chat-launcher {
+  position: fixed;
+  bottom: calc(var(--game-bottom-nav-h, 0px) + 1rem);
+}
 .experimental-page {
   width: min(100%, 80rem);
   margin-inline: auto;
   padding: 1rem max(1rem, env(safe-area-inset-right))
-    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    calc(var(--experimental-bottom-nav-space) + var(--activity-dock-space, 0px) + 2rem) max(1rem, env(safe-area-inset-left));
 }
 .experimental-map-main {
   flex: 1;
   min-height: 0;
   /* Keep map controls clear of the home indicator and landscape notch. */
-  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom)
+  padding: 0 env(safe-area-inset-right) var(--experimental-bottom-nav-space)
     env(safe-area-inset-left);
 }
 .experimental-travel {
@@ -117,6 +167,52 @@
   }
   .experimental-building-dialog {
     padding-inline: 0.5rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  html[data-game-layout="experimental"] [data-activity-dock]:not(:has([data-dodge-highlight="true"])) {
+    bottom: calc(var(--game-bottom-nav-h, 0px) + 1rem);
+  }
+}
+
+@media (min-width: 768px) {
+  .experimental-game {
+    --experimental-bottom-nav-space: 0px;
+    --experimental-menu-width: clamp(180px, 18vw, 260px);
+  }
+  .experimental-mobile-nav {
+    display: none;
+  }
+  .experimental-desktop-menu {
+    position: fixed;
+    top: calc(var(--experimental-header-height) + 1rem);
+    bottom: 5rem;
+    z-index: 20;
+    display: block;
+    width: var(--experimental-menu-width);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--theme-line);
+    border-radius: var(--radius);
+    padding: 1rem;
+    background: var(--theme-surface);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
+  }
+  .experimental-player-menu {
+    left: max(1rem, env(safe-area-inset-left));
+  }
+  .experimental-world-menu {
+    right: max(1rem, env(safe-area-inset-right));
+  }
+  .experimental-page {
+    width: calc(100% - 2 * var(--experimental-menu-width) - 4rem);
+  }
+  .experimental-travel [aria-label="Map compass and neighboring sectors"] {
+    left: calc(var(--experimental-menu-width) + 2rem);
+  }
+  .experimental-travel [data-sector-weather] {
+    right: calc(var(--experimental-menu-width) + 2rem);
   }
 }
 

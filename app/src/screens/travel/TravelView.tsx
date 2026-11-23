@@ -744,11 +744,15 @@ export function TravelView({
           immersive
             ? [
                 ...headerItems,
-                { key: "tabs", node: mapTabs, priority: 0 },
                 {
-                  key: "map-controls",
-                  node: <TravelMapControls>{mapControls}</TravelMapControls>,
-                  priority: 1,
+                  key: "map-navigation",
+                  node: (
+                    <div data-experimental-map-navigation className="flex items-center">
+                      {mapTabs}
+                      <TravelMapControls>{mapControls}</TravelMapControls>
+                    </div>
+                  ),
+                  priority: 0,
                 },
               ]
             : undefined

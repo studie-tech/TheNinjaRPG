@@ -2643,7 +2643,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             </span>
           </div>
         </aside>
-        <div className="absolute top-3 right-3 z-10 flex items-start gap-2">
+        <div
+          data-sector-weather
+          className="absolute top-3 right-3 z-10 flex items-start gap-2"
+        >
           <DayNightIndicator
             className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
             previewDate={lightingPreviewDate}

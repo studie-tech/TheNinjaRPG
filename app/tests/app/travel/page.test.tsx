@@ -254,7 +254,7 @@ it.each([false, true])(
         immersive
           ? {
               topRightItems: expect.arrayContaining([
-                expect.objectContaining({ key: "tabs", priority: 0 }),
+                expect.objectContaining({ key: "map-navigation", priority: 0 }),
               ]),
             }
           : {

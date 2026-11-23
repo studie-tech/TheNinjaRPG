@@ -1,9 +1,15 @@
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { createRef, useEffect, useState } from "react";
+import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTypes";
+import { layoutVariantClasses } from "@/components/layout/shared/layoutVariants";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import * as navigation from "@/hooks/navigation";
+import * as media from "@/hooks/useMediaQuery";
+import * as help from "@/layout/LowerRightHelpBtn";
+import { getGameLayout } from "@/libs/gameLayouts";
+import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
 import { useScreenNavigation } from "@/screens/ScreenNavigationContext";
 import * as routing from "@/utils/routing";
 import {
@@ -21,13 +27,22 @@ function MapSession({ isInteractive }: { isInteractive: boolean }) {
       stops++;
     };
   }, []);
-  return <p>Map {isInteractive ? "active" : "paused"}</p>;
+  return (
+    <>
+      <p>Map {isInteractive ? "active" : "paused"}</p>
+      <div data-experimental-map-navigation>
+        <button type="button">Sector</button>
+      </div>
+    </>
+  );
 }
 const dynamicSpy = vi.spyOn(dynamic, "default").mockReturnValue(MapSession as never);
-const { ExperimentalTravelHost } = await import(
-  "@/components/layout/ExperimentalTravelHost"
-);
+const travelHost = await import("@/components/layout/ExperimentalTravelHost");
+const { ExperimentalTravelHost } = travelHost;
 dynamicSpy.mockRestore();
+const { ExperimentalGameLayout } = await import(
+  "@/components/layout/ExperimentalGameLayout"
+);
 let pathname = "/travel";
 const replace = vi.fn();
 
@@ -148,4 +163,138 @@ it("keeps tutorial controls outside a building reachable while the map is inert"
   );
   expect(view.getByRole("button", { name: "Tutorial next" })).toBeTruthy();
   expect(view.getByText("Map paused").parentElement?.hasAttribute("inert")).toBe(true);
+});
+
+it("returns a direct desktop building visit to the persistent map navigation", async () => {
+  pathname = "/bank";
+  const view = render(
+    <ExperimentalTravelHost isGuidedTutorial={false}>
+      <Building />
+    </ExperimentalTravelHost>,
+  );
+  await act(async () => {
+    await flushRadixFocus();
+  });
+  pathname = "/travel";
+  await act(async () => {
+    view.rerender(
+      <ExperimentalTravelHost isGuidedTutorial={false}>
+        <Building />
+      </ExperimentalTravelHost>,
+    );
+    await flushRadixFocus();
+  });
+  await waitFor(() =>
+    expect(
+      document.activeElement === view.getByRole("button", { name: "Sector" }),
+    ).toBe(true),
+  );
+});
+
+describe("responsive experimental menus", () => {
+  let isDesktop = false;
+  const props = (): GameLayoutRenderProps => ({
+    children: <p>Route content</p>,
+    variant: "experimental",
+    userData: { userId: "actor", tutorialOn: true, tutorialStep: 0 } as never,
+    isSignedInLayout: true,
+    isCombatPage: false,
+    navbarMenuItems: [],
+    shownNotifications: [],
+    location: { name: "Horizon", href: "/village" },
+    leftSideBarOpen: false,
+    onLeftSideBarOpenChange: vi.fn(),
+    rightSideBarOpen: false,
+    onRightSideBarOpenChange: vi.fn(),
+    rightSideBarRef: createRef<HTMLDivElement>(),
+    mobileNavConfig: DEFAULT_MOBILE_NAV_CONFIG,
+    signedInIcons: <button type="button">Account</button>,
+    leftSideBar: <p>Player statistics</p>,
+    rightSideBar: (
+      <a id="tutorial-village" href="/village">
+        Horizon Village
+      </a>
+    ),
+    leftSideBarMainMenu: <button type="button">Account controls</button>,
+    handleRightSidebarClick: vi.fn(),
+    lightLayout: false,
+    toggleLightLayout: vi.fn(),
+    imageset: {} as never,
+    variantClasses: layoutVariantClasses.experimental,
+  });
+  beforeEach(() => {
+    isDesktop = false;
+    vi.spyOn(media, "useMediaQuery").mockImplementation(() => isDesktop);
+    vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
+    vi.spyOn(help, "default").mockImplementation(({ children }) => (
+      <button type="button" aria-label="Chat">
+        {children}
+      </button>
+    ));
+    vi.spyOn(travelHost, "ExperimentalTravelHost").mockImplementation(
+      ({ headerItems }) => (
+        <div aria-label="Map host">
+          {headerItems?.map((item) => (
+            <div key={item.key}>{item.node}</div>
+          ))}
+        </div>
+      ),
+    );
+  });
+
+  it("shows both desktop menus without toolbar launchers and keeps tutorial targets mounted once", () => {
+    isDesktop = true;
+    const input = props();
+    const view = render(<ExperimentalGameLayout {...input} />);
+    expect(view.getByRole("complementary", { name: "Player menu" })).toBeTruthy();
+    expect(view.getByRole("complementary", { name: "Game menu" })).toBeTruthy();
+    expect(view.getByText("Player statistics")).toBeTruthy();
+    expect(view.getByRole("button", { name: "Account controls" })).toBeTruthy();
+    const village = view.getByRole("link", { name: "Horizon Village" });
+    expect(input.rightSideBarRef.current?.contains(village)).toBe(true);
+    expect(view.container.querySelectorAll("#tutorial-village")).toHaveLength(1);
+    expect(view.queryByRole("button", { name: "Open player menu" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Open game menu" })).toBeNull();
+    expect(
+      view.queryByRole("button", { name: /Open notifications|Settings/ }),
+    ).toBeNull();
+    expect(getGameLayout("experimental").sidebarBreakpoint).toBe(768);
+  });
+  it("uses mobile corner menus and the shared configured bottom navigation", () => {
+    const input = props();
+    input.mobileNavConfig = { left: ["bank", "itemshop"], right: ["profile", "items"] };
+    const view = render(<ExperimentalGameLayout {...input} />);
+    expect(view.getByRole("button", { name: "Open player menu" })).toBeTruthy();
+    const game = view.getByRole("button", { name: "Open game menu" });
+    expect(game.id).toBe("tutorial-gameBtn");
+    fireEvent.click(game);
+    expect(input.onRightSideBarOpenChange).toHaveBeenCalledWith(true);
+    expect(view.getByRole("link", { name: "Bank" }).getAttribute("href")).toBe("/bank");
+    expect(view.getByRole("link", { name: "Item Shop" }).getAttribute("href")).toBe(
+      "/itemshop",
+    );
+    expect(view.getByRole("link", { name: "Village" }).getAttribute("href")).toBe(
+      "/village",
+    );
+    expect(view.queryByRole("complementary", { name: "Game menu" })).toBeNull();
+    expect(view.queryByText("Player statistics")).toBeNull();
+  });
+  it("moves menu contents between the mobile drawer and desktop without duplicate tutorial targets", async () => {
+    const input = { ...props(), rightSideBarOpen: true };
+    const view = render(<ExperimentalGameLayout {...input} />);
+    expect(view.getByRole("dialog", { name: "Game menu" })).toBeTruthy();
+    expect(
+      input.rightSideBarRef.current?.querySelector("#tutorial-village"),
+    ).toBeTruthy();
+    isDesktop = true;
+    view.rerender(<ExperimentalGameLayout {...input} />);
+    await act(async () => {
+      await flushRadixFocus();
+    });
+    expect(view.queryByRole("dialog", { name: "Game menu" })).toBeNull();
+    expect(view.container.querySelectorAll("#tutorial-village")).toHaveLength(1);
+    expect(
+      input.rightSideBarRef.current?.querySelector("#tutorial-village"),
+    ).toBeTruthy();
+  });
 });
