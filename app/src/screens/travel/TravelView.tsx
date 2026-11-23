@@ -46,10 +46,14 @@ import type {
   TravelSession,
 } from "@/hooks/useTravelSession";
 import AutoAttackModal from "@/layout/AutoAttackModal";
+import { CaravanControlsTrigger } from "@/layout/CaravanControls";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
-import { ContentBoxHeaderActions } from "@/layout/ContentBoxHeaderActions";
+import {
+  ContentBoxHeaderActions,
+  type HeaderActionItem,
+} from "@/layout/ContentBoxHeaderActions";
 import { FindSectorPopover, SectorIdField } from "@/layout/FindSectorPopover";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
@@ -62,7 +66,7 @@ import NavTabs from "@/layout/NavTabs";
 import { TravelArrivalStatus } from "@/layout/TravelArrivalStatus";
 import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { StealthControls } from "@/layout/travel/StealthControls";
-import { mapToolClassName } from "@/layout/travel/styles";
+import { mapIconToolClassName, mapToolClassName } from "@/layout/travel/styles";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
@@ -299,14 +303,16 @@ export function TravelView({
 
   // Controls stay mounted when their disclosure closes so dialogs retain their state.
   const isSectorTools = !isGlobal && activeTab !== "";
-  const travelTools = [
+  const toolClassName = immersive ? mapToolClassName : mapIconToolClassName;
+  const travelTools: HeaderActionItem[] = [
     {
       key: "quick-travel",
+      priority: 0,
       node: (
         <Popover open={isQuickTravelOpen} onOpenChange={setQuickTravelOpen}>
-          <PopoverTrigger aria-label="Quick Travel" className={mapToolClassName}>
+          <PopoverTrigger aria-label="Quick Travel" className={toolClassName}>
             <Search className="h-7 w-7 hover:text-orange-500" />
-            <span>Quick travel</span>
+            {immersive && <span>Quick travel</span>}
           </PopoverTrigger>
           <PopoverContent className="w-72">
             <p className="py-2 font-semibold">Quick Travel</p>
@@ -455,30 +461,33 @@ export function TravelView({
     },
     {
       key: "scout",
+      priority: 7,
       node: isSectorTools && userData.status === "AWAKE" && (
         <button
           type="button"
           aria-label="Scout surrounding sectors"
           aria-pressed={showSorrounding}
-          className={mapToolClassName}
+          className={toolClassName}
           onClick={() => setShowSorrounding((prev) => !prev)}
         >
           <UserRoundSearch
             className={`h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
           />
-          <span className="flex-1">Scout surrounding sectors</span>
+          {immersive && <span className="flex-1">Scout surrounding sectors</span>}
         </button>
       ),
     },
     {
       key: "players",
+      priority: 6,
+      attention: isSectorTools && !tutorialRunning && !showOtherUsers,
       node: isSectorTools && (
         <TooltipProvider delayDuration={50}>
           <Tooltip>
             <TooltipTrigger
               aria-label="Show other players on the map"
               aria-pressed={showOtherUsers}
-              className={mapToolClassName}
+              className={toolClassName}
               onClick={() =>
                 tutorialRunning
                   ? setRevealOthersInTutorial((prev) => !prev)
@@ -490,10 +499,12 @@ export function TravelView({
               ) : (
                 <EyeOff className="h-7 w-7" />
               )}
-              <span className="flex-1">Show other players</span>
-              <span className="text-muted-foreground text-xs">
-                {showOtherUsers ? "On" : "Off"}
-              </span>
+              {immersive && <span className="flex-1">Show other players</span>}
+              {immersive && (
+                <span className="text-muted-foreground text-xs">
+                  {showOtherUsers ? "On" : "Off"}
+                </span>
+              )}
             </TooltipTrigger>
             <TooltipContent>
               {showOtherUsers
@@ -506,8 +517,10 @@ export function TravelView({
     },
     {
       key: "stealth",
+      priority: 1,
       node: isSectorTools && (
         <StealthControls
+          asMenu={immersive}
           onRevealed={(players) => {
             setRevealedPlayers(players);
             setShowRevealedPlayersModal(true);
@@ -517,13 +530,19 @@ export function TravelView({
     },
     {
       key: "operations",
+      priority: 10,
       // Caravans stay out of the tutorial's guided map lessons.
       node: (
-        <WarFieldActions asMenu includeCaravans={isSectorTools && !tutorialRunning} />
+        <WarFieldActions
+          asMenu={immersive}
+          includeCaravans={immersive && isSectorTools && !tutorialRunning}
+        />
       ),
     },
     {
       key: "auto-attack",
+      priority: 2,
+      attention: autoAttackMode,
       node:
         isSectorTools &&
         userData?.anbuId &&
@@ -532,42 +551,40 @@ export function TravelView({
             type="button"
             aria-label="Stop auto-attack"
             aria-pressed={true}
-            className={mapToolClassName}
+            className={toolClassName}
             onClick={() => setAutoAttackMode(false)}
           >
             <Zap className="h-7 w-7 text-red-500" />
-            <span>Stop auto-attack</span>
+            {immersive && <span>Stop auto-attack</span>}
           </button>
         ) : (
           <button
             type="button"
             aria-label="Start auto-attack"
             aria-pressed={false}
-            className={mapToolClassName}
+            className={toolClassName}
             onClick={() => setShowAutoAttackModal(true)}
           >
             <ZapOff className="h-7 w-7 hover:text-red-500" />
-            <span>Start auto-attack</span>
+            {immersive && <span>Start auto-attack</span>}
           </button>
         )),
     },
     {
       key: "find",
+      priority: 8,
+      attention: isGlobal && focusSector !== null,
       node: isGlobal && !isTraveling && (
         <FindSectorPopover
           focusSector={globeFocusSector}
           onFocusSector={setFocusSector}
           triggerAsChild
           trigger={
-            <button
-              type="button"
-              aria-label="Find a sector"
-              className={mapToolClassName}
-            >
+            <button type="button" aria-label="Find a sector" className={toolClassName}>
               <Locate
                 className={`h-7 w-7 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
               />
-              <span>Find a sector</span>
+              {immersive && <span>Find a sector</span>}
             </button>
           }
         />
@@ -575,22 +592,27 @@ export function TravelView({
     },
     {
       key: "ownership",
+      priority: 4,
       node: isGlobal && (
         <TooltipProvider delayDuration={50}>
           <Tooltip>
             <TooltipTrigger
               aria-label="Show sector ownerships and factions"
               aria-pressed={showOwnership}
-              className={mapToolClassName}
+              className={toolClassName}
               onClick={() => setShowOwnership(!showOwnership)}
             >
               <MapPinned
                 className={`h-7 w-7 ${showOwnership ? "text-orange-500" : ""}`}
               />
-              <span className="flex-1">Sector ownership and factions</span>
-              <span className="text-muted-foreground text-xs">
-                {showOwnership ? "On" : "Off"}
-              </span>
+              {immersive && (
+                <span className="flex-1">Sector ownership and factions</span>
+              )}
+              {immersive && (
+                <span className="text-muted-foreground text-xs">
+                  {showOwnership ? "On" : "Off"}
+                </span>
+              )}
             </TooltipTrigger>
             <TooltipContent>Show sector ownerships and factions</TooltipContent>
           </Tooltip>
@@ -599,6 +621,7 @@ export function TravelView({
     },
     {
       key: "join",
+      priority: 11,
       node: joinVillageBtn && (
         <Confirm
           title={`Join Village [${sectorVillage.name}]`}
@@ -606,10 +629,10 @@ export function TravelView({
           button={
             <>
               <GitMerge className="h-7 w-7 hover:text-orange-500" />
-              <span>Join {sectorVillage.name}</span>
+              {immersive && <span>Join {sectorVillage.name}</span>}
             </>
           }
-          triggerClassName={mapToolClassName}
+          triggerClassName={toolClassName}
           triggerLabel={`Join ${sectorVillage.name}`}
           disabled={isJoining}
           isLoading={isJoining}
@@ -627,6 +650,7 @@ export function TravelView({
     },
     {
       key: "hideout",
+      priority: 12,
       node: canCreateHideout && (
         <Confirm
           title="Purchase Hideout"
@@ -634,10 +658,10 @@ export function TravelView({
           button={
             <>
               <HousePlus className="h-7 w-7 hover:text-orange-500" />
-              <span>Purchase hideout</span>
+              {immersive && <span>Purchase hideout</span>}
             </>
           }
-          triggerClassName={mapToolClassName}
+          triggerClassName={toolClassName}
           triggerLabel="Purchase hideout"
           disabled={isCreatingHideout}
           isLoading={isCreatingHideout}
@@ -656,6 +680,29 @@ export function TravelView({
           currently has <b>{userData?.clan?.bank} ryo</b>. Do you want to create your
           faction hideout in this sector?
         </Confirm>
+      ),
+    },
+    {
+      key: "caravans",
+      priority: 8,
+      node: !immersive && isSectorTools && !tutorialRunning && (
+        <CaravanControlsTrigger className={toolClassName} />
+      ),
+    },
+    {
+      key: "expand",
+      priority: 4,
+      node: !immersive && isSectorTools && (
+        <button
+          type="button"
+          aria-label="Expand world"
+          aria-expanded={isWorldExpanded}
+          disabled={!showSector || !SectorComponent}
+          className={toolClassName}
+          onClick={() => setWorldExpanded(true)}
+        >
+          <Maximize2 className="h-7 w-7" aria-hidden />
+        </button>
       ),
     },
   ];
@@ -678,19 +725,6 @@ export function TravelView({
       {travelTools.map(({ key, node }) => (
         <Fragment key={key}>{node}</Fragment>
       ))}
-      {!immersive && isSectorTools && (
-        <button
-          type="button"
-          aria-label="Expand world"
-          aria-expanded={isWorldExpanded}
-          disabled={!showSector || !SectorComponent}
-          className={mapToolClassName}
-          onClick={() => setWorldExpanded(true)}
-        >
-          <Maximize2 className="h-7 w-7" aria-hidden />
-          <span>Fullscreen</span>
-        </button>
-      )}
       {showSector && (
         <fieldset
           aria-label="Loadouts"
@@ -788,10 +822,14 @@ export function TravelView({
           )
         }
         padding={false}
-        collapsedActionsLabel="Map controls"
-        collapsedActionsIconOnly
-        headerStartContent={immersive ? undefined : mapTabs}
-        topRightContent={immersive ? undefined : mapControls}
+        topRightItems={
+          immersive
+            ? undefined
+            : [
+                ...travelTools,
+                { key: "tabs", node: mapTabs, priority: tutorialRunning ? 0 : 3 },
+              ]
+        }
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
         <div
@@ -880,6 +918,12 @@ export function TravelView({
           )}
         </div>
       </ContentBox>
+      {!immersive && showSector && (
+        <div className="flex flex-wrap items-center gap-2 p-1">
+          <JutsuLoadoutSelector size="small" label="Jutsu" compact />
+          <ItemLoadoutSelector size="small" label="Items" compact />
+        </div>
+      )}
       {showSector && userData?.anbuId && autoAttackMode && (
         <div className="flex w-full items-center p-1 text-sm font-semibold text-red-500">
           <Zap className="mr-1 h-4 w-4" />
