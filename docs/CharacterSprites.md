@@ -46,7 +46,7 @@ expanding the equipment layout. It uses the current inventory query, including
 selected variants, so equipment actions and loadout changes update the displayed
 look. Closing the preview releases its renderer and texture leases.
 
-Creation starts from curated, fully editable trait presets. The body selector can follow the gender-derived default or keep an explicit build; profile editing can restore the default.
+Creation starts with random, compatible traits and colours that remain editable. The body selector can follow the gender-derived default or keep an explicit build; profile editing can restore the default.
 
 Skin, eye and hair palettes save directly from their selectors and do not count
 toward the trait limit. Hair styles, face shapes and beard styles are mutually

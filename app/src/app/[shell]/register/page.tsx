@@ -27,7 +27,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -57,13 +56,12 @@ import {
 import { trackConversion } from "@/libs/conversionTracking";
 import { readMetaTracking } from "@/libs/metaTracking";
 import {
-  CHARACTER_CREATION_PRESETS,
   firstInvalidRegistrationStep,
   registrationStepReadiness,
 } from "@/libs/registration";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { getRandomElement } from "@/utils/array";
+import { getRandomElement, shuffle } from "@/utils/array";
 import { isRetryableTrpcError } from "@/utils/error";
 import { secureRandomInt } from "@/utils/math";
 import { safeLocalStorageGetItem } from "@/utils/storage";
@@ -494,7 +492,7 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
   return (
     <div className="grid grid-cols-1 items-start gap-3 px-3 sm:grid-cols-[min(9rem,30%)_minmax(0,1fr)]">
       <CharacterPreview
-        className="w-40 sm:row-span-3 sm:w-full"
+        className="w-40 sm:row-span-2 sm:w-full"
         user={{
           gender,
           spriteBodyStyle: body,
@@ -541,46 +539,6 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           </FormItem>
         )}
       />
-      <div className="min-w-0 space-y-2">
-        <Label htmlFor="character-creation-preset">Starting look</Label>
-        <Select
-          value={
-            CHARACTER_CREATION_PRESETS.find((preset) =>
-              preset.traits.every(
-                (trait, index) => [watchAttr1, watchAttr2, watchAttr3][index] === trait,
-              ),
-            )?.id ?? "custom"
-          }
-          onValueChange={(id) => {
-            const preset = CHARACTER_CREATION_PRESETS.find((entry) => entry.id === id);
-            if (preset)
-              preset.traits.forEach((trait, index) => {
-                form.setValue(
-                  (["attribute_1", "attribute_2", "attribute_3"] as const)[index]!,
-                  trait,
-                  { shouldDirty: true, shouldValidate: true },
-                );
-              });
-          }}
-        >
-          <SelectTrigger id="character-creation-preset" aria-label="Starting look">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="custom" disabled>
-              Custom appearance
-            </SelectItem>
-            {CHARACTER_CREATION_PRESETS.map((preset) => (
-              <SelectItem key={preset.id} value={preset.id}>
-                {preset.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-muted-foreground text-xs">
-          A starting point for your three traits. Every trait and colour stays editable.
-        </p>
-      </div>
       <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
         {(
           [
@@ -918,9 +876,15 @@ const getLocalStorageBoolean = (key: string, defaultValue: boolean): boolean => 
 
 /** Helper to get randomized initial form values */
 const getRandomizedFormValues = () => {
-  const [attr1, attr2, attr3] = (
-    getRandomElement(CHARACTER_CREATION_PRESETS) ?? CHARACTER_CREATION_PRESETS[0]
-  ).traits;
+  const shuffledAttributes = shuffle(attributes);
+  const [attr1, attr2, attr3] = shuffledAttributes
+    .filter(
+      (attribute, index, all) =>
+        !all
+          .slice(0, index)
+          .some((previous) => getAttributeGroup(attribute).includes(previous)),
+    )
+    .slice(0, 3);
 
   return {
     attribute_1: attr1 ?? attributes[0],

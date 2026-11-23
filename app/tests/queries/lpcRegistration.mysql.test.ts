@@ -13,7 +13,6 @@ import {
 } from "@/drizzle/schema";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { spriteLayerSheets } from "@/libs/lpc/catalog";
-import { CHARACTER_CREATION_PRESETS } from "@/libs/registration";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
 import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import { lpcCatalog } from "../setup/lpc";
@@ -45,43 +44,42 @@ describeWithDatabase("fresh character appearance registration", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("persists curated looks with the gender default and starts the guided tutorial", async () => {
+  it("persists traits with the gender default and starts the guided tutorial", async () => {
     const database = await getTestDatabase();
-    for (const [index, preset] of CHARACTER_CREATION_PRESETS.entries()) {
-      const userId = `freshlpc${index}`;
-      const result = await registerCharacter(
-        userId,
-        {
-          username: userId,
-          bloodlineId: "lpc-register-bloodline",
-          gender: "Female",
-          attribute_1: preset.traits[0],
-          attribute_2: preset.traits[1],
-          attribute_3: preset.traits[2],
-        },
-        { database },
-      );
-      expect(result.success, result.message).toBe(true);
-      const user = await findUserDataForQueryUpdatedUser(database, userId);
-      expect(user).toMatchObject({
+    const traits = ["Pixie Hair", "Round features", "Glasses"] as const;
+    const userId = "freshlpc";
+    const result = await registerCharacter(
+      userId,
+      {
+        username: userId,
+        bloodlineId: "lpc-register-bloodline",
         gender: "Female",
-        spriteBodyStyle: null,
-        tutorialOn: true,
-        tutorialStep: 0,
-        rank: "STUDENT",
-      });
-      const appearance = resolveSpriteAppearance(user!);
-      expect(appearance.body).toBe("female");
-      for (const layer of appearance.layers)
-        expect(
-          spriteLayerSheets(lpcCatalog, appearance, layer, "travel").length,
-        ).toBeGreaterThan(0);
-      const saved = await database.query.userAttribute.findMany({
-        where: eq(userAttribute.userId, userId),
-      });
-      for (const trait of preset.traits)
-        expect(saved.some((row) => row.attribute === trait)).toBe(true);
-    }
+        attribute_1: traits[0],
+        attribute_2: traits[1],
+        attribute_3: traits[2],
+      },
+      { database },
+    );
+    expect(result.success, result.message).toBe(true);
+    const user = await findUserDataForQueryUpdatedUser(database, userId);
+    expect(user).toMatchObject({
+      gender: "Female",
+      spriteBodyStyle: null,
+      tutorialOn: true,
+      tutorialStep: 0,
+      rank: "STUDENT",
+    });
+    const appearance = resolveSpriteAppearance(user!);
+    expect(appearance.body).toBe("female");
+    for (const layer of appearance.layers)
+      expect(
+        spriteLayerSheets(lpcCatalog, appearance, layer, "travel").length,
+      ).toBeGreaterThan(0);
+    const saved = await database.query.userAttribute.findMany({
+      where: eq(userAttribute.userId, userId),
+    });
+    for (const trait of traits)
+      expect(saved.some((row) => row.attribute === trait)).toBe(true);
   });
 
   it("retains an explicit build and can restore the gender default without changing traits", async () => {
