@@ -117,4 +117,91 @@ describe("collection objective countdown", () => {
       expect(checkRewards).toHaveBeenCalledTimes(calls);
     },
   );
+
+  describe("claim control", () => {
+    const objective = AllObjectives.parse({
+      id: "train",
+      task: "stats_trained",
+      value: 1,
+      reward_exp: 1000,
+    });
+    const done = QuestTracker.parse({
+      id: "quest",
+      goals: [{ id: "train", done: true, collected: false, value: 1 }],
+    });
+
+    it("labels the claim with the reward and claims on click", () => {
+      const checkRewards = vi.fn();
+      const view = render(
+        <Objective objective={objective} tracker={done} checkRewards={checkRewards} />,
+      );
+      const claim = view.getByRole("button", { name: "Claim 1,000 XP" });
+      expect(claim.id).toBe("tutorial-objective-claim");
+      // A claim names every reward, so a long one wraps in a narrow column.
+      expect(claim.className).toContain("whitespace-normal");
+      expect(claim.className).not.toContain("whitespace-nowrap");
+      fireEvent.click(claim);
+      expect(checkRewards).toHaveBeenCalledTimes(1);
+    });
+
+    it("offers no claim while asleep, grayed out or already collected", () => {
+      const collected = QuestTracker.parse({
+        id: "quest",
+        goals: [{ id: "train", done: true, collected: true, value: 1 }],
+      });
+      const cases = [
+        () => (
+          <Objective
+            objective={objective}
+            tracker={done}
+            checkRewards={vi.fn()}
+            grayedOut
+          />
+        ),
+        () => (
+          <Objective objective={objective} tracker={collected} checkRewards={vi.fn()} />
+        ),
+        () => {
+          Object.assign(actor, { status: "ASLEEP", autoWakeUp: false });
+          return (
+            <Objective objective={objective} tracker={done} checkRewards={vi.fn()} />
+          );
+        },
+      ];
+      for (const element of cases) {
+        const view = render(element());
+        expect(view.queryByRole("button", { name: /^Claim/ })).toBeNull();
+        cleanup();
+      }
+    });
+  });
+
+  describe("travel shortcut", () => {
+    const objective = AllObjectives.parse({
+      id: "walk",
+      task: "move_to_location",
+      sector: 227,
+      longitude: 9,
+      latitude: 6,
+    });
+    const tracker = QuestTracker.parse({ id: "quest", goals: [] });
+
+    it("offers a trip to the objective once the tutorial is over", () => {
+      Object.assign(actor, { tutorialOn: true, tutorialStep: 9999 });
+      const view = render(
+        <Objective objective={objective} tracker={tracker} checkRewards={vi.fn()} />,
+      );
+      expect(view.getByText("Take me there")).toBeTruthy();
+    });
+
+    it("leaves the way there to the tutorial's lesson", () => {
+      Object.assign(actor, { tutorialOn: true, tutorialStep: 0 });
+      const view = render(
+        <Objective objective={objective} tracker={tracker} checkRewards={vi.fn()} />,
+      );
+      expect(view.queryByText("Take me there")).toBeNull();
+      // The sector still shows, as text rather than an auto-travel link.
+      expect(view.getByText("227")).toBeTruthy();
+    });
+  });
 });

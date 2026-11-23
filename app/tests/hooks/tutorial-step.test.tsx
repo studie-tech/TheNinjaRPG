@@ -29,22 +29,26 @@ const { TUTORIAL_STEPS } = steps;
 const store = getDefaultStore();
 let tutorialStep = 0;
 let pathname = "/profile";
+let status = "AWAKE";
 let updateUser = vi.fn();
 let push = vi.fn();
 let replace = vi.fn();
 let mutationOptions: StepMutationOptions | undefined;
+let saveMutation = vi.fn(async (_variables: { step: number }) => ({}));
 
 beforeEach(() => {
   tutorialStep = 0;
   pathname = "/profile";
+  status = "AWAKE";
   updateUser = vi.fn();
   push = vi.fn();
   replace = vi.fn();
   mutationOptions = undefined;
+  saveMutation = vi.fn(async (_variables: { step: number }) => ({}));
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
     () =>
       ({
-        data: { userId: "u1", tutorialOn: true, tutorialStep, status: "AWAKE" },
+        data: { userId: "u1", tutorialOn: true, tutorialStep, status },
         updateUser,
         timeDiff: 0,
       }) as never,
@@ -56,7 +60,7 @@ beforeEach(() => {
       updateTutorialStep: {
         useMutation: (options: StepMutationOptions) => {
           mutationOptions = options;
-          return { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
+          return { mutate: vi.fn(), mutateAsync: saveMutation, isPending: false };
         },
       },
     },
@@ -84,6 +88,17 @@ const renderCounted = () => {
 };
 
 describe("useTutorialStep combat subscriptions", () => {
+  it("keeps a fight begun on another page on the battle page while it loads", () => {
+    tutorialStep = TUTORIAL_STEPS.findIndex((step) => step.id === "mission-find-pup");
+    pathname = "/combat";
+    status = "BATTLE";
+    const { result } = renderHook(() => useTutorialStep());
+    expect(TUTORIAL_STEPS[tutorialStep]?.page).toBe("/travel");
+    expect(result.current.currentStep?.page).toBe("/combat");
+    expect(result.current.currentStep?.elementIds).toEqual([]);
+    expect(result.current.currentStep?.action).toBeUndefined();
+  });
+
   it("ignores battle updates and action selection outside a guided combat lesson", () => {
     const renders = renderCounted();
     const before = renders();
@@ -138,6 +153,86 @@ describe("useTutorialStep combat subscriptions", () => {
     act(() => store.set(UserContext.combatActionIdAtom, "owned-shuriken"));
     expect(result.current.currentStep?.title).toBe("Pick your target");
     expect(result.current.currentStep?.elementIds).toEqual(["tutorial-combat-field"]);
+  });
+});
+
+describe("useTutorialStep after a fight", () => {
+  const examTour = () => TUTORIAL_STEPS.findIndex((step) => step.id === "exam-tour");
+  const examBattle = (leftBattle: boolean) =>
+    makeCompleteBattle({
+      id: "exam",
+      usersState: [
+        makeBattleUser("u1", { leftBattle }),
+        makeBattleUser("clone", { longitude: 2 }),
+      ],
+    });
+
+  it("shows the fight's close as soon as the battle that moved the step on is over", () => {
+    tutorialStep = examTour();
+    pathname = "/combat";
+    status = "BATTLE";
+    act(() => store.set(UserContext.userBattleAtom, examBattle(true)));
+    const { result } = renderHook(() => useTutorialStep());
+    expect(result.current.currentStep?.title).toBe("Battle over");
+    expect(result.current.currentStep?.page).toBe("/combat");
+  });
+
+  it("keeps the step itself while the player is still in a fight", () => {
+    tutorialStep = examTour();
+    pathname = "/combat";
+    status = "BATTLE";
+    act(() => store.set(UserContext.userBattleAtom, examBattle(false)));
+    const { result } = renderHook(() => useTutorialStep());
+    expect(result.current.currentStep).toBe(TUTORIAL_STEPS[tutorialStep]);
+  });
+});
+
+describe("useTutorialStep keyboard shortcuts", () => {
+  const spentTurn = () => {
+    tutorialStep = TUTORIAL_STEPS.findIndex((step) => step.id === "combat-fight");
+    pathname = "/combat";
+    status = "BATTLE";
+    const battle = makeCompleteBattle({
+      activeUserId: "u1",
+      round: 2,
+      roundStartAt: new Date(),
+      usersState: [
+        // A loadout the battle does not list keeps the turn open with too few AP to act.
+        {
+          ...makeBattleUser("u1", { longitude: 0, actionPoints: 5, direction: "left" }),
+          items: undefined as never,
+        },
+        makeBattleUser("enemy", { longitude: 2, direction: "right" }),
+      ],
+    });
+    act(() => store.set(UserContext.userBattleAtom, battle));
+    return renderHook(() => useTutorialStep()).result;
+  };
+
+  it("names the End Turn key where there is a keyboard", () => {
+    const result = spentTurn();
+    expect(result.current.currentStep?.title).toBe("Turn spent");
+    expect(result.current.currentStep?.action).toContain("press W");
+  });
+
+  it("leaves keyboard shortcuts out on touch screens", () => {
+    const matchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(pointer: coarse)",
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+    try {
+      const result = spentTurn();
+      expect(result.current.currentStep?.title).toBe("Turn spent");
+      expect(result.current.currentStep?.action).not.toContain("press W");
+    } finally {
+      if (matchMedia) Object.defineProperty(window, "matchMedia", matchMedia);
+      else delete (window as { matchMedia?: unknown }).matchMedia;
+    }
   });
 });
 
@@ -258,6 +353,19 @@ describe("useTutorialStep step saving", () => {
     );
     expect(updateUser).toHaveBeenLastCalledWith({ tutorialStep });
     expect(replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("useTutorialStep closing words", () => {
+  it("keeps the dashboard step after the claim and saves it only on Finish", async () => {
+    tutorialStep = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-dashboard");
+    const { result } = renderHook(() => useTutorialStep());
+    expect(result.current.currentStep?.advanceOn).toBe("claimStreak");
+    await act(() => result.current.completeTutorialAction("claimStreak"));
+    expect(saveMutation).not.toHaveBeenCalled();
+    expect(result.current.currentStep?.id).toBe("exam-dashboard");
+    await act(() => result.current.handleNextStepAsync());
+    expect(saveMutation).toHaveBeenCalledWith({ step: tutorialStep + 1 });
   });
 });
 

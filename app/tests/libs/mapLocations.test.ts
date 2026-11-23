@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import {
+  getGlobeQuestGoals,
   getQuestMapLocations,
   groupMapLocations,
   publicQuestLocations,
@@ -136,6 +137,105 @@ describe("public quest landmarks", () => {
         },
       ])[0],
     ).toMatchObject({ sector: 1337, longitude: 0, latitude: 0 });
+  });
+});
+
+describe("globe quest goals", () => {
+  const join = DialogObjective.parse({
+    id: "join",
+    task: "dialog",
+    nextObjectiveId: [
+      { text: "Akasumi", nextObjectiveId: "reportA" },
+      { text: "Shirohana", nextObjectiveId: "reportB" },
+    ],
+  });
+  const report = (id: string, sector: number) =>
+    MoveToObjective.parse({
+      id,
+      task: "move_to_location",
+      sector,
+      longitude: 1,
+      latitude: 1,
+      description: `<p>Report&nbsp;in</p>`,
+    });
+  const branching = {
+    ...quest,
+    name: "Road to Genin",
+    content: { objectives: [join, report("reportA", 1335), report("reportB", 222)] },
+  };
+  const branchUser = (goals: unknown[]) =>
+    ({
+      userQuests: [{ questId: "q1", quest: branching, completed: 0, endAt: null }],
+      questData: [{ id: "q1", goals }],
+    }) as unknown as NonNullable<UserWithRelations>;
+
+  it("marks only the branch the player chose", () => {
+    const goals = getGlobeQuestGoals(
+      branchUser([
+        { id: "join", done: true, selectedNextObjectiveId: "reportA" },
+        { id: "reportA", done: false },
+        { id: "reportB", done: false },
+      ]),
+    );
+    expect(goals.map((goal) => goal.sector)).toEqual([1335]);
+    expect(goals[0]).toMatchObject({ quest: "Road to Genin", details: "Report in" });
+  });
+  it("uses the sector the tracker instantiated over the authored one", () => {
+    const goals = getGlobeQuestGoals(
+      branchUser([
+        { id: "join", done: true, selectedNextObjectiveId: "reportA" },
+        { id: "reportA", done: false, sector: 1400 },
+      ]),
+    );
+    expect(goals.map((goal) => goal.sector)).toEqual([1400]);
+  });
+  it("marks nothing for done objectives or finished quests", () => {
+    expect(
+      getGlobeQuestGoals(
+        branchUser([
+          { id: "join", done: true, selectedNextObjectiveId: "reportA" },
+          { id: "reportA", done: true },
+        ]),
+      ),
+    ).toEqual([]);
+    expect(getGlobeQuestGoals(undefined)).toEqual([]);
+  });
+  it("marks a dialog objective only at the destination that names it", () => {
+    const traveller = user([
+      { id: "arrival", done: true, selectedNextObjectiveId: "dialog" },
+      { id: "dialog", done: false },
+    ]);
+    expect(getGlobeQuestGoals(traveller)).toEqual([]);
+    expect(
+      getGlobeQuestGoals(traveller, {
+        questId: "q1",
+        objectiveIds: ["dialog"],
+        sector: 1335,
+      }).map((goal) => goal.sector),
+    ).toEqual([1335]);
+    expect(
+      getGlobeQuestGoals(traveller, {
+        questId: "other",
+        objectiveIds: ["dialog"],
+        sector: 1335,
+      }),
+    ).toEqual([]);
+  });
+  it("marks a dialog objective at its destination, not the sector its tracker rolled", () => {
+    // A dialog tracker records where the player stood when it opened; the lesson's
+    // destination (the sanctuary trip) is where it is answered.
+    const traveller = user([
+      { id: "arrival", done: true, selectedNextObjectiveId: "dialog" },
+      { id: "dialog", done: false, sector: 227 },
+    ]);
+    expect(
+      getGlobeQuestGoals(traveller, {
+        questId: "q1",
+        objectiveIds: ["dialog"],
+        sector: 1335,
+      }).map((goal) => goal.sector),
+    ).toEqual([1335]);
+    expect(getGlobeQuestGoals(traveller)).toEqual([]);
   });
 });
 

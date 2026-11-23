@@ -1,11 +1,16 @@
 "use client";
 
-import { CalendarClock, Coins, Dumbbell, Landmark, Swords } from "lucide-react";
+import { Bot, CalendarClock, Coins, Dumbbell, Landmark, Swords } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { GENIN_EXAM_LEVEL, USER_CAPS } from "@/drizzle/constants";
+import {
+  EXPRESS_TRIALS_SHURIKEN,
+  GENIN_EXAM_LEVEL,
+  USER_CAPS,
+} from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import { getEnergyQueue } from "@/libs/queue";
 import { cn } from "@/libs/shadui";
@@ -21,17 +26,13 @@ export const TutorialScreen: React.FC<{
   onContinue: () => void;
 }> = ({ kind, onContinue }) => (
   <FullScreenDialog>
-    <div className="@container mx-auto flex min-h-full max-w-3xl flex-col items-center justify-center gap-6 px-4 py-8 text-center">
-      {kind === "rankUp" ? <RankUpContent /> : <TomorrowContent />}
-      <Button
-        id="tutorial-screen-continue"
-        size="xl"
-        decoration="gold"
-        className="w-full"
-        onClick={onContinue}
-      >
-        Continue
-      </Button>
+    {/* max-w-7xl is 960px at the 12px root: two readable columns on desktop, one on phones. */}
+    <div className="@container mx-auto flex min-h-full w-full max-w-7xl flex-col justify-center px-4 py-8">
+      {kind === "rankUp" ? (
+        <RankUpContent onContinue={onContinue} />
+      ) : (
+        <TomorrowContent onContinue={onContinue} />
+      )}
     </div>
   </FullScreenDialog>
 );
@@ -80,21 +81,33 @@ export const FullScreenDialogTitle: React.FC<{
 );
 
 /** The Genin promotion: the new village, its colours and what the rank opens up. */
-const RankUpContent: React.FC = () => {
+const RankUpContent: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
   const { data: user } = useRequiredUserDataSelector((u) => ({
     username: u.username,
     rank: u.rank,
     village: u.village,
+    defaultAutoCombat: u.defaultAutoCombat,
   }));
   useEffect(() => {
     void triggerConfetti();
   }, []);
   const village = user?.village;
+  const hasGraphic = !!village?.villageGraphic;
   return (
-    <>
+    // The village art and the text sit side by side from @5xl (768px), stacked below it.
+    // The art takes the right column, where the quest reward toast opens over this screen,
+    // so the headline stays readable while the toast shows.
+    <div
+      className={cn(
+        "grid items-center gap-6 text-center",
+        hasGraphic
+          ? "@5xl:grid-cols-2 @5xl:gap-10 @5xl:text-left"
+          : "mx-auto w-full max-w-2xl",
+      )}
+    >
       {village?.villageGraphic && (
         <div
-          className="relative aspect-[16/9] w-full max-w-xl overflow-hidden rounded-xl border-4"
+          className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border-4 @5xl:order-last @5xl:aspect-[4/3]"
           style={{ borderColor: village.hexColor ?? undefined }}
         >
           <Image
@@ -105,36 +118,46 @@ const RankUpContent: React.FC = () => {
           />
         </div>
       )}
-      <div className="flex flex-col gap-2">
-        <p className="font-semibold text-muted-foreground text-sm uppercase tracking-widest">
-          Promotion
-        </p>
-        <FullScreenDialogTitle className="text-4xl font-bold">
-          Genin of {village?.name ?? "your village"}
-        </FullScreenDialogTitle>
-        <p className="text-lg">
-          {user?.username}, the proctor ties the headband of {village?.name} on your
-          brow. You are a shinobi now.
-        </p>
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
+          <p className="text-muted-foreground text-sm font-semibold tracking-widest uppercase">
+            Promotion
+          </p>
+          <FullScreenDialogTitle className="text-4xl font-bold @5xl:text-5xl">
+            Genin of {village?.name ?? "your village"}
+          </FullScreenDialogTitle>
+          <p className="text-lg">
+            {user?.username}, the proctor ties the headband of {village?.name} on your
+            brow. You are a shinobi now.
+          </p>
+        </div>
+        {/* Two facts a row from @lg (384px), which the text column keeps on desktop. */}
+        <ul className="grid grid-cols-1 gap-3 text-left @lg:grid-cols-2">
+          <ScreenFact icon={<Swords className="h-6 w-6" />} title="Real missions">
+            Your village&apos;s mission hall now gives you D-rank missions.
+          </ScreenFact>
+          <ScreenFact icon={<Dumbbell className="h-6 w-6" />} title="Higher caps">
+            You can now grow far past the Academy&apos;s level{" "}
+            {USER_CAPS.STUDENT.LVL_CAP} limit.
+          </ScreenFact>
+          <ScreenFact icon={<Bot className="h-6 w-6" />} title="Auto combat">
+            {user?.defaultAutoCombat === false
+              ? "Your AI profile can fight non-PvP battles for you. Switch on Auto combat in Battle setup at the arena."
+              : "Your AI profile now fights your non-PvP battles. Tap Auto combat on the battlefield to take over."}
+          </ScreenFact>
+          <ScreenFact icon={<Landmark className="h-6 w-6" />} title="The case file">
+            The academy archives have turned up something you should see. Find Lemu at
+            the Academy.
+          </ScreenFact>
+        </ul>
+        <ContinueButton onContinue={onContinue} />
       </div>
-      <ul className="grid w-full grid-cols-1 gap-3 text-left @lg:grid-cols-3">
-        <ScreenFact icon={<Swords className="h-5 w-5" />} title="Real missions">
-          Your village&apos;s mission hall now gives you D-rank missions.
-        </ScreenFact>
-        <ScreenFact icon={<Dumbbell className="h-5 w-5" />} title="Higher caps">
-          You can now grow far past the Academy&apos;s level {USER_CAPS.STUDENT.LVL_CAP}{" "}
-          limit.
-        </ScreenFact>
-        <ScreenFact icon={<Landmark className="h-5 w-5" />} title="The case file">
-          Lemu has news about that shard. She&apos;ll meet you at the Academy.
-        </ScreenFact>
-      </ul>
-    </>
+    </div>
   );
 };
 
 /** What is waiting tomorrow, so the first evening ends with a reason to return. */
-const TomorrowContent: React.FC = () => {
+const TomorrowContent: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
   const { data: user } = useRequiredUserDataSelector((u) => ({
     bank: u.bank,
     queue: u.queue,
@@ -145,20 +168,17 @@ const TomorrowContent: React.FC = () => {
   const { data: streaks } = api.activityStreak.getUserStreaks.useQuery(undefined, {
     staleTime: 60_000,
   });
-  const recurring =
-    streaks?.streaks.find((streak) => streak.streakType === "RECURRING") ?? null;
-  const rewards = recurring?.allRewards ?? streaks?.activeRecurringConfig?.rewards;
-  const dayTwo = rewards?.find((reward) => reward.dayNumber === 2);
+  const { today, tomorrow } = streakDaysAhead(streaks);
   const queued = user ? getEnergyQueue(user) : [];
   const queuedEnergy = queued.reduce((sum, entry) => sum + entry.energy, 0);
   const now = new Date();
   return (
-    <>
-      <div className="flex flex-col gap-2">
-        <p className="font-semibold text-muted-foreground text-sm uppercase tracking-widest">
+    <div className="flex flex-col items-center gap-6 text-center">
+      <div className="flex max-w-2xl flex-col gap-2">
+        <p className="text-muted-foreground text-sm font-semibold tracking-widest uppercase">
           Before you rest
         </p>
-        <FullScreenDialogTitle className="text-4xl font-bold">
+        <FullScreenDialogTitle className="text-4xl font-bold @5xl:text-5xl">
           Tomorrow
         </FullScreenDialogTitle>
         <p className="text-lg">
@@ -166,44 +186,90 @@ const TomorrowContent: React.FC = () => {
           waiting for you.
         </p>
       </div>
-      <ul className="grid w-full grid-cols-1 gap-3 text-left @lg:grid-cols-2">
-        <ScreenFact icon={<CalendarClock className="h-5 w-5" />} title="Streak day 2">
-          {dayTwo
-            ? `Claim ${describeStreakReward(dayTwo)} on your Dashboard.`
-            : "Come back to claim the next day of your daily streak."}
+      <ul className="grid w-full grid-cols-1 gap-4 text-left @lg:grid-cols-2">
+        <ScreenFact icon={<CalendarClock className="h-6 w-6" />} title="Daily streak">
+          {today && tomorrow
+            ? `Claim day ${today.dayNumber} (${describeStreakReward(today)}) on your Dashboard now, then day ${tomorrow.dayNumber} (${describeStreakReward(tomorrow)}) tomorrow.`
+            : tomorrow
+              ? `Day ${tomorrow.dayNumber} of your streak (${describeStreakReward(tomorrow)}) waits on your Dashboard tomorrow.`
+              : "Claim one day of your streak on your Dashboard every day."}
         </ScreenFact>
-        <ScreenFact icon={<Swords className="h-5 w-5" />} title="Daily duties reset">
-          New daily duties in{" "}
-          {getTimeLeftStr(nextUtcDayAt(now).getTime() - now.getTime())}.
+        <ScreenFact icon={<Swords className="h-6 w-6" />} title="Daily quest">
+          A new daily quest arrives in{" "}
+          {getTimeLeftStr(nextUtcDayAt(now).getTime() - now.getTime())}. Find it under
+          Quests.
         </ScreenFact>
-        <ScreenFact icon={<Dumbbell className="h-5 w-5" />} title="Training">
+        <ScreenFact icon={<Dumbbell className="h-6 w-6" />} title="Training">
           {queuedEnergy > 0
             ? `Your queue trains ${queuedEnergy.toLocaleString()} Energy as it refills, even while you're offline.`
             : "Your Energy refills overnight. Queue it at the training grounds to train while you're away."}
         </ScreenFact>
-        <ScreenFact icon={<Coins className="h-5 w-5" />} title="Bank">
+        <ScreenFact icon={<Coins className="h-6 w-6" />} title="Bank">
           {user && user.bank > 0
-            ? `Your ${user.bank.toLocaleString()} ryo in the bank earn interest every day.`
-            : "Ryo kept in the bank earn interest every day. You'll open an account soon."}
+            ? `You start with ${user.bank.toLocaleString()} ryo in the bank. It earns interest once a day; when it has, press Collect on your Dashboard to take it.`
+            : "Ryo in the bank earn interest once a day; when they have, press Collect on your Dashboard to take it."}
         </ScreenFact>
       </ul>
-    </>
+      <ContinueButton onContinue={onContinue} className="@2xl:max-w-sm" />
+    </div>
   );
 };
+
+/** The single way out of a tutorial screen. */
+const ContinueButton: React.FC<{ onContinue: () => void; className?: string }> = ({
+  onContinue,
+  className,
+}) => (
+  <Button
+    id="tutorial-screen-continue"
+    size="xl"
+    decoration="gold"
+    className={cn("w-full", className)}
+    onClick={onContinue}
+  >
+    Continue
+  </Button>
+);
 
 const ScreenFact: React.FC<{
   icon: React.ReactNode;
   title: string;
   children: React.ReactNode;
 }> = ({ icon, title, children }) => (
-  <li className="flex gap-3 rounded-lg border bg-card p-3">
-    <span className="mt-0.5 text-primary">{icon}</span>
-    <span className="flex flex-col">
-      <b className="text-base">{title}</b>
-      <span className="text-muted-foreground text-sm">{children}</span>
+  <li className="bg-card flex gap-4 rounded-xl border p-4 @5xl:p-5">
+    <span className="bg-primary/10 text-primary h-fit shrink-0 rounded-full p-2">
+      {icon}
+    </span>
+    <span className="flex flex-col gap-1">
+      <b className="text-lg">{title}</b>
+      <span className="text-muted-foreground text-base">{children}</span>
     </span>
   </li>
 );
+
+/** Today's and tomorrow's streak rewards: day 1 is still unclaimed when the screen first shows. */
+export const streakDaysAhead = (
+  data: RouterOutputs["activityStreak"]["getUserStreaks"] | undefined,
+) => {
+  const recurring =
+    data?.streaks.find((streak) => streak.streakType === "RECURRING") ?? null;
+  const rewards = recurring?.allRewards ?? data?.activeRecurringConfig?.rewards ?? [];
+  const todayDay = recurring
+    ? recurring.canClaimToday
+      ? recurring.nextDayNumber
+      : null
+    : rewards.length
+      ? 1
+      : null;
+  const tomorrowDay = recurring?.alreadyClaimedToday
+    ? recurring.nextDayNumber
+    : todayDay
+      ? todayDay + 1
+      : null;
+  const find = (day: number | null) =>
+    day ? rewards.find((reward) => reward.dayNumber === day) : undefined;
+  return { today: find(todayDay), tomorrow: find(tomorrowDay) };
+};
 
 /** The headline of a streak day's reward: ryo, experience or items. */
 const describeStreakReward = (day: StreakDayRewardType) => {
@@ -222,14 +288,15 @@ const describeStreakReward = (day: StreakDayRewardType) => {
 
 /**
  * Express Trials, offered to players who said they have played before: skip the Academy
- * Trials with the experience they would have paid, and pick up at graduation, where the
- * player assigns it, levels up and takes the Genin exam in full. Declining plays the
- * Academy Trials.
+ * Trials with the experience they would have paid and the jutsu and shuriken their lessons
+ * hand out, and pick up at graduation, where the player assigns it, levels up and takes the
+ * Genin exam in full. Declining plays the Academy Trials.
  */
 export const ExpressTrialsScreen: React.FC<{
   examStep: number;
   onDecline: () => void;
 }> = ({ examStep, onDecline }) => {
+  const utils = api.useUtils();
   const { updateUser, prepareUserUpdate } = useRequiredUserDataSelector((u) => ({
     userId: u.userId,
   }));
@@ -238,6 +305,10 @@ export const ExpressTrialsScreen: React.FC<{
     onSuccess: async (result, _variables, context) => {
       showMutationToast(result);
       if (!result.success) return;
+      // The granted jutsu and shuriken join the player's jutsu, loadout and item lists.
+      void utils.jutsu.getUserJutsus.invalidate();
+      void utils.jutsu.getLoadouts.invalidate();
+      void utils.item.getUserItems.invalidate();
       // A withheld patch reads the profile again, Road to Genin included.
       await updateUser(result.userPatch, {
         revision: context?.userRevision,
@@ -247,7 +318,7 @@ export const ExpressTrialsScreen: React.FC<{
   });
   return (
     <FullScreenDialog>
-      <div className="@container mx-auto flex min-h-full max-w-3xl flex-col justify-center gap-5 px-4 py-8">
+      <div className="@container mx-auto flex min-h-full max-w-6xl flex-col justify-center gap-5 px-4 py-8">
         <header className="flex flex-col gap-2 text-center">
           <p className="font-semibold text-muted-foreground text-sm uppercase tracking-widest">
             Welcome back
@@ -255,19 +326,30 @@ export const ExpressTrialsScreen: React.FC<{
           <FullScreenDialogTitle className="text-3xl font-bold">
             Express Trials
           </FullScreenDialogTitle>
-          <p className="text-base">
+          <p className="mx-auto max-w-2xl text-base">
             You know the ropes. Skip the Academy Trials and pick up at graduation with
-            the experience they pay.
+            the experience they pay and the jutsu and tools they teach.
           </p>
         </header>
-        {/* Side by side from @2xl (504px), where both lists keep their lines short. */}
-        <div className="grid gap-3 @2xl:grid-cols-2">
+        {/* Two columns from @2xl (504px) under the full-width grants, three from @5xl
+            (768px), where every list keeps its lines short. */}
+        <div className="grid gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
+          <ExpressList
+            title="You receive"
+            className="@2xl:col-span-2 @5xl:col-span-1"
+            items={[
+              `The experience the trials pay, enough for level ${GENIN_EXAM_LEVEL}`,
+              "Sonic Slash, learned and equipped",
+              `${EXPRESS_TRIALS_SHURIKEN} shuriken in a free item slot`,
+            ]}
+          />
           <ExpressList
             title="Skipped"
             items={[
               "The arena, training, shop and travel lessons",
               "The missing pup and its fight",
               "The Bondkeeper companion",
+              "The trials' other rewards, such as ryo and their badge",
             ]}
           />
           <ExpressList
@@ -279,7 +361,7 @@ export const ExpressTrialsScreen: React.FC<{
             ]}
           />
         </div>
-        <div className="grid gap-2 @lg:grid-cols-2">
+        <div className="mx-auto grid w-full max-w-3xl gap-2 @lg:grid-cols-2">
           <Button
             size="xl"
             decoration="gold"
@@ -305,11 +387,12 @@ export const ExpressTrialsScreen: React.FC<{
 };
 
 /** One column of the Express Trials summary. */
-const ExpressList: React.FC<{ title: string; items: string[] }> = ({
+const ExpressList: React.FC<{ title: string; items: string[]; className?: string }> = ({
   title,
   items,
+  className,
 }) => (
-  <section className="rounded-lg border bg-card p-3">
+  <section className={cn("bg-card rounded-lg border p-3", className)}>
     <h3 className="mb-2 text-base font-semibold">{title}</h3>
     <ul className="list-disc space-y-1 pl-5 text-sm">
       {items.map((item) => (

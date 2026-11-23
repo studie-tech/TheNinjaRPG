@@ -79,6 +79,7 @@ import {
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useJutsuLoadoutCacheUpdate } from "@/hooks/useJutsuLoadoutCacheUpdate";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
 import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
@@ -165,15 +166,31 @@ import { getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserInfo, useRequireInVillage } from "@/utils/UserContext";
 import type { BaseServerResponse } from "@/validators/base";
 
+/** Where the last visited training section is remembered for a player. */
+const trainingTabStorageKey = (userId: string) => `trainingTab:${userId}`;
+
 /** Render the traininggrounds screen independently of its route adapter. */
 export function TrainingScreen() {
   // Ensure user is in village
   const { userData, timeDiff, access } = useRequireInVillage("/traininggrounds");
   const { currentStep } = useTutorialStep();
-  // The tutorial selects the panel containing its highlighted training action.
-  const focusJutsuTraining = isTutorialJutsuPickStep(currentStep);
+  // Tutorial steps select the panel containing their highlighted training action.
+  const tutorialSection = isTutorialJutsuPickStep(currentStep)
+    ? "Jutsu"
+    : currentStep?.advanceOn === "trainStats" ||
+        currentStep?.advanceOn === "queueEnergy"
+      ? "Stats"
+      : null;
   // Null until NavTabs restores the last visited section (or falls back to the first).
   const [section, setSection] = useState<string | null>(null);
+  // A lesson's panel stays selected once the lesson moves on, instead of NavTabs falling
+  // back to the section remembered from before it.
+  const userId = userData?.userId;
+  useEffect(() => {
+    if (!tutorialSection) return;
+    setSection(tutorialSection);
+    if (userId) safeLocalStorageSetItem(trainingTabStorageKey(userId), tutorialSection);
+  }, [tutorialSection, userId]);
   // Links such as a story objective's "Find a sensei" open a section by name.
   useEffect(() => {
     const linked = new URLSearchParams(window.location.search).get("section");
@@ -193,17 +210,11 @@ export function TrainingScreen() {
   const energyQueueLength = getEnergyQueue(userData).length;
   const trainingSections = getTrainingSections(showSenseiSystem);
 
-  // Tutorial steps select the panel containing their highlighted action.
-  const activeSection = focusJutsuTraining
-    ? "Jutsu"
-    : currentStep?.advanceOn === "trainStats" ||
-        currentStep?.advanceOn === "queueEnergy"
-      ? "Stats"
-      : section;
+  const activeSection = tutorialSection ?? section;
 
   // Every user-driven section change is remembered, including Radix keyboard navigation,
   // which bypasses the NavTabs click handler.
-  const sectionStorageKey = `trainingTab:${userData.userId}`;
+  const sectionStorageKey = trainingTabStorageKey(userData.userId);
   const selectSection = (value: string) => {
     safeLocalStorageSetItem(sectionStorageKey, value);
     startTransition(() => setSection(value));
@@ -1240,12 +1251,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   const { prepareTrainingUpdate, updateTraining, refreshTraining } =
     useJutsuTrainingCacheUpdate();
+  const { prepareLoadoutUpdate, updateEquippedLoadout } = useJutsuLoadoutCacheUpdate();
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
     api.jutsu.startTraining.useMutation({
       onMutate: () => ({
         revision: prepareUserUpdate(),
         training: prepareTrainingUpdate(),
+        loadouts: prepareLoadoutUpdate(),
       }),
       onSuccess: async (result, variables, context) => {
         showMutationToast(result);
@@ -1253,7 +1266,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           await updateUser(result, { revision: context.revision, refetch: false });
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
-          await updateUser(result, { revision: context.revision, refetch: false });
+          await Promise.allSettled([
+            updateUser(result, { revision: context.revision, refetch: false }),
+            // An auto-equipped jutsu joined the active loadout.
+            result.equip && updateEquippedLoadout(result.equip, context.loadouts),
+          ]);
           if (variables.jutsuId === TUTORIAL_JUTSU_ID) {
             void completeTutorialAction("trainJutsu");
           }
@@ -1584,21 +1601,24 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                     >
                       Levels to {isQueueing ? "queue" : "train"} (Max: {maxLevelCount})
                     </label>
-                    <NumberInput
-                      id="jutsu-level-count"
-                      inputMode="numeric"
-                      min={1}
-                      max={maxLevelCount}
-                      value={levelCount}
-                      onValueChange={setLevelCount}
-                      emptyFallback={1}
-                      className="w-full"
-                    />
-                    <p className="mt-2 text-muted-foreground text-xs">
-                      {count > 1
-                        ? `Levels ${level + 1}-${level + count}, trained one after another. Each level is priced at the level it trains.`
-                        : `Level ${level + 1}. Raise this to queue further levels of the same jutsu.`}
-                    </p>
+                    {/* A short centred count beside its explanation reads as a value, not an empty field. */}
+                    <div className="flex items-center gap-3">
+                      <NumberInput
+                        id="jutsu-level-count"
+                        inputMode="numeric"
+                        min={1}
+                        max={maxLevelCount}
+                        value={levelCount}
+                        onValueChange={setLevelCount}
+                        emptyFallback={1}
+                        className="w-20 shrink-0 text-center text-base tabular-nums"
+                      />
+                      <p className="min-w-0 flex-1 text-muted-foreground text-xs">
+                        {count > 1
+                          ? `Levels ${level + 1}-${level + count}, trained one after another. Each level is priced at the level it trains.`
+                          : `Level ${level + 1}. Raise this to queue further levels of the same jutsu.`}
+                      </p>
+                    </div>
                   </div>
                 )}
                 {!isPending && isRankedFavoritable(jutsu) && (

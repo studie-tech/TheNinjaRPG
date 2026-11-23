@@ -199,7 +199,7 @@ const cardFor = (
         lead: (
           <p className="text-base leading-relaxed">
             {item.chapter.chapter === 8
-              ? "Remember the shard from the pup's collar? Someone at the Academy archives wants to see you about it. "
+              ? "Remember the shard the masked courier dropped? Someone at the Academy archives wants to see you about it. "
               : `Chapter ${item.chapter.chapter} is ready at the Academy. `}
             {item.navigation === "G3"
               ? isAtAcademy
@@ -222,7 +222,7 @@ const cardFor = (
         eyebrow: `Chapter ${item.chapter.chapter}`,
         lead: (
           <p className="text-base leading-relaxed">
-            Your current objective is in your quest log below.
+            Your current objective is under Quests.
           </p>
         ),
       };

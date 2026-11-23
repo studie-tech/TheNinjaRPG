@@ -138,6 +138,8 @@ export interface ItemWithEffectsProps {
   hideData?: boolean;
   onDelete?: (id: string) => void;
   folderName?: string;
+  /** Per-unit ryo price after the viewer's shop discounts; a lower price strikes through the list price. */
+  shopRyoPrice?: number;
 }
 
 /** Clone the confirmed quest, refresh its listing, and open the saved copy's editor. */
@@ -294,6 +296,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     hideData,
     onDelete,
     folderName,
+    shopRyoPrice,
   } = props;
   // Only the role decides staff links, so other profile changes do not re-render each card.
   const { data: role } = useUserDataSelector((user) => user.role);
@@ -590,6 +593,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             <FurnitureDetails
               item={item as Item}
               showHidden={!!role && canChangeContent(role)}
+              shopRyoPrice={shopRyoPrice}
             />
           )}
           {!hideData && isCardPack && (
@@ -1010,7 +1014,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"cost" in item && item.cost > 0 && (
                 <div className="col-span-2">
-                  <b>Shop Price:</b> {item.cost} ryo
+                  <ShopRyoPrice cost={item.cost} price={shopRyoPrice} />
                 </div>
               )}
               {"repsCost" in item && item.repsCost > 0 && (
@@ -1720,9 +1724,11 @@ const KESSEN_PACKS_TAB_HREF = "/kessen?tab=packs";
 const FurnitureDetails = ({
   item,
   showHidden,
+  shopRyoPrice,
 }: {
   item: Item;
   showHidden: boolean;
+  shopRyoPrice?: number;
 }) => (
   <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
     <p>
@@ -1756,7 +1762,7 @@ const FurnitureDetails = ({
     )}
     {item.cost > 0 && (
       <p className="col-span-2">
-        <b>Shop Price:</b> {item.cost.toLocaleString()} ryo
+        <ShopRyoPrice cost={item.cost} price={shopRyoPrice} />
       </p>
     )}
     {item.repsCost > 0 && (
@@ -1776,4 +1782,19 @@ const FurnitureDetails = ({
       </p>
     )}
   </div>
+);
+
+/** A ryo shop price; a lower price after the viewer's discounts follows the struck-through list price. */
+const ShopRyoPrice = ({ cost, price }: { cost: number; price?: number }) => (
+  <>
+    <b>Shop Price:</b>{" "}
+    {price !== undefined && price < cost ? (
+      <>
+        <s className="text-muted-foreground">{cost.toLocaleString()}</s>{" "}
+        {price.toLocaleString()} ryo
+      </>
+    ) : (
+      `${cost.toLocaleString()} ryo`
+    )}
+  </>
 );

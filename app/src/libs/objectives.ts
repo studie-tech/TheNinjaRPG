@@ -15,7 +15,11 @@ import {
   type QuestRewardType,
   rewardPayloads,
 } from "@/validators/rewardPackages";
-import { ObjectiveReward } from "@/validators/rewards";
+import {
+  hasReward,
+  ObjectiveReward,
+  type ObjectiveRewardType,
+} from "@/validators/rewards";
 
 /**
  * Content id a dialog choice reports. A terminal branch has no follow-up objective, so it
@@ -311,6 +315,43 @@ export const isQuestObjectiveAvailable = (
   if (!currentObjective) return false;
 
   return selectedObjectivePath(objectives, tracker).ids.includes(currentObjective.id);
+};
+
+/**
+ * Whether the finished objective leading to `objectiveId` still holds a reward the player
+ * has not claimed. Any reward check collects it, including a dialog answer, so the
+ * conversation waits for the reward just earned. Older unclaimed rewards elsewhere in the
+ * quest, such as an opening level check, do not hold it.
+ */
+export const hasUnclaimedPredecessorReward = (
+  quest: Pick<Quest, "content">,
+  tracker: QuestTrackerType,
+  objectiveId: string,
+) => {
+  const predecessor = findCompletedPredecessor(
+    quest.content.objectives,
+    objectiveId,
+    tracker,
+  );
+  if (!predecessor) return false;
+  const goal = tracker.goals.find((g) => g.id === predecessor.id);
+  return !!goal?.done && !goal.collected && hasReward(predecessor);
+};
+
+/** Text of a claim button naming the reward's rank, experience and ryo: "Claim Genin rank + 1,200 XP + 300 ryo". */
+export const getRewardClaimLabel = (
+  reward: Partial<
+    Pick<ObjectiveRewardType, "reward_rank" | "reward_exp" | "reward_money">
+  >,
+) => {
+  const parts = [
+    reward.reward_rank && reward.reward_rank !== "NONE"
+      ? `${capitalizeFirstLetter(reward.reward_rank.toLowerCase())} rank`
+      : "",
+    reward.reward_exp ? `${reward.reward_exp.toLocaleString()} XP` : "",
+    reward.reward_money ? `${reward.reward_money.toLocaleString()} ryo` : "",
+  ].filter(Boolean);
+  return parts.length ? `Claim ${parts.join(" + ")}` : "Claim reward";
 };
 
 /**

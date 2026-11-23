@@ -1014,6 +1014,19 @@ export const createTravelActors = (
       const feet = actorFeet(record);
       return { x: feet.x + container.x, y: feet.y + container.y };
     },
+    /** The viewer's first objective marker: its foot in window coordinates and its tile's height. */
+    questMarker: () => {
+      for (const [key, record] of records) {
+        if (!key.startsWith("quest:")) continue;
+        const feet = actorFeet(record);
+        return {
+          x: feet.x + container.x,
+          y: feet.y + container.y,
+          size: record.recipe.tile.height,
+        };
+      }
+      return undefined;
+    },
     /** World-space extent and paint depth of a user's actor; scenery above that depth covers it. */
     body: (userId: string) => {
       const record = records.get(`user:${userId}`);

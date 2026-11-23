@@ -28,6 +28,8 @@ import {
   COST_TAVERN_COLOR_CHANGE,
   type CombatStatName,
   CombatStatNames,
+  DURABILITY_MAX_DEFAULT,
+  EXPRESS_TRIALS_SHURIKEN,
   GENIN_EXAM_LEVEL,
   getUserCaps,
   KAGE_MIN_PRESTIGE,
@@ -45,6 +47,8 @@ import {
   SKILL_TREE_REQUIRED_RANK,
   TERRITORY_WAR_BOOST_PERCENT,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
+  TUTORIAL_ITEM_ID,
+  TUTORIAL_JUTSU_ID,
   TUTORIAL_STARTER_QUEST_ID,
   TUTORIAL_STEPS_COUNT,
   UserRanks,
@@ -59,6 +63,7 @@ import {
   type SageMode,
   type UserData,
   type UserItem,
+  type UserItemWithRelations,
   type UserJutsu,
   type UserQuest,
   type UserQueue,
@@ -86,6 +91,9 @@ import {
   getGlobalGameSettingNotifications,
 } from "@/libs/gameSettingBoost";
 import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
+import { canEquipAdditional, findFreeEquipSlot } from "@/libs/item";
+import { getJutsuCapFlags } from "@/libs/jutsu";
+import { calcJutsuEquipLimit, checkJutsuBloodlineItem } from "@/libs/jutsuRequirements";
 import type { SpriteUser } from "@/libs/lpc/appearance";
 import {
   effectiveMasteries,
@@ -143,6 +151,7 @@ import {
 import { hasRequiredRank } from "@/libs/rank";
 import { createThumbnail } from "@/libs/replicate";
 import { reservedContentDeletionError } from "@/libs/reservedContent";
+import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
 import { STORY_SYSTEM_IDS } from "@/libs/storyGuidance";
 import { getTerritoryWarBoost, getTerritoryWarBoostUntil } from "@/libs/territoryWar";
@@ -167,7 +176,13 @@ import { incrementUserBank } from "@/queries/bank";
 import { fetchClan } from "@/queries/clan";
 import { claimDungeonQueue, findActiveDungeonRun } from "@/queries/dungeon";
 import { listHuntingHabitats } from "@/queries/hunting";
-import { fetchJutsu } from "@/queries/jutsu";
+import { fetchItem, insertUserItems } from "@/queries/item";
+import {
+  fetchJutsu,
+  updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically,
+  updateUserJutsuForRollbackEquipIfOverCap,
+} from "@/queries/jutsu";
+import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
 import { fetchKageReplacement } from "@/queries/kage";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
 import {
@@ -224,6 +239,7 @@ import {
   insertUserItemForCloneAi,
   insertUserJutsuForApplyUserContentChanges,
   insertUserJutsuForCloneAi,
+  insertUserJutsuForExpressTrials,
   insertUserNindoForCloneAi,
   insertUserNindoForUpdateNindo,
   insertUserVoteForFetchUpdatedUserOnce,
@@ -248,6 +264,7 @@ import {
   selectSupportTicketForGetUser,
   selectUserDataForCountOnlineUsers,
   selectUserDataForLevelUp,
+  selectUserItemForExpressTrials,
   selectUserItemForGetSidebarTimers,
   selectUserItemImbuementForGetSidebarTimers,
   selectUserJutsuForFetchJutsuTimers,
@@ -646,7 +663,9 @@ export const profileRouter = createTRPCRouter({
       };
     }),
   // Returning players skip the Academy Trials and receive the experience for the level the
-  // Genin exam asks for; they assign it and level up themselves before the exam.
+  // Genin exam asks for; they assign it and level up themselves before the exam. They also
+  // receive what the skipped jutsu and shop lessons hand out: Sonic Slash, learned and
+  // equipped, and shuriken in a free tool slot.
   startExpressTrials: protectedProcedure
     .meta({ mcp: { description: "Skip the Academy Trials as a returning player" } })
     .input(z.object({ step: z.number().int().min(0).max(TUTORIAL_STEPS_COUNT) }))
@@ -655,9 +674,17 @@ export const profileRouter = createTRPCRouter({
       const [
         { user, requiresProgressionRefresh, publishedAchievementIds },
         roadToGenin,
+        sonicSlash,
+        shuriken,
+        [ownedShuriken],
+        caps,
       ] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchQuest(ctx.drizzle, TUTORIAL_GENIN_EXAM_QUEST_ID),
+        fetchJutsu(ctx.drizzle, TUTORIAL_JUTSU_ID),
+        fetchItem(ctx.drizzle, TUTORIAL_ITEM_ID),
+        selectUserItemForExpressTrials(ctx.drizzle, ctx.userId, TUTORIAL_ITEM_ID),
+        fetchJutsuEquipCaps(ctx.drizzle),
       ]);
       if (!user) return errorResponse("User not found");
       const starter = user.userQuests?.find(
@@ -714,8 +741,60 @@ export const profileRouter = createTRPCRouter({
           },
         ],
       };
+      // The jutsu lesson's auto-equip: equipped on insert when the player may use it,
+      // then the over-cap rollback below settles concurrent equips.
+      const jutsuGrant = sonicSlash && {
+        id: nanoid(),
+        userId: ctx.userId,
+        jutsuId: sonicSlash.id,
+        equipped:
+          hasRequiredSkill(sonicSlash, user) &&
+          checkJutsuBloodlineItem(sonicSlash, user.items),
+      };
+      // The shop lesson's purchase, placed in a free tool slot as the shop places it. Only
+      // a player who owns no shuriken gets them; the claim above admits one skip, and a
+      // purchase racing it is the player's own and only adds shuriken.
+      const shurikenSlot =
+        shuriken &&
+        user.level >= shuriken.requiredLevel &&
+        hasRequiredSkill(shuriken, user) &&
+        canEquipAdditional(
+          shuriken,
+          user.items.map((entry) => ({
+            slot: entry.equipped,
+            itemType: entry.item.itemType,
+            bloodlineId: entry.item.bloodlineId,
+          })),
+        ) === null
+          ? findFreeEquipSlot(shuriken.slot, user.items)
+          : undefined;
+      const shurikenGrant: UserItem | undefined =
+        shuriken && !ownedShuriken
+          ? {
+              id: nanoid(),
+              userId: ctx.userId,
+              itemId: shuriken.id,
+              createdAt: result.claimedAt,
+              updatedAt: result.claimedAt,
+              quantity: Math.min(EXPRESS_TRIALS_SHURIKEN, shuriken.stackSize),
+              equipped: shurikenSlot ?? "NONE",
+              level: 1,
+              experience: 0,
+              durability: DURABILITY_MAX_DEFAULT,
+              storedAtHome: false,
+              homeX: null,
+              homeY: null,
+              homeRotation: 0,
+              homeRoom: "main",
+              isInAuction: false,
+              craftingFinishedAt: null,
+              activeVariantId: null,
+              fortification: null,
+              dropChancePerc: 0,
+            }
+          : undefined;
       // The skipped trials end by handing out the Road to Genin; hand it out here instead.
-      const [, assigned] = await Promise.all([
+      const [, assigned, learned] = await Promise.all([
         updateQuestHistoryForExpressTrials(
           ctx.drizzle,
           ctx.userId,
@@ -724,17 +803,85 @@ export const profileRouter = createTRPCRouter({
         roadToGenin
           ? upsertQuestEntry(ctx.drizzle, skipped, roadToGenin, "system")
           : undefined,
+        jutsuGrant
+          ? insertUserJutsuForExpressTrials(ctx.drizzle, jutsuGrant)
+          : undefined,
+        shurikenGrant ? insertUserItems(ctx.drizzle, [shurikenGrant]) : undefined,
       ]);
+      const keptEquipped =
+        !!jutsuGrant?.equipped &&
+        !!sonicSlash &&
+        learned?.rowsAffected === 1 &&
+        (
+          await retryOnDeadlock(() =>
+            updateUserJutsuForRollbackEquipIfOverCap(
+              ctx.drizzle,
+              jutsuGrant.id,
+              ctx.userId,
+              calcJutsuEquipLimit(user),
+              getJutsuCapFlags(sonicSlash),
+              caps,
+            ),
+          )
+        ).rowsAffected === 0;
+      // The equipped jutsu joins the active loadout, which the loadout page and the
+      // "No jutsu equipped!" notice read; a first loadout is later made from equipped rows.
+      const loadoutId = keptEquipped ? user.jutsuLoadout : null;
+      const loadoutBaseline = user.loadout?.jutsuIds ?? [];
+      const loadoutSynced =
+        !loadoutId ||
+        (
+          await updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically(
+            ctx.drizzle,
+            TUTORIAL_JUTSU_ID,
+            loadoutId,
+            ctx.userId,
+            loadoutBaseline,
+          )
+        ).rowsAffected === 1;
+      if (loadoutId && !loadoutSynced) {
+        // The loadout changed since it was read: append without the baseline, and let the
+        // client read the profile again instead of projecting it.
+        await updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically(
+          ctx.drizzle,
+          TUTORIAL_JUTSU_ID,
+          loadoutId,
+          ctx.userId,
+        );
+      }
+      // Equipped shuriken count toward the derived limits the progression patch carries.
+      const granted =
+        shurikenGrant && shuriken && shurikenGrant.equipped !== "NONE"
+          ? {
+              ...skipped,
+              items: [
+                ...skipped.items,
+                {
+                  ...shurikenGrant,
+                  item: shuriken,
+                  activeVariant: null,
+                  imbuements: [],
+                },
+              ],
+            }
+          : undefined;
       return {
         success: true,
-        message: "Academy Trials skipped. The Genin exam awaits you on Wake Island.",
+        message:
+          "Academy Trials skipped. Sonic Slash and shuriken are in your kit, and the Genin exam awaits you on Wake Island.",
         ...getExpressTrialsUserUpdate({
           step: input.step,
           sector: MAP_WAKE_ISLAND_SECTOR,
           progression:
-            !requiresProgressionRefresh && assigned?.userCacheEligible
-              ? getUserProgressionUpdate(skipped, publishedAchievementIds)
+            !requiresProgressionRefresh && assigned?.userCacheEligible && loadoutSynced
+              ? getUserProgressionUpdate(granted ?? skipped, publishedAchievementIds)
               : undefined,
+          // The profile read loads each equipped row with its item and imbuements, the
+          // shape the profile cache holds.
+          items: granted?.items as UserItemWithRelations[] | undefined,
+          learnedJutsu: loadoutId
+            ? { loadoutJutsuIds: loadoutBaseline, jutsuId: TUTORIAL_JUTSU_ID }
+            : undefined,
         }),
       };
     }),

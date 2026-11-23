@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "bun:test";
 import { type Mesh, UniformGroup } from "pixi.js";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createGlobeMarkers } from "@/libs/rendering/scenes/globeMarkers";
+import { globeProject } from "@/libs/rendering/scenes/globeProjection";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -62,6 +63,43 @@ it("moves the character and its ring without rebuilding marker textures or other
     markers.move("traveler", next);
     expect(updated).toHaveBeenCalledTimes(1);
     expect(context.ellipse).toHaveBeenCalledTimes(drawn);
+  } finally {
+    for (const cleanup of cleanups) cleanup();
+    markers.container.destroy();
+  }
+});
+
+it("selects a landmark's sector from its banner and its pole, not the tile behind the pole", () => {
+  const context = new Proxy({} as Record<string, unknown>, {
+    get: (target, key) => (key in target ? target[key as string] : vi.fn()),
+    set: (target, key, value) => {
+      target[key as string] = value;
+      return true;
+    },
+  }) as unknown as CanvasRenderingContext2D;
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+    () => context as never,
+  );
+  const cleanups: (() => void)[] = [];
+  const game = {
+    signal: new AbortController().signal,
+    own: (fn: () => void) => cleanups.push(fn),
+  } as unknown as GameRenderer;
+  const camera = { longitude: 0, latitude: 0, distance: 20, width: 390, height: 390 };
+  const markers = createGlobeMarkers(game, new UniformGroup({}), camera, 10);
+  try {
+    const point = { x: 10, y: 0, z: 0 };
+    markers.set([
+      { kind: "label", sector: 222, point, text: "Wake Island", clickable: true },
+    ]);
+    const foot = globeProject(point, camera);
+    const at = (dx: number, dy: number) =>
+      markers.pick(foot.x + dx * foot.scale, foot.y - dy * foot.scale);
+    expect(at(0, 1.5)).toBe(222);
+    expect(at(0.05, 0.5)).toBe(222);
+    expect(at(-0.3, 0.2)).toBe(222);
+    expect(at(0.9, 0.5)).toBeNull();
+    expect(at(0, -0.3)).toBeNull();
   } finally {
     for (const cleanup of cleanups) cleanup();
     markers.container.destroy();

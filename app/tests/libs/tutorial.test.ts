@@ -21,10 +21,12 @@ import {
   getTutorialCombatCoaching,
   getTutorialCombatGuidance,
   getTutorialHighlightedQuestId,
+  getTutorialObjectiveSector,
   getTutorialRewindStepIndex,
   getTutorialStepPath,
   getTutorialStrandedBattleStepId,
   getTutorialTakeQuestId,
+  getTutorialTripPhase,
   hasOutgrownTutorial,
   isStarterObjectiveSatisfied,
   isTutorialActive,
@@ -44,6 +46,7 @@ import {
   TUTORIAL_WAKE_TRAVEL_STEP_ID,
   TutorialTriggers,
 } from "@/libs/tutorial";
+import type * as TutorialSteps from "@/libs/tutorialSteps";
 
 /**
  * Read the step source and slice it to the array, so `id:` keys elsewhere in
@@ -293,6 +296,16 @@ describe("tutorial highlight placement", () => {
 });
 
 describe("TUTORIAL_STEPS", () => {
+  it("ends on the dashboard with closing words that wait for Finish", () => {
+    const last = TUTORIAL_STEPS.at(-1);
+    expect(last?.id).toBe("exam-dashboard");
+    expect(last?.advanceOn).toBe("claimStreak");
+    expect(last?.afterAction?.action).toBeTruthy();
+    expect(last?.afterAction?.nextLabel).toBe("Finish");
+    // Finish belongs to the closing words; before the claim the step offers no way on.
+    expect(last?.showNextButton).toBeUndefined();
+    expect(last?.nextLabel).toBeUndefined();
+  });
   it("teaches travel on the globe, pointing at less the second time", () => {
     // Travel steps share one element list defined above the step array.
     const source = readFileSync(
@@ -312,10 +325,13 @@ describe("TUTORIAL_STEPS", () => {
     ]);
     const first = stepBlock(TUTORIAL_CAPTURE_TRAVEL_STEP_ID);
     expect(first).toContain('"tutorial-globe-target", "tutorial-Global"');
-    // The second trip leaves finding the Global tab to the player.
+    // The second trip points at its entry, the Global tab, and the lesson's own trip.
     const second = stepBlock(TUTORIAL_WAKE_TRAVEL_STEP_ID);
-    expect(second).toContain('"tutorial-globe-target"');
-    expect(second).not.toContain('"tutorial-Global"');
+    expect(second).toContain(
+      'elementIds: ["tutorial-auto-travel-proceed", "tutorial-Global"]',
+    );
+    expect(second).not.toContain("globalTravelElements");
+    expect(second).not.toContain('"tutorial-globe-target"');
     for (const block of [first, second]) {
       expect(block).toContain("teachOnPage: true");
       expect(block).toMatch(/autoTravelLabel: "[^"]+"/);
@@ -399,9 +415,9 @@ describe("TUTORIAL_STEPS", () => {
     }
   });
 
-  it("gives every single-action step a way forward", () => {
-    // A step that waits for a purchase or training can fail for reasons the
-    // lesson does not cover (no ryo, a full slot), so it carries Next as well.
+  it("asks for a purchase or training itself, with the stuck-step skip as the way past", () => {
+    // A purchase or training lesson waits for the action; if it fails, the stuck-step
+    // skip offers a way past.
     for (const stepId of [
       TUTORIAL_ITEM_BUY_STEP_ID,
       "tools-train-stat",
@@ -410,7 +426,7 @@ describe("TUTORIAL_STEPS", () => {
       "bond-adopt",
       "exam-dashboard",
     ]) {
-      expect(stepBlock(stepId)).toContain("showNextButton: true");
+      expect(stepBlock(stepId)).not.toContain("showNextButton");
     }
   });
 
@@ -1072,6 +1088,89 @@ describe("getTutorialCatchUpStepIndex on Road to Genin", () => {
   });
 });
 
+describe("getTutorialObjectiveSector", () => {
+  const [akasumi, shirohana] = GENIN_QUEST_OBJECTIVES.report;
+  const geninQuest = {
+    id: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    consecutiveObjectives: true,
+    content: {
+      objectives: [
+        {
+          id: "join",
+          task: "dialog",
+          nextObjectiveId: [
+            { text: "Akasumi", nextObjectiveId: akasumi },
+            { text: "Shirohana", nextObjectiveId: shirohana },
+          ],
+        },
+        { id: akasumi, task: "move_to_location", sector: 1335 },
+        { id: shirohana, task: "move_to_location", sector: 724 },
+      ],
+    },
+  };
+  const step = {
+    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    objectiveId: GENIN_QUEST_OBJECTIVES.report,
+  };
+  const geninUser = (goals: Record<string, unknown>[]) =>
+    ({
+      userQuests: [
+        { questId: TUTORIAL_GENIN_EXAM_QUEST_ID, endAt: null, quest: geninQuest },
+      ],
+      questData: [{ id: TUTORIAL_GENIN_EXAM_QUEST_ID, goals }],
+    }) as unknown as Parameters<typeof getTutorialObjectiveSector>[1];
+
+  it("returns the sector of the branch the player chose", () => {
+    const user = geninUser([
+      { id: "join", done: true, selectedNextObjectiveId: akasumi },
+      { id: akasumi, done: false },
+      { id: shirohana, done: false },
+    ]);
+    expect(getTutorialObjectiveSector(step, user)).toBe(1335);
+  });
+  it("prefers the sector the tracker instantiated", () => {
+    const user = geninUser([
+      { id: "join", done: true, selectedNextObjectiveId: akasumi },
+      { id: akasumi, done: false, sector: 1400 },
+    ]);
+    expect(getTutorialObjectiveSector(step, user)).toBe(1400);
+  });
+  it("returns null when the active objective is not one the step names", () => {
+    const user = geninUser([{ id: "join", done: false }]);
+    expect(getTutorialObjectiveSector(step, user)).toBeNull();
+    expect(getTutorialObjectiveSector({ relatedValue: 1335 }, user)).toBeNull();
+  });
+
+  describe("getTutorialTripPhase", () => {
+    const reporting = geninUser([
+      { id: "join", done: true, selectedNextObjectiveId: akasumi },
+      { id: akasumi, done: false },
+    ]);
+    it("follows a trip to the objective's sector until the player stands in it", () => {
+      expect(getTutorialTripPhase(step, { ...reporting, sector: 222 })).toBeUndefined();
+      expect(
+        getTutorialTripPhase(step, { ...reporting, sector: 222, status: "TRAVEL" }),
+      ).toBe("travelling");
+      expect(
+        getTutorialTripPhase(step, { ...reporting, sector: 1335, status: "AWAKE" }),
+      ).toBe("arrived");
+    });
+    it("goes to a travel step's own sector", () => {
+      const trip = { advanceOn: "travelArrive" as const, relatedValue: 227 };
+      expect(getTutorialTripPhase(trip, { sector: 227 })).toBe("arrived");
+      expect(getTutorialTripPhase(trip, { sector: 12, status: "TRAVEL" })).toBe(
+        "travelling",
+      );
+    });
+    it("has nothing to say for a step without a destination", () => {
+      expect(
+        getTutorialTripPhase({ relatedValue: "quest" }, { status: "TRAVEL" }),
+      ).toBeUndefined();
+      expect(getTutorialTripPhase(undefined, { status: "TRAVEL" })).toBeUndefined();
+    });
+  });
+});
+
 describe("getTutorialStrandedBattleStepId", () => {
   const O = STARTER_QUEST_OBJECTIVES;
   const activeQuest = { questId: TUTORIAL_STARTER_QUEST_ID, completed: 0, endAt: null };
@@ -1205,5 +1304,33 @@ describe("getTutorialStrandedBattleStepId", () => {
       getTutorialStrandedBattleStepId(steps, pupIndex, user, "/travel"),
     ).toBeUndefined();
     expect(getTutorialStrandedBattleStepId(steps, 0, user, "/village")).toBeUndefined();
+  });
+});
+
+// Assistant suites replace the steps module, and Bun keeps module mocks across files.
+const realStepsPath = "../../src/libs/tutorialSteps.tsx?real";
+const { TUTORIAL_STEPS, lessonReadingSeconds } = (await import(
+  realStepsPath
+)) as typeof TutorialSteps;
+
+describe("lessonReadingSeconds", () => {
+  it("counts the words of text and element descriptions, ignoring markup", () => {
+    expect(
+      lessonReadingSeconds({
+        description: "Open the <b>Global</b> tab.",
+        action: "Go.",
+      }),
+    ).toBeCloseTo(5 * 0.3);
+    const step = TUTORIAL_STEPS.find((entry) => entry.id === "mission-find-pup")!;
+    expect(typeof step.description).not.toBe("string");
+    expect(lessonReadingSeconds(step)).toBeGreaterThan(10);
+  });
+
+  it("offers a lesson's own button before the stuck step's skip", () => {
+    for (const step of TUTORIAL_STEPS.filter(
+      (entry) => entry.teachOnPage || entry.questsTab,
+    )) {
+      expect(lessonReadingSeconds(step) + 10).toBeLessThan(60);
+    }
   });
 });

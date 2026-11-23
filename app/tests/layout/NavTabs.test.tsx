@@ -156,6 +156,23 @@ describe("optional tab remembering", () => {
     );
     view.getByRole("button", { name: "Sharing 2 notifications" });
   });
+  it("gives each tab a tutorial id unless its item id leaves one out", () => {
+    const view = render(
+      <NavTabs
+        current="Character"
+        options={options}
+        remember={false}
+        itemId={(option) => (option === "Character" ? undefined : `tutorial-${option}`)}
+      />,
+    );
+    expect(view.container.querySelector("#tutorial-Dashboard")).not.toBeNull();
+    expect(view.container.querySelector("#tutorial-Character")).toBeNull();
+    cleanup();
+    const plain = render(
+      <NavTabs current="Character" options={options} remember={false} />,
+    );
+    expect(plain.container.querySelector("#tutorial-Character")).not.toBeNull();
+  });
   it("ignores a saved tab and does not write clicks when remembering is off", () => {
     const read = vi
       .spyOn(storage, "safeLocalStorageGetItem")

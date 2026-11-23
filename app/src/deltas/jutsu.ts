@@ -17,6 +17,7 @@ export const getStartedJutsuUserUpdate = ({
   requiresProgressionRefresh,
   publishedAchievementIds,
   equippedJutsus,
+  equip,
 }: {
   user: Parameters<typeof getSavedTrainingQueueUserUpdate>[0]["user"];
   cost: number;
@@ -25,6 +26,8 @@ export const getStartedJutsuUserUpdate = ({
   requiresProgressionRefresh: boolean;
   publishedAchievementIds: readonly string[];
   equippedJutsus?: { jutsuId: string }[];
+  /** A learned jutsu auto-equipped into the active loadout, whose saved order matched `loadout`. */
+  equip?: { jutsuId: string; equipped: boolean; loadout?: { jutsuIds: string[] } };
 }) => {
   const projection: Pick<UserDeltaResponse, "userPatch" | "achievementProgress"> =
     getSavedTrainingQueueUserUpdate({
@@ -38,6 +41,9 @@ export const getStartedJutsuUserUpdate = ({
     userPatch: projection.userPatch
       ? {
           ...projection.userPatch,
+          ...(equip?.loadout
+            ? getEquippedJutsuUserPatch(equip.loadout.jutsuIds, equip)
+            : {}),
           ...(equippedJutsus
             ? {
                 jutsus: equippedJutsus.map(({ jutsuId }) => ({ jutsuId })),

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
-import { type ReactNode, useMemo } from "react";
+import { type ImgHTMLAttributes, type ReactNode, useMemo } from "react";
 import * as client from "@/app/_trpc/client";
 import * as dialogComponents from "@/components/ui/dialog";
 import * as sortableList from "@/components/ui/sortable-list";
@@ -49,7 +49,6 @@ function testMocks() {
       rewardHook: ReturnType<typeof vi.fn>;
       step: TutorialStepConfig;
       stepNumber: number;
-      visible: boolean;
       next: ReturnType<typeof vi.fn>;
     };
   };
@@ -70,7 +69,6 @@ function testMocks() {
     },
     next: vi.fn(),
     stepNumber: 0,
-    visible: true,
   };
   return globals.__tutorialAssistantMocks;
 }
@@ -105,6 +103,7 @@ function mockApi() {
       },
     },
     gameAsset: { getSceneAssets: { useQuery: () => ({ data: [] }) } },
+    activityStreak: { getUserStreaks: { useQuery: () => ({ data: undefined }) } },
     quests: {
       retryBattle: {
         useMutation: () => ({ mutate: () => undefined, isPending: false }),
@@ -128,6 +127,7 @@ vi.mock("@/libs/tutorialSteps", () => {
     TUTORIAL_STEPS: [step],
     TUTORIAL_CHAPTERS: [{ id: "student", title: "A New Student" }],
     TUTORIAL_HOSPITALIZED_STEP: step,
+    lessonReadingSeconds: () => 0,
   };
 });
 vi.mock("@/hooks/tutorial", () => {
@@ -135,8 +135,6 @@ vi.mock("@/hooks/tutorial", () => {
     useTutorialStep: () => ({
       currentStep: testMocks().step,
       stepNumber: testMocks().stepNumber,
-      isAssistantVisible: testMocks().visible,
-      setIsAssistantVisible: vi.fn(),
       updateTutorialStep: vi.fn(),
       handleNextStep: testMocks().next,
       handleNextStepAsync: vi.fn(async () => {}),
@@ -147,9 +145,23 @@ vi.mock("@/hooks/tutorial", () => {
 // A bare image, as other suites stub it: Bun module mocks outlive this file, and later
 // suites still look for the rendered <img>.
 vi.mock("@/layout/Image", () => ({
-  default: (props: { src: string; alt: string }) => (
+  default: ({
+    src,
+    alt,
+    className,
+    onLoad,
+    onError,
+    "aria-hidden": ariaHidden,
+  }: ImgHTMLAttributes<HTMLImageElement> & { src: string; alt: string }) => (
     // biome-ignore lint/performance/noImgElement: isolated component test stub
-    <img src={props.src} alt={props.alt} />
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onLoad={onLoad}
+      onError={onError}
+      aria-hidden={ariaHidden}
+    />
   ),
 }));
 const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}</div>;
@@ -211,7 +223,6 @@ beforeEach(() => {
   mocks.client.setQueryData(key, profile());
   mocks.disable.mockResolvedValue({ success: true, message: "Saved" });
   mocks.stepNumber = 0;
-  mocks.visible = true;
   mocks.step = {
     id: "welcome",
     chapter: "student",
@@ -537,7 +548,6 @@ describe("TutorialAssistant completion sync", () => {
 
 it("shows a completed tutorial state and still presents available quest guidance", async () => {
   mocks.stepNumber = 100;
-  mocks.visible = false;
   mocks.step = undefined as never;
   const completed = profile();
   completed.userData.tutorialStep = 100;

@@ -6,7 +6,10 @@ import {
   TUTORIAL_STARTER_QUEST_ID,
   TUTORIAL_STEPS_COUNT,
 } from "@/drizzle/constants";
+import type { Quest } from "@/drizzle/schema";
+import { getActiveObjective } from "@/libs/objectives";
 import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
+import type { QuestTrackerType } from "@/validators/objectives";
 
 /**
  * True while the tutorial still has a step left to show. A switched-off
@@ -410,6 +413,73 @@ const isObjectiveSatisfied = (
       toObjectiveIds(objectiveId).some((id) =>
         isStarterObjectiveSatisfied(id, starter, requireCollected),
       );
+
+/**
+ * Sector of the quest objective a step works towards, on the branch the player chose and
+ * at the location their tracker instantiated, or null when the quest's active objective
+ * is not one the step names.
+ */
+export const getTutorialObjectiveSector = (
+  step:
+    | { objectiveId?: TutorialObjectiveRef; relatedValue?: number | string }
+    | null
+    | undefined,
+  user:
+    | {
+        userQuests?:
+          | { questId: string; endAt?: Date | string | null; quest: Quest }[]
+          | null;
+        questData?: QuestTrackerType[] | null;
+      }
+    | null
+    | undefined,
+) => {
+  if (!step?.objectiveId || typeof step.relatedValue !== "string" || !user) return null;
+  const entry = user.userQuests?.find(
+    (e) => e.questId === step.relatedValue && !e.endAt,
+  );
+  const tracker = user.questData?.find((t) => t.id === step.relatedValue);
+  const active =
+    entry && tracker ? getActiveObjective(entry.quest, tracker) : undefined;
+  if (!active || !tracker || !toObjectiveIds(step.objectiveId).includes(active.id))
+    return null;
+  const sector =
+    tracker.goals.find((g) => g.id === active.id)?.sector ??
+    ("sector" in active ? active.sector : undefined);
+  return typeof sector === "number" ? sector : null;
+};
+
+/**
+ * Where a player stands on a lesson that sends them to a sector: on the way there,
+ * already standing in it, or neither (still to set off, or a lesson with no sector).
+ * A travel step names its sector; any other step goes where its quest objective is.
+ */
+export const getTutorialTripPhase = (
+  step:
+    | {
+        advanceOn?: TutorialTrigger;
+        objectiveId?: TutorialObjectiveRef;
+        relatedValue?: number | string;
+      }
+    | null
+    | undefined,
+  user:
+    | (Parameters<typeof getTutorialObjectiveSector>[1] & {
+        status?: string;
+        sector?: number;
+      })
+    | null
+    | undefined,
+): "travelling" | "arrived" | undefined => {
+  if (!step || !user) return undefined;
+  const destination =
+    step.advanceOn === "travelArrive" && typeof step.relatedValue === "number"
+      ? step.relatedValue
+      : getTutorialObjectiveSector(step, user);
+  if (destination === null) return undefined;
+  if (user.status === "TRAVEL") return "travelling";
+  return user.sector === destination ? "arrived" : undefined;
+};
 
 /**
  * Whether a running tutorial has nothing left to teach: the player graduated

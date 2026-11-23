@@ -177,6 +177,7 @@ import {
   listUserJutsuForGetReskin,
   listUserJutsuForUpdateReskin,
   selectBloodlineReskinForUpdate,
+  selectEquippedJutsuIds,
   selectJutsuForCreateLinkedReskin,
   selectJutsuForDelete,
   selectJutsuForDelete2,
@@ -199,6 +200,7 @@ import {
   updateJutsuForSaveJutsuFamily,
   updateJutsuForSaveJutsuFamily2,
   updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically,
+  updateJutsuLoadoutForFillEmptyActive,
   updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically,
   updateJutsuLoadoutForRenameLoadout,
   updateJutsuLoadoutForSetLoadoutHotkeys,
@@ -345,6 +347,14 @@ const updateJutsuReskinSchema = getJutsuReskinSchema.extend({
 });
 
 const updateJutsuSchema = z.object({ id: z.string(), data: JutsuValidator });
+
+/** A confirmed equip change; its loadout is the order loaded before the change, a baseline
+ *  for the client rather than a replacement for concurrent SQL appends. */
+const jutsuEquipChangeSchema = z.object({
+  equipped: z.boolean(),
+  jutsuId: z.string(),
+  loadout: z.object({ id: z.string(), jutsuIds: z.array(z.string()) }).optional(),
+});
 
 export const jutsuRouter = createTRPCRouter({
   getRecentTransfers: protectedProcedure
@@ -573,6 +583,23 @@ export const jutsuRouter = createTRPCRouter({
         },
         new Date(),
       );
+      // Equipped jutsu belong in the active loadout, which the loadout UI and the "No jutsu
+      // equipped!" notice read. An empty active loadout, also one created or activated now,
+      // lists the jutsu a player equipped before it existed or that never reached it.
+      const slots = [...loadouts, ...missing];
+      const activeId = user?.jutsuLoadout ?? slots[0]?.id;
+      const active = slots.find((row) => row.id === activeId);
+      const equippedIds =
+        activeId && active?.jutsuIds.length === 0
+          ? (await selectEquippedJutsuIds(ctx.drizzle, ctx.userId)).map(
+              (row) => row.jutsuId,
+            )
+          : [];
+      const newIndex = missing.findIndex((row) => row.id === activeId);
+      const newActive = missing[newIndex];
+      if (newActive && equippedIds.length > 0) {
+        missing[newIndex] = { ...newActive, jutsuIds: equippedIds };
+      }
       const rows = await backfillLoadouts<
         JutsuLoadout & { aiProfile: { id: string } | null }
       >({
@@ -586,7 +613,26 @@ export const jutsuRouter = createTRPCRouter({
           // a concurrent select that set it first is not overwritten.
           updateUserDataForWriteDefaultPointer(ctx.drizzle, id, ctx),
       });
-      if (user?.jutsuLoadout) return rows;
+      // An existing loadout is filled only while it is still active and empty. A jutsu
+      // unequipped meanwhile stays listed; toggling it on /jutsus settles that.
+      const filled =
+        activeId && !newActive && equippedIds.length > 0
+          ? (
+              await updateJutsuLoadoutForFillEmptyActive(
+                ctx.drizzle,
+                activeId,
+                ctx.userId,
+                equippedIds,
+              )
+            ).rowsAffected === 1
+          : false;
+      if (user?.jutsuLoadout) {
+        return filled
+          ? rows.map((row) =>
+              row.id === activeId ? { ...row, jutsuIds: equippedIds } : row,
+            )
+          : rows;
+      }
       // The first active loadout may take over AI rules the player wrote before owning one.
       return (await fetchJutsuLoadouts(ctx.drizzle, ctx.userId)).slice(0, maxLoadouts);
     }),
@@ -1378,6 +1424,8 @@ export const jutsuRouter = createTRPCRouter({
         data: z
           .object({ money: z.number(), questData: z.array(QuestTracker).nullable() })
           .optional(),
+        // A newly learned jutsu that stayed auto-equipped.
+        equip: jutsuEquipChangeSchema.optional(),
         // Only a confirmed existing ownership row with no queued successors can project.
         trainingUpdate: z
           .object({
@@ -1551,6 +1599,7 @@ export const jutsuRouter = createTRPCRouter({
         questDataFull = trackers;
       }
       const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);
+      let equipChange: z.infer<typeof jutsuEquipChangeSchema> | undefined;
 
       if (userjutsuObj) {
         // The level and debit commit together; the returned level must describe this
@@ -1663,7 +1712,7 @@ export const jutsuRouter = createTRPCRouter({
           );
         }
 
-        await Promise.all([
+        const [, kept] = await Promise.all([
           updateUserQuestData(ctx.drizzle, questDataForDb, ctx.userId),
           canAutoEquip
             ? rollbackEquipIfOverCap({
@@ -1674,8 +1723,32 @@ export const jutsuRouter = createTRPCRouter({
                 flags: capFlags,
                 caps,
               })
-            : undefined,
+            : false,
         ]);
+        // The auto-equipped jutsu joins the active loadout, which the loadout UI and the
+        // "No jutsu equipped!" notice read. A lost append leaves the row equipped but
+        // unlisted; toggling it on /jutsus repairs that.
+        const activeLoadoutId = user.jutsuLoadout;
+        const synced =
+          kept && activeLoadoutId
+            ? await appendJutsuIdToLoadoutAtomically({
+                client: ctx.drizzle,
+                loadoutId: activeLoadoutId,
+                userId: ctx.userId,
+                jutsuId: input.jutsuId,
+                expectedJutsuIds: user.loadout?.jutsuIds,
+              })
+            : false;
+        if (kept) {
+          equipChange = {
+            equipped: true,
+            jutsuId: input.jutsuId,
+            loadout:
+              synced === "snapshot" && activeLoadoutId
+                ? { id: activeLoadoutId, jutsuIds: user.loadout?.jutsuIds ?? [] }
+                : undefined,
+          };
+        }
       }
 
       // Queue the further levels; the started one stands even if this fails.
@@ -1699,12 +1772,14 @@ export const jutsuRouter = createTRPCRouter({
             requiresProgressionRefresh: data.requiresProgressionRefresh,
             publishedAchievementIds: data.publishedAchievementIds,
             equippedJutsus: confirmedEquippedJutsus,
+            equip: equipChange,
           }),
           message: queued.success
             ? followUps.length > 0
               ? `You started training: ${info.name}, and queued ${formatLevelRange(level + 2, level + 1 + followUps.length)}`
               : `You started training: ${info.name}`
             : `You started training: ${info.name}, but the further levels could not be queued: ${queued.message}`,
+          equip: equipChange,
           data: {
             money: user.money - trainCost - queuedCost,
             questData: getPublicQuestUser({ ...user, questData: questDataFull })
@@ -1840,16 +1915,7 @@ export const jutsuRouter = createTRPCRouter({
     .input(z.object({ userJutsuId: z.string() }))
     .output(
       baseServerResponse.extend({
-        data: z
-          .object({
-            equipped: z.boolean(),
-            jutsuId: z.string(),
-            // The loaded order is a baseline, not a replacement for concurrent SQL appends.
-            loadout: z
-              .object({ id: z.string(), jutsuIds: z.array(z.string()) })
-              .optional(),
-          })
-          .optional(),
+        data: jutsuEquipChangeSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

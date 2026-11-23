@@ -237,7 +237,9 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
       )}
       {isPending && <Loader explanation="Starting quest..." />}
       {!userData && <Loader explanation="Loading userdata..." />}
-      {!isPending && userData && (
+      {/* The list is still loading; saying nothing is available would be wrong. */}
+      {userData && !fetchedQuests && <Loader explanation="Loading..." />}
+      {!isPending && userData && fetchedQuests && (
         <div className="bg-popover">
           {availableQuests.length === 0 && (
             <p className="p-3 font-bold">

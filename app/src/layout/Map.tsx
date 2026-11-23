@@ -9,13 +9,16 @@ import {
 } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { MAP_WAR_TORN_BATTLEGROUND_SECTOR } from "@/drizzle/constants";
+import {
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  TUTORIAL_STARTER_QUEST_ID,
+} from "@/drizzle/constants";
 import type { Village } from "@/drizzle/schema";
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import WebGlError from "@/layout/WebGLError";
-import { getObjectiveImage } from "@/libs/objectives";
+import { type GlobeQuestGoal, getGlobeQuestGoals } from "@/libs/mapLocations";
 import {
   createGlobeScene,
   type GlobeHoverPoint,
@@ -24,7 +27,7 @@ import {
 } from "@/libs/rendering/scenes/globe";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { calcGlobalTravelTime } from "@/libs/travel";
-import { TUTORIAL_LAYOUT_EVENT } from "@/libs/tutorial";
+import { TUTORIAL_LAYOUT_EVENT, toObjectiveIds } from "@/libs/tutorial";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { selectUserWithoutPosition, useUserDataSelector } from "@/utils/UserContext";
 import type { GlobeJourney } from "@/validators/travel";
@@ -53,6 +56,8 @@ interface MapProps {
   journey?: GlobeJourney | null;
   /** Receive the picked world sector ID for travel, editing or war selection. */
   onTileClick?: (sector: number) => void;
+  /** Grow down to the foot of the first screen instead of staying square. */
+  fillViewport?: boolean;
 }
 
 const GlobalMap: React.FC<MapProps> = (props) => {
@@ -73,30 +78,29 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     { onlyOwnWar: true },
     { enabled: showOwnership },
   );
-  // Objectives already done are not marked, so a quest that visits several
-  // sectors only points at where the player still has to go.
+  const isTravelStep = currentStep?.advanceOn === "travelArrive";
+  // A lesson's trip names where its objective is answered, which a dialog objective
+  // cannot place on the map itself.
+  const destinationSector =
+    isTravelStep && typeof currentStep.relatedValue === "number"
+      ? currentStep.relatedValue
+      : null;
+  const destinationObjective = isTravelStep ? currentStep.objectiveId : undefined;
+  // Only objectives still to do on the player's chosen path are marked, so a quest that
+  // visits several sectors points at where the player still has to go.
   const questGoals = useMemo(
     () =>
-      userData?.userQuests.flatMap((entry) => {
-        const goals = userData.questData?.find((q) => q.id === entry.questId)?.goals;
-        return entry.quest.content.objectives.flatMap((objective) =>
-          "sector" in objective &&
-          objective.sector &&
-          !("hideLocation" in objective && objective.hideLocation) &&
-          objective.task !== "dialog" &&
-          !goals?.find((goal) => goal.id === objective.id)?.done
-            ? [
-                {
-                  sector: objective.sector,
-                  quest: entry.quest.name,
-                  goal: getObjectiveImage(objective).title,
-                  details: plainText(objective.description),
-                },
-              ]
-            : [],
-        );
-      }) ?? [],
-    [userData],
+      getGlobeQuestGoals(
+        userData,
+        destinationSector !== null && destinationObjective
+          ? {
+              questId: TUTORIAL_STARTER_QUEST_ID,
+              objectiveIds: toObjectiveIds(destinationObjective),
+              sector: destinationSector,
+            }
+          : null,
+      ),
+    [userData, destinationSector, destinationObjective],
   );
   const questSectors = useMemo(
     () => questGoals.map((goal) => goal.sector),
@@ -105,7 +109,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
   const hasQuestMarkers =
     !!props.userLocation && !showOwnership && questSectors.length > 0;
   const actionExplanation = props.actionExplanation || "Click tile to move there";
-  const isTravelStep = currentStep?.advanceOn === "travelArrive";
   // Memoized so hover re-renders (the sector card) do not push a scene update.
   const state: GlobeSceneState = useMemo(
     () => ({
@@ -160,6 +163,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         state: current.current.state,
         onHover: hover.set,
         onClick: (sector) => current.current.props.onTileClick?.(sector),
+        fillViewport: current.current.props.fillViewport,
         onFocusPoint: (at) => {
           const marker = focusMarkerRef.current;
           if (!marker) return;
@@ -283,7 +287,7 @@ const SectorCard: React.FC<{
   map: GlobalMapData;
   villages?: Village[];
   fromSector?: number;
-  quests: QuestGoal[];
+  quests: GlobeQuestGoal[];
   targets?: { sector: number; username?: string }[];
   focusSector?: number | null;
   focusLabel: string;
@@ -442,18 +446,7 @@ const createHoverStore = () => {
 
 type HoverStore = ReturnType<typeof createHoverStore>;
 
-/** An unfinished quest objective placed on the map. */
-type QuestGoal = { sector: number; quest: string; goal: string; details: string };
-
-const NO_GOALS: QuestGoal[] = [];
-
-/** Objective text without markup, for a short preview. */
-const plainText = (html: string) =>
-  html
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+const NO_GOALS: GlobeQuestGoal[] = [];
 
 /** Names for the globe's terrain ids (`globalBiomeType`). */
 const BIOME_NAMES = ["Ocean", "Grassland", "Desert", "Snowfield"];

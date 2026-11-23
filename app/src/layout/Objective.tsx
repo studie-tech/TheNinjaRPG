@@ -29,10 +29,13 @@ import {
   canRetryQuestBattle,
   getObjectiveActionGuide,
   getObjectiveImage,
+  getRewardClaimLabel,
   isObjectiveComplete,
 } from "@/libs/objectives";
 import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
 import { collapseRewards } from "@/libs/rewards";
+import { cn } from "@/libs/shadui";
+import { isTutorialActive } from "@/libs/tutorial";
 import { parseHtml } from "@/utils/parse";
 import { getCollectDeadline, hasEndDatePassed } from "@/utils/time";
 import { useRequiredUserDataSelector, useUserDataSelector } from "@/utils/UserContext";
@@ -58,6 +61,8 @@ interface ObjectiveProps {
   tier?: number;
   grayedOut?: boolean;
   hideIfNoRewards?: boolean | null;
+  /** The narrow dock: a finished objective with nothing to claim takes one line. */
+  compact?: boolean;
 }
 export const Objective: React.FC<ObjectiveProps> = (props) => {
   const [modalOpen, setModalOpen] = useState(false);
@@ -67,8 +72,12 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
     autoWakeUp: u.autoWakeUp,
     battleId: u.battleId,
     userQuests: u.userQuests,
+    isInTutorial: isTutorialActive(u),
   }));
   const { objective, tier, tracker, titlePrefix, checkRewards } = props;
+  // The tutorial teaches the way there by hand; its lesson offers a shortcut only to an
+  // idle player.
+  const offersTravel = !userData?.isInTutorial;
   const { image, title } = getObjectiveImage(objective);
   const actionGuide = getObjectiveActionGuide(objective);
 
@@ -125,6 +134,16 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
       />
     ) : null;
 
+  // A finished objective's reward, claimable now
+  const canClaim =
+    done &&
+    hasReward(parsed) &&
+    canCollect &&
+    !props.grayedOut &&
+    (canAttemptAwakeAction(userData) ||
+      (isBetweenPyramidBattles(userData) &&
+        getIsolatedPyramid(userData)?.questId === tracker.id));
+
   // Indicator icon
   const indicatorIcons = (
     <div className="flex flex-col items-center gap-1">
@@ -138,25 +157,9 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
       {done ? (
         <>
           <Check className="h-10 w-10 stroke-green-500" />
-          {hasReward(parsed) &&
-            (canCollect &&
-            !props.grayedOut &&
-            (canAttemptAwakeAction(userData) ||
-              (isBetweenPyramidBattles(userData) &&
-                getIsolatedPyramid(userData)?.questId === tracker.id)) ? (
-              <button
-                type="button"
-                id="tutorial-objective-claim"
-                aria-label="Claim reward"
-                title="Claim reward"
-                className="rounded-md hover:text-orange-500"
-                onClick={checkRewards}
-              >
-                <Gift className="h-7 w-7" aria-hidden="true" />
-              </button>
-            ) : (
-              <Gift className="h-7 w-7 fill-slate-500" />
-            ))}
+          {hasReward(parsed) && !canClaim && (
+            <Gift className="h-7 w-7 fill-slate-500" aria-hidden="true" />
+          )}
         </>
       ) : (
         <>
@@ -176,6 +179,24 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
 
   // If future objectives are hidden, hide future objectives
   if (props.hideIfNoRewards && !canCollect) return null;
+
+  const hasRewardWaiting = hasReward(parsed) && canCollect;
+  if (props.compact && done && !hasRewardWaiting && !canRetryBattle) {
+    return (
+      <p
+        className={cn(
+          "flex items-center gap-2 pl-2 font-semibold",
+          props.grayedOut && "opacity-30 grayscale",
+        )}
+      >
+        <Check className="h-5 w-5 shrink-0 stroke-green-500" aria-label="Done" />
+        <span className="min-w-0">
+          {titlePrefix}
+          {title}
+        </span>
+      </p>
+    );
+  }
 
   // Show the objective
   return (
@@ -244,23 +265,27 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                   <>
                     <div>
                       <b>Sector: </b>{" "}
-                      <Link
-                        className="text-orange-600 underline dark:text-orange-400"
-                        href={travelHref}
-                        aria-label={
-                          located.longitude !== undefined &&
-                          located.latitude !== undefined
-                            ? `Auto travel to sector ${located.sector}, position ${located.longitude}, ${located.latitude}`
-                            : `Auto travel to sector ${located.sector}`
-                        }
-                      >
-                        {located.sector}
-                      </Link>
+                      {offersTravel ? (
+                        <Link
+                          className="text-orange-600 underline dark:text-orange-400"
+                          href={travelHref}
+                          aria-label={
+                            located.longitude !== undefined &&
+                            located.latitude !== undefined
+                              ? `Auto travel to sector ${located.sector}, position ${located.longitude}, ${located.latitude}`
+                              : `Auto travel to sector ${located.sector}`
+                          }
+                        >
+                          {located.sector}
+                        </Link>
+                      ) : (
+                        located.sector
+                      )}
                     </div>
                     <div>
                       <b>Position:</b> [{located.longitude}, {located.latitude}]
                     </div>
-                    {!done && !props.grayedOut && (
+                    {!done && !props.grayedOut && offersTravel && (
                       <Button asChild size="sm" className="my-1">
                         <Link href={travelHref}>
                           <MapPin className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -283,6 +308,20 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                 )}
               </div>
               <div>{indicatorIcons}</div>
+            </div>
+          )}
+          {canClaim && (
+            <div className="mt-2 pr-3">
+              <Button
+                id="tutorial-objective-claim"
+                size="sm"
+                // A claim names every reward, so a long one wraps in a narrow column.
+                className="h-auto min-h-8 w-full py-1.5 text-left text-balance whitespace-normal"
+                onClick={checkRewards}
+              >
+                <Gift className="mr-2 h-4 w-4 shrink-0" aria-hidden="true" />
+                {getRewardClaimLabel(collapseRewards(rewardPayloads(parsed)))}
+              </Button>
             </div>
           )}
           {props.questType === "pvp" &&

@@ -27,7 +27,11 @@ import { QuestUpdateModal } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffects";
 import WebGlError from "@/layout/WebGLError";
 import { getAudioPreference } from "@/libs/audioPreferences";
-import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
+import {
+  availableUserActions,
+  calcActiveUser,
+  getActionSelectionId,
+} from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
 import {
@@ -254,8 +258,10 @@ const Combat: React.FC<CombatProps> = (props) => {
   const detailsEffects = useMemo(() => {
     if (!detailsTarget) return null;
 
-    const groundEffects =
-      battleMaps.groundEffectsByTile.get(detailsTarget.tileKey) || [];
+    // Visual tags only decorate the tile, so they have no row, as in the fighter list.
+    const groundEffects = (
+      battleMaps.groundEffectsByTile.get(detailsTarget.tileKey) ?? []
+    ).filter((effect) => effect.type !== "visual");
     const userEffects = detailsTarget.userId
       ? battleMaps.userEffectsByUserId.get(detailsTarget.userId) || []
       : [];
@@ -438,7 +444,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         showMutationToast({ success: false, message: error.message });
       }
     },
-    onSuccess: async (data, _variables, context) => {
+    onSuccess: async (data, variables, context) => {
       actionInFlightRef.current = false;
       // A resolved action keeps its slot until the field reaches its log entry.
       if (!data.updateClient || !data.battleUpdate || !combat.scene.current)
@@ -471,6 +477,13 @@ const Combat: React.FC<CombatProps> = (props) => {
         const nextControlled = resolveControlledActorId(data.battleUpdate, suid);
         if (prevControlled !== nextControlled) {
           setCombatActionId(undefined);
+        } else if (
+          variables.actionId === "move" &&
+          data.battleUpdate.round !== battleRef.current?.round
+        ) {
+          // A move that spends the round's last AP ends the turn, so the new round
+          // opens with a choice rather than a move.
+          setCombatActionId((current) => (current === "move" ? undefined : current));
         }
       }
       // Physical feedback for the two moments worth feeling: an action landing, and the
@@ -637,6 +650,10 @@ const Combat: React.FC<CombatProps> = (props) => {
     };
   }, [suid, timeDiff]);
 
+  const dismissHoverDetails = () => {
+    lastHoverKeyRef.current = null;
+    setHoveredEffect(null);
+  };
   const clearTouchDetailsTimer = () => {
     if (touchDetailsTimerRef.current) clearTimeout(touchDetailsTimerRef.current);
     touchDetailsTimerRef.current = null;
@@ -872,11 +889,6 @@ const Combat: React.FC<CombatProps> = (props) => {
       resultRef.current
     )
       return;
-    setAggroTarget(
-      config.showAggro && character?.userId && aggro.has(character.userId)
-        ? character
-        : null,
-    );
     const battle = battleRef.current,
       action = actionRef.current,
       grid = gridRef.current;
@@ -906,6 +918,15 @@ const Combat: React.FC<CombatProps> = (props) => {
       )
     )
       inspectTapped(character.userId);
+    // A tap that acts leaves the field clear for the result and the next target;
+    // any other tap on a fighter pins its aggro.
+    const acts = !!battle && !!action && isValid;
+    setAggroTarget(
+      !acts && config.showAggro && character?.userId && aggro.has(character.userId)
+        ? character
+        : null,
+    );
+    if (acts) dismissHoverDetails();
     if (!battle || !action || !isValid || !canPerformAction()) return;
     document.body.style.cursor = "wait";
     performAction({
@@ -946,15 +967,24 @@ const Combat: React.FC<CombatProps> = (props) => {
     gridRef.current = combat.scene.current?.grid ?? null;
     const mount = mountRef.current;
     if (!combat.isReady || !mount) return;
-    const dismissAggro = () => setAggroTarget(null);
-    mount.addEventListener("pointerdown", dismissAggro, { passive: true });
+    // Any press closes a pinned aggro card; a press outside the field (the action bar,
+    // the page) also closes effect details a touch or a resting pointer left open.
+    const dismissDetails = (event: PointerEvent) => {
+      setAggroTarget(null);
+      if (!(event.target instanceof Node && mount.contains(event.target)))
+        dismissHoverDetails();
+    };
+    document.addEventListener("pointerdown", dismissDetails, {
+      capture: true,
+      passive: true,
+    });
     mount.addEventListener("touchstart", onDocumentTouchStart, { passive: true });
     mount.addEventListener("touchend", onDocumentTouchEnd, { passive: true });
     mount.addEventListener("touchcancel", onDocumentTouchEnd, { passive: true });
     mount.addEventListener("pointermove", onDocumentPointerMove, { passive: true });
     return () => {
       clearTouchDetailsTimer();
-      mount.removeEventListener("pointerdown", dismissAggro);
+      document.removeEventListener("pointerdown", dismissDetails, { capture: true });
       mount.removeEventListener("touchstart", onDocumentTouchStart);
       mount.removeEventListener("touchend", onDocumentTouchEnd);
       mount.removeEventListener("touchcancel", onDocumentTouchEnd);
@@ -973,11 +1003,14 @@ const Combat: React.FC<CombatProps> = (props) => {
     config,
     combat.isReady,
   ]);
+  // Choosing another action starts aiming afresh, so earlier details make way for it.
+  const selectedActionId = props.action
+    ? getActionSelectionId(props.action)
+    : undefined;
   useEffect(() => {
-    lastHoverKeyRef.current = null;
-    setHoveredEffect(null);
+    dismissHoverDetails();
     setAggroTarget(null);
-  }, [battleId, result, config.showAggro]);
+  }, [battleId, result, config.showAggro, selectedActionId]);
 
   // Clear hover state on mouse leave from combat area
   useEffect(() => {

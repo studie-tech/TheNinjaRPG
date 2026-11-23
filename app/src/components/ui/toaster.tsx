@@ -21,7 +21,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <SonnerToaster
       richColors
       visibleToasts={9}
-      mobileOffset={{ bottom: "16px" }}
+      // A tutorial highlight near the top publishes how far down toasts must start.
+      offset={{ top: "var(--tutorial-toast-top, 24px)" }}
+      mobileOffset={{ top: "var(--tutorial-toast-top, 16px)", bottom: "16px" }}
       className="toaster group"
       theme={theme}
       style={

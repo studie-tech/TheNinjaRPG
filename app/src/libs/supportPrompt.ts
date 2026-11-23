@@ -368,7 +368,7 @@ ${trainingIntervals}
     - **Time Frame:** Quests are subject to time limits.
     - **Reading Quests:**  
       - Essential for understanding objectives, locations, and hints.
-- **LogBook (Profile Page):**  
+- **Logbook (Profile Page):**  
   - **Active:** Currently accepted quests.  
   - **History:** Completed quests and missions.  
   - **Battles:** Recent battle logs.  

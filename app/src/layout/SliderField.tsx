@@ -1,6 +1,7 @@
 import { MinusCircle, PlusCircle } from "lucide-react";
 import type { UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
+import { round } from "@/utils/math";
 
 interface SliderFieldProps {
   id: string;
@@ -61,12 +62,18 @@ const SliderField: React.FC<SliderFieldProps> = (props) => {
         disabled={props.disabled}
         onDecrement={() => {
           if (!props.disabled && props.watchedValue > props.min) {
-            props.setValue(props.id, props.watchedValue - (props.step ?? 1));
+            props.setValue(
+              props.id,
+              Math.max(props.min, round(props.watchedValue - (props.step ?? 1), 6)),
+            );
           }
         }}
         onIncrement={() => {
           if (!props.disabled && props.watchedValue < props.max) {
-            props.setValue(props.id, props.watchedValue + (props.step ?? 1));
+            props.setValue(
+              props.id,
+              Math.min(props.max, round(props.watchedValue + (props.step ?? 1), 6)),
+            );
           }
         }}
         inputProps={{

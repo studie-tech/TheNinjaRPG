@@ -115,7 +115,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
     if (shouldAdvance) {
       const formSum = sumStatValues(data);
 
-      if (formSum !== availableStats) {
+      if (round(formSum - availableStats) !== 0) {
         showMutationToast({
           success: false,
           message: "You must assign all points to your stats to continue.",
@@ -130,21 +130,32 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
     return typeof accepted === "boolean" ? accepted : undefined;
   };
 
-  // NavTabs component - hide for redistribution
-  const navTabs = !isRedistribution ? (
-    <div
-      aria-disabled={isPending || disabled}
-      inert={disabled || undefined}
-      className={isPending || disabled ? "pointer-events-none opacity-50" : undefined}
-    >
-      <NavTabs
-        id="stats-distribution-tab"
-        current={tab}
-        options={["Simple", "Advanced"] as const}
-        onChange={(value) => {
-          if (!isPending) setTab(value as "Simple" | "Advanced");
-        }}
-      />
+  // The Simple/Advanced choice opens the form beside a line on what each mode does. In the
+  // box header a long title would fold it into an unlabelled overflow menu on phones.
+  // Redistribution always uses the advanced form, so it has no choice to show.
+  const modeTabs = !isRedistribution ? (
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-x-3 border-b">
+      <p className="text-muted-foreground min-w-0 flex-1 basis-48 pb-2 text-sm">
+        {tab === "Simple"
+          ? includeMasteries
+            ? "Pick a specialization to spread your points, or open Advanced to split them across stats, masteries and elements."
+            : "Pick a specialization to spread your points, or open Advanced to place each point yourself."
+          : "Choose how many points go into each stat."}
+      </p>
+      <div
+        aria-disabled={isPending || disabled}
+        inert={disabled || undefined}
+        className={isPending || disabled ? "pointer-events-none opacity-50" : undefined}
+      >
+        <NavTabs
+          id="stats-distribution-tab"
+          current={tab}
+          options={["Simple", "Advanced"] as const}
+          onChange={(value) => {
+            if (!isPending) setTab(value as "Simple" | "Advanced");
+          }}
+        />
+      </div>
     </div>
   ) : null;
 
@@ -155,9 +166,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
       inert={disabled || undefined}
       className={disabled ? "opacity-60" : undefined}
     >
-      {!showWrapper && navTabs && (
-        <div className="mb-2 flex justify-end">{navTabs}</div>
-      )}
+      {modeTabs}
       {includeMasteries && (
         <p className="text-muted-foreground mb-3 text-sm">
           Masteries and elements use unused XP without granting level XP. Elements have
@@ -201,7 +210,6 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
         title={title}
         subtitle={subtitle}
         defaultBackHref={defaultBackHref}
-        topRightContent={navTabs}
       >
         {content}
       </ContentBox>
@@ -460,11 +468,6 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
           </Confirm>
         );
       })}
-      <p className="text-muted-foreground col-span-2 mt-2 text-center text-xs sm:col-span-4">
-        {includeMasteries
-          ? "Use Advanced to split points across multiple stats, masteries and elements."
-          : "Use Advanced to choose how many points go into each stat."}
-      </p>
     </div>
   );
 };
@@ -589,15 +592,23 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
         {statNames.map((stat, i) => {
           const maxValue = maxValues[stat];
           const minValue = 0;
-          const step = isInArray(stat, BasicElementName) ? 1 : 0.01;
+          // Unused XP is spent in whole points (an integer column the server floors each
+          // input to); only redistribution moves fractional stats, never elements.
+          const step =
+            isRedistribution && !isInArray(stat, BasicElementName) ? 0.01 : 1;
           const hasFiniteValue = Number.isFinite(Number(formValues[stat]));
           const currentValue = hasFiniteValue ? Number(formValues[stat]) : 0;
           const useInput = useInputBoxes || !hasFiniteValue;
 
           // Calculate remaining points and dynamic max for this slider
           // remainingPoints already includes currentValue freed up from the total
-          const remainingPoints = availableStats - formSum + currentValue;
-          const dynamicMax = Math.min(maxValue ?? Infinity, remainingPoints);
+          // Rounded so float leftovers (1000 - 504.22 - 256.26 = 239.519999...) cannot
+          // pull a native range's max below the step it should reach.
+          const remainingPoints = round(availableStats - formSum + currentValue);
+          const dynamicMax = floorToStep(
+            Math.min(maxValue ?? Infinity, remainingPoints),
+            step,
+          );
 
           // Keep stale or invalid drafts editable after a cap or eligibility refresh.
           if ((maxValue ?? 0) > 0 || Number(formValues[stat]) !== 0) {
@@ -713,3 +724,7 @@ const sumStatValues = (values: Record<string, unknown>) =>
   Object.values(values)
     .map((v) => (Number.isFinite(Number(v)) ? Number(v) : 0))
     .reduce((a, b) => a + b, 0);
+
+/** Largest multiple of `step` not above `value`, so a native range or number input can reach it exactly. */
+const floorToStep = (value: number, step: number) =>
+  Number.isFinite(value) ? round(Math.floor(round(value / step, 6)) * step) : value;

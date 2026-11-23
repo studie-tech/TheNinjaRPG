@@ -72,8 +72,7 @@ import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
 import { hasRequiredRank } from "@/libs/rank";
-import { calcGlobalTravelTime } from "@/libs/travel";
-import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
+import { calcGlobalTravelTime, describeGlobalTravelTime } from "@/libs/travel";
 import { getReadableVillageHexColor } from "@/utils/color";
 
 /** Render travel maps, controls and dialogs from a single session. */
@@ -207,6 +206,7 @@ export function TravelView({
           journey={globeJourney}
           onTileClick={(sector) => initiateTravelToSector(sector)}
           hexasphere={globe}
+          fillViewport
         />
       )
     );
@@ -689,26 +689,24 @@ export function TravelView({
       ),
     },
     {
-      key: "caravans",
-      priority: 8,
-      node: !immersive && isSectorTools && !tutorialRunning && (
-        <CaravanControlsTrigger className={toolClassName} />
-      ),
-    },
-    {
-      key: "expand",
-      priority: 4,
-      node: !immersive && isSectorTools && (
-        <button
-          type="button"
-          aria-label="Expand world"
-          aria-expanded={isWorldExpanded}
-          disabled={!showSector || !SectorComponent}
-          className={toolClassName}
-          onClick={() => setWorldExpanded(true)}
-        >
-          <Maximize2 className="h-7 w-7" aria-hidden />
-        </button>
+      key: "tabs",
+      node: (
+        <NavTabs
+          current={isGlobal ? globalLink : activeTab}
+          options={sectorLink ? [sectorLink, globalLink] : [globalLink]}
+          labels={{ [sectorLink]: "Sector" }}
+          itemClassName={(option) => (option === globalLink ? "mr-0" : "")}
+          // The open Global tab is not the next thing to press, so tutorial rings skip it.
+          itemId={(option) =>
+            option === globalLink && isGlobal ? undefined : `tutorial-${option}`
+          }
+          disabledOptions={isTraveling ? [sectorLink] : undefined}
+          setValue={setActiveTab}
+          onChange={(value) => {
+            if (value !== globalLink)
+              setCameraFocusRevision((previous) => previous + 1);
+          }}
+        />
       ),
     },
   ];
@@ -893,8 +891,9 @@ export function TravelView({
                   {describeSector(targetSector)}.{" "}
                   <p className="py-2">
                     The travel time is estimated to be{" "}
-                    {calcGlobalTravelTime(userData.sector, targetSector, globe)}{" "}
-                    seconds.
+                    {describeGlobalTravelTime(
+                      calcGlobalTravelTime(userData.sector, targetSector, globe),
+                    )}
                   </p>
                   {targetSector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && (
                     <p className="mb-2 rounded-md border border-red-600/40 bg-red-600/10 p-2 text-red-700 text-sm dark:text-red-400">

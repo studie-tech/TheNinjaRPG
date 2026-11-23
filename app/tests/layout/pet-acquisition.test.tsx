@@ -7,6 +7,7 @@ import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import type { RouterInputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
+import { TUTORIAL_STARTER_QUEST_ID } from "@/drizzle/constants";
 import * as Confirm from "@/layout/Confirm";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
@@ -14,6 +15,7 @@ import * as Link from "@/layout/Link";
 import { PetAcquisition } from "@/layout/PetAcquisition";
 import { getDailyPetOptions } from "@/libs/pets/catalogue";
 import * as toast from "@/libs/toast";
+import { STARTER_QUEST_OBJECTIVES } from "@/libs/tutorial";
 import * as UserContext from "@/utils/UserContext";
 import { initialPetSpecies } from "../libs/pets/helpers/species";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
@@ -1064,3 +1066,43 @@ function renderAcquisition(
     },
   };
 }
+
+it("offers the rescued pup only after it has been handed to the Bondkeepers", async () => {
+  const starterQuest = (goals: { id: string; done: boolean }[]) => ({
+    ...owner,
+    userQuests: [{ questId: TUTORIAL_STARTER_QUEST_ID, completed: 0, endAt: null }],
+    questData: [{ id: TUTORIAL_STARTER_QUEST_ID, goals }],
+  });
+  const throughPup = Object.values(STARTER_QUEST_OBJECTIVES)
+    .slice(
+      0,
+      Object.values(STARTER_QUEST_OBJECTIVES).indexOf(STARTER_QUEST_OBJECTIVES.pup) + 1,
+    )
+    .map((id) => ({ id, done: true }));
+  owner = starterQuest(throughPup);
+  const carrying = renderAcquisition({});
+  try {
+    await carrying.view.findByText(/still at your side/);
+    expect(carrying.view.queryByRole("button", { name: "Adopt the pup" })).toBeNull();
+    expect(carrying.view.container.querySelector("#tutorial-sanctuary-pup")).toBeNull();
+  } finally {
+    carrying.queryClient.clear();
+    cleanup();
+  }
+
+  owner = starterQuest([
+    ...throughPup,
+    { id: STARTER_QUEST_OBJECTIVES.sanctuary, done: true },
+  ]);
+  const handedOver = renderAcquisition({});
+  try {
+    await handedOver.view.findByRole("button", { name: "Adopt the pup" });
+    expect(handedOver.view.queryByText(/still at your side/)).toBeNull();
+    // The lesson and quest call the rescued companion a pup; the offer must agree.
+    const offer = handedOver.view.container.querySelector("#tutorial-sanctuary-pup");
+    expect(offer?.textContent).toContain("The pup you rescued");
+    expect(offer?.textContent).not.toMatch(/hound/i);
+  } finally {
+    handedOver.queryClient.clear();
+  }
+});

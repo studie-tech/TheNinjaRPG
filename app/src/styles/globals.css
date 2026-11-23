@@ -79,6 +79,8 @@
   --animate-home-sleep: home-sleep 3s ease-in-out infinite;
   /* Calls to action pulse a ring around the button and keep full opacity, unlike disabled ones. */
   --animate-cta-pulse: cta-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  /* The tutorial spotlight's ring pulses a fixed 10px outward, whatever the size of the control it surrounds. */
+  --animate-spotlight-ping: spotlight-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
   /* Loading placeholders pulse below their resting 20% opacity, on the compositor. */
   --animate-placeholder-pulse: placeholder-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
@@ -99,6 +101,16 @@
     }
     50% {
       box-shadow: 0 0 0 5px rgb(249 115 22 / 0);
+    }
+  }
+
+  @keyframes spotlight-ping {
+    0% {
+      box-shadow: 0 0 0 0 rgb(252 211 77 / 0.75);
+    }
+    80%,
+    100% {
+      box-shadow: 0 0 0 10px rgb(252 211 77 / 0);
     }
   }
 

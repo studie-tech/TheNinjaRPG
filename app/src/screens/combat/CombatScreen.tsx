@@ -180,6 +180,8 @@ export function CombatScreen() {
     return () => setCombatThemeHeld(false);
   }, [results, setCombatThemeHeld]);
   const battle = battleState?.battle;
+  // A selection belongs to its battle: the next fight starts with a choice.
+  useEffect(() => () => setActionId(undefined), [battle?.id, setActionId]);
   const isBattleMissing = isSuccess && data.battle === null;
   const versionId = battle?.version;
   // The actor the human controls right now: themselves, or their piloted summon
@@ -683,7 +685,7 @@ export function CombatScreen() {
       >
         {!isBattleLoading && combat}
         {!isBattleLoading && !resultShown && battle && isAutoCombatActive && (
-          <div className="absolute top-2 left-2 z-20">
+          <div id="battle-ai-control" className="absolute top-2 left-2 z-20">
             <AutoCombatBadge
               isPending={isTogglingAutoCombat}
               onDisable={

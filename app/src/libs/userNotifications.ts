@@ -147,9 +147,10 @@ export const getUserFactionNotifications = (
 
   // Raid notifications. Raids are opportunities to join, not threats, so they use the
   // informational colour and leave red (and the red badge) to attacks and blocking states.
-  const openRaids = user?.activeRaids?.filter((r) => r.raidType === "open") ?? [];
-  const exclusiveRaids =
-    user?.activeRaids?.filter((r) => r.raidType === "exclusive") ?? [];
+  // Open raids are listed to every player; a student still in the tutorial cannot take part yet.
+  const raids = isTutorialActive(user) ? [] : (user?.activeRaids ?? []);
+  const openRaids = raids.filter((r) => r.raidType === "open");
+  const exclusiveRaids = raids.filter((r) => r.raidType === "exclusive");
 
   // Group by sector to avoid duplicate sector mentions
   const openRaidSectors = [...new Set(openRaids.map((r) => r.sector))];

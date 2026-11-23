@@ -148,16 +148,15 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
   // Track previous round to detect round changes
   const prevRoundRef = useRef<number | undefined>(currentRound);
 
-  // Auto-deselect action in combat mode when round changes (except basic actions)
+  // Auto-deselect action in combat mode when round changes (except repeatable basic moves)
   useEffect(() => {
     if (!combatMode || currentRound === undefined) return;
     if (prevRoundRef.current !== undefined && prevRoundRef.current !== currentRound) {
       if (selectedId) {
-        // Don't deselect basic actions
         const selectedItem = filtered?.find(
           (i) => getActionSelectionId(i) === selectedId,
         );
-        if (selectedItem?.type !== "basic") {
+        if (!keepsSelectionNextRound(selectedItem)) {
           onClick(selectedId);
         }
       }
@@ -165,13 +164,13 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
     prevRoundRef.current = currentRound;
   }, [combatMode, currentRound, selectedId, onClick, filtered]);
 
-  // Auto-deselect action in combat mode if it can't be repeated
+  // Auto-deselect action in combat mode if it is no longer offered or can't be repeated,
+  // e.g. End Turn once its AP is spent or an item whose last copy was used.
   useEffect(() => {
     if (!combatMode || !selectedId || !filtered) return;
     const selectedItem = filtered.find((i) => getActionSelectionId(i) === selectedId);
-    if (!selectedItem) return;
-
     if (
+      !selectedItem ||
       getRemainingCooldown(selectedItem, currentRound) > 0 ||
       lacksActionPoints(getEffectiveActionCost(selectedItem, props), {
         combatMode,
@@ -529,6 +528,10 @@ const actionHoverSummary = (item: ActionItemProps, actionCost: number | undefine
     .filter(Boolean)
     .join(" · ");
 };
+
+/** End Turn is spent when used; the other basic moves stay selected into the next round. */
+const keepsSelectionNextRound = (item: ActionItemProps | undefined) =>
+  item?.type === "basic" && item.id !== "wait";
 
 /** An action's AP cost: its effective cost in combat, otherwise its listed cost. */
 const getEffectiveActionCost = (

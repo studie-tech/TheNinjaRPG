@@ -39,6 +39,7 @@ import GraphBankLedger from "@/layout/GraphBankLedger";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
+import { SystemIntroBanner } from "@/layout/SystemIntroBanner";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
@@ -224,6 +225,7 @@ export function BankScreen() {
         {...navigation}
         padding={false}
       >
+        <SystemIntroBanner system="bank" className="m-3" />
         <Image
           alt="welcome"
           src={IMG_BUILDING_BANK}

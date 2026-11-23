@@ -1,5 +1,5 @@
 import { useSetAtom } from "jotai";
-import { Loader2, Sparkles, X } from "lucide-react";
+import { Gift, Loader2, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -32,7 +32,10 @@ import { trackConversion } from "@/libs/conversionTracking";
 import {
   dialogChoiceContentId,
   getActiveObjective,
+  getRewardClaimLabel,
   getSeenQuestDialogue,
+  hasUnclaimedPredecessorReward,
+  isObjectiveComplete,
   isQuestComplete,
   isQuestObjectiveAvailable,
   type QuestDialogueEntry,
@@ -50,6 +53,7 @@ import {
 import { sceneCharactersAtom } from "@/libs/questScene";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { getRewardPickCount, isRewardChoiceQuest } from "@/libs/rewardChoice";
+import { collapseRewards } from "@/libs/rewards";
 import { cn } from "@/libs/shadui";
 import { getChapterForQuest, isLeadQuest } from "@/libs/storyGuidance";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
@@ -60,7 +64,8 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserDataSelector, useUserInfo } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
-import { hasAnyRewardValue } from "@/validators/rewards";
+import { rewardPayloads } from "@/validators/rewardPackages";
+import { hasAnyRewardValue, hasReward } from "@/validators/rewards";
 
 const tabs = ["Active", "History", "Battles", "Achievements"] as const;
 type tabType = (typeof tabs)[number];
@@ -82,7 +87,7 @@ const Logbook: React.FC = () => {
   return (
     <ContentBox
       id="tutorial-logbook"
-      title="LogBook"
+      title="Logbook"
       subtitle="Character Activities"
       initialBreak={true}
       padding={false}
@@ -500,6 +505,26 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   // - If no background or scene, use default background & scene from quest
   // - For starter quests, use the assistant image instead of quest characters
   const activeObjective = getActiveObjective(quest, tracker);
+  // The reward just earned is claimed before the conversation moves on; an answer would
+  // collect it unseen.
+  const holdsDialogForClaim =
+    activeObjective?.task === "dialog" &&
+    hasUnclaimedPredecessorReward(quest, tracker, activeObjective.id);
+  // An older reward still waiting, such as an opening level check, leads the entry, so
+  // the claim comes before the conversation's next answer and the answer before the
+  // objectives already behind the player.
+  const isWaitingClaim = (index: number) => {
+    const objective = quest.content.objectives[index];
+    return (
+      !!objective &&
+      hasReward(objective) &&
+      isObjectiveComplete(tracker, objective).canCollect &&
+      isQuestObjectiveAvailable(quest, tracker, index)
+    );
+  };
+  const leadsWithObjectiveClaim = quest.content.objectives.some((_, index) =>
+    isWaitingClaim(index),
+  );
   // Explain hidden dialog choices or reward collection instead of showing no actions at all.
   const awaitsPlayerAction =
     (activeObjective?.task === "dialog" && !activeObjective.overworldPlacementId) ||
@@ -648,6 +673,71 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     });
   };
 
+  const objectiveCards = (include: (index: number) => boolean) =>
+    quest.content.objectives?.some((_, index) => include(index)) && (
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-4",
+          // Consecutive quests show only their active objective, so it gets the full width.
+          props.compact ||
+            tierOrDaily ||
+            quest.consecutiveObjectives ||
+            quest.content.objectives.length === 1
+            ? "sm:grid-cols-1"
+            : "sm:grid-cols-2",
+          showScene ? "px-3 pb-3" : "",
+        )}
+      >
+        <QuestObjectives
+          quest={quest}
+          tracker={tracker}
+          checkRewards={() => checkRewards({ questId: quest.id })}
+          locked={!canProgress}
+          include={include}
+          compact={props.compact}
+        />
+      </div>
+    );
+  // The quest's reward and story. The narrow dock leads with what the player does now,
+  // so there they follow the objectives.
+  const questSummary = !showScene && (
+    <>
+      <div className="pt-2">
+        <Reward
+          info={userQuest.quest.content.reward}
+          rewardMultiplier={rewardMultiplier}
+          pickCount={
+            isRewardChoiceQuest(userQuest.quest.content)
+              ? getRewardPickCount(userQuest.quest.content)
+              : undefined
+          }
+        />
+        <EventTimer quest={quest} />
+      </div>
+      {!["tier", "daily"].includes(quest.questType) && quest.description && (
+        <QuestBriefing key={quest.id} description={quest.description} />
+      )}
+    </>
+  );
+  // The finished quest's reward, named like the objective claims.
+  const questClaim = allDone && !userQuest.completed && canProgress && (
+    <div className={cn("w-full", showScene ? "p-3" : "", !props.compact && "grow")}>
+      <Button
+        id="return"
+        onClick={() => checkRewards({ questId: quest.id })}
+        // A claim names every reward, so a long one wraps in a narrow column.
+        className="h-auto min-h-9 w-full text-left text-balance whitespace-normal"
+      >
+        <Gift className="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
+        {isRewardChoiceQuest(quest.content)
+          ? "Choose your reward"
+          : rewardMultiplier === 1
+            ? getRewardClaimLabel(collapseRewards(rewardPayloads(quest.content.reward)))
+            : "Claim reward"}
+      </Button>
+    </div>
+  );
+
   return (
     <Post
       className={`${tierOrDaily ? "" : "col-span-2"} ${showScene ? "px-0 py-0" : "px-3"}`}
@@ -735,26 +825,8 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             <div className="font-bold text-sm">{quest.name}</div>
           </div>
         )}
-        {/* If we're not showing the scene, just show the text. Useful when we're in the logbook */}
-        {!showScene && (
-          <>
-            <div className="pt-2">
-              <Reward
-                info={userQuest.quest.content.reward}
-                rewardMultiplier={rewardMultiplier}
-                pickCount={
-                  isRewardChoiceQuest(userQuest.quest.content)
-                    ? getRewardPickCount(userQuest.quest.content)
-                    : undefined
-                }
-              />
-              <EventTimer quest={quest} />
-            </div>
-            {!["tier", "daily"].includes(quest.questType) && quest.description && (
-              <QuestBriefing key={quest.id} description={quest.description} />
-            )}
-          </>
-        )}
+        {/* The narrow dock scrolls; its claim leads the entry instead of trailing the objectives. */}
+        {props.compact ? questClaim : questSummary}
         {showScene && (
           <QuestDialogScene
             background={background}
@@ -776,13 +848,16 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             {progressBlockedMessage}
           </p>
         )}
+        {leadsWithObjectiveClaim ? objectiveCards(isWaitingClaim) : null}
         {/* Dialog options */}
         {canProgress &&
+          !holdsDialogForClaim &&
           activeObjective?.task === "dialog" &&
           // Placement-bound dialog choices are only actionable at their NPC. The Sector dialog
           // renders them after the server verifies the player's authoritative placement tile.
           !activeObjective.overworldPlacementId && (
-            <div className="w-full">
+            // The tutorial ring frames the heading with the answers it names.
+            <div id="tutorial-dialog-options" className="w-full">
               <h2 className="flex items-center pl-2 font-bold text-lg">
                 Dialog Options
                 {isCheckingRewards && (
@@ -792,16 +867,12 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                   />
                 )}
               </h2>
-              <div
-                id="tutorial-dialog-options"
-                className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1"
-              >
+              <div className="pointer-events-auto flex w-full flex-wrap gap-1 px-2 pb-1">
                 {!isCheckingRewards &&
                   activeObjective.nextObjectiveId.map((entry, index) => (
                     <Button
                       key={`${index}-${entry.text}`}
                       type="button"
-                      variant="info"
                       className="h-auto max-w-full whitespace-normal text-left"
                       onClick={() =>
                         checkRewards({
@@ -832,41 +903,8 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             </p>
           )}
 
-        {quest.content.objectives && (
-          <div
-            className={cn(
-              "grid grid-cols-1 gap-4",
-              // Consecutive quests show only their active objective, so it gets the full width.
-              props.compact ||
-                tierOrDaily ||
-                quest.consecutiveObjectives ||
-                quest.content.objectives.length === 1
-                ? "sm:grid-cols-1"
-                : "sm:grid-cols-2",
-              showScene ? "px-3 pb-3" : "",
-            )}
-          >
-            <QuestObjectives
-              quest={quest}
-              tracker={tracker}
-              checkRewards={() => checkRewards({ questId: quest.id })}
-              locked={!canProgress}
-            />
-          </div>
-        )}
-
-        {allDone && !userQuest.completed && canProgress && (
-          <div className={cn("w-full grow", showScene ? "p-3" : "")}>
-            <Button
-              id="return"
-              onClick={() => checkRewards({ questId: quest.id })}
-              className="w-full"
-            >
-              <Sparkles className="mr-2 h-5 w-5" />
-              Collect Reward
-            </Button>
-          </div>
-        )}
+        {objectiveCards((index) => !leadsWithObjectiveClaim || !isWaitingClaim(index))}
+        {props.compact ? questSummary : questClaim}
         <EarlierQuestDialogue
           key={abandonIdentity}
           entries={earlierDialogue}
@@ -877,7 +915,6 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   );
 };
 
-/** A quest's objective cards, hiding those not yet relevant. Callers own the grid around them. */
 /** Quest story text, collapsed so the objectives stay near the quest name */
 const QuestBriefing: React.FC<{ description: string }> = ({ description }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -897,19 +934,26 @@ const QuestBriefing: React.FC<{ description: string }> = ({ description }) => {
   );
 };
 
+/** A quest's objective cards, hiding those not yet relevant. Callers own the grid around them. */
 export const QuestObjectives: React.FC<{
   quest: UserQuest["quest"];
   tracker: QuestTrackerType;
   checkRewards: () => void;
   /** Gray out every objective, for a player who cannot progress right now. */
   locked?: boolean;
-}> = ({ quest, tracker, checkRewards, locked }) => {
+  /** The objectives, by index, this part of the entry shows; all by default. */
+  include?: (index: number) => boolean;
+  /** The narrow dock: finished objectives with nothing to claim take one line. */
+  compact?: boolean;
+}> = ({ quest, tracker, checkRewards, locked, include, compact }) => {
   const allDone = isQuestComplete(quest, tracker);
   const activeObjective = getActiveObjective(quest, tracker);
   return quest.content.objectives.map((objective, i) => {
+    if (include && !include(i)) return null;
     const status = tracker.goals.find((g) => g.id === objective.id);
     return (
       <Objective
+        compact={compact}
         objective={objective}
         tracker={tracker}
         questType={quest.questType}
@@ -1079,16 +1123,18 @@ export const useCheckRewards = () => {
         }
         if (data.success && !(data.userQuest && data.rewards))
           showActionReadinessToast(data);
-        // Only the academy tutorial needs refreshed quest lists before its next highlight.
-        const questRefresh = updateQuestRewards(data, context.quests, profileApplied);
         // Reconcile other views without holding reward feedback or the collection loader.
-        void Promise.allSettled([questRefresh]);
-        // Claim steps move on once the tracker shows the reward collected.
+        void Promise.allSettled([
+          updateQuestRewards(data, context.quests, profileApplied),
+        ]);
+        // A dialog lesson moves on once the server has accepted the answer; a refused one
+        // keeps the step and its answer buttons for another try. The next lesson's
+        // highlight finds its target once the lists refresh.
         if (
+          data.success &&
           variables?.nextObjectiveId &&
           currentStep?.relatedValue === variables.questId
         ) {
-          await questRefresh;
           await completeTutorialAction("questDialog");
         }
       },

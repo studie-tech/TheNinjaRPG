@@ -23,6 +23,8 @@ interface NavTabsProps {
   values?: Partial<Record<string, string>>;
   listClassName?: string;
   itemClassName?: (option: string) => string;
+  /** Tutorial id of a tab's item; `tutorial-<option>` unless given. */
+  itemId?: (option: string) => string | undefined;
   counts?: Partial<Record<string, number>>;
   countLabel?: string;
   /** Per-tab names for what a count means; tabs without one use `countLabel`. */
@@ -126,7 +128,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
       <li
         className={cn("mr-2", props.itemClassName?.(option))}
         key={`${option}-${i}`}
-        id={`tutorial-${option}`}
+        id={props.itemId ? props.itemId(option) : `tutorial-${option}`}
         role={props.accessibleTabs ? "presentation" : undefined}
       >
         {props.accessibleTabs ? (

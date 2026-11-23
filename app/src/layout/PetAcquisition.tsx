@@ -39,6 +39,11 @@ import {
   isPetAppearanceReady,
 } from "@/libs/pets/progression";
 import { showMutationToast } from "@/libs/toast";
+import {
+  getStarterQuestProgress,
+  isStarterObjectiveSatisfied,
+  STARTER_QUEST_OBJECTIVES,
+} from "@/libs/tutorial";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { acquirePetSchema } from "@/validators/pets";
 
@@ -302,6 +307,16 @@ export function PetAcquisition() {
     isCollectionFull && data.slots >= data.maxSlots && data.options.species.length > 0
       ? "Your collection is full. Release a companion before adopting another."
       : data.unavailableReason;
+  // The rescued pup is offered once the player has handed it to the Bondkeepers on the
+  // starter quest; until then the page points back to that hand-over.
+  const starterProgress = getStarterQuestProgress(userData);
+  const isPupHandedOver =
+    !!starterProgress &&
+    isStarterObjectiveSatisfied(STARTER_QUEST_OBJECTIVES.sanctuary, starterProgress);
+  const isCarryingPup =
+    !!starterProgress &&
+    !isPupHandedOver &&
+    isStarterObjectiveSatisfied(STARTER_QUEST_OBJECTIVES.pup, starterProgress);
   const appearanceReady = pet ? isPetAppearanceReady(pet) : false;
   const retryAt = data.generationRetryAt;
   const canRetry =
@@ -360,14 +375,25 @@ export function PetAcquisition() {
       {!acquiredPetId &&
         !isReplacement &&
         data.pets.length === 0 &&
-        data.canAdoptSanctuaryPup && (
+        data.canAdoptSanctuaryPup &&
+        (isPupHandedOver ? (
           <SanctuaryPupOffer
             name={name}
             onNameChange={setName}
             isBusy={isBusy}
             onAdopt={() => void adoptPup()}
           />
-        )}
+        ) : (
+          isCarryingPup && (
+            <p
+              className="mb-4 rounded-lg border-2 border-dashed border-violet-500/50 bg-violet-500/5 p-3 text-sm"
+              role="status"
+            >
+              The pup you rescued is still at your side. Hand it over to the Bondkeepers
+              in your <b>Quests</b> first.
+            </p>
+          )
+        ))}
       {!acquiredPetId && unavailableReason && (
         <p className="text-muted-foreground mb-4 text-sm" role="status">
           {unavailableReason}
@@ -858,8 +884,8 @@ const SanctuaryPupOffer: React.FC<{
         The Sanctuary pup
       </h3>
       <p className="text-sm">
-        The hound you rescued won&apos;t leave your side. Its collar still carries a
-        faint violet scorch. Give it a name, or keep the one the Bondkeepers chose.
+        The pup you rescued won&apos;t leave your side. Its collar still carries a faint
+        violet scorch. Give it a name, or keep the one the Bondkeepers chose.
       </p>
     </div>
     <div className="flex flex-col gap-2 @lg:flex-row @lg:items-center">

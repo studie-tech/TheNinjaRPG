@@ -35,6 +35,10 @@ import {
 } from "@/libs/rendering/scenes/travelActors";
 import { travelSectorKey } from "@/libs/rendering/scenes/travelData";
 import { createTravelPath } from "@/libs/rendering/scenes/travelPath";
+import {
+  travelViewportHeight,
+  watchTravelViewport,
+} from "@/libs/rendering/scenes/travelViewport";
 import { createRenderScope } from "@/libs/rendering/scope";
 import {
   applySectorTiles,
@@ -96,6 +100,11 @@ export const createTravelScene = async (options: {
   onTap: (hit: TravelPick, client: { x: number; y: number }) => void;
   onHover: (structureId: string | null, locationId: string | null) => void;
   onZoom: (zoom: number) => void;
+  /**
+   * Where the viewer's objective marker stands in the canvas's CSS pixels (`size` is
+   * its tile's height there), or null while it is off screen. Called when it moves.
+   */
+  onQuestMarkerPoint?: (at: TravelMarkerPoint | null) => void;
   initialZoom: number;
   resolution?: number;
 }) => {
@@ -112,8 +121,11 @@ export const createTravelScene = async (options: {
       options.mount.closest<HTMLElement>("[data-travel-viewport]")?.clientHeight ||
       (options.mount.closest('[data-world-expanded="true"]')
         ? window.innerHeight
-        : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600))),
+        : travelViewportHeight(options.mount, width * displayRatio(), {
+            hasRowBelow: true,
+          })),
   });
+  game.own(watchTravelViewport(game.fit));
   game.canvas.style.filter = "none";
   try {
     // The camera moves this group without repacking unchanged descendant transforms.
@@ -361,6 +373,25 @@ export const createTravelScene = async (options: {
       );
     };
     game.setResize(() => transform(true));
+    let questMarkerKey = "";
+    const reportQuestMarker = () => {
+      if (!options.onQuestMarkerPoint) return;
+      const marker = actors.questMarker();
+      const s = scale(),
+        { width, height } = game.renderer;
+      const x = marker ? world.position.x + marker.x * s : 0,
+        y = marker ? world.position.y - marker.y * s : 0;
+      const at =
+        marker && x >= 0 && x <= width && y >= 0 && y <= height
+          ? { x, y, size: marker.size * s, width, height }
+          : null;
+      const key = at
+        ? `${Math.round(at.x)}:${Math.round(at.y)}:${Math.round(at.size)}:${width}:${height}`
+        : "";
+      if (key === questMarkerKey) return;
+      questMarkerKey = key;
+      options.onQuestMarkerPoint(at);
+    };
     const pick = (x: number, y: number): TravelPick => {
       const snapshot = options.getSnapshot(),
         s = scale();
@@ -1185,6 +1216,7 @@ export const createTravelScene = async (options: {
         route.set(points, tile?.width ?? 50);
       }
       route.animate(frame, actors.feet(snapshot.viewer?.userId ?? ""), scale());
+      reportQuestMarker();
       const currentWeather =
         snapshot.weather ??
         getWorldWeather(
@@ -1319,6 +1351,14 @@ export type TravelPick = {
   actor: TravelActorHit | null;
   structureId: string | null;
   locationId: string | null;
+};
+/** A point on the travel canvas in CSS pixels, with the canvas size it was measured in. */
+export type TravelMarkerPoint = {
+  x: number;
+  y: number;
+  size: number;
+  width: number;
+  height: number;
 };
 export type TravelScene = Awaited<ReturnType<typeof createTravelScene>>;
 type TravelSector = {

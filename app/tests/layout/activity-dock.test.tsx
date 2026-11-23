@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, expect, it, mock, vi } from "bun:test";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import * as storyGuidanceHook from "@/hooks/useStoryGuidance";
@@ -6,11 +6,19 @@ import { ActivityDock } from "@/layout/ActivityDock";
 import { ActivityDockButton } from "@/layout/ActivityDockButton";
 import * as logbook from "@/layout/Logbook";
 import { chatPanelAtom } from "@/libs/chatPanel";
-import { questsTabLessonAtom } from "@/libs/questsTabLesson";
+import { getQuestsTabLesson } from "@/libs/questsTabLesson";
 import * as storyGuidance from "@/libs/storyGuidance";
+import type * as TutorialSteps from "@/libs/tutorialSteps";
 import * as routing from "@/utils/routing";
 import * as context from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+
+// Another assistant suite replaces the steps with one synthetic step, and Bun keeps
+// module mocks across files. A query-suffixed import loads the real definitions again.
+const realStepsPath = "../../src/libs/tutorialSteps.tsx?real";
+const steps = (await import(realStepsPath)) as typeof TutorialSteps;
+mock.module("@/libs/tutorialSteps", () => steps);
+const { TUTORIAL_STEPS } = steps;
 
 let user: {
   userId: string;
@@ -86,7 +94,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
-  getDefaultStore().set(questsTabLessonAtom, null);
   restoreBrowserGlobals();
   document.documentElement.removeAttribute("data-mobile-activity-nav");
 });
@@ -323,35 +330,315 @@ it("pins active quest attempts, restores pins, and removes completed attempts fr
   expect(reopened.queryByRole("button", { name: "Unpin Second mission" })).toBeNull();
 });
 
-it("leads a lesson's answer or claim through the Quests tab and hands back after it", () => {
-  const quest = (id: string, name: string) => ({
-    id: `attempt-${id}`,
-    questId: id,
-    endAt: null,
-    quest: { id, name, questType: "starter" },
-  });
-  user.userQuests = [quest("other", "Other mission"), quest("trials", "The Trials")];
+/** Puts the player on the first lesson with these Quests-tab marks; returns its quest id. */
+const onQuestsTabLesson = (marks: "all" | "tab" | "none") => {
+  const index = TUTORIAL_STEPS.findIndex((step) => step.questsTab?.marks === marks);
+  const questId = String(TUTORIAL_STEPS[index]!.relatedValue);
+  user.tutorialStep = index;
+  user.userQuests = [
+    lessonQuest("other", "Other mission"),
+    lessonQuest(questId, "The Trials"),
+  ];
   user.questData = [
     { id: "other", goals: [] },
-    { id: "trials", goals: [{ id: "a", done: true, collected: false }] },
+    { id: questId, goals: [{ id: "a", done: true, collected: false }] },
   ];
-  getDefaultStore().set(questsTabLessonAtom, {
-    questId: "trials",
-    prompt: "Tap the gift to claim your reward.",
-  });
+  return questId;
+};
+const lessonQuest = (id: string, name: string) => ({
+  id: `attempt-${id}`,
+  questId: id,
+  endAt: null,
+  quest: { id, name, questType: "starter" },
+});
+
+it("leads a lesson's answer or claim through the Quests tab and hands back after it", () => {
+  const questId = onQuestsTabLesson("all");
+  const step = TUTORIAL_STEPS[user.tutorialStep]!;
   const view = render(<ActivityDock>Lesson</ActivityDock>);
   const questsTab = view.getByRole("tab", { name: "Quests" });
   expect(questsTab.className).toContain("ring-amber-500");
   fireEvent.mouseDown(questsTab, { button: 0, ctrlKey: false });
-  expect(view.getByText("Tap the gift to claim your reward.")).toBeTruthy();
-  // The lesson's quest comes first, already open.
-  expect(view.container.querySelector("article")?.textContent).toContain("The Trials");
+  expect(
+    view.getByText(step.questsTab?.marks === "all" ? step.questsTab.prompt : ""),
+  ).toBeTruthy();
+  // The lesson's quest comes first, already open and outlined.
+  const first = view.container.querySelector("article");
+  expect(first?.textContent).toContain("The Trials");
+  expect(first?.className).toContain("ring-amber-500/40");
   expect(view.getByText("Progress for The Trials")).toBeTruthy();
   // Claiming moves the quest on, and the dock returns to the lesson.
   user.questData = [
     { id: "other", goals: [] },
-    { id: "trials", goals: [{ id: "a", done: true, collected: true }] },
+    { id: questId, goals: [{ id: "a", done: true, collected: true }] },
   ];
   view.rerender(<ActivityDock>Lesson</ActivityDock>);
   expect(view.getByText("Lesson")).toBeTruthy();
+});
+
+it.each([
+  ["tab", true],
+  ["none", false],
+] as const)(
+  "marks %s of the Quests tab for a later lesson and still hands back after it",
+  (marks, ringsTab) => {
+    const questId = onQuestsTabLesson(marks);
+    const view = render(<ActivityDock>Lesson</ActivityDock>);
+    const questsTab = view.getByRole("tab", { name: "Quests" });
+    expect(questsTab.className.includes("ring-amber-500")).toBe(ringsTab);
+    fireEvent.mouseDown(questsTab, { button: 0, ctrlKey: false });
+    // The prompt as plain text, with no outline, and the lesson's quest still leads, open.
+    const prompt = getQuestsTabLesson(user)!.prompt;
+    expect(view.getByText(prompt).closest("p")?.querySelector("svg")).toBeNull();
+    expect(
+      view.queryByText("Pin the objectives you want to keep at the top."),
+    ).toBeNull();
+    const first = view.container.querySelector("article");
+    expect(first?.textContent).toContain("The Trials");
+    expect(first?.className).not.toContain("ring-amber-500/40");
+    expect(view.getByText("Progress for The Trials")).toBeTruthy();
+    // The lesson's own action moves on: a claim the quest, an answer the step.
+    if (TUTORIAL_STEPS[user.tutorialStep]?.advanceOn === "questDialog") {
+      user.tutorialStep += 1;
+    } else {
+      user.questData = [
+        { id: "other", goals: [] },
+        { id: questId, goals: [{ id: "a", done: true, collected: true }] },
+      ];
+    }
+    view.rerender(<ActivityDock>Lesson</ActivityDock>);
+    expect(view.getByText("Lesson")).toBeTruthy();
+  },
+);
+
+it("keeps Quests open for the answer after claiming an older reward there", () => {
+  const index = TUTORIAL_STEPS.findIndex(
+    (step) => step.questsTab && step.advanceOn === "questDialog",
+  );
+  const questId = onQuestsTabLesson(TUTORIAL_STEPS[index]!.questsTab!.marks);
+  user.tutorialStep = index;
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  user.questData = [
+    { id: "other", goals: [] },
+    { id: questId, goals: [{ id: "a", done: true, collected: true }] },
+  ];
+  view.rerender(<ActivityDock>Lesson</ActivityDock>);
+  expect(view.queryByText("Lesson")).toBeNull();
+  expect(view.getByText("Progress for The Trials")).toBeTruthy();
+});
+
+it("keeps Quests open for the proctor's answer after claiming the level reward", () => {
+  // The exam's goals as the server stores them when the proctor's question opens.
+  const index = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-tour");
+  const questId = String(TUTORIAL_STEPS[index]!.relatedValue);
+  const located = { sector: 222, latitude: 8, longitude: 13, locationChecked: true };
+  const goals = (levelClaimed: boolean) => [
+    {
+      id: "lG3__",
+      done: true,
+      value: 5,
+      collected: levelClaimed,
+      // The claim's confirmed tracker comes back without the parsed defaults.
+      ...(levelClaimed ? {} : { recentlyDied: false }),
+      selectedNextObjectiveId: "mKVnH",
+    },
+    {
+      id: "mKVnH",
+      done: true,
+      value: 0,
+      collected: false,
+      recentlyDied: false,
+      selectedNextObjectiveId: "tFTYj",
+      ...located,
+    },
+    {
+      id: "tFTYj",
+      done: false,
+      value: 0,
+      collected: false,
+      recentlyDied: false,
+      ...located,
+    },
+  ];
+  user.tutorialStep = index;
+  user.userQuests = [lessonQuest(questId, "Road to Genin")];
+  user.questData = [{ id: questId, goals: goals(false) }];
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  user = { ...user, questData: [{ id: questId, goals: goals(true) }] };
+  view.rerender(<ActivityDock>Lesson</ActivityDock>);
+  expect(view.queryByText("Lesson")).toBeNull();
+  expect(view.getByText("Progress for Road to Genin")).toBeTruthy();
+  // The answer moves the step on, and the dock returns to the next lesson.
+  user = { ...user, tutorialStep: index + 1 };
+  view.rerender(<ActivityDock>Lesson</ActivityDock>);
+  expect(view.getByText("Lesson")).toBeTruthy();
+});
+
+it("brings the proctor's answer into view when Quests opens", () => {
+  const index = TUTORIAL_STEPS.findIndex((step) => step.id === "exam-tour");
+  const questId = String(TUTORIAL_STEPS[index]!.relatedValue);
+  user.tutorialStep = index;
+  user.userQuests = [lessonQuest(questId, "Road to Genin")];
+  user.questData = [{ id: questId, goals: [] }];
+  vi.spyOn(logbook, "LogbookEntry").mockImplementation(() => (
+    <div id="tutorial-dialog-options">Choose my village</div>
+  ));
+  // The answer sits 120px below the bottom of the scrolling list.
+  const rect = (top: number, bottom: number) => ({ top, bottom }) as DOMRect;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.id === "tutorial-dialog-options" ? rect(500, 560) : rect(0, 440);
+  });
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  const panel = view.getByRole("tabpanel");
+  expect(panel.scrollTop).toBe(120);
+  // Later updates leave the player's own scrolling alone.
+  panel.scrollTop = 0;
+  view.rerender(<ActivityDock>Lesson</ActivityDock>);
+  expect(panel.scrollTop).toBe(0);
+});
+
+it("gives Quests the lesson's height on a phone and the lesson's text size when narrow", () => {
+  const offsetHeight = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "offsetHeight",
+  );
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get: () => 330,
+  });
+  try {
+    const view = render(<ActivityDock>Lesson</ActivityDock>);
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    const panel = view.getByRole("tabpanel");
+    expect(panel.style.getPropertyValue("--activity-dock-lesson-height")).toBe("330px");
+    expect(panel.className).toContain(
+      "max-md:h-[max(var(--activity-dock-lesson-height),16rem)]",
+    );
+    expect(panel.className).toContain("@max-[34rem]/dock:[&_.text-sm]:text-lg");
+  } finally {
+    if (offsetHeight)
+      Object.defineProperty(HTMLElement.prototype, "offsetHeight", offsetHeight);
+  }
+});
+
+it("keeps the Story tab after the tutorial below the page's dialogs", () => {
+  user = { ...user, rank: "GENIN", tutorialStep: TUTORIAL_STEPS.length };
+  const view = render(<ActivityDock>Story so far</ActivityDock>);
+  fireEvent.click(view.getByRole("button", { name: "Open Activity" }));
+  expect(view.getByText("Story so far")).toBeTruthy();
+  expect(view.getByRole("complementary", { name: "Activity" }).className).not.toContain(
+    "z-[61]",
+  );
+});
+
+it("steps a lesson below a modal it does not teach, and stays above one it does", async () => {
+  const target = TUTORIAL_STEPS.findIndex((step) => !!step.elementIds?.length);
+  user.tutorialStep = target;
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  const dock = view.getByRole("complementary", { name: "Activity" });
+  expect(dock.className).toContain("z-[61]");
+  // A modal dialog hides the rest of the page, the dock included.
+  const dialog = document.createElement("div");
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("data-state", "open");
+  await act(async () => {
+    document.body.append(dialog);
+    view.container.setAttribute("aria-hidden", "true");
+  });
+  expect(dock.className).not.toContain("z-[61]");
+  // The lesson's own target inside the dialog keeps the lesson on top.
+  const taught = document.createElement("button");
+  taught.id = TUTORIAL_STEPS[target]!.elementIds![0]!;
+  await act(async () => {
+    dialog.append(taught);
+  });
+  expect(dock.className).toContain("z-[61]");
+  await act(async () => {
+    dialog.remove();
+    view.container.removeAttribute("aria-hidden");
+  });
+  expect(dock.className).toContain("z-[61]");
+});
+
+it("fits the open dock to the gutter beside the centre column on a wide screen", () => {
+  const column = document.createElement("div");
+  column.setAttribute("data-reading-surface", "");
+  document.body.append(column);
+  const matchMedia = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: query === "(min-width: 1280px)",
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  })) as never;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return (
+      this === column
+        ? { left: 358, right: 1058, width: 700 }
+        : { left: 15, right: 435, width: 420 }
+    ) as DOMRect;
+  });
+  try {
+    const view = render(<ActivityDock>Lesson</ActivityDock>);
+    const panel = view.container.querySelector<HTMLElement>(
+      "[data-activity-dock] > div",
+    );
+    expect(panel?.style.width).toBe("min(var(--activity-dock-width, 420px), 335px)");
+  } finally {
+    window.matchMedia = matchMedia;
+    column.remove();
+  }
+});
+
+it("returns from Quests to the lesson when the step moves on there", () => {
+  user.tutorialStep = TUTORIAL_STEPS.findIndex((step) => !step.questsTab);
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  expect(view.queryByText("Lesson")).toBeNull();
+  // A lesson that does not send the player here leaves the tab its own hint.
+  expect(
+    view.getByText("Pin the objectives you want to keep at the top."),
+  ).toBeTruthy();
+  user.tutorialStep += 1;
+  view.rerender(<ActivityDock>Lesson</ActivityDock>);
+  expect(view.getByText("Lesson")).toBeTruthy();
+});
+
+it("keeps Quests open on a new step answered there, showing that step's prompt", () => {
+  const index = TUTORIAL_STEPS.findIndex((step) => step.questsTab?.marks === "all");
+  const step = TUTORIAL_STEPS[index]!;
+  onQuestsTabLesson("all");
+  user.tutorialStep = index - 1;
+  const view = render(<ActivityDock>Lesson</ActivityDock>);
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  user.tutorialStep = index;
+  view.rerender(<ActivityDock>Lesson</ActivityDock>);
+  expect(view.queryByText("Lesson")).toBeNull();
+  expect(
+    view.getByText(step.questsTab?.marks === "all" ? step.questsTab.prompt : ""),
+  ).toBeTruthy();
 });

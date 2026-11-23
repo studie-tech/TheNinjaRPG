@@ -2720,3 +2720,29 @@ export const updateQuestHistoryForExpressTrials = (
         isNull(questHistory.endAt),
       ),
     );
+
+/**
+ * Build the grant of a jutsu Express Trials hand out in place of its lesson, learned at
+ * level 1 and equipped when `equipped` says so. A jutsu the player already owns stays as
+ * it is and reports no affected row.
+ */
+export const insertUserJutsuForExpressTrials = (
+  client: Pick<DrizzleClient, "insert">,
+  row: { id: string; userId: string; jutsuId: string; equipped: boolean },
+) =>
+  client
+    .insert(userJutsu)
+    .values(row)
+    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+
+/** Build the lookup of whether the player owns any copy of an item, carried or stored. */
+export const selectUserItemForExpressTrials = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  itemId: string,
+) =>
+  client
+    .select({ id: userItem.id })
+    .from(userItem)
+    .where(and(eq(userItem.userId, userId), eq(userItem.itemId, itemId)))
+    .limit(1);

@@ -90,3 +90,25 @@ it("leaves every quest folded when auto-open is off and none is in progress", ()
   expect(screen.getByText("Quest chapter")).toBeDefined();
   expect(screen.queryByText(/\(open\)/)).toBeNull();
 });
+
+it("shows its loader rather than an empty list while the quests are loading", () => {
+  Object.assign(vi.spyOn(client, "api" as never), {
+    quests: {
+      specificQuests: { useQuery: () => ({ data: undefined }) },
+      startQuest: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    item: { getAllNames: { useQuery: () => ({ data: undefined }) } },
+  });
+  mockUserContextValue({
+    data: { level: 1, sector: 1, questData: [], userQuests: [] },
+  });
+  render(
+    <QuestPicker
+      questType="starter"
+      title="Lessons"
+      unavailableText="No lessons available right now."
+    />,
+  );
+  expect(screen.queryByText("No lessons available right now.")).toBeNull();
+  expect(screen.getByText("Loading...")).toBeDefined();
+});

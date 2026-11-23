@@ -96,3 +96,16 @@ it.each(["tutorial", "auth", "merch", "editor"])(
     expect(view.queryByRole("dialog")).toBeNull();
   },
 );
+it("holds the dispatch for the rest of the visit in which the tutorial ended", async () => {
+  tutorialOn = true;
+  const view = render(<ActivityStreakPopup />);
+  expect(view.queryByRole("dialog")).toBeNull();
+  tutorialOn = false;
+  view.rerender(<ActivityStreakPopup />);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(view.queryByRole("dialog")).toBeNull();
+  view.unmount();
+  // The next visit, a fresh mount, opens it as usual.
+  const next = render(<ActivityStreakPopup />);
+  expect(await next.findByRole("dialog", { name: "Village dispatch" })).toBeTruthy();
+});

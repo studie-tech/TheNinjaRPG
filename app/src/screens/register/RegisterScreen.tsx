@@ -41,6 +41,7 @@ import {
   IMG_REGISTRATIN_STEP9,
 } from "@/drizzle/constants";
 import { useNavigationRouter } from "@/hooks/navigation";
+import { resetCharacterPresentation } from "@/hooks/useActivityDock";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CharacterPreview } from "@/layout/CharacterPreview";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -173,6 +174,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
           // Publish the confirmed receipt before cache reconciliation can fail.
           trackConversion("register", data.registrationId ?? userId ?? undefined);
           if (data.isAdClickLinked) markAdClickLinked();
+          if (userId) resetCharacterPresentation(userId);
           await utils.profile.getUser.invalidate();
           createAvatar.mutate();
         } else {

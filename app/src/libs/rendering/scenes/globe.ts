@@ -45,6 +45,10 @@ import {
   createGlobeArc,
   globeJourneyProgress,
 } from "@/libs/rendering/scenes/globeRoute";
+import {
+  travelViewportHeight,
+  watchTravelViewport,
+} from "@/libs/rendering/scenes/travelViewport";
 import { createSectorGenerator } from "@/libs/rendering/sectorGenerationClient";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { getWorldWeather, type WorldWeather } from "@/libs/rendering/worldWeather";
@@ -70,14 +74,18 @@ export const createGlobeScene = async (options: {
    * same units as `onHover`, or null while it faces away. Called when it moves.
    */
   onFocusPoint?: (at: GlobeHoverPoint | null) => void;
+  /** Grow the square canvas down to the foot of the first screen (the travel page). */
+  fillViewport?: boolean;
 }) => {
   const game = await createGameRenderer({
     ...options,
     surface: "globe",
     height: (width) =>
-      options.mount.closest<HTMLElement>("[data-travel-viewport]")?.clientHeight ||
-      width,
+      options.fillViewport
+        ? travelViewportHeight(options.mount, width * MIN_FILL_ASPECT)
+        : width,
   });
+  if (options.fillViewport) game.own(watchTravelViewport(game.fit));
   try {
     let state = options.state;
     const map = state.map,
@@ -758,6 +766,9 @@ const globeClimate = (protectedSectors: number[]) => {
 };
 
 const climateFields = new Map<string, Promise<Uint8Array>>();
+
+/** A filling globe may turn landscape when a lesson leaves little room, never flatter. */
+const MIN_FILL_ASPECT = 0.75;
 
 /** Where the pointer entered the hovered sector, in the canvas's CSS pixels. */
 export type GlobeHoverPoint = { x: number; y: number; width: number; height: number };

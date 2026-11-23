@@ -40,6 +40,7 @@ import {
   tutorialPageGuidanceAtom,
   useTutorialStep,
 } from "@/hooks/tutorial";
+import { characterStorageKey } from "@/hooks/useActivityDock";
 import { useStoryGuidance } from "@/hooks/useStoryGuidance";
 import { ActivityDock } from "@/layout/ActivityDock";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
@@ -47,7 +48,11 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { QuestObjectives, useCheckRewards } from "@/layout/Logbook";
 import { StorySpotlight, useStoryDockCard } from "@/layout/StoryDock";
-import { ExpressTrialsScreen, TutorialScreen } from "@/layout/TutorialScreens";
+import {
+  ExpressTrialsScreen,
+  streakDaysAhead,
+  TutorialScreen,
+} from "@/layout/TutorialScreens";
 import { CoachCard } from "@/layout/tutorial/CoachCard";
 import {
   type GuidedLessonMark,
@@ -55,6 +60,7 @@ import {
   guidedLessonAtom,
 } from "@/layout/tutorial/guidedLesson";
 import {
+  getDodgedPanelTop,
   getUsableHighlightElement,
   isSameBox,
   Spotlight,
@@ -68,11 +74,12 @@ import {
   canRetryQuestBattle,
   dialogChoiceContentId,
   getActiveObjective,
+  getRewardClaimLabel,
   isQuestComplete,
 } from "@/libs/objectives";
 import { levelUpBlockMessage } from "@/libs/profile";
 import { sceneCharactersAtom } from "@/libs/questScene";
-import { questsTabLessonAtom } from "@/libs/questsTabLesson";
+import { collapseRewards } from "@/libs/rewards";
 import { cn } from "@/libs/shadui";
 import { getChapterForQuest, getNavigationLevel } from "@/libs/storyGuidance";
 import {
@@ -81,6 +88,7 @@ import {
   getTutorialChapterProgress,
   getTutorialRewindStepIndex,
   getTutorialStrandedBattleStepId,
+  getTutorialTripPhase,
   hasOutgrownTutorial,
   isTutorialActive,
   isTutorialJutsuPickStep,
@@ -91,6 +99,7 @@ import {
 } from "@/libs/tutorial";
 import type { TutorialStepConfig } from "@/libs/tutorialSteps";
 import {
+  lessonReadingSeconds,
   TUTORIAL_CHAPTERS,
   TUTORIAL_HOSPITALIZED_STEP,
   TUTORIAL_STEPS,
@@ -101,12 +110,16 @@ import { usePublicPathname } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserDataSelector } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
+import { rewardPayloads } from "@/validators/rewardPackages";
 
 /** Marks the assistant panel so the highlight logic can measure what it covers. */
 const TUTORIAL_ASSISTANT_PANEL_ID = "tutorial-assistant-panel";
 
 /** Where the Activity dock lands when it dodges a highlight (its `top-20`), in rem. */
 const DODGED_PANEL_TOP_REM = 5;
+
+/** The dock's top while it dodges a highlight inside a dialog, read by `ActivityDock`. */
+const DODGE_TOP_PROPERTY = "--activity-dock-dodge-top";
 
 /** Width the Activity dock narrows to in a fight (`--activity-dock-width`), set on the root. */
 const ACTIVITY_DOCK_WIDTH_PROPERTY = "--activity-dock-width";
@@ -119,8 +132,18 @@ const ACTIVITY_DOCK_FIELD_GAP_PX = 16;
 
 /** Seconds a step without a Next button stays up before a "skip" escape appears. */
 const STUCK_STEP_SECONDS = 60;
-/** Idle seconds before a lesson that teaches a game control offers its own button. */
+/** Idle seconds, after the lesson has been read, before a lesson that teaches a game control offers its own button. */
 const SHORTCUT_IDLE_SECONDS = 10;
+
+/**
+ * How long the lesson keeps saying where it is going after the page, the step or the
+ * player's status changes, before a step that is still on another page counts as having
+ * no guidance here. Covers a battle starting while its lesson catches up.
+ */
+const PLACE_SETTLE_MS = 3000;
+
+/** The call to action of a lesson whose trip is under way. */
+const TRIP_UNDER_WAY_ACTION = "Follow your character along the route until you arrive.";
 
 /**
  * Grace before a combat lesson without a running fight is moved on, so the
@@ -321,8 +344,6 @@ const PlayerTutorialAssistant: React.FC<
     return () => window.removeEventListener("resize", handleResize);
   }, [sidebarBreakpoint]);
 
-  // State to track if we should show the special game menu tutorial
-  const [showGameMenuTutorial, setShowGameMenuTutorial] = useState<boolean>(false);
   // The village choice opens as a full page; the player may close it to look around.
   const [isVillageChooserHidden, setIsVillageChooserHidden] = useState(false);
   // The control that opened the chooser is gone once it hides, so focus its reopen button.
@@ -332,102 +353,115 @@ const PlayerTutorialAssistant: React.FC<
   }, [isVillageChooserHidden]);
   // Returning players are offered Express Trials until they reach the exam or decline.
   const [hasDeclinedExpress, setHasDeclinedExpress] = useLocalStorage(
-    `expressTrialsDeclined:${userData?.userId}`,
+    characterStorageKey("expressTrialsDeclined", userData?.userId),
     false,
   );
 
   // Tutorial management hook
   const {
     stepNumber,
-    currentStep,
+    currentStep: savedStep,
     updateTutorialStep,
     handleNextStep,
     handleNextStepAsync,
-    isAssistantVisible,
-    setIsAssistantVisible,
   } = useTutorialStep();
+
+  // The Dashboard lesson closes once the streak shows no day left to claim today: the
+  // claim was made, possibly before a reload, or there was nothing to claim.
+  const awaitsStreakClaim = savedStep?.advanceOn === "claimStreak";
+  const { data: streaks } = api.activityStreak.getUserStreaks.useQuery(undefined, {
+    enabled: awaitsStreakClaim,
+    staleTime: 60_000,
+  });
+  const isStreakClaimDone =
+    awaitsStreakClaim && !!streaks && !streakDaysAhead(streaks).today;
+  // Where the player is on the trip the lesson sends them on, which changes its words.
+  const tripPhase = getTutorialTripPhase(savedStep, userData);
+  // A returning player still on the trials past the exam step without having declined
+  // Express Trials took them, and skipped the lessons before the exam.
+  const tookExpress = !!userData?.playedBefore && !hasDeclinedExpress;
+  const currentStep = placeLesson(
+    isStreakClaimDone && savedStep?.afterAction
+      ? {
+          ...savedStep,
+          ...savedStep.afterAction,
+          elementIds: [],
+          advanceOn: undefined,
+          showNextButton: true,
+        }
+      : savedStep,
+    { tripPhase, pathname, isSidebarShown: !isMobile, tookExpress },
+  );
 
   const { checkRewards, isCheckingRewards } = useCheckRewards();
 
-  // Initialize tutorial visibility
+  // Where the lesson shows, worked out during render so a dock reopened on the step's
+  // page shows its lesson on the first frame. The hospital step overrides every step.
+  const isTutorialOn = !!userData && userData.tutorialOn !== false;
+  const isActiveStep = stepNumber < TUTORIAL_STEPS.length;
+  const visibilityStep =
+    userData?.status === "HOSPITALIZED" ? TUTORIAL_HOSPITALIZED_STEP : currentStep;
+  const onVisibilityStepPage = isTutorialPageMatch(visibilityStep?.page, pathname);
+  // Abandoned tutorial fights leave the user in BATTLE; they are pulled back before a
+  // later step renders on the wrong page. Only for a step that is about the fight:
+  // players past the tutorial (or on an unrelated step) stay free to browse while a
+  // battle runs, and a stale BATTLE status with no battle row must not pin them there.
+  const isHeldForBattle =
+    userData?.status === "BATTLE" &&
+    !!userData.battleId &&
+    pathname !== "/combat" &&
+    isActiveStep &&
+    (visibilityStep?.page === "/combat" ||
+      !!visibilityStep?.onCombatWin ||
+      !!visibilityStep?.onCombatLoss);
+  // Phones need the game menu for a step that points inside it, unless the player is
+  // already on the page its entry opens.
+  const needsGameMenu =
+    isMobile &&
+    visibilityStep?.requiresGameMenu === true &&
+    pathname !== visibilityStep.gameMenuEntryPage;
+  // The menu prompt shows while the drawer is closed, the lesson once it is open.
+  const showGameMenuTutorial =
+    isTutorialOn &&
+    !isHeldForBattle &&
+    isActiveStep &&
+    needsGameMenu &&
+    !rightSideBarOpen &&
+    onVisibilityStepPage;
+  const isAssistantVisible =
+    isTutorialOn &&
+    !isHeldForBattle &&
+    isActiveStep &&
+    onVisibilityStepPage &&
+    (needsGameMenu ? rightSideBarOpen : true);
+  // The effect below takes the player to the step's page, and the dock says so meanwhile:
+  // away from a fight to an unrelated page, or into the battle they are in.
+  const isOpeningStepPage =
+    isTutorialOn &&
+    isActiveStep &&
+    !onVisibilityStepPage &&
+    !!visibilityStep &&
+    ((pathname !== "/combat" && visibilityStep.page !== "/combat") ||
+      (userData?.status === "BATTLE" && visibilityStep.page === "/combat"));
+
+  // Lead the player to the step's page, and bring the game menu button into view.
   useEffect(() => {
-    if (userData) {
-      // Early exit if tutorial is disabled
-      if (userData?.tutorialOn === false) return;
-
-      // Handle the tutorial step
-      const tutorialStep = userData.tutorialStep;
-      const isActiveStep = tutorialStep < TUTORIAL_STEPS.length;
-
-      // Get current step config
-      const isHospitalized = userData.status === "HOSPITALIZED";
-      const currentStepConfig = isHospitalized
-        ? TUTORIAL_HOSPITALIZED_STEP
-        : currentStep;
-      const inBattle = userData.status === "BATTLE";
-      const onBattlePage = pathname === "/combat";
-      const toBattlePage = currentStepConfig?.page === "/combat";
-
-      // Abandoned tutorial fights leave the user in BATTLE; pull them back
-      // before trying to render a later step on the wrong page. Only for a
-      // step that is actually about the fight - players past the tutorial (or
-      // on an unrelated step) stay free to browse while a battle runs, and a
-      // stale BATTLE status with no battle row must not pin them to /combat.
-      const isBattleStep =
-        toBattlePage ||
-        Boolean(currentStepConfig?.onCombatWin) ||
-        Boolean(currentStepConfig?.onCombatLoss);
-      if (
-        inBattle &&
-        !onBattlePage &&
-        userData.battleId &&
-        isActiveStep &&
-        isBattleStep
-      ) {
-        return navigateWithRetry(() => router.replace("/combat"));
-      }
-
-      // Show the menu prompt when using a drawer, it is closed, and the step
-      // points at something inside the game menu
-      const shouldShowGameMenuTutorial =
-        usesGameMenuDrawer &&
-        !rightSideBarOpen &&
-        isActiveStep &&
-        currentStepConfig?.requiresGameMenu === true &&
-        isTutorialPageMatch(currentStepConfig.page, pathname);
-
-      setShowGameMenuTutorial(shouldShowGameMenuTutorial);
-
-      // Scroll to top when requiresGameMenu is true and menu is not open
-      if (shouldShowGameMenuTutorial) {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        setIsAssistantVisible(false);
-        return;
-      }
-
-      // Show tutorial if we have a valid step and we're on the right page
-      const onCorrectPage = isTutorialPageMatch(currentStepConfig?.page, pathname);
-      const hasRequiredGameMenu =
-        currentStepConfig?.requiresGameMenu && usesGameMenuDrawer
-          ? rightSideBarOpen
-          : true;
-      setIsAssistantVisible(isActiveStep && onCorrectPage && hasRequiredGameMenu);
-
-      // If we're at a valid step but not on the correct page, redirect
-      if (isActiveStep && !onCorrectPage && currentStepConfig) {
-        const keepMenuOpen =
-          sidebarBreakpoint === null &&
-          window.matchMedia(SIDEBAR_COLUMNS_SHOWN_QUERY).matches;
-        if (!keepMenuOpen && !currentStepConfig?.requiresGameMenu) {
-          setRightSideBarOpen(false);
-        }
-        const battleCheck =
-          (!onBattlePage && !toBattlePage) || // Unrelated to battle
-          (inBattle && toBattlePage); // In battle and going to battle page
-        if (battleCheck) {
-          return navigateWithRetry(() => router.push(currentStepConfig.page));
-        }
-      }
+    if (!userData || !isTutorialOn) return;
+    if (isHeldForBattle) return navigateWithRetry(() => router.replace("/combat"));
+    if (showGameMenuTutorial) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (
+      isActiveStep &&
+      !onVisibilityStepPage &&
+      visibilityStep &&
+      !visibilityStep.requiresGameMenu
+    ) {
+      setRightSideBarOpen(false);
+    }
+    if (isOpeningStepPage && visibilityStep) {
+      return navigateWithRetry(() => router.push(visibilityStep.page));
     }
   }, [
     userData,
@@ -530,6 +564,18 @@ const PlayerTutorialAssistant: React.FC<
     userData?.tutorialOn,
   ]);
 
+  // A formed bond and a full stomach replace their lesson with one that offers Next:
+  // nothing reports an adoption, and greyed-out bowls cannot be bought.
+  const hasBonded =
+    currentStep?.advanceOn === "petAdopt" && (userData?.petAcquisitions ?? 0) > 0;
+  // Ramen only restores stamina and chakra; with both full there is nothing to buy.
+  const isWellFed =
+    currentStep?.advanceOn === "buyRamen" &&
+    !!userData &&
+    userData.curStamina >= userData.maxStamina &&
+    userData.curChakra >= userData.maxChakra;
+  const offersNext = !!currentStep?.showNextButton || hasBonded || isWellFed;
+
   // Enter or ArrowRight presses the step's Next button
   useEffect(() => {
     // Early exit if tutorial is disabled
@@ -557,10 +603,7 @@ const PlayerTutorialAssistant: React.FC<
           event.preventDefault();
           event.stopPropagation();
           setRightSideBarOpen(true);
-        } else if (
-          currentStep?.showNextButton ||
-          currentStep?.proceedOnHighlightClick
-        ) {
+        } else if (offersNext || currentStep?.proceedOnHighlightClick) {
           event.preventDefault();
           event.stopPropagation();
           handleNextStep();
@@ -583,59 +626,49 @@ const PlayerTutorialAssistant: React.FC<
     handleNextStep,
     setRightSideBarOpen,
     router,
-    currentStep?.showNextButton,
+    offersNext,
     currentStep?.proceedOnHighlightClick,
     isDisablingTutorial,
     showCancelConfirmDialog,
   ]);
 
+  // The waits below count only while the step's own lesson is on screen: not while a
+  // fight's close stands in for it on /combat, nor while its page is still opening. Each
+  // stage of a trip is a lesson of its own, so its waits start again.
+  const isOwnLessonShown =
+    isAssistantVisible &&
+    isTutorialPageMatch(TUTORIAL_STEPS[stepNumber]?.page, pathname);
+  const lessonKey = currentStep ? `${currentStep.id}:${tripPhase ?? ""}` : undefined;
+  const isTripUnderWay = tripPhase === "travelling";
+
   // A step whose only exit is one specific game action can strand a player
   // when that action fails for a reason the lesson does not cover. After a
-  // minute on the same step, offer to move on.
-  const [stuckStepId, setStuckStepId] = useState<string>();
+  // minute on the same step without a tap or key press, offer to move on; a trip
+  // under way is not stuck, and neither is a player reading a dialog.
+  const [stuckKey, setStuckKey] = useState<string>();
   useEffect(() => {
-    const stepId = currentStep?.id;
-    if (!stepId || currentStep?.showNextButton || !isAssistantVisible) return;
-    const timer = setTimeout(() => setStuckStepId(stepId), STUCK_STEP_SECONDS * 1000);
-    return () => clearTimeout(timer);
-  }, [currentStep?.id, currentStep?.showNextButton, isAssistantVisible]);
-
-  // A lesson that teaches a control in the game itself offers its own button once the
-  // player has done nothing for a few seconds; any tap or key press restarts the wait.
-  const teachesInGame = !!(currentStep?.teachOnPage || currentStep?.questsTabPrompt);
-  const [idleStepId, setIdleStepId] = useState<string>();
-  useEffect(() => {
-    const stepId = currentStep?.id;
-    if (!stepId || !teachesInGame || !isAssistantVisible || idleStepId === stepId)
+    if (
+      !lessonKey ||
+      offersNext ||
+      !isOwnLessonShown ||
+      isTripUnderWay ||
+      stuckKey === lessonKey
+    )
       return;
-    let timer = setTimeout(() => setIdleStepId(stepId), SHORTCUT_IDLE_SECONDS * 1000);
-    const restart = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => setIdleStepId(stepId), SHORTCUT_IDLE_SECONDS * 1000);
-    };
-    window.addEventListener("pointerdown", restart, { passive: true });
-    window.addEventListener("keydown", restart);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("pointerdown", restart);
-      window.removeEventListener("keydown", restart);
-    };
-  }, [currentStep?.id, teachesInGame, isAssistantVisible, idleStepId]);
+    return waitForIdle(STUCK_STEP_SECONDS * 1000, () => setStuckKey(lessonKey), {
+      canEnd: () => !hasOpenModalDialog(),
+    });
+  }, [lessonKey, offersNext, isOwnLessonShown, isTripUnderWay, stuckKey]);
 
-  // A lesson answered or claimed on the Quests tab tells that tab what to prompt.
-  const setQuestsTabLesson = useSetAtom(questsTabLessonAtom);
-  const questsTabQuestId =
-    currentStep?.questsTabPrompt && typeof currentStep.relatedValue === "string"
-      ? currentStep.relatedValue
-      : undefined;
-  const questsTabPrompt = currentStep?.questsTabPrompt;
+  // A battle starting, or a page still opening, briefly leaves the step on another page
+  // than the player's; meanwhile the lesson says where it is going.
+  const placeKey = `${pathname}:${stepNumber}:${userData?.status}`;
+  const [settledPlaceKey, setSettledPlaceKey] = useState<string>();
   useEffect(() => {
-    setQuestsTabLesson(
-      questsTabQuestId && questsTabPrompt
-        ? { questId: questsTabQuestId, prompt: questsTabPrompt }
-        : null,
-    );
-  }, [questsTabQuestId, questsTabPrompt, setQuestsTabLesson]);
+    const timer = setTimeout(() => setSettledPlaceKey(placeKey), PLACE_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [placeKey]);
+  const isPlaceSettling = settledPlaceKey !== placeKey;
 
   // Once the trials are over the story leads: its chapter and Leads come before other quests.
   const { story, user: storyUser } = useStoryGuidance();
@@ -693,14 +726,6 @@ const PlayerTutorialAssistant: React.FC<
     };
   }
 
-  const hasBonded =
-    currentStep?.advanceOn === "petAdopt" && (userData?.petAcquisitions ?? 0) > 0;
-  // Ramen only restores stamina and chakra; with both full there is nothing to buy.
-  const isWellFed =
-    currentStep?.advanceOn === "buyRamen" &&
-    !!userData &&
-    userData.curStamina >= userData.maxStamina &&
-    userData.curChakra >= userData.maxChakra;
   const currentTutorialStep =
     dynamicQuestStep ||
     (isHospitalized
@@ -710,9 +735,10 @@ const PlayerTutorialAssistant: React.FC<
             ...currentStep,
             title: "A bond is formed",
             description:
-              "The Bondkeepers bless your new bond. Your companion's portrait takes a few minutes to paint; it will be ready by the time you graduate.",
+              "The Bondkeepers bless your new bond. Your companion's portrait takes a few minutes to paint. If it doesn't finish, retry it on your companion's page: a failed attempt costs nothing.",
             action: undefined,
             elementIds: ["tutorial-pet-acquisition"],
+            showNextButton: true,
           }
         : isWellFed && currentStep
           ? {
@@ -720,6 +746,7 @@ const PlayerTutorialAssistant: React.FC<
               description:
                 "Your stamina and chakra are full right now, so the bowls are greyed out. Remember this place for after a fight: a bowl costs only a few ryo. Health comes back by resting, or at the hospital.",
               action: "Tap Next.",
+              showNextButton: true,
             }
           : currentStep);
 
@@ -739,6 +766,29 @@ const PlayerTutorialAssistant: React.FC<
   const activeRelatedObjective = relatedQuest
     ? getActiveObjective(relatedQuest.userQuest.quest, relatedQuest.tracker)
     : undefined;
+  // A lesson that teaches a control in the game itself offers its own button once the
+  // player has had time to read it, quote included, and then done nothing for a few
+  // seconds; any tap or key press shows they are acting, and restarts a plain wait. A
+  // dialog over the page has the player's attention, so the wait does not end under it.
+  const teachesInGame = !!(currentStep?.teachOnPage || currentStep?.questsTab);
+  const readingMs = currentStep
+    ? lessonReadingSeconds(
+        currentStep,
+        currentStep.quoteObjective ? activeRelatedObjective?.description : undefined,
+      ) * 1000
+    : 0;
+  const [idleKey, setIdleKey] = useState<string>();
+  useEffect(() => {
+    if (!lessonKey || !teachesInGame || !isOwnLessonShown || idleKey === lessonKey)
+      return;
+    const idleMs = SHORTCUT_IDLE_SECONDS * 1000;
+    return waitForIdle(idleMs, () => setIdleKey(lessonKey), {
+      firstMs: readingMs + idleMs,
+      canEnd: () => !hasOpenModalDialog(),
+    });
+  }, [lessonKey, teachesInGame, isOwnLessonShown, idleKey, readingMs]);
+  const isModalDialogOpen = useIsModalDialogOpen();
+
   // A lost lesson fight the player can start again from the lesson itself.
   const retryQuestId = (() => {
     const objectiveId = currentTutorialStep?.objectiveId;
@@ -770,25 +820,18 @@ const PlayerTutorialAssistant: React.FC<
     );
     const goal = relatedQuest.tracker.goals.find((entry) => entry.id === objective?.id);
     if (!objective) return;
-    // Winning the quest pays the quest's own reward rather than the objective's.
-    const reward = objective.task === "win_quest" ? quest.content.reward : objective;
-    const rank =
-      reward.reward_rank !== "NONE"
-        ? capitalizeFirstLetter(reward.reward_rank.toLowerCase())
-        : "";
+    const isQuestWin = objective.task === "win_quest";
     return {
       questId: relatedQuest.userQuest.questId,
       // Winning collects itself; what is left to claim is the finished quest.
-      isReady:
-        objective.task === "win_quest"
-          ? isQuestComplete(quest, relatedQuest.tracker)
-          : !!goal?.done && !goal.collected,
+      isReady: isQuestWin
+        ? isQuestComplete(quest, relatedQuest.tracker)
+        : !!goal?.done && !goal.collected,
       objectiveText: objective.description,
-      rewards: [
-        rank ? `${rank} rank` : "",
-        reward.reward_exp ? `${reward.reward_exp.toLocaleString()} XP` : "",
-        reward.reward_money ? `${reward.reward_money.toLocaleString()} ryo` : "",
-      ].filter(Boolean),
+      // A won quest pays out from its Quests entry's claim, named the same here.
+      label: getRewardClaimLabel(
+        isQuestWin ? collapseRewards(rewardPayloads(quest.content.reward)) : objective,
+      ),
     };
   })();
 
@@ -909,10 +952,18 @@ const PlayerTutorialAssistant: React.FC<
             errorMessage={disableTutorialError}
             onOpenDisableModal={openDisableModal}
             disableLabel={disableLabel}
+            // A step with its own menu lead says why in it; any other keeps its reason
+            // and then names the menu.
             lead={
-              <p className="text-base leading-relaxed">
-                The location and main menus live in the game menu.
-              </p>
+              <div className="space-y-2 text-base leading-relaxed">
+                {!currentStep?.gameMenuLead && currentStep?.description && (
+                  <StepDescription description={currentStep.description} />
+                )}
+                <p>
+                  {currentStep?.gameMenuLead ??
+                    "On phones, the location and main menus live in the game menu."}
+                </p>
+              </div>
             }
             footer={
               <div className="flex justify-end">
@@ -1008,6 +1059,39 @@ const PlayerTutorialAssistant: React.FC<
     );
   }
 
+  // While the lesson's page is still opening (a dev route can take seconds to compile),
+  // the lesson shows where it is taking the player rather than an empty dock.
+  if (
+    !isAssistantVisible &&
+    !showPostTutorialQuest &&
+    isTutorialActive(userData) &&
+    currentTutorialStep &&
+    userData?.status !== "HOSPITALIZED"
+  ) {
+    if (isTutorialPageMatch(currentTutorialStep.page, pathname)) return null;
+    if (isOpeningStepPage || isPlaceSettling) {
+      return (
+        <AssistantDialog
+          title={currentTutorialStep.title}
+          eyebrow={chapterEyebrow}
+          progress={chapterProgress}
+          stepId={currentTutorialStep.id}
+          lead={
+            <p
+              role="status"
+              className="flex items-center gap-2 text-base text-muted-foreground"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Taking you there…
+            </p>
+          }
+          onOpenDisableModal={openDisableModal}
+          disableLabel={disableLabel}
+        />
+      );
+    }
+  }
+
   if ((!isAssistantVisible && !showPostTutorialQuest) || !currentTutorialStep) {
     return (
       <div className="text-muted-foreground space-y-2 p-4 text-sm">
@@ -1027,30 +1111,177 @@ const PlayerTutorialAssistant: React.FC<
   }
 
   const isQuestOverlay = !!dynamicQuestStep;
-  // A lesson that teaches the page's own control offers its shortcut only to a stuck player.
-  const isShortcutWithheld =
-    !!(currentTutorialStep.teachOnPage || currentTutorialStep.questsTabPrompt) &&
-    idleStepId !== currentTutorialStep.id;
+  // A lesson that teaches the page's own control offers its shortcut only to a stuck
+  // player, and no shortcut shows under a dialog the player has open.
+  const isShortcutShown =
+    !(
+      (currentTutorialStep.teachOnPage || currentTutorialStep.questsTab) &&
+      idleKey !== lessonKey
+    ) && !isModalDialogOpen;
   // Fights end on their own; skipping a step mid-battle would lose the lesson.
   // The quest cannot go on without Sonic Slash, so its lesson has no skip either.
-  const isStuck =
+  const canOfferSkip =
     !isQuestOverlay &&
+    !isHospitalized &&
+    isOwnLessonShown &&
+    !isTripUnderWay &&
+    !offersNext &&
     !isTutorialJutsuPickStep(currentTutorialStep) &&
-    stuckStepId === currentTutorialStep.id &&
     !currentTutorialStep.showNextButton &&
     !currentTutorialStep.onCombatWin &&
     pathname !== "/combat" &&
     !dialogOptions &&
     !claimable?.isReady;
-  // In a phone battle, or a fight's dock narrowed beside the field, a step with an
-  // instruction shows only that, so the field and the controls stay visible. A rematch's
-  // instruction only says to win, so its advice stays.
+  const isStuck = canOfferSkip && stuckKey === lessonKey;
+  // Like the shortcut, the skip stays out from under a dialog the player has open.
+  const isSkipShown = isStuck && !isModalDialogOpen;
+  // In a phone battle, or a fight's dock narrowed beside the field, a step that only
+  // coaches shows its instruction alone, which carries the facts, so the field and the
+  // controls stay visible. A step pointing at a control keeps the reason for it, and a
+  // rematch's instruction only says to win, so its advice stays too.
+  const hidesLeadInFight =
+    pathname === "/combat" &&
+    !!currentTutorialStep.action &&
+    !currentTutorialStep.elementIds?.length &&
+    currentTutorialStep.title !== TUTORIAL_REMATCH_TITLE;
   const leadClassName = cn(
     "text-base leading-relaxed",
-    pathname === "/combat" &&
-      currentTutorialStep.action &&
-      currentTutorialStep.title !== TUTORIAL_REMATCH_TITLE &&
-      "max-md:hidden @max-[17rem]/dock:hidden",
+    hidesLeadInFight && "max-md:hidden @max-[17rem]/dock:hidden",
+  );
+
+  // The lesson's own trip, answer and claim, and its skip. Until they are offered they
+  // are previewed unseen, so they arrive without moving the dock.
+  const hasShortcut =
+    (!!autoTravelHref && !!currentTutorialStep.autoTravelLabel) ||
+    (!!dialogOptions && !isVillageChoice) ||
+    !!claimable;
+  const renderShortcuts = (isPreview: boolean) => (
+    <>
+      {autoTravelHref && currentTutorialStep.autoTravelLabel && (
+        <ClaimHighlight
+          // The trip button is the step's action until a page control takes over.
+          active={
+            !isPreview &&
+            currentTutorialStep.advanceOn === "travelArrive" &&
+            highlight?.stepId !== currentTutorialStep.id
+          }
+        >
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              router.push(autoTravelHref);
+            }}
+          >
+            <MapPin className="mr-2 h-5 w-5" aria-hidden="true" />
+            {currentTutorialStep.autoTravelLabel}
+          </Button>
+        </ClaimHighlight>
+      )}
+      {dialogOptions && !isVillageChoice && (
+        <div>
+          <h3 className="mb-2 flex items-center text-base font-semibold">
+            Your answer
+            {isCheckingRewards && (
+              <Loader2
+                className="ml-2 inline h-4 w-4 shrink-0 animate-spin"
+                aria-label="Loading"
+              />
+            )}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {!isCheckingRewards &&
+              dialogOptions.options.map((entry) => (
+                <Button
+                  key={entry.nextObjectiveId ?? entry.text}
+                  variant={isQuestOverlay ? "outline" : "default"}
+                  size="lg"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    checkRewards({
+                      questId: dialogOptions.questId,
+                      nextObjectiveId: dialogChoiceContentId(
+                        entry.nextObjectiveId,
+                        dialogOptions.objectiveId,
+                      ),
+                    });
+                  }}
+                  className="min-w-[120px] flex-1"
+                >
+                  {entry.text}
+                </Button>
+              ))}
+          </div>
+        </div>
+      )}
+      {claimable && (
+        <div className="bg-muted/40 rounded-lg border p-3">
+          {claimable.isReady ? (
+            <ClaimHighlight
+              // Without a logbook entry on the page, this is the only place to claim.
+              active={!isPreview && !currentTutorialStep.elementIds?.length}
+            >
+              <Button
+                size="lg"
+                decoration="gold"
+                animation={
+                  currentTutorialStep.elementIds?.length || isCheckingRewards
+                    ? undefined
+                    : "pulse"
+                }
+                // A claim names every reward, so a long one wraps inside the dock.
+                className="h-auto min-h-10 w-full px-4 py-2 text-left text-balance whitespace-normal"
+                disabled={isCheckingRewards}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  checkRewards({ questId: claimable.questId });
+                }}
+              >
+                {isCheckingRewards ? (
+                  <Loader2
+                    className="mr-2 h-5 w-5 shrink-0 animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Gift className="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
+                )}
+                {isCheckingRewards ? "Claiming" : claimable.label}
+              </Button>
+            </ClaimHighlight>
+          ) : (
+            <p className="text-muted-foreground text-base">
+              Objective: {parseHtml(claimable.objectiveText || "Complete the task.")}
+            </p>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  // Next, or the skip a stuck player is offered.
+  const renderNextRow = (isSkip: boolean) => (
+    <div className="flex items-center justify-end gap-3">
+      {isSkip && <span className="text-muted-foreground text-sm">Stuck here?</span>}
+      <Button
+        size="lg"
+        variant={isSkip ? "outline" : "default"}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleNextStep();
+        }}
+      >
+        {isSkip && !currentTutorialStep.showNextButton
+          ? "Skip this step"
+          : (currentTutorialStep.nextLabel ??
+            (stepNumber === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next"))}
+        <ArrowRight className="ml-2 h-5 w-5" />
+      </Button>
+    </div>
   );
 
   // Render the tutorial overlay with highlight and assistant panel
@@ -1109,6 +1340,14 @@ const PlayerTutorialAssistant: React.FC<
           eyebrow={isQuestOverlay ? "Active quest" : chapterEyebrow}
           progress={isQuestOverlay ? undefined : chapterProgress}
           stepId={currentTutorialStep.id}
+          // A fight's instructions are short and change with every action, so they stay open.
+          // A dialog moves what the lesson could stand in front of, so the text folds for
+          // the page and for a dialog separately, each on a tap made there.
+          foldKey={
+            pathname === "/combat"
+              ? undefined
+              : `${currentTutorialStep.id}:${isModalDialogOpen ? "dialog" : "page"}`
+          }
           action={isQuestOverlay ? undefined : currentTutorialStep.action}
           isBusy={isDisablingTutorial}
           errorMessage={disableTutorialError}
@@ -1120,30 +1359,7 @@ const PlayerTutorialAssistant: React.FC<
           showOrderingButton={showPostTutorialQuest}
           footer={
             <>
-              {autoTravelHref &&
-                currentTutorialStep.autoTravelLabel &&
-                !isShortcutWithheld && (
-                  <ClaimHighlight
-                    // The trip button is the step's action until a page control takes over.
-                    active={
-                      currentTutorialStep.advanceOn === "travelArrive" &&
-                      highlight?.stepId !== currentTutorialStep.id
-                    }
-                  >
-                    <Button
-                      size="lg"
-                      className="w-full"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        router.push(autoTravelHref);
-                      }}
-                    >
-                      <MapPin className="mr-2 h-5 w-5" aria-hidden="true" />
-                      {currentTutorialStep.autoTravelLabel}
-                    </Button>
-                  </ClaimHighlight>
-                )}
+              {isShortcutShown && renderShortcuts(false)}
               {retryQuestId && (
                 <Button
                   size="lg"
@@ -1175,6 +1391,11 @@ const PlayerTutorialAssistant: React.FC<
                     options={dialogOptions.options}
                     isPending={isCheckingRewards}
                     onHide={() => setIsVillageChooserHidden(true)}
+                    guide={
+                      typeof currentTutorialStep.description === "string"
+                        ? parseHtml(currentTutorialStep.description)
+                        : currentTutorialStep.description
+                    }
                     onChoose={(option) =>
                       checkRewards({
                         questId: dialogOptions.questId,
@@ -1187,119 +1408,23 @@ const PlayerTutorialAssistant: React.FC<
                   />,
                   document.body,
                 )}
-              {dialogOptions && !isVillageChoice && !isShortcutWithheld && (
-                <div>
-                  <h3 className="mb-2 flex items-center text-base font-semibold">
-                    Your answer
-                    {isCheckingRewards && (
-                      <Loader2
-                        className="ml-2 inline h-4 w-4 shrink-0 animate-spin"
-                        aria-label="Loading"
-                      />
-                    )}
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {!isCheckingRewards &&
-                      dialogOptions.options.map((entry) => (
-                        <Button
-                          key={entry.nextObjectiveId ?? entry.text}
-                          variant={isQuestOverlay ? "outline" : "default"}
-                          size="lg"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            checkRewards({
-                              questId: dialogOptions.questId,
-                              nextObjectiveId: dialogChoiceContentId(
-                                entry.nextObjectiveId,
-                                dialogOptions.objectiveId,
-                              ),
-                            });
-                          }}
-                          className="min-w-[120px] flex-1"
-                        >
-                          {entry.text}
-                        </Button>
-                      ))}
-                  </div>
-                </div>
-              )}
-              {claimable && !isShortcutWithheld && (
-                <div className="bg-muted/40 rounded-lg border p-3">
-                  {claimable.isReady ? (
-                    <ClaimHighlight
-                      // Without a logbook entry on the page, this is the only place to claim.
-                      active={!currentTutorialStep.elementIds?.length}
-                    >
-                      <Button
-                        size="lg"
-                        decoration="gold"
-                        animation={
-                          currentTutorialStep.elementIds?.length || isCheckingRewards
-                            ? undefined
-                            : "pulse"
-                        }
-                        className="w-full"
-                        disabled={isCheckingRewards}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          checkRewards({ questId: claimable.questId });
-                        }}
-                      >
-                        {isCheckingRewards ? (
-                          <Loader2
-                            className="mr-2 h-5 w-5 animate-spin"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <Gift className="mr-2 h-5 w-5" aria-hidden="true" />
-                        )}
-                        {isCheckingRewards
-                          ? "Claiming"
-                          : `Claim${claimable.rewards.length ? ` ${claimable.rewards.join(" + ")}` : " reward"}`}
-                      </Button>
-                    </ClaimHighlight>
-                  ) : (
-                    <p className="text-muted-foreground text-base">
-                      Objective:{" "}
-                      {parseHtml(claimable.objectiveText || "Complete the task.")}
-                    </p>
-                  )}
-                </div>
-              )}
-              {(currentTutorialStep.showNextButton || isStuck) && (
-                <div className="flex items-center justify-end gap-3">
-                  {isStuck && (
-                    <span className="text-muted-foreground text-sm">Stuck here?</span>
-                  )}
-                  <Button
-                    size="lg"
-                    variant={isStuck ? "outline" : "default"}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleNextStep();
-                    }}
-                  >
-                    {isStuck && !currentTutorialStep.showNextButton
-                      ? "Skip this step"
-                      : (currentTutorialStep.nextLabel ??
-                        (stepNumber === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next"))}
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </div>
-              )}
+              {(currentTutorialStep.showNextButton || isSkipShown) &&
+                renderNextRow(isSkipShown)}
             </>
           }
+          pendingFooter={
+            (!isShortcutShown && hasShortcut) || (canOfferSkip && !isSkipShown) ? (
+              <>
+                {!isShortcutShown && hasShortcut && renderShortcuts(true)}
+                {canOfferSkip && !isSkipShown && renderNextRow(true)}
+              </>
+            ) : undefined
+          }
           lead={
-            typeof currentTutorialStep.description === "string" ? (
-              <p className={leadClassName}>
-                {parseHtml(currentTutorialStep.description)}
-              </p>
-            ) : (
-              <div className={leadClassName}>{currentTutorialStep.description}</div>
-            )
+            <StepDescription
+              description={currentTutorialStep.description}
+              className={leadClassName}
+            />
           }
         >
           {currentTutorialStep.quoteObjective &&
@@ -1427,6 +1552,8 @@ const GuidedLessonAssistant: React.FC<{ step: GuidedLessonStep }> = ({ step }) =
         eyebrow={step.eyebrow}
         progress={step.progress}
         stepId={step.id}
+        // A blocking step waits for an answer to its text, which stays open.
+        foldKey={step.blocking ? undefined : step.id}
         action={step.action}
         lead={step.lead}
         dodgeHighlight={panelDodgesHighlight}
@@ -1438,12 +1565,24 @@ const GuidedLessonAssistant: React.FC<{ step: GuidedLessonStep }> = ({ step }) =
   );
 };
 
+/** A step's description: Lemu's words with their inline markup, or a node as written. */
+const StepDescription: React.FC<{
+  description: TutorialStepConfig["description"];
+  className?: string;
+}> = ({ description, className }) =>
+  typeof description === "string" ? (
+    <p className={className}>{parseHtml(description)}</p>
+  ) : (
+    <div className={className}>{description}</div>
+  );
+
 /**
  * Lemu, or whoever speaks in the lesson, in a column down the card's left side,
  * facing the text on a tint that fades into the card behind a tapered divider. She
- * fills the column's height from just below its top, and her picture reaches a
- * little past the divider into the text's left padding (both in rem, so at every
- * size), letting her raised hand cross it without covering the words.
+ * stands at the column's foot, as tall as it allows from just below its top, and her
+ * raised hand reaches past the divider into the text's left padding without covering
+ * the words: her picture is never wider than keeps the hand within half a rem of the
+ * divider, which the text's padding always exceeds.
  */
 const AssistantPortrait: React.FC<{ image: string }> = ({ image }) => (
   <div
@@ -1459,8 +1598,10 @@ const AssistantPortrait: React.FC<{ image: string }> = ({ image }) => (
       alt=""
       // Her whole figure at its own proportions. The picture's transparent margin is
       // about 30% of its width, so this shift lets her hair step a little past the card's
-      // left edge at any lesson height, inside the dock's margin to the screen.
-      className="pointer-events-none absolute top-2 bottom-0 left-0 h-[calc(100%-0.5rem)] w-auto max-w-none -translate-x-[30%] scale-x-[-1] drop-shadow-md select-none"
+      // left edge, inside the dock's margin to the screen. Her hand ends 55% of the
+      // picture's width from the column's left edge once shifted, so the width cap keeps it
+      // half a rem past the divider; a taller lesson then stands her at the foot.
+      className="pointer-events-none absolute top-2 bottom-0 left-0 h-[calc(100%-0.5rem)] w-auto max-w-[calc((100%_+_0.5rem)/0.55)] -translate-x-[30%] scale-x-[-1] object-contain object-bottom drop-shadow-md select-none"
     />
   </div>
 );
@@ -1481,6 +1622,12 @@ const AssistantDialog: React.FC<{
   children?: React.ReactNode;
   /** Controls that answer the step, kept in view under the scrolling text. */
   footer?: React.ReactNode;
+  /**
+   * Controls the footer will offer later. Until then they are measured unseen, and the
+   * dock floats their height above its anchor, so they arrive in that space and the
+   * dock's tabs stay where the player may be about to tap.
+   */
+  pendingFooter?: React.ReactNode;
   onOpenDisableModal?: () => void;
   /** Accessible name of the close button that calls `onOpenDisableModal`. */
   disableLabel?: string;
@@ -1491,6 +1638,8 @@ const AssistantDialog: React.FC<{
   dodgeHighlight?: boolean;
   isBusy?: boolean;
   errorMessage?: string;
+  /** Folds the lead on a narrow dock once the player turns to the page; see `CoachCard`. */
+  foldKey?: string;
 }> = ({
   title,
   eyebrow,
@@ -1500,6 +1649,7 @@ const AssistantDialog: React.FC<{
   lead,
   children,
   footer,
+  pendingFooter,
   onOpenDisableModal,
   disableLabel = "Skip tutorial",
   characterImage,
@@ -1508,6 +1658,7 @@ const AssistantDialog: React.FC<{
   dodgeHighlight,
   isBusy = false,
   errorMessage,
+  foldKey,
 }) => {
   const sectionRef = React.useRef<HTMLElement>(null);
   const lemuImage = characterImage || IMG_URL_ASSISTANT;
@@ -1515,6 +1666,31 @@ const AssistantDialog: React.FC<{
   const isSpeakerInScene = useAtomValue(sceneCharactersAtom).some((scene) =>
     scene.includes(lemuImage),
   );
+  const pendingRef = React.useRef<HTMLDivElement>(null);
+  const liftRef = React.useRef(0);
+  const reserveRef = React.useRef<() => void>(undefined);
+  const hasPendingFooter = !!pendingFooter;
+  // Declared before the reserve below, so that on unmount the reserve is cleared last.
+  React.useLayoutEffect(() => {
+    const dock = sectionRef.current?.closest<HTMLElement>("[data-activity-dock]");
+    const pending = pendingRef.current;
+    // A dock dodging a highlight hangs from the top, where growing moves no tab.
+    if (!dock || !pending || dodgeHighlight) return;
+    const lift = () => {
+      liftRef.current = pending.offsetHeight;
+      dock.style.translate = `0px -${liftRef.current}px`;
+      reserveRef.current?.();
+    };
+    lift();
+    const observer = new ResizeObserver(lift);
+    observer.observe(pending);
+    return () => {
+      observer.disconnect();
+      liftRef.current = 0;
+      dock.style.translate = "";
+      reserveRef.current?.();
+    };
+  }, [hasPendingFooter, dodgeHighlight]);
   // The dock is fixed over the foot of the page; while a lesson is open the game
   // layouts pad their content by its height, so whatever it covers can be
   // scrolled clear of it.
@@ -1523,12 +1699,17 @@ const AssistantDialog: React.FC<{
     if (!dock) return;
     const root = document.documentElement;
     const reserve = () =>
-      root.style.setProperty("--activity-dock-space", `${dock.offsetHeight}px`);
+      root.style.setProperty(
+        "--activity-dock-space",
+        `${dock.offsetHeight + liftRef.current}px`,
+      );
+    reserveRef.current = reserve;
     reserve();
     const observer = new ResizeObserver(reserve);
     observer.observe(dock);
     return () => {
       observer.disconnect();
+      reserveRef.current = undefined;
       root.style.removeProperty("--activity-dock-space");
     };
   }, []);
@@ -1548,7 +1729,27 @@ const AssistantDialog: React.FC<{
         progress={progress}
         action={action}
         lead={lead}
-        footer={footer}
+        footer={
+          pendingFooter ? (
+            <>
+              {footer}
+              {/* Its negative margin cancels the gap the footer leaves above its last row,
+              so the preview takes no room; the gap it brings is measured with it. */}
+              <div aria-hidden className="relative -mt-3 @max-[34rem]/dock:-mt-2">
+                <div
+                  ref={pendingRef}
+                  inert
+                  data-tutorial-pending-footer=""
+                  className="invisible absolute inset-x-0 top-0 space-y-3 pt-3 @max-[34rem]/dock:space-y-2 @max-[34rem]/dock:pt-2"
+                >
+                  {pendingFooter}
+                </div>
+              </div>
+            </>
+          ) : (
+            footer
+          )
+        }
         onDismiss={onOpenDisableModal}
         dismissLabel={disableLabel}
         portrait={
@@ -1556,6 +1757,7 @@ const AssistantDialog: React.FC<{
         }
         isBusy={isBusy}
         errorMessage={errorMessage}
+        foldKey={foldKey}
       >
         {children}
         {showOrderingButton && onOpenOrderingDialog && (
@@ -1874,6 +2076,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
           settled: false,
           settledScrollY: 0,
         };
+        document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
         setPanelDodgesHighlight(false);
       }
       const placement = placementRef.current;
@@ -1970,20 +2173,30 @@ const useHighlightPlacement = <Step extends { id: string }>({
           // room, the panel gives way -- a step whose only advance action is
           // pressing the highlight has to be pressable. It only moves when the
           // target is clear of where it lands, or it would cover it from above.
+          // Inside a dialog it takes the band that hides the least of the dialog's
+          // header and controls instead of the top of the screen.
           if (isCovered) {
             const after = highlightInfo.element.getBoundingClientRect();
             const panelAfter = getAssistantPanelRect();
-            if (
-              panelAfter &&
-              rectsOverlap(after, panelAfter) &&
-              after.top >
-                DODGED_PANEL_TOP_REM *
-                  Number.parseFloat(
-                    getComputedStyle(document.documentElement).fontSize,
-                  ) +
-                  panelAfter.height
-            ) {
-              setPanelDodgesHighlight(true);
+            const minTop =
+              DODGED_PANEL_TOP_REM *
+              Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+            if (panelAfter && rectsOverlap(after, panelAfter)) {
+              const dialogTop = getDodgedPanelTop(
+                highlightInfo.element,
+                panelAfter,
+                minTop,
+              );
+              if (dialogTop !== null) {
+                document.documentElement.style.setProperty(
+                  DODGE_TOP_PROPERTY,
+                  `${dialogTop}px`,
+                );
+                setPanelDodgesHighlight(true);
+              } else if (after.top > minTop + panelAfter.height) {
+                document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
+                setPanelDodgesHighlight(true);
+              }
             }
           }
         }
@@ -2010,6 +2223,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
     // Coached turns and rematches point at nothing, yet the dock still keeps beside the field.
     if (pathname === "/combat") fitActivityDockBesideField();
     setHighlight(null);
+    document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
     setPanelDodgesHighlight(false);
     return null;
   };
@@ -2026,6 +2240,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
     return () => {
       stopTracking();
       document.documentElement.style.removeProperty(ACTIVITY_DOCK_WIDTH_PROPERTY);
+      document.documentElement.style.removeProperty(DODGE_TOP_PROPERTY);
     };
   }, [step, enabled, pathname, revealOnly]);
 
@@ -2037,84 +2252,37 @@ const useHighlightPlacement = <Step extends { id: string }>({
  * It is shown only while that quest's logbook entry is not already on the page.
  */
 const usePostTutorialQuest = (
-  userData:
-    | Pick<NonNullable<UserWithRelations>, "tutorialOn" | "userQuests" | "questData">
-    | undefined,
+  userData: PostTutorialUser | undefined,
   stepNumber: number,
   preferredQuestIds: readonly string[] = [],
 ) => {
-  // Post tutorial state - quest data from userData
-  const [postTutorialQuest, setPostTutorialQuest] = useState<PostTutorialQuest | null>(
-    null,
-  );
-
-  // Post tutorial state - whether to show the quest
-  const [showPostTutorialQuest, setShowPostTutorialQuest] = useState(false);
-
   // Quest type priority ordering (persisted in localStorage)
   const [questTypePriority, setQuestTypePriority] = useLocalStorage<QuestType[]>(
     "tutorial-quest-type-priority",
     [...OrderedQuestTypesInTutorial],
   );
-
-  // Post-tutorial quest guidance: Find quest based on priority ordering
-  useEffect(() => {
-    if (userData?.tutorialOn !== false && stepNumber >= TUTORIAL_STEPS.length) {
-      // Find the first quest based on priority ordering
-      const activeUserQuests = userData?.userQuests?.filter(
-        (uq) => OrderedQuestTypesInTutorial.includes(uq.quest.questType) && !uq.endAt,
+  // Derived from the profile, so a freshly opened dock shows the quest on its first frame.
+  const postTutorialQuest = getPostTutorialQuest(
+    userData,
+    stepNumber,
+    questTypePriority,
+    preferredQuestIds,
+  );
+  const questId = postTutorialQuest?.userQuest.questId;
+  // The quest whose logbook entry is on the page: checked before paint, as the logbook
+  // renders after the dock, then every second for an entry that mounts later.
+  const [listedQuestId, setListedQuestId] = useState<string>();
+  React.useLayoutEffect(() => {
+    if (!questId) return;
+    const check = () =>
+      setListedQuestId(
+        document.getElementById(`logbook-entry-${questId}`) ? questId : undefined,
       );
-
-      if (activeUserQuests && activeUserQuests.length > 0) {
-        // Sort by priority order (lower index = higher priority)
-        const sortedQuests = [...activeUserQuests].sort((a, b) => {
-          // Story chapters and Leads come first, in story order.
-          const aStory = preferredQuestIds.indexOf(a.questId);
-          const bStory = preferredQuestIds.indexOf(b.questId);
-          if (aStory !== bStory) {
-            if (aStory === -1) return 1;
-            if (bStory === -1) return -1;
-            return aStory - bStory;
-          }
-          const aPriority = questTypePriority.indexOf(a.quest.questType);
-          const bPriority = questTypePriority.indexOf(b.quest.questType);
-          // If not found in priority list, put at end
-          const aIdx = aPriority === -1 ? questTypePriority.length : aPriority;
-          const bIdx = bPriority === -1 ? questTypePriority.length : bPriority;
-          return aIdx - bIdx;
-        });
-
-        const quest = sortedQuests[0];
-        const tracker = quest
-          ? userData?.questData?.find((q) => q.id === quest.questId)
-          : undefined;
-        setPostTutorialQuest(quest && tracker ? { userQuest: quest, tracker } : null);
-      } else {
-        setPostTutorialQuest(null);
-      }
-    } else {
-      setPostTutorialQuest(null);
-    }
-  }, [userData, stepNumber, questTypePriority, preferredQuestIds.join(",")]);
-
-  // Check if logbook entry exists on the page to determine whether to show the quest
-  useEffect(() => {
-    if (!postTutorialQuest) {
-      setShowPostTutorialQuest(false);
-      return;
-    }
-
-    const checkLogbookEntry = () => {
-      const logbookEntryExists = document.getElementById(
-        `logbook-entry-${postTutorialQuest.userQuest.questId}`,
-      );
-      setShowPostTutorialQuest(!logbookEntryExists);
-    };
-
-    checkLogbookEntry();
-    const interval = setInterval(checkLogbookEntry, 1000);
+    check();
+    const interval = setInterval(check, 1000);
     return () => clearInterval(interval);
-  }, [postTutorialQuest]);
+  }, [questId]);
+  const showPostTutorialQuest = !!postTutorialQuest && listedQuestId !== questId;
 
   return {
     postTutorialQuest,
@@ -2122,6 +2290,93 @@ const usePostTutorialQuest = (
     questTypePriority,
     setQuestTypePriority,
   };
+};
+
+/**
+ * The quest to guide after the trials: story chapters and Leads first, in story order,
+ * then by quest type priority.
+ */
+const getPostTutorialQuest = (
+  userData: PostTutorialUser | undefined,
+  stepNumber: number,
+  questTypePriority: readonly QuestType[],
+  preferredQuestIds: readonly string[],
+): PostTutorialQuest | null => {
+  if (userData?.tutorialOn === false || stepNumber < TUTORIAL_STEPS.length) return null;
+  const activeUserQuests = userData?.userQuests?.filter(
+    (uq) => OrderedQuestTypesInTutorial.includes(uq.quest.questType) && !uq.endAt,
+  );
+  if (!activeUserQuests?.length) return null;
+  // Sort by priority order (lower index = higher priority)
+  const sortedQuests = [...activeUserQuests].sort((a, b) => {
+    const aStory = preferredQuestIds.indexOf(a.questId);
+    const bStory = preferredQuestIds.indexOf(b.questId);
+    if (aStory !== bStory) {
+      if (aStory === -1) return 1;
+      if (bStory === -1) return -1;
+      return aStory - bStory;
+    }
+    const aPriority = questTypePriority.indexOf(a.quest.questType);
+    const bPriority = questTypePriority.indexOf(b.quest.questType);
+    // If not found in priority list, put at end
+    const aIdx = aPriority === -1 ? questTypePriority.length : aPriority;
+    const bIdx = bPriority === -1 ? questTypePriority.length : bPriority;
+    return aIdx - bIdx;
+  });
+  const quest = sortedQuests[0];
+  const tracker = quest
+    ? userData?.questData?.find((q) => q.id === quest.questId)
+    : undefined;
+  return quest && tracker ? { userQuest: quest, tracker } : null;
+};
+
+/**
+ * A lesson in the words for where the player is: following their character while a trip
+ * is under way, only the walk left once they stand in the step's sector, and no call to
+ * open the page its game-menu entry leads to while they are on it.
+ */
+const placeLesson = (
+  saved: TutorialStepConfig | undefined,
+  {
+    tripPhase,
+    pathname,
+    isSidebarShown,
+    tookExpress,
+  }: {
+    tripPhase: ReturnType<typeof getTutorialTripPhase>;
+    pathname: string;
+    /** The game menu is the sidebar beside the page rather than a drawer. */
+    isSidebarShown: boolean;
+    tookExpress: boolean;
+  },
+): TutorialStepConfig | undefined => {
+  if (!saved) return saved;
+  const description = isSidebarShown ? saved.sidebarDescription : undefined;
+  const elementIds =
+    tookExpress && tripPhase !== "arrived" ? saved.expressElementIds : undefined;
+  const step =
+    description || elementIds
+      ? {
+          ...saved,
+          description: description ?? saved.description,
+          elementIds: elementIds ?? saved.elementIds,
+        }
+      : saved;
+  if (tripPhase === "travelling") {
+    return { ...step, action: TRIP_UNDER_WAY_ACTION, autoTravelLabel: undefined };
+  }
+  if (tripPhase === "arrived" && step.onArrival) {
+    return {
+      ...step,
+      description: step.onArrival.description ?? step.description,
+      action: step.onArrival.action,
+      autoTravelLabel: step.onArrival.autoTravelLabel ?? step.autoTravelLabel,
+    };
+  }
+  if (step.gameMenuEntryAction && pathname === step.gameMenuEntryPage) {
+    return { ...step, action: step.gameMenuEntryAction };
+  }
+  return step;
 };
 
 /**
@@ -2134,6 +2389,64 @@ const navigateWithRetry = (navigate: () => void) => {
   const retry = setTimeout(navigate, REDIRECT_RETRY_MS);
   return () => clearTimeout(retry);
 };
+
+/** Events that show the player is acting on the page. */
+const PLAYER_ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel"] as const;
+
+/**
+ * Calls `onIdle` once the player has gone `idleMs` without a tap, key press or wheel
+ * turn, the first wait lasting `firstMs`. It listens in the capture phase, so input a
+ * canvas or a dialog keeps to itself counts too, and a modal dialog closing counts as
+ * input, however it closed. A wait that runs out while `canEnd` says no starts again.
+ * Returns the cleanup.
+ */
+const waitForIdle = (
+  idleMs: number,
+  onIdle: () => void,
+  {
+    firstMs = idleMs,
+    canEnd = () => true,
+  }: { firstMs?: number; canEnd?: () => boolean } = {},
+) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const start = (ms: number) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => (canEnd() ? onIdle() : start(idleMs)), ms);
+  };
+  const restart = () => start(idleMs);
+  start(firstMs);
+  for (const type of PLAYER_ACTIVITY_EVENTS)
+    window.addEventListener(type, restart, { capture: true, passive: true });
+  let isModalOpen = hasOpenModalDialog();
+  const stopWatchingDialogs = subscribeToDialogs(() => {
+    const wasModalOpen = isModalOpen;
+    isModalOpen = hasOpenModalDialog();
+    if (wasModalOpen && !isModalOpen) restart();
+  });
+  return () => {
+    stopWatchingDialogs();
+    clearTimeout(timer);
+    for (const type of PLAYER_ACTIVITY_EVENTS)
+      window.removeEventListener(type, restart, { capture: true });
+  };
+};
+
+/** An open modal: Radix dialogs and alert dialogs portal to the body. */
+const MODAL_DIALOG_SELECTOR =
+  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
+
+const hasOpenModalDialog = () => !!document.querySelector(MODAL_DIALOG_SELECTOR);
+
+/** Follows dialogs mounting and unmounting, as portals directly under the body. */
+const subscribeToDialogs = (onChange: () => void) => {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.body, { childList: true });
+  return () => observer.disconnect();
+};
+
+/** Whether a modal dialog is open over the page. */
+const useIsModalDialogOpen = () =>
+  React.useSyncExternalStore(subscribeToDialogs, hasOpenModalDialog, () => false);
 
 /** Include the Activity header when keeping highlighted controls clear of the dock. */
 const getAssistantPanelRect = (): DOMRect | null => {
@@ -2361,6 +2674,12 @@ type HighlightTarget = { element: HTMLElement; isPrimaryElement: boolean };
 
 /** A quest the assistant guides after the tutorial, with its live tracker. */
 type PostTutorialQuest = { userQuest: UserQuest; tracker: QuestTrackerType };
+
+/** The profile fields the post-trials quest guidance reads. */
+type PostTutorialUser = Pick<
+  NonNullable<UserWithRelations>,
+  "tutorialOn" | "userQuests" | "questData"
+>;
 
 /** The edges of a box on screen, in viewport pixels. */
 type ScreenEdges = Pick<DOMRect, "top" | "left" | "right" | "bottom">;

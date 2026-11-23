@@ -1,7 +1,7 @@
 "use client";
 
 import { atom, useAtomValue, useStore } from "jotai";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { api } from "@/app/_trpc/client";
 import { TUTORIAL_ITEM_ID, TUTORIAL_JUTSU_ID } from "@/drizzle/constants";
 import { useNavigationRouter } from "@/hooks/navigation";
@@ -59,11 +59,11 @@ export const useTutorialStep = () => {
     tutorialOn: user.tutorialOn,
     tutorialStep: user.tutorialStep,
     status: user.status,
+    battleId: user.battleId,
   }));
   const pathname = usePublicPathname();
   const router = useNavigationRouter();
   const store = useStore();
-  const [isAssistantVisible, setIsAssistantVisible] = useState<boolean>(false);
 
   // Derived
   const stepNumber = userData?.tutorialStep || 0;
@@ -79,10 +79,34 @@ export const useTutorialStep = () => {
     pathname === "/combat" &&
     !!staticStep &&
     GUIDED_COMBAT_STEP_IDS.includes(staticStep.id);
+  // A step past a fight, shown on /combat while the profile still says BATTLE: the fight
+  // that moved the tutorial on has ended, or the player is in another one.
+  const isAfterFight =
+    pathname === "/combat" &&
+    inBattle &&
+    !!staticStep &&
+    !staticStep.onCombatWin &&
+    !staticStep.onCombatLoss;
+  // Touch screens have no keyboard shortcuts to teach.
+  const isTouch = useSyncExternalStore(
+    subscribeToPointer,
+    isCoarsePointer,
+    () => false,
+  );
 
-  // Only a guided combat lesson follows the battle; every other caller reads constant
-  // atoms, so battle updates and action selection do not re-render it.
-  const battle = useAtomValue(isGuidedCombat ? userBattleAtom : noBattleAtom);
+  // Only a guided combat lesson, or one just past a fight, follows the battle; every
+  // other caller reads constant atoms, so battle updates and action selection do not
+  // re-render it.
+  const battle = useAtomValue(
+    isGuidedCombat || isAfterFight ? userBattleAtom : noBattleAtom,
+  );
+  // The battle on the page is over for the player: its result is in, though the profile
+  // may still say BATTLE.
+  const hasLeftBattle =
+    isAfterFight &&
+    !!battle &&
+    (!userData?.battleId || battle.id === userData.battleId) &&
+    !!battle.usersState.find((u) => u.userId === userId)?.leftBattle;
   const selectedActionId = useAtomValue(
     isGuidedCombat ? combatActionIdAtom : noSelectedActionAtom,
   );
@@ -173,7 +197,7 @@ export const useTutorialStep = () => {
     const isBattleStep = !!staticStep.onCombatWin || !!staticStep.onCombatLoss;
     // After a guided fight the step has already moved on; point at the way back.
     if (!isBattleStep) {
-      if (inBattle) return staticStep;
+      if (inBattle && !hasLeftBattle) return staticStep;
       return {
         ...staticStep,
         title: "Battle over",
@@ -208,9 +232,23 @@ export const useTutorialStep = () => {
       return getCoachedCombatStep(
         staticStep,
         JSON.parse(coachingKey) as Extract<TutorialCombatCoaching, { kind: "coach" }>,
+        isTouch,
       );
     }
-    if (!guidanceKind) return staticStep;
+    // Until the battle shows whose turn it is (loading, or between rounds), a fight
+    // begun from another page keeps its lesson here rather than pointing back there.
+    if (!guidanceKind) {
+      return staticStep.page === "/combat" || !inBattle
+        ? staticStep
+        : {
+            ...staticStep,
+            page: "/combat",
+            action: undefined,
+            elementIds: [],
+            showNextButton: false,
+            proceedOnHighlightClick: false,
+          };
+    }
     const guidance: TutorialCombatGuidance | { kind: "auto" } =
       guidanceKind === "auto" || guidanceKind === "wait" || !guidanceActionId
         ? { kind: guidanceKind === "auto" ? "auto" : "wait" }
@@ -220,11 +258,13 @@ export const useTutorialStep = () => {
             actionName: guidanceActionName,
             reason: guidanceReason,
           };
-    return getGuidedCombatStep(staticStep, guidance, guidanceDistance);
+    return getGuidedCombatStep(staticStep, guidance, guidanceDistance, isTouch);
   }, [
     staticStep,
     pathname,
     inBattle,
+    hasLeftBattle,
+    isTouch,
     guidanceKind,
     guidanceActionId,
     guidanceActionName,
@@ -289,11 +329,6 @@ export const useTutorialStep = () => {
     },
   });
 
-  // Hide the assistant once the player is past the last step
-  useEffect(() => {
-    if (stepNumber >= TUTORIAL_STEPS.length) setIsAssistantVisible(false);
-  }, [stepNumber]);
-
   /**
    * Move to `forceStep`, or to the step after the current one. Saving the same
    * index twice is skipped, so two triggers firing for one action cannot move
@@ -301,7 +336,6 @@ export const useTutorialStep = () => {
    * if the server does not take it, so a tap on Next never sits unanswered.
    */
   const saveStep = async (nextStep: number) => {
-    if (nextStep >= TUTORIAL_STEPS.length) setIsAssistantVisible(false);
     if (isPending || nextStep === stepNumber) return;
     // A failed save is already rolled back by the mutation.
     await saveTutorialStep({ step: nextStep }).catch(() => undefined);
@@ -323,6 +357,9 @@ export const useTutorialStep = () => {
    */
   const completeTutorialAction = async (trigger: TutorialTrigger) => {
     if (!staticStep || staticStep.advanceOn !== trigger) return;
+    // A step with closing words shows them once game data proves the action, and moves
+    // on from its own button.
+    if (staticStep.afterAction) return;
     await saveStep(stepNumber + 1);
   };
 
@@ -334,9 +371,23 @@ export const useTutorialStep = () => {
     handleNextStep,
     handleNextStepAsync,
     completeTutorialAction,
-    isAssistantVisible,
-    setIsAssistantVisible,
   };
+};
+
+/** A primary pointer as coarse as a finger: a touch screen. */
+const COARSE_POINTER_QUERY = "(pointer: coarse)";
+
+const coarsePointerQuery = () =>
+  typeof window.matchMedia === "function"
+    ? window.matchMedia(COARSE_POINTER_QUERY)
+    : null;
+
+const isCoarsePointer = () => coarsePointerQuery()?.matches ?? false;
+
+const subscribeToPointer = (onChange: () => void) => {
+  const query = coarsePointerQuery();
+  query?.addEventListener("change", onChange);
+  return () => query?.removeEventListener("change", onChange);
 };
 
 /** A step page counts as reached when its path and any requested tab match. */
@@ -350,6 +401,7 @@ const getGuidedCombatStep = (
   step: TutorialStepConfig,
   guidance: TutorialCombatGuidance | { kind: "auto" },
   distanceToEnemy: number | null,
+  isTouch: boolean,
 ): TutorialStepConfig => {
   // A move ends next to the opponent once only one tile separates them.
   const isOneTileAway = distanceToEnemy === 2;
@@ -364,7 +416,7 @@ const getGuidedCombatStep = (
       ...base,
       title: "Auto combat",
       description:
-        "Your AI profile is fighting this battle for you. Switch AI control off below the battlefield to take over and learn the controls.",
+        "Your AI profile is fighting this battle for you. Tap Auto combat on the battlefield to take over and learn the controls.",
       elementIds: ["battle-ai-control", "tutorial-combat-field"],
     };
   }
@@ -430,7 +482,9 @@ const getGuidedCombatStep = (
       guidance.reason === "move"
         ? "Highlighted tiles are within reach. Step onto a tile next to your opponent."
         : guidance.reason === "end"
-          ? "End Turn targets yourself. Shortcut: press W."
+          ? isTouch
+            ? "End Turn targets yourself."
+            : "End Turn targets yourself. Shortcut: press W."
           : "Tap your opponent on the battlefield to attack.",
     action:
       guidance.reason === "move"
@@ -451,6 +505,7 @@ const getGuidedCombatStep = (
 const getCoachedCombatStep = (
   step: TutorialStepConfig,
   coaching: Extract<TutorialCombatCoaching, { kind: "coach" }>,
+  isTouch: boolean,
 ): TutorialStepConfig => {
   const { distanceToEnemy: distance, actionPoints, inReach } = coaching;
   const name = coaching.actionName ?? "";
@@ -491,7 +546,9 @@ const getCoachedCombatStep = (
         title: "End your turn",
         description:
           "Ending your turn hands it to your opponent and refills your Action Points for the next round.",
-        action: "Tap yourself to end the turn, or press W.",
+        action: isTouch
+          ? "Tap yourself to end the turn."
+          : "Tap yourself to end the turn, or press W.",
       };
     case "endEarly":
       return {
@@ -515,7 +572,9 @@ const getCoachedCombatStep = (
         ...base,
         title: "Turn spent",
         description: `With ${actionPoints} AP left there is nothing more you can do this turn.`,
-        action: `${actionPoints} AP left: end your turn with End Turn, or press W.`,
+        action: isTouch
+          ? `${actionPoints} AP left: end your turn with End Turn.`
+          : `${actionPoints} AP left: end your turn with End Turn, or press W.`,
       };
     default:
       return {

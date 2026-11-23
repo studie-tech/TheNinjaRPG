@@ -112,10 +112,15 @@ import { showMutationToast } from "@/libs/toast";
 import {
   isSectorPresenceStatus,
   isTravelKeyBlocked,
+  reportableQuestNotifications,
   SECTOR_ARRIVAL_BATCH_LIMIT,
   SECTOR_ARRIVAL_BATCH_MS,
 } from "@/libs/travel";
-import { isTutorialActive, isTutorialCaptureStep } from "@/libs/tutorial";
+import {
+  isTutorialActive,
+  isTutorialCaptureStep,
+  TUTORIAL_LAYOUT_EVENT,
+} from "@/libs/tutorial";
 import { getAllyStatus, isAutoAttackTarget, mapAttackRelation } from "@/utils/alliance";
 import { isStaffRole } from "@/utils/permissions";
 import { sleep } from "@/utils/time";
@@ -258,6 +263,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const originRef = useRef<TerrainHex | undefined>(undefined);
   // The renderer's host outlives the in-page and expanded layouts, so the scene moves between them.
   const mountRef = useRef<HTMLDivElement | null>(null);
+  // Lesson anchor kept over the viewer's objective marker, so guidance can point at it.
+  const objectiveMarkerRef = useRef<HTMLDivElement | null>(null);
   const pathFinderRef = useRef<PathCalculator | null>(null);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
@@ -722,7 +729,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     onSuccess: async (result, _input, context) => {
       if (result.success) {
         // Push any notifications
-        result.notifications.forEach((notification) => {
+        reportableQuestNotifications(result.notifications).forEach((notification) => {
           const isCancellation = notification.startsWith(GATHERING_CANCEL_PREFIX);
           showMutationToast({
             success: !isCancellation,
@@ -2582,6 +2589,19 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           liveZoomRef.current = zoom;
           setStoredZoom(zoom);
         },
+        onQuestMarkerPoint: (at) => {
+          const anchor = objectiveMarkerRef.current;
+          if (!anchor) return;
+          anchor.style.display = at ? "" : "none";
+          if (at) {
+            // The pin stands on its tile, so the box rises from the tile's foot.
+            anchor.style.left = `${at.x}px`;
+            anchor.style.top = `${at.y + at.size * 0.25}px`;
+            anchor.style.width = `${at.size * 1.5}px`;
+            anchor.style.height = `${at.size * 2.5}px`;
+          }
+          window.dispatchEvent(new Event(TUTORIAL_LAYOUT_EVENT));
+        },
         getSnapshot: () => {
           const snapshot = travelSnapshot.current;
           if (!snapshot) throw new Error("Travel snapshot unavailable");
@@ -2747,6 +2767,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           aria-busy={!travel.isReady && !travel.error}
           className={!travel.isReady && !travel.error ? "min-h-60" : undefined}
         ></div>
+        <div
+          ref={objectiveMarkerRef}
+          id="tutorial-objective-marker"
+          aria-hidden="true"
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full"
+          style={{ display: "none" }}
+        />
         {showWorldLoader && !travel.isReady && !travel.error && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div

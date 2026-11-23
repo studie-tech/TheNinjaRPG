@@ -1,9 +1,14 @@
 import { SECTOR_MAP_MAX_DIMENSION } from "@/drizzle/constants";
 import type { Quest, UserData, UserQuest } from "@/drizzle/schema";
-import { findCompletedPredecessor, isQuestObjectiveAvailable } from "@/libs/objectives";
+import {
+  findCompletedPredecessor,
+  getObjectiveImage,
+  isQuestObjectiveAvailable,
+} from "@/libs/objectives";
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent, getContentRole } from "@/utils/permissions";
+import { stripHtmlPreview } from "@/utils/string";
 import { getUtcDayKey, hasEndDatePassed } from "@/utils/time";
 import type { MapLocation } from "@/validators/mapLocation";
 import { mapLocationFields } from "@/validators/mapLocation";
@@ -225,6 +230,53 @@ export const getQuestMapLocations = (
   return [...locations.values()];
 };
 
+/**
+ * Sectors the globe marks for the player's active quests: objectives still to do on the
+ * path the player chose, at the sector their tracker instantiated. A branching quest
+ * marks only the selected branch, never its alternatives. A dialog objective has no
+ * place of its own; a `destination` naming an objective marks the sector where it is
+ * answered, in place of any sector its tracker holds.
+ */
+export const getGlobeQuestGoals = (
+  user:
+    | (Pick<UserData, "questData"> & {
+        userQuests: Pick<UserQuest, "questId" | "completed" | "endAt" | "quest">[];
+      })
+    | null
+    | undefined,
+  destination?: GlobeQuestDestination | null,
+): GlobeQuestGoal[] =>
+  user?.userQuests.flatMap((entry) => {
+    if (entry.completed || entry.endAt || !entry.quest) return [];
+    const quest = entry.quest;
+    const tracker = user.questData?.find((q) => q.id === entry.questId);
+    return quest.content.objectives.flatMap((objective, index) => {
+      const goal = tracker?.goals.find((g) => g.id === objective.id);
+      if (goal?.done || (tracker && !isQuestObjectiveAvailable(quest, tracker, index)))
+        return [];
+      const isDestination =
+        destination?.questId === entry.questId &&
+        destination.objectiveIds.includes(objective.id);
+      // The tracker rolls a sector even for a dialog objective (where the player stood
+      // when it opened), so a destination naming the objective outranks it.
+      const sector = isDestination
+        ? destination.sector
+        : (goal?.sector ?? ("sector" in objective ? objective.sector : undefined));
+      return sector &&
+        !("hideLocation" in objective && objective.hideLocation) &&
+        (objective.task !== "dialog" || isDestination)
+        ? [
+            {
+              sector,
+              quest: quest.name,
+              goal: getObjectiveImage(objective).title,
+              details: stripHtmlPreview(objective.description),
+            },
+          ]
+        : [];
+    });
+  }) ?? [];
+
 /** One sprite per tile, preferring active quests while retaining every location's actions. */
 export const groupMapLocations = (locations: MapLocation[]) => {
   const groups = new Map<string, MapLocation[]>();
@@ -246,4 +298,19 @@ type MapPlacement = {
   sector: number;
   longitude: number;
   latitude: number;
+};
+
+/** Where a quest's located-nowhere objective is answered, such as a lesson's trip. */
+export type GlobeQuestDestination = {
+  questId: string;
+  objectiveIds: readonly string[];
+  sector: number;
+};
+
+/** One quest goal pinned on the globe, with its hover-card text. */
+export type GlobeQuestGoal = {
+  sector: number;
+  quest: string;
+  goal: string;
+  details: string;
 };

@@ -272,7 +272,9 @@ void main() {
         const [bottom, top] = layout.hit ?? [layout.lift, layout.lift + layout.height];
         const dx = (x - projected.x) / projected.scale - (layout.shift ?? 0),
           dy = (projected.y - y) / projected.scale;
-        if (Math.abs(dx) > layout.width / 2 || dy < bottom || dy > top) continue;
+        const onPole = !!layout.pole && Math.abs(dx) <= layout.pole && dy >= 0;
+        if (!onPole && (Math.abs(dx) > layout.width / 2 || dy < bottom || dy > top))
+          continue;
         return marker.sector;
       }
       return null;
@@ -320,7 +322,8 @@ export const globeMarkerAnchor = (
 
 /**
  * Billboard size in globe units, its bottom edge's height above the anchor (`lift`),
- * the atlas texels it occupies and, for labels, the clickable band of the banner.
+ * the atlas texels it occupies and, for labels, the clickable band of the banner and
+ * the half-width of its pole, whose foot stands on the landmark's own sector.
  */
 const MARKER_LAYOUT: Record<
   GlobeMarker["kind"],
@@ -330,11 +333,20 @@ const MARKER_LAYOUT: Record<
     lift: number;
     texels: [number, number];
     hit?: [number, number];
+    pole?: number;
     /** Screen-right offset of the billboard centre from the anchor. */
     shift?: number;
   }
 > = {
-  label: { width: 2.2, height: 1.99, lift: 0, texels: [124, 112], hit: [0.95, 1.99] },
+  label: {
+    width: 2.2,
+    height: 1.99,
+    lift: 0,
+    texels: [124, 112],
+    hit: [0.95, 1.99],
+    // Wider than the drawn pole so a fingertip on it still lands.
+    pole: 0.35,
+  },
   avatar: { width: 1, height: 1, lift: 0.05, texels: [64, 64] },
   quest: { width: 0.85, height: 1.13, lift: 0, texels: [72, 96] },
   target: { width: 0.85, height: 1.13, lift: 0, texels: [72, 96] },
