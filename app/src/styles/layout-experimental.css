@@ -255,7 +255,21 @@ html[data-game-layout="experimental"] {
 }
 .experimental-mobile-nav [data-nav-center] > a > div,
 .experimental-mobile-nav [data-nav-center] > button > span {
+  position: relative;
+  isolation: isolate;
   padding: 0.4rem;
+  background: none;
+}
+/* The halo extends beyond the compact action without taking space or intercepting taps. */
+.experimental-mobile-nav [data-nav-center] > a > div::before,
+.experimental-mobile-nav [data-nav-center] > button > span::before {
+  position: absolute;
+  z-index: -1;
+  inset: -0.65rem;
+  border-radius: 50%;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.5));
+  pointer-events: none;
+  content: "";
 }
 .experimental-mobile-nav [data-nav-center] > a > div > svg {
   width: 36px;
