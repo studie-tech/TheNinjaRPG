@@ -217,6 +217,7 @@ import {
 } from "@/server/utils/questConsequences";
 import { nameGrantedRewards, updateRewards } from "@/server/utils/questRewards";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
+import { getVillageChoiceBlock } from "@/server/utils/villageChoice";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -1545,6 +1546,13 @@ export const questsRouter = createTRPCRouter({
       const attemptBlock =
         activeAttempt && questAttemptBlockMessage(activeAttempt, getContentRole(user));
       if (attemptBlock) return errorResponse(attemptBlock);
+      const villageBlock = await getVillageChoiceBlock(
+        ctx.drizzle,
+        user.userQuests.find((entry) => entry.questId === input.questId)?.quest
+          ?.content,
+        input.nextObjectiveId,
+      );
+      if (villageBlock) return errorResponse(villageBlock);
 
       // Figure out if any finished quests & get rewards
       const {

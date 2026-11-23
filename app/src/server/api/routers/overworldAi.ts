@@ -88,6 +88,7 @@ import {
 } from "@/server/utils/questAssignment";
 import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import { fetchPublishedSectorMap, habitatSectorPool } from "@/server/utils/sectorMap";
+import { getVillageChoiceBlock } from "@/server/utils/villageChoice";
 import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
@@ -619,6 +620,13 @@ export const overworldAiRouter = createTRPCRouter({
             dialog: toNpcDialog(bound.objective),
           });
         }
+        const villageBlock = await getVillageChoiceBlock(
+          ctx.drizzle,
+          activeUser.userQuests?.find((entry) => entry.questId === bound.questId)?.quest
+            ?.content,
+          input.dialogContentId,
+        );
+        if (villageBlock) return errorResponse(villageBlock);
 
         // getReward advances trackers (it internally calls getNewTrackers with the
         // dialog contentId + useritems on the user), marks the completed objective as

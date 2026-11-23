@@ -2190,6 +2190,15 @@ export const VILLAGE_REDUCED_GAINS_FACTOR = 0.5;
 export const HORIZON_MAX_LEVEL = 10;
 /** Level the Road to Genin exam asks for; Express Trials start returning players at it. */
 export const GENIN_EXAM_LEVEL = 5;
+/**
+ * The Genin exam stops offering a village while its players active this week exceed the
+ * quietest joinable village's by this factor and by at least VILLAGE_CHOICE_FULL_MIN_GAP
+ * players, so new Genin fill the quieter villages. The VILLAGE_CHOICE_MIN_OPEN quietest
+ * villages are always offered.
+ */
+export const VILLAGE_CHOICE_FULL_RATIO = 1.25;
+export const VILLAGE_CHOICE_FULL_MIN_GAP = 20;
+export const VILLAGE_CHOICE_MIN_OPEN = 2;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
 /** Ranks eligible to enroll and provide a village duty defender. */
 export const VILLAGE_DUTY_RANKS = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"] as const;

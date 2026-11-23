@@ -1396,14 +1396,17 @@ const PlayerTutorialAssistant: React.FC<
                         ? parseHtml(currentTutorialStep.description)
                         : currentTutorialStep.description
                     }
-                    onChoose={(option) =>
-                      checkRewards({
-                        questId: dialogOptions.questId,
-                        nextObjectiveId: dialogChoiceContentId(
-                          option.nextObjectiveId ?? undefined,
-                          dialogOptions.objectiveId,
-                        ),
-                      })
+                    onChoose={(option, onRejected) =>
+                      checkRewards(
+                        {
+                          questId: dialogOptions.questId,
+                          nextObjectiveId: dialogChoiceContentId(
+                            option.nextObjectiveId ?? undefined,
+                            dialogOptions.objectiveId,
+                          ),
+                        },
+                        { onSuccess: (data) => data.success || onRejected() },
+                      )
                     }
                   />,
                   document.body,
