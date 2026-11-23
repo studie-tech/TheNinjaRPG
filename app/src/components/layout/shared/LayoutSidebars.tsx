@@ -107,9 +107,9 @@ const loadMenuBoxProfile = createModuleLoader(() => import("@/layout/MenuBoxProf
  */
 export const preloadSignedInSidebar = () => void loadMenuBoxProfile();
 
-const MenuBoxProfile = () => {
+const MenuBoxProfile = ({ showAvatar = true }: { showAvatar?: boolean }) => {
   const { default: LoadedMenuBoxProfile } = use(loadMenuBoxProfile());
-  return <LoadedMenuBoxProfile />;
+  return <LoadedMenuBoxProfile showAvatar={showAvatar} />;
 };
 
 interface LayoutLeftSidebarProps {
@@ -163,7 +163,7 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
                 />
               }
             >
-              <MenuBoxProfile />
+              <MenuBoxProfile showAvatar={variant !== "experimental"} />
             </Suspense>
           </ChunkErrorBoundary>
         </>

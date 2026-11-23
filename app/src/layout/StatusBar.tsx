@@ -17,6 +17,10 @@ export interface StatusBarProps {
   lastRegenAt?: Date | null;
   tooltip?: string;
   showText?: boolean;
+  /** Slim labeled meter with values available to touch, keyboard and screen-reader users. */
+  compact?: boolean;
+  /** Open the detailed character readings from a compact HUD meter. */
+  onInspect?: () => void;
   status?: UserStatus;
   timeDiff?: number;
   /** Combat Energy uses continuous recovery, including captured timed bonuses. */
@@ -36,7 +40,7 @@ export interface StatusBarProps {
 const StatusBar: React.FC<StatusBarProps> = (props) => {
   // Destructure props
   const { regen, lastRegenAt, timeDiff, combatRegenerationPeriods, timedBuffs } = props;
-  const { showText, title, current, total, status } = props;
+  const { showText, title, current, total, status, compact = false } = props;
 
   // Is the user in battle?
   const isInBattle = props.status === "BATTLE";
@@ -109,11 +113,17 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
     timedBuffs,
   ]);
 
+  const valueLabel = isInBattle
+    ? "In battle"
+    : current === undefined || total === undefined
+      ? "Loading"
+      : `${Math.round(state.current)} / ${total}`;
+
   return (
-    <div className="group relative flex-row">
+    <div className="group relative flex-row" data-compact-meter={compact || undefined}>
       {/* Hidden rather than removed in battle: the status flips to and from BATTLE
           mid-session, and removing the line moved everything below the bars. */}
-      {showText && (
+      {showText && !compact && (
         <div className={cn("leading-none", isInBattle && "invisible")}>
           {title} ({total ? `${Math.round(state.current)} / ${total}` : "?? / ??"})
           {state.nextTickSeconds !== undefined && ` (${state.nextTickSeconds}s)`}
@@ -122,8 +132,25 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
 
       <TooltipProvider delayDuration={50}>
         <Tooltip>
-          <TooltipTrigger className="w-full">
-            <div className={`h-3 w-full border-2 border-black`}>
+          <TooltipTrigger
+            className={compact ? "player-status-meter" : "w-full"}
+            onClick={props.onInspect}
+            aria-haspopup={props.onInspect ? "dialog" : undefined}
+            aria-label={compact ? `${title}: ${valueLabel}` : undefined}
+          >
+            {compact && (
+              <span className="player-status-meter-label">
+                <span>{title}</span>
+                <span className="player-status-meter-value">{valueLabel}</span>
+              </span>
+            )}
+            <div
+              className={
+                compact
+                  ? "player-status-meter-track"
+                  : "h-3 w-full border-2 border-black"
+              }
+            >
               <div
                 className={`h-full ${color}`}
                 style={{
@@ -132,7 +159,12 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
               ></div>
             </div>
           </TooltipTrigger>
-          {props.tooltip && <TooltipContent>{props.tooltip}</TooltipContent>}
+          {props.tooltip && (
+            <TooltipContent>
+              {props.tooltip}
+              {compact && <> · {valueLabel}</>}
+            </TooltipContent>
+          )}
         </Tooltip>
       </TooltipProvider>
     </div>

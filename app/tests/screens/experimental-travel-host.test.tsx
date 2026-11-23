@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as dynamic from "next/dynamic";
 import { createRef, useEffect, useState } from "react";
+import * as playerStatus from "@/components/layout/ExperimentalPlayerStatus";
 import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTypes";
 import { layoutVariantClasses } from "@/components/layout/shared/layoutVariants";
 import * as compass from "@/components/layout/shared/TravelCompass";
@@ -224,6 +225,9 @@ describe("responsive experimental menus", () => {
     variantClasses: layoutVariantClasses.experimental,
   });
   beforeEach(() => {
+    vi.spyOn(playerStatus, "ExperimentalPlayerStatus").mockReturnValue(
+      <div aria-label="Character status" />,
+    );
     vi.spyOn(compass, "TravelCompass").mockReturnValue(
       <button type="button">Destination compass</button>,
     );
@@ -267,6 +271,30 @@ describe("responsive experimental menus", () => {
     ).toBeNull();
     expect(getGameLayout("experimental").sidebarBreakpoint).toBeNull();
   });
+  it("returns keyboard focus to the resource meter that opened player details", async () => {
+    vi.spyOn(playerStatus, "ExperimentalPlayerStatus").mockImplementation(
+      ({ onOpenPlayerMenu }) => (
+        <div data-compact-meter>
+          <button type="button" onClick={onOpenPlayerMenu}>
+            HP details
+          </button>
+        </div>
+      ),
+    );
+    const input = props();
+    const view = render(<ExperimentalGameLayout {...input} />);
+    const meter = view.getByRole("button", { name: "HP details" });
+    meter.focus();
+    fireEvent.click(meter);
+    expect(input.onLeftSideBarOpenChange).toHaveBeenCalledWith(true);
+    view.rerender(<ExperimentalGameLayout {...input} leftSideBarOpen />);
+    await act(async () => flushRadixFocus());
+    expect(view.getByRole("dialog", { name: "Player menu" })).toBeTruthy();
+    view.rerender(<ExperimentalGameLayout {...input} leftSideBarOpen={false} />);
+    await act(async () => flushRadixFocus());
+    expect(document.activeElement).toBe(meter);
+  });
+
   it("uses mobile corner menus and the shared configured bottom navigation", () => {
     const input = props();
     input.mobileNavConfig = { left: ["bank"], right: ["itemshop", "items", "tavern"] };

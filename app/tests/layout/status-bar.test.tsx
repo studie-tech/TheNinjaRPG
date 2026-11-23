@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import StatusBar from "@/layout/StatusBar";
 
@@ -121,4 +121,34 @@ describe("PoolStatusBars", () => {
     remounted.rerender(bars(true, 11));
     expect(firstBar(remounted)).not.toBe(remountedBar);
   });
+});
+
+it("opens compact meter details and keeps unavailable combat pools explicit", () => {
+  const inspect = vi.fn();
+  const view = render(
+    <StatusBar
+      title="HP"
+      color="bg-red-500"
+      compact
+      onInspect={inspect}
+      current={40}
+      total={100}
+      regen={0}
+      status="AWAKE"
+    />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "HP: 40 / 100" }));
+  expect(inspect).toHaveBeenCalledTimes(1);
+  view.rerender(
+    <StatusBar
+      title="HP"
+      color="bg-red-500"
+      compact
+      current={40}
+      total={100}
+      regen={0}
+      status="BATTLE"
+    />,
+  );
+  expect(view.getByRole("button", { name: "HP: In battle" })).toBeTruthy();
 });

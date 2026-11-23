@@ -7,7 +7,7 @@ import {
   PanelLeftOpen,
   PanelRightOpen,
 } from "lucide-react";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -17,10 +17,6 @@ import {
 } from "@/components/ui/sheet";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import {
-  ContentBoxPriorityActions,
-  type HeaderActionItem,
-} from "@/layout/ContentBoxHeaderActions";
 import Footer from "@/layout/Footer";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
@@ -29,6 +25,7 @@ import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { TravelNavigationContext } from "@/screens/travel/TravelNavigationContext";
 import { usePublicPathname } from "@/utils/routing";
+import { ExperimentalPlayerStatus } from "./ExperimentalPlayerStatus";
 import { ExperimentalTravelHost } from "./ExperimentalTravelHost";
 import { type GameFrameProps, GameLayout } from "./GameLayout";
 import { CHAT_BUTTON_LAYER, MobileSidebarStack } from "./shared/LayoutChrome";
@@ -74,90 +71,112 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
     [controlsTarget, viewTarget],
   );
 
-  const headerItems: HeaderActionItem[] = [
-    {
-      key: "player-menu",
-      pinned: "start",
-      node: (
-        <Sheet
-          open={leftSideBarOpen}
-          onOpenChange={onLeftSideBarOpenChange}
-          modal={!isDesktop}
-        >
-          <SheetTrigger
-            className="experimental-tool"
-            aria-label="Open player menu"
-            data-experimental-travel-link={isMapPage || undefined}
-          >
-            <PanelLeftOpen aria-hidden="true" />
-            <span className="sr-only">Player</span>
-          </SheetTrigger>
-          <SheetContent
-            side="left"
-            className="experimental-drawer"
-            data-experimental-sidebar="player"
-            data-reading-surface
-            onInteractOutside={(event) => {
-              if (isDesktop) event.preventDefault();
-              else keepSheetOpenForClerk(event);
-            }}
-          >
-            <SheetHeader>
-              <SheetTitle>Player menu</SheetTitle>
-            </SheetHeader>
-            <MobileSidebarStack
-              isCombat={isCombatPage}
-              leftSideBar={leftSideBar}
-              mainMenu={leftSideBarMainMenu}
-            />
-            <Footer />
-          </SheetContent>
-        </Sheet>
-      ),
-      priority: 0,
-    },
-    {
-      key: "game-menu",
-      pinned: "end",
-      node: (
-        <Sheet
-          open={rightSideBarOpen}
-          onOpenChange={onRightSideBarOpenChange}
-          modal={!isDesktop && !isGuidedTutorial}
-        >
-          <SheetTrigger
-            className="experimental-tool"
-            aria-label="Open game menu"
-            id="tutorial-gameBtn"
-          >
-            <PanelRightOpen aria-hidden="true" />
-            <span className="sr-only">Game menu</span>
-          </SheetTrigger>
-          <SheetContent
-            className="experimental-drawer"
-            data-experimental-sidebar="game"
-            data-reading-surface
-            onInteractOutside={(event) => {
-              if (isDesktop || isGuidedTutorial || isClerkElement(event.target))
-                event.preventDefault();
-            }}
-          >
-            <SheetHeader>
-              <SheetTitle>Game menu</SheetTitle>
-            </SheetHeader>
-            <Suspense fallback={<Loader explanation="Loading game menu" />}>
-              {/* biome-ignore lint/a11y/useKeyWithClickEvents: Sheet owns keyboard interaction. */}
-              {/* biome-ignore lint/a11y/noStaticElementInteractions: delegated navigation dismissal. */}
-              <div ref={rightSideBarRef} onClick={handleRightSidebarClick}>
-                {rightSideBar}
-              </div>
-            </Suspense>
-          </SheetContent>
-        </Sheet>
-      ),
-      priority: 0,
-    },
-  ];
+  const headerRef = useRef<HTMLElement>(null);
+  const playerMeterFocus = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const root = document.documentElement;
+    const measure = () =>
+      root.style.setProperty(
+        "--experimental-header-height",
+        `${Math.ceil(header.getBoundingClientRect().height)}px`,
+      );
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--experimental-header-height");
+    };
+  }, []);
+
+  const playerMenu = (
+    <Sheet
+      open={leftSideBarOpen}
+      onOpenChange={onLeftSideBarOpenChange}
+      modal={!isDesktop}
+    >
+      <SheetTrigger
+        className="experimental-tool"
+        aria-label="Open player menu"
+        data-experimental-travel-link={isMapPage || undefined}
+      >
+        <PanelLeftOpen aria-hidden="true" />
+        <span className="sr-only">Player</span>
+      </SheetTrigger>
+      <SheetContent
+        side="left"
+        className="experimental-drawer"
+        data-experimental-sidebar="player"
+        data-reading-surface
+        onOpenAutoFocus={() => {
+          const focused = document.activeElement;
+          playerMeterFocus.current =
+            focused instanceof HTMLElement && focused.closest("[data-compact-meter]")
+              ? focused
+              : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (playerMeterFocus.current?.isConnected) {
+            event.preventDefault();
+            playerMeterFocus.current.focus({ preventScroll: true });
+          }
+          playerMeterFocus.current = null;
+        }}
+        onInteractOutside={(event) => {
+          if (isDesktop) event.preventDefault();
+          else keepSheetOpenForClerk(event);
+        }}
+      >
+        <SheetHeader>
+          <SheetTitle>Player menu</SheetTitle>
+        </SheetHeader>
+        <MobileSidebarStack
+          isCombat={isCombatPage}
+          leftSideBar={leftSideBar}
+          mainMenu={leftSideBarMainMenu}
+        />
+        <Footer />
+      </SheetContent>
+    </Sheet>
+  );
+  const gameMenu = (
+    <Sheet
+      open={rightSideBarOpen}
+      onOpenChange={onRightSideBarOpenChange}
+      modal={!isDesktop && !isGuidedTutorial}
+    >
+      <SheetTrigger
+        className="experimental-tool"
+        aria-label="Open game menu"
+        id="tutorial-gameBtn"
+      >
+        <PanelRightOpen aria-hidden="true" />
+        <span className="sr-only">Game menu</span>
+      </SheetTrigger>
+      <SheetContent
+        className="experimental-drawer"
+        data-experimental-sidebar="game"
+        data-reading-surface
+        onInteractOutside={(event) => {
+          if (isDesktop || isGuidedTutorial || isClerkElement(event.target))
+            event.preventDefault();
+        }}
+      >
+        <SheetHeader>
+          <SheetTitle>Game menu</SheetTitle>
+        </SheetHeader>
+        <Suspense fallback={<Loader explanation="Loading game menu" />}>
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: Sheet owns keyboard interaction. */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: delegated navigation dismissal. */}
+          <div ref={rightSideBarRef} onClick={handleRightSidebarClick}>
+            {rightSideBar}
+          </div>
+        </Suspense>
+      </SheetContent>
+    </Sheet>
+  );
 
   return (
     <TravelNavigationContext value={travelNavigation}>
@@ -169,11 +188,16 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
         <a href="#game-content" className="theme-skip-link">
           Skip to game content
         </a>
-        {!isMapPage && (
-          <header className="experimental-header">
-            <ContentBoxPriorityActions items={headerItems} label="Game" />
-          </header>
-        )}
+        <header ref={headerRef} className="experimental-header">
+          <div data-header-item="player-menu">{playerMenu}</div>
+          {userData && (
+            <ExperimentalPlayerStatus
+              hasLocation={!!location}
+              onOpenPlayerMenu={() => onLeftSideBarOpenChange(true)}
+            />
+          )}
+          <div data-header-item="game-menu">{gameMenu}</div>
+        </header>
 
         <main
           id="game-content"
@@ -182,10 +206,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
           data-reading-surface={!isMapPage || undefined}
         >
           {isMapPage ? (
-            <ExperimentalTravelHost
-              isGuidedTutorial={isGuidedTutorial}
-              headerItems={headerItems}
-            >
+            <ExperimentalTravelHost isGuidedTutorial={isGuidedTutorial}>
               {children}
             </ExperimentalTravelHost>
           ) : (

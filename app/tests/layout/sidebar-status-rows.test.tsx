@@ -200,9 +200,9 @@ describe("sidebar status rows", () => {
       ]
         .map((row) => row as [string, string, string])
         .map(([href, text, tip]) => ({
-          trigger: "w-full",
+          trigger: "",
           outer: "A",
-          outerClass: "hover:text-orange-500",
+          outerClass: "w-full hover:text-orange-500",
           href,
           linkWraps: text,
           text,

@@ -22,6 +22,8 @@ const require = createRequire(import.meta.url);
 const { c } = require("react/compiler-runtime") as { c: (size: number) => unknown[] };
 
 const targets = [
+  ["components/layout/ExperimentalPlayerStatus.tsx", ["ExperimentalPlayerStatus"]],
+  ["layout/StatusBar.tsx", ["StatusBar"]],
   [
     "layout/ContentBoxHeaderActions.tsx",
     ["ContentBoxHeaderActions", "ContentBoxPriorityActions"],

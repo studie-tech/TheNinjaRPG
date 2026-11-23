@@ -39,7 +39,13 @@ const POOL_BARS = [
 interface PoolStatusBarsProps
   extends Pick<
     StatusBarProps,
-    "status" | "regen" | "lastRegenAt" | "timeDiff" | "timedBuffs"
+    | "status"
+    | "regen"
+    | "lastRegenAt"
+    | "timeDiff"
+    | "timedBuffs"
+    | "compact"
+    | "onInspect"
   > {
   pools: {
     [Pool in (typeof POOL_BARS)[number]["pool"] as

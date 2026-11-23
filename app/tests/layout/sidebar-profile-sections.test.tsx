@@ -130,6 +130,15 @@ const mount = () => {
 };
 
 describe("profile sidebar sections", () => {
+  it("omits the portrait while retaining detailed player readings", () => {
+    const view = render(<MenuBoxProfile showAvatar={false} />);
+    expect(Avatar.default).not.toHaveBeenCalled();
+    expect(view.container.textContent).toContain("Status:");
+    expect(view.container.textContent).toContain("100");
+    expect(renders.pools).toBe(1);
+    expect(renders.bars).toEqual(["EP", "XP"]);
+  });
+
   it("re-renders only the money row for a money write", () => {
     const view = mount();
     write({ money: 250 });
