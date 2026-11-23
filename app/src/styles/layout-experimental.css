@@ -384,12 +384,13 @@ html[data-game-layout="experimental"] {
 .player-status-shortcuts {
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(3, 13px);
+  container-type: inline-size;
+  grid-template-rows: repeat(2, 20px);
   grid-auto-columns: max-content;
   align-content: safe center;
   align-items: center;
-  justify-content: start;
-  gap: 1px 3px;
+  justify-content: safe end;
+  gap: 2px 3px;
   min-width: 0;
   max-height: 44px;
   overflow: auto;
@@ -399,14 +400,17 @@ html[data-game-layout="experimental"] {
 }
 .player-status-shortcuts > a,
 .player-status-shortcuts > button {
+  display: flex;
+  align-items: center;
   width: auto;
+  height: 100%;
   min-width: 0;
   max-width: 100%;
-  min-height: 13px;
+  min-height: 20px;
   border: 1px solid color-mix(in srgb, var(--theme-line) 20%, transparent);
   border-radius: 3px;
   padding: 0 2px;
-  line-height: 1.2;
+  line-height: 1;
   white-space: nowrap;
 }
 .player-status-shortcuts > a:hover,
@@ -414,17 +418,23 @@ html[data-game-layout="experimental"] {
   background: var(--theme-bg);
 }
 .player-status-shortcuts svg {
+  display: block;
   flex-shrink: 0;
   width: 10px;
   height: 10px;
   margin-right: 2px;
 }
 .player-status-shortcuts p {
-  margin-right: 2px;
-  font-size: 10px;
+  margin: 0 2px 0 0;
+  font-size: inherit;
+  line-height: inherit;
 }
+.player-status-shortcuts > a > div,
 .player-status-shortcuts > button > div {
+  display: flex;
+  align-items: center;
   min-width: 0;
+  height: 100%;
 }
 .player-status-shortcuts [data-player-summary-label] {
   min-width: 0;
@@ -434,7 +444,7 @@ html[data-game-layout="experimental"] {
 }
 @media (min-width: 768px) {
   .experimental-player-status {
-    grid-template-columns: 40px clamp(90px, 12vw, 160px) clamp(
+    grid-template-columns: 40px minmax(90px, 1fr) clamp(
         180px,
         25vw,
         340px
@@ -471,7 +481,6 @@ html[data-game-layout="experimental"] {
   .player-status-shortcuts {
     grid-column: 4;
     grid-row: 1 / 3;
-    grid-template-rows: repeat(2, 20px);
     gap: 2px 0.5rem;
     font-size: 10px;
   }
@@ -480,12 +489,8 @@ html[data-game-layout="experimental"] {
     height: 12px;
     margin-right: 3px;
   }
-  .player-status-shortcuts p {
-    font-size: 12px;
-  }
   .player-status-shortcuts > a,
   .player-status-shortcuts > button {
-    min-height: 20px;
     padding-inline: 0.4rem;
   }
 }
@@ -568,20 +573,21 @@ html[data-game-layout="experimental"] {
   }
 }
 
-@container (min-width: 1000px) and (max-width: 1199px) {
+/* Shortcut labels depend on their own space, keeping the resource column centered. */
+@container (min-width: 600px) {
   .player-status-shortcuts [data-player-summary-label] {
+    display: inline;
+    max-width: 24ch;
+    margin-right: 0.35rem;
+  }
+  .player-status-shortcuts [data-player-summary-full-value] {
+    display: inline;
+  }
+  .player-status-shortcuts [data-player-summary-short-value] {
     display: none;
   }
 }
-@container (min-width: 1600px) {
-  .player-status-shortcuts {
-    grid-template-rows: 20px;
-  }
-}
 @container (min-width: 1200px) {
-  .player-status-shortcuts [data-player-summary-label] {
-    max-width: 24ch;
-  }
   .experimental-player-status [data-player-summary-full-value] {
     display: inline;
   }
