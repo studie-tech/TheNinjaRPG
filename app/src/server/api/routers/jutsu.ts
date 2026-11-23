@@ -628,6 +628,7 @@ export const jutsuRouter = createTRPCRouter({
               id,
               loadoutJutsuIds: loadout.jutsuIds,
               aiProfileId: result.aiProfileId,
+              equippedJutsus: result.jutsus,
             }),
           }
         : result;
@@ -1064,6 +1065,10 @@ export const jutsuRouter = createTRPCRouter({
                 ...getEvolveJutsuUserUpdate({
                   progressionUserPatch: progression.userPatch,
                   activeLoadout,
+                  userJutsus,
+                  previousJutsuId: oldJutsuId,
+                  evolutionJutsuId: input.evolutionJutsuId,
+                  isRestrictedEquipType,
                 }),
               }
             : {}),
@@ -1541,6 +1546,7 @@ export const jutsuRouter = createTRPCRouter({
         questDataFull = trackers;
       }
       const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);
+      let learnedJutsuEquipped = false;
 
       if (userjutsuObj) {
         // The level and debit commit together; the returned level must describe this
@@ -1653,7 +1659,7 @@ export const jutsuRouter = createTRPCRouter({
           );
         }
 
-        await Promise.all([
+        const [, keptEquipped] = await Promise.all([
           updateUserQuestData(ctx.drizzle, questDataForDb, ctx.userId),
           canAutoEquip
             ? rollbackEquipIfOverCap({
@@ -1666,6 +1672,7 @@ export const jutsuRouter = createTRPCRouter({
               })
             : undefined,
         ]);
+        learnedJutsuEquipped = keptEquipped === true;
       }
 
       // Queue the further levels; the started one stands even if this fails.
@@ -1686,6 +1693,10 @@ export const jutsuRouter = createTRPCRouter({
             questData: questDataFull,
             requiresProgressionRefresh: data.requiresProgressionRefresh,
             publishedAchievementIds: data.publishedAchievementIds,
+            equippedJutsus,
+            learnedJutsu: !userjutsuObj
+              ? { jutsuId: input.jutsuId, equipped: learnedJutsuEquipped }
+              : undefined,
           }),
           message: queued.success
             ? followUps.length > 0

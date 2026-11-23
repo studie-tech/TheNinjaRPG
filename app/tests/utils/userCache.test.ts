@@ -1,13 +1,21 @@
 import { describe, expect, it, setSystemTime } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import {
+  getEquippedJutsuProfilePatch,
+  getSelectJutsuLoadoutUserUpdate,
+  getUnequipAllJutsuUserUpdate,
+} from "@/deltas/jutsu";
+import {
   getUserCaps,
   KAGE_DEFENSE_REMINDER_HOURS,
   MAX_MASTERY_CAP,
   VILLAGE_REDUCED_GAINS_DAYS,
 } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
-import { getUserFactionNotifications } from "@/libs/userNotifications";
+import {
+  getUserFactionNotifications,
+  NO_JUTSU_EQUIPPED_NOTIFICATION,
+} from "@/libs/userNotifications";
 import type {
   AchievementProgress,
   UserWithRelations,
@@ -66,6 +74,56 @@ const setup = (active = true) => {
 };
 
 describe("user cache updates", () => {
+  it("keeps equipment warnings accurate across saved-loadout mismatches without refetching", async () => {
+    const test = setup();
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: {
+        ...profile(100).userData,
+        isAi: false,
+        tutorialOn: false,
+        jutsuLoadout: "main",
+        loadout: { jutsuIds: [] },
+        jutsus: [{ jutsuId: "auto-equipped" }],
+      },
+      notifications: [NO_JUTSU_EQUIPPED_NOTIFICATION],
+    });
+    const notifications = () =>
+      test.value()?.notifications as unknown as NavBarDropdownLink[];
+    // Any confirmed profile change reconciles a warning against actual equipment.
+    await updateUserCache(test.client, key, { money: 99 });
+    expect(notifications()).not.toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
+    for (const equipped of [true, false]) {
+      await updateUserCache(test.client, key, (user) =>
+        getEquippedJutsuProfilePatch(user, {
+          equipped,
+          jutsuId: "manual-equip",
+          loadout: { id: "main", jutsuIds: equipped ? [] : ["manual-equip"] },
+        }),
+      );
+      expect(notifications()).not.toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
+    }
+    // Validation can reject every saved ID when selecting a loadout.
+    const selected = getSelectJutsuLoadoutUserUpdate({
+      id: "main",
+      loadoutJutsuIds: ["unusable-jutsu"],
+      aiProfileId: null,
+      equippedJutsus: [],
+    });
+    await updateUserCache(test.client, key, selected.userPatch);
+    expect(notifications()).toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
+    await updateUserCache(test.client, key, { jutsus: [{ jutsuId: "auto-equipped" }] });
+    expect(notifications()).not.toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
+    await updateUserCache(
+      test.client,
+      key,
+      getUnequipAllJutsuUserUpdate(false).userPatch,
+    );
+    expect(notifications()).toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
   it.each(["matching", "changed", "missing"] as const)(
     "applies confirmed changes only with %s server prerequisites",
     async (baseline) => {

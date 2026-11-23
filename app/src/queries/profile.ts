@@ -2043,6 +2043,10 @@ const findProfileUser = <
       loadout: {
         columns: { jutsuIds: true },
       },
+      jutsus: {
+        columns: { jutsuId: true },
+        where: eq(userJutsu.equipped, true),
+      },
       promotions: {
         limit: 1,
       },

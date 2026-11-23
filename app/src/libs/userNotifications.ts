@@ -5,7 +5,7 @@ import { isTutorialActive } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { getKageSetupDeadline } from "@/utils/kage";
 
-/** Sidebar warning for a player whose active jutsu loadout is empty. */
+/** Sidebar warning for a player with no equipped jutsu. */
 export const NO_JUTSU_EQUIPPED_NOTIFICATION: NavBarDropdownLink = {
   href: "/jutsus",
   name: "No jutsu equipped!",
@@ -13,9 +13,10 @@ export const NO_JUTSU_EQUIPPED_NOTIFICATION: NavBarDropdownLink = {
 };
 
 /**
- * Warn a player whose active jutsu loadout is empty, so they don't walk into a fight
- * with basic actions only. Skipped for AI, players without a loadout yet, and
- * players still in the tutorial.
+ * Warn a player with no equipped jutsu, so they don't walk into a fight with basic
+ * actions only. Saved loadout membership can differ from actual equipment after
+ * auto-equipping learned jutsu or validating a loadout. Skip AI, unknown equipment
+ * and players still in the tutorial.
  */
 export const getNoJutsuEquippedNotifications = (
   user:
@@ -23,16 +24,12 @@ export const getNoJutsuEquippedNotifications = (
         isAi: boolean;
         tutorialOn?: boolean | null;
         tutorialStep?: number | null;
-        loadout?: { jutsuIds: string[] } | null;
+        jutsus?: { jutsuId: string }[];
       }
     | null
     | undefined,
 ): NavBarDropdownLink[] =>
-  user &&
-  !user.isAi &&
-  user.loadout &&
-  user.loadout.jutsuIds.length === 0 &&
-  !isTutorialActive(user)
+  user && !user.isAi && user.jutsus?.length === 0 && !isTutorialActive(user)
     ? [NO_JUTSU_EQUIPPED_NOTIFICATION]
     : [];
 

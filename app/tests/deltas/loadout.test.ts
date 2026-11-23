@@ -57,9 +57,11 @@ it("applies confirmed equip membership against its server baseline without repla
 });
 
 it("reconciles profile equipment only for the confirmed active loadout and membership baseline", () => {
-  const user = { jutsuLoadout: "one", loadout: { jutsuIds: ["a"] } } as Parameters<
-    typeof getEquippedJutsuProfilePatch
-  >[0];
+  const user = {
+    jutsuLoadout: "one",
+    loadout: { jutsuIds: ["a"] },
+    jutsus: [{ jutsuId: "a" }],
+  } as Parameters<typeof getEquippedJutsuProfilePatch>[0];
   const change = {
     equipped: true,
     jutsuId: "b",
@@ -67,6 +69,7 @@ it("reconciles profile equipment only for the confirmed active loadout and membe
   };
   expect(getEquippedJutsuProfilePatch(user, change)).toEqual({
     loadout: { jutsuIds: ["a", "b"] },
+    jutsus: [{ jutsuId: "a" }, { jutsuId: "b" }],
   });
   expect(
     getEquippedJutsuProfilePatch({ ...user, jutsuLoadout: "other" }, change),

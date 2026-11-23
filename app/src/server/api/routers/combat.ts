@@ -1334,6 +1334,7 @@ export const combatRouter = createTRPCRouter({
               id: appliedJutsuLoadout.id,
               loadoutJutsuIds: appliedJutsuLoadout.jutsuIds,
               aiProfileId: jutsuLoadoutResult.aiProfileId,
+              equippedJutsus: jutsuLoadoutResult.jutsus,
             })
           : {};
 

@@ -3824,6 +3824,8 @@ export type UserWithRelations =
           })
         | null;
       loadout?: { jutsuIds: string[] } | null;
+      /** Actual equipped ownership rows, independent of saved loadout membership. */
+      jutsus?: { jutsuId: string }[];
       userQuests: (UserQuest & { quest: Quest })[];
       completedQuests: {
         id: string;

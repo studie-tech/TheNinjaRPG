@@ -16,6 +16,7 @@ import {
   village,
 } from "@/drizzle/schema";
 import { calcJutsuTrainTime } from "@/libs/train";
+import { NO_JUTSU_EQUIPPED_NOTIFICATION } from "@/libs/userNotifications";
 import {
   trainOwnedJutsuLevelAtomically,
   updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically,
@@ -85,6 +86,30 @@ describeWithDatabase("jutsu training progress timestamps", () => {
     ]);
     await insertUserVotes([{ userId }]);
     await insertJutsus([{ id: jutsuId, name: "Timer Jutsu", ...info }]);
+  });
+
+  it("removes the empty-equipment warning when learning auto-equips a jutsu", async () => {
+    const db = await getTestDatabase();
+    await db
+      .insert(jutsuLoadout)
+      .values({ id: "training-loadout", userId, jutsuIds: [] });
+    await db
+      .update(userData)
+      .set({ jutsuLoadout: "training-loadout", tutorialOn: false })
+      .where(eq(userData.userId, userId));
+    const profile = await callerFor(profileRouter, userId);
+    expect((await profile.getUser()).notifications).toContainEqual(
+      NO_JUTSU_EQUIPPED_NOTIFICATION,
+    );
+    const started = await (await callerFor(jutsuRouter, userId)).startTraining({
+      jutsuId,
+    });
+    expect(started.success, started.message).toBe(true);
+    expect(started.userPatch?.jutsus).toEqual([{ jutsuId }]);
+    const saved = await profile.getUser();
+    expect(saved.userData?.loadout?.jutsuIds).toEqual([]);
+    expect(saved.userData?.jutsus).toEqual([{ jutsuId }]);
+    expect(saved.notifications).not.toContainEqual(NO_JUTSU_EQUIPPED_NOTIFICATION);
   });
 
   it.each([false, true])(

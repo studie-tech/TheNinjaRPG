@@ -215,10 +215,10 @@ describe("getNoJutsuEquippedNotifications", () => {
     isAi: false,
     tutorialOn: false,
     tutorialStep: 0,
-    loadout: { jutsuIds: [] as string[] },
+    jutsus: [] as { jutsuId: string }[],
   };
 
-  it("warns a player whose active loadout is empty", () => {
+  it("warns a player with no actual equipped jutsu", () => {
     expect(getNoJutsuEquippedNotifications(player)).toEqual([
       NO_JUTSU_EQUIPPED_NOTIFICATION,
     ]);
@@ -228,12 +228,31 @@ describe("getNoJutsuEquippedNotifications", () => {
     });
   });
 
-  it("stays quiet with jutsu equipped, for AI, without a loadout, or during the tutorial", () => {
+  it("uses equipment independently of saved loadout membership", () => {
+    const autoEquipped = {
+      ...player,
+      jutsus: [{ jutsuId: "sonic-slash" }],
+      loadout: { jutsuIds: [] },
+    };
+    expect(getNoJutsuEquippedNotifications(autoEquipped)).toEqual([]);
+    const staleLoadout = {
+      ...autoEquipped,
+      jutsus: [],
+      loadout: { jutsuIds: ["unusable-jutsu"] },
+    };
+    expect(getNoJutsuEquippedNotifications(staleLoadout)).toEqual([
+      NO_JUTSU_EQUIPPED_NOTIFICATION,
+    ]);
+  });
+
+  it("stays quiet with equipment, for AI, with unknown equipment, or during the tutorial", () => {
     expect(
-      getNoJutsuEquippedNotifications({ ...player, loadout: { jutsuIds: ["j1"] } }),
+      getNoJutsuEquippedNotifications({ ...player, jutsus: [{ jutsuId: "j1" }] }),
     ).toEqual([]);
     expect(getNoJutsuEquippedNotifications({ ...player, isAi: true })).toEqual([]);
-    expect(getNoJutsuEquippedNotifications({ ...player, loadout: null })).toEqual([]);
+    expect(getNoJutsuEquippedNotifications({ ...player, jutsus: undefined })).toEqual(
+      [],
+    );
     expect(getNoJutsuEquippedNotifications({ ...player, tutorialOn: true })).toEqual(
       [],
     );
