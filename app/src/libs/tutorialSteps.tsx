@@ -165,14 +165,21 @@ const globalTravelElements = [
 const openStatsTab = { "tutorial-Stats": "Open the Stats tab." };
 const openJutsuTab = { "tutorial-Jutsu": "Open the Jutsu tab." };
 const assignElements = [
-  "tutorial-specialization-confirm-content",
+  "tutorial-specialization-confirm-proceed",
   "tutorial-specialization-options",
   "tutorial-unassigned-stats-contentbox",
 ];
-const levelUpElements = [
-  "tutorial-level-up-modal-content",
-  "tutorial-level-up-experience",
-];
+// The same Level up button on the experience page, the profile and the dashboard, then the
+// confirmation it opens.
+const levelUpTarget = {
+  elementIds: [
+    "tutorial-level-up-modal-proceed",
+    "tutorial-level-up-experience",
+    "tutorial-level-up-btn",
+    "tutorial-level-up-dashboard",
+  ],
+  elementActions: { "tutorial-level-up-modal-proceed": "Tap Awesome! to level up." },
+};
 
 export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   // Chapter 1: A Violet Flash
@@ -302,6 +309,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       "Each specialization raises <b>Offence</b> (harder hits) and <b>Defence</b> (softer blows), plus two of the stats your techniques draw on. Pick the one that fits how you want to fight; <b>Advanced</b> lets you place each point yourself later.",
     action: "Tap Mind, Body, Resolve or Tactics, then Proceed.",
     elementIds: assignElements,
+    elementActions: {
+      "tutorial-specialization-confirm-proceed":
+        "Tap Proceed, or Close to pick another.",
+    },
     page: "/profile/experience",
     advanceOn: "assignStats",
     needsUnassignedExperience: true,
@@ -313,7 +324,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "Your experience now covers level 2. Every level raises your maximum health, chakra and stamina.",
     action: "Tap Level up!, then Awesome!",
-    elementIds: levelUpElements,
+    ...levelUpTarget,
     page: "/profile/experience",
     advanceOn: "levelUp",
   },
@@ -487,12 +498,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     description:
       "That covers another level. A <b>Level up</b> button shows on your profile and on the experience page whenever you have earned one.",
     action: "Tap Level up! to take level 3.",
-    // The same Level up button on the experience page, the profile and the dashboard.
-    elementIds: [
-      "tutorial-level-up-experience",
-      "tutorial-level-up-btn",
-      "tutorial-level-up-dashboard",
-    ],
+    ...levelUpTarget,
     page: TUTORIAL_ANY_PAGE,
     advanceOn: "levelUp",
   },

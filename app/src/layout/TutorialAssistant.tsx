@@ -61,6 +61,7 @@ import {
   getPanelPlaceOverDialog,
   getUsableHighlightElement,
   isSameBox,
+  isUnderModal,
   Spotlight,
   type SpotlightMark,
   SpotlightMarks,
@@ -555,7 +556,14 @@ const PlayerTutorialAssistant: React.FC<
 
   const isLessonMarked = isAssistantVisible && highlight?.stepId === currentStep?.id;
   const marks = useGuidedMarks({
-    marks: isLessonMarked ? currentStep?.marks : undefined,
+    marks:
+      highlight && isLessonMarked
+        ? [
+            ...(currentStep?.marks ?? []),
+            // The words of a confirmation stay readable around the button marked in it.
+            { selector: `[data-modal]:has([id="${highlight.elementId}"])`, label: "" },
+          ]
+        : undefined,
   });
 
   // Update game menu highlight position when showing game menu tutorial
@@ -2095,6 +2103,20 @@ const useHighlightPlacement = <Step extends { id: string }>({
     placementRef.current.gaveWay = true;
   };
 
+  /** Moves the dock off a dialog's words and controls, to where it covers fewest of them. */
+  const giveWayToDialog = (element: HTMLElement, dialog: HTMLElement) => {
+    const panel = getAssistantPanelRect();
+    if (!panel || !rectsOverlap(dialog.getBoundingClientRect(), panel)) return;
+    const minTop =
+      DODGED_PANEL_TOP_REM *
+      Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const place = getPanelPlaceOverDialog(element, panel, minTop);
+    if (!place) return;
+    document.documentElement.style.setProperty(DODGE_TOP_PROPERTY, `${place.top}px`);
+    setPanelDodgesHighlight(place.side);
+    placementRef.current.gaveWay = true;
+  };
+
   // Helper function to update the highlight position
   const updateHighlightPosition = (currentStepConfig: Step) => {
     const highlightInfo = find(currentStepConfig);
@@ -2167,8 +2189,18 @@ const useHighlightPlacement = <Step extends { id: string }>({
       }
       // A target with no room above the lesson at the foot of the screen starts at the top,
       // and the lesson folds.
+      // A dialog stays where it is however the page behind it scrolls.
+      const dialog = highlightInfo.element.closest<HTMLElement>(MODAL_DIALOG_SELECTOR);
+      if (dialog && panel && !placement.gaveWay) {
+        // Beside a wide screen's dialog there is room to leave its words readable too.
+        const isBeside =
+          dialog.matches("[data-modal]") && window.innerWidth > panel.width * 1.5;
+        if (isBeside) giveWayToDialog(highlightInfo.element, dialog);
+        else if (rectsOverlap(before, panel)) giveWay(highlightInfo.element);
+      }
       const isCrowded =
         !isCombat &&
+        !dialog &&
         !!panel &&
         panel.bottom > window.innerHeight / 2 &&
         // A lesson beside the target, over its edge at most, leaves it readable.
@@ -2186,6 +2218,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
       if (
         !placement.settled &&
         placement.attempts < 5 &&
+        !dialog &&
         !isCrowded &&
         !isFieldPending &&
         // A fight's offset is capped by its AP bar, so even a field taller than the
@@ -2646,7 +2679,7 @@ const useGuidedMarks = (
 /** A guided step's target: the first visible match outside inert content. */
 const findGuidedTarget = (selector: string): HighlightTarget | null => {
   for (const element of document.querySelectorAll<HTMLElement>(selector)) {
-    if (element.closest("[inert]")) continue;
+    if (element.closest("[inert]") || isUnderModal(element)) continue;
     const style = window.getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden") continue;
     if (isUsableHighlightRect(element.getBoundingClientRect())) {
@@ -2691,7 +2724,7 @@ const findElementToHighlight = (
           ),
       );
 
-    if (foundElement) {
+    if (foundElement && !isUnderModal(foundElement)) {
       element = foundElement;
     }
   }

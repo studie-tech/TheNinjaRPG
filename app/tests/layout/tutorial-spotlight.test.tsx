@@ -5,6 +5,7 @@ import {
   getDodgedPanelTop,
   getPanelPlaceOverDialog,
   getToastClearance,
+  getUsableHighlightElement,
   Spotlight,
   SpotlightPointer,
 } from "@/layout/tutorial/Spotlight";
@@ -225,6 +226,39 @@ describe("dodged lesson dock placement", () => {
       top: height - 12 - 300,
     });
     expect(getPanelPlaceOverDialog(document.body, dock, 60)).toBeNull();
+  });
+});
+
+describe("a target under a modal", () => {
+  it("is passed over for one in the modal, and found again once it closes", () => {
+    const page = document.body.appendChild(document.createElement("main"));
+    const box = { top: 100, left: 40, width: 100, height: 40 };
+    const covered = place(page.appendChild(document.createElement("button")), box);
+    covered.id = "level-up";
+    // Radix hides the page behind an open modal with both attributes.
+    page.setAttribute("aria-hidden", "true");
+    page.setAttribute("data-aria-hidden", "true");
+    expect(getUsableHighlightElement("level-up")).toBeNull();
+    const modal = document.body.appendChild(document.createElement("div"));
+    const proceed = place(modal.appendChild(document.createElement("button")), box);
+    proceed.id = "level-up-proceed";
+    expect(getUsableHighlightElement("level-up-proceed")).toBe(proceed);
+    page.removeAttribute("aria-hidden");
+    page.removeAttribute("data-aria-hidden");
+    expect(getUsableHighlightElement("level-up")).toBe(covered);
+  });
+
+  it("ignores content hidden from assistive technology alone", () => {
+    const page = document.body.appendChild(document.createElement("main"));
+    page.setAttribute("aria-hidden", "true");
+    const target = place(page.appendChild(document.createElement("button")), {
+      top: 100,
+      left: 40,
+      width: 100,
+      height: 40,
+    });
+    target.id = "marker";
+    expect(getUsableHighlightElement("marker")).toBe(target);
   });
 });
 

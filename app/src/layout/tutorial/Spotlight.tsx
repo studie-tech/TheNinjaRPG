@@ -398,8 +398,16 @@ export const trackLayout = (
 };
 
 /**
- * The first visible, usable element with this id. An element inside collapsed
- * content-box controls asks them to reveal themselves and is skipped this time.
+ * Whether an open modal covers the element: Radix hides everything outside the modal,
+ * under this attribute of its own. A control there cannot be pressed.
+ */
+export const isUnderModal = (element: Element) =>
+  !!element.closest('[data-aria-hidden="true"]');
+
+/**
+ * The first visible, usable element with this id, outside anything a modal covers. An
+ * element inside collapsed content-box controls asks them to reveal themselves and is
+ * skipped this time.
  */
 export const getUsableHighlightElement = (id: string | undefined) => {
   if (!id) return null;
@@ -412,7 +420,7 @@ export const getUsableHighlightElement = (id: string | undefined) => {
     const style = window.getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden") continue;
     const rect = element.getBoundingClientRect();
-    if (!isUsableHighlightRect(rect)) continue;
+    if (!isUsableHighlightRect(rect) || isUnderModal(element)) continue;
     return element;
   }
   return null;
@@ -475,7 +483,7 @@ export const getDodgedPanelTop = (
 
 /**
  * Where the dock stands when no band of a dialog is clear of its `target` (see
- * `getDodgedPanelTop`): over the dialog's blank space rather than any of its controls, on
+ * `getDodgedPanelTop`): over the dialog's blank space rather than its controls and words, on
  * either side of the screen, as low as that allows. Null for a target outside a dialog.
  */
 export const getPanelPlaceOverDialog = (
@@ -495,6 +503,7 @@ export const getPanelPlaceOverDialog = (
       weight: element.matches(DIALOG_CONTROL_SELECTOR) ? DIALOG_CONTROL_WEIGHT : 1,
     }),
   )
+    .concat(getTextBoxes(dialog).map((box) => ({ box, weight: TEXT_WEIGHT })))
     // The target's own words and blank space give way last.
     .concat({ box: target.getBoundingClientRect(), weight: TARGET_WEIGHT })
     .filter(({ box }) => box.width > 0 && box.height > 0);
@@ -512,6 +521,21 @@ export const getPanelPlaceOverDialog = (
     }
   }
   return best && { top: best.top, side: best.side };
+};
+
+/** The boxes of the lines of text inside an element. */
+const getTextBoxes = (element: Element) => {
+  const texts = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  const boxes: DOMRect[] = [];
+  // A document without layout (tests) has no text boxes.
+  if (!range.getClientRects) return boxes;
+  while (texts.nextNode()) {
+    if (!texts.currentNode.textContent?.trim()) continue;
+    range.selectNodeContents(texts.currentNode);
+    boxes.push(...range.getClientRects());
+  }
+  return boxes;
 };
 
 /**
@@ -611,6 +635,8 @@ const DIALOG_CONTROL_SELECTOR =
   'input, select, textarea, button, a[href], [role="slider"]';
 /** How much more covering a control costs than covering a heading or a picture. */
 const DIALOG_CONTROL_WEIGHT = 20;
+/** How much more covering words to read costs than covering a picture. */
+const TEXT_WEIGHT = 4;
 /** How much covering the target's own words and blank space costs, against a heading. */
 const TARGET_WEIGHT = 0.05;
 /** Lowest mark whose name still hangs over its top edge rather than above it. */

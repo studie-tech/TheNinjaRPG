@@ -1312,9 +1312,12 @@ describe("quest steps", () => {
     // The first round is led page by page; later rounds run wherever the player is.
     expect(levelSteps[0]?.page).toBe("/profile/experience");
     for (const step of levelSteps.slice(1)) expect(step.page).toBe("*");
-    // The second level-up points at the Level up button alone; later rounds are text only.
-    expect(levelSteps[1]?.elementIds?.[0]).toBe("tutorial-level-up-experience");
-    expect(levelSteps[1]?.elementIds).not.toContain("tutorial-level-up-modal-content");
+    // The first two point at the Level up button and its confirmation; later rounds are
+    // text only.
+    for (const step of levelSteps.slice(0, 2)) {
+      expect(step.elementIds?.[0]).toBe("tutorial-level-up-modal-proceed");
+      expect(step.elementIds).toContain("tutorial-level-up-experience");
+    }
     expect(levelSteps.slice(2).every((step) => !step.elementIds?.length)).toBe(true);
   });
 
