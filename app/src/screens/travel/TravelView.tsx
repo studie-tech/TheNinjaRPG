@@ -691,7 +691,8 @@ export function TravelView({
           hasLocationRequest
         }
       />
-      {locationRequest && (
+      {/* Portaled map dialogs pause with the session while a building owns input. */}
+      {isInteractive && locationRequest && (
         <Modal
           id="tutorial-auto-travel"
           title="Auto Travel"
@@ -779,7 +780,7 @@ export function TravelView({
             !mapError &&
             userData.status !== "TRAVEL" &&
             (!showSector || !SectorComponent) && <SectorLoadingPlaceholder />}
-          {showModal && globe && userData && targetSector !== null && (
+          {isInteractive && showModal && globe && userData && targetSector !== null && (
             <Modal
               id="tutorial-global-travel"
               title="World Travel"
@@ -860,7 +861,7 @@ export function TravelView({
               }
             }}
           />
-          {isOpen && useritem && (
+          {isInteractive && isOpen && useritem && (
             <Modal
               title="Item Details"
               isOpen={isOpen}
@@ -898,7 +899,7 @@ export function TravelView({
       )}
 
       {/* Auto Attack Configuration Modal */}
-      {showAutoAttackModal && (
+      {isInteractive && showAutoAttackModal && (
         <AutoAttackModal
           isOpen={showAutoAttackModal}
           setIsOpen={setShowAutoAttackModal}
@@ -907,7 +908,7 @@ export function TravelView({
       )}
 
       {/* Revealed Players Modal (from Sensory Scan) */}
-      {showRevealedPlayersModal && revealedPlayers.length > 0 && (
+      {isInteractive && showRevealedPlayersModal && revealedPlayers.length > 0 && (
         <Modal
           title="Players Revealed by Sensory!"
           isOpen={showRevealedPlayersModal}

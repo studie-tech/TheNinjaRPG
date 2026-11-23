@@ -13,6 +13,7 @@ import * as itemCache from "@/hooks/useItemConsumptionCacheUpdate";
 import * as assetLibrary from "@/hooks/useMapAssetLibrary";
 import * as sectorCache from "@/hooks/useSectorCacheUpdate";
 import * as sectorVillage from "@/hooks/useSectorVillage";
+import { useTravelSession } from "@/hooks/useTravelSession";
 import * as ContentBox from "@/layout/ContentBox";
 import * as TravelPosition from "@/layout/TravelPositionLabel";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -37,6 +38,7 @@ Object.assign(sensoryCapture, {
 const dynamicSpy = vi.spyOn(dynamic, "default").mockReturnValue((() => null) as never);
 const { default: TravelPage } = await import("@/app/[shell]/travel/page");
 const { TravelScreen } = await import("@/screens/travel/TravelScreen");
+const { TravelView } = await import("@/screens/travel/TravelView");
 dynamicSpy.mockRestore();
 sensoryCapture.mockRestore();
 let actor: NonNullable<UserWithRelations>;
@@ -571,3 +573,28 @@ it("lets a building finish its access guard before the map redirects an unavaila
   view.rerender(<TravelScreen immersive isInteractive />);
   expect(push).toHaveBeenCalledWith("/combat");
 });
+
+it.each(["World Travel", "Auto Travel"])(
+  "retains the %s request without a portaled action while a building is open",
+  async (title) => {
+    let session: ReturnType<typeof useTravelSession>;
+    function RetainedTravel({ isInteractive }: { isInteractive: boolean }) {
+      session = useTravelSession();
+      return <TravelView session={session} immersive isInteractive={isInteractive} />;
+    }
+    const view = render(<RetainedTravel isInteractive />);
+    await act(async () => {
+      if (title === "World Travel") session.initiateTravelToSector(1539);
+      else session.setLocationRequest({ sector: 1539 });
+    });
+    expect(view.getByRole("dialog", { name: title })).toBeTruthy();
+    await act(async () => {
+      view.rerender(<RetainedTravel isInteractive={false} />);
+      await flushRadixFocus();
+    });
+    expect(view.queryByRole("dialog", { name: title })).toBeNull();
+    view.rerender(<RetainedTravel isInteractive />);
+    expect(view.getByRole("dialog", { name: title })).toBeTruthy();
+    expect(mutation.mutate).not.toHaveBeenCalled();
+  },
+);

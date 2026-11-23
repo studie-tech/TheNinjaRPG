@@ -81,7 +81,8 @@
   min-height: 0;
   overflow: hidden;
 }
-.experimental-travel [data-travel-viewport] > div:has(#tutorial-travel-sector),
+/* Every sector wrapper must inherit height so the observed scene mount follows it. */
+.experimental-travel [data-travel-viewport] div:has(#tutorial-travel-sector),
 .experimental-travel [data-travel-viewport] > div:has(#tutorial-global-map),
 .experimental-travel #tutorial-travel-sector,
 .experimental-travel #tutorial-travel-sector > div,
