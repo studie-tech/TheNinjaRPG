@@ -163,6 +163,10 @@ export function Profile() {
             remember={userData.rememberProfileTab}
             current={urlTab || tab !== null ? activeTab : null}
             options={visibleTabs}
+            // The open tab is not the next thing to press, so tutorial rings skip it.
+            itemId={(option) =>
+              option === activeTab ? undefined : `tutorial-${option}`
+            }
             aliases={profileTabAliases}
             onChange={selectTab}
             accessibleTabs

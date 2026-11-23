@@ -21,6 +21,7 @@ import { getQuestsTabLesson } from "@/libs/questsTabLesson";
 import * as toast from "@/libs/toast";
 import {
   getTutorialChapterProgress,
+  TUTORIAL_QUEUE_CHECK_STEP_ID,
   TUTORIAL_VILLAGE_CHOICE_STEP_ID,
   TUTORIAL_WAKE_SECTOR,
 } from "@/libs/tutorial";
@@ -108,6 +109,12 @@ const makeProfile = (tutorialStep: number, values: Partial<Profile> = {}): Profi
   role: "USER",
   ...values,
 });
+
+/** A profile with one Energy queue entry waiting. */
+const queuedEnergy = {
+  energyQueueHead: 0,
+  queue: [{ kind: "ENERGY", position: 1, stat: "defence", energy: 150 }],
+} as unknown as Partial<Profile>;
 
 const spies: { mockRestore: () => void }[] = [];
 let restoreDialogs = () => {};
@@ -325,7 +332,12 @@ describe("each tutorial step", () => {
       const step = TUTORIAL_STEPS[index]!;
       const target = step.elementIds?.[0];
       // The sanctuary stands on Wake Island's village page.
-      const values = step.arrivesAt === "/pets" ? { sector: TUTORIAL_WAKE_SECTOR } : {};
+      const values: Partial<Profile> =
+        step.arrivesAt === "/pets"
+          ? { sector: TUTORIAL_WAKE_SECTOR }
+          : step.id === TUTORIAL_QUEUE_CHECK_STEP_ID
+            ? queuedEnergy
+            : {};
       const view = show(
         index,
         values,
@@ -351,16 +363,15 @@ describe("each tutorial step", () => {
           .getByRole("progressbar", { name: "Chapter progress" })
           .getAttribute("aria-valuenow"),
       ).toBe(String(progress.position));
-      if (step.action) expect(region.textContent).toContain(step.action);
+      const action = (target && step.elementActions?.[target]) ?? step.action;
+      if (action) expect(region.textContent).toContain(action);
 
       // The highlight surrounds the step's first target and leaves its presses to it.
       const hole = overlay()?.querySelector<HTMLElement>(".absolute.rounded-lg");
       if (target) {
         expect(hole?.style.transform).toBe("translate(32px, 292px)");
         expect(hole?.className).toContain("pointer-events-none");
-        expect(!!overlay()?.querySelector(".animate-spotlight-ping")).toBe(
-          !!step.action,
-        );
+        expect(!!overlay()?.querySelector(".animate-spotlight-ping")).toBe(!!action);
       } else {
         expect(overlay() === null).toBe(true);
       }
@@ -470,6 +481,28 @@ describe("step overrides", () => {
       behavior: "smooth",
     });
     window.scrollBy = original;
+  });
+
+  it("says so when the Energy queue has trained before it is looked at", () => {
+    const index = TUTORIAL_STEPS.findIndex(
+      (step) => step.id === TUTORIAL_QUEUE_CHECK_STEP_ID,
+    );
+    const view = show(index);
+    const region = lesson(view, TUTORIAL_STEPS[index]!.title);
+    expect(region.textContent).toContain("it trained Defence and is empty again");
+    expect(view.getByRole("button", { name: "Next" })).toBeTruthy();
+  });
+
+  it("asks for the control pressed first, and for nothing after it until then", () => {
+    const index = TUTORIAL_STEPS.findIndex((step) => step.id === "tools-energy");
+    const view = show(index, {}, undefined, <Target id="tutorial-Stats" />);
+    expect(lesson(view, TUTORIAL_STEPS[index]!.title).textContent).toContain(
+      "Open the Stats tab.",
+    );
+    expect(view.queryByRole("button", { name: "Next" })).toBeNull();
+    cleanup();
+    const opened = show(index, {}, undefined, <Target id="tutorial-training-energy" />);
+    expect(opened.getByRole("button", { name: "Next" })).toBeTruthy();
   });
 
   it("shows the hospital lesson over any step while hospitalized", () => {
@@ -1535,7 +1568,7 @@ describe("quest steps", () => {
         })?.prompt,
       ]),
     ).toEqual([
-      ["tools-claim-jutsu", "Claim your reward here."],
+      ["tools-claim-jutsu", "Claim your reward here. Then I'll go on."],
       ["mission-claim-pup", "Claim your reward here."],
       ["bond-return-pup", "Answer to hand over the pup."],
       ["genin-debrief", "Answer here to complete the Academy Trials."],

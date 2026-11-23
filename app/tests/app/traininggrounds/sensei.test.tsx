@@ -120,8 +120,7 @@ it("refreshes sensei requests after each request change", async () => {
   expect(toast.showMutationToast).toHaveBeenCalledTimes(6);
 });
 
-it("keeps the Stats panel open through the Energy queue lesson", () => {
-  localStorage.setItem("trainingTab:viewer", "Jutsu");
+it("leaves the player on the section they opened during the training lessons", () => {
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
     currentStep: { advanceOn: "queueEnergy" },
   } as never);
@@ -133,25 +132,8 @@ it("keeps the Stats panel open through the Energy queue lesson", () => {
   const selected = screen
     .getAllByRole("tab")
     .find((tab) => tab.getAttribute("aria-selected") === "true");
-  expect(selected?.textContent).toContain("Stats");
-});
-
-it("stays on a lesson's panel after the lesson moves on", () => {
-  localStorage.setItem("trainingTab:viewer", "Jutsu");
-  const step = vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
-    currentStep: { advanceOn: "queueEnergy" },
-  } as never);
-  const page = (
-    <AppRouterContext.Provider value={{} as never}>
-      <Training />
-    </AppRouterContext.Provider>
-  );
-  const { rerender } = render(page);
-  step.mockReturnValue({ currentStep: undefined } as never);
-  rerender(page);
-  const selected = screen
-    .getAllByRole("tab")
-    .find((tab) => tab.getAttribute("aria-selected") === "true");
-  expect(selected?.textContent).toContain("Stats");
-  expect(localStorage.getItem("trainingTab:viewer")).toBe("Stats");
+  expect(selected?.textContent).toContain("Covert & Sensei");
+  // A lesson can point at the tab to open, and never at the one already open.
+  expect(document.getElementById("tutorial-Stats")).toBeTruthy();
+  expect(document.getElementById("tutorial-Covert & Sensei")).toBeNull();
 });

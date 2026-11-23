@@ -193,7 +193,15 @@ const SpotlightMarkRing = ({ mark }: { mark: SpotlightMark }) => {
         transform: `translate(${box.left - MARK_PADDING_PX}px, ${box.top - MARK_PADDING_PX}px)`,
       }}
     >
-      <span className="absolute -top-2 left-1/2 max-w-[160px] -translate-x-1/2 truncate rounded-sm bg-sky-300 px-1.5 py-0.5 text-[11px] leading-tight font-semibold whitespace-nowrap text-sky-950 shadow">
+      <span
+        className={cn(
+          "absolute max-w-[160px] truncate rounded-sm bg-sky-300 px-1.5 py-0.5 text-[11px] leading-tight font-semibold whitespace-nowrap text-sky-950 shadow",
+          // Inside the edge of a bar or a row of buttons the name would cover all of it.
+          box.height < MARK_TAB_MIN_HEIGHT_PX
+            ? "-top-0.5 left-0 -translate-y-full"
+            : "-top-2 left-1/2 -translate-x-1/2",
+        )}
+      >
         {label}
       </span>
     </div>
@@ -604,6 +612,8 @@ const DIALOG_CONTROL_SELECTOR =
 const DIALOG_CONTROL_WEIGHT = 20;
 /** How much covering the target's own words and blank space costs, against a heading. */
 const TARGET_WEIGHT = 0.05;
+/** Lowest mark whose name still hangs over its top edge rather than above it. */
+const MARK_TAB_MIN_HEIGHT_PX = 64;
 /** Space a dodging dock keeps from the target and the screen's foot. */
 const DODGE_GAP_PX = 12;
 /** Room the bouncing hand takes beside a target (see `SpotlightPointer`). */

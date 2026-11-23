@@ -17,6 +17,7 @@ export interface TimedQueueJob {
 }
 
 interface TimedQueueProps {
+  id?: string;
   title: string;
   subtitle: string;
   /** Total jobs allowed, including the active one */
@@ -52,6 +53,7 @@ export const TimedQueue: React.FC<TimedQueueProps> = (props) => {
   const used = (active ? 1 : 0) + waiting.length;
   return (
     <ContentBox
+      id={props.id}
       title={props.title}
       subtitle={props.subtitle}
       initialBreak={props.initialBreak ?? true}

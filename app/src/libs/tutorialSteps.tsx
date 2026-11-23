@@ -6,6 +6,7 @@ import {
   TUTORIAL_JUTSU_ID,
   TUTORIAL_STARTER_QUEST_ID,
 } from "@/drizzle/constants";
+import type { GuidedLessonMark } from "@/layout/tutorial/guidedLesson";
 import type { QuestsTabMarks } from "@/libs/questsTabLesson";
 import {
   GENIN_QUEST_OBJECTIVES,
@@ -39,6 +40,13 @@ export interface TutorialStepConfig {
   action?: string;
   /** Elements to highlight, most specific first; the first one on screen wins. */
   elementIds?: string[];
+  /**
+   * The call to action while one of the elements is the highlighted one, for a control
+   * pressed on the way to the step's target, such as the tab that holds it.
+   */
+  elementActions?: Partial<Record<string, string>>;
+  /** Further elements the words refer to, each marked with its name. */
+  marks?: GuidedLessonMark[];
   /** What Lemu says while the scene that opens the step still plays on the map. */
   sceneLead?: { description: string; action: string };
   /** Marks the target without dimming the page, for a scene that plays around it. */
@@ -153,6 +161,8 @@ const globalTravelElements = [
   "tutorial-global-travel-proceed",
   "tutorial-travel-arrival",
 ];
+const openStatsTab = { "tutorial-Stats": "Open the Stats tab." };
+const openJutsuTab = { "tutorial-Jutsu": "Open the Jutsu tab." };
 const assignElements = [
   "tutorial-specialization-confirm-content",
   "tutorial-specialization-options",
@@ -261,6 +271,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     action: "Tap Claim to collect your reward.",
     // The Character tab holds the logbook, for a profile that opened on another one.
     elementIds: ["tutorial-objective-claim", "tutorial-Character"],
+    elementActions: { "tutorial-Character": "Open the Character tab." },
     teachOnPage: true,
     page: "/profile",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
@@ -347,13 +358,30 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     arrivesAt: "/traininggrounds",
   },
   {
+    id: "tools-energy",
+    chapter: "academy",
+    title: "Your Energy",
+    description:
+      "Training here costs <b>Energy</b> (EP). This bar shows how much you have, and it refills by itself over time.",
+    elementIds: ["tutorial-training-energy", "tutorial-Stats"],
+    elementActions: openStatsTab,
+    marks: [{ selector: "#tutorial-sidebar-energy", label: "Always shown here" }],
+    page: "/traininggrounds",
+    showNextButton: true,
+  },
+  {
     id: "tools-train-stat",
     chapter: "academy",
     title: "Train with Energy",
     description:
-      "Training spends <b>Energy</b> to raise a stat instantly. I've set aside a small amount so you can see what it buys.",
+      "Pick a stat, and the Energy chosen above is spent on it at once. <b>Max</b> is selected, so this spends all you have.",
     action: "Tap Offence to train it.",
-    elementIds: ["tutorial-traininggrounds-offence"],
+    elementIds: ["tutorial-traininggrounds-offence", "tutorial-Stats"],
+    elementActions: openStatsTab,
+    marks: [
+      { selector: "#tutorial-training-energy", label: "Your Energy" },
+      { selector: "#tutorial-training-amount", label: "What you spend" },
+    ],
     page: "/traininggrounds",
     advanceOn: "trainStats",
   },
@@ -362,35 +390,65 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "academy",
     title: "The Energy queue",
     description:
-      "Energy refills over time, even while you are offline. The <b>Energy queue</b> spends it for you as it comes back, so your training never stops.",
-    action: "Tap Defence to queue the rest of your Energy.",
-    elementIds: ["tutorial-traininggrounds-defence"],
+      "You spent your Energy. It refills over time, also while you are offline. In <b>Queue</b> mode you decide now what it trains once it is back.",
+    action: "Now tap Defence to queue it.",
+    elementIds: [
+      "tutorial-training-queue",
+      "tutorial-traininggrounds-defence",
+      "tutorial-Stats",
+    ],
+    elementActions: { ...openStatsTab, "tutorial-training-queue": "Tap Queue." },
+    marks: [{ selector: "#tutorial-training-energy", label: "Refilling" }],
     page: "/traininggrounds",
     advanceOn: "queueEnergy",
+  },
+  {
+    id: "tools-queue-check",
+    chapter: "academy",
+    title: "Training is queued",
+    description:
+      "Here is your <b>Energy queue</b>. Once your Energy has refilled, it trains Defence by itself, even while you sleep. You can remove an entry at any time.",
+    elementIds: ["tutorial-energy-queue", "tutorial-Stats"],
+    elementActions: openStatsTab,
+    page: "/traininggrounds",
+    showNextButton: true,
   },
   {
     id: "tools-train-jutsu",
     chapter: "academy",
     title: "Your first jutsu",
     description:
-      "Jutsu are your signature techniques. <b>Sonic Slash</b> is a piercing blade strike that hits from a few tiles away. The first level takes about a minute and costs a little ryo, and a new jutsu is equipped automatically.",
+      "Jutsu are your signature techniques, and the <b>Jutsu</b> tab is where you learn them. I've put <b>Sonic Slash</b> first in your list: a piercing blade strike that hits from a few tiles away. It costs a little ryo.",
     action: "Tap Sonic Slash, then Learn.",
     elementIds: [
       "tutorial-traininggrounds-trainJutsu-proceed",
       `tutorial-combat-action-${TUTORIAL_JUTSU_ID}`,
+      "tutorial-Jutsu",
     ],
+    elementActions: openJutsuTab,
     page: "/traininggrounds",
     objectiveId: STARTER_QUEST_OBJECTIVES.jutsu,
     advanceOn: "trainJutsu",
+  },
+  {
+    id: "tools-jutsu-check",
+    chapter: "academy",
+    title: "Sonic Slash in training",
+    description:
+      "Jutsu have a <b>training queue</b> too: it shows the minute Sonic Slash still needs. A new jutsu is equipped by itself, so you can use it in battle already.",
+    elementIds: ["tutorial-jutsu-queue", "tutorial-Jutsu"],
+    elementActions: openJutsuTab,
+    page: "/traininggrounds",
+    showNextButton: true,
   },
   {
     id: "tools-claim-jutsu",
     chapter: "academy",
     title: "Objective complete",
     description:
-      "Learning a jutsu completed your first trial. You can use Sonic Slash in battle right away, even while it finishes training.",
+      "Learning a jutsu completed your first trial. Rewards can be claimed from the <b>Quests</b> tab here as well, without a trip to your profile.",
     action: "Open Quests and claim your reward there.",
-    questsTab: { marks: "all", prompt: "Claim your reward here." },
+    questsTab: { marks: "all", prompt: "Claim your reward here. Then I'll go on." },
     page: TUTORIAL_ANY_PAGE,
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.jutsu,
@@ -455,7 +513,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "tools",
     title: "Shuriken",
     description:
-      "<b>Shuriken</b> hit from a distance and are used up when thrown. Tools you buy go straight into a free item slot, ready for battle.",
+      "I asked for <b>Shuriken</b> to be put out first. They hit from a distance and are used up when thrown. Tools you buy go straight into a free item slot, ready for battle.",
     action: "Tap Shuriken, then buy a few.",
     elementIds: [
       "tutorial-itemshop-confirmPurchase-proceed",
@@ -484,9 +542,18 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "tools",
     title: "Your second trial",
     description:
-      "I've picked the <b>Academy Dummy</b> for you. Auto combat stays off while you train with me, so you strike with your own hands. Open with Sonic Slash.",
+      "The arena has several ways to fight; <b>Arena</b> pits you against training opponents. I've picked the <b>Academy Dummy</b> for you. Auto combat stays off while you train with me, so you strike with your own hands.",
     action: "Tap the Fight button.",
-    elementIds: ["tutorial-battlearena-challenge-ai-enter"],
+    elementIds: [
+      "tutorial-battlearena-challenge-ai-enter",
+      "tutorial-battlearena-mode-Arena",
+      "tutorial-battlearena-tab-Arena",
+    ],
+    elementActions: {
+      "tutorial-battlearena-mode-Arena": "Open Arena.",
+      "tutorial-battlearena-tab-Arena": "Open Arena.",
+    },
+    marks: [{ selector: "#tutorial-battlearena-opponent", label: "Your opponent" }],
     page: "/battlearena",
     objectiveId: STARTER_QUEST_OBJECTIVES.arena,
     advanceOn: "arenaStart",
@@ -550,7 +617,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "The world map",
     description:
-      "The pup fled beyond the walls, to the sector marked on the <b>Global</b> map. Trips between sectors take a little time: follow your character along the route as the arrival timer counts down. Don't worry, I'm coming with you.",
+      "The pup fled beyond the walls. I've marked its sector on the <b>Global</b> map, which opens turned towards it. Trips take a little time: follow your character as the arrival timer counts down. Your map then shows the sector you reached. Don't worry, I'm coming with you.",
     action: "Open the Global tab, tap the marked sector, then confirm with Travel.",
     elementIds: [...globalTravelElements, "tutorial-globe-target", "tutorial-Global"],
     teachOnPage: true,
@@ -569,7 +636,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
         The pup is cornered at the{" "}
         <MapPin className="inline-block h-4 w-4 text-red-500" /> marker, and the masked
         figure is with it: no double this time. They won&apos;t hand it over, so use
-        everything you have. I&apos;ll call out what I see, but the fight is yours.
+        everything you have. The fight starts as soon as you reach them; I&apos;ll call
+        out what I see, but it is yours.
       </>
     ),
     action: "Tap the marker to walk to it.",
@@ -705,7 +773,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       <>
         Your <b>Road to Genin</b> has begun. The exam is held right here on Wake Island,
         in the Administration Building at the{" "}
-        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker.
+        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker. It begins with
+        a fight, as soon as you get there.
       </>
     ),
     action: "Tap the marker on the Administration Building to walk there.",
@@ -854,6 +923,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
       "tutorial-dashboard-now",
       "tutorial-Dashboard",
     ],
+    elementActions: { "tutorial-Dashboard": "Open the Dashboard tab." },
     page: "/profile?tab=dashboard",
     advanceOn: "claimStreak",
     afterAction: {

@@ -89,6 +89,7 @@ import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import { CovertStatCard } from "@/layout/CovertStatCard";
 import { getElementImg } from "@/layout/ElementImage";
+import { EnergyMeter } from "@/layout/EnergyMeter";
 import {
   EnergyTrainingQueue,
   useEnergyTrainingQueue,
@@ -151,11 +152,7 @@ import {
   trainEfficiency,
   trainingEnergyMessage,
 } from "@/libs/train";
-import {
-  isTutorialJutsuPickStep,
-  TUTORIAL_TRAIN_STAT_STEP_ID,
-  TUTORIAL_TRAINING_ENERGY,
-} from "@/libs/tutorial";
+import { isTutorialJutsuPickStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
@@ -173,24 +170,8 @@ const trainingTabStorageKey = (userId: string) => `trainingTab:${userId}`;
 export function TrainingScreen() {
   // Ensure user is in village
   const { userData, timeDiff, access } = useRequireInVillage("/traininggrounds");
-  const { currentStep } = useTutorialStep();
-  // Tutorial steps select the panel containing their highlighted training action.
-  const tutorialSection = isTutorialJutsuPickStep(currentStep)
-    ? "Jutsu"
-    : currentStep?.advanceOn === "trainStats" ||
-        currentStep?.advanceOn === "queueEnergy"
-      ? "Stats"
-      : null;
   // Null until NavTabs restores the last visited section (or falls back to the first).
   const [section, setSection] = useState<string | null>(null);
-  // A lesson's panel stays selected once the lesson moves on, instead of NavTabs falling
-  // back to the section remembered from before it.
-  const userId = userData?.userId;
-  useEffect(() => {
-    if (!tutorialSection) return;
-    setSection(tutorialSection);
-    if (userId) safeLocalStorageSetItem(trainingTabStorageKey(userId), tutorialSection);
-  }, [tutorialSection, userId]);
   // Links such as a story objective's "Find a sensei" open a section by name.
   useEffect(() => {
     const linked = new URLSearchParams(window.location.search).get("section");
@@ -210,7 +191,7 @@ export function TrainingScreen() {
   const energyQueueLength = getEnergyQueue(userData).length;
   const trainingSections = getTrainingSections(showSenseiSystem);
 
-  const activeSection = tutorialSection ?? section;
+  const activeSection = section;
 
   // Every user-driven section change is remembered, including Radix keyboard navigation,
   // which bypasses the NavTabs click handler.
@@ -236,6 +217,10 @@ export function TrainingScreen() {
               current={activeSection}
               onChange={setSection}
               options={trainingSections.options}
+              // The open tab is not the next thing to press, so tutorial rings skip it.
+              itemId={(option) =>
+                option === activeSection ? undefined : `tutorial-${option}`
+              }
               aliases={trainingSections.aliases}
               counts={{
                 Stats: energyQueueLength,
@@ -565,19 +550,8 @@ const StatsTraining: React.FC<
 
   // Tutorial management hook
   const { currentStep, completeTutorialAction } = useTutorialStep();
-  // The first lesson trains a small, previewed amount; the next one queues the rest.
-  const isEnergyLesson = currentStep?.id === TUTORIAL_TRAIN_STAT_STEP_ID;
+  const isEnergyLesson = currentStep?.advanceOn === "trainStats";
   const isQueueLesson = currentStep?.advanceOn === "queueEnergy";
-  const lessonMode = isEnergyLesson ? "Custom" : isQueueLesson ? "Queue" : null;
-  useEffect(() => {
-    if (lessonMode === "Custom") {
-      setStatTrainingMode("Custom");
-      setEnergy(Math.max(1, Math.min(TUTORIAL_TRAINING_ENERGY, userData.maxEnergy)));
-    } else if (lessonMode === "Queue") {
-      setStatTrainingMode("Queue");
-      setEnergy(userData.maxEnergy);
-    }
-  }, [lessonMode, userData.maxEnergy]);
 
   // Mutations
   const { mutate: startTraining, isPending: isStarting } =
@@ -757,7 +731,10 @@ const StatsTraining: React.FC<
             // The Energy controls only matter once the captcha check is out of the way
             needsCaptcha ? undefined : (
               <div className="my-2 ml-2 flex flex-col gap-1">
-                <div className="flex items-center justify-end gap-1">
+                <div
+                  id="tutorial-training-amount"
+                  className="flex items-center justify-end gap-1"
+                >
                   <Popover>
                     <PopoverTrigger
                       aria-label="About Energy training"
@@ -791,6 +768,12 @@ const StatsTraining: React.FC<
                       {(["Custom", "Max", "Queue"] as const).map((mode, index) => (
                         <Button
                           key={mode}
+                          // The mode in use is not the next thing to press, so rings skip it.
+                          id={
+                            statTrainingMode === mode
+                              ? undefined
+                              : `tutorial-training-${mode.toLowerCase()}`
+                          }
                           variant={statTrainingMode === mode ? "default" : "outline"}
                           size="sm"
                           className={cn(
@@ -816,7 +799,19 @@ const StatsTraining: React.FC<
             )
           }
         >
-          {(isEnergyLesson || isQueueLesson) && (
+          {/* A filled queue shows the Energy it is waiting for above. */}
+          {!needsCaptcha && energyQueueLength === 0 && (
+            <div className="mb-3">
+              <EnergyMeter
+                id="tutorial-training-energy"
+                available={availableEnergy}
+                total={userData.maxEnergy}
+                label="Energy available for training"
+              />
+            </div>
+          )}
+          {((isEnergyLesson && !isQueueingStats) ||
+            (isQueueLesson && isQueueingStats)) && (
             <p
               id="tutorial-training-preview"
               className="mb-4 rounded-md border border-violet-500/40 bg-violet-500/10 p-2 text-center text-sm"
@@ -1494,6 +1489,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     <>
       {(activeTraining || queuedJobs.length > 0) && (
         <TimedQueue
+          id="tutorial-jutsu-queue"
           title="Jutsu training queue"
           subtitle="Levels that start when the active training ends"
           capacity={trainingQueue?.capacity ?? 1}

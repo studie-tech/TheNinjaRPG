@@ -118,22 +118,17 @@ it("leaves for the village after returning from a mode through the page title", 
   await waitFor(() => expect(window.location.pathname).toBe("/village"));
 });
 
-it("leaves the forced tutorial mode for the village through the page title", async () => {
-  window.history.replaceState({}, "", "/battlearena#Training");
-  window.history.pushState({}, "", "/battlearena#Sparring");
-  tutorialStep = { advanceOn: "arenaStart" };
-  render(<Arena />);
-  expect(screen.getByRole("region", { name: "Arena mode" })).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "Battle Arena" }));
-  await waitFor(() => expect(window.location.pathname).toBe("/village"));
-});
-
-it("opens Arena with the Academy Dummy during the tutorial arena step", () => {
-  window.history.replaceState({}, "", "/battlearena#Sparring");
+it("opens on the overview during the tutorial arena step, with the dummy picked", () => {
+  window.history.replaceState({}, "", "/battlearena");
   window.localStorage.setItem("arenaAI4", JSON.stringify("some-other-ai"));
   tutorialStep = { advanceOn: "arenaStart" };
   act(() => {
     render(<Arena />);
+  });
+  expect(screen.queryByRole("region", { name: "Arena mode" })).toBeNull();
+  act(() => {
+    window.history.pushState({}, "", "/battlearena#Arena");
+    window.dispatchEvent(new Event("hashchange"));
   });
   expect(screen.getByRole("region", { name: "Arena mode" })).toBeDefined();
   expect(arenaProps.aiId).toBe(TUTORIAL_ARENA_DUMMY_ID);

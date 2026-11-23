@@ -77,6 +77,7 @@ import {
 } from "@/libs/objectives";
 import { levelUpBlockMessage } from "@/libs/profile";
 import { sceneCharactersAtom } from "@/libs/questScene";
+import { getEnergyQueue } from "@/libs/queue";
 import { collapseRewards } from "@/libs/rewards";
 import { cn } from "@/libs/shadui";
 import { getChapterForQuest, getNavigationLevel } from "@/libs/storyGuidance";
@@ -92,6 +93,7 @@ import {
   isTutorialJutsuPickStep,
   isTutorialPageMatch,
   isUsableHighlightRect,
+  TUTORIAL_QUEUE_CHECK_STEP_ID,
   TUTORIAL_VILLAGE_CHOICE_STEP_ID,
   toObjectiveIds,
 } from "@/libs/tutorial";
@@ -301,6 +303,7 @@ const PlayerTutorialAssistant: React.FC<
     village: user.village,
     sector: user.sector,
     earnedExperience: user.earnedExperience,
+    hasEnergyQueue: getEnergyQueue(user).length > 0,
     curStamina: user.curStamina,
     maxStamina: user.maxStamina,
     curChakra: user.curChakra,
@@ -550,6 +553,11 @@ const PlayerTutorialAssistant: React.FC<
       pathname,
     });
 
+  const isLessonMarked = isAssistantVisible && highlight?.stepId === currentStep?.id;
+  const marks = useGuidedMarks({
+    marks: isLessonMarked ? currentStep?.marks : undefined,
+  });
+
   // Update game menu highlight position when showing game menu tutorial
   useEffect(() => {
     // Early exit if tutorial is disabled
@@ -593,6 +601,9 @@ const PlayerTutorialAssistant: React.FC<
     !!userData &&
     userData.curStamina >= userData.maxStamina &&
     userData.curChakra >= userData.maxChakra;
+  // Energy refills within minutes, so the queue can have trained before it is looked at.
+  const isQueueTrained =
+    currentStep?.id === TUTORIAL_QUEUE_CHECK_STEP_ID && !userData?.hasEnergyQueue;
   const offersNext = !!currentStep?.showNextButton || hasBonded || isWellFed;
 
   // Enter or ArrowRight presses the step's Next button
@@ -772,7 +783,13 @@ const PlayerTutorialAssistant: React.FC<
               action: "Tap Next.",
               showNextButton: true,
             }
-          : currentStep);
+          : isQueueTrained && currentStep && !currentStep.wayHref
+            ? {
+                ...currentStep,
+                description:
+                  "Your Energy had already refilled, so the <b>Energy queue</b> went straight to work: it trained Defence and is empty again. It does the same while you are away.",
+              }
+            : currentStep);
 
   // The quest the current step talks about, with its live tracker
   const relatedQuest = (() => {
@@ -1038,8 +1055,15 @@ const PlayerTutorialAssistant: React.FC<
           .map((asset) => asset.image)?.[0]
       : undefined;
 
+  // A control pressed on the way to the step's target has a call to action of its own,
+  // and nothing to go on to until it is pressed.
+  const elementAction =
+    highlight && highlight.stepId === currentTutorialStep?.id
+      ? currentTutorialStep.elementActions?.[highlight.elementId]
+      : undefined;
+  const stepAction = elementAction ?? currentTutorialStep?.action;
   // Point at the highlight only when the step wants it pressed.
-  const showPointer = !!currentTutorialStep?.action;
+  const showPointer = !!stepAction;
 
   // If showing the special Game Menu tutorial
   if (showGameMenuTutorial) {
@@ -1344,6 +1368,7 @@ const PlayerTutorialAssistant: React.FC<
           // The real control under the hole takes the press.
           <Spotlight
             box={highlight}
+            marks={marks}
             dim={!currentTutorialStep.isPageLit}
             ping={showPointer}
             pointer={showPointer}
@@ -1368,11 +1393,7 @@ const PlayerTutorialAssistant: React.FC<
               ? undefined
               : `${currentTutorialStep.id}:${isModalDialogOpen ? "dialog" : "page"}`
           }
-          action={
-            isQuestOverlay
-              ? undefined
-              : (sceneLead?.action ?? currentTutorialStep.action)
-          }
+          action={isQuestOverlay ? undefined : (sceneLead?.action ?? stepAction)}
           isBusy={isDisablingTutorial}
           errorMessage={disableTutorialError}
           onOpenDisableModal={openDisableModal}
@@ -1436,7 +1457,8 @@ const PlayerTutorialAssistant: React.FC<
                   />,
                   document.body,
                 )}
-              {(currentTutorialStep.showNextButton || isSkipShown) &&
+              {((currentTutorialStep.showNextButton && !elementAction) ||
+                isSkipShown) &&
                 renderNextRow(isSkipShown)}
             </>
           }
@@ -2069,6 +2091,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
 }) => {
   const [highlight, setHighlight] = useState<{
     stepId: string;
+    elementId: string;
     isRevealed: boolean;
     top: number;
     left: number;
@@ -2279,6 +2302,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
       const rect = highlightInfo.element.getBoundingClientRect();
       const next = {
         stepId: currentStepConfig.id,
+        elementId: highlightInfo.element.id,
         isRevealed: !!highlightInfo.isRevealed,
         top: rect.top,
         left: rect.left,
@@ -2288,6 +2312,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
       setHighlight((prev) =>
         prev &&
         prev.stepId === next.stepId &&
+        prev.elementId === next.elementId &&
         prev.isRevealed === next.isRevealed &&
         isSameBox(prev, next)
           ? prev
@@ -2608,11 +2633,13 @@ const getPreferredHighlightCentre = (targetHeight: number) => {
 };
 
 /**
- * The boxes of the elements a guided step refers to (`step.marks`): every visible match
+ * The boxes of the elements a step refers to (`step.marks`): every visible match
  * outside inert or modal-hidden content except the ringed target, kept placed as the
  * page moves.
  */
-const useGuidedMarks = (step: GuidedLessonStep): SpotlightMark[] => {
+const useGuidedMarks = (
+  step: Pick<GuidedLessonStep, "marks" | "target">,
+): SpotlightMark[] => {
   const [marks, setMarks] = useState<SpotlightMark[]>([]);
   // Scenes re-register their step on every render; the marks' content keys the tracking.
   const wantedKey = JSON.stringify(step.marks ?? []);
@@ -2620,7 +2647,7 @@ const useGuidedMarks = (step: GuidedLessonStep): SpotlightMark[] => {
   useEffect(() => {
     const wanted = JSON.parse(wantedKey) as GuidedLessonMark[];
     if (wanted.length === 0) {
-      setMarks([]);
+      setMarks((prev) => (prev.length === 0 ? prev : []));
       return;
     }
     return trackLayout(() => {

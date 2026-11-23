@@ -1904,7 +1904,7 @@ export const RECRUITMENT_GOALS = {
 export const RECRUITMENT_STALLED_AFTER_DAYS = 7;
 
 // Length of TUTORIAL_STEPS in hooks/tutorial.tsx; tests/libs/tutorial.test.ts enforces it.
-export const TUTORIAL_STEPS_COUNT = 49;
+export const TUTORIAL_STEPS_COUNT = 52;
 
 // Recruitment rewards config
 export const RECRUITMENT_REWARDS = [

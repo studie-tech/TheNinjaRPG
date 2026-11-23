@@ -5,9 +5,9 @@ import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress";
 import { useEnergyQueueRefresh } from "@/hooks/useEnergyQueueRefresh";
 import ContentBox from "@/layout/ContentBox";
+import { EnergyMeter } from "@/layout/EnergyMeter";
 import { TrainingPushPrompt } from "@/layout/TrainingPushPrompt";
 import { getEnergyQueue } from "@/libs/queue";
 import { showMutationToast } from "@/libs/toast";
@@ -60,7 +60,10 @@ export const EnergyTrainingQueue = ({
     >
       <div className="space-y-3">
         {entries.length > 0 && (
-          <ol className="divide-y divide-orange-900/20 rounded border border-orange-900/30">
+          <ol
+            id="tutorial-energy-queue"
+            className="divide-y divide-orange-900/20 rounded border border-orange-900/30"
+          >
             {entries.map((entry, index) => (
               <li
                 key={`${index}-${entry.stat}-${entry.energy}`}
@@ -94,21 +97,12 @@ export const EnergyTrainingQueue = ({
           </ol>
         )}
         {entries[0] && (
-          <div className="space-y-1">
-            <div className="flex justify-between text-muted-foreground text-xs">
-              <span>Energy available</span>
-              <span>
-                {Math.floor(availableEnergy).toLocaleString()} /{" "}
-                {entries[0].energy.toLocaleString()}
-              </span>
-            </div>
-            <Progress
-              aria-label="Energy toward the next queue entry"
-              value={Math.min(100, (availableEnergy / entries[0].energy) * 100)}
-              indicatorClassName="bg-violet-500"
-              className="h-1.5 bg-violet-500/15"
-            />
-          </div>
+          <EnergyMeter
+            id="tutorial-training-energy"
+            available={availableEnergy}
+            total={entries[0].energy}
+            label="Energy toward the next queue entry"
+          />
         )}
         <div className="flex items-center justify-between gap-2 text-muted-foreground text-xs">
           <span>One time per entry · Works offline and asleep</span>

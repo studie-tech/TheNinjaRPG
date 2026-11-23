@@ -22,7 +22,6 @@ import {
   WAR_FACTION_MAX_SECTORS,
   WAR_VILLAGE_MAX_SECTORS,
 } from "@/drizzle/constants";
-import { useTutorialStep } from "@/hooks/tutorial";
 import { useNewSystemBadges, useStoryGuidance } from "@/hooks/useStoryGuidance";
 import Building, { structureRewardEntries } from "@/layout/Building";
 import Confirm from "@/layout/Confirm";
@@ -40,7 +39,6 @@ export function VillageOverviewScreen() {
   // State
   const { userData, sectorVillage } = useRequireInVillage();
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
-  const { currentStep } = useTutorialStep();
   // Newly unlocked systems, and a chapter waiting at the Academy, are marked "New".
   const newSystems = useNewSystemBadges();
   const { item: storyItem } = useStoryGuidance();
@@ -111,14 +109,7 @@ export function VillageOverviewScreen() {
   const shownStructures = villageData?.structures
     .filter((s) => s.hasPage !== 0)
     .filter((s) => s.showInVillagePage)
-    .filter((s) => ownSector || s.allyAccess)
-    .sort((a, v) => {
-      // The building the tutorial points at comes first, so it is never below the fold.
-      const highlighted = currentStep?.elementIds ?? [];
-      if (highlighted.includes(`tutorial-${a.route.replace("/", "")}`)) return -1;
-      if (highlighted.includes(`tutorial-${v.route.replace("/", "")}`)) return 1;
-      return 0;
-    });
+    .filter((s) => ownSector || s.allyAccess);
 
   return (
     <>

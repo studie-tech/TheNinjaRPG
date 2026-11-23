@@ -55,11 +55,8 @@ export const TUTORIAL_ARRIVAL_STEP_ID = "arrival-welcome";
 /** Step that plays the ambush at Horizon on the sector map. */
 export const TUTORIAL_AMBUSH_STEP_ID = "arrival-ambush";
 
-/** Step that has the player train a stat with a small, previewed amount of Energy. */
-export const TUTORIAL_TRAIN_STAT_STEP_ID = "tools-train-stat";
-
-/** Energy the first training lesson spends, so its gain can be previewed. */
-export const TUTORIAL_TRAINING_ENERGY = 25;
+/** Step that shows the Energy queue the player just filled. */
+export const TUTORIAL_QUEUE_CHECK_STEP_ID = "tools-queue-check";
 
 /** Step where the player picks their village on the full-page chooser. */
 export const TUTORIAL_VILLAGE_CHOICE_STEP_ID = "exam-choose";
