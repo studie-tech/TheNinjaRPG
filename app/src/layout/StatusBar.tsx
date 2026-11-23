@@ -137,6 +137,7 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
           <TooltipTrigger
             className={compact ? "player-status-meter" : "w-full"}
             onClick={props.onInspect}
+            data-resource={compact ? title : undefined}
             aria-haspopup={props.onInspect ? "dialog" : undefined}
             aria-label={compact ? `${title}: ${valueLabel}` : undefined}
           >

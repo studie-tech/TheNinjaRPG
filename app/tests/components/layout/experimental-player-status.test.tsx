@@ -107,6 +107,42 @@ it("opens full character readings from each meter and returns keyboard focus on 
   }
 });
 
+it.each([
+  ["HP", "Health"],
+  ["CP", "Chakra"],
+  ["SP", "Stamina"],
+])(
+  "returns focus to the current %s meter after a live pool update",
+  async (title, pool) => {
+    const view = render(<ExperimentalPlayerStatus hasLocation />);
+    const meter = view.getByRole("button", { name: new RegExp(`^${title}:`) });
+    await act(async () => {
+      meter.focus();
+      await flushRadixFocus();
+    });
+    fireEvent.click(meter);
+    await act(async () => flushRadixFocus());
+
+    user = { ...user, [`cur${pool}`]: 35, [`max${pool}`]: 90 };
+    view.rerender(<ExperimentalPlayerStatus hasLocation />);
+    expect(meter.isConnected).toBe(false);
+    expect(
+      within(view.getByRole("dialog", { name: "Character details" })).getByText(
+        `${title} (35 / 90)`,
+      ),
+    ).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await act(async () => flushRadixFocus());
+    await waitFor(() =>
+      expect(view.queryByRole("dialog", { name: "Character details" })).toBeNull(),
+    );
+    expect(document.activeElement).toBe(
+      view.getByRole("button", { name: `${title}: 35 / 90` }),
+    );
+  },
+);
+
 it("keeps profile, status, village, balances and daily destinations accessible", () => {
   const view = render(<ExperimentalPlayerStatus hasLocation />);
   expect(

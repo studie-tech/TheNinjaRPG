@@ -24,11 +24,12 @@ import { useUserDataSelector } from "@/utils/UserContext";
 /** Live character shortcuts with detailed resources and timers available on demand. */
 export function ExperimentalPlayerStatus({ hasLocation }: { hasLocation: boolean }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const detailsFocus = useRef<HTMLElement | null>(null);
+  const resources = useRef<HTMLFieldSetElement>(null);
+  const detailsFocus = useRef<string | null>(null);
   const detailsTitle = useRef<HTMLHeadingElement>(null);
   const inspectResources = () => {
     detailsFocus.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      document.activeElement?.getAttribute("data-resource") ?? null;
     setDetailsOpen(true);
   };
   const { data: identity } = useUserDataSelector((user) => ({
@@ -87,7 +88,11 @@ export function ExperimentalPlayerStatus({ hasLocation }: { hasLocation: boolean
             )}
           </div>
         </div>
-        <fieldset className="player-status-pools" aria-label="Resources">
+        <fieldset
+          ref={resources}
+          className="player-status-pools"
+          aria-label="Resources"
+        >
           <ProfilePools compact onInspect={inspectResources} />
           <ProfileLevel compact onInspect={inspectResources} />
         </fieldset>
@@ -112,9 +117,12 @@ export function ExperimentalPlayerStatus({ hasLocation }: { hasLocation: boolean
             detailsTitle.current?.focus({ preventScroll: true });
           }}
           onCloseAutoFocus={(event) => {
-            if (detailsFocus.current?.isConnected) {
+            const meter = resources.current?.querySelector<HTMLButtonElement>(
+              `[data-resource="${detailsFocus.current}"]`,
+            );
+            if (meter) {
               event.preventDefault();
-              detailsFocus.current.focus({ preventScroll: true });
+              meter.focus({ preventScroll: true });
             }
           }}
         >
