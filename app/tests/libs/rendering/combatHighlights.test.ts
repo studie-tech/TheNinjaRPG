@@ -3,8 +3,10 @@ import { Grid, rectangle } from "honeycomb-grid";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { defineHex } from "@/libs/hexgrid";
 import {
+  combatGridEdges,
   combatHighlightEdges,
   combatHighlightPlan,
+  tileSides,
 } from "@/libs/rendering/combatHighlights";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
@@ -211,5 +213,32 @@ describe("combat targeting surface edges", () => {
   );
   it("removes every outline when targeting clears", () => {
     expect(combatHighlightEdges([], new Map())).toEqual([]);
+  });
+});
+
+describe("combat hex outlines", () => {
+  it("draws every edge of a level field once", () => {
+    const grid = new Grid(defineHex(), rectangle({ width: 3, height: 3 }));
+    const [batch, ...rest] = combatGridEdges(grid, new Map());
+    expect(rest).toHaveLength(0);
+    expect(batch?.layer).toBe(0);
+    const keys = new Set(
+      grid.toArray().flatMap((tile) => tileSides(tile).map((side) => side.key)),
+    );
+    expect(batch?.points).toHaveLength(keys.size * 4);
+  });
+
+  it("closes a recessed tile on its own face and keeps the shared edge on level ground", () => {
+    const grid = new Grid(defineHex(), rectangle({ width: 2, height: 1 }));
+    const batches = combatGridEdges(grid, new Map([["0,0", -4]]));
+    const recessed = batches.find((batch) => batch.layer === -0.5)?.points ?? [];
+    const level = batches.find((batch) => batch.layer === 0)?.points ?? [];
+    expect(recessed).toHaveLength(6 * 4);
+    expect(level).toHaveLength(6 * 4);
+    const water = grid.getHex({ col: 0, row: 0 })!;
+    expect(recessed.slice(0, 2)).toEqual([
+      water.corners[0]!.x,
+      water.corners[0]!.y - 4,
+    ]);
   });
 });
