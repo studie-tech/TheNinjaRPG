@@ -2,6 +2,7 @@
 
 import {
   Binoculars,
+  Caravan,
   Footprints,
   Gift,
   Hourglass,
@@ -11,6 +12,7 @@ import {
   Users,
   Zap,
 } from "lucide-react";
+import { useRef, useState } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,13 +27,48 @@ import {
   TRADE_ROUTE_MARKER_MAX_CONTROL,
 } from "@/drizzle/constants";
 import { useCaravans } from "@/hooks/useCaravans";
+import { useHeaderActionsFocus } from "@/hooks/useHeaderActionsFocus";
 import { useNow } from "@/hooks/useNow";
 import Loader from "@/layout/Loader";
+import Modal from "@/layout/Modal";
 import { QueryError } from "@/layout/QueryError";
 import { getTrackableAt } from "@/libs/caravan";
 import { cn } from "@/libs/shadui";
 import { formatDateTime } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
+
+/** Open caravan operations directly from the travel toolbar. */
+export const CaravanControlsTrigger = ({ className }: { className: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useHeaderActionsFocus() ?? triggerRef;
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label="Caravans"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        className={className}
+        onClick={() => setIsOpen(true)}
+      >
+        <Caravan className="h-7 w-7 hover:text-orange-500" aria-hidden />
+      </button>
+      {isOpen && (
+        <Modal
+          title="Caravans"
+          isOpen={isOpen}
+          setIsOpen={setIsOpen}
+          returnFocusRef={returnFocusRef}
+          className="sm:max-w-3xl md:max-w-3xl"
+        >
+          <CaravanControls />
+        </Modal>
+      )}
+    </>
+  );
+};
 
 /** Everything a player can do against caravans and route markers from their sector. */
 export const CaravanControls = () => {

@@ -41,9 +41,11 @@ import type {
   TravelSession,
 } from "@/hooks/useTravelSession";
 import AutoAttackModal from "@/layout/AutoAttackModal";
+import { CaravanControlsTrigger } from "@/layout/CaravanControls";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import type { HeaderActionItem } from "@/layout/ContentBoxHeaderActions";
 import { FindSectorPopover, SectorIdField } from "@/layout/FindSectorPopover";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
@@ -56,7 +58,7 @@ import NavTabs from "@/layout/NavTabs";
 import { TravelArrivalStatus } from "@/layout/TravelArrivalStatus";
 import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { StealthControls } from "@/layout/travel/StealthControls";
-import { mapToolClassName } from "@/layout/travel/styles";
+import { mapIconToolClassName as mapToolClassName } from "@/layout/travel/styles";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
@@ -278,16 +280,142 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
 
   // Render
 
-  // Controls stay mounted when their disclosure closes so dialogs retain their state.
+  // Map tools in their display order. On narrow screens they leave the header row by
+  // priority (lower stays longer) into a "More" menu: stealth and sensory first, then
+  // the tabs and quick travel, the way out of a sector.
   const isSectorTools = !isGlobal && activeTab !== "";
-  const travelTools = [
+  const travelTools: HeaderActionItem[] = [
+    { key: "war", node: <WarFieldActions />, priority: 10 },
+    {
+      key: "caravans",
+      // Kept out of the tutorial's guided map lessons.
+      node: isSectorTools && !tutorialRunning && (
+        <CaravanControlsTrigger className={mapToolClassName} />
+      ),
+      priority: 8,
+    },
+    {
+      key: "auto-attack",
+      node:
+        isSectorTools &&
+        userData?.anbuId &&
+        (autoAttackMode ? (
+          <button
+            type="button"
+            aria-label="Stop auto-attack"
+            aria-pressed={true}
+            className={mapToolClassName}
+            onClick={() => setAutoAttackMode(false)}
+          >
+            <Zap className="h-7 w-7 text-red-500" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Start auto-attack"
+            aria-pressed={false}
+            className={mapToolClassName}
+            onClick={() => setShowAutoAttackModal(true)}
+          >
+            <ZapOff className="h-7 w-7 hover:text-red-500" />
+          </button>
+        )),
+      priority: 2,
+      attention: autoAttackMode,
+    },
+    {
+      key: "stealth",
+      node: isSectorTools && (
+        <StealthControls
+          asMenu={false}
+          onRevealed={(players) => {
+            setRevealedPlayers(players);
+            setShowRevealedPlayersModal(true);
+          }}
+        />
+      ),
+      priority: 1,
+    },
+    {
+      key: "players",
+      node: isSectorTools && (
+        <TooltipProvider delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger
+              aria-label="Show other players on the map"
+              aria-pressed={showOtherUsers}
+              className={mapToolClassName}
+              onClick={() =>
+                tutorialRunning
+                  ? setRevealOthersInTutorial((prev) => !prev)
+                  : setShowActive(!showActive)
+              }
+            >
+              {showOtherUsers ? (
+                <Eye className="h-7 w-7 text-orange-500" />
+              ) : (
+                <EyeOff className="h-7 w-7" />
+              )}
+            </TooltipTrigger>
+            <TooltipContent>
+              {showOtherUsers
+                ? "Hide other players on the map"
+                : "Show other players on the map"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ),
+      priority: 6,
+      // Hidden players are easy to forget about once the switch sits in the menu. The
+      // tutorial starts with them hidden on purpose.
+      attention: isSectorTools && !tutorialRunning && !showOtherUsers,
+    },
+    {
+      key: "scout",
+      node: isSectorTools && userData.status === "AWAKE" && (
+        <button
+          type="button"
+          aria-label="Scout surrounding sectors"
+          aria-pressed={showSorrounding}
+          className={mapToolClassName}
+          onClick={() => setShowSorrounding((prev) => !prev)}
+        >
+          <UserRoundSearch
+            className={`h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
+          />
+        </button>
+      ),
+      priority: 7,
+    },
+    {
+      key: "find",
+      node: isGlobal && !isTraveling && (
+        <FindSectorPopover
+          focusSector={globeFocusSector}
+          onFocusSector={setFocusSector}
+          triggerAsChild
+          trigger={
+            <button
+              type="button"
+              aria-label="Find a sector"
+              className={mapToolClassName}
+            >
+              <Locate
+                className={`h-7 w-7 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
+              />
+            </button>
+          }
+        />
+      ),
+      priority: 8,
+      attention: isGlobal && focusSector !== null,
+    },
     {
       key: "quick-travel",
       node: (
         <Popover open={isQuickTravelOpen} onOpenChange={setQuickTravelOpen}>
           <PopoverTrigger aria-label="Quick Travel" className={mapToolClassName}>
             <Search className="h-7 w-7 hover:text-orange-500" />
-            <span>Quick travel</span>
           </PopoverTrigger>
           <PopoverContent className="w-72">
             <p className="py-2 font-semibold">Quick Travel</p>
@@ -433,126 +561,23 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           </PopoverContent>
         </Popover>
       ),
+      priority: 4,
     },
     {
-      key: "scout",
-      node: isSectorTools && userData.status === "AWAKE" && (
+      key: "expand",
+      node: !isGlobal && activeTab !== "" && (
         <button
           type="button"
-          aria-label="Scout surrounding sectors"
-          aria-pressed={showSorrounding}
-          className={mapToolClassName}
-          onClick={() => setShowSorrounding((prev) => !prev)}
+          aria-label="Expand world"
+          aria-expanded={isWorldExpanded}
+          disabled={!showSector || !SectorComponent}
+          className={`${mapToolClassName} hover:text-orange-500`}
+          onClick={() => setWorldExpanded(true)}
         >
-          <UserRoundSearch
-            className={`h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
-          />
-          <span className="flex-1">Scout surrounding sectors</span>
+          <Maximize2 className="h-7 w-7" />
         </button>
       ),
-    },
-    {
-      key: "players",
-      node: isSectorTools && (
-        <TooltipProvider delayDuration={50}>
-          <Tooltip>
-            <TooltipTrigger
-              aria-label="Show other players on the map"
-              aria-pressed={showOtherUsers}
-              className={mapToolClassName}
-              onClick={() =>
-                tutorialRunning
-                  ? setRevealOthersInTutorial((prev) => !prev)
-                  : setShowActive(!showActive)
-              }
-            >
-              {showOtherUsers ? (
-                <Eye className="h-7 w-7 text-orange-500" />
-              ) : (
-                <EyeOff className="h-7 w-7" />
-              )}
-              <span className="flex-1">Show other players</span>
-              <span className="text-muted-foreground text-xs">
-                {showOtherUsers ? "On" : "Off"}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {showOtherUsers
-                ? "Hide other players on the map"
-                : "Show other players on the map"}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      ),
-    },
-    {
-      key: "stealth",
-      node: isSectorTools && (
-        <StealthControls
-          onRevealed={(players) => {
-            setRevealedPlayers(players);
-            setShowRevealedPlayersModal(true);
-          }}
-        />
-      ),
-    },
-    {
-      key: "operations",
-      // Caravans stay out of the tutorial's guided map lessons.
-      node: (
-        <WarFieldActions asMenu includeCaravans={isSectorTools && !tutorialRunning} />
-      ),
-    },
-    {
-      key: "auto-attack",
-      node:
-        isSectorTools &&
-        userData?.anbuId &&
-        (autoAttackMode ? (
-          <button
-            type="button"
-            aria-label="Stop auto-attack"
-            aria-pressed={true}
-            className={mapToolClassName}
-            onClick={() => setAutoAttackMode(false)}
-          >
-            <Zap className="h-7 w-7 text-red-500" />
-            <span>Stop auto-attack</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            aria-label="Start auto-attack"
-            aria-pressed={false}
-            className={mapToolClassName}
-            onClick={() => setShowAutoAttackModal(true)}
-          >
-            <ZapOff className="h-7 w-7 hover:text-red-500" />
-            <span>Start auto-attack</span>
-          </button>
-        )),
-    },
-    {
-      key: "find",
-      node: isGlobal && !isTraveling && (
-        <FindSectorPopover
-          focusSector={globeFocusSector}
-          onFocusSector={setFocusSector}
-          triggerAsChild
-          trigger={
-            <button
-              type="button"
-              aria-label="Find a sector"
-              className={mapToolClassName}
-            >
-              <Locate
-                className={`h-7 w-7 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
-              />
-              <span>Find a sector</span>
-            </button>
-          }
-        />
-      ),
+      priority: 9,
     },
     {
       key: "ownership",
@@ -568,15 +593,13 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
               <MapPinned
                 className={`h-7 w-7 ${showOwnership ? "text-orange-500" : ""}`}
               />
-              <span className="flex-1">Sector ownership and factions</span>
-              <span className="text-muted-foreground text-xs">
-                {showOwnership ? "On" : "Off"}
-              </span>
             </TooltipTrigger>
             <TooltipContent>Show sector ownerships and factions</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       ),
+      priority: 9,
+      attention: isGlobal && showOwnership,
     },
     {
       key: "join",
@@ -584,12 +607,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
         <Confirm
           title={`Join Village [${sectorVillage.name}]`}
           proceed_label="Join village"
-          button={
-            <>
-              <GitMerge className="h-7 w-7 hover:text-orange-500" />
-              <span>Join {sectorVillage.name}</span>
-            </>
-          }
+          button={<GitMerge className="h-7 w-7 hover:text-orange-500" />}
           triggerClassName={mapToolClassName}
           triggerLabel={`Join ${sectorVillage.name}`}
           disabled={isJoining}
@@ -605,6 +623,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           from day 0.
         </Confirm>
       ),
+      priority: 11,
     },
     {
       key: "hideout",
@@ -612,12 +631,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
         <Confirm
           title="Purchase Hideout"
           proceed_label={canAffordHideout ? "Purchase hideout" : "Not enough ryo"}
-          button={
-            <>
-              <HousePlus className="h-7 w-7 hover:text-orange-500" />
-              <span>Purchase hideout</span>
-            </>
-          }
+          button={<HousePlus className="h-7 w-7 hover:text-orange-500" />}
           triggerClassName={mapToolClassName}
           triggerLabel="Purchase hideout"
           disabled={isCreatingHideout}
@@ -638,6 +652,26 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           faction hideout in this sector?
         </Confirm>
       ),
+      priority: 12,
+    },
+    {
+      key: "tabs",
+      node: (
+        <NavTabs
+          current={isGlobal ? globalLink : activeTab}
+          options={sectorLink ? [sectorLink, globalLink] : [globalLink]}
+          labels={{ [sectorLink]: "Sector" }}
+          itemClassName={(option) => (option === globalLink ? "mr-0" : "")}
+          disabledOptions={isTraveling ? [sectorLink] : undefined}
+          setValue={setActiveTab}
+          onChange={(value) => {
+            if (value !== globalLink)
+              setCameraFocusRevision((previous) => previous + 1);
+          }}
+        />
+      ),
+      // Tutorial steps point at the Global tab, so the tabs stay in the row while it runs.
+      priority: tutorialRunning ? 0 : 3,
     },
   ];
 
@@ -693,29 +727,7 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           )
         }
         padding={false}
-        collapsedActionsLabel="Map controls"
-        collapsedActionsIconOnly
-        headerStartContent={
-          <NavTabs
-            current={isGlobal ? globalLink : activeTab}
-            options={sectorLink ? [sectorLink, globalLink] : [globalLink]}
-            labels={{ [sectorLink]: "Sector" }}
-            itemClassName={(option) => (option === globalLink ? "mr-0" : "")}
-            disabledOptions={isTraveling ? [sectorLink] : undefined}
-            setValue={setActiveTab}
-            onChange={(value) => {
-              if (value !== globalLink)
-                setCameraFocusRevision((previous) => previous + 1);
-            }}
-          />
-        }
-        topRightContent={
-          <div className="flex flex-col gap-1 text-sm [&_svg]:shrink-0">
-            {travelTools.map(({ key, node }) => (
-              <Fragment key={key}>{node}</Fragment>
-            ))}
-          </div>
-        }
+        topRightItems={travelTools}
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
         <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
@@ -801,28 +813,13 @@ export function TravelView({ session, hasLocationRequest = false }: TravelViewPr
           )}
         </div>
       </ContentBox>
-      <div className="flex flex-wrap items-center justify-between gap-2 p-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-2 p-1">
+        <div className="flex min-w-0 flex-wrap items-start gap-2">
           {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" compact />}
           {showSector && <ItemLoadoutSelector size="small" label="Items" compact />}
         </div>
-        {isSectorTools && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Expand world"
-            aria-expanded={isWorldExpanded}
-            disabled={!showSector || !SectorComponent}
-            className="text-muted-foreground ml-auto min-h-[44px] gap-2"
-            onClick={() => setWorldExpanded(true)}
-          >
-            <Maximize2 className="size-4" aria-hidden />
-            Fullscreen
-          </Button>
-        )}
         {showSector && userData?.anbuId && autoAttackMode && (
-          <div className="flex w-full items-center text-sm font-semibold text-red-500">
+          <div className="flex items-center font-semibold text-red-500 text-sm">
             <Zap className="mr-1 h-4 w-4" />
             Auto-Attack: Scanning for enemies to hunt...
           </div>
