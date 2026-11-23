@@ -115,7 +115,7 @@ export const KessenGuestHall = ({ ready }: { ready: boolean }) => {
 
   return (
     <>
-      <HallBox subtitle="Free to play in your browser" scene={scene}>
+      <HallBox subtitle="Free to play in your browser" scene={scene} isGuest>
         <HallHeader
           className="kg-hall"
           today={null}

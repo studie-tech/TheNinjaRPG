@@ -43,29 +43,30 @@
 .kh-hall-inner {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px;
+  gap: 1.25rem;
+  padding: 1rem;
 }
-@container kessen-hall (min-width: 600px) {
-  .kh-hall-inner {
-    gap: 14px;
-    padding: 14px 16px 16px;
-  }
-}
-
 /* A hall panel: the game's bordered section on the content box surface. */
 .kh-panel {
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
 }
-/* Panel and sheet titles in the Kessen display face (above the themed layouts' heading
-   font), in the surrounding text colour. */
+/* Shared headings inherit the game surface; lobby headings follow its typography. */
 .kessen-ui .kh-heading.kh-heading {
   margin: 0;
   color: inherit;
   font-family: var(--kessen-font-display);
   font-weight: 400;
   letter-spacing: 0.01em;
+}
+.kessen-lobby {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.kessen-lobby > div:not(.kh-scene) .kh-heading.kh-heading {
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: normal;
 }
 
 /* A highlighted block inside a panel: the next lesson, the recommended one, a live duel. */
@@ -523,5 +524,59 @@ button.kh-deckchip:focus-visible {
 }
 .kh-rule-slot-mode:not([data-active]) {
   visibility: hidden;
+}
+
+/* Keep the counters and deck on full rows in the classic centre column. */
+.kh-lobby .kh-today {
+  flex-wrap: wrap;
+}
+.kh-lobby .kh-today-item,
+.kh-lobby .kh-deckchip {
+  border-color: hsl(var(--border));
+  border-radius: 0.5rem;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.kh-lobby .kh-today-label,
+.kh-lobby .kh-deckchip-prov-label,
+.kh-lobby .kh-deckchip-dot {
+  color: hsl(var(--muted-foreground));
+}
+.kh-lobby .kh-today-value,
+.kh-lobby .kh-deckchip-name {
+  color: hsl(var(--foreground));
+  font-family: inherit;
+  font-weight: 700;
+}
+.kh-lobby .kh-deckchip-prov[data-over],
+.kh-lobby .kh-deckchip-state {
+  color: hsl(var(--destructive));
+}
+.kh-lobby .kh-deckchip:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.kh-lobby .kh-deckchip-state[data-ready],
+.kh-lobby .kh-today-item[data-done] .kh-today-value {
+  color: hsl(var(--success));
+}
+.kh-lobby .kh-hall-action,
+.kh-lobby .kh-hall-action:hover {
+  border-radius: 0.5rem;
+  background: rgb(245 158 11);
+  color: black;
+  box-shadow: none;
+}
+.kh-lobby .kh-hall-action-label,
+.kh-lobby .kh-hall-action-detail {
+  color: inherit;
+  font-family: inherit;
+}
+.kh-lobby .kh-hall-action-icon {
+  background: none;
+  box-shadow: none;
+  color: inherit;
 }
 

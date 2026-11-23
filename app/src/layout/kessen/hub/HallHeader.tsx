@@ -20,14 +20,7 @@ import { FactionSigil } from "../FactionSigil";
 import { KESSEN_IMAGES } from "../kessenArt";
 import type { KessenDeckSummary } from "./hubData";
 
-/**
- * Card Hall banner: the hall artwork under its place and the game's tagline (the page
- * frame carries the name), the reward counters as lacquer chips on one line over the art
- * (today's rewarded matches and drops with the daily reset, then the week's first-win
- * pack with the weekly reset), and the deck chip ("Hyorin Frost · Provision 143/161 ·
- * ready", or the borrowed-deck note) with `actions` (the ways back to the table) beside
- * it. Wide halls fold it into a slim strip so the Circuit map starts high on the screen.
- */
+/** The hall artwork, match rewards, selected deck and available ways back to the table. */
 export const HallHeader = ({
   today,
   week,
@@ -48,8 +41,22 @@ export const HallHeader = ({
   lead?: React.ReactNode;
   className?: string;
 }) => (
-  <header className={cn("kh-hall", className)}>
-    <div className="kh-hall-art" aria-hidden>
+  <header
+    className={cn(
+      lead
+        ? "kh-hall"
+        : "kh-lobby bg-card flex flex-col gap-3 rounded-xl border-2 border-amber-500/70 p-3 @[34rem]:flex-row @[34rem]:items-center",
+      className,
+    )}
+  >
+    <div
+      className={
+        lead
+          ? "kh-hall-art"
+          : "h-24 w-full shrink-0 overflow-hidden rounded-lg @[34rem]:h-20 @[34rem]:w-32"
+      }
+      aria-hidden
+    >
       <Image
         src={KESSEN_IMAGES.hallHero}
         alt=""
@@ -57,15 +64,22 @@ export const HallHeader = ({
         height={683}
         priority
         draggable={false}
+        className={lead ? undefined : "h-full w-full object-cover"}
       />
     </div>
-    <div className="kh-hall-shade" aria-hidden />
-    <div className="kh-hall-body">
-      <p className="kh-eyebrow">The Card Hall of Wake Island</p>
-      <p className="kh-hall-title">The Ninja War Table</p>
+    {lead ? <div className="kh-hall-shade" aria-hidden /> : null}
+    <div className={lead ? "kh-hall-body" : "min-w-0 flex-1"}>
+      <p
+        className={lead ? "kh-eyebrow" : "text-muted-foreground text-sm font-semibold"}
+      >
+        The Card Hall of Wake Island
+      </p>
+      <h2 className={lead ? "kh-hall-title" : "text-xl leading-tight font-black"}>
+        The Ninja War Table
+      </h2>
       {lead ? <p className="kh-hall-lead">{lead}</p> : null}
       {today ? (
-        <ul className="kh-today" aria-label="Rewards today and this week">
+        <ul className="kh-today mt-2" aria-label="Rewards today and this week">
           <li className="kh-today-item">
             <span className="kh-today-label">Rewarded</span>
             <span className="kh-today-value">
@@ -100,7 +114,7 @@ export const HallHeader = ({
         </ul>
       ) : null}
       {onDeckClick || actions ? (
-        <div className="kh-hall-row">
+        <div className={cn("kh-hall-row", !lead && "mt-2")}>
           {onDeckClick ? <DeckChip deck={deck} onClick={onDeckClick} /> : null}
           {actions ? <div className="kh-hall-actions">{actions}</div> : null}
         </div>

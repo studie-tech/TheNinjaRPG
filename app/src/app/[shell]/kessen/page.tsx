@@ -735,27 +735,26 @@ function KessenHall() {
   if (hub.needsLesson) {
     return (
       <HallBox scene={scene} subtitle="Lemu's first lesson">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-5">
           {header}
           <section
-            className="flex flex-col items-center gap-2 py-4 text-center"
+            className="bg-card flex flex-col gap-3 rounded-xl border p-3"
             aria-labelledby="kessen-lesson-title"
           >
-            <p className="kh-eyebrow">
+            <p className="text-muted-foreground text-sm font-semibold">
               First visit · Lemu's Academy, lesson 1 of {hub.academy.total}
             </p>
-            <h2 id="kessen-lesson-title" className="kh-heading text-[28px]">
+            <h2 id="kessen-lesson-title" className="text-xl leading-tight font-black">
               {firstLesson?.title ?? "First Blood"}
             </h2>
-            <p className="max-w-[560px] text-muted-foreground">
+            <p className="text-muted-foreground max-w-[560px]">
               A two-minute lesson with a fixed hand: rows, rounds and passing, and why
               giving up a round can win the match. It opens your starter deck and the
               Circuit; five more lessons teach the rest of the strategy.
             </p>
             <Button
               size="lg"
-              decoration="gold"
-              className="mt-2"
+              className="self-start bg-amber-500 text-lg font-bold text-black hover:bg-amber-400"
               loading={isStarting}
               onClick={() => void startLessonMatch(KESSEN_ACADEMY_FIRST_LESSON)}
             >
@@ -778,7 +777,7 @@ function KessenHall() {
   if (hub.needsStarter) {
     return (
       <HallBox scene={scene} subtitle="Choose your starter faction">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-5">
           {header}
           <StarterChoice
             homeFaction={hub.homeFaction}
@@ -837,7 +836,7 @@ function KessenHall() {
         />
       }
     >
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-5">
         {tab === "Play" ? (
           <>
             {header}

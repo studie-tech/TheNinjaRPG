@@ -7,6 +7,7 @@ import type React from "react";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
+import { cn } from "@/libs/shadui";
 
 /**
  * The Card Hall in the game's page frame ("Kessen", with the way back to the minigames),
@@ -26,6 +27,7 @@ export const HallBox = ({
   scene = null,
   backHref = "/minigames",
   leaderboardLink = true,
+  isGuest = false,
 }: {
   children: React.ReactNode;
   /** The section tabs, in the frame's header. */
@@ -37,6 +39,8 @@ export const HallBox = ({
   backHref?: string;
   /** Show the Leaderboard button in the header; off on the leaderboard itself. */
   leaderboardLink?: boolean;
+  /** Guests keep the illustrated landing typography. */
+  isGuest?: boolean;
 }) => (
   <ContentBox
     title={scene ? (scene.title ?? "Card Hall") : title}
@@ -55,7 +59,7 @@ export const HallBox = ({
       )
     }
   >
-    <div className="kessen-hall kessen-ui">
+    <div className={cn("kessen-hall kessen-ui", !isGuest && "kessen-lobby")}>
       {scene ? <div className="kh-scene kessen-scene">{scene.content}</div> : null}
       <div hidden={scene !== null}>
         <div className="kh-hall-inner">{children}</div>

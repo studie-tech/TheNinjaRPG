@@ -2,7 +2,6 @@
 
 import {
   ArrowRight,
-  CheckCircle2,
   ChevronDown,
   Clover,
   Dices,
@@ -14,7 +13,6 @@ import {
   type LucideIcon,
   Magnet,
   Play,
-  ScrollText,
   Skull,
   Sparkles,
   Sunrise,
@@ -34,6 +32,7 @@ import {
 } from "@/layout/ChakraStormHud";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import { MiniGameDailyDuty } from "@/layout/MiniGameDailyDuty";
 import {
   CS_DAILY_SECONDS,
   CS_JUTSU,
@@ -93,6 +92,7 @@ export const ChakraStormLobby = (props: {
   const stage = CS_STAGE_INFO[props.stage];
   return (
     <div className="@container space-y-5">
+      {!props.isGuest && <DailyReport daily={props.daily} />}
       {/* A visitor meets the landing; a signed-in scout goes straight to the run. */}
       {props.isGuest ? (
         <section className="relative overflow-hidden rounded-xl border border-black/20 bg-black text-white shadow-lg">
@@ -170,7 +170,7 @@ export const ChakraStormLobby = (props: {
         />
       )}
 
-      <DailyReport daily={props.daily} />
+      {props.isGuest && <DailyReport daily={props.daily} />}
 
       {/* Stages */}
       <section aria-labelledby="cs-stages" className="space-y-2">
@@ -554,69 +554,32 @@ const DailyReport = (props: {
   const { daily } = props;
   const minutes = CS_DAILY_SECONDS / 60;
   return (
-    <section
-      aria-labelledby="cs-daily"
-      className={cn(
-        "flex flex-wrap items-center gap-3 rounded-xl border-2 p-3",
-        daily?.done
-          ? "border-emerald-500/60 bg-emerald-500/10"
-          : "border-amber-500/70 bg-amber-500/10",
-      )}
-    >
-      <span
-        className={cn(
-          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
-          daily?.done
-            ? "bg-emerald-500/20 text-emerald-600"
-            : "bg-amber-500/20 text-amber-600",
-        )}
-      >
-        {daily?.done ? (
-          <CheckCircle2 className="h-6 w-6" />
-        ) : (
-          <ScrollText className="h-6 w-6" />
-        )}
-      </span>
-      {/* The text keeps a readable width; on a narrow screen the rewards wrap below it. */}
-      <div className="min-w-[min(100%,16rem)] flex-1">
-        <h2 id="cs-daily" className="text-base leading-tight font-bold">
-          Daily scouting report
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          {!daily
-            ? `Signed-in scouts earn ryo, prestige and tokens for their village once a day for a run of ${minutes} minutes or more. Every run is verified by the server.`
-            : daily.done
-              ? "Delivered today. Your village thanks you; the next report is due tomorrow."
-              : `Scout ${minutes} minutes or more in any region today.`}
-        </p>
-      </div>
-      {daily ? (
-        !daily.done && (
-          <span className="flex flex-wrap gap-1.5 text-sm font-bold">
-            <RewardChip>{daily.reward.ryo.toLocaleString()} ryo</RewardChip>
-            <RewardChip>{daily.reward.prestige} prestige</RewardChip>
-            {daily.hasVillage && (
-              <RewardChip>{daily.reward.villageTokens} village tokens</RewardChip>
-            )}
-          </span>
-        )
-      ) : (
-        <Button asChild size="sm">
-          <Link href="/signup">
-            <UserPlus className="mr-1.5 h-4 w-4" />
-            Join to earn
-          </Link>
-        </Button>
-      )}
-    </section>
+    <MiniGameDailyDuty
+      id="cs-daily"
+      title="Daily scouting report"
+      done={daily?.done ?? false}
+      description={
+        !daily
+          ? `Signed-in scouts earn ryo, prestige and tokens for their village once a day for a run of ${minutes} minutes or more. Every run is verified by the server.`
+          : daily.done
+            ? "Delivered today. Your village thanks you; the next report is due tomorrow."
+            : `Scout ${minutes} minutes or more in any region today.`
+      }
+      reward={daily?.reward}
+      hasVillage={daily?.hasVillage}
+      action={
+        !daily ? (
+          <Button asChild size="sm">
+            <Link href="/signup">
+              <UserPlus className="mr-1.5 h-4 w-4" />
+              Join to earn
+            </Link>
+          </Button>
+        ) : undefined
+      }
+    />
   );
 };
-
-const RewardChip = (props: { children: React.ReactNode }) => (
-  <span className="rounded-md bg-amber-500/20 px-2 py-0.5 whitespace-nowrap">
-    {props.children}
-  </span>
-);
 
 const TrainingCard = (props: {
   id: CsTraining;
