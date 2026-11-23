@@ -18,8 +18,10 @@ describe("getEffectiveColorTheme", () => {
 
   it("uses the saved theme on color-mode layouts", () => {
     expect(getEffectiveColorTheme("default")).toBe("light");
+    expect(getEffectiveColorTheme("experimental")).toBe("light");
     localStorage.setItem("theme", "dark");
     expect(getEffectiveColorTheme("default")).toBe("dark");
+    expect(getEffectiveColorTheme("experimental")).toBe("dark");
   });
 
   it("follows the document class without a layout", () => {

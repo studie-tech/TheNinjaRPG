@@ -598,3 +598,21 @@ it.each(["World Travel", "Auto Travel"])(
     expect(mutation.mutate).not.toHaveBeenCalled();
   },
 );
+
+it("renders host navigation alongside travel tools in the immersive header", () => {
+  const view = render(
+    <TravelScreen
+      immersive
+      headerItems={[
+        {
+          key: "host-menu",
+          node: <button type="button">Host menu</button>,
+          priority: 0,
+        },
+      ]}
+    />,
+  );
+  expect(view.getByRole("button", { name: "Host menu" })).toBeTruthy();
+  expect(view.getByRole("button", { name: "Quick Travel" })).toBeTruthy();
+  expect(view.queryByRole("button", { name: "Expand world" })).toBeNull();
+});

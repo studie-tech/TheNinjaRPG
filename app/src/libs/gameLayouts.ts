@@ -116,13 +116,13 @@ export const GAME_LAYOUTS = [
       "Explore a full-screen sector map and visit the Bank and Item Shop in dialogs. Other destinations open as pages through the game menu.",
     composition:
       "A full-height map with compact navigation, player and game drawers, and building dialogs.",
-    tone: "dark",
+    tone: "light",
     frame: "experimental",
     publicFrame: "page",
     welcome: "illustrated",
     // Navigation lives in drawers at every viewport width.
     sidebarBreakpoint: 100000,
-    supportsColorMode: false,
+    supportsColorMode: true,
     visualLanguage: "Sector exploration · Experimental",
     welcomeTitle: "Your next adventure is out there.",
     welcomeIntro:

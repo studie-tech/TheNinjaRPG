@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { useTravelSession } from "@/hooks/useTravelSession";
+import type { HeaderActionItem } from "@/layout/ContentBoxHeaderActions";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { TravelView } from "@/screens/travel/TravelView";
@@ -14,16 +15,21 @@ import { travelLocationSchema } from "@/validators/travel";
 export function TravelScreen({
   immersive = false,
   isInteractive = true,
+  headerItems,
 }: TravelScreenProps) {
   return (
     <Suspense fallback={<Loader explanation="Loading travel" />}>
-      <TravelRoute immersive={immersive} isInteractive={isInteractive} />
+      <TravelRoute
+        immersive={immersive}
+        isInteractive={isInteractive}
+        headerItems={headerItems}
+      />
     </Suspense>
   );
 }
 
 /** Travel owns URL requests and redirects; the session can be hosted independently. */
-function TravelRoute({ immersive, isInteractive }: TravelScreenProps) {
+function TravelRoute({ immersive, isInteractive, headerItems }: TravelScreenProps) {
   const session = useTravelSession();
   const { userData, setLocationRequest } = session;
   const searchParams = useSearchParams();
@@ -64,6 +70,7 @@ function TravelRoute({ immersive, isInteractive }: TravelScreenProps) {
     <TravelView
       session={session}
       hasLocationRequest={searchParams.has("sector")}
+      headerItems={headerItems}
       immersive={immersive}
       isInteractive={isInteractive}
     />
@@ -72,6 +79,7 @@ function TravelRoute({ immersive, isInteractive }: TravelScreenProps) {
 }
 
 interface TravelScreenProps {
+  headerItems?: HeaderActionItem[];
   immersive?: boolean;
   isInteractive?: boolean;
 }

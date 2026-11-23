@@ -66,13 +66,16 @@ describe("layout before first paint", () => {
     },
   );
 
-  it("honors Classic's saved color mode without changing layout identity", () => {
-    expect(run("default", () => "dark")).toEqual({
-      id: "default",
-      frame: "classic",
-      dark: true,
-    });
-  });
+  it.each(["default", "experimental"] as const)(
+    "honors %s saved color mode without changing layout identity",
+    (id) => {
+      expect(run(id, () => "dark")).toEqual({
+        id,
+        frame: id === "default" ? "classic" : "experimental",
+        dark: true,
+      });
+    },
+  );
 
   it.each([...GAME_LAYOUTS])("keeps $name usable when storage is blocked", (layout) => {
     expect(

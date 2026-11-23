@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useNavigationRouter } from "@/hooks/navigation";
+import type { HeaderActionItem } from "@/layout/ContentBoxHeaderActions";
 import Loader from "@/layout/Loader";
 import { ScreenNavigationProvider } from "@/screens/ScreenNavigationContext";
 import { usePublicPathname } from "@/utils/routing";
@@ -25,9 +26,11 @@ const TravelScreen = dynamic(
 export function ExperimentalTravelHost({
   children,
   isGuidedTutorial,
+  headerItems,
 }: {
   children: ReactNode;
   isGuidedTutorial: boolean;
+  headerItems?: HeaderActionItem[];
 }) {
   const pathname = usePublicPathname();
   const router = useNavigationRouter();
@@ -42,7 +45,7 @@ export function ExperimentalTravelHost({
   return (
     <>
       <div className="h-full" inert={!!building}>
-        <TravelScreen immersive isInteractive={!building} />
+        <TravelScreen immersive isInteractive={!building} headerItems={headerItems} />
       </div>
       <Dialog
         open={!!building}

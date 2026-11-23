@@ -116,39 +116,17 @@ html[data-game-layout="20-eclipse-observatory"]
   display: block;
 }
 
+/* The experimental frame uses the same semantic palette as Classic, including dark mode. */
 html[data-game-layout="experimental"] {
-  --theme-bg: #172a28;
-  --theme-surface: #213a35;
-  --theme-text: #f0f5ed;
-  --theme-muted: #aac2b7;
-  --theme-accent: #e7c675;
-  --theme-line: #415b50;
-  --theme-heading-font: "Manrope", system-ui, sans-serif;
-  --theme-body-font: "Manrope", system-ui, sans-serif;
+  --theme-bg: hsl(var(--background));
+  --theme-surface: hsl(var(--card));
+  --theme-text: hsl(var(--foreground));
+  --theme-muted: hsl(var(--muted-foreground));
+  --theme-accent: hsl(var(--foreground));
+  --theme-line: hsl(var(--border));
+  --theme-heading-font: ui-sans-serif, system-ui, sans-serif;
+  --theme-body-font: ui-sans-serif, system-ui, sans-serif;
 }
-html[data-game-layout="experimental"]:not([data-reading-palette]) {
-  --background: 174 29% 13%;
-  --foreground: 98 29% 95%;
-  --card: 168 28% 18%;
-  --card-foreground: 98 29% 95%;
-  --popover: 168 28% 18%;
-  --popover-foreground: 98 29% 95%;
-  --poppopover: 174 29% 13%;
-  --poppopover-foreground: 98 29% 95%;
-  --primary: 44 70% 68%;
-  --primary-foreground: 174 29% 13%;
-  --secondary: 168 20% 25%;
-  --secondary-foreground: 98 29% 95%;
-  --muted: 168 20% 25%;
-  --muted-foreground: 154 16% 71%;
-  --accent: 168 20% 25%;
-  --accent-foreground: 98 29% 95%;
-  --border: 155 17% 31%;
-  --input: 155 17% 31%;
-  --ring: 44 70% 68%;
-  --success: 142 60% 66%;
-  --warning: 38 90% 66%;
-  --link: 213 90% 76%;
-  color-scheme: dark;
+html[data-game-layout="experimental"] .theme-welcome-copy[data-theme-id="experimental"] {
+  display: block;
 }
-html[data-game-layout="experimental"] .theme-welcome-copy[data-theme-id="experimental"] { display: block; }

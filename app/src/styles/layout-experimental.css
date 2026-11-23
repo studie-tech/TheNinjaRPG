@@ -72,7 +72,10 @@
   flex-direction: column;
 }
 .experimental-travel > [data-content-box] > [data-content-box-header] {
-  padding: 0.5rem;
+  flex: none;
+  border-bottom: 1px solid var(--theme-line);
+  padding: max(0.5rem, env(safe-area-inset-top)) 0.5rem 0.5rem;
+  background: var(--theme-surface);
 }
 .experimental-travel > [data-content-box] > [data-content-box-inner] {
   flex: 1;

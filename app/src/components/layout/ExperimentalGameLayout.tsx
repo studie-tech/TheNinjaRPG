@@ -9,6 +9,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  ContentBoxPriorityActions,
+  type HeaderActionItem,
+} from "@/layout/ContentBoxHeaderActions";
 import Footer from "@/layout/Footer";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
@@ -49,19 +53,18 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
   const isMapPage = !!userData && ["/travel", "/bank", "/itemshop"].includes(pathname);
   const isGuidedTutorial = isTutorialActive(userData);
 
-  return (
-    <div
-      data-world-page
-      className={cn("experimental-game", isMapPage && "experimental-game-map")}
-    >
-      <a href="#game-content" className="theme-skip-link">
-        Skip to game content
-      </a>
-      <header className="experimental-header">
+  const headerItems: HeaderActionItem[] = [
+    {
+      key: "player-menu",
+      node: (
         <Sheet open={leftSideBarOpen} onOpenChange={onLeftSideBarOpenChange}>
-          <SheetTrigger className="experimental-tool" aria-label="Open player menu">
+          <SheetTrigger
+            className="experimental-tool"
+            aria-label="Open player menu"
+            data-experimental-travel-link={isMapPage || undefined}
+          >
             <Menu aria-hidden="true" />
-            <span className="hidden sm:inline">Player</span>
+            <span className="sr-only">Player</span>
           </SheetTrigger>
           <SheetContent
             side="left"
@@ -80,15 +83,12 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
             <Footer />
           </SheetContent>
         </Sheet>
-        <Link
-          href="/travel"
-          data-experimental-travel-link
-          className="experimental-tool"
-          aria-current={isMapPage ? "page" : undefined}
-        >
-          <MapIcon aria-hidden="true" />
-          <span>Travel</span>
-        </Link>
+      ),
+      priority: 0,
+    },
+    {
+      key: "game-menu",
+      node: (
         <Sheet
           open={rightSideBarOpen}
           onOpenChange={onRightSideBarOpenChange}
@@ -100,7 +100,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
             id="tutorial-gameBtn"
           >
             <Compass aria-hidden="true" />
-            <span className="hidden sm:inline">Game menu</span>
+            <span className="sr-only">Game menu</span>
           </SheetTrigger>
           <SheetContent
             className="experimental-drawer"
@@ -122,27 +122,68 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
             </Suspense>
           </SheetContent>
         </Sheet>
-        <div className="ml-auto flex min-w-0 items-center gap-1">
-          {!isCombatPage && (
-            <MobileNotificationsPopover
-              notifications={shownNotifications}
-              variant={variant}
-            />
-          )}
-          <LowerRightHelpBtn className="experimental-tool">
-            <MessageCircle aria-hidden="true" />
-            <span className="sr-only">Chat</span>
-          </LowerRightHelpBtn>
+      ),
+      priority: 0,
+    },
+    {
+      key: "notifications",
+      node: !isCombatPage && (
+        <MobileNotificationsPopover
+          notifications={shownNotifications}
+          variant={variant}
+        />
+      ),
+      priority: 4,
+    },
+    {
+      key: "chat",
+      node: (
+        <LowerRightHelpBtn className="experimental-tool">
+          <MessageCircle aria-hidden="true" />
+          <span className="sr-only">Chat</span>
+        </LowerRightHelpBtn>
+      ),
+      priority: 5,
+    },
+    {
+      key: "settings",
+      node: (
+        <Link href={SETTINGS_HREF} className="experimental-tool" aria-label="Settings">
+          <Settings aria-hidden="true" />
+        </Link>
+      ),
+      priority: 2,
+    },
+    {
+      key: "account",
+      node: <div className="hidden sm:flex">{signedInIcons}</div>,
+      priority: 8,
+    },
+  ];
+
+  return (
+    <div
+      data-world-page
+      className={cn("experimental-game", isMapPage && "experimental-game-map")}
+    >
+      <a href="#game-content" className="theme-skip-link">
+        Skip to game content
+      </a>
+      {!isMapPage && (
+        <header className="experimental-header">
           <Link
-            href={SETTINGS_HREF}
+            href="/travel"
+            data-experimental-travel-link
             className="experimental-tool"
-            aria-label="Settings"
+            aria-current={isMapPage ? "page" : undefined}
           >
-            <Settings aria-hidden="true" />
+            <MapIcon aria-hidden="true" />
+            <span>Travel</span>
           </Link>
-          <div className="hidden sm:flex">{signedInIcons}</div>
-        </div>
-      </header>
+          <ContentBoxPriorityActions items={headerItems} label="Game" />
+        </header>
+      )}
+
       <main
         id="game-content"
         tabIndex={-1}
@@ -150,7 +191,10 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
         data-reading-surface={!isMapPage || undefined}
       >
         {isMapPage ? (
-          <ExperimentalTravelHost isGuidedTutorial={isGuidedTutorial}>
+          <ExperimentalTravelHost
+            isGuidedTutorial={isGuidedTutorial}
+            headerItems={headerItems}
+          >
             {children}
           </ExperimentalTravelHost>
         ) : (

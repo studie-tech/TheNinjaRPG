@@ -73,6 +73,7 @@ export function TravelView({
   hasLocationRequest = false,
   immersive = false,
   isInteractive = true,
+  headerItems = [],
 }: TravelViewProps) {
   const {
     showActive,
@@ -1086,6 +1087,8 @@ const SectorLoadingPlaceholder = () => (
 
 interface TravelViewProps {
   session: TravelSession;
+  /** Navigation from an immersive host shares the travel tools’ responsive header. */
+  headerItems?: HeaderActionItem[];
   /** Fill the host’s available map viewport while retaining the page controls. */
   immersive?: boolean;
   /** A building dialog pauses map input and automatic arrival prompts. */
