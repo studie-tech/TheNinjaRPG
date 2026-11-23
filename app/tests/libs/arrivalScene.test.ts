@@ -15,6 +15,7 @@ import {
 import { oddQHexDistance } from "@/libs/hexgrid";
 import { travelActorKey } from "@/libs/rendering/scenes/travelActors";
 import { getNeighborCoordinates } from "@/libs/sector-map/validation";
+import { isStoryPlacementId } from "@/libs/storyActors";
 
 type Tile = { x: number; y: number };
 
@@ -144,6 +145,20 @@ describe("arrivalSceneActors", () => {
       expect(actor.npcInteractionType).toBe("AMBIENT");
       expect(actor.sector).toBe(301);
     }
+  });
+
+  it("gives a figure the map's own control when the scene says so", () => {
+    const actors = arrivalSceneActors(scene, 60_000, art, 301, { double: "HOSTILE" });
+    expect(
+      actors.map((actor) => [actor.npcPlacementId, actor.npcInteractionType]),
+    ).toEqual([
+      ["story-lemu", "AMBIENT"],
+      ["story-double", "HOSTILE"],
+    ]);
+    expect(actors.every((actor) => isStoryPlacementId(actor.npcPlacementId))).toBe(
+      true,
+    );
+    expect(isStoryPlacementId("placement-1")).toBe(false);
   });
 
   it("leaves out a figure whose artwork did not load", () => {

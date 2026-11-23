@@ -78,3 +78,18 @@ export const isOnCanvas = (point: MapAnchorPoint) =>
   point.x <= point.width &&
   point.foot >= 0 &&
   point.foot <= point.height;
+
+/** A box over an anchor, in tiles. */
+export type AnchoredBox = { width: number; height: number };
+
+/** Where such a box lies on the canvas: what stands on a tile rises from just below its centre. */
+export const anchoredRect = (point: MapAnchorPoint, box: AnchoredBox) => {
+  const width = point.tile * box.width;
+  const height = point.tile * box.height;
+  return {
+    left: point.x - width / 2,
+    top: point.foot + point.tile * 0.25 - height,
+    width,
+    height,
+  };
+};

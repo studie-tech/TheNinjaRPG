@@ -5,7 +5,14 @@ import type { Grid } from "honeycomb-grid";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Minimize2, Swords } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
@@ -16,7 +23,6 @@ import { getSectorPresenceUpdate } from "@/deltas/travel";
 import {
   IMG_AVATAR_DEFAULT,
   IMG_SCENE_BACKGROUND,
-  IMG_URL_HANDPOINTER,
   SECTOR_WALK_STEP_MS,
   STRUCTURE_ADJACENTS,
   WAR_SHRINE_IMAGE_BY_BIOME,
@@ -45,7 +51,7 @@ import { QuestDialogScene, QuestUpdateModal } from "@/layout/Logbook";
 import { MapLocationActions } from "@/layout/MapLocationActions";
 import Modal from "@/layout/Modal";
 import { MapAnchored } from "@/layout/map/MapAnchored";
-import { MapSpeech } from "@/layout/map/MapSpeech";
+import { MapSpeech, type SpeechAvoid } from "@/layout/map/MapSpeech";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import { SurroundingUsers } from "@/layout/SurroundingUsers";
@@ -113,6 +119,7 @@ import type {
 } from "@/libs/sector-map/world-types";
 import { subscribeSharedChannel } from "@/libs/sharedChannel";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
+import { isStoryPlacementId } from "@/libs/storyActors";
 import { showMutationToast } from "@/libs/toast";
 import {
   isSectorPresenceStatus,
@@ -272,6 +279,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const mountRef = useRef<HTMLDivElement | null>(null);
   // What overlays over the map hold on to: markers, glows and speech.
   const [mapAnchors] = useState(createMapAnchors);
+  const onStoryTapRef = useRef<(placementId: string) => SectorUser | null>(() => null);
   const pathFinderRef = useRef<PathCalculator | null>(null);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const usersRef = useRef<SectorUser[]>([]);
@@ -2388,6 +2396,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (hit.tile)
       candidates.push({ type: "tile", tile: hit.tile.hex, sector: hit.tile.sector });
     const canSelectLocation = candidates.every((i) => {
+      // A story figure is no placement: its scene says what tapping it does, and one with
+      // nothing to do leaves the ground behind it to tap.
+      if (i.npcPlacementId && isStoryPlacementId(i.npcPlacementId)) {
+        const attacked = onStoryTapRef.current(i.npcPlacementId);
+        if (attacked) setTargetUser(attacked);
+        return !attacked;
+      }
       const questMarker = i.type === "questMarker" ? i : null;
       if (questMarker?.type === "questMarker") {
         const x = questMarker.longitude as number;
@@ -2662,14 +2677,19 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       actorRevisionRef.current++;
     },
   });
-  const storyTarget: MapAnchor | null = arrivalScene.marker && {
-    kind: "tile",
-    ...arrivalScene.marker,
-  };
+  useLayoutEffect(() => {
+    onStoryTapRef.current = arrivalScene.onStoryTap;
+  });
   // Speech leaves the player's character and the ground to tap in view.
-  const speechAvoids: MapAnchor[] = [
-    ...(userData ? [{ kind: "actor" as const, key: `user:${userData.userId}` }] : []),
-    ...(storyTarget ? [storyTarget] : []),
+  const storyTargetBox =
+    arrivalScene.target?.kind === "actor" ? STORY_FIGURE_BOX : STORY_TILE_BOX;
+  const speechAvoids: SpeechAvoid[] = [
+    ...(userData
+      ? [{ anchor: { kind: "actor" as const, key: `user:${userData.userId}` } }]
+      : []),
+    ...(arrivalScene.target
+      ? [{ anchor: arrivalScene.target, box: storyTargetBox }]
+      : []),
   ];
   const attachSceneHost = useCallback((slot: HTMLDivElement | null) => {
     if (!slot) return;
@@ -2797,23 +2817,19 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           id="tutorial-objective-marker"
           onPlaced={announceTutorialLayout}
         />
+        {/* Lesson anchor kept over what a story scene points at: a figure or a tile. */}
         <MapAnchored
           anchors={mapAnchors}
-          anchor={storyTarget}
+          anchor={arrivalScene.target}
+          box={storyTargetBox}
+          id="tutorial-map-target"
+          onPlaced={announceTutorialLayout}
+        />
+        <MapAnchored
+          anchors={mapAnchors}
+          anchor={arrivalScene.marker}
           box={{ width: 1.6, height: 1.4 }}
         >
-          {arrivalScene.kind === "greeting" && (
-            <>
-              <span className="story-target absolute inset-x-0 bottom-0" />
-              <Image
-                src={IMG_URL_HANDPOINTER}
-                alt=""
-                width={80}
-                height={80}
-                className="absolute top-full left-1/2 h-14 w-14 -translate-x-5 animate-bounce drop-shadow-lg motion-reduce:animate-none"
-              />
-            </>
-          )}
           {arrivalScene.smoke > 0 && (
             <span key={arrivalScene.smoke} className="story-smoke absolute inset-0" />
           )}
@@ -3065,21 +3081,22 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           onClose={() => setLogbookModalQuestId(null)}
         />
       )}
-      {targetUser && (isAttacking || userData?.status === "BATTLE") && (
-        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black">
-          <div className="m-auto text-center text-white">
-            <p className="p-5 text-3xl">
-              <AvatarImage
-                href={targetUser.avatar}
-                alt={targetUser.username}
-                size={256}
-                priority
-              />
-            </p>
-            <p className="text-5xl">Attacking {targetUser.username}</p>
+      {targetUser &&
+        (isAttacking || arrivalScene.isAttacking || userData?.status === "BATTLE") && (
+          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black">
+            <div className="m-auto text-center text-white">
+              <p className="p-5 text-3xl">
+                <AvatarImage
+                  href={targetUser.avatar}
+                  alt={targetUser.username}
+                  size={256}
+                  priority
+                />
+              </p>
+              <p className="text-5xl">Attacking {targetUser.username}</p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
       {healTargetUser && userData && originRef.current && (
         <div className="pointer-events-auto absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 transform">
           <HealingPopover
@@ -3215,6 +3232,9 @@ const SECTOR_MAX_ZOOM = 3;
  */
 const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
 
+/** What a lesson marks over a story's figure, with its control, and over its tile, in tiles. */
+const STORY_FIGURE_BOX = { width: 2.2, height: 1.7 };
+const STORY_TILE_BOX = { width: 1.5, height: 1 };
 const OBJECTIVE_ANCHOR: MapAnchor = { kind: "objective" };
 const announceTutorialLayout = () =>
   window.dispatchEvent(new Event(TUTORIAL_LAYOUT_EVENT));

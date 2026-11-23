@@ -346,8 +346,8 @@ describe("each tutorial step", () => {
       if (step.action) expect(region.textContent).toContain(step.action);
 
       // The highlight surrounds the step's first target and only captures clicks that
-      // advance; a step that only brings its target into view leaves the page lit.
-      const marked = step.isRevealOnly ? undefined : target;
+      // advance; a scene on the page stays lit around its target.
+      const marked = target;
       const highlightButton = marked
         ? view.getByRole("button", { name: step.action ?? "Continue tutorial" })
         : null;

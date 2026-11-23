@@ -51,6 +51,26 @@ it("shows a line once its speaker is on the map and follows them as they walk", 
   expect(bubble.style.visibility).toBe("hidden");
 });
 
+it("moves a bubble at rest out of the way of what comes to stand under it", () => {
+  const anchors = createMapAnchors();
+  const avoid = [
+    {
+      anchor: { kind: "actor" as const, key: "double" },
+      box: { width: 4, height: 8 },
+    },
+  ];
+  const view = render(
+    <MapSpeech anchors={anchors} lines={[line("a", "lemu")]} avoid={avoid} />,
+  );
+  const bubble = view.container.querySelector<HTMLElement>("[data-map-speech-line=a]")!;
+  Object.defineProperty(bubble, "offsetWidth", { value: 160 });
+  Object.defineProperty(bubble, "offsetHeight", { value: 60 });
+  frame(anchors, { lemu: point() });
+  expect(bubble.dataset.speechSide).toBe("above");
+  frame(anchors, { lemu: point(), double: point({ foot: 260, top: 220 }) });
+  expect(bubble.dataset.speechSide).not.toBe("above");
+});
+
 it("announces each character's line and drops the ones that end", () => {
   const anchors = createMapAnchors();
   const lines = [line("a", "lemu"), line("b", "pup", { tone: "shout" })];
@@ -91,7 +111,7 @@ it("keeps a box over something on the map and hides it off the map", () => {
   expect(box.style.display).toBe("none");
   frame(anchors, { objective: point() });
   expect([box.style.left, box.style.width, box.style.display]).toEqual([
-    "350px",
+    "310px",
     "80px",
     "",
   ]);

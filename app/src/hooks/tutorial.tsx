@@ -205,7 +205,8 @@ export const useTutorialStep = () => {
       description: "That's the fight done. Let's carry on where we left off.",
       action: "Tap the highlighted button.",
       elementIds: ["return"],
-      isRevealOnly: false,
+      isPageLit: false,
+      revealId: undefined,
       page: "/combat",
       // One call to action on the result screen; the next step does the rest.
       advanceOn: undefined,

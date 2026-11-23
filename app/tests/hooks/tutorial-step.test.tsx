@@ -135,7 +135,7 @@ describe("useTutorialStep combat subscriptions", () => {
     const { result } = renderHook(() => useTutorialStep());
     expect(result.current.currentStep?.title).toBe("Battle over");
     expect(result.current.currentStep?.elementIds).toEqual(["return"]);
-    expect(result.current.currentStep?.isRevealOnly).toBe(false);
+    expect(result.current.currentStep?.isPageLit).toBe(false);
   });
 
   it("ignores battle updates and action selection outside a guided combat lesson", () => {

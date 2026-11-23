@@ -206,6 +206,8 @@ describe("travel actor snapshots", () => {
     expect(shown[0]?.parts.map((part) => part.kind)).toEqual(["avatar"]);
     // Unlike wildlife, a figure the story is about is lit at night.
     expect(shown[0]?.parts[0]).toHaveProperty("light");
+    const hostile = recipes([{ ...story, npcInteractionType: "HOSTILE" }]);
+    expect(hostile[0]?.parts.map((part) => part.kind)).toEqual(["avatar", "attack"]);
   });
   it("omits restricted attack actions while preserving healing and profile details", () => {
     expect(

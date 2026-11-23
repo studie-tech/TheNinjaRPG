@@ -75,6 +75,7 @@ import {
   villageDutyPursuitPosition,
 } from "@/libs/villageDuty";
 import { clamp } from "@/utils/math";
+import type { LpcDirection } from "@/validators/lpc";
 import type { MapLocation } from "@/validators/mapLocation";
 
 /** Neighbouring sectors join seamlessly, so their terrain draws no outline between them. */
@@ -936,6 +937,7 @@ export const createTravelScene = async (options: {
       const walkBetween = (
         actorKey: string,
         pose: { from: WanderTile; to: WanderTile; progress: number; isMoving: boolean },
+        standing?: LpcDirection,
       ) => {
         const from = entry.grid.getHex({ col: pose.from.x, row: pose.from.y });
         const to = entry.grid.getHex({ col: pose.to.x, row: pose.to.y });
@@ -952,13 +954,14 @@ export const createTravelScene = async (options: {
               progress,
           direction: pose.isMoving && !frame.reducedMotion ? "horizontal" : null,
           facing: to.center.x > from.center.x ? 1 : -1,
+          standing,
         });
         return true;
       };
       for (const user of wanderMap ? snapshot.users : []) {
         if (user.npcWalk) {
           const pose = npcWalkPose(user.npcWalk, clock);
-          if (pose) walkBetween(travelActorKey(user), pose);
+          if (pose) walkBetween(travelActorKey(user), pose, user.npcWalk.facing ?? 2);
           continue;
         }
         const wander = user.npcWander;

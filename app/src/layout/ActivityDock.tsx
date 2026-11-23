@@ -252,7 +252,7 @@ export function ActivityDock({
           id={panelId}
           className={cn(
             "border-primary/60 bg-card text-card-foreground @container/dock pointer-events-auto relative w-[var(--activity-dock-width,420px)] max-w-[calc(100vw-2rem)] rounded-xl border-2 shadow-xl",
-            isPulsing && "story-pulse-once",
+            isPulsing && ATTENTION_PULSE,
           )}
           style={
             fitWidth === null
@@ -374,7 +374,7 @@ export function ActivityDock({
           variant="outline"
           className={cn(
             "bg-card pointer-events-auto h-11 gap-2 rounded-full shadow-lg",
-            (isPulsing || hasStoryNews) && "story-pulse-once",
+            (isPulsing || hasStoryNews) && ATTENTION_PULSE,
           )}
           aria-expanded={false}
           aria-controls={panelId}
@@ -589,3 +589,7 @@ type ActivityUser = ReturnType<typeof selectActivityUser>;
 
 /** The dock's open state and tab during one guided lesson. */
 type GuidedView = { lessonId: string; open: boolean; tab: "tutorial" | "quests" };
+
+/** The call-to-action pulse, for three beats: news the player may leave for later. */
+const ATTENTION_PULSE =
+  "motion-safe:animate-cta-pulse motion-safe:[animation-iteration-count:3]";

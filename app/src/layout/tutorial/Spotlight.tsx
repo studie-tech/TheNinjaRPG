@@ -33,6 +33,7 @@ import {
 export const Spotlight = ({
   box,
   marks = [],
+  dim = true,
   ping = true,
   pointer = true,
   holeClassName,
@@ -41,6 +42,8 @@ export const Spotlight = ({
   box: SpotlightBox;
   /** Further elements the step refers to: uncovered and marked with a dashed ring. */
   marks?: SpotlightMark[];
+  /** Dims the page around the hole; off for a scene the player must see whole. */
+  dim?: boolean;
   /** The ring that pulses a few pixels outward to draw the eye to the hole. */
   ping?: boolean;
   /** The bouncing hand, for a control the player should press. */
@@ -82,7 +85,7 @@ export const Spotlight = ({
       className="pointer-events-none fixed inset-0 z-[60]"
     >
       <style>{SPOTLIT_STYLE}</style>
-      <SpotlightDim box={box} extra={marks.map((mark) => mark.box)} />
+      {dim && <SpotlightDim box={box} extra={marks.map((mark) => mark.box)} />}
       {marks.map((mark) => (
         <SpotlightMarkRing key={mark.key} mark={mark} />
       ))}

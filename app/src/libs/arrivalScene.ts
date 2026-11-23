@@ -2,11 +2,12 @@ import {
   ARRIVAL_PUP_AI_ID,
   BLACKSTEEL_COURIER_AI_ID,
   BLACKSTEEL_DOUBLE_AI_ID,
+  type OverworldInteractionType,
 } from "@/drizzle/constants";
 import { oddQHexDistance } from "@/libs/hexgrid";
 import { getNeighborCoordinates, getSectorTileKey } from "@/libs/sector-map/validation";
 import type { NpcWalk, SectorUser } from "@/libs/sector-map/world-types";
-import type { CharacterAnimation } from "@/libs/spriteAnimations";
+import { type StoryActorArt, storyActorKey, storyActorUser } from "@/libs/storyActors";
 import type { SpriteAppearance } from "@/validators/lpc";
 
 /** Where the player stands in the opening of the Academy Trials, as the map stages it. */
@@ -257,68 +258,40 @@ export const ARRIVAL_LINES = {
 } as const;
 
 /** The map actor key of a scene's figure, which speech and lessons hold on to. */
-export const arrivalActorKey = (role: CastRole) => `npc:story-${role}:0:0`;
-
-/** The artwork one figure wears on the map. */
-export type ArrivalCastArt = {
-  avatar: string | null;
-  sheets?: { idle?: CharacterAnimation; move?: CharacterAnimation };
-};
+export const arrivalActorKey = (role: CastRole) => storyActorKey(role);
 
 /**
- * The scene's figures on the map at `elapsed` milliseconds, as map actors only this
- * player sees: scenery without controls, drawn whatever the map's filters hide. Reduced
- * motion shows only how the scene ends.
+ * The scene's figures on the map at `elapsed` milliseconds. Reduced motion shows only how
+ * the scene ends. `interactions` gives a figure a control; the rest are scenery.
  */
 export const arrivalSceneActors = (
   scene: ArrivalScene,
   elapsed: number,
-  art: Partial<Record<string, ArrivalCastArt>>,
+  art: Partial<Record<string, StoryActorArt>>,
   sector: number,
+  interactions: Partial<Record<CastRole, OverworldInteractionType>> = {},
 ): SectorUser[] =>
   scene.cast.flatMap((entry) => {
     if (elapsed < entry.from || elapsed >= entry.until) return [];
     const aiId = CAST_AI_IDS[entry.role];
     const look = aiId ? art[aiId] : undefined;
     if (aiId && !look) return [];
-    // Every figure is anchored where the scene happens: the renderer culls by the anchor, and
-    // a chase ends out of view.
     return [
-      {
-        userId: `story-${entry.role}`,
-        username: CAST_NAMES[entry.role],
-        curHealth: 1,
-        maxHealth: 1,
-        avatar: look?.avatar ?? null,
-        avatarLight: null,
+      storyActorUser({
+        id: entry.role,
+        name: CAST_NAMES[entry.role],
         sector,
-        longitude: scene.marker.x,
-        latitude: scene.marker.y,
-        location: null,
-        villageId: null,
-        level: 1,
-        rank: "STUDENT" as const,
-        isOutlaw: false,
-        isBanned: false,
-        immunityUntil: NEVER,
-        robImmunityUntil: NEVER,
-        updatedAt: NEVER,
-        allianceStatus: "NEUTRAL" as const,
-        status: "AWAKE" as const,
-        battleId: null,
-        isNpc: true,
-        isStoryActor: true,
-        npcPlacementId: `story-${entry.role}`,
-        npcInteractionType: "AMBIENT" as const,
-        npcWalk: entry.walk,
-        ...(look?.sheets ? { npcSheets: look.sheets } : {}),
-        ...(entry.role === "lemu" ? { spriteAppearance: LEMU_APPEARANCE } : {}),
-        ...(entry.role === "pup" ? { npcScale: 0.65 } : {}),
-      },
+        // A chase ends out of view, so every figure stays anchored where the scene happens.
+        at: scene.marker,
+        walk: entry.walk,
+        interaction: interactions[entry.role],
+        avatar: look?.avatar,
+        sheets: look?.sheets,
+        appearance: entry.role === "lemu" ? LEMU_APPEARANCE : undefined,
+        scale: entry.role === "pup" ? 0.65 : undefined,
+      }),
     ];
   });
-
-const NEVER = new Date(0);
 
 /** AI whose map artwork each figure wears; Lemu is a layered character. */
 const CAST_AI_IDS: Record<CastRole, string | undefined> = {
@@ -349,7 +322,7 @@ const LEMU_APPEARANCE: SpriteAppearance = {
     { slot: "gloves", profile: "gloves", color: "red" },
     { slot: "armarmour", profile: "armarmour", color: "red" },
     { slot: "belt", profile: "belt", color: "red" },
-    { slot: "mask", profile: "mask", color: "black" },
+    { slot: "mask", profile: "half-mask", color: "black" },
   ],
 };
 

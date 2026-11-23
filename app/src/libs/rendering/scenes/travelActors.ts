@@ -805,11 +805,10 @@ export const createTravelActors = (
         // The published edge owns interpolation; its destination consumes any queued snapshot path.
         record.path.length = 0;
         record.tile = recipe.tile;
-        record.facing = lpcFacing(
-          movement.x - record.x,
-          movement.y - record.y,
-          record.facing,
-        );
+        record.facing =
+          movement.direction === null && movement.standing !== undefined
+            ? movement.standing
+            : lpcFacing(movement.x - record.x, movement.y - record.y, record.facing);
         record.heading = headingOf(movement.x - record.x, record.heading);
         record.x = movement.x;
         record.y = movement.y;
@@ -1740,6 +1739,8 @@ export type TravelActorMovement = {
   to?: { x: number; y: number };
   direction: WorldMotionDirection | null;
   facing: number;
+  /** Which way the actor looks while it stands, in place of the way it came. */
+  standing?: LpcDirection;
 };
 
 export type TravelMotionStep = {

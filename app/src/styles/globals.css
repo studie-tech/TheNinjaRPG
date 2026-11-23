@@ -896,15 +896,6 @@
   animation: story-flash 1.6s ease-out 1;
 }
 
-.story-target {
-  height: 70%;
-  border: 2px solid rgb(252 211 77);
-  border-radius: 9999px;
-  background: rgb(252 211 77 / 0.3);
-  box-shadow: 0 0 12px 3px rgb(252 211 77 / 0.6);
-  animation: story-target 1.4s ease-in-out infinite;
-}
-
 .story-smoke::before,
 .story-smoke::after {
   content: "";
@@ -942,13 +933,6 @@
   }
 }
 
-@keyframes story-target {
-  50% {
-    transform: scale(0.8);
-    opacity: 0.65;
-  }
-}
-
 @keyframes story-smoke {
   0% {
     opacity: 0;
@@ -965,7 +949,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .story-flash,
-  .story-target,
   .story-smoke::before,
   .story-smoke::after {
     animation: none;
@@ -1139,23 +1122,4 @@ html[data-reading-palette] .tnr-pixel-game [data-content-box] :where(h1, h2, h3,
  */
 .paypal-checkout-sandbox {
   pointer-events: auto;
-}
-
-/* The Academy tile pulses a few times when the story dock points at a new chapter. */
-@keyframes story-pulse-once {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgb(251 191 36 / 0);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgb(251 191 36 / 0.6);
-  }
-}
-.story-pulse-once {
-  animation: story-pulse-once 1.2s ease-in-out 3;
-}
-@media (prefers-reduced-motion: reduce) {
-  .story-pulse-once {
-    animation: none;
-  }
 }

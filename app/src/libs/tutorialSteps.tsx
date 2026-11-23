@@ -41,8 +41,10 @@ export interface TutorialStepConfig {
   elementIds?: string[];
   /** What Lemu says while the scene that opens the step still plays on the map. */
   sceneLead?: { description: string; action: string };
-  /** Brings the element into view and leaves the page lit: the step plays on it, unmarked. */
-  isRevealOnly?: boolean;
+  /** Marks the target without dimming the page, for a scene that plays around it. */
+  isPageLit?: boolean;
+  /** Element brought into view, unmarked, while no target is on screen. */
+  revealId?: string;
   /**
    * Elements to highlight instead for a player who took Express Trials, whose skipped
    * lessons taught the controls this step expects them to know.
@@ -130,6 +132,12 @@ export const TUTORIAL_HOSPITALIZED_STEP: TutorialStepConfig = {
 const starterLogbookEntry = `logbook-entry-${TUTORIAL_STARTER_QUEST_ID}`;
 // The marker of the quest objective on the sector map, ahead of the map around it.
 const sectorTargetElements = ["tutorial-objective-marker", "tutorial-travel-sector"];
+// What a story scene on the sector map points at, and the map it plays on.
+const mapSceneTarget = {
+  elementIds: ["tutorial-map-target"],
+  revealId: "tutorial-travel-sector",
+  isPageLit: true,
+};
 // The trip's confirmation and arrival timer, ahead of the controls that lead to them.
 const globalTravelElements = [
   "tutorial-auto-travel-proceed",
@@ -153,9 +161,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Welcome to Horizon",
     description:
       "You made it! I'm <b>Lemu</b>, your instructor from today. This is <b>Horizon</b>, where every shinobi begins. Come, walk with me.",
-    action: "Tap the glowing ground to walk over to me.",
-    elementIds: ["tutorial-travel-sector"],
-    isRevealOnly: true,
+    action: "Tap the marked ground to walk over to me.",
+    ...mapSceneTarget,
     page: "/travel",
     objectiveId: STARTER_QUEST_OBJECTIVES.stand,
     advanceOn: "sectorWalk",
@@ -165,14 +172,15 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "arrival",
     title: "A violet flash",
     description:
-      "That poor pup! Its hunter left a <b>smoke double</b> to stop us. Breathe. You move, then you strike. I'm right here.",
-    action: "Face the smoke double.",
+      "That poor pup! Its hunter left a <b>smoke double</b> to stop us. Breathe, and attack it when you're ready. I'm right here.",
+    action: "Tap the smoke double to attack it.",
+    // The double on the map is the answer; the dock's own button helps a stuck player.
+    teachOnPage: true,
     sceneLead: {
       description: "That light on the ridge... Stay close to me!",
       action: "Watch the map.",
     },
-    elementIds: ["tutorial-travel-sector"],
-    isRevealOnly: true,
+    ...mapSceneTarget,
     page: "/travel",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.stand,
@@ -224,9 +232,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Back on your feet",
     description:
       "I drove the double off, but it is circling back. Step next to it, and spend all your Action Points striking before you end your turn.",
-    action: "Tap Retry battle to face it again.",
-    elementIds: ["tutorial-travel-sector"],
-    isRevealOnly: true,
+    action: "Tap the smoke double to attack it again.",
+    ...mapSceneTarget,
     page: "/travel",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.double,

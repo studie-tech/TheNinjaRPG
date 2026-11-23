@@ -2,11 +2,20 @@
 
 import { ArrowRight, Check, Circle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useStoryGuidance } from "@/hooks/useStoryGuidance";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
+import {
+  getUsableHighlightElement,
+  isSameBox,
+  Spotlight,
+  type SpotlightBox,
+  trackLayout,
+} from "@/layout/tutorial/Spotlight";
+import { cn } from "@/libs/shadui";
 import {
   getExamChecklist,
   getXpSources,
@@ -66,47 +75,50 @@ export const useStoryDockCard = (): StoryDockCard | null => {
 };
 
 /**
- * Spotlights the Academy and its Take quest button while the dock points there.
- * A full story pointer (G3) keeps the ring on; a lighter one (G2) pulses it once.
+ * Points at the Academy and its Take quest button while the dock does, on a page left lit
+ * since the player may go elsewhere. A full story pointer (G3) keeps the hand there; a
+ * lighter one (G2) only rings the Academy for a moment.
  */
-export const StorySpotlight: React.FC = () => {
+export const StorySpotlight: React.FC<{ isHidden: boolean }> = ({ isHidden }) => {
   const { item } = useStoryGuidance();
   const pathname = usePublicPathname();
-  const target =
-    item?.kind === "chapterReady" &&
-    (item.navigation === "G3" || item.navigation === "G2")
-      ? item
-      : null;
+  const navigation = item?.kind === "chapterReady" ? item.navigation : undefined;
+  const questId = item?.kind === "chapterReady" ? item.questId : undefined;
+  const isFull = navigation === "G3";
+  const isPointing = !isHidden && (isFull || navigation === "G2");
+  const [box, setBox] = useState<SpotlightBox | null>(null);
   useEffect(() => {
-    if (!target) return;
-    const ids =
-      target.navigation === "G3"
-        ? ["tutorial-academy", `tutorial-take-quest-${target.questId}`]
-        : ["tutorial-academy"];
-    const classes =
-      target.navigation === "G3"
-        ? ["ring-4", "ring-amber-400", "rounded-lg", "animate-pulse"]
-        : ["ring-4", "ring-amber-400", "rounded-lg", "story-pulse-once"];
-    const marked: HTMLElement[] = [];
-    const apply = () => {
-      for (const id of ids) {
-        const element = document.getElementById(id);
-        if (element && !marked.includes(element)) {
-          element.classList.add(...classes);
-          marked.push(element);
-        }
-      }
-    };
-    apply();
-    // Pages render their buildings after the profile; look again until they exist.
-    const interval = setInterval(apply, 1000);
+    if (!isPointing) return;
+    const ids = [
+      "tutorial-academy",
+      ...(isFull ? [`tutorial-take-quest-${questId}`] : []),
+    ];
+    const stop = trackLayout(() => {
+      const element = ids.map((id) => getUsableHighlightElement(id)).find(Boolean);
+      const rect = element?.getBoundingClientRect();
+      const next = rect
+        ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+        : null;
+      setBox((prev) => (prev && next && isSameBox(prev, next) ? prev : next));
+      return element ?? null;
+    });
+    const timer = isFull
+      ? undefined
+      : setTimeout(() => {
+          stop();
+          setBox(null);
+        }, LIGHT_POINTER_MS);
     return () => {
-      clearInterval(interval);
-      for (const element of marked) element.classList.remove(...classes);
+      clearTimeout(timer);
+      stop();
+      setBox(null);
     };
-  }, [target?.questId, target?.navigation, pathname]);
-  return null;
+  }, [isPointing, isFull, questId, pathname]);
+  return box ? <Spotlight box={box} dim={false} pointer={isFull} /> : null;
 };
+
+/** How long a light story pointer rings the Academy. */
+const LIGHT_POINTER_MS = 4000;
 
 const cardFor = (
   item: StoryDockItem,
@@ -271,7 +283,7 @@ const SourceChips: React.FC<{ sources: StoryXpSource[] }> = ({ sources }) => (
       <li key={source.id}>
         <Link
           href={source.href}
-          className="inline-flex min-h-9 items-center rounded-full border border-amber-500/50 bg-amber-500/10 px-3 text-sm hover:bg-amber-500/20"
+          className={cn(badgeVariants({ variant: "outline" }), "min-h-9 text-sm")}
         >
           {source.label}
         </Link>

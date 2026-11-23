@@ -2,6 +2,7 @@
 
 import { BellRing } from "lucide-react";
 import { useState } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNativePushPermission } from "@/hooks/useNativePush";
@@ -22,30 +23,30 @@ export const TrainingPushPrompt = () => {
   const canAsk = permission === "prompt" || permission === "prompt-with-rationale";
   if (!isSupported || !canAsk || dismissed) return null;
   return (
-    <div className="flex flex-col gap-2 rounded border border-violet-500/40 bg-violet-500/10 p-3 text-sm sm:flex-row sm:items-center">
-      <BellRing className="hidden h-5 w-5 shrink-0 text-violet-500 sm:block" />
-      <p className="grow">
-        Training keeps going while you&apos;re away. Want a notification when it
-        finishes?
-      </p>
-      <div className="flex shrink-0 gap-2">
-        <Button size="sm" variant="ghost" onClick={() => setDismissed(true)}>
-          Not now
-        </Button>
-        <Button
-          size="sm"
-          disabled={isAsking}
-          onClick={() => {
-            setIsAsking(true);
-            void requestPermission().finally(() => {
-              setIsAsking(false);
-              setDismissed(true);
-            });
-          }}
-        >
-          Tell me when training finishes
-        </Button>
-      </div>
-    </div>
+    <Alert role="status">
+      <BellRing aria-hidden="true" />
+      <AlertTitle>Training keeps going while you&apos;re away</AlertTitle>
+      <AlertDescription>
+        <p>Want a notification when it finishes?</p>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setDismissed(true)}>
+            Not now
+          </Button>
+          <Button
+            size="sm"
+            disabled={isAsking}
+            onClick={() => {
+              setIsAsking(true);
+              void requestPermission().finally(() => {
+                setIsAsking(false);
+                setDismissed(true);
+              });
+            }}
+          >
+            Tell me when training finishes
+          </Button>
+        </div>
+      </AlertDescription>
+    </Alert>
   );
 };

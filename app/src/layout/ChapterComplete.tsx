@@ -2,6 +2,7 @@
 
 import { ArrowRight, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -81,11 +82,10 @@ export const ChapterCompleteWatcher: React.FC = () => {
         {reward.length > 0 && (
           <ul className="flex flex-wrap gap-2" aria-label="Rewards">
             {reward.map((label) => (
-              <li
-                key={label}
-                className="rounded-full border px-3 py-1 font-semibold text-sm"
-              >
-                {label}
+              <li key={label}>
+                <Badge variant="outline" className="text-sm">
+                  {label}
+                </Badge>
               </li>
             ))}
           </ul>
@@ -95,12 +95,9 @@ export const ChapterCompleteWatcher: React.FC = () => {
             <Sparkles aria-hidden className="h-4 w-4 text-amber-500" />
             <span>Chapter {shown.chapter.chapter + 1} opens:</span>
             {unlocks.map((label) => (
-              <span
-                key={label}
-                className="rounded-full bg-amber-500/15 px-3 py-1 text-amber-600 dark:text-amber-300"
-              >
+              <Badge key={label} variant="secondary" className="text-sm">
                 {label}
-              </span>
+              </Badge>
             ))}
           </div>
         )}

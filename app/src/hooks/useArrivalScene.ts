@@ -1,6 +1,8 @@
 import { atom, useSetAtom } from "jotai";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { TUTORIAL_STARTER_QUEST_ID } from "@/drizzle/constants";
+import { useQuestFight } from "@/hooks/useQuestFight";
 import {
   ARRIVAL_LINES,
   type ArrivalLine,
@@ -12,13 +14,19 @@ import {
   CAST_NAMES,
   planArrivalScene,
 } from "@/libs/arrivalScene";
+import type { MapAnchor } from "@/libs/mapAnchors";
 import type { MapSpeechLine } from "@/libs/mapSpeech";
 import { isWanderTile } from "@/libs/overworldWander";
 import type { TravelScene } from "@/libs/rendering/scenes/travel";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { getSectorTile } from "@/libs/sector-map/validation";
 import type { SectorUser } from "@/libs/sector-map/world-types";
-import { TUTORIAL_AMBUSH_STEP_ID, TUTORIAL_ARRIVAL_STEP_ID } from "@/libs/tutorial";
+import { storyPlacementId } from "@/libs/storyActors";
+import {
+  STARTER_QUEST_OBJECTIVES,
+  TUTORIAL_AMBUSH_STEP_ID,
+  TUTORIAL_ARRIVAL_STEP_ID,
+} from "@/libs/tutorial";
 import type { TutorialStepConfig } from "@/libs/tutorialSteps";
 import { parseHtml } from "@/utils/parse";
 
@@ -38,9 +46,10 @@ const SCENE_KINDS: Record<string, ArrivalSceneKind> = {
 /**
  * The opening of the Academy Trials on the sector map: Lemu's greeting, the ambush and the
  * wait for a rematch, staged around the player and drawn only for them. The figures are
- * added to what the renderer reads, so no map logic meets them. `flash` and `smoke` count
- * up when their overlay should play; a player who prefers reduced motion sees neither, and
- * the scene as it ends.
+ * added to what the renderer reads, so no map logic meets them; `onStoryTap` runs what the
+ * control of a tapped one does and answers with the figure attacked. `target` is what the
+ * lesson points at. `flash` and `smoke` count up when their overlay should play; a player
+ * who prefers reduced motion sees neither, and the scene as it ends.
  */
 export const useArrivalScene = (info: {
   step: TutorialStepConfig | undefined;
@@ -155,6 +164,13 @@ export const useArrivalScene = (info: {
       setSpokenStep(null);
     };
   }, [scene, stepId, setSpokenStep]);
+  // The double takes the map's attack control once Lemu calls for it.
+  const fight = useQuestFight({
+    questId: TUTORIAL_STARTER_QUEST_ID,
+    dialogId: STARTER_QUEST_OBJECTIVES.stand,
+    battleId: STARTER_QUEST_OBJECTIVES.double,
+  });
+  const canAttack = !!fight && spoken.includes("challenge");
   const step = info.step;
   const lines: MapSpeechLine[] = (scene?.plan.lines ?? [])
     .filter((line) => spoken.includes(line.id))
@@ -186,9 +202,13 @@ export const useArrivalScene = (info: {
       elapsed,
       art ?? {},
       infoRef.current.sector,
+      canAttack ? { double: "HOSTILE" } : {},
     );
     const key = `${scene.startAt}:${cast
-      .map((actor) => `${actor.userId}@${actor.npcWalk?.startAt}`)
+      .map(
+        (actor) =>
+          `${actor.userId}@${actor.npcWalk?.startAt}:${actor.npcInteractionType}`,
+      )
       .join("|")}`;
     const previous = merged.current;
     if (previous?.users === users && previous.key === key) return previous.result;
@@ -201,11 +221,29 @@ export const useArrivalScene = (info: {
     withCastRef.current = withCast;
   });
 
+  const marker: MapAnchor | null = scene
+    ? { kind: "tile", ...scene.plan.marker, sector: info.sector }
+    : null;
   return {
     withCast: (users: SectorUser[]) => withCastRef.current(users),
     lines,
-    marker: scene ? { ...scene.plan.marker, sector: info.sector } : null,
-    kind: scene?.plan.kind,
+    onStoryTap: (placementId: string) => {
+      const actor = merged.current?.result.find(
+        (user) => user.npcPlacementId === placementId,
+      );
+      if (!canAttack || !actor || placementId !== storyPlacementId("double"))
+        return null;
+      fight.start();
+      return actor;
+    },
+    isAttacking: !!fight?.isPending,
+    marker,
+    target:
+      canAttack && !fight.isPending
+        ? FOE_ANCHOR
+        : scene?.plan.kind === "greeting"
+          ? marker
+          : null,
     flash,
     smoke,
   };
@@ -216,6 +254,8 @@ type ArrivalScenery = Pick<TravelScene, "sceneryReady" | "isTileCovered">;
 
 /** Longest the scene waits for scenery to stand its figures clear of. */
 const SCENERY_WAIT_MS = 4000;
+
+const FOE_ANCHOR: MapAnchor = { kind: "actor", key: arrivalActorKey("double") };
 
 const lineId = (line: ArrivalLine) => line.id;
 

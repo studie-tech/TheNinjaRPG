@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
-import { isOnCanvas, type MapAnchor, type MapAnchors } from "@/libs/mapAnchors";
+import {
+  type AnchoredBox,
+  anchoredRect,
+  isOnCanvas,
+  type MapAnchor,
+  type MapAnchors,
+} from "@/libs/mapAnchors";
 import { cn } from "@/libs/shadui";
 
 /**
@@ -21,7 +27,7 @@ export const MapAnchored = ({
 }: {
   anchors: MapAnchors;
   anchor: MapAnchor | null;
-  box: { width: number; height: number };
+  box: AnchoredBox;
   id?: string;
   className?: string;
   /** Runs after each move, for anything outside that measures the box. */
@@ -42,11 +48,11 @@ export const MapAnchored = ({
       const shown = !!point && isOnCanvas(point);
       element.style.display = shown ? "" : "none";
       if (shown) {
-        element.style.left = `${point.x}px`;
-        // What stands on a tile rises from just below its centre.
-        element.style.top = `${point.foot + point.tile * 0.25}px`;
-        element.style.width = `${point.tile * box.width}px`;
-        element.style.height = `${point.tile * box.height}px`;
+        const rect = anchoredRect(point, { width: box.width, height: box.height });
+        element.style.left = `${rect.left}px`;
+        element.style.top = `${rect.top}px`;
+        element.style.width = `${rect.width}px`;
+        element.style.height = `${rect.height}px`;
       }
       onPlacedRef.current?.();
     };
@@ -59,10 +65,7 @@ export const MapAnchored = ({
       ref={ref}
       id={id}
       aria-hidden="true"
-      className={cn(
-        "pointer-events-none absolute -translate-x-1/2 -translate-y-full",
-        className,
-      )}
+      className={cn("pointer-events-none absolute", className)}
       style={{ display: "none" }}
     >
       {children}

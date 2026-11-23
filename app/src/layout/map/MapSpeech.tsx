@@ -2,7 +2,13 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { SpeechBubble } from "@/layout/map/SpeechBubble";
-import type { MapAnchor, MapAnchorPoint, MapAnchors } from "@/libs/mapAnchors";
+import {
+  type AnchoredBox,
+  anchoredRect,
+  type MapAnchor,
+  type MapAnchorPoint,
+  type MapAnchors,
+} from "@/libs/mapAnchors";
 import {
   type MapSpeechLine,
   placeSpeech,
@@ -28,21 +34,28 @@ export const MapSpeech = ({
 }: {
   anchors: MapAnchors;
   lines: readonly MapSpeechLine[];
-  /** Characters and tiles a bubble should leave in view. */
-  avoid?: readonly MapAnchor[];
+  /** Characters and tiles a bubble should leave in view, with any box marked over them. */
+  avoid?: readonly SpeechAvoid[];
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const avoided = useRef(new Map<string, SpeechRect>());
   const placed = useRef(new Map<string, SpeechRect>());
+  const [replacers] = useState(() => new Map<string, () => void>());
   const layerId = useId();
   const avoidKey = JSON.stringify(avoid);
   useEffect(() => {
     const rects = avoided.current;
-    const cleanups = (JSON.parse(avoidKey) as MapAnchor[]).map((anchor, index) => {
+    const cleanups = (JSON.parse(avoidKey) as SpeechAvoid[]).map((subject, index) => {
       const id = `${layerId}avoid${index}`;
-      const stop = anchors.follow(id, anchor, (point) => {
-        if (point) rects.set(id, speakerRect(point));
+      const stop = anchors.follow(id, subject.anchor, (point) => {
+        if (point)
+          rects.set(
+            id,
+            subject.box ? anchoredRect(point, subject.box) : speakerRect(point),
+          );
         else rects.delete(id);
+        // A bubble at rest makes way for what comes to stand under it.
+        for (const placeAgain of replacers.values()) placeAgain();
       });
       return () => {
         stop();
@@ -52,7 +65,7 @@ export const MapSpeech = ({
     return () => {
       for (const cleanup of cleanups) cleanup();
     };
-  }, [anchors, avoidKey, layerId]);
+  }, [anchors, avoidKey, layerId, replacers]);
 
   /** What a line's bubble should not cover, in the layer's own pixels. */
   const obstaclesFor = (lineId: string): SpeechObstacle[] => {
@@ -96,6 +109,7 @@ export const MapSpeech = ({
           anchors={anchors}
           followId={`${layerId}${line.id}`}
           obstaclesFor={obstaclesFor}
+          replacers={replacers}
           onPlaced={(rect) => {
             if (rect) placed.current.set(line.id, rect);
             else placed.current.delete(line.id);
@@ -112,12 +126,15 @@ const SpokenLine = ({
   anchors,
   followId,
   obstaclesFor,
+  replacers,
   onPlaced,
 }: {
   line: MapSpeechLine;
   anchors: MapAnchors;
   followId: string;
   obstaclesFor: (lineId: string) => SpeechObstacle[];
+  /** Where the bubble leaves its way to be placed again when its obstacles move. */
+  replacers: Map<string, () => void>;
   onPlaced: (rect: SpeechRect | null) => void;
 }) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -166,12 +183,14 @@ const SpokenLine = ({
         ? undefined
         : new ResizeObserver(() => place(last));
     observer?.observe(element);
+    replacers.set(lineId, () => place(last));
     return () => {
       stop();
+      replacers.delete(lineId);
       observer?.disconnect();
       callbacks.current.onPlaced(null);
     };
-  }, [anchors, anchorKey, followId, lineId]);
+  }, [anchors, anchorKey, followId, lineId, replacers]);
   return (
     <div
       ref={ref}
@@ -194,4 +213,7 @@ const SpokenLine = ({
   );
 };
 
-const NOTHING: readonly MapAnchor[] = [];
+/** Something a bubble leaves in view: an anchor, and the box a lesson marks over it. */
+export type SpeechAvoid = { anchor: MapAnchor; box?: AnchoredBox };
+
+const NOTHING: readonly SpeechAvoid[] = [];

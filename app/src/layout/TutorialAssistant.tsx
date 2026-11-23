@@ -1048,7 +1048,7 @@ const PlayerTutorialAssistant: React.FC<
   ) {
     return (
       <>
-        <StorySpotlight />
+        <StorySpotlight isHidden={isModalDialogOpen} />
         <AssistantDialog
           title={storyCard.title}
           eyebrow={storyCard.eyebrow}
@@ -1318,11 +1318,12 @@ const PlayerTutorialAssistant: React.FC<
         )}
       {highlight &&
         highlight.stepId === currentTutorialStep.id &&
-        !currentTutorialStep.isRevealOnly &&
+        !highlight.isRevealed &&
         !showCancelConfirmDialog && (
           // Only the highlighted control captures clicks; game controls stay reachable.
           <Spotlight
             box={highlight}
+            dim={!currentTutorialStep.isPageLit}
             ping={showPointer}
             pointer={showPointer}
             holeClassName={cn("bg-transparent", pointerEvents)}
@@ -2051,6 +2052,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
   const [highlight, setHighlight] = useState<{
     stepId: string;
     isPrimaryElement: boolean;
+    isRevealed: boolean;
     top: number;
     left: number;
     width: number;
@@ -2099,6 +2101,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
       }
       const placement = placementRef.current;
       const isCombat = pathname === "/combat";
+      const isRevealOnly = revealOnly || !!highlightInfo.isInScene;
       // A fight is placed once its field has laid out, since the dock's width and the
       // scroll both follow it.
       const isFieldPending = isCombat && !fitActivityDockBesideField();
@@ -2158,7 +2161,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
           isCovered ||
           isCutOff ||
           isTimerAbove ||
-          (!revealOnly && Math.abs(centre - preferredCentre) > 100);
+          (!isRevealOnly && Math.abs(centre - preferredCentre) > 100);
         if (!isMisplaced) {
           placement.settled = true;
           placement.settledScrollY = window.scrollY;
@@ -2178,7 +2181,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
               : clear.bottom + 16 > floor
                 ? clear.bottom + 16 - floor
                 : clear.top - 80;
-          const offset = !revealOnly
+          const offset = !isRevealOnly
             ? centre - preferredCentre
             : Math.min(
                 revealOffset,
@@ -2223,6 +2226,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
       const next = {
         stepId: currentStepConfig.id,
         isPrimaryElement: highlightInfo.isPrimaryElement,
+        isRevealed: !!highlightInfo.isRevealed,
         top: rect.top,
         left: rect.left,
         width: rect.width,
@@ -2232,6 +2236,7 @@ const useHighlightPlacement = <Step extends { id: string }>({
         prev &&
         prev.stepId === next.stepId &&
         prev.isPrimaryElement === next.isPrimaryElement &&
+        prev.isRevealed === next.isRevealed &&
         isSameBox(prev, next)
           ? prev
           : next,
@@ -2601,7 +2606,7 @@ const findGuidedTarget = (selector: string): HighlightTarget | null => {
 };
 
 /**
- * The element a main-tutorial step highlights, with its box: the first usable of its ids,
+ * The element a main-tutorial step highlights: the first usable of its ids,
  * or a match in the open game menu for a step that needs it. `isPrimaryElement` tells
  * whether it is the step's first id.
  */
@@ -2609,7 +2614,7 @@ const findElementToHighlight = (
   step: TutorialStepConfig,
   rightSideBarRef: React.RefObject<HTMLDivElement | null>,
   rightSideBarOpen: boolean,
-) => {
+): HighlightTarget | null => {
   if (!step?.elementIds || step.elementIds.length === 0) return null;
 
   let element: HTMLElement | null =
@@ -2645,7 +2650,10 @@ const findElementToHighlight = (
     }
   }
 
-  if (!element) return null;
+  if (!element) {
+    const revealed = getUsableHighlightElement(step.revealId);
+    return revealed && { element: revealed, isPrimaryElement: false, isRevealed: true };
+  }
 
   const rect = element.getBoundingClientRect();
   if (!isUsableHighlightRect(rect)) {
@@ -2656,10 +2664,7 @@ const findElementToHighlight = (
   return {
     element,
     isPrimaryElement,
-    top: rect.top,
-    left: rect.left,
-    width: rect.width,
-    height: rect.height,
+    isInScene: step.isPageLit,
   };
 };
 
@@ -2688,7 +2693,14 @@ type TutorialIdentityRef = React.RefObject<{
 }>;
 
 /** The element a step points at; a fallback target is not the step's primary one. */
-type HighlightTarget = { element: HTMLElement; isPrimaryElement: boolean };
+type HighlightTarget = {
+  element: HTMLElement;
+  isPrimaryElement: boolean;
+  /** Only brought into view: the step's scene plays there with nothing to mark yet. */
+  isRevealed?: boolean;
+  /** Part of a scene that must stay in view around it, so it is only uncovered. */
+  isInScene?: boolean;
+};
 
 /** A quest the assistant guides after the tutorial, with its live tracker. */
 type PostTutorialQuest = { userQuest: UserQuest; tracker: QuestTrackerType };

@@ -6,6 +6,7 @@ import type {
 } from "@/drizzle/constants";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
 import type { VillageDutyPatrol } from "@/libs/villageDuty";
+import type { LpcDirection } from "@/validators/lpc";
 
 type NonEmptyArray<T> = T[] & { 0: T };
 
@@ -58,7 +59,13 @@ export interface GlobalMapData {
 }
 
 /** Tiles walked one after another from `startAt`, on the server-corrected clock. */
-export type NpcWalk = { tiles: SectorPoint[]; startAt: number; stepMs: number };
+export type NpcWalk = {
+  tiles: SectorPoint[];
+  startAt: number;
+  stepMs: number;
+  /** Which way the figure looks while it stands: south, towards the viewer, when left out. */
+  facing?: LpcDirection;
+};
 
 export interface SectorUser {
   /** Viewer-safe resolved art; the sector router substitutes uniforms for masked identities. */
