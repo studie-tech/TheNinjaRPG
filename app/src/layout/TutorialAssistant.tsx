@@ -369,7 +369,8 @@ const PlayerTutorialAssistant: React.FC<
 
       // If we're at a valid step but not on the correct page, redirect
       if (isActiveStep && !onCorrectPage && currentStepConfig) {
-        if (!currentStepConfig?.requiresGameMenu) {
+        // Always-drawer layouts keep the game menu available between lessons.
+        if (sidebarBreakpoint !== null && !currentStepConfig?.requiresGameMenu) {
           setRightSideBarOpen(false);
         }
         const battleCheck =
@@ -380,7 +381,15 @@ const PlayerTutorialAssistant: React.FC<
         }
       }
     }
-  }, [userData, currentStep, pathname, router, rightSideBarOpen, usesGameMenuDrawer]);
+  }, [
+    userData,
+    currentStep,
+    pathname,
+    router,
+    rightSideBarOpen,
+    usesGameMenuDrawer,
+    sidebarBreakpoint,
+  ]);
 
   // Skip steps that have nothing to do: spending experience the player does
   // not have, adopting a companion when they already formed a bond, or

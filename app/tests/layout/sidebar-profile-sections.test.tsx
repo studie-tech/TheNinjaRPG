@@ -134,8 +134,8 @@ describe("profile sidebar sections", () => {
   it("keeps supplemental details without duplicating the character HUD", () => {
     const view = render(<MenuBoxProfile presentation="supplemental" />);
     expect(Avatar.default).not.toHaveBeenCalled();
-    expect(view.container.textContent).toContain("Bracket:");
-    expect(view.container.textContent).toContain("Time:");
+    expect(view.container.textContent).not.toContain("Bracket:");
+    expect(view.container.textContent).not.toContain("Time:");
     expect(view.container.textContent).not.toContain("Status:");
     expect(view.container.textContent).not.toContain("Village:");
     expect(renders.pools).toBe(0);

@@ -125,10 +125,11 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const activeTerritoryWar = useTerritoryWarNotice(!!userData, timeDiff, isPageActive);
 
   useEffect(() => {
+    if (variant === "experimental") return;
     // Deep links and notification taps navigate without clicking a sidebar item.
     setLeftSideBarOpen(false);
     setRightSideBarOpen(false);
-  }, [pathname]);
+  }, [pathname, variant]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -278,13 +279,17 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     bloodlineId: user.bloodlineId,
   }));
 
+  const closeLeftSidebarOnNavigate = () => {
+    if (variant !== "experimental") setLeftSideBarOpen(false);
+  };
+
   const signedInIcons = (
     <SignedInIcons
       variant={variant}
       isSignedIn={isClerkLoaded && isSignedIn}
       userData={layoutUser}
       updateUser={updateUser}
-      onEventClick={() => setLeftSideBarOpen(false)}
+      onEventClick={closeLeftSidebarOnNavigate}
       onThemeToggle={toggleTheme}
     />
   );
@@ -316,7 +321,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       navbarMenuItems={navbarMenuItems}
       signedInIcons={signedInIcons}
-      onNavigate={() => setLeftSideBarOpen(false)}
+      onNavigate={closeLeftSidebarOnNavigate}
     />
   );
 

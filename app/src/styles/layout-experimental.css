@@ -399,7 +399,8 @@ html[data-game-layout="experimental"] {
   font-variant-numeric: tabular-nums;
 }
 .player-status-shortcuts > a,
-.player-status-shortcuts > button {
+.player-status-shortcuts > button,
+.player-status-shortcuts > span {
   display: flex;
   align-items: center;
   width: auto;
@@ -490,7 +491,8 @@ html[data-game-layout="experimental"] {
     margin-right: 3px;
   }
   .player-status-shortcuts > a,
-  .player-status-shortcuts > button {
+  .player-status-shortcuts > button,
+  .player-status-shortcuts > span {
     padding-inline: 0.4rem;
   }
 }
@@ -627,17 +629,6 @@ html[data-game-layout="experimental"] {
 .experimental-drawer [data-profile-social] img {
   width: 20px;
   height: 20px;
-}
-.experimental-drawer .experimental-public-profile {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding-block: 0.5rem;
-  font-size: 11px;
-}
-.experimental-public-profile svg {
-  width: 14px;
-  height: 14px;
 }
 .experimental-location-link {
   display: block;

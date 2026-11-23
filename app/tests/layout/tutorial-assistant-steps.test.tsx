@@ -438,6 +438,14 @@ describe("step overrides", () => {
 });
 
 describe("routing", () => {
+  it("preserves an open drawer-only menu while routing to a lesson", () => {
+    state.pathname = "/not-the-lesson";
+    state.profile = makeProfile(0);
+    render(assistant(null, true));
+    expect(state.push).toHaveBeenCalled();
+    expect(state.setRightSideBarOpen).not.toHaveBeenCalledWith(false);
+  });
+
   it("sends the player to the step's page and tries once more", async () => {
     vi.useFakeTimers();
     const index = TUTORIAL_STEPS.findIndex((step) => step.page === "/village");

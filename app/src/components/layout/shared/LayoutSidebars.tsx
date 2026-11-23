@@ -139,7 +139,7 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
     <div>
       {userData && (
         <>
-          {variant !== "experimental" ? (
+          {variant !== "experimental" && (
             <SideBannerTitle>
               <Link
                 href={`/userid/${userData.userId}`}
@@ -148,17 +148,6 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
                 {userData.username} <Link2 className="inline-block h-5 w-5" />
               </Link>
             </SideBannerTitle>
-          ) : (
-            <>
-              <SideBannerTitle>Character</SideBannerTitle>
-              <Link
-                className="experimental-public-profile"
-                href={`/userid/${userData.userId}`}
-              >
-                <Link2 aria-hidden />
-                Public profile
-              </Link>
-            </>
           )}
           <ChunkErrorBoundary
             fallback={(retry) => (

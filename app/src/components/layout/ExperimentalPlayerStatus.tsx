@@ -1,5 +1,6 @@
 "use client";
 
+import { Clock } from "lucide-react";
 import { useRef, useState } from "react";
 import {
   Dialog,
@@ -10,6 +11,8 @@ import {
 import AvatarImage from "@/layout/Avatar";
 import Link from "@/layout/Link";
 import {
+  GameClock,
+  ProfileBracket,
   ProfileDailyActivities,
   ProfileLevel,
   ProfileMoney,
@@ -107,6 +110,17 @@ export function ExperimentalPlayerStatus({ hasLocation }: { hasLocation: boolean
           <ProfileDailyActivities compact />
           <ProfileReputation compact />
           <ProfileTimers compact />
+          <ProfileBracket compact />
+          <span
+            role="timer"
+            aria-live="off"
+            aria-label="Game time (UTC)"
+            title="Game time (UTC)"
+          >
+            <Clock aria-hidden />
+            <span data-player-summary-label>Time</span>
+            <GameClock />
+          </span>
         </section>
       </section>
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>

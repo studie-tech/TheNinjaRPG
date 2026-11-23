@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { ExperimentalPlayerStatus } from "@/components/layout/ExperimentalPlayerStatus";
-import { MISSIONS_PER_DAY } from "@/drizzle/constants";
+import { MAX_PVP_BRACKET, MISSIONS_PER_DAY } from "@/drizzle/constants";
 import * as Avatar from "@/layout/Avatar";
 import * as userContext from "@/utils/UserContext";
 import {
@@ -183,4 +183,15 @@ it("shortens HUD balances while retaining their exact accessible values", () => 
   expect(
     view.getByRole("link", { name: "Reputation points: 100000" }).textContent,
   ).toContain("100K");
+});
+
+it("shows the bracket and game clock alongside the other character shortcuts", () => {
+  const view = render(<ExperimentalPlayerStatus hasLocation />);
+  const shortcuts = within(view.getByRole("region", { name: "Character shortcuts" }));
+  expect(
+    shortcuts.getByRole("button", { name: `PvP bracket: 0/${MAX_PVP_BRACKET}` }),
+  ).toBeTruthy();
+  expect(shortcuts.getByRole("timer", { name: "Game time (UTC)" }).textContent).toMatch(
+    /\d{2}:\d{2}:\d{2}/,
+  );
 });

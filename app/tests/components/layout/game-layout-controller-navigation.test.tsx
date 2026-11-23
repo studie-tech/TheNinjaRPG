@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import GameLayoutController from "@/components/layout/shared/GameLayoutController";
 import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTypes";
@@ -107,3 +107,46 @@ it("marks only the battle page as the combat page", () => {
   expect(navigate(view, "/combat").isCombatPage).toBe(true);
   expect(navigate(view, "/combat-log").isCombatPage).toBe(false);
 });
+
+it.each(["default", "experimental"] as const)(
+  "keeps navigation dismissal specific to the %s layout",
+  async (variant) => {
+    const view = render(
+      <GameLayoutController variant={variant} renderer={Renderer}>
+        <div />
+      </GameLayoutController>,
+    );
+    const reopen = async () =>
+      act(async () => {
+        renderProps!.onLeftSideBarOpenChange(true);
+        renderProps!.onRightSideBarOpenChange(true);
+      });
+    await reopen();
+    const menu = renderProps!.leftSideBarMainMenu as ReactElement<{
+      onNavigate: () => void;
+    }>;
+    await act(async () => menu.props.onNavigate());
+    expect(renderProps!.leftSideBarOpen).toBe(variant === "experimental");
+    await reopen();
+    const icons = renderProps!.signedInIcons as ReactElement<{
+      onEventClick: () => void;
+    }>;
+    await act(async () => icons.props.onEventClick());
+    expect(renderProps!.leftSideBarOpen).toBe(variant === "experimental");
+    await reopen();
+    pathname = "/bank";
+    view.rerender(
+      <GameLayoutController variant={variant} renderer={Renderer}>
+        <div />
+      </GameLayoutController>,
+    );
+    expect(renderProps!.leftSideBarOpen).toBe(variant === "experimental");
+    expect(renderProps!.rightSideBarOpen).toBe(variant === "experimental");
+    await act(async () => {
+      renderProps!.onLeftSideBarOpenChange(false);
+      renderProps!.onRightSideBarOpenChange(false);
+    });
+    expect(renderProps!.leftSideBarOpen).toBe(false);
+    expect(renderProps!.rightSideBarOpen).toBe(false);
+  },
+);

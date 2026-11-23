@@ -98,13 +98,15 @@ const MenuBoxProfile: React.FC<MenuBoxProfileProps> = ({ presentation = "full" }
         )}
         {isSupplemental && <ProfileLevel showProgress={false} />}
 
-        <div className={isSupplemental ? "" : "mt-4"}>
-          <hr />
-          <ProfileStanding hasLocation={hasLocation} showIdentity={!isSupplemental} />
-          <p suppressHydrationWarning>
-            <b>Time: </b> <GameClock />
-          </p>
-        </div>
+        {!isSupplemental && (
+          <div className="mt-4">
+            <hr />
+            <ProfileStanding hasLocation={hasLocation} />
+            <p suppressHydrationWarning>
+              <b>Time: </b> <GameClock />
+            </p>
+          </div>
+        )}
         <ProfileBattleEffects />
         {!isSupplemental && (
           <>
@@ -263,65 +265,81 @@ export const ProfileLevel: React.FC<{
 };
 
 /** Status, village and PvP bracket. */
-const ProfileStanding: React.FC<{ hasLocation: boolean; showIdentity?: boolean }> = ({
-  hasLocation,
-  showIdentity = true,
-}) => {
+const ProfileStanding: React.FC<{ hasLocation: boolean }> = ({ hasLocation }) => {
   const { data: userData } = useUserDataSelector(selectStanding);
   return (
     <>
-      {showIdentity && (
-        <>
-          <p className="mt-2 flex flex-row">
-            <b>Status: </b>{" "}
-            <span className="ml-1">
-              <StatusLink
-                status={userData?.status ?? "UNKNOWN"}
-                hasLocation={hasLocation}
-              />
-            </span>
-          </p>
-          {userData?.villageName && (
-            <p className="flex flex-row">
-              <b>Village: </b>{" "}
-              <Link href="/village" className="ml-1 hover:text-orange-500">
-                {userData.villageName}
-              </Link>
+      <p className="mt-2 flex flex-row">
+        <b>Status: </b>{" "}
+        <span className="ml-1">
+          <StatusLink
+            status={userData?.status ?? "UNKNOWN"}
+            hasLocation={hasLocation}
+          />
+        </span>
+      </p>
+      {userData?.villageName && (
+        <p className="flex flex-row">
+          <b>Village: </b>{" "}
+          <Link href="/village" className="ml-1 hover:text-orange-500">
+            {userData.villageName}
+          </Link>
+        </p>
+      )}
+      <ProfileBracket />
+    </>
+  );
+};
+
+/** Experience-based PvP bracket and its existing attack-range guidance. */
+export const ProfileBracket: React.FC<{ compact?: boolean }> = ({
+  compact = false,
+}) => {
+  const { data: userData } = useUserDataSelector((user) => ({
+    bracket: getExpBracket(user.experience, user.rank),
+    isEliteJonin: user.rank === "ELITE JONIN",
+  }));
+  if (!userData) return null;
+  return (
+    <TooltipProvider delayDuration={50}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {compact ? (
+            <button
+              type="button"
+              aria-label={`PvP bracket: ${userData.bracket}/${MAX_PVP_BRACKET}`}
+            >
+              <Swords aria-hidden />
+              <span data-player-summary-label>Bracket</span>
+              {userData.bracket}/{MAX_PVP_BRACKET}
+            </button>
+          ) : (
+            <p className="cursor-default">
+              <b>Bracket: </b>
+              {userData.bracket}/{MAX_PVP_BRACKET}
             </p>
           )}
-        </>
-      )}
-      {userData && (
-        <TooltipProvider delayDuration={50}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <p className="cursor-default">
-                <b>Bracket: </b>
-                {userData.bracket}/{MAX_PVP_BRACKET}
-              </p>
-            </TooltipTrigger>
-            <TooltipContent>
-              {userData.isEliteJonin ? (
-                <>
-                  Elite Jonin use bracket {ELITE_JONIN_BRACKET}. Your fights are limited
-                  to brackets {ELITE_JONIN_BRACKET - 1} and {ELITE_JONIN_BRACKET},
-                  including during wars or when immunity is lifted.
-                </>
-              ) : (
-                <>
-                  PvP bracket based on experience (Academy & Genin are bracket 0). You
-                  can freely attack players in your bracket, one bracket below, or
-                  higher. Attacking Elite Jonin requires bracket{" "}
-                  {ELITE_JONIN_BRACKET - 1} or {ELITE_JONIN_BRACKET}. Other players more
-                  than one bracket below are protected unless their immunity is lifted
-                  or both sides are active war participants.
-                </>
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
-    </>
+        </TooltipTrigger>
+        <TooltipContent>
+          {userData.isEliteJonin ? (
+            <>
+              Elite Jonin use bracket {ELITE_JONIN_BRACKET}. Your fights are limited to
+              brackets {ELITE_JONIN_BRACKET - 1} and {ELITE_JONIN_BRACKET}, including
+              during wars or when immunity is lifted.
+            </>
+          ) : (
+            <>
+              PvP bracket based on experience (Academy & Genin are bracket 0). You can
+              freely attack players in your bracket, one bracket below, or higher.
+              Attacking Elite Jonin requires bracket {ELITE_JONIN_BRACKET - 1} or{" "}
+              {ELITE_JONIN_BRACKET}. Other players more than one bracket below are
+              protected unless their immunity is lifted or both sides are active war
+              participants.
+            </>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };
 
@@ -796,7 +814,7 @@ const SidebarLinkRow: React.FC<{
 );
 
 /** A live text node keeps UTC clock ticks outside the surrounding React tree. */
-const GameClock: React.FC = () => {
+export const GameClock: React.FC = () => {
   const clock = React.useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const update = () => {
@@ -882,8 +900,6 @@ const selectLevel = (user: ProfileUser) => {
 const selectStanding = (user: ProfileUser) => ({
   status: user.status,
   villageName: user.village?.name,
-  bracket: getExpBracket(user.experience, user.rank),
-  isEliteJonin: user.rank === "ELITE JONIN",
 });
 
 const selectMoney = (user: ProfileUser) => user.money;

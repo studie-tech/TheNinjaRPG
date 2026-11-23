@@ -30,11 +30,7 @@ import { ExperimentalTravelHost } from "./ExperimentalTravelHost";
 import { type GameFrameProps, GameLayout } from "./GameLayout";
 import { CHAT_BUTTON_LAYER, MobileSidebarStack } from "./shared/LayoutChrome";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
-import {
-  isClerkElement,
-  keepSheetOpenForClerk,
-  SIDEBAR_COLUMNS_SHOWN_QUERY,
-} from "./shared/layoutUtils";
+import { SIDEBAR_COLUMNS_SHOWN_QUERY } from "./shared/layoutUtils";
 import { MobileGameNav } from "./shared/MobileGameNav";
 import { TravelCompass } from "./shared/TravelCompass";
 import "../../styles/layout-experimental.css";
@@ -43,7 +39,6 @@ import "../../styles/layout-experimental.css";
 export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
   const {
     children,
-    handleRightSidebarClick,
     isCombatPage,
     leftSideBar,
     leftSideBarMainMenu,
@@ -92,8 +87,7 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
         data-experimental-sidebar="player"
         data-reading-surface
         onInteractOutside={(event) => {
-          if (isDesktop) event.preventDefault();
-          else keepSheetOpenForClerk(event);
+          event.preventDefault();
         }}
       >
         <SheetHeader>
@@ -128,19 +122,14 @@ export function ExperimentalGameLayout(props: GameLayoutRenderProps) {
         data-experimental-sidebar="game"
         data-reading-surface
         onInteractOutside={(event) => {
-          if (isDesktop || isGuidedTutorial || isClerkElement(event.target))
-            event.preventDefault();
+          event.preventDefault();
         }}
       >
         <SheetHeader>
           <SheetTitle>Game menu</SheetTitle>
         </SheetHeader>
         <Suspense fallback={<Loader explanation="Loading game menu" />}>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: Sheet owns keyboard interaction. */}
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: delegated navigation dismissal. */}
-          <div ref={rightSideBarRef} onClick={handleRightSidebarClick}>
-            {rightSideBar}
-          </div>
+          <div ref={rightSideBarRef}>{rightSideBar}</div>
         </Suspense>
       </SheetContent>
     </Sheet>
