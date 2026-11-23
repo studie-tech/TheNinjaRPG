@@ -31,6 +31,7 @@ import {
 describeWithDatabase("sprite appearance database snapshots", () => {
   beforeEach(async () => {
     await resetTables(
+      gameAsset,
       userCosmeticSlot,
       userItem,
       itemVariant,
